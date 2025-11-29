@@ -20,14 +20,16 @@ import { ContactAttachments } from '@/components/contacts/ContactAttachments';
 export default function ContactDetail() {
   const { id } = useParams();
   const navigate = useNavigate();
-  const { organization, locale } = useOrganization();
+  const { organization, locale, loading: orgLoading } = useOrganization();
   const { t } = useTranslation(locale as any);
   const [contact, setContact] = useState<any>(null);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    fetchContact();
-  }, [id]);
+    if (organization?.id) {
+      fetchContact();
+    }
+  }, [id, organization?.id]);
 
   const fetchContact = async () => {
     if (!organization || !id) return;
@@ -65,7 +67,7 @@ export default function ContactDetail() {
     navigate('/contacts');
   };
 
-  if (loading) return <Layout><div className="p-6">{t('common.loading')}</div></Layout>;
+  if (orgLoading || loading) return <Layout><div className="p-6">{t('common.loading')}</div></Layout>;
   if (!contact) return <Layout><div className="p-6">{t('common.noResults')}</div></Layout>;
 
   const lifecycleColor = contact.lifecycle_stage === 'lead' ? 'bg-blue-500' : contact.lifecycle_stage === 'customer' ? 'bg-green-500' : 'bg-muted';
