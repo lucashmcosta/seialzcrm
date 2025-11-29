@@ -88,6 +88,146 @@ export type Database = {
           },
         ]
       }
+      attachments: {
+        Row: {
+          bucket: string
+          created_at: string | null
+          deleted_at: string | null
+          entity_id: string
+          entity_type: string
+          file_name: string
+          id: string
+          is_sample: boolean | null
+          mime_type: string | null
+          organization_id: string
+          size_bytes: number | null
+          storage_path: string
+          uploaded_by_user_id: string | null
+        }
+        Insert: {
+          bucket?: string
+          created_at?: string | null
+          deleted_at?: string | null
+          entity_id: string
+          entity_type: string
+          file_name: string
+          id?: string
+          is_sample?: boolean | null
+          mime_type?: string | null
+          organization_id: string
+          size_bytes?: number | null
+          storage_path: string
+          uploaded_by_user_id?: string | null
+        }
+        Update: {
+          bucket?: string
+          created_at?: string | null
+          deleted_at?: string | null
+          entity_id?: string
+          entity_type?: string
+          file_name?: string
+          id?: string
+          is_sample?: boolean | null
+          mime_type?: string | null
+          organization_id?: string
+          size_bytes?: number | null
+          storage_path?: string
+          uploaded_by_user_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "attachments_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "attachments_uploaded_by_user_id_fkey"
+            columns: ["uploaded_by_user_id"]
+            isOneToOne: false
+            referencedRelation: "users"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      calls: {
+        Row: {
+          contact_id: string
+          created_at: string | null
+          deleted_at: string | null
+          direction: string
+          duration_seconds: number | null
+          id: string
+          is_sample: boolean | null
+          notes: string | null
+          opportunity_id: string | null
+          organization_id: string
+          started_at: string | null
+          status: string | null
+          user_id: string
+        }
+        Insert: {
+          contact_id: string
+          created_at?: string | null
+          deleted_at?: string | null
+          direction: string
+          duration_seconds?: number | null
+          id?: string
+          is_sample?: boolean | null
+          notes?: string | null
+          opportunity_id?: string | null
+          organization_id: string
+          started_at?: string | null
+          status?: string | null
+          user_id: string
+        }
+        Update: {
+          contact_id?: string
+          created_at?: string | null
+          deleted_at?: string | null
+          direction?: string
+          duration_seconds?: number | null
+          id?: string
+          is_sample?: boolean | null
+          notes?: string | null
+          opportunity_id?: string | null
+          organization_id?: string
+          started_at?: string | null
+          status?: string | null
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "calls_contact_id_fkey"
+            columns: ["contact_id"]
+            isOneToOne: false
+            referencedRelation: "contacts"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "calls_opportunity_id_fkey"
+            columns: ["opportunity_id"]
+            isOneToOne: false
+            referencedRelation: "opportunities"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "calls_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "calls_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "users"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       contacts: {
         Row: {
           company_name: string | null
@@ -157,6 +297,278 @@ export type Database = {
             columns: ["owner_user_id"]
             isOneToOne: false
             referencedRelation: "users"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      custom_field_definitions: {
+        Row: {
+          created_at: string | null
+          field_type: string
+          id: string
+          is_required: boolean | null
+          label: string
+          module: string
+          name: string
+          options: Json | null
+          order_index: number
+          organization_id: string
+          updated_at: string | null
+        }
+        Insert: {
+          created_at?: string | null
+          field_type: string
+          id?: string
+          is_required?: boolean | null
+          label: string
+          module: string
+          name: string
+          options?: Json | null
+          order_index?: number
+          organization_id: string
+          updated_at?: string | null
+        }
+        Update: {
+          created_at?: string | null
+          field_type?: string
+          id?: string
+          is_required?: boolean | null
+          label?: string
+          module?: string
+          name?: string
+          options?: Json | null
+          order_index?: number
+          organization_id?: string
+          updated_at?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "custom_field_definitions_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      custom_field_values: {
+        Row: {
+          created_at: string | null
+          field_definition_id: string
+          id: string
+          module: string
+          organization_id: string
+          record_id: string
+          updated_at: string | null
+          value: Json | null
+        }
+        Insert: {
+          created_at?: string | null
+          field_definition_id: string
+          id?: string
+          module: string
+          organization_id: string
+          record_id: string
+          updated_at?: string | null
+          value?: Json | null
+        }
+        Update: {
+          created_at?: string | null
+          field_definition_id?: string
+          id?: string
+          module?: string
+          organization_id?: string
+          record_id?: string
+          updated_at?: string | null
+          value?: Json | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "custom_field_values_field_definition_id_fkey"
+            columns: ["field_definition_id"]
+            isOneToOne: false
+            referencedRelation: "custom_field_definitions"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "custom_field_values_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      invitations: {
+        Row: {
+          accepted_at: string | null
+          created_at: string | null
+          email: string
+          id: string
+          invited_by_user_id: string
+          organization_id: string
+          permission_profile_id: string | null
+          status: string | null
+          token: string
+        }
+        Insert: {
+          accepted_at?: string | null
+          created_at?: string | null
+          email: string
+          id?: string
+          invited_by_user_id: string
+          organization_id: string
+          permission_profile_id?: string | null
+          status?: string | null
+          token: string
+        }
+        Update: {
+          accepted_at?: string | null
+          created_at?: string | null
+          email?: string
+          id?: string
+          invited_by_user_id?: string
+          organization_id?: string
+          permission_profile_id?: string | null
+          status?: string | null
+          token?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "invitations_invited_by_user_id_fkey"
+            columns: ["invited_by_user_id"]
+            isOneToOne: false
+            referencedRelation: "users"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "invitations_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "invitations_permission_profile_id_fkey"
+            columns: ["permission_profile_id"]
+            isOneToOne: false
+            referencedRelation: "permission_profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      message_threads: {
+        Row: {
+          channel: string | null
+          contact_id: string
+          created_at: string | null
+          id: string
+          opportunity_id: string | null
+          organization_id: string
+          subject: string | null
+          updated_at: string | null
+        }
+        Insert: {
+          channel?: string | null
+          contact_id: string
+          created_at?: string | null
+          id?: string
+          opportunity_id?: string | null
+          organization_id: string
+          subject?: string | null
+          updated_at?: string | null
+        }
+        Update: {
+          channel?: string | null
+          contact_id?: string
+          created_at?: string | null
+          id?: string
+          opportunity_id?: string | null
+          organization_id?: string
+          subject?: string | null
+          updated_at?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "message_threads_contact_id_fkey"
+            columns: ["contact_id"]
+            isOneToOne: false
+            referencedRelation: "contacts"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "message_threads_opportunity_id_fkey"
+            columns: ["opportunity_id"]
+            isOneToOne: false
+            referencedRelation: "opportunities"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "message_threads_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      messages: {
+        Row: {
+          content: string
+          created_at: string | null
+          deleted_at: string | null
+          direction: string | null
+          id: string
+          is_sample: boolean | null
+          organization_id: string
+          sender_user_id: string | null
+          sent_at: string | null
+          thread_id: string
+        }
+        Insert: {
+          content: string
+          created_at?: string | null
+          deleted_at?: string | null
+          direction?: string | null
+          id?: string
+          is_sample?: boolean | null
+          organization_id: string
+          sender_user_id?: string | null
+          sent_at?: string | null
+          thread_id: string
+        }
+        Update: {
+          content?: string
+          created_at?: string | null
+          deleted_at?: string | null
+          direction?: string | null
+          id?: string
+          is_sample?: boolean | null
+          organization_id?: string
+          sender_user_id?: string | null
+          sent_at?: string | null
+          thread_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "messages_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "messages_sender_user_id_fkey"
+            columns: ["sender_user_id"]
+            isOneToOne: false
+            referencedRelation: "users"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "messages_thread_id_fkey"
+            columns: ["thread_id"]
+            isOneToOne: false
+            referencedRelation: "message_threads"
             referencedColumns: ["id"]
           },
         ]
@@ -375,6 +787,60 @@ export type Database = {
           },
         ]
       }
+      saved_views: {
+        Row: {
+          created_at: string | null
+          filters: Json | null
+          id: string
+          is_default: boolean | null
+          module: string
+          name: string
+          organization_id: string
+          owner_user_id: string | null
+          sort: Json | null
+          updated_at: string | null
+        }
+        Insert: {
+          created_at?: string | null
+          filters?: Json | null
+          id?: string
+          is_default?: boolean | null
+          module: string
+          name: string
+          organization_id: string
+          owner_user_id?: string | null
+          sort?: Json | null
+          updated_at?: string | null
+        }
+        Update: {
+          created_at?: string | null
+          filters?: Json | null
+          id?: string
+          is_default?: boolean | null
+          module?: string
+          name?: string
+          organization_id?: string
+          owner_user_id?: string | null
+          sort?: Json | null
+          updated_at?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "saved_views_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "saved_views_owner_user_id_fkey"
+            columns: ["owner_user_id"]
+            isOneToOne: false
+            referencedRelation: "users"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       subscriptions: {
         Row: {
           billing_period: string | null
@@ -423,6 +889,83 @@ export type Database = {
             foreignKeyName: "subscriptions_organization_id_fkey"
             columns: ["organization_id"]
             isOneToOne: true
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      tag_assignments: {
+        Row: {
+          created_at: string | null
+          entity_id: string
+          entity_type: string
+          id: string
+          organization_id: string
+          tag_id: string
+        }
+        Insert: {
+          created_at?: string | null
+          entity_id: string
+          entity_type: string
+          id?: string
+          organization_id: string
+          tag_id: string
+        }
+        Update: {
+          created_at?: string | null
+          entity_id?: string
+          entity_type?: string
+          id?: string
+          organization_id?: string
+          tag_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "tag_assignments_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "tag_assignments_tag_id_fkey"
+            columns: ["tag_id"]
+            isOneToOne: false
+            referencedRelation: "tags"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      tags: {
+        Row: {
+          color: string | null
+          created_at: string | null
+          id: string
+          name: string
+          organization_id: string
+          updated_at: string | null
+        }
+        Insert: {
+          color?: string | null
+          created_at?: string | null
+          id?: string
+          name: string
+          organization_id: string
+          updated_at?: string | null
+        }
+        Update: {
+          color?: string | null
+          created_at?: string | null
+          id?: string
+          name?: string
+          organization_id?: string
+          updated_at?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "tags_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
             referencedRelation: "organizations"
             referencedColumns: ["id"]
           },
