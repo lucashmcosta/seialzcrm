@@ -11,6 +11,11 @@ import { Badge } from '@/components/ui/badge';
 import { toast } from 'sonner';
 import { ArrowLeft, Mail, Phone, Building2, Edit, Trash2 } from 'lucide-react';
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from '@/components/ui/alert-dialog';
+import { ActivityTimeline } from '@/components/contacts/ActivityTimeline';
+import { ContactTasks } from '@/components/contacts/ContactTasks';
+import { ContactCalls } from '@/components/contacts/ContactCalls';
+import { ContactMessages } from '@/components/contacts/ContactMessages';
+import { ContactAttachments } from '@/components/contacts/ContactAttachments';
 
 export default function ContactDetail() {
   const { id } = useParams();
@@ -160,10 +165,11 @@ export default function ContactDetail() {
               </Card>
             </TabsContent>
 
-            <TabsContent value="timeline">
-              <Card className="p-6">
-                <p className="text-muted-foreground">{t('activity.timeline')} - Coming soon</p>
-              </Card>
+            <TabsContent value="timeline" className="space-y-4">
+              <ActivityTimeline contactId={contact.id} />
+              <ContactCalls contactId={contact.id} />
+              <ContactMessages contactId={contact.id} />
+              <ContactAttachments contactId={contact.id} />
             </TabsContent>
 
             <TabsContent value="opportunities">
@@ -173,9 +179,7 @@ export default function ContactDetail() {
             </TabsContent>
 
             <TabsContent value="tasks">
-              <Card className="p-6">
-                <p className="text-muted-foreground">{t('contacts.tasksTab')} - Coming soon</p>
-              </Card>
+              <ContactTasks contactId={contact.id} />
             </TabsContent>
           </Tabs>
         </div>
