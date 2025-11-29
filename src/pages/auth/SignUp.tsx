@@ -56,7 +56,7 @@ export default function SignUp() {
         description: 'Conta criada! Verifique seu email para confirmar o cadastro.',
       });
 
-      navigate('/auth/signin');
+      navigate(`/auth/confirm-email?email=${encodeURIComponent(formData.email)}`);
     } catch (error: any) {
       console.error('Sign up error:', error);
       toast({
