@@ -22,33 +22,52 @@ export default function SignIn() {
     setLoading(true);
 
     try {
-      const { error } = await supabase.auth.signInWithPassword({
+      const { data: authData, error } = await supabase.auth.signInWithPassword({
         email,
         password,
       });
 
       if (error) throw error;
 
-      // Check onboarding status
-      const { data: userData } = await supabase
+      // Check if user exists in our database
+      let { data: userData } = await supabase
         .from('users')
         .select('id')
         .eq('email', email)
-        .single();
+        .maybeSingle();
+
+      // If user doesn't exist in our tables but is authenticated, create the records
+      if (!userData && authData.user) {
+        const { error: signupError } = await supabase.rpc('handle_user_signup', {
+          p_full_name: authData.user.user_metadata?.full_name || 'Usuário',
+          p_email: email,
+          p_organization_name: authData.user.user_metadata?.organization_name || 'Minha Empresa',
+        });
+        
+        if (signupError) throw signupError;
+        
+        // Fetch user data again
+        const { data: newUserData } = await supabase
+          .from('users')
+          .select('id')
+          .eq('email', email)
+          .maybeSingle();
+        userData = newUserData;
+      }
 
       if (userData) {
         const { data: membership } = await supabase
           .from('user_organizations')
           .select('organization_id')
           .eq('user_id', userData.id)
-          .single();
+          .maybeSingle();
 
         if (membership) {
           const { data: org } = await supabase
             .from('organizations')
             .select('onboarding_step')
             .eq('id', membership.organization_id)
-            .single();
+            .maybeSingle();
 
           if (org && org.onboarding_step !== 'completed') {
             navigate('/onboarding');

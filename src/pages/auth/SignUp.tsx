@@ -37,36 +37,26 @@ export default function SignUp() {
     setLoading(true);
 
     try {
-      // 1. Create Supabase Auth user
-      const { data: authData, error: authError } = await supabase.auth.signUp({
+      const { error: authError } = await supabase.auth.signUp({
         email: formData.email,
         password: formData.password,
         options: {
           emailRedirectTo: `${window.location.origin}/`,
           data: {
             full_name: formData.fullName,
+            organization_name: formData.organizationName,
           }
         }
       });
 
       if (authError) throw authError;
-      if (!authData.user) throw new Error('Failed to create user');
-
-      // 2. Call the secure signup function to create all related records
-      const { data, error } = await supabase.rpc('handle_user_signup', {
-        p_full_name: formData.fullName,
-        p_email: formData.email,
-        p_organization_name: formData.organizationName,
-      });
-
-      if (error) throw error;
 
       toast({
         title: t('common.success'),
-        description: 'Conta criada com sucesso! Você será redirecionado.',
+        description: 'Conta criada! Verifique seu email para confirmar o cadastro.',
       });
 
-      navigate('/onboarding');
+      navigate('/auth/signin');
     } catch (error: any) {
       console.error('Sign up error:', error);
       toast({
