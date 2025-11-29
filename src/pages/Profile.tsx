@@ -30,7 +30,7 @@ export default function Profile() {
   const [avatarUrl, setAvatarUrl] = useState('');
   
   // Preferences
-  const [userLocale, setUserLocale] = useState('');
+  const [userLocale, setUserLocale] = useState(orgLocale);
   const [timezone, setTimezone] = useState('');
 
   useEffect(() => {
