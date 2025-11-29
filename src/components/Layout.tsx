@@ -1,6 +1,6 @@
 import { ReactNode } from 'react';
 import { Link, useLocation } from 'react-router-dom';
-import { Building2, Users, Briefcase, Settings, LogOut, LayoutDashboard } from 'lucide-react';
+import { Building2, Users, Briefcase, Settings, LogOut, LayoutDashboard, CheckSquare } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { useAuth } from '@/hooks/useAuth';
 import { useOrganization } from '@/hooks/useOrganization';
@@ -17,10 +17,11 @@ export function Layout({ children }: LayoutProps) {
   const { t } = useTranslation(locale as 'pt-BR' | 'en-US');
 
   const navigation = [
-    { name: t('dashboard.title'), href: '/dashboard', icon: LayoutDashboard },
-    { name: t('contacts.title'), href: '/contacts', icon: Users },
-    { name: t('opportunities.title'), href: '/opportunities', icon: Briefcase },
-    { name: t('settings.title'), href: '/settings', icon: Settings },
+    { name: t('nav.dashboard'), href: '/dashboard', icon: LayoutDashboard },
+    { name: t('nav.contacts'), href: '/contacts', icon: Users },
+    { name: t('nav.opportunities'), href: '/opportunities', icon: Briefcase },
+    { name: t('nav.tasks'), href: '/tasks', icon: CheckSquare },
+    { name: t('nav.settings'), href: '/settings', icon: Settings },
   ];
 
   return (
@@ -66,17 +67,19 @@ export function Layout({ children }: LayoutProps) {
 
           {/* User section */}
           <div className="p-4 border-t border-border">
-            <div className="flex items-center gap-3 mb-3">
-              <div className="w-10 h-10 bg-muted rounded-full flex items-center justify-center">
-                <span className="text-sm font-medium">
-                  {userProfile?.full_name?.charAt(0) || user?.email?.charAt(0).toUpperCase()}
-                </span>
+            <Link to="/profile" className="block mb-3">
+              <div className="flex items-center gap-3 p-2 rounded-lg hover:bg-muted transition-colors">
+                <div className="w-10 h-10 bg-primary/10 rounded-full flex items-center justify-center">
+                  <span className="text-sm font-semibold text-primary">
+                    {userProfile?.full_name?.charAt(0) || user?.email?.charAt(0).toUpperCase()}
+                  </span>
+                </div>
+                <div className="flex-1 min-w-0">
+                  <p className="text-sm font-medium truncate text-foreground">{userProfile?.full_name}</p>
+                  <p className="text-xs text-muted-foreground truncate">{userProfile?.email}</p>
+                </div>
               </div>
-              <div className="flex-1 min-w-0">
-                <p className="text-sm font-medium truncate">{userProfile?.full_name}</p>
-                <p className="text-xs text-muted-foreground truncate">{userProfile?.email}</p>
-              </div>
-            </div>
+            </Link>
             <Button
               variant="outline"
               size="sm"

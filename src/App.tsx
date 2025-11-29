@@ -9,7 +9,12 @@ import SignIn from "./pages/auth/SignIn";
 import Onboarding from "./pages/Onboarding";
 import Dashboard from "./pages/Dashboard";
 import ContactsList from "./pages/contacts/ContactsList";
+import ContactDetail from "./pages/contacts/ContactDetail";
+import ContactForm from "./pages/contacts/ContactForm";
 import OpportunitiesKanban from "./pages/opportunities/OpportunitiesKanban";
+import TasksList from "./pages/tasks/TasksList";
+import Settings from "./pages/Settings";
+import Profile from "./pages/Profile";
 import NotFound from "./pages/NotFound";
 
 const queryClient = new QueryClient();
@@ -67,6 +72,30 @@ const App = () => (
             }
           />
           <Route
+            path="/contacts/new"
+            element={
+              <ProtectedRoute>
+                <ContactForm />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/contacts/:id"
+            element={
+              <ProtectedRoute>
+                <ContactDetail />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/contacts/:id/edit"
+            element={
+              <ProtectedRoute>
+                <ContactForm />
+              </ProtectedRoute>
+            }
+          />
+          <Route
             path="/opportunities"
             element={
               <ProtectedRoute>
@@ -74,7 +103,30 @@ const App = () => (
               </ProtectedRoute>
             }
           />
-          <Route path="/settings" element={<ProtectedRoute><Dashboard /></ProtectedRoute>} />
+          <Route
+            path="/tasks"
+            element={
+              <ProtectedRoute>
+                <TasksList />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/settings"
+            element={
+              <ProtectedRoute>
+                <Settings />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/profile"
+            element={
+              <ProtectedRoute>
+                <Profile />
+              </ProtectedRoute>
+            }
+          />
           <Route path="*" element={<NotFound />} />
         </Routes>
       </BrowserRouter>
