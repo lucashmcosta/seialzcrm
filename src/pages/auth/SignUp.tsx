@@ -25,10 +25,19 @@ export default function SignUp() {
 
   const handleSignUp = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (!formData.fullName || !formData.email || !formData.password || !formData.organizationName) {
+      toast({
+        title: t('common.error'),
+        description: 'Por favor, preencha todos os campos.',
+        variant: 'destructive',
+      });
+      return;
+    }
+
     setLoading(true);
 
     try {
-      // Sign up the user
+      // 1. Create Supabase Auth user
       const { data: authData, error: authError } = await supabase.auth.signUp({
         email: formData.email,
         password: formData.password,
@@ -41,121 +50,25 @@ export default function SignUp() {
       });
 
       if (authError) throw authError;
+      if (!authData.user) throw new Error('Failed to create user');
 
-      if (authData.user) {
-        // Create organization slug from name
-        const slug = formData.organizationName
-          .toLowerCase()
-          .replace(/[^a-z0-9]+/g, '-')
-          .replace(/^-|-$/g, '');
+      // 2. Call the secure signup function to create all related records
+      const { data, error } = await supabase.rpc('handle_user_signup', {
+        p_full_name: formData.fullName,
+        p_email: formData.email,
+        p_organization_name: formData.organizationName,
+      });
 
-        // Create user profile
-        const { data: userData, error: userError } = await supabase
-          .from('users')
-          .insert({
-            auth_user_id: authData.user.id,
-            email: formData.email,
-            full_name: formData.fullName,
-            first_name: formData.fullName.split(' ')[0],
-            last_name: formData.fullName.split(' ').slice(1).join(' ') || null,
-            locale: 'pt-BR',
-            timezone: 'America/Sao_Paulo',
-          })
-          .select()
-          .single();
+      if (error) throw error;
 
-        if (userError) throw userError;
+      toast({
+        title: t('common.success'),
+        description: 'Conta criada com sucesso! Você será redirecionado.',
+      });
 
-        // Create organization
-        const { data: orgData, error: orgError } = await supabase
-          .from('organizations')
-          .insert({
-            name: formData.organizationName,
-            slug: slug,
-            default_currency: 'BRL',
-            default_locale: 'pt-BR',
-            timezone: 'America/Sao_Paulo',
-            onboarding_step: 'first_contact',
-          })
-          .select()
-          .single();
-
-        if (orgError) throw orgError;
-
-        // Create default permission profiles
-        const { data: adminProfile, error: profileError } = await supabase
-          .from('permission_profiles')
-          .insert([
-            {
-              organization_id: orgData.id,
-              name: 'Admin',
-              permissions: {
-                can_view_contacts: true,
-                can_edit_contacts: true,
-                can_delete_contacts: true,
-                can_view_opportunities: true,
-                can_edit_opportunities: true,
-                can_delete_opportunities: true,
-                can_manage_settings: true,
-                can_manage_users: true,
-              },
-            },
-            {
-              organization_id: orgData.id,
-              name: 'Sales Rep',
-              permissions: {
-                can_view_contacts: true,
-                can_edit_contacts: true,
-                can_view_opportunities: true,
-                can_edit_opportunities: true,
-              },
-            },
-          ])
-          .select();
-
-        if (profileError) throw profileError;
-
-        // Create user organization membership
-        const { error: membershipError } = await supabase
-          .from('user_organizations')
-          .insert({
-            user_id: userData.id,
-            organization_id: orgData.id,
-            permission_profile_id: adminProfile[0].id,
-            is_active: true,
-          });
-
-        if (membershipError) throw membershipError;
-
-        // Create subscription
-        const { error: subscriptionError } = await supabase
-          .from('subscriptions')
-          .insert({
-            organization_id: orgData.id,
-            plan_name: 'free',
-            status: 'trialing',
-            is_free_plan: true,
-            max_seats: 3,
-          });
-
-        if (subscriptionError) throw subscriptionError;
-
-        // Create default pipeline stages
-        await supabase.from('pipeline_stages').insert([
-          { organization_id: orgData.id, name: 'Novo', order_index: 1, type: 'custom' },
-          { organization_id: orgData.id, name: 'Em negociação', order_index: 2, type: 'custom' },
-          { organization_id: orgData.id, name: 'Ganho', order_index: 100, type: 'won' },
-          { organization_id: orgData.id, name: 'Perdido', order_index: 101, type: 'lost' },
-        ]);
-
-        toast({
-          title: t('common.success'),
-          description: 'Conta criada com sucesso!',
-        });
-
-        navigate('/onboarding');
-      }
+      navigate('/onboarding');
     } catch (error: any) {
+      console.error('Sign up error:', error);
       toast({
         title: t('common.error'),
         description: error.message,

@@ -1169,6 +1169,16 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
+      handle_user_signup: {
+        Args: {
+          p_email: string
+          p_full_name: string
+          p_locale?: string
+          p_organization_name: string
+          p_timezone?: string
+        }
+        Returns: Json
+      }
       user_has_org_access: { Args: { org_id: string }; Returns: boolean }
     }
     Enums: {
