@@ -97,6 +97,7 @@ export const translations = {
     'opportunities.created': 'Negócio criado',
     'opportunities.updated': 'Negócio atualizado',
     'opportunities.deleted': 'Negócio excluído',
+    'opportunities.deleteConfirm': 'Tem certeza que deseja remover esta oportunidade?',
     'opportunities.kanban': 'Kanban',
     'opportunities.list': 'Lista',
     
@@ -366,6 +367,7 @@ export const translations = {
     'opportunities.created': 'Opportunity created',
     'opportunities.updated': 'Opportunity updated',
     'opportunities.deleted': 'Opportunity deleted',
+    'opportunities.deleteConfirm': 'Are you sure you want to remove this opportunity?',
     'opportunities.kanban': 'Kanban',
     'opportunities.list': 'List',
     
