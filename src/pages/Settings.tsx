@@ -2,7 +2,12 @@ import { Layout } from '@/components/Layout';
 import { useOrganization } from '@/hooks/useOrganization';
 import { useTranslation } from '@/lib/i18n';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { Card } from '@/components/ui/card';
+import { GeneralSettings } from '@/components/settings/GeneralSettings';
+import { UsersSettings } from '@/components/settings/UsersSettings';
+import { PipelineSettings } from '@/components/settings/PipelineSettings';
+import { DuplicatePreventionSettings } from '@/components/settings/DuplicatePreventionSettings';
+import { CustomFieldsSettings } from '@/components/settings/CustomFieldsSettings';
+import { TagsSettings } from '@/components/settings/TagsSettings';
 
 export default function Settings() {
   const { locale } = useOrganization();
@@ -29,39 +34,27 @@ export default function Settings() {
             </TabsList>
 
             <TabsContent value="general">
-              <Card className="p-6">
-                <p className="text-muted-foreground">{t('settings.general')} - Coming soon</p>
-              </Card>
+              <GeneralSettings />
             </TabsContent>
 
             <TabsContent value="users">
-              <Card className="p-6">
-                <p className="text-muted-foreground">{t('settings.users')} - Coming soon</p>
-              </Card>
+              <UsersSettings />
             </TabsContent>
 
             <TabsContent value="pipeline">
-              <Card className="p-6">
-                <p className="text-muted-foreground">{t('settings.pipeline')} - Coming soon</p>
-              </Card>
+              <PipelineSettings />
             </TabsContent>
 
             <TabsContent value="duplicates">
-              <Card className="p-6">
-                <p className="text-muted-foreground">{t('settings.duplicates')} - Coming soon</p>
-              </Card>
+              <DuplicatePreventionSettings />
             </TabsContent>
 
             <TabsContent value="customFields">
-              <Card className="p-6">
-                <p className="text-muted-foreground">{t('settings.customFields')} - Coming soon</p>
-              </Card>
+              <CustomFieldsSettings />
             </TabsContent>
 
             <TabsContent value="tags">
-              <Card className="p-6">
-                <p className="text-muted-foreground">{t('settings.tags')} - Coming soon</p>
-              </Card>
+              <TagsSettings />
             </TabsContent>
           </Tabs>
         </div>
