@@ -279,8 +279,53 @@ export type Database = {
           },
         ]
       }
+      companies: {
+        Row: {
+          address: string | null
+          created_at: string | null
+          deleted_at: string | null
+          domain: string | null
+          id: string
+          name: string
+          organization_id: string
+          phone: string | null
+          updated_at: string | null
+        }
+        Insert: {
+          address?: string | null
+          created_at?: string | null
+          deleted_at?: string | null
+          domain?: string | null
+          id?: string
+          name: string
+          organization_id: string
+          phone?: string | null
+          updated_at?: string | null
+        }
+        Update: {
+          address?: string | null
+          created_at?: string | null
+          deleted_at?: string | null
+          domain?: string | null
+          id?: string
+          name?: string
+          organization_id?: string
+          phone?: string | null
+          updated_at?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "companies_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       contacts: {
         Row: {
+          company_id: string | null
           company_name: string | null
           created_at: string | null
           deleted_at: string | null
@@ -298,6 +343,7 @@ export type Database = {
           updated_at: string | null
         }
         Insert: {
+          company_id?: string | null
           company_name?: string | null
           created_at?: string | null
           deleted_at?: string | null
@@ -317,6 +363,7 @@ export type Database = {
           updated_at?: string | null
         }
         Update: {
+          company_id?: string | null
           company_name?: string | null
           created_at?: string | null
           deleted_at?: string | null
@@ -336,6 +383,13 @@ export type Database = {
           updated_at?: string | null
         }
         Relationships: [
+          {
+            foreignKeyName: "contacts_company_id_fkey"
+            columns: ["company_id"]
+            isOneToOne: false
+            referencedRelation: "companies"
+            referencedColumns: ["id"]
+          },
           {
             foreignKeyName: "contacts_organization_id_fkey"
             columns: ["organization_id"]
@@ -720,6 +774,7 @@ export type Database = {
         Row: {
           amount: number | null
           close_date: string | null
+          company_id: string | null
           contact_id: string | null
           created_at: string | null
           currency: string | null
@@ -736,6 +791,7 @@ export type Database = {
         Insert: {
           amount?: number | null
           close_date?: string | null
+          company_id?: string | null
           contact_id?: string | null
           created_at?: string | null
           currency?: string | null
@@ -752,6 +808,7 @@ export type Database = {
         Update: {
           amount?: number | null
           close_date?: string | null
+          company_id?: string | null
           contact_id?: string | null
           created_at?: string | null
           currency?: string | null
@@ -766,6 +823,13 @@ export type Database = {
           updated_at?: string | null
         }
         Relationships: [
+          {
+            foreignKeyName: "opportunities_company_id_fkey"
+            columns: ["company_id"]
+            isOneToOne: false
+            referencedRelation: "companies"
+            referencedColumns: ["id"]
+          },
           {
             foreignKeyName: "opportunities_contact_id_fkey"
             columns: ["contact_id"]
