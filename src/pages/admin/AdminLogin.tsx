@@ -21,24 +21,34 @@ export default function AdminLogin() {
   }, []);
 
   const checkExistingSession = async () => {
-    const { data: { session } } = await supabase.auth.getSession();
-    
-    if (session?.user) {
-      const { data: adminUser } = await supabase
-        .from('admin_users')
-        .select('mfa_enabled, is_active')
-        .eq('auth_user_id', session.user.id)
-        .single();
+    try {
+      const { data: { session } } = await supabase.auth.getSession();
       
-      if (adminUser && adminUser.is_active) {
-        if (adminUser.mfa_enabled) {
-          navigate('/admin');
-          return;
-        } else {
-          navigate('/admin/mfa-setup');
+      if (session?.user) {
+        const { data: adminUser, error } = await supabase
+          .from('admin_users')
+          .select('mfa_enabled, is_active')
+          .eq('auth_user_id', session.user.id)
+          .single();
+        
+        if (error) {
+          console.error('Erro ao buscar admin:', error);
+          setCheckingSession(false);
           return;
         }
+        
+        if (adminUser && adminUser.is_active) {
+          if (adminUser.mfa_enabled) {
+            navigate('/admin');
+            return;
+          } else {
+            navigate('/admin/mfa-setup');
+            return;
+          }
+        }
       }
+    } catch (error) {
+      console.error('Erro ao verificar sessão:', error);
     }
     
     setCheckingSession(false);
