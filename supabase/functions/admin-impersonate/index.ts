@@ -87,6 +87,7 @@ serve(async (req) => {
       JSON.stringify({
         success: true,
         session: sessionData,
+        hashed_token: sessionData.properties.hashed_token,
         user: {
           id: targetUser.id,
           email: targetUser.email,

@@ -6,6 +6,7 @@ import { supabase } from '@/integrations/supabase/client';
 export function ImpersonationBanner() {
   const [isImpersonating, setIsImpersonating] = useState(false);
   const [impersonatedUser, setImpersonatedUser] = useState('');
+  const [returnUrl, setReturnUrl] = useState('/admin/organizations');
 
   useEffect(() => {
     checkImpersonation();
@@ -17,13 +18,44 @@ export function ImpersonationBanner() {
       const data = JSON.parse(impersonationData);
       setIsImpersonating(true);
       setImpersonatedUser(data.userName || 'Usuário');
+      setReturnUrl(data.returnUrl || '/admin/organizations');
     }
   };
 
   const handleExitImpersonation = async () => {
-    localStorage.removeItem('admin_impersonation');
-    await supabase.auth.signOut();
-    window.location.href = '/admin/login';
+    try {
+      // 1. Get return URL before clearing
+      const impersonationData = localStorage.getItem('admin_impersonation');
+      const savedReturnUrl = impersonationData 
+        ? JSON.parse(impersonationData).returnUrl 
+        : '/admin/organizations';
+
+      // 2. Sign out impersonated user session
+      await supabase.auth.signOut();
+
+      // 3. Restore admin session
+      const adminBackup = localStorage.getItem('admin_session_backup');
+      if (adminBackup) {
+        const { access_token, refresh_token } = JSON.parse(adminBackup);
+        await supabase.auth.setSession({
+          access_token,
+          refresh_token,
+        });
+      }
+
+      // 4. Clean up localStorage
+      localStorage.removeItem('admin_impersonation');
+      localStorage.removeItem('admin_session_backup');
+
+      // 5. Redirect to where admin was
+      window.location.href = savedReturnUrl;
+    } catch (error) {
+      console.error('Error exiting impersonation:', error);
+      // Fallback to login if restoration fails
+      localStorage.removeItem('admin_impersonation');
+      localStorage.removeItem('admin_session_backup');
+      window.location.href = '/admin/login';
+    }
   };
 
   if (!isImpersonating) return null;

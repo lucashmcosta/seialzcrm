@@ -127,23 +127,44 @@ export default function AdminOrganizationDetail() {
 
   const handleImpersonate = async (user: { id: string; full_name: string; email: string }) => {
     try {
+      // 1. Save current admin session
+      const { data: { session: adminSession } } = await supabase.auth.getSession();
+      if (adminSession) {
+        localStorage.setItem('admin_session_backup', JSON.stringify({
+          access_token: adminSession.access_token,
+          refresh_token: adminSession.refresh_token,
+        }));
+      }
+
+      // 2. Call edge function
       const { data, error } = await supabase.functions.invoke('admin-impersonate', {
         body: { userId: user.id },
       });
 
       if (error) throw error;
 
-      // Store impersonation data in localStorage
+      // 3. Store impersonation data with return URL
       localStorage.setItem('admin_impersonation', JSON.stringify({
         userId: user.id,
         userName: user.full_name,
         userEmail: user.email,
         startedAt: new Date().toISOString(),
+        returnUrl: window.location.pathname,
       }));
 
-      // Redirect to CRM main page
+      // 4. Login as the user using hashed_token
+      const { error: verifyError } = await supabase.auth.verifyOtp({
+        token_hash: data.hashed_token,
+        type: 'email',
+      });
+
+      if (verifyError) throw verifyError;
+
+      // 5. Redirect to CRM
       window.location.href = '/';
     } catch (error: any) {
+      // Clean up backup if failed
+      localStorage.removeItem('admin_session_backup');
       toast({
         title: 'Erro',
         description: error.message || 'Falha ao iniciar impersonation.',
