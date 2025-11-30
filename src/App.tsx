@@ -19,6 +19,10 @@ import Settings from "./pages/Settings";
 import Profile from "./pages/Profile";
 import SaaSAdmin from "./pages/admin/SaaSAdmin";
 import NotFound from "./pages/NotFound";
+import CompaniesList from "./pages/companies/CompaniesList";
+import CompanyDetail from "./pages/companies/CompanyDetail";
+import CompanyForm from "./pages/companies/CompanyForm";
+import AcceptInvitation from "./pages/invite/AcceptInvitation";
 
 const queryClient = new QueryClient();
 
@@ -51,6 +55,7 @@ const App = () => (
           <Route path="/auth/signup" element={<SignUp />} />
           <Route path="/auth/signin" element={<SignIn />} />
           <Route path="/auth/confirm-email" element={<ConfirmEmail />} />
+          <Route path="/invite/:token" element={<AcceptInvitation />} />
           <Route
             path="/onboarding"
             element={
@@ -144,6 +149,38 @@ const App = () => (
             element={
               <ProtectedRoute>
                 <SaaSAdmin />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/companies"
+            element={
+              <ProtectedRoute>
+                <CompaniesList />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/companies/new"
+            element={
+              <ProtectedRoute>
+                <CompanyForm />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/companies/:id"
+            element={
+              <ProtectedRoute>
+                <CompanyDetail />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/companies/:id/edit"
+            element={
+              <ProtectedRoute>
+                <CompanyForm />
               </ProtectedRoute>
             }
           />

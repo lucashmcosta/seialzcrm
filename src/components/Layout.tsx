@@ -25,6 +25,15 @@ export function Layout({ children }: LayoutProps) {
     { name: t('nav.settings'), href: '/settings', icon: Settings },
   ];
 
+  // Add Companies menu if module is enabled
+  if (organization?.enable_companies_module) {
+    navigation.splice(2, 0, { 
+      name: t('nav.companies'), 
+      href: '/companies', 
+      icon: Building2 
+    });
+  }
+
   if (userProfile?.is_platform_admin) {
     navigation.push({ name: t('nav.admin'), href: '/saas-admin', icon: Shield });
   }

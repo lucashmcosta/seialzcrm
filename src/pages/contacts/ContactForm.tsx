@@ -30,18 +30,38 @@ export default function ContactForm() {
     email: '',
     phone: '',
     company_name: '',
+    company_id: null as string | null,
     lifecycle_stage: 'lead' as 'lead' | 'customer' | 'inactive',
     do_not_contact: false,
   });
   const [loading, setLoading] = useState(false);
   const [duplicates, setDuplicates] = useState<any[]>([]);
   const [showDuplicateWarning, setShowDuplicateWarning] = useState(false);
+  const [companies, setCompanies] = useState<Array<{ id: string; name: string }>>([]);
 
   useEffect(() => {
     if (isEdit) {
       fetchContact();
     }
-  }, [id]);
+    if (organization?.enable_companies_module) {
+      fetchCompanies();
+    }
+  }, [id, organization?.enable_companies_module]);
+
+  const fetchCompanies = async () => {
+    if (!organization?.id) return;
+    
+    const { data } = await supabase
+      .from('companies')
+      .select('id, name')
+      .eq('organization_id', organization.id)
+      .is('deleted_at', null)
+      .order('name');
+    
+    if (data) {
+      setCompanies(data);
+    }
+  };
 
   const fetchContact = async () => {
     if (!organization || !id) return;
@@ -61,6 +81,7 @@ export default function ContactForm() {
         email: data.email || '',
         phone: data.phone || '',
         company_name: data.company_name || '',
+        company_id: data.company_id || null,
         lifecycle_stage: data.lifecycle_stage || 'lead',
         do_not_contact: data.do_not_contact || false,
       });
@@ -271,14 +292,36 @@ export default function ContactForm() {
                 />
               </div>
 
-              <div>
-                <Label htmlFor="company">{t('contacts.company')}</Label>
-                <Input
-                  id="company"
-                  value={formData.company_name}
-                  onChange={(e) => setFormData({ ...formData, company_name: e.target.value })}
-                />
-              </div>
+              {organization?.enable_companies_module ? (
+                <div>
+                  <Label htmlFor="company">{t('contacts.company')}</Label>
+                  <Select
+                    value={formData.company_id || 'none'}
+                    onValueChange={(value) => setFormData({ ...formData, company_id: value === 'none' ? null : value })}
+                  >
+                    <SelectTrigger>
+                      <SelectValue placeholder={t('common.select')} />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="none">{t('common.none')}</SelectItem>
+                      {companies.map((company) => (
+                        <SelectItem key={company.id} value={company.id}>
+                          {company.name}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+              ) : (
+                <div>
+                  <Label htmlFor="company">{t('contacts.company')}</Label>
+                  <Input
+                    id="company"
+                    value={formData.company_name}
+                    onChange={(e) => setFormData({ ...formData, company_name: e.target.value })}
+                  />
+                </div>
+              )}
 
               <div>
                 <Label htmlFor="lifecycle">{t('contacts.lifecycleStage')}</Label>

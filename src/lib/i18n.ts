@@ -29,6 +29,7 @@ export const translations = {
     // Navigation
     'nav.dashboard': 'Início',
     'nav.contacts': 'Contatos',
+    'nav.companies': 'Empresas',
     'nav.opportunities': 'Negócios',
     'nav.tasks': 'Tarefas',
     'nav.settings': 'Configurações',
@@ -115,8 +116,30 @@ export const translations = {
     'contacts.duplicateDescription': 'Encontramos contatos similares no sistema:',
     'contacts.saveDespiteDuplicate': 'Salvar mesmo assim',
     
+    // Companies
+    'companies.title': 'Empresas',
+    'companies.newCompany': 'Nova Empresa',
+    'companies.editCompany': 'Editar Empresa',
+    'companies.name': 'Nome',
+    'companies.domain': 'Domínio',
+    'companies.phone': 'Telefone',
+    'companies.address': 'Endereço',
+    'companies.created': 'Criado em',
+    'companies.updated': 'Atualizado em',
+    'companies.deleted': 'Empresa excluída',
+    'companies.noCompanies': 'Nenhuma empresa encontrada',
+    'companies.linkedContacts': 'Contatos Vinculados',
+    'companies.linkedOpportunities': 'Oportunidades Vinculadas',
+    'companies.manageCompanies': 'Gerencie suas empresas e relacionamentos',
+    'companies.details': 'Detalhes da Empresa',
+    'companies.deleteConfirm': 'Tem certeza que deseja excluir esta empresa?',
+    'companies.deleteWarning': 'Esta ação não pode ser desfeita.',
+    'companies.notFound': 'Empresa não encontrada',
+    
     // Opportunities
     'opportunities.title': 'Oportunidades',
+    'opportunities.company': 'Empresa',
+    'opportunities.noOpportunities': 'Nenhuma oportunidade encontrada',
     'opportunities.newOpportunity': 'Nova oportunidade',
     'opportunities.editOpportunity': 'Editar oportunidade',
     'opportunities.name': 'Nome do negócio',
@@ -317,6 +340,17 @@ export const translations = {
     'savedViews.created': 'Visualização salva',
     'savedViews.deleted': 'Visualização excluída',
     
+    // Invitations
+    'invite.title': 'Convite para organização',
+    'invite.welcome': 'Você foi convidado para',
+    'invite.invalidToken': 'Convite inválido ou expirado',
+    'invite.alreadyAccepted': 'Este convite já foi aceito',
+    'invite.emailMismatch': 'O email do convite não corresponde ao seu email logado',
+    'invite.createAccount': 'Criar conta para aceitar convite',
+    'invite.acceptInvitation': 'Aceitar Convite',
+    'invite.accepted': 'Convite aceito com sucesso!',
+    'invite.loggedInAs': 'Você está logado como',
+    
     // Onboarding
     'onboarding.welcome': 'Bem-vindo ao Seialz!',
     'onboarding.letsGetStarted': 'Vamos começar',
@@ -380,6 +414,7 @@ export const translations = {
     // Navigation
     'nav.dashboard': 'Dashboard',
     'nav.contacts': 'Contacts',
+    'nav.companies': 'Companies',
     'nav.opportunities': 'Opportunities',
     'nav.tasks': 'Tasks',
     'nav.settings': 'Settings',

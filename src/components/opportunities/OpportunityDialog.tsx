@@ -42,12 +42,14 @@ export function OpportunityDialog({ open, onOpenChange, opportunity, stages, onS
   const { organization, locale, userProfile } = useOrganization();
   const { t } = useTranslation(locale as any);
   const [contacts, setContacts] = useState<Contact[]>([]);
+  const [companies, setCompanies] = useState<Array<{ id: string; name: string }>>([]);
   const [submitting, setSubmitting] = useState(false);
-  const [formData, setFormData] = useState<Opportunity>({
+  const [formData, setFormData] = useState<Opportunity & { company_id?: string | null }>({
     title: '',
     amount: 0,
     currency: organization?.default_currency || 'BRL',
     contact_id: null,
+    company_id: null,
     pipeline_stage_id: stages[0]?.id || '',
     close_date: null,
   });
@@ -70,8 +72,11 @@ export function OpportunityDialog({ open, onOpenChange, opportunity, stages, onS
   useEffect(() => {
     if (open && organization?.id) {
       fetchContacts();
+      if (organization.enable_companies_module) {
+        fetchCompanies();
+      }
     }
-  }, [open, organization?.id]);
+  }, [open, organization?.id, organization?.enable_companies_module]);
 
   const fetchContacts = async () => {
     if (!organization?.id) return;
@@ -85,6 +90,21 @@ export function OpportunityDialog({ open, onOpenChange, opportunity, stages, onS
 
     if (data) {
       setContacts(data);
+    }
+  };
+
+  const fetchCompanies = async () => {
+    if (!organization?.id) return;
+
+    const { data } = await supabase
+      .from('companies')
+      .select('id, name')
+      .eq('organization_id', organization.id)
+      .is('deleted_at', null)
+      .order('name');
+
+    if (data) {
+      setCompanies(data);
     }
   };
 
@@ -103,6 +123,7 @@ export function OpportunityDialog({ open, onOpenChange, opportunity, stages, onS
             amount: formData.amount,
             currency: formData.currency,
             contact_id: formData.contact_id,
+            company_id: formData.company_id,
             pipeline_stage_id: formData.pipeline_stage_id,
             close_date: formData.close_date,
           })
@@ -121,6 +142,7 @@ export function OpportunityDialog({ open, onOpenChange, opportunity, stages, onS
             amount: formData.amount,
             currency: formData.currency,
             contact_id: formData.contact_id,
+            company_id: formData.company_id,
             pipeline_stage_id: formData.pipeline_stage_id,
             close_date: formData.close_date,
             status: 'open',
@@ -211,6 +233,27 @@ export function OpportunityDialog({ open, onOpenChange, opportunity, stages, onS
                 </SelectContent>
               </Select>
             </div>
+            {organization?.enable_companies_module && (
+              <div className="space-y-2">
+                <Label htmlFor="company">{t('opportunities.company')}</Label>
+                <Select
+                  value={formData.company_id || 'none'}
+                  onValueChange={(value) => setFormData({ ...formData, company_id: value === 'none' ? null : value })}
+                >
+                  <SelectTrigger id="company">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="none">Sem empresa</SelectItem>
+                    {companies.map((company) => (
+                      <SelectItem key={company.id} value={company.id}>
+                        {company.name}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+            )}
             <div className="space-y-2">
               <Label htmlFor="contact">{t('opportunities.contact')}</Label>
               <Select
