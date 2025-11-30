@@ -8,6 +8,9 @@ import { PipelineSettings } from '@/components/settings/PipelineSettings';
 import { DuplicatePreventionSettings } from '@/components/settings/DuplicatePreventionSettings';
 import { CustomFieldsSettings } from '@/components/settings/CustomFieldsSettings';
 import { TagsSettings } from '@/components/settings/TagsSettings';
+import { PermissionProfilesSettings } from '@/components/settings/PermissionProfilesSettings';
+import { BillingSettings } from '@/components/settings/BillingSettings';
+import { IntegrationsSettings } from '@/components/settings/IntegrationsSettings';
 
 export default function Settings() {
   const { locale } = useOrganization();
@@ -24,13 +27,16 @@ export default function Settings() {
 
         <div className="flex-1 overflow-auto p-6">
           <Tabs defaultValue="general" className="w-full">
-            <TabsList>
+            <TabsList className="flex-wrap h-auto">
               <TabsTrigger value="general">{t('settings.general')}</TabsTrigger>
               <TabsTrigger value="users">{t('settings.users')}</TabsTrigger>
+              <TabsTrigger value="permissionProfiles">{t('settings.permissionProfiles')}</TabsTrigger>
+              <TabsTrigger value="billing">{t('settings.billing')}</TabsTrigger>
               <TabsTrigger value="pipeline">{t('settings.pipeline')}</TabsTrigger>
               <TabsTrigger value="duplicates">{t('settings.duplicates')}</TabsTrigger>
               <TabsTrigger value="customFields">{t('settings.customFields')}</TabsTrigger>
               <TabsTrigger value="tags">{t('settings.tags')}</TabsTrigger>
+              <TabsTrigger value="integrations">{t('settings.integrations')}</TabsTrigger>
             </TabsList>
 
             <TabsContent value="general">
@@ -55,6 +61,18 @@ export default function Settings() {
 
             <TabsContent value="tags">
               <TagsSettings />
+            </TabsContent>
+
+            <TabsContent value="permissionProfiles">
+              <PermissionProfilesSettings />
+            </TabsContent>
+
+            <TabsContent value="billing">
+              <BillingSettings />
+            </TabsContent>
+
+            <TabsContent value="integrations">
+              <IntegrationsSettings />
             </TabsContent>
           </Tabs>
         </div>

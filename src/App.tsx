@@ -13,9 +13,11 @@ import ContactsList from "./pages/contacts/ContactsList";
 import ContactDetail from "./pages/contacts/ContactDetail";
 import ContactForm from "./pages/contacts/ContactForm";
 import OpportunitiesKanban from "./pages/opportunities/OpportunitiesKanban";
+import OpportunityDetail from "./pages/opportunities/OpportunityDetail";
 import TasksList from "./pages/tasks/TasksList";
 import Settings from "./pages/Settings";
 import Profile from "./pages/Profile";
+import SaaSAdmin from "./pages/admin/SaaSAdmin";
 import NotFound from "./pages/NotFound";
 
 const queryClient = new QueryClient();
@@ -106,6 +108,14 @@ const App = () => (
             }
           />
           <Route
+            path="/opportunities/:id"
+            element={
+              <ProtectedRoute>
+                <OpportunityDetail />
+              </ProtectedRoute>
+            }
+          />
+          <Route
             path="/tasks"
             element={
               <ProtectedRoute>
@@ -126,6 +136,14 @@ const App = () => (
             element={
               <ProtectedRoute>
                 <Profile />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/saas-admin"
+            element={
+              <ProtectedRoute>
+                <SaaSAdmin />
               </ProtectedRoute>
             }
           />

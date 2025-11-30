@@ -1,10 +1,11 @@
 import { ReactNode } from 'react';
 import { Link, useLocation } from 'react-router-dom';
-import { Building2, Users, Briefcase, Settings, LogOut, LayoutDashboard, CheckSquare } from 'lucide-react';
+import { Building2, Users, Briefcase, Settings, LogOut, LayoutDashboard, CheckSquare, Shield } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { useAuth } from '@/hooks/useAuth';
 import { useOrganization } from '@/hooks/useOrganization';
 import { useTranslation } from '@/lib/i18n';
+import { Notifications } from '@/components/Notifications';
 
 interface LayoutProps {
   children: ReactNode;
@@ -23,6 +24,10 @@ export function Layout({ children }: LayoutProps) {
     { name: t('nav.tasks'), href: '/tasks', icon: CheckSquare },
     { name: t('nav.settings'), href: '/settings', icon: Settings },
   ];
+
+  if (userProfile?.is_platform_admin) {
+    navigation.push({ name: t('nav.admin'), href: '/saas-admin', icon: Shield });
+  }
 
   return (
     <div className="min-h-screen bg-background">
@@ -95,6 +100,12 @@ export function Layout({ children }: LayoutProps) {
 
       {/* Main content */}
       <div className="pl-64">
+        {/* Top bar with notifications */}
+        <div className="sticky top-0 z-10 bg-background/95 backdrop-blur border-b border-border">
+          <div className="px-6 py-2 flex justify-end">
+            <Notifications />
+          </div>
+        </div>
         <main className="min-h-screen">
           {children}
         </main>
