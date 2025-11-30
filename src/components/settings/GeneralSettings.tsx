@@ -9,13 +9,25 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Switch } from '@/components/ui/switch';
 import { useToast } from '@/hooks/use-toast';
-import { Loader2 } from 'lucide-react';
+import { Loader2, Trash2 } from 'lucide-react';
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  AlertDialogTrigger,
+} from '@/components/ui/alert-dialog';
 
 export function GeneralSettings() {
   const { organization, locale } = useOrganization();
   const { t } = useTranslation(locale as any);
   const { toast } = useToast();
   const [loading, setLoading] = useState(false);
+  const [resetting, setResetting] = useState(false);
   const [formData, setFormData] = useState({
     name: organization?.name || '',
     default_currency: organization?.default_currency || 'BRL',
@@ -142,6 +154,68 @@ export function GeneralSettings() {
             {t('common.save')}
           </Button>
         </form>
+
+        {/* Sample Data Reset Section */}
+        <div className="mt-8 pt-8 border-t">
+          <h3 className="text-lg font-medium mb-2">{t('settings.sampleData')}</h3>
+          <p className="text-sm text-muted-foreground mb-4">
+            {t('settings.sampleDataDescription')}
+          </p>
+          <AlertDialog>
+            <AlertDialogTrigger asChild>
+              <Button variant="destructive" disabled={resetting}>
+                {resetting && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                <Trash2 className="mr-2 h-4 w-4" />
+                {t('settings.resetSampleData')}
+              </Button>
+            </AlertDialogTrigger>
+            <AlertDialogContent>
+              <AlertDialogHeader>
+                <AlertDialogTitle>{t('settings.resetSampleDataConfirm')}</AlertDialogTitle>
+                <AlertDialogDescription>
+                  {t('settings.resetSampleDataWarning')}
+                </AlertDialogDescription>
+              </AlertDialogHeader>
+              <AlertDialogFooter>
+                <AlertDialogCancel>{t('common.cancel')}</AlertDialogCancel>
+                <AlertDialogAction
+                  onClick={async () => {
+                    if (!organization?.id) return;
+                    setResetting(true);
+                    try {
+                      // Delete sample data from all tables
+                      await Promise.all([
+                        supabase.from('contacts').delete().eq('organization_id', organization.id).eq('is_sample', true),
+                        supabase.from('opportunities').delete().eq('organization_id', organization.id).eq('is_sample', true),
+                        supabase.from('tasks').delete().eq('organization_id', organization.id).eq('is_sample', true),
+                        supabase.from('activities').delete().eq('organization_id', organization.id).eq('is_sample', true),
+                        supabase.from('calls').delete().eq('organization_id', organization.id).eq('is_sample', true),
+                        supabase.from('messages').delete().eq('organization_id', organization.id).eq('is_sample', true),
+                        supabase.from('attachments').delete().eq('organization_id', organization.id).eq('is_sample', true),
+                      ]);
+                      
+                      toast({
+                        title: t('common.success'),
+                        description: t('settings.sampleDataDeleted'),
+                      });
+                    } catch (error) {
+                      console.error('Error deleting sample data:', error);
+                      toast({
+                        variant: 'destructive',
+                        title: t('common.error'),
+                        description: t('settings.sampleDataError'),
+                      });
+                    } finally {
+                      setResetting(false);
+                    }
+                  }}
+                >
+                  {t('common.confirm')}
+                </AlertDialogAction>
+              </AlertDialogFooter>
+            </AlertDialogContent>
+          </AlertDialog>
+        </div>
       </CardContent>
     </Card>
   );

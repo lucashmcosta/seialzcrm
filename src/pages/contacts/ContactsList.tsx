@@ -4,10 +4,14 @@ import { Layout } from '@/components/Layout';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Card, CardContent } from '@/components/ui/card';
+import { Checkbox } from '@/components/ui/checkbox';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { useOrganization } from '@/hooks/useOrganization';
 import { useTranslation } from '@/lib/i18n';
 import { supabase } from '@/integrations/supabase/client';
-import { Plus, Search, Mail, Phone } from 'lucide-react';
+import { Plus, Search, Mail, Phone, Filter } from 'lucide-react';
+import { SavedViewsDropdown } from '@/components/SavedViewsDropdown';
+import { BulkActionsBar } from '@/components/BulkActionsBar';
 
 interface Contact {
   id: string;
@@ -16,42 +20,105 @@ interface Contact {
   phone: string | null;
   company_name: string | null;
   lifecycle_stage: string;
+  owner_user_id: string | null;
   created_at: string;
 }
 
 export default function ContactsList() {
-  const { organization, locale } = useOrganization();
+  const { organization, userProfile, locale } = useOrganization();
   const { t } = useTranslation(locale as 'pt-BR' | 'en-US');
   const [contacts, setContacts] = useState<Contact[]>([]);
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
+  const [selectedIds, setSelectedIds] = useState<string[]>([]);
+  const [users, setUsers] = useState<{ id: string; full_name: string }[]>([]);
+  
+  // Filters state
+  const [ownerFilter, setOwnerFilter] = useState('all');
+  const [stageFilter, setStageFilter] = useState('all');
+  
+  // Current filters and sort for SavedViews
+  const currentFilters = { owner: ownerFilter, stage: stageFilter, search: searchTerm };
+  const currentSort = { field: 'created_at', direction: 'desc' };
+  
+  const handleApplyView = (filters: any, sort: any) => {
+    if (filters.owner) setOwnerFilter(filters.owner);
+    if (filters.stage) setStageFilter(filters.stage);
+    if (filters.search) setSearchTerm(filters.search);
+  };
 
   useEffect(() => {
     if (!organization) return;
-
-    const fetchContacts = async () => {
-      setLoading(true);
-      const { data, error } = await supabase
-        .from('contacts')
-        .select('*')
-        .eq('organization_id', organization.id)
-        .is('deleted_at', null)
-        .order('created_at', { ascending: false });
-
-      if (!error && data) {
-        setContacts(data);
-      }
-      setLoading(false);
-    };
-
     fetchContacts();
+    fetchUsers();
   }, [organization]);
 
-  const filteredContacts = contacts.filter((contact) =>
-    contact.full_name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    contact.email?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    contact.phone?.includes(searchTerm)
-  );
+  const fetchUsers = async () => {
+    if (!organization) return;
+    
+    const { data } = await supabase
+      .from('user_organizations')
+      .select('user_id, users(id, full_name)')
+      .eq('organization_id', organization.id)
+      .eq('is_active', true);
+    
+    if (data) {
+      const usersList = data
+        .filter(u => u.users)
+        .map(u => ({ id: u.users!.id, full_name: u.users!.full_name }));
+      setUsers(usersList);
+    }
+  };
+
+  const fetchContacts = async () => {
+    if (!organization) return;
+
+    setLoading(true);
+    const { data, error } = await supabase
+      .from('contacts')
+      .select('*')
+      .eq('organization_id', organization.id)
+      .is('deleted_at', null)
+      .order('created_at', { ascending: false });
+
+    if (!error && data) {
+      setContacts(data);
+    }
+    setLoading(false);
+  };
+
+  const filteredContacts = contacts.filter((contact) => {
+    const matchesSearch = 
+      contact.full_name.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      contact.email?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      contact.phone?.includes(searchTerm);
+    
+    const matchesOwner = ownerFilter === 'all' || contact.owner_user_id === ownerFilter;
+    const matchesStage = stageFilter === 'all' || contact.lifecycle_stage === stageFilter;
+    
+    return matchesSearch && matchesOwner && matchesStage;
+  });
+
+  const handleSelectAll = (checked: boolean | 'indeterminate') => {
+    if (checked === true) {
+      setSelectedIds(filteredContacts.map(c => c.id));
+    } else {
+      setSelectedIds([]);
+    }
+  };
+
+  const handleSelectOne = (id: string, checked: boolean) => {
+    if (checked) {
+      setSelectedIds([...selectedIds, id]);
+    } else {
+      setSelectedIds(selectedIds.filter(i => i !== id));
+    }
+  };
+
+  const handleBulkSuccess = () => {
+    setSelectedIds([]);
+    fetchContacts();
+  };
 
   return (
     <Layout>
@@ -60,19 +127,28 @@ export default function ContactsList() {
           <div>
             <h1 className="text-3xl font-bold text-foreground">{t('contacts.title')}</h1>
             <p className="text-muted-foreground mt-1">
-              Gerencie seus contatos e relacionamentos
+              {t('contacts.manageContacts')}
             </p>
           </div>
-          <Link to="/contacts/new">
-            <Button>
-              <Plus className="w-4 h-4 mr-2" />
-              {t('contacts.newContact')}
-            </Button>
-          </Link>
+          <div className="flex gap-2">
+            <SavedViewsDropdown
+              module="contacts"
+              currentFilters={currentFilters}
+              currentSort={currentSort}
+              onApplyView={handleApplyView}
+            />
+            <Link to="/contacts/new">
+              <Button>
+                <Plus className="w-4 h-4 mr-2" />
+                {t('contacts.newContact')}
+              </Button>
+            </Link>
+          </div>
         </div>
 
-        <div className="mb-6">
-          <div className="relative">
+        {/* Filters */}
+        <div className="mb-6 flex flex-wrap gap-3">
+          <div className="relative flex-1 min-w-[250px]">
             <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-muted-foreground w-5 h-5" />
             <Input
               placeholder={t('common.search')}
@@ -81,6 +157,32 @@ export default function ContactsList() {
               className="pl-10"
             />
           </div>
+          
+          <Select value={ownerFilter} onValueChange={setOwnerFilter}>
+            <SelectTrigger className="w-48">
+              <SelectValue placeholder={t('contacts.owner')} />
+            </SelectTrigger>
+            <SelectContent className="bg-popover z-50">
+              <SelectItem value="all">{t('contacts.allOwners')}</SelectItem>
+              {users.map(user => (
+                <SelectItem key={user.id} value={user.id}>
+                  {user.full_name}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+          
+          <Select value={stageFilter} onValueChange={setStageFilter}>
+            <SelectTrigger className="w-48">
+              <SelectValue placeholder={t('contacts.lifecycleStage')} />
+            </SelectTrigger>
+            <SelectContent className="bg-popover z-50">
+              <SelectItem value="all">{t('contacts.allStages')}</SelectItem>
+              <SelectItem value="lead">{t('lifecycle.lead')}</SelectItem>
+              <SelectItem value="customer">{t('lifecycle.customer')}</SelectItem>
+              <SelectItem value="inactive">{t('lifecycle.inactive')}</SelectItem>
+            </SelectContent>
+          </Select>
         </div>
 
         {loading ? (
@@ -90,7 +192,7 @@ export default function ContactsList() {
         ) : filteredContacts.length === 0 ? (
           <Card>
             <CardContent className="py-12 text-center">
-              <p className="text-muted-foreground">Nenhum contato encontrado</p>
+              <p className="text-muted-foreground">{t('contacts.noContacts')}</p>
               <Link to="/contacts/new">
                 <Button className="mt-4">
                   <Plus className="w-4 h-4 mr-2" />
@@ -100,49 +202,81 @@ export default function ContactsList() {
             </CardContent>
           </Card>
         ) : (
-          <div className="grid gap-4">
-            {filteredContacts.map((contact) => (
-              <Link key={contact.id} to={`/contacts/${contact.id}`}>
-                <Card className="hover:shadow-md transition-shadow">
+          <>
+            {/* Select all checkbox */}
+            <div className="mb-3 flex items-center gap-2 px-2">
+              <Checkbox
+                checked={selectedIds.length === filteredContacts.length && filteredContacts.length > 0}
+                onCheckedChange={handleSelectAll}
+              />
+              <span className="text-sm text-muted-foreground">
+                {selectedIds.length > 0 
+                  ? `${selectedIds.length} ${t('contacts.selected')}`
+                  : t('contacts.selectAll')
+                }
+              </span>
+            </div>
+            
+            <div className="grid gap-4">
+              {filteredContacts.map((contact) => (
+                <Card key={contact.id} className="hover:shadow-md transition-shadow">
                   <CardContent className="p-6">
-                    <div className="flex justify-between items-start">
-                      <div className="space-y-2">
-                        <h3 className="text-lg font-semibold text-foreground">
-                          {contact.full_name}
-                        </h3>
-                        {contact.email && (
-                          <div className="flex items-center gap-2 text-sm text-muted-foreground">
-                            <Mail className="w-4 h-4" />
-                            {contact.email}
+                    <div className="flex items-start gap-4">
+                      <Checkbox
+                        checked={selectedIds.includes(contact.id)}
+                        onCheckedChange={(checked) => handleSelectOne(contact.id, !!checked)}
+                        onClick={(e) => e.stopPropagation()}
+                      />
+                      <Link to={`/contacts/${contact.id}`} className="flex-1">
+                        <div className="flex justify-between items-start">
+                          <div className="space-y-2">
+                            <h3 className="text-lg font-semibold text-foreground">
+                              {contact.full_name}
+                            </h3>
+                            {contact.email && (
+                              <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                                <Mail className="w-4 h-4" />
+                                {contact.email}
+                              </div>
+                            )}
+                            {contact.phone && (
+                              <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                                <Phone className="w-4 h-4" />
+                                {contact.phone}
+                              </div>
+                            )}
+                            {contact.company_name && (
+                              <p className="text-sm text-muted-foreground">{contact.company_name}</p>
+                            )}
                           </div>
-                        )}
-                        {contact.phone && (
-                          <div className="flex items-center gap-2 text-sm text-muted-foreground">
-                            <Phone className="w-4 h-4" />
-                            {contact.phone}
+                          <div className="text-sm">
+                            <span className={`px-2 py-1 rounded-full text-xs font-medium ${
+                              contact.lifecycle_stage === 'customer' 
+                                ? 'bg-primary/10 text-primary'
+                                : 'bg-muted text-muted-foreground'
+                            }`}>
+                              {t(`lifecycle.${contact.lifecycle_stage}`)}
+                            </span>
                           </div>
-                        )}
-                        {contact.company_name && (
-                          <p className="text-sm text-muted-foreground">{contact.company_name}</p>
-                        )}
-                      </div>
-                      <div className="text-sm">
-                        <span className={`px-2 py-1 rounded-full text-xs font-medium ${
-                          contact.lifecycle_stage === 'customer' 
-                            ? 'bg-primary/10 text-primary'
-                            : 'bg-muted text-muted-foreground'
-                        }`}>
-                          {t(`lifecycle.${contact.lifecycle_stage}`)}
-                        </span>
-                      </div>
+                        </div>
+                      </Link>
                     </div>
                   </CardContent>
                 </Card>
-              </Link>
-            ))}
-          </div>
+              ))}
+            </div>
+          </>
         )}
       </div>
+
+      <BulkActionsBar
+        selectedIds={selectedIds}
+        module="contacts"
+        users={users}
+        onClear={() => setSelectedIds([])}
+        onSuccess={handleBulkSuccess}
+        locale={locale as 'pt-BR' | 'en-US'}
+      />
     </Layout>
   );
 }
