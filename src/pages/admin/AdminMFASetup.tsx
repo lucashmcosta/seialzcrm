@@ -11,15 +11,17 @@ import { useAdminAuth } from '@/hooks/useAdminAuth';
 
 export default function AdminMFASetup() {
   const [mfaCode, setMfaCode] = useState('');
-  const [loading, setLoading] = useState(false);
+  const [submitting, setSubmitting] = useState(false);
   const [qrCode, setQrCode] = useState('');
   const [secret, setSecret] = useState('');
   const [backupCodes, setBackupCodes] = useState<string[]>([]);
   const navigate = useNavigate();
   const { toast } = useToast();
-  const { user, adminUser } = useAdminAuth();
+  const { user, adminUser, loading } = useAdminAuth();
 
   useEffect(() => {
+    if (loading) return;
+    
     if (!user || !adminUser) {
       navigate('/admin/login');
       return;
@@ -31,7 +33,7 @@ export default function AdminMFASetup() {
     }
 
     generateMFASecret();
-  }, [user, adminUser, navigate]);
+  }, [user, adminUser, loading, navigate]);
 
   const generateMFASecret = () => {
     const randomSecret = Array.from(crypto.getRandomValues(new Uint8Array(20)))
@@ -52,7 +54,7 @@ export default function AdminMFASetup() {
 
   const handleVerifyMFA = async (e: React.FormEvent) => {
     e.preventDefault();
-    setLoading(true);
+    setSubmitting(true);
 
     try {
       const { error } = await supabase
@@ -86,7 +88,7 @@ export default function AdminMFASetup() {
         variant: 'destructive',
       });
     } finally {
-      setLoading(false);
+      setSubmitting(false);
     }
   };
 
@@ -97,6 +99,17 @@ export default function AdminMFASetup() {
       description: 'Texto copiado para a área de transferência.',
     });
   };
+
+  if (loading) {
+    return (
+      <div className="min-h-screen flex items-center justify-center">
+        <div className="text-center">
+          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary mx-auto" />
+          <p className="mt-4 text-muted-foreground">Carregando...</p>
+        </div>
+      </div>
+    );
+  }
 
   if (!user || !adminUser) {
     return null;
@@ -170,16 +183,16 @@ export default function AdminMFASetup() {
                   onChange={(e) => setMfaCode(e.target.value)}
                   maxLength={6}
                   required
-                  disabled={loading}
+                  disabled={submitting}
                   className="text-center text-2xl tracking-widest"
                 />
               </div>
               <Button
                 type="submit"
                 className="w-full"
-                disabled={loading || mfaCode.length !== 6}
+                disabled={submitting || mfaCode.length !== 6}
               >
-                {loading ? 'Verificando...' : 'Ativar 2FA'}
+                {submitting ? 'Verificando...' : 'Ativar 2FA'}
               </Button>
             </form>
           </div>
