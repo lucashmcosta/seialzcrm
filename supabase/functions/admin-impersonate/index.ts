@@ -59,7 +59,7 @@ serve(async (req) => {
       throw new Error('Usuário não encontrado');
     }
 
-    // Generate impersonation session
+    // Generate magic link for impersonation
     const { data: sessionData, error: sessionError } = await supabase.auth.admin.generateLink({
       type: 'magiclink',
       email: targetUser.email,
@@ -67,6 +67,24 @@ serve(async (req) => {
 
     if (sessionError || !sessionData) {
       throw new Error('Falha ao gerar sessão');
+    }
+
+    // Create impersonation session record
+    const { data: impSession, error: impError } = await supabase
+      .from('impersonation_sessions')
+      .insert({
+        admin_user_id: adminUser.id,
+        target_user_id: targetUser.id,
+        target_user_email: targetUser.email,
+        target_user_name: targetUser.full_name,
+        organization_id: targetUser.user_organizations[0]?.organization_id,
+        status: 'active',
+      })
+      .select()
+      .single();
+
+    if (impError) {
+      console.error('Error creating impersonation session:', impError);
     }
 
     // Log impersonation action
@@ -78,16 +96,23 @@ serve(async (req) => {
       details: {
         target_email: targetUser.email,
         target_name: targetUser.full_name,
+        session_id: impSession?.id,
       },
     });
 
     console.log(`Admin ${adminUser.email} impersonating user ${targetUser.email}`);
 
+    // Return magic link with session_id as query param
+    const magicLinkUrl = new URL(sessionData.properties.action_link);
+    if (impSession) {
+      magicLinkUrl.searchParams.set('imp_session', impSession.id);
+    }
+
     return new Response(
       JSON.stringify({
         success: true,
-        session: sessionData,
-        hashed_token: sessionData.properties.hashed_token,
+        action_link: magicLinkUrl.toString(),
+        session_id: impSession?.id,
         user: {
           id: targetUser.id,
           email: targetUser.email,

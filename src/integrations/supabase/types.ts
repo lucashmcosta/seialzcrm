@@ -714,6 +714,66 @@ export type Database = {
         }
         Relationships: []
       }
+      impersonation_sessions: {
+        Row: {
+          admin_user_id: string | null
+          created_at: string | null
+          duration_seconds: number | null
+          ended_at: string | null
+          id: string
+          notes: string | null
+          organization_id: string | null
+          started_at: string
+          status: string | null
+          target_user_email: string
+          target_user_id: string
+          target_user_name: string | null
+        }
+        Insert: {
+          admin_user_id?: string | null
+          created_at?: string | null
+          duration_seconds?: number | null
+          ended_at?: string | null
+          id?: string
+          notes?: string | null
+          organization_id?: string | null
+          started_at?: string
+          status?: string | null
+          target_user_email: string
+          target_user_id: string
+          target_user_name?: string | null
+        }
+        Update: {
+          admin_user_id?: string | null
+          created_at?: string | null
+          duration_seconds?: number | null
+          ended_at?: string | null
+          id?: string
+          notes?: string | null
+          organization_id?: string | null
+          started_at?: string
+          status?: string | null
+          target_user_email?: string
+          target_user_id?: string
+          target_user_name?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "impersonation_sessions_admin_user_id_fkey"
+            columns: ["admin_user_id"]
+            isOneToOne: false
+            referencedRelation: "admin_users"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "impersonation_sessions_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       integrations: {
         Row: {
           config: Json | null

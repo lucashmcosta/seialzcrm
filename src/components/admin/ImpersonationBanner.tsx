@@ -4,61 +4,79 @@ import { AlertTriangle } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 
 export function ImpersonationBanner() {
-  const [isImpersonating, setIsImpersonating] = useState(false);
+  const [sessionId, setSessionId] = useState<string | null>(null);
   const [impersonatedUser, setImpersonatedUser] = useState('');
-  const [returnUrl, setReturnUrl] = useState('/admin/organizations');
 
   useEffect(() => {
     checkImpersonation();
   }, []);
 
   const checkImpersonation = async () => {
-    const impersonationData = localStorage.getItem('admin_impersonation');
-    if (impersonationData) {
-      const data = JSON.parse(impersonationData);
-      setIsImpersonating(true);
-      setImpersonatedUser(data.userName || 'Usuário');
-      setReturnUrl(data.returnUrl || '/admin/organizations');
+    // Check URL params first (from magic link)
+    const params = new URLSearchParams(window.location.search);
+    const urlSessionId = params.get('imp_session');
+    
+    if (urlSessionId) {
+      setSessionId(urlSessionId);
+      localStorage.setItem('impersonation_session_id', urlSessionId);
+      
+      // Fetch session details
+      const { data: session } = await supabase
+        .from('impersonation_sessions')
+        .select('target_user_name')
+        .eq('id', urlSessionId)
+        .single();
+      
+      if (session) {
+        setImpersonatedUser(session.target_user_name || 'Usuário');
+      }
+    } else {
+      // Check localStorage
+      const storedSessionId = localStorage.getItem('impersonation_session_id');
+      if (storedSessionId) {
+        setSessionId(storedSessionId);
+        
+        // Fetch session details
+        const { data: session } = await supabase
+          .from('impersonation_sessions')
+          .select('target_user_name')
+          .eq('id', storedSessionId)
+          .single();
+        
+        if (session) {
+          setImpersonatedUser(session.target_user_name || 'Usuário');
+        }
+      }
     }
   };
 
-  const handleExitImpersonation = async () => {
+  const handleEndSession = async () => {
     try {
-      // 1. Get return URL before clearing
-      const impersonationData = localStorage.getItem('admin_impersonation');
-      const savedReturnUrl = impersonationData 
-        ? JSON.parse(impersonationData).returnUrl 
-        : '/admin/organizations';
-
-      // 2. Sign out impersonated user session
-      await supabase.auth.signOut();
-
-      // 3. Restore admin session
-      const adminBackup = localStorage.getItem('admin_session_backup');
-      if (adminBackup) {
-        const { access_token, refresh_token } = JSON.parse(adminBackup);
-        await supabase.auth.setSession({
-          access_token,
-          refresh_token,
+      if (sessionId) {
+        // Call edge function to end session
+        await supabase.functions.invoke('admin-impersonate-end', {
+          body: { sessionId },
         });
       }
 
-      // 4. Clean up localStorage
-      localStorage.removeItem('admin_impersonation');
-      localStorage.removeItem('admin_session_backup');
-
-      // 5. Redirect to where admin was
-      window.location.href = savedReturnUrl;
+      // Clean up
+      localStorage.removeItem('impersonation_session_id');
+      
+      // Sign out impersonated user
+      await supabase.auth.signOut();
+      
+      // Close this tab
+      window.close();
     } catch (error) {
-      console.error('Error exiting impersonation:', error);
-      // Fallback to login if restoration fails
-      localStorage.removeItem('admin_impersonation');
-      localStorage.removeItem('admin_session_backup');
-      window.location.href = '/admin/login';
+      console.error('Error ending impersonation:', error);
+      // Fallback: still sign out and close
+      localStorage.removeItem('impersonation_session_id');
+      await supabase.auth.signOut();
+      window.close();
     }
   };
 
-  if (!isImpersonating) return null;
+  if (!sessionId) return null;
 
   return (
     <div className="bg-destructive text-destructive-foreground px-4 py-2 flex items-center justify-between">
@@ -71,9 +89,9 @@ export function ImpersonationBanner() {
       <Button
         size="sm"
         variant="secondary"
-        onClick={handleExitImpersonation}
+        onClick={handleEndSession}
       >
-        Sair da Sessão
+        Encerrar Sessão
       </Button>
     </div>
   );

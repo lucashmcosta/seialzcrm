@@ -2,3 +2,6 @@ project_id = "qvmtzfvkhkhkhdpclzua"
 
 [functions.admin-impersonate]
 verify_jwt = true
+
+[functions.admin-impersonate-end]
+verify_jwt = false
