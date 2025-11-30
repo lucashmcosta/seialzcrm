@@ -41,6 +41,8 @@ import AdminIntegrationDetail from "./pages/admin/AdminIntegrationDetail";
 import AdminDocumentation from "./pages/admin/AdminDocumentation";
 import AdminDocumentationEdit from "./pages/admin/AdminDocumentationEdit";
 import { AdminProtectedRoute } from "./components/admin/AdminProtectedRoute";
+import DocsIndex from "./pages/docs/DocsIndex";
+import DocsModule from "./pages/docs/DocsModule";
 
 const queryClient = new QueryClient();
 
@@ -70,6 +72,10 @@ const App = () => (
       <BrowserRouter>
         <Routes>
           <Route path="/" element={<Navigate to="/dashboard" replace />} />
+          
+          {/* Public Documentation */}
+          <Route path="/docs" element={<DocsIndex />} />
+          <Route path="/docs/:module" element={<DocsModule />} />
           
           {/* Auth routes */}
           <Route path="/auth/signup" element={<SignUp />} />
