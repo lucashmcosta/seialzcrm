@@ -13,6 +13,7 @@ import { useAuth } from '@/hooks/useAuth';
 import { useOrganization } from '@/hooks/useOrganization';
 import { useNavigate } from 'react-router-dom';
 import { useTranslation } from '@/lib/i18n';
+import { toast } from 'sonner';
 
 interface Notification {
   id: string;
@@ -36,6 +37,30 @@ export function Notifications() {
   useEffect(() => {
     if (userProfile) {
       fetchNotifications();
+      
+      // Subscribe to realtime changes
+      const channel = supabase
+        .channel('notifications')
+        .on('postgres_changes', 
+          { 
+            event: 'INSERT', 
+            schema: 'public', 
+            table: 'notifications',
+            filter: `user_id=eq.${userProfile.id}`
+          }, 
+          (payload) => {
+            const newNotif = payload.new as Notification;
+            setNotifications(prev => [newNotif, ...prev]);
+            setUnreadCount(prev => prev + 1);
+            // Show toast notification
+            toast.success(newNotif.title, { description: newNotif.body || undefined });
+          }
+        )
+        .subscribe();
+      
+      return () => {
+        supabase.removeChannel(channel);
+      };
     }
   }, [userProfile]);
 
@@ -72,6 +97,25 @@ export function Notifications() {
     fetchNotifications();
   };
 
+  const markAllAsRead = async () => {
+    if (!userProfile) return;
+
+    const unreadIds = notifications.filter(n => !n.read_at).map(n => n.id);
+    if (unreadIds.length === 0) return;
+
+    const { error } = await supabase
+      .from('notifications')
+      .update({ read_at: new Date().toISOString() })
+      .in('id', unreadIds);
+
+    if (error) {
+      console.error('Error marking all as read:', error);
+      return;
+    }
+
+    fetchNotifications();
+  };
+
   const handleNotificationClick = (notification: Notification) => {
     markAsRead(notification.id);
 
@@ -102,8 +146,13 @@ export function Notifications() {
         </Button>
       </DropdownMenuTrigger>
       <DropdownMenuContent align="end" className="w-80">
-        <div className="p-2 border-b">
+        <div className="p-2 border-b flex items-center justify-between">
           <p className="font-semibold text-sm">{t('notifications.title')}</p>
+          {unreadCount > 0 && (
+            <Button variant="ghost" size="sm" onClick={markAllAsRead}>
+              {t('notifications.markAllRead')}
+            </Button>
+          )}
         </div>
         {notifications.length === 0 ? (
           <div className="p-4 text-center text-sm text-muted-foreground">

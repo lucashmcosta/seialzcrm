@@ -25,6 +25,10 @@ export const translations = {
     'common.noResults': 'Nenhum resultado encontrado',
     'common.showing': 'Mostrando',
     'common.of': 'de',
+    'common.view': 'Visualizar',
+    'common.page': 'Página',
+    'common.name': 'Nome',
+    'common.type': 'Tipo',
     
     // Navigation
     'nav.dashboard': 'Início',
@@ -39,6 +43,7 @@ export const translations = {
     // Notifications
     'notifications.title': 'Notificações',
     'notifications.empty': 'Nenhuma notificação',
+    'notifications.markAllRead': 'Marcar todas como lidas',
     
     // Admin
     'admin.title': 'Administração SaaS',
@@ -215,6 +220,8 @@ export const translations = {
     'settings.permissionProfiles': 'Perfis de Permissão',
     'settings.billing': 'Faturamento',
     'settings.integrations': 'Integrações',
+    'settings.auditLogs': 'Histórico de Alterações',
+    'settings.trash': 'Lixeira',
     'settings.orgName': 'Nome da Organização',
     'settings.orgLogo': 'Logotipo',
     'settings.defaultCurrency': 'Moeda Padrão',
@@ -279,6 +286,37 @@ export const translations = {
     'settings.seatLimitDescription': 'Você atingiu o número máximo de usuários ativos para seu plano. Desative um usuário ou faça upgrade do seu plano.',
     'settings.userActivated': 'Usuário ativado',
     'settings.userDeactivated': 'Usuário desativado',
+    
+    // Audit Logs
+    'auditLogs.title': 'Histórico de Alterações',
+    'auditLogs.description': 'Visualize todas as alterações feitas nos registros',
+    'auditLogs.entityType': 'Tipo de Entidade',
+    'auditLogs.action': 'Ação',
+    'auditLogs.user': 'Usuário',
+    'auditLogs.date': 'Data',
+    'auditLogs.oldValue': 'Valor Anterior',
+    'auditLogs.newValue': 'Novo Valor',
+    'auditLogs.noLogs': 'Nenhum registro encontrado',
+    'auditLogs.details': 'Detalhes da Alteração',
+    'auditLogs.actions.INSERT': 'Criação',
+    'auditLogs.actions.UPDATE': 'Atualização',
+    'auditLogs.actions.DELETE': 'Exclusão',
+    
+    // Trash
+    'trash.title': 'Lixeira',
+    'trash.description': 'Restaure ou exclua permanentemente itens deletados',
+    'trash.restore': 'Restaurar',
+    'trash.deleteForever': 'Excluir Permanentemente',
+    'trash.emptyTrash': 'Esvaziar Lixeira',
+    'trash.deletedAt': 'Excluído em',
+    'trash.confirmRestore': 'Deseja restaurar este item?',
+    'trash.confirmDelete': 'Deseja excluir este item permanentemente?',
+    'trash.confirmEmpty': 'Tem certeza?',
+    'trash.emptyWarning': 'Todos os itens serão excluídos permanentemente. Esta ação não pode ser desfeita.',
+    'trash.restored': 'Item restaurado com sucesso',
+    'trash.deleted': 'Item excluído permanentemente',
+    'trash.emptied': 'Lixeira esvaziada com sucesso',
+    'trash.noItems': 'Nenhum item na lixeira',
     
     // Profile
     'profile.title': 'Meu Perfil',
@@ -410,6 +448,10 @@ export const translations = {
     'common.noResults': 'No results found',
     'common.showing': 'Showing',
     'common.of': 'of',
+    'common.view': 'View',
+    'common.page': 'Page',
+    'common.name': 'Name',
+    'common.type': 'Type',
     
     // Navigation
     'nav.dashboard': 'Dashboard',
@@ -424,6 +466,7 @@ export const translations = {
     // Notifications
     'notifications.title': 'Notifications',
     'notifications.empty': 'No notifications',
+    'notifications.markAllRead': 'Mark all as read',
     
     // Admin
     'admin.title': 'SaaS Administration',
@@ -579,6 +622,8 @@ export const translations = {
     'settings.permissionProfiles': 'Permission Profiles',
     'settings.billing': 'Billing',
     'settings.integrations': 'Integrations',
+    'settings.auditLogs': 'Audit Logs',
+    'settings.trash': 'Trash',
     'settings.orgName': 'Organization Name',
     'settings.orgLogo': 'Logo',
     'settings.defaultCurrency': 'Default Currency',
@@ -643,6 +688,37 @@ export const translations = {
     'settings.seatLimitDescription': 'You have reached the maximum number of active users for your plan. Deactivate a user or upgrade your plan.',
     'settings.userActivated': 'User activated',
     'settings.userDeactivated': 'User deactivated',
+    
+    // Audit Logs
+    'auditLogs.title': 'Audit Logs',
+    'auditLogs.description': 'View all changes made to records',
+    'auditLogs.entityType': 'Entity Type',
+    'auditLogs.action': 'Action',
+    'auditLogs.user': 'User',
+    'auditLogs.date': 'Date',
+    'auditLogs.oldValue': 'Old Value',
+    'auditLogs.newValue': 'New Value',
+    'auditLogs.noLogs': 'No logs found',
+    'auditLogs.details': 'Change Details',
+    'auditLogs.actions.INSERT': 'Creation',
+    'auditLogs.actions.UPDATE': 'Update',
+    'auditLogs.actions.DELETE': 'Deletion',
+    
+    // Trash
+    'trash.title': 'Trash',
+    'trash.description': 'Restore or permanently delete items',
+    'trash.restore': 'Restore',
+    'trash.deleteForever': 'Delete Forever',
+    'trash.emptyTrash': 'Empty Trash',
+    'trash.deletedAt': 'Deleted at',
+    'trash.confirmRestore': 'Restore this item?',
+    'trash.confirmDelete': 'Permanently delete this item?',
+    'trash.confirmEmpty': 'Are you sure?',
+    'trash.emptyWarning': 'All items will be permanently deleted. This action cannot be undone.',
+    'trash.restored': 'Item restored successfully',
+    'trash.deleted': 'Item deleted permanently',
+    'trash.emptied': 'Trash emptied successfully',
+    'trash.noItems': 'No items in trash',
     
     // Profile
     'profile.title': 'My Profile',
