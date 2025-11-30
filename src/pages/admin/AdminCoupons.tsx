@@ -102,9 +102,6 @@ export default function AdminCoupons() {
         <div className="flex items-center justify-between">
           <div>
             <h1 className="text-3xl font-bold">Cupons de Desconto</h1>
-            <p className="text-muted-foreground">
-              Gerencie cupons promocionais e descontos
-            </p>
           </div>
           <Button onClick={() => setDialogOpen(true)}>
             <Plus className="mr-2 h-4 w-4" />

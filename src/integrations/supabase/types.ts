@@ -1452,14 +1452,15 @@ export type Database = {
           description: string | null
           display_name: string
           features: Json | null
+          free_seats_limit: number | null
           id: string
           is_active: boolean | null
           max_contacts: number | null
           max_seats: number | null
           max_storage_mb: number | null
           name: string
-          price_monthly: number | null
-          price_yearly: number | null
+          price_per_seat_monthly: number | null
+          price_per_seat_yearly: number | null
           sort_order: number | null
           updated_at: string | null
         }
@@ -1468,14 +1469,15 @@ export type Database = {
           description?: string | null
           display_name: string
           features?: Json | null
+          free_seats_limit?: number | null
           id?: string
           is_active?: boolean | null
           max_contacts?: number | null
           max_seats?: number | null
           max_storage_mb?: number | null
           name: string
-          price_monthly?: number | null
-          price_yearly?: number | null
+          price_per_seat_monthly?: number | null
+          price_per_seat_yearly?: number | null
           sort_order?: number | null
           updated_at?: string | null
         }
@@ -1484,14 +1486,15 @@ export type Database = {
           description?: string | null
           display_name?: string
           features?: Json | null
+          free_seats_limit?: number | null
           id?: string
           is_active?: boolean | null
           max_contacts?: number | null
           max_seats?: number | null
           max_storage_mb?: number | null
           name?: string
-          price_monthly?: number | null
-          price_yearly?: number | null
+          price_per_seat_monthly?: number | null
+          price_per_seat_yearly?: number | null
           sort_order?: number | null
           updated_at?: string | null
         }
@@ -1892,6 +1895,41 @@ export type Database = {
           },
           {
             foreignKeyName: "user_organizations_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "users"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      user_sessions: {
+        Row: {
+          created_at: string | null
+          device_id: string
+          id: string
+          last_seen_at: string | null
+          user_agent: string | null
+          user_id: string
+        }
+        Insert: {
+          created_at?: string | null
+          device_id: string
+          id?: string
+          last_seen_at?: string | null
+          user_agent?: string | null
+          user_id: string
+        }
+        Update: {
+          created_at?: string | null
+          device_id?: string
+          id?: string
+          last_seen_at?: string | null
+          user_agent?: string | null
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "user_sessions_user_id_fkey"
             columns: ["user_id"]
             isOneToOne: false
             referencedRelation: "users"

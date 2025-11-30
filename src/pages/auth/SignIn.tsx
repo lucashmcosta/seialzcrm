@@ -29,6 +29,34 @@ export default function SignIn() {
 
       if (error) throw error;
 
+      // Invalidar sessões de outros devices
+      if (authData.user) {
+        const { data: userData } = await supabase
+          .from('users')
+          .select('id')
+          .eq('auth_user_id', authData.user.id)
+          .single();
+
+        if (userData) {
+          // Gerar device_id se não existir
+          let deviceId = localStorage.getItem('seialz_device_id');
+          if (!deviceId) {
+            deviceId = crypto.randomUUID();
+            localStorage.setItem('seialz_device_id', deviceId);
+          }
+
+          // Registrar nova sessão
+          await supabase.from('user_sessions').upsert({
+            user_id: userData.id,
+            device_id: deviceId,
+            last_seen_at: new Date().toISOString(),
+            user_agent: navigator.userAgent,
+          }, {
+            onConflict: 'user_id,device_id'
+          });
+        }
+      }
+
       // Check if user exists in our database
       let { data: userData } = await supabase
         .from('users')
