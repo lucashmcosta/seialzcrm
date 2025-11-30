@@ -42,7 +42,7 @@ serve(async (req) => {
     }
 
     // Get target user from request body
-    const { userId } = await req.json();
+    const { userId, redirectUrl } = await req.json();
 
     if (!userId) {
       throw new Error('userId é obrigatório');
@@ -104,6 +104,14 @@ serve(async (req) => {
 
     // Return magic link with session_id as query param
     const magicLinkUrl = new URL(sessionData.properties.action_link);
+    
+    // Replace domain with the correct one from redirectUrl
+    if (redirectUrl) {
+      const targetUrl = new URL(redirectUrl);
+      magicLinkUrl.protocol = targetUrl.protocol;
+      magicLinkUrl.host = targetUrl.host;
+    }
+    
     if (impSession) {
       magicLinkUrl.searchParams.set('imp_session', impSession.id);
     }

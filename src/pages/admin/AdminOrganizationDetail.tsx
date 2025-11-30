@@ -128,7 +128,10 @@ export default function AdminOrganizationDetail() {
   const handleImpersonate = async (user: { id: string; full_name: string; email: string }) => {
     try {
       const { data, error } = await supabase.functions.invoke('admin-impersonate', {
-        body: { userId: user.id },
+        body: { 
+          userId: user.id,
+          redirectUrl: window.location.origin
+        },
       });
 
       if (error) throw error;
