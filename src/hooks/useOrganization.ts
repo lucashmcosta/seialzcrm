@@ -13,6 +13,8 @@ export interface Organization {
   enable_companies_module: boolean;
   onboarding_step: string;
   onboarding_completed_at?: string;
+  duplicate_check_mode?: 'none' | 'email' | 'phone' | 'email_or_phone';
+  duplicate_enforce_block?: boolean;
 }
 
 export interface UserProfile {

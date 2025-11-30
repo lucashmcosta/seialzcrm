@@ -34,6 +34,8 @@ export default function ContactForm() {
     do_not_contact: false,
   });
   const [loading, setLoading] = useState(false);
+  const [duplicates, setDuplicates] = useState<any[]>([]);
+  const [showDuplicateWarning, setShowDuplicateWarning] = useState(false);
 
   useEffect(() => {
     if (isEdit) {
@@ -65,10 +67,86 @@ export default function ContactForm() {
     }
   };
 
+  const checkDuplicates = async () => {
+    if (!organization) return [];
+
+    const checkMode = organization.duplicate_check_mode || 'none';
+    if (checkMode === 'none') return [];
+
+    let query = supabase
+      .from('contacts')
+      .select('id, full_name, email, phone')
+      .eq('organization_id', organization.id)
+      .is('deleted_at', null);
+
+    // Exclude current contact if editing
+    if (isEdit && id) {
+      query = query.neq('id', id);
+    }
+
+    let conditions: any[] = [];
+
+    if (checkMode === 'email' && formData.email) {
+      conditions.push({ email: formData.email });
+    } else if (checkMode === 'phone' && formData.phone) {
+      conditions.push({ phone: formData.phone });
+    } else if (checkMode === 'email_or_phone') {
+      if (formData.email) conditions.push({ email: formData.email });
+      if (formData.phone) conditions.push({ phone: formData.phone });
+    }
+
+    if (conditions.length === 0) return [];
+
+    // Check for duplicates
+    const duplicateResults = [];
+    for (const condition of conditions) {
+      if (condition.email) {
+        const { data } = await query.eq('email', condition.email);
+        if (data) duplicateResults.push(...data);
+      }
+      if (condition.phone) {
+        const { data } = await query.eq('phone', condition.phone);
+        if (data) duplicateResults.push(...data);
+      }
+    }
+
+    // Remove duplicates from results
+    const unique = Array.from(new Map(duplicateResults.map(item => [item.id, item])).values());
+    return unique;
+  };
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!organization || !userProfile) return;
 
+    setLoading(true);
+
+    // Check for duplicates
+    const foundDuplicates = await checkDuplicates();
+    
+    if (foundDuplicates.length > 0) {
+      setDuplicates(foundDuplicates);
+      setShowDuplicateWarning(true);
+      
+      // If enforce_block is true, stop here
+      if (organization.duplicate_enforce_block) {
+        toast.error(t('contacts.duplicateFound'));
+        setLoading(false);
+        return;
+      }
+      
+      // If not enforcing, show warning but allow to continue
+      setLoading(false);
+      return;
+    }
+
+    // Proceed with save
+    await saveContact();
+  };
+
+  const saveContact = async () => {
+    if (!organization || !userProfile) return;
+    
     setLoading(true);
 
     const contactData = {
@@ -109,6 +187,12 @@ export default function ContactForm() {
     }
   };
 
+  const handleForceSave = async () => {
+    setShowDuplicateWarning(false);
+    setDuplicates([]);
+    await saveContact();
+  };
+
   return (
     <Layout>
       <div className="flex flex-col h-full">
@@ -127,6 +211,36 @@ export default function ContactForm() {
 
         <div className="flex-1 overflow-auto p-6">
           <Card className="max-w-2xl mx-auto p-6">
+            {showDuplicateWarning && duplicates.length > 0 && (
+              <div className="mb-6 p-4 border border-destructive/50 bg-destructive/10 rounded-lg">
+                <h3 className="font-semibold text-destructive mb-2">
+                  {t('contacts.duplicateWarning')}
+                </h3>
+                <p className="text-sm text-muted-foreground mb-3">
+                  {t('contacts.duplicateDescription')}
+                </p>
+                <div className="space-y-2 mb-4">
+                  {duplicates.map((dup) => (
+                    <div key={dup.id} className="text-sm p-2 bg-background rounded border">
+                      <div className="font-medium">{dup.full_name}</div>
+                      {dup.email && <div className="text-muted-foreground">{dup.email}</div>}
+                      {dup.phone && <div className="text-muted-foreground">{dup.phone}</div>}
+                    </div>
+                  ))}
+                </div>
+                <div className="flex gap-2">
+                  {!organization?.duplicate_enforce_block && (
+                    <Button type="button" onClick={handleForceSave} variant="destructive">
+                      {t('contacts.saveDespiteDuplicate')}
+                    </Button>
+                  )}
+                  <Button type="button" onClick={() => setShowDuplicateWarning(false)} variant="outline">
+                    {t('common.cancel')}
+                  </Button>
+                </div>
+              </div>
+            )}
+            
             <form onSubmit={handleSubmit} className="space-y-6">
               <NameInput
                 locale={locale as any}
