@@ -70,11 +70,7 @@ const App = () => (
           
           {/* Admin Portal routes */}
           <Route path="/admin/login" element={<AdminLogin />} />
-          <Route path="/admin/mfa-setup" element={
-            <AdminProtectedRoute>
-              <AdminMFASetup />
-            </AdminProtectedRoute>
-          } />
+          <Route path="/admin/mfa-setup" element={<AdminMFASetup />} />
           <Route path="/admin" element={
             <AdminProtectedRoute>
               <AdminDashboard />
