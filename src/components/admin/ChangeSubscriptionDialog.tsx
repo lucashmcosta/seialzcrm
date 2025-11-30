@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { Button } from '@/components/ui/button';
 import {
@@ -29,13 +29,6 @@ interface ChangeSubscriptionDialogProps {
   onSuccess: () => void;
 }
 
-const PLANS = [
-  { value: 'free', label: 'Free', price: 0, maxSeats: 3 },
-  { value: 'starter', label: 'Starter', price: 49, maxSeats: 10 },
-  { value: 'pro', label: 'Pro', price: 149, maxSeats: 50 },
-  { value: 'enterprise', label: 'Enterprise', price: 499, maxSeats: 999 },
-];
-
 export function ChangeSubscriptionDialog({
   open,
   onOpenChange,
@@ -47,9 +40,18 @@ export function ChangeSubscriptionDialog({
   const [selectedPlan, setSelectedPlan] = useState(currentPlan);
   const [maxSeats, setMaxSeats] = useState(currentSeats);
   const [loading, setLoading] = useState(false);
+  const [plans, setPlans] = useState<any[]>([]);
   const { toast } = useToast();
 
-  const selectedPlanData = PLANS.find(p => p.value === selectedPlan);
+  useEffect(() => {
+    const fetchPlans = async () => {
+      const { data } = await supabase.from('plans').select('*').eq('is_active', true).order('sort_order');
+      setPlans(data || []);
+    };
+    fetchPlans();
+  }, []);
+
+  const selectedPlanData = plans.find(p => p.name === selectedPlan);
 
   const handleSave = async () => {
     setLoading(true);
@@ -73,7 +75,7 @@ export function ChangeSubscriptionDialog({
         .update({
           plan_name: selectedPlan,
           max_seats: maxSeats,
-          price_per_seat: selectedPlanData?.price || 0,
+          price_per_seat: selectedPlanData?.price_monthly || 0,
           is_free_plan: selectedPlan === 'free',
           status: 'active',
         })
@@ -119,7 +121,7 @@ export function ChangeSubscriptionDialog({
         <DialogHeader>
           <DialogTitle>Alterar Subscription</DialogTitle>
           <DialogDescription>
-            Altere o plano e número de seats da organização.
+            Altere o plano e número de seats da conta.
           </DialogDescription>
         </DialogHeader>
         <div className="space-y-4">
@@ -130,9 +132,9 @@ export function ChangeSubscriptionDialog({
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
-                {PLANS.map((plan) => (
-                  <SelectItem key={plan.value} value={plan.value}>
-                    {plan.label} - R$ {plan.price}/mês (até {plan.maxSeats} usuários)
+                {plans.map((plan) => (
+                  <SelectItem key={plan.name} value={plan.name}>
+                    {plan.display_name} - R$ {plan.price_monthly}/mês (até {plan.max_seats || '∞'} usuários)
                   </SelectItem>
                 ))}
               </SelectContent>
@@ -144,22 +146,22 @@ export function ChangeSubscriptionDialog({
               id="seats"
               type="number"
               min={1}
-              max={selectedPlanData?.maxSeats || 999}
+              max={selectedPlanData?.max_seats || 999}
               value={maxSeats}
               onChange={(e) => setMaxSeats(parseInt(e.target.value) || 1)}
             />
             <p className="text-xs text-muted-foreground mt-1">
-              Máximo: {selectedPlanData?.maxSeats || 999} usuários
+              Máximo: {selectedPlanData?.max_seats || 999} usuários
             </p>
           </div>
           {selectedPlanData && (
             <div className="p-4 bg-muted rounded-lg">
               <p className="text-sm font-medium">Resumo:</p>
               <p className="text-sm text-muted-foreground">
-                Plano: <strong>{selectedPlanData.label}</strong>
+                Plano: <strong>{selectedPlanData.display_name}</strong>
               </p>
               <p className="text-sm text-muted-foreground">
-                Valor: <strong>R$ {selectedPlanData.price}/mês</strong>
+                Valor: <strong>R$ {selectedPlanData.price_monthly}/mês</strong>
               </p>
               <p className="text-sm text-muted-foreground">
                 Seats: <strong>{maxSeats} usuários</strong>

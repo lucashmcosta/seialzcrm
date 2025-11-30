@@ -80,8 +80,8 @@ export function SuspendOrgDialog({
       });
 
       toast({
-        title: 'Organização suspensa',
-        description: 'A organização foi suspensa com sucesso.',
+        title: 'Conta suspensa',
+        description: 'A conta foi suspensa com sucesso.',
       });
 
       setReason('');
@@ -91,7 +91,7 @@ export function SuspendOrgDialog({
       console.error('Error suspending organization:', error);
       toast({
         title: 'Erro',
-        description: error.message || 'Falha ao suspender organização.',
+        description: error.message || 'Falha ao suspender conta.',
         variant: 'destructive',
       });
     } finally {
@@ -105,7 +105,7 @@ export function SuspendOrgDialog({
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2 text-destructive">
             <AlertTriangle className="h-5 w-5" />
-            Suspender Organização
+            Suspender Conta
           </DialogTitle>
           <DialogDescription>
             Você está prestes a suspender <strong>{organizationName}</strong>. 
