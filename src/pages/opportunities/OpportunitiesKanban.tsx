@@ -7,10 +7,13 @@ import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, 
 import { useOrganization } from '@/hooks/useOrganization';
 import { useTranslation } from '@/lib/i18n';
 import { supabase } from '@/integrations/supabase/client';
-import { Plus, Search, Filter } from 'lucide-react';
+import { Plus, Search, Filter, X } from 'lucide-react';
 import { OpportunityDialog } from '@/components/opportunities/OpportunityDialog';
 import { OpportunityCard } from '@/components/opportunities/OpportunityCard';
 import { Input } from '@/components/ui/input';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
+import { Badge } from '@/components/ui/badge';
 import { toast } from 'sonner';
 
 interface PipelineStage {
@@ -28,9 +31,18 @@ interface Opportunity {
   pipeline_stage_id: string;
   contact_id: string | null;
   close_date: string | null;
+  owner_user_id: string | null;
   contacts?: {
     full_name: string;
   } | null;
+  users?: {
+    full_name: string;
+  } | null;
+}
+
+interface User {
+  id: string;
+  full_name: string;
 }
 
 export default function OpportunitiesKanban() {
@@ -43,6 +55,13 @@ export default function OpportunitiesKanban() {
   const [editingOpportunity, setEditingOpportunity] = useState<Opportunity | null>(null);
   const [deleteId, setDeleteId] = useState<string | null>(null);
   const [searchTerm, setSearchTerm] = useState('');
+  const [users, setUsers] = useState<User[]>([]);
+  const [filterOwner, setFilterOwner] = useState<string>('all');
+  const [filterMinAmount, setFilterMinAmount] = useState<string>('');
+  const [filterMaxAmount, setFilterMaxAmount] = useState<string>('');
+  const [filterDateFrom, setFilterDateFrom] = useState<string>('');
+  const [filterDateTo, setFilterDateTo] = useState<string>('');
+  const [showFilters, setShowFilters] = useState(false);
 
   useEffect(() => {
     if (!organization?.id) return;
@@ -65,12 +84,15 @@ export default function OpportunitiesKanban() {
       setStages(stagesData);
     }
 
-    // Fetch opportunities with contact info
+    // Fetch opportunities with contact and owner info
     const { data: oppsData } = await supabase
       .from('opportunities')
       .select(`
         *,
         contacts (
+          full_name
+        ),
+        users (
           full_name
         )
       `)
@@ -80,6 +102,25 @@ export default function OpportunitiesKanban() {
 
     if (oppsData) {
       setOpportunities(oppsData);
+    }
+
+    // Fetch users for filter
+    const { data: usersData } = await supabase
+      .from('user_organizations')
+      .select(`
+        users (
+          id,
+          full_name
+        )
+      `)
+      .eq('organization_id', organization.id)
+      .eq('is_active', true);
+
+    if (usersData) {
+      const usersList = usersData
+        .map((uo: any) => uo.users)
+        .filter((u: any) => u !== null);
+      setUsers(usersList);
     }
 
     setLoading(false);
@@ -95,10 +136,20 @@ export default function OpportunitiesKanban() {
   const getOpportunitiesForStage = (stageId: string) => {
     return opportunities.filter((opp) => {
       const matchesStage = opp.pipeline_stage_id === stageId;
+      
       const matchesSearch = !searchTerm || 
         opp.title.toLowerCase().includes(searchTerm.toLowerCase()) ||
         opp.contacts?.full_name?.toLowerCase().includes(searchTerm.toLowerCase());
-      return matchesStage && matchesSearch;
+      
+      const matchesOwner = filterOwner === 'all' || opp.owner_user_id === filterOwner;
+      
+      const matchesMinAmount = !filterMinAmount || (opp.amount && Number(opp.amount) >= Number(filterMinAmount));
+      const matchesMaxAmount = !filterMaxAmount || (opp.amount && Number(opp.amount) <= Number(filterMaxAmount));
+      
+      const matchesDateFrom = !filterDateFrom || !opp.close_date || opp.close_date >= filterDateFrom;
+      const matchesDateTo = !filterDateTo || !opp.close_date || opp.close_date <= filterDateTo;
+      
+      return matchesStage && matchesSearch && matchesOwner && matchesMinAmount && matchesMaxAmount && matchesDateFrom && matchesDateTo;
     });
   };
 
@@ -162,6 +213,22 @@ export default function OpportunitiesKanban() {
     setDialogOpen(true);
   };
 
+  const clearFilters = () => {
+    setFilterOwner('all');
+    setFilterMinAmount('');
+    setFilterMaxAmount('');
+    setFilterDateFrom('');
+    setFilterDateTo('');
+  };
+
+  const activeFiltersCount = [
+    filterOwner !== 'all',
+    filterMinAmount,
+    filterMaxAmount,
+    filterDateFrom,
+    filterDateTo,
+  ].filter(Boolean).length;
+
   if (loading) {
     return (
       <Layout>
@@ -188,7 +255,7 @@ export default function OpportunitiesKanban() {
           </Button>
         </div>
 
-        <div className="mb-6 flex gap-4">
+        <div className="mb-6 flex gap-4 items-start">
           <div className="relative flex-1 max-w-md">
             <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-muted-foreground h-4 w-4" />
             <Input
@@ -198,6 +265,83 @@ export default function OpportunitiesKanban() {
               className="pl-10"
             />
           </div>
+          
+          <Popover open={showFilters} onOpenChange={setShowFilters}>
+            <PopoverTrigger asChild>
+              <Button variant="outline" className="relative">
+                <Filter className="h-4 w-4 mr-2" />
+                Filtros
+                {activeFiltersCount > 0 && (
+                  <Badge variant="secondary" className="ml-2 h-5 w-5 p-0 flex items-center justify-center rounded-full">
+                    {activeFiltersCount}
+                  </Badge>
+                )}
+              </Button>
+            </PopoverTrigger>
+            <PopoverContent className="w-80" align="end">
+              <div className="space-y-4">
+                <div className="flex items-center justify-between">
+                  <h4 className="font-medium text-sm">Filtros Avançados</h4>
+                  {activeFiltersCount > 0 && (
+                    <Button variant="ghost" size="sm" onClick={clearFilters}>
+                      Limpar
+                    </Button>
+                  )}
+                </div>
+
+                <div className="space-y-2">
+                  <label className="text-sm font-medium">Responsável</label>
+                  <Select value={filterOwner} onValueChange={setFilterOwner}>
+                    <SelectTrigger>
+                      <SelectValue placeholder="Todos" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="all">Todos</SelectItem>
+                      {users.map((user) => (
+                        <SelectItem key={user.id} value={user.id}>
+                          {user.full_name}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+
+                <div className="space-y-2">
+                  <label className="text-sm font-medium">Valor</label>
+                  <div className="flex gap-2">
+                    <Input
+                      type="number"
+                      placeholder="Mín"
+                      value={filterMinAmount}
+                      onChange={(e) => setFilterMinAmount(e.target.value)}
+                    />
+                    <Input
+                      type="number"
+                      placeholder="Máx"
+                      value={filterMaxAmount}
+                      onChange={(e) => setFilterMaxAmount(e.target.value)}
+                    />
+                  </div>
+                </div>
+
+                <div className="space-y-2">
+                  <label className="text-sm font-medium">Data de Fechamento</label>
+                  <div className="flex gap-2">
+                    <Input
+                      type="date"
+                      value={filterDateFrom}
+                      onChange={(e) => setFilterDateFrom(e.target.value)}
+                    />
+                    <Input
+                      type="date"
+                      value={filterDateTo}
+                      onChange={(e) => setFilterDateTo(e.target.value)}
+                    />
+                  </div>
+                </div>
+              </div>
+            </PopoverContent>
+          </Popover>
         </div>
 
         <DragDropContext onDragEnd={handleDragEnd}>
