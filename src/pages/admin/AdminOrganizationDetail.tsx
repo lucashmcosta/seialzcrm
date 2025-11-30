@@ -6,7 +6,7 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Badge } from '@/components/ui/badge';
-import { ArrowLeft, RefreshCw, Ban, Trash2, Mail, Play } from 'lucide-react';
+import { ArrowLeft, RefreshCw, Ban, Trash2, Mail, Play, LogIn } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
@@ -53,6 +53,7 @@ export default function AdminOrganizationDetail() {
         .select(`
           *,
           users (
+            id,
             full_name,
             email
           )
@@ -70,17 +71,21 @@ export default function AdminOrganizationDetail() {
 
   const handleRecalculateMetrics = async () => {
     try {
-      await supabase.rpc('update_organization_usage_metrics', { org_id: id });
+      const { error } = await supabase.rpc('update_organization_usage_metrics', { org_id: id });
+      
+      if (error) throw error;
+      
       await fetchOrganization();
       
       toast({
         title: 'Métricas atualizadas',
         description: 'As métricas foram recalculadas com sucesso.',
       });
-    } catch (error) {
+    } catch (error: any) {
+      console.error('Error recalculating metrics:', error);
       toast({
-        title: 'Erro',
-        description: 'Falha ao recalcular métricas.',
+        title: 'Erro ao recalcular métricas',
+        description: error.message || 'Falha ao recalcular métricas.',
         variant: 'destructive',
       });
     }
@@ -118,6 +123,33 @@ export default function AdminOrganizationDetail() {
       title: 'Em desenvolvimento',
       description: 'Funcionalidade de envio de email em breve.',
     });
+  };
+
+  const handleImpersonate = async (user: { id: string; full_name: string; email: string }) => {
+    try {
+      const { data, error } = await supabase.functions.invoke('admin-impersonate', {
+        body: { userId: user.id },
+      });
+
+      if (error) throw error;
+
+      // Store impersonation data in localStorage
+      localStorage.setItem('admin_impersonation', JSON.stringify({
+        userId: user.id,
+        userName: user.full_name,
+        userEmail: user.email,
+        startedAt: new Date().toISOString(),
+      }));
+
+      // Redirect to CRM main page
+      window.location.href = '/';
+    } catch (error: any) {
+      toast({
+        title: 'Erro',
+        description: error.message || 'Falha ao iniciar impersonation.',
+        variant: 'destructive',
+      });
+    }
   };
 
   if (loading) {
@@ -248,9 +280,25 @@ export default function AdminOrganizationDetail() {
                         <p className="font-medium">{userOrg.users?.full_name}</p>
                         <p className="text-sm text-muted-foreground">{userOrg.users?.email}</p>
                       </div>
-                      <span className={`text-sm px-2 py-1 rounded ${userOrg.is_active ? 'bg-green-100 text-green-700' : 'bg-gray-100 text-gray-700'}`}>
-                        {userOrg.is_active ? 'Ativo' : 'Inativo'}
-                      </span>
+                      <div className="flex items-center gap-2">
+                        <span className={`text-sm px-2 py-1 rounded ${userOrg.is_active ? 'bg-green-100 text-green-700' : 'bg-gray-100 text-gray-700'}`}>
+                          {userOrg.is_active ? 'Ativo' : 'Inativo'}
+                        </span>
+                        {userOrg.is_active && (
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            onClick={() => handleImpersonate({
+                              id: userOrg.user_id,
+                              full_name: userOrg.users?.full_name,
+                              email: userOrg.users?.email,
+                            })}
+                          >
+                            <LogIn className="h-4 w-4 mr-1" />
+                            Entrar como
+                          </Button>
+                        )}
+                      </div>
                     </div>
                   ))}
                 </div>
