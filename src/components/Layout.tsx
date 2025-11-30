@@ -1,7 +1,8 @@
 import { ReactNode } from 'react';
 import { Link, useLocation } from 'react-router-dom';
-import { Building2, Users, Briefcase, Settings, LogOut, LayoutDashboard, CheckSquare, Shield } from 'lucide-react';
+import { Building2, Users, Briefcase, Settings, LogOut, LayoutDashboard, CheckSquare, Shield, HelpCircle } from 'lucide-react';
 import { Button } from '@/components/ui/button';
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import { useAuth } from '@/hooks/useAuth';
 import { useOrganization } from '@/hooks/useOrganization';
 import { usePermissions } from '@/hooks/usePermissions';
@@ -119,7 +120,21 @@ export function Layout({ children }: LayoutProps) {
       <div className="pl-64">
         {/* Top bar with notifications */}
         <div className="sticky top-0 z-10 bg-background/95 backdrop-blur border-b border-border">
-          <div className="px-6 py-2 flex justify-end">
+          <div className="px-6 py-2 flex justify-end items-center gap-3">
+            <TooltipProvider>
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <Button variant="ghost" size="icon" asChild>
+                    <Link to="/docs">
+                      <HelpCircle className="w-5 h-5" />
+                    </Link>
+                  </Button>
+                </TooltipTrigger>
+                <TooltipContent>
+                  <p>Central de Ajuda</p>
+                </TooltipContent>
+              </Tooltip>
+            </TooltipProvider>
             <Notifications />
           </div>
         </div>
