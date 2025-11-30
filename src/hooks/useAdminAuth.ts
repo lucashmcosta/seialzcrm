@@ -20,9 +20,11 @@ export function useAdminAuth() {
     checkAuth();
 
     const { data: { subscription } } = supabase.auth.onAuthStateChange(
-      async (event, session) => {
+      (event, session) => {
         if (event === 'SIGNED_IN') {
-          await loadAdminUser(session?.user || null);
+          setTimeout(() => {
+            loadAdminUser(session?.user || null);
+          }, 0);
         } else if (event === 'SIGNED_OUT') {
           setUser(null);
           setAdminUser(null);
