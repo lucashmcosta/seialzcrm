@@ -21,6 +21,11 @@ export default function AdminLogin() {
   }, []);
 
   const checkExistingSession = async () => {
+    const timeoutId = setTimeout(() => {
+      console.warn('Timeout na verificação de sessão');
+      setCheckingSession(false);
+    }, 5000);
+
     try {
       const { data: { session } } = await supabase.auth.getSession();
       
@@ -29,7 +34,9 @@ export default function AdminLogin() {
           .from('admin_users')
           .select('mfa_enabled, is_active')
           .eq('auth_user_id', session.user.id)
-          .single();
+          .maybeSingle();
+        
+        clearTimeout(timeoutId);
         
         if (error) {
           console.error('Erro ao buscar admin:', error);
@@ -39,16 +46,19 @@ export default function AdminLogin() {
         
         if (adminUser && adminUser.is_active) {
           if (adminUser.mfa_enabled) {
-            navigate('/admin');
+            navigate('/admin', { replace: true });
             return;
           } else {
-            navigate('/admin/mfa-setup');
+            navigate('/admin/mfa-setup', { replace: true });
             return;
           }
         }
       }
+      
+      clearTimeout(timeoutId);
     } catch (error) {
       console.error('Erro ao verificar sessão:', error);
+      clearTimeout(timeoutId);
     }
     
     setCheckingSession(false);
