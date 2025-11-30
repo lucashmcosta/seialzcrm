@@ -31,6 +31,21 @@ export const translations = {
     'nav.tasks': 'Tarefas',
     'nav.settings': 'Configurações',
     'nav.profile': 'Meu Perfil',
+    'nav.admin': 'Administração',
+    
+    // Notifications
+    'notifications.title': 'Notificações',
+    'notifications.empty': 'Nenhuma notificação',
+    
+    // Admin
+    'admin.title': 'Administração SaaS',
+    'admin.subtitle': 'Gerenciar organizações e métricas da plataforma',
+    'admin.totalOrganizations': 'Total de Organizações',
+    'admin.activeSubscriptions': 'Assinaturas Ativas',
+    'admin.totalSeats': 'Total de Licenças',
+    'admin.organizations': 'Organizações',
+    'admin.seats': 'licenças',
+    'admin.noSubscription': 'Sem assinatura',
     
     // Auth
     'auth.signUp': 'Cadastrar',
@@ -54,6 +69,17 @@ export const translations = {
     'dashboard.newContacts': 'Novos contatos',
     'dashboard.myTasksToday': 'Minhas tarefas hoje',
     'dashboard.recentActivity': 'Atividade recente',
+    'dashboard.today': 'Hoje',
+    'dashboard.last7Days': 'Últimos 7 dias',
+    'dashboard.last30Days': 'Últimos 30 dias',
+    'dashboard.last90Days': 'Últimos 90 dias',
+    'dashboard.allUsers': 'Todos os usuários',
+    'dashboard.wonAmount': 'Valor Ganho',
+    'dashboard.lostOpportunities': 'Oportunidades Perdidas',
+    'dashboard.opportunitiesByStage': 'Oportunidades por Etapa',
+    'dashboard.wonOverTime': 'Ganhos ao Longo do Tempo',
+    'dashboard.noTasks': 'Nenhuma tarefa para hoje',
+    'dashboard.noActivities': 'Nenhuma atividade recente',
     
     // Contacts
     'contacts.title': 'Contatos',
@@ -76,6 +102,12 @@ export const translations = {
     'contacts.deleted': 'Contato excluído',
     'contacts.created': 'Contato criado',
     'contacts.updated': 'Contato atualizado',
+    'contacts.manageContacts': 'Gerencie seus contatos e relacionamentos',
+    'contacts.noContacts': 'Nenhum contato encontrado',
+    'contacts.allOwners': 'Todos os responsáveis',
+    'contacts.allStages': 'Todos os estágios',
+    'contacts.selectAll': 'Selecionar todos',
+    'contacts.selected': 'selecionados',
     
     // Opportunities
     'opportunities.title': 'Oportunidades',
@@ -129,6 +161,19 @@ export const translations = {
     'tasks.statusOpen': 'Aberta',
     'tasks.statusCompleted': 'Concluída',
     'tasks.statusCanceled': 'Cancelada',
+    'tasks.searchPlaceholder': 'Buscar tarefas...',
+    'tasks.allPriorities': 'Todas as prioridades',
+    'tasks.allUsers': 'Todos os usuários',
+    'tasks.allTasks': 'Todas',
+    'tasks.open': 'Abertas',
+    'tasks.noTasks': 'Nenhuma tarefa encontrada',
+    'tasks.contact': 'Contato',
+    'tasks.opportunity': 'Oportunidade',
+    'tasks.errorFetching': 'Erro ao carregar tarefas',
+    'tasks.errorCompleting': 'Erro ao concluir tarefa',
+    'tasks.errorDeleting': 'Erro ao deletar tarefa',
+    'tasks.completedSuccess': 'Tarefa concluída com sucesso',
+    'tasks.deletedSuccess': 'Tarefa deletada com sucesso',
     
     // Settings
     'settings.title': 'Configurações',
@@ -138,6 +183,9 @@ export const translations = {
     'settings.duplicates': 'Duplicatas',
     'settings.customFields': 'Campos Personalizados',
     'settings.tags': 'Etiquetas',
+    'settings.permissionProfiles': 'Perfis de Permissão',
+    'settings.billing': 'Faturamento',
+    'settings.integrations': 'Integrações',
     'settings.orgName': 'Nome da Organização',
     'settings.orgLogo': 'Logotipo',
     'settings.defaultCurrency': 'Moeda Padrão',
@@ -145,6 +193,13 @@ export const translations = {
     'settings.timezone': 'Fuso Horário',
     'settings.enableCompanies': 'Habilitar Módulo de Empresas',
     'settings.orgUpdated': 'Organização atualizada',
+    'settings.sampleData': 'Dados de Exemplo',
+    'settings.sampleDataDescription': 'Limpar todos os dados de exemplo criados durante o onboarding. Esta ação não pode ser desfeita.',
+    'settings.resetSampleData': 'Limpar Dados de Exemplo',
+    'settings.resetSampleDataConfirm': 'Tem certeza que deseja limpar os dados de exemplo?',
+    'settings.resetSampleDataWarning': 'Esta ação irá deletar permanentemente todos os contatos, oportunidades, tarefas e atividades marcados como exemplo. Esta ação não pode ser desfeita.',
+    'settings.sampleDataDeleted': 'Dados de exemplo deletados com sucesso',
+    'settings.sampleDataError': 'Erro ao deletar dados de exemplo',
     'settings.inviteUser': 'Convidar Usuário',
     'settings.email': 'E-mail',
     'settings.role': 'Perfil de Permissão',
@@ -255,8 +310,25 @@ export const translations = {
     // Onboarding
     'onboarding.welcome': 'Bem-vindo ao Seialz!',
     'onboarding.letsGetStarted': 'Vamos começar',
+    'onboarding.inviteYourTeam': 'Convide sua equipe',
+    'onboarding.inviteTeamDescription': 'Convide membros da sua equipe para colaborar',
+    'onboarding.createFirstContactDescription': 'Crie um contato de exemplo para começar',
+    'onboarding.createFirstOpportunityDescription': 'Crie uma oportunidade de exemplo',
+    'onboarding.emailPlaceholder': 'email@exemplo.com',
+    'onboarding.addEmail': 'Adicionar',
+    'onboarding.invitedEmails': 'E-mails convidados',
+    'onboarding.skipForNow': 'Pular por enquanto',
+    'onboarding.invalidEmail': 'E-mail inválido',
+    'onboarding.emailAlreadyAdded': 'E-mail já adicionado',
     'onboarding.createFirstContact': 'Criar seu primeiro contato',
     'onboarding.createFirstOpportunity': 'Criar sua primeira oportunidade',
+    'onboarding.opportunityPlaceholder': 'Ex: Venda de produto X',
+    'onboarding.setupIncomplete': 'Setup incompleto',
+    'onboarding.contactCreated': 'Contato criado',
+    'onboarding.sampleContactNote': 'Este é um contato de exemplo criado durante o onboarding.',
+    'onboarding.opportunityCreated': 'Oportunidade criada',
+    'onboarding.sampleOpportunityNote': 'Esta é uma oportunidade de exemplo criada durante o onboarding.',
+    'onboarding.completed': 'Onboarding concluído com sucesso!',
     
     // Lifecycle stages
     'lifecycle.lead': 'Lead',
@@ -300,6 +372,21 @@ export const translations = {
     'nav.tasks': 'Tasks',
     'nav.settings': 'Settings',
     'nav.profile': 'My Profile',
+    'nav.admin': 'Administration',
+    
+    // Notifications
+    'notifications.title': 'Notifications',
+    'notifications.empty': 'No notifications',
+    
+    // Admin
+    'admin.title': 'SaaS Administration',
+    'admin.subtitle': 'Manage organizations and platform metrics',
+    'admin.totalOrganizations': 'Total Organizations',
+    'admin.activeSubscriptions': 'Active Subscriptions',
+    'admin.totalSeats': 'Total Seats',
+    'admin.organizations': 'Organizations',
+    'admin.seats': 'seats',
+    'admin.noSubscription': 'No subscription',
     
     // Auth
     'auth.signUp': 'Sign up',
@@ -324,6 +411,17 @@ export const translations = {
     'dashboard.newContacts': 'New contacts',
     'dashboard.myTasksToday': 'My tasks today',
     'dashboard.recentActivity': 'Recent activity',
+    'dashboard.today': 'Today',
+    'dashboard.last7Days': 'Last 7 days',
+    'dashboard.last30Days': 'Last 30 days',
+    'dashboard.last90Days': 'Last 90 days',
+    'dashboard.allUsers': 'All users',
+    'dashboard.wonAmount': 'Won Amount',
+    'dashboard.lostOpportunities': 'Lost Opportunities',
+    'dashboard.opportunitiesByStage': 'Opportunities by Stage',
+    'dashboard.wonOverTime': 'Won Over Time',
+    'dashboard.noTasks': 'No tasks for today',
+    'dashboard.noActivities': 'No recent activities',
     
     // Contacts
     'contacts.title': 'Contacts',
@@ -346,6 +444,12 @@ export const translations = {
     'contacts.deleted': 'Contact deleted',
     'contacts.created': 'Contact created',
     'contacts.updated': 'Contact updated',
+    'contacts.manageContacts': 'Manage your contacts and relationships',
+    'contacts.noContacts': 'No contacts found',
+    'contacts.allOwners': 'All owners',
+    'contacts.allStages': 'All stages',
+    'contacts.selectAll': 'Select all',
+    'contacts.selected': 'selected',
     
     // Opportunities
     'opportunities.title': 'Opportunities',
@@ -399,6 +503,19 @@ export const translations = {
     'tasks.statusOpen': 'Open',
     'tasks.statusCompleted': 'Completed',
     'tasks.statusCanceled': 'Canceled',
+    'tasks.searchPlaceholder': 'Search tasks...',
+    'tasks.allPriorities': 'All priorities',
+    'tasks.allUsers': 'All users',
+    'tasks.allTasks': 'All',
+    'tasks.open': 'Open',
+    'tasks.noTasks': 'No tasks found',
+    'tasks.contact': 'Contact',
+    'tasks.opportunity': 'Opportunity',
+    'tasks.errorFetching': 'Error fetching tasks',
+    'tasks.errorCompleting': 'Error completing task',
+    'tasks.errorDeleting': 'Error deleting task',
+    'tasks.completedSuccess': 'Task completed successfully',
+    'tasks.deletedSuccess': 'Task deleted successfully',
     
     // Settings
     'settings.title': 'Settings',
@@ -408,6 +525,9 @@ export const translations = {
     'settings.duplicates': 'Duplicates',
     'settings.customFields': 'Custom Fields',
     'settings.tags': 'Tags',
+    'settings.permissionProfiles': 'Permission Profiles',
+    'settings.billing': 'Billing',
+    'settings.integrations': 'Integrations',
     'settings.orgName': 'Organization Name',
     'settings.orgLogo': 'Logo',
     'settings.defaultCurrency': 'Default Currency',
@@ -415,6 +535,13 @@ export const translations = {
     'settings.timezone': 'Timezone',
     'settings.enableCompanies': 'Enable Companies Module',
     'settings.orgUpdated': 'Organization updated',
+    'settings.sampleData': 'Sample Data',
+    'settings.sampleDataDescription': 'Clear all sample data created during onboarding. This action cannot be undone.',
+    'settings.resetSampleData': 'Clear Sample Data',
+    'settings.resetSampleDataConfirm': 'Are you sure you want to clear sample data?',
+    'settings.resetSampleDataWarning': 'This will permanently delete all contacts, opportunities, tasks, and activities marked as sample data. This action cannot be undone.',
+    'settings.sampleDataDeleted': 'Sample data deleted successfully',
+    'settings.sampleDataError': 'Error deleting sample data',
     'settings.inviteUser': 'Invite User',
     'settings.email': 'Email',
     'settings.role': 'Permission Profile',
@@ -475,7 +602,7 @@ export const translations = {
     'profile.avatarUploaded': 'Avatar uploaded',
     'profile.avatarUploadedDesc': 'Your avatar has been updated successfully',
     'profile.saved': 'Profile saved',
-    'profile.savedDesc': 'Your changes have been saved successfully',
+    'profile.savedDesc': 'Your changes were saved successfully',
     'profile.avatar': 'Avatar',
     'profile.fullName': 'Full Name',
     'profile.email': 'Email',
@@ -525,8 +652,25 @@ export const translations = {
     // Onboarding
     'onboarding.welcome': 'Welcome to Seialz!',
     'onboarding.letsGetStarted': "Let's get started",
+    'onboarding.inviteYourTeam': 'Invite your team',
+    'onboarding.inviteTeamDescription': 'Invite team members to collaborate',
+    'onboarding.createFirstContactDescription': 'Create a sample contact to get started',
+    'onboarding.createFirstOpportunityDescription': 'Create a sample opportunity',
+    'onboarding.emailPlaceholder': 'email@example.com',
+    'onboarding.addEmail': 'Add',
+    'onboarding.invitedEmails': 'Invited emails',
+    'onboarding.skipForNow': 'Skip for now',
+    'onboarding.invalidEmail': 'Invalid email',
+    'onboarding.emailAlreadyAdded': 'Email already added',
     'onboarding.createFirstContact': 'Create your first contact',
     'onboarding.createFirstOpportunity': 'Create your first opportunity',
+    'onboarding.opportunityPlaceholder': 'Ex: Product X sale',
+    'onboarding.setupIncomplete': 'Setup incomplete',
+    'onboarding.contactCreated': 'Contact created',
+    'onboarding.sampleContactNote': 'This is a sample contact created during onboarding.',
+    'onboarding.opportunityCreated': 'Opportunity created',
+    'onboarding.sampleOpportunityNote': 'This is a sample opportunity created during onboarding.',
+    'onboarding.completed': 'Onboarding completed successfully!',
     
     // Lifecycle stages
     'lifecycle.lead': 'Lead',
@@ -537,15 +681,17 @@ export const translations = {
     'status.open': 'Open',
     'status.won': 'Won',
     'status.lost': 'Lost',
-  },
-};
+  }
+} as const;
 
 export type Locale = 'pt-BR' | 'en-US';
+type TranslationKeys = keyof typeof translations['pt-BR'];
 
-export function useTranslation(locale: Locale = 'pt-BR') {
-  const t = (key: string): string => {
-    return translations[locale][key as keyof typeof translations[typeof locale]] || key;
+export function useTranslation(locale: 'pt-BR' | 'en-US' = 'pt-BR') {
+  return {
+    t: (key: string) => {
+      const translations_locale = translations[locale] as any;
+      return translations_locale[key] || key;
+    },
   };
-  
-  return { t, locale };
 }
