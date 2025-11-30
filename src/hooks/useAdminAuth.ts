@@ -17,34 +17,43 @@ export function useAdminAuth() {
   const [mfaRequired, setMfaRequired] = useState(false);
 
   useEffect(() => {
+    let mounted = true;
+    
+    const checkAuth = async () => {
+      try {
+        const { data: { session } } = await supabase.auth.getSession();
+        if (mounted) {
+          await loadAdminUser(session?.user || null);
+          setLoading(false);
+        }
+      } catch (error) {
+        console.error('Erro ao verificar auth:', error);
+        if (mounted) {
+          setLoading(false);
+        }
+      }
+    };
+
     checkAuth();
 
     const { data: { subscription } } = supabase.auth.onAuthStateChange(
       (event, session) => {
-        if (event === 'SIGNED_IN') {
-          setTimeout(async () => {
-            await loadAdminUser(session?.user || null);
-            setLoading(false);
-          }, 0);
-        } else if (event === 'SIGNED_OUT') {
+        if (!mounted) return;
+        
+        if (event === 'SIGNED_OUT') {
           setUser(null);
           setAdminUser(null);
           setMfaRequired(false);
-          setLoading(false);
-        } else {
           setLoading(false);
         }
       }
     );
 
-    return () => subscription.unsubscribe();
+    return () => {
+      mounted = false;
+      subscription.unsubscribe();
+    };
   }, []);
-
-  const checkAuth = async () => {
-    const { data: { session } } = await supabase.auth.getSession();
-    await loadAdminUser(session?.user || null);
-    setLoading(false);
-  };
 
   const loadAdminUser = async (authUser: User | null) => {
     setUser(authUser);
