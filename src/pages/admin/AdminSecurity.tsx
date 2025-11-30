@@ -131,12 +131,7 @@ export default function AdminSecurity() {
   return (
     <AdminLayout>
       <div className="space-y-6">
-        <div>
-          <h1 className="text-3xl font-bold">Segurança</h1>
-          <p className="text-muted-foreground">
-            Monitoramento e controle de segurança do sistema
-          </p>
-        </div>
+        <h1 className="text-3xl font-bold">Segurança</h1>
 
         <div className="grid gap-4 md:grid-cols-3">
           <Card>
