@@ -4,6 +4,7 @@ import { Building2, Users, Briefcase, Settings, LogOut, LayoutDashboard, CheckSq
 import { Button } from '@/components/ui/button';
 import { useAuth } from '@/hooks/useAuth';
 import { useOrganization } from '@/hooks/useOrganization';
+import { usePermissions } from '@/hooks/usePermissions';
 import { useTranslation } from '@/lib/i18n';
 import { Notifications } from '@/components/Notifications';
 
@@ -15,6 +16,7 @@ export function Layout({ children }: LayoutProps) {
   const location = useLocation();
   const { signOut, user } = useAuth();
   const { organization, userProfile, locale } = useOrganization();
+  const { permissions } = usePermissions();
   const { t } = useTranslation(locale as 'pt-BR' | 'en-US');
 
   const navigation = [
@@ -22,7 +24,6 @@ export function Layout({ children }: LayoutProps) {
     { name: t('nav.contacts'), href: '/contacts', icon: Users },
     { name: t('nav.opportunities'), href: '/opportunities', icon: Briefcase },
     { name: t('nav.tasks'), href: '/tasks', icon: CheckSquare },
-    { name: t('nav.settings'), href: '/settings', icon: Settings },
   ];
 
   // Add Companies menu if module is enabled
@@ -32,6 +33,11 @@ export function Layout({ children }: LayoutProps) {
       href: '/companies', 
       icon: Building2 
     });
+  }
+
+  // Add Settings menu if user has permission
+  if (permissions.canManageSettings) {
+    navigation.push({ name: t('nav.settings'), href: '/settings', icon: Settings });
   }
 
   if (userProfile?.is_platform_admin) {

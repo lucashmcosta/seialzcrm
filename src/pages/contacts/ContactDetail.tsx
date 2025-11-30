@@ -4,6 +4,7 @@ import { Layout } from '@/components/Layout';
 import { supabase } from '@/integrations/supabase/client';
 import { useOrganization } from '@/hooks/useOrganization';
 import { useTranslation } from '@/lib/i18n';
+import { usePermissions } from '@/hooks/usePermissions';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
@@ -22,6 +23,7 @@ export default function ContactDetail() {
   const navigate = useNavigate();
   const { organization, locale, loading: orgLoading } = useOrganization();
   const { t } = useTranslation(locale as any);
+  const { permissions } = usePermissions();
   const [contact, setContact] = useState<any>(null);
   const [loading, setLoading] = useState(true);
 
@@ -91,34 +93,38 @@ export default function ContactDetail() {
               </div>
             </div>
             <div className="flex gap-2">
-              <Button variant="outline" asChild>
-                <Link to={`/contacts/${contact.id}/edit`}>
-                  <Edit className="h-4 w-4 mr-2" />
-                  {t('common.edit')}
-                </Link>
-              </Button>
-              <AlertDialog>
-                <AlertDialogTrigger asChild>
-                  <Button variant="destructive">
-                    <Trash2 className="h-4 w-4 mr-2" />
-                    {t('common.delete')}
-                  </Button>
-                </AlertDialogTrigger>
-                <AlertDialogContent>
-                  <AlertDialogHeader>
-                    <AlertDialogTitle>{t('contacts.deleteConfirm')}</AlertDialogTitle>
-                    <AlertDialogDescription>
-                      {contact.full_name}
-                    </AlertDialogDescription>
-                  </AlertDialogHeader>
-                  <AlertDialogFooter>
-                    <AlertDialogCancel>{t('common.cancel')}</AlertDialogCancel>
-                    <AlertDialogAction onClick={handleDelete}>
+              {permissions.canEditContacts && (
+                <Button variant="outline" asChild>
+                  <Link to={`/contacts/${contact.id}/edit`}>
+                    <Edit className="h-4 w-4 mr-2" />
+                    {t('common.edit')}
+                  </Link>
+                </Button>
+              )}
+              {permissions.canDeleteContacts && (
+                <AlertDialog>
+                  <AlertDialogTrigger asChild>
+                    <Button variant="destructive">
+                      <Trash2 className="h-4 w-4 mr-2" />
                       {t('common.delete')}
-                    </AlertDialogAction>
-                  </AlertDialogFooter>
-                </AlertDialogContent>
-              </AlertDialog>
+                    </Button>
+                  </AlertDialogTrigger>
+                  <AlertDialogContent>
+                    <AlertDialogHeader>
+                      <AlertDialogTitle>{t('contacts.deleteConfirm')}</AlertDialogTitle>
+                      <AlertDialogDescription>
+                        {contact.full_name}
+                      </AlertDialogDescription>
+                    </AlertDialogHeader>
+                    <AlertDialogFooter>
+                      <AlertDialogCancel>{t('common.cancel')}</AlertDialogCancel>
+                      <AlertDialogAction onClick={handleDelete}>
+                        {t('common.delete')}
+                      </AlertDialogAction>
+                    </AlertDialogFooter>
+                  </AlertDialogContent>
+                </AlertDialog>
+              )}
             </div>
           </div>
         </div>

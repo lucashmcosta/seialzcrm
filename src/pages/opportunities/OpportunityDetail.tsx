@@ -8,6 +8,7 @@ import { Badge } from '@/components/ui/badge';
 import { supabase } from '@/integrations/supabase/client';
 import { useOrganization } from '@/hooks/useOrganization';
 import { useTranslation } from '@/lib/i18n';
+import { usePermissions } from '@/hooks/usePermissions';
 import { toast } from '@/hooks/use-toast';
 import { ArrowLeft, Edit, TrendingUp, TrendingDown, DollarSign, Calendar, User, Building2 } from 'lucide-react';
 import { ActivityTimeline } from '@/components/contacts/ActivityTimeline';
@@ -40,6 +41,7 @@ export default function OpportunityDetail() {
   const navigate = useNavigate();
   const { organization, locale } = useOrganization();
   const { t } = useTranslation(locale as any);
+  const { permissions } = usePermissions();
   const [opportunity, setOpportunity] = useState<Opportunity | null>(null);
   const [stages, setStages] = useState<PipelineStage[]>([]);
   const [loading, setLoading] = useState(true);
@@ -234,20 +236,24 @@ export default function OpportunityDetail() {
             </div>
 
             <div className="flex items-center gap-2">
-              <Button onClick={() => setEditDialogOpen(true)}>
-                <Edit className="h-4 w-4 mr-2" />
-                {t('common.edit')}
-              </Button>
-              {opportunity.status === 'open' && (
+              {permissions.canEditOpportunities && (
                 <>
-                  <Button variant="outline" onClick={handleMarkWon}>
-                    <TrendingUp className="h-4 w-4 mr-2" />
-                    {t('opportunities.markWon')}
+                  <Button onClick={() => setEditDialogOpen(true)}>
+                    <Edit className="h-4 w-4 mr-2" />
+                    {t('common.edit')}
                   </Button>
-                  <Button variant="outline" onClick={handleMarkLost}>
-                    <TrendingDown className="h-4 w-4 mr-2" />
-                    {t('opportunities.markLost')}
-                  </Button>
+                  {opportunity.status === 'open' && (
+                    <>
+                      <Button variant="outline" onClick={handleMarkWon}>
+                        <TrendingUp className="h-4 w-4 mr-2" />
+                        {t('opportunities.markWon')}
+                      </Button>
+                      <Button variant="outline" onClick={handleMarkLost}>
+                        <TrendingDown className="h-4 w-4 mr-2" />
+                        {t('opportunities.markLost')}
+                      </Button>
+                    </>
+                  )}
                 </>
               )}
             </div>

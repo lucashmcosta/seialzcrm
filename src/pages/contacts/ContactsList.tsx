@@ -8,6 +8,7 @@ import { Checkbox } from '@/components/ui/checkbox';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { useOrganization } from '@/hooks/useOrganization';
 import { useTranslation } from '@/lib/i18n';
+import { usePermissions } from '@/hooks/usePermissions';
 import { supabase } from '@/integrations/supabase/client';
 import { Plus, Search, Mail, Phone, Filter } from 'lucide-react';
 import { SavedViewsDropdown } from '@/components/SavedViewsDropdown';
@@ -27,6 +28,7 @@ interface Contact {
 export default function ContactsList() {
   const { organization, userProfile, locale } = useOrganization();
   const { t } = useTranslation(locale as 'pt-BR' | 'en-US');
+  const { permissions } = usePermissions();
   const [contacts, setContacts] = useState<Contact[]>([]);
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
@@ -153,12 +155,14 @@ export default function ContactsList() {
               currentSort={currentSort}
               onApplyView={handleApplyView}
             />
-            <Link to="/contacts/new">
-              <Button>
-                <Plus className="w-4 h-4 mr-2" />
-                {t('contacts.newContact')}
-              </Button>
-            </Link>
+            {permissions.canEditContacts && (
+              <Link to="/contacts/new">
+                <Button>
+                  <Plus className="w-4 h-4 mr-2" />
+                  {t('contacts.newContact')}
+                </Button>
+              </Link>
+            )}
           </div>
         </div>
 
@@ -319,6 +323,8 @@ export default function ContactsList() {
         onClear={() => setSelectedIds([])}
         onSuccess={handleBulkSuccess}
         locale={locale as 'pt-BR' | 'en-US'}
+        canEdit={permissions.canEditContacts}
+        canDelete={permissions.canDeleteContacts}
       />
     </Layout>
   );

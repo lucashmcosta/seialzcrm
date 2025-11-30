@@ -6,6 +6,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from '@/components/ui/alert-dialog';
 import { useOrganization } from '@/hooks/useOrganization';
 import { useTranslation } from '@/lib/i18n';
+import { usePermissions } from '@/hooks/usePermissions';
 import { supabase } from '@/integrations/supabase/client';
 import { Plus, Search, Filter, X } from 'lucide-react';
 import { OpportunityDialog } from '@/components/opportunities/OpportunityDialog';
@@ -48,6 +49,7 @@ interface User {
 export default function OpportunitiesKanban() {
   const { organization, locale } = useOrganization();
   const { t } = useTranslation(locale as 'pt-BR' | 'en-US');
+  const { permissions } = usePermissions();
   const [stages, setStages] = useState<PipelineStage[]>([]);
   const [opportunities, setOpportunities] = useState<Opportunity[]>([]);
   const [loading, setLoading] = useState(true);
@@ -249,7 +251,7 @@ export default function OpportunitiesKanban() {
               Visualize e gerencie seu pipeline de vendas
             </p>
           </div>
-          <Button onClick={handleNewOpportunity}>
+          <Button onClick={handleNewOpportunity} disabled={!permissions.canEditOpportunities}>
             <Plus className="w-4 h-4 mr-2" />
             {t('opportunities.newOpportunity')}
           </Button>
@@ -344,7 +346,7 @@ export default function OpportunitiesKanban() {
           </Popover>
         </div>
 
-        <DragDropContext onDragEnd={handleDragEnd}>
+        <DragDropContext onDragEnd={permissions.canEditOpportunities ? handleDragEnd : () => {}}>
           <div className="flex gap-4 overflow-x-auto pb-4">
             {stages.map((stage) => {
               const stageOpportunities = getOpportunitiesForStage(stage.id);
@@ -382,7 +384,12 @@ export default function OpportunitiesKanban() {
                             </p>
                           ) : (
                             stageOpportunities.map((opp, index) => (
-                              <Draggable key={opp.id} draggableId={opp.id} index={index}>
+                              <Draggable 
+                                key={opp.id} 
+                                draggableId={opp.id} 
+                                index={index}
+                                isDragDisabled={!permissions.canEditOpportunities}
+                              >
                                 {(provided, snapshot) => (
                                   <div
                                     ref={provided.innerRef}

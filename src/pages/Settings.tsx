@@ -1,6 +1,7 @@
 import { Layout } from '@/components/Layout';
 import { useOrganization } from '@/hooks/useOrganization';
 import { useTranslation } from '@/lib/i18n';
+import { usePermissions } from '@/hooks/usePermissions';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { GeneralSettings } from '@/components/settings/GeneralSettings';
 import { UsersSettings } from '@/components/settings/UsersSettings';
@@ -11,10 +12,13 @@ import { TagsSettings } from '@/components/settings/TagsSettings';
 import { PermissionProfilesSettings } from '@/components/settings/PermissionProfilesSettings';
 import { BillingSettings } from '@/components/settings/BillingSettings';
 import { IntegrationsSettings } from '@/components/settings/IntegrationsSettings';
+import { AuditLogs } from './settings/AuditLogs';
+import { Trash } from './settings/Trash';
 
 export default function Settings() {
   const { locale } = useOrganization();
   const { t } = useTranslation(locale as any);
+  const { permissions } = usePermissions();
 
   return (
     <Layout>
@@ -29,14 +33,16 @@ export default function Settings() {
           <Tabs defaultValue="general" className="w-full">
             <TabsList className="flex-wrap h-auto">
               <TabsTrigger value="general">{t('settings.general')}</TabsTrigger>
-              <TabsTrigger value="users">{t('settings.users')}</TabsTrigger>
-              <TabsTrigger value="permissionProfiles">{t('settings.permissionProfiles')}</TabsTrigger>
-              <TabsTrigger value="billing">{t('settings.billing')}</TabsTrigger>
-              <TabsTrigger value="pipeline">{t('settings.pipeline')}</TabsTrigger>
-              <TabsTrigger value="duplicates">{t('settings.duplicates')}</TabsTrigger>
-              <TabsTrigger value="customFields">{t('settings.customFields')}</TabsTrigger>
-              <TabsTrigger value="tags">{t('settings.tags')}</TabsTrigger>
-              <TabsTrigger value="integrations">{t('settings.integrations')}</TabsTrigger>
+              {permissions.canManageUsers && <TabsTrigger value="users">{t('settings.users')}</TabsTrigger>}
+              {permissions.canManageSettings && <TabsTrigger value="permissionProfiles">{t('settings.permissionProfiles')}</TabsTrigger>}
+              {permissions.canManageBilling && <TabsTrigger value="billing">{t('settings.billing')}</TabsTrigger>}
+              {permissions.canManageSettings && <TabsTrigger value="pipeline">{t('settings.pipeline')}</TabsTrigger>}
+              {permissions.canManageSettings && <TabsTrigger value="duplicates">{t('settings.duplicates')}</TabsTrigger>}
+              {permissions.canManageSettings && <TabsTrigger value="customFields">{t('settings.customFields')}</TabsTrigger>}
+              {permissions.canManageSettings && <TabsTrigger value="tags">{t('settings.tags')}</TabsTrigger>}
+              {permissions.canManageIntegrations && <TabsTrigger value="integrations">{t('settings.integrations')}</TabsTrigger>}
+              {permissions.canManageSettings && <TabsTrigger value="auditLogs">{t('settings.auditLogs')}</TabsTrigger>}
+              {permissions.canManageSettings && <TabsTrigger value="trash">{t('settings.trash')}</TabsTrigger>}
             </TabsList>
 
             <TabsContent value="general">
@@ -73,6 +79,14 @@ export default function Settings() {
 
             <TabsContent value="integrations">
               <IntegrationsSettings />
+            </TabsContent>
+
+            <TabsContent value="auditLogs">
+              <AuditLogs />
+            </TabsContent>
+
+            <TabsContent value="trash">
+              <Trash />
             </TabsContent>
           </Tabs>
         </div>

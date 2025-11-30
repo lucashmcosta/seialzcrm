@@ -18,6 +18,8 @@ interface BulkActionsBarProps {
   onClear: () => void;
   onSuccess: () => void;
   locale: string;
+  canEdit?: boolean;
+  canDelete?: boolean;
 }
 
 export function BulkActionsBar({
@@ -27,6 +29,8 @@ export function BulkActionsBar({
   onClear,
   onSuccess,
   locale,
+  canEdit = true,
+  canDelete = true,
 }: BulkActionsBarProps) {
   const { t } = useTranslation(locale as any);
   const [processing, setProcessing] = useState(false);
@@ -111,21 +115,23 @@ export function BulkActionsBar({
         </span>
 
         <div className="flex items-center gap-2">
-          <Select onValueChange={handleChangeOwner} disabled={processing}>
-            <SelectTrigger className="w-48 bg-background text-foreground">
-              <User className="h-4 w-4 mr-2" />
-              <SelectValue placeholder={t('contacts.owner')} />
-            </SelectTrigger>
-            <SelectContent>
-              {users.map((user) => (
-                <SelectItem key={user.id} value={user.id}>
-                  {user.full_name}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
+          {canEdit && (
+            <Select onValueChange={handleChangeOwner} disabled={processing}>
+              <SelectTrigger className="w-48 bg-background text-foreground">
+                <User className="h-4 w-4 mr-2" />
+                <SelectValue placeholder={t('contacts.owner')} />
+              </SelectTrigger>
+              <SelectContent>
+                {users.map((user) => (
+                  <SelectItem key={user.id} value={user.id}>
+                    {user.full_name}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          )}
 
-          {module === 'contacts' && (
+          {canEdit && module === 'contacts' && (
             <Button
               variant="secondary"
               size="sm"
@@ -137,15 +143,17 @@ export function BulkActionsBar({
             </Button>
           )}
 
-          <Button
-            variant="destructive"
-            size="sm"
-            onClick={handleDelete}
-            disabled={processing}
-          >
-            <Trash2 className="h-4 w-4 mr-2" />
-            {t('common.delete')}
-          </Button>
+          {canDelete && (
+            <Button
+              variant="destructive"
+              size="sm"
+              onClick={handleDelete}
+              disabled={processing}
+            >
+              <Trash2 className="h-4 w-4 mr-2" />
+              {t('common.delete')}
+            </Button>
+          )}
 
           <Button
             variant="ghost"
