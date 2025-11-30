@@ -54,20 +54,29 @@ export function useAdminAuth() {
       return;
     }
 
-    const { data: admin } = await supabase
-      .from('admin_users')
-      .select('*')
-      .eq('auth_user_id', authUser.id)
-      .single();
+    try {
+      const { data: admin, error } = await supabase
+        .from('admin_users')
+        .select('*')
+        .eq('auth_user_id', authUser.id)
+        .maybeSingle();
 
-    if (admin) {
-      setAdminUser(admin);
-      if (!admin.mfa_enabled) {
-        setMfaRequired(true);
+      if (error) {
+        console.error('Erro ao buscar admin:', error);
+        setAdminUser(null);
+        setMfaRequired(false);
+        return;
+      }
+
+      if (admin) {
+        setAdminUser(admin);
+        setMfaRequired(!admin.mfa_enabled);
       } else {
+        setAdminUser(null);
         setMfaRequired(false);
       }
-    } else {
+    } catch (error) {
+      console.error('Erro ao carregar admin user:', error);
       setAdminUser(null);
       setMfaRequired(false);
     }
