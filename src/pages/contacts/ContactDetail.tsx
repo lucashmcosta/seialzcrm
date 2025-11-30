@@ -17,6 +17,7 @@ import { ContactTasks } from '@/components/contacts/ContactTasks';
 import { ContactCalls } from '@/components/contacts/ContactCalls';
 import { ContactMessages } from '@/components/contacts/ContactMessages';
 import { ContactAttachments } from '@/components/contacts/ContactAttachments';
+import { ContactOpportunities } from '@/components/contacts/ContactOpportunities';
 
 export default function ContactDetail() {
   const { id } = useParams();
@@ -181,9 +182,7 @@ export default function ContactDetail() {
             </TabsContent>
 
             <TabsContent value="opportunities">
-              <Card className="p-6">
-                <p className="text-muted-foreground">{t('contacts.opportunitiesTab')} - Coming soon</p>
-              </Card>
+              <ContactOpportunities contactId={contact.id} />
             </TabsContent>
 
             <TabsContent value="tasks">
