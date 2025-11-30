@@ -22,14 +22,18 @@ export function useAdminAuth() {
     const { data: { subscription } } = supabase.auth.onAuthStateChange(
       (event, session) => {
         if (event === 'SIGNED_IN') {
-          setTimeout(() => {
-            loadAdminUser(session?.user || null);
+          setTimeout(async () => {
+            await loadAdminUser(session?.user || null);
+            setLoading(false);
           }, 0);
         } else if (event === 'SIGNED_OUT') {
           setUser(null);
           setAdminUser(null);
+          setMfaRequired(false);
+          setLoading(false);
+        } else {
+          setLoading(false);
         }
-        setLoading(false);
       }
     );
 
@@ -46,6 +50,7 @@ export function useAdminAuth() {
     setUser(authUser);
     if (!authUser) {
       setAdminUser(null);
+      setMfaRequired(false);
       return;
     }
 
@@ -59,7 +64,12 @@ export function useAdminAuth() {
       setAdminUser(admin);
       if (!admin.mfa_enabled) {
         setMfaRequired(true);
+      } else {
+        setMfaRequired(false);
       }
+    } else {
+      setAdminUser(null);
+      setMfaRequired(false);
     }
   };
 
