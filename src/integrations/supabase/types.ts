@@ -88,6 +88,148 @@ export type Database = {
           },
         ]
       }
+      admin_audit_logs: {
+        Row: {
+          action: string
+          admin_user_id: string | null
+          created_at: string | null
+          details: Json | null
+          entity_id: string | null
+          entity_type: string | null
+          id: string
+          ip_address: string | null
+          user_agent: string | null
+        }
+        Insert: {
+          action: string
+          admin_user_id?: string | null
+          created_at?: string | null
+          details?: Json | null
+          entity_id?: string | null
+          entity_type?: string | null
+          id?: string
+          ip_address?: string | null
+          user_agent?: string | null
+        }
+        Update: {
+          action?: string
+          admin_user_id?: string | null
+          created_at?: string | null
+          details?: Json | null
+          entity_id?: string | null
+          entity_type?: string | null
+          id?: string
+          ip_address?: string | null
+          user_agent?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "admin_audit_logs_admin_user_id_fkey"
+            columns: ["admin_user_id"]
+            isOneToOne: false
+            referencedRelation: "admin_users"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      admin_sessions: {
+        Row: {
+          admin_user_id: string
+          created_at: string | null
+          expires_at: string
+          id: string
+          ip_address: string | null
+          mfa_verified: boolean | null
+          revoked_at: string | null
+          session_token: string
+          user_agent: string | null
+        }
+        Insert: {
+          admin_user_id: string
+          created_at?: string | null
+          expires_at: string
+          id?: string
+          ip_address?: string | null
+          mfa_verified?: boolean | null
+          revoked_at?: string | null
+          session_token: string
+          user_agent?: string | null
+        }
+        Update: {
+          admin_user_id?: string
+          created_at?: string | null
+          expires_at?: string
+          id?: string
+          ip_address?: string | null
+          mfa_verified?: boolean | null
+          revoked_at?: string | null
+          session_token?: string
+          user_agent?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "admin_sessions_admin_user_id_fkey"
+            columns: ["admin_user_id"]
+            isOneToOne: false
+            referencedRelation: "admin_users"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      admin_users: {
+        Row: {
+          auth_user_id: string
+          created_at: string | null
+          email: string
+          failed_login_attempts: number | null
+          full_name: string
+          id: string
+          is_active: boolean | null
+          last_login_at: string | null
+          last_login_ip: string | null
+          locked_until: string | null
+          mfa_backup_codes: string[] | null
+          mfa_enabled: boolean
+          mfa_secret: string | null
+          mfa_setup_completed_at: string | null
+          updated_at: string | null
+        }
+        Insert: {
+          auth_user_id: string
+          created_at?: string | null
+          email: string
+          failed_login_attempts?: number | null
+          full_name: string
+          id?: string
+          is_active?: boolean | null
+          last_login_at?: string | null
+          last_login_ip?: string | null
+          locked_until?: string | null
+          mfa_backup_codes?: string[] | null
+          mfa_enabled?: boolean
+          mfa_secret?: string | null
+          mfa_setup_completed_at?: string | null
+          updated_at?: string | null
+        }
+        Update: {
+          auth_user_id?: string
+          created_at?: string | null
+          email?: string
+          failed_login_attempts?: number | null
+          full_name?: string
+          id?: string
+          is_active?: boolean | null
+          last_login_at?: string | null
+          last_login_ip?: string | null
+          locked_until?: string | null
+          mfa_backup_codes?: string[] | null
+          mfa_enabled?: boolean
+          mfa_secret?: string | null
+          mfa_setup_completed_at?: string | null
+          updated_at?: string | null
+        }
+        Relationships: []
+      }
       attachments: {
         Row: {
           bucket: string
@@ -860,6 +1002,53 @@ export type Database = {
           },
         ]
       }
+      organization_usage_metrics: {
+        Row: {
+          actions_last_30_days: number | null
+          actions_last_7_days: number | null
+          calculated_at: string | null
+          id: string
+          last_user_activity_at: string | null
+          organization_id: string
+          storage_used_bytes: number | null
+          total_contacts: number | null
+          total_opportunities: number | null
+          total_tasks: number | null
+        }
+        Insert: {
+          actions_last_30_days?: number | null
+          actions_last_7_days?: number | null
+          calculated_at?: string | null
+          id?: string
+          last_user_activity_at?: string | null
+          organization_id: string
+          storage_used_bytes?: number | null
+          total_contacts?: number | null
+          total_opportunities?: number | null
+          total_tasks?: number | null
+        }
+        Update: {
+          actions_last_30_days?: number | null
+          actions_last_7_days?: number | null
+          calculated_at?: string | null
+          id?: string
+          last_user_activity_at?: string | null
+          organization_id?: string
+          storage_used_bytes?: number | null
+          total_contacts?: number | null
+          total_opportunities?: number | null
+          total_tasks?: number | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "organization_usage_metrics_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: true
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       organizations: {
         Row: {
           created_at: string | null
@@ -1414,6 +1603,19 @@ export type Database = {
           p_timezone?: string
         }
         Returns: Json
+      }
+      is_admin_user: { Args: never; Returns: boolean }
+      record_failed_admin_login: {
+        Args: { p_email: string; p_ip: string }
+        Returns: undefined
+      }
+      reset_admin_login_attempts: {
+        Args: { p_admin_id: string }
+        Returns: undefined
+      }
+      update_organization_usage_metrics: {
+        Args: { org_id: string }
+        Returns: undefined
       }
       user_has_org_access: { Args: { org_id: string }; Returns: boolean }
     }
