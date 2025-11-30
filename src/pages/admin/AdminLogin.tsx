@@ -46,10 +46,10 @@ export default function AdminLogin() {
         
         if (adminUser && adminUser.is_active) {
           if (adminUser.mfa_enabled) {
-            navigate('/admin', { replace: true });
+            window.location.href = '/admin';
             return;
           } else {
-            navigate('/admin/mfa-setup', { replace: true });
+            window.location.href = '/admin/mfa-setup';
             return;
           }
         }

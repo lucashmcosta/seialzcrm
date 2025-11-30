@@ -1,23 +1,10 @@
 import { useAdminAuth } from '@/hooks/useAdminAuth';
 import { Navigate } from 'react-router-dom';
-import { useState, useEffect } from 'react';
 
 export function AdminProtectedRoute({ children }: { children: React.ReactNode }) {
-  const { isAdmin, loading, mfaRequired, user } = useAdminAuth();
-  const [timedOut, setTimedOut] = useState(false);
+  const { loading, mfaRequired, user, adminUser } = useAdminAuth();
 
-  useEffect(() => {
-    const timer = setTimeout(() => {
-      if (loading) {
-        console.warn('Timeout no AdminProtectedRoute');
-        setTimedOut(true);
-      }
-    }, 10000);
-    
-    return () => clearTimeout(timer);
-  }, [loading]);
-
-  if (loading && !timedOut) {
+  if (loading) {
     return (
       <div className="min-h-screen flex items-center justify-center">
         <div className="text-center">
@@ -28,16 +15,12 @@ export function AdminProtectedRoute({ children }: { children: React.ReactNode })
     );
   }
 
-  if (timedOut || !user) {
+  if (!user || !adminUser) {
     return <Navigate to="/admin/login" replace />;
   }
 
-  if (mfaRequired) {
+  if (mfaRequired || !adminUser.mfa_enabled) {
     return <Navigate to="/admin/mfa-setup" replace />;
-  }
-
-  if (!isAdmin) {
-    return <Navigate to="/admin/login" replace />;
   }
 
   return <>{children}</>;
