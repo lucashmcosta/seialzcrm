@@ -37,7 +37,6 @@ export default function TasksList() {
   const { toast } = useToast();
   
   const [tasks, setTasks] = useState<Task[]>([]);
-  const [filteredTasks, setFilteredTasks] = useState<Task[]>([]);
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
   const [statusFilter, setStatusFilter] = useState('all');
@@ -46,17 +45,18 @@ export default function TasksList() {
   const [users, setUsers] = useState<{ id: string; full_name: string }[]>([]);
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [selectedTask, setSelectedTask] = useState<Task | null>(null);
+  
+  // Pagination state
+  const [currentPage, setCurrentPage] = useState(1);
+  const [totalCount, setTotalCount] = useState(0);
+  const pageSize = 20;
 
   useEffect(() => {
     if (organization) {
       fetchUsers();
       fetchTasks();
     }
-  }, [organization]);
-
-  useEffect(() => {
-    filterTasks();
-  }, [tasks, searchTerm, statusFilter, priorityFilter, assignedFilter]);
+  }, [organization, currentPage, searchTerm, statusFilter, priorityFilter, assignedFilter]);
 
   const fetchUsers = async () => {
     if (!organization) return;
@@ -79,17 +79,45 @@ export default function TasksList() {
     if (!organization) return;
     
     setLoading(true);
-    const { data, error } = await supabase
+    
+    let query = supabase
       .from('tasks')
       .select(`
         *,
         contacts(full_name),
         opportunities(title),
         assigned_user:users!tasks_assigned_user_id_fkey(full_name)
-      `)
+      `, { count: 'exact' })
       .eq('organization_id', organization.id)
-      .is('deleted_at', null)
-      .order('due_at', { ascending: true, nullsFirst: false });
+      .is('deleted_at', null);
+    
+    // Apply filters
+    if (searchTerm) {
+      query = query.ilike('title', `%${searchTerm}%`);
+    }
+    if (statusFilter === 'overdue') {
+      query = query.lt('due_at', new Date().toISOString()).eq('status', 'open');
+    } else if (statusFilter === 'today') {
+      const today = new Date();
+      const startOfDay = new Date(today.setHours(0, 0, 0, 0)).toISOString();
+      const endOfDay = new Date(today.setHours(23, 59, 59, 999)).toISOString();
+      query = query.gte('due_at', startOfDay).lte('due_at', endOfDay);
+    } else if (statusFilter !== 'all') {
+      query = query.eq('status', statusFilter as 'open' | 'completed' | 'canceled');
+    }
+    if (priorityFilter !== 'all') {
+      query = query.eq('priority', priorityFilter as 'low' | 'medium' | 'high');
+    }
+    if (assignedFilter !== 'all') {
+      query = query.eq('assigned_user_id', assignedFilter);
+    }
+    
+    // Apply pagination
+    const from = (currentPage - 1) * pageSize;
+    const to = from + pageSize - 1;
+    query = query.range(from, to).order('due_at', { ascending: true, nullsFirst: false });
+    
+    const { data, error, count } = await query;
     
     if (error) {
       console.error('Error fetching tasks:', error);
@@ -100,53 +128,10 @@ export default function TasksList() {
       });
     } else {
       setTasks(data || []);
+      setTotalCount(count || 0);
     }
     
     setLoading(false);
-  };
-
-  const filterTasks = () => {
-    let filtered = [...tasks];
-    
-    // Search
-    if (searchTerm) {
-      filtered = filtered.filter(task =>
-        task.title.toLowerCase().includes(searchTerm.toLowerCase())
-      );
-    }
-    
-    // Status
-    if (statusFilter !== 'all') {
-      if (statusFilter === 'overdue') {
-        const now = new Date();
-        filtered = filtered.filter(task =>
-          task.status === 'open' && task.due_at && new Date(task.due_at) < now
-        );
-      } else if (statusFilter === 'today') {
-        const today = new Date();
-        today.setHours(0, 0, 0, 0);
-        const tomorrow = new Date(today);
-        tomorrow.setDate(tomorrow.getDate() + 1);
-        filtered = filtered.filter(task =>
-          task.status === 'open' && task.due_at &&
-          new Date(task.due_at) >= today && new Date(task.due_at) < tomorrow
-        );
-      } else {
-        filtered = filtered.filter(task => task.status === statusFilter);
-      }
-    }
-    
-    // Priority
-    if (priorityFilter !== 'all') {
-      filtered = filtered.filter(task => task.priority === priorityFilter);
-    }
-    
-    // Assigned
-    if (assignedFilter !== 'all') {
-      filtered = filtered.filter(task => task.assigned_user_id === assignedFilter);
-    }
-    
-    setFilteredTasks(filtered);
   };
 
   const handleCompleteTask = async (taskId: string) => {
@@ -272,83 +257,112 @@ export default function TasksList() {
             <TabsContent value={statusFilter} className="mt-6">
               {loading ? (
                 <p className="text-muted-foreground">{t('common.loading')}</p>
-              ) : filteredTasks.length === 0 ? (
+              ) : tasks.length === 0 ? (
                 <Card className="p-6">
                   <p className="text-muted-foreground text-center">{t('tasks.noTasks')}</p>
                 </Card>
               ) : (
-                <div className="grid gap-4">
-                  {filteredTasks.map(task => (
-                    <Card
-                      key={task.id}
-                      className={`p-4 ${isOverdue(task) ? 'border-red-500' : ''}`}
-                    >
-                      <div className="flex items-start gap-4">
-                        <div className="flex-1">
-                          <div className="flex items-center gap-2 mb-2">
-                            {getPriorityIcon(task.priority)}
-                            <h3 className="font-semibold">{task.title}</h3>
-                            {isOverdue(task) && (
-                              <span className="text-xs px-2 py-1 bg-red-100 text-red-700 rounded">
-                                {t('tasks.overdue')}
-                              </span>
+                <>
+                  <div className="grid gap-4">
+                    {tasks.map(task => (
+                      <Card
+                        key={task.id}
+                        className={`p-4 ${isOverdue(task) ? 'border-red-500' : ''}`}
+                      >
+                        <div className="flex items-start gap-4">
+                          <div className="flex-1">
+                            <div className="flex items-center gap-2 mb-2">
+                              {getPriorityIcon(task.priority)}
+                              <h3 className="font-semibold">{task.title}</h3>
+                              {isOverdue(task) && (
+                                <span className="text-xs px-2 py-1 bg-red-100 text-red-700 rounded">
+                                  {t('tasks.overdue')}
+                                </span>
+                              )}
+                            </div>
+                            
+                            {task.description && (
+                              <p className="text-sm text-muted-foreground mb-2">
+                                {task.description}
+                              </p>
                             )}
+                            
+                            <div className="flex flex-wrap gap-3 text-sm text-muted-foreground">
+                              {task.assigned_user && (
+                                <span>{t('tasks.assignedTo')}: {task.assigned_user.full_name}</span>
+                              )}
+                              {task.contacts && (
+                                <span>{t('tasks.contact')}: {task.contacts.full_name}</span>
+                              )}
+                              {task.opportunities && (
+                                <span>{t('tasks.opportunity')}: {task.opportunities.title}</span>
+                              )}
+                              {task.due_at && (
+                                <span>
+                                  {t('tasks.dueDate')}: {new Date(task.due_at).toLocaleDateString(locale)}
+                                </span>
+                              )}
+                            </div>
                           </div>
                           
-                          {task.description && (
-                            <p className="text-sm text-muted-foreground mb-2">
-                              {task.description}
-                            </p>
-                          )}
-                          
-                          <div className="flex flex-wrap gap-3 text-sm text-muted-foreground">
-                            {task.assigned_user && (
-                              <span>{t('tasks.assignedTo')}: {task.assigned_user.full_name}</span>
+                          <div className="flex gap-2">
+                            {task.status === 'open' && (
+                              <Button
+                                size="sm"
+                                variant="outline"
+                                onClick={() => handleCompleteTask(task.id)}
+                              >
+                                <CheckCircle2 className="h-4 w-4 mr-1" />
+                                {t('tasks.complete')}
+                              </Button>
                             )}
-                            {task.contacts && (
-                              <span>{t('tasks.contact')}: {task.contacts.full_name}</span>
-                            )}
-                            {task.opportunities && (
-                              <span>{t('tasks.opportunity')}: {task.opportunities.title}</span>
-                            )}
-                            {task.due_at && (
-                              <span>
-                                {t('tasks.dueDate')}: {new Date(task.due_at).toLocaleDateString(locale)}
-                              </span>
-                            )}
-                          </div>
-                        </div>
-                        
-                        <div className="flex gap-2">
-                          {task.status === 'open' && (
                             <Button
                               size="sm"
                               variant="outline"
-                              onClick={() => handleCompleteTask(task.id)}
+                              onClick={() => { setSelectedTask(task); setIsDialogOpen(true); }}
                             >
-                              <CheckCircle2 className="h-4 w-4 mr-1" />
-                              {t('tasks.complete')}
+                              {t('common.edit')}
                             </Button>
-                          )}
-                          <Button
-                            size="sm"
-                            variant="outline"
-                            onClick={() => { setSelectedTask(task); setIsDialogOpen(true); }}
-                          >
-                            {t('common.edit')}
-                          </Button>
-                          <Button
-                            size="sm"
-                            variant="destructive"
-                            onClick={() => handleDeleteTask(task.id)}
-                          >
-                            {t('common.delete')}
-                          </Button>
+                            <Button
+                              size="sm"
+                              variant="destructive"
+                              onClick={() => handleDeleteTask(task.id)}
+                            >
+                              {t('common.delete')}
+                            </Button>
+                          </div>
                         </div>
+                      </Card>
+                    ))}
+                  </div>
+                  
+                  {/* Pagination */}
+                  {totalCount > pageSize && (
+                    <div className="mt-6 flex items-center justify-between">
+                      <p className="text-sm text-muted-foreground">
+                        {t('common.showing')} {(currentPage - 1) * pageSize + 1} - {Math.min(currentPage * pageSize, totalCount)} {t('common.of')} {totalCount}
+                      </p>
+                      <div className="flex gap-2">
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={() => setCurrentPage(p => Math.max(1, p - 1))}
+                          disabled={currentPage === 1}
+                        >
+                          {t('common.previous')}
+                        </Button>
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={() => setCurrentPage(p => Math.min(Math.ceil(totalCount / pageSize), p + 1))}
+                          disabled={currentPage >= Math.ceil(totalCount / pageSize)}
+                        >
+                          {t('common.next')}
+                        </Button>
                       </div>
-                    </Card>
-                  ))}
-                </div>
+                    </div>
+                  )}
+                </>
               )}
             </TabsContent>
           </Tabs>
