@@ -53,19 +53,25 @@ export default function AdminMFASetup() {
   };
 
   const generateMFASecret = (email: string) => {
-    const randomSecret = Array.from(crypto.getRandomValues(new Uint8Array(20)))
-      .map(b => b.toString(36))
-      .join('')
-      .toUpperCase();
+    // Alfabeto Base32 válido para TOTP
+    const base32Chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ234567';
+    
+    // Gerar secret de 32 caracteres em Base32
+    const randomBytes = crypto.getRandomValues(new Uint8Array(32));
+    const randomSecret = Array.from(randomBytes)
+      .map(b => base32Chars[b % 32])
+      .join('');
     
     setSecret(randomSecret);
     
-    const qrUrl = `otpauth://totp/CRM%20Admin:${email}?secret=${randomSecret}&issuer=CRM`;
+    const qrUrl = `otpauth://totp/CRM%20Admin:${encodeURIComponent(email)}?secret=${randomSecret}&issuer=CRM`;
     setQrCode(`https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=${encodeURIComponent(qrUrl)}`);
     
-    const codes = Array.from({ length: 8 }, () => 
-      Math.random().toString(36).substring(2, 10).toUpperCase()
-    );
+    // Backup codes também em Base32
+    const codes = Array.from({ length: 8 }, () => {
+      const codeBytes = crypto.getRandomValues(new Uint8Array(8));
+      return Array.from(codeBytes).map(b => base32Chars[b % 32]).join('');
+    });
     setBackupCodes(codes);
   };
 
