@@ -103,7 +103,7 @@ export const translations = {
     'contacts.lifecycleStage': 'Estágio',
     'contacts.timeline': 'Linha do tempo',
     'contacts.details': 'Detalhes',
-    'contacts.opportunitiesTab': 'Negócios',
+    'contacts.opportunitiesTab': 'Oportunidades',
     'contacts.tasksTab': 'Tarefas',
     'contacts.doNotContact': 'Não Contactar',
     'contacts.deleteConfirm': 'Tem certeza que deseja excluir este contato?',
