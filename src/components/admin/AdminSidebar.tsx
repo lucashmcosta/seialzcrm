@@ -1,10 +1,12 @@
 import { Link, useLocation } from 'react-router-dom';
 import { cn } from '@/lib/utils';
-import { LayoutDashboard, Building2, FileText, Shield } from 'lucide-react';
+import { LayoutDashboard, Building2, FileText, Shield, Users, Flag } from 'lucide-react';
 
 const menuItems = [
   { icon: LayoutDashboard, label: 'Dashboard', href: '/admin' },
   { icon: Building2, label: 'Organizações', href: '/admin/organizations' },
+  { icon: Users, label: 'Administradores', href: '/admin/users' },
+  { icon: Flag, label: 'Feature Flags', href: '/admin/feature-flags' },
   { icon: FileText, label: 'Logs', href: '/admin/logs' },
   { icon: Shield, label: 'Segurança', href: '/admin/security' },
 ];

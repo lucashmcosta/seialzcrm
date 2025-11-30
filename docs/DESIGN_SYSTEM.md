@@ -313,4 +313,153 @@ Antes de finalizar qualquer componente, verifique:
 ---
 
 **Última atualização:** 2025-11-30
-**Versão:** 1.0.0
+**Versão:** 1.1.0
+
+---
+
+## 11. Admin Panel - Padrões Específicos
+
+### Dialogs de Confirmação
+
+Para ações críticas (suspender, deletar), sempre usar dialogs de confirmação:
+
+```tsx
+// ✅ Padrão para ações destrutivas
+<Dialog>
+  <DialogHeader>
+    <DialogTitle className="flex items-center gap-2 text-destructive">
+      <AlertTriangle className="h-5 w-5" />
+      Ação Crítica
+    </DialogTitle>
+    <DialogDescription>
+      Descrição clara das consequências
+    </DialogDescription>
+  </DialogHeader>
+  {/* Form com campos de confirmação */}
+  <DialogFooter>
+    <Button variant="outline">Cancelar</Button>
+    <Button variant="destructive">Confirmar</Button>
+  </DialogFooter>
+</Dialog>
+```
+
+### Tabelas com Ações
+
+Padrão para listagens administrativas:
+
+```tsx
+// Use DropdownMenu para ações em linhas
+<TableCell className="text-right">
+  <DropdownMenu>
+    <DropdownMenuTrigger asChild>
+      <Button variant="ghost" size="icon">
+        <MoreHorizontal className="h-4 w-4" />
+      </Button>
+    </DropdownMenuTrigger>
+    <DropdownMenuContent align="end">
+      <DropdownMenuItem>Editar</DropdownMenuItem>
+      <DropdownMenuItem className="text-destructive">Deletar</DropdownMenuItem>
+    </DropdownMenuContent>
+  </DropdownMenu>
+</TableCell>
+```
+
+### Badges de Status
+
+```tsx
+// Admin-specific status badges
+<Badge variant="default" className="gap-1">
+  <CheckCircle className="h-3 w-3" />
+  Ativo
+</Badge>
+
+<Badge variant="destructive" className="gap-1">
+  <XCircle className="h-3 w-3" />
+  Suspenso
+</Badge>
+
+<Badge variant="secondary" className="gap-1">
+  <Shield className="h-3 w-3" />
+  MFA Ativo
+</Badge>
+```
+
+### Audit Logging
+
+Sempre registrar ações administrativas críticas:
+
+```tsx
+// Após ação bem-sucedida
+await supabase.from('admin_audit_logs').insert({
+  admin_user_id: adminUser.id,
+  action: 'suspend_organization',
+  entity_type: 'organization',
+  entity_id: orgId,
+  details: { reason, additionalData },
+});
+```
+
+### Gráficos e Visualizações
+
+Use recharts para dashboards:
+
+```tsx
+// Padrão de gráfico responsivo
+<Card>
+  <CardHeader>
+    <CardTitle>Título do Gráfico</CardTitle>
+  </CardHeader>
+  <CardContent>
+    <ResponsiveContainer width="100%" height={300}>
+      <LineChart data={data}>
+        <CartesianGrid strokeDasharray="3 3" />
+        <XAxis dataKey="name" />
+        <YAxis />
+        <Tooltip />
+        <Legend />
+        <Line type="monotone" dataKey="value" stroke="hsl(var(--primary))" />
+      </LineChart>
+    </ResponsiveContainer>
+  </CardContent>
+</Card>
+```
+
+### Ações Organizacionais
+
+Interface consistente para ações em organizações:
+
+```tsx
+// Abas para organizar informações
+<Tabs defaultValue="overview">
+  <TabsList>
+    <TabsTrigger value="overview">Visão Geral</TabsTrigger>
+    <TabsTrigger value="users">Usuários</TabsTrigger>
+    <TabsTrigger value="subscription">Subscription</TabsTrigger>
+    <TabsTrigger value="actions">Ações</TabsTrigger>
+  </TabsList>
+  {/* Content */}
+</Tabs>
+
+// Aba de ações com botões claros
+<Card>
+  <CardHeader>
+    <CardTitle>Ações Administrativas</CardTitle>
+  </CardHeader>
+  <CardContent className="space-y-3">
+    <Button variant="destructive" className="w-full justify-start">
+      <Icon className="h-4 w-4 mr-2" />
+      Ação Crítica
+    </Button>
+  </CardContent>
+</Card>
+```
+
+### Segurança
+
+- **SEMPRE** verificar permissões de admin via `is_admin_user()`
+- **NUNCA** confiar em dados do cliente
+- Registrar todas as ações em audit logs
+- Usar dialogs de confirmação dupla para ações destrutivas
+- Validar entrada de usuário no backend
+
+---

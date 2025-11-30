@@ -132,6 +132,44 @@ export type Database = {
           },
         ]
       }
+      admin_notifications: {
+        Row: {
+          admin_user_id: string | null
+          body: string | null
+          created_at: string | null
+          id: string
+          read_at: string | null
+          title: string
+          type: string
+        }
+        Insert: {
+          admin_user_id?: string | null
+          body?: string | null
+          created_at?: string | null
+          id?: string
+          read_at?: string | null
+          title: string
+          type: string
+        }
+        Update: {
+          admin_user_id?: string | null
+          body?: string | null
+          created_at?: string | null
+          id?: string
+          read_at?: string | null
+          title?: string
+          type?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "admin_notifications_admin_user_id_fkey"
+            columns: ["admin_user_id"]
+            isOneToOne: false
+            referencedRelation: "admin_users"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       admin_sessions: {
         Row: {
           admin_user_id: string
@@ -646,6 +684,36 @@ export type Database = {
           },
         ]
       }
+      feature_flags: {
+        Row: {
+          created_at: string | null
+          description: string | null
+          id: string
+          is_enabled: boolean | null
+          name: string
+          organization_ids: string[] | null
+          updated_at: string | null
+        }
+        Insert: {
+          created_at?: string | null
+          description?: string | null
+          id?: string
+          is_enabled?: boolean | null
+          name: string
+          organization_ids?: string[] | null
+          updated_at?: string | null
+        }
+        Update: {
+          created_at?: string | null
+          description?: string | null
+          id?: string
+          is_enabled?: boolean | null
+          name?: string
+          organization_ids?: string[] | null
+          updated_at?: string | null
+        }
+        Relationships: []
+      }
       integrations: {
         Row: {
           config: Json | null
@@ -1065,6 +1133,9 @@ export type Database = {
           onboarding_completed_at: string | null
           onboarding_step: Database["public"]["Enums"]["onboarding_step"] | null
           slug: string
+          suspended_at: string | null
+          suspended_by_admin_id: string | null
+          suspended_reason: string | null
           timezone: string | null
           updated_at: string | null
         }
@@ -1085,6 +1156,9 @@ export type Database = {
             | Database["public"]["Enums"]["onboarding_step"]
             | null
           slug: string
+          suspended_at?: string | null
+          suspended_by_admin_id?: string | null
+          suspended_reason?: string | null
           timezone?: string | null
           updated_at?: string | null
         }
@@ -1105,10 +1179,21 @@ export type Database = {
             | Database["public"]["Enums"]["onboarding_step"]
             | null
           slug?: string
+          suspended_at?: string | null
+          suspended_by_admin_id?: string | null
+          suspended_reason?: string | null
           timezone?: string | null
           updated_at?: string | null
         }
-        Relationships: []
+        Relationships: [
+          {
+            foreignKeyName: "organizations_suspended_by_admin_id_fkey"
+            columns: ["suspended_by_admin_id"]
+            isOneToOne: false
+            referencedRelation: "admin_users"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       permission_profiles: {
         Row: {
