@@ -36,6 +36,10 @@ import AdminSecurity from "./pages/admin/AdminSecurity";
 import AdminImpersonationHistory from "./pages/admin/AdminImpersonationHistory";
 import AdminPlans from "./pages/admin/AdminPlans";
 import AdminCoupons from "./pages/admin/AdminCoupons";
+import AdminIntegrations from "./pages/admin/AdminIntegrations";
+import AdminIntegrationDetail from "./pages/admin/AdminIntegrationDetail";
+import AdminDocumentation from "./pages/admin/AdminDocumentation";
+import AdminDocumentationEdit from "./pages/admin/AdminDocumentationEdit";
 import { AdminProtectedRoute } from "./components/admin/AdminProtectedRoute";
 
 const queryClient = new QueryClient();
@@ -124,6 +128,26 @@ const App = () => (
           <Route path="/admin/coupons" element={
             <AdminProtectedRoute>
               <AdminCoupons />
+            </AdminProtectedRoute>
+          } />
+          <Route path="/admin/integrations" element={
+            <AdminProtectedRoute>
+              <AdminIntegrations />
+            </AdminProtectedRoute>
+          } />
+          <Route path="/admin/integrations/:id" element={
+            <AdminProtectedRoute>
+              <AdminIntegrationDetail />
+            </AdminProtectedRoute>
+          } />
+          <Route path="/admin/documentation" element={
+            <AdminProtectedRoute>
+              <AdminDocumentation />
+            </AdminProtectedRoute>
+          } />
+          <Route path="/admin/documentation/:module" element={
+            <AdminProtectedRoute>
+              <AdminDocumentationEdit />
             </AdminProtectedRoute>
           } />
           

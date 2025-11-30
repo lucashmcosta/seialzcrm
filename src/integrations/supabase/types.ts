@@ -132,6 +132,54 @@ export type Database = {
           },
         ]
       }
+      admin_integrations: {
+        Row: {
+          category: string
+          config_schema: Json | null
+          created_at: string | null
+          description: string | null
+          documentation_url: string | null
+          id: string
+          logo_url: string | null
+          master_config: Json | null
+          name: string
+          slug: string
+          sort_order: number | null
+          status: string
+          updated_at: string | null
+        }
+        Insert: {
+          category?: string
+          config_schema?: Json | null
+          created_at?: string | null
+          description?: string | null
+          documentation_url?: string | null
+          id?: string
+          logo_url?: string | null
+          master_config?: Json | null
+          name: string
+          slug: string
+          sort_order?: number | null
+          status?: string
+          updated_at?: string | null
+        }
+        Update: {
+          category?: string
+          config_schema?: Json | null
+          created_at?: string | null
+          description?: string | null
+          documentation_url?: string | null
+          id?: string
+          logo_url?: string | null
+          master_config?: Json | null
+          name?: string
+          slug?: string
+          sort_order?: number | null
+          status?: string
+          updated_at?: string | null
+        }
+        Relationships: []
+      }
       admin_notifications: {
         Row: {
           admin_user_id: string | null
@@ -802,6 +850,53 @@ export type Database = {
           },
         ]
       }
+      documentation: {
+        Row: {
+          content: string
+          created_at: string | null
+          id: string
+          is_public: boolean | null
+          module: string
+          status: string | null
+          title: string
+          updated_at: string | null
+          updated_by_admin_id: string | null
+          version: string | null
+        }
+        Insert: {
+          content: string
+          created_at?: string | null
+          id?: string
+          is_public?: boolean | null
+          module: string
+          status?: string | null
+          title: string
+          updated_at?: string | null
+          updated_by_admin_id?: string | null
+          version?: string | null
+        }
+        Update: {
+          content?: string
+          created_at?: string | null
+          id?: string
+          is_public?: boolean | null
+          module?: string
+          status?: string | null
+          title?: string
+          updated_at?: string | null
+          updated_by_admin_id?: string | null
+          version?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "documentation_updated_by_admin_id_fkey"
+            columns: ["updated_by_admin_id"]
+            isOneToOne: false
+            referencedRelation: "admin_users"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       feature_flags: {
         Row: {
           created_at: string | null
@@ -1244,6 +1339,67 @@ export type Database = {
             columns: ["pipeline_stage_id"]
             isOneToOne: false
             referencedRelation: "pipeline_stages"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      organization_integrations: {
+        Row: {
+          config_values: Json | null
+          connected_account: Json | null
+          connected_at: string | null
+          connected_by_user_id: string | null
+          created_at: string | null
+          id: string
+          integration_id: string | null
+          is_enabled: boolean | null
+          organization_id: string | null
+          updated_at: string | null
+        }
+        Insert: {
+          config_values?: Json | null
+          connected_account?: Json | null
+          connected_at?: string | null
+          connected_by_user_id?: string | null
+          created_at?: string | null
+          id?: string
+          integration_id?: string | null
+          is_enabled?: boolean | null
+          organization_id?: string | null
+          updated_at?: string | null
+        }
+        Update: {
+          config_values?: Json | null
+          connected_account?: Json | null
+          connected_at?: string | null
+          connected_by_user_id?: string | null
+          created_at?: string | null
+          id?: string
+          integration_id?: string | null
+          is_enabled?: boolean | null
+          organization_id?: string | null
+          updated_at?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "organization_integrations_connected_by_user_id_fkey"
+            columns: ["connected_by_user_id"]
+            isOneToOne: false
+            referencedRelation: "users"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "organization_integrations_integration_id_fkey"
+            columns: ["integration_id"]
+            isOneToOne: false
+            referencedRelation: "admin_integrations"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "organization_integrations_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
             referencedColumns: ["id"]
           },
         ]
