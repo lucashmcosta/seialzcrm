@@ -53,9 +53,9 @@ export default function AdminOrganizations() {
 
       const orgsWithMetrics = await Promise.all(
         (orgs || []).map(async (org) => {
-          const { data: userOrgs } = await supabase
+          const { count: userCount } = await supabase
             .from('user_organizations')
-            .select('user_id', { count: 'exact', head: true })
+            .select('*', { count: 'exact', head: true })
             .eq('organization_id', org.id)
             .eq('is_active', true);
 
@@ -63,7 +63,7 @@ export default function AdminOrganizations() {
             .from('organization_usage_metrics')
             .select('last_user_activity_at')
             .eq('organization_id', org.id)
-            .single();
+            .maybeSingle();
 
           return {
             id: org.id,
@@ -71,7 +71,7 @@ export default function AdminOrganizations() {
             slug: org.slug,
             created_at: org.created_at,
             plan_name: org.subscriptions?.[0]?.plan_name || 'free',
-            user_count: userOrgs?.length || 0,
+            user_count: userCount || 0,
             last_activity: metrics?.last_user_activity_at || null,
           };
         })
