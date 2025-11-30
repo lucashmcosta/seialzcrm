@@ -23,6 +23,8 @@ export const translations = {
     'common.all': 'Todos',
     'common.actions': 'Ações',
     'common.noResults': 'Nenhum resultado encontrado',
+    'common.showing': 'Mostrando',
+    'common.of': 'de',
     
     // Navigation
     'nav.dashboard': 'Início',
@@ -364,6 +366,8 @@ export const translations = {
     'common.all': 'All',
     'common.actions': 'Actions',
     'common.noResults': 'No results found',
+    'common.showing': 'Showing',
+    'common.of': 'of',
     
     // Navigation
     'nav.dashboard': 'Dashboard',

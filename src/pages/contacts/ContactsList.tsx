@@ -37,6 +37,11 @@ export default function ContactsList() {
   const [ownerFilter, setOwnerFilter] = useState('all');
   const [stageFilter, setStageFilter] = useState('all');
   
+  // Pagination state
+  const [currentPage, setCurrentPage] = useState(1);
+  const [totalCount, setTotalCount] = useState(0);
+  const pageSize = 20;
+  
   // Current filters and sort for SavedViews
   const currentFilters = { owner: ownerFilter, stage: stageFilter, search: searchTerm };
   const currentSort = { field: 'created_at', direction: 'desc' };
@@ -51,7 +56,7 @@ export default function ContactsList() {
     if (!organization) return;
     fetchContacts();
     fetchUsers();
-  }, [organization]);
+  }, [organization, currentPage, searchTerm, ownerFilter, stageFilter]);
 
   const fetchUsers = async () => {
     if (!organization) return;
@@ -74,30 +79,41 @@ export default function ContactsList() {
     if (!organization) return;
 
     setLoading(true);
-    const { data, error } = await supabase
+    
+    // Build query with filters
+    let query = supabase
       .from('contacts')
-      .select('*')
+      .select('*', { count: 'exact' })
       .eq('organization_id', organization.id)
-      .is('deleted_at', null)
-      .order('created_at', { ascending: false });
+      .is('deleted_at', null);
+    
+    // Apply filters
+    if (searchTerm) {
+      query = query.or(`full_name.ilike.%${searchTerm}%,email.ilike.%${searchTerm}%,phone.ilike.%${searchTerm}%`);
+    }
+    if (ownerFilter !== 'all') {
+      query = query.eq('owner_user_id', ownerFilter);
+    }
+    if (stageFilter !== 'all') {
+      query = query.eq('lifecycle_stage', stageFilter as 'lead' | 'customer' | 'inactive');
+    }
+    
+    // Apply pagination
+    const from = (currentPage - 1) * pageSize;
+    const to = from + pageSize - 1;
+    query = query.range(from, to).order('created_at', { ascending: false });
+
+    const { data, error, count } = await query;
 
     if (!error && data) {
       setContacts(data);
+      setTotalCount(count || 0);
     }
     setLoading(false);
   };
 
-  const filteredContacts = contacts.filter((contact) => {
-    const matchesSearch = 
-      contact.full_name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      contact.email?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      contact.phone?.includes(searchTerm);
-    
-    const matchesOwner = ownerFilter === 'all' || contact.owner_user_id === ownerFilter;
-    const matchesStage = stageFilter === 'all' || contact.lifecycle_stage === stageFilter;
-    
-    return matchesSearch && matchesOwner && matchesStage;
-  });
+  // Filters now applied server-side, so we use contacts directly
+  const filteredContacts = contacts;
 
   const handleSelectAll = (checked: boolean | 'indeterminate') => {
     if (checked === true) {
@@ -265,6 +281,33 @@ export default function ContactsList() {
                 </Card>
               ))}
             </div>
+            
+            {/* Pagination */}
+            {totalCount > pageSize && (
+              <div className="mt-6 flex items-center justify-between">
+                <p className="text-sm text-muted-foreground">
+                  {t('common.showing')} {(currentPage - 1) * pageSize + 1} - {Math.min(currentPage * pageSize, totalCount)} {t('common.of')} {totalCount}
+                </p>
+                <div className="flex gap-2">
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => setCurrentPage(p => Math.max(1, p - 1))}
+                    disabled={currentPage === 1}
+                  >
+                    {t('common.previous')}
+                  </Button>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => setCurrentPage(p => Math.min(Math.ceil(totalCount / pageSize), p + 1))}
+                    disabled={currentPage >= Math.ceil(totalCount / pageSize)}
+                  >
+                    {t('common.next')}
+                  </Button>
+                </div>
+              </div>
+            )}
           </>
         )}
       </div>
