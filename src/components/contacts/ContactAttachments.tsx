@@ -21,10 +21,12 @@ interface Attachment {
 }
 
 interface ContactAttachmentsProps {
-  contactId: string;
+  contactId?: string;
+  entityId?: string;
+  entityType?: string;
 }
 
-export function ContactAttachments({ contactId }: ContactAttachmentsProps) {
+export function ContactAttachments({ contactId, entityId, entityType }: ContactAttachmentsProps) {
   const { organization, locale, userProfile } = useOrganization();
   const { t } = useTranslation(locale as any);
   const { toast } = useToast();
@@ -34,20 +36,25 @@ export function ContactAttachments({ contactId }: ContactAttachmentsProps) {
 
   useEffect(() => {
     fetchAttachments();
-  }, [contactId, organization?.id]);
+  }, [contactId, entityId, organization?.id]);
 
   const fetchAttachments = async () => {
     if (!organization?.id) return;
 
     try {
-      const { data, error } = await supabase
+      let query = supabase
         .from('attachments')
         .select('*')
         .eq('organization_id', organization.id)
-        .eq('entity_type', 'contact')
-        .eq('entity_id', contactId)
-        .is('deleted_at', null)
-        .order('created_at', { ascending: false });
+        .is('deleted_at', null);
+
+      if (entityId && entityType) {
+        query = query.eq('entity_id', entityId).eq('entity_type', entityType);
+      } else if (contactId) {
+        query = query.eq('entity_id', contactId).eq('entity_type', 'contact');
+      }
+
+      const { data, error } = await query.order('created_at', { ascending: false });
 
       if (error) throw error;
       setAttachments(data || []);
@@ -62,10 +69,14 @@ export function ContactAttachments({ contactId }: ContactAttachmentsProps) {
     const file = e.target.files?.[0];
     if (!file || !organization?.id || !userProfile?.id) return;
 
+    const finalEntityId = entityId || contactId;
+    const finalEntityType = entityType || 'contact';
+    if (!finalEntityId) return;
+
     setUploading(true);
     try {
       const fileExt = file.name.split('.').pop();
-      const fileName = `${contactId}/${Date.now()}.${fileExt}`;
+      const fileName = `${finalEntityId}/${Date.now()}.${fileExt}`;
 
       // Upload to storage
       const { error: uploadError } = await supabase.storage
@@ -79,8 +90,8 @@ export function ContactAttachments({ contactId }: ContactAttachmentsProps) {
         .from('attachments')
         .insert({
           organization_id: organization.id,
-          entity_type: 'contact',
-          entity_id: contactId,
+          entity_type: finalEntityType,
+          entity_id: finalEntityId,
           bucket: 'attachments',
           storage_path: fileName,
           file_name: file.name,

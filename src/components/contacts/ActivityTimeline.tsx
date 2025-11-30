@@ -20,10 +20,11 @@ interface Activity {
 }
 
 interface ActivityTimelineProps {
-  contactId: string;
+  contactId?: string;
+  opportunityId?: string;
 }
 
-export function ActivityTimeline({ contactId }: ActivityTimelineProps) {
+export function ActivityTimeline({ contactId, opportunityId }: ActivityTimelineProps) {
   const { organization, locale, userProfile } = useOrganization();
   const { t } = useTranslation(locale as any);
   const { toast } = useToast();
@@ -35,19 +36,26 @@ export function ActivityTimeline({ contactId }: ActivityTimelineProps) {
 
   useEffect(() => {
     fetchActivities();
-  }, [contactId, organization?.id]);
+  }, [contactId, opportunityId, organization?.id]);
 
   const fetchActivities = async () => {
     if (!organization?.id) return;
 
     try {
-      const { data, error } = await supabase
+      let query = supabase
         .from('activities')
         .select('*')
         .eq('organization_id', organization.id)
-        .eq('contact_id', contactId)
-        .is('deleted_at', null)
-        .order('occurred_at', { ascending: false });
+        .is('deleted_at', null);
+
+      if (contactId) {
+        query = query.eq('contact_id', contactId);
+      }
+      if (opportunityId) {
+        query = query.eq('opportunity_id', opportunityId);
+      }
+
+      const { data, error } = await query.order('occurred_at', { ascending: false });
 
       if (error) throw error;
       setActivities(data || []);

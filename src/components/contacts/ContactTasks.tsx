@@ -27,10 +27,11 @@ interface Task {
 }
 
 interface ContactTasksProps {
-  contactId: string;
+  contactId?: string;
+  opportunityId?: string;
 }
 
-export function ContactTasks({ contactId }: ContactTasksProps) {
+export function ContactTasks({ contactId, opportunityId }: ContactTasksProps) {
   const { organization, locale, userProfile } = useOrganization();
   const { t } = useTranslation(locale as any);
   const { toast } = useToast();
@@ -48,19 +49,26 @@ export function ContactTasks({ contactId }: ContactTasksProps) {
 
   useEffect(() => {
     fetchTasks();
-  }, [contactId, organization?.id]);
+  }, [contactId, opportunityId, organization?.id]);
 
   const fetchTasks = async () => {
     if (!organization?.id) return;
 
     try {
-      const { data, error } = await supabase
+      let query = supabase
         .from('tasks')
         .select('*')
         .eq('organization_id', organization.id)
-        .eq('contact_id', contactId)
-        .is('deleted_at', null)
-        .order('due_at', { ascending: true, nullsFirst: false });
+        .is('deleted_at', null);
+
+      if (contactId) {
+        query = query.eq('contact_id', contactId);
+      }
+      if (opportunityId) {
+        query = query.eq('opportunity_id', opportunityId);
+      }
+
+      const { data, error } = await query.order('due_at', { ascending: true, nullsFirst: false });
 
       if (error) throw error;
       setTasks(data || []);
