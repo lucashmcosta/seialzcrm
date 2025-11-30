@@ -98,7 +98,38 @@ export function UsersSettings() {
   };
 
   const toggleStatus = async (membershipId: string, currentStatus: boolean) => {
+    if (!organization?.id) return;
+
     try {
+      // If activating, check seat limit
+      if (!currentStatus) {
+        // Get subscription details
+        const { data: subscription } = await supabase
+          .from('subscriptions')
+          .select('id, max_seats')
+          .eq('organization_id', organization.id)
+          .single();
+
+        // Get current seat count
+        const { data: usage } = await supabase
+          .from('subscription_usage')
+          .select('current_seat_count')
+          .eq('subscription_id', subscription?.id || '')
+          .single();
+
+        const currentSeats = usage?.current_seat_count || 0;
+        const maxSeats = subscription?.max_seats || 0;
+
+        if (currentSeats >= maxSeats) {
+          toast({
+            variant: 'destructive',
+            title: t('settings.seatLimitReached'),
+            description: t('settings.seatLimitDescription'),
+          });
+          return;
+        }
+      }
+
       const { error } = await supabase
         .from('user_organizations')
         .update({ is_active: !currentStatus })
@@ -106,8 +137,29 @@ export function UsersSettings() {
 
       if (error) throw error;
 
+      // Update seat count
+      const { data: subscription } = await supabase
+        .from('subscriptions')
+        .select('id')
+        .eq('organization_id', organization.id)
+        .single();
+
+      if (subscription) {
+        const activeCount = memberships.filter(m => 
+          m.id === membershipId ? !currentStatus : m.is_active
+        ).length;
+
+        await supabase
+          .from('subscription_usage')
+          .update({ 
+            current_seat_count: activeCount,
+            last_calculated_at: new Date().toISOString()
+          })
+          .eq('subscription_id', subscription.id);
+      }
+
       toast({
-        description: !currentStatus ? 'User activated' : 'User deactivated',
+        description: !currentStatus ? t('settings.userActivated') : t('settings.userDeactivated'),
       });
       fetchMemberships();
     } catch (error) {

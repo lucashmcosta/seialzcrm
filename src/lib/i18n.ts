@@ -110,6 +110,10 @@ export const translations = {
     'contacts.allStages': 'Todos os estágios',
     'contacts.selectAll': 'Selecionar todos',
     'contacts.selected': 'selecionados',
+    'contacts.duplicateFound': 'Contato duplicado encontrado',
+    'contacts.duplicateWarning': 'Possível Duplicata Detectada',
+    'contacts.duplicateDescription': 'Encontramos contatos similares no sistema:',
+    'contacts.saveDespiteDuplicate': 'Salvar mesmo assim',
     
     // Opportunities
     'opportunities.title': 'Oportunidades',
@@ -248,6 +252,10 @@ export const translations = {
     'settings.tagCreated': 'Etiqueta criada',
     'settings.tagUpdated': 'Etiqueta atualizada',
     'settings.tagDeleted': 'Etiqueta excluída',
+    'settings.seatLimitReached': 'Limite de assentos atingido',
+    'settings.seatLimitDescription': 'Você atingiu o número máximo de usuários ativos para seu plano. Desative um usuário ou faça upgrade do seu plano.',
+    'settings.userActivated': 'Usuário ativado',
+    'settings.userDeactivated': 'Usuário desativado',
     
     // Profile
     'profile.title': 'Meu Perfil',
@@ -454,6 +462,10 @@ export const translations = {
     'contacts.allStages': 'All stages',
     'contacts.selectAll': 'Select all',
     'contacts.selected': 'selected',
+    'contacts.duplicateFound': 'Duplicate contact found',
+    'contacts.duplicateWarning': 'Possible Duplicate Detected',
+    'contacts.duplicateDescription': 'We found similar contacts in the system:',
+    'contacts.saveDespiteDuplicate': 'Save anyway',
     
     // Opportunities
     'opportunities.title': 'Opportunities',
@@ -592,6 +604,10 @@ export const translations = {
     'settings.tagCreated': 'Tag created',
     'settings.tagUpdated': 'Tag updated',
     'settings.tagDeleted': 'Tag deleted',
+    'settings.seatLimitReached': 'Seat limit reached',
+    'settings.seatLimitDescription': 'You have reached the maximum number of active users for your plan. Deactivate a user or upgrade your plan.',
+    'settings.userActivated': 'User activated',
+    'settings.userDeactivated': 'User deactivated',
     
     // Profile
     'profile.title': 'My Profile',
