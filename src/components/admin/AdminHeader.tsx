@@ -17,9 +17,6 @@ export function AdminHeader() {
     <header className="h-16 border-b bg-card flex items-center justify-between px-6">
       <div>
         <h2 className="text-lg font-semibold">Painel Administrativo</h2>
-        <p className="text-sm text-muted-foreground">
-          Gerenciamento completo do sistema SaaS
-        </p>
       </div>
       
       <DropdownMenu>

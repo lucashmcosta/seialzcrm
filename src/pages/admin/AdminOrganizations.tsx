@@ -93,14 +93,7 @@ export default function AdminOrganizations() {
   return (
     <AdminLayout>
       <div className="space-y-6">
-        <div className="flex items-center justify-between">
-          <div>
-            <h1 className="text-3xl font-bold">Organizações</h1>
-            <p className="text-muted-foreground">
-              Gerenciar todas as organizações do sistema
-            </p>
-          </div>
-        </div>
+        <h1 className="text-3xl font-bold">Organizações</h1>
 
         <div className="flex items-center gap-4">
           <div className="relative flex-1">

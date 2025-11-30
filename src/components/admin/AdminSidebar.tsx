@@ -16,7 +16,6 @@ export function AdminSidebar() {
     <div className="w-64 bg-card border-r flex flex-col">
       <div className="p-6 border-b">
         <h1 className="text-2xl font-bold text-primary">Portal Admin</h1>
-        <p className="text-sm text-muted-foreground">Sistema de Gerenciamento</p>
       </div>
       <nav className="flex-1 p-4 space-y-2">
         {menuItems.map((item) => {

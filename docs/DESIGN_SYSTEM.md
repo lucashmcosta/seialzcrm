@@ -1,0 +1,316 @@
+# Design System - CRM SaaS
+
+## Princípios de Design
+
+Este documento define as diretrizes de design e boas práticas para manter consistência visual e experiência do usuário em todo o sistema.
+
+---
+
+## 1. Headers de Página
+
+### ✅ Fazer
+- Usar apenas título principal (`<h1>` ou `<h2>`)
+- Manter títulos claros e descritivos
+- O título deve ser auto-explicativo
+
+### ❌ Não Fazer
+- **NÃO** usar subtítulos ou descrições abaixo do título principal
+- **NÃO** adicionar textos explicativos redundantes
+- **NÃO** usar taglines ou slogans em headers
+
+### Exemplos
+
+```tsx
+// ✅ CORRETO
+<div>
+  <h1 className="text-3xl font-bold">Dashboard</h1>
+</div>
+
+// ❌ INCORRETO
+<div>
+  <h1 className="text-3xl font-bold">Dashboard</h1>
+  <p className="text-muted-foreground">Visão geral do sistema e métricas principais</p>
+</div>
+```
+
+---
+
+## 2. Cards
+
+### Princípios
+- Título claro e conciso
+- Usar `CardDescription` apenas quando absolutamente necessário
+- Evitar descrições redundantes em cards de métricas/KPIs
+
+### Cards de KPI
+
+```tsx
+// ✅ CORRETO - Limpo e direto
+<Card>
+  <CardHeader>
+    <CardTitle>Total de Usuários</CardTitle>
+  </CardHeader>
+  <CardContent>
+    <div className="text-2xl font-bold">1,234</div>
+  </CardContent>
+</Card>
+
+// ❌ INCORRETO - Descrição desnecessária
+<Card>
+  <CardHeader>
+    <CardTitle>Total de Usuários</CardTitle>
+  </CardHeader>
+  <CardContent>
+    <div className="text-2xl font-bold">1,234</div>
+    <p className="text-xs text-muted-foreground mt-1">
+      Todos os usuários cadastrados no sistema
+    </p>
+  </CardContent>
+</Card>
+```
+
+### Cards de Formulário
+
+```tsx
+// ✅ CORRETO - CardDescription apenas quando necessário
+<Card>
+  <CardHeader>
+    <CardTitle>Informações Pessoais</CardTitle>
+  </CardHeader>
+  <CardContent>
+    {/* Form fields */}
+  </CardContent>
+</Card>
+
+// ⚠️ Usar apenas em casos complexos
+<Card>
+  <CardHeader>
+    <CardTitle>Configurações Avançadas</CardTitle>
+    <CardDescription>
+      Estas configurações afetam o comportamento crítico do sistema
+    </CardDescription>
+  </CardHeader>
+  <CardContent>
+    {/* Complex form fields */}
+  </CardContent>
+</Card>
+```
+
+---
+
+## 3. Sidebars
+
+### Princípios
+- Logo + nome do sistema
+- **NÃO** usar subtítulos ou taglines
+- Manter navegação limpa e direta
+
+### Exemplos
+
+```tsx
+// ✅ CORRETO
+<div className="p-6 border-b">
+  <h1 className="text-2xl font-bold text-primary">Portal Admin</h1>
+</div>
+
+// ❌ INCORRETO
+<div className="p-6 border-b">
+  <h1 className="text-2xl font-bold text-primary">Portal Admin</h1>
+  <p className="text-sm text-muted-foreground">Sistema de Gerenciamento</p>
+</div>
+```
+
+---
+
+## 4. Hierarquia de Informação
+
+### Regra de Ouro
+> **Se o título precisa de explicação, o título está ruim.**
+
+### Princípios
+- Títulos devem ser auto-explicativos
+- Menos texto = mais clareza
+- Priorizar informação visual (ícones, badges, cores)
+- Usar contexto da interface ao invés de texto
+
+### Exemplo Prático
+
+```tsx
+// ❌ INCORRETO - Excesso de texto
+<div>
+  <h2>Oportunidades</h2>
+  <p>Visualize e gerencie seu pipeline de vendas</p>
+  <p>Arraste cards entre as colunas para mover oportunidades</p>
+</div>
+
+// ✅ CORRETO - Contexto visual
+<div>
+  <h2>Oportunidades</h2>
+  {/* O kanban board já mostra visualmente o que fazer */}
+</div>
+```
+
+---
+
+## 5. Espaçamento e Layout
+
+### Espaçamentos Padrão
+
+| Elemento | Classe Tailwind | Uso |
+|----------|----------------|-----|
+| Headers de página | `py-4` | Padding vertical do header |
+| Entre seções | `space-y-6` | Espaçamento entre seções principais |
+| Dentro de cards | `p-6` | Padding interno de cards |
+| Entre elementos | `gap-4` | Gap em grids e flexbox |
+
+### Layout Consistente
+
+```tsx
+// Estrutura padrão de página
+<Layout>
+  <div className="flex flex-col h-full">
+    {/* Header fixo */}
+    <div className="border-b bg-background/95 backdrop-blur">
+      <div className="px-6 py-4">
+        <h1 className="text-2xl font-bold">Título da Página</h1>
+      </div>
+    </div>
+
+    {/* Conteúdo scrollable */}
+    <div className="flex-1 overflow-auto p-6">
+      <div className="space-y-6">
+        {/* Conteúdo */}
+      </div>
+    </div>
+  </div>
+</Layout>
+```
+
+---
+
+## 6. Tokens de Design
+
+### Cores Semânticas
+Sempre usar tokens semânticos do design system definidos em `src/index.css`:
+
+```tsx
+// ✅ CORRETO - Usar tokens semânticos
+<div className="bg-card text-card-foreground">
+<div className="bg-primary text-primary-foreground">
+<div className="text-muted-foreground">
+
+// ❌ INCORRETO - Cores diretas
+<div className="bg-white text-black">
+<div className="bg-blue-500 text-white">
+```
+
+### Cores Disponíveis
+- `background` / `foreground`
+- `card` / `card-foreground`
+- `primary` / `primary-foreground`
+- `secondary` / `secondary-foreground`
+- `muted` / `muted-foreground`
+- `accent` / `accent-foreground`
+- `destructive` / `destructive-foreground`
+
+---
+
+## 7. Tipografia
+
+### Hierarquia de Títulos
+
+| Uso | Classe | Quando Usar |
+|-----|--------|-------------|
+| Título principal | `text-3xl font-bold` | Página principal |
+| Subtítulo grande | `text-2xl font-bold` | Headers de seção |
+| Subtítulo médio | `text-xl font-semibold` | Cards importantes |
+| Subtítulo pequeno | `text-lg font-semibold` | Subsections |
+| Corpo normal | `text-base` | Texto padrão |
+| Texto pequeno | `text-sm` | Labels, metadata |
+| Texto muito pequeno | `text-xs` | Badges, hints |
+
+---
+
+## 8. Componentes Comuns
+
+### Badges de Status
+
+```tsx
+// Use cores semânticas para status
+<Badge className="bg-green-500 text-white">Ativo</Badge>
+<Badge className="bg-red-500 text-white">Inativo</Badge>
+<Badge className="bg-primary">Padrão</Badge>
+```
+
+### Botões de Ação
+
+```tsx
+// Hierarquia visual clara
+<div className="flex gap-2">
+  <Button>Ação Principal</Button>
+  <Button variant="outline">Ação Secundária</Button>
+  <Button variant="ghost">Ação Terciária</Button>
+</div>
+```
+
+---
+
+## 9. Acessibilidade
+
+### Requisitos
+- Todos os botões devem ter labels claros
+- Ícones devem ter aria-labels quando usados sozinhos
+- Contraste mínimo de 4.5:1 para texto normal
+- Contraste mínimo de 3:1 para texto grande
+- Focar estados visíveis em elementos interativos
+
+---
+
+## 10. Responsividade
+
+### Breakpoints
+```tsx
+// Mobile first
+<div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3">
+  {/* Conteúdo */}
+</div>
+```
+
+### Guidelines
+- Design mobile-first
+- Testar em múltiplos tamanhos de tela
+- Usar grid responsivo do Tailwind
+- Esconder elementos não críticos em mobile quando necessário
+
+---
+
+## Checklist de Revisão
+
+Antes de finalizar qualquer componente, verifique:
+
+- [ ] Título é claro e auto-explicativo
+- [ ] Não há subtítulos ou descrições redundantes
+- [ ] Cards KPI não têm descrições desnecessárias
+- [ ] Sidebars não têm taglines
+- [ ] Cores usam tokens semânticos
+- [ ] Espaçamento está consistente
+- [ ] Layout é responsivo
+- [ ] Acessibilidade está garantida
+
+---
+
+## Mantendo o Design System
+
+### Processo de Atualização
+1. Propor mudanças neste documento
+2. Revisar com o time
+3. Atualizar componentes existentes
+4. Documentar mudanças
+
+### Filosofia
+> "Menos é mais. Cada palavra, cada elemento deve ter um propósito claro. Se não adiciona valor, remove."
+
+---
+
+**Última atualização:** 2025-11-30
+**Versão:** 1.0.0

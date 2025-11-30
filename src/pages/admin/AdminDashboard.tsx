@@ -72,37 +72,28 @@ export default function AdminDashboard() {
       title: 'Total de Organizações',
       value: kpis.totalOrgs,
       icon: Building2,
-      description: 'Todas as organizações cadastradas',
     },
     {
       title: 'Organizações Ativas',
       value: kpis.activeOrgs,
       icon: Activity,
-      description: 'Com atividade nos últimos 30 dias',
     },
     {
       title: 'Total de Usuários',
       value: kpis.totalUsers,
       icon: Users,
-      description: 'Usuários cadastrados no sistema',
     },
     {
       title: 'MRR',
       value: `R$ ${kpis.mrr.toLocaleString('pt-BR')}`,
       icon: DollarSign,
-      description: 'Receita recorrente mensal',
     },
   ];
 
   return (
     <AdminLayout>
       <div className="space-y-6">
-        <div>
-          <h1 className="text-3xl font-bold">Dashboard</h1>
-          <p className="text-muted-foreground">
-            Visão geral do sistema e métricas principais
-          </p>
-        </div>
+        <h1 className="text-3xl font-bold">Dashboard</h1>
 
         {loading ? (
           <div className="text-center py-12">
@@ -123,9 +114,6 @@ export default function AdminDashboard() {
                   </CardHeader>
                   <CardContent>
                     <div className="text-2xl font-bold">{kpi.value}</div>
-                    <p className="text-xs text-muted-foreground mt-1">
-                      {kpi.description}
-                    </p>
                   </CardContent>
                 </Card>
               );

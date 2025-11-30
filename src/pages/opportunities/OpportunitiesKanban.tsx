@@ -245,12 +245,7 @@ export default function OpportunitiesKanban() {
     <Layout>
       <div className="p-8">
         <div className="flex justify-between items-center mb-6">
-          <div>
-            <h1 className="text-3xl font-bold text-foreground">{t('opportunities.title')}</h1>
-            <p className="text-muted-foreground mt-1">
-              Visualize e gerencie seu pipeline de vendas
-            </p>
-          </div>
+          <h1 className="text-3xl font-bold text-foreground">{t('opportunities.title')}</h1>
           <Button onClick={handleNewOpportunity} disabled={!permissions.canEditOpportunities}>
             <Plus className="w-4 h-4 mr-2" />
             {t('opportunities.newOpportunity')}

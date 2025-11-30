@@ -233,9 +233,6 @@ export default function Dashboard() {
         <div className="border-b bg-background/95 backdrop-blur">
           <div className="px-6 py-4">
             <h1 className="text-2xl font-bold text-foreground">{t('dashboard.welcome')}</h1>
-            {organization && (
-              <p className="text-sm text-muted-foreground">{organization.name}</p>
-            )}
           </div>
         </div>
 

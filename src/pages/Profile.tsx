@@ -161,7 +161,6 @@ export default function Profile() {
             <Card>
               <CardHeader>
                 <CardTitle>{t('profile.personalInfo')}</CardTitle>
-                <CardDescription>{t('profile.personalInfoDesc')}</CardDescription>
               </CardHeader>
               <CardContent className="space-y-6">
                 {/* Avatar */}
@@ -223,7 +222,6 @@ export default function Profile() {
             <Card>
               <CardHeader>
                 <CardTitle>{t('profile.preferences')}</CardTitle>
-                <CardDescription>{t('profile.preferencesDesc')}</CardDescription>
               </CardHeader>
               <CardContent className="space-y-4">
                 {/* Language */}
@@ -264,7 +262,6 @@ export default function Profile() {
             <Card>
               <CardHeader>
                 <CardTitle>{t('profile.organizations')}</CardTitle>
-                <CardDescription>{t('profile.organizationsDesc')}</CardDescription>
               </CardHeader>
               <CardContent>
                 {organization && (
