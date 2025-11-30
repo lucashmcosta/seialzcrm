@@ -9,6 +9,7 @@ import { Badge } from '@/components/ui/badge';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { CreateIntegrationDialog } from '@/components/admin/CreateIntegrationDialog';
 import { IntegrationCard } from '@/components/admin/IntegrationCard';
+import { AdminLayout } from '@/components/admin/AdminLayout';
 
 export default function AdminIntegrations() {
   const [searchTerm, setSearchTerm] = useState('');
@@ -50,19 +51,15 @@ export default function AdminIntegrations() {
   };
 
   return (
-    <div className="p-8 space-y-6">
-      <div className="flex items-center justify-between">
-        <div>
+    <AdminLayout>
+      <div className="space-y-6">
+        <div className="flex items-center justify-between">
           <h1 className="text-3xl font-bold">Integrações</h1>
-          <p className="text-muted-foreground mt-1">
-            Gerencie as integrações disponíveis no CRM
-          </p>
+          <Button onClick={() => setShowCreateDialog(true)}>
+            <Plus className="h-4 w-4 mr-2" />
+            Nova Integração
+          </Button>
         </div>
-        <Button onClick={() => setShowCreateDialog(true)}>
-          <Plus className="h-4 w-4 mr-2" />
-          Nova Integração
-        </Button>
-      </div>
 
       <div className="grid grid-cols-4 gap-4">
         <Card>
@@ -151,6 +148,7 @@ export default function AdminIntegrations() {
       )}
 
       <CreateIntegrationDialog open={showCreateDialog} onOpenChange={setShowCreateDialog} />
-    </div>
+      </div>
+    </AdminLayout>
   );
 }

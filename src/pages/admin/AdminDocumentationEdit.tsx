@@ -10,6 +10,7 @@ import { Label } from '@/components/ui/label';
 import { Switch } from '@/components/ui/switch';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { MarkdownEditor } from '@/components/admin/MarkdownEditor';
+import { AdminLayout } from '@/components/admin/AdminLayout';
 
 export default function AdminDocumentationEdit() {
   const { module } = useParams();
@@ -89,28 +90,26 @@ export default function AdminDocumentationEdit() {
   };
 
   return (
-    <div className="p-8 space-y-6">
-      <div className="flex items-center justify-between">
-        <div className="flex items-center gap-4">
-          <Button variant="ghost" size="icon" onClick={() => navigate('/admin/documentation')}>
-            <ArrowLeft className="h-5 w-5" />
-          </Button>
-          <div>
+    <AdminLayout>
+      <div className="space-y-6">
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-4">
+            <Button variant="ghost" size="icon" onClick={() => navigate('/admin/documentation')}>
+              <ArrowLeft className="h-5 w-5" />
+            </Button>
             <h1 className="text-3xl font-bold">Editar Documentação</h1>
-            <p className="text-muted-foreground">Módulo: <code>{module}</code></p>
+          </div>
+          <div className="flex gap-2">
+            <Button variant="outline" onClick={() => handleSave(false)} disabled={loading}>
+              <Save className="h-4 w-4 mr-2" />
+              Salvar Rascunho
+            </Button>
+            <Button onClick={() => handleSave(true)} disabled={loading}>
+              <Eye className="h-4 w-4 mr-2" />
+              {loading ? 'Publicando...' : 'Publicar'}
+            </Button>
           </div>
         </div>
-        <div className="flex gap-2">
-          <Button variant="outline" onClick={() => handleSave(false)} disabled={loading}>
-            <Save className="h-4 w-4 mr-2" />
-            Salvar Rascunho
-          </Button>
-          <Button onClick={() => handleSave(true)} disabled={loading}>
-            <Eye className="h-4 w-4 mr-2" />
-            {loading ? 'Publicando...' : 'Publicar'}
-          </Button>
-        </div>
-      </div>
 
       <div className="grid gap-6">
         <Card>
@@ -156,6 +155,7 @@ export default function AdminDocumentationEdit() {
           onChange={(content) => setFormData({ ...formData, content })}
         />
       </div>
-    </div>
+      </div>
+    </AdminLayout>
   );
 }

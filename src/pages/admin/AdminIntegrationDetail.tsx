@@ -11,6 +11,7 @@ import { Textarea } from '@/components/ui/textarea';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
+import { AdminLayout } from '@/components/admin/AdminLayout';
 
 export default function AdminIntegrationDetail() {
   const { id } = useParams();
@@ -79,32 +80,34 @@ export default function AdminIntegrationDetail() {
   };
 
   if (isLoading) {
-    return <div className="p-8">Carregando...</div>;
+    return (
+      <AdminLayout>
+        <div>Carregando...</div>
+      </AdminLayout>
+    );
   }
 
   return (
-    <div className="p-8 space-y-6">
-      <div className="flex items-center justify-between">
-        <div className="flex items-center gap-4">
-          <Button variant="ghost" size="icon" onClick={() => navigate('/admin/integrations')}>
-            <ArrowLeft className="h-5 w-5" />
-          </Button>
-          <div>
+    <AdminLayout>
+      <div className="space-y-6">
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-4">
+            <Button variant="ghost" size="icon" onClick={() => navigate('/admin/integrations')}>
+              <ArrowLeft className="h-5 w-5" />
+            </Button>
             <h1 className="text-3xl font-bold">{integration?.name}</h1>
-            <p className="text-muted-foreground">Configurar integração master</p>
+          </div>
+          <div className="flex gap-2">
+            <Button variant="destructive" onClick={handleDelete} disabled={loading}>
+              <Trash2 className="h-4 w-4 mr-2" />
+              Excluir
+            </Button>
+            <Button onClick={handleSave} disabled={loading}>
+              <Save className="h-4 w-4 mr-2" />
+              {loading ? 'Salvando...' : 'Salvar'}
+            </Button>
           </div>
         </div>
-        <div className="flex gap-2">
-          <Button variant="destructive" onClick={handleDelete} disabled={loading}>
-            <Trash2 className="h-4 w-4 mr-2" />
-            Excluir
-          </Button>
-          <Button onClick={handleSave} disabled={loading}>
-            <Save className="h-4 w-4 mr-2" />
-            {loading ? 'Salvando...' : 'Salvar'}
-          </Button>
-        </div>
-      </div>
 
       <div className="grid gap-6">
         <Card>
@@ -222,6 +225,7 @@ export default function AdminIntegrationDetail() {
           </CardContent>
         </Card>
       </div>
-    </div>
+      </div>
+    </AdminLayout>
   );
 }
