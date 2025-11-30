@@ -7,35 +7,52 @@ import { Label } from '@/components/ui/label';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { useToast } from '@/hooks/use-toast';
 import { Shield, Copy } from 'lucide-react';
-import { useAdminAuth } from '@/hooks/useAdminAuth';
 
 export default function AdminMFASetup() {
   const [mfaCode, setMfaCode] = useState('');
   const [submitting, setSubmitting] = useState(false);
+  const [loading, setLoading] = useState(true);
   const [qrCode, setQrCode] = useState('');
   const [secret, setSecret] = useState('');
   const [backupCodes, setBackupCodes] = useState<string[]>([]);
+  const [adminUser, setAdminUser] = useState<any>(null);
   const navigate = useNavigate();
   const { toast } = useToast();
-  const { user, adminUser, loading } = useAdminAuth();
 
   useEffect(() => {
-    if (loading) return;
+    checkAdminUser();
+  }, []);
+
+  const checkAdminUser = async () => {
+    const { data: { session } } = await supabase.auth.getSession();
     
-    if (!user || !adminUser) {
+    if (!session?.user) {
       navigate('/admin/login');
       return;
     }
 
-    if (adminUser.mfa_enabled) {
+    const { data: admin } = await supabase
+      .from('admin_users')
+      .select('*')
+      .eq('auth_user_id', session.user.id)
+      .single();
+
+    if (!admin) {
+      navigate('/admin/login');
+      return;
+    }
+
+    if (admin.mfa_enabled) {
       navigate('/admin');
       return;
     }
 
-    generateMFASecret();
-  }, [user, adminUser, loading, navigate]);
+    setAdminUser(admin);
+    generateMFASecret(admin.email);
+    setLoading(false);
+  };
 
-  const generateMFASecret = () => {
+  const generateMFASecret = (email: string) => {
     const randomSecret = Array.from(crypto.getRandomValues(new Uint8Array(20)))
       .map(b => b.toString(36))
       .join('')
@@ -43,7 +60,7 @@ export default function AdminMFASetup() {
     
     setSecret(randomSecret);
     
-    const qrUrl = `otpauth://totp/CRM%20Admin:${adminUser?.email}?secret=${randomSecret}&issuer=CRM`;
+    const qrUrl = `otpauth://totp/CRM%20Admin:${email}?secret=${randomSecret}&issuer=CRM`;
     setQrCode(`https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=${encodeURIComponent(qrUrl)}`);
     
     const codes = Array.from({ length: 8 }, () => 
@@ -109,10 +126,6 @@ export default function AdminMFASetup() {
         </div>
       </div>
     );
-  }
-
-  if (!user || !adminUser) {
-    return null;
   }
 
   return (
