@@ -29,6 +29,8 @@ import AdminMFASetup from "./pages/admin/AdminMFASetup";
 import AdminDashboard from "./pages/admin/AdminDashboard";
 import AdminOrganizations from "./pages/admin/AdminOrganizations";
 import AdminOrganizationDetail from "./pages/admin/AdminOrganizationDetail";
+import AdminUsers from "./pages/admin/AdminUsers";
+import AdminFeatureFlags from "./pages/admin/AdminFeatureFlags";
 import AdminLogs from "./pages/admin/AdminLogs";
 import AdminSecurity from "./pages/admin/AdminSecurity";
 import { AdminProtectedRoute } from "./components/admin/AdminProtectedRoute";
@@ -89,6 +91,16 @@ const App = () => (
           <Route path="/admin/logs" element={
             <AdminProtectedRoute>
               <AdminLogs />
+            </AdminProtectedRoute>
+          } />
+          <Route path="/admin/users" element={
+            <AdminProtectedRoute>
+              <AdminUsers />
+            </AdminProtectedRoute>
+          } />
+          <Route path="/admin/feature-flags" element={
+            <AdminProtectedRoute>
+              <AdminFeatureFlags />
             </AdminProtectedRoute>
           } />
           <Route path="/admin/security" element={
