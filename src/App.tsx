@@ -17,12 +17,21 @@ import OpportunityDetail from "./pages/opportunities/OpportunityDetail";
 import TasksList from "./pages/tasks/TasksList";
 import Settings from "./pages/Settings";
 import Profile from "./pages/Profile";
-import SaaSAdmin from "./pages/admin/SaaSAdmin";
 import NotFound from "./pages/NotFound";
 import CompaniesList from "./pages/companies/CompaniesList";
 import CompanyDetail from "./pages/companies/CompanyDetail";
 import CompanyForm from "./pages/companies/CompanyForm";
 import AcceptInvitation from "./pages/invite/AcceptInvitation";
+
+// Admin Portal
+import AdminLogin from "./pages/admin/AdminLogin";
+import AdminMFASetup from "./pages/admin/AdminMFASetup";
+import AdminDashboard from "./pages/admin/AdminDashboard";
+import AdminOrganizations from "./pages/admin/AdminOrganizations";
+import AdminOrganizationDetail from "./pages/admin/AdminOrganizationDetail";
+import AdminLogs from "./pages/admin/AdminLogs";
+import AdminSecurity from "./pages/admin/AdminSecurity";
+import { AdminProtectedRoute } from "./components/admin/AdminProtectedRoute";
 
 const queryClient = new QueryClient();
 
@@ -52,10 +61,47 @@ const App = () => (
       <BrowserRouter>
         <Routes>
           <Route path="/" element={<Navigate to="/dashboard" replace />} />
+          
+          {/* Auth routes */}
           <Route path="/auth/signup" element={<SignUp />} />
           <Route path="/auth/signin" element={<SignIn />} />
           <Route path="/auth/confirm-email" element={<ConfirmEmail />} />
           <Route path="/invite/:token" element={<AcceptInvitation />} />
+          
+          {/* Admin Portal routes */}
+          <Route path="/admin/login" element={<AdminLogin />} />
+          <Route path="/admin/mfa-setup" element={
+            <AdminProtectedRoute>
+              <AdminMFASetup />
+            </AdminProtectedRoute>
+          } />
+          <Route path="/admin" element={
+            <AdminProtectedRoute>
+              <AdminDashboard />
+            </AdminProtectedRoute>
+          } />
+          <Route path="/admin/organizations" element={
+            <AdminProtectedRoute>
+              <AdminOrganizations />
+            </AdminProtectedRoute>
+          } />
+          <Route path="/admin/organizations/:id" element={
+            <AdminProtectedRoute>
+              <AdminOrganizationDetail />
+            </AdminProtectedRoute>
+          } />
+          <Route path="/admin/logs" element={
+            <AdminProtectedRoute>
+              <AdminLogs />
+            </AdminProtectedRoute>
+          } />
+          <Route path="/admin/security" element={
+            <AdminProtectedRoute>
+              <AdminSecurity />
+            </AdminProtectedRoute>
+          } />
+          
+          {/* CRM routes */}
           <Route
             path="/onboarding"
             element={
@@ -141,14 +187,6 @@ const App = () => (
             element={
               <ProtectedRoute>
                 <Profile />
-              </ProtectedRoute>
-            }
-          />
-          <Route
-            path="/saas-admin"
-            element={
-              <ProtectedRoute>
-                <SaaSAdmin />
               </ProtectedRoute>
             }
           />
