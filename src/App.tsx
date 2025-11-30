@@ -33,6 +33,7 @@ import AdminUsers from "./pages/admin/AdminUsers";
 import AdminFeatureFlags from "./pages/admin/AdminFeatureFlags";
 import AdminLogs from "./pages/admin/AdminLogs";
 import AdminSecurity from "./pages/admin/AdminSecurity";
+import AdminImpersonationHistory from "./pages/admin/AdminImpersonationHistory";
 import { AdminProtectedRoute } from "./components/admin/AdminProtectedRoute";
 
 const queryClient = new QueryClient();
@@ -106,6 +107,11 @@ const App = () => (
           <Route path="/admin/security" element={
             <AdminProtectedRoute>
               <AdminSecurity />
+            </AdminProtectedRoute>
+          } />
+          <Route path="/admin/impersonations" element={
+            <AdminProtectedRoute>
+              <AdminImpersonationHistory />
             </AdminProtectedRoute>
           } />
           
