@@ -13,11 +13,12 @@ interface Plan {
   name: string;
   display_name: string;
   description: string | null;
-  price_monthly: number;
-  price_yearly: number;
+  price_per_seat_monthly: number;
+  price_per_seat_yearly: number;
   max_seats: number | null;
   max_contacts: number | null;
   max_storage_mb: number;
+  free_seats_limit: number | null;
   features: string[];
   is_active: boolean;
   sort_order: number;
@@ -114,9 +115,6 @@ export default function AdminPlans() {
         <div className="flex items-center justify-between">
           <div>
             <h1 className="text-3xl font-bold">Planos</h1>
-            <p className="text-muted-foreground">
-              Gerencie os planos de assinatura do sistema
-            </p>
           </div>
           <Button onClick={handleCreate}>
             <Plus className="mr-2 h-4 w-4" />
@@ -146,11 +144,11 @@ export default function AdminPlans() {
                 <CardContent className="space-y-4">
                   <div>
                     <div className="text-3xl font-bold">
-                      R$ {plan.price_monthly}
-                      <span className="text-sm font-normal text-muted-foreground">/mês</span>
+                      R$ {plan.price_per_seat_monthly}
+                      <span className="text-sm font-normal text-muted-foreground">/usuário/mês</span>
                     </div>
                     <div className="text-sm text-muted-foreground">
-                      R$ {plan.price_yearly}/ano
+                      R$ {plan.price_per_seat_yearly}/usuário/ano
                     </div>
                   </div>
 
@@ -158,7 +156,9 @@ export default function AdminPlans() {
                     <div className="flex justify-between">
                       <span className="text-muted-foreground">Usuários:</span>
                       <span className="font-medium">
-                        {plan.max_seats || 'Ilimitado'}
+                        {plan.free_seats_limit 
+                          ? `${plan.free_seats_limit} usuários grátis` 
+                          : 'Usuários ilimitados'}
                       </span>
                     </div>
                     <div className="flex justify-between">

@@ -32,9 +32,9 @@ export function CreatePlanDialog({
     name: '',
     display_name: '',
     description: '',
-    price_monthly: 0,
-    price_yearly: 0,
-    max_seats: '',
+    price_per_seat_monthly: 0,
+    price_per_seat_yearly: 0,
+    free_seats_limit: '',
     max_contacts: '',
     max_storage_mb: 500,
   });
@@ -46,9 +46,9 @@ export function CreatePlanDialog({
         name: plan.name,
         display_name: plan.display_name,
         description: plan.description || '',
-        price_monthly: plan.price_monthly,
-        price_yearly: plan.price_yearly,
-        max_seats: plan.max_seats?.toString() || '',
+        price_per_seat_monthly: plan.price_per_seat_monthly,
+        price_per_seat_yearly: plan.price_per_seat_yearly,
+        free_seats_limit: plan.free_seats_limit?.toString() || '',
         max_contacts: plan.max_contacts?.toString() || '',
         max_storage_mb: plan.max_storage_mb,
       });
@@ -57,9 +57,9 @@ export function CreatePlanDialog({
         name: '',
         display_name: '',
         description: '',
-        price_monthly: 0,
-        price_yearly: 0,
-        max_seats: '',
+        price_per_seat_monthly: 0,
+        price_per_seat_yearly: 0,
+        free_seats_limit: '',
         max_contacts: '',
         max_storage_mb: 500,
       });
@@ -83,9 +83,9 @@ export function CreatePlanDialog({
         name: formData.name,
         display_name: formData.display_name,
         description: formData.description || null,
-        price_monthly: formData.price_monthly,
-        price_yearly: formData.price_yearly,
-        max_seats: formData.max_seats ? parseInt(formData.max_seats) : null,
+        price_per_seat_monthly: formData.price_per_seat_monthly,
+        price_per_seat_yearly: formData.price_per_seat_yearly,
+        free_seats_limit: formData.free_seats_limit ? parseInt(formData.free_seats_limit) : null,
         max_contacts: formData.max_contacts ? parseInt(formData.max_contacts) : null,
         max_storage_mb: formData.max_storage_mb,
       };
@@ -123,9 +123,6 @@ export function CreatePlanDialog({
       <DialogContent className="max-w-2xl">
         <DialogHeader>
           <DialogTitle>{plan ? 'Editar' : 'Criar'} Plano</DialogTitle>
-          <DialogDescription>
-            {plan ? 'Atualize' : 'Defina'} as informações do plano de assinatura
-          </DialogDescription>
         </DialogHeader>
         <div className="grid gap-4 py-4">
           <div className="grid grid-cols-2 gap-4">
@@ -162,24 +159,24 @@ export function CreatePlanDialog({
 
           <div className="grid grid-cols-2 gap-4">
             <div>
-              <Label htmlFor="price_monthly">Preço mensal (R$)</Label>
+              <Label htmlFor="price_per_seat_monthly">Preço por usuário/mês (R$)</Label>
               <Input
-                id="price_monthly"
+                id="price_per_seat_monthly"
                 type="number"
-                value={formData.price_monthly}
+                value={formData.price_per_seat_monthly}
                 onChange={(e) =>
-                  setFormData({ ...formData, price_monthly: parseFloat(e.target.value) })
+                  setFormData({ ...formData, price_per_seat_monthly: parseFloat(e.target.value) })
                 }
               />
             </div>
             <div>
-              <Label htmlFor="price_yearly">Preço anual (R$)</Label>
+              <Label htmlFor="price_per_seat_yearly">Preço por usuário/ano (R$)</Label>
               <Input
-                id="price_yearly"
+                id="price_per_seat_yearly"
                 type="number"
-                value={formData.price_yearly}
+                value={formData.price_per_seat_yearly}
                 onChange={(e) =>
-                  setFormData({ ...formData, price_yearly: parseFloat(e.target.value) })
+                  setFormData({ ...formData, price_per_seat_yearly: parseFloat(e.target.value) })
                 }
               />
             </div>
@@ -187,12 +184,12 @@ export function CreatePlanDialog({
 
           <div className="grid grid-cols-3 gap-4">
             <div>
-              <Label htmlFor="max_seats">Máx. usuários</Label>
+              <Label htmlFor="free_seats_limit">Limite usuários grátis</Label>
               <Input
-                id="max_seats"
+                id="free_seats_limit"
                 type="number"
-                value={formData.max_seats}
-                onChange={(e) => setFormData({ ...formData, max_seats: e.target.value })}
+                value={formData.free_seats_limit}
+                onChange={(e) => setFormData({ ...formData, free_seats_limit: e.target.value })}
                 placeholder="Vazio = ilimitado"
               />
             </div>
