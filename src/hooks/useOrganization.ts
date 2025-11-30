@@ -25,6 +25,7 @@ export interface UserProfile {
   avatar_url?: string;
   locale: string;
   timezone: string;
+  is_platform_admin?: boolean;
 }
 
 export function useOrganization() {
