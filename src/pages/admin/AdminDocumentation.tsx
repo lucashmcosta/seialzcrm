@@ -8,6 +8,7 @@ import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { format } from 'date-fns';
+import { AdminLayout } from '@/components/admin/AdminLayout';
 
 export default function AdminDocumentation() {
   const navigate = useNavigate();
@@ -42,15 +43,9 @@ export default function AdminDocumentation() {
   ];
 
   return (
-    <div className="p-8 space-y-6">
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-3xl font-bold">Documentação</h1>
-          <p className="text-muted-foreground mt-1">
-            Gerencie a documentação do sistema
-          </p>
-        </div>
-      </div>
+    <AdminLayout>
+      <div className="space-y-6">
+        <h1 className="text-3xl font-bold">Documentação</h1>
 
       <div className="flex gap-4">
         <Input
@@ -131,6 +126,7 @@ export default function AdminDocumentation() {
           })}
         </div>
       )}
-    </div>
+      </div>
+    </AdminLayout>
   );
 }

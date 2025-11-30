@@ -463,3 +463,81 @@ Interface consistente para ações em organizações:
 - Validar entrada de usuário no backend
 
 ---
+
+## 12. Estrutura de Páginas - Layouts Obrigatórios
+
+### Admin Pages (`/admin/*`)
+
+**TODAS** as páginas admin **DEVEM** usar o `AdminLayout`:
+
+```tsx
+// ✅ CORRETO - Toda página admin usa AdminLayout
+import { AdminLayout } from '@/components/admin/AdminLayout';
+
+export default function AdminNovaFuncionalidade() {
+  return (
+    <AdminLayout>
+      <div className="space-y-6">
+        <h1 className="text-3xl font-bold">Título</h1>
+        {/* Conteúdo */}
+      </div>
+    </AdminLayout>
+  );
+}
+
+// ❌ INCORRETO - Página admin sem AdminLayout
+export default function AdminNovaFuncionalidade() {
+  return (
+    <div className="p-8 space-y-6">
+      <h1 className="text-3xl font-bold">Título</h1>
+      {/* Sidebar não vai aparecer! */}
+    </div>
+  );
+}
+```
+
+### CRM Pages (páginas do usuário)
+
+**TODAS** as páginas do CRM **DEVEM** usar o `Layout`:
+
+```tsx
+// ✅ CORRETO
+import { Layout } from '@/components/Layout';
+
+export default function MinhaFuncionalidade() {
+  return (
+    <Layout>
+      {/* Conteúdo */}
+    </Layout>
+  );
+}
+```
+
+### Regras de Padding
+
+| Contexto | Padding | Razão |
+|----------|---------|-------|
+| Dentro de `AdminLayout` | **NÃO usar `p-8`** | AdminLayout já aplica padding |
+| Dentro de `Layout` | **NÃO usar padding extra** | Layout já gerencia |
+| Páginas públicas sem layout | Usar `p-6` ou `p-8` | Não tem wrapper |
+
+### Checklist para Novas Páginas Admin
+
+Antes de criar ou modificar qualquer página admin:
+
+- [ ] Importou `AdminLayout` de `@/components/admin/AdminLayout`?
+- [ ] Envolveu todo o conteúdo com `<AdminLayout>`?
+- [ ] Removeu padding `p-8` do div interno?
+- [ ] Header tem apenas título (sem subtítulo)?
+- [ ] Testou e a sidebar aparece na página?
+
+### Checklist para Novas Páginas CRM
+
+Antes de criar ou modificar qualquer página CRM:
+
+- [ ] Importou `Layout` de `@/components/Layout`?
+- [ ] Envolveu todo o conteúdo com `<Layout>`?
+- [ ] Removeu padding extra do div interno?
+- [ ] Header segue padrão do design system?
+
+---
