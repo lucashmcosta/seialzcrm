@@ -12,6 +12,7 @@ import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { SuspendOrgDialog } from '@/components/admin/SuspendOrgDialog';
 import { DeleteOrgDialog } from '@/components/admin/DeleteOrgDialog';
+import { ExtendTrialDialog } from '@/components/admin/ExtendTrialDialog';
 import { ChangeSubscriptionDialog } from '@/components/admin/ChangeSubscriptionDialog';
 
 export default function AdminOrganizationDetail() {
@@ -24,6 +25,7 @@ export default function AdminOrganizationDetail() {
   const [suspendDialogOpen, setSuspendDialogOpen] = useState(false);
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
   const [changeSubDialogOpen, setChangeSubDialogOpen] = useState(false);
+  const [extendTrialDialogOpen, setExtendTrialDialogOpen] = useState(false);
 
   useEffect(() => {
     if (id) {
@@ -106,13 +108,13 @@ export default function AdminOrganizationDetail() {
 
       await fetchOrganization();
       toast({
-        title: 'Organização reativada',
-        description: 'A organização foi reativada com sucesso.',
+        title: 'Conta reativada',
+        description: 'A conta foi reativada com sucesso.',
       });
     } catch (error) {
       toast({
         title: 'Erro',
-        description: 'Falha ao reativar organização.',
+        description: 'Falha ao reativar conta.',
         variant: 'destructive',
       });
     }
@@ -166,7 +168,7 @@ export default function AdminOrganizationDetail() {
     return (
       <AdminLayout>
         <div className="text-center py-12">
-          <p className="text-muted-foreground">Organização não encontrada</p>
+          <p className="text-muted-foreground">Conta não encontrada</p>
         </div>
       </AdminLayout>
     );
@@ -197,7 +199,7 @@ export default function AdminOrganizationDetail() {
               <div className="flex items-center gap-2 text-destructive">
                 <Ban className="h-5 w-5" />
                 <div>
-                  <p className="font-semibold">Organização Suspensa</p>
+                  <p className="font-semibold">Conta Suspensa</p>
                   <p className="text-sm">
                     Suspensa em {format(new Date(org.suspended_at), 'dd/MM/yyyy HH:mm', { locale: ptBR })}
                   </p>
@@ -400,7 +402,7 @@ export default function AdminOrganizationDetail() {
                       R$ {org.subscriptions?.[0]?.price_per_seat || 0}
                     </p>
                   </div>
-                  {org.subscriptions?.[0]?.current_period_start && (
+                   {org.subscriptions?.[0]?.current_period_start && (
                     <div>
                       <span className="text-sm text-muted-foreground">Período Atual:</span>
                       <p className="text-sm">
@@ -411,7 +413,25 @@ export default function AdminOrganizationDetail() {
                       </p>
                     </div>
                   )}
+                  {org.subscriptions?.[0]?.trial_ends_at && (
+                    <div>
+                      <span className="text-sm text-muted-foreground">Trial termina em:</span>
+                      <p>{format(new Date(org.subscriptions[0].trial_ends_at), 'dd/MM/yyyy', { locale: ptBR })}</p>
+                    </div>
+                  )}
+                  {org.subscriptions?.[0]?.extended_trial_days > 0 && (
+                    <div>
+                      <span className="text-sm text-muted-foreground">Trial estendido:</span>
+                      <p>{org.subscriptions[0].extended_trial_days} dias</p>
+                    </div>
+                  )}
                 </div>
+                {org.subscriptions?.[0]?.status === 'trialing' && (
+                  <Button variant="outline" onClick={() => setExtendTrialDialogOpen(true)}>
+                    <Play className="h-4 w-4 mr-2" />
+                    Estender Trial
+                  </Button>
+                )}
               </CardContent>
             </Card>
           </TabsContent>
@@ -425,18 +445,18 @@ export default function AdminOrganizationDetail() {
                 {org.suspended_at ? (
                   <Button onClick={handleReactivate} variant="default" className="w-full justify-start">
                     <Play className="h-4 w-4 mr-2" />
-                    Reativar Organização
+                    Reativar Conta
                   </Button>
                 ) : (
                   <Button onClick={() => setSuspendDialogOpen(true)} variant="destructive" className="w-full justify-start">
                     <Ban className="h-4 w-4 mr-2" />
-                    Suspender Organização
+                    Suspender Conta
                   </Button>
                 )}
                 
                 <Button onClick={handleSendEmail} variant="outline" className="w-full justify-start">
                   <Mail className="h-4 w-4 mr-2" />
-                  Enviar Email para Organização
+                  Enviar Email para Conta
                 </Button>
 
                 <Button 
@@ -445,7 +465,7 @@ export default function AdminOrganizationDetail() {
                   className="w-full justify-start"
                 >
                   <Trash2 className="h-4 w-4 mr-2" />
-                  Deletar Organização Permanentemente
+                  Deletar Conta Permanentemente
                 </Button>
               </CardContent>
             </Card>
@@ -469,14 +489,24 @@ export default function AdminOrganizationDetail() {
         />
 
         {org.subscriptions?.[0] && (
-          <ChangeSubscriptionDialog
-            open={changeSubDialogOpen}
-            onOpenChange={setChangeSubDialogOpen}
-            subscriptionId={org.subscriptions[0].id}
-            currentPlan={org.subscriptions[0].plan_name}
-            currentSeats={org.subscriptions[0].max_seats}
-            onSuccess={fetchOrganization}
-          />
+          <>
+            <ChangeSubscriptionDialog
+              open={changeSubDialogOpen}
+              onOpenChange={setChangeSubDialogOpen}
+              subscriptionId={org.subscriptions[0].id}
+              currentPlan={org.subscriptions[0].plan_name}
+              currentSeats={org.subscriptions[0].max_seats}
+              onSuccess={fetchOrganization}
+            />
+            <ExtendTrialDialog
+              open={extendTrialDialogOpen}
+              onOpenChange={setExtendTrialDialogOpen}
+              subscriptionId={org.subscriptions[0].id}
+              organizationId={id!}
+              currentTrialDays={org.subscriptions[0].original_trial_days || 14}
+              onSuccess={fetchOrganization}
+            />
+          </>
         )}
       </div>
     </AdminLayout>

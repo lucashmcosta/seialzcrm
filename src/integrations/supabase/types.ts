@@ -586,6 +586,124 @@ export type Database = {
           },
         ]
       }
+      coupon_redemptions: {
+        Row: {
+          coupon_id: string
+          discount_applied: number
+          id: string
+          organization_id: string
+          redeemed_at: string | null
+          redeemed_by_admin_id: string | null
+          subscription_id: string
+        }
+        Insert: {
+          coupon_id: string
+          discount_applied: number
+          id?: string
+          organization_id: string
+          redeemed_at?: string | null
+          redeemed_by_admin_id?: string | null
+          subscription_id: string
+        }
+        Update: {
+          coupon_id?: string
+          discount_applied?: number
+          id?: string
+          organization_id?: string
+          redeemed_at?: string | null
+          redeemed_by_admin_id?: string | null
+          subscription_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "coupon_redemptions_coupon_id_fkey"
+            columns: ["coupon_id"]
+            isOneToOne: false
+            referencedRelation: "coupons"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "coupon_redemptions_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "coupon_redemptions_redeemed_by_admin_id_fkey"
+            columns: ["redeemed_by_admin_id"]
+            isOneToOne: false
+            referencedRelation: "admin_users"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "coupon_redemptions_subscription_id_fkey"
+            columns: ["subscription_id"]
+            isOneToOne: false
+            referencedRelation: "subscriptions"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      coupons: {
+        Row: {
+          applicable_plans: string[] | null
+          code: string
+          created_at: string | null
+          created_by_admin_id: string | null
+          current_uses: number | null
+          description: string | null
+          discount_type: string
+          discount_value: number
+          id: string
+          is_active: boolean | null
+          max_uses: number | null
+          updated_at: string | null
+          valid_from: string | null
+          valid_until: string | null
+        }
+        Insert: {
+          applicable_plans?: string[] | null
+          code: string
+          created_at?: string | null
+          created_by_admin_id?: string | null
+          current_uses?: number | null
+          description?: string | null
+          discount_type: string
+          discount_value: number
+          id?: string
+          is_active?: boolean | null
+          max_uses?: number | null
+          updated_at?: string | null
+          valid_from?: string | null
+          valid_until?: string | null
+        }
+        Update: {
+          applicable_plans?: string[] | null
+          code?: string
+          created_at?: string | null
+          created_by_admin_id?: string | null
+          current_uses?: number | null
+          description?: string | null
+          discount_type?: string
+          discount_value?: number
+          id?: string
+          is_active?: boolean | null
+          max_uses?: number | null
+          updated_at?: string | null
+          valid_from?: string | null
+          valid_until?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "coupons_created_by_admin_id_fkey"
+            columns: ["created_by_admin_id"]
+            isOneToOne: false
+            referencedRelation: "admin_users"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       custom_field_definitions: {
         Row: {
           created_at: string | null
@@ -1328,6 +1446,57 @@ export type Database = {
           },
         ]
       }
+      plans: {
+        Row: {
+          created_at: string | null
+          description: string | null
+          display_name: string
+          features: Json | null
+          id: string
+          is_active: boolean | null
+          max_contacts: number | null
+          max_seats: number | null
+          max_storage_mb: number | null
+          name: string
+          price_monthly: number | null
+          price_yearly: number | null
+          sort_order: number | null
+          updated_at: string | null
+        }
+        Insert: {
+          created_at?: string | null
+          description?: string | null
+          display_name: string
+          features?: Json | null
+          id?: string
+          is_active?: boolean | null
+          max_contacts?: number | null
+          max_seats?: number | null
+          max_storage_mb?: number | null
+          name: string
+          price_monthly?: number | null
+          price_yearly?: number | null
+          sort_order?: number | null
+          updated_at?: string | null
+        }
+        Update: {
+          created_at?: string | null
+          description?: string | null
+          display_name?: string
+          features?: Json | null
+          id?: string
+          is_active?: boolean | null
+          max_contacts?: number | null
+          max_seats?: number | null
+          max_storage_mb?: number | null
+          name?: string
+          price_monthly?: number | null
+          price_yearly?: number | null
+          sort_order?: number | null
+          updated_at?: string | null
+        }
+        Relationships: []
+      }
       saved_views: {
         Row: {
           created_at: string | null
@@ -1417,13 +1586,22 @@ export type Database = {
           created_at: string | null
           current_period_end: string | null
           current_period_start: string | null
+          extended_trial_days: number | null
           id: string
           is_free_plan: boolean | null
+          locked_price_monthly: number | null
+          locked_price_yearly: number | null
           max_seats: number | null
           organization_id: string
+          original_trial_days: number | null
+          plan_id: string | null
           plan_name: string | null
+          price_locked_at: string | null
           price_per_seat: number | null
           status: Database["public"]["Enums"]["subscription_status"] | null
+          trial_ends_at: string | null
+          trial_extended_by_admin_id: string | null
+          trial_extension_reason: string | null
           updated_at: string | null
         }
         Insert: {
@@ -1431,13 +1609,22 @@ export type Database = {
           created_at?: string | null
           current_period_end?: string | null
           current_period_start?: string | null
+          extended_trial_days?: number | null
           id?: string
           is_free_plan?: boolean | null
+          locked_price_monthly?: number | null
+          locked_price_yearly?: number | null
           max_seats?: number | null
           organization_id: string
+          original_trial_days?: number | null
+          plan_id?: string | null
           plan_name?: string | null
+          price_locked_at?: string | null
           price_per_seat?: number | null
           status?: Database["public"]["Enums"]["subscription_status"] | null
+          trial_ends_at?: string | null
+          trial_extended_by_admin_id?: string | null
+          trial_extension_reason?: string | null
           updated_at?: string | null
         }
         Update: {
@@ -1445,13 +1632,22 @@ export type Database = {
           created_at?: string | null
           current_period_end?: string | null
           current_period_start?: string | null
+          extended_trial_days?: number | null
           id?: string
           is_free_plan?: boolean | null
+          locked_price_monthly?: number | null
+          locked_price_yearly?: number | null
           max_seats?: number | null
           organization_id?: string
+          original_trial_days?: number | null
+          plan_id?: string | null
           plan_name?: string | null
+          price_locked_at?: string | null
           price_per_seat?: number | null
           status?: Database["public"]["Enums"]["subscription_status"] | null
+          trial_ends_at?: string | null
+          trial_extended_by_admin_id?: string | null
+          trial_extension_reason?: string | null
           updated_at?: string | null
         }
         Relationships: [
@@ -1460,6 +1656,20 @@ export type Database = {
             columns: ["organization_id"]
             isOneToOne: true
             referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "subscriptions_plan_id_fkey"
+            columns: ["plan_id"]
+            isOneToOne: false
+            referencedRelation: "plans"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "subscriptions_trial_extended_by_admin_id_fkey"
+            columns: ["trial_extended_by_admin_id"]
+            isOneToOne: false
+            referencedRelation: "admin_users"
             referencedColumns: ["id"]
           },
         ]

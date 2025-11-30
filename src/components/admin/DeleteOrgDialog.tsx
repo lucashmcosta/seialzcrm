@@ -37,7 +37,7 @@ export function DeleteOrgDialog({
     if (confirmation !== organizationName) {
       toast({
         title: 'Erro',
-        description: 'O nome da organização não confere.',
+        description: 'O nome da conta não confere.',
         variant: 'destructive',
       });
       return;
@@ -76,8 +76,8 @@ export function DeleteOrgDialog({
       });
 
       toast({
-        title: 'Organização deletada',
-        description: 'A organização foi deletada permanentemente.',
+        title: 'Conta deletada',
+        description: 'A conta foi deletada permanentemente.',
       });
 
       setConfirmation('');
@@ -87,7 +87,7 @@ export function DeleteOrgDialog({
       console.error('Error deleting organization:', error);
       toast({
         title: 'Erro',
-        description: error.message || 'Falha ao deletar organização.',
+        description: error.message || 'Falha ao deletar conta.',
         variant: 'destructive',
       });
     } finally {
@@ -101,10 +101,10 @@ export function DeleteOrgDialog({
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2 text-destructive">
             <AlertTriangle className="h-5 w-5" />
-            Deletar Organização
+            Deletar Conta
           </DialogTitle>
           <DialogDescription>
-            Esta ação é <strong>IRREVERSÍVEL</strong>. Todos os dados da organização 
+            Esta ação é <strong>IRREVERSÍVEL</strong>. Todos os dados da conta 
             serão permanentemente deletados, incluindo:
           </DialogDescription>
         </DialogHeader>

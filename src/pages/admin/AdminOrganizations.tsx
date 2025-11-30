@@ -93,7 +93,7 @@ export default function AdminOrganizations() {
   return (
     <AdminLayout>
       <div className="space-y-6">
-        <h1 className="text-3xl font-bold">Organizações</h1>
+        <h1 className="text-3xl font-bold">Contas</h1>
 
         <div className="flex items-center gap-4">
           <div className="relative flex-1">
@@ -110,7 +110,7 @@ export default function AdminOrganizations() {
         {loading ? (
           <div className="text-center py-12">
             <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary mx-auto" />
-            <p className="mt-4 text-muted-foreground">Carregando organizações...</p>
+            <p className="mt-4 text-muted-foreground">Carregando contas...</p>
           </div>
         ) : (
           <div className="rounded-lg border">
@@ -130,7 +130,7 @@ export default function AdminOrganizations() {
                 {filteredOrgs.length === 0 ? (
                   <TableRow>
                     <TableCell colSpan={7} className="text-center py-8 text-muted-foreground">
-                      Nenhuma organização encontrada
+                      Nenhuma conta encontrada
                     </TableCell>
                   </TableRow>
                 ) : (

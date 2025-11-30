@@ -1,10 +1,12 @@
 import { Link, useLocation } from 'react-router-dom';
 import { cn } from '@/lib/utils';
-import { LayoutDashboard, Building2, FileText, Shield, Users, Flag, UserCheck } from 'lucide-react';
+import { LayoutDashboard, Building2, FileText, Shield, Users, Flag, UserCheck, CreditCard, Ticket } from 'lucide-react';
 
 const menuItems = [
   { icon: LayoutDashboard, label: 'Dashboard', href: '/admin' },
-  { icon: Building2, label: 'Organizações', href: '/admin/organizations' },
+  { icon: Building2, label: 'Contas', href: '/admin/organizations' },
+  { icon: CreditCard, label: 'Planos', href: '/admin/plans' },
+  { icon: Ticket, label: 'Cupons', href: '/admin/coupons' },
   { icon: Users, label: 'Administradores', href: '/admin/users' },
   { icon: UserCheck, label: 'Impersonations', href: '/admin/impersonations' },
   { icon: Flag, label: 'Feature Flags', href: '/admin/feature-flags' },

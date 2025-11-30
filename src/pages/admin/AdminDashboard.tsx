@@ -50,9 +50,9 @@ export default function AdminDashboard() {
 
       const suspendedOrgs = orgs?.filter(o => o.suspended_at).length || 0;
 
-      const { data: users } = await supabase
+      const { count: totalUsers } = await supabase
         .from('users')
-        .select('id', { count: 'exact', head: true });
+        .select('*', { count: 'exact', head: true });
 
       const { data: subscriptions } = await supabase
         .from('subscriptions')
@@ -100,7 +100,7 @@ export default function AdminDashboard() {
         totalOrgs: orgs?.length || 0,
         activeOrgs,
         suspendedOrgs,
-        totalUsers: users?.length || 0,
+        totalUsers: totalUsers || 0,
         mrr,
       });
     } catch (error) {
@@ -112,17 +112,17 @@ export default function AdminDashboard() {
 
   const kpiCards = [
     {
-      title: 'Total de Organizações',
+      title: 'Total de Contas',
       value: kpis.totalOrgs,
       icon: Building2,
     },
     {
-      title: 'Organizações Ativas',
+      title: 'Contas Ativas',
       value: kpis.activeOrgs,
       icon: Activity,
     },
     {
-      title: 'Organizações Suspensas',
+      title: 'Contas Suspensas',
       value: kpis.suspendedOrgs,
       icon: Ban,
     },
@@ -172,7 +172,7 @@ export default function AdminDashboard() {
             <div className="grid gap-4 md:grid-cols-2">
               <Card>
                 <CardHeader>
-                  <CardTitle>Crescimento de Organizações</CardTitle>
+                  <CardTitle>Crescimento de Contas</CardTitle>
                 </CardHeader>
                 <CardContent>
                   <ResponsiveContainer width="100%" height={300}>
@@ -182,7 +182,7 @@ export default function AdminDashboard() {
                       <YAxis />
                       <Tooltip />
                       <Legend />
-                      <Line type="monotone" dataKey="orgs" stroke="hsl(var(--primary))" name="Organizações" />
+                      <Line type="monotone" dataKey="orgs" stroke="hsl(var(--primary))" name="Contas" />
                     </LineChart>
                   </ResponsiveContainer>
                 </CardContent>
