@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
+import { Pencil, Image as ImageIcon, Trash2 } from 'lucide-react';
 import {
   Dialog,
   DialogContent,
@@ -14,6 +15,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { LogoEditorDialog } from '@/components/admin/LogoEditorDialog';
 
 interface CreateIntegrationDialogProps {
   open: boolean;
@@ -23,6 +25,7 @@ interface CreateIntegrationDialogProps {
 export function CreateIntegrationDialog({ open, onOpenChange }: CreateIntegrationDialogProps) {
   const queryClient = useQueryClient();
   const [loading, setLoading] = useState(false);
+  const [logoEditorOpen, setLogoEditorOpen] = useState(false);
   const [formData, setFormData] = useState({
     name: '',
     slug: '',
@@ -100,27 +103,49 @@ export function CreateIntegrationDialog({ open, onOpenChange }: CreateIntegratio
             />
           </div>
           <div className="space-y-2">
-            <Label htmlFor="logo_url">URL da Logo</Label>
+            <Label>Logo da Integração</Label>
             <div className="flex items-center gap-4">
-              <Input
-                id="logo_url"
-                value={formData.logo_url}
-                onChange={(e) => setFormData({ ...formData, logo_url: e.target.value })}
-                placeholder="https://exemplo.com/logo.png"
-                className="flex-1"
-              />
-              {formData.logo_url && (
-                <div className="flex items-center gap-2">
-                  <span className="text-sm text-muted-foreground">Preview:</span>
-                  <img
-                    src={formData.logo_url}
-                    alt="Preview"
-                    className="w-12 h-12 rounded-lg object-contain bg-muted p-1"
-                    onError={(e) => (e.currentTarget.style.display = 'none')}
-                  />
+              {formData.logo_url ? (
+                <img
+                  src={formData.logo_url}
+                  alt="Logo"
+                  className="w-12 h-12 rounded-lg object-contain bg-muted p-2"
+                />
+              ) : (
+                <div className="w-12 h-12 rounded-lg bg-muted flex items-center justify-center">
+                  <ImageIcon className="w-5 h-5 text-muted-foreground" />
                 </div>
               )}
+              <div className="flex gap-2">
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setLogoEditorOpen(true)}
+                >
+                  <Pencil className="w-4 h-4 mr-2" />
+                  {formData.logo_url ? 'Editar' : 'Adicionar'}
+                </Button>
+                {formData.logo_url && (
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="icon"
+                    onClick={() => setFormData({ ...formData, logo_url: '' })}
+                  >
+                    <Trash2 className="w-4 h-4 text-destructive" />
+                  </Button>
+                )}
+              </div>
             </div>
+
+            <LogoEditorDialog
+              open={logoEditorOpen}
+              onOpenChange={setLogoEditorOpen}
+              currentLogoUrl={formData.logo_url}
+              onSave={(url) => setFormData({ ...formData, logo_url: url })}
+              integrationSlug={formData.slug || 'new-integration'}
+            />
           </div>
           <div className="grid grid-cols-2 gap-4">
             <div className="space-y-2">
