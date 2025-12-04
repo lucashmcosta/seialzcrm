@@ -109,7 +109,7 @@ export function CreateIntegrationDialog({ open, onOpenChange }: CreateIntegratio
                 <img
                   src={formData.logo_url}
                   alt="Logo"
-                  className="w-12 h-12 rounded-lg object-contain bg-muted p-2"
+                  className="w-12 h-12 object-contain"
                 />
               ) : (
                 <div className="w-12 h-12 rounded-lg bg-muted flex items-center justify-center">

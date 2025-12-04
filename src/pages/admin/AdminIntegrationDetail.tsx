@@ -191,11 +191,11 @@ export default function AdminIntegrationDetail() {
               <Label>Logo da Integração</Label>
               <div className="flex items-center gap-4">
                 {formData.logo_url ? (
-                  <img
-                    src={formData.logo_url}
-                    alt="Logo"
-                    className="w-16 h-16 rounded-lg object-contain bg-muted p-2"
-                  />
+                      <img
+                        src={formData.logo_url}
+                        alt="Logo"
+                        className="w-16 h-16 object-contain"
+                      />
                 ) : (
                   <div className="w-16 h-16 rounded-lg bg-muted flex items-center justify-center">
                     <ImageIcon className="w-6 h-6 text-muted-foreground" />
