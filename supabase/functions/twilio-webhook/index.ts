@@ -173,7 +173,6 @@ serve(async (req) => {
   <Dial timeout="${timeout}" action="${statusCallbackUrl}" callerId="${from}">
 ${clientElements}
   </Dial>
-  <Say language="pt-BR" voice="alice">Desculpe, não foi possível conectar sua chamada. Por favor, tente novamente mais tarde.</Say>
 </Response>`
         
         console.log('Returning inbound TwiML with clients:', twiml)
@@ -355,7 +354,10 @@ ${clientElements}
     if (path === 'status') {
       const callSid = params.CallSid
       const callStatus = params.CallStatus?.toLowerCase()
-      const duration = params.CallDuration ? parseInt(params.CallDuration) : null
+      const dialCallStatus = params.DialCallStatus?.toLowerCase() // Status do <Dial> action callback
+      const duration = params.CallDuration || params.DialCallDuration
+        ? parseInt(params.CallDuration || params.DialCallDuration)
+        : null
 
       if (!callSid) {
         return new Response(null, { status: 204 })
@@ -397,8 +399,55 @@ ${clientElements}
         console.error('Error updating call status:', error)
       }
 
-      console.log(`Call ${callSid} status updated to: ${callStatus}`)
+      console.log(`Call ${callSid} status updated to: ${callStatus}, dialCallStatus: ${dialCallStatus}`)
 
+      // Se é callback do <Dial> action, retornar TwiML apropriado
+      if (dialCallStatus) {
+        let twiml = ''
+        
+        if (dialCallStatus === 'completed' || dialCallStatus === 'answered') {
+          // Chamada completada normalmente - encerrar silenciosamente
+          twiml = `<?xml version="1.0" encoding="UTF-8"?>
+<Response>
+  <Hangup/>
+</Response>`
+        } else if (dialCallStatus === 'no-answer') {
+          // Ninguém atendeu
+          twiml = `<?xml version="1.0" encoding="UTF-8"?>
+<Response>
+  <Say language="pt-BR" voice="alice">Não foi possível completar sua chamada. Nenhum atendente disponível no momento. Por favor, tente novamente mais tarde.</Say>
+  <Hangup/>
+</Response>`
+        } else if (dialCallStatus === 'busy') {
+          // Ocupado
+          twiml = `<?xml version="1.0" encoding="UTF-8"?>
+<Response>
+  <Say language="pt-BR" voice="alice">A linha está ocupada. Por favor, tente novamente em alguns minutos.</Say>
+  <Hangup/>
+</Response>`
+        } else if (dialCallStatus === 'canceled' || dialCallStatus === 'failed') {
+          // Cancelado ou falhou
+          twiml = `<?xml version="1.0" encoding="UTF-8"?>
+<Response>
+  <Say language="pt-BR" voice="alice">Não foi possível completar sua chamada. Por favor, tente novamente.</Say>
+  <Hangup/>
+</Response>`
+        } else {
+          // Qualquer outro status - encerrar silenciosamente
+          twiml = `<?xml version="1.0" encoding="UTF-8"?>
+<Response>
+  <Hangup/>
+</Response>`
+        }
+        
+        console.log(`Returning TwiML for DialCallStatus ${dialCallStatus}`)
+        
+        return new Response(twiml, {
+          headers: { 'Content-Type': 'text/xml' }
+        })
+      }
+
+      // Se não é callback do Dial, retornar 204 (status updates normais)
       return new Response(null, { status: 204 })
     }
 
