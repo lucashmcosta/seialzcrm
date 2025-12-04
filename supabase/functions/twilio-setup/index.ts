@@ -59,6 +59,58 @@ serve(async (req) => {
 
     console.log('TwiML App created successfully:', twimlAppSid)
 
+    // ========== NEW: Configure the phone number to use the TwiML App ==========
+    // This enables inbound calls to be routed to our webhook
+    
+    // Step 1: Find the phone number SID
+    const phoneSearchUrl = `https://api.twilio.com/2010-04-01/Accounts/${accountSid}/IncomingPhoneNumbers.json?PhoneNumber=${encodeURIComponent(phoneNumber)}`
+    
+    console.log('Searching for phone number SID:', phoneNumber)
+    
+    const phoneListResponse = await fetch(phoneSearchUrl, {
+      headers: {
+        'Authorization': 'Basic ' + btoa(`${accountSid}:${authToken}`),
+      }
+    })
+
+    if (phoneListResponse.ok) {
+      const phoneListData = await phoneListResponse.json()
+      const phoneNumberSid = phoneListData.incoming_phone_numbers?.[0]?.sid
+
+      if (phoneNumberSid) {
+        console.log('Found phone number SID:', phoneNumberSid)
+
+        // Step 2: Update the phone number to use our TwiML App
+        const updatePhoneUrl = `https://api.twilio.com/2010-04-01/Accounts/${accountSid}/IncomingPhoneNumbers/${phoneNumberSid}.json`
+        
+        const updateForm = new URLSearchParams()
+        updateForm.append('VoiceApplicationSid', twimlAppSid)
+        
+        const updateResponse = await fetch(updatePhoneUrl, {
+          method: 'POST',
+          headers: {
+            'Authorization': 'Basic ' + btoa(`${accountSid}:${authToken}`),
+            'Content-Type': 'application/x-www-form-urlencoded',
+          },
+          body: updateForm.toString(),
+        })
+
+        if (!updateResponse.ok) {
+          const updateError = await updateResponse.text()
+          console.error('Failed to configure phone number:', updateError)
+          // Don't fail the entire setup - log warning but continue
+        } else {
+          console.log('Phone number configured to use TwiML App successfully')
+        }
+      } else {
+        console.warn('Phone number not found in Twilio account. Inbound calls may not work.')
+      }
+    } else {
+      const searchError = await phoneListResponse.text()
+      console.error('Failed to search for phone number:', searchError)
+    }
+    // ========== END: Phone number configuration ==========
+
     // Update the organization integration with the TwiML App SID
     const supabase = createClient(
       supabaseUrl,
