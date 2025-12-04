@@ -5,11 +5,17 @@ import { Button } from '@/components/ui/button';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Input } from '@/components/ui/input';
-import { Loader2, Phone, Save, Users } from 'lucide-react';
+import { Switch } from '@/components/ui/switch';
+import { Loader2, Phone, Save, Users, UserPlus } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { useOrganization } from '@/hooks/useOrganization';
 import { toast } from 'sonner';
 import { formatPhoneDisplay } from '@/lib/phoneUtils';
+
+interface InboundSettings {
+  auto_create_contact: boolean;
+  default_lifecycle_stage: string;
+}
 
 interface PhoneNumber {
   id: string;
@@ -18,6 +24,7 @@ interface PhoneNumber {
   ring_strategy: string;
   ring_users: string[];
   ring_timeout_seconds: number;
+  inbound_settings: InboundSettings;
 }
 
 interface User {
@@ -66,7 +73,16 @@ export function PhoneNumberSettings() {
 
       if (usersError) throw usersError;
 
-      const phoneList = phones || [];
+      const phoneList: PhoneNumber[] = (phones || []).map(phone => ({
+        id: phone.id,
+        phone_number: phone.phone_number,
+        friendly_name: phone.friendly_name,
+        ring_strategy: phone.ring_strategy,
+        ring_users: phone.ring_users || [],
+        ring_timeout_seconds: phone.ring_timeout_seconds || 30,
+        inbound_settings: (phone.inbound_settings as unknown as InboundSettings) || { auto_create_contact: true, default_lifecycle_stage: 'lead' }
+      }));
+      
       setPhoneNumbers(phoneList);
       
       if (phoneList.length > 0) {
@@ -100,6 +116,7 @@ export function PhoneNumberSettings() {
           ring_strategy: selectedPhone.ring_strategy,
           ring_users: selectedPhone.ring_users,
           ring_timeout_seconds: selectedPhone.ring_timeout_seconds,
+          inbound_settings: JSON.parse(JSON.stringify(selectedPhone.inbound_settings)),
         })
         .eq('id', selectedPhone.id);
 
@@ -126,6 +143,18 @@ export function PhoneNumberSettings() {
     setSelectedPhone({
       ...selectedPhone,
       ring_users: newUsers
+    });
+  };
+
+  const updateInboundSetting = (key: keyof InboundSettings, value: any) => {
+    if (!selectedPhone) return;
+    
+    setSelectedPhone({
+      ...selectedPhone,
+      inbound_settings: {
+        ...selectedPhone.inbound_settings,
+        [key]: value
+      }
     });
   };
 
@@ -296,6 +325,50 @@ export function PhoneNumberSettings() {
               <p className="text-xs text-muted-foreground">
                 Tempo que a chamada tocará antes de tocar mensagem de indisponibilidade
               </p>
+            </div>
+
+            {/* Inbound Settings Section */}
+            <div className="border-t pt-6 space-y-4">
+              <div className="flex items-center gap-2">
+                <UserPlus className="h-5 w-5 text-muted-foreground" />
+                <h3 className="font-semibold">Números Desconhecidos</h3>
+              </div>
+              
+              {/* Auto Create Contact */}
+              <div className="flex items-center justify-between">
+                <div className="space-y-0.5">
+                  <Label htmlFor="autoCreate">Criar contato automaticamente</Label>
+                  <p className="text-xs text-muted-foreground">
+                    Quando alguém liga de um número não cadastrado
+                  </p>
+                </div>
+                <Switch
+                  id="autoCreate"
+                  checked={selectedPhone.inbound_settings?.auto_create_contact ?? true}
+                  onCheckedChange={(checked) => updateInboundSetting('auto_create_contact', checked)}
+                />
+              </div>
+
+              {/* Default Lifecycle Stage */}
+              {selectedPhone.inbound_settings?.auto_create_contact && (
+                <div className="space-y-2">
+                  <Label>Estágio do ciclo de vida para novos contatos</Label>
+                  <Select
+                    value={selectedPhone.inbound_settings?.default_lifecycle_stage || 'lead'}
+                    onValueChange={(value) => updateInboundSetting('default_lifecycle_stage', value)}
+                  >
+                    <SelectTrigger>
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="lead">Lead</SelectItem>
+                      <SelectItem value="subscriber">Subscriber</SelectItem>
+                      <SelectItem value="opportunity">Opportunity</SelectItem>
+                      <SelectItem value="customer">Customer</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+              )}
             </div>
 
             {/* Save Button */}

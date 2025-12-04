@@ -180,6 +180,9 @@ serve(async (req) => {
         voice: {
           outgoing: {
             application_sid: twiml_app_sid
+          },
+          incoming: {
+            allow: true
           }
         }
       }
