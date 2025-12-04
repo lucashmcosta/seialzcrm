@@ -40,6 +40,8 @@ export function ActiveCallModal({
   const deviceRef = useRef<Device | null>(null);
   const activeCallRef = useRef<Call | null>(null);
   const timerRef = useRef<NodeJS.Timeout | null>(null);
+  const callIdRef = useRef<string | null>(null);
+  const callStartTimeRef = useRef<Date | null>(null);
 
   // Initialize Twilio Device
   const initializeDevice = useCallback(async () => {
@@ -93,6 +95,30 @@ export function ActiveCallModal({
     }
   }, []);
 
+  // Update call record in database
+  const updateCallRecord = useCallback(async (callStatus: string, endedAt?: Date) => {
+    if (!callIdRef.current) return;
+
+    try {
+      const updateData: Record<string, any> = { status: callStatus };
+      
+      if (endedAt && callStartTimeRef.current) {
+        const durationSeconds = Math.floor((endedAt.getTime() - callStartTimeRef.current.getTime()) / 1000);
+        updateData.ended_at = endedAt.toISOString();
+        updateData.duration_seconds = durationSeconds;
+      }
+
+      await supabase
+        .from('calls')
+        .update(updateData)
+        .eq('id', callIdRef.current);
+        
+      console.log('Call record updated:', updateData);
+    } catch (error) {
+      console.error('Error updating call record:', error);
+    }
+  }, []);
+
   // Make the call
   const makeCall = useCallback(async () => {
     if (!deviceRef.current || status !== 'ready') {
@@ -116,35 +142,42 @@ export function ActiveCallModal({
       call.on('ringing', () => {
         console.log('Call ringing');
         setStatus('ringing');
+        updateCallRecord('ringing');
       });
 
       call.on('accept', () => {
         console.log('Call accepted/connected');
         setStatus('connected');
+        callStartTimeRef.current = new Date();
+        updateCallRecord('in-progress');
         toast.success('Chamada conectada');
       });
 
       call.on('disconnect', () => {
         console.log('Call disconnected');
         setStatus('ended');
+        updateCallRecord('completed', new Date());
         onCallEnd?.();
       });
 
       call.on('cancel', () => {
         console.log('Call cancelled');
         setStatus('ended');
+        updateCallRecord('canceled', new Date());
       });
 
       call.on('reject', () => {
         console.log('Call rejected');
         setStatus('failed');
         setErrorMessage('Chamada rejeitada');
+        updateCallRecord('busy', new Date());
       });
 
       call.on('error', (error) => {
         console.error('Call error:', error);
         setErrorMessage(error.message || 'Erro na chamada');
         setStatus('failed');
+        updateCallRecord('failed', new Date());
       });
 
       // Record the call in our database
@@ -164,7 +197,7 @@ export function ActiveCallModal({
           .single();
 
         if (userOrg && userProfile) {
-          await supabase.from('calls').insert({
+          const { data: newCall } = await supabase.from('calls').insert({
             organization_id: userOrg.organization_id,
             user_id: userProfile.id,
             contact_id: contactId,
@@ -174,7 +207,12 @@ export function ActiveCallModal({
             to_number: phoneNumber,
             status: 'queued',
             started_at: new Date().toISOString(),
-          });
+          }).select('id').single();
+
+          if (newCall) {
+            callIdRef.current = newCall.id;
+            console.log('Call record created with ID:', newCall.id);
+          }
         }
       } catch (dbError) {
         console.error('Error recording call:', dbError);
@@ -185,7 +223,7 @@ export function ActiveCallModal({
       setErrorMessage(error.message || 'Erro ao conectar chamada');
       setStatus('failed');
     }
-  }, [phoneNumber, contactId, opportunityId, status, onCallEnd]);
+  }, [phoneNumber, contactId, opportunityId, status, onCallEnd, updateCallRecord]);
 
   // Effect: Initialize device when modal opens
   useEffect(() => {
@@ -212,6 +250,8 @@ export function ActiveCallModal({
       setIsMuted(false);
       setDtmfDigits('');
       setErrorMessage(null);
+      callIdRef.current = null;
+      callStartTimeRef.current = null;
     };
   }, [open, initializeDevice]);
 
