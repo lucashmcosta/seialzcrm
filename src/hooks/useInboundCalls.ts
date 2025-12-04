@@ -10,9 +10,16 @@ interface InboundCallInfo {
   contactId?: string;
 }
 
+interface ActiveCallInfo {
+  from: string;
+  contactName?: string;
+  contactId?: string;
+}
+
 interface UseInboundCallsReturn {
   isReady: boolean;
   incomingCall: InboundCallInfo | null;
+  activeCallInfo: ActiveCallInfo | null;
   answerCall: () => void;
   rejectCall: () => void;
   isOnCall: boolean;
@@ -27,6 +34,7 @@ export function useInboundCalls(): UseInboundCallsReturn {
   const [isReady, setIsReady] = useState(false);
   const [incomingCall, setIncomingCall] = useState<InboundCallInfo | null>(null);
   const [activeCall, setActiveCall] = useState<Call | null>(null);
+  const [activeCallInfo, setActiveCallInfo] = useState<ActiveCallInfo | null>(null);
   const [isMuted, setIsMuted] = useState(false);
   const deviceRef = useRef<Device | null>(null);
 
@@ -218,6 +226,7 @@ export function useInboundCalls(): UseInboundCallsReturn {
           console.log('[InboundCalls] Call disconnected');
           setIncomingCall(null);
           setActiveCall(null);
+          setActiveCallInfo(null);
           setIsMuted(false);
         });
 
@@ -246,6 +255,14 @@ export function useInboundCalls(): UseInboundCallsReturn {
   const answerCall = useCallback(() => {
     if (incomingCall?.call) {
       console.log('[InboundCalls] Answering call...');
+      
+      // Preserve contact info BEFORE clearing incomingCall
+      setActiveCallInfo({
+        from: incomingCall.from,
+        contactName: incomingCall.contactName,
+        contactId: incomingCall.contactId
+      });
+      
       incomingCall.call.accept();
       setActiveCall(incomingCall.call);
       setIncomingCall(null);
@@ -267,6 +284,7 @@ export function useInboundCalls(): UseInboundCallsReturn {
       console.log('[InboundCalls] Ending call...');
       activeCall.disconnect();
       setActiveCall(null);
+      setActiveCallInfo(null);
       setIsMuted(false);
     }
   }, [activeCall]);
@@ -298,6 +316,7 @@ export function useInboundCalls(): UseInboundCallsReturn {
   return {
     isReady,
     incomingCall,
+    activeCallInfo,
     answerCall,
     rejectCall,
     isOnCall: !!activeCall,
