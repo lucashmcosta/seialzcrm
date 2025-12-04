@@ -62,24 +62,138 @@ serve(async (req) => {
       const to = params.To || url.searchParams.get('to')
       const from = params.From || params.Caller
       const direction = params.Direction
+      const calledNumber = params.Called || params.To
       
-      console.log('Voice request - To:', to, 'From:', from, 'Direction:', direction, 'OrgId:', orgId)
+      console.log('Voice request - To:', to, 'From:', from, 'Direction:', direction, 'OrgId:', orgId, 'Called:', calledNumber)
 
       // ========== INBOUND CALL DETECTION ==========
       // Inbound calls have Direction='inbound' and From is a phone number (not client:xxx)
       const isInboundCall = direction === 'inbound' && from && !from.startsWith('client:')
       
       if (isInboundCall) {
-        console.log('Inbound call detected from:', from)
+        console.log('Inbound call detected from:', from, 'to:', calledNumber)
         
-        // For now, respond with a voice message
-        // Future: implement call forwarding or WebRTC ring to users
-        const twiml = `<?xml version="1.0" encoding="UTF-8"?>
+        // Get phone number configuration from organization_phone_numbers
+        let phoneConfig = null
+        
+        if (orgId) {
+          const { data } = await supabase
+            .from('organization_phone_numbers')
+            .select('*')
+            .eq('organization_id', orgId)
+            .eq('is_primary', true)
+            .single()
+          
+          phoneConfig = data
+        }
+        
+        // If no orgId, try to find by called number
+        if (!phoneConfig && calledNumber) {
+          const formattedCalled = formatToE164(calledNumber)
+          const { data } = await supabase
+            .from('organization_phone_numbers')
+            .select('*')
+            .or(`phone_number.eq.${formattedCalled},phone_number.eq.${calledNumber}`)
+            .single()
+          
+          phoneConfig = data
+        }
+        
+        console.log('Phone config found:', phoneConfig)
+        
+        // If no config or no users configured, play message
+        if (!phoneConfig || !phoneConfig.ring_users || phoneConfig.ring_users.length === 0) {
+          if (phoneConfig?.ring_strategy === 'all') {
+            // Get all active users from the organization
+            const { data: orgUsers } = await supabase
+              .from('user_organizations')
+              .select('user_id')
+              .eq('organization_id', phoneConfig.organization_id)
+              .eq('is_active', true)
+            
+            if (orgUsers && orgUsers.length > 0) {
+              phoneConfig.ring_users = orgUsers.map(u => u.user_id)
+              console.log('Ring all users:', phoneConfig.ring_users)
+            }
+          }
+        }
+        
+        // If still no users to ring, play message
+        if (!phoneConfig?.ring_users || phoneConfig.ring_users.length === 0) {
+          console.log('No users configured to receive calls, playing message')
+          const twiml = `<?xml version="1.0" encoding="UTF-8"?>
 <Response>
   <Say language="pt-BR" voice="alice">Olá! Obrigado por ligar. No momento não podemos atender sua chamada. Por favor, tente novamente mais tarde ou entre em contato por outros canais. Até breve!</Say>
 </Response>`
+          
+          return new Response(twiml, {
+            headers: { 'Content-Type': 'text/xml' }
+          })
+        }
         
-        console.log('Returning inbound TwiML:', twiml)
+        // Build TwiML to ring users' browsers via WebRTC
+        const timeout = phoneConfig.ring_timeout_seconds || 30
+        const statusCallbackUrl = `${Deno.env.get('SUPABASE_URL')}/functions/v1/twilio-webhook/status?orgId=${phoneConfig.organization_id}`
+        
+        // Create <Client> elements for each user
+        const clientElements = phoneConfig.ring_users
+          .map((userId: string) => `    <Client>${userId}</Client>`)
+          .join('\n')
+        
+        const twiml = `<?xml version="1.0" encoding="UTF-8"?>
+<Response>
+  <Dial timeout="${timeout}" action="${statusCallbackUrl}" callerId="${from}">
+${clientElements}
+  </Dial>
+  <Say language="pt-BR" voice="alice">Desculpe, não foi possível conectar sua chamada. Por favor, tente novamente mais tarde.</Say>
+</Response>`
+        
+        console.log('Returning inbound TwiML with clients:', twiml)
+        
+        // Create inbound call record
+        if (phoneConfig.organization_id) {
+          // Find a default user to associate with the call
+          const defaultUserId = phoneConfig.ring_users[0]
+          
+          const { error: insertError } = await supabase
+            .from('calls')
+            .insert({
+              organization_id: phoneConfig.organization_id,
+              user_id: defaultUserId,
+              contact_id: null, // Will be linked later if we can match the phone number
+              direction: 'incoming',
+              status: 'ringing',
+              from_number: from,
+              to_number: calledNumber,
+              call_sid: params.CallSid,
+              call_type: 'received',
+              started_at: new Date().toISOString()
+            })
+          
+          if (insertError) {
+            console.error('Error creating inbound call record:', insertError)
+          } else {
+            console.log('Inbound call record created with SID:', params.CallSid)
+          }
+          
+          // Try to find and link contact by phone number
+          const { data: contact } = await supabase
+            .from('contacts')
+            .select('id')
+            .eq('organization_id', phoneConfig.organization_id)
+            .or(`phone.eq.${from},phone.eq.${from.replace('+55', '')}`)
+            .is('deleted_at', null)
+            .single()
+          
+          if (contact) {
+            await supabase
+              .from('calls')
+              .update({ contact_id: contact.id })
+              .eq('call_sid', params.CallSid)
+            
+            console.log('Linked call to contact:', contact.id)
+          }
+        }
         
         return new Response(twiml, {
           headers: { 'Content-Type': 'text/xml' }
