@@ -187,11 +187,29 @@ export default function AdminIntegrationDetail() {
             </div>
             <div className="space-y-2">
               <Label>URL da Logo</Label>
-              <Input
-                value={formData.logo_url || ''}
-                onChange={(e) => setFormData({ ...formData, logo_url: e.target.value })}
-                placeholder="https://exemplo.com/logo.png"
-              />
+              <div className="flex items-center gap-4">
+                <Input
+                  value={formData.logo_url || ''}
+                  onChange={(e) => setFormData({ ...formData, logo_url: e.target.value })}
+                  placeholder="https://exemplo.com/logo.png"
+                  className="flex-1"
+                />
+                <div className="flex items-center gap-2">
+                  <span className="text-sm text-muted-foreground">Preview:</span>
+                  {formData.logo_url ? (
+                    <img
+                      src={formData.logo_url}
+                      alt="Preview"
+                      className="w-12 h-12 rounded-lg object-contain bg-muted p-1"
+                      onError={(e) => (e.currentTarget.style.display = 'none')}
+                    />
+                  ) : (
+                    <div className="w-12 h-12 rounded-lg bg-muted flex items-center justify-center">
+                      <span className="text-xs text-muted-foreground">Sem logo</span>
+                    </div>
+                  )}
+                </div>
+              </div>
             </div>
             <div className="space-y-2">
               <Label>URL da Documentação</Label>
