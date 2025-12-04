@@ -32,61 +32,104 @@ export function useInboundCalls(): UseInboundCallsReturn {
 
   // Check if user should receive calls
   const checkUserShouldReceiveCalls = useCallback(async (): Promise<boolean> => {
-    if (!organization?.id || !userProfile?.id) return false;
+    if (!organization?.id || !userProfile?.id) {
+      console.log('[InboundCalls] Missing org or user:', { orgId: organization?.id, userId: userProfile?.id });
+      return false;
+    }
 
     try {
-      // First check if organization has voice integration enabled
-      const { data: integration } = await supabase
-        .from('organization_integrations')
-        .select(`
-          is_enabled,
-          admin_integrations!inner(slug, category)
-        `)
-        .eq('organization_id', organization.id)
-        .eq('is_enabled', true)
-        .eq('admin_integrations.category', 'telephony')
+      console.log('[InboundCalls] Checking if user should receive calls...');
+      console.log('[InboundCalls] Organization ID:', organization.id);
+      console.log('[InboundCalls] User ID:', userProfile.id);
+
+      // Step 1: Find Twilio Voice integration by slug (more reliable than category)
+      const { data: twilioIntegration, error: integrationError } = await supabase
+        .from('admin_integrations')
+        .select('id, slug, category')
+        .eq('slug', 'twilio-voice')
         .single();
 
-      if (!integration) return false;
+      console.log('[InboundCalls] Twilio integration lookup:', { data: twilioIntegration, error: integrationError });
+
+      if (!twilioIntegration) {
+        console.log('[InboundCalls] Twilio Voice integration not found in admin_integrations');
+        return false;
+      }
+
+      // Step 2: Check if organization has this integration enabled
+      const { data: orgIntegration, error: orgIntError } = await supabase
+        .from('organization_integrations')
+        .select('is_enabled, config_values')
+        .eq('organization_id', organization.id)
+        .eq('integration_id', twilioIntegration.id)
+        .eq('is_enabled', true)
+        .single();
+
+      console.log('[InboundCalls] Organization integration:', { data: orgIntegration, error: orgIntError });
+
+      if (!orgIntegration) {
+        console.log('[InboundCalls] Organization does not have Twilio Voice enabled');
+        return false;
+      }
 
       // Check phone number configuration
-      const { data: phoneConfig } = await supabase
+      const { data: phoneConfig, error: phoneError } = await supabase
         .from('organization_phone_numbers')
         .select('ring_strategy, ring_users')
         .eq('organization_id', organization.id)
         .eq('is_primary', true)
         .single();
 
-      if (!phoneConfig) return false;
+      console.log('[InboundCalls] Phone config:', { data: phoneConfig, error: phoneError });
+
+      if (!phoneConfig) {
+        console.log('[InboundCalls] No primary phone number configured');
+        return false;
+      }
 
       // If ring_strategy is 'all', user should receive calls
-      if (phoneConfig.ring_strategy === 'all') return true;
+      if (phoneConfig.ring_strategy === 'all') {
+        console.log('[InboundCalls] Ring strategy is "all" - user will receive calls');
+        return true;
+      }
 
       // If ring_strategy is 'specific_users', check if user is in ring_users
       if (phoneConfig.ring_strategy === 'specific_users' || phoneConfig.ring_strategy === 'round_robin') {
         const ringUsers = phoneConfig.ring_users as string[] || [];
-        return ringUsers.includes(userProfile.id);
+        const userIncluded = ringUsers.includes(userProfile.id);
+        console.log('[InboundCalls] Ring users check:', { ringUsers, userIncluded });
+        return userIncluded;
       }
 
+      console.log('[InboundCalls] Unknown ring strategy:', phoneConfig.ring_strategy);
       return false;
     } catch (error) {
-      console.error('Error checking user call permissions:', error);
+      console.error('[InboundCalls] Error checking user call permissions:', error);
       return false;
     }
   }, [organization?.id, userProfile?.id]);
 
   // Initialize Twilio Device for receiving calls
   const initializeDevice = useCallback(async () => {
-    if (!organization?.id || !userProfile?.id) return;
+    if (!organization?.id || !userProfile?.id) {
+      console.log('[InboundCalls] Cannot initialize - missing org or user');
+      return;
+    }
 
     try {
+      console.log('[InboundCalls] Starting device initialization...');
+      
       // Check if user should receive calls
       const shouldReceive = await checkUserShouldReceiveCalls();
+      console.log('[InboundCalls] Should receive calls:', shouldReceive);
+      
       if (!shouldReceive) {
-        console.log('User not configured to receive inbound calls');
+        console.log('[InboundCalls] User not configured to receive inbound calls - skipping device init');
         return;
       }
 
+      console.log('[InboundCalls] Requesting Twilio token...');
+      
       // Get access token - use user ID as identity for inbound calls
       const { data, error } = await supabase.functions.invoke('twilio-token', {
         body: { 
@@ -96,9 +139,12 @@ export function useInboundCalls(): UseInboundCallsReturn {
       });
 
       if (error || !data?.token) {
-        console.error('Failed to get Twilio token for inbound calls:', error);
+        console.error('[InboundCalls] Failed to get Twilio token:', error, data);
         return;
       }
+
+      console.log('[InboundCalls] Token received successfully, identity:', data.identity || userProfile.id);
+      console.log('[InboundCalls] Creating Twilio Device...');
 
       // Create and register device
       const device = new Device(data.token, {
@@ -106,18 +152,34 @@ export function useInboundCalls(): UseInboundCallsReturn {
         codecPreferences: [Call.Codec.Opus, Call.Codec.PCMU],
       });
 
+      device.on('registering', () => {
+        console.log('[InboundCalls] Device registering...');
+      });
+
       device.on('registered', () => {
-        console.log('Twilio Device registered for inbound calls');
+        console.log('[InboundCalls] ✅ Device registered successfully - ready to receive calls!');
         setIsReady(true);
       });
 
-      device.on('error', (error) => {
-        console.error('Twilio Device error:', error);
+      device.on('unregistered', () => {
+        console.log('[InboundCalls] Device unregistered');
         setIsReady(false);
       });
 
+      device.on('error', (error) => {
+        console.error('[InboundCalls] ❌ Device error:', error);
+        setIsReady(false);
+      });
+
+      device.on('tokenWillExpire', () => {
+        console.log('[InboundCalls] Token will expire soon - should refresh');
+        // TODO: Implement token refresh
+      });
+
       device.on('incoming', async (call: Call) => {
-        console.log('Incoming call from:', call.parameters.From);
+        console.log('[InboundCalls] 📞 INCOMING CALL!');
+        console.log('[InboundCalls] From:', call.parameters.From);
+        console.log('[InboundCalls] Call SID:', call.parameters.CallSid);
         
         // Try to find contact by phone number
         let contactName: string | undefined;
@@ -125,6 +187,8 @@ export function useInboundCalls(): UseInboundCallsReturn {
         
         const fromNumber = call.parameters.From;
         if (fromNumber && organization?.id) {
+          console.log('[InboundCalls] Looking up contact for number:', fromNumber);
+          
           const { data: contact } = await supabase
             .from('contacts')
             .select('id, full_name')
@@ -136,6 +200,9 @@ export function useInboundCalls(): UseInboundCallsReturn {
           if (contact) {
             contactName = contact.full_name;
             contactId = contact.id;
+            console.log('[InboundCalls] Contact found:', contactName);
+          } else {
+            console.log('[InboundCalls] No contact found for this number');
           }
         }
 
@@ -148,29 +215,37 @@ export function useInboundCalls(): UseInboundCallsReturn {
 
         // Handle call disconnect
         call.on('disconnect', () => {
-          console.log('Incoming call disconnected');
+          console.log('[InboundCalls] Call disconnected');
           setIncomingCall(null);
           setActiveCall(null);
           setIsMuted(false);
         });
 
         call.on('cancel', () => {
-          console.log('Incoming call cancelled');
+          console.log('[InboundCalls] Call cancelled by caller');
+          setIncomingCall(null);
+        });
+
+        call.on('reject', () => {
+          console.log('[InboundCalls] Call rejected');
           setIncomingCall(null);
         });
       });
 
+      console.log('[InboundCalls] Registering device...');
       await device.register();
       deviceRef.current = device;
+      console.log('[InboundCalls] Device registration initiated');
 
     } catch (error) {
-      console.error('Error initializing inbound call device:', error);
+      console.error('[InboundCalls] ❌ Error initializing inbound call device:', error);
     }
   }, [organization?.id, userProfile?.id, checkUserShouldReceiveCalls]);
 
   // Answer incoming call
   const answerCall = useCallback(() => {
     if (incomingCall?.call) {
+      console.log('[InboundCalls] Answering call...');
       incomingCall.call.accept();
       setActiveCall(incomingCall.call);
       setIncomingCall(null);
@@ -180,6 +255,7 @@ export function useInboundCalls(): UseInboundCallsReturn {
   // Reject incoming call
   const rejectCall = useCallback(() => {
     if (incomingCall?.call) {
+      console.log('[InboundCalls] Rejecting call...');
       incomingCall.call.reject();
       setIncomingCall(null);
     }
@@ -188,6 +264,7 @@ export function useInboundCalls(): UseInboundCallsReturn {
   // End active call
   const endCall = useCallback(() => {
     if (activeCall) {
+      console.log('[InboundCalls] Ending call...');
       activeCall.disconnect();
       setActiveCall(null);
       setIsMuted(false);
@@ -200,14 +277,17 @@ export function useInboundCalls(): UseInboundCallsReturn {
       const newMuteState = !isMuted;
       activeCall.mute(newMuteState);
       setIsMuted(newMuteState);
+      console.log('[InboundCalls] Mute toggled:', newMuteState);
     }
   }, [activeCall, isMuted]);
 
   // Initialize on mount
   useEffect(() => {
+    console.log('[InboundCalls] Hook mounted, will initialize device when org/user available');
     initializeDevice();
 
     return () => {
+      console.log('[InboundCalls] Hook unmounting, destroying device');
       if (deviceRef.current) {
         deviceRef.current.destroy();
         deviceRef.current = null;
