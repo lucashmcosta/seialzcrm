@@ -10,11 +10,13 @@ import { useOrganization } from '@/hooks/useOrganization';
 import { useTranslation } from '@/lib/i18n';
 import { usePermissions } from '@/hooks/usePermissions';
 import { toast } from '@/hooks/use-toast';
-import { ArrowLeft, Edit, TrendingUp, TrendingDown, DollarSign, Calendar, User, Building2 } from 'lucide-react';
+import { ArrowLeft, Edit, TrendingUp, TrendingDown, DollarSign, Calendar, User, Building2, Phone } from 'lucide-react';
 import { ActivityTimeline } from '@/components/contacts/ActivityTimeline';
 import { ContactTasks } from '@/components/contacts/ContactTasks';
 import { ContactAttachments } from '@/components/contacts/ContactAttachments';
+import { ContactCalls } from '@/components/contacts/ContactCalls';
 import { OpportunityDialog } from '@/components/opportunities/OpportunityDialog';
+import { ClickToCallButton } from '@/components/calls/ClickToCallButton';
 
 interface Opportunity {
   id: string;
@@ -25,7 +27,7 @@ interface Opportunity {
   close_date: string | null;
   contact_id: string | null;
   pipeline_stage_id: string;
-  contacts?: { full_name: string } | null;
+  contacts?: { full_name: string; phone: string | null } | null;
   pipeline_stages?: { name: string; type: string } | null;
   users?: { full_name: string } | null;
 }
@@ -61,7 +63,7 @@ export default function OpportunityDetail() {
       .from('opportunities')
       .select(`
         *,
-        contacts(full_name),
+        contacts(full_name, phone),
         pipeline_stages(name, type),
         users(full_name)
       `)
@@ -180,6 +182,9 @@ export default function OpportunityDetail() {
       ? 'bg-red-500'
       : 'bg-blue-500';
 
+  const contactPhone = opportunity.contacts?.phone;
+  const contactName = opportunity.contacts?.full_name;
+
   return (
     <Layout>
       <div className="flex flex-col h-full">
@@ -236,6 +241,14 @@ export default function OpportunityDetail() {
             </div>
 
             <div className="flex items-center gap-2">
+              {contactPhone && (
+                <ClickToCallButton
+                  phoneNumber={contactPhone}
+                  contactId={opportunity.contact_id || undefined}
+                  opportunityId={opportunity.id}
+                  size="sm"
+                />
+              )}
               {permissions.canEditOpportunities && (
                 <>
                   <Button onClick={() => setEditDialogOpen(true)}>
@@ -265,6 +278,10 @@ export default function OpportunityDetail() {
             <div className="border-b px-6">
               <TabsList>
                 <TabsTrigger value="timeline">{t('contacts.timeline')}</TabsTrigger>
+                <TabsTrigger value="calls">
+                  <Phone className="h-4 w-4 mr-2" />
+                  Chamadas
+                </TabsTrigger>
                 <TabsTrigger value="tasks">{t('contacts.tasksTab')}</TabsTrigger>
                 <TabsTrigger value="attachments">{t('attachments.title')}</TabsTrigger>
               </TabsList>
@@ -273,6 +290,23 @@ export default function OpportunityDetail() {
             <div className="p-6">
               <TabsContent value="timeline" className="mt-0">
                 <ActivityTimeline opportunityId={opportunity.id} />
+              </TabsContent>
+
+              <TabsContent value="calls" className="mt-0">
+                {opportunity.contact_id ? (
+                  <ContactCalls 
+                    contactId={opportunity.contact_id} 
+                    opportunityId={opportunity.id}
+                    contactPhone={contactPhone || undefined}
+                    contactName={contactName || undefined}
+                  />
+                ) : (
+                  <Card>
+                    <CardContent className="py-8 text-center text-muted-foreground">
+                      Esta oportunidade não tem um contato associado.
+                    </CardContent>
+                  </Card>
+                )}
               </TabsContent>
 
               <TabsContent value="tasks" className="mt-0">
