@@ -164,13 +164,14 @@ serve(async (req) => {
         const statusCallbackUrl = `${Deno.env.get('SUPABASE_URL')}/functions/v1/twilio-webhook/status?orgId=${phoneConfig.organization_id}`
         
         // Create <Client> elements for each user - USE user- PREFIX to match identity!
+        // Include statusCallback and statusCallbackEvent on each Client for proper call completion tracking
         const clientElements = phoneConfig.ring_users
-          .map((userId: string) => `    <Client>user-${userId}</Client>`)
+          .map((userId: string) => `    <Client statusCallback="${statusCallbackUrl}" statusCallbackEvent="initiated ringing answered completed">user-${userId}</Client>`)
           .join('\n')
         
         const twiml = `<?xml version="1.0" encoding="UTF-8"?>
 <Response>
-  <Dial timeout="${timeout}" action="${statusCallbackUrl}" callerId="${from}">
+  <Dial timeout="${timeout}" action="${statusCallbackUrl}" callerId="${from}" statusCallback="${statusCallbackUrl}" statusCallbackEvent="initiated ringing answered completed">
 ${clientElements}
   </Dial>
 </Response>`
@@ -353,11 +354,14 @@ ${clientElements}
     // ========== ROUTE: /status ==========
     if (path === 'status') {
       const callSid = params.CallSid
+      const parentCallSid = params.ParentCallSid // For inbound calls, the parent SID is the original call
       const callStatus = params.CallStatus?.toLowerCase()
       const dialCallStatus = params.DialCallStatus?.toLowerCase() // Status do <Dial> action callback
       const duration = params.CallDuration || params.DialCallDuration
         ? parseInt(params.CallDuration || params.DialCallDuration)
         : null
+
+      console.log(`Status callback - CallSid: ${callSid}, ParentCallSid: ${parentCallSid}, CallStatus: ${callStatus}, DialCallStatus: ${dialCallStatus}, Duration: ${duration}`)
 
       if (!callSid) {
         return new Response(null, { status: 204 })
@@ -390,16 +394,31 @@ ${clientElements}
         }
       }
 
-      const { error } = await supabase
+      // Try to update by CallSid first
+      let { data, error } = await supabase
         .from('calls')
         .update(updateData)
         .eq('call_sid', callSid)
+        .select()
+
+      // If no rows updated and we have ParentCallSid, try with that (for inbound calls)
+      if ((!data || data.length === 0) && parentCallSid) {
+        console.log(`No call found with CallSid ${callSid}, trying ParentCallSid ${parentCallSid}`)
+        const result = await supabase
+          .from('calls')
+          .update(updateData)
+          .eq('call_sid', parentCallSid)
+          .select()
+        
+        data = result.data
+        error = result.error
+      }
 
       if (error) {
         console.error('Error updating call status:', error)
       }
 
-      console.log(`Call ${callSid} status updated to: ${callStatus}, dialCallStatus: ${dialCallStatus}`)
+      console.log(`Call status update result - CallSid: ${callSid}, ParentSid: ${parentCallSid}, Status: ${callStatus}, Updated rows: ${data?.length || 0}`)
 
       // Se é callback do <Dial> action, retornar TwiML apropriado
       if (dialCallStatus) {
