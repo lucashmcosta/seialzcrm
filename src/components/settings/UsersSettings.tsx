@@ -8,32 +8,47 @@ import { Label } from '@/components/ui/label';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Badge } from '@/components/ui/badge';
 import { useToast } from '@/hooks/use-toast';
-import { Loader2, Plus, UserPlus } from 'lucide-react';
+import { Loader2, UserPlus } from 'lucide-react';
 
 interface UserMembership {
   id: string;
   user_id: string;
   is_active: boolean;
+  permission_profile_id: string | null;
   users: {
     full_name: string;
     email: string;
   };
+  permission_profiles?: {
+    name: string;
+  } | null;
+}
+
+interface PermissionProfile {
+  id: string;
+  name: string;
 }
 
 export function UsersSettings() {
-  const { organization, locale } = useOrganization();
+  const { organization, userProfile, locale } = useOrganization();
   const { t } = useTranslation(locale as any);
   const { toast } = useToast();
   const [memberships, setMemberships] = useState<UserMembership[]>([]);
+  const [permissionProfiles, setPermissionProfiles] = useState<PermissionProfile[]>([]);
   const [loading, setLoading] = useState(true);
   const [dialogOpen, setDialogOpen] = useState(false);
   const [inviteEmail, setInviteEmail] = useState('');
+  const [selectedProfileId, setSelectedProfileId] = useState<string>('');
   const [submitting, setSubmitting] = useState(false);
 
   useEffect(() => {
-    fetchMemberships();
+    if (organization?.id) {
+      fetchMemberships();
+      fetchPermissionProfiles();
+    }
   }, [organization?.id]);
 
   const fetchMemberships = async () => {
@@ -42,7 +57,7 @@ export function UsersSettings() {
     try {
       const { data, error } = await supabase
         .from('user_organizations')
-        .select('id, user_id, is_active, users(full_name, email)')
+        .select('id, user_id, is_active, permission_profile_id, users(full_name, email), permission_profiles(name)')
         .eq('organization_id', organization.id);
 
       if (error) throw error;
@@ -54,27 +69,42 @@ export function UsersSettings() {
     }
   };
 
+  const fetchPermissionProfiles = async () => {
+    if (!organization?.id) return;
+
+    try {
+      const { data, error } = await supabase
+        .from('permission_profiles')
+        .select('id, name')
+        .eq('organization_id', organization.id)
+        .order('name');
+
+      if (error) throw error;
+      setPermissionProfiles(data || []);
+      
+      // Set default to first profile if available
+      if (data && data.length > 0 && !selectedProfileId) {
+        const salesRep = data.find(p => p.name === 'Sales Rep');
+        setSelectedProfileId(salesRep?.id || data[0].id);
+      }
+    } catch (error) {
+      console.error('Error fetching permission profiles:', error);
+    }
+  };
+
   const handleInvite = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!organization?.id) return;
+    if (!organization?.id || !userProfile?.id) return;
 
     setSubmitting(true);
     try {
-      // Get admin permission profile
-      const { data: profiles } = await supabase
-        .from('permission_profiles')
-        .select('id')
-        .eq('organization_id', organization.id)
-        .eq('name', 'Admin')
-        .single();
-
       const { error } = await supabase
         .from('invitations')
         .insert({
           organization_id: organization.id,
           email: inviteEmail,
-          permission_profile_id: profiles?.id,
-          invited_by_user_id: (await supabase.auth.getUser()).data.user?.id,
+          permission_profile_id: selectedProfileId || null,
+          invited_by_user_id: userProfile.id,
           token: crypto.randomUUID(),
           status: 'pending',
         });
@@ -187,7 +217,7 @@ export function UsersSettings() {
         <div className="flex items-center justify-between">
           <div>
             <CardTitle>{t('settings.users')}</CardTitle>
-            <CardDescription>Manage users and their permissions</CardDescription>
+            <CardDescription>Gerencie usuários e suas permissões</CardDescription>
           </div>
           <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
             <DialogTrigger asChild>
@@ -201,7 +231,7 @@ export function UsersSettings() {
                 <DialogHeader>
                   <DialogTitle>{t('settings.inviteUser')}</DialogTitle>
                   <DialogDescription>
-                    Send an invitation to join your organization
+                    Envie um convite para entrar na sua organização
                   </DialogDescription>
                 </DialogHeader>
                 <div className="space-y-4 py-4">
@@ -215,6 +245,24 @@ export function UsersSettings() {
                       placeholder="email@example.com"
                       required
                     />
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="profile">{t('settings.role')}</Label>
+                    <Select value={selectedProfileId} onValueChange={setSelectedProfileId}>
+                      <SelectTrigger id="profile">
+                        <SelectValue placeholder="Selecione um perfil" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {permissionProfiles.map((profile) => (
+                          <SelectItem key={profile.id} value={profile.id}>
+                            {profile.name}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                    <p className="text-xs text-muted-foreground">
+                      O perfil define as permissões que o usuário terá no sistema
+                    </p>
                   </div>
                 </div>
                 <DialogFooter>
@@ -232,8 +280,9 @@ export function UsersSettings() {
         <Table>
           <TableHeader>
             <TableRow>
-              <TableHead>Name</TableHead>
+              <TableHead>Nome</TableHead>
               <TableHead>Email</TableHead>
+              <TableHead>Perfil</TableHead>
               <TableHead>{t('settings.status')}</TableHead>
               <TableHead className="text-right">{t('common.actions')}</TableHead>
             </TableRow>
@@ -243,6 +292,11 @@ export function UsersSettings() {
               <TableRow key={membership.id}>
                 <TableCell className="font-medium">{membership.users.full_name}</TableCell>
                 <TableCell>{membership.users.email}</TableCell>
+                <TableCell>
+                  <Badge variant="outline">
+                    {membership.permission_profiles?.name || 'Sem perfil'}
+                  </Badge>
+                </TableCell>
                 <TableCell>
                   <Badge variant={membership.is_active ? 'default' : 'secondary'}>
                     {membership.is_active ? t('settings.active') : t('settings.inactive')}
@@ -254,7 +308,7 @@ export function UsersSettings() {
                     size="sm"
                     onClick={() => toggleStatus(membership.id, membership.is_active)}
                   >
-                    {membership.is_active ? 'Deactivate' : 'Activate'}
+                    {membership.is_active ? 'Desativar' : 'Ativar'}
                   </Button>
                 </TableCell>
               </TableRow>
