@@ -6,6 +6,7 @@ import { useOrganization } from '@/hooks/useOrganization';
 import { useTranslation } from '@/lib/i18n';
 import { usePermissions } from '@/hooks/usePermissions';
 import { useVoiceIntegration } from '@/hooks/useVoiceIntegration';
+import { formatPhoneDisplay } from '@/lib/phoneUtils';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
@@ -167,10 +168,10 @@ export default function ContactDetail() {
                               onClick={() => setCallModalOpen(true)}
                               className="text-primary hover:underline cursor-pointer font-medium"
                             >
-                              {contact.phone}
+                              {formatPhoneDisplay(contact.phone)}
                             </button>
                           ) : (
-                            <span className="text-foreground">{contact.phone}</span>
+                            <span className="text-foreground">{formatPhoneDisplay(contact.phone)}</span>
                           )}
                         </div>
                       </div>

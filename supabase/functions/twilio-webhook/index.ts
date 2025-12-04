@@ -6,6 +6,33 @@ const corsHeaders = {
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 }
 
+/**
+ * Formata número para E.164 (padrão internacional do Twilio)
+ * Entrada: 11964298621 → Saída: +5511964298621
+ */
+function formatToE164(phone: string): string {
+  // Remove tudo que não é número ou +
+  const cleaned = phone.replace(/[^\d+]/g, '')
+  
+  // Se já começa com +, assume que está formatado
+  if (cleaned.startsWith('+')) {
+    return cleaned
+  }
+  
+  // Se começa com 55 e tem 12-13 dígitos, adiciona só o +
+  if (cleaned.startsWith('55') && cleaned.length >= 12) {
+    return '+' + cleaned
+  }
+  
+  // Números brasileiros (10-11 dígitos: DDD + número)
+  if (cleaned.length >= 10 && cleaned.length <= 11) {
+    return '+55' + cleaned
+  }
+  
+  // Fallback: adiciona +55 mesmo assim
+  return '+55' + cleaned
+}
+
 serve(async (req) => {
   if (req.method === 'OPTIONS') {
     return new Response(null, { headers: corsHeaders })
@@ -64,6 +91,10 @@ serve(async (req) => {
         }
       }
 
+      // Format phone number to E.164
+      const formattedTo = formatToE164(to)
+      console.log('Formatted phone number:', to, '->', formattedTo)
+
       // Build TwiML response
       const recordAttr = enableRecording ? ' record="record-from-answer-dual"' : ''
       const statusCallbackUrl = `${Deno.env.get('SUPABASE_URL')}/functions/v1/twilio-webhook/status?orgId=${orgId || ''}`
@@ -72,7 +103,7 @@ serve(async (req) => {
       const twiml = `<?xml version="1.0" encoding="UTF-8"?>
 <Response>
   <Dial callerId="${callerId}" timeout="30"${recordAttr} action="${statusCallbackUrl}" recordingStatusCallback="${recordingCallbackUrl}">
-    <Number statusCallbackEvent="initiated ringing answered completed" statusCallback="${statusCallbackUrl}">${to}</Number>
+    <Number statusCallbackEvent="initiated ringing answered completed" statusCallback="${statusCallbackUrl}">${formattedTo}</Number>
   </Dial>
 </Response>`
 
