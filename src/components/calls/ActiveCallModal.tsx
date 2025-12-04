@@ -7,6 +7,7 @@ import { Phone, PhoneOff, Mic, MicOff, Volume2, VolumeX } from 'lucide-react';
 import { DialPad } from './DialPad';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
+import { formatPhoneDisplay } from '@/lib/phoneUtils';
 
 export type CallStatus = 'initializing' | 'ready' | 'connecting' | 'ringing' | 'connected' | 'ended' | 'failed';
 
@@ -345,7 +346,7 @@ export function ActiveCallModal({
             {contactName && (
               <h3 className="text-xl font-semibold text-foreground">{contactName}</h3>
             )}
-            <p className="text-muted-foreground">{phoneNumber}</p>
+            <p className="text-muted-foreground">{formatPhoneDisplay(phoneNumber)}</p>
           </div>
 
           {/* Status & Timer */}
