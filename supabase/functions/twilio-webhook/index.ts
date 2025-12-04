@@ -57,13 +57,37 @@ serve(async (req) => {
 
     console.log(`Webhook ${path}:`, JSON.stringify(params, null, 2))
 
-    // ========== ROUTE: /voice (Browser WebRTC calls) ==========
+    // ========== ROUTE: /voice (Browser WebRTC calls & Inbound calls) ==========
     if (path === 'voice') {
       const to = params.To || url.searchParams.get('to')
       const from = params.From || params.Caller
+      const direction = params.Direction
       
-      console.log('Voice request - To:', to, 'From:', from, 'OrgId:', orgId)
+      console.log('Voice request - To:', to, 'From:', from, 'Direction:', direction, 'OrgId:', orgId)
 
+      // ========== INBOUND CALL DETECTION ==========
+      // Inbound calls have Direction='inbound' and From is a phone number (not client:xxx)
+      const isInboundCall = direction === 'inbound' && from && !from.startsWith('client:')
+      
+      if (isInboundCall) {
+        console.log('Inbound call detected from:', from)
+        
+        // For now, respond with a voice message
+        // Future: implement call forwarding or WebRTC ring to users
+        const twiml = `<?xml version="1.0" encoding="UTF-8"?>
+<Response>
+  <Say language="pt-BR" voice="alice">Olá! Obrigado por ligar. No momento não podemos atender sua chamada. Por favor, tente novamente mais tarde ou entre em contato por outros canais. Até breve!</Say>
+</Response>`
+        
+        console.log('Returning inbound TwiML:', twiml)
+        
+        return new Response(twiml, {
+          headers: { 'Content-Type': 'text/xml' }
+        })
+      }
+      // ========== END INBOUND CALL DETECTION ==========
+
+      // Outbound call from browser (client:xxx)
       if (!to) {
         const errorTwiml = `<?xml version="1.0" encoding="UTF-8"?>
 <Response>
