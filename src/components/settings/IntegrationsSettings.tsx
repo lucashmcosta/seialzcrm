@@ -9,6 +9,7 @@ import { Label } from '@/components/ui/label';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import { Checkbox } from '@/components/ui/checkbox';
+import { ConfirmDialog } from '@/components/ui/confirm-dialog';
 import { useTranslation } from '@/lib/i18n';
 import { useOrganization } from '@/hooks/useOrganization';
 import { useAuth } from '@/hooks/useAuth';
@@ -52,6 +53,10 @@ export function IntegrationsSettings() {
   const [newKeyName, setNewKeyName] = useState('');
   const [newKeyScopes, setNewKeyScopes] = useState<string[]>(['leads:write']);
   const [visibleKeys, setVisibleKeys] = useState<Set<string>>(new Set());
+  const [disconnectConfirmOpen, setDisconnectConfirmOpen] = useState(false);
+  const [disconnectingId, setDisconnectingId] = useState<string | null>(null);
+  const [deleteKeyConfirmOpen, setDeleteKeyConfirmOpen] = useState(false);
+  const [deletingKeyId, setDeletingKeyId] = useState<string | null>(null);
 
   const webhookUrl = 'https://qvmtzfvkhkhkhdpclzua.supabase.co/functions/v1/lead-webhook';
 
@@ -212,10 +217,17 @@ export function IntegrationsSettings() {
     setConnectDialogOpen(true);
   };
 
-  const handleDisconnect = (orgIntegrationId: string) => {
-    if (confirm('Tem certeza que deseja desconectar esta integração?')) {
-      disconnectMutation.mutate(orgIntegrationId);
+  const handleDisconnectClick = (orgIntegrationId: string) => {
+    setDisconnectingId(orgIntegrationId);
+    setDisconnectConfirmOpen(true);
+  };
+
+  const handleDisconnectConfirm = () => {
+    if (disconnectingId) {
+      disconnectMutation.mutate(disconnectingId);
     }
+    setDisconnectConfirmOpen(false);
+    setDisconnectingId(null);
   };
 
   const copyToClipboard = (text: string, label: string) => {
@@ -240,10 +252,17 @@ export function IntegrationsSettings() {
     return key.substring(0, 12) + '•'.repeat(20) + key.substring(key.length - 4);
   };
 
-  const handleDeleteKey = (keyId: string) => {
-    if (confirm('Tem certeza que deseja excluir esta API Key? Esta ação não pode ser desfeita.')) {
-      deleteApiKeyMutation.mutate(keyId);
+  const handleDeleteKeyClick = (keyId: string) => {
+    setDeletingKeyId(keyId);
+    setDeleteKeyConfirmOpen(true);
+  };
+
+  const handleDeleteKeyConfirm = () => {
+    if (deletingKeyId) {
+      deleteApiKeyMutation.mutate(deletingKeyId);
     }
+    setDeleteKeyConfirmOpen(false);
+    setDeletingKeyId(null);
   };
 
   const isLoading = loadingIntegrations || loadingOrgIntegrations;
@@ -321,7 +340,7 @@ export function IntegrationsSettings() {
                             <Button
                               variant="outline"
                               size="sm"
-                              onClick={() => handleDisconnect(connection.id)}
+                              onClick={() => handleDisconnectClick(connection.id)}
                               disabled={disconnectMutation.isPending}
                             >
                               Desconectar
@@ -534,7 +553,7 @@ export function IntegrationsSettings() {
                         <Button
                           variant="ghost"
                           size="icon"
-                          onClick={() => handleDeleteKey(key.id)}
+                          onClick={() => handleDeleteKeyClick(key.id)}
                         >
                           <Trash2 className="h-4 w-4 text-destructive" />
                         </Button>
@@ -604,6 +623,28 @@ export function IntegrationsSettings() {
           integration={selectedIntegration}
         />
       )}
+
+      <ConfirmDialog
+        open={disconnectConfirmOpen}
+        onOpenChange={setDisconnectConfirmOpen}
+        title="Desconectar Integração"
+        description="Tem certeza que deseja desconectar esta integração? Você precisará configurá-la novamente para usá-la."
+        confirmText="Desconectar"
+        variant="destructive"
+        onConfirm={handleDisconnectConfirm}
+        loading={disconnectMutation.isPending}
+      />
+
+      <ConfirmDialog
+        open={deleteKeyConfirmOpen}
+        onOpenChange={setDeleteKeyConfirmOpen}
+        title="Excluir API Key"
+        description="Tem certeza que deseja excluir esta API Key? Integrações que usam esta chave deixarão de funcionar imediatamente."
+        confirmText="Excluir"
+        variant="destructive"
+        onConfirm={handleDeleteKeyConfirm}
+        loading={deleteApiKeyMutation.isPending}
+      />
     </>
   );
 }

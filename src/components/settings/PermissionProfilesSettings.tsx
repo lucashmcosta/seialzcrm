@@ -10,6 +10,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog';
+import { ConfirmDialog } from '@/components/ui/confirm-dialog';
 import { supabase } from '@/integrations/supabase/client';
 import { useOrganization } from '@/hooks/useOrganization';
 import { useTranslation } from '@/lib/i18n';
@@ -41,6 +42,9 @@ export function PermissionProfilesSettings() {
   const [editingProfile, setEditingProfile] = useState<PermissionProfile | null>(null);
   const [profileName, setProfileName] = useState('');
   const [permissions, setPermissions] = useState(DEFAULT_PERMISSIONS);
+  const [confirmOpen, setConfirmOpen] = useState(false);
+  const [deletingId, setDeletingId] = useState<string | null>(null);
+  const [deleting, setDeleting] = useState(false);
 
   useEffect(() => {
     if (organization) {
@@ -108,14 +112,20 @@ export function PermissionProfilesSettings() {
     }
   };
 
-  const handleDelete = async (profileId: string) => {
-    if (!confirm(t('common.confirm'))) return;
+  const handleDeleteClick = (profileId: string) => {
+    setDeletingId(profileId);
+    setConfirmOpen(true);
+  };
 
+  const handleDeleteConfirm = async () => {
+    if (!deletingId) return;
+
+    setDeleting(true);
     try {
       const { error } = await supabase
         .from('permission_profiles')
         .delete()
-        .eq('id', profileId);
+        .eq('id', deletingId);
 
       if (error) throw error;
 
@@ -124,6 +134,10 @@ export function PermissionProfilesSettings() {
     } catch (error) {
       console.error('Error deleting profile:', error);
       toast({ title: t('common.error'), variant: 'destructive' });
+    } finally {
+      setDeleting(false);
+      setConfirmOpen(false);
+      setDeletingId(null);
     }
   };
 
@@ -182,7 +196,7 @@ export function PermissionProfilesSettings() {
                   <Button
                     variant="outline"
                     size="sm"
-                    onClick={() => handleDelete(profile.id)}
+                    onClick={() => handleDeleteClick(profile.id)}
                   >
                     <Trash2 className="h-4 w-4" />
                   </Button>
@@ -235,6 +249,17 @@ export function PermissionProfilesSettings() {
           </div>
         </DialogContent>
       </Dialog>
+
+      <ConfirmDialog
+        open={confirmOpen}
+        onOpenChange={setConfirmOpen}
+        title="Excluir Perfil de Permissão"
+        description="Tem certeza que deseja excluir este perfil? Usuários associados a este perfil perderão suas permissões."
+        confirmText="Excluir"
+        variant="destructive"
+        onConfirm={handleDeleteConfirm}
+        loading={deleting}
+      />
     </>
   );
 }

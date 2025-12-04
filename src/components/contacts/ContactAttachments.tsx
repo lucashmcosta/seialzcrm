@@ -5,6 +5,7 @@ import { supabase } from '@/integrations/supabase/client';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
+import { ConfirmDialog } from '@/components/ui/confirm-dialog';
 import { useToast } from '@/hooks/use-toast';
 import { Loader2, Upload, Download, Trash2, File, FileText, Image, FileSpreadsheet } from 'lucide-react';
 import { formatDistanceToNow } from 'date-fns';
@@ -33,6 +34,9 @@ export function ContactAttachments({ contactId, entityId, entityType }: ContactA
   const [attachments, setAttachments] = useState<Attachment[]>([]);
   const [loading, setLoading] = useState(true);
   const [uploading, setUploading] = useState(false);
+  const [confirmOpen, setConfirmOpen] = useState(false);
+  const [deletingAttachment, setDeletingAttachment] = useState<Attachment | null>(null);
+  const [deleting, setDeleting] = useState(false);
 
   useEffect(() => {
     fetchAttachments();
@@ -135,20 +139,26 @@ export function ContactAttachments({ contactId, entityId, entityType }: ContactA
     }
   };
 
-  const handleDelete = async (attachment: Attachment) => {
-    if (!confirm('Delete this attachment?')) return;
+  const handleDeleteClick = (attachment: Attachment) => {
+    setDeletingAttachment(attachment);
+    setConfirmOpen(true);
+  };
 
+  const handleDeleteConfirm = async () => {
+    if (!deletingAttachment) return;
+
+    setDeleting(true);
     try {
       // Delete from storage
       await supabase.storage
-        .from(attachment.bucket)
-        .remove([attachment.storage_path]);
+        .from(deletingAttachment.bucket)
+        .remove([deletingAttachment.storage_path]);
 
       // Soft delete in database
       const { error } = await supabase
         .from('attachments')
         .update({ deleted_at: new Date().toISOString() })
-        .eq('id', attachment.id);
+        .eq('id', deletingAttachment.id);
 
       if (error) throw error;
 
@@ -157,6 +167,10 @@ export function ContactAttachments({ contactId, entityId, entityType }: ContactA
     } catch (error) {
       console.error('Error deleting attachment:', error);
       toast({ variant: 'destructive', description: t('common.error') });
+    } finally {
+      setDeleting(false);
+      setConfirmOpen(false);
+      setDeletingAttachment(null);
     }
   };
 
@@ -188,62 +202,75 @@ export function ContactAttachments({ contactId, entityId, entityType }: ContactA
   }
 
   return (
-    <Card>
-      <CardHeader>
-        <div className="flex items-center justify-between">
-          <CardTitle>{t('attachments.title')}</CardTitle>
-          <div>
-            <Input
-              type="file"
-              onChange={handleFileUpload}
-              disabled={uploading}
-              className="hidden"
-              id="file-upload"
-            />
-            <Button size="sm" asChild disabled={uploading}>
-              <label htmlFor="file-upload" className="cursor-pointer">
-                {uploading ? (
-                  <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-                ) : (
-                  <Upload className="w-4 h-4 mr-2" />
-                )}
-                {t('common.upload')}
-              </label>
-            </Button>
+    <>
+      <Card>
+        <CardHeader>
+          <div className="flex items-center justify-between">
+            <CardTitle>{t('attachments.title')}</CardTitle>
+            <div>
+              <Input
+                type="file"
+                onChange={handleFileUpload}
+                disabled={uploading}
+                className="hidden"
+                id="file-upload"
+              />
+              <Button size="sm" asChild disabled={uploading}>
+                <label htmlFor="file-upload" className="cursor-pointer">
+                  {uploading ? (
+                    <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                  ) : (
+                    <Upload className="w-4 h-4 mr-2" />
+                  )}
+                  {t('common.upload')}
+                </label>
+              </Button>
+            </div>
           </div>
-        </div>
-      </CardHeader>
-      <CardContent>
-        <div className="space-y-2">
-          {attachments.length === 0 ? (
-            <p className="text-center text-muted-foreground py-8">No attachments yet</p>
-          ) : (
-            attachments.map((attachment) => (
-              <div key={attachment.id} className="flex items-center justify-between p-3 rounded-lg border hover:bg-muted/50 transition-colors">
-                <div className="flex items-center gap-3 flex-1 min-w-0">
-                  <div className="flex-shrink-0 text-muted-foreground">
-                    {getFileIcon(attachment.mime_type)}
+        </CardHeader>
+        <CardContent>
+          <div className="space-y-2">
+            {attachments.length === 0 ? (
+              <p className="text-center text-muted-foreground py-8">No attachments yet</p>
+            ) : (
+              attachments.map((attachment) => (
+                <div key={attachment.id} className="flex items-center justify-between p-3 rounded-lg border hover:bg-muted/50 transition-colors">
+                  <div className="flex items-center gap-3 flex-1 min-w-0">
+                    <div className="flex-shrink-0 text-muted-foreground">
+                      {getFileIcon(attachment.mime_type)}
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <p className="font-medium text-sm truncate">{attachment.file_name}</p>
+                      <p className="text-xs text-muted-foreground">
+                        {formatFileSize(attachment.size_bytes)} • {formatDistanceToNow(new Date(attachment.created_at), { addSuffix: true, locale: dateLocale })}
+                      </p>
+                    </div>
                   </div>
-                  <div className="flex-1 min-w-0">
-                    <p className="font-medium text-sm truncate">{attachment.file_name}</p>
-                    <p className="text-xs text-muted-foreground">
-                      {formatFileSize(attachment.size_bytes)} • {formatDistanceToNow(new Date(attachment.created_at), { addSuffix: true, locale: dateLocale })}
-                    </p>
+                  <div className="flex gap-1">
+                    <Button variant="ghost" size="icon" onClick={() => handleDownload(attachment)}>
+                      <Download className="w-4 h-4" />
+                    </Button>
+                    <Button variant="ghost" size="icon" onClick={() => handleDeleteClick(attachment)}>
+                      <Trash2 className="w-4 h-4" />
+                    </Button>
                   </div>
                 </div>
-                <div className="flex gap-1">
-                  <Button variant="ghost" size="icon" onClick={() => handleDownload(attachment)}>
-                    <Download className="w-4 h-4" />
-                  </Button>
-                  <Button variant="ghost" size="icon" onClick={() => handleDelete(attachment)}>
-                    <Trash2 className="w-4 h-4" />
-                  </Button>
-                </div>
-              </div>
-            ))
-          )}
-        </div>
-      </CardContent>
-    </Card>
+              ))
+            )}
+          </div>
+        </CardContent>
+      </Card>
+
+      <ConfirmDialog
+        open={confirmOpen}
+        onOpenChange={setConfirmOpen}
+        title="Excluir Anexo"
+        description={`Tem certeza que deseja excluir "${deletingAttachment?.file_name}"? Esta ação não pode ser desfeita.`}
+        confirmText="Excluir"
+        variant="destructive"
+        onConfirm={handleDeleteConfirm}
+        loading={deleting}
+      />
+    </>
   );
 }

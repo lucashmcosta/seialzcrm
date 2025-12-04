@@ -9,6 +9,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { ConfirmDialog } from '@/components/ui/confirm-dialog';
 import { useToast } from '@/hooks/use-toast';
 import { Loader2, Plus, Pencil, Trash2 } from 'lucide-react';
 
@@ -32,6 +33,9 @@ export function PipelineSettings() {
     type: 'custom',
     order_index: 1
   });
+  const [confirmOpen, setConfirmOpen] = useState(false);
+  const [deletingId, setDeletingId] = useState<string | null>(null);
+  const [deleting, setDeleting] = useState(false);
 
   useEffect(() => {
     fetchStages();
@@ -93,14 +97,20 @@ export function PipelineSettings() {
     }
   };
 
-  const handleDelete = async (id: string) => {
-    if (!confirm('Are you sure?')) return;
+  const handleDeleteClick = (id: string) => {
+    setDeletingId(id);
+    setConfirmOpen(true);
+  };
 
+  const handleDeleteConfirm = async () => {
+    if (!deletingId) return;
+
+    setDeleting(true);
     try {
       const { error } = await supabase
         .from('pipeline_stages')
         .delete()
-        .eq('id', id);
+        .eq('id', deletingId);
 
       if (error) throw error;
       toast({ description: t('settings.stageDeleted') });
@@ -108,6 +118,10 @@ export function PipelineSettings() {
     } catch (error) {
       console.error('Error deleting stage:', error);
       toast({ variant: 'destructive', description: t('common.error') });
+    } finally {
+      setDeleting(false);
+      setConfirmOpen(false);
+      setDeletingId(null);
     }
   };
 
@@ -122,133 +136,146 @@ export function PipelineSettings() {
   }
 
   return (
-    <Card>
-      <CardHeader>
-        <div className="flex items-center justify-between">
-          <div>
-            <CardTitle>{t('settings.pipelineStages')}</CardTitle>
-            <CardDescription>Manage your sales pipeline stages</CardDescription>
-          </div>
-          <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
-            <DialogTrigger asChild>
-              <Button onClick={() => { 
-                setEditingStage(null); 
-                const nextOrder = Math.max(...stages.filter(s => s.type === 'custom').map(s => s.order_index), 0) + 1;
-                setFormData({ name: '', type: 'custom', order_index: nextOrder }); 
-              }}>
-                <Plus className="w-4 h-4 mr-2" />
-                {t('settings.addStage')}
-              </Button>
-            </DialogTrigger>
-            <DialogContent>
-              <form onSubmit={handleSubmit}>
-                <DialogHeader>
-                  <DialogTitle>{editingStage ? t('common.edit') : t('settings.addStage')}</DialogTitle>
-                  <DialogDescription>
-                    {editingStage ? 'Edit stage details' : 'Add a new pipeline stage'}
-                  </DialogDescription>
-                </DialogHeader>
-                <div className="space-y-4 py-4">
-                  <div className="space-y-2">
-                    <Label htmlFor="name">{t('settings.stageName')}</Label>
-                    <Input
-                      id="name"
-                      value={formData.name}
-                      onChange={(e) => setFormData({ ...formData, name: e.target.value })}
-                      required
-                    />
-                  </div>
-                  <div className="space-y-2">
-                    <Label htmlFor="order">{t('settings.order')}</Label>
-                    <Input
-                      id="order"
-                      type="number"
-                      min={1}
-                      value={formData.order_index}
-                      onChange={(e) => setFormData({ ...formData, order_index: parseInt(e.target.value) || 1 })}
-                      required
-                    />
-                    <p className="text-sm text-muted-foreground">
-                      Número menor = aparece primeiro no pipeline
-                    </p>
-                  </div>
-                  {!editingStage && (
+    <>
+      <Card>
+        <CardHeader>
+          <div className="flex items-center justify-between">
+            <div>
+              <CardTitle>{t('settings.pipelineStages')}</CardTitle>
+              <CardDescription>Manage your sales pipeline stages</CardDescription>
+            </div>
+            <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
+              <DialogTrigger asChild>
+                <Button onClick={() => { 
+                  setEditingStage(null); 
+                  const nextOrder = Math.max(...stages.filter(s => s.type === 'custom').map(s => s.order_index), 0) + 1;
+                  setFormData({ name: '', type: 'custom', order_index: nextOrder }); 
+                }}>
+                  <Plus className="w-4 h-4 mr-2" />
+                  {t('settings.addStage')}
+                </Button>
+              </DialogTrigger>
+              <DialogContent>
+                <form onSubmit={handleSubmit}>
+                  <DialogHeader>
+                    <DialogTitle>{editingStage ? t('common.edit') : t('settings.addStage')}</DialogTitle>
+                    <DialogDescription>
+                      {editingStage ? 'Edit stage details' : 'Add a new pipeline stage'}
+                    </DialogDescription>
+                  </DialogHeader>
+                  <div className="space-y-4 py-4">
                     <div className="space-y-2">
-                      <Label htmlFor="type">{t('settings.stageType')}</Label>
-                      <Select value={formData.type} onValueChange={(value: any) => setFormData({ ...formData, type: value })}>
-                        <SelectTrigger id="type">
-                          <SelectValue />
-                        </SelectTrigger>
-                        <SelectContent>
-                          <SelectItem value="custom">{t('settings.stageCustom')}</SelectItem>
-                          <SelectItem value="won" disabled={stages.some(s => s.type === 'won')}>
-                            {t('settings.stageWon')}
-                          </SelectItem>
-                          <SelectItem value="lost" disabled={stages.some(s => s.type === 'lost')}>
-                            {t('settings.stageLost')}
-                          </SelectItem>
-                        </SelectContent>
-                      </Select>
+                      <Label htmlFor="name">{t('settings.stageName')}</Label>
+                      <Input
+                        id="name"
+                        value={formData.name}
+                        onChange={(e) => setFormData({ ...formData, name: e.target.value })}
+                        required
+                      />
                     </div>
-                  )}
-                </div>
-                <DialogFooter>
-                  <Button type="submit">{t('common.save')}</Button>
-                </DialogFooter>
-              </form>
-            </DialogContent>
-          </Dialog>
-        </div>
-      </CardHeader>
-      <CardContent>
-        <Table>
-          <TableHeader>
-            <TableRow>
-              <TableHead>{t('settings.stageName')}</TableHead>
-              <TableHead>{t('settings.stageType')}</TableHead>
-              <TableHead>{t('settings.order')}</TableHead>
-              <TableHead className="text-right">{t('common.actions')}</TableHead>
-            </TableRow>
-          </TableHeader>
-          <TableBody>
-            {stages.map((stage) => (
-              <TableRow key={stage.id}>
-                <TableCell className="font-medium">{stage.name}</TableCell>
-                <TableCell>
-                  {stage.type === 'won' && t('settings.stageWon')}
-                  {stage.type === 'lost' && t('settings.stageLost')}
-                  {stage.type === 'custom' && t('settings.stageCustom')}
-                </TableCell>
-                <TableCell>{stage.order_index}</TableCell>
-                <TableCell className="text-right">
-                  <div className="flex justify-end gap-2">
-                    <Button
-                      variant="ghost"
-                      size="icon"
-                      onClick={() => {
-                        setEditingStage(stage);
-                        setFormData({ name: stage.name, type: stage.type, order_index: stage.order_index });
-                        setDialogOpen(true);
-                      }}
-                    >
-                      <Pencil className="w-4 h-4" />
-                    </Button>
-                    {stage.type === 'custom' && (
+                    <div className="space-y-2">
+                      <Label htmlFor="order">{t('settings.order')}</Label>
+                      <Input
+                        id="order"
+                        type="number"
+                        min={1}
+                        value={formData.order_index}
+                        onChange={(e) => setFormData({ ...formData, order_index: parseInt(e.target.value) || 1 })}
+                        required
+                      />
+                      <p className="text-sm text-muted-foreground">
+                        Número menor = aparece primeiro no pipeline
+                      </p>
+                    </div>
+                    {!editingStage && (
+                      <div className="space-y-2">
+                        <Label htmlFor="type">{t('settings.stageType')}</Label>
+                        <Select value={formData.type} onValueChange={(value: any) => setFormData({ ...formData, type: value })}>
+                          <SelectTrigger id="type">
+                            <SelectValue />
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="custom">{t('settings.stageCustom')}</SelectItem>
+                            <SelectItem value="won" disabled={stages.some(s => s.type === 'won')}>
+                              {t('settings.stageWon')}
+                            </SelectItem>
+                            <SelectItem value="lost" disabled={stages.some(s => s.type === 'lost')}>
+                              {t('settings.stageLost')}
+                            </SelectItem>
+                          </SelectContent>
+                        </Select>
+                      </div>
+                    )}
+                  </div>
+                  <DialogFooter>
+                    <Button type="submit">{t('common.save')}</Button>
+                  </DialogFooter>
+                </form>
+              </DialogContent>
+            </Dialog>
+          </div>
+        </CardHeader>
+        <CardContent>
+          <Table>
+            <TableHeader>
+              <TableRow>
+                <TableHead>{t('settings.stageName')}</TableHead>
+                <TableHead>{t('settings.stageType')}</TableHead>
+                <TableHead>{t('settings.order')}</TableHead>
+                <TableHead className="text-right">{t('common.actions')}</TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {stages.map((stage) => (
+                <TableRow key={stage.id}>
+                  <TableCell className="font-medium">{stage.name}</TableCell>
+                  <TableCell>
+                    {stage.type === 'won' && t('settings.stageWon')}
+                    {stage.type === 'lost' && t('settings.stageLost')}
+                    {stage.type === 'custom' && t('settings.stageCustom')}
+                  </TableCell>
+                  <TableCell>{stage.order_index}</TableCell>
+                  <TableCell className="text-right">
+                    <div className="flex justify-end gap-2">
                       <Button
                         variant="ghost"
                         size="icon"
-                        onClick={() => handleDelete(stage.id)}
+                        onClick={() => {
+                          setEditingStage(stage);
+                          setFormData({ name: stage.name, type: stage.type, order_index: stage.order_index });
+                          setDialogOpen(true);
+                        }}
                       >
-                        <Trash2 className="w-4 h-4" />
+                        <Pencil className="w-4 h-4" />
                       </Button>
-                    )}
-                  </div>
-                </TableCell>
-              </TableRow>
-            ))}
-          </TableBody>
-        </Table>
-      </CardContent>
-    </Card>
+                      {stage.type === 'custom' && (
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          onClick={() => handleDeleteClick(stage.id)}
+                        >
+                          <Trash2 className="w-4 h-4" />
+                        </Button>
+                      )}
+                    </div>
+                  </TableCell>
+                </TableRow>
+              ))}
+            </TableBody>
+          </Table>
+        </CardContent>
+      </Card>
+
+      <ConfirmDialog
+        open={confirmOpen}
+        onOpenChange={setConfirmOpen}
+        title="Excluir Estágio do Pipeline"
+        description="Tem certeza que deseja excluir este estágio? Oportunidades neste estágio precisarão ser movidas para outro."
+        confirmText="Excluir"
+        variant="destructive"
+        onConfirm={handleDeleteConfirm}
+        loading={deleting}
+      />
+    </>
   );
 }

@@ -10,9 +10,9 @@ import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-import { Badge } from '@/components/ui/badge';
 import { AdminLayout } from '@/components/admin/AdminLayout';
 import { LogoEditorDialog } from '@/components/admin/LogoEditorDialog';
+import { ConfirmDialog } from '@/components/ui/confirm-dialog';
 
 export default function AdminIntegrationDetail() {
   const { id } = useParams();
@@ -20,6 +20,8 @@ export default function AdminIntegrationDetail() {
   const queryClient = useQueryClient();
   const [loading, setLoading] = useState(false);
   const [logoEditorOpen, setLogoEditorOpen] = useState(false);
+  const [confirmOpen, setConfirmOpen] = useState(false);
+  const [deleting, setDeleting] = useState(false);
 
   const { data: integration, isLoading } = useQuery({
     queryKey: ['admin-integration', id],
@@ -60,10 +62,8 @@ export default function AdminIntegrationDetail() {
     }
   };
 
-  const handleDelete = async () => {
-    if (!confirm('Tem certeza que deseja excluir esta integração?')) return;
-
-    setLoading(true);
+  const handleDeleteConfirm = async () => {
+    setDeleting(true);
     try {
       const { error } = await supabase
         .from('admin_integrations')
@@ -77,7 +77,8 @@ export default function AdminIntegrationDetail() {
     } catch (error: any) {
       toast.error('Erro ao excluir: ' + error.message);
     } finally {
-      setLoading(false);
+      setDeleting(false);
+      setConfirmOpen(false);
     }
   };
 
@@ -100,7 +101,7 @@ export default function AdminIntegrationDetail() {
             <h1 className="text-3xl font-bold">{integration?.name}</h1>
           </div>
           <div className="flex gap-2">
-            <Button variant="destructive" onClick={handleDelete} disabled={loading}>
+            <Button variant="destructive" onClick={() => setConfirmOpen(true)} disabled={loading}>
               <Trash2 className="h-4 w-4 mr-2" />
               Excluir
             </Button>
@@ -264,6 +265,17 @@ export default function AdminIntegrationDetail() {
         </Card>
       </div>
       </div>
+
+      <ConfirmDialog
+        open={confirmOpen}
+        onOpenChange={setConfirmOpen}
+        title="Excluir Integração"
+        description="Tem certeza que deseja excluir esta integração? Todas as organizações conectadas serão desconectadas."
+        confirmText="Excluir"
+        variant="destructive"
+        onConfirm={handleDeleteConfirm}
+        loading={deleting}
+      />
     </AdminLayout>
   );
 }

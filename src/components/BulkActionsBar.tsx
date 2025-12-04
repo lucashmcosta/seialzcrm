@@ -1,10 +1,11 @@
 import { useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { ConfirmDialog } from '@/components/ui/confirm-dialog';
 import { supabase } from '@/integrations/supabase/client';
 import { useTranslation } from '@/lib/i18n';
 import { toast } from '@/hooks/use-toast';
-import { X, User, Tag, Ban, Trash2 } from 'lucide-react';
+import { X, User, Ban, Trash2 } from 'lucide-react';
 
 interface User {
   id: string;
@@ -34,6 +35,7 @@ export function BulkActionsBar({
 }: BulkActionsBarProps) {
   const { t } = useTranslation(locale as any);
   const [processing, setProcessing] = useState(false);
+  const [confirmOpen, setConfirmOpen] = useState(false);
 
   const handleChangeOwner = async (ownerId: string) => {
     if (!ownerId || selectedIds.length === 0) return;
@@ -83,7 +85,6 @@ export function BulkActionsBar({
 
   const handleDelete = async () => {
     if (selectedIds.length === 0) return;
-    if (!confirm(t('common.confirm'))) return;
 
     setProcessing(true);
     try {
@@ -102,69 +103,83 @@ export function BulkActionsBar({
       toast({ title: t('common.error'), variant: 'destructive' });
     } finally {
       setProcessing(false);
+      setConfirmOpen(false);
     }
   };
 
   if (selectedIds.length === 0) return null;
 
   return (
-    <div className="fixed bottom-6 left-1/2 -translate-x-1/2 z-50">
-      <div className="bg-primary text-primary-foreground rounded-lg shadow-lg p-4 flex items-center gap-4">
-        <span className="font-medium">
-          {selectedIds.length} {t('common.select')}
-        </span>
+    <>
+      <div className="fixed bottom-6 left-1/2 -translate-x-1/2 z-50">
+        <div className="bg-primary text-primary-foreground rounded-lg shadow-lg p-4 flex items-center gap-4">
+          <span className="font-medium">
+            {selectedIds.length} {t('common.select')}
+          </span>
 
-        <div className="flex items-center gap-2">
-          {canEdit && (
-            <Select onValueChange={handleChangeOwner} disabled={processing}>
-              <SelectTrigger className="w-48 bg-background text-foreground">
-                <User className="h-4 w-4 mr-2" />
-                <SelectValue placeholder={t('contacts.owner')} />
-              </SelectTrigger>
-              <SelectContent>
-                {users.map((user) => (
-                  <SelectItem key={user.id} value={user.id}>
-                    {user.full_name}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          )}
+          <div className="flex items-center gap-2">
+            {canEdit && (
+              <Select onValueChange={handleChangeOwner} disabled={processing}>
+                <SelectTrigger className="w-48 bg-background text-foreground">
+                  <User className="h-4 w-4 mr-2" />
+                  <SelectValue placeholder={t('contacts.owner')} />
+                </SelectTrigger>
+                <SelectContent>
+                  {users.map((user) => (
+                    <SelectItem key={user.id} value={user.id}>
+                      {user.full_name}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            )}
 
-          {canEdit && module === 'contacts' && (
+            {canEdit && module === 'contacts' && (
+              <Button
+                variant="secondary"
+                size="sm"
+                onClick={handleMarkDoNotContact}
+                disabled={processing}
+              >
+                <Ban className="h-4 w-4 mr-2" />
+                {t('contacts.doNotContact')}
+              </Button>
+            )}
+
+            {canDelete && (
+              <Button
+                variant="destructive"
+                size="sm"
+                onClick={() => setConfirmOpen(true)}
+                disabled={processing}
+              >
+                <Trash2 className="h-4 w-4 mr-2" />
+                {t('common.delete')}
+              </Button>
+            )}
+
             <Button
-              variant="secondary"
+              variant="ghost"
               size="sm"
-              onClick={handleMarkDoNotContact}
-              disabled={processing}
+              onClick={onClear}
+              className="text-primary-foreground hover:text-primary-foreground"
             >
-              <Ban className="h-4 w-4 mr-2" />
-              {t('contacts.doNotContact')}
+              <X className="h-4 w-4" />
             </Button>
-          )}
-
-          {canDelete && (
-            <Button
-              variant="destructive"
-              size="sm"
-              onClick={handleDelete}
-              disabled={processing}
-            >
-              <Trash2 className="h-4 w-4 mr-2" />
-              {t('common.delete')}
-            </Button>
-          )}
-
-          <Button
-            variant="ghost"
-            size="sm"
-            onClick={onClear}
-            className="text-primary-foreground hover:text-primary-foreground"
-          >
-            <X className="h-4 w-4" />
-          </Button>
+          </div>
         </div>
       </div>
-    </div>
+
+      <ConfirmDialog
+        open={confirmOpen}
+        onOpenChange={setConfirmOpen}
+        title="Excluir itens selecionados"
+        description={`Tem certeza que deseja excluir ${selectedIds.length} ${selectedIds.length === 1 ? 'item' : 'itens'}? Esta ação pode ser revertida através da lixeira.`}
+        confirmText="Excluir"
+        variant="destructive"
+        onConfirm={handleDelete}
+        loading={processing}
+      />
+    </>
   );
 }
