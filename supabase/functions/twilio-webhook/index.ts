@@ -11,26 +11,55 @@ const corsHeaders = {
  * Entrada: 11964298621 → Saída: +5511964298621
  */
 function formatToE164(phone: string): string {
-  // Remove tudo que não é número ou +
   const cleaned = phone.replace(/[^\d+]/g, '')
   
-  // Se já começa com +, assume que está formatado
   if (cleaned.startsWith('+')) {
     return cleaned
   }
   
-  // Se começa com 55 e tem 12-13 dígitos, adiciona só o +
   if (cleaned.startsWith('55') && cleaned.length >= 12) {
     return '+' + cleaned
   }
   
-  // Números brasileiros (10-11 dígitos: DDD + número)
   if (cleaned.length >= 10 && cleaned.length <= 11) {
     return '+55' + cleaned
   }
   
-  // Fallback: adiciona +55 mesmo assim
   return '+55' + cleaned
+}
+
+/**
+ * Normaliza número de telefone para múltiplas variações de busca
+ * Isso permite encontrar contatos independente de como o número foi salvo
+ */
+function normalizePhoneForSearch(phone: string): string[] {
+  const cleaned = phone.replace(/[^\d]/g, '')
+  
+  const variations = new Set<string>()
+  
+  // Original
+  variations.add(phone)
+  
+  // Apenas dígitos
+  variations.add(cleaned)
+  
+  // Com +
+  variations.add('+' + cleaned)
+  
+  // Sem código do país (55)
+  if (cleaned.startsWith('55') && cleaned.length >= 12) {
+    const withoutCountry = cleaned.slice(2)
+    variations.add(withoutCountry)
+    variations.add('+55' + withoutCountry)
+  }
+  
+  // Com código do país
+  if (!cleaned.startsWith('55') && cleaned.length >= 10 && cleaned.length <= 11) {
+    variations.add('55' + cleaned)
+    variations.add('+55' + cleaned)
+  }
+  
+  return Array.from(variations)
 }
 
 serve(async (req) => {
@@ -67,7 +96,6 @@ serve(async (req) => {
       console.log('Voice request - To:', to, 'From:', from, 'Direction:', direction, 'OrgId:', orgId, 'Called:', calledNumber)
 
       // ========== INBOUND CALL DETECTION ==========
-      // Inbound calls have Direction='inbound' and From is a phone number (not client:xxx)
       const isInboundCall = direction === 'inbound' && from && !from.startsWith('client:')
       
       if (isInboundCall) {
@@ -101,7 +129,7 @@ serve(async (req) => {
         
         console.log('Phone config found:', phoneConfig)
         
-        // If no config or no users configured, play message
+        // If no config or no users configured, check ring_strategy
         if (!phoneConfig || !phoneConfig.ring_users || phoneConfig.ring_users.length === 0) {
           if (phoneConfig?.ring_strategy === 'all') {
             // Get all active users from the organization
@@ -135,9 +163,9 @@ serve(async (req) => {
         const timeout = phoneConfig.ring_timeout_seconds || 30
         const statusCallbackUrl = `${Deno.env.get('SUPABASE_URL')}/functions/v1/twilio-webhook/status?orgId=${phoneConfig.organization_id}`
         
-        // Create <Client> elements for each user
+        // Create <Client> elements for each user - USE user- PREFIX to match identity!
         const clientElements = phoneConfig.ring_users
-          .map((userId: string) => `    <Client>${userId}</Client>`)
+          .map((userId: string) => `    <Client>user-${userId}</Client>`)
           .join('\n')
         
         const twiml = `<?xml version="1.0" encoding="UTF-8"?>
@@ -150,49 +178,79 @@ ${clientElements}
         
         console.log('Returning inbound TwiML with clients:', twiml)
         
-        // Create inbound call record
-        if (phoneConfig.organization_id) {
-          // Find a default user to associate with the call
-          const defaultUserId = phoneConfig.ring_users[0]
+        // Try to find contact by phone number with normalization
+        let contactId: string | null = null
+        let contactName: string | null = null
+        
+        const phoneVariations = normalizePhoneForSearch(from)
+        console.log('Searching contact with phone variations:', phoneVariations)
+        
+        const orConditions = phoneVariations.map(p => `phone.eq.${p}`).join(',')
+        const { data: contact } = await supabase
+          .from('contacts')
+          .select('id, full_name')
+          .eq('organization_id', phoneConfig.organization_id)
+          .or(orConditions)
+          .is('deleted_at', null)
+          .limit(1)
+          .single()
+        
+        if (contact) {
+          contactId = contact.id
+          contactName = contact.full_name
+          console.log('Found contact:', contactId, contactName)
+        } else {
+          console.log('No contact found for phone:', from)
           
-          const { error: insertError } = await supabase
-            .from('calls')
-            .insert({
-              organization_id: phoneConfig.organization_id,
-              user_id: defaultUserId,
-              contact_id: null, // Will be linked later if we can match the phone number
-              direction: 'incoming',
-              status: 'ringing',
-              from_number: from,
-              to_number: calledNumber,
-              call_sid: params.CallSid,
-              call_type: 'received',
-              started_at: new Date().toISOString()
-            })
+          // Check if auto_create_contact is enabled
+          const inboundSettings = phoneConfig.inbound_settings || { auto_create_contact: true, default_lifecycle_stage: 'lead' }
           
-          if (insertError) {
-            console.error('Error creating inbound call record:', insertError)
-          } else {
-            console.log('Inbound call record created with SID:', params.CallSid)
-          }
-          
-          // Try to find and link contact by phone number
-          const { data: contact } = await supabase
-            .from('contacts')
-            .select('id')
-            .eq('organization_id', phoneConfig.organization_id)
-            .or(`phone.eq.${from},phone.eq.${from.replace('+55', '')}`)
-            .is('deleted_at', null)
-            .single()
-          
-          if (contact) {
-            await supabase
-              .from('calls')
-              .update({ contact_id: contact.id })
-              .eq('call_sid', params.CallSid)
+          if (inboundSettings.auto_create_contact) {
+            // Auto-create contact
+            const { data: newContact, error: createError } = await supabase
+              .from('contacts')
+              .insert({
+                organization_id: phoneConfig.organization_id,
+                full_name: `Novo contato ${from}`,
+                phone: from,
+                source: 'inbound_call',
+                lifecycle_stage: inboundSettings.default_lifecycle_stage || 'lead'
+              })
+              .select('id, full_name')
+              .single()
             
-            console.log('Linked call to contact:', contact.id)
+            if (newContact) {
+              contactId = newContact.id
+              contactName = newContact.full_name
+              console.log('Auto-created contact:', contactId)
+            } else if (createError) {
+              console.error('Error auto-creating contact:', createError)
+            }
           }
+        }
+        
+        // Create inbound call record
+        const defaultUserId = phoneConfig.ring_users[0]
+        
+        const { error: insertError } = await supabase
+          .from('calls')
+          .insert({
+            organization_id: phoneConfig.organization_id,
+            user_id: defaultUserId,
+            contact_id: contactId,
+            direction: 'incoming',
+            status: 'ringing',
+            from_number: from,
+            to_number: calledNumber,
+            call_sid: params.CallSid,
+            call_type: 'received',
+            started_at: new Date().toISOString()
+          })
+        
+        if (insertError) {
+          console.error('Error creating inbound call record:', insertError)
+        } else {
+          console.log('Inbound call record created with SID:', params.CallSid, 'contact_id:', contactId)
         }
         
         return new Response(twiml, {

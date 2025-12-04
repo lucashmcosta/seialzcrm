@@ -486,7 +486,7 @@ export type Database = {
           answered_at: string | null
           call_sid: string | null
           call_type: string | null
-          contact_id: string
+          contact_id: string | null
           created_at: string | null
           deleted_at: string | null
           direction: string
@@ -508,7 +508,7 @@ export type Database = {
           answered_at?: string | null
           call_sid?: string | null
           call_type?: string | null
-          contact_id: string
+          contact_id?: string | null
           created_at?: string | null
           deleted_at?: string | null
           direction: string
@@ -530,7 +530,7 @@ export type Database = {
           answered_at?: string | null
           call_sid?: string | null
           call_type?: string | null
-          contact_id?: string
+          contact_id?: string | null
           created_at?: string | null
           deleted_at?: string | null
           direction?: string
@@ -1545,6 +1545,7 @@ export type Database = {
           created_at: string | null
           friendly_name: string | null
           id: string
+          inbound_settings: Json | null
           is_primary: boolean | null
           organization_id: string
           phone_number: string
@@ -1561,6 +1562,7 @@ export type Database = {
           created_at?: string | null
           friendly_name?: string | null
           id?: string
+          inbound_settings?: Json | null
           is_primary?: boolean | null
           organization_id: string
           phone_number: string
@@ -1577,6 +1579,7 @@ export type Database = {
           created_at?: string | null
           friendly_name?: string | null
           id?: string
+          inbound_settings?: Json | null
           is_primary?: boolean | null
           organization_id?: string
           phone_number?: string
