@@ -14,6 +14,7 @@ import { useOrganization } from '@/hooks/useOrganization';
 import { useAuth } from '@/hooks/useAuth';
 import { MessageSquare, Phone, Mail, Webhook, AlertTriangle, Copy, Plus, Trash2, Key, ExternalLink, Eye, EyeOff } from 'lucide-react';
 import { IntegrationConnectDialog } from './IntegrationConnectDialog';
+import { PhoneNumberSettings } from './PhoneNumberSettings';
 import { toast } from 'sonner';
 
 const iconMap: Record<string, any> = {
@@ -350,6 +351,11 @@ export function IntegrationsSettings() {
             )}
           </CardContent>
         </Card>
+
+        {/* Phone Number Settings - only show if org has telephony integration */}
+        {orgIntegrations?.some(oi => oi.is_enabled && oi.integration?.category === 'telephony') && (
+          <PhoneNumberSettings />
+        )}
 
         <Card>
           <CardHeader>

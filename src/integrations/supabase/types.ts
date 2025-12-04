@@ -1539,6 +1539,72 @@ export type Database = {
           },
         ]
       }
+      organization_phone_numbers: {
+        Row: {
+          assigned_user_id: string | null
+          created_at: string | null
+          friendly_name: string | null
+          id: string
+          is_primary: boolean | null
+          organization_id: string
+          phone_number: string
+          ring_strategy: string
+          ring_timeout_seconds: number | null
+          ring_users: string[] | null
+          twilio_phone_sid: string | null
+          updated_at: string | null
+          voicemail_enabled: boolean | null
+          voicemail_greeting: string | null
+        }
+        Insert: {
+          assigned_user_id?: string | null
+          created_at?: string | null
+          friendly_name?: string | null
+          id?: string
+          is_primary?: boolean | null
+          organization_id: string
+          phone_number: string
+          ring_strategy?: string
+          ring_timeout_seconds?: number | null
+          ring_users?: string[] | null
+          twilio_phone_sid?: string | null
+          updated_at?: string | null
+          voicemail_enabled?: boolean | null
+          voicemail_greeting?: string | null
+        }
+        Update: {
+          assigned_user_id?: string | null
+          created_at?: string | null
+          friendly_name?: string | null
+          id?: string
+          is_primary?: boolean | null
+          organization_id?: string
+          phone_number?: string
+          ring_strategy?: string
+          ring_timeout_seconds?: number | null
+          ring_users?: string[] | null
+          twilio_phone_sid?: string | null
+          updated_at?: string | null
+          voicemail_enabled?: boolean | null
+          voicemail_greeting?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "organization_phone_numbers_assigned_user_id_fkey"
+            columns: ["assigned_user_id"]
+            isOneToOne: false
+            referencedRelation: "users"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "organization_phone_numbers_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       organization_usage_metrics: {
         Row: {
           actions_last_30_days: number | null

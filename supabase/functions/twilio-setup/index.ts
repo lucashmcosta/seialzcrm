@@ -59,13 +59,15 @@ serve(async (req) => {
 
     console.log('TwiML App created successfully:', twimlAppSid)
 
-    // ========== NEW: Configure the phone number to use the TwiML App ==========
+    // ========== Configure the phone number to use the TwiML App ==========
     // This enables inbound calls to be routed to our webhook
     
     // Step 1: Find the phone number SID
     const phoneSearchUrl = `https://api.twilio.com/2010-04-01/Accounts/${accountSid}/IncomingPhoneNumbers.json?PhoneNumber=${encodeURIComponent(phoneNumber)}`
     
     console.log('Searching for phone number SID:', phoneNumber)
+    
+    let phoneNumberSid: string | null = null
     
     const phoneListResponse = await fetch(phoneSearchUrl, {
       headers: {
@@ -75,7 +77,7 @@ serve(async (req) => {
 
     if (phoneListResponse.ok) {
       const phoneListData = await phoneListResponse.json()
-      const phoneNumberSid = phoneListData.incoming_phone_numbers?.[0]?.sid
+      phoneNumberSid = phoneListData.incoming_phone_numbers?.[0]?.sid
 
       if (phoneNumberSid) {
         console.log('Found phone number SID:', phoneNumberSid)
@@ -111,12 +113,13 @@ serve(async (req) => {
     }
     // ========== END: Phone number configuration ==========
 
-    // Update the organization integration with the TwiML App SID
+    // Initialize Supabase client
     const supabase = createClient(
       supabaseUrl,
       Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''
     )
 
+    // Update the organization integration with the TwiML App SID
     const { error: updateError } = await supabase
       .from('organization_integrations')
       .update({
@@ -139,6 +142,29 @@ serve(async (req) => {
         { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       )
     }
+
+    // ========== Insert/Update phone number in organization_phone_numbers ==========
+    const { error: phoneInsertError } = await supabase
+      .from('organization_phone_numbers')
+      .upsert({
+        organization_id: organizationId,
+        phone_number: phoneNumber,
+        friendly_name: 'Número Principal',
+        twilio_phone_sid: phoneNumberSid,
+        is_primary: true,
+        ring_strategy: 'all',
+        ring_timeout_seconds: 30,
+      }, {
+        onConflict: 'organization_id,phone_number'
+      })
+
+    if (phoneInsertError) {
+      console.error('Error inserting phone number:', phoneInsertError)
+      // Don't fail - this is not critical
+    } else {
+      console.log('Phone number registered in organization_phone_numbers')
+    }
+    // ========== END: Phone number registration ==========
 
     return new Response(
       JSON.stringify({ 

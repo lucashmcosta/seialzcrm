@@ -9,6 +9,7 @@ import { usePermissions } from '@/hooks/usePermissions';
 import { useTranslation } from '@/lib/i18n';
 import { Notifications } from '@/components/Notifications';
 import { ImpersonationBanner } from '@/components/admin/ImpersonationBanner';
+import { InboundCallHandler } from '@/components/calls/InboundCallHandler';
 
 interface LayoutProps {
   children: ReactNode;
@@ -49,6 +50,7 @@ export function Layout({ children }: LayoutProps) {
   return (
     <div className="min-h-screen bg-background">
       <ImpersonationBanner />
+      <InboundCallHandler />
       {/* Sidebar */}
       <div className="fixed inset-y-0 left-0 w-64 bg-card border-r border-border">
         <div className="flex flex-col h-full">
