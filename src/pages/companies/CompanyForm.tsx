@@ -4,6 +4,7 @@ import { ArrowLeft } from 'lucide-react';
 import { Layout } from '@/components/Layout';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
+import { PhoneInput } from '@/components/ui/phone-input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { Card } from '@/components/ui/card';
@@ -139,11 +140,10 @@ export default function CompanyForm() {
 
             <div>
               <Label htmlFor="phone">{t('companies.phone')}</Label>
-              <Input
+              <PhoneInput
                 id="phone"
-                type="tel"
                 value={formData.phone}
-                onChange={(e) => setFormData({ ...formData, phone: e.target.value })}
+                onChange={(e164) => setFormData({ ...formData, phone: e164 })}
               />
             </div>
 

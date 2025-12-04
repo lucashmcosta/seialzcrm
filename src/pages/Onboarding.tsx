@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
+import { PhoneInput } from '@/components/ui/phone-input';
 import { Label } from '@/components/ui/label';
 import { useOrganization } from '@/hooks/useOrganization';
 import { useTranslation } from '@/lib/i18n';
@@ -363,11 +364,10 @@ export default function Onboarding() {
 
               <div className="space-y-2">
                 <Label htmlFor="phone">{t('contacts.phone')}</Label>
-                <Input
+                <PhoneInput
                   id="phone"
-                  type="tel"
                   value={contactData.phone}
-                  onChange={(e) => setContactData({ ...contactData, phone: e.target.value })}
+                  onChange={(e164) => setContactData({ ...contactData, phone: e164 })}
                 />
               </div>
 

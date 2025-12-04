@@ -7,6 +7,7 @@ import { useOrganization } from '@/hooks/useOrganization';
 import { useTranslation } from '@/lib/i18n';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
+import { PhoneInput } from '@/components/ui/phone-input';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Card } from '@/components/ui/card';
@@ -285,10 +286,10 @@ export default function ContactForm() {
 
               <div>
                 <Label htmlFor="phone">{t('contacts.phone')}</Label>
-                <Input
+                <PhoneInput
                   id="phone"
                   value={formData.phone}
-                  onChange={(e) => setFormData({ ...formData, phone: e.target.value })}
+                  onChange={(e164) => setFormData({ ...formData, phone: e164 })}
                 />
               </div>
 
