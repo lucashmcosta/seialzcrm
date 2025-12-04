@@ -3,7 +3,7 @@ import { useParams, useNavigate } from 'react-router-dom';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
-import { ArrowLeft, Save, Trash2 } from 'lucide-react';
+import { ArrowLeft, Save, Trash2, Pencil, Image as ImageIcon } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -12,12 +12,14 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { AdminLayout } from '@/components/admin/AdminLayout';
+import { LogoEditorDialog } from '@/components/admin/LogoEditorDialog';
 
 export default function AdminIntegrationDetail() {
   const { id } = useParams();
   const navigate = useNavigate();
   const queryClient = useQueryClient();
   const [loading, setLoading] = useState(false);
+  const [logoEditorOpen, setLogoEditorOpen] = useState(false);
 
   const { data: integration, isLoading } = useQuery({
     queryKey: ['admin-integration', id],
@@ -186,31 +188,49 @@ export default function AdminIntegrationDetail() {
               </div>
             </div>
             <div className="space-y-2">
-              <Label>URL da Logo</Label>
+              <Label>Logo da Integração</Label>
               <div className="flex items-center gap-4">
-                <Input
-                  value={formData.logo_url || ''}
-                  onChange={(e) => setFormData({ ...formData, logo_url: e.target.value })}
-                  placeholder="https://exemplo.com/logo.png"
-                  className="flex-1"
-                />
-                <div className="flex items-center gap-2">
-                  <span className="text-sm text-muted-foreground">Preview:</span>
-                  {formData.logo_url ? (
-                    <img
-                      src={formData.logo_url}
-                      alt="Preview"
-                      className="w-12 h-12 rounded-lg object-contain bg-muted p-1"
-                      onError={(e) => (e.currentTarget.style.display = 'none')}
-                    />
-                  ) : (
-                    <div className="w-12 h-12 rounded-lg bg-muted flex items-center justify-center">
-                      <span className="text-xs text-muted-foreground">Sem logo</span>
-                    </div>
+                {formData.logo_url ? (
+                  <img
+                    src={formData.logo_url}
+                    alt="Logo"
+                    className="w-16 h-16 rounded-lg object-contain bg-muted p-2"
+                  />
+                ) : (
+                  <div className="w-16 h-16 rounded-lg bg-muted flex items-center justify-center">
+                    <ImageIcon className="w-6 h-6 text-muted-foreground" />
+                  </div>
+                )}
+                <div className="flex gap-2">
+                  <Button
+                    type="button"
+                    variant="outline"
+                    onClick={() => setLogoEditorOpen(true)}
+                  >
+                    <Pencil className="w-4 h-4 mr-2" />
+                    {formData.logo_url ? 'Editar Logo' : 'Adicionar Logo'}
+                  </Button>
+                  {formData.logo_url && (
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="icon"
+                      onClick={() => setFormData({ ...formData, logo_url: '' })}
+                    >
+                      <Trash2 className="w-4 h-4 text-destructive" />
+                    </Button>
                   )}
                 </div>
               </div>
             </div>
+
+            <LogoEditorDialog
+              open={logoEditorOpen}
+              onOpenChange={setLogoEditorOpen}
+              currentLogoUrl={formData.logo_url}
+              onSave={(url) => setFormData({ ...formData, logo_url: url })}
+              integrationSlug={formData.slug}
+            />
             <div className="space-y-2">
               <Label>URL da Documentação</Label>
               <Input
