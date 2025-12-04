@@ -1,7 +1,8 @@
+import { useState } from 'react';
 import { Dialog, DialogContent } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { Avatar, AvatarFallback } from '@/components/ui/avatar';
-import { Phone, PhoneOff, Mic, MicOff, Volume2, VolumeX, Minimize2 } from 'lucide-react';
+import { PhoneOff, Mic, MicOff, Minimize2, Grid3X3 } from 'lucide-react';
 import { DialPad } from './DialPad';
 import { formatPhoneDisplay } from '@/lib/phoneUtils';
 import { CallStatus } from '@/contexts/OutboundCallContext';
@@ -19,6 +20,61 @@ interface OutboundCallModalProps {
   onToggleMute: () => void;
   onDialPress: (digit: string) => void;
   onMinimize: () => void;
+}
+
+// Sub-component for dial pad toggle
+function DialPadToggle({
+  status,
+  isMuted,
+  onToggleMute,
+  dtmfDigits,
+  onDialPress,
+}: {
+  status: CallStatus;
+  isMuted: boolean;
+  onToggleMute: () => void;
+  dtmfDigits: string;
+  onDialPress: (digit: string) => void;
+}) {
+  const [showDialPad, setShowDialPad] = useState(false);
+
+  if (status !== 'connected') return null;
+
+  return (
+    <div className="flex flex-col items-center space-y-4">
+      {/* DTMF Display */}
+      {dtmfDigits && (
+        <p className="text-lg font-mono text-muted-foreground">{dtmfDigits}</p>
+      )}
+
+      {/* Dial Pad (collapsible) */}
+      {showDialPad && (
+        <div className="w-full max-w-[200px]">
+          <DialPad onPress={onDialPress} />
+        </div>
+      )}
+
+      {/* Control buttons */}
+      <div className="flex items-center gap-4">
+        <Button
+          variant={isMuted ? 'default' : 'outline'}
+          size="icon"
+          className="h-12 w-12 rounded-full"
+          onClick={onToggleMute}
+        >
+          {isMuted ? <MicOff className="h-5 w-5" /> : <Mic className="h-5 w-5" />}
+        </Button>
+        <Button
+          variant={showDialPad ? 'default' : 'outline'}
+          size="icon"
+          className="h-12 w-12 rounded-full"
+          onClick={() => setShowDialPad(!showDialPad)}
+        >
+          <Grid3X3 className="h-5 w-5" />
+        </Button>
+      </div>
+    </div>
+  );
 }
 
 export function OutboundCallModal({
@@ -143,29 +199,14 @@ export function OutboundCallModal({
             )}
           </div>
 
-          {/* DTMF Display */}
-          {dtmfDigits && (
-            <p className="text-lg font-mono text-muted-foreground">{dtmfDigits}</p>
-          )}
-
-          {/* Dial Pad */}
-          {status === 'connected' && (
-            <DialPad onPress={onDialPress} disabled={status !== 'connected'} />
-          )}
-
           {/* Controls */}
-          <div className="flex items-center gap-4">
-            {status === 'connected' && (
-              <Button
-                variant={isMuted ? 'default' : 'outline'}
-                size="icon"
-                className="h-12 w-12 rounded-full"
-                onClick={onToggleMute}
-              >
-                {isMuted ? <MicOff className="h-5 w-5" /> : <Mic className="h-5 w-5" />}
-              </Button>
-            )}
-          </div>
+          <DialPadToggle
+            status={status}
+            isMuted={isMuted}
+            onToggleMute={onToggleMute}
+            dtmfDigits={dtmfDigits}
+            onDialPress={onDialPress}
+          />
 
           {/* End Call Button */}
           {isCallActive && (

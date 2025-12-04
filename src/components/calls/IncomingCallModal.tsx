@@ -2,7 +2,7 @@ import { useEffect, useState, useRef } from 'react';
 import { Dialog, DialogContent } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { Avatar, AvatarFallback } from '@/components/ui/avatar';
-import { Phone, PhoneOff, Mic, MicOff, User, Minimize2 } from 'lucide-react';
+import { Phone, PhoneOff, Mic, MicOff, User, Minimize2, Grid3X3 } from 'lucide-react';
 import { Call } from '@twilio/voice-sdk';
 import { formatPhoneDisplay } from '@/lib/phoneUtils';
 import { DialPad } from './DialPad';
@@ -43,6 +43,7 @@ export function IncomingCallModal({
 }: IncomingCallModalProps) {
   const [duration, setDuration] = useState(0);
   const [digits, setDigits] = useState('');
+  const [showDialPad, setShowDialPad] = useState(false);
   const timerRef = useRef<NodeJS.Timeout | null>(null);
   const audioRef = useRef<HTMLAudioElement | null>(null);
 
@@ -186,8 +187,8 @@ export function IncomingCallModal({
             </p>
           )}
 
-          {/* Dial Pad (when on call) */}
-          {isOnCall && (
+          {/* Dial Pad (when on call, collapsible) */}
+          {isOnCall && showDialPad && (
             <div className="w-full max-w-[200px]">
               <DialPad onPress={handleDialPress} />
             </div>
@@ -222,6 +223,14 @@ export function IncomingCallModal({
                   onClick={onToggleMute}
                 >
                   {isMuted ? <MicOff className="h-6 w-6" /> : <Mic className="h-6 w-6" />}
+                </Button>
+                <Button
+                  variant={showDialPad ? 'default' : 'outline'}
+                  size="lg"
+                  className="h-14 w-14 rounded-full"
+                  onClick={() => setShowDialPad(!showDialPad)}
+                >
+                  <Grid3X3 className="h-6 w-6" />
                 </Button>
                 <Button
                   variant="destructive"
