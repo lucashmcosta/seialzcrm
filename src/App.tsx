@@ -4,6 +4,7 @@ import { TooltipProvider } from "@/components/ui/tooltip";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
 import { useAuth } from "./hooks/useAuth";
+import { InboundCallHandler } from "./components/calls/InboundCallHandler";
 import SignUp from "./pages/auth/SignUp";
 import SignIn from "./pages/auth/SignIn";
 import ConfirmEmail from "./pages/auth/ConfirmEmail";
@@ -64,12 +65,22 @@ function ProtectedRoute({ children }: { children: React.ReactNode }) {
   return <>{children}</>;
 }
 
+// Global call handler - persists across all route changes
+function GlobalCallHandler() {
+  const { isAuthenticated } = useAuth();
+  
+  if (!isAuthenticated) return null;
+  
+  return <InboundCallHandler />;
+}
+
 const App = () => (
   <QueryClientProvider client={queryClient}>
     <TooltipProvider>
       <Toaster />
       <Sonner />
       <BrowserRouter>
+        <GlobalCallHandler />
         <Routes>
           <Route path="/" element={<Navigate to="/dashboard" replace />} />
           
