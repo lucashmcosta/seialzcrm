@@ -253,9 +253,7 @@ export function ActivityTimeline({ contactId, opportunityId }: ActivityTimelineP
 
                   return (
                     <div key={`call-${call.id}`} className="flex gap-4 pb-4 border-b last:border-0">
-                      <div className={`flex-shrink-0 w-8 h-8 rounded-full flex items-center justify-center ${
-                        isOutgoing ? 'bg-green-500/10 text-green-600' : 'bg-blue-500/10 text-blue-600'
-                      }`}>
+                      <div className="flex-shrink-0 w-8 h-8 rounded-full flex items-center justify-center bg-orange-500/10 text-orange-600">
                         {isOutgoing ? <PhoneOutgoing className="w-4 h-4" /> : <PhoneIncoming className="w-4 h-4" />}
                       </div>
                       <div className="flex-1 min-w-0">

@@ -130,6 +130,47 @@ export function ActiveCallModal({
       setStatus('connecting');
       console.log('Connecting call to:', phoneNumber);
 
+      // 1. FIRST: Create call record in database BEFORE connecting
+      try {
+        const { data: userData } = await supabase.auth.getUser();
+        const { data: userProfile } = await supabase
+          .from('users')
+          .select('id')
+          .eq('auth_user_id', userData.user?.id)
+          .single();
+
+        const { data: userOrg } = await supabase
+          .from('user_organizations')
+          .select('organization_id')
+          .eq('user_id', userProfile?.id)
+          .eq('is_active', true)
+          .single();
+
+        if (userOrg && userProfile) {
+          callStartTimeRef.current = new Date();
+          
+          const { data: newCall } = await supabase.from('calls').insert({
+            organization_id: userOrg.organization_id,
+            user_id: userProfile.id,
+            contact_id: contactId,
+            opportunity_id: opportunityId,
+            direction: 'outgoing',
+            call_type: 'made',
+            to_number: phoneNumber,
+            status: 'queued',
+            started_at: callStartTimeRef.current.toISOString(),
+          }).select('id').single();
+
+          if (newCall) {
+            callIdRef.current = newCall.id;
+            console.log('Call record created with ID:', newCall.id);
+          }
+        }
+      } catch (dbError) {
+        console.error('Error recording call:', dbError);
+      }
+
+      // 2. SECOND: Now connect (callIdRef.current is already set)
       const call = await deviceRef.current.connect({
         params: {
           To: phoneNumber,
@@ -138,7 +179,7 @@ export function ActiveCallModal({
 
       activeCallRef.current = call;
 
-      // Call events
+      // 3. Call events (can now update the record correctly)
       call.on('ringing', () => {
         console.log('Call ringing');
         setStatus('ringing');
@@ -148,7 +189,6 @@ export function ActiveCallModal({
       call.on('accept', () => {
         console.log('Call accepted/connected');
         setStatus('connected');
-        callStartTimeRef.current = new Date();
         updateCallRecord('in-progress');
         toast.success('Chamada conectada');
       });
@@ -179,44 +219,6 @@ export function ActiveCallModal({
         setStatus('failed');
         updateCallRecord('failed', new Date());
       });
-
-      // Record the call in our database
-      try {
-        const { data: userData } = await supabase.auth.getUser();
-        const { data: userProfile } = await supabase
-          .from('users')
-          .select('id')
-          .eq('auth_user_id', userData.user?.id)
-          .single();
-
-        const { data: userOrg } = await supabase
-          .from('user_organizations')
-          .select('organization_id')
-          .eq('user_id', userProfile?.id)
-          .eq('is_active', true)
-          .single();
-
-        if (userOrg && userProfile) {
-          const { data: newCall } = await supabase.from('calls').insert({
-            organization_id: userOrg.organization_id,
-            user_id: userProfile.id,
-            contact_id: contactId,
-            opportunity_id: opportunityId,
-            direction: 'outgoing',
-            call_type: 'made',
-            to_number: phoneNumber,
-            status: 'queued',
-            started_at: new Date().toISOString(),
-          }).select('id').single();
-
-          if (newCall) {
-            callIdRef.current = newCall.id;
-            console.log('Call record created with ID:', newCall.id);
-          }
-        }
-      } catch (dbError) {
-        console.error('Error recording call:', dbError);
-      }
 
     } catch (error: any) {
       console.error('Call connection error:', error);
