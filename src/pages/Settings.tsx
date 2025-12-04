@@ -12,6 +12,7 @@ import { TagsSettings } from '@/components/settings/TagsSettings';
 import { PermissionProfilesSettings } from '@/components/settings/PermissionProfilesSettings';
 import { BillingSettings } from '@/components/settings/BillingSettings';
 import { IntegrationsSettings } from '@/components/settings/IntegrationsSettings';
+import { ApiWebhooksSettings } from '@/components/settings/ApiWebhooksSettings';
 import { AuditLogs } from './settings/AuditLogs';
 import { Trash } from './settings/Trash';
 
@@ -41,6 +42,7 @@ export default function Settings() {
               {permissions.canManageSettings && <TabsTrigger value="customFields">{t('settings.customFields')}</TabsTrigger>}
               {permissions.canManageSettings && <TabsTrigger value="tags">{t('settings.tags')}</TabsTrigger>}
               {permissions.canManageIntegrations && <TabsTrigger value="integrations">{t('settings.integrations')}</TabsTrigger>}
+              {permissions.canManageIntegrations && <TabsTrigger value="apiWebhooks">API & Webhooks</TabsTrigger>}
               {permissions.canManageSettings && <TabsTrigger value="auditLogs">{t('settings.auditLogs')}</TabsTrigger>}
               {permissions.canManageSettings && <TabsTrigger value="trash">{t('settings.trash')}</TabsTrigger>}
             </TabsList>
@@ -79,6 +81,10 @@ export default function Settings() {
 
             <TabsContent value="integrations">
               <IntegrationsSettings />
+            </TabsContent>
+
+            <TabsContent value="apiWebhooks">
+              <ApiWebhooksSettings />
             </TabsContent>
 
             <TabsContent value="auditLogs">

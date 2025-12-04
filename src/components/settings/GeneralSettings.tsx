@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useOrganization } from '@/hooks/useOrganization';
 import { useTranslation } from '@/lib/i18n';
 import { supabase } from '@/integrations/supabase/client';
@@ -29,12 +29,25 @@ export function GeneralSettings() {
   const [loading, setLoading] = useState(false);
   const [resetting, setResetting] = useState(false);
   const [formData, setFormData] = useState({
-    name: organization?.name || '',
-    default_currency: organization?.default_currency || 'BRL',
-    default_locale: organization?.default_locale || 'pt-BR',
-    timezone: organization?.timezone || 'America/Sao_Paulo',
-    enable_companies_module: organization?.enable_companies_module || false,
+    name: '',
+    default_currency: 'BRL',
+    default_locale: 'pt-BR',
+    timezone: 'America/Sao_Paulo',
+    enable_companies_module: false,
   });
+
+  // Sync form data when organization loads
+  useEffect(() => {
+    if (organization) {
+      setFormData({
+        name: organization.name || '',
+        default_currency: organization.default_currency || 'BRL',
+        default_locale: organization.default_locale || 'pt-BR',
+        timezone: organization.timezone || 'America/Sao_Paulo',
+        enable_companies_module: organization.enable_companies_module || false,
+      });
+    }
+  }, [organization]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
