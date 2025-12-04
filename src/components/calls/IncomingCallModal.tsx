@@ -2,22 +2,27 @@ import { useEffect, useState, useRef } from 'react';
 import { Dialog, DialogContent } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { Avatar, AvatarFallback } from '@/components/ui/avatar';
-import { Phone, PhoneOff, Mic, MicOff, User } from 'lucide-react';
+import { Phone, PhoneOff, Mic, MicOff, User, Minimize2 } from 'lucide-react';
 import { Call } from '@twilio/voice-sdk';
 import { formatPhoneDisplay } from '@/lib/phoneUtils';
 import { DialPad } from './DialPad';
+import { MinimizedCallWidget } from './MinimizedCallWidget';
 
 interface IncomingCallModalProps {
   isRinging: boolean;
   isOnCall: boolean;
   from: string;
   contactName?: string;
+  contactId?: string;
   onAnswer: () => void;
   onReject: () => void;
   onEndCall: () => void;
   onToggleMute: () => void;
   isMuted: boolean;
   activeCall: Call | null;
+  isMinimized: boolean;
+  onMinimize: () => void;
+  onExpand: () => void;
 }
 
 export function IncomingCallModal({
@@ -25,12 +30,16 @@ export function IncomingCallModal({
   isOnCall,
   from,
   contactName,
+  contactId,
   onAnswer,
   onReject,
   onEndCall,
   onToggleMute,
   isMuted,
-  activeCall
+  activeCall,
+  isMinimized,
+  onMinimize,
+  onExpand
 }: IncomingCallModalProps) {
   const [duration, setDuration] = useState(0);
   const [digits, setDigits] = useState('');
@@ -100,14 +109,41 @@ export function IncomingCallModal({
 
   if (!isOpen) return null;
 
+  // Render minimized widget when on call and minimized
+  if (isOnCall && isMinimized) {
+    return (
+      <MinimizedCallWidget
+        contactName={contactName}
+        from={from}
+        duration={duration}
+        isMuted={isMuted}
+        onToggleMute={onToggleMute}
+        onEndCall={onEndCall}
+        onExpand={onExpand}
+      />
+    );
+  }
+
   return (
-    <Dialog open={isOpen} onOpenChange={() => {}}>
+    <Dialog open={isOpen && !isMinimized} onOpenChange={() => {}}>
       <DialogContent 
         className="sm:max-w-md" 
         onPointerDownOutside={(e) => e.preventDefault()}
         onEscapeKeyDown={(e) => e.preventDefault()}
       >
         <div className="flex flex-col items-center py-6 space-y-6">
+          {/* Minimize button when on call */}
+          {isOnCall && (
+            <Button
+              variant="ghost"
+              size="icon"
+              className="absolute top-2 right-10"
+              onClick={onMinimize}
+            >
+              <Minimize2 className="h-4 w-4" />
+            </Button>
+          )}
+
           {/* Avatar */}
           <div className={`relative ${isRinging ? 'animate-pulse' : ''}`}>
             <Avatar className="h-24 w-24">
