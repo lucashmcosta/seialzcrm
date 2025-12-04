@@ -5194,6 +5194,704 @@ For a guided walkthrough, check out our [server-side Programmable Voice quicksta
 
 ## Webhooks
 
+### Tipos de Webhooks
+
+| Webhook | Descrição | Quando usar |
+|---------|-----------|-------------|
+| `url` | TwiML inicial para controlar a chamada | Definir fluxo da chamada |
+| `statusCallback` | Notifica mudanças no status da chamada | Atualizar UI em tempo real, registrar histórico |
+| `statusCallbackEvent` | Eventos específicos (initiated, ringing, answered, completed) | Tracking granular do ciclo de vida |
+| `recordingStatusCallback` | Notifica quando gravação está disponível | Salvar URL da gravação automaticamente |
+| `fallbackUrl` | URL alternativa se o principal falhar | Tratamento de erros |
+
+### Parâmetros Comuns Recebidos nos Webhooks
+
+| Parâmetro | Descrição | Exemplo |
+|-----------|-----------|---------|
+| `CallSid` | ID único da chamada | `CAxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx` |
+| `AccountSid` | ID da conta Twilio | `ACxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx` |
+| `CallStatus` | Status atual da chamada | `queued`, `ringing`, `in-progress`, `completed`, `busy`, `failed`, `no-answer`, `canceled` |
+| `From` | Número de origem (formato E.164) | `+5511999999999` |
+| `To` | Número de destino (formato E.164) | `+5511888888888` |
+| `Direction` | Direção da chamada | `inbound`, `outbound-api`, `outbound-dial` |
+| `CallDuration` | Duração em segundos (apenas em completed) | `125` |
+| `Caller` | Mesmo que From | `+5511999999999` |
+| `Called` | Mesmo que To | `+5511888888888` |
+| `ApiVersion` | Versão da API | `2010-04-01` |
+
+### Parâmetros Adicionais por Tipo de Evento
+
+#### Em chamadas completadas (`completed`)
+| Parâmetro | Descrição |
+|-----------|-----------|
+| `CallDuration` | Duração total em segundos |
+| `RecordingUrl` | URL da gravação (se habilitada) |
+| `RecordingSid` | ID da gravação |
+| `RecordingDuration` | Duração da gravação |
+
+#### Em chamadas Dial
+| Parâmetro | Descrição |
+|-----------|-----------|
+| `DialCallStatus` | Status da perna B (completed, busy, no-answer, failed, canceled) |
+| `DialCallSid` | SID da chamada da perna B |
+| `DialCallDuration` | Duração da perna B |
+
+### Eventos de Status (`statusCallbackEvent`)
+
+| Evento | Descrição | Momento |
+|--------|-----------|---------|
+| `initiated` | Chamada foi criada e removida da fila | Início do processo |
+| `ringing` | Telefone está tocando | Aguardando atendimento |
+| `answered` | Chamada foi atendida | Conversação iniciada |
+| `completed` | Chamada finalizada (qualquer motivo) | Fim da chamada |
+
+### Como Responder aos Webhooks
+
+#### Status Callbacks (não controlam fluxo)
+```http
+HTTP/1.1 204 No Content
+```
+
+Ou:
+```http
+HTTP/1.1 200 OK
+Content-Type: text/xml
+
+<?xml version="1.0" encoding="UTF-8"?>
+<Response/>
+```
+
+#### Webhooks TwiML (controlam fluxo)
+```http
+HTTP/1.1 200 OK
+Content-Type: text/xml
+
+<?xml version="1.0" encoding="UTF-8"?>
+<Response>
+    <Say>Olá! Aguarde enquanto conectamos você.</Say>
+    <Dial callerId="+5511999999999">+5511888888888</Dial>
+</Response>
+```
+
+### Validação de Webhooks (Segurança)
+
+É importante validar que as requisições realmente vêm do Twilio:
+
+```typescript
+import twilio from 'twilio';
+
+const authToken = 'your_auth_token';
+const twilioSignature = req.headers['x-twilio-signature'];
+const url = 'https://your-webhook-url.com/webhook';
+const params = req.body;
+
+const isValid = twilio.validateRequest(authToken, twilioSignature, url, params);
+
+if (!isValid) {
+  return new Response('Forbidden', { status: 403 });
+}
+```
+
+---
 
 ## Implementation Examples
-<!-- Adicionar exemplos aqui -->
+
+### Estrutura de Dados Sugerida para o CRM
+
+```sql
+-- Tabela para registrar histórico de chamadas
+CREATE TABLE call_logs (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  organization_id UUID NOT NULL REFERENCES organizations(id),
+  contact_id UUID REFERENCES contacts(id),
+  user_id UUID NOT NULL REFERENCES users(id),
+  
+  -- Identificadores Twilio
+  call_sid TEXT UNIQUE NOT NULL,
+  parent_call_sid TEXT,
+  
+  -- Números
+  from_number TEXT NOT NULL,
+  to_number TEXT NOT NULL,
+  
+  -- Status e direção
+  direction TEXT NOT NULL CHECK (direction IN ('inbound', 'outbound')),
+  status TEXT NOT NULL DEFAULT 'initiated',
+  
+  -- Métricas
+  duration_seconds INTEGER,
+  
+  -- Gravação
+  recording_url TEXT,
+  recording_sid TEXT,
+  recording_duration INTEGER,
+  
+  -- Timestamps
+  started_at TIMESTAMPTZ,
+  answered_at TIMESTAMPTZ,
+  ended_at TIMESTAMPTZ,
+  created_at TIMESTAMPTZ DEFAULT now(),
+  updated_at TIMESTAMPTZ DEFAULT now(),
+  
+  -- Metadados
+  notes TEXT,
+  opportunity_id UUID REFERENCES opportunities(id)
+);
+
+-- Índices para consultas comuns
+CREATE INDEX idx_call_logs_org ON call_logs(organization_id);
+CREATE INDEX idx_call_logs_contact ON call_logs(contact_id);
+CREATE INDEX idx_call_logs_user ON call_logs(user_id);
+CREATE INDEX idx_call_logs_call_sid ON call_logs(call_sid);
+CREATE INDEX idx_call_logs_created ON call_logs(created_at DESC);
+
+-- RLS Policy
+ALTER TABLE call_logs ENABLE ROW LEVEL SECURITY;
+
+CREATE POLICY "Users can view call logs in their org"
+ON call_logs FOR SELECT
+USING (user_has_org_access(organization_id));
+
+CREATE POLICY "Users can insert call logs in their org"
+ON call_logs FOR INSERT
+WITH CHECK (user_has_org_access(organization_id));
+
+CREATE POLICY "Users can update call logs in their org"
+ON call_logs FOR UPDATE
+USING (user_has_org_access(organization_id));
+```
+
+### Edge Function: Iniciar Chamada (Click-to-Call)
+
+```typescript
+// supabase/functions/twilio-call/index.ts
+import { serve } from 'https://deno.land/std@0.168.0/http/server.ts'
+import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
+
+const corsHeaders = {
+  'Access-Control-Allow-Origin': '*',
+  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
+}
+
+interface CallRequest {
+  to: string           // Número do contato (E.164)
+  contactId?: string   // ID do contato no CRM
+  opportunityId?: string
+}
+
+serve(async (req) => {
+  // Handle CORS preflight
+  if (req.method === 'OPTIONS') {
+    return new Response(null, { headers: corsHeaders })
+  }
+
+  try {
+    // Verificar autenticação
+    const supabaseClient = createClient(
+      Deno.env.get('SUPABASE_URL') ?? '',
+      Deno.env.get('SUPABASE_ANON_KEY') ?? '',
+      { global: { headers: { Authorization: req.headers.get('Authorization')! } } }
+    )
+
+    const { data: { user }, error: authError } = await supabaseClient.auth.getUser()
+    if (authError || !user) {
+      return new Response(JSON.stringify({ error: 'Unauthorized' }), {
+        status: 401,
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+      })
+    }
+
+    // Buscar dados do usuário e organização
+    const { data: userData } = await supabaseClient
+      .from('users')
+      .select('id, organization_id:user_organizations(organization_id)')
+      .eq('auth_user_id', user.id)
+      .single()
+
+    if (!userData) {
+      return new Response(JSON.stringify({ error: 'User not found' }), {
+        status: 404,
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+      })
+    }
+
+    const organizationId = userData.organization_id[0]?.organization_id
+
+    // Buscar configuração Twilio da organização
+    const { data: integration } = await supabaseClient
+      .from('organization_integrations')
+      .select('config_values')
+      .eq('organization_id', organizationId)
+      .eq('integration_id', 'twilio-voice-integration-id') // ID da integração Twilio
+      .single()
+
+    if (!integration?.config_values) {
+      return new Response(JSON.stringify({ error: 'Twilio not configured' }), {
+        status: 400,
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+      })
+    }
+
+    const config = integration.config_values as {
+      accountSid: string
+      authToken: string
+      phoneNumber: string
+      agentPhoneNumber: string
+    }
+
+    // Dados da requisição
+    const { to, contactId, opportunityId }: CallRequest = await req.json()
+
+    if (!to) {
+      return new Response(JSON.stringify({ error: 'Phone number required' }), {
+        status: 400,
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+      })
+    }
+
+    // URL base para webhooks
+    const webhookBaseUrl = Deno.env.get('SUPABASE_URL') + '/functions/v1/twilio-webhook'
+
+    // Criar chamada via Twilio API
+    const twilioUrl = `https://api.twilio.com/2010-04-01/Accounts/${config.accountSid}/Calls.json`
+    
+    const callParams = new URLSearchParams({
+      To: config.agentPhoneNumber,  // Liga primeiro para o agente
+      From: config.phoneNumber,      // Número Twilio
+      Url: `${webhookBaseUrl}/twiml?to=${encodeURIComponent(to)}`, // TwiML para conectar ao contato
+      StatusCallback: `${webhookBaseUrl}/status`,
+      StatusCallbackEvent: 'initiated ringing answered completed',
+      StatusCallbackMethod: 'POST',
+      Record: 'true',
+      RecordingStatusCallback: `${webhookBaseUrl}/recording`,
+    })
+
+    const twilioResponse = await fetch(twilioUrl, {
+      method: 'POST',
+      headers: {
+        'Authorization': 'Basic ' + btoa(`${config.accountSid}:${config.authToken}`),
+        'Content-Type': 'application/x-www-form-urlencoded',
+      },
+      body: callParams,
+    })
+
+    const callData = await twilioResponse.json()
+
+    if (!twilioResponse.ok) {
+      console.error('Twilio error:', callData)
+      return new Response(JSON.stringify({ error: 'Failed to initiate call', details: callData }), {
+        status: 500,
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+      })
+    }
+
+    // Registrar chamada no banco
+    const { data: callLog, error: insertError } = await supabaseClient
+      .from('call_logs')
+      .insert({
+        organization_id: organizationId,
+        user_id: userData.id,
+        contact_id: contactId || null,
+        opportunity_id: opportunityId || null,
+        call_sid: callData.sid,
+        from_number: config.phoneNumber,
+        to_number: to,
+        direction: 'outbound',
+        status: 'initiated',
+        started_at: new Date().toISOString(),
+      })
+      .select()
+      .single()
+
+    if (insertError) {
+      console.error('Database error:', insertError)
+    }
+
+    return new Response(JSON.stringify({
+      success: true,
+      callSid: callData.sid,
+      status: callData.status,
+      callLogId: callLog?.id
+    }), {
+      headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+    })
+
+  } catch (error) {
+    console.error('Error:', error)
+    return new Response(JSON.stringify({ error: 'Internal server error' }), {
+      status: 500,
+      headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+    })
+  }
+})
+```
+
+### Edge Function: Webhook Handler
+
+```typescript
+// supabase/functions/twilio-webhook/index.ts
+import { serve } from 'https://deno.land/std@0.168.0/http/server.ts'
+import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
+
+const corsHeaders = {
+  'Access-Control-Allow-Origin': '*',
+  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
+}
+
+serve(async (req) => {
+  if (req.method === 'OPTIONS') {
+    return new Response(null, { headers: corsHeaders })
+  }
+
+  const url = new URL(req.url)
+  const path = url.pathname.split('/').pop()
+
+  // Criar cliente Supabase com service role para webhooks
+  const supabaseAdmin = createClient(
+    Deno.env.get('SUPABASE_URL') ?? '',
+    Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''
+  )
+
+  try {
+    // Parse form data do Twilio
+    const formData = await req.formData()
+    const params: Record<string, string> = {}
+    formData.forEach((value, key) => {
+      params[key] = value.toString()
+    })
+
+    console.log(`Webhook ${path}:`, JSON.stringify(params, null, 2))
+
+    switch (path) {
+      case 'twiml':
+        // Retorna TwiML para conectar ao contato
+        return handleTwiML(url.searchParams.get('to'))
+
+      case 'status':
+        // Atualiza status da chamada
+        return await handleStatusCallback(supabaseAdmin, params)
+
+      case 'recording':
+        // Salva URL da gravação
+        return await handleRecordingCallback(supabaseAdmin, params)
+
+      default:
+        return new Response('Not found', { status: 404 })
+    }
+
+  } catch (error) {
+    console.error('Webhook error:', error)
+    return new Response('Error', { status: 500 })
+  }
+})
+
+function handleTwiML(to: string | null): Response {
+  if (!to) {
+    const twiml = `<?xml version="1.0" encoding="UTF-8"?>
+<Response>
+  <Say language="pt-BR">Erro: número de destino não informado.</Say>
+  <Hangup/>
+</Response>`
+    return new Response(twiml, {
+      headers: { 'Content-Type': 'text/xml' }
+    })
+  }
+
+  // TwiML para:
+  // 1. Informar o agente
+  // 2. Conectar ao número do contato
+  const twiml = `<?xml version="1.0" encoding="UTF-8"?>
+<Response>
+  <Say language="pt-BR">Conectando você ao contato. Aguarde.</Say>
+  <Dial callerId="${Deno.env.get('TWILIO_PHONE_NUMBER')}" 
+        timeout="30" 
+        record="record-from-answer-dual"
+        action="/functions/v1/twilio-webhook/dial-complete">
+    <Number>${to}</Number>
+  </Dial>
+  <Say language="pt-BR">A chamada não foi completada.</Say>
+</Response>`
+
+  return new Response(twiml, {
+    headers: { 'Content-Type': 'text/xml' }
+  })
+}
+
+async function handleStatusCallback(
+  supabase: any, 
+  params: Record<string, string>
+): Promise<Response> {
+  const { CallSid, CallStatus, CallDuration, Timestamp } = params
+
+  const updateData: Record<string, any> = {
+    status: CallStatus,
+    updated_at: new Date().toISOString(),
+  }
+
+  // Adicionar timestamps baseado no status
+  switch (CallStatus) {
+    case 'ringing':
+      // Chamada está tocando
+      break
+    case 'in-progress':
+    case 'answered':
+      updateData.answered_at = new Date().toISOString()
+      break
+    case 'completed':
+    case 'busy':
+    case 'no-answer':
+    case 'failed':
+    case 'canceled':
+      updateData.ended_at = new Date().toISOString()
+      if (CallDuration) {
+        updateData.duration_seconds = parseInt(CallDuration)
+      }
+      break
+  }
+
+  const { error } = await supabase
+    .from('call_logs')
+    .update(updateData)
+    .eq('call_sid', CallSid)
+
+  if (error) {
+    console.error('Error updating call status:', error)
+  }
+
+  // Twilio espera resposta vazia ou 204
+  return new Response(null, { status: 204 })
+}
+
+async function handleRecordingCallback(
+  supabase: any,
+  params: Record<string, string>
+): Promise<Response> {
+  const { 
+    CallSid, 
+    RecordingSid, 
+    RecordingUrl, 
+    RecordingDuration,
+    RecordingStatus 
+  } = params
+
+  if (RecordingStatus !== 'completed') {
+    return new Response(null, { status: 204 })
+  }
+
+  const { error } = await supabase
+    .from('call_logs')
+    .update({
+      recording_sid: RecordingSid,
+      recording_url: RecordingUrl + '.mp3', // Adiciona extensão para download direto
+      recording_duration: parseInt(RecordingDuration),
+      updated_at: new Date().toISOString(),
+    })
+    .eq('call_sid', CallSid)
+
+  if (error) {
+    console.error('Error updating recording:', error)
+  }
+
+  return new Response(null, { status: 204 })
+}
+```
+
+### Componente React: Botão Click-to-Call
+
+```typescript
+// src/components/contacts/ClickToCallButton.tsx
+import { useState } from 'react';
+import { Phone, PhoneOff, Loader2 } from 'lucide-react';
+import { Button } from '@/components/ui/button';
+import { supabase } from '@/integrations/supabase/client';
+import { toast } from 'sonner';
+
+interface ClickToCallButtonProps {
+  phoneNumber: string;
+  contactId?: string;
+  opportunityId?: string;
+  variant?: 'default' | 'outline' | 'ghost';
+  size?: 'default' | 'sm' | 'lg' | 'icon';
+}
+
+export function ClickToCallButton({
+  phoneNumber,
+  contactId,
+  opportunityId,
+  variant = 'outline',
+  size = 'sm',
+}: ClickToCallButtonProps) {
+  const [isLoading, setIsLoading] = useState(false);
+  const [callSid, setCallSid] = useState<string | null>(null);
+
+  const handleCall = async () => {
+    if (!phoneNumber) {
+      toast.error('Número de telefone não disponível');
+      return;
+    }
+
+    setIsLoading(true);
+
+    try {
+      const { data, error } = await supabase.functions.invoke('twilio-call', {
+        body: {
+          to: phoneNumber,
+          contactId,
+          opportunityId,
+        },
+      });
+
+      if (error) throw error;
+
+      if (data.success) {
+        setCallSid(data.callSid);
+        toast.success('Chamada iniciada! Aguarde o telefone tocar.');
+      } else {
+        throw new Error(data.error || 'Erro ao iniciar chamada');
+      }
+    } catch (error: any) {
+      console.error('Call error:', error);
+      toast.error(error.message || 'Erro ao iniciar chamada');
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const formatPhone = (phone: string) => {
+    // Formata para exibição amigável
+    const cleaned = phone.replace(/\D/g, '');
+    if (cleaned.length === 13 && cleaned.startsWith('55')) {
+      const ddd = cleaned.slice(2, 4);
+      const part1 = cleaned.slice(4, 9);
+      const part2 = cleaned.slice(9);
+      return `(${ddd}) ${part1}-${part2}`;
+    }
+    return phone;
+  };
+
+  return (
+    <Button
+      variant={variant}
+      size={size}
+      onClick={handleCall}
+      disabled={isLoading || !phoneNumber}
+      className="gap-2"
+    >
+      {isLoading ? (
+        <Loader2 className="h-4 w-4 animate-spin" />
+      ) : (
+        <Phone className="h-4 w-4" />
+      )}
+      {size !== 'icon' && (
+        <span>{isLoading ? 'Ligando...' : formatPhone(phoneNumber)}</span>
+      )}
+    </Button>
+  );
+}
+```
+
+### Fluxo Completo de uma Chamada Outbound
+
+```
+┌─────────────────────────────────────────────────────────────────────────────┐
+│                        FLUXO DE CHAMADA OUTBOUND                            │
+└─────────────────────────────────────────────────────────────────────────────┘
+
+1. USUÁRIO INICIA CHAMADA
+   ┌──────────┐     POST /twilio-call      ┌──────────────┐
+   │   CRM    │ ─────────────────────────► │ Edge Function│
+   │ Frontend │                            │  twilio-call │
+   └──────────┘                            └──────┬───────┘
+                                                  │
+2. EDGE FUNCTION CRIA CHAMADA                     │
+                                                  ▼
+   ┌──────────────┐    POST /Calls.json    ┌──────────────┐
+   │ Edge Function│ ─────────────────────► │   Twilio     │
+   │  twilio-call │                        │     API      │
+   └──────────────┘                        └──────┬───────┘
+         │                                        │
+         │ INSERT call_logs                       │
+         ▼                                        │
+   ┌──────────────┐                               │
+   │   Supabase   │                               │
+   │   Database   │                               │
+   └──────────────┘                               │
+                                                  │
+3. TWILIO LIGA PARA O AGENTE                      │
+                                                  ▼
+   ┌──────────────┐    Chamada telefônica  ┌──────────────┐
+   │    Twilio    │ ─────────────────────► │   Telefone   │
+   │              │                        │   do Agente  │
+   └──────┬───────┘                        └──────────────┘
+         │
+         │ statusCallback (initiated, ringing, answered)
+         ▼
+   ┌──────────────┐
+   │ Edge Function│
+   │twilio-webhook│
+   └──────┬───────┘
+         │ UPDATE call_logs
+         ▼
+   ┌──────────────┐
+   │   Supabase   │
+   │   Database   │
+   └──────────────┘
+
+4. AGENTE ATENDE, TWILIO BUSCA TwiML
+   ┌──────────────┐    GET /twiml?to=...   ┌──────────────┐
+   │    Twilio    │ ─────────────────────► │ Edge Function│
+   │              │ ◄───────────────────── │twilio-webhook│
+   └──────────────┘    <Dial><Number>      └──────────────┘
+
+5. TWILIO CONECTA AO CONTATO
+   ┌──────────────┐    Chamada telefônica  ┌──────────────┐
+   │    Twilio    │ ─────────────────────► │   Telefone   │
+   │              │                        │  do Contato  │
+   └──────────────┘                        └──────────────┘
+
+6. CHAMADA EM ANDAMENTO (gravando)
+   ┌──────────────┐ ◄────────────────────► ┌──────────────┐
+   │   Telefone   │      Conversação       │   Telefone   │
+   │   do Agente  │      (via Twilio)      │  do Contato  │
+   └──────────────┘                        └──────────────┘
+
+7. CHAMADA ENCERRADA
+   ┌──────────────┐   statusCallback       ┌──────────────┐
+   │    Twilio    │ ─────────────────────► │ Edge Function│
+   │              │   (completed)          │twilio-webhook│
+   └──────────────┘                        └──────┬───────┘
+                                                  │
+   ┌──────────────┐  recordingCallback            │
+   │    Twilio    │ ─────────────────────────────►│
+   │              │  (recording URL)              │
+   └──────────────┘                               │
+                                                  │ UPDATE call_logs
+                                                  ▼
+   ┌──────────────┐
+   │   Supabase   │  status: completed
+   │   Database   │  duration_seconds: 125
+   └──────────────┘  recording_url: https://...
+
+8. UI ATUALIZA (via Realtime ou polling)
+   ┌──────────────┐     Subscription       ┌──────────────┐
+   │   Supabase   │ ─────────────────────► │     CRM      │
+   │   Realtime   │                        │   Frontend   │
+   └──────────────┘                        └──────────────┘
+```
+
+### Configuração Necessária
+
+1. **Secrets no Supabase:**
+   - `TWILIO_ACCOUNT_SID` - Account SID da sua conta Twilio
+   - `TWILIO_AUTH_TOKEN` - Auth Token da sua conta Twilio
+   - `TWILIO_PHONE_NUMBER` - Número Twilio para caller ID
+
+2. **Configurar `verify_jwt = false` para webhook:**
+   ```toml
+   # supabase/config.toml
+   [functions.twilio-webhook]
+   verify_jwt = false
+   ```
+
+3. **Configurar URLs no Twilio Console:**
+   - Voice Configuration URL: `https://<project-ref>.supabase.co/functions/v1/twilio-webhook/twiml`
