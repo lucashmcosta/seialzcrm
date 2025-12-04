@@ -541,3 +541,82 @@ Antes de criar ou modificar qualquer página CRM:
 - [ ] Header segue padrão do design system?
 
 ---
+
+## 13. Regras de Cores - Tokens Semânticos
+
+### Propósito de Cada Token
+
+| Token | Propósito | Luminosidade Light | Luminosidade Dark |
+|-------|-----------|-------------------|-------------------|
+| `--background` | Fundo principal da página | 96% | 9% |
+| `--card` | Fundo de cards | 98% | 14% |
+| `--muted` | **Background sutil** (tabs, skeletons, hovers) | 93% | 18% |
+| `--muted-foreground` | **Texto secundário** (labels, hints) | 45% | 65% |
+| `--primary` | Cor principal da marca | - | - |
+| `--secondary` | Backgrounds de botões secundários | 32% | 45% |
+| `--destructive` | Ações destrutivas (deletar, erro) | - | - |
+
+### ⚠️ Erro Comum: Confundir `muted` com `muted-foreground`
+
+```tsx
+// ✅ CORRETO - muted para fundo, muted-foreground para texto
+<div className="bg-muted text-muted-foreground">
+  Texto secundário em fundo sutil
+</div>
+
+// ❌ INCORRETO - muted é para fundo, não texto!
+<div className="text-muted">  {/* Não existe! */}
+  Texto errado
+</div>
+```
+
+### ❌ NUNCA Usar Cores Hardcoded
+
+```tsx
+// ❌ INCORRETO - Cores hardcoded do Tailwind
+<div className="bg-gray-100 text-gray-700">
+<div className="bg-slate-200 text-slate-600">
+<div className="bg-zinc-100 text-zinc-500">
+<span className="bg-gray-100 text-gray-700">Badge</span>
+
+// ✅ CORRETO - Tokens semânticos
+<div className="bg-muted text-muted-foreground">
+<span className="bg-muted text-muted-foreground">Badge</span>
+```
+
+### Exceções Permitidas para Cores de Status
+
+Para badges e indicadores de status, use cores com transparência:
+
+```tsx
+// ✅ CORRETO - Cores de status com transparência
+<span className="bg-green-500/10 text-green-600">Ativo</span>
+<span className="bg-blue-500/10 text-blue-600">Em progresso</span>
+<span className="bg-destructive/10 text-destructive">Erro</span>
+
+// ❌ INCORRETO - Cores opacas de status
+<span className="bg-green-100 text-green-700">Ativo</span>
+<span className="bg-red-100 text-red-700">Erro</span>
+```
+
+### Escala de Luminosidade para Backgrounds
+
+| Uso | Light Mode | Dark Mode |
+|-----|------------|-----------|
+| Fundo principal (`--background`) | 96% | 9% |
+| Cards/Superfícies (`--card`) | 98% | 14% |
+| Background sutil (`--muted`) | 93% | 18% |
+| Texto principal (`--foreground`) | 9% | 98% |
+| Texto secundário (`--muted-foreground`) | 45% | 65% |
+
+### Checklist de Cores
+
+Antes de usar qualquer cor em um componente:
+
+- [ ] Está usando token semântico (`bg-muted`, `text-foreground`, etc.)?
+- [ ] **NÃO** está usando cores diretas do Tailwind (`bg-gray-*`, `bg-slate-*`, etc.)?
+- [ ] A cor funciona tanto em light quanto dark mode?
+- [ ] O contraste entre texto e fundo é suficiente (4.5:1)?
+- [ ] Para status badges, está usando cor com transparência (`/10`)?
+
+---
