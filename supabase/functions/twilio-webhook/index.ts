@@ -30,7 +30,60 @@ serve(async (req) => {
 
     console.log(`Webhook ${path}:`, JSON.stringify(params, null, 2))
 
-    // ========== ROUTE: /twiml ==========
+    // ========== ROUTE: /voice (Browser WebRTC calls) ==========
+    if (path === 'voice') {
+      const to = params.To || url.searchParams.get('to')
+      const from = params.From || params.Caller
+      
+      console.log('Voice request - To:', to, 'From:', from, 'OrgId:', orgId)
+
+      if (!to) {
+        const errorTwiml = `<?xml version="1.0" encoding="UTF-8"?>
+<Response>
+  <Say language="pt-BR">Erro: número de destino não especificado.</Say>
+</Response>`
+        return new Response(errorTwiml, { 
+          headers: { 'Content-Type': 'text/xml' } 
+        })
+      }
+
+      // Get organization's Twilio config for caller ID and recording settings
+      let callerId = ''
+      let enableRecording = false
+
+      if (orgId) {
+        const { data: integration } = await supabase
+          .from('organization_integrations')
+          .select('config_values')
+          .eq('organization_id', orgId)
+          .single()
+
+        if (integration?.config_values) {
+          callerId = integration.config_values.phone_number || ''
+          enableRecording = integration.config_values.enable_recording === true
+        }
+      }
+
+      // Build TwiML response
+      const recordAttr = enableRecording ? ' record="record-from-answer-dual"' : ''
+      const statusCallbackUrl = `${Deno.env.get('SUPABASE_URL')}/functions/v1/twilio-webhook/status?orgId=${orgId || ''}`
+      const recordingCallbackUrl = `${Deno.env.get('SUPABASE_URL')}/functions/v1/twilio-webhook/recording?orgId=${orgId || ''}`
+
+      const twiml = `<?xml version="1.0" encoding="UTF-8"?>
+<Response>
+  <Dial callerId="${callerId}" timeout="30"${recordAttr} action="${statusCallbackUrl}" recordingStatusCallback="${recordingCallbackUrl}">
+    <Number statusCallbackEvent="initiated ringing answered completed" statusCallback="${statusCallbackUrl}">${to}</Number>
+  </Dial>
+</Response>`
+
+      console.log('Returning TwiML:', twiml)
+
+      return new Response(twiml, {
+        headers: { 'Content-Type': 'text/xml' }
+      })
+    }
+
+    // ========== ROUTE: /twiml (Legacy server-to-server calls) ==========
     if (path === 'twiml') {
       const to = url.searchParams.get('to')
       

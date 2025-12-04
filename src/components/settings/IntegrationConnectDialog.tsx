@@ -15,6 +15,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { toast } from 'sonner';
+import { Loader2 } from 'lucide-react';
 
 interface IntegrationConnectDialogProps {
   open: boolean;
@@ -22,6 +23,7 @@ interface IntegrationConnectDialogProps {
   integration: {
     id: string;
     name: string;
+    slug?: string;
     description: string | null;
     config_schema: any;
   };
@@ -35,6 +37,10 @@ export function IntegrationConnectDialog({
   const { organization } = useOrganization();
   const queryClient = useQueryClient();
   const [configValues, setConfigValues] = useState<Record<string, any>>({});
+  const [setupPhase, setSetupPhase] = useState<'form' | 'configuring'>('form');
+
+  const isTwilioVoice = integration.slug === 'twilio-voice' || 
+    integration.name.toLowerCase().includes('twilio');
 
   const connectMutation = useMutation({
     mutationFn: async () => {
@@ -47,6 +53,7 @@ export function IntegrationConnectDialog({
         .eq('auth_user_id', userData.user?.id)
         .single();
 
+      // First, save the integration connection
       const { error } = await supabase
         .from('organization_integrations')
         .insert({
@@ -59,15 +66,43 @@ export function IntegrationConnectDialog({
         });
 
       if (error) throw error;
+
+      // For Twilio Voice, run automatic setup
+      if (isTwilioVoice && configValues.account_sid && configValues.auth_token) {
+        setSetupPhase('configuring');
+        
+        const { data: setupData, error: setupError } = await supabase.functions.invoke('twilio-setup', {
+          body: {
+            organizationId: organization.id,
+            accountSid: configValues.account_sid,
+            authToken: configValues.auth_token,
+            phoneNumber: configValues.phone_number,
+            enableRecording: configValues.enable_recording,
+          },
+        });
+
+        if (setupError) {
+          console.error('Twilio setup error:', setupError);
+          throw new Error('Erro ao configurar Twilio automaticamente. Verifique suas credenciais.');
+        }
+
+        if (!setupData?.success) {
+          throw new Error(setupData?.error || 'Erro na configuração do Twilio');
+        }
+
+        console.log('Twilio setup completed:', setupData);
+      }
     },
     onSuccess: () => {
       toast.success(`${integration.name} conectado com sucesso!`);
       queryClient.invalidateQueries({ queryKey: ['organization-integrations'] });
       onOpenChange(false);
       setConfigValues({});
+      setSetupPhase('form');
     },
     onError: (error: any) => {
       toast.error(`Erro ao conectar: ${error.message}`);
+      setSetupPhase('form');
     },
   });
 
@@ -95,6 +130,21 @@ export function IntegrationConnectDialog({
                 setConfigValues({ ...configValues, [key]: e.target.value })
               }
             />
+          </div>
+        );
+      case 'checkbox':
+        return (
+          <div key={key} className="flex items-center space-x-2">
+            <input
+              id={key}
+              type="checkbox"
+              checked={configValues[key] || false}
+              onChange={(e) =>
+                setConfigValues({ ...configValues, [key]: e.target.checked })
+              }
+              className="h-4 w-4 rounded border-input"
+            />
+            <Label htmlFor={key}>{label}</Label>
           </div>
         );
       default:
@@ -131,25 +181,41 @@ export function IntegrationConnectDialog({
             </DialogDescription>
           </DialogHeader>
 
-          <div className="space-y-4 py-4">
-            {fields.length > 0 ? (
-              fields.map((field: any) => renderField(field))
-            ) : (
+          {setupPhase === 'configuring' ? (
+            <div className="flex flex-col items-center justify-center py-8 space-y-4">
+              <Loader2 className="h-8 w-8 animate-spin text-primary" />
               <p className="text-sm text-muted-foreground">
-                Esta integração não requer configuração adicional.
+                Configurando {integration.name} automaticamente...
               </p>
-            )}
-          </div>
+              <p className="text-xs text-muted-foreground">
+                Isso pode levar alguns segundos
+              </p>
+            </div>
+          ) : (
+            <div className="space-y-4 py-4">
+              {fields.length > 0 ? (
+                fields.map((field: any) => renderField(field))
+              ) : (
+                <p className="text-sm text-muted-foreground">
+                  Esta integração não requer configuração adicional.
+                </p>
+              )}
+            </div>
+          )}
 
           <DialogFooter>
             <Button
               type="button"
               variant="outline"
               onClick={() => onOpenChange(false)}
+              disabled={connectMutation.isPending}
             >
               Cancelar
             </Button>
-            <Button type="submit" disabled={connectMutation.isPending}>
+            <Button 
+              type="submit" 
+              disabled={connectMutation.isPending || setupPhase === 'configuring'}
+            >
               {connectMutation.isPending ? 'Conectando...' : 'Conectar'}
             </Button>
           </DialogFooter>

@@ -1,4 +1,5 @@
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, useCallback } from 'react';
+import { Device, Call } from '@twilio/voice-sdk';
 import { Dialog, DialogContent } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { Avatar, AvatarFallback } from '@/components/ui/avatar';
@@ -7,7 +8,7 @@ import { DialPad } from './DialPad';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
 
-export type CallStatus = 'initiating' | 'ringing' | 'connected' | 'ended' | 'failed';
+export type CallStatus = 'initializing' | 'ready' | 'connecting' | 'ringing' | 'connected' | 'ended' | 'failed';
 
 interface ActiveCallModalProps {
   open: boolean;
@@ -28,39 +29,199 @@ export function ActiveCallModal({
   opportunityId,
   onCallEnd,
 }: ActiveCallModalProps) {
-  const [status, setStatus] = useState<CallStatus>('initiating');
+  const [status, setStatus] = useState<CallStatus>('initializing');
   const [duration, setDuration] = useState(0);
   const [isMuted, setIsMuted] = useState(false);
-  const [isSpeaker, setIsSpeaker] = useState(false);
+  const [isSpeaker, setIsSpeaker] = useState(true);
   const [dtmfDigits, setDtmfDigits] = useState('');
+  const [errorMessage, setErrorMessage] = useState<string | null>(null);
+  
+  const deviceRef = useRef<Device | null>(null);
+  const activeCallRef = useRef<Call | null>(null);
   const timerRef = useRef<NodeJS.Timeout | null>(null);
-  const callSidRef = useRef<string | null>(null);
 
-  // Start call when modal opens
+  // Initialize Twilio Device
+  const initializeDevice = useCallback(async () => {
+    try {
+      setStatus('initializing');
+      setErrorMessage(null);
+
+      // Get access token from our Edge Function
+      const { data: session } = await supabase.auth.getSession();
+      if (!session?.session?.access_token) {
+        throw new Error('Não autenticado');
+      }
+
+      const { data: tokenData, error: tokenError } = await supabase.functions.invoke('twilio-token');
+
+      if (tokenError || !tokenData?.token) {
+        console.error('Token error:', tokenError);
+        throw new Error('Erro ao obter token de acesso');
+      }
+
+      console.log('Got access token, initializing device...');
+
+      // Create and register the Device
+      const device = new Device(tokenData.token, {
+        codecPreferences: [Call.Codec.PCMU, Call.Codec.Opus],
+        allowIncomingWhileBusy: false,
+      });
+
+      device.on('registered', () => {
+        console.log('Twilio Device registered');
+        setStatus('ready');
+      });
+
+      device.on('error', (error) => {
+        console.error('Twilio Device error:', error);
+        setErrorMessage(error.message || 'Erro no dispositivo de áudio');
+        setStatus('failed');
+      });
+
+      device.on('unregistered', () => {
+        console.log('Twilio Device unregistered');
+      });
+
+      await device.register();
+      deviceRef.current = device;
+
+    } catch (error: any) {
+      console.error('Device initialization error:', error);
+      setErrorMessage(error.message || 'Erro ao inicializar chamada');
+      setStatus('failed');
+    }
+  }, []);
+
+  // Make the call
+  const makeCall = useCallback(async () => {
+    if (!deviceRef.current || status !== 'ready') {
+      console.log('Device not ready, status:', status);
+      return;
+    }
+
+    try {
+      setStatus('connecting');
+      console.log('Connecting call to:', phoneNumber);
+
+      const call = await deviceRef.current.connect({
+        params: {
+          To: phoneNumber,
+        },
+      });
+
+      activeCallRef.current = call;
+
+      // Call events
+      call.on('ringing', () => {
+        console.log('Call ringing');
+        setStatus('ringing');
+      });
+
+      call.on('accept', () => {
+        console.log('Call accepted/connected');
+        setStatus('connected');
+        toast.success('Chamada conectada');
+      });
+
+      call.on('disconnect', () => {
+        console.log('Call disconnected');
+        setStatus('ended');
+        onCallEnd?.();
+      });
+
+      call.on('cancel', () => {
+        console.log('Call cancelled');
+        setStatus('ended');
+      });
+
+      call.on('reject', () => {
+        console.log('Call rejected');
+        setStatus('failed');
+        setErrorMessage('Chamada rejeitada');
+      });
+
+      call.on('error', (error) => {
+        console.error('Call error:', error);
+        setErrorMessage(error.message || 'Erro na chamada');
+        setStatus('failed');
+      });
+
+      // Record the call in our database
+      try {
+        const { data: userData } = await supabase.auth.getUser();
+        const { data: userProfile } = await supabase
+          .from('users')
+          .select('id')
+          .eq('auth_user_id', userData.user?.id)
+          .single();
+
+        const { data: userOrg } = await supabase
+          .from('user_organizations')
+          .select('organization_id')
+          .eq('user_id', userProfile?.id)
+          .eq('is_active', true)
+          .single();
+
+        if (userOrg && userProfile) {
+          await supabase.from('calls').insert({
+            organization_id: userOrg.organization_id,
+            user_id: userProfile.id,
+            contact_id: contactId,
+            opportunity_id: opportunityId,
+            direction: 'outgoing',
+            call_type: 'made',
+            to_number: phoneNumber,
+            status: 'queued',
+            started_at: new Date().toISOString(),
+          });
+        }
+      } catch (dbError) {
+        console.error('Error recording call:', dbError);
+      }
+
+    } catch (error: any) {
+      console.error('Call connection error:', error);
+      setErrorMessage(error.message || 'Erro ao conectar chamada');
+      setStatus('failed');
+    }
+  }, [phoneNumber, contactId, opportunityId, status, onCallEnd]);
+
+  // Effect: Initialize device when modal opens
   useEffect(() => {
     if (open) {
-      initiateCall();
-    } else {
-      // Reset state when modal closes
-      setStatus('initiating');
-      setDuration(0);
-      setIsMuted(false);
-      setIsSpeaker(false);
-      setDtmfDigits('');
+      initializeDevice();
+    }
+
+    return () => {
+      // Cleanup when modal closes
+      if (activeCallRef.current) {
+        activeCallRef.current.disconnect();
+        activeCallRef.current = null;
+      }
+      if (deviceRef.current) {
+        deviceRef.current.destroy();
+        deviceRef.current = null;
+      }
       if (timerRef.current) {
         clearInterval(timerRef.current);
         timerRef.current = null;
       }
-    }
-
-    return () => {
-      if (timerRef.current) {
-        clearInterval(timerRef.current);
-      }
+      setStatus('initializing');
+      setDuration(0);
+      setIsMuted(false);
+      setDtmfDigits('');
+      setErrorMessage(null);
     };
-  }, [open]);
+  }, [open, initializeDevice]);
 
-  // Timer for call duration
+  // Effect: Make call when device is ready
+  useEffect(() => {
+    if (status === 'ready' && open) {
+      makeCall();
+    }
+  }, [status, open, makeCall]);
+
+  // Effect: Timer for call duration
   useEffect(() => {
     if (status === 'connected' && !timerRef.current) {
       timerRef.current = setInterval(() => {
@@ -74,65 +235,44 @@ export function ActiveCallModal({
         timerRef.current = null;
       }
     }
-
-    return () => {
-      if (timerRef.current && (status === 'ended' || status === 'failed')) {
-        clearInterval(timerRef.current);
-      }
-    };
   }, [status]);
 
-  const initiateCall = async () => {
-    setStatus('initiating');
-
-    try {
-      const { data, error } = await supabase.functions.invoke('twilio-call', {
-        body: {
-          to: phoneNumber,
-          contactId,
-          opportunityId,
-        },
-      });
-
-      if (error) throw error;
-
-      if (data.success) {
-        callSidRef.current = data.callSid;
-        setStatus('ringing');
-        toast.success('Chamada iniciada');
-
-        // Simulate status transitions (in production, use webhooks/polling)
-        setTimeout(() => {
-          if (status !== 'ended' && status !== 'failed') {
-            setStatus('connected');
-          }
-        }, 3000);
-      } else {
-        throw new Error(data.error || 'Erro ao iniciar chamada');
-      }
-    } catch (error: any) {
-      console.error('Call error:', error);
-      setStatus('failed');
-      toast.error('Erro na chamada', {
-        description: error.message || 'Não foi possível iniciar a chamada',
-      });
-    }
-  };
-
+  // Handle end call
   const handleEndCall = () => {
+    if (activeCallRef.current) {
+      activeCallRef.current.disconnect();
+    }
     setStatus('ended');
-    onCallEnd?.();
     
-    // Close modal after a brief delay
     setTimeout(() => {
       onOpenChange(false);
     }, 1500);
   };
 
+  // Handle mute toggle (REAL)
+  const handleToggleMute = () => {
+    if (activeCallRef.current) {
+      const newMuted = !isMuted;
+      activeCallRef.current.mute(newMuted);
+      setIsMuted(newMuted);
+      toast(newMuted ? 'Microfone mutado' : 'Microfone ativado');
+    }
+  };
+
+  // Handle speaker toggle
+  const handleToggleSpeaker = () => {
+    // Note: Speaker control is typically handled by the device/OS
+    // This is a UI indicator that could be extended with Web Audio API
+    setIsSpeaker(!isSpeaker);
+    toast(isSpeaker ? 'Alto-falante desativado' : 'Alto-falante ativado');
+  };
+
+  // Handle DTMF (REAL)
   const handleDialPress = (digit: string) => {
-    setDtmfDigits((prev) => prev + digit);
-    // In production, send DTMF via Twilio API
-    console.log('DTMF digit pressed:', digit);
+    if (activeCallRef.current && status === 'connected') {
+      activeCallRef.current.sendDigits(digit);
+      setDtmfDigits((prev) => prev + digit);
+    }
   };
 
   const formatDuration = (seconds: number) => {
@@ -143,7 +283,11 @@ export function ActiveCallModal({
 
   const getStatusText = () => {
     switch (status) {
-      case 'initiating':
+      case 'initializing':
+        return 'Preparando...';
+      case 'ready':
+        return 'Conectando...';
+      case 'connecting':
         return 'Iniciando chamada...';
       case 'ringing':
         return 'Chamando...';
@@ -152,7 +296,7 @@ export function ActiveCallModal({
       case 'ended':
         return 'Chamada encerrada';
       case 'failed':
-        return 'Chamada falhou';
+        return errorMessage || 'Chamada falhou';
       default:
         return '';
     }
@@ -160,7 +304,9 @@ export function ActiveCallModal({
 
   const getStatusColor = () => {
     switch (status) {
-      case 'initiating':
+      case 'initializing':
+      case 'ready':
+      case 'connecting':
       case 'ringing':
         return 'text-yellow-500';
       case 'connected':
@@ -182,6 +328,8 @@ export function ActiveCallModal({
         .slice(0, 2)
         .toUpperCase()
     : phoneNumber.slice(-2);
+
+  const isCallActive = status === 'connecting' || status === 'ringing' || status === 'connected';
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -210,7 +358,7 @@ export function ActiveCallModal({
                 {formatDuration(duration)}
               </p>
             )}
-            {status === 'ringing' && (
+            {(status === 'ringing' || status === 'connecting') && (
               <div className="flex items-center gap-1">
                 <span className="w-2 h-2 bg-yellow-500 rounded-full animate-pulse" />
                 <span className="w-2 h-2 bg-yellow-500 rounded-full animate-pulse delay-150" />
@@ -237,7 +385,7 @@ export function ActiveCallModal({
                   variant={isMuted ? 'default' : 'outline'}
                   size="icon"
                   className="h-12 w-12 rounded-full"
-                  onClick={() => setIsMuted(!isMuted)}
+                  onClick={handleToggleMute}
                 >
                   {isMuted ? <MicOff className="h-5 w-5" /> : <Mic className="h-5 w-5" />}
                 </Button>
@@ -245,7 +393,7 @@ export function ActiveCallModal({
                   variant={isSpeaker ? 'default' : 'outline'}
                   size="icon"
                   className="h-12 w-12 rounded-full"
-                  onClick={() => setIsSpeaker(!isSpeaker)}
+                  onClick={handleToggleSpeaker}
                 >
                   {isSpeaker ? <Volume2 className="h-5 w-5" /> : <VolumeX className="h-5 w-5" />}
                 </Button>
@@ -254,7 +402,7 @@ export function ActiveCallModal({
           </div>
 
           {/* End Call Button */}
-          {status !== 'ended' && status !== 'failed' && (
+          {isCallActive && (
             <Button
               variant="destructive"
               size="lg"
@@ -265,8 +413,8 @@ export function ActiveCallModal({
             </Button>
           )}
 
-          {/* Close after failed */}
-          {status === 'failed' && (
+          {/* Close after failed/ended */}
+          {(status === 'failed' || status === 'ended') && (
             <Button variant="outline" onClick={() => onOpenChange(false)}>
               Fechar
             </Button>
