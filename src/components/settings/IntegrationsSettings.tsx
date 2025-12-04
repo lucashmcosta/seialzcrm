@@ -127,9 +127,17 @@ export function IntegrationsSettings() {
                       className="flex items-center justify-between p-4 border rounded-lg"
                     >
                       <div className="flex items-center gap-4">
-                        <div className="p-3 rounded-lg bg-muted">
-                          <Icon className="h-6 w-6" />
-                        </div>
+                        {integration.logo_url ? (
+                          <img
+                            src={integration.logo_url}
+                            alt={integration.name}
+                            className="w-12 h-12 rounded-lg object-contain bg-muted p-1"
+                          />
+                        ) : (
+                          <div className="p-3 rounded-lg bg-muted">
+                            <Icon className="h-6 w-6 text-muted-foreground" />
+                          </div>
+                        )}
                         <div>
                           <div className="flex items-center gap-2">
                             <h3 className="font-medium">{integration.name}</h3>
