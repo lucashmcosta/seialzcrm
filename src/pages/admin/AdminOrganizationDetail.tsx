@@ -283,7 +283,7 @@ export default function AdminOrganizationDetail() {
                         <p className="text-sm text-muted-foreground">{userOrg.users?.email}</p>
                       </div>
                       <div className="flex items-center gap-2">
-                        <span className={`text-sm px-2 py-1 rounded ${userOrg.is_active ? 'bg-green-100 text-green-700' : 'bg-gray-100 text-gray-700'}`}>
+                        <span className={`text-sm px-2 py-1 rounded ${userOrg.is_active ? 'bg-green-500/10 text-green-600' : 'bg-muted text-muted-foreground'}`}>
                           {userOrg.is_active ? 'Ativo' : 'Inativo'}
                         </span>
                         {userOrg.is_active && (

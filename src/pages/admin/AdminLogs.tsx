@@ -105,10 +105,10 @@ export default function AdminLogs() {
                               <TableCell>{log.users?.full_name || 'Sistema'}</TableCell>
                               <TableCell>
                                 <span className={`text-xs px-2 py-1 rounded ${
-                                  log.action === 'INSERT' ? 'bg-green-100 text-green-700' :
-                                  log.action === 'UPDATE' ? 'bg-blue-100 text-blue-700' :
-                                  log.action === 'DELETE' ? 'bg-red-100 text-red-700' :
-                                  'bg-gray-100 text-gray-700'
+                                  log.action === 'INSERT' ? 'bg-green-500/10 text-green-600' :
+                                  log.action === 'UPDATE' ? 'bg-blue-500/10 text-blue-600' :
+                                  log.action === 'DELETE' ? 'bg-destructive/10 text-destructive' :
+                                  'bg-muted text-muted-foreground'
                                 }`}>
                                   {log.action}
                                 </span>
