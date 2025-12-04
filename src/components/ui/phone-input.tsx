@@ -82,12 +82,9 @@ const PhoneInput = React.forwardRef<HTMLInputElement, PhoneInputProps>(
     return (
       <div className={cn("flex", className)}>
         <Select value={country} onValueChange={handleCountryChange} disabled={disabled}>
-          <SelectTrigger className="w-[120px] rounded-r-none border-r-0 flex-shrink-0">
+          <SelectTrigger className="w-[60px] rounded-r-none border-r-0 flex-shrink-0">
             <SelectValue>
-              <span className="flex items-center gap-1.5">
-                <span>{selectedCountry.flag}</span>
-                <span className="text-muted-foreground">+{selectedCountry.dialCode}</span>
-              </span>
+              <span className="text-lg">{selectedCountry.flag}</span>
             </SelectValue>
           </SelectTrigger>
           <SelectContent>
