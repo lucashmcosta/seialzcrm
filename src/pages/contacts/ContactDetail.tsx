@@ -5,6 +5,7 @@ import { supabase } from '@/integrations/supabase/client';
 import { useOrganization } from '@/hooks/useOrganization';
 import { useTranslation } from '@/lib/i18n';
 import { usePermissions } from '@/hooks/usePermissions';
+import { useVoiceIntegration } from '@/hooks/useVoiceIntegration';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
@@ -18,7 +19,7 @@ import { ContactCalls } from '@/components/contacts/ContactCalls';
 import { ContactMessages } from '@/components/contacts/ContactMessages';
 import { ContactAttachments } from '@/components/contacts/ContactAttachments';
 import { ContactOpportunities } from '@/components/contacts/ContactOpportunities';
-import { ClickToCallButton } from '@/components/calls/ClickToCallButton';
+import { ActiveCallModal } from '@/components/calls/ActiveCallModal';
 
 export default function ContactDetail() {
   const { id } = useParams();
@@ -26,8 +27,10 @@ export default function ContactDetail() {
   const { organization, locale, loading: orgLoading } = useOrganization();
   const { t } = useTranslation(locale as any);
   const { permissions } = usePermissions();
+  const { hasVoiceIntegration } = useVoiceIntegration();
   const [contact, setContact] = useState<any>(null);
   const [loading, setLoading] = useState(true);
+  const [callModalOpen, setCallModalOpen] = useState(false);
 
   useEffect(() => {
     if (organization?.id) {
@@ -159,13 +162,16 @@ export default function ContactDetail() {
                       <div className="flex-1">
                         <div className="text-sm text-muted-foreground">{t('contacts.phone')}</div>
                         <div className="flex items-center gap-2">
-                          <span className="text-foreground">{contact.phone}</span>
-                          <ClickToCallButton
-                            phoneNumber={contact.phone}
-                            contactId={contact.id}
-                            size="icon"
-                            variant="ghost"
-                          />
+                          {hasVoiceIntegration ? (
+                            <button
+                              onClick={() => setCallModalOpen(true)}
+                              className="text-primary hover:underline cursor-pointer font-medium"
+                            >
+                              {contact.phone}
+                            </button>
+                          ) : (
+                            <span className="text-foreground">{contact.phone}</span>
+                          )}
                         </div>
                       </div>
                     </div>
@@ -204,6 +210,17 @@ export default function ContactDetail() {
           </Tabs>
         </div>
       </div>
+
+      {/* Active Call Modal */}
+      {contact.phone && (
+        <ActiveCallModal
+          open={callModalOpen}
+          onOpenChange={setCallModalOpen}
+          phoneNumber={contact.phone}
+          contactName={contact.full_name}
+          contactId={contact.id}
+        />
+      )}
     </Layout>
   );
 }
