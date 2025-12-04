@@ -126,6 +126,15 @@ export function IntegrationsSettings() {
     mutationFn: async ({ name, scopes }: { name: string; scopes: string[] }) => {
       if (!organization || !user) throw new Error('Organization or user not found');
 
+      // Buscar o users.id do CRM baseado no auth_user_id
+      const { data: userData, error: userError } = await supabase
+        .from('users')
+        .select('id')
+        .eq('auth_user_id', user.id)
+        .single();
+
+      if (userError) throw userError;
+
       const apiKey = generateApiKey();
       
       const { error } = await supabase
@@ -135,7 +144,7 @@ export function IntegrationsSettings() {
           name: name || 'Default API Key',
           api_key: apiKey,
           scopes: scopes,
-          created_by_user_id: user.id,
+          created_by_user_id: userData.id,
         });
 
       if (error) throw error;
