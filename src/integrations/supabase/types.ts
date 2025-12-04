@@ -640,7 +640,11 @@ export type Database = {
           organization_id: string
           owner_user_id: string | null
           phone: string | null
+          source: string | null
           updated_at: string | null
+          utm_campaign: string | null
+          utm_medium: string | null
+          utm_source: string | null
         }
         Insert: {
           company_id?: string | null
@@ -660,7 +664,11 @@ export type Database = {
           organization_id: string
           owner_user_id?: string | null
           phone?: string | null
+          source?: string | null
           updated_at?: string | null
+          utm_campaign?: string | null
+          utm_medium?: string | null
+          utm_source?: string | null
         }
         Update: {
           company_id?: string | null
@@ -680,7 +688,11 @@ export type Database = {
           organization_id?: string
           owner_user_id?: string | null
           phone?: string | null
+          source?: string | null
           updated_at?: string | null
+          utm_campaign?: string | null
+          utm_medium?: string | null
+          utm_source?: string | null
         }
         Relationships: [
           {
@@ -1411,6 +1423,57 @@ export type Database = {
             columns: ["pipeline_stage_id"]
             isOneToOne: false
             referencedRelation: "pipeline_stages"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      organization_api_keys: {
+        Row: {
+          api_key: string
+          created_at: string | null
+          created_by_user_id: string | null
+          id: string
+          is_active: boolean | null
+          last_used_at: string | null
+          name: string
+          organization_id: string
+          scopes: string[] | null
+        }
+        Insert: {
+          api_key: string
+          created_at?: string | null
+          created_by_user_id?: string | null
+          id?: string
+          is_active?: boolean | null
+          last_used_at?: string | null
+          name?: string
+          organization_id: string
+          scopes?: string[] | null
+        }
+        Update: {
+          api_key?: string
+          created_at?: string | null
+          created_by_user_id?: string | null
+          id?: string
+          is_active?: boolean | null
+          last_used_at?: string | null
+          name?: string
+          organization_id?: string
+          scopes?: string[] | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "organization_api_keys_created_by_user_id_fkey"
+            columns: ["created_by_user_id"]
+            isOneToOne: false
+            referencedRelation: "users"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "organization_api_keys_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
             referencedColumns: ["id"]
           },
         ]
