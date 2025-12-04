@@ -65,24 +65,42 @@ serve(async (req) => {
       )
     }
 
-    // Get Twilio integration config
-    const { data: integration } = await supabase
-      .from('organization_integrations')
-      .select(`
-        config_values,
-        admin_integrations!inner(slug, category)
-      `)
-      .eq('organization_id', userOrg.organization_id)
-      .eq('is_enabled', true)
-      .or('admin_integrations.slug.eq.twilio-voice,admin_integrations.category.eq.telephony')
+    // Step 1: Get the Twilio integration ID from admin_integrations
+    const { data: twilioIntegration } = await supabase
+      .from('admin_integrations')
+      .select('id')
+      .or('slug.eq.twilio-voice,category.eq.telephony')
+      .limit(1)
       .single()
 
-    if (!integration || !integration.config_values) {
+    if (!twilioIntegration) {
+      console.error('Twilio integration not found in admin_integrations')
       return new Response(
-        JSON.stringify({ error: 'Twilio integration not configured' }),
+        JSON.stringify({ error: 'Twilio integration not available' }),
         { status: 404, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       )
     }
+
+    console.log('Found Twilio integration:', twilioIntegration.id)
+
+    // Step 2: Get the organization's integration config
+    const { data: integration } = await supabase
+      .from('organization_integrations')
+      .select('config_values')
+      .eq('organization_id', userOrg.organization_id)
+      .eq('integration_id', twilioIntegration.id)
+      .eq('is_enabled', true)
+      .single()
+
+    if (!integration || !integration.config_values) {
+      console.error('Organization integration not found or not configured')
+      return new Response(
+        JSON.stringify({ error: 'Twilio integration not configured for this organization' }),
+        { status: 404, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      )
+    }
+
+    console.log('Found organization integration with config')
 
     const config = integration.config_values as Record<string, string>
     const { account_sid, auth_token, twiml_app_sid } = config
@@ -135,6 +153,7 @@ serve(async (req) => {
           }
         })
         .eq('organization_id', userOrg.organization_id)
+        .eq('integration_id', twilioIntegration.id)
 
       console.log('API Key created and saved:', api_key_sid)
     }
