@@ -14,8 +14,10 @@ import { toast } from 'sonner';
 const iconMap: Record<string, any> = {
   whatsapp: MessageSquare,
   telephony: Phone,
+  'twilio-voice': Phone,
   email: Mail,
   webhooks: Webhook,
+  other: Webhook,
   default: Webhook,
 };
 
@@ -114,7 +116,7 @@ export function IntegrationsSettings() {
             ) : availableIntegrations && availableIntegrations.length > 0 ? (
               <div className="grid gap-4">
                 {availableIntegrations.map((integration) => {
-                  const Icon = iconMap[integration.slug] || iconMap.default;
+                  const Icon = iconMap[integration.slug] || iconMap[integration.category] || iconMap.default;
                   const connection = getIntegrationStatus(integration.id);
                   const isConnected = !!connection;
                   const isBeta = integration.status === 'beta';
