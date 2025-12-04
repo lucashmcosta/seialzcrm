@@ -430,50 +430,122 @@ export type Database = {
           },
         ]
       }
+      call_recordings: {
+        Row: {
+          call_id: string
+          created_at: string | null
+          duration_seconds: number | null
+          file_size_bytes: number | null
+          id: string
+          organization_id: string
+          recording_sid: string
+          recording_url: string
+          transcription: string | null
+        }
+        Insert: {
+          call_id: string
+          created_at?: string | null
+          duration_seconds?: number | null
+          file_size_bytes?: number | null
+          id?: string
+          organization_id: string
+          recording_sid: string
+          recording_url: string
+          transcription?: string | null
+        }
+        Update: {
+          call_id?: string
+          created_at?: string | null
+          duration_seconds?: number | null
+          file_size_bytes?: number | null
+          id?: string
+          organization_id?: string
+          recording_sid?: string
+          recording_url?: string
+          transcription?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "call_recordings_call_id_fkey"
+            columns: ["call_id"]
+            isOneToOne: false
+            referencedRelation: "calls"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "call_recordings_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       calls: {
         Row: {
+          answered_at: string | null
+          call_sid: string | null
+          call_type: string | null
           contact_id: string
           created_at: string | null
           deleted_at: string | null
           direction: string
           duration_seconds: number | null
+          ended_at: string | null
+          from_number: string | null
           id: string
           is_sample: boolean | null
           notes: string | null
           opportunity_id: string | null
           organization_id: string
+          scheduled_at: string | null
           started_at: string | null
           status: string | null
+          to_number: string | null
           user_id: string
         }
         Insert: {
+          answered_at?: string | null
+          call_sid?: string | null
+          call_type?: string | null
           contact_id: string
           created_at?: string | null
           deleted_at?: string | null
           direction: string
           duration_seconds?: number | null
+          ended_at?: string | null
+          from_number?: string | null
           id?: string
           is_sample?: boolean | null
           notes?: string | null
           opportunity_id?: string | null
           organization_id: string
+          scheduled_at?: string | null
           started_at?: string | null
           status?: string | null
+          to_number?: string | null
           user_id: string
         }
         Update: {
+          answered_at?: string | null
+          call_sid?: string | null
+          call_type?: string | null
           contact_id?: string
           created_at?: string | null
           deleted_at?: string | null
           direction?: string
           duration_seconds?: number | null
+          ended_at?: string | null
+          from_number?: string | null
           id?: string
           is_sample?: boolean | null
           notes?: string | null
           opportunity_id?: string | null
           organization_id?: string
+          scheduled_at?: string | null
           started_at?: string | null
           status?: string | null
+          to_number?: string | null
           user_id?: string
         }
         Relationships: [
@@ -2178,6 +2250,7 @@ export type Database = {
         | "pipeline_stage_change"
         | "system"
       app_role: "admin" | "sales_rep" | "viewer"
+      call_type: "made" | "received" | "scheduled"
       duplicate_check_mode: "none" | "email" | "phone" | "email_or_phone"
       lifecycle_stage: "lead" | "customer" | "inactive"
       onboarding_step:
@@ -2327,6 +2400,7 @@ export const Constants = {
         "system",
       ],
       app_role: ["admin", "sales_rep", "viewer"],
+      call_type: ["made", "received", "scheduled"],
       duplicate_check_mode: ["none", "email", "phone", "email_or_phone"],
       lifecycle_stage: ["lead", "customer", "inactive"],
       onboarding_step: [

@@ -5,3 +5,9 @@ verify_jwt = true
 
 [functions.admin-impersonate-end]
 verify_jwt = false
+
+[functions.twilio-call]
+verify_jwt = true
+
+[functions.twilio-webhook]
+verify_jwt = false

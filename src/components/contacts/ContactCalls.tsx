@@ -9,34 +9,47 @@ import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
-import { Badge } from '@/components/ui/badge';
+import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { useToast } from '@/hooks/use-toast';
-import { Loader2, Phone, PhoneIncoming, PhoneOutgoing } from 'lucide-react';
+import { Loader2, Phone, PhoneIncoming, PhoneOutgoing, Calendar, Plus } from 'lucide-react';
 import { formatDistanceToNow } from 'date-fns';
 import { ptBR, enUS } from 'date-fns/locale';
+import { CallStatusBadge } from '@/components/calls/CallStatusBadge';
+import { CallRecordingPlayer } from '@/components/calls/CallRecordingPlayer';
+import { ClickToCallButton } from '@/components/calls/ClickToCallButton';
+import { ScheduleCallDialog } from '@/components/calls/ScheduleCallDialog';
 
 interface Call {
   id: string;
   direction: 'outgoing' | 'incoming';
   status: string;
+  call_type: string;
   started_at: string;
+  scheduled_at: string | null;
   duration_seconds: number | null;
   notes: string | null;
+  to_number: string | null;
   created_at: string;
+  call_recordings?: { id: string; recording_url: string; duration_seconds: number | null }[];
 }
 
 interface ContactCallsProps {
   contactId: string;
+  opportunityId?: string;
+  contactPhone?: string;
+  contactName?: string;
 }
 
-export function ContactCalls({ contactId }: ContactCallsProps) {
+export function ContactCalls({ contactId, opportunityId, contactPhone, contactName }: ContactCallsProps) {
   const { organization, locale, userProfile } = useOrganization();
   const { t } = useTranslation(locale as any);
   const { toast } = useToast();
   const [calls, setCalls] = useState<Call[]>([]);
   const [loading, setLoading] = useState(true);
   const [dialogOpen, setDialogOpen] = useState(false);
+  const [scheduleDialogOpen, setScheduleDialogOpen] = useState(false);
   const [submitting, setSubmitting] = useState(false);
+  const [filter, setFilter] = useState<'all' | 'made' | 'received' | 'scheduled'>('all');
   const [formData, setFormData] = useState({
     direction: 'outgoing' as 'outgoing' | 'incoming',
     status: 'completed',
@@ -54,7 +67,10 @@ export function ContactCalls({ contactId }: ContactCallsProps) {
     try {
       const { data, error } = await supabase
         .from('calls')
-        .select('*')
+        .select(`
+          *,
+          call_recordings(id, recording_url, duration_seconds)
+        `)
         .eq('organization_id', organization.id)
         .eq('contact_id', contactId)
         .is('deleted_at', null)
@@ -80,9 +96,11 @@ export function ContactCalls({ contactId }: ContactCallsProps) {
         .insert({
           organization_id: organization.id,
           contact_id: contactId,
+          opportunity_id: opportunityId || null,
           user_id: userProfile.id,
           direction: formData.direction,
           status: formData.status,
+          call_type: formData.direction === 'outgoing' ? 'made' : 'received',
           duration_seconds: formData.duration_seconds ? parseInt(formData.duration_seconds) : null,
           notes: formData.notes || null,
           started_at: new Date().toISOString(),
@@ -90,18 +108,18 @@ export function ContactCalls({ contactId }: ContactCallsProps) {
 
       if (error) throw error;
 
-      // Create activity
       await supabase.from('activities').insert({
         organization_id: organization.id,
         contact_id: contactId,
+        opportunity_id: opportunityId || null,
         activity_type: 'call',
-        title: `${formData.direction === 'outgoing' ? 'Outgoing' : 'Incoming'} call`,
+        title: `${formData.direction === 'outgoing' ? 'Ligação realizada' : 'Ligação recebida'}`,
         body: formData.notes,
         created_by_user_id: userProfile.id,
         occurred_at: new Date().toISOString(),
       });
 
-      toast({ description: 'Call logged successfully' });
+      toast({ description: 'Chamada registrada com sucesso' });
       setDialogOpen(false);
       setFormData({ direction: 'outgoing', status: 'completed', duration_seconds: '', notes: '' });
       fetchCalls();
@@ -122,6 +140,26 @@ export function ContactCalls({ contactId }: ContactCallsProps) {
 
   const dateLocale = locale === 'pt-BR' ? ptBR : enUS;
 
+  const filteredCalls = calls.filter((call) => {
+    if (filter === 'all') return true;
+    if (filter === 'made') return call.call_type === 'made' || (call.direction === 'outgoing' && call.call_type !== 'scheduled');
+    if (filter === 'received') return call.call_type === 'received' || call.direction === 'incoming';
+    if (filter === 'scheduled') return call.call_type === 'scheduled';
+    return true;
+  });
+
+  const getCallIcon = (call: Call) => {
+    if (call.call_type === 'scheduled') return <Calendar className="w-4 h-4" />;
+    if (call.direction === 'outgoing') return <PhoneOutgoing className="w-4 h-4" />;
+    return <PhoneIncoming className="w-4 h-4" />;
+  };
+
+  const getCallTitle = (call: Call) => {
+    if (call.call_type === 'scheduled') return 'Chamada agendada';
+    if (call.direction === 'outgoing') return 'Ligação realizada';
+    return 'Ligação recebida';
+  };
+
   if (loading) {
     return (
       <Card>
@@ -136,98 +174,164 @@ export function ContactCalls({ contactId }: ContactCallsProps) {
     <Card>
       <CardHeader>
         <div className="flex items-center justify-between">
-          <CardTitle>Calls</CardTitle>
-          <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
-            <DialogTrigger asChild>
-              <Button size="sm">
-                <Phone className="w-4 h-4 mr-2" />
-                {t('activity.logCall')}
-              </Button>
-            </DialogTrigger>
-            <DialogContent>
-              <form onSubmit={handleSubmit}>
-                <DialogHeader>
-                  <DialogTitle>{t('activity.logCall')}</DialogTitle>
-                  <DialogDescription>Record a call with this contact</DialogDescription>
-                </DialogHeader>
-                <div className="space-y-4 py-4">
-                  <div className="space-y-2">
-                    <Label htmlFor="direction">{t('activity.direction')}</Label>
-                    <Select value={formData.direction} onValueChange={(value: any) => setFormData({ ...formData, direction: value })}>
-                      <SelectTrigger id="direction">
-                        <SelectValue />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="outgoing">{t('activity.outgoing')}</SelectItem>
-                        <SelectItem value="incoming">{t('activity.incoming')}</SelectItem>
-                      </SelectContent>
-                    </Select>
+          <CardTitle className="flex items-center gap-2">
+            <Phone className="h-5 w-5" />
+            Chamadas
+          </CardTitle>
+          <div className="flex items-center gap-2">
+            {contactPhone && (
+              <>
+                <ClickToCallButton
+                  phoneNumber={contactPhone}
+                  contactId={contactId}
+                  opportunityId={opportunityId}
+                  size="sm"
+                />
+                <Button size="sm" variant="outline" onClick={() => setScheduleDialogOpen(true)}>
+                  <Calendar className="w-4 h-4 mr-2" />
+                  Agendar
+                </Button>
+              </>
+            )}
+            <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
+              <DialogTrigger asChild>
+                <Button size="sm" variant="outline">
+                  <Plus className="w-4 h-4 mr-2" />
+                  Registrar
+                </Button>
+              </DialogTrigger>
+              <DialogContent>
+                <form onSubmit={handleSubmit}>
+                  <DialogHeader>
+                    <DialogTitle>Registrar Chamada</DialogTitle>
+                    <DialogDescription>Registre uma chamada manual com este contato</DialogDescription>
+                  </DialogHeader>
+                  <div className="space-y-4 py-4">
+                    <div className="space-y-2">
+                      <Label htmlFor="direction">Direção</Label>
+                      <Select value={formData.direction} onValueChange={(value: any) => setFormData({ ...formData, direction: value })}>
+                        <SelectTrigger id="direction">
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="outgoing">Realizada</SelectItem>
+                          <SelectItem value="incoming">Recebida</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </div>
+                    <div className="space-y-2">
+                      <Label htmlFor="status">Status</Label>
+                      <Select value={formData.status} onValueChange={(value) => setFormData({ ...formData, status: value })}>
+                        <SelectTrigger id="status">
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="completed">Concluída</SelectItem>
+                          <SelectItem value="no-answer">Não atendeu</SelectItem>
+                          <SelectItem value="busy">Ocupado</SelectItem>
+                          <SelectItem value="failed">Falhou</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </div>
+                    <div className="space-y-2">
+                      <Label htmlFor="duration">Duração (segundos)</Label>
+                      <Input
+                        id="duration"
+                        type="number"
+                        value={formData.duration_seconds}
+                        onChange={(e) => setFormData({ ...formData, duration_seconds: e.target.value })}
+                        placeholder="120"
+                      />
+                    </div>
+                    <div className="space-y-2">
+                      <Label htmlFor="notes">Notas</Label>
+                      <Textarea
+                        id="notes"
+                        value={formData.notes}
+                        onChange={(e) => setFormData({ ...formData, notes: e.target.value })}
+                        rows={3}
+                        placeholder="Notas da chamada..."
+                      />
+                    </div>
                   </div>
-                  <div className="space-y-2">
-                    <Label htmlFor="duration">{t('activity.duration')} (seconds)</Label>
-                    <Input
-                      id="duration"
-                      type="number"
-                      value={formData.duration_seconds}
-                      onChange={(e) => setFormData({ ...formData, duration_seconds: e.target.value })}
-                      placeholder="120"
-                    />
-                  </div>
-                  <div className="space-y-2">
-                    <Label htmlFor="notes">{t('activity.notes')}</Label>
-                    <Textarea
-                      id="notes"
-                      value={formData.notes}
-                      onChange={(e) => setFormData({ ...formData, notes: e.target.value })}
-                      rows={3}
-                      placeholder="Call notes..."
-                    />
-                  </div>
-                </div>
-                <DialogFooter>
-                  <Button type="submit" disabled={submitting}>
-                    {submitting && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-                    {t('common.save')}
-                  </Button>
-                </DialogFooter>
-              </form>
-            </DialogContent>
-          </Dialog>
+                  <DialogFooter>
+                    <Button type="submit" disabled={submitting}>
+                      {submitting && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                      Salvar
+                    </Button>
+                  </DialogFooter>
+                </form>
+              </DialogContent>
+            </Dialog>
+          </div>
         </div>
+        
+        <Tabs value={filter} onValueChange={(v) => setFilter(v as any)} className="mt-2">
+          <TabsList>
+            <TabsTrigger value="all">Todas</TabsTrigger>
+            <TabsTrigger value="made">Feitas</TabsTrigger>
+            <TabsTrigger value="received">Recebidas</TabsTrigger>
+            <TabsTrigger value="scheduled">Agendadas</TabsTrigger>
+          </TabsList>
+        </Tabs>
       </CardHeader>
       <CardContent>
         <div className="space-y-3">
-          {calls.length === 0 ? (
-            <p className="text-center text-muted-foreground py-8">No calls logged yet</p>
+          {filteredCalls.length === 0 ? (
+            <p className="text-center text-muted-foreground py-8">Nenhuma chamada registrada</p>
           ) : (
-            calls.map((call) => (
+            filteredCalls.map((call) => (
               <div key={call.id} className="flex items-start gap-3 p-3 rounded-lg border">
                 <div className="flex-shrink-0 w-8 h-8 rounded-full bg-primary/10 flex items-center justify-center text-primary">
-                  {call.direction === 'outgoing' ? (
-                    <PhoneOutgoing className="w-4 h-4" />
-                  ) : (
-                    <PhoneIncoming className="w-4 h-4" />
-                  )}
+                  {getCallIcon(call)}
                 </div>
-                <div className="flex-1 min-w-0">
-                  <div className="flex items-center justify-between mb-1">
-                    <p className="font-medium text-foreground">
-                      {call.direction === 'outgoing' ? t('activity.outgoing') : t('activity.incoming')} call
-                    </p>
+                <div className="flex-1 min-w-0 space-y-2">
+                  <div className="flex items-center justify-between">
+                    <p className="font-medium text-foreground">{getCallTitle(call)}</p>
                     <span className="text-xs text-muted-foreground">
-                      {formatDistanceToNow(new Date(call.started_at), { addSuffix: true, locale: dateLocale })}
+                      {call.scheduled_at 
+                        ? `Agendada: ${new Date(call.scheduled_at).toLocaleString(locale)}`
+                        : formatDistanceToNow(new Date(call.started_at), { addSuffix: true, locale: dateLocale })
+                      }
                     </span>
                   </div>
-                  <div className="flex items-center gap-2 mb-2">
-                    <Badge variant="secondary" className="text-xs">
-                      {formatDuration(call.duration_seconds)}
-                    </Badge>
-                    <Badge variant="outline" className="text-xs capitalize">
-                      {call.status}
-                    </Badge>
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <CallStatusBadge status={call.status} />
+                    {call.duration_seconds && call.status === 'completed' && (
+                      <span className="text-xs text-muted-foreground">
+                        {formatDuration(call.duration_seconds)}
+                      </span>
+                    )}
+                    {call.to_number && (
+                      <span className="text-xs text-muted-foreground">
+                        {call.to_number}
+                      </span>
+                    )}
                   </div>
                   {call.notes && (
                     <p className="text-sm text-muted-foreground whitespace-pre-wrap">{call.notes}</p>
+                  )}
+                  {call.call_recordings && call.call_recordings.length > 0 && (
+                    <div className="mt-2">
+                      {call.call_recordings.map((rec) => (
+                        <CallRecordingPlayer 
+                          key={rec.id} 
+                          recordingUrl={rec.recording_url} 
+                          duration={rec.duration_seconds || undefined} 
+                        />
+                      ))}
+                    </div>
+                  )}
+                  {call.call_type === 'scheduled' && call.status === 'queued' && contactPhone && (
+                    <div className="mt-2">
+                      <ClickToCallButton
+                        phoneNumber={contactPhone}
+                        contactId={contactId}
+                        opportunityId={opportunityId}
+                        size="sm"
+                        variant="default"
+                      />
+                    </div>
                   )}
                 </div>
               </div>
@@ -235,6 +339,18 @@ export function ContactCalls({ contactId }: ContactCallsProps) {
           )}
         </div>
       </CardContent>
+
+      {contactPhone && contactName && (
+        <ScheduleCallDialog
+          open={scheduleDialogOpen}
+          onOpenChange={setScheduleDialogOpen}
+          contactId={contactId}
+          contactPhone={contactPhone}
+          contactName={contactName}
+          opportunityId={opportunityId}
+          onSuccess={fetchCalls}
+        />
+      )}
     </Card>
   );
 }

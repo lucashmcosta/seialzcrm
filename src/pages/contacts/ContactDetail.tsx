@@ -18,6 +18,7 @@ import { ContactCalls } from '@/components/contacts/ContactCalls';
 import { ContactMessages } from '@/components/contacts/ContactMessages';
 import { ContactAttachments } from '@/components/contacts/ContactAttachments';
 import { ContactOpportunities } from '@/components/contacts/ContactOpportunities';
+import { ClickToCallButton } from '@/components/calls/ClickToCallButton';
 
 export default function ContactDetail() {
   const { id } = useParams();
@@ -155,9 +156,17 @@ export default function ContactDetail() {
                   {contact.phone && (
                     <div className="flex items-center gap-3">
                       <Phone className="h-4 w-4 text-muted-foreground" />
-                      <div>
+                      <div className="flex-1">
                         <div className="text-sm text-muted-foreground">{t('contacts.phone')}</div>
-                        <div className="text-foreground">{contact.phone}</div>
+                        <div className="flex items-center gap-2">
+                          <span className="text-foreground">{contact.phone}</span>
+                          <ClickToCallButton
+                            phoneNumber={contact.phone}
+                            contactId={contact.id}
+                            size="icon"
+                            variant="ghost"
+                          />
+                        </div>
                       </div>
                     </div>
                   )}
@@ -176,7 +185,11 @@ export default function ContactDetail() {
 
             <TabsContent value="timeline" className="space-y-4">
               <ActivityTimeline contactId={contact.id} />
-              <ContactCalls contactId={contact.id} />
+              <ContactCalls 
+                contactId={contact.id} 
+                contactPhone={contact.phone}
+                contactName={contact.full_name}
+              />
               <ContactMessages contactId={contact.id} />
               <ContactAttachments contactId={contact.id} />
             </TabsContent>
