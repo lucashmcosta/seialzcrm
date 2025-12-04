@@ -2,6 +2,8 @@ import { Toaster } from "@/components/ui/toaster";
 import { Toaster as Sonner } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
+import { OutboundCallProvider } from "@/contexts/OutboundCallContext";
+import { OutboundCallHandler } from "@/components/calls/OutboundCallHandler";
 import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
 import { useAuth } from "./hooks/useAuth";
 import { InboundCallHandler } from "./components/calls/InboundCallHandler";
@@ -71,11 +73,17 @@ function GlobalCallHandler() {
   
   if (!isAuthenticated) return null;
   
-  return <InboundCallHandler />;
+  return (
+    <>
+      <InboundCallHandler />
+      <OutboundCallHandler />
+    </>
+  );
 }
 
 const App = () => (
   <QueryClientProvider client={queryClient}>
+    <OutboundCallProvider>
     <TooltipProvider>
       <Toaster />
       <Sonner />
@@ -293,6 +301,7 @@ const App = () => (
         </Routes>
       </BrowserRouter>
     </TooltipProvider>
+    </OutboundCallProvider>
   </QueryClientProvider>
 );
 

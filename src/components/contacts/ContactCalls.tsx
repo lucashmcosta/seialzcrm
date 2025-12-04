@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { useOrganization } from '@/hooks/useOrganization';
 import { useVoiceIntegration } from '@/hooks/useVoiceIntegration';
+import { useOutboundCall } from '@/contexts/OutboundCallContext';
 import { useTranslation } from '@/lib/i18n';
 import { supabase } from '@/integrations/supabase/client';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -18,7 +19,6 @@ import { ptBR, enUS } from 'date-fns/locale';
 import { CallStatusBadge } from '@/components/calls/CallStatusBadge';
 import { CallRecordingPlayer } from '@/components/calls/CallRecordingPlayer';
 import { ScheduleCallDialog } from '@/components/calls/ScheduleCallDialog';
-import { ActiveCallModal } from '@/components/calls/ActiveCallModal';
 
 interface Call {
   id: string;
@@ -44,13 +44,13 @@ interface ContactCallsProps {
 export function ContactCalls({ contactId, opportunityId, contactPhone, contactName }: ContactCallsProps) {
   const { organization, locale, userProfile } = useOrganization();
   const { hasVoiceIntegration } = useVoiceIntegration();
+  const { startCall } = useOutboundCall();
   const { t } = useTranslation(locale as any);
   const { toast } = useToast();
   const [calls, setCalls] = useState<Call[]>([]);
   const [loading, setLoading] = useState(true);
   const [dialogOpen, setDialogOpen] = useState(false);
   const [scheduleDialogOpen, setScheduleDialogOpen] = useState(false);
-  const [callModalOpen, setCallModalOpen] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [filter, setFilter] = useState<'all' | 'made' | 'received' | 'scheduled'>('all');
   const [formData, setFormData] = useState({
@@ -184,7 +184,12 @@ export function ContactCalls({ contactId, opportunityId, contactPhone, contactNa
           <div className="flex items-center gap-2">
             {contactPhone && hasVoiceIntegration && (
               <>
-                <Button size="sm" onClick={() => setCallModalOpen(true)}>
+                <Button size="sm" onClick={() => startCall({ 
+                  phoneNumber: contactPhone, 
+                  contactName, 
+                  contactId, 
+                  opportunityId 
+                })}>
                   <Phone className="w-4 h-4 mr-2" />
                   Ligar
                 </Button>
@@ -325,7 +330,12 @@ export function ContactCalls({ contactId, opportunityId, contactPhone, contactNa
                   )}
                   {call.call_type === 'scheduled' && call.status === 'queued' && contactPhone && hasVoiceIntegration && (
                     <div className="mt-2">
-                      <Button size="sm" onClick={() => setCallModalOpen(true)}>
+                      <Button size="sm" onClick={() => startCall({ 
+                        phoneNumber: contactPhone, 
+                        contactName, 
+                        contactId, 
+                        opportunityId 
+                      })}>
                         <Phone className="w-4 h-4 mr-2" />
                         Ligar agora
                       </Button>
@@ -339,26 +349,15 @@ export function ContactCalls({ contactId, opportunityId, contactPhone, contactNa
       </CardContent>
 
       {contactPhone && contactName && hasVoiceIntegration && (
-        <>
-          <ScheduleCallDialog
-            open={scheduleDialogOpen}
-            onOpenChange={setScheduleDialogOpen}
-            contactId={contactId}
-            contactPhone={contactPhone}
-            contactName={contactName}
-            opportunityId={opportunityId}
-            onSuccess={fetchCalls}
-          />
-          <ActiveCallModal
-            open={callModalOpen}
-            onOpenChange={setCallModalOpen}
-            phoneNumber={contactPhone}
-            contactName={contactName}
-            contactId={contactId}
-            opportunityId={opportunityId}
-            onCallEnd={fetchCalls}
-          />
-        </>
+        <ScheduleCallDialog
+          open={scheduleDialogOpen}
+          onOpenChange={setScheduleDialogOpen}
+          contactId={contactId}
+          contactPhone={contactPhone}
+          contactName={contactName}
+          opportunityId={opportunityId}
+          onSuccess={fetchCalls}
+        />
       )}
     </Card>
   );
