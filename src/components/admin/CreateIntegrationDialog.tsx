@@ -27,6 +27,7 @@ export function CreateIntegrationDialog({ open, onOpenChange }: CreateIntegratio
     name: '',
     slug: '',
     description: '',
+    logo_url: '',
     category: 'other',
     status: 'coming_soon',
   });
@@ -49,6 +50,7 @@ export function CreateIntegrationDialog({ open, onOpenChange }: CreateIntegratio
         name: '',
         slug: '',
         description: '',
+        logo_url: '',
         category: 'other',
         status: 'coming_soon',
       });
@@ -96,6 +98,29 @@ export function CreateIntegrationDialog({ open, onOpenChange }: CreateIntegratio
               onChange={(e) => setFormData({ ...formData, description: e.target.value })}
               rows={3}
             />
+          </div>
+          <div className="space-y-2">
+            <Label htmlFor="logo_url">URL da Logo</Label>
+            <div className="flex items-center gap-4">
+              <Input
+                id="logo_url"
+                value={formData.logo_url}
+                onChange={(e) => setFormData({ ...formData, logo_url: e.target.value })}
+                placeholder="https://exemplo.com/logo.png"
+                className="flex-1"
+              />
+              {formData.logo_url && (
+                <div className="flex items-center gap-2">
+                  <span className="text-sm text-muted-foreground">Preview:</span>
+                  <img
+                    src={formData.logo_url}
+                    alt="Preview"
+                    className="w-12 h-12 rounded-lg object-contain bg-muted p-1"
+                    onError={(e) => (e.currentTarget.style.display = 'none')}
+                  />
+                </div>
+              )}
+            </div>
           </div>
           <div className="grid grid-cols-2 gap-4">
             <div className="space-y-2">
