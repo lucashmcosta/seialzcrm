@@ -27,9 +27,10 @@ export function PipelineSettings() {
   const [loading, setLoading] = useState(true);
   const [dialogOpen, setDialogOpen] = useState(false);
   const [editingStage, setEditingStage] = useState<PipelineStage | null>(null);
-  const [formData, setFormData] = useState<{ name: string; type: 'custom' | 'won' | 'lost' }>({ 
+  const [formData, setFormData] = useState<{ name: string; type: 'custom' | 'won' | 'lost'; order_index: number }>({ 
     name: '', 
-    type: 'custom' 
+    type: 'custom',
+    order_index: 1
   });
 
   useEffect(() => {
@@ -63,20 +64,19 @@ export function PipelineSettings() {
       if (editingStage) {
         const { error } = await supabase
           .from('pipeline_stages')
-          .update({ name: formData.name })
+          .update({ name: formData.name, order_index: formData.order_index })
           .eq('id', editingStage.id);
 
         if (error) throw error;
         toast({ description: t('settings.stageUpdated') });
       } else {
-        const maxOrder = Math.max(...stages.map(s => s.order_index), 0);
         const { error } = await supabase
           .from('pipeline_stages')
           .insert({
             organization_id: organization.id,
             name: formData.name,
             type: formData.type,
-            order_index: formData.type === 'custom' ? maxOrder + 1 : formData.type === 'won' ? 100 : 101,
+            order_index: formData.order_index,
           });
 
         if (error) throw error;
@@ -85,7 +85,7 @@ export function PipelineSettings() {
 
       setDialogOpen(false);
       setEditingStage(null);
-      setFormData({ name: '', type: 'custom' });
+      setFormData({ name: '', type: 'custom', order_index: 1 });
       fetchStages();
     } catch (error) {
       console.error('Error saving stage:', error);
@@ -131,7 +131,11 @@ export function PipelineSettings() {
           </div>
           <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
             <DialogTrigger asChild>
-              <Button onClick={() => { setEditingStage(null); setFormData({ name: '', type: 'custom' }); }}>
+              <Button onClick={() => { 
+                setEditingStage(null); 
+                const nextOrder = Math.max(...stages.filter(s => s.type === 'custom').map(s => s.order_index), 0) + 1;
+                setFormData({ name: '', type: 'custom', order_index: nextOrder }); 
+              }}>
                 <Plus className="w-4 h-4 mr-2" />
                 {t('settings.addStage')}
               </Button>
@@ -153,6 +157,20 @@ export function PipelineSettings() {
                       onChange={(e) => setFormData({ ...formData, name: e.target.value })}
                       required
                     />
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="order">{t('settings.order')}</Label>
+                    <Input
+                      id="order"
+                      type="number"
+                      min={1}
+                      value={formData.order_index}
+                      onChange={(e) => setFormData({ ...formData, order_index: parseInt(e.target.value) || 1 })}
+                      required
+                    />
+                    <p className="text-sm text-muted-foreground">
+                      Número menor = aparece primeiro no pipeline
+                    </p>
                   </div>
                   {!editingStage && (
                     <div className="space-y-2">
@@ -209,7 +227,7 @@ export function PipelineSettings() {
                       size="icon"
                       onClick={() => {
                         setEditingStage(stage);
-                        setFormData({ name: stage.name, type: stage.type });
+                        setFormData({ name: stage.name, type: stage.type, order_index: stage.order_index });
                         setDialogOpen(true);
                       }}
                     >
