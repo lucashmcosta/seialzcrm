@@ -53,17 +53,22 @@ export function IntegrationConnectDialog({
         .eq('auth_user_id', userData.user?.id)
         .single();
 
-      // First, save the integration connection
+      // Save/update the integration connection (upsert allows reconnecting existing integrations)
       const { error } = await supabase
         .from('organization_integrations')
-        .insert({
-          organization_id: organization.id,
-          integration_id: integration.id,
-          config_values: configValues,
-          is_enabled: true,
-          connected_at: new Date().toISOString(),
-          connected_by_user_id: userProfile?.id,
-        });
+        .upsert(
+          {
+            organization_id: organization.id,
+            integration_id: integration.id,
+            config_values: configValues,
+            is_enabled: true,
+            connected_at: new Date().toISOString(),
+            connected_by_user_id: userProfile?.id,
+          },
+          {
+            onConflict: 'integration_id,organization_id',
+          }
+        );
 
       if (error) throw error;
 
