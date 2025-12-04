@@ -6,6 +6,7 @@ import { useOrganization } from '@/hooks/useOrganization';
 import { useTranslation } from '@/lib/i18n';
 import { usePermissions } from '@/hooks/usePermissions';
 import { useVoiceIntegration } from '@/hooks/useVoiceIntegration';
+import { useOutboundCall } from '@/contexts/OutboundCallContext';
 import { formatPhoneDisplay } from '@/lib/phoneUtils';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
@@ -20,7 +21,6 @@ import { ContactCalls } from '@/components/contacts/ContactCalls';
 import { ContactMessages } from '@/components/contacts/ContactMessages';
 import { ContactAttachments } from '@/components/contacts/ContactAttachments';
 import { ContactOpportunities } from '@/components/contacts/ContactOpportunities';
-import { ActiveCallModal } from '@/components/calls/ActiveCallModal';
 
 export default function ContactDetail() {
   const { id } = useParams();
@@ -29,9 +29,9 @@ export default function ContactDetail() {
   const { t } = useTranslation(locale as any);
   const { permissions } = usePermissions();
   const { hasVoiceIntegration } = useVoiceIntegration();
+  const { startCall } = useOutboundCall();
   const [contact, setContact] = useState<any>(null);
   const [loading, setLoading] = useState(true);
-  const [callModalOpen, setCallModalOpen] = useState(false);
 
   useEffect(() => {
     if (organization?.id) {
@@ -165,7 +165,11 @@ export default function ContactDetail() {
                         <div className="flex items-center gap-2">
                           {hasVoiceIntegration ? (
                             <button
-                              onClick={() => setCallModalOpen(true)}
+                              onClick={() => startCall({ 
+                                phoneNumber: contact.phone, 
+                                contactName: contact.full_name, 
+                                contactId: contact.id 
+                              })}
                               className="text-primary hover:underline cursor-pointer font-medium"
                             >
                               {formatPhoneDisplay(contact.phone)}
@@ -211,17 +215,6 @@ export default function ContactDetail() {
           </Tabs>
         </div>
       </div>
-
-      {/* Active Call Modal */}
-      {contact.phone && (
-        <ActiveCallModal
-          open={callModalOpen}
-          onOpenChange={setCallModalOpen}
-          phoneNumber={contact.phone}
-          contactName={contact.full_name}
-          contactId={contact.id}
-        />
-      )}
     </Layout>
   );
 }
