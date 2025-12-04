@@ -5,6 +5,7 @@ import { Label } from '@/components/ui/label';
 import { Phone, CheckCircle2, XCircle, Settings2 } from 'lucide-react';
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
+import { formatPhoneDisplay } from '@/lib/phoneUtils';
 
 interface IntegrationDetailDialogProps {
   open: boolean;
@@ -37,20 +38,26 @@ export function IntegrationDetailDialog({
       <div className="space-y-2">
         <Label className="text-muted-foreground">Account SID</Label>
         <p className="font-mono text-sm bg-muted px-3 py-2 rounded-md">
-          {maskSecret(configValues.accountSid)}
+          {maskSecret(configValues.account_sid)}
+        </p>
+      </div>
+      <div className="space-y-2">
+        <Label className="text-muted-foreground">Auth Token</Label>
+        <p className="font-mono text-sm bg-muted px-3 py-2 rounded-md">
+          {maskSecret(configValues.auth_token)}
         </p>
       </div>
       <div className="space-y-2">
         <Label className="text-muted-foreground">Número de Telefone</Label>
         <p className="font-mono text-sm bg-muted px-3 py-2 rounded-md flex items-center gap-2">
           <Phone className="h-4 w-4" />
-          {configValues.twilioPhoneNumber || 'Não configurado'}
+          {formatPhoneDisplay(configValues.phone_number) || 'Não configurado'}
         </p>
       </div>
       <div className="space-y-2">
         <Label className="text-muted-foreground">Gravação Automática</Label>
         <div className="flex items-center gap-2">
-          {configValues.enableRecording ? (
+          {configValues.enable_recording ? (
             <>
               <CheckCircle2 className="h-4 w-4 text-green-500" />
               <span className="text-sm">Ativada</span>
