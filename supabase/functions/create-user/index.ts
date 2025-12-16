@@ -163,31 +163,79 @@ serve(async (req) => {
 
     console.log('Auth user created:', newAuthUser.user.id);
 
-    // Create user record in users table
-    const nameParts = full_name.trim().split(' ');
-    const firstName = nameParts[0];
-    const lastName = nameParts.length > 1 ? nameParts.slice(1).join(' ') : null;
-
-    const { data: newUser, error: createUserError } = await supabaseAdmin
+    // Check if user record was auto-created by database trigger
+    // The handle_new_user trigger may have already created the user
+    let newUser: { id: string } | null = null;
+    
+    const { data: existingUser } = await supabaseAdmin
       .from('users')
-      .insert({
-        auth_user_id: newAuthUser.user.id,
-        email,
-        full_name,
-        first_name: firstName,
-        last_name: lastName,
-      })
       .select('id')
+      .eq('auth_user_id', newAuthUser.user.id)
       .single();
 
-    if (createUserError || !newUser) {
-      console.error('Error creating user record:', createUserError);
-      // Rollback: delete auth user
-      await supabaseAdmin.auth.admin.deleteUser(newAuthUser.user.id);
-      return new Response(
-        JSON.stringify({ error: 'Failed to create user record' }),
-        { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-      );
+    if (existingUser) {
+      console.log('User record already exists (created by trigger):', existingUser.id);
+      newUser = existingUser;
+      
+      // Update user with correct name if needed
+      const nameParts = full_name.trim().split(' ');
+      const firstName = nameParts[0];
+      const lastName = nameParts.length > 1 ? nameParts.slice(1).join(' ') : null;
+      
+      await supabaseAdmin
+        .from('users')
+        .update({ full_name, first_name: firstName, last_name: lastName })
+        .eq('id', existingUser.id);
+      
+      // The trigger also creates an auto-org - we need to clean it up
+      // Find the auto-created organization membership and delete it along with the org
+      const { data: autoMembership } = await supabaseAdmin
+        .from('user_organizations')
+        .select('organization_id')
+        .eq('user_id', existingUser.id)
+        .single();
+      
+      if (autoMembership && autoMembership.organization_id !== organization_id) {
+        const autoOrgId = autoMembership.organization_id;
+        console.log('Cleaning up auto-created organization:', autoOrgId);
+        
+        // Delete in correct order to avoid FK violations
+        await supabaseAdmin.from('subscription_usage').delete().eq('subscription_id', 
+          supabaseAdmin.from('subscriptions').select('id').eq('organization_id', autoOrgId));
+        await supabaseAdmin.from('subscriptions').delete().eq('organization_id', autoOrgId);
+        await supabaseAdmin.from('pipeline_stages').delete().eq('organization_id', autoOrgId);
+        await supabaseAdmin.from('permission_profiles').delete().eq('organization_id', autoOrgId);
+        await supabaseAdmin.from('user_organizations').delete().eq('organization_id', autoOrgId);
+        await supabaseAdmin.from('organizations').delete().eq('id', autoOrgId);
+      }
+    } else {
+      // Create user record in users table
+      const nameParts = full_name.trim().split(' ');
+      const firstName = nameParts[0];
+      const lastName = nameParts.length > 1 ? nameParts.slice(1).join(' ') : null;
+
+      const { data: createdUser, error: createUserError } = await supabaseAdmin
+        .from('users')
+        .insert({
+          auth_user_id: newAuthUser.user.id,
+          email,
+          full_name,
+          first_name: firstName,
+          last_name: lastName,
+        })
+        .select('id')
+        .single();
+
+      if (createUserError || !createdUser) {
+        console.error('Error creating user record:', createUserError);
+        // Rollback: delete auth user
+        await supabaseAdmin.auth.admin.deleteUser(newAuthUser.user.id);
+        return new Response(
+          JSON.stringify({ error: 'Failed to create user record' }),
+          { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        );
+      }
+      newUser = createdUser;
     }
 
     console.log('User record created:', newUser.id);
