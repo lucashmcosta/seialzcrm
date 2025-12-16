@@ -6,6 +6,31 @@ const corsHeaders = {
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type, x-api-key',
 };
 
+// Normaliza telefone para formato E.164 (assume Brasil como padrão)
+function normalizePhoneToE164(phone: string): string {
+  if (!phone) return '';
+  
+  // Remove tudo que não é número ou +
+  let cleaned = phone.replace(/[^\d+]/g, '');
+  
+  // Se já está em E.164 (começa com +), retorna como está
+  if (cleaned.startsWith('+')) {
+    return cleaned;
+  }
+  
+  // Números brasileiros típicos: 10-11 dígitos (com DDD)
+  // Se tem 10-11 dígitos e começa com DDD válido (11-99), assume Brasil
+  if (cleaned.length >= 10 && cleaned.length <= 11) {
+    const ddd = parseInt(cleaned.substring(0, 2));
+    if (ddd >= 11 && ddd <= 99) {
+      return `+55${cleaned}`;
+    }
+  }
+  
+  // Para outros casos, assume Brasil por padrão
+  return `+55${cleaned}`;
+}
+
 interface LeadPayload {
   name: string;
   email?: string;
@@ -112,7 +137,7 @@ serve(async (req) => {
         first_name: firstName,
         last_name: lastName,
         email: payload.email || null,
-        phone: payload.phone || null,
+        phone: payload.phone ? normalizePhoneToE164(payload.phone) : null,
         company_name: payload.company || null,
         source: payload.source || 'api',
         utm_source: payload.utm_source || null,
