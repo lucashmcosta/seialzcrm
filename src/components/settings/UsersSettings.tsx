@@ -7,11 +7,12 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
-import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
 import { Badge } from '@/components/ui/badge';
 import { useToast } from '@/hooks/use-toast';
-import { Loader2, UserPlus } from 'lucide-react';
+import { Loader2, UserPlus, ChevronDown, Mail, UserRoundPlus } from 'lucide-react';
 
 interface UserMembership {
   id: string;
@@ -39,10 +40,22 @@ export function UsersSettings() {
   const [memberships, setMemberships] = useState<UserMembership[]>([]);
   const [permissionProfiles, setPermissionProfiles] = useState<PermissionProfile[]>([]);
   const [loading, setLoading] = useState(true);
-  const [dialogOpen, setDialogOpen] = useState(false);
+  
+  // Invite dialog state
+  const [inviteDialogOpen, setInviteDialogOpen] = useState(false);
   const [inviteEmail, setInviteEmail] = useState('');
-  const [selectedProfileId, setSelectedProfileId] = useState<string>('');
-  const [submitting, setSubmitting] = useState(false);
+  const [inviteProfileId, setInviteProfileId] = useState<string>('');
+  const [inviteSubmitting, setInviteSubmitting] = useState(false);
+  
+  // Create user dialog state
+  const [createDialogOpen, setCreateDialogOpen] = useState(false);
+  const [createForm, setCreateForm] = useState({
+    full_name: '',
+    email: '',
+    password: '',
+  });
+  const [createProfileId, setCreateProfileId] = useState<string>('');
+  const [createSubmitting, setCreateSubmitting] = useState(false);
 
   useEffect(() => {
     if (organization?.id) {
@@ -82,10 +95,12 @@ export function UsersSettings() {
       if (error) throw error;
       setPermissionProfiles(data || []);
       
-      // Set default to first profile if available
-      if (data && data.length > 0 && !selectedProfileId) {
+      // Set default to Sales Rep or first profile
+      if (data && data.length > 0) {
         const salesRep = data.find(p => p.name === 'Sales Rep');
-        setSelectedProfileId(salesRep?.id || data[0].id);
+        const defaultId = salesRep?.id || data[0].id;
+        setInviteProfileId(defaultId);
+        setCreateProfileId(defaultId);
       }
     } catch (error) {
       console.error('Error fetching permission profiles:', error);
@@ -96,14 +111,14 @@ export function UsersSettings() {
     e.preventDefault();
     if (!organization?.id || !userProfile?.id) return;
 
-    setSubmitting(true);
+    setInviteSubmitting(true);
     try {
       const { error } = await supabase
         .from('invitations')
         .insert({
           organization_id: organization.id,
           email: inviteEmail,
-          permission_profile_id: selectedProfileId || null,
+          permission_profile_id: inviteProfileId || null,
           invited_by_user_id: userProfile.id,
           token: crypto.randomUUID(),
           status: 'pending',
@@ -114,7 +129,7 @@ export function UsersSettings() {
       toast({
         description: t('settings.userInvited'),
       });
-      setDialogOpen(false);
+      setInviteDialogOpen(false);
       setInviteEmail('');
     } catch (error) {
       console.error('Error inviting user:', error);
@@ -123,7 +138,58 @@ export function UsersSettings() {
         description: t('common.error'),
       });
     } finally {
-      setSubmitting(false);
+      setInviteSubmitting(false);
+    }
+  };
+
+  const handleCreateUser = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!organization?.id) return;
+
+    if (createForm.password.length < 6) {
+      toast({
+        variant: 'destructive',
+        description: 'A senha deve ter pelo menos 6 caracteres',
+      });
+      return;
+    }
+
+    setCreateSubmitting(true);
+    try {
+      const { data: sessionData } = await supabase.auth.getSession();
+      
+      const response = await supabase.functions.invoke('create-user', {
+        body: {
+          email: createForm.email,
+          full_name: createForm.full_name,
+          password: createForm.password,
+          permission_profile_id: createProfileId,
+          organization_id: organization.id,
+        },
+      });
+
+      if (response.error) {
+        throw new Error(response.error.message || 'Erro ao criar usuário');
+      }
+
+      if (response.data?.error) {
+        throw new Error(response.data.error);
+      }
+
+      toast({
+        description: 'Usuário criado com sucesso!',
+      });
+      setCreateDialogOpen(false);
+      setCreateForm({ full_name: '', email: '', password: '' });
+      fetchMemberships();
+    } catch (error: any) {
+      console.error('Error creating user:', error);
+      toast({
+        variant: 'destructive',
+        description: error.message || t('common.error'),
+      });
+    } finally {
+      setCreateSubmitting(false);
     }
   };
 
@@ -219,61 +285,25 @@ export function UsersSettings() {
             <CardTitle>{t('settings.users')}</CardTitle>
             <CardDescription>Gerencie usuários e suas permissões</CardDescription>
           </div>
-          <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
-            <DialogTrigger asChild>
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
               <Button>
                 <UserPlus className="w-4 h-4 mr-2" />
-                {t('settings.inviteUser')}
+                Adicionar Usuário
+                <ChevronDown className="w-4 h-4 ml-2" />
               </Button>
-            </DialogTrigger>
-            <DialogContent>
-              <form onSubmit={handleInvite}>
-                <DialogHeader>
-                  <DialogTitle>{t('settings.inviteUser')}</DialogTitle>
-                  <DialogDescription>
-                    Envie um convite para entrar na sua organização
-                  </DialogDescription>
-                </DialogHeader>
-                <div className="space-y-4 py-4">
-                  <div className="space-y-2">
-                    <Label htmlFor="email">{t('settings.email')}</Label>
-                    <Input
-                      id="email"
-                      type="email"
-                      value={inviteEmail}
-                      onChange={(e) => setInviteEmail(e.target.value)}
-                      placeholder="email@example.com"
-                      required
-                    />
-                  </div>
-                  <div className="space-y-2">
-                    <Label htmlFor="profile">{t('settings.role')}</Label>
-                    <Select value={selectedProfileId} onValueChange={setSelectedProfileId}>
-                      <SelectTrigger id="profile">
-                        <SelectValue placeholder="Selecione um perfil" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        {permissionProfiles.map((profile) => (
-                          <SelectItem key={profile.id} value={profile.id}>
-                            {profile.name}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                    <p className="text-xs text-muted-foreground">
-                      O perfil define as permissões que o usuário terá no sistema
-                    </p>
-                  </div>
-                </div>
-                <DialogFooter>
-                  <Button type="submit" disabled={submitting}>
-                    {submitting && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-                    {t('common.confirm')}
-                  </Button>
-                </DialogFooter>
-              </form>
-            </DialogContent>
-          </Dialog>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end" className="w-56">
+              <DropdownMenuItem onClick={() => setInviteDialogOpen(true)}>
+                <Mail className="w-4 h-4 mr-2" />
+                Convidar por email
+              </DropdownMenuItem>
+              <DropdownMenuItem onClick={() => setCreateDialogOpen(true)}>
+                <UserRoundPlus className="w-4 h-4 mr-2" />
+                Criar conta diretamente
+              </DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
         </div>
       </CardHeader>
       <CardContent>
@@ -316,6 +346,137 @@ export function UsersSettings() {
           </TableBody>
         </Table>
       </CardContent>
+
+      {/* Invite Dialog */}
+      <Dialog open={inviteDialogOpen} onOpenChange={setInviteDialogOpen}>
+        <DialogContent>
+          <form onSubmit={handleInvite}>
+            <DialogHeader>
+              <DialogTitle>Convidar Usuário</DialogTitle>
+              <DialogDescription>
+                Envie um convite por email para entrar na sua organização
+              </DialogDescription>
+            </DialogHeader>
+            <div className="space-y-4 py-4">
+              <div className="space-y-2">
+                <Label htmlFor="invite-email">{t('settings.email')}</Label>
+                <Input
+                  id="invite-email"
+                  type="email"
+                  value={inviteEmail}
+                  onChange={(e) => setInviteEmail(e.target.value)}
+                  placeholder="email@example.com"
+                  required
+                />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="invite-profile">{t('settings.role')}</Label>
+                <Select value={inviteProfileId} onValueChange={setInviteProfileId}>
+                  <SelectTrigger id="invite-profile">
+                    <SelectValue placeholder="Selecione um perfil" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {permissionProfiles.map((profile) => (
+                      <SelectItem key={profile.id} value={profile.id}>
+                        {profile.name}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+                <p className="text-xs text-muted-foreground">
+                  O usuário receberá um email com link para criar sua conta
+                </p>
+              </div>
+            </div>
+            <DialogFooter>
+              <Button type="button" variant="outline" onClick={() => setInviteDialogOpen(false)}>
+                Cancelar
+              </Button>
+              <Button type="submit" disabled={inviteSubmitting}>
+                {inviteSubmitting && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                Enviar Convite
+              </Button>
+            </DialogFooter>
+          </form>
+        </DialogContent>
+      </Dialog>
+
+      {/* Create User Dialog */}
+      <Dialog open={createDialogOpen} onOpenChange={setCreateDialogOpen}>
+        <DialogContent>
+          <form onSubmit={handleCreateUser}>
+            <DialogHeader>
+              <DialogTitle>Criar Usuário</DialogTitle>
+              <DialogDescription>
+                Crie uma conta com acesso imediato ao sistema
+              </DialogDescription>
+            </DialogHeader>
+            <div className="space-y-4 py-4">
+              <div className="space-y-2">
+                <Label htmlFor="create-name">Nome completo *</Label>
+                <Input
+                  id="create-name"
+                  type="text"
+                  value={createForm.full_name}
+                  onChange={(e) => setCreateForm(prev => ({ ...prev, full_name: e.target.value }))}
+                  placeholder="João Silva"
+                  required
+                />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="create-email">Email *</Label>
+                <Input
+                  id="create-email"
+                  type="email"
+                  value={createForm.email}
+                  onChange={(e) => setCreateForm(prev => ({ ...prev, email: e.target.value }))}
+                  placeholder="joao@empresa.com"
+                  required
+                />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="create-password">Senha temporária *</Label>
+                <Input
+                  id="create-password"
+                  type="password"
+                  value={createForm.password}
+                  onChange={(e) => setCreateForm(prev => ({ ...prev, password: e.target.value }))}
+                  placeholder="••••••••"
+                  minLength={6}
+                  required
+                />
+                <p className="text-xs text-muted-foreground">
+                  Mínimo 6 caracteres. O usuário poderá alterar depois.
+                </p>
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="create-profile">Perfil de permissão</Label>
+                <Select value={createProfileId} onValueChange={setCreateProfileId}>
+                  <SelectTrigger id="create-profile">
+                    <SelectValue placeholder="Selecione um perfil" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {permissionProfiles.map((profile) => (
+                      <SelectItem key={profile.id} value={profile.id}>
+                        {profile.name}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+            </div>
+            <DialogFooter>
+              <Button type="button" variant="outline" onClick={() => setCreateDialogOpen(false)}>
+                Cancelar
+              </Button>
+              <Button type="submit" disabled={createSubmitting}>
+                {createSubmitting && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                Criar Usuário
+              </Button>
+            </DialogFooter>
+          </form>
+        </DialogContent>
+      </Dialog>
     </Card>
   );
 }
