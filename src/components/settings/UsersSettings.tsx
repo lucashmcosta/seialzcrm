@@ -318,10 +318,10 @@ export function UsersSettings() {
             </TableRow>
           </TableHeader>
           <TableBody>
-            {memberships.map((membership) => (
+            {memberships.filter(m => m.users).map((membership) => (
               <TableRow key={membership.id}>
-                <TableCell className="font-medium">{membership.users.full_name}</TableCell>
-                <TableCell>{membership.users.email}</TableCell>
+                <TableCell className="font-medium">{membership.users?.full_name}</TableCell>
+                <TableCell>{membership.users?.email}</TableCell>
                 <TableCell>
                   <Badge variant="outline">
                     {membership.permission_profiles?.name || 'Sem perfil'}
