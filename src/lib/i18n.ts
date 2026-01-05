@@ -105,6 +105,10 @@ export const translations = {
     'contacts.details': 'Detalhes',
     'contacts.opportunitiesTab': 'Oportunidades',
     'contacts.tasksTab': 'Tarefas',
+    'contacts.notesTab': 'Notas',
+    'contacts.callsTab': 'Chamadas',
+    'contacts.messagesTab': 'Mensagens',
+    'contacts.attachmentsTab': 'Anexos',
     'contacts.doNotContact': 'Não Contactar',
     'contacts.deleteConfirm': 'Tem certeza que deseja excluir este contato?',
     'contacts.deleted': 'Contato excluído',
@@ -357,6 +361,9 @@ export const translations = {
     'activity.outgoing': 'Saída',
     'activity.notes': 'Notas',
     'activity.created': 'Atividade criada',
+    'activity.noteAdded': 'Nota adicionada',
+    'activity.notePlaceholder': 'Adicione uma nota...',
+    'activity.noNotes': 'Nenhuma nota ainda',
     
     // Attachments
     'attachments.title': 'Anexos',
@@ -529,6 +536,10 @@ export const translations = {
     'contacts.details': 'Details',
     'contacts.opportunitiesTab': 'Opportunities',
     'contacts.tasksTab': 'Tasks',
+    'contacts.notesTab': 'Notes',
+    'contacts.callsTab': 'Calls',
+    'contacts.messagesTab': 'Messages',
+    'contacts.attachmentsTab': 'Attachments',
     'contacts.doNotContact': 'Do Not Contact',
     'contacts.deleteConfirm': 'Are you sure you want to delete this contact?',
     'contacts.deleted': 'Contact deleted',
@@ -759,6 +770,9 @@ export const translations = {
     'activity.outgoing': 'Outgoing',
     'activity.notes': 'Notes',
     'activity.created': 'Activity created',
+    'activity.noteAdded': 'Note added',
+    'activity.notePlaceholder': 'Add a note...',
+    'activity.noNotes': 'No notes yet',
     
     // Attachments
     'attachments.title': 'Attachments',

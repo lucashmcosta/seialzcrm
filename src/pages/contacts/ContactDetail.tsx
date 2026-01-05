@@ -21,6 +21,7 @@ import { ContactCalls } from '@/components/contacts/ContactCalls';
 import { ContactMessages } from '@/components/contacts/ContactMessages';
 import { ContactAttachments } from '@/components/contacts/ContactAttachments';
 import { ContactOpportunities } from '@/components/contacts/ContactOpportunities';
+import { ContactNotes } from '@/components/contacts/ContactNotes';
 
 export default function ContactDetail() {
   const { id } = useParams();
@@ -137,11 +138,15 @@ export default function ContactDetail() {
 
         <div className="flex-1 overflow-auto p-6">
           <Tabs defaultValue="details" className="w-full">
-            <TabsList>
+            <TabsList className="flex-wrap h-auto gap-1">
               <TabsTrigger value="details">{t('contacts.details')}</TabsTrigger>
               <TabsTrigger value="timeline">{t('contacts.timeline')}</TabsTrigger>
               <TabsTrigger value="opportunities">{t('contacts.opportunitiesTab')}</TabsTrigger>
               <TabsTrigger value="tasks">{t('contacts.tasksTab')}</TabsTrigger>
+              <TabsTrigger value="notes">{t('contacts.notesTab')}</TabsTrigger>
+              <TabsTrigger value="calls">{t('contacts.callsTab')}</TabsTrigger>
+              <TabsTrigger value="messages">{t('contacts.messagesTab')}</TabsTrigger>
+              <TabsTrigger value="attachments">{t('contacts.attachmentsTab')}</TabsTrigger>
             </TabsList>
 
             <TabsContent value="details" className="space-y-4">
@@ -194,15 +199,8 @@ export default function ContactDetail() {
               </Card>
             </TabsContent>
 
-            <TabsContent value="timeline" className="space-y-4">
+            <TabsContent value="timeline">
               <ActivityTimeline contactId={contact.id} />
-              <ContactCalls 
-                contactId={contact.id} 
-                contactPhone={contact.phone}
-                contactName={contact.full_name}
-              />
-              <ContactMessages contactId={contact.id} />
-              <ContactAttachments contactId={contact.id} />
             </TabsContent>
 
             <TabsContent value="opportunities">
@@ -211,6 +209,26 @@ export default function ContactDetail() {
 
             <TabsContent value="tasks">
               <ContactTasks contactId={contact.id} />
+            </TabsContent>
+
+            <TabsContent value="notes">
+              <ContactNotes contactId={contact.id} />
+            </TabsContent>
+
+            <TabsContent value="calls">
+              <ContactCalls 
+                contactId={contact.id} 
+                contactPhone={contact.phone}
+                contactName={contact.full_name}
+              />
+            </TabsContent>
+
+            <TabsContent value="messages">
+              <ContactMessages contactId={contact.id} />
+            </TabsContent>
+
+            <TabsContent value="attachments">
+              <ContactAttachments contactId={contact.id} />
             </TabsContent>
           </Tabs>
         </div>
