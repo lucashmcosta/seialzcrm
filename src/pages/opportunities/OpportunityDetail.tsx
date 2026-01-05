@@ -15,6 +15,8 @@ import { ActivityTimeline } from '@/components/contacts/ActivityTimeline';
 import { ContactTasks } from '@/components/contacts/ContactTasks';
 import { ContactAttachments } from '@/components/contacts/ContactAttachments';
 import { ContactCalls } from '@/components/contacts/ContactCalls';
+import { ContactMessages } from '@/components/contacts/ContactMessages';
+import { ContactNotes } from '@/components/contacts/ContactNotes';
 import { OpportunityDialog } from '@/components/opportunities/OpportunityDialog';
 import { ClickToCallButton } from '@/components/calls/ClickToCallButton';
 
@@ -274,20 +276,76 @@ export default function OpportunityDetail() {
         </div>
 
         <div className="flex-1 overflow-auto">
-          <Tabs defaultValue="timeline" className="h-full">
+          <Tabs defaultValue="overview" className="h-full">
             <div className="border-b px-6">
-              <TabsList>
+              <TabsList className="flex-wrap">
+                <TabsTrigger value="overview">{t('opportunities.overviewTab')}</TabsTrigger>
                 <TabsTrigger value="timeline">{t('contacts.timeline')}</TabsTrigger>
-                <TabsTrigger value="calls">
-                  <Phone className="h-4 w-4 mr-2" />
-                  Chamadas
-                </TabsTrigger>
+                <TabsTrigger value="calls">{t('contacts.callsTab')}</TabsTrigger>
+                <TabsTrigger value="messages">{t('contacts.messagesTab')}</TabsTrigger>
                 <TabsTrigger value="tasks">{t('contacts.tasksTab')}</TabsTrigger>
                 <TabsTrigger value="attachments">{t('attachments.title')}</TabsTrigger>
+                <TabsTrigger value="notes">{t('contacts.notesTab')}</TabsTrigger>
               </TabsList>
             </div>
 
             <div className="p-6">
+              <TabsContent value="overview" className="mt-0">
+                <Card>
+                  <CardContent className="pt-6">
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                      <div className="space-y-4">
+                        <div>
+                          <p className="text-sm text-muted-foreground">{t('opportunities.value')}</p>
+                          <p className="text-lg font-semibold">{formatCurrency(opportunity.amount || 0)}</p>
+                        </div>
+                        <div>
+                          <p className="text-sm text-muted-foreground">{t('opportunities.stage')}</p>
+                          <p className="text-lg font-semibold">{opportunity.pipeline_stages?.name || '-'}</p>
+                        </div>
+                        <div>
+                          <p className="text-sm text-muted-foreground">{t('opportunities.closeDate')}</p>
+                          <p className="text-lg font-semibold">
+                            {opportunity.close_date 
+                              ? new Date(opportunity.close_date).toLocaleDateString(locale)
+                              : '-'}
+                          </p>
+                        </div>
+                      </div>
+                      <div className="space-y-4">
+                        <div>
+                          <p className="text-sm text-muted-foreground">{t('opportunities.contact')}</p>
+                          {opportunity.contacts ? (
+                            <Link 
+                              to={`/contacts/${opportunity.contact_id}`}
+                              className="text-lg font-semibold text-primary hover:underline"
+                            >
+                              {opportunity.contacts.full_name}
+                            </Link>
+                          ) : (
+                            <p className="text-lg font-semibold">-</p>
+                          )}
+                        </div>
+                        <div>
+                          <p className="text-sm text-muted-foreground">{t('opportunities.owner')}</p>
+                          <p className="text-lg font-semibold">{opportunity.users?.full_name || '-'}</p>
+                        </div>
+                        <div>
+                          <p className="text-sm text-muted-foreground">{t('common.status')}</p>
+                          <Badge className={statusColor}>
+                            {opportunity.status === 'won'
+                              ? t('status.won')
+                              : opportunity.status === 'lost'
+                              ? t('status.lost')
+                              : t('status.open')}
+                          </Badge>
+                        </div>
+                      </div>
+                    </div>
+                  </CardContent>
+                </Card>
+              </TabsContent>
+
               <TabsContent value="timeline" className="mt-0">
                 <ActivityTimeline opportunityId={opportunity.id} />
               </TabsContent>
@@ -309,12 +367,20 @@ export default function OpportunityDetail() {
                 )}
               </TabsContent>
 
+              <TabsContent value="messages" className="mt-0">
+                <ContactMessages opportunityId={opportunity.id} />
+              </TabsContent>
+
               <TabsContent value="tasks" className="mt-0">
                 <ContactTasks opportunityId={opportunity.id} />
               </TabsContent>
 
               <TabsContent value="attachments" className="mt-0">
                 <ContactAttachments entityId={opportunity.id} entityType="opportunity" />
+              </TabsContent>
+
+              <TabsContent value="notes" className="mt-0">
+                <ContactNotes opportunityId={opportunity.id} />
               </TabsContent>
             </div>
           </Tabs>

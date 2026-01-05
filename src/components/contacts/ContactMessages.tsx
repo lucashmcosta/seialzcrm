@@ -19,10 +19,11 @@ interface Message {
 }
 
 interface ContactMessagesProps {
-  contactId: string;
+  contactId?: string;
+  opportunityId?: string;
 }
 
-export function ContactMessages({ contactId }: ContactMessagesProps) {
+export function ContactMessages({ contactId, opportunityId }: ContactMessagesProps) {
   const { organization, locale, userProfile } = useOrganization();
   const { t } = useTranslation(locale as any);
   const { toast } = useToast();
@@ -34,20 +35,30 @@ export function ContactMessages({ contactId }: ContactMessagesProps) {
 
   useEffect(() => {
     fetchThread();
-  }, [contactId, organization?.id]);
+  }, [contactId, opportunityId, organization?.id]);
 
   const fetchThread = async () => {
     if (!organization?.id) return;
+    if (!contactId && !opportunityId) {
+      setLoading(false);
+      return;
+    }
 
     try {
       // Check if thread exists
-      const { data: threadData } = await supabase
+      let query = supabase
         .from('message_threads')
         .select('id')
         .eq('organization_id', organization.id)
-        .eq('contact_id', contactId)
-        .eq('channel', 'internal')
-        .maybeSingle();
+        .eq('channel', 'internal');
+
+      if (opportunityId) {
+        query = query.eq('opportunity_id', opportunityId);
+      } else if (contactId) {
+        query = query.eq('contact_id', contactId);
+      }
+
+      const { data: threadData } = await query.maybeSingle();
 
       if (threadData) {
         setThreadId(threadData.id);
@@ -92,7 +103,8 @@ export function ContactMessages({ contactId }: ContactMessagesProps) {
           .from('message_threads')
           .insert({
             organization_id: organization.id,
-            contact_id: contactId,
+            contact_id: contactId || null,
+            opportunity_id: opportunityId || null,
             channel: 'internal',
           })
           .select()
@@ -120,7 +132,8 @@ export function ContactMessages({ contactId }: ContactMessagesProps) {
       // Create activity
       await supabase.from('activities').insert({
         organization_id: organization.id,
-        contact_id: contactId,
+        contact_id: contactId || null,
+        opportunity_id: opportunityId || null,
         activity_type: 'message',
         title: 'Message sent',
         body: messageText,

@@ -579,6 +579,9 @@ export const translations = {
     'opportunities.deleteConfirm': 'Are you sure you want to remove this opportunity?',
     'opportunities.kanban': 'Kanban',
     'opportunities.list': 'List',
+    'opportunities.overviewTab': 'Overview',
+    'opportunities.value': 'Value',
+    'opportunities.owner': 'Owner',
     
     // Tasks
     'tasks.title': 'Tasks',
