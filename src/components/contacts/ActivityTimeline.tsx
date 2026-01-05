@@ -3,11 +3,8 @@ import { useOrganization } from '@/hooks/useOrganization';
 import { useTranslation } from '@/lib/i18n';
 import { supabase } from '@/integrations/supabase/client';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { Button } from '@/components/ui/button';
-import { Textarea } from '@/components/ui/textarea';
 import { Badge } from '@/components/ui/badge';
-import { useToast } from '@/hooks/use-toast';
-import { Loader2, Plus, MessageSquare, Phone, CheckSquare, FileText, PhoneOutgoing, PhoneIncoming, User, Clock } from 'lucide-react';
+import { Loader2, MessageSquare, Phone, CheckSquare, FileText, PhoneOutgoing, PhoneIncoming, User, Clock } from 'lucide-react';
 import { formatDistanceToNow, format } from 'date-fns';
 import { ptBR, enUS } from 'date-fns/locale';
 import { formatPhoneDisplay } from '@/lib/phoneUtils';
@@ -38,15 +35,11 @@ interface ActivityTimelineProps {
 }
 
 export function ActivityTimeline({ contactId, opportunityId }: ActivityTimelineProps) {
-  const { organization, locale, userProfile } = useOrganization();
+  const { organization, locale } = useOrganization();
   const { t } = useTranslation(locale as any);
-  const { toast } = useToast();
   const [activities, setActivities] = useState<Activity[]>([]);
   const [calls, setCalls] = useState<CallDetails[]>([]);
   const [loading, setLoading] = useState(true);
-  const [showNoteForm, setShowNoteForm] = useState(false);
-  const [noteText, setNoteText] = useState('');
-  const [submitting, setSubmitting] = useState(false);
 
   useEffect(() => {
     fetchData();
@@ -108,37 +101,6 @@ export function ActivityTimeline({ contactId, opportunityId }: ActivityTimelineP
       console.error('Error fetching data:', error);
     } finally {
       setLoading(false);
-    }
-  };
-
-  const handleAddNote = async () => {
-    if (!organization?.id || !userProfile?.id || !noteText.trim()) return;
-
-    setSubmitting(true);
-    try {
-      const { error } = await supabase
-        .from('activities')
-        .insert({
-          organization_id: organization.id,
-          contact_id: contactId,
-          activity_type: 'note',
-          title: 'Note added',
-          body: noteText,
-          created_by_user_id: userProfile.id,
-          occurred_at: new Date().toISOString(),
-        });
-
-      if (error) throw error;
-
-      toast({ description: t('activity.created') });
-      setNoteText('');
-      setShowNoteForm(false);
-      fetchData();
-    } catch (error) {
-      console.error('Error adding note:', error);
-      toast({ variant: 'destructive', description: t('common.error') });
-    } finally {
-      setSubmitting(false);
     }
   };
 
@@ -207,39 +169,12 @@ export function ActivityTimeline({ contactId, opportunityId }: ActivityTimelineP
   }
 
   return (
-    <div className="space-y-4">
-      <Card>
-        <CardHeader>
-          <div className="flex items-center justify-between">
-            <CardTitle>{t('activity.timeline')}</CardTitle>
-            <Button onClick={() => setShowNoteForm(!showNoteForm)} size="sm">
-              <Plus className="w-4 h-4 mr-2" />
-              {t('activity.addNote')}
-            </Button>
-          </div>
-        </CardHeader>
-        <CardContent>
-          {showNoteForm && (
-            <div className="mb-6 space-y-3">
-              <Textarea
-                placeholder="Add a note..."
-                value={noteText}
-                onChange={(e) => setNoteText(e.target.value)}
-                rows={3}
-              />
-              <div className="flex gap-2">
-                <Button onClick={handleAddNote} disabled={submitting} size="sm">
-                  {submitting && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-                  {t('common.save')}
-                </Button>
-                <Button variant="outline" onClick={() => setShowNoteForm(false)} size="sm">
-                  {t('common.cancel')}
-                </Button>
-              </div>
-            </div>
-          )}
-
-          <div className="space-y-4">
+    <Card>
+      <CardHeader>
+        <CardTitle>{t('activity.timeline')}</CardTitle>
+      </CardHeader>
+      <CardContent>
+        <div className="space-y-4">
             {combinedItems.length === 0 ? (
               <p className="text-center text-muted-foreground py-8">
                 No activities yet
@@ -332,6 +267,5 @@ export function ActivityTimeline({ contactId, opportunityId }: ActivityTimelineP
           </div>
         </CardContent>
       </Card>
-    </div>
   );
 }
