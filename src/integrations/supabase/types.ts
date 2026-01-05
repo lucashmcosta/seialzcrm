@@ -1674,6 +1674,9 @@ export type Database = {
           suspended_at: string | null
           suspended_by_admin_id: string | null
           suspended_reason: string | null
+          theme_dark_mode: boolean | null
+          theme_primary_color: string | null
+          theme_sidebar_color: string | null
           timezone: string | null
           updated_at: string | null
         }
@@ -1697,6 +1700,9 @@ export type Database = {
           suspended_at?: string | null
           suspended_by_admin_id?: string | null
           suspended_reason?: string | null
+          theme_dark_mode?: boolean | null
+          theme_primary_color?: string | null
+          theme_sidebar_color?: string | null
           timezone?: string | null
           updated_at?: string | null
         }
@@ -1720,6 +1726,9 @@ export type Database = {
           suspended_at?: string | null
           suspended_by_admin_id?: string | null
           suspended_reason?: string | null
+          theme_dark_mode?: boolean | null
+          theme_primary_color?: string | null
+          theme_sidebar_color?: string | null
           timezone?: string | null
           updated_at?: string | null
         }
