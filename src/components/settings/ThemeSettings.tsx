@@ -38,7 +38,8 @@ export function ThemeSettings() {
     setPrimaryColor, 
     setSidebarColor, 
     setDarkMode,
-    setPreviewMode 
+    setPreviewMode,
+    setJustSaved
   } = useTheme();
   
   const [saving, setSaving] = useState(false);
@@ -92,6 +93,7 @@ export function ThemeSettings() {
         sidebar: sidebarColor,
         dark: darkMode,
       });
+      setJustSaved(true);
       setPreviewMode(false);
       toast.success(t('settings.themeUpdated'));
     } catch (error) {
