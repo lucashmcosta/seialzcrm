@@ -84,12 +84,12 @@ function GlobalCallHandler() {
 
 const App = () => (
   <QueryClientProvider client={queryClient}>
-    <ThemeProvider>
     <OutboundCallProvider>
     <TooltipProvider>
       <Toaster />
       <Sonner />
       <BrowserRouter>
+        <ThemeProvider>
         <GlobalCallHandler />
         <Routes>
           <Route path="/" element={<Navigate to="/dashboard" replace />} />
@@ -301,10 +301,10 @@ const App = () => (
           />
           <Route path="*" element={<NotFound />} />
         </Routes>
+        </ThemeProvider>
       </BrowserRouter>
     </TooltipProvider>
     </OutboundCallProvider>
-    </ThemeProvider>
   </QueryClientProvider>
 );
 
