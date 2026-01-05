@@ -14,6 +14,7 @@ interface OpportunityCardProps {
   locale: string;
   onEdit: () => void;
   onDelete: () => void;
+  onClick: () => void;
   formatCurrency: (value: number, currency: string) => string;
 }
 
@@ -26,12 +27,13 @@ export function OpportunityCard({
   locale,
   onEdit,
   onDelete,
+  onClick,
   formatCurrency,
 }: OpportunityCardProps) {
   const dateLocale = locale === 'pt-BR' ? ptBR : enUS;
 
   return (
-    <Card className="p-4 bg-background hover:shadow-md transition-all cursor-pointer group">
+    <Card className="p-4 bg-background hover:shadow-md transition-all cursor-pointer group" onClick={onClick}>
       <div className="space-y-3">
         <div className="flex justify-between items-start">
           <h4 className="font-medium text-sm flex-1 pr-2 text-foreground">{title}</h4>

@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { DragDropContext, Droppable, Draggable, DropResult } from '@hello-pangea/dnd';
 import { Layout } from '@/components/Layout';
 import { Button } from '@/components/ui/button';
@@ -47,6 +48,7 @@ interface User {
 }
 
 export default function OpportunitiesKanban() {
+  const navigate = useNavigate();
   const { organization, locale } = useOrganization();
   const { t } = useTranslation(locale as 'pt-BR' | 'en-US');
   const { permissions } = usePermissions();
@@ -403,6 +405,7 @@ export default function OpportunitiesKanban() {
                                       locale={locale}
                                       onEdit={() => handleEdit(opp)}
                                       onDelete={() => setDeleteId(opp.id)}
+                                      onClick={() => navigate(`/opportunities/${opp.id}`)}
                                       formatCurrency={formatCurrency}
                                     />
                                   </div>
