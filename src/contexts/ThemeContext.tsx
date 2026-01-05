@@ -10,6 +10,7 @@ interface ThemeContextType {
   setDarkMode: (enabled: boolean) => void;
   isPreviewMode: boolean;
   setPreviewMode: (enabled: boolean) => void;
+  setJustSaved: (saved: boolean) => void;
 }
 
 const ThemeContext = createContext<ThemeContextType | undefined>(undefined);
@@ -24,15 +25,19 @@ export function ThemeProvider({ children }: { children: ReactNode }) {
   const [sidebarColor, setSidebarColor] = useState(DEFAULT_SIDEBAR);
   const [darkMode, setDarkMode] = useState(false);
   const [isPreviewMode, setPreviewMode] = useState(false);
+  const [justSaved, setJustSaved] = useState(false);
 
   // Sync with organization settings
   useEffect(() => {
-    if (organization && !isPreviewMode) {
+    if (organization && !isPreviewMode && !justSaved) {
       setPrimaryColor(organization.theme_primary_color || DEFAULT_PRIMARY);
       setSidebarColor(organization.theme_sidebar_color || DEFAULT_SIDEBAR);
       setDarkMode(organization.theme_dark_mode || false);
     }
-  }, [organization, isPreviewMode]);
+    if (justSaved) {
+      setJustSaved(false);
+    }
+  }, [organization, isPreviewMode, justSaved]);
 
   // Apply CSS variables and dark mode class
   useEffect(() => {
@@ -68,6 +73,7 @@ export function ThemeProvider({ children }: { children: ReactNode }) {
         setDarkMode,
         isPreviewMode,
         setPreviewMode,
+        setJustSaved,
       }}
     >
       {children}
