@@ -15,6 +15,9 @@ export interface Organization {
   onboarding_completed_at?: string;
   duplicate_check_mode?: 'none' | 'email' | 'phone' | 'email_or_phone';
   duplicate_enforce_block?: boolean;
+  theme_primary_color?: string;
+  theme_sidebar_color?: string;
+  theme_dark_mode?: boolean;
 }
 
 export interface UserProfile {

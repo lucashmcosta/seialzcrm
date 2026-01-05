@@ -419,6 +419,21 @@ export const translations = {
     'onboarding.sampleOpportunityNote': 'Esta é uma oportunidade de exemplo criada durante o onboarding.',
     'onboarding.completed': 'Onboarding concluído com sucesso!',
     
+    // Theme Settings
+    'settings.theme': 'Tema e Cores',
+    'settings.primaryColor': 'Cor Primária',
+    'settings.primaryColorDescription': 'Escolha a cor principal que será usada em botões, links e destaques',
+    'settings.sidebarColor': 'Cor do Sidebar',
+    'settings.sidebarColorDescription': 'Escolha o tema de cores da barra lateral',
+    'settings.darkMode': 'Modo Escuro',
+    'settings.darkModeDescription': 'Ative o modo escuro para uma interface mais confortável em ambientes com pouca luz',
+    'settings.darkModeEnabled': 'Modo escuro ativado',
+    'settings.darkModeDisabled': 'Modo escuro desativado',
+    'settings.themePreview': 'Visualizando alterações',
+    'settings.themePreviewDescription': 'As mudanças estão sendo aplicadas em tempo real. Clique em Salvar para confirmar.',
+    'settings.themeUpdated': 'Tema atualizado com sucesso',
+    'settings.selectedColor': 'Cor selecionada',
+    
     // Lifecycle stages
     'lifecycle.lead': 'Lead',
     'lifecycle.customer': 'Cliente',
@@ -819,6 +834,21 @@ export const translations = {
     'onboarding.opportunityCreated': 'Opportunity created',
     'onboarding.sampleOpportunityNote': 'This is a sample opportunity created during onboarding.',
     'onboarding.completed': 'Onboarding completed successfully!',
+    
+    // Theme Settings
+    'settings.theme': 'Theme & Colors',
+    'settings.primaryColor': 'Primary Color',
+    'settings.primaryColorDescription': 'Choose the main color used for buttons, links and highlights',
+    'settings.sidebarColor': 'Sidebar Color',
+    'settings.sidebarColorDescription': 'Choose the color theme for the sidebar',
+    'settings.darkMode': 'Dark Mode',
+    'settings.darkModeDescription': 'Enable dark mode for a more comfortable interface in low-light environments',
+    'settings.darkModeEnabled': 'Dark mode enabled',
+    'settings.darkModeDisabled': 'Dark mode disabled',
+    'settings.themePreview': 'Previewing changes',
+    'settings.themePreviewDescription': 'Changes are being applied in real-time. Click Save to confirm.',
+    'settings.themeUpdated': 'Theme updated successfully',
+    'settings.selectedColor': 'Selected color',
     
     // Lifecycle stages
     'lifecycle.lead': 'Lead',

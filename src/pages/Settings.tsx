@@ -13,6 +13,7 @@ import { PermissionProfilesSettings } from '@/components/settings/PermissionProf
 import { BillingSettings } from '@/components/settings/BillingSettings';
 import { IntegrationsSettings } from '@/components/settings/IntegrationsSettings';
 import { ApiWebhooksSettings } from '@/components/settings/ApiWebhooksSettings';
+import { ThemeSettings } from '@/components/settings/ThemeSettings';
 import { AuditLogs } from './settings/AuditLogs';
 import { Trash } from './settings/Trash';
 
@@ -34,6 +35,7 @@ export default function Settings() {
           <Tabs defaultValue="general" className="w-full">
             <TabsList className="flex-wrap h-auto">
               <TabsTrigger value="general">{t('settings.general')}</TabsTrigger>
+              {permissions.canManageSettings && <TabsTrigger value="theme">{t('settings.theme')}</TabsTrigger>}
               {permissions.canManageUsers && <TabsTrigger value="users">{t('settings.users')}</TabsTrigger>}
               {permissions.canManageSettings && <TabsTrigger value="permissionProfiles">{t('settings.permissionProfiles')}</TabsTrigger>}
               {permissions.canManageBilling && <TabsTrigger value="billing">{t('settings.billing')}</TabsTrigger>}
@@ -49,6 +51,10 @@ export default function Settings() {
 
             <TabsContent value="general">
               <GeneralSettings />
+            </TabsContent>
+
+            <TabsContent value="theme">
+              <ThemeSettings />
             </TabsContent>
 
             <TabsContent value="users">
