@@ -10,9 +10,10 @@ import { useOrganization } from '@/hooks/useOrganization';
 import { useTranslation } from '@/lib/i18n';
 import { usePermissions } from '@/hooks/usePermissions';
 import { supabase } from '@/integrations/supabase/client';
-import { Plus, Search, Mail, Phone, Filter } from 'lucide-react';
+import { Plus, Search, Mail, Phone } from 'lucide-react';
 import { SavedViewsDropdown } from '@/components/SavedViewsDropdown';
 import { BulkActionsBar } from '@/components/BulkActionsBar';
+import { Breadcrumbs } from '@/components/application/breadcrumbs/breadcrumbs';
 
 interface Contact {
   id: string;
@@ -141,6 +142,12 @@ export default function ContactsList() {
   return (
     <Layout>
       <div className="p-8">
+        {/* Breadcrumbs */}
+        <Breadcrumbs 
+          items={[{ label: t('contacts.title') }]} 
+          className="mb-6"
+        />
+
         <div className="flex justify-between items-center mb-8">
           <h1 className="text-3xl font-bold text-foreground">{t('contacts.title')}</h1>
           <div className="flex gap-2">
