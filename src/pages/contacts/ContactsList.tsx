@@ -29,6 +29,7 @@ import {
   TableRowActionsDropdown,
   TableRowAction,
 } from '@/components/application/table/table';
+import { ColumnSelector, type ColumnConfig } from '@/components/application/table/column-selector';
 import { Avatar } from '@/components/base/avatar/avatar';
 import { BadgeWithDot } from '@/components/base/badges/badges';
 import type { BadgeColor } from '@/components/base/badges/badge-types';
@@ -82,6 +83,19 @@ export default function ContactsList() {
     column: 'created_at',
     direction: 'descending',
   });
+
+  // Column visibility state
+  const availableColumns: ColumnConfig[] = [
+    { id: 'full_name', label: t('contacts.name'), isRequired: true },
+    { id: 'lifecycle_stage', label: t('contacts.lifecycleStage') },
+    { id: 'phone', label: t('contacts.phone') },
+    { id: 'company_name', label: t('contacts.company') },
+    { id: 'created_at', label: t('common.createdAt') },
+  ];
+  
+  const [visibleColumns, setVisibleColumns] = useState<string[]>(
+    availableColumns.map(c => c.id)
+  );
   
   // Current filters and sort for SavedViews
   const currentFilters = { owner: ownerFilter, stage: stageFilter, search: searchTerm };
@@ -278,6 +292,13 @@ export default function ContactsList() {
               <SelectItem value="inactive">{t('lifecycle.inactive')}</SelectItem>
             </SelectContent>
           </Select>
+
+          <ColumnSelector
+            columns={availableColumns}
+            visibleColumns={visibleColumns}
+            onChange={setVisibleColumns}
+            label={t('common.columns') || 'Colunas'}
+          />
         </div>
 
         {loading ? (
@@ -319,21 +340,31 @@ export default function ContactsList() {
                   isIndeterminate={someSelected}
                   onChange={handleSelectAll}
                 />
-                <TableColumn id="full_name" allowsSorting>
-                  {t('contacts.name')}
-                </TableColumn>
-                <TableColumn id="lifecycle_stage" allowsSorting>
-                  {t('contacts.lifecycleStage')}
-                </TableColumn>
-                <TableColumn id="phone">
-                  {t('contacts.phone')}
-                </TableColumn>
-                <TableColumn id="company_name" allowsSorting>
-                  {t('contacts.company')}
-                </TableColumn>
-                <TableColumn id="created_at" allowsSorting>
-                  {t('common.createdAt')}
-                </TableColumn>
+                {visibleColumns.includes('full_name') && (
+                  <TableColumn id="full_name" allowsSorting sortDescriptor={sortDescriptor}>
+                    {t('contacts.name')}
+                  </TableColumn>
+                )}
+                {visibleColumns.includes('lifecycle_stage') && (
+                  <TableColumn id="lifecycle_stage" allowsSorting sortDescriptor={sortDescriptor}>
+                    {t('contacts.lifecycleStage')}
+                  </TableColumn>
+                )}
+                {visibleColumns.includes('phone') && (
+                  <TableColumn id="phone" sortDescriptor={sortDescriptor}>
+                    {t('contacts.phone')}
+                  </TableColumn>
+                )}
+                {visibleColumns.includes('company_name') && (
+                  <TableColumn id="company_name" allowsSorting sortDescriptor={sortDescriptor}>
+                    {t('contacts.company')}
+                  </TableColumn>
+                )}
+                {visibleColumns.includes('created_at') && (
+                  <TableColumn id="created_at" allowsSorting sortDescriptor={sortDescriptor}>
+                    {t('common.createdAt')}
+                  </TableColumn>
+                )}
                 <TableColumn id="actions" className="w-12">
                   <span className="sr-only">Ações</span>
                 </TableColumn>
@@ -349,42 +380,52 @@ export default function ContactsList() {
                       isSelected={selectedIds.includes(contact.id)}
                       onChange={(checked) => handleSelectOne(contact.id, checked)}
                     />
-                    <TableCell>
-                      <div className="flex items-center gap-3">
-                        <Avatar
-                          fallbackText={contact.full_name}
-                          size="sm"
-                        />
-                        <div>
-                          <p className="font-medium text-foreground">
-                            {contact.full_name}
-                          </p>
-                          {contact.email && (
-                            <p className="text-sm text-muted-foreground">
-                              {contact.email}
+                    {visibleColumns.includes('full_name') && (
+                      <TableCell>
+                        <div className="flex items-center gap-3">
+                          <Avatar
+                            fallbackText={contact.full_name}
+                            size="sm"
+                          />
+                          <div>
+                            <p className="font-medium text-foreground">
+                              {contact.full_name}
                             </p>
-                          )}
+                            {contact.email && (
+                              <p className="text-sm text-muted-foreground">
+                                {contact.email}
+                              </p>
+                            )}
+                          </div>
                         </div>
-                      </div>
-                    </TableCell>
-                    <TableCell>
-                      <BadgeWithDot
-                        color={lifecycleColors[contact.lifecycle_stage] || 'gray'}
-                      >
-                        {getLifecycleLabel(contact.lifecycle_stage)}
-                      </BadgeWithDot>
-                    </TableCell>
-                    <TableCell className="text-muted-foreground">
-                      {contact.phone ? formatPhoneDisplay(contact.phone) : '—'}
-                    </TableCell>
-                    <TableCell className="text-muted-foreground">
-                      {contact.company_name || '—'}
-                    </TableCell>
-                    <TableCell className="text-muted-foreground">
-                      {contact.created_at
-                        ? format(new Date(contact.created_at), 'dd MMM yyyy', { locale: ptBR })
-                        : '—'}
-                    </TableCell>
+                      </TableCell>
+                    )}
+                    {visibleColumns.includes('lifecycle_stage') && (
+                      <TableCell>
+                        <BadgeWithDot
+                          color={lifecycleColors[contact.lifecycle_stage] || 'gray'}
+                        >
+                          {getLifecycleLabel(contact.lifecycle_stage)}
+                        </BadgeWithDot>
+                      </TableCell>
+                    )}
+                    {visibleColumns.includes('phone') && (
+                      <TableCell className="text-muted-foreground">
+                        {contact.phone ? formatPhoneDisplay(contact.phone) : '—'}
+                      </TableCell>
+                    )}
+                    {visibleColumns.includes('company_name') && (
+                      <TableCell className="text-muted-foreground">
+                        {contact.company_name || '—'}
+                      </TableCell>
+                    )}
+                    {visibleColumns.includes('created_at') && (
+                      <TableCell className="text-muted-foreground">
+                        {contact.created_at
+                          ? format(new Date(contact.created_at), 'dd MMM yyyy', { locale: ptBR })
+                          : '—'}
+                      </TableCell>
+                    )}
                     <TableCell>
                       <TableRowActionsDropdown>
                         <TableRowAction

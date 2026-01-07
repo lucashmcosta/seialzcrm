@@ -1,4 +1,4 @@
-import { ReactNode, useState } from "react";
+import { ReactNode } from "react";
 import {
   Cell,
   Column,
@@ -8,7 +8,7 @@ import {
   TableHeader as AriaTableHeader,
   type SortDescriptor,
 } from "react-aria-components";
-import { MoreVertical } from "lucide-react";
+import { MoreVertical, ArrowUp, ArrowDown, ChevronsUpDown } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Card } from "@/components/ui/card";
 import { Checkbox } from "@/components/ui/checkbox";
@@ -21,7 +21,7 @@ import {
 import { ButtonUtility } from "@/components/base/buttons/button-utility";
 
 // Re-export react-aria-components for convenience
-export { Cell as TableCell, Row as TableRow, Column as TableColumn };
+export { Cell as TableCell, Row as TableRow };
 
 interface TableProps {
   children: ReactNode;
@@ -168,5 +168,46 @@ export const TableCheckboxCell = ({
     <Cell className="w-12">
       <Checkbox checked={isSelected} onCheckedChange={onChange} />
     </Cell>
+  );
+};
+
+// Sortable Table Column with visual indicators
+interface TableColumnProps {
+  id: string;
+  children: ReactNode;
+  allowsSorting?: boolean;
+  sortDescriptor?: SortDescriptor;
+  className?: string;
+}
+
+export const TableColumn = ({
+  id,
+  children,
+  allowsSorting,
+  sortDescriptor,
+  className,
+}: TableColumnProps) => {
+  const isActive = sortDescriptor?.column === id;
+  const direction = sortDescriptor?.direction;
+
+  return (
+    <Column id={id} allowsSorting={allowsSorting} className={className}>
+      <div className="flex items-center gap-1">
+        <span>{children}</span>
+        {allowsSorting && (
+          <span className="text-muted-foreground">
+            {isActive ? (
+              direction === "ascending" ? (
+                <ArrowUp className="w-3.5 h-3.5" />
+              ) : (
+                <ArrowDown className="w-3.5 h-3.5" />
+              )
+            ) : (
+              <ChevronsUpDown className="w-3.5 h-3.5 opacity-50" />
+            )}
+          </span>
+        )}
+      </div>
+    </Column>
   );
 };
