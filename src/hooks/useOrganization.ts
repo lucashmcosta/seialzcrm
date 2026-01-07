@@ -47,33 +47,33 @@ export function useOrganization() {
 
     const fetchOrganizationData = async () => {
       try {
-        // Get user profile
-        const { data: profile } = await supabase
+        // Single optimized query with joins
+        const { data, error } = await supabase
           .from('users')
-          .select('*')
+          .select(`
+            *,
+            user_organizations!inner (
+              organization:organizations (*)
+            )
+          `)
           .eq('auth_user_id', user.id)
+          .eq('user_organizations.is_active', true)
           .single();
 
-        if (profile) {
-          setUserProfile(profile);
+        if (error) {
+          console.error('Error fetching organization data:', error);
+          setLoading(false);
+          return;
+        }
 
-          // Get user's organization membership
-          const { data: membership } = await supabase
-            .from('user_organizations')
-            .select('organization_id')
-            .eq('user_id', profile.id)
-            .eq('is_active', true)
-            .single();
+        if (data) {
+          // Extract user profile (exclude the nested relation)
+          const { user_organizations, ...profileData } = data;
+          setUserProfile(profileData as UserProfile);
 
-          if (membership) {
-            // Get organization details
-            const { data: org } = await supabase
-              .from('organizations')
-              .select('*')
-              .eq('id', membership.organization_id)
-              .single();
-
-            setOrganization(org);
+          // Extract organization from nested relation
+          if (user_organizations?.[0]?.organization) {
+            setOrganization(user_organizations[0].organization as Organization);
           }
         }
       } catch (error) {
