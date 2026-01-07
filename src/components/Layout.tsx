@@ -134,26 +134,6 @@ export function Layout({ children }: LayoutProps) {
 
       {/* Main content */}
       <div className="pl-64 flex-1">
-        {/* Top bar with notifications */}
-        <div className="sticky top-0 z-10 bg-background/95 backdrop-blur border-b border-border">
-          <div className="px-6 py-2 flex justify-end items-center gap-3">
-            <TooltipProvider>
-              <Tooltip>
-                <TooltipTrigger asChild>
-                  <Button variant="ghost" size="icon" asChild>
-                    <Link to="/docs">
-                      <HelpCircle className="w-5 h-5" />
-                    </Link>
-                  </Button>
-                </TooltipTrigger>
-                <TooltipContent>
-                  <p>Central de Ajuda</p>
-                </TooltipContent>
-              </Tooltip>
-            </TooltipProvider>
-            <Notifications />
-          </div>
-        </div>
         <main className="min-h-screen">
           {children}
         </main>
