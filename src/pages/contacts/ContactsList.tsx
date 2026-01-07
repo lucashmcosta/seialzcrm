@@ -1,19 +1,40 @@
-import { useState, useEffect } from 'react';
-import { Link } from 'react-router-dom';
+import { useState, useEffect, useMemo } from 'react';
+import { Link, useNavigate } from 'react-router-dom';
+import type { SortDescriptor } from 'react-aria-components';
+import { Edit01, Trash01 } from '@untitledui/icons';
 import { Layout } from '@/components/Layout';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Card, CardContent } from '@/components/ui/card';
-import { Checkbox } from '@/components/ui/checkbox';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { useOrganization } from '@/hooks/useOrganization';
 import { useTranslation } from '@/lib/i18n';
 import { usePermissions } from '@/hooks/usePermissions';
 import { supabase } from '@/integrations/supabase/client';
-import { Plus, Search, Mail, Phone } from 'lucide-react';
+import { Plus, Search } from 'lucide-react';
 import { SavedViewsDropdown } from '@/components/SavedViewsDropdown';
 import { BulkActionsBar } from '@/components/BulkActionsBar';
 import { Breadcrumbs } from '@/components/application/breadcrumbs/breadcrumbs';
+import { PaginationPageMinimalCenter } from '@/components/application/pagination/pagination';
+import {
+  Table,
+  TableCard,
+  TableHeader,
+  TableBody,
+  TableRow,
+  TableCell,
+  TableColumn,
+  TableCheckboxHeader,
+  TableCheckboxCell,
+  TableRowActionsDropdown,
+  TableRowAction,
+} from '@/components/application/table/table';
+import { Avatar } from '@/components/base/avatar/avatar';
+import { BadgeWithDot } from '@/components/base/badges/badges';
+import type { BadgeColor } from '@/components/base/badges/badge-types';
+import { formatPhoneDisplay } from '@/lib/phoneUtils';
+import { format } from 'date-fns';
+import { ptBR } from 'date-fns/locale';
 
 interface Contact {
   id: string;
@@ -26,7 +47,19 @@ interface Contact {
   created_at: string;
 }
 
+const ITEMS_PER_PAGE = 10;
+
+const lifecycleColors: Record<string, BadgeColor> = {
+  lead: 'blue',
+  qualified: 'purple',
+  opportunity: 'warning',
+  customer: 'success',
+  churned: 'error',
+  inactive: 'gray',
+};
+
 export default function ContactsList() {
+  const navigate = useNavigate();
   const { organization, userProfile, locale } = useOrganization();
   const { t } = useTranslation(locale as 'pt-BR' | 'en-US');
   const { permissions } = usePermissions();
@@ -43,7 +76,12 @@ export default function ContactsList() {
   // Pagination state
   const [currentPage, setCurrentPage] = useState(1);
   const [totalCount, setTotalCount] = useState(0);
-  const pageSize = 20;
+  
+  // Sorting state
+  const [sortDescriptor, setSortDescriptor] = useState<SortDescriptor>({
+    column: 'created_at',
+    direction: 'descending',
+  });
   
   // Current filters and sort for SavedViews
   const currentFilters = { owner: ownerFilter, stage: stageFilter, search: searchTerm };
@@ -102,8 +140,8 @@ export default function ContactsList() {
     }
     
     // Apply pagination
-    const from = (currentPage - 1) * pageSize;
-    const to = from + pageSize - 1;
+    const from = (currentPage - 1) * ITEMS_PER_PAGE;
+    const to = from + ITEMS_PER_PAGE - 1;
     query = query.range(from, to).order('created_at', { ascending: false });
 
     const { data, error, count } = await query;
@@ -115,12 +153,34 @@ export default function ContactsList() {
     setLoading(false);
   };
 
-  // Filters now applied server-side, so we use contacts directly
-  const filteredContacts = contacts;
+  // Sort contacts client-side
+  const sortedContacts = useMemo(() => {
+    return [...contacts].sort((a, b) => {
+      const column = sortDescriptor.column as keyof Contact;
+      const aVal = a[column];
+      const bVal = b[column];
 
-  const handleSelectAll = (checked: boolean | 'indeterminate') => {
-    if (checked === true) {
-      setSelectedIds(filteredContacts.map(c => c.id));
+      if (aVal === null || aVal === undefined) return 1;
+      if (bVal === null || bVal === undefined) return -1;
+
+      let cmp = 0;
+      if (typeof aVal === 'string' && typeof bVal === 'string') {
+        cmp = aVal.localeCompare(bVal);
+      }
+
+      return sortDescriptor.direction === 'descending' ? -cmp : cmp;
+    });
+  }, [contacts, sortDescriptor]);
+
+  const totalPages = Math.ceil(totalCount / ITEMS_PER_PAGE);
+
+  // Selection handlers
+  const allSelected = sortedContacts.length > 0 && sortedContacts.every(c => selectedIds.includes(c.id));
+  const someSelected = sortedContacts.some(c => selectedIds.includes(c.id)) && !allSelected;
+
+  const handleSelectAll = (checked: boolean) => {
+    if (checked) {
+      setSelectedIds(sortedContacts.map(c => c.id));
     } else {
       setSelectedIds([]);
     }
@@ -134,9 +194,22 @@ export default function ContactsList() {
     }
   };
 
+  const handleDelete = async (contactId: string) => {
+    await supabase
+      .from('contacts')
+      .update({ deleted_at: new Date().toISOString() })
+      .eq('id', contactId);
+    fetchContacts();
+  };
+
   const handleBulkSuccess = () => {
     setSelectedIds([]);
     fetchContacts();
+  };
+
+  const getLifecycleLabel = (stage: string | null) => {
+    if (!stage) return 'Lead';
+    return t(`lifecycle.${stage}`) || stage;
   };
 
   return (
@@ -170,8 +243,8 @@ export default function ContactsList() {
 
         {/* Filters */}
         <div className="mb-6 flex flex-wrap gap-3">
-          <div className="relative flex-1 min-w-[250px]">
-            <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-muted-foreground w-5 h-5" />
+          <div className="relative flex-1 min-w-[250px] max-w-sm">
+            <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-muted-foreground w-4 h-4" />
             <Input
               placeholder={t('common.search')}
               value={searchTerm}
@@ -211,7 +284,7 @@ export default function ContactsList() {
           <div className="text-center py-12">
             <p className="text-muted-foreground">{t('common.loading')}</p>
           </div>
-        ) : filteredContacts.length === 0 ? (
+        ) : sortedContacts.length === 0 ? (
           <Card>
             <CardContent className="py-12 text-center">
               <p className="text-muted-foreground">{t('contacts.noContacts')}</p>
@@ -224,97 +297,124 @@ export default function ContactsList() {
             </CardContent>
           </Card>
         ) : (
-          <>
-            {/* Select all checkbox */}
-            <div className="mb-3 flex items-center gap-2 px-2">
-              <Checkbox
-                checked={selectedIds.length === filteredContacts.length && filteredContacts.length > 0}
-                onCheckedChange={handleSelectAll}
-              />
-              <span className="text-sm text-muted-foreground">
-                {selectedIds.length > 0 
-                  ? `${selectedIds.length} ${t('contacts.selected')}`
-                  : t('contacts.selectAll')
-                }
-              </span>
-            </div>
-            
-            <div className="grid gap-4">
-              {filteredContacts.map((contact) => (
-                <Card key={contact.id} className="hover:shadow-md transition-shadow">
-                  <CardContent className="p-6">
-                    <div className="flex items-start gap-4">
-                      <Checkbox
-                        checked={selectedIds.includes(contact.id)}
-                        onCheckedChange={(checked) => handleSelectOne(contact.id, !!checked)}
-                        onClick={(e) => e.stopPropagation()}
-                      />
-                      <Link to={`/contacts/${contact.id}`} className="flex-1">
-                        <div className="flex justify-between items-start">
-                          <div className="space-y-2">
-                            <h3 className="text-lg font-semibold text-foreground">
-                              {contact.full_name}
-                            </h3>
-                            {contact.email && (
-                              <div className="flex items-center gap-2 text-sm text-muted-foreground">
-                                <Mail className="w-4 h-4" />
-                                {contact.email}
-                              </div>
-                            )}
-                            {contact.phone && (
-                              <div className="flex items-center gap-2 text-sm text-muted-foreground">
-                                <Phone className="w-4 h-4" />
-                                {contact.phone}
-                              </div>
-                            )}
-                            {contact.company_name && (
-                              <p className="text-sm text-muted-foreground">{contact.company_name}</p>
-                            )}
-                          </div>
-                          <div className="text-sm">
-                            <span className={`px-2 py-1 rounded-full text-xs font-medium ${
-                              contact.lifecycle_stage === 'customer' 
-                                ? 'bg-primary/10 text-primary'
-                                : 'bg-muted text-muted-foreground'
-                            }`}>
-                              {t(`lifecycle.${contact.lifecycle_stage}`)}
-                            </span>
-                          </div>
+          <TableCard
+            footer={
+              totalPages > 1 && (
+                <PaginationPageMinimalCenter
+                  currentPage={currentPage}
+                  totalPages={totalPages}
+                  onPageChange={setCurrentPage}
+                />
+              )
+            }
+          >
+            <Table
+              aria-label="Lista de contatos"
+              sortDescriptor={sortDescriptor}
+              onSortChange={setSortDescriptor}
+            >
+              <TableHeader>
+                <TableCheckboxHeader
+                  isSelected={allSelected}
+                  isIndeterminate={someSelected}
+                  onChange={handleSelectAll}
+                />
+                <TableColumn id="full_name" allowsSorting>
+                  {t('contacts.name')}
+                </TableColumn>
+                <TableColumn id="lifecycle_stage" allowsSorting>
+                  {t('contacts.lifecycleStage')}
+                </TableColumn>
+                <TableColumn id="phone">
+                  {t('contacts.phone')}
+                </TableColumn>
+                <TableColumn id="company_name" allowsSorting>
+                  {t('contacts.company')}
+                </TableColumn>
+                <TableColumn id="created_at" allowsSorting>
+                  {t('common.createdAt')}
+                </TableColumn>
+                <TableColumn id="actions" className="w-12">
+                  <span className="sr-only">Ações</span>
+                </TableColumn>
+              </TableHeader>
+              <TableBody items={sortedContacts}>
+                {(contact) => (
+                  <TableRow
+                    key={contact.id}
+                    className="cursor-pointer"
+                    onAction={() => navigate(`/contacts/${contact.id}`)}
+                  >
+                    <TableCheckboxCell
+                      isSelected={selectedIds.includes(contact.id)}
+                      onChange={(checked) => handleSelectOne(contact.id, checked)}
+                    />
+                    <TableCell>
+                      <div className="flex items-center gap-3">
+                        <Avatar
+                          fallbackText={contact.full_name}
+                          size="sm"
+                        />
+                        <div>
+                          <p className="font-medium text-foreground">
+                            {contact.full_name}
+                          </p>
+                          {contact.email && (
+                            <p className="text-sm text-muted-foreground">
+                              {contact.email}
+                            </p>
+                          )}
                         </div>
-                      </Link>
-                    </div>
-                  </CardContent>
-                </Card>
-              ))}
-            </div>
-            
-            {/* Pagination */}
-            {totalCount > pageSize && (
-              <div className="mt-6 flex items-center justify-between">
-                <p className="text-sm text-muted-foreground">
-                  {t('common.showing')} {(currentPage - 1) * pageSize + 1} - {Math.min(currentPage * pageSize, totalCount)} {t('common.of')} {totalCount}
-                </p>
-                <div className="flex gap-2">
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    onClick={() => setCurrentPage(p => Math.max(1, p - 1))}
-                    disabled={currentPage === 1}
-                  >
-                    {t('common.previous')}
-                  </Button>
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    onClick={() => setCurrentPage(p => Math.min(Math.ceil(totalCount / pageSize), p + 1))}
-                    disabled={currentPage >= Math.ceil(totalCount / pageSize)}
-                  >
-                    {t('common.next')}
-                  </Button>
-                </div>
-              </div>
-            )}
-          </>
+                      </div>
+                    </TableCell>
+                    <TableCell>
+                      <BadgeWithDot
+                        color={lifecycleColors[contact.lifecycle_stage] || 'gray'}
+                      >
+                        {getLifecycleLabel(contact.lifecycle_stage)}
+                      </BadgeWithDot>
+                    </TableCell>
+                    <TableCell className="text-muted-foreground">
+                      {contact.phone ? formatPhoneDisplay(contact.phone) : '—'}
+                    </TableCell>
+                    <TableCell className="text-muted-foreground">
+                      {contact.company_name || '—'}
+                    </TableCell>
+                    <TableCell className="text-muted-foreground">
+                      {contact.created_at
+                        ? format(new Date(contact.created_at), 'dd MMM yyyy', { locale: ptBR })
+                        : '—'}
+                    </TableCell>
+                    <TableCell>
+                      <TableRowActionsDropdown>
+                        <TableRowAction
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            navigate(`/contacts/${contact.id}/edit`);
+                          }}
+                        >
+                          <Edit01 className="w-4 h-4 mr-2" />
+                          Editar
+                        </TableRowAction>
+                        {permissions.canDeleteContacts && (
+                          <TableRowAction
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              handleDelete(contact.id);
+                            }}
+                            className="text-destructive focus:text-destructive"
+                          >
+                            <Trash01 className="w-4 h-4 mr-2" />
+                            Excluir
+                          </TableRowAction>
+                        )}
+                      </TableRowActionsDropdown>
+                    </TableCell>
+                  </TableRow>
+                )}
+              </TableBody>
+            </Table>
+          </TableCard>
         )}
       </div>
 
