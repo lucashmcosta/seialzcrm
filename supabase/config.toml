@@ -23,3 +23,15 @@ verify_jwt = false
 
 [functions.create-user]
 verify_jwt = true
+
+[functions.twilio-whatsapp-setup]
+verify_jwt = true
+
+[functions.twilio-whatsapp-webhook]
+verify_jwt = false
+
+[functions.twilio-whatsapp-send]
+verify_jwt = true
+
+[functions.twilio-whatsapp-templates]
+verify_jwt = true

@@ -1172,31 +1172,37 @@ export type Database = {
           channel: string | null
           contact_id: string
           created_at: string | null
+          external_id: string | null
           id: string
           opportunity_id: string | null
           organization_id: string
           subject: string | null
           updated_at: string | null
+          whatsapp_last_inbound_at: string | null
         }
         Insert: {
           channel?: string | null
           contact_id: string
           created_at?: string | null
+          external_id?: string | null
           id?: string
           opportunity_id?: string | null
           organization_id: string
           subject?: string | null
           updated_at?: string | null
+          whatsapp_last_inbound_at?: string | null
         }
         Update: {
           channel?: string | null
           contact_id?: string
           created_at?: string | null
+          external_id?: string | null
           id?: string
           opportunity_id?: string | null
           organization_id?: string
           subject?: string | null
           updated_at?: string | null
+          whatsapp_last_inbound_at?: string | null
         }
         Relationships: [
           {
@@ -1228,36 +1234,54 @@ export type Database = {
           created_at: string | null
           deleted_at: string | null
           direction: string | null
+          error_code: string | null
+          error_message: string | null
           id: string
           is_sample: boolean | null
+          media_urls: Json | null
           organization_id: string
           sender_user_id: string | null
           sent_at: string | null
+          template_id: string | null
           thread_id: string
+          whatsapp_message_sid: string | null
+          whatsapp_status: string | null
         }
         Insert: {
           content: string
           created_at?: string | null
           deleted_at?: string | null
           direction?: string | null
+          error_code?: string | null
+          error_message?: string | null
           id?: string
           is_sample?: boolean | null
+          media_urls?: Json | null
           organization_id: string
           sender_user_id?: string | null
           sent_at?: string | null
+          template_id?: string | null
           thread_id: string
+          whatsapp_message_sid?: string | null
+          whatsapp_status?: string | null
         }
         Update: {
           content?: string
           created_at?: string | null
           deleted_at?: string | null
           direction?: string | null
+          error_code?: string | null
+          error_message?: string | null
           id?: string
           is_sample?: boolean | null
+          media_urls?: Json | null
           organization_id?: string
           sender_user_id?: string | null
           sent_at?: string | null
+          template_id?: string | null
           thread_id?: string
+          whatsapp_message_sid?: string | null
+          whatsapp_status?: string | null
         }
         Relationships: [
           {
@@ -1272,6 +1296,13 @@ export type Database = {
             columns: ["sender_user_id"]
             isOneToOne: false
             referencedRelation: "users"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "messages_template_id_fkey"
+            columns: ["template_id"]
+            isOneToOne: false
+            referencedRelation: "whatsapp_templates"
             referencedColumns: ["id"]
           },
           {
@@ -2350,6 +2381,74 @@ export type Database = {
           updated_at?: string | null
         }
         Relationships: []
+      }
+      whatsapp_templates: {
+        Row: {
+          body: string
+          category: string | null
+          created_at: string | null
+          footer: string | null
+          friendly_name: string
+          header: string | null
+          id: string
+          is_active: boolean | null
+          language: string | null
+          last_synced_at: string | null
+          organization_id: string
+          rejection_reason: string | null
+          status: string | null
+          template_type: string | null
+          twilio_content_sid: string
+          updated_at: string | null
+          variables: Json | null
+        }
+        Insert: {
+          body: string
+          category?: string | null
+          created_at?: string | null
+          footer?: string | null
+          friendly_name: string
+          header?: string | null
+          id?: string
+          is_active?: boolean | null
+          language?: string | null
+          last_synced_at?: string | null
+          organization_id: string
+          rejection_reason?: string | null
+          status?: string | null
+          template_type?: string | null
+          twilio_content_sid: string
+          updated_at?: string | null
+          variables?: Json | null
+        }
+        Update: {
+          body?: string
+          category?: string | null
+          created_at?: string | null
+          footer?: string | null
+          friendly_name?: string
+          header?: string | null
+          id?: string
+          is_active?: boolean | null
+          language?: string | null
+          last_synced_at?: string | null
+          organization_id?: string
+          rejection_reason?: string | null
+          status?: string | null
+          template_type?: string | null
+          twilio_content_sid?: string
+          updated_at?: string | null
+          variables?: Json | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "whatsapp_templates_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+        ]
       }
     }
     Views: {
