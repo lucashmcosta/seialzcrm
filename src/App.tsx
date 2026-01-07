@@ -1,52 +1,62 @@
+import { Suspense, lazy } from "react";
 import { Toaster } from "@/components/ui/toaster";
 import { Toaster as Sonner } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { OutboundCallProvider } from "@/contexts/OutboundCallContext";
 import { ThemeProvider } from "@/contexts/ThemeContext";
-import { OutboundCallHandler } from "@/components/calls/OutboundCallHandler";
 import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
 import { useAuth } from "./hooks/useAuth";
-import { InboundCallHandler } from "./components/calls/InboundCallHandler";
+import { PageLoader } from "./components/common/PageLoader";
+
+// Lazy load call handlers (heavy Twilio SDK)
+const InboundCallHandler = lazy(() => import("./components/calls/InboundCallHandler").then(m => ({ default: m.InboundCallHandler })));
+const OutboundCallHandler = lazy(() => import("./components/calls/OutboundCallHandler").then(m => ({ default: m.OutboundCallHandler })));
+
+// Auth pages - load immediately (small)
 import SignUp from "./pages/auth/SignUp";
 import SignIn from "./pages/auth/SignIn";
 import ConfirmEmail from "./pages/auth/ConfirmEmail";
-import Onboarding from "./pages/Onboarding";
-import Dashboard from "./pages/Dashboard";
-import ContactsList from "./pages/contacts/ContactsList";
-import ContactDetail from "./pages/contacts/ContactDetail";
-import ContactForm from "./pages/contacts/ContactForm";
-import OpportunitiesKanban from "./pages/opportunities/OpportunitiesKanban";
-import OpportunityDetail from "./pages/opportunities/OpportunityDetail";
-import TasksList from "./pages/tasks/TasksList";
-import Settings from "./pages/Settings";
-import Profile from "./pages/Profile";
-import NotFound from "./pages/NotFound";
-import CompaniesList from "./pages/companies/CompaniesList";
-import CompanyDetail from "./pages/companies/CompanyDetail";
-import CompanyForm from "./pages/companies/CompanyForm";
 import AcceptInvitation from "./pages/invite/AcceptInvitation";
 
-// Admin Portal
-import AdminLogin from "./pages/admin/AdminLogin";
-import AdminMFASetup from "./pages/admin/AdminMFASetup";
-import AdminDashboard from "./pages/admin/AdminDashboard";
-import AdminOrganizations from "./pages/admin/AdminOrganizations";
-import AdminOrganizationDetail from "./pages/admin/AdminOrganizationDetail";
-import AdminUsers from "./pages/admin/AdminUsers";
-import AdminFeatureFlags from "./pages/admin/AdminFeatureFlags";
-import AdminLogs from "./pages/admin/AdminLogs";
-import AdminSecurity from "./pages/admin/AdminSecurity";
-import AdminImpersonationHistory from "./pages/admin/AdminImpersonationHistory";
-import AdminPlans from "./pages/admin/AdminPlans";
-import AdminCoupons from "./pages/admin/AdminCoupons";
-import AdminIntegrations from "./pages/admin/AdminIntegrations";
-import AdminIntegrationDetail from "./pages/admin/AdminIntegrationDetail";
-import AdminDocumentation from "./pages/admin/AdminDocumentation";
-import AdminDocumentationEdit from "./pages/admin/AdminDocumentationEdit";
-import { AdminProtectedRoute } from "./components/admin/AdminProtectedRoute";
+// Public docs - load immediately
 import DocsIndex from "./pages/docs/DocsIndex";
 import DocsModule from "./pages/docs/DocsModule";
+
+// Lazy load CRM pages
+const Onboarding = lazy(() => import("./pages/Onboarding"));
+const Dashboard = lazy(() => import("./pages/Dashboard"));
+const ContactsList = lazy(() => import("./pages/contacts/ContactsList"));
+const ContactDetail = lazy(() => import("./pages/contacts/ContactDetail"));
+const ContactForm = lazy(() => import("./pages/contacts/ContactForm"));
+const OpportunitiesKanban = lazy(() => import("./pages/opportunities/OpportunitiesKanban"));
+const OpportunityDetail = lazy(() => import("./pages/opportunities/OpportunityDetail"));
+const TasksList = lazy(() => import("./pages/tasks/TasksList"));
+const Settings = lazy(() => import("./pages/Settings"));
+const Profile = lazy(() => import("./pages/Profile"));
+const NotFound = lazy(() => import("./pages/NotFound"));
+const CompaniesList = lazy(() => import("./pages/companies/CompaniesList"));
+const CompanyDetail = lazy(() => import("./pages/companies/CompanyDetail"));
+const CompanyForm = lazy(() => import("./pages/companies/CompanyForm"));
+
+// Lazy load Admin pages
+const AdminLogin = lazy(() => import("./pages/admin/AdminLogin"));
+const AdminMFASetup = lazy(() => import("./pages/admin/AdminMFASetup"));
+const AdminDashboard = lazy(() => import("./pages/admin/AdminDashboard"));
+const AdminOrganizations = lazy(() => import("./pages/admin/AdminOrganizations"));
+const AdminOrganizationDetail = lazy(() => import("./pages/admin/AdminOrganizationDetail"));
+const AdminUsers = lazy(() => import("./pages/admin/AdminUsers"));
+const AdminFeatureFlags = lazy(() => import("./pages/admin/AdminFeatureFlags"));
+const AdminLogs = lazy(() => import("./pages/admin/AdminLogs"));
+const AdminSecurity = lazy(() => import("./pages/admin/AdminSecurity"));
+const AdminImpersonationHistory = lazy(() => import("./pages/admin/AdminImpersonationHistory"));
+const AdminPlans = lazy(() => import("./pages/admin/AdminPlans"));
+const AdminCoupons = lazy(() => import("./pages/admin/AdminCoupons"));
+const AdminIntegrations = lazy(() => import("./pages/admin/AdminIntegrations"));
+const AdminIntegrationDetail = lazy(() => import("./pages/admin/AdminIntegrationDetail"));
+const AdminDocumentation = lazy(() => import("./pages/admin/AdminDocumentation"));
+const AdminDocumentationEdit = lazy(() => import("./pages/admin/AdminDocumentationEdit"));
+const AdminProtectedRoute = lazy(() => import("./components/admin/AdminProtectedRoute").then(m => ({ default: m.AdminProtectedRoute })));
 
 const queryClient = new QueryClient();
 
@@ -54,11 +64,7 @@ function ProtectedRoute({ children }: { children: React.ReactNode }) {
   const { isAuthenticated, loading } = useAuth();
 
   if (loading) {
-    return (
-      <div className="min-h-screen bg-background flex items-center justify-center">
-        <p className="text-muted-foreground">Carregando...</p>
-      </div>
-    );
+    return <PageLoader />;
   }
 
   if (!isAuthenticated) {
@@ -75,10 +81,10 @@ function GlobalCallHandler() {
   if (!isAuthenticated) return null;
   
   return (
-    <>
+    <Suspense fallback={null}>
       <InboundCallHandler />
       <OutboundCallHandler />
-    </>
+    </Suspense>
   );
 }
 
@@ -91,6 +97,7 @@ const App = () => (
       <BrowserRouter>
         <ThemeProvider>
         <GlobalCallHandler />
+        <Suspense fallback={<PageLoader />}>
         <Routes>
           <Route path="/" element={<Navigate to="/dashboard" replace />} />
           
@@ -301,6 +308,7 @@ const App = () => (
           />
           <Route path="*" element={<NotFound />} />
         </Routes>
+        </Suspense>
         </ThemeProvider>
       </BrowserRouter>
     </TooltipProvider>
