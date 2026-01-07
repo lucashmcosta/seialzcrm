@@ -29,6 +29,8 @@ export const translations = {
     'common.page': 'Página',
     'common.name': 'Nome',
     'common.type': 'Tipo',
+    'common.createdAt': 'Criado em',
+    'common.columns': 'Colunas',
     
     // Navigation
     'nav.dashboard': 'Início',
@@ -91,6 +93,7 @@ export const translations = {
     
     // Contacts
     'contacts.title': 'Contatos',
+    'contacts.name': 'Nome',
     'contacts.newContact': 'Novo contato',
     'contacts.editContact': 'Editar contato',
     'contacts.fullName': 'Nome completo',
@@ -474,6 +477,8 @@ export const translations = {
     'common.page': 'Page',
     'common.name': 'Name',
     'common.type': 'Type',
+    'common.createdAt': 'Created at',
+    'common.columns': 'Columns',
     
     // Navigation
     'nav.dashboard': 'Dashboard',
@@ -537,6 +542,7 @@ export const translations = {
     
     // Contacts
     'contacts.title': 'Contacts',
+    'contacts.name': 'Name',
     'contacts.newContact': 'New contact',
     'contacts.editContact': 'Edit contact',
     'contacts.fullName': 'Full name',
