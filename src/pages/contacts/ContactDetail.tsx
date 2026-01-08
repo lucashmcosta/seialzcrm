@@ -85,22 +85,14 @@ export default function ContactDetail() {
   return (
     <Layout>
       <div className="flex flex-col h-full">
-        <div className="border-b bg-background/95 backdrop-blur">
-          <div className="flex items-center justify-between px-6 py-4">
-            <div className="flex flex-col gap-2">
-              <Breadcrumbs 
-                items={[
-                  { label: t('contacts.title'), href: '/contacts' },
-                  { label: contact.full_name }
-                ]} 
-              />
-              <div className="flex items-center gap-3">
-                <h1 className="text-2xl font-bold text-foreground">{contact.full_name}</h1>
-                <Badge className={`${lifecycleColor} text-white`}>
-                  {t(`lifecycle.${contact.lifecycle_stage}`)}
-                </Badge>
-              </div>
-            </div>
+        <div className="border-b bg-background/95 backdrop-blur px-6 py-4">
+          <div className="flex items-center justify-between mb-2">
+            <Breadcrumbs 
+              items={[
+                { label: t('contacts.title'), href: '/contacts' },
+                { label: contact.full_name }
+              ]} 
+            />
             <div className="flex gap-2">
               {permissions.canEditContacts && (
                 <Button variant="outline" asChild>
@@ -135,6 +127,12 @@ export default function ContactDetail() {
                 </AlertDialog>
               )}
             </div>
+          </div>
+          <div className="flex items-center gap-3">
+            <h1 className="text-2xl font-bold text-foreground">{contact.full_name}</h1>
+            <Badge className={`${lifecycleColor} text-white`}>
+              {t(`lifecycle.${contact.lifecycle_stage}`)}
+            </Badge>
           </div>
         </div>
 
