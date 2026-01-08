@@ -5,10 +5,9 @@ import { TooltipProvider } from "@/components/ui/tooltip";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { OutboundCallProvider } from "@/contexts/OutboundCallContext";
 import { ThemeProvider } from "@/contexts/ThemeContext";
+import { AuthProvider, useAuthContext } from "@/contexts/AuthContext";
 import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
-import { useAuth } from "./hooks/useAuth";
 import { PageLoader } from "./components/common/PageLoader";
-
 // Lazy load call handlers (heavy Twilio SDK)
 const InboundCallHandler = lazy(() => import("./components/calls/InboundCallHandler").then(m => ({ default: m.InboundCallHandler })));
 const OutboundCallHandler = lazy(() => import("./components/calls/OutboundCallHandler").then(m => ({ default: m.OutboundCallHandler })));
@@ -61,7 +60,7 @@ const AdminProtectedRoute = lazy(() => import("./components/admin/AdminProtected
 const queryClient = new QueryClient();
 
 function ProtectedRoute({ children }: { children: React.ReactNode }) {
-  const { isAuthenticated, loading } = useAuth();
+  const { isAuthenticated, loading } = useAuthContext();
 
   if (loading) {
     return <PageLoader />;
@@ -76,7 +75,7 @@ function ProtectedRoute({ children }: { children: React.ReactNode }) {
 
 // Global call handler - persists across all route changes
 function GlobalCallHandler() {
-  const { isAuthenticated } = useAuth();
+  const { isAuthenticated } = useAuthContext();
   
   if (!isAuthenticated) return null;
   
@@ -95,6 +94,7 @@ const App = () => (
       <Toaster />
       <Sonner />
       <BrowserRouter>
+        <AuthProvider>
         <ThemeProvider>
         <GlobalCallHandler />
         <Suspense fallback={<PageLoader />}>
@@ -310,6 +310,7 @@ const App = () => (
         </Routes>
         </Suspense>
         </ThemeProvider>
+        </AuthProvider>
       </BrowserRouter>
     </TooltipProvider>
     </OutboundCallProvider>
