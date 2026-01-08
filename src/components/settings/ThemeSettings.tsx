@@ -13,6 +13,7 @@ import { cn } from '@/lib/utils';
 
 const COLOR_PRESETS = [
   { name: 'Deep Blue', value: '206 50% 29%', color: 'hsl(206, 50%, 29%)' },
+  { name: 'Azul', value: '217 100% 61%', color: 'hsl(217, 100%, 61%)' },
   { name: 'Ocean', value: '200 70% 45%', color: 'hsl(200, 70%, 45%)' },
   { name: 'Forest', value: '142 60% 35%', color: 'hsl(142, 60%, 35%)' },
   { name: 'Purple', value: '270 60% 45%', color: 'hsl(270, 60%, 45%)' },
