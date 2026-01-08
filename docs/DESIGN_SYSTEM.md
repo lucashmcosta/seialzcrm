@@ -18,7 +18,7 @@
 
 | Nome | HSL | Uso |
 |------|-----|-----|
-| Primary (Deep Blue) | `hsl(206, 50%, 29%)` | Botões principais, links, ícones ativos |
+| Primary (Azul Elétrico) | `hsl(234, 91%, 56%)` / `#2B40F5` | Botões principais, links, ícones ativos |
 | Primary Foreground | `hsl(0, 0%, 100%)` | Texto sobre primary |
 
 ### Cores de Status

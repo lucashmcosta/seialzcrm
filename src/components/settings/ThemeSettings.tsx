@@ -12,6 +12,7 @@ import { Check, Loader2, Palette, Moon, Sun } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
 const COLOR_PRESETS = [
+  { name: 'Azul Elétrico', value: '234 91% 56%', color: '#2B40F5' },
   { name: 'Deep Blue', value: '206 50% 29%', color: 'hsl(206, 50%, 29%)' },
   { name: 'Azul', value: '217 100% 61%', color: 'hsl(217, 100%, 61%)' },
   { name: 'Ocean', value: '200 70% 45%', color: 'hsl(200, 70%, 45%)' },
@@ -56,7 +57,7 @@ export function ThemeSettings() {
   useEffect(() => {
     if (organization) {
       const original = {
-        primary: organization.theme_primary_color || '206 50% 29%',
+        primary: organization.theme_primary_color || '234 91% 56%',
         sidebar: organization.theme_sidebar_color || '0 0% 98%',
         dark: organization.theme_dark_mode || false,
       };

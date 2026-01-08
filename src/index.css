@@ -5,7 +5,7 @@
 /* Base44 Design System
  * Filosofia: Design limpo, profissional, estilo "pill" (arredondado)
  * Fonte: Inter
- * Cor Principal: Deep Blue hsl(206, 50%, 29%)
+ * Cor Principal: Azul Elétrico hsl(234, 91%, 56%) - #2B40F5
  */
 
 @layer base {
@@ -20,10 +20,10 @@
     --popover: 0 0% 100%;
     --popover-foreground: 217 33% 17%;
 
-    /* Cor Primária (Deep Blue) */
-    --primary: 206 50% 29%;
+    /* Cor Primária (Azul Elétrico) */
+    --primary: 234 91% 56%;
     --primary-foreground: 0 0% 100%;
-    --primary-glow: 206 50% 45%;
+    --primary-glow: 234 91% 70%;
 
     /* Cor Secundária */
     --secondary: 210 20% 96%;
@@ -52,7 +52,7 @@
     /* Bordas e Inputs */
     --border: 214 32% 91%;
     --input: 214 32% 91%;
-    --ring: 206 50% 29%;
+    --ring: 234 91% 56%;
 
     /* Border Radius */
     --radius: 0.75rem;
@@ -60,17 +60,17 @@
     /* Sidebar */
     --sidebar-background: 0 0% 98%;
     --sidebar-foreground: 240 5.3% 26.1%;
-    --sidebar-primary: 206 50% 29%;
+    --sidebar-primary: 234 91% 56%;
     --sidebar-primary-foreground: 0 0% 100%;
-    --sidebar-accent: 206 50% 88%;
-    --sidebar-accent-foreground: 206 100% 20%;
+    --sidebar-accent: 234 91% 92%;
+    --sidebar-accent-foreground: 234 91% 30%;
     --sidebar-border: 220 13% 91%;
-    --sidebar-ring: 206 50% 29%;
+    --sidebar-ring: 234 91% 56%;
 
     /* Chart Colors */
-    --chart-1: 206 50% 29%;
-    --chart-2: 206 50% 45%;
-    --chart-3: 206 50% 60%;
+    --chart-1: 234 91% 56%;
+    --chart-2: 234 91% 65%;
+    --chart-3: 234 91% 75%;
     --chart-4: 142 76% 36%;
     --chart-5: 45 93% 47%;
 
@@ -120,9 +120,9 @@
     --popover: 222.2 84% 4.9%;
     --popover-foreground: 210 40% 98%;
     
-    --primary: 206 50% 45%;
+    --primary: 234 91% 65%;
     --primary-foreground: 0 0% 100%;
-    --primary-glow: 206 50% 55%;
+    --primary-glow: 234 91% 75%;
     
     --secondary: 217.2 32.6% 17.5%;
     --secondary-foreground: 210 40% 98%;
@@ -144,22 +144,22 @@
     
     --border: 217.2 32.6% 17.5%;
     --input: 217.2 32.6% 17.5%;
-    --ring: 206 50% 45%;
+    --ring: 234 91% 65%;
 
     /* Sidebar Dark */
     --sidebar-background: 222.2 84% 4.9%;
     --sidebar-foreground: 240 5.3% 73.9%;
-    --sidebar-primary: 206 50% 45%;
+    --sidebar-primary: 234 91% 65%;
     --sidebar-primary-foreground: 0 0% 100%;
-    --sidebar-accent: 206 50% 20%;
-    --sidebar-accent-foreground: 206 50% 88%;
+    --sidebar-accent: 234 91% 25%;
+    --sidebar-accent-foreground: 234 91% 85%;
     --sidebar-border: 217.2 32.6% 17.5%;
-    --sidebar-ring: 206 50% 45%;
+    --sidebar-ring: 234 91% 65%;
 
     /* Charts Dark */
-    --chart-1: 206 50% 45%;
-    --chart-2: 206 50% 60%;
-    --chart-3: 206 50% 75%;
+    --chart-1: 234 91% 65%;
+    --chart-2: 234 91% 75%;
+    --chart-3: 234 91% 85%;
     --chart-4: 142 76% 50%;
     --chart-5: 45 93% 55%;
 
