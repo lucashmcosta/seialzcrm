@@ -73,7 +73,7 @@ export function Layout({ children }: LayoutProps) {
           src={organization.logo_url}
           alt={organization.name}
           style={{ height: logoSize }}
-          className="object-contain my-3"
+          className="object-contain my-5"
         />
       ) : (
         <>
