@@ -35,19 +35,32 @@ export interface UserProfile {
 }
 
 export function useOrganization() {
-  const { user } = useAuth();
+  const { user, loading: authLoading } = useAuth();
   const [organization, setOrganization] = useState<Organization | null>(null);
   const [userProfile, setUserProfile] = useState<UserProfile | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
+    // Still loading auth - keep loading state
+    if (authLoading) {
+      setLoading(true);
+      return;
+    }
+
+    // Auth finished but no user - reset state (logged out)
     if (!user) {
+      setOrganization(null);
+      setUserProfile(null);
+      setError(null);
       setLoading(false);
       return;
     }
 
+    // User exists - fetch data
     const fetchData = async () => {
+      setLoading(true);
+      setError(null);
       try {
         // Step 1: Fetch user profile first (without inner join)
         const { data: profileData, error: profileError } = await supabase
@@ -101,7 +114,7 @@ export function useOrganization() {
     };
 
     fetchData();
-  }, [user]);
+  }, [user, authLoading]);
 
   const locale = userProfile?.locale || organization?.default_locale || 'pt-BR';
 

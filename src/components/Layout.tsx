@@ -116,12 +116,16 @@ export function Layout({ children }: LayoutProps) {
         <div className="flex items-center gap-3 p-2 rounded-lg hover:bg-accent transition-colors">
           <div className="w-10 h-10 bg-primary/10 rounded-full flex items-center justify-center">
             <span className="text-sm font-semibold text-primary">
-              {userProfile?.full_name?.charAt(0) || user?.email?.charAt(0).toUpperCase()}
+              {userProfile?.full_name?.charAt(0) || user?.email?.charAt(0)?.toUpperCase() || '?'}
             </span>
           </div>
           <div className="flex-1 min-w-0">
-            <p className="text-sm font-medium truncate text-foreground">{userProfile?.full_name}</p>
-            <p className="text-xs text-muted-foreground truncate">{userProfile?.email}</p>
+            <p className="text-sm font-medium truncate text-foreground">
+              {userProfile?.full_name || 'Carregando...'}
+            </p>
+            <p className="text-xs text-muted-foreground truncate">
+              {userProfile?.email || user?.email || ''}
+            </p>
           </div>
         </div>
       </Link>
