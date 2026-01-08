@@ -9,7 +9,8 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Switch } from '@/components/ui/switch';
 import { useToast } from '@/hooks/use-toast';
-import { Loader2, Trash2 } from 'lucide-react';
+import { Loader2, Trash2, ImageIcon, Pencil } from 'lucide-react';
+import { LogoEditorDialog } from '@/components/admin/LogoEditorDialog';
 import {
   AlertDialog,
   AlertDialogAction,
@@ -28,6 +29,8 @@ export function GeneralSettings() {
   const { toast } = useToast();
   const [loading, setLoading] = useState(false);
   const [resetting, setResetting] = useState(false);
+  const [logoDialogOpen, setLogoDialogOpen] = useState(false);
+  const [logoUrl, setLogoUrl] = useState('');
   const [formData, setFormData] = useState({
     name: '',
     default_currency: 'BRL',
@@ -46,8 +49,32 @@ export function GeneralSettings() {
         timezone: organization.timezone || 'America/Sao_Paulo',
         enable_companies_module: organization.enable_companies_module || false,
       });
+      setLogoUrl(organization.logo_url || '');
     }
   }, [organization]);
+
+  const handleLogoSave = async (newLogoUrl: string) => {
+    if (!organization?.id) return;
+    
+    const { error } = await supabase
+      .from('organizations')
+      .update({ logo_url: newLogoUrl })
+      .eq('id', organization.id);
+      
+    if (!error) {
+      setLogoUrl(newLogoUrl);
+      toast({ 
+        title: t('common.success'),
+        description: t('settings.logoUpdated'),
+      });
+    } else {
+      toast({
+        variant: 'destructive',
+        title: t('common.error'),
+        description: 'Failed to update logo',
+      });
+    }
+  };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -86,6 +113,35 @@ export function GeneralSettings() {
       </CardHeader>
       <CardContent>
         <form onSubmit={handleSubmit} className="space-y-6">
+          {/* Logo Section */}
+          <div className="space-y-2">
+            <Label>{t('settings.organizationLogo')}</Label>
+            <p className="text-sm text-muted-foreground">
+              {t('settings.logoDescription')}
+            </p>
+            <div className="flex items-center gap-4 p-4 bg-muted rounded-lg">
+              {logoUrl ? (
+                <img
+                  src={logoUrl}
+                  alt="Logo da organização"
+                  className="w-16 h-16 rounded-lg object-contain bg-background p-2"
+                />
+              ) : (
+                <div className="w-16 h-16 rounded-lg bg-background flex items-center justify-center">
+                  <ImageIcon className="w-8 h-8 text-muted-foreground" />
+                </div>
+              )}
+              <Button
+                type="button"
+                variant="outline"
+                onClick={() => setLogoDialogOpen(true)}
+              >
+                <Pencil className="w-4 h-4 mr-2" />
+                {t('settings.changeLogo')}
+              </Button>
+            </div>
+          </div>
+
           <div className="space-y-2">
             <Label htmlFor="name">{t('settings.orgName')}</Label>
             <Input
@@ -227,9 +283,19 @@ export function GeneralSettings() {
                 </AlertDialogAction>
               </AlertDialogFooter>
             </AlertDialogContent>
-          </AlertDialog>
+        </AlertDialog>
         </div>
       </CardContent>
+
+      {/* Logo Editor Dialog */}
+      <LogoEditorDialog
+        open={logoDialogOpen}
+        onOpenChange={setLogoDialogOpen}
+        currentLogoUrl={logoUrl}
+        onSave={handleLogoSave}
+        integrationSlug={organization?.slug || 'org'}
+        bucketName="organization-logos"
+      />
     </Card>
   );
 }
