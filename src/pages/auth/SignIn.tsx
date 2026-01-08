@@ -30,30 +30,22 @@ export default function SignIn() {
       if (error) throw error;
 
       if (authData.user) {
-        // Buscar usuário por auth_user_id (única busca necessária)
-        let { data: userData } = await supabase
+        // Buscar usuário por auth_user_id
+        const { data: userData, error: userError } = await supabase
           .from('users')
           .select('id')
           .eq('auth_user_id', authData.user.id)
           .maybeSingle();
 
-        // Se não existe, criar registros
+        // Se houver erro na query, lançar exceção
+        if (userError) {
+          console.error('Erro ao buscar usuário:', userError);
+          throw new Error('Erro ao carregar dados do usuário. Tente novamente.');
+        }
+
+        // Se usuário não encontrado, algo deu errado no signup (trigger deveria ter criado)
         if (!userData) {
-          const { error: signupError } = await supabase.rpc('handle_user_signup', {
-            p_full_name: authData.user.user_metadata?.full_name || 'Usuário',
-            p_email: email,
-            p_organization_name: authData.user.user_metadata?.organization_name || 'Minha Empresa',
-          });
-          
-          if (signupError) throw signupError;
-          
-          // Buscar usuário recém-criado
-          const { data: newUserData } = await supabase
-            .from('users')
-            .select('id')
-            .eq('auth_user_id', authData.user.id)
-            .maybeSingle();
-          userData = newUserData;
+          throw new Error('Usuário não encontrado. Por favor, faça logout e tente criar uma nova conta.');
         }
 
         if (userData) {

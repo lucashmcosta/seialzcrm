@@ -2518,6 +2518,7 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
+      current_user_id: { Args: never; Returns: string }
       handle_user_signup: {
         Args: {
           p_email: string
