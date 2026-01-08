@@ -131,8 +131,32 @@ export const TableRowActionsDropdown = ({
   );
 };
 
-// Convenient re-exports
-export { DropdownMenuItem as TableRowAction } from "@/components/ui/dropdown-menu";
+// Table Row Action component
+interface TableRowActionProps {
+  label: string;
+  icon?: ReactNode;
+  variant?: "default" | "destructive";
+  onAction: () => void;
+}
+
+export const TableRowAction = ({
+  label,
+  icon,
+  variant = "default",
+  onAction,
+}: TableRowActionProps) => {
+  return (
+    <DropdownMenuItem
+      onClick={onAction}
+      className={cn(
+        variant === "destructive" && "text-destructive focus:text-destructive"
+      )}
+    >
+      {icon && <span className="mr-2">{icon}</span>}
+      {label}
+    </DropdownMenuItem>
+  );
+};
 
 interface TableCheckboxHeaderProps {
   isSelected: boolean;
