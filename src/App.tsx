@@ -6,6 +6,7 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { OutboundCallProvider } from "@/contexts/OutboundCallContext";
 import { ThemeProvider } from "@/contexts/ThemeContext";
 import { AuthProvider, useAuthContext } from "@/contexts/AuthContext";
+import { OrganizationProvider } from "@/contexts/OrganizationContext";
 import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
 import { PageLoader } from "./components/common/PageLoader";
 // Lazy load call handlers (heavy Twilio SDK)
@@ -95,6 +96,7 @@ const App = () => (
       <Sonner />
       <BrowserRouter>
         <AuthProvider>
+        <OrganizationProvider>
         <ThemeProvider>
         <GlobalCallHandler />
         <Suspense fallback={<PageLoader />}>
@@ -310,6 +312,7 @@ const App = () => (
         </Routes>
         </Suspense>
         </ThemeProvider>
+        </OrganizationProvider>
         </AuthProvider>
       </BrowserRouter>
     </TooltipProvider>
