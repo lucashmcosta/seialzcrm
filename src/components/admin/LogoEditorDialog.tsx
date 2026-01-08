@@ -22,6 +22,7 @@ interface LogoEditorDialogProps {
   currentLogoUrl?: string;
   onSave: (newLogoUrl: string) => void;
   integrationSlug?: string;
+  bucketName?: string;
 }
 
 function centerAspectCrop(mediaWidth: number, mediaHeight: number, aspect: number) {
@@ -46,6 +47,7 @@ export function LogoEditorDialog({
   currentLogoUrl,
   onSave,
   integrationSlug = 'logo',
+  bucketName = 'integration-logos',
 }: LogoEditorDialogProps) {
   const [loading, setLoading] = useState(false);
   const [imageUrl, setImageUrl] = useState('');
@@ -119,7 +121,7 @@ export function LogoEditorDialog({
       const fileName = `${integrationSlug}-${Date.now()}.png`;
       
       const { data, error } = await supabase.storage
-        .from('integration-logos')
+        .from(bucketName)
         .upload(fileName, blob, {
           contentType: 'image/png',
           upsert: true,
@@ -128,7 +130,7 @@ export function LogoEditorDialog({
       if (error) throw error;
 
       const { data: urlData } = supabase.storage
-        .from('integration-logos')
+        .from(bucketName)
         .getPublicUrl(data.path);
 
       onSave(urlData.publicUrl);
