@@ -12,7 +12,9 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
 import { Badge } from '@/components/ui/badge';
 import { useToast } from '@/hooks/use-toast';
-import { Loader2, UserPlus, ChevronDown, Mail, UserRoundPlus } from 'lucide-react';
+import { Loader2, UserPlus, ChevronDown, Mail, UserRoundPlus, Clock, X } from 'lucide-react';
+import { format } from 'date-fns';
+import { ptBR } from 'date-fns/locale';
 
 interface UserMembership {
   id: string;
@@ -33,12 +35,23 @@ interface PermissionProfile {
   name: string;
 }
 
+interface Invitation {
+  id: string;
+  email: string;
+  status: string;
+  created_at: string;
+  permission_profiles?: {
+    name: string;
+  } | null;
+}
+
 export function UsersSettings() {
   const { organization, userProfile, locale } = useOrganization();
   const { t } = useTranslation(locale as any);
   const { toast } = useToast();
   const [memberships, setMemberships] = useState<UserMembership[]>([]);
   const [permissionProfiles, setPermissionProfiles] = useState<PermissionProfile[]>([]);
+  const [invitations, setInvitations] = useState<Invitation[]>([]);
   const [loading, setLoading] = useState(true);
   
   // Invite dialog state
@@ -61,6 +74,7 @@ export function UsersSettings() {
     if (organization?.id) {
       fetchMemberships();
       fetchPermissionProfiles();
+      fetchInvitations();
     }
   }, [organization?.id]);
 
@@ -107,6 +121,46 @@ export function UsersSettings() {
     }
   };
 
+  const fetchInvitations = async () => {
+    if (!organization?.id) return;
+
+    try {
+      const { data, error } = await supabase
+        .from('invitations')
+        .select('id, email, status, created_at, permission_profiles(name)')
+        .eq('organization_id', organization.id)
+        .eq('status', 'pending')
+        .order('created_at', { ascending: false });
+
+      if (error) throw error;
+      setInvitations(data || []);
+    } catch (error) {
+      console.error('Error fetching invitations:', error);
+    }
+  };
+
+  const cancelInvitation = async (invitationId: string) => {
+    try {
+      const { error } = await supabase
+        .from('invitations')
+        .delete()
+        .eq('id', invitationId);
+
+      if (error) throw error;
+
+      toast({
+        description: 'Convite cancelado',
+      });
+      fetchInvitations();
+    } catch (error) {
+      console.error('Error canceling invitation:', error);
+      toast({
+        variant: 'destructive',
+        description: t('common.error'),
+      });
+    }
+  };
+
   const handleInvite = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!organization?.id || !userProfile?.id) return;
@@ -131,6 +185,7 @@ export function UsersSettings() {
       });
       setInviteDialogOpen(false);
       setInviteEmail('');
+      fetchInvitations();
     } catch (error) {
       console.error('Error inviting user:', error);
       toast({
@@ -306,45 +361,99 @@ export function UsersSettings() {
           </DropdownMenu>
         </div>
       </CardHeader>
-      <CardContent>
-        <Table>
-          <TableHeader>
-            <TableRow>
-              <TableHead>Nome</TableHead>
-              <TableHead>Email</TableHead>
-              <TableHead>Perfil</TableHead>
-              <TableHead>{t('settings.status')}</TableHead>
-              <TableHead className="text-right">{t('common.actions')}</TableHead>
-            </TableRow>
-          </TableHeader>
-          <TableBody>
-            {memberships.filter(m => m.users).map((membership) => (
-              <TableRow key={membership.id}>
-                <TableCell className="font-medium">{membership.users?.full_name}</TableCell>
-                <TableCell>{membership.users?.email}</TableCell>
-                <TableCell>
-                  <Badge variant="outline">
-                    {membership.permission_profiles?.name || 'Sem perfil'}
-                  </Badge>
-                </TableCell>
-                <TableCell>
-                  <Badge variant={membership.is_active ? 'default' : 'secondary'}>
-                    {membership.is_active ? t('settings.active') : t('settings.inactive')}
-                  </Badge>
-                </TableCell>
-                <TableCell className="text-right">
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    onClick={() => toggleStatus(membership.id, membership.is_active)}
-                  >
-                    {membership.is_active ? 'Desativar' : 'Ativar'}
-                  </Button>
-                </TableCell>
+      <CardContent className="space-y-6">
+        {/* Pending Invitations */}
+        {invitations.length > 0 && (
+          <div>
+            <h4 className="text-sm font-medium mb-3 flex items-center gap-2">
+              <Clock className="w-4 h-4 text-muted-foreground" />
+              Convites Pendentes ({invitations.length})
+            </h4>
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>Email</TableHead>
+                  <TableHead>Perfil</TableHead>
+                  <TableHead>Data do Convite</TableHead>
+                  <TableHead className="text-right">{t('common.actions')}</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {invitations.map((invitation) => (
+                  <TableRow key={invitation.id}>
+                    <TableCell className="font-medium">{invitation.email}</TableCell>
+                    <TableCell>
+                      <Badge variant="outline">
+                        {invitation.permission_profiles?.name || 'Sem perfil'}
+                      </Badge>
+                    </TableCell>
+                    <TableCell className="text-muted-foreground">
+                      {format(new Date(invitation.created_at), 'dd/MM/yyyy', { locale: ptBR })}
+                    </TableCell>
+                    <TableCell className="text-right">
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        onClick={() => cancelInvitation(invitation.id)}
+                        className="text-destructive hover:text-destructive"
+                      >
+                        <X className="w-4 h-4 mr-1" />
+                        Cancelar
+                      </Button>
+                    </TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+          </div>
+        )}
+
+        {/* Active Users */}
+        <div>
+          {invitations.length > 0 && (
+            <h4 className="text-sm font-medium mb-3">
+              Usuários Ativos ({memberships.filter(m => m.users).length})
+            </h4>
+          )}
+          <Table>
+            <TableHeader>
+              <TableRow>
+                <TableHead>Nome</TableHead>
+                <TableHead>Email</TableHead>
+                <TableHead>Perfil</TableHead>
+                <TableHead>{t('settings.status')}</TableHead>
+                <TableHead className="text-right">{t('common.actions')}</TableHead>
               </TableRow>
-            ))}
-          </TableBody>
-        </Table>
+            </TableHeader>
+            <TableBody>
+              {memberships.filter(m => m.users).map((membership) => (
+                <TableRow key={membership.id}>
+                  <TableCell className="font-medium">{membership.users?.full_name}</TableCell>
+                  <TableCell>{membership.users?.email}</TableCell>
+                  <TableCell>
+                    <Badge variant="outline">
+                      {membership.permission_profiles?.name || 'Sem perfil'}
+                    </Badge>
+                  </TableCell>
+                  <TableCell>
+                    <Badge variant={membership.is_active ? 'default' : 'secondary'}>
+                      {membership.is_active ? t('settings.active') : t('settings.inactive')}
+                    </Badge>
+                  </TableCell>
+                  <TableCell className="text-right">
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => toggleStatus(membership.id, membership.is_active)}
+                    >
+                      {membership.is_active ? 'Desativar' : 'Ativar'}
+                    </Button>
+                  </TableCell>
+                </TableRow>
+              ))}
+            </TableBody>
+          </Table>
+        </div>
       </CardContent>
 
       {/* Invite Dialog */}
