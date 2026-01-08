@@ -380,7 +380,7 @@ export default function Dashboard() {
             </Card>
             
             <Card className="p-6">
-              <h3 className="text-lg font-semibold mb-4">{t('dashboard.recentActivities')}</h3>
+              <h3 className="text-lg font-semibold mb-4">{t('dashboard.recentActivity')}</h3>
               {recentActivities.length === 0 ? (
                 <p className="text-muted-foreground">{t('dashboard.noActivities')}</p>
               ) : (
