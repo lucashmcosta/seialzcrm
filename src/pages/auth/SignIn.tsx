@@ -29,13 +29,32 @@ export default function SignIn() {
 
       if (error) throw error;
 
-      // Invalidar sessões de outros devices
       if (authData.user) {
-        const { data: userData } = await supabase
+        // Buscar usuário por auth_user_id (única busca necessária)
+        let { data: userData } = await supabase
           .from('users')
           .select('id')
           .eq('auth_user_id', authData.user.id)
-          .single();
+          .maybeSingle();
+
+        // Se não existe, criar registros
+        if (!userData) {
+          const { error: signupError } = await supabase.rpc('handle_user_signup', {
+            p_full_name: authData.user.user_metadata?.full_name || 'Usuário',
+            p_email: email,
+            p_organization_name: authData.user.user_metadata?.organization_name || 'Minha Empresa',
+          });
+          
+          if (signupError) throw signupError;
+          
+          // Buscar usuário recém-criado
+          const { data: newUserData } = await supabase
+            .from('users')
+            .select('id')
+            .eq('auth_user_id', authData.user.id)
+            .maybeSingle();
+          userData = newUserData;
+        }
 
         if (userData) {
           // Gerar device_id se não existir
@@ -54,53 +73,26 @@ export default function SignIn() {
           }, {
             onConflict: 'user_id,device_id'
           });
-        }
-      }
 
-      // Check if user exists in our database
-      let { data: userData } = await supabase
-        .from('users')
-        .select('id')
-        .eq('email', email)
-        .maybeSingle();
-
-      // If user doesn't exist in our tables but is authenticated, create the records
-      if (!userData && authData.user) {
-        const { error: signupError } = await supabase.rpc('handle_user_signup', {
-          p_full_name: authData.user.user_metadata?.full_name || 'Usuário',
-          p_email: email,
-          p_organization_name: authData.user.user_metadata?.organization_name || 'Minha Empresa',
-        });
-        
-        if (signupError) throw signupError;
-        
-        // Fetch user data again
-        const { data: newUserData } = await supabase
-          .from('users')
-          .select('id')
-          .eq('email', email)
-          .maybeSingle();
-        userData = newUserData;
-      }
-
-      if (userData) {
-        const { data: membership } = await supabase
-          .from('user_organizations')
-          .select('organization_id')
-          .eq('user_id', userData.id)
-          .maybeSingle();
-
-        if (membership) {
-          const { data: org } = await supabase
-            .from('organizations')
-            .select('onboarding_step')
-            .eq('id', membership.organization_id)
+          // Verificar organização e redirecionamento
+          const { data: membership } = await supabase
+            .from('user_organizations')
+            .select('organization_id')
+            .eq('user_id', userData.id)
             .maybeSingle();
 
-          if (org && org.onboarding_step !== 'completed') {
-            navigate('/onboarding');
-          } else {
-            navigate('/dashboard');
+          if (membership) {
+            const { data: org } = await supabase
+              .from('organizations')
+              .select('onboarding_step')
+              .eq('id', membership.organization_id)
+              .maybeSingle();
+
+            if (org && org.onboarding_step !== 'completed') {
+              navigate('/onboarding');
+            } else {
+              navigate('/dashboard');
+            }
           }
         }
       }
