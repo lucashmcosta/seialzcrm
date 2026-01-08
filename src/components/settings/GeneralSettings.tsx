@@ -10,7 +10,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Switch } from '@/components/ui/switch';
 import { useToast } from '@/hooks/use-toast';
 import { Loader2, Trash2, ImageIcon, Pencil } from 'lucide-react';
-import { LogoEditorDialog } from '@/components/admin/LogoEditorDialog';
+import { SimpleLogoUploader } from '@/components/settings/SimpleLogoUploader';
 import {
   AlertDialog,
   AlertDialogAction,
@@ -31,6 +31,7 @@ export function GeneralSettings() {
   const [resetting, setResetting] = useState(false);
   const [logoDialogOpen, setLogoDialogOpen] = useState(false);
   const [logoUrl, setLogoUrl] = useState('');
+  const [logoSize, setLogoSize] = useState(40);
   const [formData, setFormData] = useState({
     name: '',
     default_currency: 'BRL',
@@ -50,30 +51,26 @@ export function GeneralSettings() {
         enable_companies_module: organization.enable_companies_module || false,
       });
       setLogoUrl(organization.logo_url || '');
+      setLogoSize((organization as any).logo_size || 40);
     }
   }, [organization]);
 
-  const handleLogoSave = async (newLogoUrl: string) => {
+  const handleLogoSave = async (newLogoUrl: string, newSize: number) => {
     if (!organization?.id) return;
     
     const { error } = await supabase
       .from('organizations')
-      .update({ logo_url: newLogoUrl })
+      .update({ logo_url: newLogoUrl, logo_size: newSize })
       .eq('id', organization.id);
       
-    if (!error) {
-      setLogoUrl(newLogoUrl);
-      toast({ 
-        title: t('common.success'),
-        description: t('settings.logoUpdated'),
-      });
-    } else {
-      toast({
-        variant: 'destructive',
-        title: t('common.error'),
-        description: 'Failed to update logo',
-      });
-    }
+    if (error) throw error;
+    
+    setLogoUrl(newLogoUrl);
+    setLogoSize(newSize);
+    toast({ 
+      title: t('common.success'),
+      description: t('settings.logoUpdated'),
+    });
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -124,21 +121,30 @@ export function GeneralSettings() {
                 <img
                   src={logoUrl}
                   alt="Logo da organização"
-                  className="w-16 h-16 rounded-lg object-contain bg-background p-2"
+                  style={{ height: logoSize }}
+                  className="object-contain bg-background rounded p-1"
                 />
               ) : (
-                <div className="w-16 h-16 rounded-lg bg-background flex items-center justify-center">
-                  <ImageIcon className="w-8 h-8 text-muted-foreground" />
+                <div 
+                  className="rounded-lg bg-primary flex items-center justify-center"
+                  style={{ width: logoSize, height: logoSize }}
+                >
+                  <ImageIcon className="w-1/2 h-1/2 text-primary-foreground" />
                 </div>
               )}
-              <Button
-                type="button"
-                variant="outline"
-                onClick={() => setLogoDialogOpen(true)}
-              >
-                <Pencil className="w-4 h-4 mr-2" />
-                {t('settings.changeLogo')}
-              </Button>
+              <div className="flex flex-col gap-1">
+                <Button
+                  type="button"
+                  variant="outline"
+                  onClick={() => setLogoDialogOpen(true)}
+                >
+                  <Pencil className="w-4 h-4 mr-2" />
+                  {t('settings.changeLogo')}
+                </Button>
+                <span className="text-xs text-muted-foreground">
+                  {t('settings.logoSize')}: {logoSize}px
+                </span>
+              </div>
             </div>
           </div>
 
@@ -287,14 +293,14 @@ export function GeneralSettings() {
         </div>
       </CardContent>
 
-      {/* Logo Editor Dialog */}
-      <LogoEditorDialog
+      {/* Simple Logo Uploader */}
+      <SimpleLogoUploader
         open={logoDialogOpen}
         onOpenChange={setLogoDialogOpen}
         currentLogoUrl={logoUrl}
+        currentSize={logoSize}
         onSave={handleLogoSave}
-        integrationSlug={organization?.slug || 'org'}
-        bucketName="organization-logos"
+        organizationSlug={organization?.slug || 'org'}
       />
     </Card>
   );

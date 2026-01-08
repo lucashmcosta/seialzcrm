@@ -7,6 +7,7 @@ export interface Organization {
   name: string;
   slug: string;
   logo_url?: string;
+  logo_size?: number;
   default_currency: string;
   default_locale: string;
   timezone: string;

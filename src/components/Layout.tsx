@@ -65,11 +65,21 @@ export function Layout({ children }: LayoutProps) {
   footerItems.push({ label: 'Central de Ajuda', href: '/docs', icon: HelpCircle });
 
   // Logo section
+  const logoSize = organization?.logo_size || 40;
   const logoSection = (
     <Link to="/dashboard" className="flex items-center gap-3">
-      <div className="w-10 h-10 bg-primary rounded-lg flex items-center justify-center">
-        <Building07 className="w-6 h-6 text-primary-foreground" />
-      </div>
+      {organization?.logo_url ? (
+        <img
+          src={organization.logo_url}
+          alt={organization.name}
+          style={{ height: logoSize }}
+          className="object-contain"
+        />
+      ) : (
+        <div className="w-10 h-10 bg-primary rounded-lg flex items-center justify-center">
+          <Building07 className="w-6 h-6 text-primary-foreground" />
+        </div>
+      )}
       <div>
         <h1 className="text-xl font-bold text-foreground">Seialz</h1>
         {organization && (
