@@ -30,9 +30,47 @@ interface Activity {
 }
 
 export default function Dashboard() {
-  const { organization, userProfile, locale } = useOrganization();
+  const { organization, userProfile, locale, loading: orgLoading } = useOrganization();
   const { user } = useAuth();
   const { t } = useTranslation(locale as 'pt-BR' | 'en-US');
+
+  // Show skeleton while organization data is loading
+  if (orgLoading || !organization || !userProfile) {
+    return (
+      <Layout>
+        <div className="flex flex-col h-full">
+          <div className="border-b bg-background/95 backdrop-blur">
+            <div className="px-6 py-4">
+              <div className="h-8 w-48 bg-muted rounded animate-pulse" />
+            </div>
+          </div>
+          <div className="flex-1 overflow-auto p-6">
+            {/* Filter skeletons */}
+            <div className="flex gap-4 mb-6">
+              <div className="h-10 w-48 bg-muted rounded animate-pulse" />
+              <div className="h-10 w-48 bg-muted rounded animate-pulse" />
+            </div>
+            {/* KPI skeletons */}
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4 mb-6">
+              {[...Array(5)].map((_, i) => (
+                <div key={i} className="h-24 bg-muted rounded-lg animate-pulse" />
+              ))}
+            </div>
+            {/* Chart skeletons */}
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-6">
+              <div className="h-80 bg-muted rounded-lg animate-pulse" />
+              <div className="h-80 bg-muted rounded-lg animate-pulse" />
+            </div>
+            {/* Tasks & Activities skeletons */}
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+              <div className="h-64 bg-muted rounded-lg animate-pulse" />
+              <div className="h-64 bg-muted rounded-lg animate-pulse" />
+            </div>
+          </div>
+        </div>
+      </Layout>
+    );
+  }
   
   const [period, setPeriod] = useState('30');
   const [ownerId, setOwnerId] = useState('all');
