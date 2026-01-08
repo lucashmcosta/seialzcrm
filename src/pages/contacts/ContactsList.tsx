@@ -386,45 +386,46 @@ export default function ContactsList() {
               sortDescriptor={sortDescriptor}
               onSortChange={setSortDescriptor}
             >
+              {/* Select All Banner */}
+              {allSelected && totalCount > sortedContacts.length && (
+                <div className="px-4 py-2 bg-muted/50 border-b text-sm flex items-center justify-center gap-2">
+                  {selectAllMode === 'all' ? (
+                    <>
+                      <span>Todos os {totalCount} contatos selecionados.</span>
+                      <button
+                        className="text-primary font-medium hover:underline"
+                        onClick={handleClearSelection}
+                      >
+                        Limpar seleção
+                      </button>
+                    </>
+                  ) : (
+                    <>
+                      <span>{sortedContacts.length} contatos desta página selecionados.</span>
+                      <button
+                        className="text-primary font-medium hover:underline"
+                        onClick={handleSelectAllContacts}
+                      >
+                        Selecionar todos os {totalCount} contatos
+                      </button>
+                    </>
+                  )}
+                </div>
+              )}
+
               <TableHeader>
                 <TableCheckboxHeader
                   isSelected={allSelected}
                   isIndeterminate={someSelected}
                   onChange={handleSelectAll}
                 />
-                {activeColumns.map(col => (
-                  <TableColumn 
+                {activeColumns.map((col) => (
+                  <TableColumn
                     key={col.id}
-                    id={col.id} 
-                    allowsSorting={col.id !== 'phone'} 
+                    id={col.id}
+                    allowsSorting={col.id !== 'phone'}
                     sortDescriptor={sortDescriptor}
-          >
-            {/* Select All Banner */}
-            {allSelected && totalCount > sortedContacts.length && (
-              <div className="px-4 py-2 bg-muted/50 border-b text-sm flex items-center justify-center gap-2">
-                {selectAllMode === 'all' ? (
-                  <>
-                    <span>Todos os {totalCount} contatos selecionados.</span>
-                    <button 
-                      className="text-primary font-medium hover:underline"
-                      onClick={handleClearSelection}
-                    >
-                      Limpar seleção
-                    </button>
-                  </>
-                ) : (
-                  <>
-                    <span>{sortedContacts.length} contatos desta página selecionados.</span>
-                    <button 
-                      className="text-primary font-medium hover:underline"
-                      onClick={handleSelectAllContacts}
-                    >
-                      Selecionar todos os {totalCount} contatos
-                    </button>
-                  </>
-                )}
-              </div>
-            )}
+                  >
                     {col.label}
                   </TableColumn>
                 ))}
