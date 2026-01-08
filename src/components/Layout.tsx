@@ -76,16 +76,18 @@ export function Layout({ children }: LayoutProps) {
           className="object-contain"
         />
       ) : (
-        <div className="w-10 h-10 bg-primary rounded-lg flex items-center justify-center">
-          <Building07 className="w-6 h-6 text-primary-foreground" />
-        </div>
+        <>
+          <div className="w-10 h-10 bg-primary rounded-lg flex items-center justify-center">
+            <Building07 className="w-6 h-6 text-primary-foreground" />
+          </div>
+          <div>
+            <h1 className="text-xl font-bold text-foreground">Seialz</h1>
+            {organization && (
+              <p className="text-xs text-muted-foreground">{organization.name}</p>
+            )}
+          </div>
+        </>
       )}
-      <div>
-        <h1 className="text-xl font-bold text-foreground">Seialz</h1>
-        {organization && (
-          <p className="text-xs text-muted-foreground">{organization.name}</p>
-        )}
-      </div>
     </Link>
   );
 
