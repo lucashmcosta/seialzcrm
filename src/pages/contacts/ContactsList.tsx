@@ -3,7 +3,7 @@ import { Link, useNavigate } from 'react-router-dom';
 import type { SortDescriptor } from 'react-aria-components';
 import { Edit01, Trash01 } from '@untitledui/icons';
 import { Layout } from '@/components/Layout';
-import { Button } from '@/components/ui/button';
+import { Button } from '@/components/base/buttons/button';
 import { Input } from '@/components/ui/input';
 import { Card, CardContent } from '@/components/ui/card';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
@@ -297,7 +297,7 @@ export default function ContactsList() {
             />
             {permissions.canEditContacts && (
               <Link to="/contacts/new">
-                <Button>
+                <Button color="primary" size="md">
                   <Plus className="w-4 h-4 mr-2" />
                   {t('contacts.newContact')}
                 </Button>
@@ -361,7 +361,7 @@ export default function ContactsList() {
             <CardContent className="py-12 text-center">
               <p className="text-muted-foreground">{t('contacts.noContacts')}</p>
               <Link to="/contacts/new">
-                <Button className="mt-4">
+                <Button color="primary" size="md" className="mt-4">
                   <Plus className="w-4 h-4 mr-2" />
                   {t('contacts.newContact')}
                 </Button>
@@ -484,26 +484,16 @@ export default function ContactsList() {
                     <TableCell>
                       <TableRowActionsDropdown>
                         <TableRowAction
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            navigate(`/contacts/${contact.id}/edit`);
-                          }}
-                        >
-                          <Edit01 className="w-4 h-4 mr-2" />
-                          Editar
-                        </TableRowAction>
-                        {permissions.canDeleteContacts && (
-                          <TableRowAction
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              handleDelete(contact.id);
-                            }}
-                            className="text-destructive focus:text-destructive"
-                          >
-                            <Trash01 className="w-4 h-4 mr-2" />
-                            Excluir
-                          </TableRowAction>
-                        )}
+                          label={t('common.edit')}
+                          icon={<Edit01 className="w-4 h-4" />}
+                          onAction={() => navigate(`/contacts/${contact.id}/edit`)}
+                        />
+                        <TableRowAction
+                          label={t('common.delete')}
+                          icon={<Trash01 className="w-4 h-4" />}
+                          variant="destructive"
+                          onAction={() => handleDelete(contact.id)}
+                        />
                       </TableRowActionsDropdown>
                     </TableCell>
                   </TableRow>
@@ -512,18 +502,18 @@ export default function ContactsList() {
             </Table>
           </TableCard>
         )}
-      </div>
 
-      <BulkActionsBar
-        selectedIds={selectedIds}
-        module="contacts"
-        users={users}
-        onClear={() => setSelectedIds([])}
-        onSuccess={handleBulkSuccess}
-        locale={locale as 'pt-BR' | 'en-US'}
-        canEdit={permissions.canEditContacts}
-        canDelete={permissions.canDeleteContacts}
-      />
+        <BulkActionsBar
+          selectedIds={selectedIds}
+          module="contacts"
+          users={users}
+          onClear={handleClearSelection}
+          onSuccess={handleBulkSuccess}
+          locale={locale}
+          canEdit={permissions.canEditContacts}
+          canDelete={permissions.canDeleteContacts}
+        />
+      </div>
     </Layout>
   );
 }

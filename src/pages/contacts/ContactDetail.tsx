@@ -17,7 +17,7 @@ import { Tabs } from '@/components/application/tabs/tabs';
 import { NativeSelect } from '@/components/base/select/select-native';
 import { Avatar } from '@/components/base/avatar/avatar';
 import { Badge } from '@/components/base/badges/badges';
-import { Button } from '@/components/ui/button';
+import { Button } from '@/components/base/buttons/button';
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -158,7 +158,7 @@ export default function ContactDetail() {
 
             <div className="flex items-center gap-2">
               {permissions.canEditContacts && (
-                <Button variant="outline" size="sm" asChild>
+                <Button color="secondary" size="sm" asChild>
                   <Link to={`/contacts/${contact.id}/edit`}>
                     <Edit className="h-4 w-4 mr-2" />
                     {t('common.edit')}
@@ -168,7 +168,7 @@ export default function ContactDetail() {
               
               <DropdownMenu>
                 <DropdownMenuTrigger asChild>
-                  <Button variant="ghost" size="icon">
+                  <Button color="ghost" size="icon">
                     <MoreVertical className="h-4 w-4" />
                   </Button>
                 </DropdownMenuTrigger>

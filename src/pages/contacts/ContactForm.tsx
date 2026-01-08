@@ -5,7 +5,7 @@ import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/hooks/useAuth';
 import { useOrganization } from '@/hooks/useOrganization';
 import { useTranslation } from '@/lib/i18n';
-import { Button } from '@/components/ui/button';
+import { Button } from '@/components/base/buttons/button';
 import { Input } from '@/components/ui/input';
 import { PhoneInput } from '@/components/ui/phone-input';
 import { Label } from '@/components/ui/label';
@@ -221,7 +221,7 @@ export default function ContactForm() {
         <div className="border-b bg-background/95 backdrop-blur">
           <div className="flex items-center gap-4 px-6 py-4">
             <Link to={isEdit ? `/contacts/${id}` : '/contacts'}>
-              <Button variant="ghost" size="icon">
+              <Button color="ghost" size="icon">
                 <ArrowLeft className="h-4 w-4" />
               </Button>
             </Link>
@@ -252,11 +252,11 @@ export default function ContactForm() {
                 </div>
                 <div className="flex gap-2">
                   {!organization?.duplicate_enforce_block && (
-                    <Button type="button" onClick={handleForceSave} variant="destructive">
+                    <Button type="button" onClick={handleForceSave} color="destructive">
                       {t('contacts.saveDespiteDuplicate')}
                     </Button>
                   )}
-                  <Button type="button" onClick={() => setShowDuplicateWarning(false)} variant="outline">
+                  <Button type="button" onClick={() => setShowDuplicateWarning(false)} color="secondary">
                     {t('common.cancel')}
                   </Button>
                 </div>
@@ -353,12 +353,12 @@ export default function ContactForm() {
               </div>
 
               <div className="flex gap-2">
-                <Button type="submit" disabled={loading}>
+                <Button type="submit" color="primary" disabled={loading}>
                   {loading ? t('common.loading') : t('common.save')}
                 </Button>
                 <Button
                   type="button"
-                  variant="outline"
+                  color="secondary"
                   onClick={() => navigate(isEdit ? `/contacts/${id}` : '/contacts')}
                 >
                   {t('common.cancel')}

@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
 import { Building2, Plus, Search } from 'lucide-react';
 import { Layout } from '@/components/Layout';
-import { Button } from '@/components/ui/button';
+import { Button } from '@/components/base/buttons/button';
 import { Input } from '@/components/ui/input';
 import { Card } from '@/components/ui/card';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
@@ -91,7 +91,7 @@ export default function CompaniesList() {
             <p className="text-muted-foreground mt-1">{t('companies.manageCompanies')}</p>
           </div>
           <Link to="/companies/new">
-            <Button>
+            <Button color="primary" size="md">
               <Plus className="w-4 h-4 mr-2" />
               {t('companies.newCompany')}
             </Button>

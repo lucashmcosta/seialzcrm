@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Button } from '@/components/ui/button';
+import { Button } from '@/components/base/buttons/button';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { ConfirmDialog } from '@/components/ui/confirm-dialog';
 import { supabase } from '@/integrations/supabase/client';
@@ -136,7 +136,7 @@ export function BulkActionsBar({
 
             {canEdit && module === 'contacts' && (
               <Button
-                variant="secondary"
+                color="secondary"
                 size="sm"
                 onClick={handleMarkDoNotContact}
                 disabled={processing}
@@ -148,7 +148,7 @@ export function BulkActionsBar({
 
             {canDelete && (
               <Button
-                variant="destructive"
+                color="destructive"
                 size="sm"
                 onClick={() => setConfirmOpen(true)}
                 disabled={processing}
@@ -159,7 +159,7 @@ export function BulkActionsBar({
             )}
 
             <Button
-              variant="ghost"
+              color="ghost"
               size="sm"
               onClick={onClear}
               className="text-primary-foreground hover:text-primary-foreground"

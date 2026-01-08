@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Button } from '@/components/ui/button';
+import { Button } from '@/components/base/buttons/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { PhoneInput } from '@/components/ui/phone-input';
@@ -306,7 +306,7 @@ export default function Onboarding() {
                       }
                     }}
                   />
-                  <Button type="button" onClick={handleAddEmail} variant="secondary">
+                  <Button type="button" onClick={handleAddEmail} color="secondary" size="md">
                     <Mail className="w-4 h-4 mr-2" />
                     {t('onboarding.addEmail')}
                   </Button>
@@ -331,10 +331,10 @@ export default function Onboarding() {
               )}
 
               <div className="flex gap-2 pt-4">
-                <Button type="button" variant="outline" onClick={handleSkipInvites} className="flex-1">
+                <Button type="button" color="secondary" onClick={handleSkipInvites} className="flex-1">
                   {t('onboarding.skipForNow')}
                 </Button>
-                <Button type="submit" className="flex-1" disabled={loading}>
+                <Button type="submit" color="primary" className="flex-1" disabled={loading}>
                   {loading ? t('common.loading') : t('common.next')}
                 </Button>
               </div>
@@ -371,7 +371,7 @@ export default function Onboarding() {
                 />
               </div>
 
-              <Button type="submit" className="w-full" disabled={loading}>
+              <Button type="submit" color="primary" className="w-full" disabled={loading}>
                 {loading ? t('common.loading') : t('common.next')}
               </Button>
             </form>
@@ -407,10 +407,10 @@ export default function Onboarding() {
               </div>
 
               <div className="flex gap-2">
-                <Button type="button" variant="outline" onClick={() => setCurrentStep(1)} className="flex-1">
+                <Button type="button" color="secondary" onClick={() => setCurrentStep(1)} className="flex-1">
                   {t('common.back')}
                 </Button>
-                <Button type="submit" className="flex-1" disabled={loading}>
+                <Button type="submit" color="primary" className="flex-1" disabled={loading}>
                   {loading ? t('common.loading') : t('common.finish')}
                 </Button>
               </div>
