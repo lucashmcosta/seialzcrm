@@ -30,7 +30,7 @@ interface LayoutProps {
 export function Layout({ children }: LayoutProps) {
   const navigate = useNavigate();
   const { signOut, user } = useAuth();
-  const { organization, userProfile, locale } = useOrganization();
+  const { organization, userProfile, locale, loading } = useOrganization();
   const { permissions } = usePermissions();
   const { t } = useTranslation(locale as 'pt-BR' | 'en-US');
 
@@ -64,9 +64,17 @@ export function Layout({ children }: LayoutProps) {
 
   footerItems.push({ label: 'Central de Ajuda', href: '/docs', icon: HelpCircle });
 
-  // Logo section
+  // Logo section with skeleton
   const logoSize = organization?.logo_size || 40;
-  const logoSection = (
+  const logoSection = loading ? (
+    <div className="flex items-center gap-3">
+      <div className="w-10 h-10 bg-muted rounded-lg animate-pulse" />
+      <div className="space-y-2">
+        <div className="h-5 w-24 bg-muted rounded animate-pulse" />
+        <div className="h-3 w-16 bg-muted rounded animate-pulse" />
+      </div>
+    </div>
+  ) : (
     <Link to="/dashboard" className="flex items-center gap-3">
       {organization?.logo_url ? (
         <img
@@ -80,19 +88,29 @@ export function Layout({ children }: LayoutProps) {
           <div className="w-10 h-10 bg-primary rounded-lg flex items-center justify-center">
             <Building07 className="w-6 h-6 text-primary-foreground" />
           </div>
-          <div>
-            <h1 className="text-xl font-bold text-foreground">Seialz</h1>
-            {organization && (
-              <p className="text-xs text-muted-foreground">{organization.name}</p>
-            )}
-          </div>
+          {organization && (
+            <div>
+              <h1 className="text-xl font-bold text-foreground">{organization.name}</h1>
+            </div>
+          )}
         </>
       )}
     </Link>
   );
 
-  // User section
-  const userSection = (
+  // User section with skeleton
+  const userSection = loading ? (
+    <div className="space-y-2">
+      <div className="flex items-center gap-3 p-2">
+        <div className="w-10 h-10 bg-muted rounded-full animate-pulse" />
+        <div className="flex-1 space-y-2">
+          <div className="h-4 w-24 bg-muted rounded animate-pulse" />
+          <div className="h-3 w-32 bg-muted rounded animate-pulse" />
+        </div>
+      </div>
+      <div className="h-9 w-full bg-muted rounded animate-pulse" />
+    </div>
+  ) : (
     <div className="space-y-2">
       <Link to="/profile" className="block">
         <div className="flex items-center gap-3 p-2 rounded-lg hover:bg-accent transition-colors">
