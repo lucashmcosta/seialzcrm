@@ -9,7 +9,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { supabase } from '@/integrations/supabase/client';
 import { DollarSign, TrendingUp, TrendingDown, Users, CheckCircle2 } from 'lucide-react';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, LineChart, Line, Area, AreaChart } from 'recharts';
-import { Link } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 
 interface Task {
   id: string;
@@ -30,12 +30,13 @@ interface Activity {
 }
 
 export default function Dashboard() {
-  const { organization, userProfile, locale, loading: orgLoading } = useOrganization();
-  const { user } = useAuth();
+  const { organization, userProfile, locale, loading: orgLoading, error } = useOrganization();
+  const { user, signOut } = useAuth();
   const { t } = useTranslation(locale as 'pt-BR' | 'en-US');
+  const navigate = useNavigate();
 
-  // Show skeleton while organization data is loading
-  if (orgLoading || !organization || !userProfile) {
+  // Show skeleton ONLY while loading
+  if (orgLoading) {
     return (
       <Layout>
         <div className="flex flex-col h-full">
@@ -45,27 +46,60 @@ export default function Dashboard() {
             </div>
           </div>
           <div className="flex-1 overflow-auto p-6">
-            {/* Filter skeletons */}
             <div className="flex gap-4 mb-6">
               <div className="h-10 w-48 bg-muted rounded animate-pulse" />
               <div className="h-10 w-48 bg-muted rounded animate-pulse" />
             </div>
-            {/* KPI skeletons */}
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4 mb-6">
               {[...Array(5)].map((_, i) => (
                 <div key={i} className="h-24 bg-muted rounded-lg animate-pulse" />
               ))}
             </div>
-            {/* Chart skeletons */}
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-6">
               <div className="h-80 bg-muted rounded-lg animate-pulse" />
               <div className="h-80 bg-muted rounded-lg animate-pulse" />
             </div>
-            {/* Tasks & Activities skeletons */}
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
               <div className="h-64 bg-muted rounded-lg animate-pulse" />
               <div className="h-64 bg-muted rounded-lg animate-pulse" />
             </div>
+          </div>
+        </div>
+      </Layout>
+    );
+  }
+
+  // Error state: profile not found
+  if (error || !userProfile) {
+    return (
+      <Layout>
+        <div className="flex flex-col items-center justify-center h-full p-6">
+          <div className="text-center space-y-4 max-w-md">
+            <h2 className="text-2xl font-bold text-foreground">Erro ao carregar perfil</h2>
+            <p className="text-muted-foreground">
+              Não foi possível carregar seus dados. Tente recarregar a página.
+            </p>
+            <div className="flex gap-4 justify-center">
+              <Button onClick={() => window.location.reload()}>Recarregar</Button>
+              <Button variant="outline" onClick={() => signOut()}>Sair</Button>
+            </div>
+          </div>
+        </div>
+      </Layout>
+    );
+  }
+
+  // No organization state
+  if (!organization) {
+    return (
+      <Layout>
+        <div className="flex flex-col items-center justify-center h-full p-6">
+          <div className="text-center space-y-4 max-w-md">
+            <h2 className="text-2xl font-bold text-foreground">Sem organização</h2>
+            <p className="text-muted-foreground">
+              Você ainda não está vinculado a uma organização. Complete o onboarding para começar.
+            </p>
+            <Button onClick={() => navigate('/onboarding')}>Ir para Onboarding</Button>
           </div>
         </div>
       </Layout>

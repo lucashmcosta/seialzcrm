@@ -39,6 +39,7 @@ export function useOrganization() {
   const [organization, setOrganization] = useState<Organization | null>(null);
   const [userProfile, setUserProfile] = useState<UserProfile | null>(null);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
     if (!user) {
@@ -46,45 +47,60 @@ export function useOrganization() {
       return;
     }
 
-    const fetchOrganizationData = async () => {
+    const fetchData = async () => {
       try {
-        // Single optimized query with joins
-        const { data, error } = await supabase
+        // Step 1: Fetch user profile first (without inner join)
+        const { data: profileData, error: profileError } = await supabase
           .from('users')
-          .select(`
-            *,
-            user_organizations!inner (
-              organization:organizations (*)
-            )
-          `)
+          .select('*')
           .eq('auth_user_id', user.id)
-          .eq('user_organizations.is_active', true)
-          .single();
+          .maybeSingle();
 
-        if (error) {
-          console.error('Error fetching organization data:', error);
+        if (profileError) {
+          console.error('Error fetching user profile:', profileError);
+          setError('PROFILE_FETCH_ERROR');
           setLoading(false);
           return;
         }
 
-        if (data) {
-          // Extract user profile (exclude the nested relation)
-          const { user_organizations, ...profileData } = data;
-          setUserProfile(profileData as UserProfile);
-
-          // Extract organization from nested relation
-          if (user_organizations?.[0]?.organization) {
-            setOrganization(user_organizations[0].organization as Organization);
-          }
+        if (!profileData) {
+          console.warn('User profile not found for auth_user_id:', user.id);
+          setError('PROFILE_NOT_FOUND');
+          setLoading(false);
+          return;
         }
-      } catch (error) {
-        console.error('Error fetching organization:', error);
+
+        setUserProfile(profileData as UserProfile);
+
+        // Step 2: Fetch active organization membership separately
+        const { data: membershipData, error: membershipError } = await supabase
+          .from('user_organizations')
+          .select('organization:organizations(*)')
+          .eq('user_id', profileData.id)
+          .eq('is_active', true)
+          .maybeSingle();
+
+        if (membershipError) {
+          console.error('Error fetching organization membership:', membershipError);
+          // Don't set error - user exists but has no org (valid state)
+          setLoading(false);
+          return;
+        }
+
+        if (membershipData?.organization) {
+          setOrganization(membershipData.organization as Organization);
+        } else {
+          console.warn('No active organization found for user:', profileData.id);
+        }
+      } catch (err) {
+        console.error('Error in useOrganization:', err);
+        setError('UNKNOWN_ERROR');
       } finally {
         setLoading(false);
       }
     };
 
-    fetchOrganizationData();
+    fetchData();
   }, [user]);
 
   const locale = userProfile?.locale || organization?.default_locale || 'pt-BR';
@@ -94,5 +110,7 @@ export function useOrganization() {
     userProfile,
     locale,
     loading,
+    error,
+    hasOrganization: !!organization,
   };
 }
