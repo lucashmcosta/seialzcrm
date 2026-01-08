@@ -1757,6 +1757,7 @@ export type Database = {
           duplicate_enforce_block: boolean | null
           enable_companies_module: boolean | null
           id: string
+          logo_size: number | null
           logo_url: string | null
           name: string
           onboarding_completed_at: string | null
@@ -1781,6 +1782,7 @@ export type Database = {
           duplicate_enforce_block?: boolean | null
           enable_companies_module?: boolean | null
           id?: string
+          logo_size?: number | null
           logo_url?: string | null
           name: string
           onboarding_completed_at?: string | null
@@ -1807,6 +1809,7 @@ export type Database = {
           duplicate_enforce_block?: boolean | null
           enable_companies_module?: boolean | null
           id?: string
+          logo_size?: number | null
           logo_url?: string | null
           name?: string
           onboarding_completed_at?: string | null
