@@ -1,4 +1,4 @@
-import { useState, useRef } from 'react';
+import { useState, useRef, useEffect } from 'react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -41,6 +41,14 @@ export function SimpleLogoUploader({
   const [logoSize, setLogoSize] = useState(currentSize);
   const [urlInput, setUrlInput] = useState('');
   const [activeTab, setActiveTab] = useState<string>('upload');
+
+  // Sync preview with current logo when dialog opens or props change
+  useEffect(() => {
+    if (open) {
+      setPreviewUrl(currentLogoUrl);
+      setLogoSize(currentSize);
+    }
+  }, [open, currentLogoUrl, currentSize]);
 
   // Reset state when dialog opens
   const handleOpenChange = (isOpen: boolean) => {
