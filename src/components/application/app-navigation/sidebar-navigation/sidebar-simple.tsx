@@ -24,7 +24,7 @@ export const SidebarNavigationSimple = ({
     <div className="flex h-full w-64 flex-col border-r bg-card">
       {/* Header / Logo */}
       {logo && (
-        <div className="flex py-5 items-center border-b px-4">
+        <div className="flex py-5 items-center px-4">
           {logo}
         </div>
       )}
