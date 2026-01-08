@@ -13,7 +13,8 @@ import { Card } from '@/components/ui/card';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Badge } from '@/components/ui/badge';
 import { toast } from 'sonner';
-import { ArrowLeft, Mail, Phone, Building2, Edit, Trash2 } from 'lucide-react';
+import { Mail, Phone, Building2, Edit, Trash2 } from 'lucide-react';
+import { Breadcrumbs } from '@/components/application/breadcrumbs/breadcrumbs';
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from '@/components/ui/alert-dialog';
 import { ActivityTimeline } from '@/components/contacts/ActivityTimeline';
 import { ContactTasks } from '@/components/contacts/ContactTasks';
@@ -86,13 +87,17 @@ export default function ContactDetail() {
       <div className="flex flex-col h-full">
         <div className="border-b bg-background/95 backdrop-blur">
           <div className="flex items-center justify-between px-6 py-4">
-            <div className="flex items-center gap-4">
-              <Link to="/contacts">
-                <Button variant="ghost" size="icon">
-                  <ArrowLeft className="h-4 w-4" />
-                </Button>
-              </Link>
-              <div>
+            <div className="flex flex-col gap-2">
+              <Breadcrumbs 
+                items={[
+                  { label: t('contacts.title'), href: '/contacts' },
+                  { label: contact.full_name }
+                ]} 
+              />
+              <div className="text-xs text-muted-foreground font-mono">
+                /contacts/{id}
+              </div>
+              <div className="flex items-center gap-3">
                 <h1 className="text-2xl font-bold text-foreground">{contact.full_name}</h1>
                 <Badge className={`${lifecycleColor} text-white`}>
                   {t(`lifecycle.${contact.lifecycle_stage}`)}
