@@ -94,9 +94,6 @@ export default function ContactDetail() {
                   { label: contact.full_name }
                 ]} 
               />
-              <div className="text-xs text-muted-foreground font-mono">
-                /contacts/{id}
-              </div>
               <div className="flex items-center gap-3">
                 <h1 className="text-2xl font-bold text-foreground">{contact.full_name}</h1>
                 <Badge className={`${lifecycleColor} text-white`}>
