@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react';
 import { useParams, useNavigate, Link } from 'react-router-dom';
 import { ArrowLeft } from 'lucide-react';
 import { Layout } from '@/components/Layout';
-import { Button } from '@/components/ui/button';
+import { Button } from '@/components/base/buttons/button';
 import { Input } from '@/components/ui/input';
 import { PhoneInput } from '@/components/ui/phone-input';
 import { Label } from '@/components/ui/label';
@@ -103,7 +103,7 @@ export default function CompanyForm() {
     <Layout>
       <div className="p-6">
         <Link to={isEdit ? `/companies/${id}` : '/companies'}>
-          <Button variant="ghost" size="sm" className="mb-4">
+          <Button color="ghost" size="sm" className="mb-4">
             <ArrowLeft className="w-4 h-4 mr-2" />
             {t('common.back')}
           </Button>
@@ -158,11 +158,11 @@ export default function CompanyForm() {
             </div>
 
             <div className="flex gap-3">
-              <Button type="submit" disabled={loading}>
+              <Button type="submit" color="primary" disabled={loading}>
                 {loading ? t('common.loading') : t('common.save')}
               </Button>
               <Link to={isEdit ? `/companies/${id}` : '/companies'}>
-                <Button type="button" variant="outline">
+                <Button type="button" color="secondary">
                   {t('common.cancel')}
                 </Button>
               </Link>

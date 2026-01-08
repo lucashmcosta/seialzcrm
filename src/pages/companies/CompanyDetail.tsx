@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react';
 import { useParams, useNavigate, Link } from 'react-router-dom';
 import { Building2, Edit, Trash2, ArrowLeft, Users, Briefcase } from 'lucide-react';
 import { Layout } from '@/components/Layout';
-import { Button } from '@/components/ui/button';
+import { Button } from '@/components/base/buttons/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from '@/components/ui/alert-dialog';
 import { supabase } from '@/integrations/supabase/client';
@@ -114,7 +114,7 @@ export default function CompanyDetail() {
       <div className="p-6">
         <div className="mb-6">
           <Link to="/companies">
-            <Button variant="ghost" size="sm" className="mb-4">
+            <Button color="ghost" size="sm" className="mb-4">
               <ArrowLeft className="w-4 h-4 mr-2" />
               {t('common.back')}
             </Button>
@@ -134,14 +134,14 @@ export default function CompanyDetail() {
             </div>
             <div className="flex gap-2">
               <Link to={`/companies/${id}/edit`}>
-                <Button variant="outline">
+                <Button color="secondary" size="md">
                   <Edit className="w-4 h-4 mr-2" />
                   {t('common.edit')}
                 </Button>
               </Link>
               <AlertDialog>
                 <AlertDialogTrigger asChild>
-                  <Button variant="destructive">
+                  <Button color="destructive" size="md">
                     <Trash2 className="w-4 h-4 mr-2" />
                     {t('common.delete')}
                   </Button>

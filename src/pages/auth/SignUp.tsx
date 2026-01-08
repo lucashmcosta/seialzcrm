@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { supabase } from '@/integrations/supabase/client';
-import { Button } from '@/components/ui/button';
+import { Button } from '@/components/base/buttons/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
@@ -122,7 +122,7 @@ export default function SignUp() {
               />
             </div>
 
-            <Button type="submit" className="w-full" disabled={loading}>
+            <Button type="submit" color="primary" className="w-full" disabled={loading}>
               {loading ? t('common.loading') : t('auth.signUp')}
             </Button>
 
@@ -130,7 +130,7 @@ export default function SignUp() {
               <span className="text-muted-foreground">{t('auth.alreadyHaveAccount')} </span>
               <Button
                 type="button"
-                variant="link"
+                color="link"
                 className="p-0 h-auto"
                 onClick={() => navigate('/auth/signin')}
               >
