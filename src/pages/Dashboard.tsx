@@ -35,6 +35,40 @@ export default function Dashboard() {
   const { t } = useTranslation(locale as 'pt-BR' | 'en-US');
   const navigate = useNavigate();
 
+  // Local UI state (MUST be declared before any early return)
+  const [period, setPeriod] = useState('30');
+  const [ownerId, setOwnerId] = useState('all');
+  const [users, setUsers] = useState<{ id: string; full_name: string }[]>([]);
+
+  const [openOpportunities, setOpenOpportunities] = useState(0);
+  const [pipelineValue, setPipelineValue] = useState(0);
+  const [wonAmount, setWonAmount] = useState(0);
+  const [lostCount, setLostCount] = useState(0);
+  const [newContacts, setNewContacts] = useState(0);
+
+  const [stageData, setStageData] = useState<any[]>([]);
+  const [trendData, setTrendData] = useState<any[]>([]);
+  const [myTasks, setMyTasks] = useState<Task[]>([]);
+  const [recentActivities, setRecentActivities] = useState<Activity[]>([]);
+
+  const [loading, setLoading] = useState(true);
+
+  // Redirect to login if not authenticated (do this as an effect)
+  useEffect(() => {
+    if (!orgLoading && !user) {
+      navigate('/auth/signin', { replace: true });
+    }
+  }, [orgLoading, user, navigate]);
+
+  // Fetch dashboard data when org/profile is available
+  useEffect(() => {
+    if (organization && userProfile) {
+      fetchUsers();
+      fetchStats();
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [organization?.id, userProfile?.id, period, ownerId]);
+
   // Show skeleton ONLY while loading
   if (orgLoading) {
     return (
@@ -69,8 +103,13 @@ export default function Dashboard() {
     );
   }
 
+  // If auth finished and user is not present, render nothing while redirect happens
+  if (!user) {
+    return null;
+  }
+
   // Error state: profile not found (only show if user exists but profile doesn't)
-  if (error || (user && !userProfile)) {
+  if (error || !userProfile) {
     return (
       <Layout>
         <div className="flex flex-col items-center justify-center h-full p-6">
@@ -105,32 +144,8 @@ export default function Dashboard() {
       </Layout>
     );
   }
-  
-  const [period, setPeriod] = useState('30');
-  const [ownerId, setOwnerId] = useState('all');
-  const [users, setUsers] = useState<{ id: string; full_name: string }[]>([]);
-  
-  const [openOpportunities, setOpenOpportunities] = useState(0);
-  const [pipelineValue, setPipelineValue] = useState(0);
-  const [wonAmount, setWonAmount] = useState(0);
-  const [lostCount, setLostCount] = useState(0);
-  const [newContacts, setNewContacts] = useState(0);
-  
-  const [stageData, setStageData] = useState<any[]>([]);
-  const [trendData, setTrendData] = useState<any[]>([]);
-  const [myTasks, setMyTasks] = useState<Task[]>([]);
-  const [recentActivities, setRecentActivities] = useState<Activity[]>([]);
-  
-  const [loading, setLoading] = useState(true);
 
-  useEffect(() => {
-    if (organization && userProfile) {
-      fetchUsers();
-      fetchStats();
-    }
-  }, [organization, userProfile, period, ownerId]);
-
-  const fetchUsers = async () => {
+  async function fetchUsers() {
     if (!organization) return;
     
     const { data } = await supabase
@@ -145,9 +160,9 @@ export default function Dashboard() {
         .map(u => ({ id: u.users!.id, full_name: u.users!.full_name }));
       setUsers(usersList);
     }
-  };
+  }
 
-  const fetchStats = async () => {
+  async function fetchStats() {
     if (!organization || !userProfile) return;
     
     setLoading(true);
@@ -290,7 +305,7 @@ export default function Dashboard() {
     } finally {
       setLoading(false);
     }
-  };
+  }
 
   const formatCurrency = (value: number) => {
     return new Intl.NumberFormat(locale, {
