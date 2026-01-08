@@ -35,6 +35,12 @@ export default function Dashboard() {
   const { t } = useTranslation(locale as 'pt-BR' | 'en-US');
   const navigate = useNavigate();
 
+  // Redirect to login if not authenticated
+  if (!orgLoading && !user) {
+    navigate('/auth/signin');
+    return null;
+  }
+
   // Show skeleton ONLY while loading
   if (orgLoading) {
     return (
@@ -69,8 +75,8 @@ export default function Dashboard() {
     );
   }
 
-  // Error state: profile not found
-  if (error || !userProfile) {
+  // Error state: profile not found (only show if user exists but profile doesn't)
+  if (error || (user && !userProfile)) {
     return (
       <Layout>
         <div className="flex flex-col items-center justify-center h-full p-6">
