@@ -11,11 +11,9 @@ import { formatPhoneDisplay } from '@/lib/phoneUtils';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { Badge } from '@/components/ui/badge';
 import { toast } from 'sonner';
-import { Mail, Phone, Building2, Edit, Trash2 } from 'lucide-react';
+import { Mail, Phone, Building2 } from 'lucide-react';
 import { Breadcrumbs } from '@/components/application/breadcrumbs/breadcrumbs';
-import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from '@/components/ui/alert-dialog';
 import { ActivityTimeline } from '@/components/contacts/ActivityTimeline';
 import { ContactTasks } from '@/components/contacts/ContactTasks';
 import { ContactCalls } from '@/components/contacts/ContactCalls';
@@ -80,60 +78,16 @@ export default function ContactDetail() {
   if (orgLoading || loading) return <Layout><div className="p-6">{t('common.loading')}</div></Layout>;
   if (!contact) return <Layout><div className="p-6">{t('common.noResults')}</div></Layout>;
 
-  const lifecycleColor = contact.lifecycle_stage === 'lead' ? 'bg-blue-500' : contact.lifecycle_stage === 'customer' ? 'bg-green-500' : 'bg-muted';
-
   return (
     <Layout>
       <div className="flex flex-col h-full">
-        <div className="border-b bg-background/95 backdrop-blur px-6 py-4">
-          <div className="flex items-center justify-between mb-2">
-            <Breadcrumbs 
-              items={[
-                { label: t('contacts.title'), href: '/contacts' },
-                { label: contact.full_name }
-              ]} 
-            />
-            <div className="flex gap-2">
-              {permissions.canEditContacts && (
-                <Button variant="outline" asChild>
-                  <Link to={`/contacts/${contact.id}/edit`}>
-                    <Edit className="h-4 w-4 mr-2" />
-                    {t('common.edit')}
-                  </Link>
-                </Button>
-              )}
-              {permissions.canDeleteContacts && (
-                <AlertDialog>
-                  <AlertDialogTrigger asChild>
-                    <Button variant="destructive">
-                      <Trash2 className="h-4 w-4 mr-2" />
-                      {t('common.delete')}
-                    </Button>
-                  </AlertDialogTrigger>
-                  <AlertDialogContent>
-                    <AlertDialogHeader>
-                      <AlertDialogTitle>{t('contacts.deleteConfirm')}</AlertDialogTitle>
-                      <AlertDialogDescription>
-                        {contact.full_name}
-                      </AlertDialogDescription>
-                    </AlertDialogHeader>
-                    <AlertDialogFooter>
-                      <AlertDialogCancel>{t('common.cancel')}</AlertDialogCancel>
-                      <AlertDialogAction onClick={handleDelete}>
-                        {t('common.delete')}
-                      </AlertDialogAction>
-                    </AlertDialogFooter>
-                  </AlertDialogContent>
-                </AlertDialog>
-              )}
-            </div>
-          </div>
-          <div className="flex items-center gap-3">
-            <h1 className="text-2xl font-bold text-foreground">{contact.full_name}</h1>
-            <Badge className={`${lifecycleColor} text-white`}>
-              {t(`lifecycle.${contact.lifecycle_stage}`)}
-            </Badge>
-          </div>
+        <div className="px-6 pt-4">
+          <Breadcrumbs 
+            items={[
+              { label: t('contacts.title'), href: '/contacts' },
+              { label: contact.full_name }
+            ]} 
+          />
         </div>
 
         <div className="flex-1 overflow-auto p-6">
