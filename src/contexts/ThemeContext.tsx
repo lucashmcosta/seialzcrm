@@ -47,8 +47,9 @@ export function ThemeProvider({ children }: { children: ReactNode }) {
     root.style.setProperty('--primary', primaryColor);
     
     // Calculate primary-foreground based on luminosity
+    // Threshold at 65% - saturated colors like vibrant blue need white text
     const lightness = parseInt(primaryColor.split(' ')[2]?.replace('%', '') || '50');
-    const foreground = lightness > 50 ? '217 33% 17%' : '0 0% 100%';
+    const foreground = lightness > 65 ? '217 33% 17%' : '0 0% 100%';
     root.style.setProperty('--primary-foreground', foreground);
     
     // Set sidebar background
