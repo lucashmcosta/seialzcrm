@@ -10,7 +10,7 @@ import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/comp
 import { ConfirmDialog } from '@/components/ui/confirm-dialog';
 import { useTranslation } from '@/lib/i18n';
 import { useOrganization } from '@/hooks/useOrganization';
-import { MessageSquare, Phone, Mail, Webhook, AlertTriangle, Plus } from 'lucide-react';
+import { MessageSquare, Phone, Mail, Webhook, AlertTriangle, Plus, Bot, Sparkles } from 'lucide-react';
 import { IntegrationConnectDialog } from './IntegrationConnectDialog';
 import { IntegrationDetailDialog } from './IntegrationDetailDialog';
 import { PhoneNumberSettings } from './PhoneNumberSettings';
@@ -20,14 +20,19 @@ const iconMap: Record<string, any> = {
   whatsapp: MessageSquare,
   telephony: Phone,
   'twilio-voice': Phone,
+  'twilio-whatsapp': MessageSquare,
   email: Mail,
   webhooks: Webhook,
+  ai: Bot,
+  'claude-ai': Sparkles,
+  'openai-gpt': Bot,
   other: Webhook,
   default: Webhook,
 };
 
 const categories = [
   { id: 'all', label: 'Ver todos' },
+  { id: 'ai', label: 'Inteligência Artificial' },
   { id: 'telephony', label: 'Telefonia' },
   { id: 'whatsapp', label: 'WhatsApp' },
   { id: 'email', label: 'Email' },

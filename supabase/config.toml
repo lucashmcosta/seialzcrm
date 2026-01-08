@@ -35,3 +35,6 @@ verify_jwt = true
 
 [functions.twilio-whatsapp-templates]
 verify_jwt = true
+
+[functions.ai-generate]
+verify_jwt = true

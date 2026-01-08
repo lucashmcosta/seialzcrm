@@ -14,6 +14,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { toast } from 'sonner';
 import { Loader2 } from 'lucide-react';
 
@@ -117,15 +118,64 @@ export function IntegrationConnectDialog({
   };
 
   const renderField = (field: any) => {
-    const { key, label, type, placeholder, required } = field;
+    const { key, label, type, placeholder, required, options, description } = field;
+
+    const fieldLabel = (
+      <Label htmlFor={key}>
+        {label} {required && <span className="text-destructive">*</span>}
+      </Label>
+    );
+
+    const fieldDescription = description && (
+      <p className="text-xs text-muted-foreground">{description}</p>
+    );
 
     switch (type) {
+      case 'select':
+        return (
+          <div key={key} className="space-y-2">
+            {fieldLabel}
+            <Select
+              value={configValues[key] || field.default || ''}
+              onValueChange={(value) =>
+                setConfigValues({ ...configValues, [key]: value })
+              }
+            >
+              <SelectTrigger>
+                <SelectValue placeholder="Selecione..." />
+              </SelectTrigger>
+              <SelectContent>
+                {options?.map((option: string) => (
+                  <SelectItem key={option} value={option}>
+                    {option}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+            {fieldDescription}
+          </div>
+        );
+      case 'number':
+        return (
+          <div key={key} className="space-y-2">
+            {fieldLabel}
+            <Input
+              id={key}
+              type="number"
+              placeholder={placeholder}
+              required={required}
+              value={configValues[key] ?? field.default ?? ''}
+              onChange={(e) =>
+                setConfigValues({ ...configValues, [key]: parseInt(e.target.value) || 0 })
+              }
+            />
+            {fieldDescription}
+          </div>
+        );
       case 'textarea':
         return (
           <div key={key} className="space-y-2">
-            <Label htmlFor={key}>
-              {label} {required && <span className="text-destructive">*</span>}
-            </Label>
+            {fieldLabel}
             <Textarea
               id={key}
               placeholder={placeholder}
@@ -135,6 +185,7 @@ export function IntegrationConnectDialog({
                 setConfigValues({ ...configValues, [key]: e.target.value })
               }
             />
+            {fieldDescription}
           </div>
         );
       case 'checkbox':
@@ -155,9 +206,7 @@ export function IntegrationConnectDialog({
       default:
         return (
           <div key={key} className="space-y-2">
-            <Label htmlFor={key}>
-              {label} {required && <span className="text-destructive">*</span>}
-            </Label>
+            {fieldLabel}
             <Input
               id={key}
               type={type || 'text'}
@@ -168,6 +217,7 @@ export function IntegrationConnectDialog({
                 setConfigValues({ ...configValues, [key]: e.target.value })
               }
             />
+            {fieldDescription}
           </div>
         );
     }
