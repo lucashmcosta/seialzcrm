@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
-import { useParams, useNavigate, Link } from 'react-router-dom';
+import { useParams, useNavigate } from 'react-router-dom';
+import type { Key } from 'react-aria-components';
 import { Layout } from '@/components/Layout';
 import { supabase } from '@/integrations/supabase/client';
 import { useOrganization } from '@/hooks/useOrganization';
@@ -8,12 +9,12 @@ import { usePermissions } from '@/hooks/usePermissions';
 import { useVoiceIntegration } from '@/hooks/useVoiceIntegration';
 import { useOutboundCall } from '@/contexts/OutboundCallContext';
 import { formatPhoneDisplay } from '@/lib/phoneUtils';
-import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { toast } from 'sonner';
 import { Mail, Phone, Building2 } from 'lucide-react';
 import { Breadcrumbs } from '@/components/application/breadcrumbs/breadcrumbs';
+import { Tabs } from '@/components/application/tabs/tabs';
+import { NativeSelect } from '@/components/base/select/select-native';
 import { ActivityTimeline } from '@/components/contacts/ActivityTimeline';
 import { ContactTasks } from '@/components/contacts/ContactTasks';
 import { ContactCalls } from '@/components/contacts/ContactCalls';
@@ -32,6 +33,18 @@ export default function ContactDetail() {
   const { startCall } = useOutboundCall();
   const [contact, setContact] = useState<any>(null);
   const [loading, setLoading] = useState(true);
+  const [selectedTab, setSelectedTab] = useState<Key>("details");
+
+  const tabs = [
+    { id: "details", label: t('contacts.details') },
+    { id: "timeline", label: t('contacts.timeline') },
+    { id: "opportunities", label: t('contacts.opportunitiesTab') },
+    { id: "tasks", label: t('contacts.tasksTab') },
+    { id: "notes", label: t('contacts.notesTab') },
+    { id: "calls", label: t('contacts.callsTab') },
+    { id: "messages", label: t('contacts.messagesTab') },
+    { id: "attachments", label: t('contacts.attachmentsTab') },
+  ];
 
   useEffect(() => {
     if (organization?.id) {
@@ -91,19 +104,22 @@ export default function ContactDetail() {
         </div>
 
         <div className="flex-1 overflow-auto p-6">
-          <Tabs defaultValue="details" className="w-full">
-            <TabsList className="flex-wrap h-auto gap-1">
-              <TabsTrigger value="details">{t('contacts.details')}</TabsTrigger>
-              <TabsTrigger value="timeline">{t('contacts.timeline')}</TabsTrigger>
-              <TabsTrigger value="opportunities">{t('contacts.opportunitiesTab')}</TabsTrigger>
-              <TabsTrigger value="tasks">{t('contacts.tasksTab')}</TabsTrigger>
-              <TabsTrigger value="notes">{t('contacts.notesTab')}</TabsTrigger>
-              <TabsTrigger value="calls">{t('contacts.callsTab')}</TabsTrigger>
-              <TabsTrigger value="messages">{t('contacts.messagesTab')}</TabsTrigger>
-              <TabsTrigger value="attachments">{t('contacts.attachmentsTab')}</TabsTrigger>
-            </TabsList>
+          {/* Mobile: Native Select */}
+          <NativeSelect
+            aria-label="Tabs"
+            value={selectedTab as string}
+            onChange={(e) => setSelectedTab(e.target.value)}
+            options={tabs.map((tab) => ({ label: tab.label, value: tab.id }))}
+            className="w-full md:hidden mb-4"
+          />
 
-            <TabsContent value="details" className="space-y-4">
+          {/* Desktop: Underline Tabs */}
+          <Tabs selectedKey={selectedTab} onSelectionChange={setSelectedTab} className="w-full">
+            <Tabs.List type="underline" items={tabs} className="max-md:hidden">
+              {(tab) => <Tabs.Item key={tab.id} {...tab} />}
+            </Tabs.List>
+
+            <Tabs.Panel id="details" className="space-y-4">
               <Card className="p-6">
                 <h2 className="text-lg font-semibold mb-4 text-foreground">{t('contacts.details')}</h2>
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -151,39 +167,39 @@ export default function ContactDetail() {
                   )}
                 </div>
               </Card>
-            </TabsContent>
+            </Tabs.Panel>
 
-            <TabsContent value="timeline">
+            <Tabs.Panel id="timeline">
               <ActivityTimeline contactId={contact.id} />
-            </TabsContent>
+            </Tabs.Panel>
 
-            <TabsContent value="opportunities">
+            <Tabs.Panel id="opportunities">
               <ContactOpportunities contactId={contact.id} />
-            </TabsContent>
+            </Tabs.Panel>
 
-            <TabsContent value="tasks">
+            <Tabs.Panel id="tasks">
               <ContactTasks contactId={contact.id} />
-            </TabsContent>
+            </Tabs.Panel>
 
-            <TabsContent value="notes">
+            <Tabs.Panel id="notes">
               <ContactNotes contactId={contact.id} />
-            </TabsContent>
+            </Tabs.Panel>
 
-            <TabsContent value="calls">
+            <Tabs.Panel id="calls">
               <ContactCalls 
                 contactId={contact.id} 
                 contactPhone={contact.phone}
                 contactName={contact.full_name}
               />
-            </TabsContent>
+            </Tabs.Panel>
 
-            <TabsContent value="messages">
+            <Tabs.Panel id="messages">
               <ContactMessages contactId={contact.id} />
-            </TabsContent>
+            </Tabs.Panel>
 
-            <TabsContent value="attachments">
+            <Tabs.Panel id="attachments">
               <ContactAttachments contactId={contact.id} />
-            </TabsContent>
+            </Tabs.Panel>
           </Tabs>
         </div>
       </div>
