@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { useParams, useNavigate } from 'react-router-dom';
+import { useParams, useNavigate, Link } from 'react-router-dom';
 import type { Key } from 'react-aria-components';
 import { Layout } from '@/components/Layout';
 import { supabase } from '@/integrations/supabase/client';
@@ -11,10 +11,30 @@ import { useOutboundCall } from '@/contexts/OutboundCallContext';
 import { formatPhoneDisplay } from '@/lib/phoneUtils';
 import { Card } from '@/components/ui/card';
 import { toast } from 'sonner';
-import { Mail, Phone, Building2 } from 'lucide-react';
+import { Mail, Phone, Building2, Edit, Trash2, MoreVertical } from 'lucide-react';
 import { Breadcrumbs } from '@/components/application/breadcrumbs/breadcrumbs';
 import { Tabs } from '@/components/application/tabs/tabs';
 import { NativeSelect } from '@/components/base/select/select-native';
+import { Avatar } from '@/components/base/avatar/avatar';
+import { Badge } from '@/components/base/badges/badges';
+import { Button } from '@/components/ui/button';
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu';
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  AlertDialogTrigger,
+} from '@/components/ui/alert-dialog';
 import { ActivityTimeline } from '@/components/contacts/ActivityTimeline';
 import { ContactTasks } from '@/components/contacts/ContactTasks';
 import { ContactCalls } from '@/components/contacts/ContactCalls';
@@ -22,6 +42,16 @@ import { ContactMessages } from '@/components/contacts/ContactMessages';
 import { ContactAttachments } from '@/components/contacts/ContactAttachments';
 import { ContactOpportunities } from '@/components/contacts/ContactOpportunities';
 import { ContactNotes } from '@/components/contacts/ContactNotes';
+
+const getLifecycleColor = (stage: string | null): "gray" | "blue" | "purple" | "success" | "error" => {
+  switch (stage) {
+    case 'lead': return 'blue';
+    case 'prospect': return 'purple';
+    case 'customer': return 'success';
+    case 'churned': return 'error';
+    default: return 'gray';
+  }
+};
 
 export default function ContactDetail() {
   const { id } = useParams();
@@ -101,6 +131,87 @@ export default function ContactDetail() {
               { label: contact.full_name }
             ]} 
           />
+
+          {/* Card Header com Avatar */}
+          <div className="mt-6 flex items-start justify-between">
+            <div className="flex items-start gap-4">
+              <Avatar 
+                fallbackText={contact.full_name}
+                size="xl"
+              />
+              <div className="space-y-1">
+                <div className="flex items-center gap-2">
+                  <h1 className="text-xl font-semibold text-foreground">
+                    {contact.full_name}
+                  </h1>
+                  {contact.lifecycle_stage && (
+                    <Badge color={getLifecycleColor(contact.lifecycle_stage)} size="sm">
+                      {contact.lifecycle_stage}
+                    </Badge>
+                  )}
+                </div>
+                {contact.email && (
+                  <p className="text-sm text-muted-foreground">{contact.email}</p>
+                )}
+              </div>
+            </div>
+
+            <div className="flex items-center gap-2">
+              {permissions.canEditContacts && (
+                <Button variant="outline" size="sm" asChild>
+                  <Link to={`/contacts/${contact.id}/edit`}>
+                    <Edit className="h-4 w-4 mr-2" />
+                    {t('common.edit')}
+                  </Link>
+                </Button>
+              )}
+              
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <Button variant="ghost" size="icon">
+                    <MoreVertical className="h-4 w-4" />
+                  </Button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="end">
+                  {permissions.canEditContacts && (
+                    <DropdownMenuItem asChild>
+                      <Link to={`/contacts/${contact.id}/edit`}>
+                        <Edit className="h-4 w-4 mr-2" />
+                        {t('common.edit')}
+                      </Link>
+                    </DropdownMenuItem>
+                  )}
+                  {permissions.canDeleteContacts && (
+                    <AlertDialog>
+                      <AlertDialogTrigger asChild>
+                        <DropdownMenuItem 
+                          className="text-destructive focus:text-destructive"
+                          onSelect={(e) => e.preventDefault()}
+                        >
+                          <Trash2 className="h-4 w-4 mr-2" />
+                          {t('common.delete')}
+                        </DropdownMenuItem>
+                      </AlertDialogTrigger>
+                      <AlertDialogContent>
+                        <AlertDialogHeader>
+                          <AlertDialogTitle>{t('contacts.deleteConfirm')}</AlertDialogTitle>
+                          <AlertDialogDescription>
+                            {contact.full_name}
+                          </AlertDialogDescription>
+                        </AlertDialogHeader>
+                        <AlertDialogFooter>
+                          <AlertDialogCancel>{t('common.cancel')}</AlertDialogCancel>
+                          <AlertDialogAction onClick={handleDelete}>
+                            {t('common.delete')}
+                          </AlertDialogAction>
+                        </AlertDialogFooter>
+                      </AlertDialogContent>
+                    </AlertDialog>
+                  )}
+                </DropdownMenuContent>
+              </DropdownMenu>
+            </div>
+          </div>
         </div>
 
         <div className="flex-1 overflow-auto p-6">
