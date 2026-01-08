@@ -15,6 +15,7 @@ import { Plus, Search } from 'lucide-react';
 import { SavedViewsDropdown } from '@/components/SavedViewsDropdown';
 import { BulkActionsBar } from '@/components/BulkActionsBar';
 import { Breadcrumbs } from '@/components/application/breadcrumbs/breadcrumbs';
+import { PaginationWithPageSize } from '@/components/application/pagination/pagination';
 import { PaginationPageMinimalCenter } from '@/components/application/pagination/pagination';
 import {
   Table,
@@ -48,7 +49,7 @@ interface Contact {
   created_at: string;
 }
 
-const ITEMS_PER_PAGE = 10;
+const DEFAULT_ITEMS_PER_PAGE = 25;
 
 const lifecycleColors: Record<string, BadgeColor> = {
   lead: 'blue',
@@ -77,6 +78,10 @@ export default function ContactsList() {
   // Pagination state
   const [currentPage, setCurrentPage] = useState(1);
   const [totalCount, setTotalCount] = useState(0);
+  const [itemsPerPage, setItemsPerPage] = useState(DEFAULT_ITEMS_PER_PAGE);
+  
+  // Select all mode
+  const [selectAllMode, setSelectAllMode] = useState<'page' | 'all' | 'none'>('none');
   
   // Sorting state
   const [sortDescriptor, setSortDescriptor] = useState<SortDescriptor>({
@@ -117,7 +122,7 @@ export default function ContactsList() {
     if (!organization) return;
     fetchContacts();
     fetchUsers();
-  }, [organization, currentPage, searchTerm, ownerFilter, stageFilter]);
+  }, [organization, currentPage, itemsPerPage, searchTerm, ownerFilter, stageFilter]);
 
   const fetchUsers = async () => {
     if (!organization) return;
@@ -160,8 +165,8 @@ export default function ContactsList() {
     }
     
     // Apply pagination
-    const from = (currentPage - 1) * ITEMS_PER_PAGE;
-    const to = from + ITEMS_PER_PAGE - 1;
+    const from = (currentPage - 1) * itemsPerPage;
+    const to = from + itemsPerPage - 1;
     query = query.range(from, to).order('created_at', { ascending: false });
 
     const { data, error, count } = await query;
@@ -192,7 +197,12 @@ export default function ContactsList() {
     });
   }, [contacts, sortDescriptor]);
 
-  const totalPages = Math.ceil(totalCount / ITEMS_PER_PAGE);
+  const totalPages = Math.ceil(totalCount / itemsPerPage);
+
+  const handleItemsPerPageChange = (newValue: number) => {
+    setItemsPerPage(newValue);
+    setCurrentPage(1);
+  };
 
   // Selection handlers
   const allSelected = sortedContacts.length > 0 && sortedContacts.every(c => selectedIds.includes(c.id));
@@ -201,9 +211,43 @@ export default function ContactsList() {
   const handleSelectAll = (checked: boolean) => {
     if (checked) {
       setSelectedIds(sortedContacts.map(c => c.id));
+      setSelectAllMode('page');
     } else {
       setSelectedIds([]);
+      setSelectAllMode('none');
     }
+  };
+
+  const handleSelectAllContacts = async () => {
+    if (!organization) return;
+    
+    // Fetch all contact IDs matching current filters
+    let query = supabase
+      .from('contacts')
+      .select('id')
+      .eq('organization_id', organization.id)
+      .is('deleted_at', null);
+    
+    if (searchTerm) {
+      query = query.or(`full_name.ilike.%${searchTerm}%,email.ilike.%${searchTerm}%,phone.ilike.%${searchTerm}%`);
+    }
+    if (ownerFilter !== 'all') {
+      query = query.eq('owner_user_id', ownerFilter);
+    }
+    if (stageFilter !== 'all') {
+      query = query.eq('lifecycle_stage', stageFilter as 'lead' | 'customer' | 'inactive');
+    }
+
+    const { data } = await query;
+    if (data) {
+      setSelectedIds(data.map(c => c.id));
+      setSelectAllMode('all');
+    }
+  };
+
+  const handleClearSelection = () => {
+    setSelectedIds([]);
+    setSelectAllMode('none');
   };
 
   const handleSelectOne = (id: string, checked: boolean) => {
@@ -224,6 +268,7 @@ export default function ContactsList() {
 
   const handleBulkSuccess = () => {
     setSelectedIds([]);
+    setSelectAllMode('none');
     fetchContacts();
   };
 
@@ -326,13 +371,14 @@ export default function ContactsList() {
         ) : (
           <TableCard
             footer={
-              totalPages > 1 && (
-                <PaginationPageMinimalCenter
-                  currentPage={currentPage}
-                  totalPages={totalPages}
-                  onPageChange={setCurrentPage}
-                />
-              )
+              <PaginationWithPageSize
+                currentPage={currentPage}
+                totalPages={totalPages}
+                totalItems={totalCount}
+                itemsPerPage={itemsPerPage}
+                onPageChange={setCurrentPage}
+                onItemsPerPageChange={handleItemsPerPageChange}
+              />
             }
           >
             <Table
@@ -352,7 +398,33 @@ export default function ContactsList() {
                     id={col.id} 
                     allowsSorting={col.id !== 'phone'} 
                     sortDescriptor={sortDescriptor}
-                  >
+          >
+            {/* Select All Banner */}
+            {allSelected && totalCount > sortedContacts.length && (
+              <div className="px-4 py-2 bg-muted/50 border-b text-sm flex items-center justify-center gap-2">
+                {selectAllMode === 'all' ? (
+                  <>
+                    <span>Todos os {totalCount} contatos selecionados.</span>
+                    <button 
+                      className="text-primary font-medium hover:underline"
+                      onClick={handleClearSelection}
+                    >
+                      Limpar seleção
+                    </button>
+                  </>
+                ) : (
+                  <>
+                    <span>{sortedContacts.length} contatos desta página selecionados.</span>
+                    <button 
+                      className="text-primary font-medium hover:underline"
+                      onClick={handleSelectAllContacts}
+                    >
+                      Selecionar todos os {totalCount} contatos
+                    </button>
+                  </>
+                )}
+              </div>
+            )}
                     {col.label}
                   </TableColumn>
                 ))}
