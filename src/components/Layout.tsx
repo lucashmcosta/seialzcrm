@@ -121,7 +121,7 @@ export function Layout({ children }: LayoutProps) {
           </div>
           <div className="flex-1 min-w-0">
             <p className="text-sm font-medium truncate text-foreground">
-              {userProfile?.full_name || 'Carregando...'}
+              {userProfile?.full_name || user?.email || 'Usuário'}
             </p>
             <p className="text-xs text-muted-foreground truncate">
               {userProfile?.email || user?.email || ''}

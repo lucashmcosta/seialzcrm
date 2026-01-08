@@ -35,12 +35,6 @@ export default function Dashboard() {
   const { t } = useTranslation(locale as 'pt-BR' | 'en-US');
   const navigate = useNavigate();
 
-  // Redirect to login if not authenticated
-  if (!orgLoading && !user) {
-    navigate('/auth/signin');
-    return null;
-  }
-
   // Show skeleton ONLY while loading
   if (orgLoading) {
     return (
