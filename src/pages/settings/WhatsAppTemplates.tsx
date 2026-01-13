@@ -70,29 +70,15 @@ export default function WhatsAppTemplates() {
   const syncMutation = useMutation({
     mutationFn: async () => {
       const { data, error } = await supabase.functions.invoke('twilio-whatsapp-templates', {
-        method: 'GET',
-        headers: {
-          'Content-Type': 'application/json',
+        body: {
+          organizationId: organization?.id,
+          action: 'sync',
         },
-        body: null,
       });
 
-      // Use query params approach
-      const response = await fetch(
-        `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/twilio-whatsapp-templates?organizationId=${organization?.id}&action=sync`,
-        {
-          headers: {
-            'Authorization': `Bearer ${(await supabase.auth.getSession()).data.session?.access_token}`,
-          },
-        }
-      );
-
-      if (!response.ok) {
-        const errorData = await response.json();
-        throw new Error(errorData.error || 'Failed to sync templates');
-      }
-
-      return response.json();
+      if (error) throw error;
+      if (data?.error) throw new Error(data.error);
+      return data;
     },
     onSuccess: (data) => {
       toast({
