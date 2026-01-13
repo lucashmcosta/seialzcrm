@@ -6,10 +6,13 @@ import { Textarea } from '@/components/ui/textarea';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { useToast } from '@/hooks/use-toast';
-import { Loader2, Send, Clock, Check, CheckCheck, AlertCircle } from 'lucide-react';
+import { Loader2, Send, Clock, Check, CheckCheck, AlertCircle, Image, FileText, Volume2 } from 'lucide-react';
 import { formatDistanceToNow } from 'date-fns';
 import { ptBR, enUS } from 'date-fns/locale';
 import { WhatsAppTemplateSelector } from './WhatsAppTemplateSelector';
+import { AudioRecorder } from './AudioRecorder';
+import { AudioMessagePlayer } from './AudioMessagePlayer';
+import { MediaUploadButton } from './MediaUploadButton';
 
 interface Message {
   id: string;
@@ -19,6 +22,7 @@ interface Message {
   whatsapp_status: string | null;
   whatsapp_message_sid: string | null;
   media_urls: string[] | null;
+  media_type: string | null;
   error_code: string | null;
   error_message: string | null;
 }
@@ -142,10 +146,38 @@ export function WhatsAppChat({ contactId, threadId: initialThreadId, onThreadCre
     }
   };
 
-  const handleSendMessage = async () => {
-    if (!organization?.id || !messageText.trim()) return;
+  const uploadMediaToStorage = async (file: File): Promise<{ url: string; mediaType: string }> => {
+    const fileExt = file.name.split('.').pop()?.toLowerCase() || 'bin';
+    const fileName = `${Date.now()}-${Math.random().toString(36).substring(7)}.${fileExt}`;
+    const filePath = `${organization?.id}/${fileName}`;
 
-    if (!isIn24hWindow) {
+    // Determine media type
+    let mediaType = 'document';
+    if (file.type.startsWith('image/')) {
+      mediaType = 'image';
+    } else if (file.type.startsWith('audio/')) {
+      mediaType = 'audio';
+    } else if (file.type.startsWith('video/')) {
+      mediaType = 'video';
+    }
+
+    const { error: uploadError } = await supabase.storage
+      .from('whatsapp-media')
+      .upload(filePath, file);
+
+    if (uploadError) throw uploadError;
+
+    const { data: { publicUrl } } = supabase.storage
+      .from('whatsapp-media')
+      .getPublicUrl(filePath);
+
+    return { url: publicUrl, mediaType };
+  };
+
+  const handleSendMessage = async (mediaUrl?: string, mediaType?: string) => {
+    if (!organization?.id || (!messageText.trim() && !mediaUrl)) return;
+
+    if (!isIn24hWindow && !mediaUrl) {
       setShowTemplates(true);
       return;
     }
@@ -157,7 +189,9 @@ export function WhatsAppChat({ contactId, threadId: initialThreadId, onThreadCre
           organizationId: organization.id,
           contactId,
           threadId,
-          message: messageText,
+          message: messageText || (mediaUrl ? '📎 Mídia' : ''),
+          mediaUrl,
+          mediaType,
           userId: userProfile?.id,
         },
       });
@@ -227,6 +261,34 @@ export function WhatsAppChat({ contactId, threadId: initialThreadId, onThreadCre
     }
   };
 
+  const handleMediaUpload = async (file: File) => {
+    if (!organization?.id) return;
+
+    try {
+      const { url, mediaType } = await uploadMediaToStorage(file);
+      await handleSendMessage(url, mediaType);
+      toast({ description: 'Mídia enviada com sucesso!' });
+    } catch (error: any) {
+      console.error('Error uploading media:', error);
+      toast({ variant: 'destructive', description: error.message || 'Erro ao enviar mídia' });
+    }
+  };
+
+  const handleAudioSend = async (audioBlob: Blob) => {
+    if (!organization?.id) return;
+
+    try {
+      // Convert blob to file
+      const audioFile = new File([audioBlob], `audio-${Date.now()}.ogg`, { type: audioBlob.type });
+      const { url, mediaType } = await uploadMediaToStorage(audioFile);
+      await handleSendMessage(url, 'audio');
+      toast({ description: 'Áudio enviado com sucesso!' });
+    } catch (error: any) {
+      console.error('Error sending audio:', error);
+      toast({ variant: 'destructive', description: error.message || 'Erro ao enviar áudio' });
+    }
+  };
+
   const renderStatusIcon = (status: string | null) => {
     switch (status) {
       case 'sending':
@@ -239,6 +301,63 @@ export function WhatsAppChat({ contactId, threadId: initialThreadId, onThreadCre
         return <CheckCheck className="w-3 h-3 text-blue-500" />;
       case 'failed':
         return <AlertCircle className="w-3 h-3 text-destructive" />;
+      default:
+        return null;
+    }
+  };
+
+  const renderMediaContent = (message: Message) => {
+    if (!message.media_urls || message.media_urls.length === 0) return null;
+
+    const mediaType = message.media_type;
+
+    return (
+      <div className="mb-2 space-y-2">
+        {message.media_urls.map((url, i) => {
+          // Check if it's audio
+          if (mediaType === 'audio' || url.includes('.ogg') || url.includes('.mp3') || url.includes('.wav')) {
+            return <AudioMessagePlayer key={i} src={url} />;
+          }
+
+          // Check if it's an image
+          if (mediaType === 'image' || url.match(/\.(jpg|jpeg|png|gif|webp)$/i)) {
+            return (
+              <img
+                key={i}
+                src={url}
+                alt="Media"
+                className="max-w-full rounded cursor-pointer hover:opacity-90 transition-opacity"
+                onClick={() => window.open(url, '_blank')}
+              />
+            );
+          }
+
+          // Document/other
+          return (
+            <a
+              key={i}
+              href={url}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="flex items-center gap-2 p-2 rounded bg-background/50 hover:bg-background/80 transition-colors"
+            >
+              <FileText className="w-4 h-4" />
+              <span className="text-sm underline">Ver documento</span>
+            </a>
+          );
+        })}
+      </div>
+    );
+  };
+
+  const getMediaTypeIcon = (mediaType: string | null) => {
+    switch (mediaType) {
+      case 'image':
+        return <Image className="w-3 h-3" />;
+      case 'audio':
+        return <Volume2 className="w-3 h-3" />;
+      case 'document':
+        return <FileText className="w-3 h-3" />;
       default:
         return null;
     }
@@ -303,21 +422,12 @@ export function WhatsAppChat({ contactId, threadId: initialThreadId, onThreadCre
                     }`}
                   >
                     {/* Media */}
-                    {message.media_urls && message.media_urls.length > 0 && (
-                      <div className="mb-2 space-y-2">
-                        {message.media_urls.map((url, i) => (
-                          <img
-                            key={i}
-                            src={url}
-                            alt="Media"
-                            className="max-w-full rounded"
-                          />
-                        ))}
-                      </div>
-                    )}
+                    {renderMediaContent(message)}
 
                     {/* Content */}
-                    <p className="text-sm whitespace-pre-wrap break-words">{message.content}</p>
+                    {message.content && (
+                      <p className="text-sm whitespace-pre-wrap break-words">{message.content}</p>
+                    )}
 
                     {/* Error */}
                     {message.error_message && (
@@ -326,6 +436,7 @@ export function WhatsAppChat({ contactId, threadId: initialThreadId, onThreadCre
 
                     {/* Footer */}
                     <div className="flex items-center justify-end gap-1 mt-1">
+                      {message.media_type && getMediaTypeIcon(message.media_type)}
                       <span className="text-xs text-muted-foreground">
                         {formatDistanceToNow(new Date(message.sent_at), {
                           addSuffix: true,
@@ -347,6 +458,10 @@ export function WhatsAppChat({ contactId, threadId: initialThreadId, onThreadCre
       <div className="pt-4 border-t mt-4">
         {isIn24hWindow || messages.length === 0 ? (
           <div className="flex gap-2">
+            <div className="flex gap-1">
+              <MediaUploadButton onUpload={handleMediaUpload} disabled={submitting} />
+              <AudioRecorder onSend={handleAudioSend} disabled={submitting} />
+            </div>
             <Textarea
               placeholder="Digite uma mensagem..."
               value={messageText}
@@ -362,7 +477,7 @@ export function WhatsAppChat({ contactId, threadId: initialThreadId, onThreadCre
             />
             <div className="flex flex-col gap-2">
               <Button
-                onClick={handleSendMessage}
+                onClick={() => handleSendMessage()}
                 disabled={submitting || !messageText.trim()}
                 size="icon"
                 className="bg-green-600 hover:bg-green-700"
