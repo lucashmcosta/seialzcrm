@@ -20,6 +20,8 @@ serve(async (req) => {
       templateId,
       templateVariables,
       mediaUrl,
+      mediaUrls,
+      mediaType,
       userId
     } = await req.json()
 
@@ -197,18 +199,28 @@ serve(async (req) => {
       }
     }
 
+    // Collect all media URLs
+    const allMediaUrls: string[] = []
+    if (mediaUrl) {
+      allMediaUrls.push(mediaUrl)
+    }
+    if (mediaUrls && Array.isArray(mediaUrls)) {
+      allMediaUrls.push(...mediaUrls)
+    }
+
     // Insert message record first (with status 'sending')
     const { data: insertedMessage, error: insertError } = await supabase
       .from('messages')
       .insert({
         organization_id: organizationId,
         thread_id: currentThreadId,
-        content: messageBody,
+        content: messageBody || '',
         direction: 'outbound',
         sender_user_id: userId || null,
         whatsapp_status: 'sending',
         template_id: templateId || null,
-        media_urls: mediaUrl ? [mediaUrl] : [],
+        media_urls: allMediaUrls.length > 0 ? allMediaUrls : [],
+        media_type: mediaType || null,
         sent_at: new Date().toISOString(),
       })
       .select('id')
@@ -238,20 +250,22 @@ serve(async (req) => {
       if (templateVariables) {
         formData.append('ContentVariables', JSON.stringify(templateVariables))
       }
-    } else {
-      formData.append('Body', message)
+    } else if (messageBody) {
+      formData.append('Body', messageBody)
     }
 
-    if (mediaUrl) {
-      formData.append('MediaUrl', mediaUrl)
-    }
+    // Add media URLs (Twilio accepts multiple MediaUrl params)
+    allMediaUrls.forEach((url) => {
+      formData.append('MediaUrl', url)
+    })
 
     console.log('Sending WhatsApp message:', {
       from: whatsappFrom,
       to: whatsappTo,
       contentSid,
-      hasBody: !!message,
-      hasMedia: !!mediaUrl
+      hasBody: !!messageBody,
+      mediaCount: allMediaUrls.length,
+      mediaType
     })
 
     const twilioResponse = await fetch(twilioUrl, {
@@ -310,8 +324,10 @@ serve(async (req) => {
         organization_id: organizationId,
         contact_id: contactId,
         activity_type: 'message',
-        title: 'Mensagem WhatsApp enviada',
-        body: messageBody.slice(0, 200),
+        title: allMediaUrls.length > 0 
+          ? `Mensagem WhatsApp enviada (${mediaType || 'mídia'})`
+          : 'Mensagem WhatsApp enviada',
+        body: messageBody?.slice(0, 200) || '',
         created_by_user_id: userId || null,
         occurred_at: new Date().toISOString(),
       })

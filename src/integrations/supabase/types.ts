@@ -1298,6 +1298,7 @@ export type Database = {
           error_message: string | null
           id: string
           is_sample: boolean | null
+          media_type: string | null
           media_urls: Json | null
           organization_id: string
           sender_user_id: string | null
@@ -1316,6 +1317,7 @@ export type Database = {
           error_message?: string | null
           id?: string
           is_sample?: boolean | null
+          media_type?: string | null
           media_urls?: Json | null
           organization_id: string
           sender_user_id?: string | null
@@ -1334,6 +1336,7 @@ export type Database = {
           error_message?: string | null
           id?: string
           is_sample?: boolean | null
+          media_type?: string | null
           media_urls?: Json | null
           organization_id?: string
           sender_user_id?: string | null

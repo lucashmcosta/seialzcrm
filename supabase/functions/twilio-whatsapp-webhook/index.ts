@@ -42,6 +42,123 @@ function normalizePhoneForSearch(phone: string): string[] {
   return Array.from(variations)
 }
 
+/**
+ * Detect media type from content type or URL
+ */
+function detectMediaType(contentType: string | null, url: string): string {
+  if (contentType) {
+    if (contentType.startsWith('image/')) return 'image'
+    if (contentType.startsWith('audio/')) return 'audio'
+    if (contentType.startsWith('video/')) return 'video'
+    if (contentType.includes('sticker')) return 'sticker'
+  }
+  
+  // Fallback to URL extension
+  const lowerUrl = url.toLowerCase()
+  if (lowerUrl.match(/\.(jpg|jpeg|png|gif|webp)$/)) return 'image'
+  if (lowerUrl.match(/\.(ogg|mp3|wav|m4a|opus)$/)) return 'audio'
+  if (lowerUrl.match(/\.(mp4|mov|avi|mkv)$/)) return 'video'
+  
+  return 'document'
+}
+
+/**
+ * Download media from Twilio and upload to storage
+ */
+async function persistMedia(
+  supabase: any,
+  orgId: string,
+  twilioAccountSid: string,
+  twilioAuthToken: string,
+  mediaUrls: string[],
+  contentTypes: string[]
+): Promise<{ urls: string[], mediaType: string | null }> {
+  if (mediaUrls.length === 0) {
+    return { urls: [], mediaType: null }
+  }
+
+  const persistedUrls: string[] = []
+  let detectedMediaType: string | null = null
+
+  for (let i = 0; i < mediaUrls.length; i++) {
+    const mediaUrl = mediaUrls[i]
+    const contentType = contentTypes[i] || null
+
+    try {
+      // Download from Twilio (requires authentication)
+      const response = await fetch(mediaUrl, {
+        headers: {
+          'Authorization': 'Basic ' + btoa(`${twilioAccountSid}:${twilioAuthToken}`),
+        }
+      })
+
+      if (!response.ok) {
+        console.error(`Failed to download media from Twilio: ${response.status}`)
+        // Fallback to original URL
+        persistedUrls.push(mediaUrl)
+        continue
+      }
+
+      const blob = await response.blob()
+      const actualContentType = response.headers.get('content-type') || contentType
+      const mediaType = detectMediaType(actualContentType, mediaUrl)
+      
+      if (!detectedMediaType) {
+        detectedMediaType = mediaType
+      }
+
+      // Determine file extension
+      let extension = 'bin'
+      if (actualContentType) {
+        const extMap: Record<string, string> = {
+          'image/jpeg': 'jpg',
+          'image/png': 'png',
+          'image/gif': 'gif',
+          'image/webp': 'webp',
+          'audio/ogg': 'ogg',
+          'audio/mpeg': 'mp3',
+          'audio/mp4': 'm4a',
+          'video/mp4': 'mp4',
+          'application/pdf': 'pdf',
+        }
+        extension = extMap[actualContentType] || 'bin'
+      }
+
+      const fileName = `${Date.now()}-${Math.random().toString(36).substring(7)}.${extension}`
+      const filePath = `${orgId}/${fileName}`
+
+      // Upload to storage
+      const { error: uploadError } = await supabase.storage
+        .from('whatsapp-media')
+        .upload(filePath, blob, {
+          contentType: actualContentType || 'application/octet-stream',
+        })
+
+      if (uploadError) {
+        console.error('Failed to upload media to storage:', uploadError)
+        // Fallback to original URL
+        persistedUrls.push(mediaUrl)
+        continue
+      }
+
+      // Get public URL
+      const { data: { publicUrl } } = supabase.storage
+        .from('whatsapp-media')
+        .getPublicUrl(filePath)
+
+      persistedUrls.push(publicUrl)
+      console.log(`Media persisted: ${mediaUrl} -> ${publicUrl}`)
+
+    } catch (error) {
+      console.error('Error persisting media:', error)
+      // Fallback to original URL
+      persistedUrls.push(mediaUrl)
+    }
+  }
+
+  return { urls: persistedUrls, mediaType: detectedMediaType }
+}
+
 serve(async (req) => {
   if (req.method === 'OPTIONS') {
     return new Response(null, { headers: corsHeaders })
@@ -82,16 +199,47 @@ serve(async (req) => {
       const waId = params.WaId || ''
       const numMedia = parseInt(params.NumMedia || '0')
       
-      // Collect media URLs
-      const mediaUrls: string[] = []
+      // Collect media URLs and content types
+      const rawMediaUrls: string[] = []
+      const contentTypes: string[] = []
       for (let i = 0; i < numMedia; i++) {
         const mediaUrl = params[`MediaUrl${i}`]
+        const contentType = params[`MediaContentType${i}`]
         if (mediaUrl) {
-          mediaUrls.push(mediaUrl)
+          rawMediaUrls.push(mediaUrl)
+          contentTypes.push(contentType || '')
         }
       }
 
       console.log(`Inbound WhatsApp - From: ${from}, Body: ${body}, Media: ${numMedia}`)
+
+      // Get Twilio credentials for media download
+      let twilioAccountSid = ''
+      let twilioAuthToken = ''
+      
+      const { data: integration } = await supabase
+        .from('organization_integrations')
+        .select('config_values, admin_integrations!inner(slug)')
+        .eq('organization_id', orgId)
+        .eq('admin_integrations.slug', 'twilio-whatsapp')
+        .eq('is_enabled', true)
+        .single()
+
+      if (integration?.config_values) {
+        const config = integration.config_values as any
+        twilioAccountSid = config.account_sid || ''
+        twilioAuthToken = config.auth_token || ''
+      }
+
+      // Persist media to storage
+      const { urls: persistedMediaUrls, mediaType } = await persistMedia(
+        supabase,
+        orgId,
+        twilioAccountSid,
+        twilioAuthToken,
+        rawMediaUrls,
+        contentTypes
+      )
 
       // Find or create contact
       let contactId: string | null = null
@@ -192,7 +340,7 @@ serve(async (req) => {
         }
       }
 
-      // Insert message
+      // Insert message with persisted media URLs
       const { error: messageError } = await supabase
         .from('messages')
         .insert({
@@ -202,18 +350,28 @@ serve(async (req) => {
           direction: 'inbound',
           whatsapp_message_sid: messageSid,
           whatsapp_status: 'delivered',
-          media_urls: mediaUrls,
+          media_urls: persistedMediaUrls,
+          media_type: mediaType,
           sent_at: new Date().toISOString(),
         })
 
       if (messageError) {
         console.error('Error inserting message:', messageError)
       } else {
-        console.log('Message saved successfully')
+        console.log('Message saved successfully with', persistedMediaUrls.length, 'media files')
       }
 
       // Create notification for contact owner
       if (contactOwnerId) {
+        let notificationBody = body
+        if (persistedMediaUrls.length > 0 && !body) {
+          const mediaLabel = mediaType === 'audio' ? '🎵 Áudio' 
+            : mediaType === 'image' ? '📷 Imagem'
+            : mediaType === 'video' ? '🎬 Vídeo'
+            : '📎 Mídia'
+          notificationBody = mediaLabel
+        }
+
         await supabase
           .from('notifications')
           .insert({
@@ -221,21 +379,26 @@ serve(async (req) => {
             organization_id: orgId,
             type: 'whatsapp_message',
             title: 'Nova mensagem WhatsApp',
-            body: `${profileName || from}: ${body.slice(0, 100)}${body.length > 100 ? '...' : ''}`,
+            body: `${profileName || from}: ${notificationBody.slice(0, 100)}${notificationBody.length > 100 ? '...' : ''}`,
             entity_type: 'message',
             entity_id: threadId,
           })
       }
 
       // Create activity
+      let activityTitle = 'Mensagem WhatsApp recebida'
+      if (persistedMediaUrls.length > 0) {
+        activityTitle = `Mensagem WhatsApp recebida (${mediaType || 'mídia'})`
+      }
+
       await supabase
         .from('activities')
         .insert({
           organization_id: orgId,
           contact_id: contactId,
           activity_type: 'message',
-          title: 'Mensagem WhatsApp recebida',
-          body: body.slice(0, 200),
+          title: activityTitle,
+          body: body.slice(0, 200) || (persistedMediaUrls.length > 0 ? '[Mídia]' : ''),
           occurred_at: new Date().toISOString(),
         })
 
