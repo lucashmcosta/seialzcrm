@@ -6,7 +6,7 @@ import { Textarea } from '@/components/ui/textarea';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { useToast } from '@/hooks/use-toast';
-import { Loader2, Send, Clock, Check, CheckCheck, AlertCircle, Image, FileText, Volume2 } from 'lucide-react';
+import { Loader2, Send, Clock, Check, CheckCheck, AlertCircle, Image, FileText, Volume2, Video } from 'lucide-react';
 import { formatDistanceToNow } from 'date-fns';
 import { ptBR, enUS } from 'date-fns/locale';
 import { WhatsAppTemplateSelector } from './WhatsAppTemplateSelector';
@@ -315,8 +315,21 @@ export function WhatsAppChat({ contactId, threadId: initialThreadId, onThreadCre
       <div className="mb-2 space-y-2">
         {message.media_urls.map((url, i) => {
           // Check if it's audio
-          if (mediaType === 'audio' || url.includes('.ogg') || url.includes('.mp3') || url.includes('.wav')) {
+          if (mediaType === 'audio' || url.match(/\.(ogg|mp3|wav|m4a)$/i)) {
             return <AudioMessagePlayer key={i} src={url} />;
+          }
+
+          // Check if it's video
+          if (mediaType === 'video' || url.match(/\.(mp4|mov|webm|avi)$/i)) {
+            return (
+              <video
+                key={i}
+                src={url}
+                controls
+                className="max-w-full rounded"
+                preload="metadata"
+              />
+            );
           }
 
           // Check if it's an image
@@ -356,6 +369,8 @@ export function WhatsAppChat({ contactId, threadId: initialThreadId, onThreadCre
         return <Image className="w-3 h-3" />;
       case 'audio':
         return <Volume2 className="w-3 h-3" />;
+      case 'video':
+        return <Video className="w-3 h-3" />;
       case 'document':
         return <FileText className="w-3 h-3" />;
       default:
