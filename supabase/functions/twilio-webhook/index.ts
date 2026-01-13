@@ -275,16 +275,29 @@ ${clientElements}
       let enableRecording = false
 
       if (orgId) {
-        const { data: integration } = await supabase
-          .from('organization_integrations')
-          .select('config_values')
-          .eq('organization_id', orgId)
+        // First, get the Twilio Voice integration ID
+        const { data: twilioIntegration } = await supabase
+          .from('admin_integrations')
+          .select('id')
+          .eq('slug', 'twilio-voice')
           .single()
 
-        if (integration?.config_values) {
-          callerId = integration.config_values.phone_number || ''
-          enableRecording = integration.config_values.enable_recording === true
+        if (twilioIntegration) {
+          const { data: integration } = await supabase
+            .from('organization_integrations')
+            .select('config_values')
+            .eq('organization_id', orgId)
+            .eq('integration_id', twilioIntegration.id)
+            .eq('is_enabled', true)
+            .single()
+
+          if (integration?.config_values) {
+            callerId = integration.config_values.phone_number || ''
+            enableRecording = integration.config_values.enable_recording === true
+          }
         }
+
+        console.log('Twilio Voice config - callerId:', callerId, 'enableRecording:', enableRecording)
       }
 
       // Format phone number to E.164
