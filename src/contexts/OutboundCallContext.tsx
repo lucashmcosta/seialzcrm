@@ -12,6 +12,11 @@ interface CallInfo {
   opportunityId?: string;
 }
 
+interface TokenCache {
+  token: string;
+  expires: number;
+}
+
 interface OutboundCallContextType {
   // Start a call
   startCall: (params: CallInfo) => void;
@@ -33,6 +38,9 @@ interface OutboundCallContextType {
   // UI state
   isMinimized: boolean;
   setMinimized: (val: boolean) => void;
+  
+  // Device state
+  isDeviceReady: boolean;
 }
 
 const OutboundCallContext = createContext<OutboundCallContextType | undefined>(undefined);
@@ -45,6 +53,7 @@ export function OutboundCallProvider({ children }: { children: ReactNode }) {
   const [dtmfDigits, setDtmfDigits] = useState('');
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [isMinimized, setIsMinimized] = useState(false);
+  const [isDeviceReady, setIsDeviceReady] = useState(false);
   
   const deviceRef = useRef<Device | null>(null);
   const activeCallRef = useRef<Call | null>(null);
@@ -52,11 +61,94 @@ export function OutboundCallProvider({ children }: { children: ReactNode }) {
   const callIdRef = useRef<string | null>(null);
   const callStartTimeRef = useRef<Date | null>(null);
   const pendingCallRef = useRef<CallInfo | null>(null);
+  const tokenCacheRef = useRef<TokenCache | null>(null);
+  const userDataCacheRef = useRef<{ userId: string; orgId: string } | null>(null);
+  const isInitializingRef = useRef(false);
 
   const isOnCall = status !== 'idle' && status !== 'failed' && status !== 'ended';
 
-  // Cleanup function
-  const cleanup = useCallback(() => {
+  // Get cached token or fetch new one
+  const getToken = useCallback(async (): Promise<string> => {
+    const now = Date.now();
+    
+    // Return cached token if still valid (with 1 minute buffer)
+    if (tokenCacheRef.current && tokenCacheRef.current.expires > now + 60000) {
+      console.log('Using cached token');
+      return tokenCacheRef.current.token;
+    }
+
+    const { data: tokenData, error: tokenError } = await supabase.functions.invoke('twilio-token');
+
+    if (tokenError || !tokenData?.token) {
+      console.error('Token error:', tokenError);
+      throw new Error('Erro ao obter token de acesso');
+    }
+
+    // Cache token for 1 hour
+    tokenCacheRef.current = {
+      token: tokenData.token,
+      expires: now + 3600000, // 1 hour
+    };
+
+    console.log('Token fetched and cached');
+    return tokenData.token;
+  }, []);
+
+  // Get cached user data or fetch it
+  const getUserData = useCallback(async () => {
+    if (userDataCacheRef.current) {
+      return userDataCacheRef.current;
+    }
+
+    const { data: userData } = await supabase.auth.getUser();
+    const { data: userProfile } = await supabase
+      .from('users')
+      .select('id')
+      .eq('auth_user_id', userData.user?.id)
+      .single();
+
+    const { data: userOrg } = await supabase
+      .from('user_organizations')
+      .select('organization_id')
+      .eq('user_id', userProfile?.id)
+      .eq('is_active', true)
+      .single();
+
+    if (userOrg && userProfile) {
+      userDataCacheRef.current = {
+        userId: userProfile.id,
+        orgId: userOrg.organization_id,
+      };
+      return userDataCacheRef.current;
+    }
+
+    return null;
+  }, []);
+
+  // Cleanup call state only (keep device)
+  const cleanupCall = useCallback(() => {
+    if (activeCallRef.current) {
+      activeCallRef.current.disconnect();
+      activeCallRef.current = null;
+    }
+    if (timerRef.current) {
+      clearInterval(timerRef.current);
+      timerRef.current = null;
+    }
+    setStatus(isDeviceReady ? 'ready' : 'idle');
+    setDuration(0);
+    setIsMuted(false);
+    setDtmfDigits('');
+    setErrorMessage(null);
+    setCallInfo(null);
+    setIsMinimized(false);
+    callIdRef.current = null;
+    callStartTimeRef.current = null;
+    pendingCallRef.current = null;
+  }, [isDeviceReady]);
+
+  // Full cleanup (including device)
+  const fullCleanup = useCallback(() => {
     if (activeCallRef.current) {
       activeCallRef.current.disconnect();
       activeCallRef.current = null;
@@ -76,9 +168,13 @@ export function OutboundCallProvider({ children }: { children: ReactNode }) {
     setErrorMessage(null);
     setCallInfo(null);
     setIsMinimized(false);
+    setIsDeviceReady(false);
     callIdRef.current = null;
     callStartTimeRef.current = null;
     pendingCallRef.current = null;
+    tokenCacheRef.current = null;
+    userDataCacheRef.current = null;
+    isInitializingRef.current = false;
   }, []);
 
   // Update call record in database
@@ -105,7 +201,36 @@ export function OutboundCallProvider({ children }: { children: ReactNode }) {
     }
   }, []);
 
-  // Make the actual call
+  // Create call record in parallel (non-blocking)
+  const createCallRecordAsync = useCallback(async (phoneNumber: string, contactId?: string, opportunityId?: string) => {
+    try {
+      const userData = await getUserData();
+      if (!userData) return;
+
+      callStartTimeRef.current = new Date();
+      
+      const { data: newCall } = await supabase.from('calls').insert({
+        organization_id: userData.orgId,
+        user_id: userData.userId,
+        contact_id: contactId,
+        opportunity_id: opportunityId,
+        direction: 'outgoing',
+        call_type: 'made',
+        to_number: phoneNumber,
+        status: 'queued',
+        started_at: callStartTimeRef.current.toISOString(),
+      }).select('id').single();
+
+      if (newCall) {
+        callIdRef.current = newCall.id;
+        console.log('Call record created with ID:', newCall.id);
+      }
+    } catch (dbError) {
+      console.error('Error recording call:', dbError);
+    }
+  }, [getUserData]);
+
+  // Make the actual call (fast path - device already ready)
   const makeCall = useCallback(async () => {
     if (!deviceRef.current || !pendingCallRef.current) {
       console.log('Device or pending call not ready');
@@ -118,47 +243,10 @@ export function OutboundCallProvider({ children }: { children: ReactNode }) {
       setStatus('connecting');
       console.log('Connecting call to:', phoneNumber);
 
-      // Create call record BEFORE connecting
-      try {
-        const { data: userData } = await supabase.auth.getUser();
-        const { data: userProfile } = await supabase
-          .from('users')
-          .select('id')
-          .eq('auth_user_id', userData.user?.id)
-          .single();
+      // Start call record creation in PARALLEL (non-blocking)
+      createCallRecordAsync(phoneNumber, contactId, opportunityId);
 
-        const { data: userOrg } = await supabase
-          .from('user_organizations')
-          .select('organization_id')
-          .eq('user_id', userProfile?.id)
-          .eq('is_active', true)
-          .single();
-
-        if (userOrg && userProfile) {
-          callStartTimeRef.current = new Date();
-          
-          const { data: newCall } = await supabase.from('calls').insert({
-            organization_id: userOrg.organization_id,
-            user_id: userProfile.id,
-            contact_id: contactId,
-            opportunity_id: opportunityId,
-            direction: 'outgoing',
-            call_type: 'made',
-            to_number: phoneNumber,
-            status: 'queued',
-            started_at: callStartTimeRef.current.toISOString(),
-          }).select('id').single();
-
-          if (newCall) {
-            callIdRef.current = newCall.id;
-            console.log('Call record created with ID:', newCall.id);
-          }
-        }
-      } catch (dbError) {
-        console.error('Error recording call:', dbError);
-      }
-
-      // Connect the call
+      // Connect the call IMMEDIATELY
       const call = await deviceRef.current.connect({
         params: {
           To: phoneNumber,
@@ -212,69 +300,117 @@ export function OutboundCallProvider({ children }: { children: ReactNode }) {
       setErrorMessage(error.message || 'Erro ao conectar chamada');
       setStatus('failed');
     }
-  }, [updateCallRecord]);
+  }, [updateCallRecord, createCallRecordAsync]);
 
-  // Initialize device
+  // Initialize device (persistent - runs once)
   const initializeDevice = useCallback(async () => {
+    // Prevent multiple initializations
+    if (isInitializingRef.current || deviceRef.current) {
+      console.log('Device already initialized or initializing');
+      return;
+    }
+
     try {
+      isInitializingRef.current = true;
       setStatus('initializing');
       setErrorMessage(null);
 
       const { data: session } = await supabase.auth.getSession();
       if (!session?.session?.access_token) {
-        throw new Error('Não autenticado');
+        console.log('Not authenticated, skipping device initialization');
+        isInitializingRef.current = false;
+        setStatus('idle');
+        return;
       }
 
-      const { data: tokenData, error: tokenError } = await supabase.functions.invoke('twilio-token');
+      const token = await getToken();
+      console.log('Got access token, initializing persistent device...');
 
-      if (tokenError || !tokenData?.token) {
-        console.error('Token error:', tokenError);
-        throw new Error('Erro ao obter token de acesso');
-      }
-
-      console.log('Got access token, initializing device...');
-
-      const device = new Device(tokenData.token, {
+      const device = new Device(token, {
         codecPreferences: [Call.Codec.PCMU, Call.Codec.Opus],
         allowIncomingWhileBusy: false,
       });
 
       device.on('registered', () => {
-        console.log('Twilio Device registered');
+        console.log('Twilio Device registered and ready');
         setStatus('ready');
+        setIsDeviceReady(true);
+        isInitializingRef.current = false;
       });
 
       device.on('error', (error) => {
         console.error('Twilio Device error:', error);
         setErrorMessage(error.message || 'Erro no dispositivo de áudio');
         setStatus('failed');
+        setIsDeviceReady(false);
+        isInitializingRef.current = false;
       });
 
       device.on('unregistered', () => {
         console.log('Twilio Device unregistered');
+        setIsDeviceReady(false);
+      });
+
+      device.on('tokenWillExpire', async () => {
+        console.log('Token will expire, refreshing...');
+        try {
+          // Clear cache to force refresh
+          tokenCacheRef.current = null;
+          const newToken = await getToken();
+          device.updateToken(newToken);
+          console.log('Token refreshed successfully');
+        } catch (error) {
+          console.error('Error refreshing token:', error);
+        }
       });
 
       await device.register();
       deviceRef.current = device;
 
+      // Pre-cache user data for faster call record creation
+      getUserData();
+
     } catch (error: any) {
       console.error('Device initialization error:', error);
       setErrorMessage(error.message || 'Erro ao inicializar chamada');
       setStatus('failed');
+      isInitializingRef.current = false;
     }
+  }, [getToken, getUserData]);
+
+  // Initialize device on mount (persistent)
+  useEffect(() => {
+    // Small delay to ensure auth is ready
+    const timer = setTimeout(() => {
+      initializeDevice();
+    }, 1000);
+
+    return () => {
+      clearTimeout(timer);
+      fullCleanup();
+    };
   }, []);
 
   // Start a new call
   const startCall = useCallback((params: CallInfo) => {
-    // Clean up any existing call first
+    // Clean up any existing call first (but keep device)
     if (isOnCall) {
-      cleanup();
+      cleanupCall();
     }
     
     setCallInfo(params);
     pendingCallRef.current = params;
-    initializeDevice();
-  }, [isOnCall, cleanup, initializeDevice]);
+
+    // If device is ready, start call immediately
+    if (isDeviceReady && deviceRef.current) {
+      console.log('Device ready, starting call immediately');
+      makeCall();
+    } else {
+      // Device not ready, initialize it first
+      console.log('Device not ready, initializing...');
+      initializeDevice();
+    }
+  }, [isOnCall, cleanupCall, isDeviceReady, makeCall, initializeDevice]);
 
   // End the current call
   const endCall = useCallback(() => {
@@ -285,9 +421,9 @@ export function OutboundCallProvider({ children }: { children: ReactNode }) {
     
     // Cleanup after a short delay to show "ended" state
     setTimeout(() => {
-      cleanup();
+      cleanupCall();
     }, 1500);
-  }, [cleanup]);
+  }, [cleanupCall]);
 
   // Toggle mute
   const toggleMute = useCallback(() => {
@@ -307,9 +443,9 @@ export function OutboundCallProvider({ children }: { children: ReactNode }) {
     }
   }, [status]);
 
-  // Effect: Make call when device is ready
+  // Effect: Make call when device becomes ready (for pending calls)
   useEffect(() => {
-    if (status === 'ready' && pendingCallRef.current) {
+    if (status === 'ready' && pendingCallRef.current && !activeCallRef.current) {
       makeCall();
     }
   }, [status, makeCall]);
@@ -344,6 +480,7 @@ export function OutboundCallProvider({ children }: { children: ReactNode }) {
     dtmfDigits,
     isMinimized,
     setMinimized: setIsMinimized,
+    isDeviceReady,
   };
 
   return (
