@@ -19,6 +19,7 @@ import { ApiWebhooksSettings } from '@/components/settings/ApiWebhooksSettings';
 import { ThemeSettings } from '@/components/settings/ThemeSettings';
 import { AuditLogs } from './settings/AuditLogs';
 import { Trash } from './settings/Trash';
+import WhatsAppTemplates from './settings/WhatsAppTemplates';
 import { SearchLg } from '@untitledui/icons';
 
 interface TabConfig {
@@ -45,6 +46,7 @@ export default function Settings() {
     { id: 'customFields', label: t('settings.customFields'), permission: 'canManageSettings' },
     { id: 'tags', label: t('settings.tags'), permission: 'canManageSettings' },
     { id: 'integrations', label: t('settings.integrations'), permission: 'canManageIntegrations' },
+    { id: 'whatsappTemplates', label: 'WhatsApp Templates', permission: 'canManageIntegrations' },
     { id: 'apiWebhooks', label: 'API & Webhooks', permission: 'canManageIntegrations' },
     { id: 'auditLogs', label: t('settings.auditLogs'), permission: 'canManageSettings' },
     { id: 'trash', label: t('settings.trash'), permission: 'canManageSettings' },
@@ -156,6 +158,10 @@ export default function Settings() {
 
               <TabsContent value="integrations">
                 <IntegrationsSettings />
+              </TabsContent>
+
+              <TabsContent value="whatsappTemplates">
+                <WhatsAppTemplates />
               </TabsContent>
 
               <TabsContent value="apiWebhooks">
