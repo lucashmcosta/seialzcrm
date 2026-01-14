@@ -247,6 +247,22 @@ serve(async (req) => {
     formData.append('To', whatsappTo)
     formData.append('StatusCallback', statusCallbackUrl)
 
+    // Handle reply context - get the original message's Twilio SID
+    if (replyToMessageId) {
+      const { data: originalMessage, error: replyError } = await supabase
+        .from('messages')
+        .select('whatsapp_message_sid')
+        .eq('id', replyToMessageId)
+        .single()
+
+      if (originalMessage?.whatsapp_message_sid) {
+        console.log('Adding reply context - RepliedMessageSid:', originalMessage.whatsapp_message_sid)
+        formData.append('RepliedMessageSid', originalMessage.whatsapp_message_sid)
+      } else {
+        console.log('Could not resolve reply context:', replyError?.message || 'No SID found')
+      }
+    }
+
     if (contentSid) {
       formData.append('ContentSid', contentSid)
       if (templateVariables) {

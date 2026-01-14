@@ -240,6 +240,7 @@ serve(async (req) => {
       const profileName = params.ProfileName || ''
       const waId = params.WaId || ''
       const numMedia = parseInt(params.NumMedia || '0')
+      const originalRepliedMessageSid = params.OriginalRepliedMessageSid || null
       
       // Collect media URLs and content types
       const rawMediaUrls: string[] = []
@@ -382,6 +383,23 @@ serve(async (req) => {
         }
       }
 
+      // Resolve reply_to_message_id from OriginalRepliedMessageSid (if customer replied to a message)
+      let replyToMessageId: string | null = null
+      if (originalRepliedMessageSid) {
+        const { data: originalMessage } = await supabase
+          .from('messages')
+          .select('id')
+          .eq('whatsapp_message_sid', originalRepliedMessageSid)
+          .single()
+
+        if (originalMessage) {
+          replyToMessageId = originalMessage.id
+          console.log('Resolved reply context - reply_to_message_id:', replyToMessageId)
+        } else {
+          console.log('Could not find original message for reply:', originalRepliedMessageSid)
+        }
+      }
+
       // Insert message with persisted media URLs
       const { error: messageError } = await supabase
         .from('messages')
@@ -395,12 +413,13 @@ serve(async (req) => {
           media_urls: persistedMediaUrls,
           media_type: mediaType,
           sent_at: new Date().toISOString(),
+          reply_to_message_id: replyToMessageId,
         })
 
       if (messageError) {
         console.error('Error inserting message:', messageError)
       } else {
-        console.log('Message saved successfully with', persistedMediaUrls.length, 'media files')
+        console.log('Message saved successfully with', persistedMediaUrls.length, 'media files', replyToMessageId ? '(reply)' : '')
       }
 
       // Create notification for contact owner
