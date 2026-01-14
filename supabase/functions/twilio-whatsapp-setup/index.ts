@@ -144,7 +144,7 @@ serve(async (req) => {
           const updateServiceUrl = `https://messaging.twilio.com/v1/Services/${messagingServiceSid}`
           // Use manual encoding to avoid double-encoding the URLs
           const updateBody = `InboundRequestUrl=${encodeURIComponent(inboundWebhookUrl)}&InboundMethod=POST&StatusCallback=${encodeURIComponent(statusWebhookUrl)}`
-          await fetch(updateServiceUrl, {
+          const updateResponse = await fetch(updateServiceUrl, {
             method: 'POST',
             headers: {
               'Authorization': authHeader,
@@ -152,7 +152,18 @@ serve(async (req) => {
             },
             body: updateBody
           })
-          console.log('Updated webhooks on existing Messaging Service')
+          
+          if (updateResponse.ok) {
+            const updateData = await updateResponse.json()
+            console.log('Updated webhooks on Messaging Service:', {
+              sid: updateData.sid,
+              inbound_request_url: updateData.inbound_request_url,
+              status_callback: updateData.status_callback
+            })
+          } else {
+            const errorText = await updateResponse.text()
+            console.error('Failed to update Messaging Service webhooks:', errorText)
+          }
         }
       }
 
@@ -217,6 +228,37 @@ serve(async (req) => {
         }
       }
     }
+
+    // Step 4.5: Configure webhooks directly on phone numbers (fallback/override)
+    // This ensures webhooks work even if Messaging Service webhook isn't being used
+    let numbersWithWebhook: string[] = []
+    
+    for (const sender of whatsappSenders) {
+      try {
+        const updateNumberUrl = `https://api.twilio.com/2010-04-01/Accounts/${accountSid}/IncomingPhoneNumbers/${sender.sid}.json`
+        
+        const numberUpdateResponse = await fetch(updateNumberUrl, {
+          method: 'POST',
+          headers: {
+            'Authorization': authHeader,
+            'Content-Type': 'application/x-www-form-urlencoded',
+          },
+          body: `SmsUrl=${encodeURIComponent(inboundWebhookUrl)}&SmsMethod=POST&StatusCallback=${encodeURIComponent(statusWebhookUrl)}`
+        })
+
+        if (numberUpdateResponse.ok) {
+          numbersWithWebhook.push(sender.phone_number)
+          console.log('Updated webhook on number:', sender.phone_number)
+        } else {
+          const errorText = await numberUpdateResponse.text()
+          console.warn('Could not update webhook on number:', sender.phone_number, errorText)
+        }
+      } catch (e) {
+        console.warn('Error updating number webhook:', sender.phone_number, e)
+      }
+    }
+    
+    console.log('Numbers with direct webhook configured:', numbersWithWebhook)
 
     // Step 5: Sync templates from Twilio Content API
     let templates: any[] = []
