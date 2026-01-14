@@ -171,6 +171,7 @@ export default function MessagesList() {
   const { t } = useTranslation(locale as 'pt-BR' | 'en-US');
   const { toast } = useToast();
   const scrollRef = useRef<HTMLDivElement>(null);
+  const textareaRef = useRef<HTMLTextAreaElement>(null);
   const dateLocale = locale === 'pt-BR' ? ptBR : enUS;
 
   const [selectedThreadId, setSelectedThreadId] = useState<string | null>(null);
@@ -611,6 +612,16 @@ export default function MessagesList() {
     }
   };
 
+  // Auto-adjust textarea height as user types
+  const adjustTextareaHeight = () => {
+    const textarea = textareaRef.current;
+    if (textarea) {
+      textarea.style.height = 'auto';
+      const newHeight = Math.min(textarea.scrollHeight, 150);
+      textarea.style.height = `${newHeight}px`;
+    }
+  };
+
   const renderStatusIcon = (status: string | null) => {
     switch (status) {
       case 'sending':
@@ -936,17 +947,25 @@ export default function MessagesList() {
                         </Popover>
                       </div>
                       <Textarea
+                        ref={textareaRef}
                         placeholder={locale === 'pt-BR' ? 'Digite uma mensagem...' : 'Type a message...'}
                         value={messageText}
-                        onChange={(e) => setMessageText(e.target.value)}
+                        onChange={(e) => {
+                          setMessageText(e.target.value);
+                          adjustTextareaHeight();
+                        }}
                         onKeyDown={(e) => {
                           if (e.key === 'Enter' && !e.shiftKey) {
                             e.preventDefault();
                             handleSendMessage();
+                            // Reset textarea height after sending
+                            if (textareaRef.current) {
+                              textareaRef.current.style.height = 'auto';
+                            }
                           }
                         }}
                         rows={1}
-                        className="flex-1 resize-none min-h-[40px]"
+                        className="flex-1 resize-none min-h-[40px] max-h-[150px] overflow-y-auto"
                         disabled={!isIn24hWindow && messages.length > 0}
                       />
                       <Button
