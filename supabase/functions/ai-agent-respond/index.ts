@@ -11,6 +11,7 @@ interface AgentRequest {
   contactId: string;
   threadId: string;
   message: string;
+  isTestMode?: boolean;
 }
 
 interface WorkingHours {
@@ -162,9 +163,9 @@ serve(async (req) => {
   );
 
   try {
-    const { agentId, contactId, threadId, message }: AgentRequest = await req.json();
+    const { agentId, contactId, threadId, message, isTestMode }: AgentRequest = await req.json();
 
-    console.log(`AI Agent processing - Agent: ${agentId}, Contact: ${contactId}, Thread: ${threadId}`);
+    console.log(`AI Agent processing - Agent: ${agentId}, Contact: ${contactId}, Thread: ${threadId}, TestMode: ${isTestMode}`);
 
     // 1. Fetch agent configuration
     const { data: agent, error: agentError } = await supabase
@@ -413,7 +414,23 @@ serve(async (req) => {
 
     const responseTime = Date.now() - startTime;
 
-    // 7. Send response via WhatsApp
+    // 7. Check if this is test mode - don't send to WhatsApp, just return response
+    if (isTestMode) {
+      console.log(`AI Agent TEST MODE response - ${responseTime}ms, ${tokensUsed} tokens`);
+      
+      return new Response(
+        JSON.stringify({ 
+          success: true, 
+          response: aiResponse,
+          responseTime,
+          tokensUsed,
+          isTestMode: true,
+        }),
+        { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      );
+    }
+
+    // 8. Send response via WhatsApp (production mode)
     const { error: sendError } = await supabase.functions.invoke('twilio-whatsapp-send', {
       body: {
         organizationId,
@@ -421,6 +438,8 @@ serve(async (req) => {
         threadId,
         message: aiResponse,
         isAgentMessage: true,
+        agentId: agent.id,
+        senderName: agent.name,
       }
     });
 
@@ -429,7 +448,7 @@ serve(async (req) => {
       throw new Error('Failed to send WhatsApp message');
     }
 
-    // 8. Log successful interaction
+    // 9. Log successful interaction
     await supabase.from('ai_agent_logs').insert({
       organization_id: organizationId,
       agent_id: agentId,
@@ -449,7 +468,7 @@ serve(async (req) => {
       status: 'success',
     });
 
-    // 9. Log to ai_usage_logs for billing/analytics
+    // 10. Log to ai_usage_logs for billing/analytics
     await supabase.from('ai_usage_logs').insert({
       organization_id: organizationId,
       integration_slug: integrationSlug,

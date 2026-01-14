@@ -35,7 +35,8 @@ import { useQuery } from '@tanstack/react-query';
 import { formatDistanceToNow } from 'date-fns';
 import { ptBR, enUS } from 'date-fns/locale';
 import { useToast } from '@/hooks/use-toast';
-import { Loader2, Check, CheckCheck, Clock, AlertCircle, Sparkles, SpellCheck, Briefcase, Smile } from 'lucide-react';
+import { Loader2, Check, CheckCheck, Clock, AlertCircle, Sparkles, SpellCheck, Briefcase, Smile, Bot, MessageSquarePlus } from 'lucide-react';
+import { AgentMessageFeedbackDialog } from '@/components/whatsapp/AgentMessageFeedbackDialog';
 import { WhatsAppTemplateSelector } from '@/components/whatsapp/WhatsAppTemplateSelector';
 import { AudioRecorder } from '@/components/whatsapp/AudioRecorder';
 import { MediaUploadButton } from '@/components/whatsapp/MediaUploadButton';
@@ -118,6 +119,10 @@ interface Message {
     content: string;
     direction: string;
   } | null;
+  // New fields for sender identification
+  sender_type: 'user' | 'agent' | 'system' | null;
+  sender_name: string | null;
+  sender_agent_id: string | null;
 }
 
 interface ChatListItemProps extends ListBoxItemProps<ChatThread> {
@@ -209,6 +214,10 @@ export default function MessagesList() {
   const [aiMenuOpen, setAiMenuOpen] = useState(false);
   const [aiImproving, setAiImproving] = useState(false);
   const { generate: generateAI } = useAI();
+  
+  // Agent feedback state
+  const [feedbackMessage, setFeedbackMessage] = useState<Message | null>(null);
+  const [showFeedbackDialog, setShowFeedbackDialog] = useState(false);
   
   // Check if organization has AI enabled
   const { data: hasAI } = useQuery({
@@ -399,6 +408,7 @@ export default function MessagesList() {
         .from('messages')
         .select(`
           id, content, direction, sent_at, whatsapp_status, media_urls, media_type, error_message, reply_to_message_id,
+          sender_type, sender_name, sender_agent_id,
           reply_to_message:reply_to_message_id (content, direction)
         `)
         .eq('thread_id', threadId)
@@ -448,6 +458,9 @@ export default function MessagesList() {
       error_message: null,
       reply_to_message_id: replyingTo?.id || null,
       reply_to_message: replyingTo ? { content: replyingTo.content, direction: replyingTo.direction } : null,
+      sender_type: 'user',
+      sender_name: userProfile?.full_name || null,
+      sender_agent_id: null,
     };
 
     // Add temp message and clear input immediately
@@ -518,6 +531,9 @@ export default function MessagesList() {
       error_message: null,
       reply_to_message_id: null,
       reply_to_message: null,
+      sender_type: 'user',
+      sender_name: userProfile?.full_name || null,
+      sender_agent_id: null,
     };
 
     setMessages((prev) => [...prev, tempMessage]);
@@ -599,6 +615,9 @@ export default function MessagesList() {
       error_message: null,
       reply_to_message_id: savedReplyTo?.id || null,
       reply_to_message: savedReplyTo ? { content: savedReplyTo.content, direction: savedReplyTo.direction } : null,
+      sender_type: 'user',
+      sender_name: userProfile?.full_name || null,
+      sender_agent_id: null,
     };
 
     setReplyingTo(null);
@@ -855,6 +874,34 @@ export default function MessagesList() {
                                     : 'bg-muted'
                                 )}
                               >
+                                {/* Agent Badge + Feedback Button for agent messages */}
+                                {isOutbound && message.sender_type === 'agent' && (
+                                  <div className="flex items-center gap-2 mb-2">
+                                    <Badge color="purple" size="sm" icon={<Bot className="w-3 h-3" />}>
+                                      {message.sender_name || 'Agente IA'}
+                                    </Badge>
+                                    <Button
+                                      variant="ghost"
+                                      size="sm"
+                                      className="h-6 px-2 text-xs opacity-0 group-hover:opacity-100 transition-opacity"
+                                      onClick={() => {
+                                        setFeedbackMessage(message);
+                                        setShowFeedbackDialog(true);
+                                      }}
+                                    >
+                                      <MessageSquarePlus className="w-3 h-3 mr-1" />
+                                      Feedback
+                                    </Button>
+                                  </div>
+                                )}
+                                
+                                {/* User name for human messages */}
+                                {isOutbound && message.sender_type === 'user' && message.sender_name && (
+                                  <div className="text-xs text-muted-foreground/70 mb-1">
+                                    {message.sender_name}
+                                  </div>
+                                )}
+                                
                                 {/* Quoted Message */}
                                 {message.reply_to_message && (
                                   <QuotedMessage
@@ -1136,6 +1183,24 @@ export default function MessagesList() {
           </div>
         </DialogContent>
       </Dialog>
+
+      {/* Agent Message Feedback Dialog */}
+      {feedbackMessage && organization?.id && (
+        <AgentMessageFeedbackDialog
+          open={showFeedbackDialog}
+          onOpenChange={setShowFeedbackDialog}
+          message={{
+            id: feedbackMessage.id,
+            content: feedbackMessage.content,
+            sender_agent_id: feedbackMessage.sender_agent_id,
+            sender_name: feedbackMessage.sender_name,
+          }}
+          organizationId={organization.id}
+          onFeedbackApplied={() => {
+            setFeedbackMessage(null);
+          }}
+        />
+      )}
     </Layout>
   );
 }

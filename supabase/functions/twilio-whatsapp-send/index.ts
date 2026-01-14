@@ -23,7 +23,11 @@ serve(async (req) => {
       mediaUrls,
       mediaType,
       userId,
-      replyToMessageId
+      replyToMessageId,
+      // New fields for agent identification
+      isAgentMessage,
+      agentId,
+      senderName,
     } = await req.json()
 
     if (!organizationId || !contactId) {
@@ -209,6 +213,17 @@ serve(async (req) => {
       allMediaUrls.push(...mediaUrls)
     }
 
+    // Get sender name if userId provided and not already specified
+    let resolvedSenderName = senderName || null
+    if (!resolvedSenderName && userId && !isAgentMessage) {
+      const { data: userData } = await supabase
+        .from('users')
+        .select('full_name')
+        .eq('id', userId)
+        .single()
+      resolvedSenderName = userData?.full_name || null
+    }
+
     // Insert message record first (with status 'sending')
     const { data: insertedMessage, error: insertError } = await supabase
       .from('messages')
@@ -224,6 +239,10 @@ serve(async (req) => {
         media_type: mediaType || null,
         sent_at: new Date().toISOString(),
         reply_to_message_id: replyToMessageId || null,
+        // New sender identification fields
+        sender_type: isAgentMessage ? 'agent' : 'user',
+        sender_name: resolvedSenderName,
+        sender_agent_id: isAgentMessage && agentId ? agentId : null,
       })
       .select('id')
       .single()
