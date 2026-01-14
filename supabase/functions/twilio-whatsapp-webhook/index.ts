@@ -160,19 +160,44 @@ async function persistMedia(
 }
 
 serve(async (req) => {
-  if (req.method === 'OPTIONS') {
-    return new Response(null, { headers: corsHeaders })
-  }
-
   const url = new URL(req.url)
   const path = url.pathname.split('/').pop()
   const orgId = url.searchParams.get('orgId')
 
-  console.log(`WhatsApp Webhook - Path: ${path}, OrgId: ${orgId}`)
+  // Enhanced logging for debugging
+  console.log(`=== WhatsApp Webhook Request ===`)
+  console.log(`Method: ${req.method}`)
+  console.log(`Path: ${path}`)
+  console.log(`Full URL: ${req.url}`)
+  console.log(`OrgId: ${orgId}`)
+  console.log(`Content-Type: ${req.headers.get('content-type')}`)
+  console.log(`User-Agent: ${req.headers.get('user-agent')}`)
+
+  if (req.method === 'OPTIONS') {
+    return new Response(null, { headers: corsHeaders })
+  }
+
+  // Handle /ping route for connectivity testing
+  if (path === 'ping') {
+    console.log('Ping received - webhook is accessible!')
+    return new Response('pong', { 
+      status: 200, 
+      headers: { ...corsHeaders, 'Content-Type': 'text/plain' } 
+    })
+  }
+
+  // Handle GET requests (some misconfigured webhooks use GET)
+  if (req.method === 'GET') {
+    console.log('GET request received - Search params:', Object.fromEntries(url.searchParams))
+    return new Response('OK - Use POST for webhooks', { 
+      status: 200, 
+      headers: { ...corsHeaders, 'Content-Type': 'text/plain' } 
+    })
+  }
 
   if (!orgId) {
     console.error('Missing orgId parameter')
-    return new Response('Missing orgId', { status: 400 })
+    return new Response('Missing orgId', { status: 400, headers: corsHeaders })
   }
 
   const supabase = createClient(
@@ -181,11 +206,28 @@ serve(async (req) => {
   )
 
   try {
-    const formData = await req.formData()
-    const params: Record<string, string> = {}
-    formData.forEach((value, key) => {
-      params[key] = value.toString()
-    })
+    // Parse form data with error handling
+    let params: Record<string, string> = {}
+    try {
+      const formData = await req.formData()
+      formData.forEach((value, key) => {
+        params[key] = value.toString()
+      })
+    } catch (parseError) {
+      console.error('Error parsing form data:', parseError)
+      // Try to read as text for debugging
+      try {
+        const bodyText = await req.text()
+        console.log('Raw body (first 500 chars):', bodyText.slice(0, 500))
+      } catch (e) {
+        console.log('Could not read body as text')
+      }
+      // Return 200 to prevent Twilio retries
+      return new Response('<?xml version="1.0" encoding="UTF-8"?><Response></Response>', { 
+        status: 200, 
+        headers: { ...corsHeaders, 'Content-Type': 'text/xml' } 
+      })
+    }
 
     console.log(`WhatsApp Webhook ${path} params:`, JSON.stringify(params, null, 2))
 
