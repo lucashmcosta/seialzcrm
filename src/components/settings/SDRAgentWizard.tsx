@@ -204,6 +204,7 @@ export function SDRAgentWizard({
   const [aiProvider, setAiProvider] = useState<string>(existingAgent?.ai_provider || 'auto');
   const [aiModel, setAiModel] = useState<string>(existingAgent?.ai_model || '');
   const [maxMessages, setMaxMessages] = useState<number>(existingAgent?.max_messages_per_conversation ?? 10);
+  const [agentName, setAgentName] = useState<string>(existingAgent?.name || '');
   const [newFeedback, setNewFeedback] = useState('');
   const [isGenerating, setIsGenerating] = useState(false);
   const [isRefining, setIsRefining] = useState(false);
@@ -248,6 +249,7 @@ export function SDRAgentWizard({
       setAiProvider(existingAgent?.ai_provider || 'auto');
       setAiModel(existingAgent?.ai_model || '');
       setMaxMessages(existingAgent?.max_messages_per_conversation ?? 10);
+      setAgentName(existingAgent?.name || '');
     }
   }, [open, existingAgent]);
 
@@ -483,7 +485,7 @@ export function SDRAgentWizard({
     try {
       const agentData = {
         organization_id: organizationId,
-        name: existingAgent?.name || `Agente ${wizardData.companyName}`,
+        name: agentName.trim() || `Agente ${wizardData.companyName}`,
         custom_instructions: wizardData.generatedPrompt,
         wizard_data: JSON.parse(JSON.stringify(wizardData)),
         feedback_history: JSON.parse(JSON.stringify(feedbackHistory)),
@@ -1198,6 +1200,20 @@ export function SDRAgentWizard({
             {isEditMode ? 'Editar Agente SDR' : 'Configurar Agente SDR'}
           </DialogTitle>
         </DialogHeader>
+
+        {/* Agent Name Field */}
+        <div className="space-y-2 pb-4 border-b">
+          <Label htmlFor="agent-name">Nome do Agente</Label>
+          <Input
+            id="agent-name"
+            value={agentName}
+            onChange={(e) => setAgentName(e.target.value)}
+            placeholder={`Agente ${wizardData.companyName || 'SDR'}`}
+          />
+          <p className="text-xs text-muted-foreground">
+            Deixe vazio para usar o nome padrão baseado na empresa
+          </p>
+        </div>
 
         {isEditMode ? (
           // Edit mode: show tabs
