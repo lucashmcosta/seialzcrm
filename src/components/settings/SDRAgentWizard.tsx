@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -10,7 +10,7 @@ import { Progress } from '@/components/ui/progress';
 import { Badge } from '@/components/ui/badge';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { ScrollArea } from '@/components/ui/scroll-area';
-import { Loader2, RefreshCw, ArrowLeft, ArrowRight, Check, Sparkles, Building2, Package, Target, FileText, MessageSquarePlus, History, Trash2 } from 'lucide-react';
+import { Loader2, RefreshCw, ArrowLeft, ArrowRight, Check, Sparkles, Building2, Package, Target, FileText, MessageSquarePlus, History, Trash2, Send, Bot, User, ThumbsUp, ThumbsDown, Beaker } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
 import { format } from 'date-fns';
@@ -104,9 +104,10 @@ export function SDRAgentWizard({
   onSuccess 
 }: SDRAgentWizardProps) {
   const isEditMode = !!(existingAgent?.id && existingAgent?.custom_instructions);
+  const messagesEndRef = useRef<HTMLDivElement>(null);
   
   const [currentStep, setCurrentStep] = useState(isEditMode ? 4 : 1);
-  const [activeTab, setActiveTab] = useState<'prompt' | 'feedback' | 'wizard'>('prompt');
+  const [activeTab, setActiveTab] = useState<'prompt' | 'feedback' | 'wizard' | 'test'>('prompt');
   const [wizardData, setWizardData] = useState<WizardData>(() => {
     if (existingAgent?.wizard_data) {
       return {
@@ -123,6 +124,16 @@ export function SDRAgentWizard({
   const [isGenerating, setIsGenerating] = useState(false);
   const [isRefining, setIsRefining] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
+  
+  // Test mode state
+  interface TestMessage {
+    id: string;
+    role: 'user' | 'agent';
+    content: string;
+  }
+  const [testMessages, setTestMessages] = useState<TestMessage[]>([]);
+  const [testInput, setTestInput] = useState('');
+  const [isSimulating, setIsSimulating] = useState(false);
 
   // Reset state when dialog opens/closes or agent changes
   useEffect(() => {
@@ -131,7 +142,8 @@ export function SDRAgentWizard({
       setCurrentStep(isEdit ? 4 : 1);
       setActiveTab('prompt');
       setNewFeedback('');
-      
+      setTestMessages([]);
+      setTestInput('');
       if (existingAgent?.wizard_data) {
         setWizardData({
           ...existingAgent.wizard_data,
@@ -249,6 +261,107 @@ export function SDRAgentWizard({
     setFeedbackHistory(prev => prev.filter(f => f.id !== id));
   };
 
+  // Test mode simulation
+  const simulateMessage = async () => {
+    if (!testInput.trim() || !existingAgent?.id) return;
+    
+    // Add user message
+    const userMessage: TestMessage = {
+      id: crypto.randomUUID(),
+      role: 'user',
+      content: testInput,
+    };
+    setTestMessages(prev => [...prev, userMessage]);
+    setTestInput('');
+    setIsSimulating(true);
+    
+    // Scroll to bottom
+    setTimeout(() => {
+      messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+    }, 100);
+    
+    try {
+      const { data, error } = await supabase.functions.invoke('ai-agent-respond', {
+        body: {
+          agentId: existingAgent.id,
+          contactId: 'test-contact',
+          threadId: 'test-thread',
+          message: testInput,
+          isTestMode: true,
+        },
+      });
+      
+      if (error) throw error;
+      
+      if (data?.response) {
+        const agentMessage: TestMessage = {
+          id: crypto.randomUUID(),
+          role: 'agent',
+          content: data.response,
+        };
+        setTestMessages(prev => [...prev, agentMessage]);
+        
+        // Scroll to bottom
+        setTimeout(() => {
+          messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+        }, 100);
+      }
+    } catch (error: any) {
+      console.error('Error simulating:', error);
+      toast.error(error.message || 'Erro ao simular resposta. Verifique se você tem uma integração de IA configurada.');
+    } finally {
+      setIsSimulating(false);
+    }
+  };
+
+  const handleTestFeedback = async (testMessage: TestMessage, isPositive: boolean) => {
+    if (isPositive) {
+      toast.success('Resposta marcada como positiva!');
+      return;
+    }
+    
+    // Ask for feedback
+    const feedback = prompt('Como o agente deveria ter respondido?');
+    if (!feedback) return;
+    
+    // Apply feedback
+    try {
+      const formattedFeedback = `Quando o cliente disse algo similar a "${testMessages.find(m => m.role === 'user' && testMessages.indexOf(m) < testMessages.indexOf(testMessage))?.content || 'mensagem do cliente'}", ao invés de responder "${testMessage.content.slice(0, 100)}...", responder: "${feedback}"`;
+      
+      const { data, error } = await supabase.functions.invoke('ai-generate', {
+        body: {
+          action: 'refine_agent_prompt',
+          context: {
+            currentPrompt: wizardData.generatedPrompt,
+            feedback: formattedFeedback,
+          },
+        },
+      });
+      
+      if (error) throw error;
+      
+      if (data?.content) {
+        updateField('generatedPrompt', data.content);
+        
+        const newEntry: FeedbackEntry = {
+          id: crypto.randomUUID(),
+          date: new Date().toISOString(),
+          feedback: formattedFeedback,
+          applied: true,
+        };
+        setFeedbackHistory(prev => [newEntry, ...prev]);
+        toast.success('Feedback aplicado! O prompt foi atualizado.');
+      }
+    } catch (error: any) {
+      console.error('Error applying feedback:', error);
+      toast.error(error.message || 'Erro ao aplicar feedback');
+    }
+  };
+
+  const clearTestConversation = () => {
+    setTestMessages([]);
+  };
+
   const handleNext = async () => {
     if (currentStep === 3) {
       setCurrentStep(4);
@@ -320,18 +433,22 @@ export function SDRAgentWizard({
   // Render edit mode (with tabs)
   const renderEditMode = () => (
     <Tabs value={activeTab} onValueChange={(v) => setActiveTab(v as any)} className="flex-1">
-      <TabsList className="w-full grid grid-cols-3">
+      <TabsList className="w-full grid grid-cols-4">
         <TabsTrigger value="prompt" className="gap-2">
           <FileText className="h-4 w-4" />
-          Prompt Atual
+          Prompt
+        </TabsTrigger>
+        <TabsTrigger value="test" className="gap-2">
+          <Beaker className="h-4 w-4" />
+          Testar
         </TabsTrigger>
         <TabsTrigger value="feedback" className="gap-2">
           <MessageSquarePlus className="h-4 w-4" />
-          Adicionar Feedback
+          Feedback
         </TabsTrigger>
         <TabsTrigger value="wizard" className="gap-2">
           <History className="h-4 w-4" />
-          Dados Originais
+          Dados
         </TabsTrigger>
       </TabsList>
 
@@ -379,6 +496,99 @@ export function SDRAgentWizard({
             Edite o texto acima livremente ou use a aba "Adicionar Feedback" para refinamentos via IA.
           </p>
         </div>
+      </TabsContent>
+
+      <TabsContent value="test" className="mt-4 space-y-4">
+        <div>
+          <p className="text-sm text-muted-foreground">
+            Simule uma conversa com o agente. As mensagens NÃO são enviadas ao WhatsApp.
+          </p>
+        </div>
+        
+        {/* Chat area */}
+        <div className="border rounded-lg h-[300px] overflow-y-auto p-4 space-y-3 bg-muted/30">
+          {testMessages.length === 0 ? (
+            <div className="flex items-center justify-center h-full text-muted-foreground text-sm">
+              Digite uma mensagem para simular a conversa
+            </div>
+          ) : (
+            testMessages.map((msg) => (
+              <div
+                key={msg.id}
+                className={cn(
+                  'max-w-[80%] p-3 rounded-lg',
+                  msg.role === 'user' ? 'ml-auto bg-primary/10' : 'bg-card border'
+                )}
+              >
+                <div className="flex items-center gap-2 mb-1">
+                  {msg.role === 'agent' ? (
+                    <Bot className="h-4 w-4 text-purple-500" />
+                  ) : (
+                    <User className="h-4 w-4 text-muted-foreground" />
+                  )}
+                  <span className="text-xs text-muted-foreground">
+                    {msg.role === 'agent' ? 'Agente' : 'Você (cliente simulado)'}
+                  </span>
+                </div>
+                <p className="text-sm">{msg.content}</p>
+                {msg.role === 'agent' && (
+                  <div className="flex gap-2 mt-2">
+                    <Button
+                      size="sm"
+                      variant="ghost"
+                      className="h-7 text-xs"
+                      onClick={() => handleTestFeedback(msg, false)}
+                    >
+                      <ThumbsDown className="h-3 w-3 mr-1" />
+                      Feedback
+                    </Button>
+                    <Button
+                      size="sm"
+                      variant="ghost"
+                      className="h-7 text-xs"
+                      onClick={() => handleTestFeedback(msg, true)}
+                    >
+                      <ThumbsUp className="h-3 w-3 mr-1" />
+                      Boa
+                    </Button>
+                  </div>
+                )}
+              </div>
+            ))
+          )}
+          {isSimulating && (
+            <div className="flex items-center gap-2 text-muted-foreground">
+              <Loader2 className="h-4 w-4 animate-spin" />
+              <span className="text-sm">Agente pensando...</span>
+            </div>
+          )}
+          <div ref={messagesEndRef} />
+        </div>
+        
+        {/* Input */}
+        <div className="flex gap-2">
+          <Input
+            value={testInput}
+            onChange={(e) => setTestInput(e.target.value)}
+            placeholder="Simular mensagem do cliente..."
+            onKeyDown={(e) => {
+              if (e.key === 'Enter' && !e.shiftKey) {
+                e.preventDefault();
+                simulateMessage();
+              }
+            }}
+            disabled={isSimulating}
+          />
+          <Button onClick={simulateMessage} disabled={isSimulating || !testInput.trim()}>
+            <Send className="h-4 w-4" />
+          </Button>
+        </div>
+        
+        {testMessages.length > 0 && (
+          <Button variant="outline" size="sm" onClick={clearTestConversation}>
+            Limpar Conversa
+          </Button>
+        )}
       </TabsContent>
 
       <TabsContent value="feedback" className="mt-4 space-y-4">

@@ -1447,6 +1447,9 @@ export type Database = {
           media_urls: Json | null
           organization_id: string
           reply_to_message_id: string | null
+          sender_agent_id: string | null
+          sender_name: string | null
+          sender_type: string | null
           sender_user_id: string | null
           sent_at: string | null
           template_id: string | null
@@ -1467,6 +1470,9 @@ export type Database = {
           media_urls?: Json | null
           organization_id: string
           reply_to_message_id?: string | null
+          sender_agent_id?: string | null
+          sender_name?: string | null
+          sender_type?: string | null
           sender_user_id?: string | null
           sent_at?: string | null
           template_id?: string | null
@@ -1487,6 +1493,9 @@ export type Database = {
           media_urls?: Json | null
           organization_id?: string
           reply_to_message_id?: string | null
+          sender_agent_id?: string | null
+          sender_name?: string | null
+          sender_type?: string | null
           sender_user_id?: string | null
           sent_at?: string | null
           template_id?: string | null
@@ -1507,6 +1516,13 @@ export type Database = {
             columns: ["reply_to_message_id"]
             isOneToOne: false
             referencedRelation: "messages"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "messages_sender_agent_id_fkey"
+            columns: ["sender_agent_id"]
+            isOneToOne: false
+            referencedRelation: "ai_agents"
             referencedColumns: ["id"]
           },
           {
