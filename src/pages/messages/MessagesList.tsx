@@ -232,37 +232,75 @@ export default function MessagesList() {
     }
   }, [selectedThreadId]);
 
-  // Real-time subscription
+  // Real-time subscription for ALL new messages (updates thread list)
   useEffect(() => {
-    if (!selectedThreadId) return;
+    if (!organization?.id) return;
 
     const channel = supabase
-      .channel(`messages-${selectedThreadId}`)
+      .channel(`org-messages-${organization.id}`)
       .on('postgres_changes', {
         event: 'INSERT',
         schema: 'public',
         table: 'messages',
-        filter: `thread_id=eq.${selectedThreadId}`,
+        filter: `organization_id=eq.${organization.id}`,
       }, (payload) => {
-        setMessages((prev) => [...prev, payload.new as Message]);
-        scrollToBottom();
+        const newMessage = payload.new as Message & { thread_id: string };
+        
+        // Refetch threads to update list order and last message
+        refetchThreads();
+        
+        // If this message belongs to the selected thread, add it to messages
+        if (newMessage.thread_id === selectedThreadId) {
+          setMessages((prev) => {
+            // Avoid duplicates
+            if (prev.find((m) => m.id === newMessage.id)) return prev;
+            return [...prev, newMessage];
+          });
+          scrollToBottom();
+        }
       })
       .on('postgres_changes', {
         event: 'UPDATE',
         schema: 'public',
         table: 'messages',
-        filter: `thread_id=eq.${selectedThreadId}`,
+        filter: `organization_id=eq.${organization.id}`,
       }, (payload) => {
-        setMessages((prev) =>
-          prev.map((m) => (m.id === payload.new.id ? (payload.new as Message) : m))
-        );
+        const updatedMessage = payload.new as Message & { thread_id: string };
+        
+        // Update message if it's in the selected thread
+        if (updatedMessage.thread_id === selectedThreadId) {
+          setMessages((prev) =>
+            prev.map((m) => (m.id === updatedMessage.id ? updatedMessage : m))
+          );
+        }
       })
       .subscribe();
 
     return () => {
       supabase.removeChannel(channel);
     };
-  }, [selectedThreadId]);
+  }, [organization?.id, selectedThreadId, refetchThreads]);
+
+  // Real-time subscription for new threads
+  useEffect(() => {
+    if (!organization?.id) return;
+
+    const channel = supabase
+      .channel(`org-threads-${organization.id}`)
+      .on('postgres_changes', {
+        event: 'INSERT',
+        schema: 'public',
+        table: 'message_threads',
+        filter: `organization_id=eq.${organization.id}`,
+      }, () => {
+        refetchThreads();
+      })
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, [organization?.id, refetchThreads]);
 
   const scrollToBottom = () => {
     setTimeout(() => {
