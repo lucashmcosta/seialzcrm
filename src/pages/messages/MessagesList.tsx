@@ -371,6 +371,10 @@ export default function MessagesList() {
       }
 
       setMessageText('');
+      // Immediately refresh messages to show sent message
+      if (selectedThreadId) {
+        await fetchMessages(selectedThreadId);
+      }
       refetchThreads();
     } catch (error: any) {
       console.error('Error sending message:', error);
@@ -405,6 +409,10 @@ export default function MessagesList() {
       }
 
       toast({ description: locale === 'pt-BR' ? 'Mensagem enviada!' : 'Message sent!' });
+      // Immediately refresh messages to show sent template
+      if (selectedThreadId) {
+        await fetchMessages(selectedThreadId);
+      }
       refetchThreads();
     } catch (error: any) {
       console.error('Error sending template:', error);
@@ -450,6 +458,10 @@ export default function MessagesList() {
       });
 
       if (error) throw error;
+      // Immediately refresh messages to show sent media
+      if (selectedThreadId) {
+        await fetchMessages(selectedThreadId);
+      }
       refetchThreads();
     } catch (error: any) {
       console.error('Error uploading media:', error);
