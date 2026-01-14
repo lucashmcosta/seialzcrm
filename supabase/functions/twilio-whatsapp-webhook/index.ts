@@ -465,16 +465,24 @@ serve(async (req) => {
 
       // ========== AI AGENT AUTO-RESPOND ==========
       // Check if organization has an active AI agent
-      const { data: aiAgent } = await supabase
+      // Using .limit(1) instead of .single() to avoid failure when multiple agents exist
+      const { data: aiAgents, error: agentError } = await supabase
         .from('ai_agents')
         .select('id, is_enabled, max_messages_per_conversation')
         .eq('organization_id', orgId)
         .eq('agent_type', 'sdr')
         .eq('is_enabled', true)
-        .single()
+        .order('created_at', { ascending: false })
+        .limit(1)
+
+      if (agentError) {
+        console.error('Error fetching AI agent:', agentError)
+      }
+
+      const aiAgent = aiAgents?.[0]
 
       if (aiAgent && threadId && body) {
-        console.log('AI Agent found, triggering response...')
+        console.log('AI Agent found:', aiAgent.id, '- triggering response...')
         
         // Invoke ai-agent-respond function (async, don't wait for response)
         try {
