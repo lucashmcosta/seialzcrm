@@ -7,7 +7,7 @@ const corsHeaders = {
 };
 
 interface AIRequest {
-  action: "summarize_contact" | "suggest_reply" | "analyze_opportunity" | "generate_email" | "custom";
+  action: "summarize_contact" | "suggest_reply" | "analyze_opportunity" | "generate_email" | "improve_text" | "custom";
   prompt?: string;
   context?: Record<string, any>;
 }
@@ -114,6 +114,16 @@ serve(async (req) => {
       case "generate_email":
         systemPrompt = "Você é um especialista em copywriting de emails comerciais. Gere um email profissional e persuasivo.";
         userPrompt = `Gere um email com base nas seguintes instruções:\n${prompt}\n\nContexto:\n${JSON.stringify(context, null, 2)}`;
+        break;
+      case "improve_text":
+        systemPrompt = "Você é um especialista em redação. Melhore o texto mantendo a mensagem original. Retorne APENAS o texto melhorado, sem explicações ou comentários adicionais.";
+        if (context?.mode === 'grammar') {
+          userPrompt = `Corrija apenas erros de gramática e ortografia neste texto, mantendo o tom original. Retorne apenas o texto corrigido:\n\n${context?.text}`;
+        } else if (context?.mode === 'professional') {
+          userPrompt = `Reescreva este texto de forma mais profissional e formal, mantendo a mensagem. Retorne apenas o texto reescrito:\n\n${context?.text}`;
+        } else if (context?.mode === 'friendly') {
+          userPrompt = `Reescreva este texto de forma mais amigável e simpática, mantendo a mensagem. Retorne apenas o texto reescrito:\n\n${context?.text}`;
+        }
         break;
       case "custom":
       default:

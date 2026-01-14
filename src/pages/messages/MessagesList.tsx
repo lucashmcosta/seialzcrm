@@ -22,6 +22,12 @@ import { ScrollArea } from '@/components/ui/scroll-area';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { Dialog, DialogContent } from '@/components/ui/dialog';
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu';
 import { useOrganization } from '@/hooks/useOrganization';
 import { useTranslation } from '@/lib/i18n';
 import { supabase } from '@/integrations/supabase/client';
@@ -29,7 +35,7 @@ import { useQuery } from '@tanstack/react-query';
 import { formatDistanceToNow } from 'date-fns';
 import { ptBR, enUS } from 'date-fns/locale';
 import { useToast } from '@/hooks/use-toast';
-import { Loader2, Check, CheckCheck, Clock, AlertCircle } from 'lucide-react';
+import { Loader2, Check, CheckCheck, Clock, AlertCircle, Sparkles, SpellCheck, Briefcase, Smile } from 'lucide-react';
 import { WhatsAppTemplateSelector } from '@/components/whatsapp/WhatsAppTemplateSelector';
 import { AudioRecorder } from '@/components/whatsapp/AudioRecorder';
 import { MediaUploadButton } from '@/components/whatsapp/MediaUploadButton';
@@ -39,6 +45,7 @@ import { QuotedMessage } from '@/components/whatsapp/QuotedMessage';
 import { ReplyPreview } from '@/components/whatsapp/ReplyPreview';
 import EmojiPicker, { EmojiClickData, Theme } from 'emoji-picker-react';
 import { cn } from '@/lib/utils';
+import { useAI } from '@/hooks/useAI';
 
 // Helper function for formatting relative time
 const formatRelativeTime = (timestamp: string, locale: 'pt-BR' | 'en-US'): string => {
@@ -197,6 +204,64 @@ export default function MessagesList() {
   
   // Image preview state
   const [previewImageUrl, setPreviewImageUrl] = useState<string | null>(null);
+  
+  // AI text improvement state
+  const [aiMenuOpen, setAiMenuOpen] = useState(false);
+  const [aiImproving, setAiImproving] = useState(false);
+  const { generate: generateAI } = useAI();
+  
+  // Check if organization has AI enabled
+  const { data: hasAI } = useQuery({
+    queryKey: ['org-has-ai', organization?.id],
+    queryFn: async () => {
+      if (!organization?.id) return false;
+      
+      const { data } = await supabase
+        .from('organization_integrations')
+        .select('is_enabled, integration:admin_integrations!inner(slug)')
+        .eq('organization_id', organization.id)
+        .eq('is_enabled', true)
+        .in('integration.slug', ['claude-ai', 'openai-gpt']);
+      
+      return data && data.length > 0;
+    },
+    enabled: !!organization?.id,
+  });
+  
+  // Handle AI text improvement
+  const handleImproveText = async (mode: 'grammar' | 'professional' | 'friendly') => {
+    if (!messageText.trim()) {
+      toast({
+        variant: 'destructive',
+        description: locale === 'pt-BR' ? 'Digite uma mensagem primeiro' : 'Type a message first',
+      });
+      return;
+    }
+    
+    setAiMenuOpen(false);
+    setAiImproving(true);
+    
+    try {
+      const result = await generateAI({
+        action: 'improve_text',
+        context: { text: messageText, mode }
+      });
+      
+      setMessageText(result.content);
+      adjustTextareaHeight();
+      toast({
+        description: locale === 'pt-BR' ? 'Texto melhorado!' : 'Text improved!',
+      });
+    } catch (error: any) {
+      console.error('AI improvement error:', error);
+      toast({
+        variant: 'destructive',
+        description: locale === 'pt-BR' ? 'Erro ao processar com IA' : 'AI processing error',
+      });
+    } finally {
+      setAiImproving(false);
+    }
+  };
 
   // Fetch threads
   const { data: threads, isLoading: threadsLoading, refetch: refetchThreads } = useQuery({
@@ -952,29 +1017,65 @@ export default function MessagesList() {
                           </PopoverContent>
                         </Popover>
                       </div>
-                      <Textarea
-                        ref={textareaRef}
-                        placeholder={locale === 'pt-BR' ? 'Digite uma mensagem...' : 'Type a message...'}
-                        value={messageText}
-                        onChange={(e) => {
-                          setMessageText(e.target.value);
-                          adjustTextareaHeight();
-                        }}
-                        onKeyDown={(e) => {
-                          if (e.key === 'Enter' && !e.shiftKey) {
-                            e.preventDefault();
-                            handleSendMessage();
-                            // Reset textarea height after sending
-                            if (textareaRef.current) {
-                              textareaRef.current.style.height = 'auto';
+                      <div className="relative flex-1">
+                        <Textarea
+                          ref={textareaRef}
+                          placeholder={locale === 'pt-BR' ? 'Digite uma mensagem...' : 'Type a message...'}
+                          value={messageText}
+                          onChange={(e) => {
+                            setMessageText(e.target.value);
+                            adjustTextareaHeight();
+                          }}
+                          onKeyDown={(e) => {
+                            if (e.key === 'Enter' && !e.shiftKey) {
+                              e.preventDefault();
+                              handleSendMessage();
+                              // Reset textarea height after sending
+                              if (textareaRef.current) {
+                                textareaRef.current.style.height = 'auto';
+                              }
+                              setTextareaOverflow(false);
                             }
-                            setTextareaOverflow(false);
-                          }
-                        }}
-                        rows={1}
-                        className={`flex-1 resize-none min-h-[40px] max-h-[150px] ${textareaOverflow ? 'overflow-y-auto' : 'overflow-hidden'}`}
-                        disabled={!isIn24hWindow && messages.length > 0}
-                      />
+                          }}
+                          rows={1}
+                          className={`w-full resize-none min-h-[40px] max-h-[150px] pr-10 ${textareaOverflow ? 'overflow-y-auto' : 'overflow-hidden'}`}
+                          disabled={!isIn24hWindow && messages.length > 0}
+                        />
+                        
+                        {/* AI Improve Button */}
+                        {hasAI && (
+                          <DropdownMenu open={aiMenuOpen} onOpenChange={setAiMenuOpen}>
+                            <DropdownMenuTrigger asChild>
+                              <Button
+                                variant="ghost"
+                                size="icon"
+                                className="absolute right-1 top-1/2 -translate-y-1/2 h-7 w-7"
+                                disabled={!messageText.trim() || aiImproving || (!isIn24hWindow && messages.length > 0)}
+                              >
+                                {aiImproving ? (
+                                  <Loader2 className="h-4 w-4 animate-spin" />
+                                ) : (
+                                  <Sparkles className="h-4 w-4 text-purple-500" />
+                                )}
+                              </Button>
+                            </DropdownMenuTrigger>
+                            <DropdownMenuContent align="end">
+                              <DropdownMenuItem onClick={() => handleImproveText('grammar')}>
+                                <SpellCheck className="h-4 w-4 mr-2" />
+                                {locale === 'pt-BR' ? 'Corrigir gramática' : 'Fix grammar'}
+                              </DropdownMenuItem>
+                              <DropdownMenuItem onClick={() => handleImproveText('professional')}>
+                                <Briefcase className="h-4 w-4 mr-2" />
+                                {locale === 'pt-BR' ? 'Tornar profissional' : 'Make professional'}
+                              </DropdownMenuItem>
+                              <DropdownMenuItem onClick={() => handleImproveText('friendly')}>
+                                <Smile className="h-4 w-4 mr-2" />
+                                {locale === 'pt-BR' ? 'Tornar amigável' : 'Make friendly'}
+                              </DropdownMenuItem>
+                            </DropdownMenuContent>
+                          </DropdownMenu>
+                        )}
+                      </div>
                       <Button
                         onClick={handleSendMessage}
                         disabled={submitting || !messageText.trim() || (!isIn24hWindow && messages.length > 0)}

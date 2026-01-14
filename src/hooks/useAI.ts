@@ -1,7 +1,7 @@
 import { useMutation } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 
-type AIAction = 'summarize_contact' | 'suggest_reply' | 'analyze_opportunity' | 'generate_email' | 'custom';
+type AIAction = 'summarize_contact' | 'suggest_reply' | 'analyze_opportunity' | 'generate_email' | 'improve_text' | 'custom';
 
 interface AIRequest {
   action: AIAction;
