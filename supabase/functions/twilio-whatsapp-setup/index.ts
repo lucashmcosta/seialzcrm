@@ -28,9 +28,25 @@ serve(async (req) => {
   }
 
   try {
-    const { organizationId, accountSid, authToken } = await req.json()
+    console.log('=== twilio-whatsapp-setup called ===');
+    
+    const body = await req.json()
+    const { organizationId, accountSid, authToken } = body
+    
+    console.log('Request body received:', { 
+      organizationId, 
+      hasAccountSid: !!accountSid, 
+      accountSidLength: accountSid?.length || 0,
+      hasAuthToken: !!authToken,
+      authTokenLength: authToken?.length || 0 
+    });
 
     if (!organizationId || !accountSid || !authToken) {
+      console.error('Missing required fields:', { 
+        hasOrgId: !!organizationId, 
+        hasAccountSid: !!accountSid, 
+        hasAuthToken: !!authToken 
+      });
       return new Response(
         JSON.stringify({ error: 'Missing required fields: organizationId, accountSid, authToken' }),
         { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
