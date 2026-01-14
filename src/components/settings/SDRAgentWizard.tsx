@@ -48,10 +48,36 @@ interface SDRAgentWizardProps {
     wizard_data: any;
     feedback_history?: FeedbackEntry[];
     enabled_tools?: string[];
+    ai_provider?: string | null;
+    ai_model?: string | null;
   } | null;
   organizationId: string;
   onSuccess: () => void;
 }
+
+const AI_PROVIDERS = [
+  { value: 'auto', label: 'Automático', description: 'Usa integração padrão da organização' },
+  { value: 'lovable-ai', label: 'Lovable AI (Gemini)', description: 'Google Gemini - rápido e econômico' },
+  { value: 'claude-ai', label: 'Claude (Anthropic)', description: 'Excelente raciocínio e nuance' },
+  { value: 'openai-gpt', label: 'GPT (OpenAI)', description: 'Versátil e poderoso' },
+];
+
+const AI_MODELS: Record<string, { value: string; label: string }[]> = {
+  'lovable-ai': [
+    { value: 'google/gemini-3-flash-preview', label: 'Gemini 3 Flash (Recomendado)' },
+    { value: 'google/gemini-2.5-flash', label: 'Gemini 2.5 Flash' },
+    { value: 'google/gemini-2.5-pro', label: 'Gemini 2.5 Pro (Mais preciso)' },
+  ],
+  'claude-ai': [
+    { value: 'claude-sonnet-4-20250514', label: 'Sonnet 4 (Recomendado)' },
+    { value: 'claude-3-5-sonnet-20241022', label: 'Sonnet 3.5' },
+    { value: 'claude-3-5-haiku-20241022', label: 'Haiku 3.5 (Mais rápido)' },
+  ],
+  'openai-gpt': [
+    { value: 'gpt-4o', label: 'GPT-4o (Mais completo)' },
+    { value: 'gpt-4o-mini', label: 'GPT-4o Mini (Recomendado)' },
+  ],
+};
 
 // Available tools configuration
 const AVAILABLE_TOOLS = [
@@ -174,6 +200,8 @@ export function SDRAgentWizard({
   const [enabledTools, setEnabledTools] = useState<string[]>(
     existingAgent?.enabled_tools || ['update_contact', 'transfer_to_human']
   );
+  const [aiProvider, setAiProvider] = useState<string>(existingAgent?.ai_provider || 'auto');
+  const [aiModel, setAiModel] = useState<string>(existingAgent?.ai_model || '');
   const [newFeedback, setNewFeedback] = useState('');
   const [isGenerating, setIsGenerating] = useState(false);
   const [isRefining, setIsRefining] = useState(false);
@@ -214,6 +242,9 @@ export function SDRAgentWizard({
       }
       
       setFeedbackHistory(existingAgent?.feedback_history || []);
+      setEnabledTools(existingAgent?.enabled_tools || ['update_contact', 'transfer_to_human']);
+      setAiProvider(existingAgent?.ai_provider || 'auto');
+      setAiModel(existingAgent?.ai_model || '');
     }
   }, [open, existingAgent]);
 
@@ -460,6 +491,8 @@ export function SDRAgentWizard({
               wizardData.goal === 'answer_questions' ? 'Responder dúvidas sobre produtos' :
               'Suporte ao cliente',
         tone: wizardData.tone,
+        ai_provider: aiProvider,
+        ai_model: aiProvider !== 'auto' ? aiModel : null,
       };
 
       if (existingAgent?.id) {
@@ -517,9 +550,61 @@ export function SDRAgentWizard({
         </TabsTrigger>
       </TabsList>
 
-      <TabsContent value="tools" className="mt-4 space-y-4">
+      <TabsContent value="tools" className="mt-4 space-y-6">
+        {/* AI Model Selection */}
+        <div className="space-y-4 p-4 border rounded-lg bg-muted/30">
+          <div>
+            <Label className="text-base font-medium">Modelo de IA</Label>
+            <p className="text-sm text-muted-foreground">
+              Escolha qual modelo de IA o agente usará para responder
+            </p>
+          </div>
+          
+          <div className="grid gap-4 md:grid-cols-2">
+            <div className="space-y-2">
+              <Label>Provider</Label>
+              <Select value={aiProvider} onValueChange={(v) => { setAiProvider(v); setAiModel(''); }}>
+                <SelectTrigger>
+                  <SelectValue placeholder="Selecione o provider" />
+                </SelectTrigger>
+                <SelectContent>
+                  {AI_PROVIDERS.map(provider => (
+                    <SelectItem key={provider.value} value={provider.value}>
+                      <div className="flex flex-col">
+                        <span>{provider.label}</span>
+                      </div>
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              <p className="text-xs text-muted-foreground">
+                {AI_PROVIDERS.find(p => p.value === aiProvider)?.description}
+              </p>
+            </div>
+            
+            {aiProvider !== 'auto' && AI_MODELS[aiProvider] && (
+              <div className="space-y-2">
+                <Label>Modelo</Label>
+                <Select value={aiModel} onValueChange={setAiModel}>
+                  <SelectTrigger>
+                    <SelectValue placeholder="Selecione o modelo" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {AI_MODELS[aiProvider].map(model => (
+                      <SelectItem key={model.value} value={model.value}>
+                        {model.label}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+            )}
+          </div>
+        </div>
+
+        {/* Tools */}
         <div>
-          <Label>Ferramentas do Agente</Label>
+          <Label className="text-base font-medium">Ferramentas do Agente</Label>
           <p className="text-sm text-muted-foreground mb-4">
             Habilite as ações que o agente pode executar automaticamente durante as conversas
           </p>

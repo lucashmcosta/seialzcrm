@@ -1006,10 +1006,52 @@ serve(async (req) => {
       );
     }
 
-    // Prefer Claude
-    const aiIntegration = aiIntegrations.find(i => i.integration.slug === 'claude-ai') || aiIntegrations[0];
-    const integrationSlug = aiIntegration.integration.slug;
-    const configValues = aiIntegration.config_values as Record<string, any>;
+    // Check if agent has specific AI provider configured
+    const agentProvider = agent.ai_provider as string | null;
+    const agentModel = agent.ai_model as string | null;
+    
+    let integrationSlug: string;
+    let configValues: Record<string, any>;
+    let useAgentSpecificProvider = false;
+    
+    if (agentProvider && agentProvider !== 'auto') {
+      // Use agent-specific provider
+      useAgentSpecificProvider = true;
+      integrationSlug = agentProvider;
+      
+      if (agentProvider === 'lovable-ai') {
+        // Lovable AI uses LOVABLE_API_KEY from environment
+        const lovableApiKey = Deno.env.get('LOVABLE_API_KEY');
+        if (!lovableApiKey) {
+          console.error('LOVABLE_API_KEY not configured');
+          return new Response(
+            JSON.stringify({ error: 'Lovable AI not configured' }),
+            { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+          );
+        }
+        configValues = { api_key: lovableApiKey, default_model: agentModel || 'google/gemini-3-flash-preview' };
+      } else {
+        // For claude-ai and openai-gpt, still need org integration for API key
+        const specificIntegration = aiIntegrations.find(i => i.integration.slug === agentProvider);
+        if (!specificIntegration) {
+          console.error(`Agent requires ${agentProvider} but not configured`);
+          return new Response(
+            JSON.stringify({ error: `${agentProvider} integration not configured` }),
+            { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+          );
+        }
+        configValues = specificIntegration.config_values as Record<string, any>;
+        // Override model if agent specifies one
+        if (agentModel) {
+          configValues = { ...configValues, default_model: agentModel };
+        }
+      }
+    } else {
+      // Prefer Claude (original behavior)
+      const aiIntegration = aiIntegrations.find(i => i.integration.slug === 'claude-ai') || aiIntegrations[0];
+      integrationSlug = aiIntegration.integration.slug;
+      configValues = aiIntegration.config_values as Record<string, any>;
+    }
 
     if (!configValues?.api_key) {
       console.error('API key not configured');
@@ -1231,6 +1273,103 @@ serve(async (req) => {
         openaiData = await openaiResponse.json();
         tokensUsed += openaiData.usage?.total_tokens || 0;
         responseMessage = openaiData.choices?.[0]?.message;
+      }
+
+      aiResponse = responseMessage?.content || '';
+
+    } else if (integrationSlug === 'lovable-ai') {
+      // Lovable AI Gateway (OpenAI-compatible)
+      const model = configValues.default_model || 'google/gemini-3-flash-preview';
+      const maxTokens = 1024;
+      modelUsed = model;
+
+      const lovableMessages = [
+        { role: 'system', content: systemPrompt },
+        ...conversationMessages,
+        { role: 'user', content: message },
+      ];
+
+      const lovableBody: any = {
+        model,
+        max_tokens: maxTokens,
+        messages: lovableMessages,
+      };
+
+      // Add tools if enabled
+      if (tools.length > 0) {
+        lovableBody.tools = tools;
+        lovableBody.tool_choice = 'auto';
+      }
+
+      let lovableResponse = await fetch('https://ai.gateway.lovable.dev/v1/chat/completions', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${configValues.api_key}`,
+        },
+        body: JSON.stringify(lovableBody),
+      });
+
+      if (!lovableResponse.ok) {
+        const errorText = await lovableResponse.text();
+        console.error('Lovable AI API error:', lovableResponse.status, errorText);
+        throw new Error(`Lovable AI API error: ${lovableResponse.status}`);
+      }
+
+      let lovableData = await lovableResponse.json();
+      tokensUsed = lovableData.usage?.total_tokens || 0;
+
+      let responseMessage = lovableData.choices?.[0]?.message;
+
+      // Handle tool calls (OpenAI-compatible format)
+      while (responseMessage?.tool_calls && responseMessage.tool_calls.length > 0) {
+        const toolResults = [];
+
+        for (const toolCall of responseMessage.tool_calls) {
+          console.log(`Lovable AI wants to use tool: ${toolCall.function.name}`);
+          toolsExecuted.push(toolCall.function.name);
+
+          const result = await executeTool(
+            supabase,
+            toolCall.function.name,
+            JSON.parse(toolCall.function.arguments || '{}'),
+            { contactId, organizationId, threadId }
+          );
+
+          toolResults.push({
+            tool_call_id: toolCall.id,
+            role: 'tool',
+            content: JSON.stringify(result),
+          });
+        }
+
+        // Continue conversation with tool results
+        lovableMessages.push(responseMessage);
+        lovableMessages.push(...toolResults);
+
+        lovableResponse = await fetch('https://ai.gateway.lovable.dev/v1/chat/completions', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${configValues.api_key}`,
+          },
+          body: JSON.stringify({
+            model,
+            max_tokens: maxTokens,
+            messages: lovableMessages,
+            tools: tools.length > 0 ? tools : undefined,
+          }),
+        });
+
+        if (!lovableResponse.ok) {
+          const errorText = await lovableResponse.text();
+          console.error('Lovable AI API error (tool continuation):', lovableResponse.status, errorText);
+          throw new Error(`Lovable AI API error: ${lovableResponse.status}`);
+        }
+
+        lovableData = await lovableResponse.json();
+        tokensUsed += lovableData.usage?.total_tokens || 0;
+        responseMessage = lovableData.choices?.[0]?.message;
       }
 
       aiResponse = responseMessage?.content || '';
