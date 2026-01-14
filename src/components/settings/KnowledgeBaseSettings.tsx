@@ -261,12 +261,12 @@ export function KnowledgeBaseSettings() {
               </div>
               <div className="space-y-2">
                 <Label htmlFor="agent">Agente (opcional)</Label>
-                <Select value={formAgentId} onValueChange={setFormAgentId}>
+                <Select value={formAgentId || 'global'} onValueChange={(val) => setFormAgentId(val === 'global' ? '' : val)}>
                   <SelectTrigger>
                     <SelectValue placeholder="Global - todos os agentes" />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="">Global - todos os agentes</SelectItem>
+                    <SelectItem value="global">Global - todos os agentes</SelectItem>
                     {agents.map(agent => (
                       <SelectItem key={agent.id} value={agent.id}>{agent.name}</SelectItem>
                     ))}
