@@ -85,6 +85,21 @@ const AVAILABLE_TOOLS = [
     name: 'Salvar Memória', 
     description: 'Salva informações importantes (datas, preferências, objeções) para lembrar em futuras conversas' 
   },
+  { 
+    id: 'schedule_follow_up', 
+    name: 'Agendar Follow-up', 
+    description: 'Agenda mensagem automática para data futura (ex: "te mando mensagem dia 15")' 
+  },
+  { 
+    id: 'send_payment_link', 
+    name: 'Enviar Link de Pagamento', 
+    description: 'Gera e envia link de pagamento quando cliente quer fechar' 
+  },
+  { 
+    id: 'update_qualification', 
+    name: 'Atualizar Qualificação', 
+    description: 'Registra dados de qualificação do lead (interesse, orçamento, timeline, decisor)' 
+  },
 ];
 
 const STEPS = [
