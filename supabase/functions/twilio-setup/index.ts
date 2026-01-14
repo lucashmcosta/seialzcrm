@@ -119,29 +119,51 @@ serve(async (req) => {
       Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''
     )
 
-    // Update the organization integration with the TwiML App SID
-    const { error: updateError } = await supabase
+    // Get the Twilio Voice integration ID
+    const { data: twilioIntegration, error: integrationLookupError } = await supabase
+      .from('admin_integrations')
+      .select('id')
+      .eq('slug', 'twilio-voice')
+      .single()
+
+    if (integrationLookupError || !twilioIntegration) {
+      console.error('Error finding Twilio Voice integration:', integrationLookupError)
+      return new Response(
+        JSON.stringify({ error: 'Twilio Voice integration not found in admin_integrations' }),
+        { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      )
+    }
+
+    console.log('Found Twilio Voice integration:', twilioIntegration.id)
+
+    // UPSERT the organization integration with the TwiML App SID
+    const { error: upsertError } = await supabase
       .from('organization_integrations')
-      .update({
+      .upsert({
+        organization_id: organizationId,
+        integration_id: twilioIntegration.id,
         config_values: {
           account_sid: accountSid,
           auth_token: authToken,
           phone_number: phoneNumber,
           enable_recording: enableRecording || false,
           twiml_app_sid: twimlAppSid,
-        }
+        },
+        is_enabled: true,
+        connected_at: new Date().toISOString(),
+      }, {
+        onConflict: 'organization_id,integration_id'
       })
-      .eq('organization_id', organizationId)
-      .order('created_at', { ascending: false })
-      .limit(1)
 
-    if (updateError) {
-      console.error('Error updating integration:', updateError)
+    if (upsertError) {
+      console.error('Error upserting integration:', upsertError)
       return new Response(
-        JSON.stringify({ error: 'Failed to save TwiML App SID' }),
+        JSON.stringify({ error: 'Failed to save integration config', details: upsertError.message }),
         { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       )
     }
+
+    console.log('Integration saved successfully for organization:', organizationId)
 
     // ========== Insert/Update phone number in organization_phone_numbers ==========
     const { error: phoneInsertError } = await supabase
