@@ -1373,10 +1373,46 @@ serve(async (req) => {
       }
 
       aiResponse = responseMessage?.content || '';
+
+      // If response is empty after tool execution, retry without tools to force a text response
+      if (!aiResponse && toolsExecuted.length > 0) {
+        console.log('Empty response after tool execution, requesting final response without tools...');
+        
+        // Add a system instruction to force a response
+        lovableMessages.push({
+          role: 'user',
+          content: '[Sistema: As ferramentas foram executadas com sucesso. Agora responda ao cliente de forma natural, sem usar mais ferramentas.]'
+        });
+        
+        const retryResponse = await fetch('https://ai.gateway.lovable.dev/v1/chat/completions', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${configValues.api_key}`,
+          },
+          body: JSON.stringify({
+            model,
+            max_tokens: maxTokens,
+            messages: lovableMessages,
+            // Explicitly NOT passing tools to force text response
+          }),
+        });
+
+        if (retryResponse.ok) {
+          const retryData = await retryResponse.json();
+          tokensUsed += retryData.usage?.total_tokens || 0;
+          aiResponse = retryData.choices?.[0]?.message?.content || '';
+          console.log('Retry response received:', aiResponse ? 'success' : 'still empty');
+        } else {
+          console.error('Retry request failed:', retryResponse.status);
+        }
+      }
     }
 
+    // Graceful fallback if still no response
     if (!aiResponse) {
-      throw new Error('Empty AI response');
+      console.warn('Using fallback response after empty AI response');
+      aiResponse = 'Desculpe, não consegui processar sua mensagem no momento. Pode repetir?';
     }
 
     const responseTime = Date.now() - startTime;
