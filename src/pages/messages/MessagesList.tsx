@@ -408,6 +408,7 @@ export default function MessagesList() {
           threadId: selectedThreadId,
           message: savedText,
           userId: userProfile?.id,
+          replyToMessageId: savedReplyTo?.id || null,
         },
       });
 
@@ -527,6 +528,7 @@ export default function MessagesList() {
     // Optimistic UI: add media message immediately
     const tempId = `temp-${Date.now()}`;
     const displayContent = caption || (mediaType === 'image' ? '📷 Imagem' : mediaType === 'audio' ? '🎵 Áudio' : mediaType === 'video' ? '🎬 Vídeo' : '📎 Mídia');
+    const savedReplyTo = replyingTo;
     const tempMessage: Message = {
       id: tempId,
       content: displayContent,
@@ -536,9 +538,11 @@ export default function MessagesList() {
       media_urls: null,
       media_type: mediaType,
       error_message: null,
-      reply_to_message_id: null,
-      reply_to_message: null,
+      reply_to_message_id: savedReplyTo?.id || null,
+      reply_to_message: savedReplyTo ? { content: savedReplyTo.content, direction: savedReplyTo.direction } : null,
     };
+
+    setReplyingTo(null);
 
     setMessages((prev) => [...prev, tempMessage]);
     scrollToBottom();
@@ -563,6 +567,7 @@ export default function MessagesList() {
           mediaUrl: publicUrl,
           mediaType,
           userId: userProfile?.id,
+          replyToMessageId: savedReplyTo?.id || null,
         },
       });
 

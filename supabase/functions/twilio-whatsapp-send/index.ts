@@ -22,7 +22,8 @@ serve(async (req) => {
       mediaUrl,
       mediaUrls,
       mediaType,
-      userId
+      userId,
+      replyToMessageId
     } = await req.json()
 
     if (!organizationId || !contactId) {
@@ -222,6 +223,7 @@ serve(async (req) => {
         media_urls: allMediaUrls.length > 0 ? allMediaUrls : [],
         media_type: mediaType || null,
         sent_at: new Date().toISOString(),
+        reply_to_message_id: replyToMessageId || null,
       })
       .select('id')
       .single()
