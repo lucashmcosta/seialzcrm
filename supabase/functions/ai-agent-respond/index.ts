@@ -900,15 +900,17 @@ serve(async (req) => {
       );
     }
 
-    // 3. Check message limit per conversation
+    // 3. Check message limit per conversation (per agent, per thread)
+    const maxMessages = agent.max_messages_per_conversation || 200; // Default safe limit
     const { count: agentMessageCount } = await supabase
       .from('ai_agent_logs')
       .select('id', { count: 'exact', head: true })
+      .eq('agent_id', agentId) // Filter by agent to avoid counting other agents' messages
       .eq('thread_id', threadId)
       .eq('status', 'success');
 
-    if (agentMessageCount && agentMessageCount >= agent.max_messages_per_conversation) {
-      console.log(`Max messages reached: ${agentMessageCount}/${agent.max_messages_per_conversation}`);
+    if (agentMessageCount && agentMessageCount >= maxMessages) {
+      console.log(`Max messages reached for agent ${agentId}: ${agentMessageCount}/${maxMessages}`);
       
       await supabase.from('ai_agent_logs').insert({
         organization_id: organizationId,
