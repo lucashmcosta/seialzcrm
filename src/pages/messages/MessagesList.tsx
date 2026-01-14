@@ -895,12 +895,7 @@ export default function MessagesList() {
                                   </div>
                                 )}
                                 
-                                {/* User name for human messages */}
-                                {isOutbound && message.sender_type === 'user' && message.sender_name && (
-                                  <div className="text-xs text-muted-foreground/70 mb-1">
-                                    {message.sender_name}
-                                  </div>
-                                )}
+                                {/* User name is now shown in footer, no need for header */}
                                 
                                 {/* Quoted Message */}
                                 {message.reply_to_message && (
@@ -960,9 +955,10 @@ export default function MessagesList() {
                                   </p>
                                 )}
 
-                                {/* Footer - WhatsApp style: bottom right */}
+                                {/* Footer - Name + Time + Status */}
                                 <div className="absolute bottom-1 right-2 flex items-center gap-1">
                                   <span className="text-[10px] text-muted-foreground/70">
+                                    {isOutbound && message.sender_name && `${message.sender_name} - `}
                                     {new Date(message.sent_at).toLocaleTimeString(locale, {
                                       hour: '2-digit',
                                       minute: '2-digit',
