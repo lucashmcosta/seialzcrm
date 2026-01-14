@@ -40,8 +40,8 @@ export function IntegrationConnectDialog({
   const [configValues, setConfigValues] = useState<Record<string, any>>({});
   const [setupPhase, setSetupPhase] = useState<'form' | 'configuring'>('form');
 
-  const isTwilioVoice = integration.slug === 'twilio-voice' || 
-    integration.name.toLowerCase().includes('twilio');
+  const isTwilioVoice = integration.slug === 'twilio-voice';
+  const isTwilioWhatsApp = integration.slug === 'twilio-whatsapp';
 
   const connectMutation = useMutation({
     mutationFn: async () => {
@@ -54,24 +54,27 @@ export function IntegrationConnectDialog({
         .eq('auth_user_id', userData.user?.id)
         .single();
 
-      // Save/update the integration connection (upsert allows reconnecting existing integrations)
-      const { error } = await supabase
-        .from('organization_integrations')
-        .upsert(
-          {
-            organization_id: organization.id,
-            integration_id: integration.id,
-            config_values: configValues,
-            is_enabled: true,
-            connected_at: new Date().toISOString(),
-            connected_by_user_id: userProfile?.id,
-          },
-          {
-            onConflict: 'integration_id,organization_id',
-          }
-        );
+      // For Twilio integrations, we'll let the setup function handle the upsert
+      // For other integrations, save normally
+      if (!isTwilioVoice && !isTwilioWhatsApp) {
+        const { error } = await supabase
+          .from('organization_integrations')
+          .upsert(
+            {
+              organization_id: organization.id,
+              integration_id: integration.id,
+              config_values: configValues,
+              is_enabled: true,
+              connected_at: new Date().toISOString(),
+              connected_by_user_id: userProfile?.id,
+            },
+            {
+              onConflict: 'integration_id,organization_id',
+            }
+          );
 
-      if (error) throw error;
+        if (error) throw error;
+      }
 
       // For Twilio Voice, run automatic setup
       if (isTwilioVoice && configValues.account_sid && configValues.auth_token) {
@@ -88,15 +91,47 @@ export function IntegrationConnectDialog({
         });
 
         if (setupError) {
-          console.error('Twilio setup error:', setupError);
-          throw new Error('Erro ao configurar Twilio automaticamente. Verifique suas credenciais.');
+          console.error('Twilio Voice setup error:', setupError);
+          throw new Error('Erro ao configurar Twilio Voice. Verifique suas credenciais.');
         }
 
         if (!setupData?.success) {
-          throw new Error(setupData?.error || 'Erro na configuração do Twilio');
+          throw new Error(setupData?.error || 'Erro na configuração do Twilio Voice');
         }
 
-        console.log('Twilio setup completed:', setupData);
+        console.log('Twilio Voice setup completed:', setupData);
+      }
+
+      // For Twilio WhatsApp, run automatic setup with full automation
+      if (isTwilioWhatsApp && configValues.account_sid && configValues.auth_token) {
+        setSetupPhase('configuring');
+        
+        const { data: setupData, error: setupError } = await supabase.functions.invoke('twilio-whatsapp-setup', {
+          body: {
+            organizationId: organization.id,
+            accountSid: configValues.account_sid,
+            authToken: configValues.auth_token,
+          },
+        });
+
+        if (setupError) {
+          console.error('Twilio WhatsApp setup error:', setupError);
+          throw new Error('Erro ao configurar WhatsApp. Verifique suas credenciais.');
+        }
+
+        if (!setupData?.success) {
+          throw new Error(setupData?.error || 'Erro na configuração do WhatsApp');
+        }
+
+        console.log('Twilio WhatsApp setup completed:', setupData);
+        
+        // Show additional info about the setup
+        if (setupData.messagingServiceSid) {
+          toast.success(`Messaging Service criado: ${setupData.messagingServiceSid.slice(-8)}`);
+        }
+        if (setupData.templatesImported > 0) {
+          toast.info(`${setupData.templatesImported} templates sincronizados`);
+        }
       }
     },
     onSuccess: () => {

@@ -7,6 +7,10 @@ interface WhatsAppConfig {
   whatsapp_number: string;
   whatsapp_from: string;
   use_sandbox: boolean;
+  messaging_service_sid?: string;
+  available_numbers?: string[];
+  webhooks_configured?: boolean;
+  setup_completed_at?: string;
 }
 
 export function useWhatsAppIntegration() {
@@ -48,6 +52,10 @@ export function useWhatsAppIntegration() {
     whatsappNumber: config?.whatsapp_number || null,
     whatsappFrom: config?.whatsapp_from || null,
     useSandbox: config?.use_sandbox || false,
+    messagingServiceSid: config?.messaging_service_sid || null,
+    availableNumbers: config?.available_numbers || [],
+    webhooksConfigured: config?.webhooks_configured || false,
+    setupCompletedAt: config?.setup_completed_at || null,
     loading: isLoading,
     integrationId: data?.id,
     refetch,

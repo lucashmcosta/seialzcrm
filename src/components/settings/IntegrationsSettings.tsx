@@ -14,6 +14,7 @@ import { MessageSquare, Phone, Mail, Webhook, AlertTriangle, Plus, Bot, Sparkles
 import { IntegrationConnectDialog } from './IntegrationConnectDialog';
 import { IntegrationDetailDialog } from './IntegrationDetailDialog';
 import { PhoneNumberSettings } from './PhoneNumberSettings';
+import { WhatsAppIntegrationStatus } from './WhatsAppIntegrationStatus';
 import { toast } from 'sonner';
 
 const iconMap: Record<string, any> = {
@@ -290,6 +291,19 @@ export function IntegrationsSettings() {
           <div className="text-center py-8">
             <p className="text-muted-foreground">Nenhuma integração encontrada nesta categoria.</p>
           </div>
+        )}
+
+        {/* WhatsApp Status - show if org has WhatsApp integration */}
+        {orgIntegrations?.some(oi => oi.is_enabled && oi.integration?.slug === 'twilio-whatsapp') && (
+          <WhatsAppIntegrationStatus 
+            onReconfigure={() => {
+              const whatsappIntegration = availableIntegrations?.find(i => i.slug === 'twilio-whatsapp');
+              if (whatsappIntegration) {
+                setSelectedIntegration(whatsappIntegration);
+                setConnectDialogOpen(true);
+              }
+            }}
+          />
         )}
 
         {/* Phone Number Settings - only show if org has telephony integration */}
