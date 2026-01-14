@@ -480,7 +480,7 @@ export function SDRAgentWizard({
     try {
       const agentData = {
         organization_id: organizationId,
-        name: `Agente ${wizardData.companyName}`,
+        name: existingAgent?.name || `Agente ${wizardData.companyName}`,
         custom_instructions: wizardData.generatedPrompt,
         wizard_data: JSON.parse(JSON.stringify(wizardData)),
         feedback_history: JSON.parse(JSON.stringify(feedbackHistory)),
