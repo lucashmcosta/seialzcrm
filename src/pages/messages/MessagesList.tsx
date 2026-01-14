@@ -8,6 +8,7 @@ import {
   Send01,
   Archive,
   User01,
+  CornerUpLeft,
 } from '@untitledui/icons';
 import { ListBox, ListBoxItem, type ListBoxItemProps } from 'react-aria-components';
 import { Layout } from '@/components/Layout';
@@ -18,6 +19,7 @@ import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Skeleton } from '@/components/ui/skeleton';
+import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { useOrganization } from '@/hooks/useOrganization';
 import { useTranslation } from '@/lib/i18n';
 import { supabase } from '@/integrations/supabase/client';
@@ -31,6 +33,9 @@ import { AudioRecorder } from '@/components/whatsapp/AudioRecorder';
 import { MediaUploadButton } from '@/components/whatsapp/MediaUploadButton';
 import { MediaPreviewDialog } from '@/components/whatsapp/MediaPreviewDialog';
 import { AudioMessagePlayer } from '@/components/whatsapp/AudioMessagePlayer';
+import { QuotedMessage } from '@/components/whatsapp/QuotedMessage';
+import { ReplyPreview } from '@/components/whatsapp/ReplyPreview';
+import EmojiPicker, { EmojiClickData, Theme } from 'emoji-picker-react';
 import { cn } from '@/lib/utils';
 
 // Helper function for formatting relative time
@@ -99,6 +104,11 @@ interface Message {
   media_urls: string[] | null;
   media_type: string | null;
   error_message: string | null;
+  reply_to_message_id: string | null;
+  reply_to_message?: {
+    content: string;
+    direction: string;
+  } | null;
 }
 
 interface ChatListItemProps extends ListBoxItemProps<ChatThread> {
@@ -174,6 +184,12 @@ export default function MessagesList() {
   const [previewFile, setPreviewFile] = useState<File | null>(null);
   const [showMediaPreview, setShowMediaPreview] = useState(false);
   const [mediaUploading, setMediaUploading] = useState(false);
+  
+  // Reply state
+  const [replyingTo, setReplyingTo] = useState<Message | null>(null);
+  
+  // Emoji picker state
+  const [showEmojiPicker, setShowEmojiPicker] = useState(false);
 
   // Fetch threads
   const { data: threads, isLoading: threadsLoading, refetch: refetchThreads } = useQuery({
@@ -318,10 +334,14 @@ export default function MessagesList() {
 
   const fetchMessages = async (threadId: string) => {
     setMessagesLoading(true);
+    setReplyingTo(null); // Clear reply when changing thread
     try {
       const { data, error } = await supabase
         .from('messages')
-        .select('id, content, direction, sent_at, whatsapp_status, media_urls, media_type, error_message')
+        .select(`
+          id, content, direction, sent_at, whatsapp_status, media_urls, media_type, error_message, reply_to_message_id,
+          reply_to_message:reply_to_message_id (content, direction)
+        `)
         .eq('thread_id', threadId)
         .is('deleted_at', null)
         .order('sent_at', { ascending: true });
@@ -367,12 +387,16 @@ export default function MessagesList() {
       media_urls: null,
       media_type: null,
       error_message: null,
+      reply_to_message_id: replyingTo?.id || null,
+      reply_to_message: replyingTo ? { content: replyingTo.content, direction: replyingTo.direction } : null,
     };
 
     // Add temp message and clear input immediately
     setMessages((prev) => [...prev, tempMessage]);
     const savedText = messageText;
+    const savedReplyTo = replyingTo;
     setMessageText('');
+    setReplyingTo(null);
     scrollToBottom();
 
     // Send in background (no setSubmitting to keep UI responsive)
@@ -432,6 +456,8 @@ export default function MessagesList() {
       media_urls: null,
       media_type: null,
       error_message: null,
+      reply_to_message_id: null,
+      reply_to_message: null,
     };
 
     setMessages((prev) => [...prev, tempMessage]);
@@ -510,6 +536,8 @@ export default function MessagesList() {
       media_urls: null,
       media_type: mediaType,
       error_message: null,
+      reply_to_message_id: null,
+      reply_to_message: null,
     };
 
     setMessages((prev) => [...prev, tempMessage]);
@@ -588,6 +616,15 @@ export default function MessagesList() {
       default:
         return null;
     }
+  };
+
+  const handleEmojiClick = (emojiData: EmojiClickData) => {
+    setMessageText((prev) => prev + emojiData.emoji);
+    setShowEmojiPicker(false);
+  };
+
+  const handleReplyClick = (message: Message) => {
+    setReplyingTo(message);
   };
 
   const filteredThreads = threads?.filter((thread) =>
@@ -716,8 +753,21 @@ export default function MessagesList() {
                           return (
                             <div
                               key={message.id}
-                              className={`flex ${isOutbound ? 'justify-end' : 'justify-start'}`}
+                              className={`group flex items-center gap-1 ${isOutbound ? 'justify-end' : 'justify-start'}`}
                             >
+                              {/* Reply button - left side for inbound */}
+                              {!isOutbound && (
+                                <Button
+                                  variant="ghost"
+                                  size="icon"
+                                  className="h-7 w-7 opacity-0 group-hover:opacity-100 transition-opacity shrink-0"
+                                  onClick={() => handleReplyClick(message)}
+                                  title={locale === 'pt-BR' ? 'Responder' : 'Reply'}
+                                >
+                                  <CornerUpLeft className="h-4 w-4" />
+                                </Button>
+                              )}
+                              
                               <div
                                 className={cn(
                                   'relative max-w-[70%] rounded-lg p-3 pb-5',
@@ -726,6 +776,13 @@ export default function MessagesList() {
                                     : 'bg-muted'
                                 )}
                               >
+                                {/* Quoted Message */}
+                                {message.reply_to_message && (
+                                  <QuotedMessage
+                                    content={message.reply_to_message.content}
+                                    direction={message.reply_to_message.direction}
+                                  />
+                                )}
                                 {/* Media */}
                                 {message.media_urls && message.media_urls.length > 0 && (
                                   <div className="space-y-2">
@@ -789,6 +846,19 @@ export default function MessagesList() {
                                   {isOutbound && renderStatusIcon(message.whatsapp_status)}
                                 </div>
                               </div>
+                              
+                              {/* Reply button - right side for outbound */}
+                              {isOutbound && (
+                                <Button
+                                  variant="ghost"
+                                  size="icon"
+                                  className="h-7 w-7 opacity-0 group-hover:opacity-100 transition-opacity shrink-0"
+                                  onClick={() => handleReplyClick(message)}
+                                  title={locale === 'pt-BR' ? 'Responder' : 'Reply'}
+                                >
+                                  <CornerUpLeft className="h-4 w-4" />
+                                </Button>
+                              )}
                             </div>
                           );
                         })}
@@ -817,10 +887,43 @@ export default function MessagesList() {
                       </div>
                     )}
 
-                    <div className="flex gap-2">
+                    {/* Reply Preview */}
+                    {replyingTo && (
+                      <ReplyPreview
+                        message={replyingTo}
+                        onClose={() => setReplyingTo(null)}
+                      />
+                    )}
+
+                    <div className={cn(
+                      "flex gap-2",
+                      replyingTo && "border border-t-0 border-border rounded-b-lg p-2 bg-card"
+                    )}>
                       <div className="flex gap-1">
                         <MediaUploadButton onFileSelected={handleFileSelected} disabled={submitting || mediaUploading || !isIn24hWindow} />
                         <AudioRecorder onSend={handleAudioSend} disabled={submitting || mediaUploading || !isIn24hWindow} />
+                        
+                        {/* Emoji Picker */}
+                        <Popover open={showEmojiPicker} onOpenChange={setShowEmojiPicker}>
+                          <PopoverTrigger asChild>
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              disabled={!isIn24hWindow && messages.length > 0}
+                              className="h-10 w-10"
+                            >
+                              <FaceSmile className="h-5 w-5" />
+                            </Button>
+                          </PopoverTrigger>
+                          <PopoverContent className="w-auto p-0 border-none" align="start" side="top">
+                            <EmojiPicker
+                              onEmojiClick={handleEmojiClick}
+                              theme={document.documentElement.classList.contains('dark') ? Theme.DARK : Theme.LIGHT}
+                              lazyLoadEmojis
+                              searchPlaceHolder={locale === 'pt-BR' ? 'Buscar emoji...' : 'Search emoji...'}
+                            />
+                          </PopoverContent>
+                        </Popover>
                       </div>
                       <Textarea
                         placeholder={locale === 'pt-BR' ? 'Digite uma mensagem...' : 'Type a message...'}

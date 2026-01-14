@@ -1301,6 +1301,7 @@ export type Database = {
           media_type: string | null
           media_urls: Json | null
           organization_id: string
+          reply_to_message_id: string | null
           sender_user_id: string | null
           sent_at: string | null
           template_id: string | null
@@ -1320,6 +1321,7 @@ export type Database = {
           media_type?: string | null
           media_urls?: Json | null
           organization_id: string
+          reply_to_message_id?: string | null
           sender_user_id?: string | null
           sent_at?: string | null
           template_id?: string | null
@@ -1339,6 +1341,7 @@ export type Database = {
           media_type?: string | null
           media_urls?: Json | null
           organization_id?: string
+          reply_to_message_id?: string | null
           sender_user_id?: string | null
           sent_at?: string | null
           template_id?: string | null
@@ -1352,6 +1355,13 @@ export type Database = {
             columns: ["organization_id"]
             isOneToOne: false
             referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "messages_reply_to_message_id_fkey"
+            columns: ["reply_to_message_id"]
+            isOneToOne: false
+            referencedRelation: "messages"
             referencedColumns: ["id"]
           },
           {
