@@ -3,6 +3,7 @@ import { Layout } from '@/components/Layout';
 import { useOrganization } from '@/hooks/useOrganization';
 import { useTranslation } from '@/lib/i18n';
 import { usePermissions } from '@/hooks/usePermissions';
+import { useWhatsAppIntegration } from '@/hooks/useWhatsAppIntegration';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { NativeSelect } from '@/components/ui/native-select';
 import { Input } from '@/components/ui/input';
@@ -32,10 +33,11 @@ export default function Settings() {
   const { locale } = useOrganization();
   const { t } = useTranslation(locale as any);
   const { permissions } = usePermissions();
+  const { hasWhatsApp } = useWhatsAppIntegration();
   const [selectedTab, setSelectedTab] = useState('general');
   const [searchTerm, setSearchTerm] = useState('');
 
-  const allTabs: TabConfig[] = [
+  const allTabs: TabConfig[] = useMemo(() => [
     { id: 'general', label: t('settings.general') },
     { id: 'theme', label: t('settings.theme'), permission: 'canManageSettings' },
     { id: 'users', label: t('settings.users'), permission: 'canManageUsers' },
@@ -46,11 +48,12 @@ export default function Settings() {
     { id: 'customFields', label: t('settings.customFields'), permission: 'canManageSettings' },
     { id: 'tags', label: t('settings.tags'), permission: 'canManageSettings' },
     { id: 'integrations', label: t('settings.integrations'), permission: 'canManageIntegrations' },
-    { id: 'whatsappTemplates', label: 'WhatsApp Templates', permission: 'canManageIntegrations' },
+    // Only show WhatsApp Templates if user has WhatsApp connected
+    ...(hasWhatsApp ? [{ id: 'whatsappTemplates', label: 'WhatsApp Templates', permission: 'canManageIntegrations' as const }] : []),
     { id: 'apiWebhooks', label: 'API & Webhooks', permission: 'canManageIntegrations' },
     { id: 'auditLogs', label: t('settings.auditLogs'), permission: 'canManageSettings' },
     { id: 'trash', label: t('settings.trash'), permission: 'canManageSettings' },
-  ];
+  ], [t, hasWhatsApp]);
 
   // Filter tabs based on permissions
   const filteredTabs = useMemo(() => {

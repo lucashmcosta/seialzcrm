@@ -1,5 +1,5 @@
-import { useState } from 'react';
-import { useQueryClient, useMutation } from '@tanstack/react-query';
+import { useState, useEffect } from 'react';
+import { useQueryClient, useMutation, useQuery } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { useOrganization } from '@/hooks/useOrganization';
 import {
@@ -15,8 +15,9 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { Alert, AlertDescription } from '@/components/ui/alert';
 import { toast } from 'sonner';
-import { Loader2 } from 'lucide-react';
+import { Loader2, Info } from 'lucide-react';
 
 interface IntegrationConnectDialogProps {
   open: boolean;
@@ -39,9 +40,53 @@ export function IntegrationConnectDialog({
   const queryClient = useQueryClient();
   const [configValues, setConfigValues] = useState<Record<string, any>>({});
   const [setupPhase, setSetupPhase] = useState<'form' | 'configuring'>('form');
+  const [credentialsFromVoice, setCredentialsFromVoice] = useState(false);
 
   const isTwilioVoice = integration.slug === 'twilio-voice';
   const isTwilioWhatsApp = integration.slug === 'twilio-whatsapp';
+
+  // Fetch Twilio Voice credentials if connecting WhatsApp
+  const { data: voiceIntegration } = useQuery({
+    queryKey: ['twilio-voice-credentials', organization?.id],
+    queryFn: async () => {
+      const { data } = await supabase
+        .from('organization_integrations')
+        .select(`
+          config_values,
+          admin_integrations!inner(slug)
+        `)
+        .eq('organization_id', organization!.id)
+        .eq('admin_integrations.slug', 'twilio-voice')
+        .eq('is_enabled', true)
+        .maybeSingle();
+      return data;
+    },
+    enabled: !!organization?.id && isTwilioWhatsApp && open,
+  });
+
+  // Pre-fill credentials from Voice integration if available
+  useEffect(() => {
+    if (voiceIntegration?.config_values && isTwilioWhatsApp) {
+      const voiceConfig = voiceIntegration.config_values as any;
+      if (voiceConfig.account_sid && voiceConfig.auth_token) {
+        setConfigValues(prev => ({
+          ...prev,
+          account_sid: voiceConfig.account_sid,
+          auth_token: voiceConfig.auth_token,
+        }));
+        setCredentialsFromVoice(true);
+      }
+    }
+  }, [voiceIntegration, isTwilioWhatsApp]);
+
+  // Reset state when dialog opens/closes
+  useEffect(() => {
+    if (!open) {
+      setConfigValues({});
+      setSetupPhase('form');
+      setCredentialsFromVoice(false);
+    }
+  }, [open]);
 
   const connectMutation = useMutation({
     mutationFn: async () => {
@@ -283,6 +328,16 @@ export function IntegrationConnectDialog({
             </div>
           ) : (
             <div className="space-y-4 py-4">
+              {/* Show info if credentials from Voice */}
+              {credentialsFromVoice && isTwilioWhatsApp && (
+                <Alert className="bg-primary/10 border-primary/20">
+                  <Info className="h-4 w-4" />
+                  <AlertDescription>
+                    Credenciais detectadas da integração Twilio Voice. Você pode simplesmente clicar em Conectar.
+                  </AlertDescription>
+                </Alert>
+              )}
+              
               {fields.length > 0 ? (
                 fields.map((field: any) => renderField(field))
               ) : (
