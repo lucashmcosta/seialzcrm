@@ -726,7 +726,9 @@ ${agent.custom_instructions}
 
 `;
     
-    const facts = (memories.facts as string[]) || [];
+    // Limit facts to last 8 to reduce tokens
+    const allFacts = (memories.facts as string[]) || [];
+    const facts = allFacts.slice(-8);
     if (facts.length > 0) {
       prompt += `### Fatos Importantes que Você Sabe
 `;
@@ -954,14 +956,14 @@ serve(async (req) => {
         .is('deleted_at', null)
         .limit(5),
       
-      // Message history - INCREASED LIMIT for better memory
+      // Message history - OPTIMIZED LIMIT to avoid rate limits
       supabase
         .from('messages')
         .select('content, direction, created_at, sender_type')
         .eq('thread_id', threadId)
         .is('deleted_at', null)
         .order('created_at', { ascending: false })
-        .limit(30),
+        .limit(10),
       
       // Contact memories - PERSISTENT MEMORY
       supabase
@@ -1066,10 +1068,10 @@ serve(async (req) => {
     // 6. Build system prompt (without message history - it goes in messages now)
     const systemPrompt = buildSystemPrompt(agent, contact, company, opportunities, enabledTools, memories);
 
-    // Build conversation messages for REAL memory
+    // Build conversation messages for REAL memory - truncate long messages to save tokens
     const conversationMessages = messageHistory.map(msg => ({
       role: msg.direction === 'inbound' ? 'user' : 'assistant',
-      content: msg.content || '',
+      content: (msg.content || '').slice(0, 400),
     }));
 
     // Filter enabled tools
@@ -1120,7 +1122,30 @@ serve(async (req) => {
       if (!claudeResponse.ok) {
         const errorText = await claudeResponse.text();
         console.error('Claude API error:', claudeResponse.status, errorText);
-        throw new Error(`Claude API error: ${claudeResponse.status}`);
+        
+        // Retry on rate limit (429)
+        if (claudeResponse.status === 429) {
+          console.log('Rate limit hit, waiting 2 seconds and retrying...');
+          await new Promise(resolve => setTimeout(resolve, 2000));
+          
+          claudeResponse = await fetch('https://api.anthropic.com/v1/messages', {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              'x-api-key': configValues.api_key,
+              'anthropic-version': '2023-06-01',
+            },
+            body: JSON.stringify(claudeBody),
+          });
+          
+          if (!claudeResponse.ok) {
+            const retryErrorText = await claudeResponse.text();
+            console.error('Claude API retry error:', claudeResponse.status, retryErrorText);
+            throw new Error(`Claude API error after retry: ${claudeResponse.status}`);
+          }
+        } else {
+          throw new Error(`Claude API error: ${claudeResponse.status}`);
+        }
       }
 
       let claudeData = await claudeResponse.json();
@@ -1172,7 +1197,34 @@ serve(async (req) => {
         if (!claudeResponse.ok) {
           const errorText = await claudeResponse.text();
           console.error('Claude API error (tool continuation):', claudeResponse.status, errorText);
-          throw new Error(`Claude API error: ${claudeResponse.status}`);
+          
+          // Retry on rate limit for tool calls too
+          if (claudeResponse.status === 429) {
+            console.log('Rate limit hit on tool call, waiting 2 seconds...');
+            await new Promise(resolve => setTimeout(resolve, 2000));
+            
+            claudeResponse = await fetch('https://api.anthropic.com/v1/messages', {
+              method: 'POST',
+              headers: {
+                'Content-Type': 'application/json',
+                'x-api-key': configValues.api_key,
+                'anthropic-version': '2023-06-01',
+              },
+              body: JSON.stringify({
+                model,
+                max_tokens: maxTokens,
+                system: systemPrompt,
+                messages: claudeMessages,
+                tools: claudeBody.tools,
+              }),
+            });
+            
+            if (!claudeResponse.ok) {
+              throw new Error(`Claude API error after retry: ${claudeResponse.status}`);
+            }
+          } else {
+            throw new Error(`Claude API error: ${claudeResponse.status}`);
+          }
         }
 
         claudeData = await claudeResponse.json();
