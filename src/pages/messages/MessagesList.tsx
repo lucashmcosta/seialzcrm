@@ -695,7 +695,7 @@ export default function MessagesList() {
                             >
                               <div
                                 className={cn(
-                                  'max-w-[70%] rounded-lg p-3',
+                                  'relative max-w-[70%] rounded-lg p-3 pb-5',
                                   isOutbound
                                     ? 'bg-green-100 dark:bg-green-900/40 text-green-900 dark:text-green-100'
                                     : 'bg-muted'
@@ -703,7 +703,7 @@ export default function MessagesList() {
                               >
                                 {/* Media */}
                                 {message.media_urls && message.media_urls.length > 0 && (
-                                  <div className="mb-2 space-y-2">
+                                  <div className="space-y-2">
                                     {message.media_urls.map((url, i) => {
                                       if (message.media_type === 'audio' || url.match(/\.(ogg|mp3|wav|m4a)$/i)) {
                                         return <AudioMessagePlayer key={i} src={url} />;
@@ -736,8 +736,10 @@ export default function MessagesList() {
                                   </div>
                                 )}
 
-                                {/* Content */}
-                                {message.content && (
+                                {/* Content - hide media placeholders */}
+                                {message.content && 
+                                 !(message.media_urls && message.media_urls.length > 0 && 
+                                   ['📎 Mídia', '📷 Imagem', '🎵 Áudio', '🎬 Vídeo', '📎 Media', '📷 Image', '🎵 Audio', '🎬 Video'].includes(message.content)) && (
                                   <p className="text-sm whitespace-pre-wrap break-words">
                                     {message.content}
                                   </p>
@@ -750,12 +752,13 @@ export default function MessagesList() {
                                   </p>
                                 )}
 
-                                {/* Footer */}
-                                <div className="flex items-center justify-end gap-1 mt-1">
-                                  <span className="text-xs text-muted-foreground">
-                                    {formatDistanceToNow(new Date(message.sent_at), {
-                                      addSuffix: true,
-                                      locale: dateLocale,
+                                {/* Footer - WhatsApp style: bottom right */}
+                                <div className="absolute bottom-1 right-2 flex items-center gap-1">
+                                  <span className="text-[10px] text-muted-foreground/70">
+                                    {new Date(message.sent_at).toLocaleTimeString(locale, {
+                                      hour: '2-digit',
+                                      minute: '2-digit',
+                                      hour12: false
                                     })}
                                   </span>
                                   {isOutbound && renderStatusIcon(message.whatsapp_status)}
