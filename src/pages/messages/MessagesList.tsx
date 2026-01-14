@@ -230,13 +230,7 @@ export default function MessagesList() {
   
   // Handle AI text improvement
   const handleImproveText = async (mode: 'grammar' | 'professional' | 'friendly') => {
-    if (!messageText.trim()) {
-      toast({
-        variant: 'destructive',
-        description: locale === 'pt-BR' ? 'Digite uma mensagem primeiro' : 'Type a message first',
-      });
-      return;
-    }
+    if (!messageText.trim()) return;
     
     setAiMenuOpen(false);
     setAiImproving(true);
@@ -249,15 +243,8 @@ export default function MessagesList() {
       
       setMessageText(result.content);
       adjustTextareaHeight();
-      toast({
-        description: locale === 'pt-BR' ? 'Texto melhorado!' : 'Text improved!',
-      });
     } catch (error: any) {
       console.error('AI improvement error:', error);
-      toast({
-        variant: 'destructive',
-        description: locale === 'pt-BR' ? 'Erro ao processar com IA' : 'AI processing error',
-      });
     } finally {
       setAiImproving(false);
     }
