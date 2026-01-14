@@ -22,6 +22,7 @@ import { AuditLogs } from './settings/AuditLogs';
 import { Trash } from './settings/Trash';
 import WhatsAppTemplates from './settings/WhatsAppTemplates';
 import { AIAgentSettings } from '@/components/settings/AIAgentSettings';
+import { KnowledgeBaseSettings } from '@/components/settings/KnowledgeBaseSettings';
 import { SearchLg } from '@untitledui/icons';
 
 interface TabConfig {
@@ -53,6 +54,7 @@ export default function Settings() {
     ...(hasWhatsApp ? [
       { id: 'whatsappTemplates', label: 'WhatsApp Templates', permission: 'canManageIntegrations' as const },
       { id: 'aiAgent', label: 'Agente IA', permission: 'canManageIntegrations' as const },
+      { id: 'knowledgeBase', label: 'Base de Conhecimento', permission: 'canManageIntegrations' as const },
     ] : []),
     { id: 'apiWebhooks', label: 'API & Webhooks', permission: 'canManageIntegrations' },
     { id: 'auditLogs', label: t('settings.auditLogs'), permission: 'canManageSettings' },
@@ -173,6 +175,10 @@ export default function Settings() {
 
               <TabsContent value="aiAgent">
                 <AIAgentSettings />
+              </TabsContent>
+
+              <TabsContent value="knowledgeBase">
+                <KnowledgeBaseSettings />
               </TabsContent>
 
               <TabsContent value="apiWebhooks">

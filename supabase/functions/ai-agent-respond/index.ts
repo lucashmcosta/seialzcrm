@@ -643,6 +643,68 @@ function isWithinWorkingHours(workingHours: WorkingHours): boolean {
 }
 
 /**
+ * Search for relevant knowledge using RAG
+ */
+async function searchRelevantKnowledge(
+  supabase: any,
+  messageContent: string,
+  organizationId: string,
+  agentId: string
+): Promise<{ content: string; title: string | null; type: string }[]> {
+  try {
+    // Generate embedding for the user message
+    const embeddingResponse = await fetch('https://ai.gateway.lovable.dev/v1/embeddings', {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${Deno.env.get('LOVABLE_API_KEY')}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        model: 'text-embedding-3-small',
+        input: messageContent,
+      }),
+    });
+
+    if (!embeddingResponse.ok) {
+      console.warn('Failed to generate embedding for RAG search');
+      return [];
+    }
+
+    const embeddingData = await embeddingResponse.json();
+    const queryEmbedding = embeddingData.data?.[0]?.embedding;
+
+    if (!queryEmbedding) {
+      console.warn('No embedding returned from API');
+      return [];
+    }
+
+    // Search for similar knowledge
+    const { data: results, error } = await supabase.rpc('search_knowledge', {
+      query_embedding: queryEmbedding,
+      org_id: organizationId,
+      agent_id_filter: agentId,
+      match_threshold: 0.7,
+      match_count: 5,
+    });
+
+    if (error) {
+      console.warn('RAG search error:', error.message);
+      return [];
+    }
+
+    console.log(`RAG found ${results?.length || 0} relevant knowledge items`);
+    return (results || []).map((r: any) => ({
+      content: r.content,
+      title: r.title,
+      type: r.content_type,
+    }));
+  } catch (err) {
+    console.warn('RAG search failed:', err);
+    return [];
+  }
+}
+
+/**
  * Build system prompt based on agent configuration
  */
 function buildSystemPrompt(
@@ -651,7 +713,8 @@ function buildSystemPrompt(
   company: any,
   opportunities: any[],
   enabledTools: string[],
-  memories: any | null
+  memories: any | null,
+  retrievedKnowledge: { content: string; title: string | null; type: string }[] = []
 ): string {
   const toneDescriptions: Record<string, string> = {
     professional: 'Seja profissional, cortês e objetivo. Use linguagem formal mas acolhedora.',
@@ -817,6 +880,21 @@ Você tem acesso a ferramentas que DEVE usar quando apropriado:
   - "estou muito interessado" → save_memory({qualification: {interest_level: "high"}})
 `;
     }
+  }
+
+  // Add retrieved knowledge from RAG
+  if (retrievedKnowledge.length > 0) {
+    prompt += `
+## CONHECIMENTO RELEVANTE PARA ESTA MENSAGEM
+Use estas informações para responder com mais precisão:
+`;
+    retrievedKnowledge.forEach((item, i) => {
+      const titlePart = item.title ? ` (${item.title})` : '';
+      prompt += `
+${i + 1}. [${item.type.toUpperCase()}]${titlePart}
+${item.content}
+`;
+    });
   }
 
   prompt += `
@@ -1065,8 +1143,11 @@ serve(async (req) => {
       );
     }
 
-    // 6. Build system prompt (without message history - it goes in messages now)
-    const systemPrompt = buildSystemPrompt(agent, contact, company, opportunities, enabledTools, memories);
+    // 6. Search for relevant knowledge (RAG)
+    const retrievedKnowledge = await searchRelevantKnowledge(supabase, message, organizationId, agentId);
+
+    // 7. Build system prompt with RAG knowledge
+    const systemPrompt = buildSystemPrompt(agent, contact, company, opportunities, enabledTools, memories, retrievedKnowledge);
 
     // Build conversation messages for REAL memory - truncate long messages to save tokens
     const conversationMessages = messageHistory.map(msg => ({
