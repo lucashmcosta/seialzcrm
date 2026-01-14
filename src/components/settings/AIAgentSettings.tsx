@@ -38,6 +38,7 @@ interface AIAgent {
   enabled_tools?: string[];
   ai_provider?: string | null;
   ai_model?: string | null;
+  max_messages_per_conversation?: number | null;
 }
 
 export function AIAgentSettings() {
@@ -82,6 +83,7 @@ export function AIAgentSettings() {
           enabled_tools: (agent.enabled_tools as string[]) || ['update_contact', 'transfer_to_human'],
           ai_provider: agent.ai_provider,
           ai_model: agent.ai_model,
+          max_messages_per_conversation: agent.max_messages_per_conversation,
         };
       });
       
@@ -146,6 +148,7 @@ export function AIAgentSettings() {
           is_enabled: false,
           ai_provider: agent.ai_provider,
           ai_model: agent.ai_model,
+          max_messages_per_conversation: agent.max_messages_per_conversation,
           goal: 'Qualificar leads',
           tone: 'friendly',
         })
