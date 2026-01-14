@@ -22,6 +22,229 @@ interface WorkingHours {
   };
 }
 
+interface ToolResult {
+  success: boolean;
+  message: string;
+  data?: any;
+}
+
+// Available tools for the agent
+const AVAILABLE_TOOLS = [
+  {
+    type: "function",
+    function: {
+      name: "update_contact",
+      description: "Atualiza informações do contato no CRM. Use quando o cliente corrigir seu nome, informar email, telefone ou empresa.",
+      parameters: {
+        type: "object",
+        properties: {
+          full_name: { type: "string", description: "Nome completo correto do contato" },
+          first_name: { type: "string", description: "Primeiro nome do contato" },
+          last_name: { type: "string", description: "Sobrenome do contato" },
+          email: { type: "string", description: "Email do contato" },
+          phone: { type: "string", description: "Telefone do contato" },
+          company_name: { type: "string", description: "Nome da empresa do contato" },
+        },
+      },
+    },
+  },
+  {
+    type: "function",
+    function: {
+      name: "create_opportunity",
+      description: "Cria uma oportunidade de venda quando o cliente demonstra interesse em comprar. Use quando identificar intenção de compra clara.",
+      parameters: {
+        type: "object",
+        properties: {
+          title: { type: "string", description: "Título da oportunidade (ex: 'Interesse em Plano Pro')" },
+          amount: { type: "number", description: "Valor estimado da venda" },
+          notes: { type: "string", description: "Notas sobre o interesse do cliente" },
+        },
+        required: ["title"],
+      },
+    },
+  },
+  {
+    type: "function",
+    function: {
+      name: "create_task",
+      description: "Cria uma tarefa de follow-up para a equipe. Use quando precisar agendar um retorno ou ação futura.",
+      parameters: {
+        type: "object",
+        properties: {
+          title: { type: "string", description: "Título da tarefa (ex: 'Ligar para confirmar reunião')" },
+          due_date: { type: "string", description: "Data de vencimento no formato YYYY-MM-DD" },
+          priority: { type: "string", enum: ["low", "medium", "high"], description: "Prioridade da tarefa" },
+        },
+        required: ["title"],
+      },
+    },
+  },
+  {
+    type: "function",
+    function: {
+      name: "transfer_to_human",
+      description: "Transfere a conversa para um atendente humano. Use quando o cliente pedir explicitamente, o assunto for muito complexo, ou houver reclamação séria.",
+      parameters: {
+        type: "object",
+        properties: {
+          reason: { type: "string", description: "Motivo da transferência para o atendente" },
+        },
+      },
+    },
+  },
+  {
+    type: "function",
+    function: {
+      name: "schedule_meeting",
+      description: "Agenda uma reunião ou demonstração com o cliente.",
+      parameters: {
+        type: "object",
+        properties: {
+          title: { type: "string", description: "Título da reunião" },
+          date: { type: "string", description: "Data da reunião no formato YYYY-MM-DD" },
+          time: { type: "string", description: "Horário da reunião no formato HH:MM" },
+          notes: { type: "string", description: "Notas sobre a reunião" },
+        },
+        required: ["title", "date"],
+      },
+    },
+  },
+];
+
+/**
+ * Execute a tool call and return the result
+ */
+async function executeTool(
+  supabase: any,
+  toolName: string,
+  args: any,
+  context: { contactId: string; organizationId: string; threadId: string }
+): Promise<ToolResult> {
+  console.log(`Executing tool: ${toolName}`, args);
+
+  try {
+    switch (toolName) {
+      case 'update_contact': {
+        // Only update non-empty fields
+        const updateData: Record<string, any> = {};
+        if (args.full_name) updateData.full_name = args.full_name;
+        if (args.first_name) updateData.first_name = args.first_name;
+        if (args.last_name) updateData.last_name = args.last_name;
+        if (args.email) updateData.email = args.email;
+        if (args.phone) updateData.phone = args.phone;
+        if (args.company_name) updateData.company_name = args.company_name;
+
+        if (Object.keys(updateData).length === 0) {
+          return { success: false, message: 'Nenhum campo para atualizar' };
+        }
+
+        const { error } = await supabase
+          .from('contacts')
+          .update(updateData)
+          .eq('id', context.contactId);
+
+        if (error) {
+          console.error('Error updating contact:', error);
+          return { success: false, message: error.message };
+        }
+        return { success: true, message: 'Contato atualizado com sucesso', data: updateData };
+      }
+
+      case 'create_opportunity': {
+        // Get first pipeline stage
+        const { data: stages } = await supabase
+          .from('pipeline_stages')
+          .select('id')
+          .eq('organization_id', context.organizationId)
+          .order('order_index')
+          .limit(1);
+
+        const stageId = stages?.[0]?.id;
+        if (!stageId) {
+          return { success: false, message: 'Nenhum estágio de pipeline encontrado' };
+        }
+
+        const { error } = await supabase
+          .from('opportunities')
+          .insert({
+            organization_id: context.organizationId,
+            contact_id: context.contactId,
+            title: args.title,
+            amount: args.amount || 0,
+            pipeline_stage_id: stageId,
+            status: 'open',
+          });
+
+        if (error) {
+          console.error('Error creating opportunity:', error);
+          return { success: false, message: error.message };
+        }
+        return { success: true, message: 'Oportunidade criada com sucesso' };
+      }
+
+      case 'create_task': {
+        const { error } = await supabase
+          .from('tasks')
+          .insert({
+            organization_id: context.organizationId,
+            contact_id: context.contactId,
+            title: args.title,
+            due_date: args.due_date || null,
+            priority: args.priority || 'medium',
+            status: 'pending',
+          });
+
+        if (error) {
+          console.error('Error creating task:', error);
+          return { success: false, message: error.message };
+        }
+        return { success: true, message: 'Tarefa criada com sucesso' };
+      }
+
+      case 'transfer_to_human': {
+        const { error } = await supabase
+          .from('message_threads')
+          .update({ needs_human_attention: true })
+          .eq('id', context.threadId);
+
+        if (error) {
+          console.error('Error transferring to human:', error);
+          return { success: false, message: error.message };
+        }
+        return { success: true, message: 'Conversa marcada para atenção humana' };
+      }
+
+      case 'schedule_meeting': {
+        // Create a task for the meeting
+        const meetingDate = args.date + (args.time ? ` ${args.time}` : '');
+        const { error } = await supabase
+          .from('tasks')
+          .insert({
+            organization_id: context.organizationId,
+            contact_id: context.contactId,
+            title: `📅 ${args.title}`,
+            due_date: args.date,
+            priority: 'high',
+            status: 'pending',
+          });
+
+        if (error) {
+          console.error('Error scheduling meeting:', error);
+          return { success: false, message: error.message };
+        }
+        return { success: true, message: `Reunião agendada para ${meetingDate}` };
+      }
+
+      default:
+        return { success: false, message: `Tool desconhecida: ${toolName}` };
+    }
+  } catch (error) {
+    console.error(`Error executing tool ${toolName}:`, error);
+    return { success: false, message: error instanceof Error ? error.message : 'Erro desconhecido' };
+  }
+}
+
 /**
  * Check if current time is within working hours
  */
@@ -59,7 +282,7 @@ function buildSystemPrompt(
   contact: any,
   company: any,
   opportunities: any[],
-  messageHistory: any[]
+  enabledTools: string[]
 ): string {
   const toneDescriptions: Record<string, string> = {
     professional: 'Seja profissional, cortês e objetivo. Use linguagem formal mas acolhedora.',
@@ -98,7 +321,7 @@ ${agent.custom_instructions}
 ## CONTEXTO DO CONTATO
 `;
   if (contact) {
-    prompt += `- Nome: ${contact.full_name || 'Não informado'}
+    prompt += `- Nome atual registrado: ${contact.full_name || 'Não informado'}
 - Email: ${contact.email || 'Não informado'}
 - Telefone: ${contact.phone || 'Não informado'}
 - Estágio: ${contact.lifecycle_stage || 'lead'}
@@ -126,16 +349,39 @@ ${agent.custom_instructions}
     });
   }
 
-  // Add message history context
-  if (messageHistory && messageHistory.length > 0) {
+  // Add tools instructions
+  if (enabledTools.length > 0) {
     prompt += `
-## HISTÓRICO RECENTE DA CONVERSA (últimas ${messageHistory.length} mensagens)
+## FERRAMENTAS DISPONÍVEIS
+Você tem acesso a ferramentas que DEVE usar quando apropriado:
 `;
-    messageHistory.forEach(msg => {
-      const sender = msg.direction === 'inbound' ? 'Cliente' : 'Você';
-      prompt += `${sender}: ${msg.content?.slice(0, 200)}${msg.content?.length > 200 ? '...' : ''}
+    if (enabledTools.includes('update_contact')) {
+      prompt += `
+- **update_contact**: Atualize o contato quando o cliente corrigir informações (nome, email, telefone, empresa).
+  IMPORTANTE: Na PRIMEIRA mensagem ou quando tiver dúvida, confirme o nome do contato naturalmente.
+  Se o nome registrado parecer incompleto ou incorreto, pergunte "Posso confirmar seu nome?"
 `;
-    });
+    }
+    if (enabledTools.includes('create_opportunity')) {
+      prompt += `
+- **create_opportunity**: Crie uma oportunidade quando identificar interesse claro de compra.
+`;
+    }
+    if (enabledTools.includes('create_task')) {
+      prompt += `
+- **create_task**: Crie tarefas para follow-ups ou ações futuras.
+`;
+    }
+    if (enabledTools.includes('transfer_to_human')) {
+      prompt += `
+- **transfer_to_human**: Transfira para humano quando o cliente pedir, o assunto for complexo, ou houver reclamação.
+`;
+    }
+    if (enabledTools.includes('schedule_meeting')) {
+      prompt += `
+- **schedule_meeting**: Agende reuniões quando o cliente aceitar uma demonstração ou call.
+`;
+    }
   }
 
   prompt += `
@@ -145,6 +391,8 @@ ${agent.custom_instructions}
 3. Seja natural e humano na comunicação
 4. Nunca invente informações sobre produtos ou preços
 5. Se não souber algo, ofereça conectar com um especialista
+6. Use as ferramentas disponíveis proativamente quando fizer sentido
+7. SEMPRE confirme informações importantes antes de atualizar o CRM
 `;
 
   return prompt;
@@ -183,6 +431,7 @@ serve(async (req) => {
     }
 
     const organizationId = agent.organization_id;
+    const enabledTools = (agent.enabled_tools as string[]) || ['update_contact', 'transfer_to_human'];
 
     // 2. Check working hours
     const workingHours = agent.working_hours as WorkingHours;
@@ -219,14 +468,6 @@ serve(async (req) => {
     }
 
     // 3. Check message limit per conversation
-    const { count: messageCount } = await supabase
-      .from('messages')
-      .select('id', { count: 'exact', head: true })
-      .eq('thread_id', threadId)
-      .eq('direction', 'outbound')
-      .not('sender_user_id', 'is', null);
-
-    // Count agent-sent messages (we'll track this differently)
     const { count: agentMessageCount } = await supabase
       .from('ai_agent_logs')
       .select('id', { count: 'exact', head: true })
@@ -258,7 +499,7 @@ serve(async (req) => {
       // Contact
       supabase
         .from('contacts')
-        .select('id, full_name, email, phone, company_name, lifecycle_stage, source, company_id')
+        .select('id, full_name, first_name, last_name, email, phone, company_name, lifecycle_stage, source, company_id')
         .eq('id', contactId)
         .single(),
       
@@ -278,14 +519,14 @@ serve(async (req) => {
         .is('deleted_at', null)
         .limit(5),
       
-      // Message history
+      // Message history - INCREASED LIMIT for better memory
       supabase
         .from('messages')
-        .select('content, direction, created_at')
+        .select('content, direction, created_at, sender_type')
         .eq('thread_id', threadId)
         .is('deleted_at', null)
         .order('created_at', { ascending: false })
-        .limit(10),
+        .limit(30),
     ]);
 
     const contact = contactResult.data;
@@ -294,6 +535,7 @@ serve(async (req) => {
       ...opp,
       stage_name: opp.pipeline_stage?.name,
     }));
+    // Reverse to get chronological order
     const messageHistory = (historyResult.data || []).reverse();
 
     // 5. Find AI integration
@@ -336,32 +578,58 @@ serve(async (req) => {
       );
     }
 
-    // 6. Build prompt and call AI
-    const systemPrompt = buildSystemPrompt(agent, contact, company, opportunities, messageHistory);
-    const userPrompt = message;
+    // 6. Build system prompt (without message history - it goes in messages now)
+    const systemPrompt = buildSystemPrompt(agent, contact, company, opportunities, enabledTools);
+
+    // Build conversation messages for REAL memory
+    const conversationMessages = messageHistory.map(msg => ({
+      role: msg.direction === 'inbound' ? 'user' : 'assistant',
+      content: msg.content || '',
+    }));
+
+    // Filter enabled tools
+    const tools = AVAILABLE_TOOLS.filter(t => enabledTools.includes(t.function.name));
 
     let aiResponse: string = '';
     let tokensUsed = 0;
     let modelUsed = '';
+    const toolsExecuted: string[] = [];
 
     if (integrationSlug === 'claude-ai') {
       const model = configValues.default_model || 'claude-sonnet-4-20250514';
-      const maxTokens = 512;
+      const maxTokens = 1024;
       modelUsed = model;
 
-      const claudeResponse = await fetch('https://api.anthropic.com/v1/messages', {
+      // Build messages with history
+      const claudeMessages = [
+        ...conversationMessages,
+        { role: 'user', content: message }
+      ];
+
+      const claudeBody: any = {
+        model,
+        max_tokens: maxTokens,
+        system: systemPrompt,
+        messages: claudeMessages,
+      };
+
+      // Add tools if enabled
+      if (tools.length > 0) {
+        claudeBody.tools = tools.map(t => ({
+          name: t.function.name,
+          description: t.function.description,
+          input_schema: t.function.parameters,
+        }));
+      }
+
+      let claudeResponse = await fetch('https://api.anthropic.com/v1/messages', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
           'x-api-key': configValues.api_key,
           'anthropic-version': '2023-06-01',
         },
-        body: JSON.stringify({
-          model,
-          max_tokens: maxTokens,
-          system: systemPrompt,
-          messages: [{ role: 'user', content: userPrompt }],
-        }),
+        body: JSON.stringify(claudeBody),
       });
 
       if (!claudeResponse.ok) {
@@ -370,13 +638,69 @@ serve(async (req) => {
         throw new Error(`Claude API error: ${claudeResponse.status}`);
       }
 
-      const claudeData = await claudeResponse.json();
-      aiResponse = claudeData.content?.[0]?.text || '';
+      let claudeData = await claudeResponse.json();
       tokensUsed = (claudeData.usage?.input_tokens || 0) + (claudeData.usage?.output_tokens || 0);
+
+      // Handle tool calls
+      while (claudeData.stop_reason === 'tool_use') {
+        const toolUseBlocks = claudeData.content.filter((c: any) => c.type === 'tool_use');
+        const toolResults = [];
+
+        for (const toolUse of toolUseBlocks) {
+          console.log(`Claude wants to use tool: ${toolUse.name}`);
+          toolsExecuted.push(toolUse.name);
+          
+          const result = await executeTool(
+            supabase,
+            toolUse.name,
+            toolUse.input,
+            { contactId, organizationId, threadId }
+          );
+
+          toolResults.push({
+            type: 'tool_result',
+            tool_use_id: toolUse.id,
+            content: JSON.stringify(result),
+          });
+        }
+
+        // Continue conversation with tool results
+        claudeMessages.push({ role: 'assistant', content: claudeData.content });
+        claudeMessages.push({ role: 'user', content: toolResults as any });
+
+        claudeResponse = await fetch('https://api.anthropic.com/v1/messages', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'x-api-key': configValues.api_key,
+            'anthropic-version': '2023-06-01',
+          },
+          body: JSON.stringify({
+            model,
+            max_tokens: maxTokens,
+            system: systemPrompt,
+            messages: claudeMessages,
+            tools: claudeBody.tools,
+          }),
+        });
+
+        if (!claudeResponse.ok) {
+          const errorText = await claudeResponse.text();
+          console.error('Claude API error (tool continuation):', claudeResponse.status, errorText);
+          throw new Error(`Claude API error: ${claudeResponse.status}`);
+        }
+
+        claudeData = await claudeResponse.json();
+        tokensUsed += (claudeData.usage?.input_tokens || 0) + (claudeData.usage?.output_tokens || 0);
+      }
+
+      // Extract text response
+      const textBlock = claudeData.content?.find((c: any) => c.type === 'text');
+      aiResponse = textBlock?.text || '';
 
     } else if (integrationSlug === 'openai-gpt') {
       const model = configValues.default_model || 'gpt-4o-mini';
-      const maxTokens = 512;
+      const maxTokens = 1024;
       modelUsed = model;
 
       const headers: Record<string, string> = {
@@ -384,17 +708,29 @@ serve(async (req) => {
         'Authorization': `Bearer ${configValues.api_key}`,
       };
 
-      const openaiResponse = await fetch('https://api.openai.com/v1/chat/completions', {
+      // Build messages with history
+      const openaiMessages = [
+        { role: 'system', content: systemPrompt },
+        ...conversationMessages,
+        { role: 'user', content: message },
+      ];
+
+      const openaiBody: any = {
+        model,
+        max_tokens: maxTokens,
+        messages: openaiMessages,
+      };
+
+      // Add tools if enabled
+      if (tools.length > 0) {
+        openaiBody.tools = tools;
+        openaiBody.tool_choice = 'auto';
+      }
+
+      let openaiResponse = await fetch('https://api.openai.com/v1/chat/completions', {
         method: 'POST',
         headers,
-        body: JSON.stringify({
-          model,
-          max_tokens: maxTokens,
-          messages: [
-            { role: 'system', content: systemPrompt },
-            { role: 'user', content: userPrompt },
-          ],
-        }),
+        body: JSON.stringify(openaiBody),
       });
 
       if (!openaiResponse.ok) {
@@ -403,9 +739,60 @@ serve(async (req) => {
         throw new Error(`OpenAI API error: ${openaiResponse.status}`);
       }
 
-      const openaiData = await openaiResponse.json();
-      aiResponse = openaiData.choices?.[0]?.message?.content || '';
+      let openaiData = await openaiResponse.json();
       tokensUsed = openaiData.usage?.total_tokens || 0;
+
+      let responseMessage = openaiData.choices?.[0]?.message;
+
+      // Handle tool calls
+      while (responseMessage?.tool_calls && responseMessage.tool_calls.length > 0) {
+        const toolResults = [];
+
+        for (const toolCall of responseMessage.tool_calls) {
+          console.log(`OpenAI wants to use tool: ${toolCall.function.name}`);
+          toolsExecuted.push(toolCall.function.name);
+
+          const result = await executeTool(
+            supabase,
+            toolCall.function.name,
+            JSON.parse(toolCall.function.arguments || '{}'),
+            { contactId, organizationId, threadId }
+          );
+
+          toolResults.push({
+            tool_call_id: toolCall.id,
+            role: 'tool',
+            content: JSON.stringify(result),
+          });
+        }
+
+        // Continue conversation with tool results
+        openaiMessages.push(responseMessage);
+        openaiMessages.push(...toolResults);
+
+        openaiResponse = await fetch('https://api.openai.com/v1/chat/completions', {
+          method: 'POST',
+          headers,
+          body: JSON.stringify({
+            model,
+            max_tokens: maxTokens,
+            messages: openaiMessages,
+            tools: tools.length > 0 ? tools : undefined,
+          }),
+        });
+
+        if (!openaiResponse.ok) {
+          const errorText = await openaiResponse.text();
+          console.error('OpenAI API error (tool continuation):', openaiResponse.status, errorText);
+          throw new Error(`OpenAI API error: ${openaiResponse.status}`);
+        }
+
+        openaiData = await openaiResponse.json();
+        tokensUsed += openaiData.usage?.total_tokens || 0;
+        responseMessage = openaiData.choices?.[0]?.message;
+      }
+
+      aiResponse = responseMessage?.content || '';
     }
 
     if (!aiResponse) {
@@ -416,7 +803,7 @@ serve(async (req) => {
 
     // 7. Check if this is test mode - don't send to WhatsApp, just return response
     if (isTestMode) {
-      console.log(`AI Agent TEST MODE response - ${responseTime}ms, ${tokensUsed} tokens`);
+      console.log(`AI Agent TEST MODE response - ${responseTime}ms, ${tokensUsed} tokens, tools: ${toolsExecuted.join(', ') || 'none'}`);
       
       return new Response(
         JSON.stringify({ 
@@ -424,6 +811,7 @@ serve(async (req) => {
           response: aiResponse,
           responseTime,
           tokensUsed,
+          toolsExecuted,
           isTestMode: true,
         }),
         { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
@@ -461,6 +849,7 @@ serve(async (req) => {
         company: company ? { name: company.name } : null,
         opportunities_count: opportunities.length,
         history_count: messageHistory.length,
+        tools_executed: toolsExecuted,
       },
       response_time_ms: responseTime,
       tokens_used: tokensUsed,
@@ -479,7 +868,7 @@ serve(async (req) => {
       entity_id: threadId,
     });
 
-    console.log(`AI Agent response sent - ${responseTime}ms, ${tokensUsed} tokens`);
+    console.log(`AI Agent response sent - ${responseTime}ms, ${tokensUsed} tokens, tools: ${toolsExecuted.join(', ') || 'none'}`);
 
     return new Response(
       JSON.stringify({ 
@@ -487,6 +876,7 @@ serve(async (req) => {
         response: aiResponse,
         responseTime,
         tokensUsed,
+        toolsExecuted,
       }),
       { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
     );
