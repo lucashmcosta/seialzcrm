@@ -251,7 +251,11 @@ serve(async (req) => {
         formData.append('ContentVariables', JSON.stringify(templateVariables))
       }
     } else if (messageBody) {
-      formData.append('Body', messageBody)
+      // Filter out media placeholder texts that shouldn't be sent
+      const mediaPlaceholders = ['📎 Mídia', '📷 Imagem', '🎵 Áudio', '🎬 Vídeo', '📎 Media', '📷 Image', '🎵 Audio', '🎬 Video']
+      if (!mediaPlaceholders.includes(messageBody)) {
+        formData.append('Body', messageBody)
+      }
     }
 
     // Add media URLs (Twilio accepts multiple MediaUrl params)
