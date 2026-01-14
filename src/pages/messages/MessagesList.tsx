@@ -535,7 +535,12 @@ export default function MessagesList() {
     if (!organization?.id || !selectedThread) return;
 
     try {
-      const audioFile = new File([audioBlob], `audio-${Date.now()}.ogg`, { type: audioBlob.type });
+      // Audio is now always recorded in OGG Opus format (WhatsApp compatible)
+      const audioFile = new File(
+        [audioBlob], 
+        `audio-${Date.now()}.ogg`, 
+        { type: 'audio/ogg;codecs=opus' }
+      );
       await handleMediaUpload(audioFile);
     } catch (error: any) {
       console.error('Error sending audio:', error);

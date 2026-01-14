@@ -2,6 +2,16 @@ import { useState, useRef, useEffect } from 'react';
 import { Button } from '@/components/ui/button';
 import { useToast } from '@/hooks/use-toast';
 import { Mic, Square, Send, Trash2, Loader2 } from 'lucide-react';
+import OpusMediaRecorder from 'opus-media-recorder';
+
+// Worker options for opus-media-recorder
+const workerOptions = {
+  encoderWorkerFactory: () => new Worker(
+    new URL('opus-media-recorder/encoderWorker.umd.js', import.meta.url),
+    { type: 'module' }
+  ),
+  OggOpusEncoderWasmPath: 'https://cdn.jsdelivr.net/npm/opus-media-recorder@latest/OggOpusEncoder.wasm',
+};
 
 interface AudioRecorderProps {
   onSend: (audioBlob: Blob) => Promise<void>;
@@ -16,7 +26,7 @@ export function AudioRecorder({ onSend, disabled }: AudioRecorderProps) {
   const [audioBlob, setAudioBlob] = useState<Blob | null>(null);
   const [isSending, setIsSending] = useState(false);
 
-  const mediaRecorderRef = useRef<MediaRecorder | null>(null);
+  const mediaRecorderRef = useRef<any>(null);
   const chunksRef = useRef<Blob[]>([]);
   const timerRef = useRef<NodeJS.Timeout | null>(null);
   const streamRef = useRef<MediaStream | null>(null);
@@ -39,30 +49,42 @@ export function AudioRecorder({ onSend, disabled }: AudioRecorderProps) {
         audio: {
           echoCancellation: true,
           noiseSuppression: true,
-          sampleRate: 44100,
+          sampleRate: 48000, // Opus works best with 48kHz
         }
       });
       streamRef.current = stream;
 
-      // Try to use ogg/opus format (WhatsApp compatible), fallback to webm
-      const mimeType = MediaRecorder.isTypeSupported('audio/ogg;codecs=opus')
-        ? 'audio/ogg;codecs=opus'
-        : MediaRecorder.isTypeSupported('audio/webm;codecs=opus')
-        ? 'audio/webm;codecs=opus'
-        : 'audio/webm';
-
-      const mediaRecorder = new MediaRecorder(stream, { mimeType });
+      // Use OpusMediaRecorder to record directly in OGG Opus format (WhatsApp compatible)
+      const mimeType = 'audio/ogg;codecs=opus';
+      
+      let mediaRecorder: any;
+      
+      try {
+        // Try to use OpusMediaRecorder (polyfill for OGG Opus)
+        mediaRecorder = new OpusMediaRecorder(stream, { mimeType }, workerOptions);
+      } catch (polyfillError) {
+        console.warn('OpusMediaRecorder failed, trying native:', polyfillError);
+        // Fallback to native MediaRecorder
+        const nativeMimeType = MediaRecorder.isTypeSupported('audio/ogg;codecs=opus')
+          ? 'audio/ogg;codecs=opus'
+          : MediaRecorder.isTypeSupported('audio/webm;codecs=opus')
+          ? 'audio/webm;codecs=opus'
+          : 'audio/webm';
+        mediaRecorder = new MediaRecorder(stream, { mimeType: nativeMimeType });
+      }
+      
       mediaRecorderRef.current = mediaRecorder;
       chunksRef.current = [];
 
-      mediaRecorder.ondataavailable = (event) => {
+      mediaRecorder.ondataavailable = (event: BlobEvent) => {
         if (event.data.size > 0) {
           chunksRef.current.push(event.data);
         }
       };
 
       mediaRecorder.onstop = () => {
-        const blob = new Blob(chunksRef.current, { type: mimeType });
+        // Create blob with OGG Opus type
+        const blob = new Blob(chunksRef.current, { type: 'audio/ogg;codecs=opus' });
         setAudioBlob(blob);
         
         // Stop all tracks
