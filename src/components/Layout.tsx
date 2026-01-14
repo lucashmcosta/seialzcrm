@@ -10,6 +10,7 @@ import {
   CheckDone01,
   Shield01,
   HelpCircle,
+  MessageChatCircle,
 } from '@untitledui/icons';
 import { Button } from '@/components/ui/button';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
@@ -22,6 +23,7 @@ import { ImpersonationBanner } from '@/components/admin/ImpersonationBanner';
 import { SidebarNavigationSimple } from '@/components/application/app-navigation/sidebar-navigation/sidebar-simple';
 import { FeaturedCardProgressBar } from '@/components/application/app-navigation/base-components/featured-cards';
 import type { NavItemType } from '@/components/application/app-navigation/config';
+import { useWhatsAppIntegration } from '@/hooks/useWhatsAppIntegration';
 
 interface LayoutProps {
   children: ReactNode;
@@ -33,6 +35,7 @@ export function Layout({ children }: LayoutProps) {
   const { organization, userProfile, locale, loading } = useOrganization();
   const { permissions } = usePermissions();
   const { t } = useTranslation(locale as 'pt-BR' | 'en-US');
+  const { hasWhatsApp } = useWhatsAppIntegration();
 
   // Build navigation items
   const navItems: NavItemType[] = [
@@ -48,6 +51,15 @@ export function Layout({ children }: LayoutProps) {
       label: t('nav.companies'), 
       href: '/companies', 
       icon: Building07 
+    });
+  }
+
+  // Add Messages menu if WhatsApp is enabled
+  if (hasWhatsApp) {
+    navItems.push({ 
+      label: t('nav.messages'), 
+      href: '/messages', 
+      icon: MessageChatCircle 
     });
   }
 

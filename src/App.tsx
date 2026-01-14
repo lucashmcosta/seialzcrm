@@ -32,6 +32,7 @@ const ContactForm = lazy(() => import("./pages/contacts/ContactForm"));
 const OpportunitiesKanban = lazy(() => import("./pages/opportunities/OpportunitiesKanban"));
 const OpportunityDetail = lazy(() => import("./pages/opportunities/OpportunityDetail"));
 const TasksList = lazy(() => import("./pages/tasks/TasksList"));
+const MessagesList = lazy(() => import("./pages/messages/MessagesList"));
 const Settings = lazy(() => import("./pages/Settings"));
 const Profile = lazy(() => import("./pages/Profile"));
 const NotFound = lazy(() => import("./pages/NotFound"));
@@ -257,6 +258,14 @@ const App = () => (
             element={
               <ProtectedRoute>
                 <TasksList />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/messages"
+            element={
+              <ProtectedRoute>
+                <MessagesList />
               </ProtectedRoute>
             }
           />
