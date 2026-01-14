@@ -834,6 +834,63 @@ export type Database = {
           },
         ]
       }
+      contact_memories: {
+        Row: {
+          contact_id: string
+          created_at: string | null
+          facts: Json | null
+          id: string
+          next_action: string | null
+          next_action_date: string | null
+          objections: Json | null
+          organization_id: string
+          preferences: Json | null
+          qualification: Json | null
+          updated_at: string | null
+        }
+        Insert: {
+          contact_id: string
+          created_at?: string | null
+          facts?: Json | null
+          id?: string
+          next_action?: string | null
+          next_action_date?: string | null
+          objections?: Json | null
+          organization_id: string
+          preferences?: Json | null
+          qualification?: Json | null
+          updated_at?: string | null
+        }
+        Update: {
+          contact_id?: string
+          created_at?: string | null
+          facts?: Json | null
+          id?: string
+          next_action?: string | null
+          next_action_date?: string | null
+          objections?: Json | null
+          organization_id?: string
+          preferences?: Json | null
+          qualification?: Json | null
+          updated_at?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "contact_memories_contact_id_fkey"
+            columns: ["contact_id"]
+            isOneToOne: true
+            referencedRelation: "contacts"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "contact_memories_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       contacts: {
         Row: {
           company_id: string | null
