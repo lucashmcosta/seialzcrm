@@ -2257,6 +2257,92 @@ export type Database = {
           },
         ]
       }
+      scheduled_messages: {
+        Row: {
+          ai_agent_id: string | null
+          channel: string | null
+          contact_id: string
+          content: string
+          created_at: string | null
+          created_by: string | null
+          error_message: string | null
+          id: string
+          organization_id: string
+          reason: string | null
+          retry_count: number | null
+          scheduled_at: string
+          sent_at: string | null
+          status: string | null
+          thread_id: string | null
+          updated_at: string | null
+        }
+        Insert: {
+          ai_agent_id?: string | null
+          channel?: string | null
+          contact_id: string
+          content: string
+          created_at?: string | null
+          created_by?: string | null
+          error_message?: string | null
+          id?: string
+          organization_id: string
+          reason?: string | null
+          retry_count?: number | null
+          scheduled_at: string
+          sent_at?: string | null
+          status?: string | null
+          thread_id?: string | null
+          updated_at?: string | null
+        }
+        Update: {
+          ai_agent_id?: string | null
+          channel?: string | null
+          contact_id?: string
+          content?: string
+          created_at?: string | null
+          created_by?: string | null
+          error_message?: string | null
+          id?: string
+          organization_id?: string
+          reason?: string | null
+          retry_count?: number | null
+          scheduled_at?: string
+          sent_at?: string | null
+          status?: string | null
+          thread_id?: string | null
+          updated_at?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "scheduled_messages_ai_agent_id_fkey"
+            columns: ["ai_agent_id"]
+            isOneToOne: false
+            referencedRelation: "ai_agents"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "scheduled_messages_contact_id_fkey"
+            columns: ["contact_id"]
+            isOneToOne: false
+            referencedRelation: "contacts"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "scheduled_messages_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "scheduled_messages_thread_id_fkey"
+            columns: ["thread_id"]
+            isOneToOne: false
+            referencedRelation: "message_threads"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       subscription_usage: {
         Row: {
           current_seat_count: number

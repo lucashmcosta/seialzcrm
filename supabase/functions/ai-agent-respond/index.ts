@@ -148,6 +148,107 @@ const AVAILABLE_TOOLS = [
       },
     },
   },
+  {
+    type: "function",
+    function: {
+      name: "schedule_follow_up",
+      description: "Agenda uma mensagem de follow-up para ser enviada automaticamente no futuro. Use quando combinar de retornar contato em uma data específica (ex: 'dia 15', 'próxima semana').",
+      parameters: {
+        type: "object",
+        properties: {
+          message: { 
+            type: "string", 
+            description: "Mensagem que será enviada automaticamente (ex: 'Oi! Lembrei que hoje é dia 15 e combinamos de conversar sobre o plano.')" 
+          },
+          scheduled_date: { 
+            type: "string", 
+            description: "Data para enviar no formato YYYY-MM-DD" 
+          },
+          scheduled_time: { 
+            type: "string", 
+            description: "Horário para enviar no formato HH:MM (default: 09:00)" 
+          },
+          reason: { 
+            type: "string", 
+            description: "Motivo do agendamento (ex: 'Cliente recebe dia 15')" 
+          },
+        },
+        required: ["message", "scheduled_date"],
+      },
+    },
+  },
+  {
+    type: "function",
+    function: {
+      name: "send_payment_link",
+      description: "Gera e envia um link de pagamento para o cliente. Use quando o cliente confirmar que quer pagar ou pedir o link.",
+      parameters: {
+        type: "object",
+        properties: {
+          amount: { 
+            type: "number", 
+            description: "Valor do pagamento em reais" 
+          },
+          description: { 
+            type: "string", 
+            description: "Descrição do pagamento (ex: 'Plano Pro - Mensal')" 
+          },
+          installments: { 
+            type: "number", 
+            description: "Número de parcelas (default: 1)" 
+          },
+        },
+        required: ["amount", "description"],
+      },
+    },
+  },
+  {
+    type: "function",
+    function: {
+      name: "update_qualification",
+      description: "Atualiza a qualificação do lead de forma estruturada. Use quando descobrir informações sobre interesse, orçamento, timing ou autoridade do lead.",
+      parameters: {
+        type: "object",
+        properties: {
+          interest_level: { 
+            type: "string", 
+            enum: ["cold", "warm", "hot"],
+            description: "Nível de interesse: cold (frio/curioso), warm (morno/considerando), hot (quente/pronto pra comprar)" 
+          },
+          has_budget: { 
+            type: "boolean", 
+            description: "O lead confirmou que tem orçamento?" 
+          },
+          budget_range: { 
+            type: "string", 
+            description: "Faixa de orçamento mencionada (ex: 'até R$ 5.000')" 
+          },
+          timeline: { 
+            type: "string", 
+            description: "Quando pretende tomar decisão (ex: 'Esta semana', 'Próximo mês')" 
+          },
+          is_decision_maker: { 
+            type: "boolean", 
+            description: "O contato é quem toma a decisão final?" 
+          },
+          decision_maker_name: { 
+            type: "string", 
+            description: "Nome do decisor, se não for o contato atual" 
+          },
+          pain_points: {
+            type: "array",
+            items: { type: "string" },
+            description: "Dores/problemas que o lead mencionou" 
+          },
+          competitors_mentioned: {
+            type: "array",
+            items: { type: "string" },
+            description: "Concorrentes que o lead mencionou usar ou considerar" 
+          },
+        },
+      },
+    },
+  },
 ];
 
 /**
@@ -354,6 +455,153 @@ async function executeTool(
         }
 
         return { success: true, message: `Memória salva: ${savedInfo.join(', ')}` };
+      }
+
+      case 'schedule_follow_up': {
+        // Parse scheduled date and time
+        const scheduledTime = args.scheduled_time || '09:00';
+        const scheduledAt = new Date(`${args.scheduled_date}T${scheduledTime}:00`);
+        
+        if (isNaN(scheduledAt.getTime())) {
+          return { success: false, message: 'Data/hora inválida' };
+        }
+
+        const { error } = await supabase
+          .from('scheduled_messages')
+          .insert({
+            organization_id: context.organizationId,
+            contact_id: context.contactId,
+            thread_id: context.threadId,
+            content: args.message,
+            scheduled_at: scheduledAt.toISOString(),
+            reason: args.reason || null,
+            created_by: 'agent',
+            status: 'pending',
+          });
+
+        if (error) {
+          console.error('Error scheduling follow-up:', error);
+          return { success: false, message: error.message };
+        }
+
+        return { 
+          success: true, 
+          message: `Follow-up agendado para ${args.scheduled_date} às ${scheduledTime}`,
+          data: { scheduled_at: scheduledAt.toISOString() }
+        };
+      }
+
+      case 'send_payment_link': {
+        // Buscar configuração de pagamento da organização (se existir)
+        const { data: orgIntegrations } = await supabase
+          .from('integrations')
+          .select('config, provider')
+          .eq('organization_id', context.organizationId)
+          .in('provider', ['stripe', 'mercado_pago', 'pagarme']);
+
+        let paymentLink = '';
+        const amount = args.amount;
+        const description = args.description;
+        const installments = args.installments || 1;
+
+        // Se tiver integração de pagamento configurada, usar
+        const paymentIntegration = orgIntegrations?.[0];
+        if (paymentIntegration?.config?.payment_link_base_url) {
+          const baseUrl = paymentIntegration.config.payment_link_base_url;
+          paymentLink = `${baseUrl}?amount=${amount}&description=${encodeURIComponent(description)}&installments=${installments}`;
+        } else {
+          // Fallback: criar mensagem com informações do pagamento
+          paymentLink = `[PIX/Boleto: R$ ${amount.toLocaleString('pt-BR', { minimumFractionDigits: 2 })} - ${description}]`;
+        }
+
+        // Atualizar valor da oportunidade se existir
+        const { data: threads } = await supabase
+          .from('message_threads')
+          .select('opportunity_id')
+          .eq('id', context.threadId)
+          .single();
+
+        if (threads?.opportunity_id) {
+          await supabase
+            .from('opportunities')
+            .update({ amount: amount })
+            .eq('id', threads.opportunity_id);
+        }
+
+        return { 
+          success: true, 
+          message: `Link de pagamento gerado: R$ ${amount}`,
+          data: { 
+            link: paymentLink,
+            amount,
+            description,
+            installments
+          }
+        };
+      }
+
+      case 'update_qualification': {
+        // Buscar ou criar memória do contato
+        let { data: memory } = await supabase
+          .from('contact_memories')
+          .select('*')
+          .eq('contact_id', context.contactId)
+          .single();
+
+        if (!memory) {
+          const { data: newMemory, error: createError } = await supabase
+            .from('contact_memories')
+            .insert({
+              organization_id: context.organizationId,
+              contact_id: context.contactId,
+              qualification: {},
+            })
+            .select()
+            .single();
+          
+          if (createError) {
+            console.error('Error creating memory:', createError);
+            return { success: false, message: createError.message };
+          }
+          memory = newMemory;
+        }
+
+        // Merge com qualificação existente
+        const existingQualification = (memory.qualification as object) || {};
+        const updatedQualification = {
+          ...existingQualification,
+          ...args,
+          updated_at: new Date().toISOString(),
+        };
+
+        const { error: updateError } = await supabase
+          .from('contact_memories')
+          .update({ qualification: updatedQualification })
+          .eq('id', memory.id);
+
+        if (updateError) {
+          console.error('Error updating qualification:', updateError);
+          return { success: false, message: updateError.message };
+        }
+
+        // Atualizar lifecycle_stage do contato se for hot
+        if (args.interest_level === 'hot') {
+          await supabase
+            .from('contacts')
+            .update({ lifecycle_stage: 'opportunity' })
+            .eq('id', context.contactId);
+        }
+
+        const qualDetails: string[] = [];
+        if (args.interest_level) qualDetails.push(`Interesse: ${args.interest_level}`);
+        if (args.has_budget !== undefined) qualDetails.push(`Orçamento: ${args.has_budget ? 'Sim' : 'Não'}`);
+        if (args.timeline) qualDetails.push(`Timeline: ${args.timeline}`);
+        if (args.is_decision_maker !== undefined) qualDetails.push(`Decisor: ${args.is_decision_maker ? 'Sim' : 'Não'}`);
+
+        return { 
+          success: true, 
+          message: `Qualificação atualizada: ${qualDetails.join(', ') || 'dados salvos'}` 
+        };
       }
 
       default:

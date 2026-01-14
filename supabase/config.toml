@@ -38,3 +38,9 @@ verify_jwt = true
 
 [functions.ai-generate]
 verify_jwt = true
+
+[functions.scheduled-messages-cron]
+verify_jwt = false
+
+[functions.ai-agent-respond]
+verify_jwt = true
