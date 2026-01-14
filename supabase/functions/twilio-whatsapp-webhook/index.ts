@@ -463,7 +463,48 @@ serve(async (req) => {
           occurred_at: new Date().toISOString(),
         })
 
-      // Return empty response (no auto-reply)
+      // ========== AI AGENT AUTO-RESPOND ==========
+      // Check if organization has an active AI agent
+      const { data: aiAgent } = await supabase
+        .from('ai_agents')
+        .select('id, is_enabled, max_messages_per_conversation')
+        .eq('organization_id', orgId)
+        .eq('agent_type', 'sdr')
+        .eq('is_enabled', true)
+        .single()
+
+      if (aiAgent && threadId && body) {
+        console.log('AI Agent found, triggering response...')
+        
+        // Invoke ai-agent-respond function (async, don't wait for response)
+        try {
+          // Use fetch to call the edge function (non-blocking)
+          const supabaseUrl = Deno.env.get('SUPABASE_URL')
+          const serviceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')
+          
+          fetch(`${supabaseUrl}/functions/v1/ai-agent-respond`, {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              'Authorization': `Bearer ${serviceKey}`,
+            },
+            body: JSON.stringify({
+              agentId: aiAgent.id,
+              contactId,
+              threadId,
+              message: body,
+            }),
+          }).catch(err => {
+            console.error('Error calling ai-agent-respond:', err)
+          })
+          
+          console.log('AI Agent response triggered (async)')
+        } catch (agentError) {
+          console.error('Error triggering AI agent:', agentError)
+        }
+      }
+
+      // Return empty response (no auto-reply from webhook itself)
       return new Response('', { 
         status: 200,
         headers: { 'Content-Type': 'text/xml' }

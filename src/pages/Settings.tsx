@@ -21,6 +21,7 @@ import { ThemeSettings } from '@/components/settings/ThemeSettings';
 import { AuditLogs } from './settings/AuditLogs';
 import { Trash } from './settings/Trash';
 import WhatsAppTemplates from './settings/WhatsAppTemplates';
+import { AIAgentSettings } from '@/components/settings/AIAgentSettings';
 import { SearchLg } from '@untitledui/icons';
 
 interface TabConfig {
@@ -49,7 +50,10 @@ export default function Settings() {
     { id: 'tags', label: t('settings.tags'), permission: 'canManageSettings' },
     { id: 'integrations', label: t('settings.integrations'), permission: 'canManageIntegrations' },
     // Only show WhatsApp Templates if user has WhatsApp connected
-    ...(hasWhatsApp ? [{ id: 'whatsappTemplates', label: 'WhatsApp Templates', permission: 'canManageIntegrations' as const }] : []),
+    ...(hasWhatsApp ? [
+      { id: 'whatsappTemplates', label: 'WhatsApp Templates', permission: 'canManageIntegrations' as const },
+      { id: 'aiAgent', label: 'Agente IA', permission: 'canManageIntegrations' as const },
+    ] : []),
     { id: 'apiWebhooks', label: 'API & Webhooks', permission: 'canManageIntegrations' },
     { id: 'auditLogs', label: t('settings.auditLogs'), permission: 'canManageSettings' },
     { id: 'trash', label: t('settings.trash'), permission: 'canManageSettings' },
@@ -165,6 +169,10 @@ export default function Settings() {
 
               <TabsContent value="whatsappTemplates">
                 <WhatsAppTemplates />
+              </TabsContent>
+
+              <TabsContent value="aiAgent">
+                <AIAgentSettings />
               </TabsContent>
 
               <TabsContent value="apiWebhooks">

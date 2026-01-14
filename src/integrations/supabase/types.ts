@@ -316,6 +316,145 @@ export type Database = {
         }
         Relationships: []
       }
+      ai_agent_logs: {
+        Row: {
+          agent_id: string
+          contact_id: string | null
+          context_used: Json | null
+          created_at: string | null
+          error_message: string | null
+          id: string
+          input_message: string
+          model_used: string | null
+          organization_id: string
+          output_message: string
+          response_time_ms: number | null
+          status: string | null
+          thread_id: string | null
+          tokens_used: number | null
+        }
+        Insert: {
+          agent_id: string
+          contact_id?: string | null
+          context_used?: Json | null
+          created_at?: string | null
+          error_message?: string | null
+          id?: string
+          input_message: string
+          model_used?: string | null
+          organization_id: string
+          output_message: string
+          response_time_ms?: number | null
+          status?: string | null
+          thread_id?: string | null
+          tokens_used?: number | null
+        }
+        Update: {
+          agent_id?: string
+          contact_id?: string | null
+          context_used?: Json | null
+          created_at?: string | null
+          error_message?: string | null
+          id?: string
+          input_message?: string
+          model_used?: string | null
+          organization_id?: string
+          output_message?: string
+          response_time_ms?: number | null
+          status?: string | null
+          thread_id?: string | null
+          tokens_used?: number | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "ai_agent_logs_agent_id_fkey"
+            columns: ["agent_id"]
+            isOneToOne: false
+            referencedRelation: "ai_agents"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "ai_agent_logs_contact_id_fkey"
+            columns: ["contact_id"]
+            isOneToOne: false
+            referencedRelation: "contacts"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "ai_agent_logs_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "ai_agent_logs_thread_id_fkey"
+            columns: ["thread_id"]
+            isOneToOne: false
+            referencedRelation: "message_threads"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      ai_agents: {
+        Row: {
+          agent_type: string
+          created_at: string | null
+          custom_instructions: string | null
+          goal: string
+          greeting_message: string | null
+          id: string
+          is_enabled: boolean
+          max_messages_per_conversation: number | null
+          name: string
+          organization_id: string
+          out_of_hours_message: string | null
+          tone: string
+          updated_at: string | null
+          working_hours: Json | null
+        }
+        Insert: {
+          agent_type?: string
+          created_at?: string | null
+          custom_instructions?: string | null
+          goal?: string
+          greeting_message?: string | null
+          id?: string
+          is_enabled?: boolean
+          max_messages_per_conversation?: number | null
+          name?: string
+          organization_id: string
+          out_of_hours_message?: string | null
+          tone?: string
+          updated_at?: string | null
+          working_hours?: Json | null
+        }
+        Update: {
+          agent_type?: string
+          created_at?: string | null
+          custom_instructions?: string | null
+          goal?: string
+          greeting_message?: string | null
+          id?: string
+          is_enabled?: boolean
+          max_messages_per_conversation?: number | null
+          name?: string
+          organization_id?: string
+          out_of_hours_message?: string | null
+          tone?: string
+          updated_at?: string | null
+          working_hours?: Json | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "ai_agents_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       ai_usage_logs: {
         Row: {
           action: string
