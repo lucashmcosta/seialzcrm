@@ -20,12 +20,20 @@ interface WizardData {
   generatedPrompt: string;
 }
 
+interface FeedbackEntry {
+  id: string;
+  date: string;
+  feedback: string;
+  applied: boolean;
+}
+
 interface AIAgent {
   id: string;
   name: string;
   is_enabled: boolean;
   custom_instructions: string | null;
   wizard_data: any;
+  feedback_history?: FeedbackEntry[];
 }
 
 export function AIAgentSettings() {
@@ -54,12 +62,19 @@ export function AIAgentSettings() {
       if (error && error.code !== 'PGRST116') throw error;
 
       if (data) {
+        // Parse feedback_history from JSON
+        let feedbackHistory: FeedbackEntry[] = [];
+        if (Array.isArray(data.feedback_history)) {
+          feedbackHistory = data.feedback_history as unknown as FeedbackEntry[];
+        }
+        
         setAgent({
           id: data.id,
           name: data.name,
           is_enabled: data.is_enabled,
           custom_instructions: data.custom_instructions,
           wizard_data: data.wizard_data,
+          feedback_history: feedbackHistory,
         });
       }
     } catch (error: any) {

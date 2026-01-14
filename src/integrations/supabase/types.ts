@@ -401,6 +401,7 @@ export type Database = {
           agent_type: string
           created_at: string | null
           custom_instructions: string | null
+          feedback_history: Json | null
           goal: string
           greeting_message: string | null
           id: string
@@ -418,6 +419,7 @@ export type Database = {
           agent_type?: string
           created_at?: string | null
           custom_instructions?: string | null
+          feedback_history?: Json | null
           goal?: string
           greeting_message?: string | null
           id?: string
@@ -435,6 +437,7 @@ export type Database = {
           agent_type?: string
           created_at?: string | null
           custom_instructions?: string | null
+          feedback_history?: Json | null
           goal?: string
           greeting_message?: string | null
           id?: string
