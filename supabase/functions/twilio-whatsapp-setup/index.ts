@@ -255,7 +255,12 @@ serve(async (req) => {
       : (primaryNumber ? `whatsapp:${primaryNumber}` : null)
 
     // Upsert organization integration with full config
-    const { error: upsertError } = await supabase
+    console.log('Upserting organization integration...', {
+      organizationId,
+      integrationId: adminIntegration.id,
+    })
+
+    const { data: upsertData, error: upsertError } = await supabase
       .from('organization_integrations')
       .upsert({
         organization_id: organizationId,
@@ -278,14 +283,18 @@ serve(async (req) => {
       }, {
         onConflict: 'organization_id,integration_id'
       })
+      .select()
+      .single()
 
     if (upsertError) {
       console.error('Error saving integration:', upsertError)
       return new Response(
-        JSON.stringify({ error: 'Failed to save integration config' }),
+        JSON.stringify({ error: 'Failed to save integration config', details: upsertError.message }),
         { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       )
     }
+
+    console.log('Integration saved successfully:', upsertData?.id)
 
     // Step 7: Sync templates to database
     let syncedTemplates = 0
