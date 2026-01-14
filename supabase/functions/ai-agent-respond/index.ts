@@ -416,8 +416,10 @@ serve(async (req) => {
     // 7. Send response via WhatsApp
     const { error: sendError } = await supabase.functions.invoke('twilio-whatsapp-send', {
       body: {
+        organizationId,
+        contactId,
         threadId,
-        content: aiResponse,
+        message: aiResponse,
         isAgentMessage: true,
       }
     });
