@@ -10,7 +10,8 @@ import { Progress } from '@/components/ui/progress';
 import { Badge } from '@/components/ui/badge';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { ScrollArea } from '@/components/ui/scroll-area';
-import { Loader2, RefreshCw, ArrowLeft, ArrowRight, Check, Sparkles, Building2, Package, Target, FileText, MessageSquarePlus, History, Trash2, Send, Bot, User, ThumbsUp, ThumbsDown, Beaker } from 'lucide-react';
+import { Switch } from '@/components/ui/switch';
+import { Loader2, RefreshCw, ArrowLeft, ArrowRight, Check, Sparkles, Building2, Package, Target, FileText, MessageSquarePlus, History, Trash2, Send, Bot, User, ThumbsUp, ThumbsDown, Beaker, Wrench } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
 import { format } from 'date-fns';
@@ -46,10 +47,40 @@ interface SDRAgentWizardProps {
     custom_instructions: string | null;
     wizard_data: any;
     feedback_history?: FeedbackEntry[];
+    enabled_tools?: string[];
   } | null;
   organizationId: string;
   onSuccess: () => void;
 }
+
+// Available tools configuration
+const AVAILABLE_TOOLS = [
+  { 
+    id: 'update_contact', 
+    name: 'Atualizar Contato', 
+    description: 'Permite corrigir nome, email, telefone e empresa do contato' 
+  },
+  { 
+    id: 'create_opportunity', 
+    name: 'Criar Oportunidade', 
+    description: 'Cria negócio quando cliente demonstra interesse' 
+  },
+  { 
+    id: 'create_task', 
+    name: 'Criar Tarefa', 
+    description: 'Agenda follow-ups e ações futuras para a equipe' 
+  },
+  { 
+    id: 'transfer_to_human', 
+    name: 'Transferir para Humano', 
+    description: 'Passa a conversa para atendimento humano' 
+  },
+  { 
+    id: 'schedule_meeting', 
+    name: 'Agendar Reunião', 
+    description: 'Agenda reuniões e demonstrações com o cliente' 
+  },
+];
 
 const STEPS = [
   { id: 1, title: 'Sobre a Empresa', icon: Building2 },
@@ -120,6 +151,9 @@ export function SDRAgentWizard({
   const [feedbackHistory, setFeedbackHistory] = useState<FeedbackEntry[]>(
     existingAgent?.feedback_history || []
   );
+  const [enabledTools, setEnabledTools] = useState<string[]>(
+    existingAgent?.enabled_tools || ['update_contact', 'transfer_to_human']
+  );
   const [newFeedback, setNewFeedback] = useState('');
   const [isGenerating, setIsGenerating] = useState(false);
   const [isRefining, setIsRefining] = useState(false);
@@ -134,6 +168,12 @@ export function SDRAgentWizard({
   const [testMessages, setTestMessages] = useState<TestMessage[]>([]);
   const [testInput, setTestInput] = useState('');
   const [isSimulating, setIsSimulating] = useState(false);
+
+  const toggleTool = (toolId: string, enabled: boolean) => {
+    setEnabledTools(prev => 
+      enabled ? [...prev, toolId] : prev.filter(t => t !== toolId)
+    );
+  };
 
   // Reset state when dialog opens/closes or agent changes
   useEffect(() => {
@@ -393,6 +433,7 @@ export function SDRAgentWizard({
         custom_instructions: wizardData.generatedPrompt,
         wizard_data: JSON.parse(JSON.stringify(wizardData)),
         feedback_history: JSON.parse(JSON.stringify(feedbackHistory)),
+        enabled_tools: enabledTools,
         is_enabled: true,
         goal: wizardData.goal === 'qualify_lead' ? 'Qualificar leads e entender necessidades' :
               wizardData.goal === 'schedule_meeting' ? 'Agendar demonstrações e reuniões' :
@@ -433,10 +474,14 @@ export function SDRAgentWizard({
   // Render edit mode (with tabs)
   const renderEditMode = () => (
     <Tabs value={activeTab} onValueChange={(v) => setActiveTab(v as any)} className="flex-1">
-      <TabsList className="w-full grid grid-cols-4">
+      <TabsList className="w-full grid grid-cols-5">
         <TabsTrigger value="prompt" className="gap-2">
           <FileText className="h-4 w-4" />
           Prompt
+        </TabsTrigger>
+        <TabsTrigger value="tools" className="gap-2">
+          <Wrench className="h-4 w-4" />
+          Tools
         </TabsTrigger>
         <TabsTrigger value="test" className="gap-2">
           <Beaker className="h-4 w-4" />
@@ -451,6 +496,40 @@ export function SDRAgentWizard({
           Dados
         </TabsTrigger>
       </TabsList>
+
+      <TabsContent value="tools" className="mt-4 space-y-4">
+        <div>
+          <Label>Ferramentas do Agente</Label>
+          <p className="text-sm text-muted-foreground mb-4">
+            Habilite as ações que o agente pode executar automaticamente durante as conversas
+          </p>
+        </div>
+        
+        <div className="space-y-3">
+          {AVAILABLE_TOOLS.map(tool => (
+            <div 
+              key={tool.id} 
+              className="flex items-center justify-between p-4 border rounded-lg bg-card"
+            >
+              <div className="space-y-1">
+                <p className="font-medium text-sm">{tool.name}</p>
+                <p className="text-xs text-muted-foreground">{tool.description}</p>
+              </div>
+              <Switch
+                checked={enabledTools.includes(tool.id)}
+                onCheckedChange={(checked) => toggleTool(tool.id, checked)}
+              />
+            </div>
+          ))}
+        </div>
+        
+        <div className="flex items-center gap-2 p-3 bg-muted/50 rounded-lg">
+          <Sparkles className="h-4 w-4 text-primary shrink-0" />
+          <p className="text-sm text-muted-foreground">
+            Quando habilitadas, o agente usará estas ferramentas automaticamente quando apropriado.
+          </p>
+        </div>
+      </TabsContent>
 
       <TabsContent value="prompt" className="mt-4 space-y-4">
         <div className="flex items-center justify-between">

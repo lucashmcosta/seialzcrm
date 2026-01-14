@@ -34,6 +34,7 @@ interface AIAgent {
   custom_instructions: string | null;
   wizard_data: any;
   feedback_history?: FeedbackEntry[];
+  enabled_tools?: string[];
 }
 
 export function AIAgentSettings() {
@@ -75,6 +76,7 @@ export function AIAgentSettings() {
           custom_instructions: data.custom_instructions,
           wizard_data: data.wizard_data,
           feedback_history: feedbackHistory,
+          enabled_tools: (data.enabled_tools as string[]) || ['update_contact', 'transfer_to_human'],
         });
       }
     } catch (error: any) {

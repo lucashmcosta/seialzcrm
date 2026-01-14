@@ -103,6 +103,7 @@ interface ChatThread {
   updated_at: string;
   whatsapp_last_inbound_at: string | null;
   unread: boolean;
+  needs_human_attention: boolean;
 }
 
 interface Message {
@@ -150,12 +151,20 @@ const ChatListItem = ({ value, locale, className, ...otherProps }: ChatListItemP
       <div className="flex items-start justify-between gap-3">
         <div className="flex items-center gap-3 min-w-0">
           <Avatar fallbackText={value.contact_name} size="md" />
-          <div className="flex items-center gap-2 min-w-0">
-            <span className="font-semibold text-sm text-foreground truncate">
-              {value.contact_name}
-            </span>
-            {value.unread && (
-              <span className="h-2 w-2 shrink-0 rounded-full bg-primary" />
+          <div className="flex flex-col min-w-0">
+            <div className="flex items-center gap-2">
+              <span className="font-semibold text-sm text-foreground truncate">
+                {value.contact_name}
+              </span>
+              {value.unread && (
+                <span className="h-2 w-2 shrink-0 rounded-full bg-primary" />
+              )}
+            </div>
+            {value.needs_human_attention && (
+              <div className="flex items-center gap-1 text-destructive">
+                <AlertCircle className="h-3 w-3" />
+                <span className="text-[10px] font-medium">Atenção</span>
+              </div>
             )}
           </div>
         </div>
@@ -272,6 +281,7 @@ export default function MessagesList() {
           contact_id,
           updated_at,
           whatsapp_last_inbound_at,
+          needs_human_attention,
           contacts!inner(full_name, phone)
         `)
         .eq('organization_id', organization.id)
@@ -304,6 +314,7 @@ export default function MessagesList() {
             updated_at: thread.updated_at,
             whatsapp_last_inbound_at: thread.whatsapp_last_inbound_at,
             unread: false, // TODO: implement unread tracking
+            needs_human_attention: (thread as any).needs_human_attention || false,
           } as ChatThread;
         })
       );

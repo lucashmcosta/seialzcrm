@@ -401,6 +401,7 @@ export type Database = {
           agent_type: string
           created_at: string | null
           custom_instructions: string | null
+          enabled_tools: Json | null
           feedback_history: Json | null
           goal: string
           greeting_message: string | null
@@ -411,6 +412,7 @@ export type Database = {
           organization_id: string
           out_of_hours_message: string | null
           tone: string
+          tool_settings: Json | null
           updated_at: string | null
           wizard_data: Json | null
           working_hours: Json | null
@@ -419,6 +421,7 @@ export type Database = {
           agent_type?: string
           created_at?: string | null
           custom_instructions?: string | null
+          enabled_tools?: Json | null
           feedback_history?: Json | null
           goal?: string
           greeting_message?: string | null
@@ -429,6 +432,7 @@ export type Database = {
           organization_id: string
           out_of_hours_message?: string | null
           tone?: string
+          tool_settings?: Json | null
           updated_at?: string | null
           wizard_data?: Json | null
           working_hours?: Json | null
@@ -437,6 +441,7 @@ export type Database = {
           agent_type?: string
           created_at?: string | null
           custom_instructions?: string | null
+          enabled_tools?: Json | null
           feedback_history?: Json | null
           goal?: string
           greeting_message?: string | null
@@ -447,6 +452,7 @@ export type Database = {
           organization_id?: string
           out_of_hours_message?: string | null
           tone?: string
+          tool_settings?: Json | null
           updated_at?: string | null
           wizard_data?: Json | null
           working_hours?: Json | null
@@ -1379,6 +1385,7 @@ export type Database = {
           created_at: string | null
           external_id: string | null
           id: string
+          needs_human_attention: boolean | null
           opportunity_id: string | null
           organization_id: string
           subject: string | null
@@ -1391,6 +1398,7 @@ export type Database = {
           created_at?: string | null
           external_id?: string | null
           id?: string
+          needs_human_attention?: boolean | null
           opportunity_id?: string | null
           organization_id: string
           subject?: string | null
@@ -1403,6 +1411,7 @@ export type Database = {
           created_at?: string | null
           external_id?: string | null
           id?: string
+          needs_human_attention?: boolean | null
           opportunity_id?: string | null
           organization_id?: string
           subject?: string | null
