@@ -6,30 +6,46 @@ const corsHeaders = {
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 }
 
+interface TwilioMessagingService {
+  sid: string;
+  friendly_name: string;
+  inbound_request_url: string;
+  status_callback: string;
+}
+
+interface TwilioWhatsAppSender {
+  sid: string;
+  phone_number: string;
+  friendly_name: string;
+  capabilities: {
+    whatsapp: boolean;
+  };
+}
+
 serve(async (req) => {
   if (req.method === 'OPTIONS') {
     return new Response(null, { headers: corsHeaders })
   }
 
   try {
-    const { organizationId, accountSid, authToken, whatsappNumber, useSandbox } = await req.json()
+    const { organizationId, accountSid, authToken } = await req.json()
 
-    if (!organizationId || !accountSid || !authToken || !whatsappNumber) {
+    if (!organizationId || !accountSid || !authToken) {
       return new Response(
-        JSON.stringify({ error: 'Missing required fields' }),
+        JSON.stringify({ error: 'Missing required fields: organizationId, accountSid, authToken' }),
         { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       )
     }
 
     console.log('Setting up WhatsApp for organization:', organizationId)
 
-    // Validate Twilio credentials
+    const authHeader = 'Basic ' + btoa(`${accountSid}:${authToken}`)
+
+    // Step 1: Validate Twilio credentials
     const accountUrl = `https://api.twilio.com/2010-04-01/Accounts/${accountSid}.json`
     
     const accountResponse = await fetch(accountUrl, {
-      headers: {
-        'Authorization': 'Basic ' + btoa(`${accountSid}:${authToken}`),
-      }
+      headers: { 'Authorization': authHeader }
     })
 
     if (!accountResponse.ok) {
@@ -46,54 +62,159 @@ serve(async (req) => {
 
     const supabaseUrl = Deno.env.get('SUPABASE_URL') ?? ''
     
-    // Webhook URLs
+    // Webhook URLs for the Messaging Service
     const inboundWebhookUrl = `${supabaseUrl}/functions/v1/twilio-whatsapp-webhook/inbound?orgId=${organizationId}`
     const statusWebhookUrl = `${supabaseUrl}/functions/v1/twilio-whatsapp-webhook/status?orgId=${organizationId}`
 
     console.log('Webhook URLs:', { inboundWebhookUrl, statusWebhookUrl })
 
-    // Format WhatsApp number
-    const formattedNumber = whatsappNumber.startsWith('+') ? whatsappNumber : `+${whatsappNumber}`
-    const whatsappFrom = useSandbox ? 'whatsapp:+14155238886' : `whatsapp:${formattedNumber}`
-
-    // If not sandbox, try to configure webhook on the phone number
-    let phoneNumberSid: string | null = null
+    // Step 2: Fetch available WhatsApp Senders
+    let whatsappSenders: TwilioWhatsAppSender[] = []
     
-    if (!useSandbox) {
-      // Search for the phone number in Twilio
-      const phoneSearchUrl = `https://api.twilio.com/2010-04-01/Accounts/${accountSid}/IncomingPhoneNumbers.json?PhoneNumber=${encodeURIComponent(formattedNumber)}`
+    try {
+      // Fetch all phone numbers from the account
+      const phoneNumbersUrl = `https://api.twilio.com/2010-04-01/Accounts/${accountSid}/IncomingPhoneNumbers.json?PageSize=100`
       
-      const phoneListResponse = await fetch(phoneSearchUrl, {
-        headers: {
-          'Authorization': 'Basic ' + btoa(`${accountSid}:${authToken}`),
-        }
+      const phoneNumbersResponse = await fetch(phoneNumbersUrl, {
+        headers: { 'Authorization': authHeader }
       })
 
-      if (phoneListResponse.ok) {
-        const phoneListData = await phoneListResponse.json()
-        const phoneData = phoneListData.incoming_phone_numbers?.[0]
+      if (phoneNumbersResponse.ok) {
+        const phoneNumbersData = await phoneNumbersResponse.json()
+        const phoneNumbers = phoneNumbersData.incoming_phone_numbers || []
         
-        if (phoneData) {
-          phoneNumberSid = phoneData.sid
-          console.log('Found phone number SID:', phoneNumberSid)
+        // Filter numbers that could be WhatsApp enabled
+        whatsappSenders = phoneNumbers.map((pn: any) => ({
+          sid: pn.sid,
+          phone_number: pn.phone_number,
+          friendly_name: pn.friendly_name || pn.phone_number,
+          capabilities: {
+            whatsapp: true // We'll assume all numbers could be WhatsApp enabled
+          }
+        }))
+        
+        console.log('Found', whatsappSenders.length, 'phone numbers')
+      }
+    } catch (e) {
+      console.warn('Error fetching phone numbers:', e)
+    }
 
-          // Note: WhatsApp webhook configuration is typically done via Twilio Console
-          // or via WhatsApp Sender configuration, not directly on the phone number
-          // The user may need to configure this manually in Twilio Console
+    // Step 3: Check for existing Messaging Services or create one
+    const serviceName = `CRM WhatsApp - ${organizationId.slice(0, 8)}`
+    let messagingServiceSid: string | null = null
+    let messagingServiceCreated = false
+
+    try {
+      // List existing Messaging Services
+      const servicesUrl = 'https://messaging.twilio.com/v1/Services?PageSize=100'
+      const servicesResponse = await fetch(servicesUrl, {
+        headers: { 'Authorization': authHeader }
+      })
+
+      if (servicesResponse.ok) {
+        const servicesData = await servicesResponse.json()
+        const services = servicesData.services || []
+        
+        // Check if a service for this org already exists
+        const existingService = services.find((s: TwilioMessagingService) => 
+          s.friendly_name === serviceName
+        )
+
+        if (existingService) {
+          messagingServiceSid = existingService.sid
+          console.log('Found existing Messaging Service:', messagingServiceSid)
+
+          // Update webhooks on existing service
+          const updateServiceUrl = `https://messaging.twilio.com/v1/Services/${messagingServiceSid}`
+          await fetch(updateServiceUrl, {
+            method: 'POST',
+            headers: {
+              'Authorization': authHeader,
+              'Content-Type': 'application/x-www-form-urlencoded',
+            },
+            body: new URLSearchParams({
+              InboundRequestUrl: inboundWebhookUrl,
+              InboundMethod: 'POST',
+              StatusCallback: statusWebhookUrl,
+            }).toString()
+          })
+          console.log('Updated webhooks on existing Messaging Service')
+        }
+      }
+
+      // Create new Messaging Service if not found
+      if (!messagingServiceSid) {
+        const createServiceUrl = 'https://messaging.twilio.com/v1/Services'
+        const createResponse = await fetch(createServiceUrl, {
+          method: 'POST',
+          headers: {
+            'Authorization': authHeader,
+            'Content-Type': 'application/x-www-form-urlencoded',
+          },
+          body: new URLSearchParams({
+            FriendlyName: serviceName,
+            InboundRequestUrl: inboundWebhookUrl,
+            InboundMethod: 'POST',
+            StatusCallback: statusWebhookUrl,
+            UseInboundWebhookOnNumber: 'false', // Use service-level webhook
+          }).toString()
+        })
+
+        if (createResponse.ok) {
+          const newService = await createResponse.json()
+          messagingServiceSid = newService.sid
+          messagingServiceCreated = true
+          console.log('Created new Messaging Service:', messagingServiceSid)
+        } else {
+          const errorText = await createResponse.text()
+          console.warn('Could not create Messaging Service:', errorText)
+        }
+      }
+    } catch (e) {
+      console.warn('Error managing Messaging Service:', e)
+    }
+
+    // Step 4: Associate phone numbers with Messaging Service
+    let associatedNumbers: string[] = []
+    
+    if (messagingServiceSid && whatsappSenders.length > 0) {
+      for (const sender of whatsappSenders) {
+        try {
+          const associateUrl = `https://messaging.twilio.com/v1/Services/${messagingServiceSid}/PhoneNumbers`
+          const associateResponse = await fetch(associateUrl, {
+            method: 'POST',
+            headers: {
+              'Authorization': authHeader,
+              'Content-Type': 'application/x-www-form-urlencoded',
+            },
+            body: new URLSearchParams({
+              PhoneNumberSid: sender.sid
+            }).toString()
+          })
+
+          if (associateResponse.ok) {
+            associatedNumbers.push(sender.phone_number)
+            console.log('Associated number:', sender.phone_number)
+          } else {
+            // Number might already be associated
+            const errorData = await associateResponse.json()
+            if (errorData.code === 21710) { // Already associated
+              associatedNumbers.push(sender.phone_number)
+            }
+          }
+        } catch (e) {
+          console.warn('Error associating number:', sender.phone_number, e)
         }
       }
     }
 
-    // Sync existing templates from Twilio Content API
-    const templatesUrl = 'https://content.twilio.com/v1/Content'
-    
+    // Step 5: Sync templates from Twilio Content API
     let templates: any[] = []
     
     try {
+      const templatesUrl = 'https://content.twilio.com/v1/Content?PageSize=100'
       const templatesResponse = await fetch(templatesUrl, {
-        headers: {
-          'Authorization': 'Basic ' + btoa(`${accountSid}:${authToken}`),
-        }
+        headers: { 'Authorization': authHeader }
       })
 
       if (templatesResponse.ok) {
@@ -107,7 +228,7 @@ serve(async (req) => {
       console.warn('Error fetching templates:', e)
     }
 
-    // Initialize Supabase client
+    // Step 6: Initialize Supabase and save configuration
     const supabase = createClient(
       supabaseUrl,
       Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''
@@ -127,7 +248,13 @@ serve(async (req) => {
       )
     }
 
-    // Upsert organization integration
+    // Determine primary WhatsApp number
+    const primaryNumber = whatsappSenders.length > 0 ? whatsappSenders[0].phone_number : null
+    const whatsappFrom = messagingServiceSid 
+      ? `whatsapp:${primaryNumber}` // Will use Messaging Service
+      : (primaryNumber ? `whatsapp:${primaryNumber}` : null)
+
+    // Upsert organization integration with full config
     const { error: upsertError } = await supabase
       .from('organization_integrations')
       .upsert({
@@ -138,12 +265,15 @@ serve(async (req) => {
         config_values: {
           account_sid: accountSid,
           auth_token: authToken,
-          whatsapp_number: formattedNumber,
+          messaging_service_sid: messagingServiceSid,
+          whatsapp_number: primaryNumber,
           whatsapp_from: whatsappFrom,
-          use_sandbox: useSandbox || false,
-          phone_number_sid: phoneNumberSid,
+          available_numbers: whatsappSenders.map(s => s.phone_number),
+          use_sandbox: false,
           inbound_webhook_url: inboundWebhookUrl,
           status_webhook_url: statusWebhookUrl,
+          webhooks_configured: !!messagingServiceSid,
+          setup_completed_at: new Date().toISOString(),
         }
       }, {
         onConflict: 'organization_id,integration_id'
@@ -157,11 +287,10 @@ serve(async (req) => {
       )
     }
 
-    // Sync templates to database
+    // Step 7: Sync templates to database
     let syncedTemplates = 0
     
     for (const template of templates) {
-      // Extract template info
       const types = template.types || {}
       const whatsappType = types['twilio/whatsapp'] || types['twilio/text'] || {}
       
@@ -175,7 +304,7 @@ serve(async (req) => {
           template_type: 'text',
           body: whatsappType.body || '',
           variables: template.variables || [],
-          status: 'approved', // If it's in Content API, it's approved
+          status: 'approved',
           category: 'utility',
           last_synced_at: new Date().toISOString(),
         }, {
@@ -191,29 +320,30 @@ serve(async (req) => {
 
     console.log('Synced', syncedTemplates, 'templates')
 
-    // Instructions for manual webhook configuration
-    const setupInstructions = useSandbox 
-      ? {
-          step1: 'Join the Twilio Sandbox by sending "join <sandbox-keyword>" to whatsapp:+14155238886',
-          step2: 'Configure sandbox webhooks in Twilio Console',
-          inbound_url: inboundWebhookUrl,
-          status_url: statusWebhookUrl,
-        }
-      : {
-          step1: 'Go to Twilio Console > Messaging > Senders > WhatsApp Senders',
-          step2: 'Select your WhatsApp number and configure the webhook URLs below',
-          inbound_url: inboundWebhookUrl,
-          status_url: statusWebhookUrl,
-        }
+    // Build success response
+    const response = {
+      success: true,
+      messagingServiceSid,
+      messagingServiceCreated,
+      whatsappNumbers: whatsappSenders.map(s => ({
+        phoneNumber: s.phone_number,
+        friendlyName: s.friendly_name
+      })),
+      associatedNumbers,
+      templatesImported: syncedTemplates,
+      webhooksConfigured: !!messagingServiceSid,
+      primaryNumber,
+      message: messagingServiceSid 
+        ? 'WhatsApp configurado automaticamente com sucesso!' 
+        : 'WhatsApp configurado. Configure webhooks manualmente no Console do Twilio.',
+      setupDetails: {
+        inboundWebhookUrl,
+        statusWebhookUrl,
+      }
+    }
 
     return new Response(
-      JSON.stringify({ 
-        success: true,
-        whatsappFrom,
-        templatesImported: syncedTemplates,
-        setupInstructions,
-        message: 'WhatsApp integration configured successfully'
-      }),
+      JSON.stringify(response),
       { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
     )
 
