@@ -29,6 +29,7 @@ import { Loader2, Check, CheckCheck, Clock, AlertCircle } from 'lucide-react';
 import { WhatsAppTemplateSelector } from '@/components/whatsapp/WhatsAppTemplateSelector';
 import { AudioRecorder } from '@/components/whatsapp/AudioRecorder';
 import { MediaUploadButton } from '@/components/whatsapp/MediaUploadButton';
+import { MediaPreviewDialog } from '@/components/whatsapp/MediaPreviewDialog';
 import { AudioMessagePlayer } from '@/components/whatsapp/AudioMessagePlayer';
 import { cn } from '@/lib/utils';
 
@@ -168,6 +169,11 @@ export default function MessagesList() {
   const [isIn24hWindow, setIsIn24hWindow] = useState(false);
   const [showTemplates, setShowTemplates] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
+  
+  // Media preview state
+  const [previewFile, setPreviewFile] = useState<File | null>(null);
+  const [showMediaPreview, setShowMediaPreview] = useState(false);
+  const [mediaUploading, setMediaUploading] = useState(false);
 
   // Fetch threads
   const { data: threads, isLoading: threadsLoading, refetch: refetchThreads } = useQuery({
@@ -464,8 +470,24 @@ export default function MessagesList() {
     }
   };
 
-  const handleMediaUpload = async (file: File) => {
+  // Handler for when a file is selected (opens preview for images/videos)
+  const handleFileSelected = (file: File) => {
+    // Show preview for images and videos
+    if (file.type.startsWith('image/') || file.type.startsWith('video/')) {
+      setPreviewFile(file);
+      setShowMediaPreview(true);
+    } else {
+      // Documents send directly (no preview needed)
+      handleMediaUpload(file, null);
+    }
+  };
+
+  const handleMediaUpload = async (file: File, caption: string | null = null) => {
     if (!organization?.id || !selectedThread) return;
+
+    setMediaUploading(true);
+    setShowMediaPreview(false);
+    setPreviewFile(null);
 
     const fileExt = file.name.split('.').pop()?.toLowerCase() || 'bin';
     const fileName = `${Date.now()}-${Math.random().toString(36).substring(7)}.${fileExt}`;
@@ -478,9 +500,10 @@ export default function MessagesList() {
 
     // Optimistic UI: add media message immediately
     const tempId = `temp-${Date.now()}`;
+    const displayContent = caption || (mediaType === 'image' ? '📷 Imagem' : mediaType === 'audio' ? '🎵 Áudio' : mediaType === 'video' ? '🎬 Vídeo' : '📎 Mídia');
     const tempMessage: Message = {
       id: tempId,
-      content: mediaType === 'image' ? '📷 Imagem' : mediaType === 'audio' ? '🎵 Áudio' : '📎 Mídia',
+      content: displayContent,
       direction: 'outbound',
       sent_at: new Date().toISOString(),
       whatsapp_status: 'sending',
@@ -508,7 +531,7 @@ export default function MessagesList() {
           organizationId: organization.id,
           contactId: selectedThread.contact_id,
           threadId: selectedThreadId,
-          message: null, // Don't send placeholder text with media
+          message: caption, // Send caption if provided
           mediaUrl: publicUrl,
           mediaType,
           userId: userProfile?.id,
@@ -528,6 +551,8 @@ export default function MessagesList() {
         )
       );
       toast({ variant: 'destructive', description: error.message });
+    } finally {
+      setMediaUploading(false);
     }
   };
 
@@ -541,7 +566,7 @@ export default function MessagesList() {
         `audio-${Date.now()}.ogg`, 
         { type: 'audio/ogg;codecs=opus' }
       );
-      await handleMediaUpload(audioFile);
+      await handleMediaUpload(audioFile, null);
     } catch (error: any) {
       console.error('Error sending audio:', error);
       toast({ variant: 'destructive', description: error.message });
@@ -794,8 +819,8 @@ export default function MessagesList() {
 
                     <div className="flex gap-2">
                       <div className="flex gap-1">
-                        <MediaUploadButton onUpload={handleMediaUpload} disabled={submitting || !isIn24hWindow} />
-                        <AudioRecorder onSend={handleAudioSend} disabled={submitting || !isIn24hWindow} />
+                        <MediaUploadButton onFileSelected={handleFileSelected} disabled={submitting || mediaUploading || !isIn24hWindow} />
+                        <AudioRecorder onSend={handleAudioSend} disabled={submitting || mediaUploading || !isIn24hWindow} />
                       </div>
                       <Textarea
                         placeholder={locale === 'pt-BR' ? 'Digite uma mensagem...' : 'Type a message...'}
@@ -849,6 +874,18 @@ export default function MessagesList() {
           )}
         </div>
       </div>
+
+      {/* Media Preview Dialog */}
+      <MediaPreviewDialog
+        file={previewFile}
+        open={showMediaPreview}
+        onClose={() => {
+          setShowMediaPreview(false);
+          setPreviewFile(null);
+        }}
+        onSend={handleMediaUpload}
+        isLoading={mediaUploading}
+      />
     </Layout>
   );
 }
