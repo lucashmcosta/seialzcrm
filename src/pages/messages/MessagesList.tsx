@@ -175,6 +175,7 @@ export default function MessagesList() {
   const dateLocale = locale === 'pt-BR' ? ptBR : enUS;
 
   const [selectedThreadId, setSelectedThreadId] = useState<string | null>(null);
+  const [textareaOverflow, setTextareaOverflow] = useState(false);
   const [messages, setMessages] = useState<Message[]>([]);
   const [messagesLoading, setMessagesLoading] = useState(false);
   const [messageText, setMessageText] = useState('');
@@ -617,8 +618,13 @@ export default function MessagesList() {
     const textarea = textareaRef.current;
     if (textarea) {
       textarea.style.height = 'auto';
-      const newHeight = Math.min(textarea.scrollHeight, 150);
-      textarea.style.height = `${newHeight}px`;
+      const scrollHeight = textarea.scrollHeight;
+      const maxHeight = 150;
+      
+      // Only show scrollbar when content exceeds max height
+      setTextareaOverflow(scrollHeight > maxHeight);
+      
+      textarea.style.height = `${Math.min(scrollHeight, maxHeight)}px`;
     }
   };
 
@@ -962,10 +968,11 @@ export default function MessagesList() {
                             if (textareaRef.current) {
                               textareaRef.current.style.height = 'auto';
                             }
+                            setTextareaOverflow(false);
                           }
                         }}
                         rows={1}
-                        className="flex-1 resize-none min-h-[40px] max-h-[150px] overflow-y-auto"
+                        className={`flex-1 resize-none min-h-[40px] max-h-[150px] ${textareaOverflow ? 'overflow-y-auto' : 'overflow-hidden'}`}
                         disabled={!isIn24hWindow && messages.length > 0}
                       />
                       <Button
