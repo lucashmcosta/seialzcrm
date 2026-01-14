@@ -110,6 +110,44 @@ const AVAILABLE_TOOLS = [
       },
     },
   },
+  {
+    type: "function",
+    function: {
+      name: "save_memory",
+      description: "Salva informações importantes sobre o contato para lembrar em conversas futuras. Use SEMPRE que o cliente mencionar: datas importantes (dia de pagamento, aniversário), contexto pessoal (família, trabalho), objeções, preferências, próximos passos combinados.",
+      parameters: {
+        type: "object",
+        properties: {
+          fact: { 
+            type: "string", 
+            description: "Fato importante para lembrar (ex: 'Recebe salário dia 15', 'Esposa se chama Maria', 'Trabalha como gerente de vendas')" 
+          },
+          next_action: { 
+            type: "string", 
+            description: "Próxima ação a fazer (ex: 'Retomar contato sobre pagamento')" 
+          },
+          next_action_date: { 
+            type: "string", 
+            description: "Data da próxima ação no formato YYYY-MM-DD" 
+          },
+          objection: { 
+            type: "string", 
+            description: "Objeção levantada pelo cliente (ex: 'Preço alto', 'Precisa pensar', 'Consultar sócio')" 
+          },
+          qualification: {
+            type: "object",
+            description: "Dados de qualificação do lead",
+            properties: {
+              interest_level: { type: "string", enum: ["low", "medium", "high"], description: "Nível de interesse demonstrado" },
+              has_budget: { type: "boolean", description: "Se o cliente tem orçamento" },
+              timeline: { type: "string", description: "Prazo para decisão (ex: 'Q1 2025', 'Próximo mês')" },
+              decision_maker: { type: "boolean", description: "Se o contato é o decisor" }
+            }
+          }
+        },
+      },
+    },
+  },
 ];
 
 /**
@@ -236,6 +274,88 @@ async function executeTool(
         return { success: true, message: `Reunião agendada para ${meetingDate}` };
       }
 
+      case 'save_memory': {
+        // Fetch or create contact memory
+        let { data: memory } = await supabase
+          .from('contact_memories')
+          .select('*')
+          .eq('contact_id', context.contactId)
+          .single();
+
+        if (!memory) {
+          // Create new memory
+          const { data: newMemory, error: createError } = await supabase
+            .from('contact_memories')
+            .insert({
+              organization_id: context.organizationId,
+              contact_id: context.contactId,
+              facts: [],
+              objections: [],
+              qualification: {},
+              preferences: {}
+            })
+            .select()
+            .single();
+          
+          if (createError) {
+            console.error('Error creating memory:', createError);
+            return { success: false, message: createError.message };
+          }
+          memory = newMemory;
+        }
+
+        const updates: Record<string, any> = { updated_at: new Date().toISOString() };
+        const savedInfo: string[] = [];
+
+        // Add fact
+        if (args.fact) {
+          const facts = (memory.facts as string[]) || [];
+          if (!facts.includes(args.fact)) {
+            facts.push(args.fact);
+            updates.facts = facts;
+            savedInfo.push(`Fato: ${args.fact}`);
+          }
+        }
+
+        // Update next action
+        if (args.next_action) {
+          updates.next_action = args.next_action;
+          savedInfo.push(`Próxima ação: ${args.next_action}`);
+        }
+        if (args.next_action_date) {
+          updates.next_action_date = args.next_action_date;
+          savedInfo.push(`Data: ${args.next_action_date}`);
+        }
+
+        // Add objection
+        if (args.objection) {
+          const objections = (memory.objections as string[]) || [];
+          if (!objections.includes(args.objection)) {
+            objections.push(args.objection);
+            updates.objections = objections;
+            savedInfo.push(`Objeção: ${args.objection}`);
+          }
+        }
+
+        // Update qualification (merge)
+        if (args.qualification) {
+          updates.qualification = { ...(memory.qualification as object || {}), ...args.qualification };
+          savedInfo.push(`Qualificação atualizada`);
+        }
+
+        const { error: updateError } = await supabase
+          .from('contact_memories')
+          .update(updates)
+          .eq('id', memory.id);
+
+        if (updateError) {
+          console.error('Error updating memory:', updateError);
+          return { success: false, message: updateError.message };
+        }
+
+        return { success: true, message: `Memória salva: ${savedInfo.join(', ')}` };
+      }
+
       default:
         return { success: false, message: `Tool desconhecida: ${toolName}` };
     }
@@ -282,7 +402,8 @@ function buildSystemPrompt(
   contact: any,
   company: any,
   opportunities: any[],
-  enabledTools: string[]
+  enabledTools: string[],
+  memories: any | null
 ): string {
   const toneDescriptions: Record<string, string> = {
     professional: 'Seja profissional, cortês e objetivo. Use linguagem formal mas acolhedora.',
@@ -349,6 +470,54 @@ ${agent.custom_instructions}
     });
   }
 
+  // Add contact memories (PERSISTENT MEMORY)
+  if (memories) {
+    prompt += `
+## MEMÓRIAS SOBRE ESTE CONTATO
+⚠️ IMPORTANTE: Use estas informações para personalizar a conversa! O cliente já compartilhou isso anteriormente.
+
+`;
+    
+    const facts = (memories.facts as string[]) || [];
+    if (facts.length > 0) {
+      prompt += `### Fatos Importantes que Você Sabe
+`;
+      facts.forEach((fact: string) => {
+        prompt += `- ${fact}
+`;
+      });
+    }
+
+    if (memories.next_action && memories.next_action_date) {
+      prompt += `
+### Próxima Ação Agendada
+- ${memories.next_action} (Data: ${memories.next_action_date})
+`;
+    }
+
+    const objections = (memories.objections as string[]) || [];
+    if (objections.length > 0) {
+      prompt += `
+### Objeções já Levantadas
+`;
+      objections.forEach((obj: string) => {
+        prompt += `- ${obj}
+`;
+      });
+    }
+
+    const qualification = (memories.qualification as Record<string, any>) || {};
+    if (Object.keys(qualification).length > 0) {
+      prompt += `
+### Qualificação do Lead
+- Nível de interesse: ${qualification.interest_level || 'não avaliado'}
+- Tem orçamento: ${qualification.has_budget === true ? 'Sim' : qualification.has_budget === false ? 'Não' : 'Não confirmado'}
+- Timeline: ${qualification.timeline || 'não definido'}
+- Decisor: ${qualification.decision_maker === true ? 'Sim' : qualification.decision_maker === false ? 'Não' : 'Não confirmado'}
+`;
+    }
+  }
+
   // Add tools instructions
   if (enabledTools.length > 0) {
     prompt += `
@@ -380,6 +549,22 @@ Você tem acesso a ferramentas que DEVE usar quando apropriado:
     if (enabledTools.includes('schedule_meeting')) {
       prompt += `
 - **schedule_meeting**: Agende reuniões quando o cliente aceitar uma demonstração ou call.
+`;
+    }
+    if (enabledTools.includes('save_memory')) {
+      prompt += `
+- **save_memory**: SEMPRE salve informações importantes que o cliente mencionar para lembrar em futuras conversas:
+  • Datas importantes (dia de pagamento, aniversário, datas de viagem, etc)
+  • Contexto pessoal (família, trabalho, hobbies, preferências)
+  • Objeções e preocupações levantadas
+  • Preferências e restrições (horários, canais de contato)
+  • Próximos passos combinados com datas
+  
+  Exemplos de quando usar:
+  - "só recebo dia 15" → save_memory({fact: "Recebe salário dia 15", next_action: "Retomar contato sobre pagamento", next_action_date: "2025-01-15"})
+  - "preciso falar com minha esposa Maria" → save_memory({fact: "Esposa se chama Maria", objection: "Precisa consultar esposa"})
+  - "meu orçamento é de no máximo 500 reais" → save_memory({fact: "Orçamento máximo de R$500", qualification: {has_budget: true}})
+  - "estou muito interessado" → save_memory({qualification: {interest_level: "high"}})
 `;
     }
   }
@@ -495,7 +680,7 @@ serve(async (req) => {
     }
 
     // 4. Collect CRM context
-    const [contactResult, companyResult, opportunitiesResult, historyResult] = await Promise.all([
+    const [contactResult, companyResult, opportunitiesResult, historyResult, memoriesResult] = await Promise.all([
       // Contact
       supabase
         .from('contacts')
@@ -527,6 +712,13 @@ serve(async (req) => {
         .is('deleted_at', null)
         .order('created_at', { ascending: false })
         .limit(30),
+      
+      // Contact memories - PERSISTENT MEMORY
+      supabase
+        .from('contact_memories')
+        .select('*')
+        .eq('contact_id', contactId)
+        .single(),
     ]);
 
     const contact = contactResult.data;
@@ -537,6 +729,7 @@ serve(async (req) => {
     }));
     // Reverse to get chronological order
     const messageHistory = (historyResult.data || []).reverse();
+    const memories = memoriesResult.data;
 
     // 5. Find AI integration
     const { data: aiIntegrations } = await supabase
@@ -579,7 +772,7 @@ serve(async (req) => {
     }
 
     // 6. Build system prompt (without message history - it goes in messages now)
-    const systemPrompt = buildSystemPrompt(agent, contact, company, opportunities, enabledTools);
+    const systemPrompt = buildSystemPrompt(agent, contact, company, opportunities, enabledTools, memories);
 
     // Build conversation messages for REAL memory
     const conversationMessages = messageHistory.map(msg => ({

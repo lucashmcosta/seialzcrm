@@ -80,6 +80,11 @@ const AVAILABLE_TOOLS = [
     name: 'Agendar Reunião', 
     description: 'Agenda reuniões e demonstrações com o cliente' 
   },
+  { 
+    id: 'save_memory', 
+    name: 'Salvar Memória', 
+    description: 'Salva informações importantes (datas, preferências, objeções) para lembrar em futuras conversas' 
+  },
 ];
 
 const STEPS = [
