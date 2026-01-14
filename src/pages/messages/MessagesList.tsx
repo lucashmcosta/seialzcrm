@@ -868,7 +868,7 @@ export default function MessagesList() {
                               
                               <div
                                 className={cn(
-                                  'relative max-w-[70%] rounded-lg p-3 pb-5 min-w-[80px]',
+                                  'relative max-w-[70%] rounded-lg p-3 min-w-[80px]',
                                   isOutbound
                                     ? 'bg-green-100 dark:bg-green-900/40 text-green-900 dark:text-green-100'
                                     : 'bg-muted'
@@ -894,8 +894,6 @@ export default function MessagesList() {
                                     </Button>
                                   </div>
                                 )}
-                                
-                                {/* User name is now shown in footer, no need for header */}
                                 
                                 {/* Quoted Message */}
                                 {message.reply_to_message && (
@@ -955,10 +953,13 @@ export default function MessagesList() {
                                   </p>
                                 )}
 
-                                {/* Footer - Name + Time + Status */}
-                                <div className="absolute bottom-1 right-2 flex items-center gap-1">
-                                  <span className="text-[10px] text-muted-foreground/70">
-                                    {isOutbound && message.sender_name && `${message.sender_name} - `}
+                                {/* Footer - Name + Time + Status (normal flow, below content) */}
+                                <div className="mt-1 flex items-center justify-end gap-1">
+                                  <span className="text-[10px] text-muted-foreground/70 whitespace-nowrap">
+                                    {isOutbound 
+                                      ? (message.sender_name ? `${message.sender_name} - ` : '')
+                                      : (selectedThread?.contact_name ? `${selectedThread.contact_name} - ` : '')
+                                    }
                                     {new Date(message.sent_at).toLocaleTimeString(locale, {
                                       hour: '2-digit',
                                       minute: '2-digit',
