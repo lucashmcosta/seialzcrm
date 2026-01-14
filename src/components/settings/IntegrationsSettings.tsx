@@ -150,9 +150,11 @@ export function IntegrationsSettings() {
 
   const handleToggle = (integration: any, orgIntegration: any, newState: boolean) => {
     if (orgIntegration) {
+      // Integration exists - just toggle enable/disable
+      // Don't open dialog, just update the database
       toggleMutation.mutate({ orgIntegrationId: orgIntegration.id, enabled: newState });
     } else if (newState) {
-      // If toggling on and not connected, open connect dialog
+      // No connection exists yet - open connect dialog
       handleConnect(integration);
     }
   };

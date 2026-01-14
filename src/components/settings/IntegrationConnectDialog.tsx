@@ -179,9 +179,12 @@ export function IntegrationConnectDialog({
         }
       }
     },
-    onSuccess: () => {
+    onSuccess: async () => {
       toast.success(`${integration.name} conectado com sucesso!`);
-      queryClient.invalidateQueries({ queryKey: ['organization-integrations'] });
+      // Force refresh all integration-related queries
+      await queryClient.invalidateQueries({ queryKey: ['organization-integrations'] });
+      await queryClient.invalidateQueries({ queryKey: ['whatsapp-integration'] });
+      await queryClient.invalidateQueries({ queryKey: ['twilio-voice-credentials'] });
       onOpenChange(false);
       setConfigValues({});
       setSetupPhase('form');
