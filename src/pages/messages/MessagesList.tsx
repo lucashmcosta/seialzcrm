@@ -9,6 +9,7 @@ import {
   Archive,
   User01,
   CornerUpLeft,
+  XClose,
 } from '@untitledui/icons';
 import { ListBox, ListBoxItem, type ListBoxItemProps } from 'react-aria-components';
 import { Layout } from '@/components/Layout';
@@ -20,6 +21,7 @@ import { Textarea } from '@/components/ui/textarea';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
+import { Dialog, DialogContent } from '@/components/ui/dialog';
 import { useOrganization } from '@/hooks/useOrganization';
 import { useTranslation } from '@/lib/i18n';
 import { supabase } from '@/integrations/supabase/client';
@@ -190,6 +192,9 @@ export default function MessagesList() {
   
   // Emoji picker state
   const [showEmojiPicker, setShowEmojiPicker] = useState(false);
+  
+  // Image preview state
+  const [previewImageUrl, setPreviewImageUrl] = useState<string | null>(null);
 
   // Fetch threads
   const { data: threads, isLoading: threadsLoading, refetch: refetchThreads } = useQuery({
@@ -775,7 +780,7 @@ export default function MessagesList() {
                               
                               <div
                                 className={cn(
-                                  'relative max-w-[70%] rounded-lg p-3 pb-5',
+                                  'relative max-w-[70%] rounded-lg p-3 pb-5 min-w-[80px]',
                                   isOutbound
                                     ? 'bg-green-100 dark:bg-green-900/40 text-green-900 dark:text-green-100'
                                     : 'bg-muted'
@@ -801,8 +806,8 @@ export default function MessagesList() {
                                             key={i}
                                             src={url}
                                             alt="Media"
-                                            className="max-w-full rounded cursor-pointer hover:opacity-90"
-                                            onClick={() => window.open(url, '_blank')}
+                                            className="max-w-[180px] max-h-[180px] rounded cursor-pointer hover:opacity-90 object-cover"
+                                            onClick={() => setPreviewImageUrl(url)}
                                           />
                                         );
                                       }
@@ -994,6 +999,29 @@ export default function MessagesList() {
         onSend={handleMediaUpload}
         isLoading={mediaUploading}
       />
+
+      {/* Image Preview Dialog */}
+      <Dialog open={!!previewImageUrl} onOpenChange={(open) => !open && setPreviewImageUrl(null)}>
+        <DialogContent className="max-w-[90vw] max-h-[90vh] p-0 bg-transparent border-none">
+          <div className="relative">
+            <Button
+              variant="ghost"
+              size="icon"
+              className="absolute top-2 right-2 z-10 bg-background/80 hover:bg-background"
+              onClick={() => setPreviewImageUrl(null)}
+            >
+              <XClose className="h-5 w-5" />
+            </Button>
+            {previewImageUrl && (
+              <img
+                src={previewImageUrl}
+                alt="Preview"
+                className="max-w-full max-h-[85vh] object-contain rounded-lg"
+              />
+            )}
+          </div>
+        </DialogContent>
+      </Dialog>
     </Layout>
   );
 }
