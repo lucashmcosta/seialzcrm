@@ -474,7 +474,7 @@ export function WhatsAppChat({ contactId, threadId: initialThreadId, onThreadCre
         {isIn24hWindow || messages.length === 0 ? (
           <div className="flex gap-2">
             <div className="flex gap-1">
-              <MediaUploadButton onUpload={handleMediaUpload} disabled={submitting} />
+              <MediaUploadButton onFileSelected={handleMediaUpload} disabled={submitting} />
               <AudioRecorder onSend={handleAudioSend} disabled={submitting} />
             </div>
             <Textarea

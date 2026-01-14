@@ -9,38 +9,23 @@ import {
 import { Paperclip, Image, FileText, Loader2 } from 'lucide-react';
 
 interface MediaUploadButtonProps {
-  onUpload: (file: File) => Promise<void>;
+  onFileSelected: (file: File) => void;
   disabled?: boolean;
 }
 
-export function MediaUploadButton({ onUpload, disabled }: MediaUploadButtonProps) {
+export function MediaUploadButton({ onFileSelected, disabled }: MediaUploadButtonProps) {
   const imageInputRef = useRef<HTMLInputElement>(null);
   const documentInputRef = useRef<HTMLInputElement>(null);
-  const [isUploading, setIsUploading] = useState(false);
 
-  const handleFileChange = async (event: React.ChangeEvent<HTMLInputElement>) => {
+  const handleFileChange = (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
     if (!file) return;
 
-    setIsUploading(true);
-    try {
-      await onUpload(file);
-    } catch (error) {
-      console.error('Upload error:', error);
-    } finally {
-      setIsUploading(false);
-      // Reset input
-      event.target.value = '';
-    }
+    onFileSelected(file);
+    // Reset input
+    event.target.value = '';
   };
 
-  if (isUploading) {
-    return (
-      <Button variant="outline" size="icon" disabled>
-        <Loader2 className="w-4 h-4 animate-spin" />
-      </Button>
-    );
-  }
 
   return (
     <>
