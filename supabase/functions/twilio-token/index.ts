@@ -65,37 +65,44 @@ serve(async (req) => {
       )
     }
 
-    // Step 1: Get the Twilio integration ID from admin_integrations
+    // Step 1: Get the Twilio Voice integration from admin_integrations
     const { data: twilioIntegration } = await supabase
       .from('admin_integrations')
       .select('id')
-      .or('slug.eq.twilio-voice,category.eq.telephony')
-      .limit(1)
+      .eq('slug', 'twilio-voice')
       .single()
 
     if (!twilioIntegration) {
-      console.error('Twilio integration not found in admin_integrations')
+      console.error('Twilio Voice integration not found in admin_integrations')
       return new Response(
-        JSON.stringify({ error: 'Twilio integration not available' }),
+        JSON.stringify({ error: 'Twilio Voice integration not available' }),
         { status: 404, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       )
     }
 
-    console.log('Found Twilio integration:', twilioIntegration.id)
+    console.log('Found Twilio Voice integration:', twilioIntegration.id)
 
-    // Step 2: Get the organization's integration config
-    const { data: integration } = await supabase
+    // Step 2: Get the organization's integration config for Twilio Voice
+    const { data: integration, error: integrationError } = await supabase
       .from('organization_integrations')
       .select('config_values')
       .eq('organization_id', userOrg.organization_id)
       .eq('integration_id', twilioIntegration.id)
       .eq('is_enabled', true)
-      .single()
+      .maybeSingle()
+
+    if (integrationError) {
+      console.error('Error fetching organization integration:', integrationError)
+      return new Response(
+        JSON.stringify({ error: 'Failed to fetch Twilio configuration' }),
+        { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      )
+    }
 
     if (!integration || !integration.config_values) {
-      console.error('Organization integration not found or not configured')
+      console.error('Twilio Voice integration not found for org:', userOrg.organization_id)
       return new Response(
-        JSON.stringify({ error: 'Twilio integration not configured for this organization' }),
+        JSON.stringify({ error: 'Twilio Voice not configured. Please connect Twilio Voice in Settings > Integrations.' }),
         { status: 404, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       )
     }
