@@ -7,7 +7,7 @@ const corsHeaders = {
 };
 
 interface AIRequest {
-  action: "summarize_contact" | "suggest_reply" | "analyze_opportunity" | "generate_email" | "improve_text" | "custom";
+  action: "summarize_contact" | "suggest_reply" | "analyze_opportunity" | "generate_email" | "improve_text" | "generate_agent_prompt" | "custom";
   prompt?: string;
   context?: Record<string, any>;
 }
@@ -125,10 +125,56 @@ serve(async (req) => {
           userPrompt = `Reescreva este texto de forma mais amigável e simpática, mantendo a mensagem. Retorne apenas o texto reescrito:\n\n${context?.text}`;
         }
         break;
+      case "generate_agent_prompt":
+        systemPrompt = `Você é um especialista em criar prompts para agentes de IA de vendas (SDR - Sales Development Representative).
+Com base nas informações fornecidas sobre a empresa, crie um prompt detalhado e bem estruturado em formato Markdown.
+
+O prompt deve incluir as seguintes seções:
+## Identidade
+- Quem é o agente, qual empresa representa
+
+## Tom de Comunicação
+- Como o agente deve se comunicar (formal, amigável, técnico)
+
+## Produtos/Serviços
+- Lista detalhada dos produtos/serviços oferecidos
+
+## Diferenciais
+- O que destacar sobre a empresa/produtos
+
+## Objetivo Principal
+- Qual é a meta do agente nas conversas
+
+## Regras Importantes
+- O que o agente DEVE fazer (com ✅)
+- O que o agente NÃO DEVE fazer (com ❌)
+
+Use uma linguagem clara e direta. O prompt deve ser prático e acionável para o agente de IA.`;
+
+        userPrompt = `Crie o prompt do agente SDR com base nestas informações:
+
+EMPRESA:
+- Nome: ${context?.companyName}
+- Segmento: ${context?.companySegment}
+- Descrição: ${context?.companyDescription}
+
+PRODUTOS/SERVIÇOS:
+${context?.products}
+
+DIFERENCIAIS:
+${context?.differentials || 'Não informado'}
+
+OBJETIVO DO AGENTE: ${context?.goal}
+TOM DE COMUNICAÇÃO: ${context?.tone}
+
+ARGUMENTOS DE VENDA (PITCH):
+${context?.salesPitch || 'Não informado'}
+
+RESTRIÇÕES (O que o agente NÃO deve fazer):
+${context?.restrictions || 'Não informado'}`;
+        break;
       case "custom":
       default:
-        // Use provided prompt directly
-        break;
     }
 
     let response: any;

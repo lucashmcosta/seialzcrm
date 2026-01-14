@@ -411,6 +411,7 @@ export type Database = {
           out_of_hours_message: string | null
           tone: string
           updated_at: string | null
+          wizard_data: Json | null
           working_hours: Json | null
         }
         Insert: {
@@ -427,6 +428,7 @@ export type Database = {
           out_of_hours_message?: string | null
           tone?: string
           updated_at?: string | null
+          wizard_data?: Json | null
           working_hours?: Json | null
         }
         Update: {
@@ -443,6 +445,7 @@ export type Database = {
           out_of_hours_message?: string | null
           tone?: string
           updated_at?: string | null
+          wizard_data?: Json | null
           working_hours?: Json | null
         }
         Relationships: [
