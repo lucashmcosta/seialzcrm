@@ -50,6 +50,7 @@ interface SDRAgentWizardProps {
     enabled_tools?: string[];
     ai_provider?: string | null;
     ai_model?: string | null;
+    max_messages_per_conversation?: number | null;
   } | null;
   organizationId: string;
   onSuccess: () => void;
@@ -202,6 +203,7 @@ export function SDRAgentWizard({
   );
   const [aiProvider, setAiProvider] = useState<string>(existingAgent?.ai_provider || 'auto');
   const [aiModel, setAiModel] = useState<string>(existingAgent?.ai_model || '');
+  const [maxMessages, setMaxMessages] = useState<number>(existingAgent?.max_messages_per_conversation ?? 10);
   const [newFeedback, setNewFeedback] = useState('');
   const [isGenerating, setIsGenerating] = useState(false);
   const [isRefining, setIsRefining] = useState(false);
@@ -245,6 +247,7 @@ export function SDRAgentWizard({
       setEnabledTools(existingAgent?.enabled_tools || ['update_contact', 'transfer_to_human']);
       setAiProvider(existingAgent?.ai_provider || 'auto');
       setAiModel(existingAgent?.ai_model || '');
+      setMaxMessages(existingAgent?.max_messages_per_conversation ?? 10);
     }
   }, [open, existingAgent]);
 
@@ -493,6 +496,7 @@ export function SDRAgentWizard({
         tone: wizardData.tone,
         ai_provider: aiProvider,
         ai_model: aiProvider !== 'auto' ? aiModel : null,
+        max_messages_per_conversation: maxMessages,
       };
 
       if (existingAgent?.id) {
@@ -599,6 +603,36 @@ export function SDRAgentWizard({
                 </Select>
               </div>
             )}
+          </div>
+        </div>
+
+        {/* Conversation Limits */}
+        <div className="space-y-4 p-4 border rounded-lg bg-muted/30">
+          <div>
+            <Label className="text-base font-medium">Limites de Conversa</Label>
+            <p className="text-sm text-muted-foreground">
+              Configure limites para as conversas do agente
+            </p>
+          </div>
+          
+          <div className="space-y-2">
+            <Label>Máximo de mensagens por conversa</Label>
+            <div className="flex items-center gap-3">
+              <Input
+                type="number"
+                min={1}
+                max={100}
+                value={maxMessages}
+                onChange={(e) => setMaxMessages(Math.max(1, Math.min(100, parseInt(e.target.value) || 10)))}
+                className="w-24"
+              />
+              <p className="text-sm text-muted-foreground">
+                O agente para de responder após este número de mensagens
+              </p>
+            </div>
+            <p className="text-xs text-muted-foreground">
+              Recomendado: 10-30 mensagens. Evita loops e custos excessivos.
+            </p>
           </div>
         </div>
 
