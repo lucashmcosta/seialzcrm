@@ -92,6 +92,20 @@ export function IntegrationConnectDialog({
     mutationFn: async () => {
       if (!organization) throw new Error('Organization not found');
 
+      // Debug logs
+      console.log('=== Connect Mutation Started ===');
+      console.log('Integration:', { 
+        id: integration.id, 
+        slug: integration.slug, 
+        name: integration.name 
+      });
+      console.log('Organization:', organization.id);
+      console.log('isTwilioVoice:', isTwilioVoice);
+      console.log('isTwilioWhatsApp:', isTwilioWhatsApp);
+      console.log('configValues:', Object.keys(configValues));
+      console.log('Has account_sid:', !!configValues.account_sid);
+      console.log('Has auth_token:', !!configValues.auth_token);
+
       const { data: userData } = await supabase.auth.getUser();
       const { data: userProfile } = await supabase
         .from('users')
@@ -122,8 +136,14 @@ export function IntegrationConnectDialog({
       }
 
       // For Twilio Voice, run automatic setup
-      if (isTwilioVoice && configValues.account_sid && configValues.auth_token) {
+      if (isTwilioVoice) {
+        if (!configValues.account_sid || !configValues.auth_token) {
+          throw new Error('Credenciais do Twilio são obrigatórias (Account SID e Auth Token)');
+        }
+        
         setSetupPhase('configuring');
+        
+        console.log('Calling twilio-setup edge function...');
         
         const { data: setupData, error: setupError } = await supabase.functions.invoke('twilio-setup', {
           body: {
@@ -134,6 +154,8 @@ export function IntegrationConnectDialog({
             enableRecording: configValues.enable_recording,
           },
         });
+
+        console.log('twilio-setup response:', { setupData, setupError });
 
         if (setupError) {
           console.error('Twilio Voice setup error:', setupError);
@@ -148,8 +170,18 @@ export function IntegrationConnectDialog({
       }
 
       // For Twilio WhatsApp, run automatic setup with full automation
-      if (isTwilioWhatsApp && configValues.account_sid && configValues.auth_token) {
+      if (isTwilioWhatsApp) {
+        if (!configValues.account_sid || !configValues.auth_token) {
+          throw new Error('Credenciais do Twilio são obrigatórias (Account SID e Auth Token)');
+        }
+
         setSetupPhase('configuring');
+        
+        console.log('Calling twilio-whatsapp-setup edge function with:', {
+          organizationId: organization.id,
+          hasAccountSid: !!configValues.account_sid,
+          hasAuthToken: !!configValues.auth_token,
+        });
         
         const { data: setupData, error: setupError } = await supabase.functions.invoke('twilio-whatsapp-setup', {
           body: {
@@ -158,6 +190,8 @@ export function IntegrationConnectDialog({
             authToken: configValues.auth_token,
           },
         });
+
+        console.log('twilio-whatsapp-setup response:', { setupData, setupError });
 
         if (setupError) {
           console.error('Twilio WhatsApp setup error:', setupError);
