@@ -252,9 +252,11 @@ export default function MessagesList() {
         // If this message belongs to the selected thread, add it to messages
         if (newMessage.thread_id === selectedThreadId) {
           setMessages((prev) => {
-            // Avoid duplicates
-            if (prev.find((m) => m.id === newMessage.id)) return prev;
-            return [...prev, newMessage];
+            // Remove temporary messages and avoid duplicates
+            const filtered = prev.filter(
+              (m) => !m.id.startsWith('temp-') && m.id !== newMessage.id
+            );
+            return [...filtered, newMessage];
           });
           scrollToBottom();
         }
@@ -348,14 +350,33 @@ export default function MessagesList() {
       return;
     }
 
-    setSubmitting(true);
+    // Optimistic UI: add message immediately
+    const tempId = `temp-${Date.now()}`;
+    const tempMessage: Message = {
+      id: tempId,
+      content: messageText,
+      direction: 'outbound',
+      sent_at: new Date().toISOString(),
+      whatsapp_status: 'sending',
+      media_urls: null,
+      media_type: null,
+      error_message: null,
+    };
+
+    // Add temp message and clear input immediately
+    setMessages((prev) => [...prev, tempMessage]);
+    const savedText = messageText;
+    setMessageText('');
+    scrollToBottom();
+
+    // Send in background (no setSubmitting to keep UI responsive)
     try {
       const { data, error } = await supabase.functions.invoke('twilio-whatsapp-send', {
         body: {
           organizationId: organization.id,
           contactId: selectedThread.contact_id,
           threadId: selectedThreadId,
-          message: messageText,
+          message: savedText,
           userId: userProfile?.id,
         },
       });
@@ -364,31 +385,51 @@ export default function MessagesList() {
 
       if (data.error) {
         if (data.requiresTemplate) {
+          // Remove temp message and show templates
+          setMessages((prev) => prev.filter((m) => m.id !== tempId));
+          setMessageText(savedText);
           setShowTemplates(true);
           return;
         }
         throw new Error(data.error);
       }
 
-      setMessageText('');
-      // Immediately refresh messages to show sent message
-      if (selectedThreadId) {
-        await fetchMessages(selectedThreadId);
-      }
+      // Success - real-time will replace temp message with real one
       refetchThreads();
     } catch (error: any) {
       console.error('Error sending message:', error);
+      // Mark temp message as failed
+      setMessages((prev) =>
+        prev.map((m) =>
+          m.id === tempId
+            ? { ...m, whatsapp_status: 'failed', error_message: error.message }
+            : m
+        )
+      );
       toast({ variant: 'destructive', description: error.message || 'Erro ao enviar mensagem' });
-    } finally {
-      setSubmitting(false);
     }
   };
 
   const handleSendTemplate = async (templateId: string, variables: Record<string, string>) => {
     if (!organization?.id || !selectedThread) return;
 
-    setSubmitting(true);
     setShowTemplates(false);
+
+    // Optimistic UI: add template message immediately
+    const tempId = `temp-${Date.now()}`;
+    const tempMessage: Message = {
+      id: tempId,
+      content: '📋 Template...',
+      direction: 'outbound',
+      sent_at: new Date().toISOString(),
+      whatsapp_status: 'sending',
+      media_urls: null,
+      media_type: null,
+      error_message: null,
+    };
+
+    setMessages((prev) => [...prev, tempMessage]);
+    scrollToBottom();
 
     try {
       const { data, error } = await supabase.functions.invoke('twilio-whatsapp-send', {
@@ -408,33 +449,50 @@ export default function MessagesList() {
         throw new Error(data.error);
       }
 
-      toast({ description: locale === 'pt-BR' ? 'Mensagem enviada!' : 'Message sent!' });
-      // Immediately refresh messages to show sent template
-      if (selectedThreadId) {
-        await fetchMessages(selectedThreadId);
-      }
+      // Success - real-time will replace temp message
       refetchThreads();
     } catch (error: any) {
       console.error('Error sending template:', error);
+      setMessages((prev) =>
+        prev.map((m) =>
+          m.id === tempId
+            ? { ...m, whatsapp_status: 'failed', error_message: error.message }
+            : m
+        )
+      );
       toast({ variant: 'destructive', description: error.message });
-    } finally {
-      setSubmitting(false);
     }
   };
 
   const handleMediaUpload = async (file: File) => {
     if (!organization?.id || !selectedThread) return;
 
+    const fileExt = file.name.split('.').pop()?.toLowerCase() || 'bin';
+    const fileName = `${Date.now()}-${Math.random().toString(36).substring(7)}.${fileExt}`;
+    const filePath = `${organization.id}/${fileName}`;
+
+    let mediaType = 'document';
+    if (file.type.startsWith('image/')) mediaType = 'image';
+    else if (file.type.startsWith('audio/')) mediaType = 'audio';
+    else if (file.type.startsWith('video/')) mediaType = 'video';
+
+    // Optimistic UI: add media message immediately
+    const tempId = `temp-${Date.now()}`;
+    const tempMessage: Message = {
+      id: tempId,
+      content: mediaType === 'image' ? '📷 Imagem' : mediaType === 'audio' ? '🎵 Áudio' : '📎 Mídia',
+      direction: 'outbound',
+      sent_at: new Date().toISOString(),
+      whatsapp_status: 'sending',
+      media_urls: null,
+      media_type: mediaType,
+      error_message: null,
+    };
+
+    setMessages((prev) => [...prev, tempMessage]);
+    scrollToBottom();
+
     try {
-      const fileExt = file.name.split('.').pop()?.toLowerCase() || 'bin';
-      const fileName = `${Date.now()}-${Math.random().toString(36).substring(7)}.${fileExt}`;
-      const filePath = `${organization.id}/${fileName}`;
-
-      let mediaType = 'document';
-      if (file.type.startsWith('image/')) mediaType = 'image';
-      else if (file.type.startsWith('audio/')) mediaType = 'audio';
-      else if (file.type.startsWith('video/')) mediaType = 'video';
-
       const { error: uploadError } = await supabase.storage
         .from('whatsapp-media')
         .upload(filePath, file);
@@ -458,13 +516,17 @@ export default function MessagesList() {
       });
 
       if (error) throw error;
-      // Immediately refresh messages to show sent media
-      if (selectedThreadId) {
-        await fetchMessages(selectedThreadId);
-      }
+      // Success - real-time will replace temp message
       refetchThreads();
     } catch (error: any) {
       console.error('Error uploading media:', error);
+      setMessages((prev) =>
+        prev.map((m) =>
+          m.id === tempId
+            ? { ...m, whatsapp_status: 'failed', error_message: error.message }
+            : m
+        )
+      );
       toast({ variant: 'destructive', description: error.message });
     }
   };
