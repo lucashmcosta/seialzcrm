@@ -7,7 +7,7 @@ const corsHeaders = {
 };
 
 interface AIRequest {
-  action: "summarize_contact" | "suggest_reply" | "analyze_opportunity" | "generate_email" | "improve_text" | "generate_agent_prompt" | "custom";
+  action: "summarize_contact" | "suggest_reply" | "analyze_opportunity" | "generate_email" | "improve_text" | "generate_agent_prompt" | "refine_agent_prompt" | "custom";
   prompt?: string;
   context?: Record<string, any>;
 }
@@ -172,6 +172,32 @@ ${context?.salesPitch || 'Não informado'}
 
 RESTRIÇÕES (O que o agente NÃO deve fazer):
 ${context?.restrictions || 'Não informado'}`;
+        break;
+      case "refine_agent_prompt":
+        systemPrompt = `Você é um especialista em otimizar prompts de agentes de IA de vendas (SDR).
+
+Sua tarefa é incorporar o feedback fornecido ao prompt existente, refinando-o sem perder as informações originais.
+
+Regras IMPORTANTES:
+- Mantenha a estrutura em Markdown existente
+- Incorpore o feedback de forma natural no prompt
+- NÃO remova informações existentes, apenas adicione ou ajuste conforme o feedback
+- Mantenha o mesmo tom e formato do prompt original
+- Se o feedback pedir para mudar comportamento, adicione/modifique nas seções relevantes
+- Se o feedback pedir para adicionar informações, inclua na seção mais apropriada
+- Retorne o prompt COMPLETO atualizado, não apenas as mudanças`;
+
+        userPrompt = `PROMPT ATUAL DO AGENTE:
+${context?.currentPrompt}
+
+---
+
+FEEDBACK A INCORPORAR:
+${context?.feedback}
+
+---
+
+Por favor, gere o prompt completo atualizado incorporando o feedback acima de forma natural.`;
         break;
       case "custom":
       default:
