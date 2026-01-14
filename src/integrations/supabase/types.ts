@@ -1441,6 +1441,60 @@ export type Database = {
           },
         ]
       }
+      knowledge_embeddings: {
+        Row: {
+          agent_id: string | null
+          content: string
+          content_type: string
+          created_at: string | null
+          embedding: string | null
+          id: string
+          metadata: Json | null
+          organization_id: string
+          title: string | null
+          updated_at: string | null
+        }
+        Insert: {
+          agent_id?: string | null
+          content: string
+          content_type: string
+          created_at?: string | null
+          embedding?: string | null
+          id?: string
+          metadata?: Json | null
+          organization_id: string
+          title?: string | null
+          updated_at?: string | null
+        }
+        Update: {
+          agent_id?: string | null
+          content?: string
+          content_type?: string
+          created_at?: string | null
+          embedding?: string | null
+          id?: string
+          metadata?: Json | null
+          organization_id?: string
+          title?: string | null
+          updated_at?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "knowledge_embeddings_agent_id_fkey"
+            columns: ["agent_id"]
+            isOneToOne: false
+            referencedRelation: "ai_agents"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "knowledge_embeddings_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       message_threads: {
         Row: {
           channel: string | null
@@ -2870,6 +2924,23 @@ export type Database = {
       reset_admin_login_attempts: {
         Args: { p_admin_id: string }
         Returns: undefined
+      }
+      search_knowledge: {
+        Args: {
+          agent_id_filter?: string
+          match_count?: number
+          match_threshold?: number
+          org_id: string
+          query_embedding: string
+        }
+        Returns: {
+          content: string
+          content_type: string
+          id: string
+          metadata: Json
+          similarity: number
+          title: string
+        }[]
       }
       update_organization_usage_metrics: {
         Args: { org_id: string }
