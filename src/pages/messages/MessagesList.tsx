@@ -508,7 +508,7 @@ export default function MessagesList() {
           organizationId: organization.id,
           contactId: selectedThread.contact_id,
           threadId: selectedThreadId,
-          message: '📎 Mídia',
+          message: null, // Don't send placeholder text with media
           mediaUrl: publicUrl,
           mediaType,
           userId: userProfile?.id,
