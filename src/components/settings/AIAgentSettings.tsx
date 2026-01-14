@@ -4,7 +4,8 @@ import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
 import { SDRAgentCard } from './SDRAgentCard';
 import { SDRAgentWizard } from './SDRAgentWizard';
-import { Loader2 } from 'lucide-react';
+import { Loader2, Plus } from 'lucide-react';
+import { Button } from '@/components/ui/button';
 import type { Json } from '@/integrations/supabase/types';
 
 interface WizardData {
@@ -35,21 +36,24 @@ interface AIAgent {
   wizard_data: any;
   feedback_history?: FeedbackEntry[];
   enabled_tools?: string[];
+  ai_provider?: string | null;
+  ai_model?: string | null;
 }
 
 export function AIAgentSettings() {
   const { organization } = useOrganization();
   const [isLoading, setIsLoading] = useState(true);
-  const [agent, setAgent] = useState<AIAgent | null>(null);
+  const [agents, setAgents] = useState<AIAgent[]>([]);
   const [wizardOpen, setWizardOpen] = useState(false);
+  const [selectedAgent, setSelectedAgent] = useState<AIAgent | null>(null);
 
   useEffect(() => {
     if (organization?.id) {
-      fetchAgent();
+      fetchAgents();
     }
   }, [organization?.id]);
 
-  const fetchAgent = async () => {
+  const fetchAgents = async () => {
     if (!organization?.id) return;
 
     setIsLoading(true);
@@ -58,51 +62,110 @@ export function AIAgentSettings() {
         .from('ai_agents')
         .select('*')
         .eq('organization_id', organization.id)
-        .maybeSingle();
+        .order('created_at', { ascending: true });
 
-      if (error && error.code !== 'PGRST116') throw error;
+      if (error) throw error;
 
-      if (data) {
-        // Parse feedback_history from JSON
+      const parsedAgents: AIAgent[] = (data || []).map(agent => {
         let feedbackHistory: FeedbackEntry[] = [];
-        if (Array.isArray(data.feedback_history)) {
-          feedbackHistory = data.feedback_history as unknown as FeedbackEntry[];
+        if (Array.isArray(agent.feedback_history)) {
+          feedbackHistory = agent.feedback_history as unknown as FeedbackEntry[];
         }
         
-        setAgent({
-          id: data.id,
-          name: data.name,
-          is_enabled: data.is_enabled,
-          custom_instructions: data.custom_instructions,
-          wizard_data: data.wizard_data,
+        return {
+          id: agent.id,
+          name: agent.name,
+          is_enabled: agent.is_enabled,
+          custom_instructions: agent.custom_instructions,
+          wizard_data: agent.wizard_data,
           feedback_history: feedbackHistory,
-          enabled_tools: (data.enabled_tools as string[]) || ['update_contact', 'transfer_to_human'],
-        });
-      }
+          enabled_tools: (agent.enabled_tools as string[]) || ['update_contact', 'transfer_to_human'],
+          ai_provider: agent.ai_provider,
+          ai_model: agent.ai_model,
+        };
+      });
+      
+      setAgents(parsedAgents);
     } catch (error: any) {
-      console.error('Error fetching agent:', error);
-      toast.error('Erro ao carregar configurações do agente');
+      console.error('Error fetching agents:', error);
+      toast.error('Erro ao carregar agentes');
     } finally {
       setIsLoading(false);
     }
   };
 
-  const handleToggle = async (enabled: boolean) => {
-    if (!agent?.id) return;
-
+  const handleToggle = async (agentId: string, enabled: boolean) => {
     try {
+      // If enabling this agent, disable others first
+      if (enabled) {
+        const { error: disableError } = await supabase
+          .from('ai_agents')
+          .update({ is_enabled: false })
+          .eq('organization_id', organization?.id)
+          .neq('id', agentId);
+        
+        if (disableError) throw disableError;
+      }
+
       const { error } = await supabase
         .from('ai_agents')
         .update({ is_enabled: enabled })
-        .eq('id', agent.id);
+        .eq('id', agentId);
 
       if (error) throw error;
 
-      setAgent(prev => prev ? { ...prev, is_enabled: enabled } : null);
+      setAgents(prev => prev.map(a => ({
+        ...a,
+        is_enabled: a.id === agentId ? enabled : (enabled ? false : a.is_enabled)
+      })));
       toast.success(enabled ? 'Agente ativado' : 'Agente desativado');
     } catch (error: any) {
       console.error('Error toggling agent:', error);
       toast.error('Erro ao alterar status do agente');
+    }
+  };
+
+  const handleConfigure = (agent: AIAgent | null) => {
+    setSelectedAgent(agent);
+    setWizardOpen(true);
+  };
+
+  const handleDuplicate = async (agent: AIAgent) => {
+    if (!organization?.id) return;
+
+    try {
+      const { data, error } = await supabase
+        .from('ai_agents')
+        .insert({
+          organization_id: organization.id,
+          name: `${agent.name} (Cópia)`,
+          custom_instructions: agent.custom_instructions,
+          wizard_data: agent.wizard_data,
+          feedback_history: agent.feedback_history as unknown as Json,
+          enabled_tools: agent.enabled_tools as Json,
+          is_enabled: false,
+          ai_provider: agent.ai_provider,
+          ai_model: agent.ai_model,
+          goal: 'Qualificar leads',
+          tone: 'friendly',
+        })
+        .select()
+        .single();
+
+      if (error) throw error;
+
+      toast.success('Agente duplicado! Edite e ative quando estiver pronto.');
+      fetchAgents();
+    } catch (error: any) {
+      console.error('Error duplicating agent:', error);
+      toast.error('Erro ao duplicar agente');
+    }
+  };
+
+  const handleWizardClose = (open: boolean) => {
+    setWizardOpen(open);
+    if (!open) {
+      setSelectedAgent(null);
     }
   };
 
@@ -116,19 +179,43 @@ export function AIAgentSettings() {
 
   return (
     <div className="space-y-6">
-      <SDRAgentCard
-        agent={agent}
-        isLoading={isLoading}
-        onConfigure={() => setWizardOpen(true)}
-        onToggle={handleToggle}
-      />
+      {/* Render existing agents */}
+      {agents.map(agent => (
+        <SDRAgentCard
+          key={agent.id}
+          agent={agent}
+          isLoading={isLoading}
+          onConfigure={() => handleConfigure(agent)}
+          onToggle={(enabled) => handleToggle(agent.id, enabled)}
+          onDuplicate={() => handleDuplicate(agent)}
+        />
+      ))}
+
+      {/* Empty state / Add new agent button */}
+      {agents.length === 0 ? (
+        <SDRAgentCard
+          agent={null}
+          isLoading={isLoading}
+          onConfigure={() => handleConfigure(null)}
+          onToggle={() => {}}
+        />
+      ) : (
+        <Button
+          variant="outline"
+          className="w-full border-dashed"
+          onClick={() => handleConfigure(null)}
+        >
+          <Plus className="h-4 w-4 mr-2" />
+          Criar novo agente
+        </Button>
+      )}
 
       <SDRAgentWizard
         open={wizardOpen}
-        onOpenChange={setWizardOpen}
-        existingAgent={agent}
+        onOpenChange={handleWizardClose}
+        existingAgent={selectedAgent}
         organizationId={organization?.id || ''}
-        onSuccess={fetchAgent}
+        onSuccess={fetchAgents}
       />
     </div>
   );

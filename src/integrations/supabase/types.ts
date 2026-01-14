@@ -399,6 +399,8 @@ export type Database = {
       ai_agents: {
         Row: {
           agent_type: string
+          ai_model: string | null
+          ai_provider: string | null
           created_at: string | null
           custom_instructions: string | null
           enabled_tools: Json | null
@@ -419,6 +421,8 @@ export type Database = {
         }
         Insert: {
           agent_type?: string
+          ai_model?: string | null
+          ai_provider?: string | null
           created_at?: string | null
           custom_instructions?: string | null
           enabled_tools?: Json | null
@@ -439,6 +443,8 @@ export type Database = {
         }
         Update: {
           agent_type?: string
+          ai_model?: string | null
+          ai_provider?: string | null
           created_at?: string | null
           custom_instructions?: string | null
           enabled_tools?: Json | null
