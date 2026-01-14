@@ -142,17 +142,15 @@ serve(async (req) => {
 
           // Update webhooks on existing service
           const updateServiceUrl = `https://messaging.twilio.com/v1/Services/${messagingServiceSid}`
+          // Use manual encoding to avoid double-encoding the URLs
+          const updateBody = `InboundRequestUrl=${encodeURIComponent(inboundWebhookUrl)}&InboundMethod=POST&StatusCallback=${encodeURIComponent(statusWebhookUrl)}`
           await fetch(updateServiceUrl, {
             method: 'POST',
             headers: {
               'Authorization': authHeader,
               'Content-Type': 'application/x-www-form-urlencoded',
             },
-            body: new URLSearchParams({
-              InboundRequestUrl: inboundWebhookUrl,
-              InboundMethod: 'POST',
-              StatusCallback: statusWebhookUrl,
-            }).toString()
+            body: updateBody
           })
           console.log('Updated webhooks on existing Messaging Service')
         }
@@ -161,19 +159,15 @@ serve(async (req) => {
       // Create new Messaging Service if not found
       if (!messagingServiceSid) {
         const createServiceUrl = 'https://messaging.twilio.com/v1/Services'
+        // Use manual encoding to avoid double-encoding the URLs
+        const createBody = `FriendlyName=${encodeURIComponent(serviceName)}&InboundRequestUrl=${encodeURIComponent(inboundWebhookUrl)}&InboundMethod=POST&StatusCallback=${encodeURIComponent(statusWebhookUrl)}&UseInboundWebhookOnNumber=false`
         const createResponse = await fetch(createServiceUrl, {
           method: 'POST',
           headers: {
             'Authorization': authHeader,
             'Content-Type': 'application/x-www-form-urlencoded',
           },
-          body: new URLSearchParams({
-            FriendlyName: serviceName,
-            InboundRequestUrl: inboundWebhookUrl,
-            InboundMethod: 'POST',
-            StatusCallback: statusWebhookUrl,
-            UseInboundWebhookOnNumber: 'false', // Use service-level webhook
-          }).toString()
+          body: createBody
         })
 
         if (createResponse.ok) {
