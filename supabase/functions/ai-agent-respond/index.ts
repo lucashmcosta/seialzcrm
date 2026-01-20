@@ -1232,8 +1232,14 @@ serve(async (req) => {
       let claudeData = await claudeResponse.json();
       tokensUsed = (claudeData.usage?.input_tokens || 0) + (claudeData.usage?.output_tokens || 0);
 
-      // Handle tool calls
-      while (claudeData.stop_reason === 'tool_use') {
+      // Handle tool calls with max iterations to prevent infinite loops
+      const MAX_TOOL_ITERATIONS = 5;
+      let toolIterations = 0;
+      
+      while (claudeData.stop_reason === 'tool_use' && toolIterations < MAX_TOOL_ITERATIONS) {
+        toolIterations++;
+        console.log(`Claude tool iteration ${toolIterations}/${MAX_TOOL_ITERATIONS}`);
+        
         const toolUseBlocks = claudeData.content.filter((c: any) => c.type === 'tool_use');
         const toolResults = [];
 
@@ -1312,9 +1318,51 @@ serve(async (req) => {
         tokensUsed += (claudeData.usage?.input_tokens || 0) + (claudeData.usage?.output_tokens || 0);
       }
 
+      if (toolIterations >= MAX_TOOL_ITERATIONS) {
+        console.warn(`Claude reached max tool iterations (${MAX_TOOL_ITERATIONS})`);
+      }
+
       // Extract text response
       const textBlock = claudeData.content?.find((c: any) => c.type === 'text');
       aiResponse = textBlock?.text || '';
+
+      // If response is empty after tool execution, retry without tools to force a text response
+      if (!aiResponse && toolsExecuted.length > 0) {
+        console.log('Claude: Empty response after tool execution, requesting final response without tools...');
+        console.log(`Claude debug - stop_reason: ${claudeData.stop_reason}, content_types: ${claudeData.content?.map((c: any) => c.type).join(', ')}`);
+        
+        // Add instruction to force natural response
+        claudeMessages.push({ 
+          role: 'user', 
+          content: 'As ferramentas foram executadas com sucesso. Agora responda ao cliente de forma natural e amigável, sem usar mais ferramentas.' 
+        });
+        
+        const retryResponse = await fetch('https://api.anthropic.com/v1/messages', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'x-api-key': configValues.api_key,
+            'anthropic-version': '2023-06-01',
+          },
+          body: JSON.stringify({
+            model,
+            max_tokens: maxTokens,
+            system: systemPrompt,
+            messages: claudeMessages,
+            // Explicitly NOT passing tools to force text response
+          }),
+        });
+
+        if (retryResponse.ok) {
+          const retryData = await retryResponse.json();
+          tokensUsed += (retryData.usage?.input_tokens || 0) + (retryData.usage?.output_tokens || 0);
+          const retryTextBlock = retryData.content?.find((c: any) => c.type === 'text');
+          aiResponse = retryTextBlock?.text || '';
+          console.log('Claude retry response received:', aiResponse ? 'success' : 'still empty');
+        } else {
+          console.error('Claude retry request failed:', retryResponse.status);
+        }
+      }
 
     } else if (integrationSlug === 'openai-gpt') {
       const model = configValues.default_model || 'gpt-4o-mini';
@@ -1544,9 +1592,17 @@ serve(async (req) => {
       }
     }
 
-    // Graceful fallback if still no response
+    // Graceful fallback if still no response - with detailed logging
+    let fallbackUsed = false;
+    let fallbackReason = '';
+    
     if (!aiResponse) {
-      console.warn('Using fallback response after empty AI response');
+      fallbackUsed = true;
+      fallbackReason = toolsExecuted.length > 0 
+        ? `empty_response_after_tools:${toolsExecuted.join(',')}` 
+        : 'empty_response_no_tools';
+      
+      console.warn(`Using fallback response - reason: ${fallbackReason}, provider: ${integrationSlug}, model: ${modelUsed}`);
       aiResponse = 'Desculpe, não consegui processar sua mensagem no momento. Pode repetir?';
     }
 
@@ -1587,7 +1643,7 @@ serve(async (req) => {
       throw new Error('Failed to send WhatsApp message');
     }
 
-    // 9. Log successful interaction
+    // 9. Log successful interaction (with fallback info if applicable)
     await supabase.from('ai_agent_logs').insert({
       organization_id: organizationId,
       agent_id: agentId,
@@ -1601,11 +1657,15 @@ serve(async (req) => {
         opportunities_count: opportunities.length,
         history_count: messageHistory.length,
         tools_executed: toolsExecuted,
+        fallback_used: fallbackUsed,
+        fallback_reason: fallbackReason || null,
+        provider: integrationSlug,
       },
       response_time_ms: responseTime,
       tokens_used: tokensUsed,
       model_used: modelUsed,
-      status: 'success',
+      status: fallbackUsed ? 'fallback' : 'success',
+      error_message: fallbackReason || null,
     });
 
     // 10. Log to ai_usage_logs for billing/analytics
