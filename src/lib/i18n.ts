@@ -31,6 +31,7 @@ export const translations = {
     'common.type': 'Tipo',
     'common.createdAt': 'Criado em',
     'common.columns': 'Colunas',
+    'common.status': 'Status',
     
     // Navigation
     'nav.dashboard': 'Início',
@@ -174,6 +175,9 @@ export const translations = {
     'opportunities.deleteConfirm': 'Tem certeza que deseja remover esta oportunidade?',
     'opportunities.kanban': 'Kanban',
     'opportunities.list': 'Lista',
+    'opportunities.overviewTab': 'Visão Geral',
+    'opportunities.value': 'Valor',
+    'opportunities.owner': 'Responsável',
     
     // Tasks
     'tasks.title': 'Tarefas',
@@ -490,6 +494,7 @@ export const translations = {
     'common.type': 'Type',
     'common.createdAt': 'Created at',
     'common.columns': 'Columns',
+    'common.status': 'Status',
     
     // Navigation
     'nav.dashboard': 'Dashboard',
