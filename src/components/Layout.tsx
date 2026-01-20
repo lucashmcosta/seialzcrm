@@ -179,7 +179,7 @@ export function Layout({ children }: LayoutProps) {
       </div>
 
       {/* Main content */}
-      <div className="pl-64 flex-1">
+      <div className="pl-64 flex-1 min-w-0 overflow-x-hidden">
         <main className="min-h-screen">
           {children}
         </main>

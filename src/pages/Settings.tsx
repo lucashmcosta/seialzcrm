@@ -105,8 +105,11 @@ export default function Settings() {
 
             {/* Desktop: Horizontal Tabs with underline */}
             <div className="hidden md:block border-b overflow-hidden">
-              <div className="px-6 overflow-x-auto scrollbar-hide">
-                <TabsList variant="underline" className="inline-flex justify-start min-w-max">
+              <div 
+                className="px-6 overflow-x-auto scrollbar-hide touch-pan-x overscroll-x-contain"
+                style={{ WebkitOverflowScrolling: 'touch' }}
+              >
+                <TabsList variant="underline" className="inline-flex flex-nowrap justify-start min-w-max">
                   {searchFilteredTabs.map(tab => (
                     <TabsTrigger 
                       key={tab.id} 
