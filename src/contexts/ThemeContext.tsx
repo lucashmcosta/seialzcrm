@@ -8,9 +8,6 @@ interface ThemeContextType {
   setPrimaryColor: (color: string) => void;
   setSidebarColor: (color: string) => void;
   setDarkMode: (enabled: boolean) => void;
-  isPreviewMode: boolean;
-  setPreviewMode: (enabled: boolean) => void;
-  setJustSaved: (saved: boolean) => void;
 }
 
 const ThemeContext = createContext<ThemeContextType | undefined>(undefined);
@@ -24,20 +21,15 @@ export function ThemeProvider({ children }: { children: ReactNode }) {
   const [primaryColor, setPrimaryColor] = useState(DEFAULT_PRIMARY);
   const [sidebarColor, setSidebarColor] = useState(DEFAULT_SIDEBAR);
   const [darkMode, setDarkMode] = useState(false);
-  const [isPreviewMode, setPreviewMode] = useState(false);
-  const [justSaved, setJustSaved] = useState(false);
 
-  // Sync with organization settings
+  // Sync with organization settings only when organization ID changes
   useEffect(() => {
-    if (organization && !isPreviewMode && !justSaved) {
+    if (organization) {
       setPrimaryColor(organization.theme_primary_color || DEFAULT_PRIMARY);
       setSidebarColor(organization.theme_sidebar_color || DEFAULT_SIDEBAR);
       setDarkMode(organization.theme_dark_mode || false);
     }
-    if (justSaved) {
-      setJustSaved(false);
-    }
-  }, [organization, isPreviewMode, justSaved]);
+  }, [organization?.id]);
 
   // Apply CSS variables and dark mode class
   useEffect(() => {
@@ -72,9 +64,6 @@ export function ThemeProvider({ children }: { children: ReactNode }) {
         setPrimaryColor,
         setSidebarColor,
         setDarkMode,
-        isPreviewMode,
-        setPreviewMode,
-        setJustSaved,
       }}
     >
       {children}

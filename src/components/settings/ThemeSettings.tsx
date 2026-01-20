@@ -1,14 +1,13 @@
-import { useState, useEffect } from 'react';
+import { useState } from 'react';
 import { useOrganization } from '@/hooks/useOrganization';
 import { useTranslation } from '@/lib/i18n';
 import { useTheme } from '@/contexts/ThemeContext';
 import { supabase } from '@/integrations/supabase/client';
-import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Label } from '@/components/ui/label';
 import { Switch } from '@/components/ui/switch';
 import { toast } from 'sonner';
-import { Check, Loader2, Palette, Moon, Sun } from 'lucide-react';
+import { Check, Palette, Moon, Sun } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
 const COLOR_PRESETS = [
@@ -40,77 +39,79 @@ export function ThemeSettings() {
     setPrimaryColor, 
     setSidebarColor, 
     setDarkMode,
-    setPreviewMode,
-    setJustSaved
   } = useTheme();
   
-  const [saving, setSaving] = useState(false);
-  const [hasChanges, setHasChanges] = useState(false);
-  
-  // Track original values for comparison
-  const [originalValues, setOriginalValues] = useState({
-    primary: '',
-    sidebar: '',
-    dark: false,
-  });
+  const [savingPrimary, setSavingPrimary] = useState(false);
+  const [savingSidebar, setSavingSidebar] = useState(false);
+  const [savingDarkMode, setSavingDarkMode] = useState(false);
 
-  useEffect(() => {
-    if (organization) {
-      const original = {
-        primary: organization.theme_primary_color || '234 91% 56%',
-        sidebar: organization.theme_sidebar_color || '0 0% 98%',
-        dark: organization.theme_dark_mode || false,
-      };
-      setOriginalValues(original);
-    }
-  }, [organization]);
-
-  useEffect(() => {
-    const changed = 
-      primaryColor !== originalValues.primary ||
-      sidebarColor !== originalValues.sidebar ||
-      darkMode !== originalValues.dark;
-    setHasChanges(changed);
-    setPreviewMode(changed);
-  }, [primaryColor, sidebarColor, darkMode, originalValues, setPreviewMode]);
-
-  const handleSave = async () => {
-    if (!organization) return;
+  const handlePrimaryColorChange = async (value: string) => {
+    if (!organization || savingPrimary) return;
     
-    setSaving(true);
+    // Update visually immediately
+    setPrimaryColor(value);
+    setSavingPrimary(true);
+    
     try {
       const { error } = await supabase
         .from('organizations')
-        .update({
-          theme_primary_color: primaryColor,
-          theme_sidebar_color: sidebarColor,
-          theme_dark_mode: darkMode,
-        })
+        .update({ theme_primary_color: value })
         .eq('id', organization.id);
 
       if (error) throw error;
-      
-      setOriginalValues({
-        primary: primaryColor,
-        sidebar: sidebarColor,
-        dark: darkMode,
-      });
-      setJustSaved(true);
-      setPreviewMode(false);
       toast.success(t('settings.themeUpdated'));
     } catch (error) {
-      console.error('Error saving theme:', error);
+      console.error('Error saving primary color:', error);
       toast.error(t('common.error'));
     } finally {
-      setSaving(false);
+      setSavingPrimary(false);
     }
   };
 
-  const handleCancel = () => {
-    setPrimaryColor(originalValues.primary);
-    setSidebarColor(originalValues.sidebar);
-    setDarkMode(originalValues.dark);
-    setPreviewMode(false);
+  const handleSidebarColorChange = async (value: string) => {
+    if (!organization || savingSidebar) return;
+    
+    // Update visually immediately
+    setSidebarColor(value);
+    setSavingSidebar(true);
+    
+    try {
+      const { error } = await supabase
+        .from('organizations')
+        .update({ theme_sidebar_color: value })
+        .eq('id', organization.id);
+
+      if (error) throw error;
+      toast.success(t('settings.themeUpdated'));
+    } catch (error) {
+      console.error('Error saving sidebar color:', error);
+      toast.error(t('common.error'));
+    } finally {
+      setSavingSidebar(false);
+    }
+  };
+
+  const handleDarkModeChange = async (enabled: boolean) => {
+    if (!organization || savingDarkMode) return;
+    
+    // Update visually immediately
+    setDarkMode(enabled);
+    setSavingDarkMode(true);
+    
+    try {
+      const { error } = await supabase
+        .from('organizations')
+        .update({ theme_dark_mode: enabled })
+        .eq('id', organization.id);
+
+      if (error) throw error;
+      toast.success(t('settings.themeUpdated'));
+    } catch (error) {
+      console.error('Error saving dark mode:', error);
+      toast.error(t('common.error'));
+    } finally {
+      setSavingDarkMode(false);
+    }
   };
 
   return (
@@ -129,9 +130,10 @@ export function ThemeSettings() {
             {COLOR_PRESETS.map((preset) => (
               <button
                 key={preset.value}
-                onClick={() => setPrimaryColor(preset.value)}
+                onClick={() => handlePrimaryColorChange(preset.value)}
+                disabled={savingPrimary}
                 className={cn(
-                  "relative h-12 w-12 rounded-full border-2 transition-all hover:scale-110",
+                  "relative h-12 w-12 rounded-full border-2 transition-all hover:scale-110 disabled:opacity-50",
                   primaryColor === preset.value 
                     ? "border-foreground ring-2 ring-foreground ring-offset-2" 
                     : "border-transparent"
@@ -162,9 +164,10 @@ export function ThemeSettings() {
             {SIDEBAR_PRESETS.map((preset) => (
               <button
                 key={preset.value}
-                onClick={() => setSidebarColor(preset.value)}
+                onClick={() => handleSidebarColorChange(preset.value)}
+                disabled={savingSidebar}
                 className={cn(
-                  "relative flex items-center justify-center h-16 w-24 rounded-lg border-2 transition-all hover:scale-105",
+                  "relative flex items-center justify-center h-16 w-24 rounded-lg border-2 transition-all hover:scale-105 disabled:opacity-50",
                   sidebarColor === preset.value 
                     ? "border-primary ring-2 ring-primary ring-offset-2" 
                     : "border-border"
@@ -208,34 +211,12 @@ export function ThemeSettings() {
             <Switch
               id="dark-mode"
               checked={darkMode}
-              onCheckedChange={setDarkMode}
+              onCheckedChange={handleDarkModeChange}
+              disabled={savingDarkMode}
             />
           </div>
         </CardContent>
       </Card>
-
-      {/* Preview Notice */}
-      {hasChanges && (
-        <Card className="border-primary bg-primary/5">
-          <CardContent className="py-4">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="font-medium text-primary">{t('settings.themePreview')}</p>
-                <p className="text-sm text-muted-foreground">{t('settings.themePreviewDescription')}</p>
-              </div>
-              <div className="flex gap-2">
-                <Button variant="outline" onClick={handleCancel}>
-                  {t('common.cancel')}
-                </Button>
-                <Button onClick={handleSave} disabled={saving}>
-                  {saving && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-                  {t('common.save')}
-                </Button>
-              </div>
-            </div>
-          </CardContent>
-        </Card>
-      )}
     </div>
   );
 }
