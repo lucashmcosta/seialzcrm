@@ -30,7 +30,15 @@ export function IntegrationDetailDialog({
   const maskSecret = (value: string | undefined) => {
     if (!value) return '•••••••••••••';
     if (value.length <= 8) return '•'.repeat(value.length);
-    return value.substring(0, 4) + '•'.repeat(12) + value.substring(value.length - 4);
+    // Mostrar apenas 4 primeiros e 4 últimos caracteres
+    return `${value.substring(0, 4)}••••••••${value.substring(value.length - 4)}`;
+  };
+
+  // Verifica se um campo é sensível e deve ser mascarado
+  const isSensitiveField = (key: string) => {
+    const lowerKey = key.toLowerCase();
+    const sensitivePatterns = ['secret', 'token', 'password', 'key', 'api_key', 'apikey', 'sid'];
+    return sensitivePatterns.some(pattern => lowerKey.includes(pattern));
   };
 
   const StatusItem = ({ 
@@ -146,11 +154,7 @@ export function IntegrationDetailDialog({
   );
 
   const renderGenericConfig = () => {
-    const entries = Object.entries(configValues).filter(([key]) => 
-      !key.toLowerCase().includes('secret') && 
-      !key.toLowerCase().includes('token') && 
-      !key.toLowerCase().includes('password')
-    );
+    const entries = Object.entries(configValues);
 
     if (entries.length === 0) {
       return (
@@ -163,12 +167,15 @@ export function IntegrationDetailDialog({
     return (
       <div className="space-y-4">
         {entries.map(([key, value]) => (
-          <div key={key} className="space-y-2">
+          <div key={key} className="space-y-2 min-w-0">
             <Label className="text-muted-foreground capitalize">
               {key.replace(/([A-Z])/g, ' $1').replace(/_/g, ' ')}
             </Label>
-            <p className="font-mono text-sm bg-muted px-3 py-2 rounded-md">
-              {String(value) || 'Não configurado'}
+            <p className="font-mono text-sm bg-muted px-3 py-2 rounded-md break-all overflow-hidden">
+              {isSensitiveField(key) 
+                ? maskSecret(String(value)) 
+                : (String(value) || 'Não configurado')
+              }
             </p>
           </div>
         ))}
