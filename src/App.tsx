@@ -7,7 +7,7 @@ import { OutboundCallProvider } from "@/contexts/OutboundCallContext";
 import { ThemeProvider } from "@/contexts/ThemeContext";
 import { AuthProvider, useAuthContext } from "@/contexts/AuthContext";
 import { OrganizationProvider } from "@/contexts/OrganizationContext";
-import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
+import { BrowserRouter, Routes, Route, Navigate, useLocation } from "react-router-dom";
 import { PageLoader } from "./components/common/PageLoader";
 // Lazy load call handlers (heavy Twilio SDK)
 const InboundCallHandler = lazy(() => import("./components/calls/InboundCallHandler").then(m => ({ default: m.InboundCallHandler })));
@@ -76,10 +76,16 @@ function ProtectedRoute({ children }: { children: React.ReactNode }) {
 }
 
 // Global call handler - persists across all route changes
+// SECURITY: Never initialize Twilio Device in admin portal - admins should NOT receive customer calls
 function GlobalCallHandler() {
   const { isAuthenticated } = useAuthContext();
+  const location = useLocation();
   
-  if (!isAuthenticated) return null;
+  // CRITICAL SECURITY: Block call handlers in admin portal
+  // This prevents SaaS admins from receiving customer calls when working on admin tasks
+  const isAdminRoute = location.pathname.startsWith('/admin');
+  
+  if (!isAuthenticated || isAdminRoute) return null;
   
   return (
     <Suspense fallback={null}>

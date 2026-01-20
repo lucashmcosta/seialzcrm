@@ -1,4 +1,5 @@
 import React, { createContext, useContext, useState, useRef, useCallback, useEffect, ReactNode } from 'react';
+import { useLocation } from 'react-router-dom';
 import { Device, Call } from '@twilio/voice-sdk';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
@@ -46,6 +47,7 @@ interface OutboundCallContextType {
 const OutboundCallContext = createContext<OutboundCallContextType | undefined>(undefined);
 
 export function OutboundCallProvider({ children }: { children: ReactNode }) {
+  const location = useLocation();
   const [status, setStatus] = useState<CallStatus>('idle');
   const [callInfo, setCallInfo] = useState<CallInfo | null>(null);
   const [duration, setDuration] = useState(0);
@@ -54,6 +56,9 @@ export function OutboundCallProvider({ children }: { children: ReactNode }) {
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [isMinimized, setIsMinimized] = useState(false);
   const [isDeviceReady, setIsDeviceReady] = useState(false);
+  
+  // SECURITY: Never initialize in admin routes
+  const isAdminRoute = location.pathname.startsWith('/admin');
   
   const deviceRef = useRef<Device | null>(null);
   const activeCallRef = useRef<Call | null>(null);
@@ -379,7 +384,14 @@ export function OutboundCallProvider({ children }: { children: ReactNode }) {
   }, [getToken, getUserData]);
 
   // Initialize device on mount (persistent)
+  // CRITICAL SECURITY: Never initialize in admin portal
   useEffect(() => {
+    // Skip initialization in admin routes
+    if (isAdminRoute) {
+      console.log('[OutboundCall] Skipping initialization in admin route');
+      return;
+    }
+    
     // Small delay to ensure auth is ready
     const timer = setTimeout(() => {
       initializeDevice();
@@ -389,7 +401,7 @@ export function OutboundCallProvider({ children }: { children: ReactNode }) {
       clearTimeout(timer);
       fullCleanup();
     };
-  }, []);
+  }, [isAdminRoute]);
 
   // Start a new call
   const startCall = useCallback((params: CallInfo) => {

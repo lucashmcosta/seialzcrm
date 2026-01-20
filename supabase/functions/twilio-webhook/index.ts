@@ -163,10 +163,11 @@ serve(async (req) => {
         const timeout = phoneConfig.ring_timeout_seconds || 30
         const statusCallbackUrl = `${Deno.env.get('SUPABASE_URL')}/functions/v1/twilio-webhook/status?orgId=${phoneConfig.organization_id}`
         
-        // Create <Client> elements for each user - USE user- PREFIX to match identity!
+        // Create <Client> elements for each user - USE user-{id}-org-{orgId} PREFIX to match identity!
+        // SECURITY: This format ensures calls are ONLY delivered to devices registered for THIS org
         // Include statusCallback and statusCallbackEvent on each Client for proper call completion tracking
         const clientElements = phoneConfig.ring_users
-          .map((userId: string) => `    <Client statusCallback="${statusCallbackUrl}" statusCallbackEvent="initiated ringing answered completed">user-${userId}</Client>`)
+          .map((userId: string) => `    <Client statusCallback="${statusCallbackUrl}" statusCallbackEvent="initiated ringing answered completed">user-${userId}-org-${phoneConfig.organization_id}</Client>`)
           .join('\n')
         
         const twiml = `<?xml version="1.0" encoding="UTF-8"?>
