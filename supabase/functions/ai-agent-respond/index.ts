@@ -1366,11 +1366,12 @@ serve(async (req) => {
 
     } else if (integrationSlug === 'openai-gpt') {
       const model = configValues.default_model || 'gpt-4o-mini';
-      const maxTokens = 1024;
       modelUsed = model;
 
       // Modelos novos usam max_completion_tokens em vez de max_tokens
+      // E precisam de mais tokens para reasoning + resposta
       const isNewModel = ['gpt-5', 'gpt-4.5', 'o1', 'o3'].some(prefix => model.startsWith(prefix));
+      const maxTokens = isNewModel ? 4096 : 1024;
 
       const headers: Record<string, string> = {
         'Content-Type': 'application/json',
@@ -1475,6 +1476,11 @@ serve(async (req) => {
       }
 
       aiResponse = responseMessage?.content || '';
+
+      // Log para debug de resposta vazia em modelos de raciocínio
+      if (!aiResponse && responseMessage) {
+        console.warn('Empty content from OpenAI. Model:', model, 'Full response:', JSON.stringify(responseMessage));
+      }
 
     } else if (integrationSlug === 'lovable-ai') {
       // Lovable AI Gateway (OpenAI-compatible)
