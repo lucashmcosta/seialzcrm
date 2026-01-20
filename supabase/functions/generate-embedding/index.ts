@@ -1,4 +1,3 @@
-import "https://deno.land/x/xhr@0.1.0/mod.ts";
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 
@@ -27,27 +26,8 @@ interface BulkEmbeddingRequest {
   }>;
 }
 
-async function generateEmbedding(text: string): Promise<number[]> {
-  const response = await fetch('https://ai.gateway.lovable.dev/v1/embeddings', {
-    method: 'POST',
-    headers: {
-      'Authorization': `Bearer ${Deno.env.get('LOVABLE_API_KEY')}`,
-      'Content-Type': 'application/json',
-    },
-    body: JSON.stringify({
-      model: 'text-embedding-3-small',
-      input: text,
-    }),
-  });
-
-  if (!response.ok) {
-    const error = await response.text();
-    throw new Error(`Embedding API error: ${response.status} - ${error}`);
-  }
-
-  const data = await response.json();
-  return data.data[0].embedding;
-}
+// Note: Lovable AI Gateway doesn't support embedding models.
+// Knowledge is stored without embeddings - retrieval uses AI semantic search via chat completions.
 
 serve(async (req) => {
   // Handle CORS preflight
@@ -76,8 +56,6 @@ serve(async (req) => {
       const results = [];
       for (const item of items) {
         try {
-          const embedding = await generateEmbedding(item.content);
-          
           const { data, error } = await supabase
             .from('knowledge_embeddings')
             .insert({
@@ -87,7 +65,7 @@ serve(async (req) => {
               content_type: item.contentType,
               title: item.title || null,
               metadata: item.metadata || {},
-              embedding: embedding,
+              embedding: null, // Embeddings not supported - using AI semantic search instead
             })
             .select('id')
             .single();
@@ -116,12 +94,9 @@ serve(async (req) => {
       );
     }
 
-    // Generate embedding
-    console.log(`Generating embedding for content type: ${contentType}`);
-    const embedding = await generateEmbedding(content);
-    console.log(`Embedding generated, dimension: ${embedding.length}`);
+    console.log(`Storing knowledge for content type: ${contentType}`);
 
-    // Save to database
+    // Save to database without embedding (will use AI semantic search for retrieval)
     const { data, error } = await supabase
       .from('knowledge_embeddings')
       .insert({
@@ -131,7 +106,7 @@ serve(async (req) => {
         content_type: contentType,
         title: title || null,
         metadata: metadata || {},
-        embedding: embedding,
+        embedding: null,
       })
       .select('id')
       .single();
@@ -141,7 +116,7 @@ serve(async (req) => {
       throw error;
     }
 
-    console.log(`Knowledge embedding saved with ID: ${data.id}`);
+    console.log(`Knowledge saved with ID: ${data.id}`);
 
     return new Response(
       JSON.stringify({ success: true, id: data.id }),
