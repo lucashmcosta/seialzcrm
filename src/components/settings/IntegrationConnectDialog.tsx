@@ -244,13 +244,13 @@ export function IntegrationConnectDialog({
     );
 
     const fieldDescription = description && (
-      <p className="text-xs text-muted-foreground">{description}</p>
+      <p className="text-xs text-muted-foreground break-words">{description}</p>
     );
 
     switch (type) {
       case 'select':
         return (
-          <div key={key} className="space-y-2">
+          <div key={key} className="space-y-2 min-w-0">
             {fieldLabel}
             <Select
               value={configValues[key] || field.default || ''}
@@ -274,7 +274,7 @@ export function IntegrationConnectDialog({
         );
       case 'number':
         return (
-          <div key={key} className="space-y-2">
+          <div key={key} className="space-y-2 min-w-0">
             {fieldLabel}
             <Input
               id={key}
@@ -291,7 +291,7 @@ export function IntegrationConnectDialog({
         );
       case 'textarea':
         return (
-          <div key={key} className="space-y-2">
+          <div key={key} className="space-y-2 min-w-0">
             {fieldLabel}
             <Textarea
               id={key}
@@ -322,7 +322,7 @@ export function IntegrationConnectDialog({
         );
       default:
         return (
-          <div key={key} className="space-y-2">
+          <div key={key} className="space-y-2 min-w-0">
             {fieldLabel}
             <Input
               id={key}
@@ -348,7 +348,7 @@ export function IntegrationConnectDialog({
         <form onSubmit={handleSubmit}>
           <DialogHeader>
             <DialogTitle>Conectar {integration.name}</DialogTitle>
-            <DialogDescription>
+            <DialogDescription className="break-words">
               {integration.description || 'Configure os parâmetros de conexão abaixo.'}
             </DialogDescription>
           </DialogHeader>
@@ -364,7 +364,7 @@ export function IntegrationConnectDialog({
               </p>
             </div>
           ) : (
-            <div className="space-y-4 py-4">
+            <div className="space-y-4 py-4 overflow-y-auto max-h-[60vh]">
               {/* Show info if credentials from Voice */}
               {credentialsFromVoice && isTwilioWhatsApp && (
                 <Alert className="bg-primary/10 border-primary/20">
