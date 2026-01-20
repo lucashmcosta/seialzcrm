@@ -12,7 +12,8 @@ import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, D
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from '@/components/ui/alert-dialog';
 import { Skeleton } from '@/components/ui/skeleton';
 import { toast } from 'sonner';
-import { Plus, Trash2, Book, HelpCircle, Package, FileText, Settings2, Search, BrainCircuit, Loader2 } from 'lucide-react';
+import { Plus, Trash2, Book, HelpCircle, Package, FileText, Settings2, Search, BrainCircuit, Loader2, Sparkles, ArrowLeft, ArrowRight, Check, Wand2 } from 'lucide-react';
+import { Progress } from '@/components/ui/progress';
 
 interface KnowledgeItem {
   id: string;
@@ -29,13 +30,40 @@ interface AIAgent {
   name: string;
 }
 
-const contentTypeConfig: Record<string, { label: string; icon: React.ElementType; color: string }> = {
-  faq: { label: 'FAQ', icon: HelpCircle, color: 'bg-blue-500/10 text-blue-500' },
-  product: { label: 'Produto', icon: Package, color: 'bg-green-500/10 text-green-500' },
-  instruction: { label: 'Instrução', icon: Settings2, color: 'bg-purple-500/10 text-purple-500' },
-  policy: { label: 'Política', icon: FileText, color: 'bg-orange-500/10 text-orange-500' },
-  general: { label: 'Geral', icon: Book, color: 'bg-muted text-muted-foreground' },
+const contentTypeConfig: Record<string, { label: string; icon: React.ElementType; color: string; description: string }> = {
+  faq: { 
+    label: 'FAQ', 
+    icon: HelpCircle, 
+    color: 'bg-blue-500/10 text-blue-500',
+    description: 'Perguntas frequentes e suas respostas',
+  },
+  product: { 
+    label: 'Produto', 
+    icon: Package, 
+    color: 'bg-green-500/10 text-green-500',
+    description: 'Informações sobre produtos ou serviços',
+  },
+  instruction: { 
+    label: 'Instrução', 
+    icon: Settings2, 
+    color: 'bg-purple-500/10 text-purple-500',
+    description: 'Instruções e procedimentos a seguir',
+  },
+  policy: { 
+    label: 'Política', 
+    icon: FileText, 
+    color: 'bg-orange-500/10 text-orange-500',
+    description: 'Regras, políticas e diretrizes',
+  },
+  general: { 
+    label: 'Geral', 
+    icon: Book, 
+    color: 'bg-muted text-muted-foreground',
+    description: 'Conhecimento geral da empresa',
+  },
 };
+
+type WizardStep = 'initial' | 'questions' | 'review';
 
 export function KnowledgeBaseSettings() {
   const { organization } = useOrganizationContext();
@@ -53,6 +81,14 @@ export function KnowledgeBaseSettings() {
   const [formContent, setFormContent] = useState('');
   const [formType, setFormType] = useState<string>('faq');
   const [formAgentId, setFormAgentId] = useState<string>('');
+
+  // Wizard state
+  const [wizardStep, setWizardStep] = useState<WizardStep>('initial');
+  const [initialDescription, setInitialDescription] = useState('');
+  const [aiQuestions, setAiQuestions] = useState<string[]>([]);
+  const [userAnswers, setUserAnswers] = useState<string[]>([]);
+  const [enhancing, setEnhancing] = useState(false);
+  const [typeLabel, setTypeLabel] = useState('');
 
   const fetchData = async () => {
     if (!organization?.id) return;
@@ -88,6 +124,74 @@ export function KnowledgeBaseSettings() {
     fetchData();
   }, [organization?.id]);
 
+  const resetWizard = () => {
+    setWizardStep('initial');
+    setInitialDescription('');
+    setAiQuestions([]);
+    setUserAnswers([]);
+    setFormTitle('');
+    setFormContent('');
+    setFormType('faq');
+    setFormAgentId('');
+    setTypeLabel('');
+  };
+
+  const handleDialogClose = (open: boolean) => {
+    setDialogOpen(open);
+    if (!open) {
+      resetWizard();
+    }
+  };
+
+  const handleStartEnhance = async () => {
+    setEnhancing(true);
+    try {
+      const { data, error } = await supabase.functions.invoke('enhance-knowledge', {
+        body: {
+          action: 'get_questions',
+          contentType: formType,
+        },
+      });
+
+      if (error) throw error;
+
+      setAiQuestions(data.questions || []);
+      setUserAnswers(new Array(data.questions?.length || 0).fill(''));
+      setTypeLabel(data.typeLabel || '');
+      setWizardStep('questions');
+    } catch (error) {
+      console.error('Error getting questions:', error);
+      toast.error('Erro ao carregar perguntas. Tente novamente.');
+    } finally {
+      setEnhancing(false);
+    }
+  };
+
+  const handleGenerateContent = async () => {
+    setEnhancing(true);
+    try {
+      const { data, error } = await supabase.functions.invoke('enhance-knowledge', {
+        body: {
+          action: 'generate_content',
+          contentType: formType,
+          initialDescription,
+          answers: userAnswers,
+        },
+      });
+
+      if (error) throw error;
+
+      setFormTitle(data.title || '');
+      setFormContent(data.content || '');
+      setWizardStep('review');
+    } catch (error) {
+      console.error('Error generating content:', error);
+      toast.error('Erro ao gerar conteúdo. Tente novamente.');
+    } finally {
+      setEnhancing(false);
+    }
+  };
+
   const handleSubmit = async () => {
     if (!organization?.id || !formContent.trim()) {
       toast.error('Preencha o conteúdo');
@@ -110,11 +214,7 @@ export function KnowledgeBaseSettings() {
       if (error) throw error;
 
       toast.success('Conhecimento adicionado com sucesso');
-      setDialogOpen(false);
-      setFormTitle('');
-      setFormContent('');
-      setFormType('faq');
-      setFormAgentId('');
+      handleDialogClose(false);
       fetchData();
     } catch (error) {
       console.error('Error saving knowledge:', error);
@@ -151,6 +251,20 @@ export function KnowledgeBaseSettings() {
     return matchesSearch && matchesType && matchesAgent;
   });
 
+  const updateAnswer = (index: number, value: string) => {
+    const newAnswers = [...userAnswers];
+    newAnswers[index] = value;
+    setUserAnswers(newAnswers);
+  };
+
+  const getWizardProgress = () => {
+    switch (wizardStep) {
+      case 'initial': return 33;
+      case 'questions': return 66;
+      case 'review': return 100;
+    }
+  };
+
   if (loading) {
     return (
       <div className="space-y-4">
@@ -163,6 +277,203 @@ export function KnowledgeBaseSettings() {
       </div>
     );
   }
+
+  const renderWizardContent = () => {
+    switch (wizardStep) {
+      case 'initial':
+        return (
+          <>
+            <DialogHeader>
+              <DialogTitle className="flex items-center gap-2">
+                <Sparkles className="h-5 w-5 text-primary" />
+                Adicionar Conhecimento
+              </DialogTitle>
+              <DialogDescription>
+                Escolha o tipo e descreva brevemente. A IA vai te guiar com perguntas específicas.
+              </DialogDescription>
+            </DialogHeader>
+            <div className="space-y-4 py-4">
+              <div className="space-y-2">
+                <Label>Tipo de Conteúdo</Label>
+                <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
+                  {Object.entries(contentTypeConfig).map(([key, config]) => {
+                    const Icon = config.icon;
+                    const isSelected = formType === key;
+                    return (
+                      <button
+                        key={key}
+                        type="button"
+                        onClick={() => setFormType(key)}
+                        className={`flex flex-col items-center gap-2 p-3 rounded-lg border-2 transition-all ${
+                          isSelected 
+                            ? 'border-primary bg-primary/5' 
+                            : 'border-border hover:border-muted-foreground/30'
+                        }`}
+                      >
+                        <div className={`p-2 rounded-full ${config.color}`}>
+                          <Icon className="h-4 w-4" />
+                        </div>
+                        <span className="text-sm font-medium">{config.label}</span>
+                      </button>
+                    );
+                  })}
+                </div>
+                <p className="text-xs text-muted-foreground">
+                  {contentTypeConfig[formType]?.description}
+                </p>
+              </div>
+
+              <div className="space-y-2">
+                <Label htmlFor="agent">Agente (opcional)</Label>
+                <Select value={formAgentId || 'global'} onValueChange={(val) => setFormAgentId(val === 'global' ? '' : val)}>
+                  <SelectTrigger>
+                    <SelectValue placeholder="Global - todos os agentes" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="global">Global - todos os agentes</SelectItem>
+                    {agents.map(agent => (
+                      <SelectItem key={agent.id} value={agent.id}>{agent.name}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+
+              <div className="space-y-2">
+                <Label htmlFor="description">Descrição inicial (opcional)</Label>
+                <Textarea
+                  id="description"
+                  placeholder="Descreva brevemente o que você quer adicionar..."
+                  value={initialDescription}
+                  onChange={(e) => setInitialDescription(e.target.value)}
+                  rows={3}
+                />
+                <p className="text-xs text-muted-foreground">
+                  Uma breve descrição ajuda a IA a fazer perguntas mais relevantes.
+                </p>
+              </div>
+            </div>
+            <DialogFooter className="flex-col gap-2 sm:flex-row">
+              <Button variant="outline" onClick={() => handleDialogClose(false)}>
+                Cancelar
+              </Button>
+              <Button onClick={handleStartEnhance} disabled={enhancing}>
+                {enhancing ? (
+                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                ) : (
+                  <Wand2 className="mr-2 h-4 w-4" />
+                )}
+                Criar com Assistente IA
+              </Button>
+            </DialogFooter>
+          </>
+        );
+
+      case 'questions':
+        return (
+          <>
+            <DialogHeader>
+              <DialogTitle className="flex items-center gap-2">
+                <HelpCircle className="h-5 w-5 text-primary" />
+                Perguntas sobre {typeLabel}
+              </DialogTitle>
+              <DialogDescription>
+                Responda as perguntas abaixo para criar um conteúdo completo e otimizado.
+              </DialogDescription>
+            </DialogHeader>
+            <div className="space-y-4 py-4 max-h-[400px] overflow-y-auto">
+              {aiQuestions.map((question, index) => (
+                <div key={index} className="space-y-2">
+                  <Label className="text-sm font-medium">
+                    {index + 1}. {question}
+                  </Label>
+                  <Textarea
+                    placeholder="Sua resposta..."
+                    value={userAnswers[index] || ''}
+                    onChange={(e) => updateAnswer(index, e.target.value)}
+                    rows={2}
+                    className="resize-none"
+                  />
+                </div>
+              ))}
+            </div>
+            <DialogFooter className="flex-col gap-2 sm:flex-row">
+              <Button variant="outline" onClick={() => setWizardStep('initial')}>
+                <ArrowLeft className="mr-2 h-4 w-4" />
+                Voltar
+              </Button>
+              <Button onClick={handleGenerateContent} disabled={enhancing}>
+                {enhancing ? (
+                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                ) : (
+                  <Sparkles className="mr-2 h-4 w-4" />
+                )}
+                Gerar Conteúdo
+              </Button>
+            </DialogFooter>
+          </>
+        );
+
+      case 'review':
+        return (
+          <>
+            <DialogHeader>
+              <DialogTitle className="flex items-center gap-2">
+                <Check className="h-5 w-5 text-green-500" />
+                Revisar e Salvar
+              </DialogTitle>
+              <DialogDescription>
+                Revise o conteúdo gerado. Você pode editar antes de salvar.
+              </DialogDescription>
+            </DialogHeader>
+            <div className="space-y-4 py-4">
+              <div className="space-y-2">
+                <Label htmlFor="title">Título</Label>
+                <Input
+                  id="title"
+                  placeholder="Título do conhecimento"
+                  value={formTitle}
+                  onChange={(e) => setFormTitle(e.target.value)}
+                />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="content">Conteúdo</Label>
+                <Textarea
+                  id="content"
+                  value={formContent}
+                  onChange={(e) => setFormContent(e.target.value)}
+                  rows={8}
+                  className="font-mono text-sm"
+                />
+              </div>
+              <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                <Badge variant="secondary" className={contentTypeConfig[formType]?.color}>
+                  {contentTypeConfig[formType]?.label}
+                </Badge>
+                {formAgentId && (
+                  <Badge variant="outline">
+                    {agents.find(a => a.id === formAgentId)?.name || 'Agente'}
+                  </Badge>
+                )}
+              </div>
+            </div>
+            <DialogFooter className="flex-col gap-2 sm:flex-row">
+              <Button variant="outline" onClick={() => setWizardStep('questions')}>
+                <ArrowLeft className="mr-2 h-4 w-4" />
+                Voltar
+              </Button>
+              <Button onClick={handleSubmit} disabled={saving || !formContent.trim()}>
+                {saving ? (
+                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                ) : (
+                  <Check className="mr-2 h-4 w-4" />
+                )}
+                Salvar Conhecimento
+              </Button>
+            </DialogFooter>
+          </>
+        );
+    }
+  };
 
   return (
     <div className="space-y-6">
@@ -217,7 +528,7 @@ export function KnowledgeBaseSettings() {
           </Select>
         </div>
 
-        <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
+        <Dialog open={dialogOpen} onOpenChange={handleDialogClose}>
           <DialogTrigger asChild>
             <Button>
               <Plus className="mr-2 h-4 w-4" />
@@ -225,80 +536,16 @@ export function KnowledgeBaseSettings() {
             </Button>
           </DialogTrigger>
           <DialogContent className="sm:max-w-lg">
-            <DialogHeader>
-              <DialogTitle>Adicionar Conhecimento</DialogTitle>
-              <DialogDescription>
-                Adicione informações que o agente pode usar para responder perguntas.
-              </DialogDescription>
-            </DialogHeader>
-            <div className="space-y-4 py-4">
-              <div className="space-y-2">
-                <Label htmlFor="title">Título (opcional)</Label>
-                <Input
-                  id="title"
-                  placeholder="Ex: Política de devolução"
-                  value={formTitle}
-                  onChange={(e) => setFormTitle(e.target.value)}
-                />
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="type">Tipo de Conteúdo</Label>
-                <Select value={formType} onValueChange={setFormType}>
-                  <SelectTrigger>
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {Object.entries(contentTypeConfig).map(([key, config]) => (
-                      <SelectItem key={key} value={key}>
-                        <div className="flex items-center gap-2">
-                          <config.icon className="h-4 w-4" />
-                          {config.label}
-                        </div>
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="agent">Agente (opcional)</Label>
-                <Select value={formAgentId || 'global'} onValueChange={(val) => setFormAgentId(val === 'global' ? '' : val)}>
-                  <SelectTrigger>
-                    <SelectValue placeholder="Global - todos os agentes" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="global">Global - todos os agentes</SelectItem>
-                    {agents.map(agent => (
-                      <SelectItem key={agent.id} value={agent.id}>{agent.name}</SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-                <p className="text-xs text-muted-foreground">
-                  Deixe vazio para que todos os agentes possam usar este conhecimento.
-                </p>
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="content">Conteúdo *</Label>
-                <Textarea
-                  id="content"
-                  placeholder="Descreva a informação que o agente deve saber..."
-                  value={formContent}
-                  onChange={(e) => setFormContent(e.target.value)}
-                  rows={5}
-                />
-                <p className="text-xs text-muted-foreground">
-                  Seja claro e objetivo. O agente usará este conteúdo para responder perguntas relacionadas.
-                </p>
+            {/* Progress indicator */}
+            <div className="mb-2">
+              <Progress value={getWizardProgress()} className="h-1" />
+              <div className="flex justify-between mt-1 text-xs text-muted-foreground">
+                <span className={wizardStep === 'initial' ? 'text-primary font-medium' : ''}>Tipo</span>
+                <span className={wizardStep === 'questions' ? 'text-primary font-medium' : ''}>Perguntas</span>
+                <span className={wizardStep === 'review' ? 'text-primary font-medium' : ''}>Revisar</span>
               </div>
             </div>
-            <DialogFooter>
-              <Button variant="outline" onClick={() => setDialogOpen(false)}>
-                Cancelar
-              </Button>
-              <Button onClick={handleSubmit} disabled={saving || !formContent.trim()}>
-                {saving && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-                Salvar
-              </Button>
-            </DialogFooter>
+            {renderWizardContent()}
           </DialogContent>
         </Dialog>
       </div>
