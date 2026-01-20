@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { DragDropContext, Droppable, Draggable, DropResult } from '@hello-pangea/dnd';
 import { Layout } from '@/components/Layout';
@@ -9,7 +9,8 @@ import { useOrganization } from '@/hooks/useOrganization';
 import { useTranslation } from '@/lib/i18n';
 import { usePermissions } from '@/hooks/usePermissions';
 import { supabase } from '@/integrations/supabase/client';
-import { Plus, Search, Filter, X } from 'lucide-react';
+import { Plus, Search, Filter } from 'lucide-react';
+import { Edit01, Trash01 } from '@untitledui/icons';
 import { OpportunityDialog } from '@/components/opportunities/OpportunityDialog';
 import { OpportunityCard } from '@/components/opportunities/OpportunityCard';
 import { Input } from '@/components/ui/input';
@@ -17,6 +18,18 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { Badge } from '@/components/ui/badge';
 import { toast } from 'sonner';
+import { ViewSwitcher } from '@/components/common/ViewSwitcher';
+import { 
+  Table, TableCard, TableHeader, TableBody, TableRow, TableCell, 
+  TableColumn, TableCheckboxHeader, TableCheckboxCell,
+  TableRowActionsDropdown, TableRowAction 
+} from '@/components/application/table/table';
+import { PaginationWithPageSize } from '@/components/application/pagination/pagination';
+import { ColumnSelector, type ColumnConfig } from '@/components/application/table/column-selector';
+import { BadgeWithDot } from '@/components/base/badges/badges';
+import { format } from 'date-fns';
+import { ptBR, enUS } from 'date-fns/locale';
+import type { SortDescriptor } from 'react-aria-components';
 
 interface PipelineStage {
   id: string;
@@ -47,6 +60,18 @@ interface User {
   full_name: string;
 }
 
+// Column configuration for table view
+const availableColumns: ColumnConfig[] = [
+  { id: 'title', label: 'Título', isRequired: true },
+  { id: 'amount', label: 'Valor' },
+  { id: 'pipeline_stage', label: 'Etapa' },
+  { id: 'contact', label: 'Contato' },
+  { id: 'owner', label: 'Responsável' },
+  { id: 'close_date', label: 'Data Fechamento' },
+];
+
+const defaultVisibleColumns = ['title', 'amount', 'pipeline_stage', 'contact', 'owner', 'close_date'];
+
 export default function OpportunitiesKanban() {
   const navigate = useNavigate();
   const { organization, locale } = useOrganization();
@@ -66,6 +91,19 @@ export default function OpportunitiesKanban() {
   const [filterDateFrom, setFilterDateFrom] = useState<string>('');
   const [filterDateTo, setFilterDateTo] = useState<string>('');
   const [showFilters, setShowFilters] = useState(false);
+  
+  // View mode state
+  const [viewMode, setViewMode] = useState<'kanban' | 'list'>('kanban');
+  
+  // Table view states
+  const [currentPage, setCurrentPage] = useState(1);
+  const [itemsPerPage, setItemsPerPage] = useState(25);
+  const [selectedIds, setSelectedIds] = useState<string[]>([]);
+  const [sortDescriptor, setSortDescriptor] = useState<SortDescriptor>({
+    column: 'title',
+    direction: 'ascending',
+  });
+  const [visibleColumns, setVisibleColumns] = useState<string[]>(defaultVisibleColumns);
 
   useEffect(() => {
     if (!organization?.id) return;
@@ -233,6 +271,112 @@ export default function OpportunitiesKanban() {
     filterDateTo,
   ].filter(Boolean).length;
 
+  // Filtered opportunities for table view (applies all filters except stage)
+  const filteredOpportunities = useMemo(() => {
+    return opportunities.filter((opp) => {
+      const matchesSearch = !searchTerm || 
+        opp.title.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        opp.contacts?.full_name?.toLowerCase().includes(searchTerm.toLowerCase());
+      
+      const matchesOwner = filterOwner === 'all' || opp.owner_user_id === filterOwner;
+      
+      const matchesMinAmount = !filterMinAmount || (opp.amount && Number(opp.amount) >= Number(filterMinAmount));
+      const matchesMaxAmount = !filterMaxAmount || (opp.amount && Number(opp.amount) <= Number(filterMaxAmount));
+      
+      const matchesDateFrom = !filterDateFrom || !opp.close_date || opp.close_date >= filterDateFrom;
+      const matchesDateTo = !filterDateTo || !opp.close_date || opp.close_date <= filterDateTo;
+      
+      return matchesSearch && matchesOwner && matchesMinAmount && matchesMaxAmount && matchesDateFrom && matchesDateTo;
+    });
+  }, [opportunities, searchTerm, filterOwner, filterMinAmount, filterMaxAmount, filterDateFrom, filterDateTo]);
+
+  // Sorted opportunities for table view
+  const sortedOpportunities = useMemo(() => {
+    const sorted = [...filteredOpportunities];
+    if (sortDescriptor.column) {
+      sorted.sort((a, b) => {
+        let aValue: any;
+        let bValue: any;
+        
+        switch (sortDescriptor.column) {
+          case 'title':
+            aValue = a.title?.toLowerCase() || '';
+            bValue = b.title?.toLowerCase() || '';
+            break;
+          case 'amount':
+            aValue = Number(a.amount) || 0;
+            bValue = Number(b.amount) || 0;
+            break;
+          case 'contact':
+            aValue = a.contacts?.full_name?.toLowerCase() || '';
+            bValue = b.contacts?.full_name?.toLowerCase() || '';
+            break;
+          case 'close_date':
+            aValue = a.close_date || '';
+            bValue = b.close_date || '';
+            break;
+          case 'pipeline_stage':
+            const stageA = stages.find(s => s.id === a.pipeline_stage_id);
+            const stageB = stages.find(s => s.id === b.pipeline_stage_id);
+            aValue = stageA?.order_index || 0;
+            bValue = stageB?.order_index || 0;
+            break;
+          default:
+            aValue = '';
+            bValue = '';
+        }
+        
+        if (aValue < bValue) return sortDescriptor.direction === 'ascending' ? -1 : 1;
+        if (aValue > bValue) return sortDescriptor.direction === 'ascending' ? 1 : -1;
+        return 0;
+      });
+    }
+    return sorted;
+  }, [filteredOpportunities, sortDescriptor, stages]);
+
+  // Paginated opportunities
+  const paginatedOpportunities = useMemo(() => {
+    const start = (currentPage - 1) * itemsPerPage;
+    return sortedOpportunities.slice(start, start + itemsPerPage);
+  }, [sortedOpportunities, currentPage, itemsPerPage]);
+
+  const totalPages = Math.ceil(sortedOpportunities.length / itemsPerPage);
+
+  // Selection handlers
+  const isAllSelected = paginatedOpportunities.length > 0 && 
+    paginatedOpportunities.every(opp => selectedIds.includes(opp.id));
+  const isIndeterminate = paginatedOpportunities.some(opp => selectedIds.includes(opp.id)) && !isAllSelected;
+
+  const handleSelectAll = (checked: boolean) => {
+    if (checked) {
+      const newIds = paginatedOpportunities.map(opp => opp.id);
+      setSelectedIds(prev => [...new Set([...prev, ...newIds])]);
+    } else {
+      const pageIds = paginatedOpportunities.map(opp => opp.id);
+      setSelectedIds(prev => prev.filter(id => !pageIds.includes(id)));
+    }
+  };
+
+  const handleSelectOne = (id: string, checked: boolean) => {
+    if (checked) {
+      setSelectedIds(prev => [...prev, id]);
+    } else {
+      setSelectedIds(prev => prev.filter(i => i !== id));
+    }
+  };
+
+  // Get stage name helper
+  const getStageName = (stageId: string) => {
+    const stage = stages.find(s => s.id === stageId);
+    return stage?.name || '-';
+  };
+
+  // Format date helper
+  const formatDate = (date: string | null) => {
+    if (!date) return '-';
+    return format(new Date(date), 'dd MMM yyyy', { locale: locale === 'en-US' ? enUS : ptBR });
+  };
+
   if (loading) {
     return (
       <Layout>
@@ -248,13 +392,20 @@ export default function OpportunitiesKanban() {
       <div className="p-8">
         <div className="flex justify-between items-center mb-6">
           <h1 className="text-3xl font-bold text-foreground">{t('opportunities.title')}</h1>
-          <Button onClick={handleNewOpportunity} disabled={!permissions.canEditOpportunities}>
-            <Plus className="w-4 h-4 mr-2" />
-            {t('opportunities.newOpportunity')}
-          </Button>
+          <div className="flex items-center gap-3">
+            <ViewSwitcher
+              view={viewMode}
+              onViewChange={(v) => setViewMode(v as 'kanban' | 'list')}
+              views={['list', 'kanban']}
+            />
+            <Button onClick={handleNewOpportunity} disabled={!permissions.canEditOpportunities}>
+              <Plus className="w-4 h-4 mr-2" />
+              {t('opportunities.newOpportunity')}
+            </Button>
+          </div>
         </div>
 
-        <div className="mb-6 flex gap-4 items-start">
+        <div className="mb-6 flex gap-4 items-start flex-wrap">
           <div className="relative flex-1 max-w-md">
             <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-muted-foreground h-4 w-4" />
             <Input
@@ -341,88 +492,223 @@ export default function OpportunitiesKanban() {
               </div>
             </PopoverContent>
           </Popover>
+
+          {viewMode === 'list' && (
+            <ColumnSelector
+              columns={availableColumns}
+              visibleColumns={visibleColumns}
+              onChange={setVisibleColumns}
+            />
+          )}
         </div>
 
-        <DragDropContext onDragEnd={permissions.canEditOpportunities ? handleDragEnd : () => {}}>
-          <div className="flex gap-4 overflow-x-auto pb-4">
-            {stages.map((stage) => {
-              const stageOpportunities = getOpportunitiesForStage(stage.id);
-              const stageTotal = stageOpportunities.reduce(
-                (sum, opp) => sum + (Number(opp.amount) || 0),
-                0
-              );
+        {viewMode === 'kanban' ? (
+          <DragDropContext onDragEnd={permissions.canEditOpportunities ? handleDragEnd : () => {}}>
+            <div className="flex gap-4 overflow-x-auto pb-4">
+              {stages.map((stage) => {
+                const stageOpportunities = getOpportunitiesForStage(stage.id);
+                const stageTotal = stageOpportunities.reduce(
+                  (sum, opp) => sum + (Number(opp.amount) || 0),
+                  0
+                );
 
-              return (
-                <div key={stage.id} className="flex-shrink-0 w-80">
-                  <Card>
-                    <CardHeader className="pb-3">
-                      <div className="flex justify-between items-center">
-                        <CardTitle className="text-base font-medium">{stage.name}</CardTitle>
-                        <span className="text-sm text-muted-foreground">
-                          {stageOpportunities.length}
+                return (
+                  <div key={stage.id} className="flex-shrink-0 w-80">
+                    <Card>
+                      <CardHeader className="pb-3">
+                        <div className="flex justify-between items-center">
+                          <CardTitle className="text-base font-medium">{stage.name}</CardTitle>
+                          <span className="text-sm text-muted-foreground">
+                            {stageOpportunities.length}
+                          </span>
+                        </div>
+                        <p className="text-sm text-muted-foreground mt-1">
+                          {formatCurrency(stageTotal, organization?.default_currency || 'BRL')}
+                        </p>
+                      </CardHeader>
+                      <Droppable droppableId={stage.id}>
+                        {(provided, snapshot) => (
+                          <CardContent
+                            ref={provided.innerRef}
+                            {...provided.droppableProps}
+                            className={`space-y-3 min-h-[200px] transition-colors ${
+                              snapshot.isDraggingOver ? 'bg-muted/50' : ''
+                            }`}
+                          >
+                            {stageOpportunities.length === 0 ? (
+                              <p className="text-sm text-muted-foreground text-center py-8">
+                                Nenhuma oportunidade
+                              </p>
+                            ) : (
+                              stageOpportunities.map((opp, index) => (
+                                <Draggable 
+                                  key={opp.id} 
+                                  draggableId={opp.id} 
+                                  index={index}
+                                  isDragDisabled={!permissions.canEditOpportunities}
+                                >
+                                  {(provided, snapshot) => (
+                                    <div
+                                      ref={provided.innerRef}
+                                      {...provided.draggableProps}
+                                      {...provided.dragHandleProps}
+                                      style={provided.draggableProps.style}
+                                      className={snapshot.isDragging ? 'opacity-50' : ''}
+                                    >
+                                      <OpportunityCard
+                                        id={opp.id}
+                                        title={opp.title}
+                                        amount={Number(opp.amount)}
+                                        currency={opp.currency}
+                                        contactName={opp.contacts?.full_name}
+                                        closeDate={opp.close_date}
+                                        locale={locale}
+                                        onEdit={() => handleEdit(opp)}
+                                        onDelete={() => setDeleteId(opp.id)}
+                                        onClick={() => navigate(`/opportunities/${opp.id}`)}
+                                        formatCurrency={formatCurrency}
+                                      />
+                                    </div>
+                                  )}
+                                </Draggable>
+                              ))
+                            )}
+                            {provided.placeholder}
+                          </CardContent>
+                        )}
+                      </Droppable>
+                    </Card>
+                  </div>
+                );
+              })}
+            </div>
+          </DragDropContext>
+        ) : (
+          <TableCard
+            footer={
+              <PaginationWithPageSize
+                currentPage={currentPage}
+                totalPages={totalPages}
+                totalItems={sortedOpportunities.length}
+                itemsPerPage={itemsPerPage}
+                onPageChange={setCurrentPage}
+                onItemsPerPageChange={setItemsPerPage}
+              />
+            }
+          >
+            <Table
+              aria-label="Oportunidades"
+              sortDescriptor={sortDescriptor}
+              onSortChange={setSortDescriptor}
+            >
+              <TableHeader>
+                <TableCheckboxHeader
+                  isSelected={isAllSelected}
+                  isIndeterminate={isIndeterminate}
+                  onChange={handleSelectAll}
+                />
+                {visibleColumns.includes('title') && (
+                  <TableColumn id="title" allowsSorting sortDescriptor={sortDescriptor}>
+                    Título
+                  </TableColumn>
+                )}
+                {visibleColumns.includes('amount') && (
+                  <TableColumn id="amount" allowsSorting sortDescriptor={sortDescriptor}>
+                    Valor
+                  </TableColumn>
+                )}
+                {visibleColumns.includes('pipeline_stage') && (
+                  <TableColumn id="pipeline_stage" allowsSorting sortDescriptor={sortDescriptor}>
+                    Etapa
+                  </TableColumn>
+                )}
+                {visibleColumns.includes('contact') && (
+                  <TableColumn id="contact" allowsSorting sortDescriptor={sortDescriptor}>
+                    Contato
+                  </TableColumn>
+                )}
+                {visibleColumns.includes('owner') && (
+                  <TableColumn id="owner">Responsável</TableColumn>
+                )}
+                {visibleColumns.includes('close_date') && (
+                  <TableColumn id="close_date" allowsSorting sortDescriptor={sortDescriptor}>
+                    Data Fechamento
+                  </TableColumn>
+                )}
+                <TableColumn id="actions" className="w-12">Ações</TableColumn>
+              </TableHeader>
+              <TableBody items={paginatedOpportunities}>
+                {(opp) => (
+                  <TableRow
+                    key={opp.id}
+                    className="cursor-pointer"
+                    onAction={() => navigate(`/opportunities/${opp.id}`)}
+                  >
+                    <TableCheckboxCell
+                      isSelected={selectedIds.includes(opp.id)}
+                      onChange={(checked) => handleSelectOne(opp.id, checked)}
+                    />
+                    {visibleColumns.includes('title') && (
+                      <TableCell>
+                        <span className="font-medium text-foreground">{opp.title}</span>
+                      </TableCell>
+                    )}
+                    {visibleColumns.includes('amount') && (
+                      <TableCell>
+                        <span className="text-foreground">
+                          {formatCurrency(Number(opp.amount) || 0, opp.currency || organization?.default_currency || 'BRL')}
                         </span>
-                      </div>
-                      <p className="text-sm text-muted-foreground mt-1">
-                        {formatCurrency(stageTotal, organization?.default_currency || 'BRL')}
-                      </p>
-                    </CardHeader>
-                    <Droppable droppableId={stage.id}>
-                      {(provided, snapshot) => (
-                        <CardContent
-                          ref={provided.innerRef}
-                          {...provided.droppableProps}
-                          className={`space-y-3 min-h-[200px] transition-colors ${
-                            snapshot.isDraggingOver ? 'bg-muted/50' : ''
-                          }`}
-                        >
-                          {stageOpportunities.length === 0 ? (
-                            <p className="text-sm text-muted-foreground text-center py-8">
-                              Nenhuma oportunidade
-                            </p>
-                          ) : (
-                            stageOpportunities.map((opp, index) => (
-                              <Draggable 
-                                key={opp.id} 
-                                draggableId={opp.id} 
-                                index={index}
-                                isDragDisabled={!permissions.canEditOpportunities}
-                              >
-                                {(provided, snapshot) => (
-                                  <div
-                                    ref={provided.innerRef}
-                                    {...provided.draggableProps}
-                                    {...provided.dragHandleProps}
-                                    style={provided.draggableProps.style}
-                                    className={snapshot.isDragging ? 'opacity-50' : ''}
-                                  >
-                                    <OpportunityCard
-                                      id={opp.id}
-                                      title={opp.title}
-                                      amount={Number(opp.amount)}
-                                      currency={opp.currency}
-                                      contactName={opp.contacts?.full_name}
-                                      closeDate={opp.close_date}
-                                      locale={locale}
-                                      onEdit={() => handleEdit(opp)}
-                                      onDelete={() => setDeleteId(opp.id)}
-                                      onClick={() => navigate(`/opportunities/${opp.id}`)}
-                                      formatCurrency={formatCurrency}
-                                    />
-                                  </div>
-                                )}
-                              </Draggable>
-                            ))
-                          )}
-                          {provided.placeholder}
-                        </CardContent>
-                      )}
-                    </Droppable>
-                  </Card>
-                </div>
-              );
-            })}
-          </div>
-        </DragDropContext>
+                      </TableCell>
+                    )}
+                    {visibleColumns.includes('pipeline_stage') && (
+                      <TableCell>
+                        <BadgeWithDot color="brand">
+                          {getStageName(opp.pipeline_stage_id)}
+                        </BadgeWithDot>
+                      </TableCell>
+                    )}
+                    {visibleColumns.includes('contact') && (
+                      <TableCell>
+                        <span className="text-muted-foreground">
+                          {opp.contacts?.full_name || '-'}
+                        </span>
+                      </TableCell>
+                    )}
+                    {visibleColumns.includes('owner') && (
+                      <TableCell>
+                        <span className="text-muted-foreground">
+                          {opp.users?.full_name || '-'}
+                        </span>
+                      </TableCell>
+                    )}
+                    {visibleColumns.includes('close_date') && (
+                      <TableCell>
+                        <span className="text-muted-foreground">
+                          {formatDate(opp.close_date)}
+                        </span>
+                      </TableCell>
+                    )}
+                    <TableCell>
+                      <TableRowActionsDropdown>
+                        <TableRowAction
+                          label={t('common.edit')}
+                          icon={<Edit01 className="h-4 w-4" />}
+                          onAction={() => handleEdit(opp)}
+                        />
+                        <TableRowAction
+                          label={t('common.delete')}
+                          icon={<Trash01 className="h-4 w-4" />}
+                          variant="destructive"
+                          onAction={() => setDeleteId(opp.id)}
+                        />
+                      </TableRowActionsDropdown>
+                    </TableCell>
+                  </TableRow>
+                )}
+              </TableBody>
+            </Table>
+          </TableCard>
+        )}
       </div>
 
       <OpportunityDialog
