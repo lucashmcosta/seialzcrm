@@ -1,12 +1,13 @@
 import { useState, useMemo } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { Layout } from '@/components/Layout';
 import { useOrganization } from '@/hooks/useOrganization';
 import { useTranslation } from '@/lib/i18n';
 import { usePermissions } from '@/hooks/usePermissions';
 import { useWhatsAppIntegration } from '@/hooks/useWhatsAppIntegration';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { ArrowLeft } from 'lucide-react';
 import { NativeSelect } from '@/components/ui/native-select';
-import { Input } from '@/components/ui/input';
 import { GeneralSettings } from '@/components/settings/GeneralSettings';
 import { UsersSettings } from '@/components/settings/UsersSettings';
 import { PipelineSettings } from '@/components/settings/PipelineSettings';
@@ -23,7 +24,6 @@ import { Trash } from './settings/Trash';
 import WhatsAppTemplates from './settings/WhatsAppTemplates';
 import { AIAgentSettings } from '@/components/settings/AIAgentSettings';
 import { KnowledgeBaseSettings } from '@/components/settings/KnowledgeBaseSettings';
-import { SearchLg } from '@untitledui/icons';
 
 interface TabConfig {
   id: string;
@@ -32,6 +32,7 @@ interface TabConfig {
 }
 
 export default function Settings() {
+  const navigate = useNavigate();
   const { locale } = useOrganization();
   const { t } = useTranslation(locale as any);
   const { permissions } = usePermissions();
@@ -80,22 +81,15 @@ export default function Settings() {
   return (
     <Layout>
       <div className="flex flex-col h-full">
-        {/* Header */}
-        <div className="border-b bg-background/95 backdrop-blur">
-          <div className="px-6 py-4">
-            <div className="flex items-center justify-between gap-4">
-              <h1 className="text-2xl font-bold text-foreground">{t('settings.title')}</h1>
-              <div className="relative hidden sm:block">
-                <SearchLg className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-                <Input
-                  placeholder={t('settings.searchPlaceholder') || 'Buscar...'}
-                  className="w-64 pl-9 rounded-full"
-                  value={searchTerm}
-                  onChange={(e) => setSearchTerm(e.target.value)}
-                />
-              </div>
-            </div>
-          </div>
+        {/* Back Button */}
+        <div className="px-6 pt-4 pb-2">
+          <button 
+            onClick={() => navigate(-1)}
+            className="flex items-center gap-2 text-sm text-muted-foreground hover:text-foreground transition-colors"
+          >
+            <ArrowLeft className="h-4 w-4" />
+            {t('common.back')}
+          </button>
         </div>
 
         <div className="flex-1 overflow-auto">
