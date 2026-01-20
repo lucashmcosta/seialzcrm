@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
+import { useLocation } from 'react-router-dom';
 import { Device, Call } from '@twilio/voice-sdk';
 import { supabase } from '@/integrations/supabase/client';
 import { useOrganization } from './useOrganization';
@@ -31,6 +32,7 @@ interface UseInboundCallsReturn {
 }
 
 export function useInboundCalls(): UseInboundCallsReturn {
+  const location = useLocation();
   const { organization, userProfile } = useOrganization();
   const { hasVoiceIntegration, loading: voiceLoading } = useVoiceIntegration();
   const [isReady, setIsReady] = useState(false);
@@ -39,6 +41,9 @@ export function useInboundCalls(): UseInboundCallsReturn {
   const [activeCallInfo, setActiveCallInfo] = useState<ActiveCallInfo | null>(null);
   const [isMuted, setIsMuted] = useState(false);
   const deviceRef = useRef<Device | null>(null);
+  
+  // SECURITY: Never initialize in admin routes
+  const isAdminRoute = location.pathname.startsWith('/admin');
 
   // Check if user should receive calls
   const checkUserShouldReceiveCalls = useCallback(async (): Promise<boolean> => {
@@ -47,6 +52,20 @@ export function useInboundCalls(): UseInboundCallsReturn {
     }
 
     try {
+      // SECURITY: First verify user is an active member of the current organization
+      const { data: membership } = await supabase
+        .from('user_organizations')
+        .select('is_active')
+        .eq('user_id', userProfile.id)
+        .eq('organization_id', organization.id)
+        .eq('is_active', true)
+        .single();
+      
+      if (!membership) {
+        console.log('[InboundCalls] User not active member of current organization');
+        return false;
+      }
+
       // Check phone number configuration
       const { data: phoneConfig } = await supabase
         .from('organization_phone_numbers')
@@ -217,9 +236,15 @@ export function useInboundCalls(): UseInboundCallsReturn {
     }
   }, [activeCall, isMuted]);
 
-  // Only initialize if voice integration is active
+  // Only initialize if voice integration is active and NOT in admin route
   useEffect(() => {
     if (voiceLoading) return;
+    
+    // CRITICAL SECURITY: Never initialize in admin portal
+    if (isAdminRoute) {
+      console.log('[InboundCalls] Skipping initialization in admin route');
+      return;
+    }
     
     // Skip initialization if no voice integration
     if (!hasVoiceIntegration) {
@@ -234,7 +259,7 @@ export function useInboundCalls(): UseInboundCallsReturn {
         deviceRef.current = null;
       }
     };
-  }, [initializeDevice, hasVoiceIntegration, voiceLoading]);
+  }, [initializeDevice, hasVoiceIntegration, voiceLoading, isAdminRoute]);
 
   return {
     isReady,

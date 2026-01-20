@@ -51,6 +51,16 @@ serve(async (req) => {
       )
     }
 
+    // Parse request body for organizationId (optional, for validation)
+    let requestedOrgId: string | null = null
+    try {
+      const body = await req.json()
+      requestedOrgId = body?.organizationId || null
+    } catch {
+      // No body or not JSON, will use default org
+    }
+
+    // Get user's active organization
     const { data: userOrg } = await supabase
       .from('user_organizations')
       .select('organization_id')
@@ -63,6 +73,28 @@ serve(async (req) => {
         JSON.stringify({ error: 'Organization not found' }),
         { status: 404, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       )
+    }
+
+    // SECURITY: If organizationId was provided, validate user has access to it
+    const targetOrgId = requestedOrgId || userOrg.organization_id
+    
+    if (requestedOrgId && requestedOrgId !== userOrg.organization_id) {
+      // Verify user belongs to the requested organization
+      const { data: membership } = await supabase
+        .from('user_organizations')
+        .select('organization_id')
+        .eq('user_id', userProfile.id)
+        .eq('organization_id', requestedOrgId)
+        .eq('is_active', true)
+        .single()
+
+      if (!membership) {
+        console.error('User not authorized for organization:', requestedOrgId)
+        return new Response(
+          JSON.stringify({ error: 'User not authorized for this organization' }),
+          { status: 403, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        )
+      }
     }
 
     // Step 1: Get the Twilio Voice integration from admin_integrations
@@ -83,10 +115,11 @@ serve(async (req) => {
     console.log('Found Twilio Voice integration:', twilioIntegration.id)
 
     // Step 2: Get the organization's integration config for Twilio Voice
+    // Use targetOrgId (validated) instead of userOrg.organization_id
     const { data: integration, error: integrationError } = await supabase
       .from('organization_integrations')
       .select('config_values')
-      .eq('organization_id', userOrg.organization_id)
+      .eq('organization_id', targetOrgId)
       .eq('integration_id', twilioIntegration.id)
       .eq('is_enabled', true)
       .maybeSingle()
@@ -100,7 +133,7 @@ serve(async (req) => {
     }
 
     if (!integration || !integration.config_values) {
-      console.error('Twilio Voice integration not found for org:', userOrg.organization_id)
+      console.error('Twilio Voice integration not found for org:', targetOrgId)
       return new Response(
         JSON.stringify({ error: 'Twilio Voice not configured. Please connect Twilio Voice in Settings > Integrations.' }),
         { status: 404, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
@@ -132,7 +165,7 @@ serve(async (req) => {
           'Content-Type': 'application/x-www-form-urlencoded',
         },
         body: new URLSearchParams({
-          FriendlyName: `CRM API Key - ${userOrg.organization_id.slice(0, 8)}`
+          FriendlyName: `CRM API Key - ${targetOrgId.slice(0, 8)}`
         }).toString()
       })
 
@@ -159,14 +192,16 @@ serve(async (req) => {
             api_key_secret: api_key_secret,
           }
         })
-        .eq('organization_id', userOrg.organization_id)
+        .eq('organization_id', targetOrgId)
         .eq('integration_id', twilioIntegration.id)
 
       console.log('API Key created and saved:', api_key_sid)
     }
 
-    // Generate Access Token using Web Crypto API
-    const identity = `user-${userProfile.id}`
+    // SECURITY: Generate identity with organization ID to isolate calls per org
+    // Format: user-{userId}-org-{orgId}
+    // This ensures calls are ONLY delivered to devices registered for the same org
+    const identity = `user-${userProfile.id}-org-${targetOrgId}`
     const ttl = 3600 // 1 hour
 
     const header = {
