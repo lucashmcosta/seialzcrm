@@ -75,8 +75,24 @@ const AI_MODELS: Record<string, { value: string; label: string }[]> = {
     { value: 'claude-3-5-haiku-20241022', label: 'Haiku 3.5 (Mais rápido)' },
   ],
   'openai-gpt': [
-    { value: 'gpt-4o', label: 'GPT-4o (Mais completo)' },
-    { value: 'gpt-4o-mini', label: 'GPT-4o Mini (Recomendado)' },
+    // Série GPT-5 (Mais recentes - 2025)
+    { value: 'gpt-5.2-pro', label: 'GPT-5.2 Pro (Último lançamento)' },
+    { value: 'gpt-5.2-mini', label: 'GPT-5.2 Mini' },
+    { value: 'gpt-5', label: 'GPT-5' },
+    { value: 'gpt-5-mini', label: 'GPT-5 Mini' },
+    // Série o (Raciocínio Avançado)
+    { value: 'o3', label: 'o3 (Raciocínio Superior)' },
+    { value: 'o3-mini', label: 'o3-mini (Raciocínio Rápido)' },
+    { value: 'o1', label: 'o1 (Raciocínio Complexo)' },
+    { value: 'o1-mini', label: 'o1-mini' },
+    // Série GPT-4.5
+    { value: 'gpt-4.5-preview', label: 'GPT-4.5 Preview' },
+    // Série GPT-4o (Omni)
+    { value: 'gpt-4o', label: 'GPT-4o' },
+    { value: 'gpt-4o-mini', label: 'GPT-4o Mini (Econômico)' },
+    // Legado
+    { value: 'gpt-4-turbo', label: 'GPT-4 Turbo (128k contexto)' },
+    { value: 'gpt-3.5-turbo', label: 'GPT-3.5 Turbo (Mais barato)' },
   ],
 };
 
