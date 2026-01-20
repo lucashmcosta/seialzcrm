@@ -11,23 +11,62 @@ import { Badge } from '@/components/ui/badge';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Switch } from '@/components/ui/switch';
-import { Loader2, RefreshCw, ArrowLeft, ArrowRight, Check, Sparkles, Building2, Package, Target, FileText, MessageSquarePlus, History, Trash2, Send, Bot, User, ThumbsUp, ThumbsDown, Beaker, Wrench } from 'lucide-react';
+import { Slider } from '@/components/ui/slider';
+import { Checkbox } from '@/components/ui/checkbox';
+import { 
+  Loader2, RefreshCw, ArrowLeft, ArrowRight, Check, Sparkles, 
+  MessageSquare, Target, FileText, MessageSquarePlus, History, 
+  Trash2, Send, Bot, User, ThumbsUp, ThumbsDown, Beaker, Wrench,
+  SlidersHorizontal, CheckSquare, Database, MessageCircleWarning,
+  Smile, Briefcase
+} from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { cn } from '@/lib/utils';
 
+// ==================== TYPES ====================
+
 interface WizardData {
+  // Step 1 - Canal e Objetivo
+  channel: 'whatsapp' | 'sms' | 'webchat';
+  objective: 'sell' | 'schedule' | 'support' | 'qualify';
+  
+  // Step 2 - Tom e Formato
+  responseLength: number; // 0-100
+  formality: 'informal' | 'professional';
+  emojis: 'yes' | 'no' | 'occasional';
+  maxQuestionsPerMessage: number;
+  
+  // Step 3 - Escopo do Agente
+  scope: {
+    howItWorks: boolean;
+    documents: boolean;
+    deadlines: boolean;
+    pricing: boolean;
+    refund: boolean;
+    eligibility: boolean;
+    generalTopics: boolean;
+  };
+  
+  // Step 4 - RAG e Intents
+  ragIntents: string[];
+  noRagBehavior: 'ask_more_info' | 'say_dont_know' | 'offer_human';
+  
+  // Step 5 - Mensagens de Fallback
+  fallbacks: {
+    noRag: string;
+    outOfScope: string;
+    handoff: string;
+  };
+  
+  // Legacy fields for compatibility and data tab
   companyName: string;
   companySegment: string;
   companyDescription: string;
   products: string;
   differentials: string;
-  goal: 'qualify_lead' | 'schedule_meeting' | 'answer_questions' | 'support';
-  tone: 'professional' | 'friendly' | 'technical';
-  salesPitch: string;
-  restrictions: string;
   generatedPrompt: string;
 }
 
@@ -56,6 +95,8 @@ interface SDRAgentWizardProps {
   onSuccess: () => void;
 }
 
+// ==================== CONSTANTS ====================
+
 const AI_PROVIDERS = [
   { value: 'auto', label: 'Automático', description: 'Usa integração padrão da organização' },
   { value: 'lovable-ai', label: 'Lovable AI (Gemini)', description: 'Google Gemini - rápido e econômico' },
@@ -75,81 +116,78 @@ const AI_MODELS: Record<string, { value: string; label: string }[]> = {
     { value: 'claude-3-5-haiku-20241022', label: 'Haiku 3.5 (Mais rápido)' },
   ],
   'openai-gpt': [
-    // Série GPT-5 (Mais recentes - 2025)
     { value: 'gpt-5.2-pro', label: 'GPT-5.2 Pro (Último lançamento)' },
     { value: 'gpt-5.2-mini', label: 'GPT-5.2 Mini' },
     { value: 'gpt-5', label: 'GPT-5' },
     { value: 'gpt-5-mini', label: 'GPT-5 Mini' },
-    // Série o (Raciocínio Avançado)
     { value: 'o3', label: 'o3 (Raciocínio Superior)' },
     { value: 'o3-mini', label: 'o3-mini (Raciocínio Rápido)' },
     { value: 'o1', label: 'o1 (Raciocínio Complexo)' },
     { value: 'o1-mini', label: 'o1-mini' },
-    // Série GPT-4.5
     { value: 'gpt-4.5-preview', label: 'GPT-4.5 Preview' },
-    // Série GPT-4o (Omni)
     { value: 'gpt-4o', label: 'GPT-4o' },
     { value: 'gpt-4o-mini', label: 'GPT-4o Mini (Econômico)' },
-    // Legado
     { value: 'gpt-4-turbo', label: 'GPT-4 Turbo (128k contexto)' },
     { value: 'gpt-3.5-turbo', label: 'GPT-3.5 Turbo (Mais barato)' },
   ],
 };
 
-// Available tools configuration
 const AVAILABLE_TOOLS = [
-  { 
-    id: 'update_contact', 
-    name: 'Atualizar Contato', 
-    description: 'Permite corrigir nome, email, telefone e empresa do contato' 
-  },
-  { 
-    id: 'create_opportunity', 
-    name: 'Criar Oportunidade', 
-    description: 'Cria negócio quando cliente demonstra interesse' 
-  },
-  { 
-    id: 'create_task', 
-    name: 'Criar Tarefa', 
-    description: 'Agenda follow-ups e ações futuras para a equipe' 
-  },
-  { 
-    id: 'transfer_to_human', 
-    name: 'Transferir para Humano', 
-    description: 'Passa a conversa para atendimento humano' 
-  },
-  { 
-    id: 'schedule_meeting', 
-    name: 'Agendar Reunião', 
-    description: 'Agenda reuniões e demonstrações com o cliente' 
-  },
-  { 
-    id: 'save_memory', 
-    name: 'Salvar Memória', 
-    description: 'Salva informações importantes (datas, preferências, objeções) para lembrar em futuras conversas' 
-  },
-  { 
-    id: 'schedule_follow_up', 
-    name: 'Agendar Follow-up', 
-    description: 'Agenda mensagem automática para data futura (ex: "te mando mensagem dia 15")' 
-  },
-  { 
-    id: 'send_payment_link', 
-    name: 'Enviar Link de Pagamento', 
-    description: 'Gera e envia link de pagamento quando cliente quer fechar' 
-  },
-  { 
-    id: 'update_qualification', 
-    name: 'Atualizar Qualificação', 
-    description: 'Registra dados de qualificação do lead (interesse, orçamento, timeline, decisor)' 
-  },
+  { id: 'update_contact', name: 'Atualizar Contato', description: 'Permite corrigir nome, email, telefone e empresa do contato' },
+  { id: 'create_opportunity', name: 'Criar Oportunidade', description: 'Cria negócio quando cliente demonstra interesse' },
+  { id: 'create_task', name: 'Criar Tarefa', description: 'Agenda follow-ups e ações futuras para a equipe' },
+  { id: 'transfer_to_human', name: 'Transferir para Humano', description: 'Passa a conversa para atendimento humano' },
+  { id: 'schedule_meeting', name: 'Agendar Reunião', description: 'Agenda reuniões e demonstrações com o cliente' },
+  { id: 'save_memory', name: 'Salvar Memória', description: 'Salva informações importantes para lembrar em futuras conversas' },
+  { id: 'schedule_follow_up', name: 'Agendar Follow-up', description: 'Agenda mensagem automática para data futura' },
+  { id: 'send_payment_link', name: 'Enviar Link de Pagamento', description: 'Gera e envia link de pagamento' },
+  { id: 'update_qualification', name: 'Atualizar Qualificação', description: 'Registra dados de qualificação do lead' },
 ];
 
 const STEPS = [
-  { id: 1, title: 'Sobre a Empresa', icon: Building2 },
-  { id: 2, title: 'Produtos e Serviços', icon: Package },
-  { id: 3, title: 'Estratégia de Vendas', icon: Target },
-  { id: 4, title: 'Revisão e Prompt', icon: FileText },
+  { id: 1, title: 'Canal e Objetivo', icon: MessageSquare },
+  { id: 2, title: 'Tom e Formato', icon: SlidersHorizontal },
+  { id: 3, title: 'Escopo', icon: CheckSquare },
+  { id: 4, title: 'Base de Conhecimento', icon: Database },
+  { id: 5, title: 'Fallbacks', icon: MessageCircleWarning },
+];
+
+const CHANNELS = [
+  { value: 'whatsapp', label: 'WhatsApp', description: 'Mensagens instantâneas, curtas e diretas' },
+  { value: 'sms', label: 'SMS', description: 'Mensagens muito curtas (160 caracteres)' },
+  { value: 'webchat', label: 'Chat Web', description: 'Chat no site, pode ser mais detalhado' },
+];
+
+const OBJECTIVES = [
+  { value: 'sell', label: 'Vender / Tirar dúvidas', description: 'Responder perguntas e conduzir para venda' },
+  { value: 'schedule', label: 'Agendar reuniões', description: 'Marcar demonstrações e consultas' },
+  { value: 'support', label: 'Suporte ao cliente', description: 'Resolver problemas e dúvidas' },
+  { value: 'qualify', label: 'Qualificar leads', description: 'Identificar interesse e perfil' },
+];
+
+const SCOPE_OPTIONS = [
+  { key: 'howItWorks', label: 'Como funciona', description: 'Explica o processo geral do serviço' },
+  { key: 'documents', label: 'Documentos necessários', description: 'Informa sobre documentação' },
+  { key: 'deadlines', label: 'Prazos', description: 'Responde sobre tempos estimados' },
+  { key: 'pricing', label: 'Preço e pacotes', description: 'Fala sobre valores e planos' },
+  { key: 'refund', label: 'Reembolso/Cancelamento', description: 'Políticas de devolução' },
+  { key: 'eligibility', label: 'Elegibilidade', description: 'Verifica se cliente se qualifica' },
+  { key: 'generalTopics', label: 'Assuntos gerais', description: 'Conversa sobre outros temas' },
+];
+
+const RAG_INTENTS = [
+  { value: 'pricing', label: 'Preços e Pacotes' },
+  { value: 'documents', label: 'Documentos Necessários' },
+  { value: 'deadlines', label: 'Prazos' },
+  { value: 'refund', label: 'Política de Reembolso' },
+  { value: 'faq', label: 'FAQ Geral' },
+  { value: 'products', label: 'Produtos e Serviços' },
+];
+
+const NO_RAG_BEHAVIORS = [
+  { value: 'ask_more_info', label: 'Pedir mais informações', description: 'Não inventar; pedir 1 info adicional' },
+  { value: 'say_dont_know', label: 'Dizer que não sabe', description: 'Ser honesto sobre a limitação' },
+  { value: 'offer_human', label: 'Oferecer atendimento humano', description: 'Passar para um consultor' },
 ];
 
 const SEGMENTS = [
@@ -164,31 +202,149 @@ const SEGMENTS = [
   { value: 'other', label: 'Outro' },
 ];
 
-const GOALS = [
-  { value: 'qualify_lead', label: 'Qualificar leads', description: 'Entender necessidades e perfil do cliente' },
-  { value: 'schedule_meeting', label: 'Agendar reuniões', description: 'Converter interesse em demonstrações agendadas' },
-  { value: 'answer_questions', label: 'Responder dúvidas', description: 'Tirar dúvidas sobre produtos e serviços' },
-  { value: 'support', label: 'Suporte ao cliente', description: 'Ajudar clientes existentes com problemas' },
-];
-
-const TONES = [
-  { value: 'professional', label: 'Profissional', description: 'Formal e objetivo' },
-  { value: 'friendly', label: 'Amigável', description: 'Descontraído e acessível' },
-  { value: 'technical', label: 'Técnico', description: 'Detalhado e preciso' },
-];
+const DEFAULT_FALLBACKS = {
+  noRag: 'Não encontrei essa informação aqui. Pode me dar mais detalhes sobre o que precisa?',
+  outOfScope: 'Eu só posso te ajudar com assuntos relacionados ao nosso serviço. Quer falar sobre isso?',
+  handoff: 'Entendi! Vou pedir para um consultor entrar em contato com você. Qual o melhor horário?',
+};
 
 const initialWizardData: WizardData = {
+  channel: 'whatsapp',
+  objective: 'sell',
+  responseLength: 30,
+  formality: 'informal',
+  emojis: 'occasional',
+  maxQuestionsPerMessage: 1,
+  scope: {
+    howItWorks: true,
+    documents: true,
+    deadlines: true,
+    pricing: true,
+    refund: false,
+    eligibility: false,
+    generalTopics: false,
+  },
+  ragIntents: ['pricing', 'products', 'faq'],
+  noRagBehavior: 'ask_more_info',
+  fallbacks: { ...DEFAULT_FALLBACKS },
   companyName: '',
   companySegment: 'saas',
   companyDescription: '',
   products: '',
   differentials: '',
-  goal: 'schedule_meeting',
-  tone: 'friendly',
-  salesPitch: '',
-  restrictions: '',
   generatedPrompt: '',
 };
+
+// ==================== HELPER FUNCTIONS ====================
+
+const getLengthRules = (value: number): string => {
+  if (value <= 30) return 'Respostas CURTAS: 1-2 bolhas de mensagem, máximo 150 caracteres por bolha. Seja direto e objetivo.';
+  if (value <= 70) return 'Respostas MÉDIAS: 2-3 bolhas de mensagem, até 300 caracteres por bolha. Equilibre informação e concisão.';
+  return 'Respostas COMPLETAS: pode usar até 500 caracteres quando necessário para explicar bem.';
+};
+
+const getLengthLabel = (value: number): string => {
+  if (value <= 30) return 'Curto';
+  if (value <= 70) return 'Médio';
+  return 'Detalhado';
+};
+
+const getScopeRules = (scope: WizardData['scope']): { can: string[]; cannot: string[] } => {
+  const can: string[] = [];
+  const cannot: string[] = [];
+  
+  if (scope.howItWorks) can.push('Explicar como o serviço/produto funciona');
+  else cannot.push('Explicar processos internos do serviço');
+  
+  if (scope.documents) can.push('Informar sobre documentação necessária');
+  else cannot.push('Falar sobre documentos requeridos');
+  
+  if (scope.deadlines) can.push('Responder sobre prazos e tempos estimados');
+  else cannot.push('Prometer ou mencionar prazos');
+  
+  if (scope.pricing) can.push('Discutir preços, pacotes e valores');
+  else cannot.push('Mencionar valores ou preços - direcionar para reunião');
+  
+  if (scope.refund) can.push('Explicar políticas de reembolso e cancelamento');
+  else cannot.push('Falar sobre reembolsos ou cancelamentos');
+  
+  if (scope.eligibility) can.push('Verificar se o cliente se qualifica para o serviço');
+  else cannot.push('Avaliar elegibilidade do cliente');
+  
+  if (scope.generalTopics) can.push('Conversar sobre assuntos gerais');
+  else cannot.push('Desviar para assuntos fora do escopo do serviço');
+  
+  return { can, cannot };
+};
+
+const generatePromptFromWizard = (data: WizardData): string => {
+  const { can, cannot } = getScopeRules(data.scope);
+  
+  const channelLabel = CHANNELS.find(c => c.value === data.channel)?.label || data.channel;
+  const objectiveLabel = OBJECTIVES.find(o => o.value === data.objective)?.label || data.objective;
+  
+  const formalityText = data.formality === 'professional' 
+    ? 'Tom PROFISSIONAL e formal. Use linguagem corporativa.'
+    : 'Tom INFORMAL e amigável. Use linguagem natural e acessível.';
+    
+  const emojisText = data.emojis === 'yes' 
+    ? 'Use emojis livremente para tornar a conversa mais leve 😊'
+    : data.emojis === 'no'
+    ? 'NÃO use emojis nas mensagens.'
+    : 'Use emojis ocasionalmente, com moderação (1-2 por mensagem quando apropriado).';
+
+  let prompt = `## Identidade
+Você é um assistente virtual de ${data.companyName || '[EMPRESA]'} que atende via ${channelLabel}.
+${data.companyDescription ? `\nSobre a empresa: ${data.companyDescription}` : ''}
+
+## Objetivo Principal
+${objectiveLabel}
+
+## Tom de Comunicação
+${formalityText}
+${emojisText}
+
+## Formato das Respostas
+${getLengthRules(data.responseLength)}
+- Faça no máximo ${data.maxQuestionsPerMessage} pergunta(s) por mensagem
+- Mensagens curtas são melhores para ${channelLabel}
+
+## ✅ PODE fazer:
+${can.map(c => `- ${c}`).join('\n')}
+
+## ❌ NÃO PODE fazer:
+${cannot.map(c => `- ${c}`).join('\n')}
+
+## Produtos/Serviços
+${data.products || 'Aguardando informações sobre produtos/serviços.'}
+
+${data.differentials ? `## Diferenciais\n${data.differentials}` : ''}
+
+## Quando não souber responder
+${data.noRagBehavior === 'ask_more_info' 
+  ? `Peça mais informações ao cliente. Exemplo: "${data.fallbacks.noRag}"`
+  : data.noRagBehavior === 'say_dont_know'
+  ? `Seja honesto sobre a limitação. Exemplo: "${data.fallbacks.noRag}"`
+  : `Ofereça atendimento humano. Exemplo: "${data.fallbacks.handoff}"`
+}
+
+## Mensagem para assuntos fora do escopo
+"${data.fallbacks.outOfScope}"
+
+## Mensagem para transferir para humano
+"${data.fallbacks.handoff}"
+
+## Regras Importantes
+✅ Sempre responda em português brasileiro
+✅ Mantenha o contexto da conversa
+✅ Personalize usando o nome do cliente quando disponível
+❌ Nunca invente informações que não estão na sua base de conhecimento
+❌ Nunca prometa algo que a empresa não possa cumprir`;
+
+  return prompt;
+};
+
+// ==================== MAIN COMPONENT ====================
 
 export function SDRAgentWizard({ 
   open, 
@@ -200,13 +356,23 @@ export function SDRAgentWizard({
   const isEditMode = !!(existingAgent?.id && existingAgent?.custom_instructions);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   
-  const [currentStep, setCurrentStep] = useState(isEditMode ? 4 : 1);
-  const [activeTab, setActiveTab] = useState<'prompt' | 'feedback' | 'wizard' | 'test'>('prompt');
+  const [currentStep, setCurrentStep] = useState(isEditMode ? 5 : 1);
+  const [activeTab, setActiveTab] = useState<'prompt' | 'feedback' | 'wizard' | 'test' | 'tools'>('prompt');
   const [wizardData, setWizardData] = useState<WizardData>(() => {
     if (existingAgent?.wizard_data) {
+      // Merge existing data with defaults to handle new fields
       return {
+        ...initialWizardData,
         ...existingAgent.wizard_data,
         generatedPrompt: existingAgent.custom_instructions || existingAgent.wizard_data.generatedPrompt || '',
+        scope: {
+          ...initialWizardData.scope,
+          ...(existingAgent.wizard_data.scope || {}),
+        },
+        fallbacks: {
+          ...DEFAULT_FALLBACKS,
+          ...(existingAgent.wizard_data.fallbacks || {}),
+        },
       };
     }
     return initialWizardData;
@@ -246,15 +412,24 @@ export function SDRAgentWizard({
   useEffect(() => {
     if (open) {
       const isEdit = !!(existingAgent?.id && existingAgent?.custom_instructions);
-      setCurrentStep(isEdit ? 4 : 1);
+      setCurrentStep(isEdit ? 5 : 1);
       setActiveTab('prompt');
       setNewFeedback('');
       setTestMessages([]);
       setTestInput('');
       if (existingAgent?.wizard_data) {
         setWizardData({
+          ...initialWizardData,
           ...existingAgent.wizard_data,
           generatedPrompt: existingAgent.custom_instructions || existingAgent.wizard_data.generatedPrompt || '',
+          scope: {
+            ...initialWizardData.scope,
+            ...(existingAgent.wizard_data.scope || {}),
+          },
+          fallbacks: {
+            ...DEFAULT_FALLBACKS,
+            ...(existingAgent.wizard_data.fallbacks || {}),
+          },
         });
       } else {
         setWizardData(initialWizardData);
@@ -273,51 +448,90 @@ export function SDRAgentWizard({
     setWizardData(prev => ({ ...prev, [field]: value }));
   };
 
+  const updateScope = (key: keyof WizardData['scope'], value: boolean) => {
+    setWizardData(prev => ({
+      ...prev,
+      scope: { ...prev.scope, [key]: value },
+    }));
+  };
+
+  const updateFallback = (key: keyof WizardData['fallbacks'], value: string) => {
+    setWizardData(prev => ({
+      ...prev,
+      fallbacks: { ...prev.fallbacks, [key]: value },
+    }));
+  };
+
+  const toggleRagIntent = (intent: string) => {
+    setWizardData(prev => ({
+      ...prev,
+      ragIntents: prev.ragIntents.includes(intent)
+        ? prev.ragIntents.filter(i => i !== intent)
+        : [...prev.ragIntents, intent],
+    }));
+  };
+
   const canProceed = () => {
     switch (currentStep) {
       case 1:
-        return wizardData.companyName.trim() && wizardData.companyDescription.trim();
+        return true; // Channel and objective have defaults
       case 2:
-        return wizardData.products.trim();
+        return true; // All have defaults
       case 3:
-        return true;
+        return Object.values(wizardData.scope).some(v => v); // At least one scope enabled
       case 4:
-        return wizardData.generatedPrompt.trim();
+        return true;
+      case 5:
+        return wizardData.fallbacks.noRag.trim() && wizardData.fallbacks.outOfScope.trim();
       default:
         return false;
     }
   };
 
   const generatePrompt = async () => {
-    setIsGenerating(true);
-    try {
-      const { data, error } = await supabase.functions.invoke('ai-generate', {
-        body: {
-          action: 'generate_agent_prompt',
-          context: {
-            companyName: wizardData.companyName,
-            companySegment: SEGMENTS.find(s => s.value === wizardData.companySegment)?.label || wizardData.companySegment,
-            companyDescription: wizardData.companyDescription,
-            products: wizardData.products,
-            differentials: wizardData.differentials,
-            goal: GOALS.find(g => g.value === wizardData.goal)?.label || wizardData.goal,
-            tone: TONES.find(t => t.value === wizardData.tone)?.label || wizardData.tone,
-            salesPitch: wizardData.salesPitch,
-            restrictions: wizardData.restrictions,
+    // First, generate from wizard data
+    const wizardPrompt = generatePromptFromWizard(wizardData);
+    
+    // If we have company info, enhance with AI
+    if (wizardData.companyName && wizardData.products) {
+      setIsGenerating(true);
+      try {
+        const { data, error } = await supabase.functions.invoke('ai-generate', {
+          body: {
+            action: 'generate_agent_prompt',
+            context: {
+              companyName: wizardData.companyName,
+              companySegment: SEGMENTS.find(s => s.value === wizardData.companySegment)?.label || wizardData.companySegment,
+              companyDescription: wizardData.companyDescription,
+              products: wizardData.products,
+              differentials: wizardData.differentials,
+              goal: OBJECTIVES.find(o => o.value === wizardData.objective)?.label || wizardData.objective,
+              tone: wizardData.formality,
+              channel: CHANNELS.find(c => c.value === wizardData.channel)?.label || wizardData.channel,
+              responseLength: getLengthLabel(wizardData.responseLength),
+              scope: wizardData.scope,
+              fallbacks: wizardData.fallbacks,
+            },
           },
-        },
-      });
+        });
 
-      if (error) throw error;
+        if (error) throw error;
 
-      if (data?.content) {
-        updateField('generatedPrompt', data.content);
+        if (data?.content) {
+          updateField('generatedPrompt', data.content);
+        } else {
+          updateField('generatedPrompt', wizardPrompt);
+        }
+      } catch (error: any) {
+        console.error('Error generating prompt:', error);
+        // Fall back to wizard-generated prompt
+        updateField('generatedPrompt', wizardPrompt);
+        toast.info('Prompt gerado localmente. Configure uma integração de IA para prompts mais detalhados.');
+      } finally {
+        setIsGenerating(false);
       }
-    } catch (error: any) {
-      console.error('Error generating prompt:', error);
-      toast.error(error.message || 'Erro ao gerar prompt. Verifique se você tem uma integração de IA configurada.');
-    } finally {
-      setIsGenerating(false);
+    } else {
+      updateField('generatedPrompt', wizardPrompt);
     }
   };
 
@@ -349,7 +563,6 @@ export function SDRAgentWizard({
       if (data?.content) {
         updateField('generatedPrompt', data.content);
         
-        // Add to feedback history
         const newEntry: FeedbackEntry = {
           id: crypto.randomUUID(),
           date: new Date().toISOString(),
@@ -377,7 +590,6 @@ export function SDRAgentWizard({
   const simulateMessage = async () => {
     if (!testInput.trim() || !existingAgent?.id) return;
     
-    // Add user message
     const userMessage: TestMessage = {
       id: crypto.randomUUID(),
       role: 'user',
@@ -387,7 +599,6 @@ export function SDRAgentWizard({
     setTestInput('');
     setIsSimulating(true);
     
-    // Scroll to bottom
     setTimeout(() => {
       messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
     }, 100);
@@ -413,7 +624,6 @@ export function SDRAgentWizard({
         };
         setTestMessages(prev => [...prev, agentMessage]);
         
-        // Scroll to bottom
         setTimeout(() => {
           messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
         }, 100);
@@ -432,11 +642,9 @@ export function SDRAgentWizard({
       return;
     }
     
-    // Ask for feedback
     const feedback = prompt('Como o agente deveria ter respondido?');
     if (!feedback) return;
     
-    // Apply feedback
     try {
       const formattedFeedback = `Quando o cliente disse algo similar a "${testMessages.find(m => m.role === 'user' && testMessages.indexOf(m) < testMessages.indexOf(testMessage))?.content || 'mensagem do cliente'}", ao invés de responder "${testMessage.content.slice(0, 100)}...", responder: "${feedback}"`;
       
@@ -475,12 +683,12 @@ export function SDRAgentWizard({
   };
 
   const handleNext = async () => {
-    if (currentStep === 3) {
-      setCurrentStep(4);
+    if (currentStep === 5) {
+      // Final step - generate prompt
       if (!wizardData.generatedPrompt) {
         await generatePrompt();
       }
-    } else if (currentStep < 4) {
+    } else if (currentStep < 5) {
       setCurrentStep(prev => prev + 1);
     }
   };
@@ -492,6 +700,11 @@ export function SDRAgentWizard({
   };
 
   const handleSave = async () => {
+    // Generate prompt if not yet generated
+    if (!wizardData.generatedPrompt.trim()) {
+      await generatePrompt();
+    }
+    
     if (!wizardData.generatedPrompt.trim()) {
       toast.error('O prompt do agente não pode estar vazio');
       return;
@@ -499,19 +712,18 @@ export function SDRAgentWizard({
 
     setIsSaving(true);
     try {
+      const goalLabel = OBJECTIVES.find(o => o.value === wizardData.objective)?.label || 'Atender clientes';
+      
       const agentData = {
         organization_id: organizationId,
-        name: agentName.trim() || `Agente ${wizardData.companyName}`,
+        name: agentName.trim() || `Agente ${wizardData.companyName || 'SDR'}`,
         custom_instructions: wizardData.generatedPrompt,
         wizard_data: JSON.parse(JSON.stringify(wizardData)),
         feedback_history: JSON.parse(JSON.stringify(feedbackHistory)),
         enabled_tools: enabledTools,
         is_enabled: true,
-        goal: wizardData.goal === 'qualify_lead' ? 'Qualificar leads e entender necessidades' :
-              wizardData.goal === 'schedule_meeting' ? 'Agendar demonstrações e reuniões' :
-              wizardData.goal === 'answer_questions' ? 'Responder dúvidas sobre produtos' :
-              'Suporte ao cliente',
-        tone: wizardData.tone,
+        goal: goalLabel,
+        tone: wizardData.formality,
         ai_provider: aiProvider,
         ai_model: aiProvider !== 'auto' ? aiModel : null,
         max_messages_per_conversation: maxMessages,
@@ -544,9 +756,10 @@ export function SDRAgentWizard({
     }
   };
 
-  const progress = (currentStep / 4) * 100;
+  const progress = (currentStep / 5) * 100;
 
-  // Render edit mode (with tabs)
+  // ==================== EDIT MODE TABS ====================
+  
   const renderEditMode = () => (
     <Tabs value={activeTab} onValueChange={(v) => setActiveTab(v as any)} className="flex-1">
       <TabsList className="w-full grid grid-cols-5">
@@ -658,7 +871,7 @@ export function SDRAgentWizard({
         <div>
           <Label className="text-base font-medium">Ferramentas do Agente</Label>
           <p className="text-sm text-muted-foreground mb-4">
-            Habilite as ações que o agente pode executar automaticamente durante as conversas
+            Habilite as ações que o agente pode executar automaticamente
           </p>
         </div>
         
@@ -678,13 +891,6 @@ export function SDRAgentWizard({
               />
             </div>
           ))}
-        </div>
-        
-        <div className="flex items-center gap-2 p-3 bg-muted/50 rounded-lg">
-          <Sparkles className="h-4 w-4 text-primary shrink-0" />
-          <p className="text-sm text-muted-foreground">
-            Quando habilitadas, o agente usará estas ferramentas automaticamente quando apropriado.
-          </p>
         </div>
       </TabsContent>
 
@@ -729,7 +935,7 @@ export function SDRAgentWizard({
         <div className="flex items-center gap-2 p-3 bg-muted/50 rounded-lg">
           <Sparkles className="h-4 w-4 text-primary shrink-0" />
           <p className="text-sm text-muted-foreground">
-            Edite o texto acima livremente ou use a aba "Adicionar Feedback" para refinamentos via IA.
+            Edite o texto acima livremente ou use a aba "Feedback" para refinamentos via IA.
           </p>
         </div>
       </TabsContent>
@@ -741,7 +947,6 @@ export function SDRAgentWizard({
           </p>
         </div>
         
-        {/* Chat area */}
         <div className="border rounded-lg h-[300px] overflow-y-auto p-4 space-y-3 bg-muted/30">
           {testMessages.length === 0 ? (
             <div className="flex items-center justify-center h-full text-muted-foreground text-sm">
@@ -801,7 +1006,6 @@ export function SDRAgentWizard({
           <div ref={messagesEndRef} />
         </div>
         
-        {/* Input */}
         <div className="flex gap-2">
           <Input
             value={testInput}
@@ -941,263 +1145,417 @@ export function SDRAgentWizard({
           />
         </div>
 
-        <div className="grid grid-cols-2 gap-4">
-          <div className="space-y-2">
-            <Label>Objetivo</Label>
-            <Select
-              value={wizardData.goal}
-              onValueChange={(value) => updateField('goal', value as WizardData['goal'])}
-            >
-              <SelectTrigger>
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                {GOALS.map((goal) => (
-                  <SelectItem key={goal.value} value={goal.value}>
-                    {goal.label}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </div>
-          <div className="space-y-2">
-            <Label>Tom</Label>
-            <Select
-              value={wizardData.tone}
-              onValueChange={(value) => updateField('tone', value as WizardData['tone'])}
-            >
-              <SelectTrigger>
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                {TONES.map((tone) => (
-                  <SelectItem key={tone.value} value={tone.value}>
-                    {tone.label}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </div>
+        <div className="space-y-2">
+          <Label>Diferenciais</Label>
+          <Textarea
+            value={wizardData.differentials}
+            onChange={(e) => updateField('differentials', e.target.value)}
+            rows={2}
+          />
         </div>
 
         <div className="flex items-center gap-2 p-3 bg-muted/50 rounded-lg">
           <Sparkles className="h-4 w-4 text-primary shrink-0" />
           <p className="text-sm text-muted-foreground">
-            Ao alterar os dados acima, clique em "Regenerar" na aba "Prompt Atual" para gerar um novo prompt.
+            Após editar os dados, clique em "Regenerar" na aba Prompt para atualizar as instruções.
           </p>
         </div>
       </TabsContent>
     </Tabs>
   );
 
-  // Render wizard step content (new agent creation)
+  // ==================== WIZARD STEPS ====================
+
   const renderWizardStep = () => {
     switch (currentStep) {
       case 1:
+        // Canal e Objetivo
         return (
-          <div className="space-y-4">
-            <div className="space-y-2">
-              <Label htmlFor="companyName">Nome da Empresa *</Label>
-              <Input
-                id="companyName"
-                placeholder="Ex: TechCorp Solutions"
-                value={wizardData.companyName}
-                onChange={(e) => updateField('companyName', e.target.value)}
-              />
-            </div>
-
-            <div className="space-y-2">
-              <Label htmlFor="companySegment">Segmento de Atuação</Label>
-              <Select
-                value={wizardData.companySegment}
-                onValueChange={(value) => updateField('companySegment', value)}
+          <div className="space-y-6">
+            <div className="space-y-3">
+              <Label className="text-base font-medium">Canal de Atendimento</Label>
+              <RadioGroup
+                value={wizardData.channel}
+                onValueChange={(value) => updateField('channel', value as WizardData['channel'])}
+                className="grid gap-2"
               >
-                <SelectTrigger>
-                  <SelectValue placeholder="Selecione o segmento" />
-                </SelectTrigger>
-                <SelectContent>
-                  {SEGMENTS.map((segment) => (
-                    <SelectItem key={segment.value} value={segment.value}>
-                      {segment.label}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
+                {CHANNELS.map((channel) => (
+                  <div 
+                    key={channel.value}
+                    className={cn(
+                      "flex items-center space-x-3 p-3 rounded-lg border cursor-pointer transition-colors",
+                      wizardData.channel === channel.value && "border-primary bg-primary/5"
+                    )}
+                  >
+                    <RadioGroupItem value={channel.value} id={channel.value} />
+                    <div className="flex-1">
+                      <Label htmlFor={channel.value} className="cursor-pointer font-medium">
+                        {channel.label}
+                      </Label>
+                      <p className="text-sm text-muted-foreground">{channel.description}</p>
+                    </div>
+                  </div>
+                ))}
+              </RadioGroup>
             </div>
 
-            <div className="space-y-2">
-              <Label htmlFor="companyDescription">Descreva sua empresa em poucas palavras *</Label>
-              <Textarea
-                id="companyDescription"
-                placeholder="Ex: Somos uma empresa de software que desenvolve soluções de CRM e ERP para pequenas e médias empresas..."
-                value={wizardData.companyDescription}
-                onChange={(e) => updateField('companyDescription', e.target.value)}
-                rows={4}
-              />
+            <div className="space-y-3">
+              <Label className="text-base font-medium">Objetivo Principal</Label>
+              <RadioGroup
+                value={wizardData.objective}
+                onValueChange={(value) => updateField('objective', value as WizardData['objective'])}
+                className="grid gap-2"
+              >
+                {OBJECTIVES.map((obj) => (
+                  <div 
+                    key={obj.value}
+                    className={cn(
+                      "flex items-center space-x-3 p-3 rounded-lg border cursor-pointer transition-colors",
+                      wizardData.objective === obj.value && "border-primary bg-primary/5"
+                    )}
+                  >
+                    <RadioGroupItem value={obj.value} id={`obj-${obj.value}`} />
+                    <div className="flex-1">
+                      <Label htmlFor={`obj-${obj.value}`} className="cursor-pointer font-medium">
+                        {obj.label}
+                      </Label>
+                      <p className="text-sm text-muted-foreground">{obj.description}</p>
+                    </div>
+                  </div>
+                ))}
+              </RadioGroup>
             </div>
           </div>
         );
 
       case 2:
+        // Tom e Formato
         return (
-          <div className="space-y-4">
-            <div className="space-y-2">
-              <Label htmlFor="products">Produtos e Serviços *</Label>
+          <div className="space-y-6">
+            {/* Response Length Slider */}
+            <div className="space-y-4">
+              <div className="flex items-center justify-between">
+                <Label className="text-base font-medium">Tamanho das Respostas</Label>
+                <Badge variant="outline">{getLengthLabel(wizardData.responseLength)}</Badge>
+              </div>
+              <div className="px-2">
+                <Slider
+                  value={[wizardData.responseLength]}
+                  onValueChange={([value]) => updateField('responseLength', value)}
+                  min={0}
+                  max={100}
+                  step={10}
+                  className="w-full"
+                />
+                <div className="flex justify-between text-xs text-muted-foreground mt-1">
+                  <span>Curto</span>
+                  <span>Médio</span>
+                  <span>Detalhado</span>
+                </div>
+              </div>
               <p className="text-sm text-muted-foreground">
-                Liste seus principais produtos ou serviços (um por linha)
+                {getLengthRules(wizardData.responseLength)}
               </p>
-              <Textarea
-                id="products"
-                placeholder="CRM Pro - Sistema completo de gestão de relacionamento&#10;ERP Suite - Gestão empresarial integrada&#10;Módulo Analytics - Dashboard de métricas de vendas"
-                value={wizardData.products}
-                onChange={(e) => updateField('products', e.target.value)}
-                rows={4}
-              />
             </div>
 
-            <div className="space-y-2">
-              <Label htmlFor="differentials">Diferenciais Competitivos</Label>
+            {/* Formality Toggle */}
+            <div className="space-y-3">
+              <Label className="text-base font-medium">Tom de Comunicação</Label>
+              <div className="flex gap-2">
+                <Button
+                  type="button"
+                  variant={wizardData.formality === 'informal' ? 'default' : 'outline'}
+                  className="flex-1 gap-2"
+                  onClick={() => updateField('formality', 'informal')}
+                >
+                  <Smile className="h-4 w-4" />
+                  Informal
+                </Button>
+                <Button
+                  type="button"
+                  variant={wizardData.formality === 'professional' ? 'default' : 'outline'}
+                  className="flex-1 gap-2"
+                  onClick={() => updateField('formality', 'professional')}
+                >
+                  <Briefcase className="h-4 w-4" />
+                  Profissional
+                </Button>
+              </div>
+            </div>
+
+            {/* Emojis */}
+            <div className="space-y-3">
+              <Label className="text-base font-medium">Usar Emojis?</Label>
+              <div className="flex gap-2">
+                {[
+                  { value: 'yes', label: 'Sim 😊' },
+                  { value: 'occasional', label: 'Às vezes' },
+                  { value: 'no', label: 'Não' },
+                ].map((opt) => (
+                  <Button
+                    key={opt.value}
+                    type="button"
+                    variant={wizardData.emojis === opt.value ? 'default' : 'outline'}
+                    className="flex-1"
+                    onClick={() => updateField('emojis', opt.value as WizardData['emojis'])}
+                  >
+                    {opt.label}
+                  </Button>
+                ))}
+              </div>
+            </div>
+
+            {/* Max Questions */}
+            <div className="space-y-3">
+              <div className="flex items-center justify-between">
+                <Label className="text-base font-medium">Máximo de perguntas por mensagem</Label>
+                <Badge variant="outline">{wizardData.maxQuestionsPerMessage}</Badge>
+              </div>
+              <div className="px-2">
+                <Slider
+                  value={[wizardData.maxQuestionsPerMessage]}
+                  onValueChange={([value]) => updateField('maxQuestionsPerMessage', value)}
+                  min={1}
+                  max={3}
+                  step={1}
+                  className="w-full"
+                />
+                <div className="flex justify-between text-xs text-muted-foreground mt-1">
+                  <span>1 pergunta</span>
+                  <span>2 perguntas</span>
+                  <span>3 perguntas</span>
+                </div>
+              </div>
               <p className="text-sm text-muted-foreground">
-                O que torna sua empresa especial?
+                Recomendamos 1 pergunta por mensagem para conversas mais naturais.
               </p>
-              <Textarea
-                id="differentials"
-                placeholder="Interface intuitiva, suporte 24h, integração com WhatsApp, preço acessível para PMEs..."
-                value={wizardData.differentials}
-                onChange={(e) => updateField('differentials', e.target.value)}
-                rows={3}
-              />
             </div>
           </div>
         );
 
       case 3:
+        // Escopo do Agente
         return (
-          <div className="space-y-6">
-            <div className="space-y-3">
-              <Label>Objetivo Principal do Agente</Label>
-              <RadioGroup
-                value={wizardData.goal}
-                onValueChange={(value) => updateField('goal', value as WizardData['goal'])}
-                className="grid gap-2"
-              >
-                {GOALS.map((goal) => (
-                  <div 
-                    key={goal.value}
-                    className={cn(
-                      "flex items-center space-x-3 p-3 rounded-lg border cursor-pointer transition-colors",
-                      wizardData.goal === goal.value && "border-primary bg-primary/5"
-                    )}
-                  >
-                    <RadioGroupItem value={goal.value} id={goal.value} />
-                    <div className="flex-1">
-                      <Label htmlFor={goal.value} className="cursor-pointer font-medium">
-                        {goal.label}
-                      </Label>
-                      <p className="text-sm text-muted-foreground">{goal.description}</p>
-                    </div>
-                  </div>
-                ))}
-              </RadioGroup>
-            </div>
-
-            <div className="space-y-3">
-              <Label>Tom de Comunicação</Label>
-              <RadioGroup
-                value={wizardData.tone}
-                onValueChange={(value) => updateField('tone', value as WizardData['tone'])}
-                className="flex gap-2"
-              >
-                {TONES.map((tone) => (
-                  <div 
-                    key={tone.value}
-                    className={cn(
-                      "flex-1 flex items-center space-x-2 p-3 rounded-lg border cursor-pointer transition-colors",
-                      wizardData.tone === tone.value && "border-primary bg-primary/5"
-                    )}
-                  >
-                    <RadioGroupItem value={tone.value} id={tone.value} />
-                    <div>
-                      <Label htmlFor={tone.value} className="cursor-pointer text-sm font-medium">
-                        {tone.label}
-                      </Label>
-                      <p className="text-xs text-muted-foreground">{tone.description}</p>
-                    </div>
-                  </div>
-                ))}
-              </RadioGroup>
+          <div className="space-y-4">
+            <div>
+              <Label className="text-base font-medium">O que o agente pode fazer?</Label>
+              <p className="text-sm text-muted-foreground mb-4">
+                Selecione os assuntos que o agente pode abordar. Os não selecionados serão bloqueados.
+              </p>
             </div>
 
             <div className="space-y-2">
-              <Label htmlFor="salesPitch">Principais Argumentos de Venda (Pitch)</Label>
-              <Textarea
-                id="salesPitch"
-                placeholder="- Oferecemos 14 dias de teste grátis&#10;- Implementação em menos de 1 semana&#10;- ROI comprovado: clientes aumentam vendas em 30%"
-                value={wizardData.salesPitch}
-                onChange={(e) => updateField('salesPitch', e.target.value)}
-                rows={3}
-              />
+              {SCOPE_OPTIONS.map((option) => (
+                <div
+                  key={option.key}
+                  className={cn(
+                    "flex items-center space-x-3 p-3 rounded-lg border cursor-pointer transition-colors",
+                    wizardData.scope[option.key as keyof typeof wizardData.scope] && "border-primary bg-primary/5"
+                  )}
+                  onClick={() => updateScope(option.key as keyof typeof wizardData.scope, !wizardData.scope[option.key as keyof typeof wizardData.scope])}
+                >
+                  <Checkbox
+                    checked={wizardData.scope[option.key as keyof typeof wizardData.scope]}
+                    onCheckedChange={(checked) => updateScope(option.key as keyof typeof wizardData.scope, !!checked)}
+                  />
+                  <div className="flex-1">
+                    <Label className="cursor-pointer font-medium">{option.label}</Label>
+                    <p className="text-sm text-muted-foreground">{option.description}</p>
+                  </div>
+                </div>
+              ))}
             </div>
 
-            <div className="space-y-2">
-              <Label htmlFor="restrictions">O que o agente NÃO deve fazer/falar?</Label>
-              <Textarea
-                id="restrictions"
-                placeholder="- Nunca mencionar preços (direcionar para reunião)&#10;- Não fazer promessas de prazos&#10;- Não falar sobre concorrentes"
-                value={wizardData.restrictions}
-                onChange={(e) => updateField('restrictions', e.target.value)}
-                rows={3}
-              />
+            {/* Preview of generated rules */}
+            <div className="p-3 bg-muted/50 rounded-lg space-y-2">
+              <p className="text-sm font-medium">Preview das regras geradas:</p>
+              <div className="grid grid-cols-2 gap-4 text-sm">
+                <div>
+                  <p className="text-green-600 font-medium">✅ PODE:</p>
+                  <ul className="text-muted-foreground text-xs space-y-1 mt-1">
+                    {getScopeRules(wizardData.scope).can.slice(0, 3).map((c, i) => (
+                      <li key={i}>• {c}</li>
+                    ))}
+                    {getScopeRules(wizardData.scope).can.length > 3 && (
+                      <li>• +{getScopeRules(wizardData.scope).can.length - 3} mais...</li>
+                    )}
+                  </ul>
+                </div>
+                <div>
+                  <p className="text-red-600 font-medium">❌ NÃO PODE:</p>
+                  <ul className="text-muted-foreground text-xs space-y-1 mt-1">
+                    {getScopeRules(wizardData.scope).cannot.slice(0, 3).map((c, i) => (
+                      <li key={i}>• {c}</li>
+                    ))}
+                    {getScopeRules(wizardData.scope).cannot.length > 3 && (
+                      <li>• +{getScopeRules(wizardData.scope).cannot.length - 3} mais...</li>
+                    )}
+                  </ul>
+                </div>
+              </div>
             </div>
           </div>
         );
 
       case 4:
-        // In wizard mode step 4, show simple prompt view
+        // RAG e Intents
         return (
-          <div className="space-y-4">
-            <div className="flex items-center justify-between">
-              <div>
-                <Label>Instruções do Agente</Label>
-                <p className="text-sm text-muted-foreground">
-                  Revise e edite o prompt gerado pela IA
-                </p>
-              </div>
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={generatePrompt}
-                disabled={isGenerating}
-              >
-                {isGenerating ? (
-                  <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                ) : (
-                  <RefreshCw className="h-4 w-4 mr-2" />
-                )}
-                Regenerar
-              </Button>
+          <div className="space-y-6">
+            <div>
+              <Label className="text-base font-medium">Intents que buscam na Base de Conhecimento</Label>
+              <p className="text-sm text-muted-foreground mb-4">
+                Quando o cliente perguntar sobre esses assuntos, o agente buscará na base de conhecimento (RAG).
+              </p>
             </div>
 
-            {isGenerating ? (
-              <div className="flex flex-col items-center justify-center py-12 space-y-4">
-                <Loader2 className="h-8 w-8 animate-spin text-primary" />
-                <p className="text-sm text-muted-foreground">Gerando instruções do agente...</p>
-              </div>
-            ) : (
-              <Textarea
-                value={wizardData.generatedPrompt}
-                onChange={(e) => updateField('generatedPrompt', e.target.value)}
-                rows={16}
-                className="font-mono text-sm"
-                placeholder="O prompt do agente será gerado automaticamente..."
-              />
-            )}
+            <div className="grid grid-cols-2 gap-2">
+              {RAG_INTENTS.map((intent) => (
+                <div
+                  key={intent.value}
+                  className={cn(
+                    "flex items-center space-x-3 p-3 rounded-lg border cursor-pointer transition-colors",
+                    wizardData.ragIntents.includes(intent.value) && "border-primary bg-primary/5"
+                  )}
+                  onClick={() => toggleRagIntent(intent.value)}
+                >
+                  <Checkbox
+                    checked={wizardData.ragIntents.includes(intent.value)}
+                    onCheckedChange={() => toggleRagIntent(intent.value)}
+                  />
+                  <Label className="cursor-pointer font-medium text-sm">{intent.label}</Label>
+                </div>
+              ))}
+            </div>
 
-            <div className="flex items-center gap-2 p-3 bg-muted/50 rounded-lg">
-              <Sparkles className="h-4 w-4 text-primary shrink-0" />
+            <div className="space-y-3">
+              <Label className="text-base font-medium">Quando não encontrar na base</Label>
               <p className="text-sm text-muted-foreground">
-                Edite o texto acima livremente até ficar do seu agrado. O agente usará estas instruções para responder aos clientes.
+                O que o agente deve fazer se não encontrar a informação?
               </p>
+              <RadioGroup
+                value={wizardData.noRagBehavior}
+                onValueChange={(value) => updateField('noRagBehavior', value as WizardData['noRagBehavior'])}
+                className="space-y-2"
+              >
+                {NO_RAG_BEHAVIORS.map((behavior) => (
+                  <div 
+                    key={behavior.value}
+                    className={cn(
+                      "flex items-center space-x-3 p-3 rounded-lg border cursor-pointer transition-colors",
+                      wizardData.noRagBehavior === behavior.value && "border-primary bg-primary/5"
+                    )}
+                  >
+                    <RadioGroupItem value={behavior.value} id={`rag-${behavior.value}`} />
+                    <div className="flex-1">
+                      <Label htmlFor={`rag-${behavior.value}`} className="cursor-pointer font-medium">
+                        {behavior.label}
+                      </Label>
+                      <p className="text-sm text-muted-foreground">{behavior.description}</p>
+                    </div>
+                  </div>
+                ))}
+              </RadioGroup>
+            </div>
+          </div>
+        );
+
+      case 5:
+        // Fallbacks
+        return (
+          <div className="space-y-6">
+            <div>
+              <Label className="text-base font-medium">Mensagens de Fallback</Label>
+              <p className="text-sm text-muted-foreground mb-4">
+                Mensagens padrão para situações especiais. Personalize como preferir.
+              </p>
+            </div>
+
+            <div className="space-y-4">
+              <div className="space-y-2">
+                <Label className="flex items-center gap-2">
+                  <Database className="h-4 w-4 text-blue-500" />
+                  Quando não encontrar na base de conhecimento
+                </Label>
+                <Textarea
+                  value={wizardData.fallbacks.noRag}
+                  onChange={(e) => updateFallback('noRag', e.target.value)}
+                  rows={2}
+                  placeholder="Não encontrei essa informação..."
+                />
+              </div>
+
+              <div className="space-y-2">
+                <Label className="flex items-center gap-2">
+                  <MessageCircleWarning className="h-4 w-4 text-orange-500" />
+                  Quando o assunto está fora do escopo
+                </Label>
+                <Textarea
+                  value={wizardData.fallbacks.outOfScope}
+                  onChange={(e) => updateFallback('outOfScope', e.target.value)}
+                  rows={2}
+                  placeholder="Eu só posso te ajudar com..."
+                />
+              </div>
+
+              <div className="space-y-2">
+                <Label className="flex items-center gap-2">
+                  <User className="h-4 w-4 text-green-500" />
+                  Quando transferir para atendimento humano
+                </Label>
+                <Textarea
+                  value={wizardData.fallbacks.handoff}
+                  onChange={(e) => updateFallback('handoff', e.target.value)}
+                  rows={2}
+                  placeholder="Vou pedir para um consultor entrar em contato..."
+                />
+              </div>
+            </div>
+
+            {/* Company info for prompt generation */}
+            <div className="p-4 border rounded-lg bg-muted/30 space-y-3">
+              <Label className="text-base font-medium">Informações da Empresa (opcional)</Label>
+              <p className="text-sm text-muted-foreground">
+                Preencha para gerar um prompt mais personalizado
+              </p>
+              
+              <div className="grid grid-cols-2 gap-3">
+                <div className="space-y-2">
+                  <Label>Nome da Empresa</Label>
+                  <Input
+                    value={wizardData.companyName}
+                    onChange={(e) => updateField('companyName', e.target.value)}
+                    placeholder="Ex: TechCorp"
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label>Segmento</Label>
+                  <Select
+                    value={wizardData.companySegment}
+                    onValueChange={(value) => updateField('companySegment', value)}
+                  >
+                    <SelectTrigger>
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {SEGMENTS.map((segment) => (
+                        <SelectItem key={segment.value} value={segment.value}>
+                          {segment.label}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+              </div>
+              
+              <div className="space-y-2">
+                <Label>Produtos/Serviços</Label>
+                <Textarea
+                  value={wizardData.products}
+                  onChange={(e) => updateField('products', e.target.value)}
+                  rows={2}
+                  placeholder="Liste seus principais produtos ou serviços..."
+                />
+              </div>
             </div>
           </div>
         );
@@ -1206,6 +1564,8 @@ export function SDRAgentWizard({
         return null;
     }
   };
+
+  // ==================== RENDER ====================
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -1266,27 +1626,27 @@ export function SDRAgentWizard({
                     <div 
                       key={step.id} 
                       className={cn(
-                        "flex items-center gap-2 text-sm",
+                        "flex items-center gap-1 text-xs",
                         isActive && "text-primary font-medium",
                         isCompleted && "text-muted-foreground",
                         !isActive && !isCompleted && "text-muted-foreground/50"
                       )}
                     >
                       <div className={cn(
-                        "p-1.5 rounded-full",
+                        "p-1 rounded-full",
                         isActive && "bg-primary/10",
                         isCompleted && "bg-green-500/10"
                       )}>
                         {isCompleted ? (
-                          <Check className="h-3.5 w-3.5 text-green-600" />
+                          <Check className="h-3 w-3 text-green-600" />
                         ) : (
                           <Icon className={cn(
-                            "h-3.5 w-3.5",
+                            "h-3 w-3",
                             isActive && "text-primary"
                           )} />
                         )}
                       </div>
-                      <span className="hidden sm:inline">{step.title}</span>
+                      <span className="hidden md:inline">{step.title}</span>
                     </div>
                   );
                 })}
@@ -1294,7 +1654,7 @@ export function SDRAgentWizard({
             </div>
 
             {/* Step content */}
-            <div className="py-4 space-y-4 min-h-[300px]">
+            <div className="py-4 space-y-4 min-h-[350px]">
               {renderWizardStep()}
             </div>
 
@@ -1309,7 +1669,7 @@ export function SDRAgentWizard({
                 Voltar
               </Button>
 
-              {currentStep < 4 ? (
+              {currentStep < 5 ? (
                 <Button
                   onClick={handleNext}
                   disabled={!canProceed()}
