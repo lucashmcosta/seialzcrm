@@ -1369,6 +1369,9 @@ serve(async (req) => {
       const maxTokens = 1024;
       modelUsed = model;
 
+      // Modelos novos usam max_completion_tokens em vez de max_tokens
+      const isNewModel = ['gpt-5', 'gpt-4.5', 'o1', 'o3'].some(prefix => model.startsWith(prefix));
+
       const headers: Record<string, string> = {
         'Content-Type': 'application/json',
         'Authorization': `Bearer ${configValues.api_key}`,
@@ -1383,9 +1386,15 @@ serve(async (req) => {
 
       const openaiBody: any = {
         model,
-        max_tokens: maxTokens,
         messages: openaiMessages,
       };
+
+      // Aplicar parâmetro de tokens correto baseado no modelo
+      if (isNewModel) {
+        openaiBody.max_completion_tokens = maxTokens;
+      } else {
+        openaiBody.max_tokens = maxTokens;
+      }
 
       // Add tools if enabled
       if (tools.length > 0) {
@@ -1436,15 +1445,22 @@ serve(async (req) => {
         openaiMessages.push(responseMessage);
         openaiMessages.push(...toolResults);
 
+        const retryBody: any = {
+          model,
+          messages: openaiMessages,
+          tools: tools.length > 0 ? tools : undefined,
+        };
+
+        if (isNewModel) {
+          retryBody.max_completion_tokens = maxTokens;
+        } else {
+          retryBody.max_tokens = maxTokens;
+        }
+
         openaiResponse = await fetch('https://api.openai.com/v1/chat/completions', {
           method: 'POST',
           headers,
-          body: JSON.stringify({
-            model,
-            max_tokens: maxTokens,
-            messages: openaiMessages,
-            tools: tools.length > 0 ? tools : undefined,
-          }),
+          body: JSON.stringify(retryBody),
         });
 
         if (!openaiResponse.ok) {
