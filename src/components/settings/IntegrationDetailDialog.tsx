@@ -2,7 +2,7 @@ import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } f
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Label } from '@/components/ui/label';
-import { Phone, CheckCircle2, XCircle, Settings2 } from 'lucide-react';
+import { Phone, CheckCircle2, XCircle, Settings2, MessageSquare, ExternalLink } from 'lucide-react';
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { formatPhoneDisplay } from '@/lib/phoneUtils';
@@ -32,6 +32,30 @@ export function IntegrationDetailDialog({
     if (value.length <= 8) return '•'.repeat(value.length);
     return value.substring(0, 4) + '•'.repeat(12) + value.substring(value.length - 4);
   };
+
+  const StatusItem = ({ 
+    label, 
+    value, 
+    success 
+  }: { 
+    label: string; 
+    value: string | null; 
+    success: boolean;
+  }) => (
+    <div className="flex items-center justify-between py-2">
+      <span className="text-sm text-muted-foreground">{label}</span>
+      <div className="flex items-center gap-2">
+        {success ? (
+          <CheckCircle2 className="h-4 w-4 text-green-500" />
+        ) : (
+          <XCircle className="h-4 w-4 text-destructive" />
+        )}
+        <span className="text-sm font-medium">
+          {value || 'Não configurado'}
+        </span>
+      </div>
+    </div>
+  );
 
   const renderTwilioConfig = () => (
     <div className="space-y-4">
@@ -73,6 +97,54 @@ export function IntegrationDetailDialog({
     </div>
   );
 
+  const renderWhatsAppConfig = () => (
+    <div className="space-y-4">
+      <div className="divide-y">
+        <StatusItem 
+          label="Número Principal"
+          value={formatPhoneDisplay(configValues.whatsapp_number)}
+          success={!!configValues.whatsapp_number}
+        />
+        <StatusItem 
+          label="Messaging Service"
+          value={configValues.messaging_service_sid ? 
+            `...${configValues.messaging_service_sid.slice(-8)}` : null}
+          success={!!configValues.messaging_service_sid}
+        />
+        <StatusItem 
+          label="Webhooks"
+          value={configValues.webhooks_configured ? 
+            'Configurados automaticamente' : 'Configuração manual necessária'}
+          success={!!configValues.webhooks_configured}
+        />
+        {configValues.setup_completed_at && (
+          <div className="flex items-center justify-between py-2">
+            <span className="text-sm text-muted-foreground">Configurado em</span>
+            <span className="text-sm text-muted-foreground">
+              {format(new Date(configValues.setup_completed_at), "dd/MM/yyyy 'às' HH:mm", { locale: ptBR })}
+            </span>
+          </div>
+        )}
+      </div>
+
+      {!configValues.webhooks_configured && (
+        <div className="bg-amber-50 dark:bg-amber-950/20 border border-amber-200 dark:border-amber-800 rounded-lg p-3">
+          <p className="text-sm text-amber-800 dark:text-amber-200">
+            <strong>Atenção:</strong> Os webhooks precisam ser configurados manualmente no Console do Twilio.
+          </p>
+          <Button 
+            variant="link" 
+            size="sm" 
+            className="p-0 h-auto text-amber-600 dark:text-amber-400"
+            onClick={() => window.open('https://console.twilio.com/us1/develop/sms/senders/whatsapp-senders', '_blank')}
+          >
+            Abrir Console Twilio <ExternalLink className="h-3 w-3 ml-1" />
+          </Button>
+        </div>
+      )}
+    </div>
+  );
+
   const renderGenericConfig = () => {
     const entries = Object.entries(configValues).filter(([key]) => 
       !key.toLowerCase().includes('secret') && 
@@ -102,6 +174,16 @@ export function IntegrationDetailDialog({
         ))}
       </div>
     );
+  };
+
+  const renderConfigDetails = () => {
+    if (integration?.slug === 'twilio-voice') {
+      return renderTwilioConfig();
+    }
+    if (integration?.slug === 'twilio-whatsapp') {
+      return renderWhatsAppConfig();
+    }
+    return renderGenericConfig();
   };
 
   return (
@@ -150,7 +232,7 @@ export function IntegrationDetailDialog({
           <div className="border-t" />
 
           {/* Configuration Details */}
-          {integration?.slug === 'twilio-voice' ? renderTwilioConfig() : renderGenericConfig()}
+          {renderConfigDetails()}
         </div>
 
         {/* Actions */}
