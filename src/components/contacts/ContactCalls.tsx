@@ -13,9 +13,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { useToast } from '@/hooks/use-toast';
-import { Loader2, Phone, PhoneIncoming, PhoneOutgoing, Calendar, Plus } from 'lucide-react';
-import { formatDistanceToNow } from 'date-fns';
-import { ptBR, enUS } from 'date-fns/locale';
+import { Loader2, Phone, PhoneIncoming, PhoneOutgoing, Calendar, Plus, User, Clock } from 'lucide-react';
 import { CallStatusBadge } from '@/components/calls/CallStatusBadge';
 import { CallRecordingPlayer } from '@/components/calls/CallRecordingPlayer';
 import { ScheduleCallDialog } from '@/components/calls/ScheduleCallDialog';
@@ -32,6 +30,7 @@ interface Call {
   to_number: string | null;
   created_at: string;
   call_recordings?: { id: string; recording_url: string; duration_seconds: number | null }[];
+  user?: { full_name: string } | null;
 }
 
 interface ContactCallsProps {
@@ -72,7 +71,8 @@ export function ContactCalls({ contactId, opportunityId, contactPhone, contactNa
         .from('calls')
         .select(`
           *,
-          call_recordings(id, recording_url, duration_seconds)
+          call_recordings(id, recording_url, duration_seconds),
+          user:users!user_id(full_name)
         `)
         .eq('organization_id', organization.id)
         .eq('contact_id', contactId)
@@ -141,7 +141,16 @@ export function ContactCalls({ contactId, opportunityId, contactPhone, contactNa
     return `${mins}:${secs.toString().padStart(2, '0')}`;
   };
 
-  const dateLocale = locale === 'pt-BR' ? ptBR : enUS;
+  const formatDateWithTimezone = (dateString: string) => {
+    const timezone = organization?.timezone || 'America/Sao_Paulo';
+    return new Intl.DateTimeFormat(locale, {
+      day: '2-digit',
+      month: 'short',
+      hour: '2-digit',
+      minute: '2-digit',
+      timeZone: timezone,
+    }).format(new Date(dateString));
+  };
 
   const filteredCalls = calls.filter((call) => {
     if (filter === 'all') return true;
@@ -296,22 +305,27 @@ export function ContactCalls({ contactId, opportunityId, contactPhone, contactNa
                     <p className="font-medium text-foreground">{getCallTitle(call)}</p>
                     <span className="text-xs text-muted-foreground">
                       {call.scheduled_at 
-                        ? `Agendada: ${new Date(call.scheduled_at).toLocaleString(locale)}`
-                        : formatDistanceToNow(new Date(call.started_at), { addSuffix: true, locale: dateLocale })
+                        ? `Agendada: ${formatDateWithTimezone(call.scheduled_at)}`
+                        : formatDateWithTimezone(call.started_at)
                       }
                     </span>
                   </div>
-                  <div className="flex items-center gap-2 flex-wrap">
+                  <div className="flex items-center gap-3 flex-wrap text-xs text-muted-foreground">
                     <CallStatusBadge status={call.status} />
+                    {call.user?.full_name && (
+                      <span className="flex items-center gap-1">
+                        <User className="w-3 h-3" />
+                        {call.user.full_name}
+                      </span>
+                    )}
                     {call.duration_seconds && call.status === 'completed' && (
-                      <span className="text-xs text-muted-foreground">
+                      <span className="flex items-center gap-1">
+                        <Clock className="w-3 h-3" />
                         {formatDuration(call.duration_seconds)}
                       </span>
                     )}
                     {call.to_number && (
-                      <span className="text-xs text-muted-foreground">
-                        {call.to_number}
-                      </span>
+                      <span>{call.to_number}</span>
                     )}
                   </div>
                   {call.notes && (
