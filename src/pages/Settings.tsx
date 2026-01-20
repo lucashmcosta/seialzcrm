@@ -80,7 +80,7 @@ export default function Settings() {
 
   return (
     <Layout>
-      <div className="flex flex-col h-full">
+      <div className="flex flex-col h-full max-w-full overflow-x-hidden">
         {/* Back Button */}
         <div className="px-6 pt-4 pb-2">
           <button 
@@ -92,7 +92,7 @@ export default function Settings() {
           </button>
         </div>
 
-        <div className="flex-1 overflow-auto">
+        <div className="flex-1 overflow-y-auto overflow-x-hidden">
           <Tabs value={selectedTab} onValueChange={setSelectedTab} className="w-full">
             {/* Mobile: Native Select */}
             <div className="md:hidden px-6 py-4 border-b">
@@ -104,9 +104,9 @@ export default function Settings() {
             </div>
 
             {/* Desktop: Horizontal Tabs with underline */}
-            <div className="hidden md:block border-b">
-              <div className="px-6">
-                <TabsList variant="underline" className="w-full justify-start overflow-x-auto">
+            <div className="hidden md:block border-b overflow-hidden">
+              <div className="px-6 overflow-x-auto scrollbar-hide">
+                <TabsList variant="underline" className="inline-flex justify-start min-w-max">
                   {searchFilteredTabs.map(tab => (
                     <TabsTrigger 
                       key={tab.id} 
