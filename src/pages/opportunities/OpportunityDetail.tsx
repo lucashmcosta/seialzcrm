@@ -1,16 +1,18 @@
 import { useState, useEffect } from 'react';
 import { useParams, useNavigate, Link } from 'react-router-dom';
+import type { Key } from 'react-aria-components';
 import { Layout } from '@/components/Layout';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Badge } from '@/components/ui/badge';
+import { Tabs } from '@/components/application/tabs/tabs';
+import { NativeSelect } from '@/components/base/select/select-native';
 import { supabase } from '@/integrations/supabase/client';
 import { useOrganization } from '@/hooks/useOrganization';
 import { useTranslation } from '@/lib/i18n';
 import { usePermissions } from '@/hooks/usePermissions';
 import { toast } from '@/hooks/use-toast';
-import { ArrowLeft, Edit, TrendingUp, TrendingDown, DollarSign, Calendar, User, Building2, Phone } from 'lucide-react';
+import { ArrowLeft, Edit, TrendingUp, TrendingDown, DollarSign, Calendar, User, Building2 } from 'lucide-react';
 import { ActivityTimeline } from '@/components/contacts/ActivityTimeline';
 import { ContactTasks } from '@/components/contacts/ContactTasks';
 import { ContactAttachments } from '@/components/contacts/ContactAttachments';
@@ -50,6 +52,17 @@ export default function OpportunityDetail() {
   const [stages, setStages] = useState<PipelineStage[]>([]);
   const [loading, setLoading] = useState(true);
   const [editDialogOpen, setEditDialogOpen] = useState(false);
+  const [selectedTab, setSelectedTab] = useState<Key>('overview');
+
+  const tabs = [
+    { id: 'overview', label: t('opportunities.overviewTab') },
+    { id: 'timeline', label: t('contacts.timeline') },
+    { id: 'calls', label: t('contacts.callsTab') },
+    { id: 'messages', label: t('contacts.messagesTab') },
+    { id: 'tasks', label: t('contacts.tasksTab') },
+    { id: 'attachments', label: t('attachments.title') },
+    { id: 'notes', label: t('contacts.notesTab') },
+  ];
 
   useEffect(() => {
     if (organization && id) {
@@ -275,114 +288,114 @@ export default function OpportunityDetail() {
           </div>
         </div>
 
-        <div className="flex-1 overflow-auto">
-          <Tabs defaultValue="overview" className="h-full">
-            <div className="border-b px-6">
-              <TabsList className="flex-wrap">
-                <TabsTrigger value="overview">{t('opportunities.overviewTab')}</TabsTrigger>
-                <TabsTrigger value="timeline">{t('contacts.timeline')}</TabsTrigger>
-                <TabsTrigger value="calls">{t('contacts.callsTab')}</TabsTrigger>
-                <TabsTrigger value="messages">{t('contacts.messagesTab')}</TabsTrigger>
-                <TabsTrigger value="tasks">{t('contacts.tasksTab')}</TabsTrigger>
-                <TabsTrigger value="attachments">{t('attachments.title')}</TabsTrigger>
-                <TabsTrigger value="notes">{t('contacts.notesTab')}</TabsTrigger>
-              </TabsList>
-            </div>
+        <div className="flex-1 overflow-auto p-6">
+          {/* Mobile: Native Select */}
+          <NativeSelect
+            aria-label="Tabs"
+            value={selectedTab as string}
+            onChange={(e) => setSelectedTab(e.target.value)}
+            options={tabs.map((tab) => ({ label: tab.label, value: tab.id }))}
+            className="w-full md:hidden mb-4"
+          />
 
-            <div className="p-6">
-              <TabsContent value="overview" className="mt-0">
-                <Card>
-                  <CardContent className="pt-6">
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                      <div className="space-y-4">
-                        <div>
-                          <p className="text-sm text-muted-foreground">{t('opportunities.value')}</p>
-                          <p className="text-lg font-semibold">{formatCurrency(opportunity.amount || 0)}</p>
-                        </div>
-                        <div>
-                          <p className="text-sm text-muted-foreground">{t('opportunities.stage')}</p>
-                          <p className="text-lg font-semibold">{opportunity.pipeline_stages?.name || '-'}</p>
-                        </div>
-                        <div>
-                          <p className="text-sm text-muted-foreground">{t('opportunities.closeDate')}</p>
-                          <p className="text-lg font-semibold">
-                            {opportunity.close_date 
-                              ? new Date(opportunity.close_date).toLocaleDateString(locale)
-                              : '-'}
-                          </p>
-                        </div>
+          {/* Desktop: Underline Tabs */}
+          <Tabs selectedKey={selectedTab} onSelectionChange={setSelectedTab}>
+            <Tabs.List type="underline" items={tabs} className="max-md:hidden">
+              {(tab) => <Tabs.Item key={tab.id} id={tab.id} label={tab.label} />}
+            </Tabs.List>
+
+            <Tabs.Panel id="overview">
+              <Card>
+                <CardContent className="pt-6">
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                    <div className="space-y-4">
+                      <div>
+                        <p className="text-sm text-muted-foreground">{t('opportunities.value')}</p>
+                        <p className="text-lg font-semibold">{formatCurrency(opportunity.amount || 0)}</p>
                       </div>
-                      <div className="space-y-4">
-                        <div>
-                          <p className="text-sm text-muted-foreground">{t('opportunities.contact')}</p>
-                          {opportunity.contacts ? (
-                            <Link 
-                              to={`/contacts/${opportunity.contact_id}`}
-                              className="text-lg font-semibold text-primary hover:underline"
-                            >
-                              {opportunity.contacts.full_name}
-                            </Link>
-                          ) : (
-                            <p className="text-lg font-semibold">-</p>
-                          )}
-                        </div>
-                        <div>
-                          <p className="text-sm text-muted-foreground">{t('opportunities.owner')}</p>
-                          <p className="text-lg font-semibold">{opportunity.users?.full_name || '-'}</p>
-                        </div>
-                        <div>
-                          <p className="text-sm text-muted-foreground">{t('common.status')}</p>
-                          <Badge className={statusColor}>
-                            {opportunity.status === 'won'
-                              ? t('status.won')
-                              : opportunity.status === 'lost'
-                              ? t('status.lost')
-                              : t('status.open')}
-                          </Badge>
-                        </div>
+                      <div>
+                        <p className="text-sm text-muted-foreground">{t('opportunities.stage')}</p>
+                        <p className="text-lg font-semibold">{opportunity.pipeline_stages?.name || '-'}</p>
+                      </div>
+                      <div>
+                        <p className="text-sm text-muted-foreground">{t('opportunities.closeDate')}</p>
+                        <p className="text-lg font-semibold">
+                          {opportunity.close_date 
+                            ? new Date(opportunity.close_date).toLocaleDateString(locale)
+                            : '-'}
+                        </p>
                       </div>
                     </div>
+                    <div className="space-y-4">
+                      <div>
+                        <p className="text-sm text-muted-foreground">{t('opportunities.contact')}</p>
+                        {opportunity.contacts ? (
+                          <Link 
+                            to={`/contacts/${opportunity.contact_id}`}
+                            className="text-lg font-semibold text-primary hover:underline"
+                          >
+                            {opportunity.contacts.full_name}
+                          </Link>
+                        ) : (
+                          <p className="text-lg font-semibold">-</p>
+                        )}
+                      </div>
+                      <div>
+                        <p className="text-sm text-muted-foreground">{t('opportunities.owner')}</p>
+                        <p className="text-lg font-semibold">{opportunity.users?.full_name || '-'}</p>
+                      </div>
+                      <div>
+                        <p className="text-sm text-muted-foreground">{t('common.status')}</p>
+                        <Badge className={statusColor}>
+                          {opportunity.status === 'won'
+                            ? t('status.won')
+                            : opportunity.status === 'lost'
+                            ? t('status.lost')
+                            : t('status.open')}
+                        </Badge>
+                      </div>
+                    </div>
+                  </div>
+                </CardContent>
+              </Card>
+            </Tabs.Panel>
+
+            <Tabs.Panel id="timeline">
+              <ActivityTimeline opportunityId={opportunity.id} />
+            </Tabs.Panel>
+
+            <Tabs.Panel id="calls">
+              {opportunity.contact_id ? (
+                <ContactCalls 
+                  contactId={opportunity.contact_id} 
+                  opportunityId={opportunity.id}
+                  contactPhone={contactPhone || undefined}
+                  contactName={contactName || undefined}
+                />
+              ) : (
+                <Card>
+                  <CardContent className="py-8 text-center text-muted-foreground">
+                    Esta oportunidade não tem um contato associado.
                   </CardContent>
                 </Card>
-              </TabsContent>
+              )}
+            </Tabs.Panel>
 
-              <TabsContent value="timeline" className="mt-0">
-                <ActivityTimeline opportunityId={opportunity.id} />
-              </TabsContent>
+            <Tabs.Panel id="messages">
+              <ContactMessages opportunityId={opportunity.id} />
+            </Tabs.Panel>
 
-              <TabsContent value="calls" className="mt-0">
-                {opportunity.contact_id ? (
-                  <ContactCalls 
-                    contactId={opportunity.contact_id} 
-                    opportunityId={opportunity.id}
-                    contactPhone={contactPhone || undefined}
-                    contactName={contactName || undefined}
-                  />
-                ) : (
-                  <Card>
-                    <CardContent className="py-8 text-center text-muted-foreground">
-                      Esta oportunidade não tem um contato associado.
-                    </CardContent>
-                  </Card>
-                )}
-              </TabsContent>
+            <Tabs.Panel id="tasks">
+              <ContactTasks opportunityId={opportunity.id} />
+            </Tabs.Panel>
 
-              <TabsContent value="messages" className="mt-0">
-                <ContactMessages opportunityId={opportunity.id} />
-              </TabsContent>
+            <Tabs.Panel id="attachments">
+              <ContactAttachments entityId={opportunity.id} entityType="opportunity" />
+            </Tabs.Panel>
 
-              <TabsContent value="tasks" className="mt-0">
-                <ContactTasks opportunityId={opportunity.id} />
-              </TabsContent>
-
-              <TabsContent value="attachments" className="mt-0">
-                <ContactAttachments entityId={opportunity.id} entityType="opportunity" />
-              </TabsContent>
-
-              <TabsContent value="notes" className="mt-0">
-                <ContactNotes opportunityId={opportunity.id} />
-              </TabsContent>
-            </div>
+            <Tabs.Panel id="notes">
+              <ContactNotes opportunityId={opportunity.id} />
+            </Tabs.Panel>
           </Tabs>
         </div>
       </div>
