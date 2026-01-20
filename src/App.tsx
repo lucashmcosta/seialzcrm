@@ -97,11 +97,11 @@ function GlobalCallHandler() {
 
 const App = () => (
   <QueryClientProvider client={queryClient}>
-    <OutboundCallProvider>
     <TooltipProvider>
       <Toaster />
       <Sonner />
       <BrowserRouter>
+        <OutboundCallProvider>
         <AuthProvider>
         <OrganizationProvider>
         <ThemeProvider>
@@ -329,9 +329,9 @@ const App = () => (
         </ThemeProvider>
         </OrganizationProvider>
         </AuthProvider>
+        </OutboundCallProvider>
       </BrowserRouter>
     </TooltipProvider>
-    </OutboundCallProvider>
   </QueryClientProvider>
 );
 
