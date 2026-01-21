@@ -384,7 +384,7 @@ export function OutboundCallProvider({ children }: { children: ReactNode }) {
   }, [getToken, getUserData]);
 
   // Initialize device on mount (persistent)
-  // CRITICAL SECURITY: Never initialize in admin portal
+  // CRITICAL SECURITY: Never initialize in admin portal or without auth
   useEffect(() => {
     // Skip initialization in admin routes
     if (isAdminRoute) {
@@ -392,13 +392,38 @@ export function OutboundCallProvider({ children }: { children: ReactNode }) {
       return;
     }
     
-    // Small delay to ensure auth is ready
-    const timer = setTimeout(() => {
-      initializeDevice();
-    }, 1000);
+    let timer: NodeJS.Timeout | null = null;
+    let isMounted = true;
+    
+    // Check auth before initializing
+    const checkAuthAndInitialize = async () => {
+      try {
+        const { data: session } = await supabase.auth.getSession();
+        if (!session?.session?.access_token) {
+          console.log('[OutboundCall] Not authenticated, skipping device initialization');
+          return;
+        }
+        
+        if (isMounted) {
+          // Small delay to ensure everything is ready
+          timer = setTimeout(() => {
+            if (isMounted) {
+              initializeDevice();
+            }
+          }, 1000);
+        }
+      } catch (error) {
+        console.log('[OutboundCall] Auth check failed:', error);
+      }
+    };
+    
+    checkAuthAndInitialize();
 
     return () => {
-      clearTimeout(timer);
+      isMounted = false;
+      if (timer) {
+        clearTimeout(timer);
+      }
       fullCleanup();
     };
   }, [isAdminRoute]);
