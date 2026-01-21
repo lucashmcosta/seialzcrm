@@ -251,6 +251,12 @@ export function useInboundCalls(): UseInboundCallsReturn {
       return;
     }
 
+    // Skip if no organization or user profile (not authenticated)
+    if (!organization?.id || !userProfile?.id) {
+      console.log('[InboundCalls] Skipping initialization - user not authenticated');
+      return;
+    }
+
     initializeDevice();
 
     return () => {
@@ -259,7 +265,7 @@ export function useInboundCalls(): UseInboundCallsReturn {
         deviceRef.current = null;
       }
     };
-  }, [initializeDevice, hasVoiceIntegration, voiceLoading, isAdminRoute]);
+  }, [initializeDevice, hasVoiceIntegration, voiceLoading, isAdminRoute, organization?.id, userProfile?.id]);
 
   return {
     isReady,
