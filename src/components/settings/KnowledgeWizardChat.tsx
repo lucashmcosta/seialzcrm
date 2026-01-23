@@ -33,6 +33,7 @@ interface WizardResponse {
   slotUpdates: Record<string, string>;
   missingSlots: string[];
   suggestedQuestions: string[];
+  faqAnswered?: { question: string; answer: string };
 }
 
 interface KnowledgeWizardChatProps {
@@ -184,6 +185,15 @@ export function KnowledgeWizardChat({ agentId, onComplete, onCancel }: Knowledge
       
       if (response.suggestedQuestions && response.suggestedQuestions.length > 0) {
         setSuggestedFaqs(response.suggestedQuestions);
+      }
+      
+      // Capture FAQ answered during faq_generation stage
+      if (response.faqAnswered && response.faqAnswered.question && response.faqAnswered.answer) {
+        setAnsweredFaqs(prev => [...prev, response.faqAnswered!]);
+        // Remove from suggested if present
+        if (response.suggestedQuestions) {
+          setSuggestedFaqs(response.suggestedQuestions);
+        }
       }
 
     } catch (error) {
@@ -418,6 +428,25 @@ export function KnowledgeWizardChat({ agentId, onComplete, onCancel }: Knowledge
                     </div>
                   );
                 })}
+                
+                {/* FAQs Respondidas */}
+                {answeredFaqs.length > 0 && (
+                  <div className="border-t pt-3 mt-3">
+                    <p className="text-xs font-medium text-foreground mb-2">
+                      FAQs Respondidas ({answeredFaqs.length})
+                    </p>
+                    {answeredFaqs.map((faq, idx) => (
+                      <div key={idx} className="mb-2 pl-2 border-l-2 border-primary/30">
+                        <p className="text-xs font-medium text-foreground truncate" title={faq.question}>
+                          {faq.question.length > 35 ? faq.question.slice(0, 35) + '...' : faq.question}
+                        </p>
+                        <p className="text-xs text-muted-foreground truncate" title={faq.answer}>
+                          {faq.answer.length > 40 ? faq.answer.slice(0, 40) + '...' : faq.answer}
+                        </p>
+                      </div>
+                    ))}
+                  </div>
+                )}
               </div>
             </CollapsibleContent>
           </Collapsible>

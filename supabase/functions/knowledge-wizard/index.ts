@@ -23,6 +23,7 @@ interface WizardResponse {
   slotUpdates: Record<string, string>;
   missingSlots: string[];
   suggestedQuestions: string[];
+  faqAnswered?: { question: string; answer: string };
 }
 
 const WIZARD_SYSTEM_PROMPT = `Você é um Wizard conversacional para coletar informações e gerar uma Base de Conhecimento.
@@ -51,7 +52,8 @@ FORMATO DE RESPOSTA (SEMPRE JSON VÁLIDO, sem markdown e sem texto fora do JSON)
   "nextQuestion": "uma única pergunta ou null",
   "slotUpdates": { "campo": "valor" },
   "missingSlots": ["campo1","campo2"],
-  "suggestedQuestions": ["..."]
+  "suggestedQuestions": ["..."],
+  "faqAnswered": { "question": "pergunta original", "answer": "resposta do usuário" } ou null
 }
 
 CAMPOS MÍNIMOS (slots)
@@ -68,6 +70,10 @@ CAMPOS MÍNIMOS (slots)
 REGRAS DE TRANSIÇÃO:
 - Só vá para faq_generation quando TODOS os slots mínimos estiverem preenchidos.
 - Em faq_generation, sugira 5-10 perguntas em suggestedQuestions.
+- IMPORTANTE: Quando o usuário responde uma pergunta de FAQ (stage faq_generation), você DEVE:
+  1. Identificar qual pergunta ele está respondendo (da lista suggestedQuestions ou similar)
+  2. Retornar faqAnswered: { "question": "a pergunta", "answer": "a resposta do usuário" }
+  3. Remover essa pergunta de suggestedQuestions
 - Após o usuário responder 3+ FAQs, mude para complete.
 - Em complete, nextQuestion DEVE ser null.`;
 
@@ -149,6 +155,7 @@ function parseWizardResponse(responseText: string): WizardResponse {
     slotUpdates: parsed.slotUpdates || {},
     missingSlots: parsed.missingSlots || [],
     suggestedQuestions: parsed.suggestedQuestions || [],
+    faqAnswered: parsed.faqAnswered ?? undefined,
   };
 }
 
