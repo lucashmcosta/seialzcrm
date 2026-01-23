@@ -13,38 +13,104 @@ interface SynthesizeRequest {
   knowledgeType?: KnowledgeType;
 }
 
-interface SynthesizeResponse {
+interface SingleDocument {
   title: string;
   content: string;
+  type: string;
 }
 
-const GENERAL_SYNTHESIZE_PROMPT = `Você é um especialista em criar documentos de conhecimento otimizados para busca semântica (RAG).
+interface SynthesizeResponse {
+  documents: SingleDocument[];
+}
+
+// Prompts for individual document types when using 'general' flow
+const COMPANY_SYNTHESIZE_PROMPT = `Você é um especialista em criar documentos de conhecimento otimizados para busca semântica (RAG).
+
+TAREFA: Criar documento sobre a EMPRESA (visão geral do negócio).
 
 REGRAS:
 1. Use APENAS as informações fornecidas. NÃO invente nada.
-2. Se um campo não foi informado ou está como "não informado", NÃO inclua essa seção.
+2. Se um campo não foi informado, NÃO inclua essa seção.
 3. Use linguagem clara, direta e profissional.
-4. Estruture em seções com headers markdown (##).
 
 ESTRUTURA DO DOCUMENTO:
-- Título: [Nome do produto/serviço]
-- ## Visão Geral
+- Título: Sobre [Nome da Empresa/Negócio]
+- ## Visão Geral (o que oferece)
 - ## Público-Alvo
-- ## O que Inclui
-- ## O que Não Inclui
-- ## Investimento
-- ## Prazo
-- ## Requisitos
-- ## Como Começar
-- ## Políticas
-- ## Perguntas Frequentes
+- ## Diferenciais (se houver)
+- ## Como Funciona / Próximos Passos
 
 FORMATO DE RESPOSTA (JSON):
 {
-  "title": "Título claro e descritivo",
+  "title": "Sobre [Nome]",
   "content": "Conteúdo em markdown"
 }`;
 
+const PRODUCTS_SYNTHESIZE_PROMPT = `Você é um especialista em criar documentos de conhecimento otimizados para busca semântica (RAG).
+
+TAREFA: Criar documento sobre PRODUTOS/SERVIÇOS.
+
+REGRAS:
+1. Use APENAS as informações fornecidas. NÃO invente nada.
+2. Se um campo não foi informado, NÃO inclua essa seção.
+3. Use linguagem clara, direta e profissional.
+
+ESTRUTURA DO DOCUMENTO:
+- Título: Produtos e Serviços
+- ## O que Inclui
+- ## O que Não Inclui
+- ## Investimento / Preços
+- ## Prazos
+- ## Requisitos
+
+FORMATO DE RESPOSTA (JSON):
+{
+  "title": "Produtos e Serviços",
+  "content": "Conteúdo em markdown"
+}`;
+
+const POLICIES_SYNTHESIZE_PROMPT = `Você é um especialista em criar documentos de conhecimento otimizados para busca semântica (RAG).
+
+TAREFA: Criar documento sobre POLÍTICAS da empresa.
+
+REGRAS:
+1. Use APENAS as informações fornecidas. NÃO invente nada.
+2. Se não houver informação de políticas, retorne content vazio.
+3. Use linguagem clara, direta e profissional.
+
+ESTRUTURA DO DOCUMENTO:
+- Título: Políticas
+- ## Política de Reembolso (se houver)
+- ## Política de Cancelamento (se houver)
+- ## Garantias (se houver)
+
+FORMATO DE RESPOSTA (JSON):
+{
+  "title": "Políticas",
+  "content": "Conteúdo em markdown ou string vazia se não houver políticas"
+}`;
+
+const FAQS_SYNTHESIZE_PROMPT = `Você é um especialista em organizar FAQs para busca semântica.
+
+TAREFA: Formatar as perguntas frequentes coletadas.
+
+REGRAS:
+1. Use APENAS as FAQs fornecidas.
+2. Organize em formato claro de perguntas e respostas.
+3. Use linguagem natural e direta.
+
+ESTRUTURA DO DOCUMENTO:
+- Título: Perguntas Frequentes
+- ## Perguntas Frequentes
+- Cada pergunta em **negrito**, resposta em texto normal
+
+FORMATO DE RESPOSTA (JSON):
+{
+  "title": "Perguntas Frequentes",
+  "content": "## Perguntas Frequentes\\n\\n**P: Pergunta 1?**\\nR: Resposta 1\\n\\n..."
+}`;
+
+// Original prompts for individual types
 const FAQ_ONLY_SYNTHESIZE_PROMPT = `Você é um especialista em organizar FAQs para busca semântica.
 
 REGRAS:
@@ -115,7 +181,7 @@ function getSynthesizePrompt(knowledgeType: KnowledgeType): string {
     case 'product':
       return PRODUCT_SYNTHESIZE_PROMPT;
     default:
-      return GENERAL_SYNTHESIZE_PROMPT;
+      return COMPANY_SYNTHESIZE_PROMPT; // Not used for general anymore
   }
 }
 
@@ -158,7 +224,7 @@ async function callLovableAI(systemPrompt: string, userPrompt: string): Promise<
   return data.choices?.[0]?.message?.content || "";
 }
 
-function parseResponse(responseText: string): SynthesizeResponse {
+function parseResponse(responseText: string): { title: string; content: string } {
   let jsonStr = responseText.trim();
   
   if (jsonStr.startsWith("```json")) {
@@ -173,14 +239,88 @@ function parseResponse(responseText: string): SynthesizeResponse {
   
   const parsed = JSON.parse(jsonStr);
   
-  if (!parsed.title || !parsed.content) {
-    throw new Error("Missing required fields");
+  if (!parsed.title) {
+    throw new Error("Missing title field");
   }
   
   return {
     title: parsed.title,
-    content: parsed.content,
+    content: parsed.content || "",
   };
+}
+
+function buildCompanyPrompt(slots: Record<string, string>): string {
+  const relevantSlots = ['offer', 'target_customer', 'next_step'];
+  let prompt = "INFORMAÇÕES DA EMPRESA:\n\n";
+  
+  const slotLabels: Record<string, string> = {
+    offer: "O que oferece",
+    target_customer: "Público-alvo",
+    next_step: "Próximo passo / Como começar",
+  };
+  
+  for (const key of relevantSlots) {
+    if (slots[key] && slots[key].trim() && slots[key].toLowerCase() !== "não informado") {
+      prompt += `${slotLabels[key]}: ${slots[key]}\n`;
+    }
+  }
+  
+  prompt += "\nGere o documento sobre a empresa.";
+  return prompt;
+}
+
+function buildProductsPrompt(slots: Record<string, string>): string {
+  const relevantSlots = ['includes', 'excludes', 'price', 'timeline', 'required_inputs'];
+  let prompt = "INFORMAÇÕES DE PRODUTOS/SERVIÇOS:\n\n";
+  
+  const slotLabels: Record<string, string> = {
+    includes: "O que inclui",
+    excludes: "O que não inclui",
+    price: "Investimento/Preço",
+    timeline: "Prazo",
+    required_inputs: "Requisitos/documentos",
+  };
+  
+  let hasContent = false;
+  for (const key of relevantSlots) {
+    if (slots[key] && slots[key].trim() && slots[key].toLowerCase() !== "não informado") {
+      prompt += `${slotLabels[key]}: ${slots[key]}\n`;
+      hasContent = true;
+    }
+  }
+  
+  if (!hasContent) {
+    return "";
+  }
+  
+  prompt += "\nGere o documento de produtos/serviços.";
+  return prompt;
+}
+
+function buildPoliciesPrompt(slots: Record<string, string>): string {
+  let prompt = "POLÍTICAS:\n\n";
+  
+  // Check for policies in the general 'policies' slot
+  if (slots.policies && slots.policies.trim() && slots.policies.toLowerCase() !== "não informado") {
+    prompt += `Políticas: ${slots.policies}\n`;
+    prompt += "\nGere o documento de políticas.";
+    return prompt;
+  }
+  
+  return "";
+}
+
+function buildFaqsPrompt(faqs: Array<{ question: string; answer: string }>): string {
+  if (!faqs || faqs.length === 0) {
+    return "";
+  }
+  
+  let prompt = "FAQs COLETADAS:\n\n";
+  for (const faq of faqs) {
+    prompt += `P: ${faq.question}\nR: ${faq.answer}\n\n`;
+  }
+  prompt += "\nGere o documento de FAQs formatado.";
+  return prompt;
 }
 
 function buildUserPrompt(slots: Record<string, string>, faqs: Array<{ question: string; answer: string }>, knowledgeType: KnowledgeType): string {
@@ -244,37 +384,70 @@ function buildUserPrompt(slots: Record<string, string>, faqs: Array<{ question: 
     return prompt;
   }
 
-  // General type
-  const slotLabels: Record<string, string> = {
-    offer: "O que oferece",
-    target_customer: "Público-alvo",
-    includes: "O que inclui",
-    excludes: "O que não inclui",
-    price: "Investimento",
-    timeline: "Prazo",
-    required_inputs: "Requisitos/documentos",
-    next_step: "Próximo passo",
-    policies: "Políticas (reembolso/cancelamento)",
-  };
+  // General type - not used anymore since we split into multiple docs
+  return "";
+}
+
+async function synthesizeGeneralType(slots: Record<string, string>, faqs: Array<{ question: string; answer: string }>): Promise<SingleDocument[]> {
+  const documents: SingleDocument[] = [];
   
-  prompt = "INFORMAÇÕES COLETADAS:\n\n";
-  
-  for (const [key, label] of Object.entries(slotLabels)) {
-    if (slots[key] && slots[key].trim() && slots[key].toLowerCase() !== "não informado") {
-      prompt += `${label}: ${slots[key]}\n`;
+  // 1. Company document (always generate if we have basic info)
+  const companyPrompt = buildCompanyPrompt(slots);
+  if (companyPrompt) {
+    try {
+      const response = await callLovableAI(COMPANY_SYNTHESIZE_PROMPT, companyPrompt);
+      const doc = parseResponse(response);
+      if (doc.content) {
+        documents.push({ ...doc, type: 'general' });
+      }
+    } catch (error) {
+      console.error("Error generating company doc:", error);
     }
   }
   
-  if (faqs && faqs.length > 0) {
-    prompt += "\nPERGUNTAS FREQUENTES:\n";
-    for (const faq of faqs) {
-      prompt += `\nP: ${faq.question}\nR: ${faq.answer}\n`;
+  // 2. Products/Services document
+  const productsPrompt = buildProductsPrompt(slots);
+  if (productsPrompt) {
+    try {
+      const response = await callLovableAI(PRODUCTS_SYNTHESIZE_PROMPT, productsPrompt);
+      const doc = parseResponse(response);
+      if (doc.content) {
+        documents.push({ ...doc, type: 'product' });
+      }
+    } catch (error) {
+      console.error("Error generating products doc:", error);
     }
   }
   
-  prompt += "\n\nGere o documento de conhecimento otimizado para RAG com base nessas informações.";
+  // 3. Policies document
+  const policiesPrompt = buildPoliciesPrompt(slots);
+  if (policiesPrompt) {
+    try {
+      const response = await callLovableAI(POLICIES_SYNTHESIZE_PROMPT, policiesPrompt);
+      const doc = parseResponse(response);
+      if (doc.content) {
+        documents.push({ ...doc, type: 'policy' });
+      }
+    } catch (error) {
+      console.error("Error generating policies doc:", error);
+    }
+  }
   
-  return prompt;
+  // 4. FAQs document
+  const faqsPrompt = buildFaqsPrompt(faqs);
+  if (faqsPrompt) {
+    try {
+      const response = await callLovableAI(FAQS_SYNTHESIZE_PROMPT, faqsPrompt);
+      const doc = parseResponse(response);
+      if (doc.content) {
+        documents.push({ ...doc, type: 'faq' });
+      }
+    } catch (error) {
+      console.error("Error generating faqs doc:", error);
+    }
+  }
+  
+  return documents;
 }
 
 serve(async (req) => {
@@ -293,7 +466,7 @@ serve(async (req) => {
           { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
         );
       }
-    } else {
+    } else if (knowledgeType !== 'general') {
       if (!slots || Object.keys(slots).length === 0) {
         return new Response(
           JSON.stringify({ error: "Nenhuma informação fornecida para síntese" }),
@@ -302,13 +475,37 @@ serve(async (req) => {
       }
     }
     
+    // For 'general' type, generate multiple documents
+    if (knowledgeType === 'general') {
+      const documents = await synthesizeGeneralType(slots || {}, faqs || []);
+      
+      if (documents.length === 0) {
+        return new Response(
+          JSON.stringify({ error: "Não foi possível gerar nenhum documento. Verifique as informações fornecidas." }),
+          { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+        );
+      }
+      
+      return new Response(JSON.stringify({ documents }), {
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
+    
+    // For other types, generate single document (wrapped in documents array for consistency)
     const systemPrompt = getSynthesizePrompt(knowledgeType);
     const userPrompt = buildUserPrompt(slots || {}, faqs || [], knowledgeType);
     const responseText = await callLovableAI(systemPrompt, userPrompt);
     
     try {
       const result = parseResponse(responseText);
-      return new Response(JSON.stringify(result), {
+      const typeMap: Record<string, string> = {
+        faq_only: 'faq',
+        policy: 'policy',
+        product: 'product',
+      };
+      return new Response(JSON.stringify({ 
+        documents: [{ ...result, type: typeMap[knowledgeType] || 'general' }] 
+      }), {
         headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
     } catch (parseError) {
@@ -318,7 +515,14 @@ serve(async (req) => {
       const retryText = await callLovableAI(systemPrompt, retryPrompt);
       
       const result = parseResponse(retryText);
-      return new Response(JSON.stringify(result), {
+      const typeMap: Record<string, string> = {
+        faq_only: 'faq',
+        policy: 'policy',
+        product: 'product',
+      };
+      return new Response(JSON.stringify({ 
+        documents: [{ ...result, type: typeMap[knowledgeType] || 'general' }] 
+      }), {
         headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
     }

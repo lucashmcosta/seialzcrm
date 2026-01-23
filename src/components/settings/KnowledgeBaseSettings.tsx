@@ -152,38 +152,54 @@ export function KnowledgeBaseSettings() {
     }
   };
 
-  const handleWizardComplete = async (title: string, content: string) => {
+  const handleWizardComplete = async (documents: Array<{ title: string; content: string; type: string }>) => {
     if (!organization?.id) return;
 
     setSaving(true);
     try {
-      // Create knowledge_item
-      const { data: item, error: itemError } = await supabase
-        .from('knowledge_items')
-        .insert({
-          organization_id: organization.id,
-          agent_id: selectedAgentId || null,
-          title: title || 'Conhecimento sem título',
-          type: 'general',
-          status: 'processing',
-          source: 'wizard_chat',
-        })
-        .select()
-        .single();
+      let savedCount = 0;
+      
+      for (const doc of documents) {
+        // Create knowledge_item for each document
+        const { data: item, error: itemError } = await supabase
+          .from('knowledge_items')
+          .insert({
+            organization_id: organization.id,
+            agent_id: selectedAgentId || null,
+            title: doc.title || 'Conhecimento sem título',
+            type: doc.type || 'general',
+            status: 'processing',
+            source: 'wizard_chat',
+          })
+          .select()
+          .single();
 
-      if (itemError) throw itemError;
+        if (itemError) {
+          console.error('Error saving document:', doc.title, itemError);
+          continue;
+        }
 
-      // Process the content
-      const { error: processError } = await supabase.functions.invoke('process-knowledge', {
-        body: {
-          itemId: item.id,
-          content,
-        },
-      });
+        // Process the content
+        const { error: processError } = await supabase.functions.invoke('process-knowledge', {
+          body: {
+            itemId: item.id,
+            content: doc.content,
+          },
+        });
 
-      if (processError) throw processError;
+        if (processError) {
+          console.error('Error processing document:', doc.title, processError);
+        } else {
+          savedCount++;
+        }
+      }
 
-      toast.success('Conhecimento adicionado com sucesso');
+      if (savedCount > 0) {
+        toast.success(`${savedCount} conhecimento(s) adicionado(s) com sucesso`);
+      } else {
+        toast.error('Erro ao salvar conhecimentos');
+      }
+      
       handleDialogClose(false);
       fetchData();
     } catch (error) {
