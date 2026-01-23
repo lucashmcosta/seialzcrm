@@ -510,21 +510,41 @@ async function executeTool(
           const baseUrl = paymentIntegration.config.payment_link_base_url;
           paymentLink = `${baseUrl}?amount=${amount}&description=${encodeURIComponent(description)}&installments=${installments}`;
         } else {
-          // 2. Fallback: buscar na Base de Conhecimento (RAG)
-          const { data: knowledgeItems } = await supabase
-            .from('knowledge_items')
-            .select('content')
-            .eq('organization_id', context.organizationId)
-            .eq('status', 'published')
-            .or('content.ilike.%link de pagamento%,content.ilike.%payment link%,content.ilike.%checkout%,content.ilike.%mpago%,content.ilike.%mercadopago%')
-            .limit(1);
+          // 2. Fallback: buscar na Base de Conhecimento (RAG) via knowledge_chunks
+          // A tabela knowledge_items NÃO tem coluna 'content' - o conteúdo fica em knowledge_chunks
+          const { data: knowledgeChunks, error: chunksError } = await supabase
+            .from('knowledge_chunks')
+            .select(`
+              content,
+              item_id,
+              item:knowledge_items!inner(
+                id,
+                title,
+                organization_id,
+                status
+              )
+            `)
+            .eq('item.organization_id', context.organizationId)
+            .eq('item.status', 'published')
+            .limit(50);
 
-          if (knowledgeItems?.[0]?.content) {
+          if (chunksError) {
+            console.error('Error fetching knowledge chunks:', chunksError);
+          }
+
+          // Filtrar chunks que contêm palavras-chave de pagamento
+          const paymentKeywords = ['link de pagamento', 'payment link', 'checkout', 'mpago', 'mercadopago', 'pagamento', 'pagar'];
+          const paymentChunk = knowledgeChunks?.find((chunk: { content?: string; item_id?: string }) => {
+            const contentLower = chunk.content?.toLowerCase() || '';
+            return paymentKeywords.some(keyword => contentLower.includes(keyword));
+          });
+
+          if (paymentChunk?.content) {
             // Extrair URL do conteúdo (regex para https://...)
-            const urlMatch = knowledgeItems[0].content.match(/https?:\/\/[^\s\)\]\>\"\']+/);
+            const urlMatch = paymentChunk.content.match(/https?:\/\/[^\s\)\]\>\"\']+/);
             if (urlMatch) {
               paymentLink = urlMatch[0];
-              console.log('Payment link found in RAG:', paymentLink);
+              console.log('Payment link found in RAG chunks:', paymentLink);
             }
           }
 
