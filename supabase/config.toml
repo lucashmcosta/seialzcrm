@@ -50,3 +50,12 @@ verify_jwt = true
 
 [functions.enhance-knowledge]
 verify_jwt = true
+
+[functions.process-knowledge]
+verify_jwt = false
+
+[functions.import-knowledge]
+verify_jwt = true
+
+[functions.import-from-url]
+verify_jwt = true
