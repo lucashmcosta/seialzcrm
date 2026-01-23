@@ -42,9 +42,15 @@ interface WizardResponse {
   faqAnswered?: { question: string; answer: string };
 }
 
+interface SynthesizedDocument {
+  title: string;
+  content: string;
+  type: string;
+}
+
 interface KnowledgeWizardChatProps {
   agentId: string | null;
-  onComplete: (title: string, content: string) => void;
+  onComplete: (documents: SynthesizedDocument[]) => void;
   onCancel: () => void;
 }
 
@@ -130,7 +136,7 @@ export function KnowledgeWizardChat({ agentId, onComplete, onCancel }: Knowledge
   const [isLoading, setIsLoading] = useState(false);
   const [isSynthesizing, setIsSynthesizing] = useState(false);
   const [slotsOpen, setSlotsOpen] = useState(true);
-  const [finalContent, setFinalContent] = useState<{ title: string; content: string } | null>(null);
+  const [finalDocuments, setFinalDocuments] = useState<SynthesizedDocument[] | null>(null);
   
   const scrollRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
@@ -304,10 +310,8 @@ export function KnowledgeWizardChat({ agentId, onComplete, onCancel }: Knowledge
 
       if (error) throw error;
 
-      setFinalContent({
-        title: data.title,
-        content: data.content,
-      });
+      // API now returns { documents: [...] }
+      setFinalDocuments(data.documents || []);
     } catch (error) {
       console.error('Error synthesizing:', error);
       toast.error('Erro ao gerar conteúdo. Tente novamente.');
@@ -317,8 +321,8 @@ export function KnowledgeWizardChat({ agentId, onComplete, onCancel }: Knowledge
   };
 
   const handleSave = () => {
-    if (finalContent) {
-      onComplete(finalContent.title, finalContent.content);
+    if (finalDocuments && finalDocuments.length > 0) {
+      onComplete(finalDocuments);
     }
   };
 
@@ -328,7 +332,7 @@ export function KnowledgeWizardChat({ agentId, onComplete, onCancel }: Knowledge
     setExtractedSlots({});
     setAnsweredFaqs([]);
     setSuggestedFaqs([]);
-    setFinalContent(null);
+    setFinalDocuments(null);
     setCurrentStage('discovery');
   };
 
@@ -501,7 +505,7 @@ export function KnowledgeWizardChat({ agentId, onComplete, onCancel }: Knowledge
             </div>
           ) : (
             <div className="p-4 border-t space-y-4">
-              {!finalContent ? (
+              {!finalDocuments ? (
                 <div className="text-center space-y-3">
                   <div className="flex items-center justify-center gap-2 text-muted-foreground">
                     <Check className="h-5 w-5 text-success" />
@@ -511,7 +515,7 @@ export function KnowledgeWizardChat({ agentId, onComplete, onCancel }: Knowledge
                     {isSynthesizing ? (
                       <>
                         <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                        Gerando documento...
+                        Gerando documentos...
                       </>
                     ) : (
                       <>
@@ -523,30 +527,38 @@ export function KnowledgeWizardChat({ agentId, onComplete, onCancel }: Knowledge
                 </div>
               ) : (
                 <div className="space-y-3">
-                  <div className="space-y-2">
-                    <Label>Título</Label>
-                    <Input
-                      value={finalContent.title}
-                      onChange={(e) => setFinalContent({ ...finalContent, title: e.target.value })}
-                    />
+                  <div className="flex items-center gap-2 text-sm text-muted-foreground mb-2">
+                    <Check className="h-4 w-4 text-success" />
+                    <span>{finalDocuments.length} documento(s) gerado(s)</span>
                   </div>
-                  <div className="space-y-2">
-                    <Label>Conteúdo (preview)</Label>
-                    <Textarea
-                      value={finalContent.content}
-                      onChange={(e) => setFinalContent({ ...finalContent, content: e.target.value })}
-                      rows={6}
-                      className="text-xs font-mono"
-                    />
-                  </div>
+                  <ScrollArea className="h-48 border rounded-md p-3">
+                    <div className="space-y-3">
+                      {finalDocuments.map((doc, idx) => (
+                        <div key={idx} className="p-2 bg-muted/50 rounded border">
+                          <div className="flex items-center gap-2 mb-1">
+                            <Badge variant="outline" className="text-xs">
+                              {doc.type === 'general' && 'Empresa'}
+                              {doc.type === 'product' && 'Produtos'}
+                              {doc.type === 'policy' && 'Políticas'}
+                              {doc.type === 'faq' && 'FAQs'}
+                            </Badge>
+                            <span className="text-sm font-medium truncate">{doc.title}</span>
+                          </div>
+                          <p className="text-xs text-muted-foreground line-clamp-2">
+                            {doc.content.slice(0, 100)}...
+                          </p>
+                        </div>
+                      ))}
+                    </div>
+                  </ScrollArea>
                   <div className="flex gap-2">
-                    <Button variant="outline" onClick={() => setFinalContent(null)} className="flex-1">
+                    <Button variant="outline" onClick={() => setFinalDocuments(null)} className="flex-1">
                       <RefreshCw className="mr-2 h-4 w-4" />
                       Regenerar
                     </Button>
                     <Button onClick={handleSave} className="flex-1">
                       <FileText className="mr-2 h-4 w-4" />
-                      Salvar
+                      Salvar {finalDocuments.length > 1 ? `(${finalDocuments.length})` : ''}
                     </Button>
                   </div>
                 </div>
