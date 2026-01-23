@@ -11,7 +11,7 @@ import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { cn } from '@/lib/utils';
 
-interface FeedbackRule {
+export interface FeedbackRule {
   id: string;
   createdAt: string;
   trigger: string;
