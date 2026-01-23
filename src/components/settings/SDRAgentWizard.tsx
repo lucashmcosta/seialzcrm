@@ -1018,7 +1018,7 @@ export function SDRAgentWizard({
       )}
       
       <Tabs value={activeTab} onValueChange={(v) => setActiveTab(v as any)} className="flex-1">
-        <TabsList className="w-full grid grid-cols-6">
+        <TabsList className="w-full grid grid-cols-5">
           <TabsTrigger value="prompt" className="gap-1 text-xs sm:text-sm">
             <FileText className="h-4 w-4" />
             <span className="hidden sm:inline">Prompt</span>
@@ -1038,10 +1038,6 @@ export function SDRAgentWizard({
           <TabsTrigger value="feedback" className="gap-1 text-xs sm:text-sm">
             <MessageSquarePlus className="h-4 w-4" />
             <span className="hidden sm:inline">Feedback</span>
-          </TabsTrigger>
-          <TabsTrigger value="wizard" className="gap-1 text-xs sm:text-sm">
-            <Database className="h-4 w-4" />
-            <span className="hidden sm:inline">Dados</span>
           </TabsTrigger>
         </TabsList>
 
@@ -1172,6 +1168,18 @@ export function SDRAgentWizard({
       </TabsContent>
 
       <TabsContent value="prompt" className="mt-4 space-y-4">
+        {/* RAG Notice */}
+        <div className="flex items-start gap-3 p-4 bg-blue-500/10 border border-blue-500/20 rounded-lg">
+          <Database className="h-5 w-5 text-blue-500 shrink-0 mt-0.5" />
+          <div>
+            <p className="text-sm font-medium">Base de Conhecimento (RAG)</p>
+            <p className="text-sm text-muted-foreground">
+              O agente busca automaticamente informações sobre produtos, preços e políticas na Base de Conhecimento.
+              Acesse <strong>Configurações → Base de Conhecimento</strong> para gerenciar.
+            </p>
+          </div>
+        </div>
+
         <div className="flex items-center justify-between">
           <div>
             <Label>Instruções do Agente</Label>
@@ -1203,7 +1211,7 @@ export function SDRAgentWizard({
           <Textarea
             value={wizardData.generatedPrompt}
             onChange={(e) => updateField('generatedPrompt', e.target.value)}
-            rows={14}
+            rows={12}
             className="font-mono text-sm"
             placeholder="O prompt do agente será gerado automaticamente..."
           />
@@ -1375,69 +1383,7 @@ export function SDRAgentWizard({
         )}
       </TabsContent>
 
-      <TabsContent value="wizard" className="mt-4 space-y-4">
-        <div className="grid grid-cols-2 gap-4">
-          <div className="space-y-2">
-            <Label>Empresa</Label>
-            <Input
-              value={wizardData.companyName}
-              onChange={(e) => updateField('companyName', e.target.value)}
-            />
-          </div>
-          <div className="space-y-2">
-            <Label>Segmento</Label>
-            <Select
-              value={wizardData.companySegment}
-              onValueChange={(value) => updateField('companySegment', value)}
-            >
-              <SelectTrigger>
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                {SEGMENTS.map((segment) => (
-                  <SelectItem key={segment.value} value={segment.value}>
-                    {segment.label}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </div>
-        </div>
-
-        <div className="space-y-2">
-          <Label>Descrição da Empresa</Label>
-          <Textarea
-            value={wizardData.companyDescription}
-            onChange={(e) => updateField('companyDescription', e.target.value)}
-            rows={2}
-          />
-        </div>
-
-        <div className="space-y-2">
-          <Label>Produtos/Serviços</Label>
-          <Textarea
-            value={wizardData.products}
-            onChange={(e) => updateField('products', e.target.value)}
-            rows={2}
-          />
-        </div>
-
-        <div className="space-y-2">
-          <Label>Diferenciais</Label>
-          <Textarea
-            value={wizardData.differentials}
-            onChange={(e) => updateField('differentials', e.target.value)}
-            rows={2}
-          />
-        </div>
-
-        <div className="flex items-center gap-2 p-3 bg-muted/50 rounded-lg">
-          <Sparkles className="h-4 w-4 text-primary shrink-0" />
-          <p className="text-sm text-muted-foreground">
-            Após editar os dados, clique em "Regenerar" na aba Prompt para atualizar as instruções.
-          </p>
-        </div>
-      </TabsContent>
+      {/* Tab "Dados" removida - informações agora vêm do RAG/Base de Conhecimento */}
     </Tabs>
     
     {/* Version History Dialog */}
@@ -1458,7 +1404,7 @@ export function SDRAgentWizard({
   const renderWizardStep = () => {
     switch (currentStep) {
       case 1:
-        // Canal e Modo de Operação
+        // Canal, Modo de Operação e IA
         return (
           <div className="space-y-6">
             <div className="space-y-3">
@@ -1520,6 +1466,58 @@ export function SDRAgentWizard({
                   );
                 })}
               </RadioGroup>
+            </div>
+
+            {/* AI Model Selection - NEW */}
+            <div className="space-y-4 p-4 border rounded-lg bg-muted/30">
+              <div>
+                <Label className="text-base font-medium flex items-center gap-2">
+                  <Sparkles className="h-4 w-4" />
+                  Modelo de IA
+                </Label>
+                <p className="text-sm text-muted-foreground">
+                  Qual modelo o agente usará para gerar as respostas?
+                </p>
+              </div>
+              
+              <div className="grid gap-4 md:grid-cols-2">
+                <div className="space-y-2">
+                  <Label>Provider</Label>
+                  <Select value={aiProvider} onValueChange={(v) => { setAiProvider(v); setAiModel(''); }}>
+                    <SelectTrigger>
+                      <SelectValue placeholder="Selecione o provider" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {AI_PROVIDERS.map(provider => (
+                        <SelectItem key={provider.value} value={provider.value}>
+                          {provider.label}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                  <p className="text-xs text-muted-foreground">
+                    {AI_PROVIDERS.find(p => p.value === aiProvider)?.description}
+                  </p>
+                </div>
+                
+                {aiProvider !== 'auto' && AI_MODELS[aiProvider] && (
+                  <div className="space-y-2">
+                    <Label>Modelo</Label>
+                    <Select value={aiModel} onValueChange={setAiModel}>
+                      <SelectTrigger>
+                        <SelectValue placeholder="Selecione o modelo" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {AI_MODELS[aiProvider].map(model => (
+                          <SelectItem key={model.value} value={model.value}>
+                            {model.label}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                )}
+              </div>
             </div>
 
             {/* Hybrid Mode Priority */}
