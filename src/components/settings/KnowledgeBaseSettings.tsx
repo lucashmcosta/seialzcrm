@@ -14,6 +14,7 @@ import { toast } from 'sonner';
 import { Trash2, Book, HelpCircle, Package, FileText, Settings2, Search, BrainCircuit, Loader2, Wand2, Upload, FileType, RefreshCw, MessageSquare } from 'lucide-react';
 import { ImportKnowledge } from './ImportKnowledge';
 import { KnowledgeWizardChat } from './KnowledgeWizardChat';
+import { ManualKnowledgeDialog } from './ManualKnowledgeDialog';
 
 interface KnowledgeItem {
   id: string;
@@ -320,21 +321,25 @@ export function KnowledgeBaseSettings() {
               </Button>
             </div>
 
-            <Dialog open={dialogOpen} onOpenChange={handleDialogClose}>
-              <DialogTrigger asChild>
-                <Button>
-                  <MessageSquare className="mr-2 h-4 w-4" />
-                  Criar com IA
-                </Button>
-              </DialogTrigger>
-              <DialogContent size="lg" className="p-0 overflow-hidden">
-                <KnowledgeWizardChat
-                  agentId={selectedAgentId || null}
-                  onComplete={handleWizardComplete}
-                  onCancel={() => handleDialogClose(false)}
-                />
-              </DialogContent>
-            </Dialog>
+            <div className="flex gap-2">
+              <ManualKnowledgeDialog agents={agents} onSuccess={fetchData} />
+
+              <Dialog open={dialogOpen} onOpenChange={handleDialogClose}>
+                <DialogTrigger asChild>
+                  <Button>
+                    <MessageSquare className="mr-2 h-4 w-4" />
+                    Criar com IA
+                  </Button>
+                </DialogTrigger>
+                <DialogContent size="lg" className="p-0 overflow-hidden">
+                  <KnowledgeWizardChat
+                    agentId={selectedAgentId || null}
+                    onComplete={handleWizardComplete}
+                    onCancel={() => handleDialogClose(false)}
+                  />
+                </DialogContent>
+              </Dialog>
+            </div>
           </div>
 
           {/* Knowledge Items Grid */}
