@@ -18,13 +18,16 @@ import {
   MessageSquare, Target, FileText, MessageSquarePlus, History, 
   Trash2, Send, Bot, User, ThumbsUp, ThumbsDown, Beaker, Wrench,
   SlidersHorizontal, CheckSquare, Database, MessageCircleWarning,
-  Smile, Briefcase
+  Smile, Briefcase, Shield, AlertCircle
 } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { cn } from '@/lib/utils';
+import { AgentVersionHistory } from './AgentVersionHistory';
+import { AgentPendingQuestions } from './AgentPendingQuestions';
+import { AgentFeedbackRules, FeedbackRule } from './AgentFeedbackRules';
 
 // ==================== TYPES ====================
 
@@ -91,6 +94,8 @@ interface SDRAgentWizardProps {
     ai_provider?: string | null;
     ai_model?: string | null;
     max_messages_per_conversation?: number | null;
+    feedback_rules?: FeedbackRule[] | null;
+    current_version?: number | null;
   } | null;
   organizationId: string;
   onSuccess: () => void;
@@ -402,6 +407,15 @@ export function SDRAgentWizard({
   const [testMessages, setTestMessages] = useState<TestMessage[]>([]);
   const [testInput, setTestInput] = useState('');
   const [isSimulating, setIsSimulating] = useState(false);
+  
+  // New components state
+  const [showVersionHistory, setShowVersionHistory] = useState(false);
+  const [feedbackRules, setFeedbackRules] = useState<FeedbackRule[]>(
+    (existingAgent?.feedback_rules as FeedbackRule[]) || []
+  );
+  const [currentVersion, setCurrentVersion] = useState<number>(
+    existingAgent?.current_version || 1
+  );
 
   const toggleTool = (toolId: string, enabled: boolean) => {
     setEnabledTools(prev => 
@@ -442,6 +456,8 @@ export function SDRAgentWizard({
       setAiModel(existingAgent?.ai_model || '');
       setMaxMessages(existingAgent?.max_messages_per_conversation ?? 10);
       setAgentName(existingAgent?.name || '');
+      setFeedbackRules((existingAgent?.feedback_rules as FeedbackRule[]) || []);
+      setCurrentVersion(existingAgent?.current_version || 1);
     }
   }, [open, existingAgent]);
 
@@ -719,6 +735,7 @@ export function SDRAgentWizard({
     setIsSaving(true);
     try {
       const goalLabel = OBJECTIVES.find(o => o.value === wizardData.objective)?.label || 'Atender clientes';
+      const newVersion = existingAgent?.id ? currentVersion + 1 : 1;
       
       const agentData = {
         organization_id: organizationId,
@@ -726,13 +743,15 @@ export function SDRAgentWizard({
         custom_instructions: promptToSave,
         wizard_data: JSON.parse(JSON.stringify({ ...wizardData, generatedPrompt: promptToSave })),
         feedback_history: JSON.parse(JSON.stringify(feedbackHistory)),
-        enabled_tools: enabledTools,
+        enabled_tools: JSON.parse(JSON.stringify(enabledTools)),
         is_enabled: existingAgent?.is_enabled ?? false,
         goal: goalLabel,
         tone: wizardData.formality,
         ai_provider: aiProvider,
         ai_model: aiProvider !== 'auto' ? aiModel : null,
         max_messages_per_conversation: maxMessages,
+        feedback_rules: JSON.parse(JSON.stringify(feedbackRules)),
+        current_version: newVersion,
       };
 
       if (existingAgent?.id) {
@@ -742,13 +761,46 @@ export function SDRAgentWizard({
           .eq('id', existingAgent.id);
 
         if (error) throw error;
+        
+        // Create version history entry
+        await supabase.from('ai_agent_versions').insert([{
+          agent_id: existingAgent.id,
+          version_number: newVersion,
+          kernel_prompt: promptToSave,
+          wizard_data: JSON.parse(JSON.stringify({ ...wizardData, generatedPrompt: promptToSave })),
+          ai_provider: aiProvider,
+          ai_model: aiProvider !== 'auto' ? aiModel : null,
+          enabled_tools: JSON.parse(JSON.stringify(enabledTools)),
+          feedback_rules: JSON.parse(JSON.stringify(feedbackRules)),
+          change_note: 'Alterações salvas',
+        }]);
+        
+        setCurrentVersion(newVersion);
         toast.success('Agente atualizado com sucesso!');
       } else {
-        const { error } = await supabase
+        const { data: newAgent, error } = await supabase
           .from('ai_agents')
-          .insert([agentData]);
+          .insert([agentData])
+          .select('id')
+          .single();
 
         if (error) throw error;
+        
+        // Create initial version
+        if (newAgent?.id) {
+          await supabase.from('ai_agent_versions').insert([{
+            agent_id: newAgent.id,
+            version_number: 1,
+            kernel_prompt: promptToSave,
+            wizard_data: JSON.parse(JSON.stringify({ ...wizardData, generatedPrompt: promptToSave })),
+            ai_provider: aiProvider,
+            ai_model: aiProvider !== 'auto' ? aiModel : null,
+            enabled_tools: JSON.parse(JSON.stringify(enabledTools)),
+            feedback_rules: JSON.parse(JSON.stringify(feedbackRules)),
+            change_note: 'Versão inicial',
+          }]);
+        }
+        
         toast.success('Agente SDR criado com sucesso!');
       }
 
@@ -764,32 +816,72 @@ export function SDRAgentWizard({
 
   const progress = (currentStep / 5) * 100;
 
+  // ==================== VERSION RESTORE HANDLER ====================
+  
+  const handleRestoreVersion = async (version: any) => {
+    // Apply version data
+    if (version.wizard_data) {
+      setWizardData(prev => ({
+        ...prev,
+        ...version.wizard_data,
+        generatedPrompt: version.kernel_prompt || version.wizard_data.generatedPrompt || prev.generatedPrompt,
+      }));
+    }
+    if (version.kernel_prompt) {
+      updateField('generatedPrompt', version.kernel_prompt);
+    }
+    setEnabledTools(version.enabled_tools || ['update_contact', 'transfer_to_human']);
+    setFeedbackRules(version.feedback_rules || []);
+    setAiProvider(version.ai_provider || 'auto');
+    setAiModel(version.ai_model || '');
+    
+    toast.success(`Restaurado para versão ${version.version_number}. Salve para confirmar.`);
+    setShowVersionHistory(false);
+    setActiveTab('prompt');
+  };
+
   // ==================== EDIT MODE TABS ====================
   
   const renderEditMode = () => (
-    <Tabs value={activeTab} onValueChange={(v) => setActiveTab(v as any)} className="flex-1">
-      <TabsList className="w-full grid grid-cols-5">
-        <TabsTrigger value="prompt" className="gap-2">
-          <FileText className="h-4 w-4" />
-          Prompt
-        </TabsTrigger>
-        <TabsTrigger value="tools" className="gap-2">
-          <Wrench className="h-4 w-4" />
-          Tools
-        </TabsTrigger>
-        <TabsTrigger value="test" className="gap-2">
-          <Beaker className="h-4 w-4" />
-          Testar
-        </TabsTrigger>
-        <TabsTrigger value="feedback" className="gap-2">
-          <MessageSquarePlus className="h-4 w-4" />
-          Feedback
-        </TabsTrigger>
-        <TabsTrigger value="wizard" className="gap-2">
-          <History className="h-4 w-4" />
-          Dados
-        </TabsTrigger>
-      </TabsList>
+    <div className="flex-1 space-y-4">
+      {/* Pending Questions Alert */}
+      {existingAgent?.id && (
+        <AgentPendingQuestions
+          agentId={existingAgent.id}
+          organizationId={organizationId}
+          onQuestionAnswered={() => {
+            toast.success('Conhecimento adicionado à base!');
+          }}
+        />
+      )}
+      
+      <Tabs value={activeTab} onValueChange={(v) => setActiveTab(v as any)} className="flex-1">
+        <TabsList className="w-full grid grid-cols-6">
+          <TabsTrigger value="prompt" className="gap-1 text-xs sm:text-sm">
+            <FileText className="h-4 w-4" />
+            <span className="hidden sm:inline">Prompt</span>
+          </TabsTrigger>
+          <TabsTrigger value="tools" className="gap-1 text-xs sm:text-sm">
+            <Wrench className="h-4 w-4" />
+            <span className="hidden sm:inline">Tools</span>
+          </TabsTrigger>
+          <TabsTrigger value="rules" className="gap-1 text-xs sm:text-sm">
+            <Shield className="h-4 w-4" />
+            <span className="hidden sm:inline">Regras</span>
+          </TabsTrigger>
+          <TabsTrigger value="test" className="gap-1 text-xs sm:text-sm">
+            <Beaker className="h-4 w-4" />
+            <span className="hidden sm:inline">Testar</span>
+          </TabsTrigger>
+          <TabsTrigger value="feedback" className="gap-1 text-xs sm:text-sm">
+            <MessageSquarePlus className="h-4 w-4" />
+            <span className="hidden sm:inline">Feedback</span>
+          </TabsTrigger>
+          <TabsTrigger value="wizard" className="gap-1 text-xs sm:text-sm">
+            <Database className="h-4 w-4" />
+            <span className="hidden sm:inline">Dados</span>
+          </TabsTrigger>
+        </TabsList>
 
       <TabsContent value="tools" className="mt-4 space-y-6">
         {/* AI Model Selection */}
@@ -898,6 +990,23 @@ export function SDRAgentWizard({
             </div>
           ))}
         </div>
+      </TabsContent>
+
+      <TabsContent value="rules" className="mt-4 space-y-4">
+        <div className="flex items-center justify-between">
+          <div>
+            <Label className="text-base font-medium">Regras de Comportamento</Label>
+            <p className="text-sm text-muted-foreground">
+              Regras aprendidas via feedback que modificam o comportamento do agente (máx. 20)
+            </p>
+          </div>
+        </div>
+
+        <AgentFeedbackRules
+          rules={feedbackRules}
+          onUpdate={(rules) => setFeedbackRules(rules)}
+          maxRules={20}
+        />
       </TabsContent>
 
       <TabsContent value="prompt" className="mt-4 space-y-4">
@@ -1168,6 +1277,18 @@ export function SDRAgentWizard({
         </div>
       </TabsContent>
     </Tabs>
+    
+    {/* Version History Dialog */}
+    {existingAgent?.id && (
+      <AgentVersionHistory
+        open={showVersionHistory}
+        onOpenChange={setShowVersionHistory}
+        agentId={existingAgent.id}
+        currentVersion={currentVersion}
+        onRestore={handleRestoreVersion}
+      />
+    )}
+    </div>
   );
 
   // ==================== WIZARD STEPS ====================
@@ -1576,11 +1697,26 @@ export function SDRAgentWizard({
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
-        <DialogHeader>
+        <DialogHeader className="flex flex-row items-center justify-between">
           <DialogTitle className="flex items-center gap-2">
             <Sparkles className="h-5 w-5 text-primary" />
             {isEditMode ? 'Editar Agente SDR' : 'Configurar Agente SDR'}
           </DialogTitle>
+          {isEditMode && existingAgent?.id && (
+            <div className="flex items-center gap-2">
+              <Badge variant="outline" className="text-xs">
+                v{currentVersion}
+              </Badge>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => setShowVersionHistory(true)}
+              >
+                <History className="h-4 w-4 mr-1" />
+                Versões
+              </Button>
+            </div>
+          )}
         </DialogHeader>
 
         {/* Agent Name Field */}
