@@ -1441,6 +1441,54 @@ export type Database = {
           },
         ]
       }
+      knowledge_chunks: {
+        Row: {
+          chunk_index: number
+          content: string
+          created_at: string | null
+          embedding: string
+          id: string
+          item_id: string
+          metadata: Json | null
+          organization_id: string
+        }
+        Insert: {
+          chunk_index: number
+          content: string
+          created_at?: string | null
+          embedding: string
+          id?: string
+          item_id: string
+          metadata?: Json | null
+          organization_id: string
+        }
+        Update: {
+          chunk_index?: number
+          content?: string
+          created_at?: string | null
+          embedding?: string
+          id?: string
+          item_id?: string
+          metadata?: Json | null
+          organization_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "knowledge_chunks_item_id_fkey"
+            columns: ["item_id"]
+            isOneToOne: false
+            referencedRelation: "knowledge_items"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "knowledge_chunks_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       knowledge_embeddings: {
         Row: {
           agent_id: string | null
@@ -1488,6 +1536,72 @@ export type Database = {
           },
           {
             foreignKeyName: "knowledge_embeddings_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      knowledge_items: {
+        Row: {
+          agent_id: string | null
+          created_at: string | null
+          created_by: string | null
+          error_message: string | null
+          id: string
+          metadata: Json | null
+          organization_id: string
+          source: string | null
+          source_file_path: string | null
+          source_url: string | null
+          status: string | null
+          title: string
+          type: string
+          updated_at: string | null
+        }
+        Insert: {
+          agent_id?: string | null
+          created_at?: string | null
+          created_by?: string | null
+          error_message?: string | null
+          id?: string
+          metadata?: Json | null
+          organization_id: string
+          source?: string | null
+          source_file_path?: string | null
+          source_url?: string | null
+          status?: string | null
+          title: string
+          type: string
+          updated_at?: string | null
+        }
+        Update: {
+          agent_id?: string | null
+          created_at?: string | null
+          created_by?: string | null
+          error_message?: string | null
+          id?: string
+          metadata?: Json | null
+          organization_id?: string
+          source?: string | null
+          source_file_path?: string | null
+          source_url?: string | null
+          status?: string | null
+          title?: string
+          type?: string
+          updated_at?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "knowledge_items_agent_id_fkey"
+            columns: ["agent_id"]
+            isOneToOne: false
+            referencedRelation: "ai_agents"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "knowledge_items_organization_id_fkey"
             columns: ["organization_id"]
             isOneToOne: false
             referencedRelation: "organizations"
@@ -2938,6 +3052,23 @@ export type Database = {
           content_type: string
           id: string
           metadata: Json
+          similarity: number
+          title: string
+        }[]
+      }
+      search_knowledge_chunks: {
+        Args: {
+          agent_id_filter?: string
+          match_count?: number
+          match_threshold?: number
+          org_id: string
+          query_embedding: string
+        }
+        Returns: {
+          content: string
+          content_type: string
+          id: string
+          item_id: string
           similarity: number
           title: string
         }[]

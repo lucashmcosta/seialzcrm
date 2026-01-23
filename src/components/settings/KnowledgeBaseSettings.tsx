@@ -11,17 +11,22 @@ import { Badge } from '@/components/ui/badge';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from '@/components/ui/alert-dialog';
 import { Skeleton } from '@/components/ui/skeleton';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { toast } from 'sonner';
-import { Plus, Trash2, Book, HelpCircle, Package, FileText, Settings2, Search, BrainCircuit, Loader2, Sparkles, ArrowLeft, ArrowRight, Check, Wand2 } from 'lucide-react';
+import { Plus, Trash2, Book, HelpCircle, Package, FileText, Settings2, Search, BrainCircuit, Loader2, Sparkles, ArrowLeft, Check, Wand2, Upload, Globe, FileType, RefreshCw } from 'lucide-react';
 import { Progress } from '@/components/ui/progress';
+import { ImportKnowledge } from './ImportKnowledge';
 
 interface KnowledgeItem {
   id: string;
-  content: string;
-  content_type: string;
-  title: string | null;
+  title: string;
+  type: string;
+  status: string;
+  source: string;
+  source_url: string | null;
   metadata: Record<string, any>;
   agent_id: string | null;
+  error_message: string | null;
   created_at: string;
 }
 
@@ -34,26 +39,38 @@ const contentTypeConfig: Record<string, { label: string; icon: React.ElementType
   faq: { 
     label: 'FAQ', 
     icon: HelpCircle, 
-    color: 'bg-blue-500/10 text-blue-500',
+    color: 'bg-primary/10 text-primary',
     description: 'Perguntas frequentes e suas respostas',
   },
   product: { 
     label: 'Produto', 
     icon: Package, 
-    color: 'bg-green-500/10 text-green-500',
+    color: 'bg-secondary text-secondary-foreground',
     description: 'Informações sobre produtos ou serviços',
   },
   instruction: { 
     label: 'Instrução', 
     icon: Settings2, 
-    color: 'bg-purple-500/10 text-purple-500',
+    color: 'bg-accent text-accent-foreground',
     description: 'Instruções e procedimentos a seguir',
   },
   policy: { 
     label: 'Política', 
     icon: FileText, 
-    color: 'bg-orange-500/10 text-orange-500',
+    color: 'bg-warning/10 text-warning',
     description: 'Regras, políticas e diretrizes',
+  },
+  process: { 
+    label: 'Processo', 
+    icon: Settings2, 
+    color: 'bg-muted text-muted-foreground',
+    description: 'Processos e fluxos de trabalho',
+  },
+  objection: { 
+    label: 'Objeção', 
+    icon: HelpCircle, 
+    color: 'bg-destructive/10 text-destructive',
+    description: 'Respostas a objeções comuns',
   },
   general: { 
     label: 'Geral', 
@@ -61,6 +78,24 @@ const contentTypeConfig: Record<string, { label: string; icon: React.ElementType
     color: 'bg-muted text-muted-foreground',
     description: 'Conhecimento geral da empresa',
   },
+};
+
+const sourceLabels: Record<string, { label: string; icon: React.ElementType }> = {
+  wizard: { label: 'Wizard IA', icon: Sparkles },
+  manual: { label: 'Manual', icon: FileText },
+  import_txt: { label: 'TXT', icon: FileType },
+  import_md: { label: 'Markdown', icon: FileType },
+  import_pdf: { label: 'PDF', icon: FileType },
+  import_docx: { label: 'DOCX', icon: FileType },
+  import_url: { label: 'URL', icon: Globe },
+};
+
+const statusConfig: Record<string, { label: string; color: string }> = {
+  draft: { label: 'Rascunho', color: 'bg-muted text-muted-foreground' },
+  processing: { label: 'Processando', color: 'bg-primary/10 text-primary' },
+  published: { label: 'Publicado', color: 'bg-secondary text-secondary-foreground' },
+  archived: { label: 'Arquivado', color: 'bg-muted text-muted-foreground' },
+  error: { label: 'Erro', color: 'bg-destructive/10 text-destructive' },
 };
 
 type WizardStep = 'initial' | 'questions' | 'review';
@@ -75,8 +110,10 @@ export function KnowledgeBaseSettings() {
   const [searchTerm, setSearchTerm] = useState('');
   const [filterType, setFilterType] = useState<string>('all');
   const [filterAgent, setFilterAgent] = useState<string>('all');
+  const [filterStatus, setFilterStatus] = useState<string>('all');
+  const [activeTab, setActiveTab] = useState('knowledge');
 
-  // Form state
+  // Form state for wizard
   const [formTitle, setFormTitle] = useState('');
   const [formContent, setFormContent] = useState('');
   const [formType, setFormType] = useState<string>('faq');
@@ -97,8 +134,8 @@ export function KnowledgeBaseSettings() {
     try {
       const [knowledgeResult, agentsResult] = await Promise.all([
         supabase
-          .from('knowledge_embeddings')
-          .select('id, content, content_type, title, metadata, agent_id, created_at')
+          .from('knowledge_items')
+          .select('id, title, type, status, source, source_url, metadata, agent_id, error_message, created_at')
           .eq('organization_id', organization.id)
           .order('created_at', { ascending: false }),
         supabase
@@ -200,18 +237,31 @@ export function KnowledgeBaseSettings() {
 
     setSaving(true);
     try {
-      const { error } = await supabase.functions.invoke('generate-embedding', {
+      // Create knowledge_item first
+      const { data: item, error: itemError } = await supabase
+        .from('knowledge_items')
+        .insert({
+          organization_id: organization.id,
+          agent_id: formAgentId || null,
+          title: formTitle || 'Conhecimento sem título',
+          type: formType,
+          status: 'processing',
+          source: 'wizard',
+        })
+        .select()
+        .single();
+
+      if (itemError) throw itemError;
+
+      // Process the content
+      const { error: processError } = await supabase.functions.invoke('process-knowledge', {
         body: {
-          organizationId: organization.id,
-          agentId: formAgentId || null,
+          itemId: item.id,
           content: formContent,
-          contentType: formType,
-          title: formTitle || null,
-          metadata: {},
         },
       });
 
-      if (error) throw error;
+      if (processError) throw processError;
 
       toast.success('Conhecimento adicionado com sucesso');
       handleDialogClose(false);
@@ -227,7 +277,7 @@ export function KnowledgeBaseSettings() {
   const handleDelete = async (id: string) => {
     try {
       const { error } = await supabase
-        .from('knowledge_embeddings')
+        .from('knowledge_items')
         .delete()
         .eq('id', id);
 
@@ -243,12 +293,12 @@ export function KnowledgeBaseSettings() {
 
   const filteredItems = items.filter(item => {
     const matchesSearch = 
-      item.content.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      (item.title?.toLowerCase().includes(searchTerm.toLowerCase()) ?? false);
-    const matchesType = filterType === 'all' || item.content_type === filterType;
+      item.title.toLowerCase().includes(searchTerm.toLowerCase());
+    const matchesType = filterType === 'all' || item.type === filterType;
     const matchesAgent = filterAgent === 'all' || 
       (filterAgent === 'global' ? item.agent_id === null : item.agent_id === filterAgent);
-    return matchesSearch && matchesType && matchesAgent;
+    const matchesStatus = filterStatus === 'all' || item.status === filterStatus;
+    return matchesSearch && matchesType && matchesAgent && matchesStatus;
   });
 
   const updateAnswer = (index: number, value: string) => {
@@ -286,7 +336,7 @@ export function KnowledgeBaseSettings() {
             <DialogHeader>
               <DialogTitle className="flex items-center gap-2">
                 <Sparkles className="h-5 w-5 text-primary" />
-                Adicionar Conhecimento
+                Criar com Assistente IA
               </DialogTitle>
               <DialogDescription>
                 Escolha o tipo e descreva brevemente. A IA vai te guiar com perguntas específicas.
@@ -362,7 +412,7 @@ export function KnowledgeBaseSettings() {
                 ) : (
                   <Wand2 className="mr-2 h-4 w-4" />
                 )}
-                Criar com Assistente IA
+                Continuar
               </Button>
             </DialogFooter>
           </>
@@ -418,7 +468,7 @@ export function KnowledgeBaseSettings() {
           <>
             <DialogHeader>
               <DialogTitle className="flex items-center gap-2">
-                <Check className="h-5 w-5 text-green-500" />
+                <Check className="h-5 w-5 text-primary" />
                 Revisar e Salvar
               </DialogTitle>
               <DialogDescription>
@@ -491,140 +541,210 @@ export function KnowledgeBaseSettings() {
         </CardHeader>
       </Card>
 
-      {/* Filters and Actions */}
-      <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-        <div className="flex flex-1 gap-2">
-          <div className="relative flex-1 max-w-xs">
-            <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
-            <Input
-              placeholder="Buscar..."
-              value={searchTerm}
-              onChange={(e) => setSearchTerm(e.target.value)}
-              className="pl-8"
-            />
-          </div>
-          <Select value={filterType} onValueChange={setFilterType}>
-            <SelectTrigger className="w-32">
-              <SelectValue placeholder="Tipo" />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="all">Todos</SelectItem>
-              {Object.entries(contentTypeConfig).map(([key, config]) => (
-                <SelectItem key={key} value={key}>{config.label}</SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-          <Select value={filterAgent} onValueChange={setFilterAgent}>
-            <SelectTrigger className="w-40">
-              <SelectValue placeholder="Agente" />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="all">Todos</SelectItem>
-              <SelectItem value="global">Global</SelectItem>
-              {agents.map(agent => (
-                <SelectItem key={agent.id} value={agent.id}>{agent.name}</SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-        </div>
+      {/* Main Tabs */}
+      <Tabs value={activeTab} onValueChange={setActiveTab}>
+        <TabsList>
+          <TabsTrigger value="knowledge" className="flex items-center gap-2">
+            <Book className="h-4 w-4" />
+            Conhecimentos ({items.length})
+          </TabsTrigger>
+          <TabsTrigger value="import" className="flex items-center gap-2">
+            <Upload className="h-4 w-4" />
+            Importar
+          </TabsTrigger>
+        </TabsList>
 
-        <Dialog open={dialogOpen} onOpenChange={handleDialogClose}>
-          <DialogTrigger asChild>
-            <Button>
-              <Plus className="mr-2 h-4 w-4" />
-              Adicionar Conhecimento
-            </Button>
-          </DialogTrigger>
-          <DialogContent className="sm:max-w-lg">
-            {/* Progress indicator */}
-            <div className="mb-2">
-              <Progress value={getWizardProgress()} className="h-1" />
-              <div className="flex justify-between mt-1 text-xs text-muted-foreground">
-                <span className={wizardStep === 'initial' ? 'text-primary font-medium' : ''}>Tipo</span>
-                <span className={wizardStep === 'questions' ? 'text-primary font-medium' : ''}>Perguntas</span>
-                <span className={wizardStep === 'review' ? 'text-primary font-medium' : ''}>Revisar</span>
+        {/* Knowledge List Tab */}
+        <TabsContent value="knowledge" className="space-y-4 mt-4">
+          {/* Filters and Actions */}
+          <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+            <div className="flex flex-1 gap-2 flex-wrap">
+              <div className="relative flex-1 min-w-[200px] max-w-xs">
+                <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
+                <Input
+                  placeholder="Buscar..."
+                  value={searchTerm}
+                  onChange={(e) => setSearchTerm(e.target.value)}
+                  className="pl-8"
+                />
               </div>
+              <Select value={filterType} onValueChange={setFilterType}>
+                <SelectTrigger className="w-28">
+                  <SelectValue placeholder="Tipo" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">Tipo</SelectItem>
+                  {Object.entries(contentTypeConfig).map(([key, config]) => (
+                    <SelectItem key={key} value={key}>{config.label}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              <Select value={filterStatus} onValueChange={setFilterStatus}>
+                <SelectTrigger className="w-32">
+                  <SelectValue placeholder="Status" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">Status</SelectItem>
+                  {Object.entries(statusConfig).map(([key, config]) => (
+                    <SelectItem key={key} value={key}>{config.label}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              <Button variant="outline" size="icon" onClick={fetchData}>
+                <RefreshCw className="h-4 w-4" />
+              </Button>
             </div>
-            {renderWizardContent()}
-          </DialogContent>
-        </Dialog>
-      </div>
 
-      {/* Knowledge Items Grid */}
-      {filteredItems.length === 0 ? (
-        <Card className="py-12">
-          <CardContent className="text-center">
-            <Book className="mx-auto h-12 w-12 text-muted-foreground/50" />
-            <h3 className="mt-4 text-lg font-medium">Nenhum conhecimento encontrado</h3>
-            <p className="mt-2 text-sm text-muted-foreground">
-              {items.length === 0 
-                ? 'Adicione informações para que seus agentes respondam com mais precisão.'
-                : 'Nenhum resultado para os filtros selecionados.'}
-            </p>
-          </CardContent>
-        </Card>
-      ) : (
-        <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
-          {filteredItems.map((item) => {
-            const typeConfig = contentTypeConfig[item.content_type] || contentTypeConfig.general;
-            const TypeIcon = typeConfig.icon;
-            const agent = agents.find(a => a.id === item.agent_id);
-
-            return (
-              <Card key={item.id} className="group relative">
-                <CardHeader className="pb-2">
-                  <div className="flex items-start justify-between gap-2">
-                    <div className="flex items-center gap-2">
-                      <Badge variant="secondary" className={typeConfig.color}>
-                        <TypeIcon className="mr-1 h-3 w-3" />
-                        {typeConfig.label}
-                      </Badge>
-                      {agent && (
-                        <Badge variant="outline" className="text-xs">
-                          {agent.name}
-                        </Badge>
-                      )}
-                    </div>
-                    <AlertDialog>
-                      <AlertDialogTrigger asChild>
-                        <Button
-                          variant="ghost"
-                          size="icon"
-                          className="h-8 w-8 opacity-0 group-hover:opacity-100 transition-opacity"
-                        >
-                          <Trash2 className="h-4 w-4 text-destructive" />
-                        </Button>
-                      </AlertDialogTrigger>
-                      <AlertDialogContent>
-                        <AlertDialogHeader>
-                          <AlertDialogTitle>Remover conhecimento?</AlertDialogTitle>
-                          <AlertDialogDescription>
-                            Esta ação não pode ser desfeita. O agente não poderá mais usar esta informação.
-                          </AlertDialogDescription>
-                        </AlertDialogHeader>
-                        <AlertDialogFooter>
-                          <AlertDialogCancel>Cancelar</AlertDialogCancel>
-                          <AlertDialogAction onClick={() => handleDelete(item.id)}>
-                            Remover
-                          </AlertDialogAction>
-                        </AlertDialogFooter>
-                      </AlertDialogContent>
-                    </AlertDialog>
+            <Dialog open={dialogOpen} onOpenChange={handleDialogClose}>
+              <DialogTrigger asChild>
+                <Button>
+                  <Wand2 className="mr-2 h-4 w-4" />
+                  Criar com IA
+                </Button>
+              </DialogTrigger>
+              <DialogContent className="sm:max-w-lg">
+                {/* Progress indicator */}
+                <div className="mb-2">
+                  <Progress value={getWizardProgress()} className="h-1" />
+                  <div className="flex justify-between mt-1 text-xs text-muted-foreground">
+                    <span className={wizardStep === 'initial' ? 'text-primary font-medium' : ''}>Tipo</span>
+                    <span className={wizardStep === 'questions' ? 'text-primary font-medium' : ''}>Perguntas</span>
+                    <span className={wizardStep === 'review' ? 'text-primary font-medium' : ''}>Revisar</span>
                   </div>
-                  {item.title && (
-                    <CardTitle className="text-sm font-medium">{item.title}</CardTitle>
-                  )}
-                </CardHeader>
-                <CardContent>
-                  <p className="text-sm text-muted-foreground line-clamp-4">
-                    {item.content}
-                  </p>
-                </CardContent>
-              </Card>
-            );
-          })}
-        </div>
-      )}
+                </div>
+                {renderWizardContent()}
+              </DialogContent>
+            </Dialog>
+          </div>
+
+          {/* Knowledge Items Grid */}
+          {filteredItems.length === 0 ? (
+            <Card className="py-12">
+              <CardContent className="text-center">
+                <Book className="mx-auto h-12 w-12 text-muted-foreground/50" />
+                <h3 className="mt-4 text-lg font-medium">Nenhum conhecimento encontrado</h3>
+                <p className="mt-2 text-sm text-muted-foreground">
+                  {items.length === 0 
+                    ? 'Adicione informações para que seus agentes respondam com mais precisão.'
+                    : 'Nenhum resultado para os filtros selecionados.'}
+                </p>
+                {items.length === 0 && (
+                  <div className="mt-4 flex gap-2 justify-center">
+                    <Button onClick={() => setDialogOpen(true)}>
+                      <Wand2 className="mr-2 h-4 w-4" />
+                      Criar com IA
+                    </Button>
+                    <Button variant="outline" onClick={() => setActiveTab('import')}>
+                      <Upload className="mr-2 h-4 w-4" />
+                      Importar Arquivo
+                    </Button>
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+          ) : (
+            <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
+              {filteredItems.map((item) => {
+                const typeConfig = contentTypeConfig[item.type] || contentTypeConfig.general;
+                const TypeIcon = typeConfig.icon;
+                const agent = agents.find(a => a.id === item.agent_id);
+                const source = sourceLabels[item.source] || sourceLabels.manual;
+                const SourceIcon = source.icon;
+                const status = statusConfig[item.status] || statusConfig.draft;
+
+                return (
+                  <Card key={item.id} className="group relative">
+                    <CardHeader className="pb-2">
+                      <div className="flex items-start justify-between gap-2">
+                        <div className="flex items-center gap-2 flex-wrap">
+                          <Badge variant="secondary" className={typeConfig.color}>
+                            <TypeIcon className="mr-1 h-3 w-3" />
+                            {typeConfig.label}
+                          </Badge>
+                          <Badge variant="outline" className={status.color}>
+                            {item.status === 'processing' && <Loader2 className="mr-1 h-3 w-3 animate-spin" />}
+                            {status.label}
+                          </Badge>
+                        </div>
+                        <AlertDialog>
+                          <AlertDialogTrigger asChild>
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              className="h-8 w-8 opacity-0 group-hover:opacity-100 transition-opacity"
+                            >
+                              <Trash2 className="h-4 w-4 text-destructive" />
+                            </Button>
+                          </AlertDialogTrigger>
+                          <AlertDialogContent>
+                            <AlertDialogHeader>
+                              <AlertDialogTitle>Remover conhecimento?</AlertDialogTitle>
+                              <AlertDialogDescription>
+                                Esta ação não pode ser desfeita. O agente não poderá mais usar esta informação.
+                              </AlertDialogDescription>
+                            </AlertDialogHeader>
+                            <AlertDialogFooter>
+                              <AlertDialogCancel>Cancelar</AlertDialogCancel>
+                              <AlertDialogAction onClick={() => handleDelete(item.id)}>
+                                Remover
+                              </AlertDialogAction>
+                            </AlertDialogFooter>
+                          </AlertDialogContent>
+                        </AlertDialog>
+                      </div>
+                      <CardTitle className="text-sm font-medium line-clamp-2">{item.title}</CardTitle>
+                    </CardHeader>
+                    <CardContent>
+                      <div className="flex items-center gap-2 text-xs text-muted-foreground">
+                        <SourceIcon className="h-3 w-3" />
+                        <span>{source.label}</span>
+                        {agent && (
+                          <>
+                            <span>•</span>
+                            <span>{agent.name}</span>
+                          </>
+                        )}
+                        {item.metadata?.chunk_count && (
+                          <>
+                            <span>•</span>
+                            <span>{item.metadata.chunk_count} chunks</span>
+                          </>
+                        )}
+                      </div>
+                      {item.status === 'error' && item.error_message && (
+                        <p className="mt-2 text-xs text-destructive line-clamp-2">
+                          {item.error_message}
+                        </p>
+                      )}
+                    </CardContent>
+                  </Card>
+                );
+              })}
+            </div>
+          )}
+        </TabsContent>
+
+        {/* Import Tab */}
+        <TabsContent value="import" className="mt-4">
+          <Card>
+            <CardHeader>
+              <CardTitle>Importar Conhecimento</CardTitle>
+              <CardDescription>
+                Importe arquivos de texto ou conteúdo de páginas web para a base de conhecimento.
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              <ImportKnowledge 
+                agents={agents} 
+                onSuccess={() => {
+                  fetchData();
+                  setActiveTab('knowledge');
+                }} 
+              />
+            </CardContent>
+          </Card>
+        </TabsContent>
+      </Tabs>
     </div>
   );
 }
