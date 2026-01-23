@@ -5,6 +5,7 @@ import { useOrganization } from '@/hooks/useOrganization';
 import { useTranslation } from '@/lib/i18n';
 import { usePermissions } from '@/hooks/usePermissions';
 import { useWhatsAppIntegration } from '@/hooks/useWhatsAppIntegration';
+import { useAIIntegration } from '@/hooks/useAIIntegration';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { ArrowLeft } from 'lucide-react';
 import { NativeSelect } from '@/components/ui/native-select';
@@ -37,8 +38,12 @@ export default function Settings() {
   const { t } = useTranslation(locale as any);
   const { permissions } = usePermissions();
   const { hasWhatsApp } = useWhatsAppIntegration();
+  const { hasAI } = useAIIntegration();
   const [selectedTab, setSelectedTab] = useState('general');
   const [searchTerm, setSearchTerm] = useState('');
+
+  // Show AI features if either WhatsApp OR any AI integration is enabled
+  const showAIFeatures = hasWhatsApp || hasAI;
 
   const allTabs: TabConfig[] = useMemo(() => [
     { id: 'general', label: t('settings.general') },
@@ -51,16 +56,19 @@ export default function Settings() {
     { id: 'customFields', label: t('settings.customFields'), permission: 'canManageSettings' },
     { id: 'tags', label: t('settings.tags'), permission: 'canManageSettings' },
     { id: 'integrations', label: t('settings.integrations'), permission: 'canManageIntegrations' },
-    // Only show WhatsApp Templates if user has WhatsApp connected
+    // Show WhatsApp Templates only if WhatsApp is connected
     ...(hasWhatsApp ? [
       { id: 'whatsappTemplates', label: 'WhatsApp Templates', permission: 'canManageIntegrations' as const },
+    ] : []),
+    // Show AI Agent and Knowledge Base if ANY AI integration is enabled (WhatsApp, OpenAI, Claude, etc.)
+    ...(showAIFeatures ? [
       { id: 'aiAgent', label: 'Agente IA', permission: 'canManageIntegrations' as const },
       { id: 'knowledgeBase', label: 'Base de Conhecimento', permission: 'canManageIntegrations' as const },
     ] : []),
     { id: 'apiWebhooks', label: 'API & Webhooks', permission: 'canManageIntegrations' },
     { id: 'auditLogs', label: t('settings.auditLogs'), permission: 'canManageSettings' },
     { id: 'trash', label: t('settings.trash'), permission: 'canManageSettings' },
-  ], [t, hasWhatsApp]);
+  ], [t, hasWhatsApp, showAIFeatures]);
 
   // Filter tabs based on permissions
   const filteredTabs = useMemo(() => {
