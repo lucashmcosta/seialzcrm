@@ -31,16 +31,38 @@ import { AgentFeedbackRules, FeedbackRule } from './AgentFeedbackRules';
 
 // ==================== TYPES ====================
 
+type AgentMode = 'close_sale' | 'qualify' | 'schedule' | 'support' | 'hybrid';
+
+interface ToolsTriggers {
+  update_contact: string;
+  create_opportunity: string;
+  create_task: string;
+  transfer_to_human: string;
+  schedule_meeting: string;
+  save_memory: string;
+  schedule_follow_up: string;
+  send_payment_link: string;
+  update_qualification: string;
+}
+
+interface ComplianceRules {
+  forbiddenPromises: string[];
+  forbiddenTerms: string[];
+  requiredDisclaimers: string[];
+}
+
 interface WizardData {
-  // Step 1 - Canal e Objetivo
+  // Step 1 - Canal e Modo de Operação
   channel: 'whatsapp' | 'sms' | 'webchat';
-  objective: 'sell' | 'schedule' | 'support' | 'qualify';
+  agentMode: AgentMode;
+  hybridPriority: AgentMode[]; // Para modo híbrido, define prioridade
   
   // Step 2 - Tom e Formato
   responseLength: number; // 0-100
   formality: 'informal' | 'professional';
   emojis: 'yes' | 'no' | 'occasional';
   maxQuestionsPerMessage: number;
+  empathyLevel: 0 | 1 | 2 | 3; // 0=direto, 1=cordial, 2=empático, 3=muito empático
   
   // Step 3 - Escopo do Agente
   scope: {
@@ -57,20 +79,33 @@ interface WizardData {
   ragIntents: string[];
   noRagBehavior: 'ask_more_info' | 'say_dont_know' | 'offer_human';
   
-  // Step 5 - Mensagens de Fallback
+  // Step 5 - Fallbacks e Compliance
   fallbacks: {
     noRag: string;
     outOfScope: string;
     handoff: string;
   };
+  complianceRules: ComplianceRules;
   
-  // Legacy fields for compatibility and data tab
+  // Step extra - Gatilhos de Ferramentas
+  toolsTriggers: ToolsTriggers;
+  
+  // Modo específico - Qualificação
+  qualificationMinQuestions: string[];
+  
+  // Modo específico - Venda/Agendamento
+  conversionCta: string;
+  
+  // Legacy fields for compatibility (deprecated - will be removed)
   companyName: string;
   companySegment: string;
   companyDescription: string;
   products: string;
   differentials: string;
   generatedPrompt: string;
+  
+  // Backwards compatibility for old objective field
+  objective?: 'sell' | 'schedule' | 'support' | 'qualify';
 }
 
 interface FeedbackEntry {
@@ -151,11 +186,11 @@ const AVAILABLE_TOOLS = [
 ];
 
 const STEPS = [
-  { id: 1, title: 'Canal e Objetivo', icon: MessageSquare },
-  { id: 2, title: 'Tom e Formato', icon: SlidersHorizontal },
+  { id: 1, title: 'Modo de Operação', icon: Target },
+  { id: 2, title: 'Tom e Empatia', icon: SlidersHorizontal },
   { id: 3, title: 'Escopo', icon: CheckSquare },
   { id: 4, title: 'Base de Conhecimento', icon: Database },
-  { id: 5, title: 'Fallbacks', icon: MessageCircleWarning },
+  { id: 5, title: 'Fallbacks e Compliance', icon: Shield },
 ];
 
 const CHANNELS = [
@@ -164,6 +199,29 @@ const CHANNELS = [
   { value: 'webchat', label: 'Chat Web', description: 'Chat no site, pode ser mais detalhado' },
 ];
 
+const AGENT_MODES: { value: AgentMode; label: string; description: string; icon: any }[] = [
+  { value: 'close_sale', label: 'Fechar Venda', description: 'Foco em avançar para compra, enviar link/CTA', icon: Target },
+  { value: 'qualify', label: 'Qualificar', description: 'Coletar informações e passar para humano', icon: CheckSquare },
+  { value: 'schedule', label: 'Agendar', description: 'Marcar reuniões e demonstrações', icon: MessageSquare },
+  { value: 'support', label: 'Suporte', description: 'Resolver dúvidas e reduzir handoff', icon: MessageCircleWarning },
+  { value: 'hybrid', label: 'Híbrido', description: 'Múltiplos objetivos com prioridade', icon: SlidersHorizontal },
+];
+
+const EMPATHY_LABELS: Record<number, string> = {
+  0: 'Direto',
+  1: 'Cordial',
+  2: 'Empático',
+  3: 'Acolhedor',
+};
+
+const EMPATHY_DESCRIPTIONS: Record<number, string> = {
+  0: 'Vai direto ao ponto, sem rodeios. Respostas objetivas e práticas.',
+  1: 'Cordial e objetivo. "Olá! Claro, posso ajudar..."',
+  2: '1 frase curta de validação ("Entendi sua dúvida") + solução.',
+  3: 'Valida + tranquiliza antes de responder. "Fico feliz em ajudar!"',
+};
+
+// Legacy - kept for backwards compatibility
 const OBJECTIVES = [
   { value: 'sell', label: 'Vender / Tirar dúvidas', description: 'Responder perguntas e conduzir para venda' },
   { value: 'schedule', label: 'Agendar reuniões', description: 'Marcar demonstrações e consultas' },
@@ -214,13 +272,38 @@ const DEFAULT_FALLBACKS = {
   handoff: 'Entendi! Vou pedir para um consultor entrar em contato com você. Qual o melhor horário?',
 };
 
+const DEFAULT_COMPLIANCE_RULES: ComplianceRules = {
+  forbiddenPromises: [],
+  forbiddenTerms: [],
+  requiredDisclaimers: [],
+};
+
+const DEFAULT_TOOLS_TRIGGERS: ToolsTriggers = {
+  update_contact: 'Quando cliente informar ou corrigir dados pessoais (nome, email, telefone)',
+  create_opportunity: 'Quando demonstrar intenção clara de compra ou pedir orçamento',
+  create_task: 'Quando cliente pedir retorno depois ou mencionar outra pessoa para contato',
+  transfer_to_human: 'Quando cliente pedir humano, reclamar, ou situação complexa demais',
+  schedule_meeting: 'Quando cliente aceitar agendar reunião ou demonstração',
+  save_memory: 'Quando cliente mencionar preferências, objeções ou informações pessoais relevantes',
+  schedule_follow_up: 'Quando cliente pedir para ser contactado em data futura específica',
+  send_payment_link: 'Quando cliente confirmar que deseja pagar ou pedir link',
+  update_qualification: 'Quando coletar informações de qualificação (BANT, MEDDIC, etc.)',
+};
+
 const initialWizardData: WizardData = {
+  // Step 1 - Modo
   channel: 'whatsapp',
-  objective: 'sell',
+  agentMode: 'qualify',
+  hybridPriority: [],
+  
+  // Step 2 - Tom
   responseLength: 30,
   formality: 'informal',
   emojis: 'occasional',
   maxQuestionsPerMessage: 1,
+  empathyLevel: 2,
+  
+  // Step 3 - Escopo
   scope: {
     howItWorks: true,
     documents: true,
@@ -230,9 +313,23 @@ const initialWizardData: WizardData = {
     eligibility: false,
     generalTopics: false,
   },
+  
+  // Step 4 - RAG
   ragIntents: ['pricing', 'products', 'faq'],
   noRagBehavior: 'ask_more_info',
+  
+  // Step 5 - Fallbacks e Compliance
   fallbacks: { ...DEFAULT_FALLBACKS },
+  complianceRules: { ...DEFAULT_COMPLIANCE_RULES },
+  
+  // Tools Triggers
+  toolsTriggers: { ...DEFAULT_TOOLS_TRIGGERS },
+  
+  // Modo específico
+  qualificationMinQuestions: [],
+  conversionCta: '',
+  
+  // Legacy (deprecated)
   companyName: '',
   companySegment: 'saas',
   companyDescription: '',
@@ -287,65 +384,126 @@ const generatePromptFromWizard = (data: WizardData): string => {
   const { can, cannot } = getScopeRules(data.scope);
   
   const channelLabel = CHANNELS.find(c => c.value === data.channel)?.label || data.channel;
-  const objectiveLabel = OBJECTIVES.find(o => o.value === data.objective)?.label || data.objective;
   
-  const formalityText = data.formality === 'professional' 
-    ? 'Tom PROFISSIONAL e formal. Use linguagem corporativa.'
-    : 'Tom INFORMAL e amigável. Use linguagem natural e acessível.';
-    
-  const emojisText = data.emojis === 'yes' 
-    ? 'Use emojis livremente para tornar a conversa mais leve 😊'
-    : data.emojis === 'no'
-    ? 'NÃO use emojis nas mensagens.'
-    : 'Use emojis ocasionalmente, com moderação (1-2 por mensagem quando apropriado).';
+  // Mode descriptions
+  const modeDescriptions: Record<AgentMode, string> = {
+    close_sale: 'Foco em avançar para compra. Envie CTA/link quando apropriado. Perguntas mínimas.',
+    qualify: 'Coletar informações relevantes (orçamento, prazo, autoridade, necessidade). Passar para humano quando qualificado.',
+    schedule: 'Agendar reunião/demonstração. Coletar: nome, disponibilidade, confirmação.',
+    support: 'Resolver dúvidas consultando a base de conhecimento. Minimizar transferências.',
+    hybrid: `Prioridade: ${data.hybridPriority.map(m => AGENT_MODES.find(a => a.value === m)?.label || m).join(' > ')}. Adapte conforme contexto.`,
+  };
 
-  let prompt = `## Identidade
-Você é um assistente virtual de ${data.companyName || '[EMPRESA]'} que atende via ${channelLabel}.
-${data.companyDescription ? `\nSobre a empresa: ${data.companyDescription}` : ''}
+  // Empathy level rules
+  const empathyRules: Record<number, string> = {
+    0: 'Direto ao ponto, sem rodeios. Resposta objetiva imediata.',
+    1: 'Cordial e objetivo. "Claro!" ou "Pode deixar!" antes da resposta.',
+    2: '1 frase curta de validação ("Entendi sua dúvida") + solução.',
+    3: 'Valida + tranquiliza antes de responder. "Fico feliz em ajudar!" ou "Fique tranquilo!"',
+  };
 
-## Objetivo Principal
-${objectiveLabel}
+  // Response length rules based on slider
+  const getMaxBubbles = (value: number): number => {
+    if (value <= 30) return 1;
+    if (value <= 70) return 2;
+    return 3;
+  };
 
-## Tom de Comunicação
-${formalityText}
-${emojisText}
+  const getMaxChars = (value: number): number => {
+    if (value <= 30) return 150;
+    if (value <= 70) return 300;
+    return 500;
+  };
 
-## Formato das Respostas
-${getLengthRules(data.responseLength)}
-- Faça no máximo ${data.maxQuestionsPerMessage} pergunta(s) por mensagem
-- Mensagens curtas são melhores para ${channelLabel}
+  const getEmojiRule = (emojis: string): string => {
+    if (emojis === 'yes') return 'Livre (2-3 por mensagem)';
+    if (emojis === 'no') return 'Não usar';
+    return '1 por mensagem, quando natural';
+  };
 
-## ✅ PODE fazer:
+  const getNoRagAction = (behavior: string): string => {
+    if (behavior === 'ask_more_info') return 'Peça 1 informação adicional para tentar ajudar.';
+    if (behavior === 'say_dont_know') return 'Seja honesto: "Não tenho essa informação no momento."';
+    return 'Ofereça atendimento humano.';
+  };
+
+  // Build kernel prompt (lean, behavioral)
+  let prompt = `Você é um AGENTE de atendimento via ${channelLabel}.
+
+## OBJETIVO
+Modo: ${data.agentMode.toUpperCase()}
+${modeDescriptions[data.agentMode]}
+
+## ESTILO DE RESPOSTA
+- Máximo ${getMaxBubbles(data.responseLength)} bolha(s) de mensagem
+- Até ${getMaxChars(data.responseLength)} caracteres por bolha
+- Emojis: ${getEmojiRule(data.emojis)}
+- Máximo ${data.maxQuestionsPerMessage} pergunta(s) curta(s) no final
+- Tom: ${data.formality === 'professional' ? 'Profissional e formal' : 'Informal e amigável'}
+
+## NÍVEL DE EMPATIA (${data.empathyLevel})
+${empathyRules[data.empathyLevel]}
+
+## LEITURA DE MENSAGENS
+- Revise as ÚLTIMAS 3 mensagens do usuário
+- Se houver correção ("não", "quis dizer", "errei"), use a versão corrigida
+- Se reclamarem que não viu algo: peça 1 confirmação antes de repetir
+
+## BASE DE CONHECIMENTO (RAG)
+- Para fatos (preço, pacotes, prazos), use SOMENTE o RAG_CONTEXT
+- Se não estiver no RAG_CONTEXT: ${getNoRagAction(data.noRagBehavior)}
+- Fallback sem info: "${data.fallbacks.noRag}"
+
+## ✅ PODE:
 ${can.map(c => `- ${c}`).join('\n')}
 
-## ❌ NÃO PODE fazer:
+## ❌ NÃO PODE:
 ${cannot.map(c => `- ${c}`).join('\n')}
+- Fallback fora de escopo: "${data.fallbacks.outOfScope}"`;
 
-## Produtos/Serviços
-${data.products || 'Aguardando informações sobre produtos/serviços.'}
+  // Add compliance rules if any
+  if (data.complianceRules.forbiddenPromises.length > 0 || 
+      data.complianceRules.forbiddenTerms.length > 0 ||
+      data.complianceRules.requiredDisclaimers.length > 0) {
+    prompt += `\n
+## COMPLIANCE`;
+    if (data.complianceRules.forbiddenPromises.length > 0) {
+      prompt += `\n- Não prometa: ${data.complianceRules.forbiddenPromises.join(', ')}`;
+    }
+    if (data.complianceRules.forbiddenTerms.length > 0) {
+      prompt += `\n- Evite termos: ${data.complianceRules.forbiddenTerms.join(', ')}`;
+    }
+    if (data.complianceRules.requiredDisclaimers.length > 0) {
+      prompt += `\n- Disclaimers obrigatórios: ${data.complianceRules.requiredDisclaimers.join('; ')}`;
+    }
+  }
 
-${data.differentials ? `## Diferenciais\n${data.differentials}` : ''}
+  // Add mode-specific rules
+  if (data.agentMode === 'qualify' || data.agentMode === 'hybrid') {
+    if (data.qualificationMinQuestions.length > 0) {
+      prompt += `\n
+## QUALIFICAÇÃO
+Perguntas mínimas a coletar:
+${data.qualificationMinQuestions.map((q, i) => `${i + 1}. ${q}`).join('\n')}`;
+    }
+  }
 
-## Quando não souber responder
-${data.noRagBehavior === 'ask_more_info' 
-  ? `Peça mais informações ao cliente. Exemplo: "${data.fallbacks.noRag}"`
-  : data.noRagBehavior === 'say_dont_know'
-  ? `Seja honesto sobre a limitação. Exemplo: "${data.fallbacks.noRag}"`
-  : `Ofereça atendimento humano. Exemplo: "${data.fallbacks.handoff}"`
-}
+  if ((data.agentMode === 'close_sale' || data.agentMode === 'schedule') && data.conversionCta) {
+    prompt += `\n
+## CTA DE CONVERSÃO
+Quando apropriado, use: "${data.conversionCta}"`;
+  }
 
-## Mensagem para assuntos fora do escopo
-"${data.fallbacks.outOfScope}"
-
-## Mensagem para transferir para humano
+  // Add handoff message
+  prompt += `\n
+## TRANSFERÊNCIA PARA HUMANO
 "${data.fallbacks.handoff}"
 
-## Regras Importantes
-✅ Sempre responda em português brasileiro
-✅ Mantenha o contexto da conversa
-✅ Personalize usando o nome do cliente quando disponível
-❌ Nunca invente informações que não estão na sua base de conhecimento
-❌ Nunca prometa algo que a empresa não possa cumprir`;
+## REGRAS FINAIS
+✅ Responda SOMENTE em português brasileiro
+✅ Use informações da BASE DE CONHECIMENTO quando disponível
+✅ Personalize com o nome do cliente quando disponível
+❌ NUNCA invente informações`;
 
   return prompt;
 };
@@ -734,7 +892,7 @@ export function SDRAgentWizard({
 
     setIsSaving(true);
     try {
-      const goalLabel = OBJECTIVES.find(o => o.value === wizardData.objective)?.label || 'Atender clientes';
+      const modeLabel = AGENT_MODES.find(m => m.value === wizardData.agentMode)?.label || 'Atender clientes';
       const newVersion = existingAgent?.id ? currentVersion + 1 : 1;
       
       const agentData = {
@@ -745,13 +903,17 @@ export function SDRAgentWizard({
         feedback_history: JSON.parse(JSON.stringify(feedbackHistory)),
         enabled_tools: JSON.parse(JSON.stringify(enabledTools)),
         is_enabled: existingAgent?.is_enabled ?? false,
-        goal: goalLabel,
+        goal: modeLabel,
         tone: wizardData.formality,
         ai_provider: aiProvider,
         ai_model: aiProvider !== 'auto' ? aiModel : null,
         max_messages_per_conversation: maxMessages,
         feedback_rules: JSON.parse(JSON.stringify(feedbackRules)),
         current_version: newVersion,
+        agent_mode: wizardData.agentMode,
+        empathy_level: wizardData.empathyLevel,
+        tool_triggers: JSON.parse(JSON.stringify(wizardData.toolsTriggers)),
+        compliance_rules: JSON.parse(JSON.stringify(wizardData.complianceRules)),
       };
 
       if (existingAgent?.id) {
@@ -1296,7 +1458,7 @@ export function SDRAgentWizard({
   const renderWizardStep = () => {
     switch (currentStep) {
       case 1:
-        // Canal e Objetivo
+        // Canal e Modo de Operação
         return (
           <div className="space-y-6">
             <div className="space-y-3">
@@ -1327,38 +1489,145 @@ export function SDRAgentWizard({
             </div>
 
             <div className="space-y-3">
-              <Label className="text-base font-medium">Objetivo Principal</Label>
+              <Label className="text-base font-medium">Modo de Operação</Label>
+              <p className="text-sm text-muted-foreground">
+                Define o objetivo principal do agente e como ele conduz as conversas
+              </p>
               <RadioGroup
-                value={wizardData.objective}
-                onValueChange={(value) => updateField('objective', value as WizardData['objective'])}
+                value={wizardData.agentMode}
+                onValueChange={(value) => updateField('agentMode', value as AgentMode)}
                 className="grid gap-2"
               >
-                {OBJECTIVES.map((obj) => (
-                  <div 
-                    key={obj.value}
-                    className={cn(
-                      "flex items-center space-x-3 p-3 rounded-lg border cursor-pointer transition-colors",
-                      wizardData.objective === obj.value && "border-primary bg-primary/5"
-                    )}
-                  >
-                    <RadioGroupItem value={obj.value} id={`obj-${obj.value}`} />
-                    <div className="flex-1">
-                      <Label htmlFor={`obj-${obj.value}`} className="cursor-pointer font-medium">
-                        {obj.label}
-                      </Label>
-                      <p className="text-sm text-muted-foreground">{obj.description}</p>
+                {AGENT_MODES.map((mode) => {
+                  const Icon = mode.icon;
+                  return (
+                    <div 
+                      key={mode.value}
+                      className={cn(
+                        "flex items-center space-x-3 p-3 rounded-lg border cursor-pointer transition-colors",
+                        wizardData.agentMode === mode.value && "border-primary bg-primary/5"
+                      )}
+                    >
+                      <RadioGroupItem value={mode.value} id={`mode-${mode.value}`} />
+                      <Icon className="h-5 w-5 text-muted-foreground" />
+                      <div className="flex-1">
+                        <Label htmlFor={`mode-${mode.value}`} className="cursor-pointer font-medium">
+                          {mode.label}
+                        </Label>
+                        <p className="text-sm text-muted-foreground">{mode.description}</p>
+                      </div>
                     </div>
-                  </div>
-                ))}
+                  );
+                })}
               </RadioGroup>
             </div>
+
+            {/* Hybrid Mode Priority */}
+            {wizardData.agentMode === 'hybrid' && (
+              <div className="space-y-3 p-4 border rounded-lg bg-muted/30">
+                <Label className="text-base font-medium">Prioridade dos Objetivos</Label>
+                <p className="text-sm text-muted-foreground">
+                  Selecione os objetivos em ordem de prioridade (o primeiro é o principal)
+                </p>
+                <div className="space-y-2">
+                  {(['close_sale', 'qualify', 'schedule'] as AgentMode[]).map((mode) => {
+                    const modeInfo = AGENT_MODES.find(m => m.value === mode);
+                    const isSelected = wizardData.hybridPriority.includes(mode);
+                    const priorityIndex = wizardData.hybridPriority.indexOf(mode);
+                    
+                    return (
+                      <div
+                        key={mode}
+                        className={cn(
+                          "flex items-center justify-between p-3 rounded-lg border cursor-pointer transition-colors",
+                          isSelected && "border-primary bg-primary/5"
+                        )}
+                        onClick={() => {
+                          if (isSelected) {
+                            updateField('hybridPriority', wizardData.hybridPriority.filter(m => m !== mode));
+                          } else {
+                            updateField('hybridPriority', [...wizardData.hybridPriority, mode]);
+                          }
+                        }}
+                      >
+                        <div className="flex items-center gap-3">
+                          <Checkbox checked={isSelected} />
+                          <span className="font-medium">{modeInfo?.label}</span>
+                        </div>
+                        {isSelected && (
+                          <Badge variant="secondary">#{priorityIndex + 1}</Badge>
+                        )}
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+            )}
+
+            {/* Mode-specific fields */}
+            {(wizardData.agentMode === 'qualify' || (wizardData.agentMode === 'hybrid' && wizardData.hybridPriority.includes('qualify'))) && (
+              <div className="space-y-3 p-4 border rounded-lg bg-muted/30">
+                <Label className="text-base font-medium">Perguntas de Qualificação</Label>
+                <p className="text-sm text-muted-foreground">
+                  Perguntas que o agente deve tentar coletar (opcional)
+                </p>
+                <Textarea
+                  value={wizardData.qualificationMinQuestions.join('\n')}
+                  onChange={(e) => updateField('qualificationMinQuestions', e.target.value.split('\n').filter(q => q.trim()))}
+                  rows={3}
+                  placeholder="Uma pergunta por linha, ex:&#10;Qual seu orçamento?&#10;Quando pretende implementar?&#10;Quem decide a compra?"
+                />
+              </div>
+            )}
+
+            {(wizardData.agentMode === 'close_sale' || wizardData.agentMode === 'schedule' || 
+              (wizardData.agentMode === 'hybrid' && (wizardData.hybridPriority.includes('close_sale') || wizardData.hybridPriority.includes('schedule')))) && (
+              <div className="space-y-3 p-4 border rounded-lg bg-muted/30">
+                <Label className="text-base font-medium">CTA de Conversão</Label>
+                <p className="text-sm text-muted-foreground">
+                  Mensagem/link que o agente usa para converter
+                </p>
+                <Input
+                  value={wizardData.conversionCta}
+                  onChange={(e) => updateField('conversionCta', e.target.value)}
+                  placeholder="Ex: Acesse aqui para agendar: [link] ou Clique para comprar: [link]"
+                />
+              </div>
+            )}
           </div>
         );
 
       case 2:
-        // Tom e Formato
+        // Tom, Formato e Empatia
         return (
           <div className="space-y-6">
+            {/* Empathy Level Slider - NEW */}
+            <div className="space-y-4">
+              <div className="flex items-center justify-between">
+                <Label className="text-base font-medium">Nível de Empatia</Label>
+                <Badge variant="outline">{EMPATHY_LABELS[wizardData.empathyLevel]}</Badge>
+              </div>
+              <div className="px-2">
+                <Slider
+                  value={[wizardData.empathyLevel]}
+                  onValueChange={([value]) => updateField('empathyLevel', value as 0 | 1 | 2 | 3)}
+                  min={0}
+                  max={3}
+                  step={1}
+                  className="w-full"
+                />
+                <div className="flex justify-between text-xs text-muted-foreground mt-1">
+                  <span>Direto</span>
+                  <span>Cordial</span>
+                  <span>Empático</span>
+                  <span>Acolhedor</span>
+                </div>
+              </div>
+              <p className="text-sm text-muted-foreground">
+                {EMPATHY_DESCRIPTIONS[wizardData.empathyLevel]}
+              </p>
+            </div>
+
             {/* Response Length Slider */}
             <div className="space-y-4">
               <div className="flex items-center justify-between">
@@ -1587,20 +1856,20 @@ export function SDRAgentWizard({
         );
 
       case 5:
-        // Fallbacks
+        // Fallbacks e Compliance
         return (
           <div className="space-y-6">
             <div>
               <Label className="text-base font-medium">Mensagens de Fallback</Label>
               <p className="text-sm text-muted-foreground mb-4">
-                Mensagens padrão para situações especiais. Personalize como preferir.
+                Mensagens padrão para situações especiais.
               </p>
             </div>
 
             <div className="space-y-4">
               <div className="space-y-2">
                 <Label className="flex items-center gap-2">
-                  <Database className="h-4 w-4 text-blue-500" />
+                  <Database className="h-4 w-4 text-muted-foreground" />
                   Quando não encontrar na base de conhecimento
                 </Label>
                 <Textarea
@@ -1613,7 +1882,7 @@ export function SDRAgentWizard({
 
               <div className="space-y-2">
                 <Label className="flex items-center gap-2">
-                  <MessageCircleWarning className="h-4 w-4 text-orange-500" />
+                  <MessageCircleWarning className="h-4 w-4 text-muted-foreground" />
                   Quando o assunto está fora do escopo
                 </Label>
                 <Textarea
@@ -1626,7 +1895,7 @@ export function SDRAgentWizard({
 
               <div className="space-y-2">
                 <Label className="flex items-center gap-2">
-                  <User className="h-4 w-4 text-green-500" />
+                  <User className="h-4 w-4 text-muted-foreground" />
                   Quando transferir para atendimento humano
                 </Label>
                 <Textarea
@@ -1638,49 +1907,54 @@ export function SDRAgentWizard({
               </div>
             </div>
 
-            {/* Company info for prompt generation */}
-            <div className="p-4 border rounded-lg bg-muted/30 space-y-3">
-              <Label className="text-base font-medium">Informações da Empresa (opcional)</Label>
-              <p className="text-sm text-muted-foreground">
-                Preencha para gerar um prompt mais personalizado
-              </p>
-              
-              <div className="grid grid-cols-2 gap-3">
-                <div className="space-y-2">
-                  <Label>Nome da Empresa</Label>
-                  <Input
-                    value={wizardData.companyName}
-                    onChange={(e) => updateField('companyName', e.target.value)}
-                    placeholder="Ex: TechCorp"
-                  />
-                </div>
-                <div className="space-y-2">
-                  <Label>Segmento</Label>
-                  <Select
-                    value={wizardData.companySegment}
-                    onValueChange={(value) => updateField('companySegment', value)}
-                  >
-                    <SelectTrigger>
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {SEGMENTS.map((segment) => (
-                        <SelectItem key={segment.value} value={segment.value}>
-                          {segment.label}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                </div>
+            {/* Compliance Rules */}
+            <div className="p-4 border rounded-lg bg-muted/30 space-y-4">
+              <div>
+                <Label className="text-base font-medium flex items-center gap-2">
+                  <Shield className="h-4 w-4" />
+                  Regras de Compliance (opcional)
+                </Label>
+                <p className="text-sm text-muted-foreground">
+                  Defina o que o agente NÃO pode prometer ou dizer
+                </p>
               </div>
               
               <div className="space-y-2">
-                <Label>Produtos/Serviços</Label>
+                <Label>Promessas proibidas</Label>
                 <Textarea
-                  value={wizardData.products}
-                  onChange={(e) => updateField('products', e.target.value)}
+                  value={wizardData.complianceRules.forbiddenPromises.join('\n')}
+                  onChange={(e) => updateField('complianceRules', {
+                    ...wizardData.complianceRules,
+                    forbiddenPromises: e.target.value.split('\n').filter(p => p.trim())
+                  })}
                   rows={2}
-                  placeholder="Liste seus principais produtos ou serviços..."
+                  placeholder="Uma por linha, ex:&#10;resultado garantido&#10;retorno em 24h"
+                />
+              </div>
+
+              <div className="space-y-2">
+                <Label>Termos a evitar</Label>
+                <Textarea
+                  value={wizardData.complianceRules.forbiddenTerms.join('\n')}
+                  onChange={(e) => updateField('complianceRules', {
+                    ...wizardData.complianceRules,
+                    forbiddenTerms: e.target.value.split('\n').filter(t => t.trim())
+                  })}
+                  rows={2}
+                  placeholder="Uma por linha, ex:&#10;grátis&#10;100% garantido"
+                />
+              </div>
+
+              <div className="space-y-2">
+                <Label>Disclaimers obrigatórios</Label>
+                <Textarea
+                  value={wizardData.complianceRules.requiredDisclaimers.join('\n')}
+                  onChange={(e) => updateField('complianceRules', {
+                    ...wizardData.complianceRules,
+                    requiredDisclaimers: e.target.value.split('\n').filter(d => d.trim())
+                  })}
+                  rows={2}
+                  placeholder="Um por linha, ex:&#10;*Consulte condições"
                 />
               </div>
             </div>
