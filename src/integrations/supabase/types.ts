@@ -316,6 +316,60 @@ export type Database = {
         }
         Relationships: []
       }
+      agent_pending_questions: {
+        Row: {
+          agent_id: string
+          answer: string | null
+          answered_at: string | null
+          created_at: string | null
+          id: string
+          organization_id: string
+          question: string
+          slot: string | null
+          source_feedback: string | null
+          status: string | null
+        }
+        Insert: {
+          agent_id: string
+          answer?: string | null
+          answered_at?: string | null
+          created_at?: string | null
+          id?: string
+          organization_id: string
+          question: string
+          slot?: string | null
+          source_feedback?: string | null
+          status?: string | null
+        }
+        Update: {
+          agent_id?: string
+          answer?: string | null
+          answered_at?: string | null
+          created_at?: string | null
+          id?: string
+          organization_id?: string
+          question?: string
+          slot?: string | null
+          source_feedback?: string | null
+          status?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "agent_pending_questions_agent_id_fkey"
+            columns: ["agent_id"]
+            isOneToOne: false
+            referencedRelation: "ai_agents"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "agent_pending_questions_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       ai_agent_logs: {
         Row: {
           agent_id: string
@@ -396,15 +450,92 @@ export type Database = {
           },
         ]
       }
+      ai_agent_versions: {
+        Row: {
+          agent_id: string
+          ai_model: string | null
+          ai_provider: string | null
+          change_note: string | null
+          compliance_rules: Json | null
+          created_at: string | null
+          created_by: string | null
+          enabled_tools: Json | null
+          feedback_rules: Json | null
+          id: string
+          is_rollback: boolean | null
+          kernel_prompt: string | null
+          rollback_from_version: number | null
+          tool_triggers: Json | null
+          version_number: number
+          wizard_data: Json | null
+        }
+        Insert: {
+          agent_id: string
+          ai_model?: string | null
+          ai_provider?: string | null
+          change_note?: string | null
+          compliance_rules?: Json | null
+          created_at?: string | null
+          created_by?: string | null
+          enabled_tools?: Json | null
+          feedback_rules?: Json | null
+          id?: string
+          is_rollback?: boolean | null
+          kernel_prompt?: string | null
+          rollback_from_version?: number | null
+          tool_triggers?: Json | null
+          version_number: number
+          wizard_data?: Json | null
+        }
+        Update: {
+          agent_id?: string
+          ai_model?: string | null
+          ai_provider?: string | null
+          change_note?: string | null
+          compliance_rules?: Json | null
+          created_at?: string | null
+          created_by?: string | null
+          enabled_tools?: Json | null
+          feedback_rules?: Json | null
+          id?: string
+          is_rollback?: boolean | null
+          kernel_prompt?: string | null
+          rollback_from_version?: number | null
+          tool_triggers?: Json | null
+          version_number?: number
+          wizard_data?: Json | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "ai_agent_versions_agent_id_fkey"
+            columns: ["agent_id"]
+            isOneToOne: false
+            referencedRelation: "ai_agents"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "ai_agent_versions_created_by_fkey"
+            columns: ["created_by"]
+            isOneToOne: false
+            referencedRelation: "users"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       ai_agents: {
         Row: {
+          agent_mode: string | null
           agent_type: string
           ai_model: string | null
           ai_provider: string | null
+          compliance_rules: Json | null
           created_at: string | null
+          current_version: number | null
           custom_instructions: string | null
+          empathy_level: number | null
           enabled_tools: Json | null
           feedback_history: Json | null
+          feedback_rules: Json | null
           goal: string
           greeting_message: string | null
           id: string
@@ -415,18 +546,24 @@ export type Database = {
           out_of_hours_message: string | null
           tone: string
           tool_settings: Json | null
+          tool_triggers: Json | null
           updated_at: string | null
           wizard_data: Json | null
           working_hours: Json | null
         }
         Insert: {
+          agent_mode?: string | null
           agent_type?: string
           ai_model?: string | null
           ai_provider?: string | null
+          compliance_rules?: Json | null
           created_at?: string | null
+          current_version?: number | null
           custom_instructions?: string | null
+          empathy_level?: number | null
           enabled_tools?: Json | null
           feedback_history?: Json | null
+          feedback_rules?: Json | null
           goal?: string
           greeting_message?: string | null
           id?: string
@@ -437,18 +574,24 @@ export type Database = {
           out_of_hours_message?: string | null
           tone?: string
           tool_settings?: Json | null
+          tool_triggers?: Json | null
           updated_at?: string | null
           wizard_data?: Json | null
           working_hours?: Json | null
         }
         Update: {
+          agent_mode?: string | null
           agent_type?: string
           ai_model?: string | null
           ai_provider?: string | null
+          compliance_rules?: Json | null
           created_at?: string | null
+          current_version?: number | null
           custom_instructions?: string | null
+          empathy_level?: number | null
           enabled_tools?: Json | null
           feedback_history?: Json | null
+          feedback_rules?: Json | null
           goal?: string
           greeting_message?: string | null
           id?: string
@@ -459,6 +602,7 @@ export type Database = {
           out_of_hours_message?: string | null
           tone?: string
           tool_settings?: Json | null
+          tool_triggers?: Json | null
           updated_at?: string | null
           wizard_data?: Json | null
           working_hours?: Json | null

@@ -65,3 +65,6 @@ verify_jwt = true
 
 [functions.synthesize-knowledge]
 verify_jwt = true
+
+[functions.classify-agent-feedback]
+verify_jwt = true

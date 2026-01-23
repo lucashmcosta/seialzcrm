@@ -897,6 +897,32 @@ ${item.content}
     });
   }
 
+  // Add feedback rules (learned behavior from user feedback)
+  const feedbackRules = (agent.feedback_rules as any[]) || [];
+  const activeRules = feedbackRules.filter((r: any) => r.isActive !== false);
+  if (activeRules.length > 0) {
+    prompt += `
+## REGRAS APRENDIDAS COM FEEDBACK
+⚠️ PRIORIDADE ALTA - Estas regras têm precedência sobre as instruções gerais:
+`;
+    activeRules.slice(0, 20).forEach((rule: any) => {
+      prompt += `- ${rule.trigger}: "${rule.response}"
+`;
+    });
+  }
+
+  // Add custom tool triggers if configured
+  const toolTriggers = agent.tool_triggers as Record<string, string> | null;
+  if (toolTriggers && Object.keys(toolTriggers).length > 0) {
+    prompt += `
+## GATILHOS ESPECÍFICOS DE FERRAMENTAS
+`;
+    Object.entries(toolTriggers).forEach(([tool, trigger]) => {
+      prompt += `- **${tool}**: ${trigger}
+`;
+    });
+  }
+
   prompt += `
 ## REGRAS IMPORTANTES
 1. Responda APENAS com a mensagem para o cliente, sem explicações ou meta-comentários
@@ -906,6 +932,7 @@ ${item.content}
 5. Se não souber algo, ofereça conectar com um especialista
 6. Use as ferramentas disponíveis proativamente quando fizer sentido
 7. SEMPRE confirme informações importantes antes de atualizar o CRM
+8. Revise as ÚLTIMAS 3 mensagens do usuário para detectar correções ("não", "quis dizer", "na verdade")
 `;
 
   return prompt;
