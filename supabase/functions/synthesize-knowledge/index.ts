@@ -5,9 +5,12 @@ const corsHeaders = {
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
 };
 
+type KnowledgeType = 'general' | 'faq_only' | 'policy' | 'product';
+
 interface SynthesizeRequest {
   slots: Record<string, string>;
   faqs: Array<{ question: string; answer: string }>;
+  knowledgeType?: KnowledgeType;
 }
 
 interface SynthesizeResponse {
@@ -15,35 +18,106 @@ interface SynthesizeResponse {
   content: string;
 }
 
-const SYNTHESIZE_SYSTEM_PROMPT = `Você é um especialista em criar documentos de conhecimento otimizados para busca semântica (RAG).
-
-Você recebe informações coletadas sobre um produto/serviço e deve gerar um documento estruturado.
+const GENERAL_SYNTHESIZE_PROMPT = `Você é um especialista em criar documentos de conhecimento otimizados para busca semântica (RAG).
 
 REGRAS:
 1. Use APENAS as informações fornecidas. NÃO invente nada.
 2. Se um campo não foi informado ou está como "não informado", NÃO inclua essa seção.
 3. Use linguagem clara, direta e profissional.
 4. Estruture em seções com headers markdown (##).
-5. Cada seção deve ser auto-contida e compreensível isoladamente.
 
 ESTRUTURA DO DOCUMENTO:
-- Título: [Nome do produto/serviço] - deve ser claro e descritivo
-- ## Visão Geral (1-2 parágrafos resumindo o que é)
-- ## Público-Alvo (para quem é indicado)
-- ## O que Inclui (lista ou descrição)
-- ## O que Não Inclui (se informado)
-- ## Investimento (preço/faixa/condições)
-- ## Prazo (timeline típico)
-- ## Requisitos (documentos/informações necessárias)
-- ## Como Começar (próximo passo)
-- ## Políticas (reembolso/cancelamento se houver)
-- ## Perguntas Frequentes (se houver FAQs)
+- Título: [Nome do produto/serviço]
+- ## Visão Geral
+- ## Público-Alvo
+- ## O que Inclui
+- ## O que Não Inclui
+- ## Investimento
+- ## Prazo
+- ## Requisitos
+- ## Como Começar
+- ## Políticas
+- ## Perguntas Frequentes
 
 FORMATO DE RESPOSTA (JSON):
 {
   "title": "Título claro e descritivo",
   "content": "Conteúdo em markdown"
 }`;
+
+const FAQ_ONLY_SYNTHESIZE_PROMPT = `Você é um especialista em organizar FAQs para busca semântica.
+
+REGRAS:
+1. Use APENAS as FAQs fornecidas.
+2. Organize em formato claro de perguntas e respostas.
+3. Use linguagem natural e direta.
+
+ESTRUTURA DO DOCUMENTO:
+- Título: Perguntas Frequentes - [Tema]
+- ## Perguntas Frequentes
+- Cada pergunta em **negrito**, resposta em texto normal
+
+FORMATO DE RESPOSTA (JSON):
+{
+  "title": "Perguntas Frequentes - [Tema]",
+  "content": "## Perguntas Frequentes\\n\\n**P: Pergunta 1?**\\nR: Resposta 1\\n\\n..."
+}`;
+
+const POLICY_SYNTHESIZE_PROMPT = `Você é um especialista em documentar políticas empresariais.
+
+REGRAS:
+1. Use APENAS as políticas fornecidas.
+2. Seja claro e objetivo sobre termos e condições.
+3. Estruture cada política em sua própria seção.
+
+ESTRUTURA DO DOCUMENTO:
+- Título: Políticas - [Nome da Empresa/Serviço]
+- ## Política de Reembolso (se houver)
+- ## Política de Cancelamento (se houver)
+- ## Garantia (se houver)
+- ## Termos de Uso (se houver)
+- ## Privacidade (se houver)
+
+FORMATO DE RESPOSTA (JSON):
+{
+  "title": "Políticas - [Nome]",
+  "content": "Conteúdo em markdown"
+}`;
+
+const PRODUCT_SYNTHESIZE_PROMPT = `Você é um especialista em criar fichas técnicas de produtos/serviços.
+
+REGRAS:
+1. Use APENAS as informações fornecidas.
+2. Seja objetivo e organizado.
+3. Inclua FAQs específicas do produto se houver.
+
+ESTRUTURA DO DOCUMENTO:
+- Título: [Nome do Produto/Serviço]
+- ## Descrição
+- ## Características
+- ## Preço
+- ## Disponibilidade
+- ## Público-Alvo
+- ## Perguntas Frequentes (se houver)
+
+FORMATO DE RESPOSTA (JSON):
+{
+  "title": "[Nome do Produto]",
+  "content": "Conteúdo em markdown"
+}`;
+
+function getSynthesizePrompt(knowledgeType: KnowledgeType): string {
+  switch (knowledgeType) {
+    case 'faq_only':
+      return FAQ_ONLY_SYNTHESIZE_PROMPT;
+    case 'policy':
+      return POLICY_SYNTHESIZE_PROMPT;
+    case 'product':
+      return PRODUCT_SYNTHESIZE_PROMPT;
+    default:
+      return GENERAL_SYNTHESIZE_PROMPT;
+  }
+}
 
 async function callLovableAI(systemPrompt: string, userPrompt: string): Promise<string> {
   const LOVABLE_API_KEY = Deno.env.get("LOVABLE_API_KEY");
@@ -87,7 +161,6 @@ async function callLovableAI(systemPrompt: string, userPrompt: string): Promise<
 function parseResponse(responseText: string): SynthesizeResponse {
   let jsonStr = responseText.trim();
   
-  // Remove markdown code blocks if present
   if (jsonStr.startsWith("```json")) {
     jsonStr = jsonStr.slice(7);
   } else if (jsonStr.startsWith("```")) {
@@ -110,7 +183,68 @@ function parseResponse(responseText: string): SynthesizeResponse {
   };
 }
 
-function buildUserPrompt(slots: Record<string, string>, faqs: Array<{ question: string; answer: string }>): string {
+function buildUserPrompt(slots: Record<string, string>, faqs: Array<{ question: string; answer: string }>, knowledgeType: KnowledgeType): string {
+  let prompt = "";
+
+  if (knowledgeType === 'faq_only') {
+    prompt = "FAQs COLETADAS:\n\n";
+    if (faqs && faqs.length > 0) {
+      for (const faq of faqs) {
+        prompt += `P: ${faq.question}\nR: ${faq.answer}\n\n`;
+      }
+    }
+    prompt += "\nGere o documento de FAQs formatado.";
+    return prompt;
+  }
+
+  if (knowledgeType === 'policy') {
+    const policyLabels: Record<string, string> = {
+      refund_policy: "Política de Reembolso",
+      cancellation_policy: "Política de Cancelamento",
+      warranty: "Garantia",
+      terms: "Termos de Uso",
+      privacy: "Privacidade",
+    };
+    
+    prompt = "POLÍTICAS COLETADAS:\n\n";
+    for (const [key, label] of Object.entries(policyLabels)) {
+      if (slots[key] && slots[key].trim() && slots[key].toLowerCase() !== "não informado") {
+        prompt += `${label}: ${slots[key]}\n`;
+      }
+    }
+    prompt += "\nGere o documento de políticas formatado.";
+    return prompt;
+  }
+
+  if (knowledgeType === 'product') {
+    const productLabels: Record<string, string> = {
+      product_name: "Nome do Produto",
+      description: "Descrição",
+      features: "Características",
+      price: "Preço",
+      availability: "Disponibilidade",
+      target_customer: "Público-alvo",
+    };
+    
+    prompt = "INFORMAÇÕES DO PRODUTO:\n\n";
+    for (const [key, label] of Object.entries(productLabels)) {
+      if (slots[key] && slots[key].trim() && slots[key].toLowerCase() !== "não informado") {
+        prompt += `${label}: ${slots[key]}\n`;
+      }
+    }
+    
+    if (faqs && faqs.length > 0) {
+      prompt += "\nPERGUNTAS FREQUENTES:\n";
+      for (const faq of faqs) {
+        prompt += `\nP: ${faq.question}\nR: ${faq.answer}\n`;
+      }
+    }
+    
+    prompt += "\nGere a ficha do produto formatada.";
+    return prompt;
+  }
+
+  // General type
   const slotLabels: Record<string, string> = {
     offer: "O que oferece",
     target_customer: "Público-alvo",
@@ -123,7 +257,7 @@ function buildUserPrompt(slots: Record<string, string>, faqs: Array<{ question: 
     policies: "Políticas (reembolso/cancelamento)",
   };
   
-  let prompt = "INFORMAÇÕES COLETADAS:\n\n";
+  prompt = "INFORMAÇÕES COLETADAS:\n\n";
   
   for (const [key, label] of Object.entries(slotLabels)) {
     if (slots[key] && slots[key].trim() && slots[key].toLowerCase() !== "não informado") {
@@ -149,17 +283,28 @@ serve(async (req) => {
   }
 
   try {
-    const { slots, faqs } = await req.json() as SynthesizeRequest;
+    const { slots, faqs, knowledgeType = 'general' } = await req.json() as SynthesizeRequest;
     
-    if (!slots || Object.keys(slots).length === 0) {
-      return new Response(
-        JSON.stringify({ error: "Nenhuma informação fornecida para síntese" }),
-        { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
-      );
+    // For FAQ only, we just need FAQs
+    if (knowledgeType === 'faq_only') {
+      if (!faqs || faqs.length === 0) {
+        return new Response(
+          JSON.stringify({ error: "Nenhuma FAQ fornecida para síntese" }),
+          { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+        );
+      }
+    } else {
+      if (!slots || Object.keys(slots).length === 0) {
+        return new Response(
+          JSON.stringify({ error: "Nenhuma informação fornecida para síntese" }),
+          { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+        );
+      }
     }
     
-    const userPrompt = buildUserPrompt(slots, faqs || []);
-    const responseText = await callLovableAI(SYNTHESIZE_SYSTEM_PROMPT, userPrompt);
+    const systemPrompt = getSynthesizePrompt(knowledgeType);
+    const userPrompt = buildUserPrompt(slots || {}, faqs || [], knowledgeType);
+    const responseText = await callLovableAI(systemPrompt, userPrompt);
     
     try {
       const result = parseResponse(responseText);
@@ -169,9 +314,8 @@ serve(async (req) => {
     } catch (parseError) {
       console.log("Parse error, trying retry...", parseError);
       
-      // Retry with explicit instruction
       const retryPrompt = `${userPrompt}\n\nIMPORTANTE: Retorne APENAS JSON válido, começando com { e terminando com }. Sem markdown code blocks.`;
-      const retryText = await callLovableAI(SYNTHESIZE_SYSTEM_PROMPT, retryPrompt);
+      const retryText = await callLovableAI(systemPrompt, retryPrompt);
       
       const result = parseResponse(retryText);
       return new Response(JSON.stringify(result), {

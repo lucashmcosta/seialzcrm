@@ -18,7 +18,11 @@ import {
   Sparkles,
   MessageSquare,
   FileText,
-  RefreshCw
+  RefreshCw,
+  HelpCircle,
+  Shield,
+  Package,
+  ArrowLeft
 } from 'lucide-react';
 
 interface ChatMessage {
@@ -26,9 +30,11 @@ interface ChatMessage {
   content: string;
 }
 
+type KnowledgeType = 'general' | 'faq_only' | 'policy' | 'product';
+
 interface WizardResponse {
   message: string;
-  stage: 'discovery' | 'slots' | 'faq_generation' | 'complete';
+  stage: 'discovery' | 'slots' | 'faq_generation' | 'policy_slots' | 'product_slots' | 'complete';
   nextQuestion: string | null;
   slotUpdates: Record<string, string>;
   missingSlots: string[];
@@ -54,16 +60,68 @@ const SLOT_LABELS: Record<string, string> = {
   policies: 'Políticas',
 };
 
+const POLICY_SLOT_LABELS: Record<string, string> = {
+  refund_policy: 'Política de Reembolso',
+  cancellation_policy: 'Política de Cancelamento',
+  warranty: 'Garantia',
+  terms: 'Termos de Uso',
+  privacy: 'Privacidade',
+};
+
+const PRODUCT_SLOT_LABELS: Record<string, string> = {
+  product_name: 'Nome do Produto',
+  description: 'Descrição',
+  features: 'Características',
+  price: 'Preço',
+  availability: 'Disponibilidade',
+  target_customer: 'Público-alvo',
+};
+
 const STAGE_LABELS: Record<string, { label: string; color: string }> = {
   discovery: { label: 'Descoberta', color: 'bg-primary/10 text-primary' },
   slots: { label: 'Coleta de Informações', color: 'bg-secondary text-secondary-foreground' },
   faq_generation: { label: 'Perguntas Frequentes', color: 'bg-accent text-accent-foreground' },
+  policy_slots: { label: 'Coleta de Políticas', color: 'bg-secondary text-secondary-foreground' },
+  product_slots: { label: 'Detalhes do Produto', color: 'bg-secondary text-secondary-foreground' },
   complete: { label: 'Completo', color: 'bg-success/10 text-success' },
 };
 
+const KNOWLEDGE_TYPES: Array<{
+  id: KnowledgeType;
+  label: string;
+  description: string;
+  icon: typeof FileText;
+}> = [
+  {
+    id: 'general',
+    label: 'Geral',
+    description: 'Documento completo com todas as informações do negócio',
+    icon: FileText,
+  },
+  {
+    id: 'faq_only',
+    label: 'Somente FAQs',
+    description: 'Adicionar perguntas frequentes à base existente',
+    icon: HelpCircle,
+  },
+  {
+    id: 'policy',
+    label: 'Políticas',
+    description: 'Regras de reembolso, cancelamento, garantias',
+    icon: Shield,
+  },
+  {
+    id: 'product',
+    label: 'Produto/Serviço',
+    description: 'Detalhes específicos de um produto ou serviço',
+    icon: Package,
+  },
+];
+
 export function KnowledgeWizardChat({ agentId, onComplete, onCancel }: KnowledgeWizardChatProps) {
+  const [knowledgeType, setKnowledgeType] = useState<KnowledgeType | null>(null);
   const [messages, setMessages] = useState<ChatMessage[]>([]);
-  const [currentStage, setCurrentStage] = useState<'discovery' | 'slots' | 'faq_generation' | 'complete'>('discovery');
+  const [currentStage, setCurrentStage] = useState<'discovery' | 'slots' | 'faq_generation' | 'policy_slots' | 'product_slots' | 'complete'>('discovery');
   const [extractedSlots, setExtractedSlots] = useState<Record<string, string>>({});
   const [missingSlots, setMissingSlots] = useState<string[]>(Object.keys(SLOT_LABELS));
   const [suggestedFaqs, setSuggestedFaqs] = useState<string[]>([]);
@@ -76,11 +134,6 @@ export function KnowledgeWizardChat({ agentId, onComplete, onCancel }: Knowledge
   
   const scrollRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
-
-  // Initialize with first AI message
-  useEffect(() => {
-    sendInitialMessage();
-  }, []);
 
   // Auto-scroll to bottom
   useEffect(() => {
@@ -96,14 +149,32 @@ export function KnowledgeWizardChat({ agentId, onComplete, onCancel }: Knowledge
     }
   }, [isLoading, currentStage]);
 
-  const sendInitialMessage = async () => {
+  const startWizard = async (type: KnowledgeType) => {
+    setKnowledgeType(type);
     setIsLoading(true);
+    
+    // Set appropriate initial stage and slots based on type
+    if (type === 'faq_only') {
+      setCurrentStage('faq_generation');
+      setMissingSlots([]);
+    } else if (type === 'policy') {
+      setCurrentStage('policy_slots');
+      setMissingSlots(Object.keys(POLICY_SLOT_LABELS));
+    } else if (type === 'product') {
+      setCurrentStage('product_slots');
+      setMissingSlots(Object.keys(PRODUCT_SLOT_LABELS));
+    } else {
+      setCurrentStage('discovery');
+      setMissingSlots(Object.keys(SLOT_LABELS));
+    }
+    
     try {
       const { data, error } = await supabase.functions.invoke('knowledge-wizard', {
         body: {
           recentMessages: [],
           currentSlots: {},
           userMessage: 'Iniciar wizard para criar conhecimento',
+          knowledgeType: type,
         },
       });
 
@@ -118,21 +189,27 @@ export function KnowledgeWizardChat({ agentId, onComplete, onCancel }: Knowledge
       if (response.missingSlots) {
         setMissingSlots(response.missingSlots);
       }
+      if (response.suggestedQuestions && response.suggestedQuestions.length > 0) {
+        setSuggestedFaqs(response.suggestedQuestions);
+      }
     } catch (error) {
       console.error('Error starting wizard:', error);
       toast.error('Erro ao iniciar o assistente');
-      // Fallback message
-      setMessages([{ 
-        role: 'assistant', 
-        content: 'Olá! O que sua empresa oferece? (produto, serviço, consultoria...)' 
-      }]);
+      // Fallback message based on type
+      const fallbackMessages: Record<KnowledgeType, string> = {
+        general: 'Olá! O que sua empresa oferece? (produto, serviço, consultoria...)',
+        faq_only: 'Olá! Vamos criar FAQs para sua base de conhecimento. Sobre qual produto ou serviço você quer criar perguntas frequentes?',
+        policy: 'Olá! Vamos documentar suas políticas. Qual política você gostaria de definir primeiro? (reembolso, cancelamento, garantia...)',
+        product: 'Olá! Vamos criar a documentação de um produto/serviço. Qual é o nome do produto ou serviço?',
+      };
+      setMessages([{ role: 'assistant', content: fallbackMessages[type] }]);
     } finally {
       setIsLoading(false);
     }
   };
 
   const handleSend = async () => {
-    if (!inputValue.trim() || isLoading) return;
+    if (!inputValue.trim() || isLoading || !knowledgeType) return;
 
     const userMessage = inputValue.trim();
     setInputValue('');
@@ -151,6 +228,7 @@ export function KnowledgeWizardChat({ agentId, onComplete, onCancel }: Knowledge
           recentMessages,
           currentSlots: extractedSlots,
           userMessage,
+          knowledgeType,
         },
       });
 
@@ -212,12 +290,15 @@ export function KnowledgeWizardChat({ agentId, onComplete, onCancel }: Knowledge
   };
 
   const handleSynthesize = async () => {
+    if (!knowledgeType) return;
+    
     setIsSynthesizing(true);
     try {
       const { data, error } = await supabase.functions.invoke('synthesize-knowledge', {
         body: {
           slots: extractedSlots,
           faqs: answeredFaqs,
+          knowledgeType,
         },
       });
 
@@ -241,34 +322,112 @@ export function KnowledgeWizardChat({ agentId, onComplete, onCancel }: Knowledge
     }
   };
 
+  const handleBack = () => {
+    setKnowledgeType(null);
+    setMessages([]);
+    setExtractedSlots({});
+    setAnsweredFaqs([]);
+    setSuggestedFaqs([]);
+    setFinalContent(null);
+    setCurrentStage('discovery');
+  };
+
+  // Get appropriate slot labels based on knowledge type
+  const getSlotLabels = () => {
+    if (knowledgeType === 'policy') return POLICY_SLOT_LABELS;
+    if (knowledgeType === 'product') return PRODUCT_SLOT_LABELS;
+    return SLOT_LABELS;
+  };
+
+  const currentSlotLabels = getSlotLabels();
   const filledSlotsCount = Object.keys(extractedSlots).filter(k => extractedSlots[k]).length;
-  const totalSlots = Object.keys(SLOT_LABELS).length;
-  const progressPercent = (filledSlotsCount / totalSlots) * 100;
+  const totalSlots = Object.keys(currentSlotLabels).length;
+  const progressPercent = knowledgeType === 'faq_only' 
+    ? (answeredFaqs.length / 3) * 100 
+    : (filledSlotsCount / totalSlots) * 100;
+
+  // Type selection screen
+  if (!knowledgeType) {
+    return (
+      <div className="flex flex-col h-full max-h-[70vh]">
+        <div className="flex items-center gap-3 p-4 border-b">
+          <div className="p-2 rounded-full bg-primary/10">
+            <MessageSquare className="h-5 w-5 text-primary" />
+          </div>
+          <div>
+            <h3 className="font-semibold">Criar Base de Conhecimento</h3>
+            <p className="text-sm text-muted-foreground">Escolha o tipo de conteúdo</p>
+          </div>
+        </div>
+
+        <div className="flex-1 p-6">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            {KNOWLEDGE_TYPES.map((type) => {
+              const Icon = type.icon;
+              return (
+                <button
+                  key={type.id}
+                  onClick={() => startWizard(type.id)}
+                  className="flex items-start gap-4 p-4 rounded-lg border bg-card hover:bg-accent/50 hover:border-primary/50 transition-all text-left group"
+                >
+                  <div className="p-3 rounded-lg bg-primary/10 group-hover:bg-primary/20 transition-colors">
+                    <Icon className="h-6 w-6 text-primary" />
+                  </div>
+                  <div className="flex-1">
+                    <h4 className="font-medium text-foreground">{type.label}</h4>
+                    <p className="text-sm text-muted-foreground mt-1">{type.description}</p>
+                  </div>
+                </button>
+              );
+            })}
+          </div>
+        </div>
+
+        <div className="flex justify-end p-4 border-t bg-muted/30">
+          <Button variant="ghost" onClick={onCancel}>
+            Cancelar
+          </Button>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="flex flex-col h-full max-h-[70vh]">
       {/* Header with stage indicator */}
       <div className="flex items-center justify-between p-4 border-b">
         <div className="flex items-center gap-3">
+          <Button variant="ghost" size="icon" onClick={handleBack} className="shrink-0">
+            <ArrowLeft className="h-4 w-4" />
+          </Button>
           <div className="p-2 rounded-full bg-primary/10">
             <MessageSquare className="h-5 w-5 text-primary" />
           </div>
           <div>
-            <h3 className="font-semibold">Assistente de Conhecimento</h3>
+            <h3 className="font-semibold">
+              {KNOWLEDGE_TYPES.find(t => t.id === knowledgeType)?.label}
+            </h3>
             <div className="flex items-center gap-2 mt-1">
-              <Badge variant="outline" className={STAGE_LABELS[currentStage].color}>
-                {STAGE_LABELS[currentStage].label}
+              <Badge variant="outline" className={STAGE_LABELS[currentStage]?.color || 'bg-muted'}>
+                {STAGE_LABELS[currentStage]?.label || currentStage}
               </Badge>
-              <span className="text-xs text-muted-foreground">
-                {filledSlotsCount}/{totalSlots} campos
-              </span>
+              {knowledgeType !== 'faq_only' && (
+                <span className="text-xs text-muted-foreground">
+                  {filledSlotsCount}/{totalSlots} campos
+                </span>
+              )}
+              {knowledgeType === 'faq_only' && (
+                <span className="text-xs text-muted-foreground">
+                  {answeredFaqs.length} FAQs
+                </span>
+              )}
             </div>
           </div>
         </div>
         <div className="w-24 h-2 bg-muted rounded-full overflow-hidden">
           <div 
             className="h-full bg-primary transition-all duration-300" 
-            style={{ width: `${progressPercent}%` }}
+            style={{ width: `${Math.min(progressPercent, 100)}%` }}
           />
         </div>
       </div>
@@ -396,61 +555,88 @@ export function KnowledgeWizardChat({ agentId, onComplete, onCancel }: Knowledge
           )}
         </div>
 
-        {/* Slots panel */}
-        <div className="w-64 border-l bg-muted/30 hidden md:block">
-          <Collapsible open={slotsOpen} onOpenChange={setSlotsOpen}>
-            <CollapsibleTrigger className="flex items-center justify-between w-full p-3 hover:bg-muted/50">
-              <span className="text-sm font-medium">Informações Coletadas</span>
-              {slotsOpen ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
-            </CollapsibleTrigger>
-            <CollapsibleContent>
-              <div className="p-3 space-y-2">
-                {Object.entries(SLOT_LABELS).map(([key, label]) => {
-                  const value = extractedSlots[key];
-                  const isFilled = value && value.trim();
-                  return (
-                    <div key={key} className="flex items-start gap-2">
-                      {isFilled ? (
-                        <Check className="h-4 w-4 text-success mt-0.5 shrink-0" />
-                      ) : (
-                        <Circle className="h-4 w-4 text-muted-foreground mt-0.5 shrink-0" />
-                      )}
-                      <div className="flex-1 min-w-0">
-                        <p className={`text-xs font-medium ${isFilled ? 'text-foreground' : 'text-muted-foreground'}`}>
-                          {label}
-                        </p>
-                        {isFilled && (
-                          <p className="text-xs text-muted-foreground truncate" title={value}>
-                            {value.length > 50 ? value.slice(0, 50) + '...' : value}
-                          </p>
+        {/* Slots panel - only show for non-faq types */}
+        {knowledgeType !== 'faq_only' && (
+          <div className="w-64 border-l bg-muted/30 hidden md:block">
+            <Collapsible open={slotsOpen} onOpenChange={setSlotsOpen}>
+              <CollapsibleTrigger className="flex items-center justify-between w-full p-3 hover:bg-muted/50">
+                <span className="text-sm font-medium">Informações Coletadas</span>
+                {slotsOpen ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
+              </CollapsibleTrigger>
+              <CollapsibleContent>
+                <div className="p-3 space-y-2">
+                  {Object.entries(currentSlotLabels).map(([key, label]) => {
+                    const value = extractedSlots[key];
+                    const isFilled = value && value.trim();
+                    return (
+                      <div key={key} className="flex items-start gap-2">
+                        {isFilled ? (
+                          <Check className="h-4 w-4 text-success mt-0.5 shrink-0" />
+                        ) : (
+                          <Circle className="h-4 w-4 text-muted-foreground mt-0.5 shrink-0" />
                         )}
+                        <div className="flex-1 min-w-0">
+                          <p className={`text-xs font-medium ${isFilled ? 'text-foreground' : 'text-muted-foreground'}`}>
+                            {label}
+                          </p>
+                          {isFilled && (
+                            <p className="text-xs text-muted-foreground truncate" title={value}>
+                              {value.length > 50 ? value.slice(0, 50) + '...' : value}
+                            </p>
+                          )}
+                        </div>
                       </div>
+                    );
+                  })}
+                  
+                  {/* FAQs Respondidas */}
+                  {answeredFaqs.length > 0 && (
+                    <div className="border-t pt-3 mt-3">
+                      <p className="text-xs font-medium text-foreground mb-2">
+                        FAQs Respondidas ({answeredFaqs.length})
+                      </p>
+                      {answeredFaqs.map((faq, idx) => (
+                        <div key={idx} className="mb-2 pl-2 border-l-2 border-primary/30">
+                          <p className="text-xs font-medium text-foreground truncate" title={faq.question}>
+                            {faq.question.length > 35 ? faq.question.slice(0, 35) + '...' : faq.question}
+                          </p>
+                          <p className="text-xs text-muted-foreground truncate" title={faq.answer}>
+                            {faq.answer.length > 40 ? faq.answer.slice(0, 40) + '...' : faq.answer}
+                          </p>
+                        </div>
+                      ))}
                     </div>
-                  );
-                })}
-                
-                {/* FAQs Respondidas */}
-                {answeredFaqs.length > 0 && (
-                  <div className="border-t pt-3 mt-3">
-                    <p className="text-xs font-medium text-foreground mb-2">
-                      FAQs Respondidas ({answeredFaqs.length})
-                    </p>
-                    {answeredFaqs.map((faq, idx) => (
-                      <div key={idx} className="mb-2 pl-2 border-l-2 border-primary/30">
-                        <p className="text-xs font-medium text-foreground truncate" title={faq.question}>
-                          {faq.question.length > 35 ? faq.question.slice(0, 35) + '...' : faq.question}
-                        </p>
-                        <p className="text-xs text-muted-foreground truncate" title={faq.answer}>
-                          {faq.answer.length > 40 ? faq.answer.slice(0, 40) + '...' : faq.answer}
-                        </p>
-                      </div>
-                    ))}
-                  </div>
+                  )}
+                </div>
+              </CollapsibleContent>
+            </Collapsible>
+          </div>
+        )}
+
+        {/* FAQs panel for faq_only type */}
+        {knowledgeType === 'faq_only' && (
+          <div className="w-64 border-l bg-muted/30 hidden md:block">
+            <div className="p-3">
+              <span className="text-sm font-medium">FAQs Coletadas</span>
+              <div className="mt-3 space-y-2">
+                {answeredFaqs.length === 0 ? (
+                  <p className="text-xs text-muted-foreground">Nenhuma FAQ respondida ainda</p>
+                ) : (
+                  answeredFaqs.map((faq, idx) => (
+                    <div key={idx} className="pl-2 border-l-2 border-primary/30">
+                      <p className="text-xs font-medium text-foreground truncate" title={faq.question}>
+                        {faq.question.length > 35 ? faq.question.slice(0, 35) + '...' : faq.question}
+                      </p>
+                      <p className="text-xs text-muted-foreground truncate" title={faq.answer}>
+                        {faq.answer.length > 40 ? faq.answer.slice(0, 40) + '...' : faq.answer}
+                      </p>
+                    </div>
+                  ))
                 )}
               </div>
-            </CollapsibleContent>
-          </Collapsible>
-        </div>
+            </div>
+          </div>
+        )}
       </div>
 
       {/* Footer */}
