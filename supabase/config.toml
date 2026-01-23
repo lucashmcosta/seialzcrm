@@ -59,3 +59,9 @@ verify_jwt = true
 
 [functions.import-from-url]
 verify_jwt = true
+
+[functions.knowledge-wizard]
+verify_jwt = true
+
+[functions.synthesize-knowledge]
+verify_jwt = true
