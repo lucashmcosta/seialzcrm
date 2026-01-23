@@ -510,42 +510,77 @@ async function executeTool(
           const baseUrl = paymentIntegration.config.payment_link_base_url;
           paymentLink = `${baseUrl}?amount=${amount}&description=${encodeURIComponent(description)}&installments=${installments}`;
         } else {
-          // 2. Fallback: buscar na Base de Conhecimento (RAG) via knowledge_chunks
-          // A tabela knowledge_items NÃO tem coluna 'content' - o conteúdo fica em knowledge_chunks
-          const { data: knowledgeChunks, error: chunksError } = await supabase
-            .from('knowledge_chunks')
-            .select(`
-              content,
-              item_id,
-              item:knowledge_items!inner(
-                id,
-                title,
-                organization_id,
-                status
-              )
-            `)
-            .eq('item.organization_id', context.organizationId)
-            .eq('item.status', 'published')
-            .limit(50);
+          // 2. Fallback: buscar na Base de Conhecimento (RAG) via query em duas etapas
+          // A sintaxe de JOIN com filtro (.eq('item.organization_id', ...)) não funciona corretamente
+          
+          // Passo 1: Buscar IDs dos knowledge_items da organização
+          const { data: orgItems, error: itemsError } = await supabase
+            .from('knowledge_items')
+            .select('id')
+            .eq('organization_id', context.organizationId)
+            .eq('status', 'published');
 
-          if (chunksError) {
-            console.error('Error fetching knowledge chunks:', chunksError);
+          if (itemsError) {
+            console.error('Error fetching knowledge items:', itemsError);
           }
 
-          // Filtrar chunks que contêm palavras-chave de pagamento
-          const paymentKeywords = ['link de pagamento', 'payment link', 'checkout', 'mpago', 'mercadopago', 'pagamento', 'pagar'];
-          const paymentChunk = knowledgeChunks?.find((chunk: { content?: string; item_id?: string }) => {
-            const contentLower = chunk.content?.toLowerCase() || '';
-            return paymentKeywords.some(keyword => contentLower.includes(keyword));
-          });
+          const itemIds = orgItems?.map((i: { id: string }) => i.id) || [];
+          console.log(`Found ${itemIds.length} published knowledge items for org ${context.organizationId}`);
+          
+          if (itemIds.length > 0) {
+            // Passo 2: Buscar chunks desses items
+            const { data: knowledgeChunks, error: chunksError } = await supabase
+              .from('knowledge_chunks')
+              .select('content, item_id')
+              .in('item_id', itemIds)
+              .limit(100);
 
-          if (paymentChunk?.content) {
-            // Extrair URL do conteúdo (regex para https://...)
-            const urlMatch = paymentChunk.content.match(/https?:\/\/[^\s\)\]\>\"\']+/);
-            if (urlMatch) {
-              paymentLink = urlMatch[0];
-              console.log('Payment link found in RAG chunks:', paymentLink);
+            if (chunksError) {
+              console.error('Error fetching knowledge chunks:', chunksError);
             }
+
+            console.log(`Found ${knowledgeChunks?.length || 0} knowledge chunks`);
+
+            // Filtrar chunks que contêm palavras-chave de pagamento
+            const paymentKeywords = ['link de pagamento', 'payment link', 'checkout', 'mpago', 'mercadopago', 'pagamento', 'pagar', 'buy.stripe', 'stripe.com'];
+            
+            // Busca inteligente: priorizar por relevância com a descrição do produto
+            const descLower = description?.toLowerCase() || '';
+            const descWords = descLower.split(/\s+/).filter((w: string) => w.length > 3);
+
+            const rankedChunks = knowledgeChunks
+              ?.map((chunk: { content?: string; item_id?: string }) => {
+                const contentLower = chunk.content?.toLowerCase() || '';
+                const hasPaymentKeyword = paymentKeywords.some(k => contentLower.includes(k));
+                const hasUrl = /https?:\/\//.test(chunk.content || '');
+                
+                // Contar palavras da descrição que aparecem no chunk
+                const matchCount = descWords.filter((w: string) => contentLower.includes(w)).length;
+                
+                return {
+                  ...chunk,
+                  hasPaymentKeyword,
+                  hasUrl,
+                  matchCount,
+                  score: (hasPaymentKeyword ? 10 : 0) + (hasUrl ? 5 : 0) + matchCount
+                };
+              })
+              .filter((c: any) => c.hasUrl)
+              .sort((a: any, b: any) => b.score - a.score);
+
+            const paymentChunk = rankedChunks?.[0];
+            console.log(`Best matching chunk score: ${paymentChunk?.score || 0}, matches: ${paymentChunk?.matchCount || 0}`);
+
+            if (paymentChunk?.content) {
+              // Extrair URL do conteúdo (regex para https://...)
+              const urlMatch = paymentChunk.content.match(/https?:\/\/[^\s\)\]\>\"\']+/);
+              if (urlMatch) {
+                paymentLink = urlMatch[0];
+                console.log('Payment link found in RAG chunks:', paymentLink);
+              }
+            }
+          } else {
+            console.log('No knowledge items found for organization:', context.organizationId);
           }
 
           // 3. Se ainda não encontrou, usar fallback genérico
