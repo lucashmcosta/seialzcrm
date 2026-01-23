@@ -504,14 +504,35 @@ async function executeTool(
         const description = args.description;
         const installments = args.installments || 1;
 
-        // Se tiver integração de pagamento configurada, usar
+        // 1. Primeiro: tentar de integrações (Stripe, Mercado Pago)
         const paymentIntegration = orgIntegrations?.[0];
         if (paymentIntegration?.config?.payment_link_base_url) {
           const baseUrl = paymentIntegration.config.payment_link_base_url;
           paymentLink = `${baseUrl}?amount=${amount}&description=${encodeURIComponent(description)}&installments=${installments}`;
         } else {
-          // Fallback: criar mensagem com informações do pagamento
-          paymentLink = `[PIX/Boleto: R$ ${amount.toLocaleString('pt-BR', { minimumFractionDigits: 2 })} - ${description}]`;
+          // 2. Fallback: buscar na Base de Conhecimento (RAG)
+          const { data: knowledgeItems } = await supabase
+            .from('knowledge_items')
+            .select('content')
+            .eq('organization_id', context.organizationId)
+            .eq('status', 'published')
+            .or('content.ilike.%link de pagamento%,content.ilike.%payment link%,content.ilike.%checkout%,content.ilike.%mpago%,content.ilike.%mercadopago%')
+            .limit(1);
+
+          if (knowledgeItems?.[0]?.content) {
+            // Extrair URL do conteúdo (regex para https://...)
+            const urlMatch = knowledgeItems[0].content.match(/https?:\/\/[^\s\)\]\>\"\']+/);
+            if (urlMatch) {
+              paymentLink = urlMatch[0];
+              console.log('Payment link found in RAG:', paymentLink);
+            }
+          }
+
+          // 3. Se ainda não encontrou, usar fallback genérico
+          if (!paymentLink) {
+            paymentLink = `[Solicite configuração do link de pagamento - R$ ${amount.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}]`;
+            console.log('No payment link configured, using fallback');
+          }
         }
 
         // Atualizar valor da oportunidade se existir
