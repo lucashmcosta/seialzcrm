@@ -83,6 +83,7 @@ interface SDRAgentWizardProps {
   existingAgent: {
     id: string;
     name: string;
+    is_enabled?: boolean;
     custom_instructions: string | null;
     wizard_data: any;
     feedback_history?: FeedbackEntry[];
@@ -488,7 +489,7 @@ export function SDRAgentWizard({
     }
   };
 
-  const generatePrompt = async () => {
+  const generatePrompt = async (): Promise<string> => {
     // First, generate from wizard data
     const wizardPrompt = generatePromptFromWizard(wizardData);
     
@@ -519,19 +520,23 @@ export function SDRAgentWizard({
 
         if (data?.content) {
           updateField('generatedPrompt', data.content);
+          return data.content;
         } else {
           updateField('generatedPrompt', wizardPrompt);
+          return wizardPrompt;
         }
       } catch (error: any) {
         console.error('Error generating prompt:', error);
         // Fall back to wizard-generated prompt
         updateField('generatedPrompt', wizardPrompt);
         toast.info('Prompt gerado localmente. Configure uma integração de IA para prompts mais detalhados.');
+        return wizardPrompt;
       } finally {
         setIsGenerating(false);
       }
     } else {
       updateField('generatedPrompt', wizardPrompt);
+      return wizardPrompt;
     }
   };
 
@@ -700,12 +705,13 @@ export function SDRAgentWizard({
   };
 
   const handleSave = async () => {
-    // Generate prompt if not yet generated
-    if (!wizardData.generatedPrompt.trim()) {
-      await generatePrompt();
+    // Generate prompt if not yet generated - capture the returned value
+    let promptToSave = wizardData.generatedPrompt.trim();
+    if (!promptToSave) {
+      promptToSave = await generatePrompt();
     }
     
-    if (!wizardData.generatedPrompt.trim()) {
+    if (!promptToSave.trim()) {
       toast.error('O prompt do agente não pode estar vazio');
       return;
     }
@@ -717,11 +723,11 @@ export function SDRAgentWizard({
       const agentData = {
         organization_id: organizationId,
         name: agentName.trim() || `Agente ${wizardData.companyName || 'SDR'}`,
-        custom_instructions: wizardData.generatedPrompt,
-        wizard_data: JSON.parse(JSON.stringify(wizardData)),
+        custom_instructions: promptToSave,
+        wizard_data: JSON.parse(JSON.stringify({ ...wizardData, generatedPrompt: promptToSave })),
         feedback_history: JSON.parse(JSON.stringify(feedbackHistory)),
         enabled_tools: enabledTools,
-        is_enabled: true,
+        is_enabled: existingAgent?.is_enabled ?? false,
         goal: goalLabel,
         tone: wizardData.formality,
         ai_provider: aiProvider,
@@ -743,7 +749,7 @@ export function SDRAgentWizard({
           .insert([agentData]);
 
         if (error) throw error;
-        toast.success('Agente SDR criado e ativado com sucesso!');
+        toast.success('Agente SDR criado com sucesso!');
       }
 
       onSuccess();
@@ -1687,7 +1693,7 @@ export function SDRAgentWizard({
                   ) : (
                     <Check className="h-4 w-4 mr-2" />
                   )}
-                  Salvar e Ativar
+                  Salvar Agente
                 </Button>
               )}
             </div>
