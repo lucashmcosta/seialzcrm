@@ -87,7 +87,6 @@ interface GenerateResponse {
   title: string;
   content: string;
   keyPoints: string[];
-  suggestedFaqs: Array<{ question: string; answer: string }>;
 }
 
 interface KnowledgeWizardProps {
@@ -210,7 +209,7 @@ export function KnowledgeWizard({ onComplete, onCancel }: KnowledgeWizardProps) 
     return 'general';
   };
 
-  // Save knowledge item to database
+  // Save knowledge item to database (UPSERT - update if exists, insert if not)
   const saveKnowledgeItem = useCallback(async (
     title: string,
     content: string,
@@ -224,32 +223,70 @@ export function KnowledgeWizard({ onComplete, onCancel }: KnowledgeWizardProps) 
     const validCategory = validateCategory(category);
 
     try {
-      const { data: item, error } = await supabase
+      // Check if item already exists for this category/scope/product
+      let query = supabase
         .from('knowledge_items')
-        .insert({
-          organization_id: organization.id,
-          title,
-          content,
-          category: validCategory,
-          scope,
-          product_id: productId || null,
-          type: validCategory,
-          source: 'wizard',
-          status: 'processing',
-          metadata: { original_content: content },
-        })
-        .select()
-        .single();
+        .select('id')
+        .eq('organization_id', organization.id)
+        .eq('category', validCategory)
+        .eq('scope', scope);
+      
+      if (productId) {
+        query = query.eq('product_id', productId);
+      } else {
+        query = query.is('product_id', null);
+      }
 
-      if (error) throw error;
+      const { data: existingItem } = await query.maybeSingle();
+
+      let itemId: string;
+
+      if (existingItem) {
+        // UPDATE existing item
+        const { error: updateError } = await supabase
+          .from('knowledge_items')
+          .update({
+            title,
+            content,
+            status: 'processing',
+            metadata: { original_content: content },
+            updated_at: new Date().toISOString(),
+          })
+          .eq('id', existingItem.id);
+
+        if (updateError) throw updateError;
+        itemId = existingItem.id;
+        console.log(`🔄 Updated knowledge item: ${title} (category: ${validCategory})`);
+      } else {
+        // INSERT new item
+        const { data: item, error: insertError } = await supabase
+          .from('knowledge_items')
+          .insert({
+            organization_id: organization.id,
+            title,
+            content,
+            category: validCategory,
+            scope,
+            product_id: productId || null,
+            type: validCategory,
+            source: 'wizard',
+            status: 'processing',
+            metadata: { original_content: content },
+          })
+          .select('id')
+          .single();
+
+        if (insertError) throw insertError;
+        itemId = item.id;
+        console.log(`✅ Created knowledge item: ${title} (category: ${validCategory})`);
+      }
 
       // Trigger processing for embeddings
       await supabase.functions.invoke('process-knowledge-item', {
-        body: { itemId: item.id },
+        body: { itemId },
       });
 
-      console.log(`✅ Saved knowledge item: ${title} (category: ${validCategory})`);
-      return { id: item.id, title };
+      return { id: itemId, title };
     } catch (err) {
       console.error('Failed to save knowledge item:', err);
       toast.error('Erro ao salvar item de conhecimento');
@@ -342,10 +379,10 @@ export function KnowledgeWizard({ onComplete, onCancel }: KnowledgeWizardProps) 
         productId = product?.id;
       }
 
-      // Save to database
+      // Save to database (UPSERT - will update if exists)
       const savedItem = await saveKnowledgeItem(
-        isAutoSave ? `${generated.title} (Rascunho)` : generated.title,
-        generated.content,
+        generated.title, // No more "(Rascunho)" suffix - same record is updated
+        generated.content, // FAQs are now included in content by the edge function
         validCategory,
         scope,
         productId
@@ -353,21 +390,6 @@ export function KnowledgeWizard({ onComplete, onCancel }: KnowledgeWizardProps) 
 
       if (savedItem) {
         toast.success(`Item salvo: ${savedItem.title}`);
-        
-        // Save suggested FAQs as separate items
-        if (generated.suggestedFaqs && generated.suggestedFaqs.length > 0) {
-          const faqContent = generated.suggestedFaqs
-            .map(faq => `**${faq.question}**\n${faq.answer}`)
-            .join('\n\n---\n\n');
-          
-          await saveKnowledgeItem(
-            `FAQ - ${generated.title}`,
-            faqContent,
-            'faq',
-            scope,
-            productId
-          );
-        }
       }
 
       return savedItem;
@@ -387,12 +409,12 @@ export function KnowledgeWizard({ onComplete, onCancel }: KnowledgeWizardProps) 
     setIsSaving(true);
 
     try {
-      // Save each global category that has content
+      // Save each global category that has content (UPSERT - no duplicates)
       for (const [category, content] of Object.entries(state.globalKnowledge)) {
         if (content && content.length > 10) {
           const validCategory = validateCategory(category);
           const savedItem = await saveKnowledgeItem(
-            `${CATEGORY_LABELS[validCategory] || validCategory} (Rascunho)`,
+            CATEGORY_LABELS[validCategory] || validCategory,
             content,
             validCategory,
             'global'
@@ -401,14 +423,14 @@ export function KnowledgeWizard({ onComplete, onCancel }: KnowledgeWizardProps) 
         }
       }
 
-      // Save each product category that has content
+      // Save each product category that has content (UPSERT - no duplicates)
       for (const [productName, categories] of Object.entries(state.productKnowledge)) {
         const product = state.products.find(p => p.name === productName);
         for (const [category, content] of Object.entries(categories)) {
           if (content && content.length > 10) {
             const validCategory = validateCategory(category);
             const savedItem = await saveKnowledgeItem(
-              `${CATEGORY_LABELS[validCategory] || validCategory} - ${productName} (Rascunho)`,
+              `${CATEGORY_LABELS[validCategory] || validCategory} - ${productName}`,
               content,
               validCategory,
               'product',

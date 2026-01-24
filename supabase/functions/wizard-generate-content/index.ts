@@ -13,16 +13,10 @@ interface GenerateRequest {
   conversationExcerpts: string[];
 }
 
-interface SuggestedFaq {
-  question: string;
-  answer: string;
-}
-
 interface GenerateResponse {
   title: string;
   content: string;
   keyPoints: string[];
-  suggestedFaqs: SuggestedFaq[];
 }
 
 const CATEGORY_LABELS: Record<string, string> = {
@@ -60,19 +54,16 @@ Gerar documento estruturado e otimizado para RAG (busca semântica) com base nas
 5. Se faltar algo crítico, indique com [A DEFINIR]
 6. Não use markdown excessivo - prefira texto corrido com headers simples
 7. Inclua exemplos concretos quando disponíveis
-8. Para FAQs sugeridas, baseie-se nas informações coletadas
+8. INCLUA uma seção "## Perguntas Frequentes" no FINAL do documento com 3-5 FAQs relevantes baseadas no conteúdo
 
 ## FORMATO DE SAÍDA (JSON OBRIGATÓRIO)
 {
   "title": "Título descritivo do documento",
-  "content": "Conteúdo completo formatado em markdown leve. Use ## para headers. Escreva parágrafos completos, não apenas listas.",
-  "keyPoints": ["Ponto-chave 1", "Ponto-chave 2", "...até 5 pontos principais"],
-  "suggestedFaqs": [
-    { "question": "Pergunta comum baseada no conteúdo?", "answer": "Resposta direta baseada nas informações coletadas." }
-  ]
+  "content": "Conteúdo completo formatado em markdown leve. Use ## para headers. Escreva parágrafos completos. INCLUA uma seção '## Perguntas Frequentes' no final com 3-5 FAQs no formato Q: Pergunta? / R: Resposta.",
+  "keyPoints": ["Ponto-chave 1", "Ponto-chave 2", "...até 5 pontos principais"]
 }
 
-IMPORTANTE: Responda SEMPRE em JSON válido. Nada antes ou depois do JSON.`;
+IMPORTANTE: Responda SEMPRE em JSON válido. Nada antes ou depois do JSON. NÃO inclua campo suggestedFaqs - as FAQs devem estar dentro do content.`;
 
 async function callLovableAI(systemPrompt: string, userPrompt: string): Promise<string> {
   const LOVABLE_API_KEY = Deno.env.get("LOVABLE_API_KEY");
@@ -134,7 +125,6 @@ function parseGenerateResponse(responseText: string): GenerateResponse {
       title: parsed.title || "Documento sem título",
       content: parsed.content || "",
       keyPoints: parsed.keyPoints || [],
-      suggestedFaqs: parsed.suggestedFaqs || [],
     };
   } catch (error) {
     console.error("Failed to parse generate response:", error, "Raw:", responseText);
@@ -144,7 +134,6 @@ function parseGenerateResponse(responseText: string): GenerateResponse {
       title: "Documento",
       content: responseText,
       keyPoints: [],
-      suggestedFaqs: [],
     };
   }
 }
@@ -188,7 +177,7 @@ Gere o documento seguindo as regras e formato JSON especificados.`;
       generateResponse.title = categoryLabel;
     }
 
-    console.log(`✅ Generated content: title="${generateResponse.title}", keyPoints=${generateResponse.keyPoints.length}, faqs=${generateResponse.suggestedFaqs.length}`);
+    console.log(`✅ Generated content: title="${generateResponse.title}", keyPoints=${generateResponse.keyPoints.length}`);
 
     return new Response(JSON.stringify(generateResponse), {
       headers: { ...corsHeaders, "Content-Type": "application/json" },
