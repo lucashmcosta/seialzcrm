@@ -179,7 +179,13 @@ Se precisar de mais informações, responda com:
 
     let parsedResponse;
     try {
-      parsedResponse = JSON.parse(aiContent);
+      // Try to extract JSON from the response (AI sometimes adds text before/after)
+      const jsonMatch = aiContent.match(/\{[\s\S]*\}/);
+      if (!jsonMatch) {
+        console.error("No JSON found in AI response:", aiContent);
+        throw new Error("No JSON found in AI response");
+      }
+      parsedResponse = JSON.parse(jsonMatch[0]);
     } catch (e) {
       console.error("Failed to parse AI response:", aiContent);
       throw new Error("Invalid AI response format");
