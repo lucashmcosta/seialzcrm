@@ -167,7 +167,7 @@ serve(async (req) => {
               "Content-Type": "application/json",
             },
             body: JSON.stringify({
-              model: "voyage-3-lite",
+              model: "voyage-3",
               input: textsToEmbed, // Array de textos (até 128)
               input_type: "document",
             }),
@@ -227,7 +227,7 @@ serve(async (req) => {
           ...item.metadata,
           char_count: contentToProcess.length,
           chunk_count: chunks.length,
-          embedding_model: "voyage-3-lite",
+          embedding_model: "voyage-3",
           embedding_dimensions: 1024,
           processed_at: new Date().toISOString(),
         },
