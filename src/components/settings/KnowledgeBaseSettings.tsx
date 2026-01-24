@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { useOrganizationContext } from '@/contexts/OrganizationContext';
 import { supabase } from '@/integrations/supabase/client';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
@@ -11,7 +11,7 @@ import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, 
 import { Skeleton } from '@/components/ui/skeleton';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { toast } from 'sonner';
-import { Trash2, Book, HelpCircle, Package, FileText, Settings2, Search, BrainCircuit, Loader2, Wand2, Upload, FileType, RefreshCw, MessageSquare } from 'lucide-react';
+import { Trash2, Book, HelpCircle, Package, FileText, Settings2, Search, BrainCircuit, Loader2, Wand2, Upload, FileType, RefreshCw, MessageSquare, Globe } from 'lucide-react';
 import { ImportKnowledge } from './ImportKnowledge';
 import { KnowledgeWizardChat } from './KnowledgeWizardChat';
 import { ManualKnowledgeDialog } from './ManualKnowledgeDialog';
@@ -27,11 +27,24 @@ interface KnowledgeItem {
   agent_id: string | null;
   error_message: string | null;
   created_at: string;
+  // Multi-product fields
+  category: string | null;
+  scope: string | null;
+  product_id: string | null;
+  is_active: boolean | null;
+  version: number | null;
+  inherits_global: boolean | null;
 }
 
 interface AIAgent {
   id: string;
   name: string;
+}
+
+interface Product {
+  id: string;
+  name: string;
+  slug: string;
 }
 
 const contentTypeConfig: Record<string, { label: string; icon: React.ElementType; color: string; description: string }> = {
@@ -79,6 +92,25 @@ const contentTypeConfig: Record<string, { label: string; icon: React.ElementType
   },
 };
 
+const categoryLabels: Record<string, string> = {
+  geral: 'Geral',
+  produto_servico: 'Produto/Serviço',
+  preco_planos: 'Preço/Planos',
+  pagamento: 'Pagamento',
+  processo: 'Processo',
+  requisitos: 'Requisitos',
+  politicas: 'Políticas',
+  faq: 'FAQ',
+  objecoes: 'Objeções',
+  qualificacao: 'Qualificação',
+  horario_contato: 'Horário/Contato',
+  glossario: 'Glossário',
+  escopo: 'Escopo',
+  compliance: 'Compliance',
+  linguagem: 'Linguagem',
+  prova_social: 'Prova Social',
+};
+
 const sourceLabels: Record<string, { label: string; icon: React.ElementType }> = {
   wizard: { label: 'Wizard IA', icon: Wand2 },
   wizard_chat: { label: 'Chat IA', icon: MessageSquare },
@@ -105,35 +137,47 @@ export function KnowledgeBaseSettings() {
   const [saving, setSaving] = useState(false);
   const [items, setItems] = useState<KnowledgeItem[]>([]);
   const [agents, setAgents] = useState<AIAgent[]>([]);
+  const [products, setProducts] = useState<Product[]>([]);
   const [dialogOpen, setDialogOpen] = useState(false);
   const [searchTerm, setSearchTerm] = useState('');
   const [filterType, setFilterType] = useState<string>('all');
   const [filterAgent, setFilterAgent] = useState<string>('all');
   const [filterStatus, setFilterStatus] = useState<string>('all');
+  const [filterProduct, setFilterProduct] = useState<string>('all');
+  const [filterCategory, setFilterCategory] = useState<string>('all');
   const [activeTab, setActiveTab] = useState('knowledge');
   const [selectedAgentId, setSelectedAgentId] = useState<string>('');
+
   const fetchData = async () => {
     if (!organization?.id) return;
 
     setLoading(true);
     try {
-      const [knowledgeResult, agentsResult] = await Promise.all([
+      const [knowledgeResult, agentsResult, productsResult] = await Promise.all([
         supabase
           .from('knowledge_items')
-          .select('id, title, type, status, source, source_url, metadata, agent_id, error_message, created_at')
+          .select('id, title, type, status, source, source_url, metadata, agent_id, error_message, created_at, category, scope, product_id, is_active, version, inherits_global')
           .eq('organization_id', organization.id)
           .order('created_at', { ascending: false }),
         supabase
           .from('ai_agents')
           .select('id, name')
           .eq('organization_id', organization.id),
+        supabase
+          .from('products')
+          .select('id, name, slug')
+          .eq('organization_id', organization.id)
+          .eq('is_active', true)
+          .order('display_order'),
       ]);
 
       if (knowledgeResult.error) throw knowledgeResult.error;
       if (agentsResult.error) throw agentsResult.error;
+      if (productsResult.error) console.error('Products fetch error:', productsResult.error);
 
       setItems((knowledgeResult.data as KnowledgeItem[]) || []);
       setAgents(agentsResult.data || []);
+      setProducts(productsResult.data || []);
     } catch (error) {
       console.error('Error fetching knowledge:', error);
       toast.error('Erro ao carregar base de conhecimento');
@@ -161,7 +205,6 @@ export function KnowledgeBaseSettings() {
       let savedCount = 0;
       
       for (const doc of documents) {
-        // Create knowledge_item for each document with original_content backup
         const { data: item, error: itemError } = await supabase
           .from('knowledge_items')
           .insert({
@@ -172,7 +215,7 @@ export function KnowledgeBaseSettings() {
             status: 'processing',
             source: 'wizard_chat',
             metadata: {
-              original_content: doc.content, // Backup for reprocessing
+              original_content: doc.content,
             },
           })
           .select()
@@ -183,7 +226,6 @@ export function KnowledgeBaseSettings() {
           continue;
         }
 
-        // Process the content
         const { error: processError } = await supabase.functions.invoke('process-knowledge', {
           body: {
             itemId: item.id,
@@ -282,15 +324,34 @@ export function KnowledgeBaseSettings() {
     }
   };
 
-  const filteredItems = items.filter(item => {
-    const matchesSearch = 
-      item.title.toLowerCase().includes(searchTerm.toLowerCase());
-    const matchesType = filterType === 'all' || item.type === filterType;
-    const matchesAgent = filterAgent === 'all' || 
-      (filterAgent === 'global' ? item.agent_id === null : item.agent_id === filterAgent);
-    const matchesStatus = filterStatus === 'all' || item.status === filterStatus;
-    return matchesSearch && matchesType && matchesAgent && matchesStatus;
-  });
+  const filteredItems = useMemo(() => {
+    return items.filter(item => {
+      const matchesSearch = item.title.toLowerCase().includes(searchTerm.toLowerCase());
+      const matchesType = filterType === 'all' || item.type === filterType;
+      const matchesAgent = filterAgent === 'all' || 
+        (filterAgent === 'global' ? item.agent_id === null : item.agent_id === filterAgent);
+      const matchesStatus = filterStatus === 'all' || item.status === filterStatus;
+      
+      // Product filter
+      let matchesProduct = true;
+      if (filterProduct === 'global') {
+        matchesProduct = item.scope === 'global' || !item.scope;
+      } else if (filterProduct !== 'all') {
+        matchesProduct = item.product_id === filterProduct;
+      }
+      
+      // Category filter
+      const matchesCategory = filterCategory === 'all' || item.category === filterCategory;
+      
+      return matchesSearch && matchesType && matchesAgent && matchesStatus && matchesProduct && matchesCategory;
+    });
+  }, [items, searchTerm, filterType, filterAgent, filterStatus, filterProduct, filterCategory]);
+
+  const getProductName = (productId: string | null) => {
+    if (!productId) return null;
+    const product = products.find(p => p.id === productId);
+    return product?.name || 'Produto';
+  };
 
   if (loading) {
     return (
@@ -348,6 +409,46 @@ export function KnowledgeBaseSettings() {
                   className="pl-8"
                 />
               </div>
+              
+              {/* Product Filter */}
+              {products.length > 0 && (
+                <Select value={filterProduct} onValueChange={setFilterProduct}>
+                  <SelectTrigger className="w-36">
+                    <SelectValue placeholder="Produto" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">Todos</SelectItem>
+                    <SelectItem value="global">
+                      <span className="flex items-center gap-1">
+                        <Globe className="h-3 w-3" />
+                        Global
+                      </span>
+                    </SelectItem>
+                    {products.map((product) => (
+                      <SelectItem key={product.id} value={product.id}>
+                        <span className="flex items-center gap-1">
+                          <Package className="h-3 w-3" />
+                          {product.name}
+                        </span>
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              )}
+
+              {/* Category Filter */}
+              <Select value={filterCategory} onValueChange={setFilterCategory}>
+                <SelectTrigger className="w-36">
+                  <SelectValue placeholder="Categoria" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">Categorias</SelectItem>
+                  {Object.entries(categoryLabels).map(([key, label]) => (
+                    <SelectItem key={key} value={key}>{label}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+
               <Select value={filterType} onValueChange={setFilterType}>
                 <SelectTrigger className="w-28">
                   <SelectValue placeholder="Tipo" />
@@ -382,7 +483,7 @@ export function KnowledgeBaseSettings() {
             </div>
 
             <div className="flex gap-2">
-              <ManualKnowledgeDialog agents={agents} onSuccess={fetchData} />
+              <ManualKnowledgeDialog agents={agents} products={products} onSuccess={fetchData} />
 
               <Dialog open={dialogOpen} onOpenChange={handleDialogClose}>
                 <DialogTrigger asChild>
@@ -436,12 +537,25 @@ export function KnowledgeBaseSettings() {
                 const source = sourceLabels[item.source] || sourceLabels.manual;
                 const SourceIcon = source.icon;
                 const status = statusConfig[item.status] || statusConfig.draft;
+                const productName = getProductName(item.product_id);
 
                 return (
                   <Card key={item.id} className="group relative">
                     <CardHeader className="pb-2">
                       <div className="flex items-start justify-between gap-2">
                         <div className="flex items-center gap-2 flex-wrap">
+                          {/* Scope Badge */}
+                          {item.scope === 'product' && productName ? (
+                            <Badge variant="outline" className="text-xs bg-secondary/10">
+                              <Package className="mr-1 h-3 w-3" />
+                              {productName}
+                            </Badge>
+                          ) : (
+                            <Badge variant="secondary" className="text-xs">
+                              <Globe className="mr-1 h-3 w-3" />
+                              Global
+                            </Badge>
+                          )}
                           <Badge variant="secondary" className={typeConfig.color}>
                             <TypeIcon className="mr-1 h-3 w-3" />
                             {typeConfig.label}
@@ -493,9 +607,15 @@ export function KnowledgeBaseSettings() {
                       <CardTitle className="text-sm font-medium line-clamp-2">{item.title}</CardTitle>
                     </CardHeader>
                     <CardContent>
-                      <div className="flex items-center gap-2 text-xs text-muted-foreground">
+                      <div className="flex items-center gap-2 text-xs text-muted-foreground flex-wrap">
                         <SourceIcon className="h-3 w-3" />
                         <span>{source.label}</span>
+                        {item.category && categoryLabels[item.category] && (
+                          <>
+                            <span>•</span>
+                            <span>{categoryLabels[item.category]}</span>
+                          </>
+                        )}
                         {agent && (
                           <>
                             <span>•</span>
@@ -506,6 +626,18 @@ export function KnowledgeBaseSettings() {
                           <>
                             <span>•</span>
                             <span>{item.metadata.chunk_count} chunks</span>
+                          </>
+                        )}
+                        {item.inherits_global && (
+                          <>
+                            <span>•</span>
+                            <span className="text-primary">Herda global</span>
+                          </>
+                        )}
+                        {item.version && item.version > 1 && (
+                          <>
+                            <span>•</span>
+                            <span>v{item.version}</span>
                           </>
                         )}
                       </div>
