@@ -785,7 +785,7 @@ async function searchRelevantKnowledge(
       const { data: allResults, error: allError } = await supabase.rpc('search_knowledge_all', {
         query_embedding: queryEmbedding,
         org_id: organizationId,
-        match_threshold: 0.65,
+        match_threshold: 0.45, // Lowered from 0.65 to find more semantic matches
         match_count: matchCount,
       });
 
@@ -861,7 +861,7 @@ async function searchRelevantKnowledge(
       const { data: fallbackResults, error: fallbackError } = await supabase.rpc('search_knowledge_all', {
         query_embedding: queryEmbedding,
         org_id: organizationId,
-        match_threshold: 0.60, // Lower threshold for fallback
+        match_threshold: 0.40, // Lowered from 0.60 to maximize fallback coverage
         match_count: matchCount,
       });
 
@@ -1106,6 +1106,21 @@ ${item.content}
   }
 
   prompt += `
+## 🚨 REGRA ANTI-ALUCINAÇÃO - PRIORIDADE MÁXIMA
+⚠️ ESTA REGRA TEM PRECEDÊNCIA SOBRE TODAS AS OUTRAS:
+
+1. Se o "Conhecimento Relevante" (RAG_CONTEXT) acima estiver VAZIO ou NÃO mencionar o assunto perguntado:
+   → NÃO invente preços, valores, prazos, processos ou serviços
+   → NÃO finja que oferecemos serviços que não estão documentados
+   → Responda EXATAMENTE: "Não tenho informações sobre isso na minha base de conhecimento. Posso ajudar com os serviços que oferecemos?"
+
+2. Se o cliente perguntar sobre serviço que NÃO aparece no RAG_CONTEXT:
+   → NÃO invente que oferecemos o serviço
+   → NÃO invente preços ou processos
+   → Diga que vai verificar com a equipe ou liste apenas os serviços que aparecem na base
+
+3. NUNCA responda sobre: Green Card, EB1, EB2, EB3, EB4, EB5, vistos de trabalho (H1B, L1, O1), vistos de estudante (F1, J1), cidadania, processos de imigração permanente - A MENOS que estes estejam EXPLICITAMENTE no RAG_CONTEXT
+
 ## REGRAS IMPORTANTES
 1. Responda APENAS com a mensagem para o cliente, sem explicações ou meta-comentários
 2. Mantenha respostas concisas (máximo 3 parágrafos curtos)
