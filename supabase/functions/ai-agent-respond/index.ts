@@ -778,8 +778,31 @@ async function searchRelevantKnowledge(
 
     const results: { content: string; title: string | null; type: string; scope: string; category: string }[] = [];
 
-    // STEP 1: If productId exists, search ONLY product-specific chunks first
-    if (productId) {
+    // NEW: If no productId, search ALL knowledge (product + global combined)
+    if (!productId) {
+      console.log(`🔍 No productId context - searching ALL knowledge scopes`);
+      
+      const { data: allResults, error: allError } = await supabase.rpc('search_knowledge_all', {
+        query_embedding: queryEmbedding,
+        org_id: organizationId,
+        match_threshold: 0.65,
+        match_count: matchCount,
+      });
+
+      if (allError) {
+        console.warn('❌ search_knowledge_all error:', allError.message);
+      } else if (allResults?.length > 0) {
+        console.log(`✅ Found ${allResults.length} chunks across all scopes`);
+        results.push(...allResults.map((r: any) => ({
+          content: r.content,
+          title: r.title,
+          type: 'knowledge',
+          scope: r.scope || 'global',
+          category: r.category || 'geral',
+        })));
+      }
+    } else {
+      // STEP 1: If productId exists, search ONLY product-specific chunks first
       console.log(`🎯 Step 1: Searching product-specific chunks (productId: ${productId})`);
       
       const { data: productResults, error: productError } = await supabase.rpc('search_knowledge_product', {
@@ -803,58 +826,58 @@ async function searchRelevantKnowledge(
           category: r.category || 'geral',
         })));
       }
+
+      // STEP 2: Complete with global chunks if needed
+      if (results.length < matchCount) {
+        const remaining = matchCount - results.length;
+        console.log(`🌐 Step 2: Searching global chunks (need ${remaining} more)`);
+        
+        const { data: globalResults, error: globalError } = await supabase.rpc('search_knowledge_global', {
+          query_embedding: queryEmbedding,
+          org_id: organizationId,
+          p_categories: null,
+          match_threshold: 0.65,
+          match_count: remaining,
+        });
+
+        if (globalError) {
+          console.warn('❌ Global RAG search error:', globalError.message);
+        } else if (globalResults?.length > 0) {
+          console.log(`✅ Found ${globalResults.length} global chunks`);
+          results.push(...globalResults.map((r: any) => ({
+            content: r.content,
+            title: r.title,
+            type: 'knowledge',
+            scope: 'global',
+            category: r.category || 'geral',
+          })));
+        }
+      }
     }
 
-    // STEP 2: Complete with global chunks if needed
-    if (results.length < matchCount) {
-      const remaining = matchCount - results.length;
-      console.log(`🌐 Step 2: Searching global chunks (need ${remaining} more)`);
-      
-      const { data: globalResults, error: globalError } = await supabase.rpc('search_knowledge_global', {
+    // Fallback to legacy search if we have no results
+    if (results.length === 0) {
+      console.log('⚠️ Falling back to search_knowledge_all (no agent_id filter)');
+      const { data: fallbackResults, error: fallbackError } = await supabase.rpc('search_knowledge_all', {
         query_embedding: queryEmbedding,
         org_id: organizationId,
-        p_categories: null,
-        match_threshold: 0.65,
-        match_count: remaining,
+        match_threshold: 0.60, // Lower threshold for fallback
+        match_count: matchCount,
       });
 
-      if (globalError) {
-        console.warn('❌ Global RAG search error:', globalError.message);
-      } else if (globalResults?.length > 0) {
-        console.log(`✅ Found ${globalResults.length} global chunks`);
-        results.push(...globalResults.map((r: any) => ({
+      if (!fallbackError && fallbackResults?.length > 0) {
+        console.log(`✅ Fallback found ${fallbackResults.length} chunks`);
+        results.push(...fallbackResults.map((r: any) => ({
           content: r.content,
           title: r.title,
           type: 'knowledge',
-          scope: 'global',
+          scope: r.scope || 'global',
           category: r.category || 'geral',
         })));
       }
     }
 
-    // Fallback to legacy search if new RPCs fail and we have no results
-    if (results.length === 0) {
-      console.log('⚠️ Falling back to legacy search_knowledge_chunks');
-      const { data: legacyResults, error: legacyError } = await supabase.rpc('search_knowledge_chunks', {
-        query_embedding: queryEmbedding,
-        org_id: organizationId,
-        agent_id_filter: agentId,
-        match_threshold: 0.65,
-        match_count: matchCount,
-      });
-
-      if (!legacyError && legacyResults?.length > 0) {
-        results.push(...legacyResults.map((r: any) => ({
-          content: r.content,
-          title: r.title,
-          type: r.content_type || 'knowledge',
-          scope: 'global',
-          category: 'geral',
-        })));
-      }
-    }
-
-    console.log(`🎯 Total RAG results: ${results.length} (product-first + global)`);
+    console.log(`🎯 Total RAG results: ${results.length}`);
 
     return results;
   } catch (err) {
