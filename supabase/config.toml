@@ -84,5 +84,17 @@ verify_jwt = true
 [functions.wizard-next-question]
 verify_jwt = false
 
-[functions.wizard-generate-content]
-verify_jwt = false
+[functions.kommo-validate]
+verify_jwt = true
+
+[functions.kommo-fetch-pipelines]
+verify_jwt = true
+
+[functions.kommo-preview]
+verify_jwt = true
+
+[functions.kommo-migrate]
+verify_jwt = true
+
+[functions.kommo-rollback]
+verify_jwt = true

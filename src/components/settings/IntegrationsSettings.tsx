@@ -10,10 +10,11 @@ import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/comp
 import { ConfirmDialog } from '@/components/ui/confirm-dialog';
 import { useTranslation } from '@/lib/i18n';
 import { useOrganization } from '@/hooks/useOrganization';
-import { MessageSquare, Phone, Mail, Webhook, AlertTriangle, Plus, Bot, Sparkles } from 'lucide-react';
+import { MessageSquare, Phone, Mail, Webhook, AlertTriangle, Plus, Bot, Sparkles, Upload, RefreshCw } from 'lucide-react';
 import { IntegrationConnectDialog } from './IntegrationConnectDialog';
 import { IntegrationDetailDialog } from './IntegrationDetailDialog';
 import { PhoneNumberSettings } from './PhoneNumberSettings';
+import { KommoMigrationDialog } from './KommoMigrationDialog';
 
 import { toast } from 'sonner';
 
@@ -27,6 +28,8 @@ const iconMap: Record<string, any> = {
   ai: Bot,
   'claude-ai': Sparkles,
   'openai-gpt': Bot,
+  automation: RefreshCw,
+  kommo: RefreshCw,
   other: Webhook,
   default: Webhook,
 };
@@ -38,6 +41,7 @@ const categories = [
   { id: 'whatsapp', label: 'WhatsApp' },
   { id: 'email', label: 'Email' },
   { id: 'webhooks', label: 'Webhooks' },
+  { id: 'automation', label: 'Automação' },
 ];
 
 export function IntegrationsSettings() {
@@ -51,7 +55,7 @@ export function IntegrationsSettings() {
   const [disconnectConfirmOpen, setDisconnectConfirmOpen] = useState(false);
   const [disconnectingId, setDisconnectingId] = useState<string | null>(null);
   const [selectedCategory, setSelectedCategory] = useState('all');
-
+  const [kommoMigrationOpen, setKommoMigrationOpen] = useState(false);
   // Fetch available integrations
   const { data: availableIntegrations, isLoading: loadingIntegrations } = useQuery({
     queryKey: ['available-integrations'],
@@ -269,7 +273,17 @@ export function IntegrationsSettings() {
                       disabled={toggleMutation.isPending}
                     />
                   </div>
-                  <div className="mt-4 flex justify-end">
+                  <div className="mt-4 flex justify-end gap-2">
+                    {integration.slug === 'kommo' && isConnected && (
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => setKommoMigrationOpen(true)}
+                      >
+                        <Upload className="h-4 w-4 mr-1" />
+                        Migrar Dados
+                      </Button>
+                    )}
                     <Button
                       variant="link"
                       size="sm"
@@ -326,6 +340,19 @@ export function IntegrationsSettings() {
         onOpenChange={setDisconnectConfirmOpen}
         title="Desconectar Integração"
         description="Tem certeza que deseja desconectar esta integração? Você precisará configurá-la novamente para usá-la."
+        confirmText="Desconectar"
+        variant="destructive"
+        onConfirm={handleDisconnectConfirm}
+        loading={disconnectMutation.isPending}
+      />
+
+      <KommoMigrationDialog
+        open={kommoMigrationOpen}
+        onOpenChange={setKommoMigrationOpen}
+      />
+    </>
+  );
+}
         confirmText="Desconectar"
         variant="destructive"
         onConfirm={handleDisconnectConfirm}
