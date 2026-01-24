@@ -44,30 +44,41 @@ const CLASSIFIER_SYSTEM_PROMPT = `Você é um classificador de feedback do agent
 
 Sua tarefa é analisar o feedback do usuário sobre uma resposta do agente e classificar em:
 
-1) KB_FACT - Problema de FATO/CONTEÚDO (preço, prazo, documento, política errada)
-   → O agente disse algo factualmente incorreto que deveria estar na Base de Conhecimento
+1) KB_FACT - Problema de FATO/CONTEÚDO
+   → O agente disse algo factualmente incorreto
+   → Preço/prazo/documento/política errada
+   → ⚠️ AGENTE INVENTOU informação que não existe (PIX, QR code, chave Pix, CPF, dados bancários)
+     Motivo: O conteúdo CORRETO precisa ser adicionado à Base de Conhecimento
+   → Destino: BASE DE CONHECIMENTO (não regras do agente!)
    
-2) AGENT_RULE - Problema de COMPORTAMENTO/ESTILO (muito longo, robótico, sem empatia, sem CTA)
-   → O agente respondeu de forma inadequada em tom, tamanho ou abordagem
-   ⚠️ INCLUI: Agente inventando informações (PIX, QR code, chave, dados bancários)
+2) AGENT_RULE - Problema de TOM/ESTILO/COMPORTAMENTO
+   → Resposta muito longa, robótica, sem empatia
+   → Não perguntou nome, não cumprimentou adequadamente
+   → Ignorou instruções de estilo/formatação
+   → ⚠️ NÃO inclui inventar dados - isso é KB_FACT!
+   → Destino: REGRAS DO AGENTE
    
-3) MISSING_INFO - FALTA DE INFORMAÇÃO (dado não existe na KB, agente chutou ou ficou travado)
-   → O agente não tinha informação suficiente para responder
+3) MISSING_INFO - FALTA DE INFORMAÇÃO
+   → Agente admitiu não saber ("depende", "não sei", "preciso verificar")
+   → Informação simplesmente não existe na KB
+   → Destino: PERGUNTAS PENDENTES (wizard)
    
-4) FLOW_TOOL - Problema de FERRAMENTA/FLUXO (handoff errado, oportunidade criada cedo demais)
-   → O agente usou ou deixou de usar uma ferramenta quando deveria
-   ⚠️ INCLUI: Deveria ter usado send_payment_link mas não usou
+4) FLOW_TOOL - Problema de USO DE FERRAMENTA
+   → Deveria ter chamado send_payment_link mas não chamou
+   → Handoff/oportunidade na ordem errada
+   → Agendamento precoce ou atrasado
+   → Destino: GATILHOS DE FERRAMENTA
 
-REGRAS DE CLASSIFICAÇÃO:
-- Preço/prazo/documentos/política errada → KB_FACT
-- Longo demais, robótico, sem empatia, ignorou correção, não perguntou nome → AGENT_RULE
-- Informação não existe ou está vaga ("depende", "não sei") → MISSING_INFO
-- Handoff/oportunidade/agendamento na ordem errada → FLOW_TOOL
+⚠️ REGRA CRÍTICA PARA PAGAMENTO:
+- Agente INVENTOU PIX/QR/chave/CPF/dados bancários que NÃO EXISTEM → KB_FACT
+  (O usuário vai fornecer o conteúdo correto para a Base de Conhecimento)
+- Agente DEVERIA ter usado ferramenta send_payment_link → FLOW_TOOL
+- TOM/ESTILO da resposta sobre pagamento foi ruim → AGENT_RULE
 
-⚠️ REGRAS ESPECIAIS PARA PAGAMENTO:
-- Se o agente INVENTOU PIX, QR code, chave Pix, dados bancários → AGENT_RULE (regra "nunca inventar dados de pagamento")
-- Se o agente DEVERIA ter enviado link de pagamento mas não enviou → FLOW_TOOL (trigger para send_payment_link)
-- Se o link de pagamento está ERRADO (produto/valor diferente) → KB_FACT (atualizar base com link correto)
+LEMBRE-SE:
+- "Inventar dados" = problema de CONTEÚDO (KB_FACT), não de comportamento
+- "Estilo ruim" = problema de COMPORTAMENTO (AGENT_RULE)
+- "Não usou ferramenta" = problema de FLUXO (FLOW_TOOL)
 
 SAÍDA (SEMPRE JSON PURO, sem markdown):
 {
