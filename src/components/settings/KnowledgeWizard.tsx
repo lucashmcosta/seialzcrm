@@ -477,13 +477,24 @@ export function KnowledgeWizard({ onComplete, onCancel }: KnowledgeWizardProps) 
       });
 
       if (fnError) {
-        if (fnError.message?.includes('429')) {
+        if (fnError.message?.includes('429') || fnError.context?.status === 429) {
           throw new Error('Limite de requisições excedido. Aguarde um momento.');
         }
-        if (fnError.message?.includes('402')) {
-          throw new Error('Créditos de IA esgotados.');
+        if (fnError.message?.includes('402') || fnError.context?.status === 402) {
+          throw new Error('Créditos de IA esgotados. Adicione créditos em Configurações > Workspace > Uso.');
         }
         throw fnError;
+      }
+
+      // Handle error response from the edge function
+      if (data?.error) {
+        if (data.error.includes('429') || data.error.includes('Limite')) {
+          throw new Error('Limite de requisições excedido. Aguarde um momento.');
+        }
+        if (data.error.includes('402') || data.error.includes('Créditos') || data.error.includes('esgotados')) {
+          throw new Error('Créditos de IA esgotados. Adicione créditos em Configurações > Workspace > Uso.');
+        }
+        throw new Error(data.error);
       }
 
       const response = data as WizardResponse;
