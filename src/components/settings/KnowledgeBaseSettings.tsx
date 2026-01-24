@@ -93,24 +93,7 @@ const contentTypeConfig: Record<string, { label: string; icon: React.ElementType
   },
 };
 
-const categoryLabels: Record<string, string> = {
-  geral: 'Geral',
-  produto_servico: 'Produto/Serviço',
-  preco_planos: 'Preço/Planos',
-  pagamento: 'Pagamento',
-  processo: 'Processo',
-  requisitos: 'Requisitos',
-  politicas: 'Políticas',
-  faq: 'FAQ',
-  objecoes: 'Objeções',
-  qualificacao: 'Qualificação',
-  horario_contato: 'Horário/Contato',
-  glossario: 'Glossário',
-  escopo: 'Escopo',
-  compliance: 'Compliance',
-  linguagem: 'Linguagem',
-  prova_social: 'Prova Social',
-};
+import { CATEGORY_LABELS as categoryLabels, getCategoryLabel } from '@/lib/knowledge-categories';
 
 const sourceLabels: Record<string, { label: string; icon: React.ElementType }> = {
   wizard: { label: 'Wizard IA', icon: Wand2 },

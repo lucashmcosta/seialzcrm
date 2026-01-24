@@ -94,8 +94,8 @@ ${productsContext || "(Nenhum produto cadastrado)"}
 ## ITENS DE CONHECIMENTO EXISTENTES
 ${itemsContext || "(Nenhum item cadastrado)"}
 
-## CATEGORIAS VÁLIDAS
-geral, produto_servico, preco_planos, pagamento, processo, requisitos, politicas, faq, objecoes, qualificacao, horario_contato, glossario, escopo, compliance, linguagem, prova_social
+## CATEGORIAS VÁLIDAS (CHAVES EM INGLÊS)
+general, contact_hours, payment, policies, scope, compliance, language_guide, glossary, product_service, pricing_plans, process, requirements, objections, qualification, faq, social_proof
 
 ## TAREFA
 Analise o pedido do usuário e identifique:

@@ -95,35 +95,13 @@ interface KnowledgeWizardProps {
   onCancel: () => void;
 }
 
-const CATEGORY_LABELS: Record<string, string> = {
-  geral: "Sobre a Empresa",
-  horario_contato: "Horários e Contato",
-  pagamento: "Formas de Pagamento",
-  politicas: "Políticas",
-  escopo: "Escopo de Atuação",
-  compliance: "Regras de Compliance",
-  linguagem: "Guia de Linguagem",
-  glossario: "Glossário de Termos",
-  produto_servico: "Descrição do Produto",
-  preco_planos: "Preços e Planos",
-  processo: "Processo e Etapas",
-  requisitos: "Requisitos",
-  objecoes: "Objeções Comuns",
-  qualificacao: "Qualificação",
-  faq: "Perguntas Frequentes",
-  prova_social: "Casos de Sucesso",
-};
-
-// Valid categories that the database accepts - CRITICAL!
-const VALID_CATEGORIES = [
-  'geral', 'produto_servico', 'preco_planos', 'pagamento', 
-  'processo', 'requisitos', 'politicas', 'faq', 'objecoes', 
-  'qualificacao', 'horario_contato', 'glossario', 'escopo', 
-  'compliance', 'linguagem', 'prova_social'
-];
-
-const GLOBAL_CATEGORIES = ['geral', 'horario_contato', 'pagamento', 'politicas', 'escopo', 'compliance'];
-const PRODUCT_CATEGORIES = ['produto_servico', 'preco_planos', 'processo', 'requisitos', 'objecoes', 'faq'];
+import { 
+  CATEGORY_LABELS, 
+  VALID_CATEGORIES, 
+  GLOBAL_CATEGORIES, 
+  PRODUCT_CATEGORIES,
+  isValidCategory 
+} from '@/lib/knowledge-categories';
 
 // Auto-save after this many messages in same category
 const AUTO_SAVE_MESSAGE_THRESHOLD = 3;
@@ -225,11 +203,11 @@ export function KnowledgeWizard({ onComplete, onCancel }: KnowledgeWizardProps) 
 
   // Validate category before saving
   const validateCategory = (category: string): string => {
-    if (VALID_CATEGORIES.includes(category)) {
+    if (isValidCategory(category)) {
       return category;
     }
-    console.warn(`Invalid category "${category}", falling back to "geral"`);
-    return 'geral';
+    console.warn(`Invalid category "${category}", falling back to "general"`);
+    return 'general';
   };
 
   // Save knowledge item to database
@@ -255,7 +233,7 @@ export function KnowledgeWizard({ onComplete, onCancel }: KnowledgeWizardProps) 
           category: validCategory,
           scope,
           product_id: productId || null,
-          type: 'manual',
+          type: validCategory,
           source: 'wizard',
           status: 'processing',
           metadata: { original_content: content },

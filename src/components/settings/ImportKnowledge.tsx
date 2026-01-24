@@ -27,33 +27,12 @@ interface ImportKnowledgeProps {
   onSuccess: () => void;
 }
 
-// 16 Categories matching ManualKnowledgeDialog
-const CATEGORIES = [
-  { value: 'geral', label: 'Geral' },
-  { value: 'produto_servico', label: 'Produto/Serviço' },
-  { value: 'preco_planos', label: 'Preço/Planos' },
-  { value: 'pagamento', label: 'Pagamento' },
-  { value: 'processo', label: 'Processo' },
-  { value: 'requisitos', label: 'Requisitos' },
-  { value: 'politicas', label: 'Políticas' },
-  { value: 'faq', label: 'FAQ' },
-  { value: 'objecoes', label: 'Objeções' },
-  { value: 'qualificacao', label: 'Qualificação' },
-  { value: 'horario_contato', label: 'Horário/Contato' },
-  { value: 'glossario', label: 'Glossário' },
-  { value: 'escopo', label: 'Escopo' },
-  { value: 'compliance', label: 'Compliance' },
-  { value: 'linguagem', label: 'Linguagem' },
-  { value: 'prova_social', label: 'Prova Social' },
-];
+import { CATEGORY_OPTIONS } from '@/lib/knowledge-categories';
 
-const contentTypes = [
-  { value: 'faq', label: 'FAQ' },
-  { value: 'product', label: 'Produto' },
-  { value: 'policy', label: 'Política' },
-  { value: 'process', label: 'Processo' },
-  { value: 'general', label: 'Geral' },
-];
+const CATEGORIES = CATEGORY_OPTIONS;
+
+// Content types now use the same categories
+const contentTypes = CATEGORY_OPTIONS;
 
 const acceptedFileTypes = [
   '.txt',
