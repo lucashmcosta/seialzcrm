@@ -166,19 +166,53 @@ export function AgentMessageFeedbackDialog({
 
       switch (selectedClassification) {
         case 'KB_FACT': {
-          // Create or update knowledge item
+          // Create knowledge item and process it for RAG
           const patch = classificationResult.patch.kb_update;
           if (patch?.content) {
-            await supabase.from('knowledge_items').insert({
-              organization_id: organizationId,
-              agent_id: agentId,
-              type: 'faq',
-              title: patch.title || 'Correção via Feedback',
-              content: patch.content,
-              source: 'feedback',
-              status: 'published',
+            // Step 1: Insert the knowledge item (without content - it goes to chunks)
+            const { data: newItem, error: insertError } = await supabase
+              .from('knowledge_items')
+              .insert({
+                organization_id: organizationId,
+                agent_id: agentId,
+                type: 'faq',
+                title: patch.title || 'Correção via Feedback',
+                source: 'feedback',
+                status: 'draft', // Will be set to published by process-knowledge
+                metadata: { 
+                  tags: patch.tags || [],
+                  from_feedback: true,
+                  original_message: message.content.slice(0, 200),
+                },
+              })
+              .select('id')
+              .single();
+
+            if (insertError) {
+              console.error('Error creating knowledge item:', insertError);
+              toast.error('Erro ao criar item na base de conhecimento');
+              break;
+            }
+
+            // Step 2: Process the knowledge to generate embeddings/chunks
+            const { error: processError } = await supabase.functions.invoke('process-knowledge', {
+              body: {
+                itemId: newItem.id,
+                content: patch.content,
+              },
             });
+
+            if (processError) {
+              console.error('Error processing knowledge:', processError);
+              toast.error('Erro ao processar conhecimento para RAG');
+              // Delete the orphan item
+              await supabase.from('knowledge_items').delete().eq('id', newItem.id);
+              break;
+            }
+
             toast.success('Base de Conhecimento atualizada!');
+          } else {
+            toast.warning('Nenhum conteúdo para adicionar');
           }
           break;
         }

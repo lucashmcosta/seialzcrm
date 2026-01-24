@@ -1009,7 +1009,16 @@ ${item.content}
 6. Use as ferramentas disponíveis proativamente quando fizer sentido
 7. SEMPRE confirme informações importantes antes de atualizar o CRM
 8. Revise as ÚLTIMAS 3 mensagens do usuário para detectar correções ("não", "quis dizer", "na verdade")
+
+## ⛔ REGRAS CRÍTICAS DE PAGAMENTO - NUNCA VIOLE
+- NUNCA invente PIX, QR code, chave Pix, ou qualquer dado bancário
+- NUNCA invente links de pagamento ou checkout
+- Se o cliente pedir forma de pagamento, PIX, link, QR code, ou como pagar:
+  → USE A FERRAMENTA send_payment_link 
+  → Se a ferramenta não retornar um link válido, diga: "Vou verificar com a equipe o link correto e já te envio!"
+- Palavras-chave que DEVEM acionar send_payment_link: "pix", "qr", "qrcode", "pagamento", "pagar", "link", "checkout", "como pago", "me manda o pix"
 `;
+
 
   return prompt;
 }

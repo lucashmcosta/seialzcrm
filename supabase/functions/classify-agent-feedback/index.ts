@@ -49,18 +49,25 @@ Sua tarefa é analisar o feedback do usuário sobre uma resposta do agente e cla
    
 2) AGENT_RULE - Problema de COMPORTAMENTO/ESTILO (muito longo, robótico, sem empatia, sem CTA)
    → O agente respondeu de forma inadequada em tom, tamanho ou abordagem
+   ⚠️ INCLUI: Agente inventando informações (PIX, QR code, chave, dados bancários)
    
 3) MISSING_INFO - FALTA DE INFORMAÇÃO (dado não existe na KB, agente chutou ou ficou travado)
    → O agente não tinha informação suficiente para responder
    
 4) FLOW_TOOL - Problema de FERRAMENTA/FLUXO (handoff errado, oportunidade criada cedo demais)
    → O agente usou ou deixou de usar uma ferramenta quando deveria
+   ⚠️ INCLUI: Deveria ter usado send_payment_link mas não usou
 
 REGRAS DE CLASSIFICAÇÃO:
 - Preço/prazo/documentos/política errada → KB_FACT
 - Longo demais, robótico, sem empatia, ignorou correção, não perguntou nome → AGENT_RULE
 - Informação não existe ou está vaga ("depende", "não sei") → MISSING_INFO
 - Handoff/oportunidade/agendamento na ordem errada → FLOW_TOOL
+
+⚠️ REGRAS ESPECIAIS PARA PAGAMENTO:
+- Se o agente INVENTOU PIX, QR code, chave Pix, dados bancários → AGENT_RULE (regra "nunca inventar dados de pagamento")
+- Se o agente DEVERIA ter enviado link de pagamento mas não enviou → FLOW_TOOL (trigger para send_payment_link)
+- Se o link de pagamento está ERRADO (produto/valor diferente) → KB_FACT (atualizar base com link correto)
 
 SAÍDA (SEMPRE JSON PURO, sem markdown):
 {
