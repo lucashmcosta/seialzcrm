@@ -27,6 +27,7 @@ export function SpeechToTextButton({
     isListening, 
     fullTranscript,
     interimTranscript,
+    error,
     isSupported, 
     startListening, 
     stopListening,
@@ -73,6 +74,7 @@ export function SpeechToTextButton({
               className={cn(
                 "transition-all shrink-0 h-[60px] w-[60px]",
                 isListening && "animate-pulse",
+                error && "border-destructive",
                 className
               )}
             >
@@ -84,10 +86,19 @@ export function SpeechToTextButton({
             </Button>
           </TooltipTrigger>
           <TooltipContent>
-            <p>{isListening ? "Parar gravação" : "Falar (Speech-to-Text)"}</p>
+            <p>{isListening ? "Parar gravação" : error ? error : "Falar (Speech-to-Text)"}</p>
           </TooltipContent>
         </Tooltip>
       </TooltipProvider>
+      
+      {/* Error indicator */}
+      {error && !isListening && (
+        <span className="text-xs text-destructive max-w-[80px] text-center leading-tight">
+          🔒 Sem permissão
+        </span>
+      )}
+      
+      {/* Interim transcript indicator */}
       {isListening && interimTranscript && (
         <span className="text-xs text-muted-foreground italic max-w-[60px] truncate">
           {interimTranscript}...
