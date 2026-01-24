@@ -256,7 +256,7 @@ export function KnowledgeWizard({ onComplete, onCancel }: KnowledgeWizardProps) 
           scope,
           product_id: productId || null,
           type: 'manual',
-          source: 'wizard_intelligent',
+          source: 'wizard',
           status: 'processing',
           metadata: { original_content: content },
         })
