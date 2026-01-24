@@ -1,10 +1,11 @@
-import { useState, useRef } from 'react';
+import { useState, useRef, useEffect } from 'react';
 import { useOrganizationContext } from '@/contexts/OrganizationContext';
 import { supabase } from '@/integrations/supabase/client';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
 import { Card, CardContent } from '@/components/ui/card';
 import { Progress } from '@/components/ui/progress';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
@@ -17,13 +18,34 @@ import {
   Loader2, 
   AlertCircle, 
   CheckCircle2,
-  X
+  X,
+  Package
 } from 'lucide-react';
 
 interface ImportKnowledgeProps {
   agents: { id: string; name: string }[];
   onSuccess: () => void;
 }
+
+// 16 Categories matching ManualKnowledgeDialog
+const CATEGORIES = [
+  { value: 'geral', label: 'Geral' },
+  { value: 'produto_servico', label: 'Produto/Serviço' },
+  { value: 'preco_planos', label: 'Preço/Planos' },
+  { value: 'pagamento', label: 'Pagamento' },
+  { value: 'processo', label: 'Processo' },
+  { value: 'requisitos', label: 'Requisitos' },
+  { value: 'politicas', label: 'Políticas' },
+  { value: 'faq', label: 'FAQ' },
+  { value: 'objecoes', label: 'Objeções' },
+  { value: 'qualificacao', label: 'Qualificação' },
+  { value: 'horario_contato', label: 'Horário/Contato' },
+  { value: 'glossario', label: 'Glossário' },
+  { value: 'escopo', label: 'Escopo' },
+  { value: 'compliance', label: 'Compliance' },
+  { value: 'linguagem', label: 'Linguagem' },
+  { value: 'prova_social', label: 'Prova Social' },
+];
 
 const contentTypes = [
   { value: 'faq', label: 'FAQ' },
@@ -40,15 +62,26 @@ const acceptedFileTypes = [
   '.docx',
 ];
 
+interface Product {
+  id: string;
+  name: string;
+}
+
 export function ImportKnowledge({ agents, onSuccess }: ImportKnowledgeProps) {
   const { organization } = useOrganizationContext();
   const fileInputRef = useRef<HTMLInputElement>(null);
+  
+  // Products state
+  const [products, setProducts] = useState<Product[]>([]);
   
   // File upload state
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const [fileTitle, setFileTitle] = useState('');
   const [fileType, setFileType] = useState('general');
   const [fileAgentId, setFileAgentId] = useState('');
+  const [fileCategory, setFileCategory] = useState('geral');
+  const [fileScope, setFileScope] = useState<'global' | 'product'>('global');
+  const [fileProductId, setFileProductId] = useState<string | null>(null);
   const [uploading, setUploading] = useState(false);
   const [uploadProgress, setUploadProgress] = useState(0);
   
@@ -57,7 +90,23 @@ export function ImportKnowledge({ agents, onSuccess }: ImportKnowledgeProps) {
   const [urlTitle, setUrlTitle] = useState('');
   const [urlType, setUrlType] = useState('general');
   const [urlAgentId, setUrlAgentId] = useState('');
+  const [urlCategory, setUrlCategory] = useState('geral');
+  const [urlScope, setUrlScope] = useState<'global' | 'product'>('global');
+  const [urlProductId, setUrlProductId] = useState<string | null>(null);
   const [importingUrl, setImportingUrl] = useState(false);
+
+  // Fetch products on mount
+  useEffect(() => {
+    if (organization?.id) {
+      supabase
+        .from('products')
+        .select('id, name')
+        .eq('organization_id', organization.id)
+        .eq('is_active', true)
+        .order('display_order')
+        .then(({ data }) => setProducts(data || []));
+    }
+  }, [organization?.id]);
 
   const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -99,6 +148,12 @@ export function ImportKnowledge({ agents, onSuccess }: ImportKnowledgeProps) {
   const handleFileUpload = async () => {
     if (!organization?.id || !selectedFile) return;
     
+    // Validate product selection
+    if (fileScope === 'product' && !fileProductId) {
+      toast.error('Selecione um produto');
+      return;
+    }
+    
     setUploading(true);
     setUploadProgress(10);
     
@@ -108,8 +163,13 @@ export function ImportKnowledge({ agents, onSuccess }: ImportKnowledgeProps) {
       formData.append('organizationId', organization.id);
       formData.append('title', fileTitle || selectedFile.name);
       formData.append('type', fileType);
+      formData.append('category', fileCategory);
+      formData.append('scope', fileScope);
       if (fileAgentId) {
         formData.append('agentId', fileAgentId);
+      }
+      if (fileScope === 'product' && fileProductId) {
+        formData.append('productId', fileProductId);
       }
       
       setUploadProgress(30);
@@ -142,6 +202,9 @@ export function ImportKnowledge({ agents, onSuccess }: ImportKnowledgeProps) {
       setFileTitle('');
       setFileType('general');
       setFileAgentId('');
+      setFileCategory('geral');
+      setFileScope('global');
+      setFileProductId(null);
       if (fileInputRef.current) {
         fileInputRef.current.value = '';
       }
@@ -159,6 +222,12 @@ export function ImportKnowledge({ agents, onSuccess }: ImportKnowledgeProps) {
   const handleUrlImport = async () => {
     if (!organization?.id || !url) return;
     
+    // Validate product selection
+    if (urlScope === 'product' && !urlProductId) {
+      toast.error('Selecione um produto');
+      return;
+    }
+    
     setImportingUrl(true);
     
     try {
@@ -169,6 +238,9 @@ export function ImportKnowledge({ agents, onSuccess }: ImportKnowledgeProps) {
           title: urlTitle || undefined,
           type: urlType,
           agentId: urlAgentId || undefined,
+          category: urlCategory,
+          scope: urlScope,
+          productId: urlScope === 'product' ? urlProductId : undefined,
         },
       });
       
@@ -181,6 +253,9 @@ export function ImportKnowledge({ agents, onSuccess }: ImportKnowledgeProps) {
       setUrlTitle('');
       setUrlType('general');
       setUrlAgentId('');
+      setUrlCategory('geral');
+      setUrlScope('global');
+      setUrlProductId(null);
       
       onSuccess();
     } catch (error) {
@@ -317,6 +392,64 @@ export function ImportKnowledge({ agents, onSuccess }: ImportKnowledgeProps) {
               </div>
             </div>
             
+            {/* Category selection */}
+            <div className="space-y-2">
+              <Label>Categoria</Label>
+              <Select value={fileCategory} onValueChange={setFileCategory}>
+                <SelectTrigger>
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  {CATEGORIES.map(cat => (
+                    <SelectItem key={cat.value} value={cat.value}>{cat.label}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+
+            {/* Scope selection */}
+            <div className="space-y-2">
+              <Label>Escopo</Label>
+              <RadioGroup value={fileScope} onValueChange={(v) => setFileScope(v as 'global' | 'product')}>
+                <div className="flex items-center space-x-2">
+                  <RadioGroupItem value="global" id="file-scope-global" />
+                  <Label htmlFor="file-scope-global" className="flex items-center gap-1 cursor-pointer">
+                    <Globe className="h-3 w-3" />
+                    Global (aplica a todos os produtos)
+                  </Label>
+                </div>
+                <div className="flex items-center space-x-2">
+                  <RadioGroupItem value="product" id="file-scope-product" />
+                  <Label htmlFor="file-scope-product" className="flex items-center gap-1 cursor-pointer">
+                    <Package className="h-3 w-3" />
+                    Produto específico
+                  </Label>
+                </div>
+              </RadioGroup>
+            </div>
+
+            {/* Product selection (if scope is product) */}
+            {fileScope === 'product' && (
+              <div className="space-y-2">
+                <Label>Produto</Label>
+                <Select value={fileProductId || ''} onValueChange={setFileProductId}>
+                  <SelectTrigger>
+                    <SelectValue placeholder="Selecione o produto" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {products.map(p => (
+                      <SelectItem key={p.id} value={p.id}>{p.name}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+                {products.length === 0 && (
+                  <p className="text-xs text-muted-foreground">
+                    Nenhum produto cadastrado. Crie produtos em Configurações → Produtos.
+                  </p>
+                )}
+              </div>
+            )}
+            
             <div className="space-y-2">
               <Label>Agente (opcional)</Label>
               <Select value={fileAgentId || 'global'} onValueChange={(val) => setFileAgentId(val === 'global' ? '' : val)}>
@@ -399,6 +532,64 @@ export function ImportKnowledge({ agents, onSuccess }: ImportKnowledgeProps) {
               </Select>
             </div>
           </div>
+          
+          {/* Category selection */}
+          <div className="space-y-2">
+            <Label>Categoria</Label>
+            <Select value={urlCategory} onValueChange={setUrlCategory}>
+              <SelectTrigger>
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                {CATEGORIES.map(cat => (
+                  <SelectItem key={cat.value} value={cat.value}>{cat.label}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+
+          {/* Scope selection */}
+          <div className="space-y-2">
+            <Label>Escopo</Label>
+            <RadioGroup value={urlScope} onValueChange={(v) => setUrlScope(v as 'global' | 'product')}>
+              <div className="flex items-center space-x-2">
+                <RadioGroupItem value="global" id="url-scope-global" />
+                <Label htmlFor="url-scope-global" className="flex items-center gap-1 cursor-pointer">
+                  <Globe className="h-3 w-3" />
+                  Global (aplica a todos os produtos)
+                </Label>
+              </div>
+              <div className="flex items-center space-x-2">
+                <RadioGroupItem value="product" id="url-scope-product" />
+                <Label htmlFor="url-scope-product" className="flex items-center gap-1 cursor-pointer">
+                  <Package className="h-3 w-3" />
+                  Produto específico
+                </Label>
+              </div>
+            </RadioGroup>
+          </div>
+
+          {/* Product selection (if scope is product) */}
+          {urlScope === 'product' && (
+            <div className="space-y-2">
+              <Label>Produto</Label>
+              <Select value={urlProductId || ''} onValueChange={setUrlProductId}>
+                <SelectTrigger>
+                  <SelectValue placeholder="Selecione o produto" />
+                </SelectTrigger>
+                <SelectContent>
+                  {products.map(p => (
+                    <SelectItem key={p.id} value={p.id}>{p.name}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              {products.length === 0 && (
+                <p className="text-xs text-muted-foreground">
+                  Nenhum produto cadastrado. Crie produtos em Configurações → Produtos.
+                </p>
+              )}
+            </div>
+          )}
           
           <div className="space-y-2">
             <Label>Agente (opcional)</Label>

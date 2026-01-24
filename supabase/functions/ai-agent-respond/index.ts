@@ -1361,14 +1361,73 @@ serve(async (req) => {
       );
     }
 
-    // 6. Search for relevant knowledge (RAG) - use conversation context for better semantic matching
+    // 6. PRODUCT DETECTION: Auto-detect product mentioned in message
+    // Fetch all products for this organization
+    const { data: orgProducts } = await supabase
+      .from('products')
+      .select('id, name, slug')
+      .eq('organization_id', organizationId)
+      .eq('is_active', true);
+
+    // Function to detect product in message
+    function detectProductInMessage(messageText: string, products: any[]): string | null {
+      if (!products || products.length === 0) return null;
+      const messageLower = messageText.toLowerCase();
+      
+      for (const product of products) {
+        // Check product name
+        if (product.name && messageLower.includes(product.name.toLowerCase())) {
+          return product.id;
+        }
+        // Check product slug
+        if (product.slug && messageLower.includes(product.slug.toLowerCase())) {
+          return product.id;
+        }
+        // Check common variations (without hyphen, with space, etc)
+        const variations = [
+          product.slug?.replace(/-/g, ' '),
+          product.slug?.replace(/-/g, ''),
+          product.name?.replace(/-/g, ' '),
+        ].filter(Boolean);
+        
+        for (const variation of variations) {
+          if (variation && messageLower.includes(variation.toLowerCase())) {
+            return product.id;
+          }
+        }
+      }
+      return null;
+    }
+
+    // Detect product in current message
+    let detectedProductId = detectProductInMessage(message, orgProducts || []);
+
+    // If not found in current message, check recent conversation history
+    if (!detectedProductId && messageHistory.length > 0) {
+      for (const msg of messageHistory.slice(-5).reverse()) {
+        const detected = detectProductInMessage(msg.content || '', orgProducts || []);
+        if (detected) {
+          detectedProductId = detected;
+          break;
+        }
+      }
+    }
+
+    const detectedProductName = detectedProductId 
+      ? orgProducts?.find(p => p.id === detectedProductId)?.name 
+      : null;
+    console.log(`🎯 Product detection: ${detectedProductName || 'None (searching all knowledge)'}`);
+
+    // 7. Search for relevant knowledge (RAG) - use conversation context for better semantic matching
     const recentMessages = messageHistory.slice(-5).map(m => m.content || '').join(' ');
     const searchContext = recentMessages ? `${recentMessages} ${message}` : message;
     console.log(`🔍 RAG search context (first 300 chars): "${searchContext.slice(0, 300)}..."`);
     
-    const retrievedKnowledge = await searchRelevantKnowledge(supabase, searchContext, organizationId, agentId);
+    // Pass detected productId to RAG search for 2-step product-first + global fallback
+    const retrievedKnowledge = await searchRelevantKnowledge(supabase, searchContext, organizationId, agentId, detectedProductId);
+    console.log(`📊 RAG Results: ${retrievedKnowledge.length} chunks (product: ${detectedProductId ? 'specific' : 'all'})`);
 
-    // 7. Build system prompt with RAG knowledge
+    // 8. Build system prompt with RAG knowledge
     const systemPrompt = buildSystemPrompt(agent, contact, company, opportunities, enabledTools, memories, retrievedKnowledge);
 
     // Build conversation messages for REAL memory - truncate long messages to save tokens
