@@ -1633,6 +1633,56 @@ export type Database = {
           },
         ]
       }
+      knowledge_edit_requests: {
+        Row: {
+          applied_at: string | null
+          confirmed_at: string | null
+          conversation_id: string | null
+          created_at: string | null
+          created_by: string | null
+          expires_at: string | null
+          id: string
+          organization_id: string
+          proposed_changes: Json
+          status: string | null
+          user_request: string
+        }
+        Insert: {
+          applied_at?: string | null
+          confirmed_at?: string | null
+          conversation_id?: string | null
+          created_at?: string | null
+          created_by?: string | null
+          expires_at?: string | null
+          id?: string
+          organization_id: string
+          proposed_changes?: Json
+          status?: string | null
+          user_request: string
+        }
+        Update: {
+          applied_at?: string | null
+          confirmed_at?: string | null
+          conversation_id?: string | null
+          created_at?: string | null
+          created_by?: string | null
+          expires_at?: string | null
+          id?: string
+          organization_id?: string
+          proposed_changes?: Json
+          status?: string | null
+          user_request?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "knowledge_edit_requests_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       knowledge_embeddings: {
         Row: {
           agent_id: string | null
@@ -1687,15 +1737,95 @@ export type Database = {
           },
         ]
       }
+      knowledge_item_history: {
+        Row: {
+          change_description: string | null
+          change_source: string | null
+          change_type: string | null
+          changed_at: string | null
+          changed_by: string | null
+          conversation_context: Json | null
+          id: string
+          item_id: string | null
+          new_content: string | null
+          new_resolved_content: string | null
+          new_title: string | null
+          organization_id: string
+          previous_content: string | null
+          previous_resolved_content: string | null
+          previous_title: string | null
+        }
+        Insert: {
+          change_description?: string | null
+          change_source?: string | null
+          change_type?: string | null
+          changed_at?: string | null
+          changed_by?: string | null
+          conversation_context?: Json | null
+          id?: string
+          item_id?: string | null
+          new_content?: string | null
+          new_resolved_content?: string | null
+          new_title?: string | null
+          organization_id: string
+          previous_content?: string | null
+          previous_resolved_content?: string | null
+          previous_title?: string | null
+        }
+        Update: {
+          change_description?: string | null
+          change_source?: string | null
+          change_type?: string | null
+          changed_at?: string | null
+          changed_by?: string | null
+          conversation_context?: Json | null
+          id?: string
+          item_id?: string | null
+          new_content?: string | null
+          new_resolved_content?: string | null
+          new_title?: string | null
+          organization_id?: string
+          previous_content?: string | null
+          previous_resolved_content?: string | null
+          previous_title?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "knowledge_item_history_item_id_fkey"
+            columns: ["item_id"]
+            isOneToOne: false
+            referencedRelation: "knowledge_items"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "knowledge_item_history_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       knowledge_items: {
         Row: {
           agent_id: string | null
+          category: string | null
+          content: string | null
+          content_hash: string | null
           created_at: string | null
           created_by: string | null
           error_message: string | null
+          global_item_id: string | null
           id: string
+          inherits_global: boolean | null
+          is_active: boolean | null
+          last_indexed_at: string | null
           metadata: Json | null
+          needs_reindex: boolean | null
           organization_id: string
+          product_id: string | null
+          resolved_content: string | null
+          scope: string | null
           source: string | null
           source_file_path: string | null
           source_url: string | null
@@ -1703,15 +1833,28 @@ export type Database = {
           title: string
           type: string
           updated_at: string | null
+          updated_by: string | null
+          version: number | null
         }
         Insert: {
           agent_id?: string | null
+          category?: string | null
+          content?: string | null
+          content_hash?: string | null
           created_at?: string | null
           created_by?: string | null
           error_message?: string | null
+          global_item_id?: string | null
           id?: string
+          inherits_global?: boolean | null
+          is_active?: boolean | null
+          last_indexed_at?: string | null
           metadata?: Json | null
+          needs_reindex?: boolean | null
           organization_id: string
+          product_id?: string | null
+          resolved_content?: string | null
+          scope?: string | null
           source?: string | null
           source_file_path?: string | null
           source_url?: string | null
@@ -1719,15 +1862,28 @@ export type Database = {
           title: string
           type: string
           updated_at?: string | null
+          updated_by?: string | null
+          version?: number | null
         }
         Update: {
           agent_id?: string | null
+          category?: string | null
+          content?: string | null
+          content_hash?: string | null
           created_at?: string | null
           created_by?: string | null
           error_message?: string | null
+          global_item_id?: string | null
           id?: string
+          inherits_global?: boolean | null
+          is_active?: boolean | null
+          last_indexed_at?: string | null
           metadata?: Json | null
+          needs_reindex?: boolean | null
           organization_id?: string
+          product_id?: string | null
+          resolved_content?: string | null
+          scope?: string | null
           source?: string | null
           source_file_path?: string | null
           source_url?: string | null
@@ -1735,6 +1891,8 @@ export type Database = {
           title?: string
           type?: string
           updated_at?: string | null
+          updated_by?: string | null
+          version?: number | null
         }
         Relationships: [
           {
@@ -1745,10 +1903,24 @@ export type Database = {
             referencedColumns: ["id"]
           },
           {
+            foreignKeyName: "knowledge_items_global_item_id_fkey"
+            columns: ["global_item_id"]
+            isOneToOne: false
+            referencedRelation: "knowledge_items"
+            referencedColumns: ["id"]
+          },
+          {
             foreignKeyName: "knowledge_items_organization_id_fkey"
             columns: ["organization_id"]
             isOneToOne: false
             referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "knowledge_items_product_id_fkey"
+            columns: ["product_id"]
+            isOneToOne: false
+            referencedRelation: "products"
             referencedColumns: ["id"]
           },
         ]
@@ -2521,6 +2693,56 @@ export type Database = {
         }
         Relationships: []
       }
+      products: {
+        Row: {
+          created_at: string | null
+          description: string | null
+          display_order: number | null
+          id: string
+          is_active: boolean | null
+          metadata: Json | null
+          name: string
+          organization_id: string
+          product_group: string | null
+          slug: string
+          updated_at: string | null
+        }
+        Insert: {
+          created_at?: string | null
+          description?: string | null
+          display_order?: number | null
+          id?: string
+          is_active?: boolean | null
+          metadata?: Json | null
+          name: string
+          organization_id: string
+          product_group?: string | null
+          slug: string
+          updated_at?: string | null
+        }
+        Update: {
+          created_at?: string | null
+          description?: string | null
+          display_order?: number | null
+          id?: string
+          is_active?: boolean | null
+          metadata?: Json | null
+          name?: string
+          organization_id?: string
+          product_group?: string | null
+          slug?: string
+          updated_at?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "products_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       saved_views: {
         Row: {
           created_at: string | null
@@ -3213,6 +3435,43 @@ export type Database = {
           content_type: string
           id: string
           item_id: string
+          similarity: number
+          title: string
+        }[]
+      }
+      search_knowledge_global: {
+        Args: {
+          match_count?: number
+          match_threshold?: number
+          org_id: string
+          p_categories?: string[]
+          query_embedding: string
+        }
+        Returns: {
+          category: string
+          content: string
+          id: string
+          item_id: string
+          resolved_content: string
+          similarity: number
+          title: string
+        }[]
+      }
+      search_knowledge_product: {
+        Args: {
+          match_count?: number
+          match_threshold?: number
+          org_id: string
+          p_categories?: string[]
+          p_product_id: string
+          query_embedding: string
+        }
+        Returns: {
+          category: string
+          content: string
+          id: string
+          item_id: string
+          resolved_content: string
           similarity: number
           title: string
         }[]
