@@ -1930,6 +1930,10 @@ export type Database = {
       }
       message_threads: {
         Row: {
+          agent_typing: boolean | null
+          agent_typing_at: string | null
+          awaiting_button_response: boolean | null
+          button_options: Json | null
           channel: string | null
           contact_id: string
           created_at: string | null
@@ -1943,6 +1947,10 @@ export type Database = {
           whatsapp_last_inbound_at: string | null
         }
         Insert: {
+          agent_typing?: boolean | null
+          agent_typing_at?: string | null
+          awaiting_button_response?: boolean | null
+          button_options?: Json | null
           channel?: string | null
           contact_id: string
           created_at?: string | null
@@ -1956,6 +1964,10 @@ export type Database = {
           whatsapp_last_inbound_at?: string | null
         }
         Update: {
+          agent_typing?: boolean | null
+          agent_typing_at?: string | null
+          awaiting_button_response?: boolean | null
+          button_options?: Json | null
           channel?: string | null
           contact_id?: string
           created_at?: string | null
@@ -1994,6 +2006,7 @@ export type Database = {
       }
       messages: {
         Row: {
+          ai_processed: boolean | null
           content: string
           created_at: string | null
           deleted_at: string | null
@@ -2017,6 +2030,7 @@ export type Database = {
           whatsapp_status: string | null
         }
         Insert: {
+          ai_processed?: boolean | null
           content: string
           created_at?: string | null
           deleted_at?: string | null
@@ -2040,6 +2054,7 @@ export type Database = {
           whatsapp_status?: string | null
         }
         Update: {
+          ai_processed?: boolean | null
           content?: string
           created_at?: string | null
           deleted_at?: string | null
