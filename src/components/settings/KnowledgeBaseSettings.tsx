@@ -161,7 +161,7 @@ export function KnowledgeBaseSettings() {
       let savedCount = 0;
       
       for (const doc of documents) {
-        // Create knowledge_item for each document
+        // Create knowledge_item for each document with original_content backup
         const { data: item, error: itemError } = await supabase
           .from('knowledge_items')
           .insert({
@@ -171,6 +171,9 @@ export function KnowledgeBaseSettings() {
             type: doc.type || 'general',
             status: 'processing',
             source: 'wizard_chat',
+            metadata: {
+              original_content: doc.content, // Backup for reprocessing
+            },
           })
           .select()
           .single();
@@ -208,6 +211,57 @@ export function KnowledgeBaseSettings() {
       toast.error('Erro ao salvar conhecimento');
     } finally {
       setSaving(false);
+    }
+  };
+
+  const handleReprocess = async (itemId: string) => {
+    try {
+      toast.info('Reprocessando...');
+      
+      const { data, error } = await supabase.functions.invoke('reprocess-knowledge', {
+        body: { itemId },
+      });
+
+      if (error) throw error;
+
+      if (data.successful > 0) {
+        toast.success(`Reprocessado! ${data.totalChunks} chunks criados.`);
+        fetchData();
+      } else {
+        toast.error(data.results?.[0]?.error || 'Erro ao reprocessar');
+      }
+    } catch (error) {
+      console.error('Reprocess error:', error);
+      toast.error('Erro ao reprocessar conhecimento');
+    }
+  };
+
+  const handleReprocessAll = async () => {
+    if (!organization?.id) return;
+    
+    const itemsWithContent = items.filter(
+      (item) => item.metadata?.original_content && (item.status === 'processing' || item.status === 'error')
+    );
+
+    if (itemsWithContent.length === 0) {
+      toast.info('Nenhum item para reprocessar');
+      return;
+    }
+
+    try {
+      toast.info(`Reprocessando ${itemsWithContent.length} itens...`);
+      
+      const { data, error } = await supabase.functions.invoke('reprocess-knowledge', {
+        body: { itemIds: itemsWithContent.map((i) => i.id) },
+      });
+
+      if (error) throw error;
+
+      toast.success(`${data.successful} de ${data.processed} reprocessados. ${data.totalChunks} chunks criados.`);
+      fetchData();
+    } catch (error) {
+      console.error('Reprocess all error:', error);
+      toast.error('Erro ao reprocessar conhecimentos');
     }
   };
 
@@ -316,9 +370,15 @@ export function KnowledgeBaseSettings() {
                   ))}
                 </SelectContent>
               </Select>
-              <Button variant="outline" size="icon" onClick={fetchData}>
+              <Button variant="outline" size="icon" onClick={fetchData} title="Atualizar">
                 <RefreshCw className="h-4 w-4" />
               </Button>
+              {items.filter((i) => (i.status === 'processing' || i.status === 'error') && i.metadata?.original_content).length > 0 && (
+                <Button variant="outline" onClick={handleReprocessAll} title="Reprocessar itens pendentes">
+                  <RefreshCw className="mr-2 h-4 w-4" />
+                  Reprocessar ({items.filter((i) => (i.status === 'processing' || i.status === 'error') && i.metadata?.original_content).length})
+                </Button>
+              )}
             </div>
 
             <div className="flex gap-2">
@@ -391,31 +451,44 @@ export function KnowledgeBaseSettings() {
                             {status.label}
                           </Badge>
                         </div>
-                        <AlertDialog>
-                          <AlertDialogTrigger asChild>
+                        <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                          {(item.status === 'error' || item.status === 'processing') && item.metadata?.original_content && (
                             <Button
                               variant="ghost"
                               size="icon"
-                              className="h-8 w-8 opacity-0 group-hover:opacity-100 transition-opacity"
+                              className="h-8 w-8"
+                              onClick={() => handleReprocess(item.id)}
+                              title="Reprocessar"
                             >
-                              <Trash2 className="h-4 w-4 text-destructive" />
+                              <RefreshCw className="h-4 w-4" />
                             </Button>
-                          </AlertDialogTrigger>
-                          <AlertDialogContent>
-                            <AlertDialogHeader>
-                              <AlertDialogTitle>Remover conhecimento?</AlertDialogTitle>
-                              <AlertDialogDescription>
-                                Esta ação não pode ser desfeita. O agente não poderá mais usar esta informação.
-                              </AlertDialogDescription>
-                            </AlertDialogHeader>
-                            <AlertDialogFooter>
-                              <AlertDialogCancel>Cancelar</AlertDialogCancel>
-                              <AlertDialogAction onClick={() => handleDelete(item.id)}>
-                                Remover
-                              </AlertDialogAction>
-                            </AlertDialogFooter>
-                          </AlertDialogContent>
-                        </AlertDialog>
+                          )}
+                          <AlertDialog>
+                            <AlertDialogTrigger asChild>
+                              <Button
+                                variant="ghost"
+                                size="icon"
+                                className="h-8 w-8"
+                              >
+                                <Trash2 className="h-4 w-4 text-destructive" />
+                              </Button>
+                            </AlertDialogTrigger>
+                            <AlertDialogContent>
+                              <AlertDialogHeader>
+                                <AlertDialogTitle>Remover conhecimento?</AlertDialogTitle>
+                                <AlertDialogDescription>
+                                  Esta ação não pode ser desfeita. O agente não poderá mais usar esta informação.
+                                </AlertDialogDescription>
+                              </AlertDialogHeader>
+                              <AlertDialogFooter>
+                                <AlertDialogCancel>Cancelar</AlertDialogCancel>
+                                <AlertDialogAction onClick={() => handleDelete(item.id)}>
+                                  Remover
+                                </AlertDialogAction>
+                              </AlertDialogFooter>
+                            </AlertDialogContent>
+                          </AlertDialog>
+                        </div>
                       </div>
                       <CardTitle className="text-sm font-medium line-clamp-2">{item.title}</CardTitle>
                     </CardHeader>

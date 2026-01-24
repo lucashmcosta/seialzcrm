@@ -155,6 +155,13 @@ export function KnowledgeWizardChat({ agentId, onComplete, onCancel }: Knowledge
     }
   }, [isLoading, currentStage]);
 
+  const handleSave = () => {
+    if (finalDocuments && finalDocuments.length > 0) {
+      // Pass documents with content for backup in metadata
+      onComplete(finalDocuments);
+    }
+  };
+
   const startWizard = async (type: KnowledgeType) => {
     setKnowledgeType(type);
     setIsLoading(true);
@@ -317,12 +324,6 @@ export function KnowledgeWizardChat({ agentId, onComplete, onCancel }: Knowledge
       toast.error('Erro ao gerar conteúdo. Tente novamente.');
     } finally {
       setIsSynthesizing(false);
-    }
-  };
-
-  const handleSave = () => {
-    if (finalDocuments && finalDocuments.length > 0) {
-      onComplete(finalDocuments);
     }
   };
 
