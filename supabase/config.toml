@@ -68,3 +68,6 @@ verify_jwt = true
 
 [functions.classify-agent-feedback]
 verify_jwt = true
+
+[functions.reprocess-knowledge]
+verify_jwt = true

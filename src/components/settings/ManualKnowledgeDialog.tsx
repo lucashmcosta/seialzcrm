@@ -42,7 +42,9 @@ export function ManualKnowledgeDialog({ agents, onSuccess }: ManualKnowledgeDial
 
     setSaving(true);
     try {
-      // 1. Create knowledge_item
+      const trimmedContent = content.trim();
+      
+      // 1. Create knowledge_item with original_content backup
       const { data: item, error: itemError } = await supabase
         .from('knowledge_items')
         .insert({
@@ -52,7 +54,10 @@ export function ManualKnowledgeDialog({ agents, onSuccess }: ManualKnowledgeDial
           type: type === 'payment' ? 'policy' : type, // payment maps to policy type
           status: 'processing',
           source: 'manual',
-          metadata: type === 'payment' ? { is_payment_link: true } : {},
+          metadata: {
+            original_content: trimmedContent, // Backup for reprocessing
+            ...(type === 'payment' ? { is_payment_link: true } : {}),
+          },
         })
         .select()
         .single();
@@ -63,7 +68,7 @@ export function ManualKnowledgeDialog({ agents, onSuccess }: ManualKnowledgeDial
       const { error: processError } = await supabase.functions.invoke('process-knowledge', {
         body: {
           itemId: item.id,
-          content: content.trim(),
+          content: trimmedContent,
         },
       });
 
