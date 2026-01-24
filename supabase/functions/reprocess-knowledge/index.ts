@@ -170,7 +170,7 @@ serve(async (req) => {
           },
           body: JSON.stringify({
             input: textsToEmbed,
-            model: "voyage-3-lite",
+            model: "voyage-3", // MUST use voyage-3 for 1024 dimensions (matches DB schema)
             input_type: "document",
           }),
         });
@@ -182,6 +182,12 @@ serve(async (req) => {
 
         const embeddingData = await embeddingResponse.json();
         const embeddings = embeddingData.data.map((d: { embedding: number[] }) => d.embedding);
+
+        // CRITICAL: Validate embedding dimensions match DB schema (vector(1024))
+        if (embeddings.length > 0 && embeddings[0].length !== 1024) {
+          throw new Error(`Embedding dimension mismatch: got ${embeddings[0].length}, expected 1024. Model may have returned wrong dimensions.`);
+        }
+        console.log(`✅ Generated ${embeddings.length} embeddings (${embeddings[0]?.length || 0} dimensions)`);
 
         // Insert chunks with embeddings
         const chunkInserts = chunks.map((chunk, idx) => ({
