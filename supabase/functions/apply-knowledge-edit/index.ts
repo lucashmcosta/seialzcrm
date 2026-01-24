@@ -63,7 +63,20 @@ serve(async (req) => {
       );
     }
 
-    // Validate status
+    // Validate status (idempotent)
+    if (editRequest.status === "applied") {
+      return new Response(
+        JSON.stringify({
+          success: true,
+          alreadyApplied: true,
+          appliedChanges: [],
+          errors: [],
+          reindexedItems: 0,
+        }),
+        { headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
+    }
+
     if (editRequest.status !== "pending" && editRequest.status !== "confirmed") {
       return new Response(
         JSON.stringify({ error: `Request already ${editRequest.status}` }),
