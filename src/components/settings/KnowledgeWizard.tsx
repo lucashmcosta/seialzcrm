@@ -20,6 +20,7 @@ import {
   Save
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import { SpeechToTextButton } from '@/components/common/SpeechToTextButton';
 
 // Types
 interface Message {
@@ -885,6 +886,12 @@ export function KnowledgeWizard({ onComplete, onCancel }: KnowledgeWizardProps) 
         )}
         
         <div className="flex gap-2 w-full">
+          <SpeechToTextButton
+            onTranscript={(text) => {
+              setInput(prev => prev ? `${prev} ${text}` : text);
+            }}
+            disabled={loading || state.currentPhase === 'complete' || isSaving}
+          />
           <Textarea
             ref={inputRef}
             value={input}
@@ -895,8 +902,8 @@ export function KnowledgeWizard({ onComplete, onCancel }: KnowledgeWizardProps) 
                 handleSend();
               }
             }}
-            placeholder={state.currentPhase === 'complete' ? 'Configuração concluída!' : 'Digite sua resposta...'}
-            className="min-h-[60px] resize-none"
+            placeholder={state.currentPhase === 'complete' ? 'Configuração concluída!' : 'Digite ou fale sua resposta...'}
+            className="min-h-[60px] resize-none flex-1"
             disabled={loading || state.currentPhase === 'complete' || isSaving}
           />
           <Button
