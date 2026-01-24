@@ -720,13 +720,16 @@ function isWithinWorkingHours(workingHours: WorkingHours): boolean {
 
 /**
  * Search for relevant knowledge using RAG with Voyage AI embeddings
+ * Implements 2-STEP SEARCH: product-first + global fallback
  */
 async function searchRelevantKnowledge(
   supabase: any,
   messageContent: string,
   organizationId: string,
-  agentId: string
-): Promise<{ content: string; title: string | null; type: string }[]> {
+  agentId: string,
+  productId: string | null = null,
+  matchCount: number = 10
+): Promise<{ content: string; title: string | null; type: string; scope: string; category: string }[]> {
   try {
     const voyageApiKey = Deno.env.get("VOYAGE_API_KEY");
     
@@ -767,27 +770,87 @@ async function searchRelevantKnowledge(
 
     console.log(`✅ Query embedding generated (${queryEmbedding.length} dimensions)`);
 
-    // Search for similar knowledge chunks via RPC
-    const { data: results, error } = await supabase.rpc('search_knowledge_chunks', {
-      query_embedding: queryEmbedding,
-      org_id: organizationId,
-      agent_id_filter: agentId,
-      match_threshold: 0.65,
-      match_count: 10,
-    });
+    const results: { content: string; title: string | null; type: string; scope: string; category: string }[] = [];
 
-    if (error) {
-      console.warn('❌ RAG search error:', error.message);
-      return [];
+    // STEP 1: If productId exists, search ONLY product-specific chunks first
+    if (productId) {
+      console.log(`🎯 Step 1: Searching product-specific chunks (productId: ${productId})`);
+      
+      const { data: productResults, error: productError } = await supabase.rpc('search_knowledge_product', {
+        query_embedding: queryEmbedding,
+        org_id: organizationId,
+        p_product_id: productId,
+        p_categories: null,
+        match_threshold: 0.65,
+        match_count: matchCount,
+      });
+
+      if (productError) {
+        console.warn('❌ Product RAG search error:', productError.message);
+      } else if (productResults?.length > 0) {
+        console.log(`✅ Found ${productResults.length} product-specific chunks`);
+        results.push(...productResults.map((r: any) => ({
+          content: r.content,
+          title: r.title,
+          type: 'knowledge',
+          scope: 'product',
+          category: r.category || 'geral',
+        })));
+      }
     }
 
-    console.log(`🎯 Voyage RAG found ${results?.length || 0} relevant chunks`);
+    // STEP 2: Complete with global chunks if needed
+    if (results.length < matchCount) {
+      const remaining = matchCount - results.length;
+      console.log(`🌐 Step 2: Searching global chunks (need ${remaining} more)`);
+      
+      const { data: globalResults, error: globalError } = await supabase.rpc('search_knowledge_global', {
+        query_embedding: queryEmbedding,
+        org_id: organizationId,
+        p_categories: null,
+        match_threshold: 0.65,
+        match_count: remaining,
+      });
 
-    return (results || []).map((r: any) => ({
-      content: r.content,
-      title: r.title,
-      type: r.content_type,
-    }));
+      if (globalError) {
+        console.warn('❌ Global RAG search error:', globalError.message);
+      } else if (globalResults?.length > 0) {
+        console.log(`✅ Found ${globalResults.length} global chunks`);
+        results.push(...globalResults.map((r: any) => ({
+          content: r.content,
+          title: r.title,
+          type: 'knowledge',
+          scope: 'global',
+          category: r.category || 'geral',
+        })));
+      }
+    }
+
+    // Fallback to legacy search if new RPCs fail and we have no results
+    if (results.length === 0) {
+      console.log('⚠️ Falling back to legacy search_knowledge_chunks');
+      const { data: legacyResults, error: legacyError } = await supabase.rpc('search_knowledge_chunks', {
+        query_embedding: queryEmbedding,
+        org_id: organizationId,
+        agent_id_filter: agentId,
+        match_threshold: 0.65,
+        match_count: matchCount,
+      });
+
+      if (!legacyError && legacyResults?.length > 0) {
+        results.push(...legacyResults.map((r: any) => ({
+          content: r.content,
+          title: r.title,
+          type: r.content_type || 'knowledge',
+          scope: 'global',
+          category: 'geral',
+        })));
+      }
+    }
+
+    console.log(`🎯 Total RAG results: ${results.length} (product-first + global)`);
+
+    return results;
   } catch (err) {
     console.warn('❌ RAG search failed:', err);
     return [];
