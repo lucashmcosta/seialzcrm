@@ -1361,8 +1361,12 @@ serve(async (req) => {
       );
     }
 
-    // 6. Search for relevant knowledge (RAG)
-    const retrievedKnowledge = await searchRelevantKnowledge(supabase, message, organizationId, agentId);
+    // 6. Search for relevant knowledge (RAG) - use conversation context for better semantic matching
+    const recentMessages = messageHistory.slice(-5).map(m => m.content || '').join(' ');
+    const searchContext = recentMessages ? `${recentMessages} ${message}` : message;
+    console.log(`🔍 RAG search context (first 300 chars): "${searchContext.slice(0, 300)}..."`);
+    
+    const retrievedKnowledge = await searchRelevantKnowledge(supabase, searchContext, organizationId, agentId);
 
     // 7. Build system prompt with RAG knowledge
     const systemPrompt = buildSystemPrompt(agent, contact, company, opportunities, enabledTools, memories, retrievedKnowledge);
