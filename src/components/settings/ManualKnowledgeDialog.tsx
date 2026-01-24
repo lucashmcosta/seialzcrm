@@ -18,33 +18,12 @@ interface ManualKnowledgeDialogProps {
   onSuccess: () => void;
 }
 
-const CATEGORIES = [
-  { value: 'geral', label: 'Geral' },
-  { value: 'produto_servico', label: 'Produto/Serviço' },
-  { value: 'preco_planos', label: 'Preço/Planos' },
-  { value: 'pagamento', label: 'Pagamento' },
-  { value: 'processo', label: 'Processo' },
-  { value: 'requisitos', label: 'Requisitos' },
-  { value: 'politicas', label: 'Políticas' },
-  { value: 'faq', label: 'FAQ' },
-  { value: 'objecoes', label: 'Objeções' },
-  { value: 'qualificacao', label: 'Qualificação' },
-  { value: 'horario_contato', label: 'Horário/Contato' },
-  { value: 'glossario', label: 'Glossário' },
-  { value: 'escopo', label: 'Escopo' },
-  { value: 'compliance', label: 'Compliance' },
-  { value: 'linguagem', label: 'Linguagem' },
-  { value: 'prova_social', label: 'Prova Social' },
-];
+import { CATEGORY_OPTIONS } from '@/lib/knowledge-categories';
 
-const knowledgeTypes = [
-  { value: 'general', label: 'Geral' },
-  { value: 'product', label: 'Produto/Serviço' },
-  { value: 'faq', label: 'FAQ' },
-  { value: 'policy', label: 'Política' },
-  { value: 'process', label: 'Processo' },
-  { value: 'objection', label: 'Objeção' },
-];
+const CATEGORIES = CATEGORY_OPTIONS;
+
+// Types use the same categories now
+const knowledgeTypes = CATEGORY_OPTIONS;
 
 export function ManualKnowledgeDialog({ agents, products = [], onSuccess }: ManualKnowledgeDialogProps) {
   const { organization } = useOrganizationContext();

@@ -62,12 +62,11 @@ interface WizardResponse {
   comparison: ComparisonInfo;
 }
 
-// Valid categories that the database accepts - CRITICAL!
+// Valid categories that the database accepts - CRITICAL! (English keys)
 const VALID_CATEGORIES = [
-  'geral', 'produto_servico', 'preco_planos', 'pagamento', 
-  'processo', 'requisitos', 'politicas', 'faq', 'objecoes', 
-  'qualificacao', 'horario_contato', 'glossario', 'escopo', 
-  'compliance', 'linguagem', 'prova_social'
+  'general', 'contact_hours', 'payment', 'policies', 'scope', 'compliance',
+  'language_guide', 'glossary', 'product_service', 'pricing_plans', 'process',
+  'requirements', 'objections', 'qualification', 'faq', 'social_proof'
 ];
 
 const INTELLIGENT_SYSTEM_PROMPT = `Você é um especialista em coletar informações de negócio para bases de conhecimento de agentes de IA.
@@ -109,55 +108,55 @@ Coletar informações COMPLETAS sobre a empresa e seus produtos/serviços atrav�
 
 ### 7. QUANDO MARCAR categoryComplete=true (CRÍTICO!)
 - MARQUE categoryComplete=true AGRESSIVAMENTE após 2-4 perguntas sobre a mesma categoria
-- ESSENCIAL para geral: história OU diferenciais OU missão (qualquer um basta!)
-- ESSENCIAL para preco_planos: valores E o que inclui (2 coisas)
-- ESSENCIAL para processo: etapas OU prazo (qualquer um basta!)
+- ESSENCIAL para general: história OU diferenciais OU missão (qualquer um basta!)
+- ESSENCIAL para pricing_plans: valores E o que inclui (2 coisas)
+- ESSENCIAL para process: etapas OU prazo (qualquer um basta!)
 - MESMO SE PARCIAL, marque como complete após 3 perguntas na mesma categoria
 - É MELHOR salvar algo incompleto do que PERDER tudo!
 - NUNCA espere ter informação perfeita - salve o que tiver
 
-## CATEGORIAS VÁLIDAS (USE APENAS ESTAS!)
-- geral
-- produto_servico
-- preco_planos
-- pagamento
-- processo
-- requisitos
-- politicas
-- faq
-- objecoes
-- qualificacao
-- horario_contato
-- glossario
-- escopo
-- compliance
-- linguagem
-- prova_social
+## CATEGORIAS VÁLIDAS (USE APENAS ESTAS - CHAVES EM INGLÊS!)
+- general (Sobre a Empresa)
+- contact_hours (Horários e Contato)
+- payment (Formas de Pagamento)
+- policies (Políticas)
+- scope (Escopo de Atuação)
+- compliance (Regras de Compliance)
+- language_guide (Guia de Linguagem)
+- glossary (Glossário de Termos)
+- product_service (Descrição do Produto)
+- pricing_plans (Preços e Planos)
+- process (Processo e Etapas)
+- requirements (Requisitos)
+- objections (Objeções Comuns)
+- qualification (Qualificação)
+- faq (Perguntas Frequentes)
+- social_proof (Casos de Sucesso)
 
-IMPORTANTE: Você só pode usar as categorias listadas acima. NUNCA use "review" ou qualquer outra categoria não listada.
+IMPORTANTE: Você só pode usar as categorias listadas acima (em inglês). NUNCA use "review", "geral", "preco_planos" ou qualquer outra categoria não listada.
 
 ## CATEGORIAS A COBRIR
 
 ### GLOBAIS (valem para todos os produtos):
-- geral: Sobre a empresa, história, diferenciais, tom de comunicação
-- horario_contato: Canais de atendimento, horários, tempo de resposta
-- pagamento: Formas de pagamento (se iguais para todos)
-- politicas: Reembolso, garantias, cancelamento
-- escopo: O que a empresa FAZ e NÃO FAZ
+- general: Sobre a empresa, história, diferenciais, tom de comunicação
+- contact_hours: Canais de atendimento, horários, tempo de resposta
+- payment: Formas de pagamento (se iguais para todos)
+- policies: Reembolso, garantias, cancelamento
+- scope: O que a empresa FAZ e NÃO FAZ
 - compliance: O que o agente NUNCA deve fazer/prometer
-- linguagem: Palavras proibidas/obrigatórias, tom
-- glossario: Termos técnicos a explicar para clientes
+- language_guide: Palavras proibidas/obrigatórias, tom
+- glossary: Termos técnicos a explicar para clientes
 
 ### POR PRODUTO:
-- produto_servico: O que é, pra quem, benefícios principais
-- preco_planos: Valores, o que inclui/não inclui
-- pagamento: Se diferente do global
-- processo: Etapas, prazo, o que acontece em cada fase
-- requisitos: Documentos, pré-requisitos do cliente
-- objecoes: Resistências comuns e como responder
-- qualificacao: Como saber se o lead é bom para este produto
+- product_service: O que é, pra quem, benefícios principais
+- pricing_plans: Valores, o que inclui/não inclui
+- payment: Se diferente do global
+- process: Etapas, prazo, o que acontece em cada fase
+- requirements: Documentos, pré-requisitos do cliente
+- objections: Resistências comuns e como responder
+- qualification: Como saber se o lead é bom para este produto
 - faq: Perguntas específicas do produto
-- prova_social: Casos de sucesso, depoimentos
+- social_proof: Casos de sucesso, depoimentos
 
 ## FASES DO WIZARD
 1. initial: Coleta nome e descrição básica da empresa

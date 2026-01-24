@@ -26,25 +26,25 @@ interface GenerateResponse {
 }
 
 const CATEGORY_LABELS: Record<string, string> = {
-  // Global categories
-  geral: "Sobre a Empresa",
-  horario_contato: "Horários e Contato",
-  pagamento: "Formas de Pagamento",
-  politicas: "Políticas",
-  escopo: "Escopo de Atuação",
+  // Global categories (English keys, Portuguese labels)
+  general: "Sobre a Empresa",
+  contact_hours: "Horários e Contato",
+  payment: "Formas de Pagamento",
+  policies: "Políticas",
+  scope: "Escopo de Atuação",
   compliance: "Regras de Compliance",
-  linguagem: "Guia de Linguagem",
-  glossario: "Glossário de Termos",
+  language_guide: "Guia de Linguagem",
+  glossary: "Glossário de Termos",
   
   // Product categories
-  produto_servico: "Descrição do Produto/Serviço",
-  preco_planos: "Preços e Planos",
-  processo: "Processo e Etapas",
-  requisitos: "Requisitos",
-  objecoes: "Objeções Comuns",
-  qualificacao: "Critérios de Qualificação",
+  product_service: "Descrição do Produto/Serviço",
+  pricing_plans: "Preços e Planos",
+  process: "Processo e Etapas",
+  requirements: "Requisitos",
+  objections: "Objeções Comuns",
+  qualification: "Critérios de Qualificação",
   faq: "Perguntas Frequentes",
-  prova_social: "Casos de Sucesso",
+  social_proof: "Casos de Sucesso",
 };
 
 const CONTENT_GENERATION_PROMPT = `Você é um especialista em criar conteúdo para bases de conhecimento de agentes de IA.
