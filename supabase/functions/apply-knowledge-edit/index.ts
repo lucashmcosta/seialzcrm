@@ -128,7 +128,7 @@ serve(async (req) => {
             new_content: change.proposed_content,
             new_resolved_content: null, // Will be set by trigger
             change_type: "update",
-            change_source: "wizard_chat",
+            change_source: "conversation",
             change_description: editRequest.user_request,
             changed_by: userId,
           });
@@ -168,7 +168,7 @@ serve(async (req) => {
               category: change.category || "geral",
               scope: change.scope || "global",
               product_id: change.product_id || null,
-              type: "manual",
+              type: change.category || "general",
               source: "wizard_chat",
               status: "draft",
               created_by: userId,
@@ -186,7 +186,7 @@ serve(async (req) => {
               new_title: newItem.title,
               new_content: newItem.content,
               change_type: "create",
-              change_source: "wizard_chat",
+              change_source: "conversation",
               change_description: editRequest.user_request,
               changed_by: userId,
             });
@@ -211,7 +211,7 @@ serve(async (req) => {
               previous_content: currentItem.content,
               previous_resolved_content: currentItem.resolved_content,
               change_type: "delete",
-              change_source: "wizard_chat",
+              change_source: "conversation",
               change_description: editRequest.user_request,
               changed_by: userId,
             });
