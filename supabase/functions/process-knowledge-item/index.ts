@@ -177,13 +177,20 @@ serve(async (req) => {
         if (embeddingResponse.ok) {
           const embeddingData = await embeddingResponse.json();
           embeddings = embeddingData.data?.map((d: any) => d.embedding) || [];
+          
+          // CRITICAL: Validate embedding dimensions match DB schema (vector(1024))
+          if (embeddings.length > 0 && embeddings[0].length !== 1024) {
+            throw new Error(`Embedding dimension mismatch: got ${embeddings[0].length}, expected 1024. Check Voyage AI model configuration.`);
+          }
           console.log(`✅ Voyage AI generated ${embeddings.length} embeddings (${embeddings[0]?.length || 0} dimensions)`);
         } else {
           const errorText = await embeddingResponse.text();
           console.error(`❌ Voyage AI error: ${embeddingResponse.status} - ${errorText}`);
+          throw new Error(`Voyage AI error: ${embeddingResponse.status} - ${errorText}`);
         }
       } catch (embError) {
         console.error(`❌ Error generating Voyage embeddings:`, embError);
+        throw embError;
       }
     } else {
       console.warn('⚠️ VOYAGE_API_KEY not configured');

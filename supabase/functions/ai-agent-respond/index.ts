@@ -748,7 +748,7 @@ async function searchRelevantKnowledge(
         'Content-Type': 'application/json',
       },
       body: JSON.stringify({
-        model: 'voyage-3-lite',
+        model: 'voyage-3', // MUST use voyage-3 for 1024 dimensions (matches DB schema)
         input: messageContent,
         input_type: 'query', // Optimized for search queries
       }),
@@ -765,6 +765,12 @@ async function searchRelevantKnowledge(
 
     if (!queryEmbedding) {
       console.warn('❌ No embedding returned from Voyage AI');
+      return [];
+    }
+
+    // CRITICAL: Validate embedding dimensions match DB schema (vector(1024))
+    if (queryEmbedding.length !== 1024) {
+      console.error(`❌ Embedding dimension mismatch: got ${queryEmbedding.length}, expected 1024. Model may have returned wrong dimensions.`);
       return [];
     }
 
