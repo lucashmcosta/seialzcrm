@@ -80,3 +80,9 @@ verify_jwt = true
 
 [functions.apply-knowledge-edit]
 verify_jwt = true
+
+[functions.wizard-next-question]
+verify_jwt = false
+
+[functions.wizard-generate-content]
+verify_jwt = false
