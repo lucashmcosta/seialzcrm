@@ -107,7 +107,7 @@ serve(async (req) => {
 
     const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
     const supabaseKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
-    const lovableApiKey = Deno.env.get("LOVABLE_API_KEY");
+    const voyageApiKey = Deno.env.get("VOYAGE_API_KEY");
 
     const supabase = createClient(supabaseUrl, supabaseKey);
 
@@ -128,62 +128,62 @@ serve(async (req) => {
     const chunks = chunkContent(content, 1500, 200);
     console.log(`📄 Generated ${chunks.length} chunks from ${content.length} characters`);
 
-    // Generate embeddings for each chunk
-    const chunksToInsert = [];
-    
-    for (const chunk of chunks) {
-      // Prepare text for embedding (include title for context)
-      const embeddingText = item.title 
-        ? `${item.title}\n\n${chunk.content}`
-        : chunk.content;
+    // Prepare texts for BATCH embedding (include title for context)
+    const textsToEmbed = chunks.map(chunk => 
+      item.title ? `${item.title}\n\n${chunk.content}` : chunk.content
+    );
 
-      let embedding: number[] | null = null;
+    let embeddings: number[][] = [];
 
-      // Try to generate real embedding via Lovable AI Gateway
-      if (lovableApiKey) {
-        try {
-          const embeddingResponse = await fetch(
-            "https://ai.gateway.lovable.dev/v1/embeddings",
-            {
-              method: "POST",
-              headers: {
-                "Authorization": `Bearer ${lovableApiKey}`,
-                "Content-Type": "application/json",
-              },
-              body: JSON.stringify({
-                model: "text-embedding-3-small",
-                input: embeddingText,
-              }),
-            }
-          );
-
-          if (embeddingResponse.ok) {
-            const embeddingData = await embeddingResponse.json();
-            embedding = embeddingData.data?.[0]?.embedding;
-            console.log(`✅ Generated embedding for chunk ${chunk.index + 1}/${chunks.length}`);
-          } else {
-            const errorText = await embeddingResponse.text();
-            console.error(`❌ Embedding API error: ${embeddingResponse.status} - ${errorText}`);
+    // Generate embeddings via Voyage AI (BATCH request)
+    if (voyageApiKey) {
+      try {
+        console.log(`🚀 Generating ${textsToEmbed.length} embeddings via Voyage AI (batch)...`);
+        
+        const embeddingResponse = await fetch(
+          "https://api.voyageai.com/v1/embeddings",
+          {
+            method: "POST",
+            headers: {
+              "Authorization": `Bearer ${voyageApiKey}`,
+              "Content-Type": "application/json",
+            },
+            body: JSON.stringify({
+              model: "voyage-3-lite",
+              input: textsToEmbed, // Array de textos (até 128)
+              input_type: "document",
+            }),
           }
-        } catch (embError) {
-          console.error(`❌ Error generating embedding for chunk ${chunk.index}:`, embError);
+        );
+
+        if (embeddingResponse.ok) {
+          const embeddingData = await embeddingResponse.json();
+          embeddings = embeddingData.data?.map((d: any) => d.embedding) || [];
+          console.log(`✅ Voyage AI generated ${embeddings.length} embeddings (${embeddings[0]?.length || 0} dimensions)`);
+        } else {
+          const errorText = await embeddingResponse.text();
+          console.error(`❌ Voyage AI error: ${embeddingResponse.status} - ${errorText}`);
         }
+      } catch (embError) {
+        console.error(`❌ Error generating Voyage embeddings:`, embError);
       }
+    } else {
+      console.warn('⚠️ VOYAGE_API_KEY not configured');
+    }
 
-      // If no embedding, generate a placeholder (all zeros - won't match anything)
-      if (!embedding) {
-        console.warn(`⚠️ Using placeholder embedding for chunk ${chunk.index}`);
-        embedding = new Array(1536).fill(0);
-      }
+    // Build chunks to insert
+    const chunksToInsert = chunks.map((chunk, i) => ({
+      organization_id: item.organization_id,
+      item_id: item.id,
+      chunk_index: chunk.index,
+      content: chunk.content,
+      embedding: JSON.stringify(embeddings[i] || new Array(1024).fill(0)), // 1024 dimensions for Voyage AI
+      metadata: chunk.metadata,
+    }));
 
-      chunksToInsert.push({
-        organization_id: item.organization_id,
-        item_id: item.id,
-        chunk_index: chunk.index,
-        content: chunk.content,
-        embedding: JSON.stringify(embedding),
-        metadata: chunk.metadata,
-      });
+    // Log warning if using placeholder embeddings
+    if (embeddings.length === 0) {
+      console.warn(`⚠️ Using placeholder embeddings for all ${chunks.length} chunks`);
     }
 
     // Insert all chunks
@@ -207,6 +207,8 @@ serve(async (req) => {
           ...item.metadata,
           char_count: content.length,
           chunk_count: chunks.length,
+          embedding_model: "voyage-3-lite",
+          embedding_dimensions: 1024,
           processed_at: new Date().toISOString(),
         },
       })
@@ -223,6 +225,7 @@ serve(async (req) => {
         itemId,
         chunksCreated: chunks.length,
         totalCharacters: content.length,
+        embeddingsGenerated: embeddings.length > 0,
       }),
       { headers: { ...corsHeaders, "Content-Type": "application/json" } }
     );

@@ -719,7 +719,7 @@ function isWithinWorkingHours(workingHours: WorkingHours): boolean {
 }
 
 /**
- * Search for relevant knowledge using RAG
+ * Search for relevant knowledge using RAG with Voyage AI embeddings
  */
 async function searchRelevantKnowledge(
   supabase: any,
@@ -728,21 +728,32 @@ async function searchRelevantKnowledge(
   agentId: string
 ): Promise<{ content: string; title: string | null; type: string }[]> {
   try {
-    // Generate embedding for the user message
-    const embeddingResponse = await fetch('https://ai.gateway.lovable.dev/v1/embeddings', {
+    const voyageApiKey = Deno.env.get("VOYAGE_API_KEY");
+    
+    if (!voyageApiKey) {
+      console.warn('⚠️ VOYAGE_API_KEY not configured - RAG disabled');
+      return [];
+    }
+
+    console.log(`🔍 Generating query embedding via Voyage AI...`);
+
+    // Generate embedding for the query via Voyage AI
+    const embeddingResponse = await fetch('https://api.voyageai.com/v1/embeddings', {
       method: 'POST',
       headers: {
-        'Authorization': `Bearer ${Deno.env.get('LOVABLE_API_KEY')}`,
+        'Authorization': `Bearer ${voyageApiKey}`,
         'Content-Type': 'application/json',
       },
       body: JSON.stringify({
-        model: 'text-embedding-3-small',
+        model: 'voyage-3-lite',
         input: messageContent,
+        input_type: 'query', // Optimized for search queries
       }),
     });
 
     if (!embeddingResponse.ok) {
-      console.warn('Failed to generate embedding for RAG search');
+      const errorText = await embeddingResponse.text();
+      console.warn('❌ Voyage AI embedding failed:', errorText);
       return [];
     }
 
@@ -750,32 +761,35 @@ async function searchRelevantKnowledge(
     const queryEmbedding = embeddingData.data?.[0]?.embedding;
 
     if (!queryEmbedding) {
-      console.warn('No embedding returned from API');
+      console.warn('❌ No embedding returned from Voyage AI');
       return [];
     }
 
-    // Search for similar knowledge
-    const { data: results, error } = await supabase.rpc('search_knowledge', {
+    console.log(`✅ Query embedding generated (${queryEmbedding.length} dimensions)`);
+
+    // Search for similar knowledge chunks via RPC
+    const { data: results, error } = await supabase.rpc('search_knowledge_chunks', {
       query_embedding: queryEmbedding,
       org_id: organizationId,
       agent_id_filter: agentId,
-      match_threshold: 0.7,
-      match_count: 5,
+      match_threshold: 0.65,
+      match_count: 10,
     });
 
     if (error) {
-      console.warn('RAG search error:', error.message);
+      console.warn('❌ RAG search error:', error.message);
       return [];
     }
 
-    console.log(`RAG found ${results?.length || 0} relevant knowledge items`);
+    console.log(`🎯 Voyage RAG found ${results?.length || 0} relevant chunks`);
+
     return (results || []).map((r: any) => ({
       content: r.content,
       title: r.title,
       type: r.content_type,
     }));
   } catch (err) {
-    console.warn('RAG search failed:', err);
+    console.warn('❌ RAG search failed:', err);
     return [];
   }
 }
