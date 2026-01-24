@@ -32,6 +32,7 @@ export function useSpeechToText(options: UseSpeechToTextOptions = {}) {
   
   const recognitionRef = useRef<any>(null);
   const transcriptRef = useRef('');
+  const shouldRestartRef = useRef(false);
 
   useEffect(() => {
     // Check browser support
@@ -70,18 +71,38 @@ export function useSpeechToText(options: UseSpeechToTextOptions = {}) {
     
     recognition.onerror = (event: SpeechRecognitionErrorEvent) => {
       console.error('Speech recognition error:', event.error);
+      
+      // Ignore no-speech error - keep listening
+      if (event.error === 'no-speech' || event.error === 'aborted') {
+        return;
+      }
+      
       setError(event.error);
+      shouldRestartRef.current = false;
       setIsListening(false);
     };
     
     recognition.onend = () => {
-      setIsListening(false);
-      onEnd?.();
+      // Auto-restart if user hasn't stopped manually
+      if (shouldRestartRef.current) {
+        try {
+          recognition.start();
+        } catch (err) {
+          console.error('Failed to restart speech recognition:', err);
+          shouldRestartRef.current = false;
+          setIsListening(false);
+          onEnd?.();
+        }
+      } else {
+        setIsListening(false);
+        onEnd?.();
+      }
     };
     
     recognitionRef.current = recognition;
     
     return () => {
+      shouldRestartRef.current = false;
       recognition.abort();
     };
   }, [language, continuous, onResult, onEnd]);
@@ -92,17 +113,20 @@ export function useSpeechToText(options: UseSpeechToTextOptions = {}) {
     transcriptRef.current = '';
     setTranscript('');
     setInterimTranscript('');
+    shouldRestartRef.current = true;
     try {
       recognitionRef.current.start();
       setIsListening(true);
     } catch (err) {
       console.error('Failed to start speech recognition:', err);
       setError('Não foi possível iniciar o reconhecimento de voz');
+      shouldRestartRef.current = false;
     }
   }, []);
 
   const stopListening = useCallback(() => {
     if (!recognitionRef.current) return;
+    shouldRestartRef.current = false;
     recognitionRef.current.stop();
     setIsListening(false);
   }, []);

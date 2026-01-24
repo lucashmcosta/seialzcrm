@@ -885,10 +885,10 @@ export function KnowledgeWizard({ onComplete, onCancel }: KnowledgeWizardProps) 
           </div>
         )}
         
-        <div className="flex gap-2 w-full">
+        <div className="flex gap-2 w-full items-start">
           <SpeechToTextButton
             onTranscript={(text) => {
-              setInput(prev => prev ? `${prev} ${text}` : text);
+              setInput(text);
             }}
             disabled={loading || state.currentPhase === 'complete' || isSaving}
           />
