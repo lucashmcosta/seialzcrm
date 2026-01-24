@@ -48,7 +48,7 @@ import EmojiPicker, { EmojiClickData, Theme } from 'emoji-picker-react';
 import { cn } from '@/lib/utils';
 import { useAI } from '@/hooks/useAI';
 
-// Helper function for formatting relative time
+// Helper function for formatting relative time in human-readable format
 const formatRelativeTime = (timestamp: string, locale: 'pt-BR' | 'en-US'): string => {
   const now = Date.now();
   const date = new Date(timestamp);
