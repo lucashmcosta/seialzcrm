@@ -177,11 +177,12 @@ export function AgentMessageFeedbackDialog({
                 agent_id: agentId,
                 type: 'faq',
                 title: patch.title || 'Correção via Feedback',
-                source: 'feedback',
+                source: 'manual', // Use 'manual' as it's an allowed value
                 status: 'draft', // Will be set to published by process-knowledge
                 metadata: { 
                   tags: patch.tags || [],
-                  from_feedback: true,
+                  origin: 'chat_feedback', // Track that it came from feedback
+                  original_message_id: message.id,
                   original_message: message.content.slice(0, 200),
                 },
               })
