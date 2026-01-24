@@ -1062,6 +1062,7 @@ export type Database = {
           owner_user_id: string | null
           phone: string | null
           source: string | null
+          source_external_id: string | null
           updated_at: string | null
           utm_campaign: string | null
           utm_medium: string | null
@@ -1086,6 +1087,7 @@ export type Database = {
           owner_user_id?: string | null
           phone?: string | null
           source?: string | null
+          source_external_id?: string | null
           updated_at?: string | null
           utm_campaign?: string | null
           utm_medium?: string | null
@@ -1110,6 +1112,7 @@ export type Database = {
           owner_user_id?: string | null
           phone?: string | null
           source?: string | null
+          source_external_id?: string | null
           updated_at?: string | null
           utm_campaign?: string | null
           utm_medium?: string | null
@@ -1485,6 +1488,108 @@ export type Database = {
           },
           {
             foreignKeyName: "impersonation_sessions_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      import_logs: {
+        Row: {
+          completed_at: string | null
+          config: Json | null
+          created_at: string | null
+          created_by_user_id: string | null
+          current_batch: number | null
+          error_count: number | null
+          errors: Json | null
+          id: string
+          imported_contact_ids: string[] | null
+          imported_contacts: number | null
+          imported_opportunities: number | null
+          imported_opportunity_ids: string[] | null
+          integration_slug: string
+          last_processed_item: string | null
+          organization_id: string
+          progress_percent: number | null
+          rollback_available: boolean | null
+          rollback_executed_at: string | null
+          skipped_contacts: number | null
+          skipped_opportunities: number | null
+          started_at: string | null
+          status: string | null
+          total_batches: number | null
+          total_contacts: number | null
+          total_opportunities: number | null
+          updated_at: string | null
+        }
+        Insert: {
+          completed_at?: string | null
+          config?: Json | null
+          created_at?: string | null
+          created_by_user_id?: string | null
+          current_batch?: number | null
+          error_count?: number | null
+          errors?: Json | null
+          id?: string
+          imported_contact_ids?: string[] | null
+          imported_contacts?: number | null
+          imported_opportunities?: number | null
+          imported_opportunity_ids?: string[] | null
+          integration_slug: string
+          last_processed_item?: string | null
+          organization_id: string
+          progress_percent?: number | null
+          rollback_available?: boolean | null
+          rollback_executed_at?: string | null
+          skipped_contacts?: number | null
+          skipped_opportunities?: number | null
+          started_at?: string | null
+          status?: string | null
+          total_batches?: number | null
+          total_contacts?: number | null
+          total_opportunities?: number | null
+          updated_at?: string | null
+        }
+        Update: {
+          completed_at?: string | null
+          config?: Json | null
+          created_at?: string | null
+          created_by_user_id?: string | null
+          current_batch?: number | null
+          error_count?: number | null
+          errors?: Json | null
+          id?: string
+          imported_contact_ids?: string[] | null
+          imported_contacts?: number | null
+          imported_opportunities?: number | null
+          imported_opportunity_ids?: string[] | null
+          integration_slug?: string
+          last_processed_item?: string | null
+          organization_id?: string
+          progress_percent?: number | null
+          rollback_available?: boolean | null
+          rollback_executed_at?: string | null
+          skipped_contacts?: number | null
+          skipped_opportunities?: number | null
+          started_at?: string | null
+          status?: string | null
+          total_batches?: number | null
+          total_contacts?: number | null
+          total_opportunities?: number | null
+          updated_at?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "import_logs_created_by_user_id_fkey"
+            columns: ["created_by_user_id"]
+            isOneToOne: false
+            referencedRelation: "users"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "import_logs_organization_id_fkey"
             columns: ["organization_id"]
             isOneToOne: false
             referencedRelation: "organizations"
@@ -2190,6 +2295,8 @@ export type Database = {
           organization_id: string
           owner_user_id: string | null
           pipeline_stage_id: string
+          source: string | null
+          source_external_id: string | null
           status: Database["public"]["Enums"]["opportunity_status"] | null
           title: string
           updated_at: string | null
@@ -2207,6 +2314,8 @@ export type Database = {
           organization_id: string
           owner_user_id?: string | null
           pipeline_stage_id: string
+          source?: string | null
+          source_external_id?: string | null
           status?: Database["public"]["Enums"]["opportunity_status"] | null
           title: string
           updated_at?: string | null
@@ -2224,6 +2333,8 @@ export type Database = {
           organization_id?: string
           owner_user_id?: string | null
           pipeline_stage_id?: string
+          source?: string | null
+          source_external_id?: string | null
           status?: Database["public"]["Enums"]["opportunity_status"] | null
           title?: string
           updated_at?: string | null
