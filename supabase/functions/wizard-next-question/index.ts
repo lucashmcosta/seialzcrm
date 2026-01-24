@@ -62,6 +62,14 @@ interface WizardResponse {
   comparison: ComparisonInfo;
 }
 
+// Valid categories that the database accepts - CRITICAL!
+const VALID_CATEGORIES = [
+  'geral', 'produto_servico', 'preco_planos', 'pagamento', 
+  'processo', 'requisitos', 'politicas', 'faq', 'objecoes', 
+  'qualificacao', 'horario_contato', 'glossario', 'escopo', 
+  'compliance', 'linguagem', 'prova_social'
+];
+
 const INTELLIGENT_SYSTEM_PROMPT = `Você é um especialista em coletar informações de negócio para bases de conhecimento de agentes de IA.
 
 ## SUA MISSÃO
@@ -99,6 +107,35 @@ Coletar informações COMPLETAS sobre a empresa e seus produtos/serviços atrav�
 - Use nomes exatos como o usuário disse.
 - Exemplo: "EB2-NIW, EB1A, O1" -> detectar 3 produtos.
 
+### 7. QUANDO MARCAR categoryComplete=true (CRÍTICO!)
+- MARQUE categoryComplete=true AGRESSIVAMENTE após 2-4 perguntas sobre a mesma categoria
+- ESSENCIAL para geral: história OU diferenciais OU missão (qualquer um basta!)
+- ESSENCIAL para preco_planos: valores E o que inclui (2 coisas)
+- ESSENCIAL para processo: etapas OU prazo (qualquer um basta!)
+- MESMO SE PARCIAL, marque como complete após 3 perguntas na mesma categoria
+- É MELHOR salvar algo incompleto do que PERDER tudo!
+- NUNCA espere ter informação perfeita - salve o que tiver
+
+## CATEGORIAS VÁLIDAS (USE APENAS ESTAS!)
+- geral
+- produto_servico
+- preco_planos
+- pagamento
+- processo
+- requisitos
+- politicas
+- faq
+- objecoes
+- qualificacao
+- horario_contato
+- glossario
+- escopo
+- compliance
+- linguagem
+- prova_social
+
+IMPORTANTE: Você só pode usar as categorias listadas acima. NUNCA use "review" ou qualquer outra categoria não listada.
+
 ## CATEGORIAS A COBRIR
 
 ### GLOBAIS (valem para todos os produtos):
@@ -127,8 +164,7 @@ Coletar informações COMPLETAS sobre a empresa e seus produtos/serviços atrav�
 2. global: Coleta informações que valem para todos os produtos
 3. product: Coleta detalhes específicos de cada produto
 4. comparison: Compara produtos para evitar repetição
-5. review: Revisão final do que foi coletado
-6. complete: Finalizado
+5. complete: Finalizado (NÃO existe fase "review" - vá direto para complete!)
 
 ## FORMATO DE RESPOSTA (JSON OBRIGATÓRIO)
 {
@@ -136,7 +172,7 @@ Coletar informações COMPLETAS sobre a empresa e seus produtos/serviços atrav�
   "action": "ask | clarify | confirm | next_category | next_product | complete",
   "question": "A pergunta a fazer ao usuário (null se action=complete)",
   "extractedInfo": {
-    "category": "categoria da informação extraída",
+    "category": "DEVE SER UMA DAS CATEGORIAS VÁLIDAS LISTADAS ACIMA",
     "product": "nome do produto ou null se global",
     "key": "chave da informação (ex: 'price', 'timeline')",
     "value": "valor extraído da resposta do usuário",
@@ -145,7 +181,7 @@ Coletar informações COMPLETAS sobre a empresa e seus produtos/serviços atrav�
   "productsDetected": ["Lista", "de", "produtos", "mencionados pelo usuário"],
   "categoryComplete": true/false,
   "summaryIfComplete": "Resumo do que foi coletado (apenas se categoryComplete=true)",
-  "nextCategory": "próxima categoria a explorar (se action=next_category)",
+  "nextCategory": "próxima categoria a explorar (DEVE SER UMA DAS CATEGORIAS VÁLIDAS)",
   "nextProduct": "próximo produto a configurar (se action=next_product)",
   "comparison": {
     "comparing": true/false,
@@ -155,7 +191,10 @@ Coletar informações COMPLETAS sobre a empresa e seus produtos/serviços atrav�
   }
 }
 
-IMPORTANTE: Responda SEMPRE em JSON válido. Nada antes ou depois do JSON.`;
+IMPORTANTE: 
+- Responda SEMPRE em JSON válido. Nada antes ou depois do JSON.
+- TODAS as categorias mencionadas DEVEM estar na lista de categorias válidas
+- NUNCA use "review" como categoria - use a categoria real da informação`;
 
 function formatCollectedKnowledge(state: WizardState): string {
   const parts: string[] = [];
@@ -243,6 +282,17 @@ function parseWizardResponse(responseText: string): WizardResponse {
 
   try {
     const parsed = JSON.parse(cleanedText);
+    
+    // Validate and fix category if invalid
+    if (parsed.extractedInfo?.category && !VALID_CATEGORIES.includes(parsed.extractedInfo.category)) {
+      console.warn(`Invalid category detected: ${parsed.extractedInfo.category}, defaulting to 'geral'`);
+      parsed.extractedInfo.category = 'geral';
+    }
+    
+    if (parsed.nextCategory && !VALID_CATEGORIES.includes(parsed.nextCategory)) {
+      console.warn(`Invalid nextCategory detected: ${parsed.nextCategory}, defaulting to 'geral'`);
+      parsed.nextCategory = 'geral';
+    }
     
     // Ensure all required fields exist with defaults
     return {
@@ -346,8 +396,10 @@ ${userMessage}
 Analise a resposta do usuário e decida:
 1. A informação foi suficiente ou precisa aprofundar?
 2. Detectou algum produto/serviço novo mencionado?
-3. A categoria atual está completa?
+3. A categoria atual está completa? (LEMBRE: marque complete após 2-4 perguntas!)
 4. Qual a próxima pergunta mais relevante?
+
+IMPORTANTE: Use APENAS as categorias válidas listadas no prompt do sistema. NUNCA use "review".
 
 Responda em JSON conforme o formato especificado.`;
 

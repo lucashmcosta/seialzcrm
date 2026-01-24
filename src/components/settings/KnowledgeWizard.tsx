@@ -16,7 +16,8 @@ import {
   Package, 
   FileText, 
   CheckCircle2,
-  AlertCircle
+  AlertCircle,
+  Save
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
@@ -51,6 +52,8 @@ interface WizardState {
   currentCategory: string | null;
   currentProduct: string | null;
   savedItems: Array<{ id: string; title: string; category: string; productId?: string }>;
+  messagesInCurrentCategory: number;
+  lastSavedCategory: string | null;
 }
 
 interface ExtractedInfo {
@@ -110,8 +113,19 @@ const CATEGORY_LABELS: Record<string, string> = {
   prova_social: "Casos de Sucesso",
 };
 
+// Valid categories that the database accepts - CRITICAL!
+const VALID_CATEGORIES = [
+  'geral', 'produto_servico', 'preco_planos', 'pagamento', 
+  'processo', 'requisitos', 'politicas', 'faq', 'objecoes', 
+  'qualificacao', 'horario_contato', 'glossario', 'escopo', 
+  'compliance', 'linguagem', 'prova_social'
+];
+
 const GLOBAL_CATEGORIES = ['geral', 'horario_contato', 'pagamento', 'politicas', 'escopo', 'compliance'];
 const PRODUCT_CATEGORIES = ['produto_servico', 'preco_planos', 'processo', 'requisitos', 'objecoes', 'faq'];
+
+// Auto-save after this many messages in same category
+const AUTO_SAVE_MESSAGE_THRESHOLD = 3;
 
 const initialState: WizardState = {
   companyName: '',
@@ -123,6 +137,8 @@ const initialState: WizardState = {
   currentCategory: null,
   currentProduct: null,
   savedItems: [],
+  messagesInCurrentCategory: 0,
+  lastSavedCategory: null,
 };
 
 export function KnowledgeWizard({ onComplete, onCancel }: KnowledgeWizardProps) {
@@ -132,6 +148,7 @@ export function KnowledgeWizard({ onComplete, onCancel }: KnowledgeWizardProps) 
   const [input, setInput] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [isSaving, setIsSaving] = useState(false);
   
   const scrollRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLTextAreaElement>(null);
@@ -205,6 +222,15 @@ export function KnowledgeWizard({ onComplete, onCancel }: KnowledgeWizardProps) 
     }
   }, [organization?.id]);
 
+  // Validate category before saving
+  const validateCategory = (category: string): string => {
+    if (VALID_CATEGORIES.includes(category)) {
+      return category;
+    }
+    console.warn(`Invalid category "${category}", falling back to "geral"`);
+    return 'geral';
+  };
+
   // Save knowledge item to database
   const saveKnowledgeItem = useCallback(async (
     title: string,
@@ -215,6 +241,9 @@ export function KnowledgeWizard({ onComplete, onCancel }: KnowledgeWizardProps) 
   ): Promise<{ id: string; title: string } | null> => {
     if (!organization?.id) return null;
 
+    // Validate category before saving
+    const validCategory = validateCategory(category);
+
     try {
       const { data: item, error } = await supabase
         .from('knowledge_items')
@@ -222,7 +251,7 @@ export function KnowledgeWizard({ onComplete, onCancel }: KnowledgeWizardProps) 
           organization_id: organization.id,
           title,
           content,
-          category,
+          category: validCategory,
           scope,
           product_id: productId || null,
           type: 'manual',
@@ -240,6 +269,7 @@ export function KnowledgeWizard({ onComplete, onCancel }: KnowledgeWizardProps) 
         body: { itemId: item.id },
       });
 
+      console.log(`✅ Saved knowledge item: ${title} (category: ${validCategory})`);
       return { id: item.id, title };
     } catch (err) {
       console.error('Failed to save knowledge item:', err);
@@ -259,7 +289,7 @@ export function KnowledgeWizard({ onComplete, onCancel }: KnowledgeWizardProps) 
     try {
       const { data, error } = await supabase.functions.invoke('wizard-generate-content', {
         body: {
-          category,
+          category: validateCategory(category),
           scope,
           productName,
           collectedInfo,
@@ -274,6 +304,170 @@ export function KnowledgeWizard({ onComplete, onCancel }: KnowledgeWizardProps) 
       return null;
     }
   }, []);
+
+  // Save current category progress (auto-save or manual)
+  const saveCategoryProgress = useCallback(async (
+    categoryToSave: string,
+    currentState: WizardState,
+    currentMessages: Message[],
+    isAutoSave: boolean = false
+  ): Promise<{ id: string; title: string } | null> => {
+    if (!organization?.id || !categoryToSave) return null;
+    
+    // Don't save if already saved this category
+    if (currentState.lastSavedCategory === categoryToSave && !isAutoSave) {
+      console.log(`Category ${categoryToSave} already saved, skipping`);
+      return null;
+    }
+
+    const validCategory = validateCategory(categoryToSave);
+    const isProductCategory = PRODUCT_CATEGORIES.includes(validCategory);
+    const scope = isProductCategory && currentState.currentProduct ? 'product' : 'global';
+    
+    // Get relevant conversation excerpts (last 10 messages)
+    const recentConvo = currentMessages.slice(-10).map(m => `${m.role}: ${m.content}`);
+    
+    // Get collected info for this category
+    const collectedInfo = scope === 'product' && currentState.currentProduct
+      ? currentState.productKnowledge[currentState.currentProduct] || {}
+      : { [validCategory]: currentState.globalKnowledge[validCategory] || '' };
+
+    // Check if we have enough content to save
+    const hasContent = Object.values(collectedInfo).some(v => v && v.length > 10);
+    if (!hasContent && recentConvo.length < 3) {
+      console.log(`Not enough content to save for ${validCategory}`);
+      return null;
+    }
+
+    try {
+      setIsSaving(true);
+      
+      // Generate content
+      const generated = await generateCategoryContent(
+        validCategory,
+        scope,
+        scope === 'product' ? currentState.currentProduct || undefined : undefined,
+        collectedInfo,
+        recentConvo
+      );
+
+      if (!generated || !generated.content) {
+        console.log(`Failed to generate content for ${validCategory}`);
+        return null;
+      }
+
+      // Find product ID if product-specific
+      let productId: string | undefined;
+      if (scope === 'product' && currentState.currentProduct) {
+        const product = currentState.products.find(p => p.name === currentState.currentProduct);
+        productId = product?.id;
+      }
+
+      // Save to database
+      const savedItem = await saveKnowledgeItem(
+        isAutoSave ? `${generated.title} (Rascunho)` : generated.title,
+        generated.content,
+        validCategory,
+        scope,
+        productId
+      );
+
+      if (savedItem) {
+        toast.success(`Item salvo: ${savedItem.title}`);
+        
+        // Save suggested FAQs as separate items
+        if (generated.suggestedFaqs && generated.suggestedFaqs.length > 0) {
+          const faqContent = generated.suggestedFaqs
+            .map(faq => `**${faq.question}**\n${faq.answer}`)
+            .join('\n\n---\n\n');
+          
+          await saveKnowledgeItem(
+            `FAQ - ${generated.title}`,
+            faqContent,
+            'faq',
+            scope,
+            productId
+          );
+        }
+      }
+
+      return savedItem;
+    } catch (err) {
+      console.error('Failed to save category progress:', err);
+      return null;
+    } finally {
+      setIsSaving(false);
+    }
+  }, [organization?.id, generateCategoryContent, saveKnowledgeItem]);
+
+  // Save all collected knowledge before exit
+  const saveAllProgress = useCallback(async (): Promise<number> => {
+    if (!organization?.id) return 0;
+
+    let savedCount = 0;
+    setIsSaving(true);
+
+    try {
+      // Save each global category that has content
+      for (const [category, content] of Object.entries(state.globalKnowledge)) {
+        if (content && content.length > 10) {
+          const validCategory = validateCategory(category);
+          const savedItem = await saveKnowledgeItem(
+            `${CATEGORY_LABELS[validCategory] || validCategory} (Rascunho)`,
+            content,
+            validCategory,
+            'global'
+          );
+          if (savedItem) savedCount++;
+        }
+      }
+
+      // Save each product category that has content
+      for (const [productName, categories] of Object.entries(state.productKnowledge)) {
+        const product = state.products.find(p => p.name === productName);
+        for (const [category, content] of Object.entries(categories)) {
+          if (content && content.length > 10) {
+            const validCategory = validateCategory(category);
+            const savedItem = await saveKnowledgeItem(
+              `${CATEGORY_LABELS[validCategory] || validCategory} - ${productName} (Rascunho)`,
+              content,
+              validCategory,
+              'product',
+              product?.id
+            );
+            if (savedItem) savedCount++;
+          }
+        }
+      }
+
+      return savedCount;
+    } finally {
+      setIsSaving(false);
+    }
+  }, [organization?.id, state, saveKnowledgeItem]);
+
+  // Handle cancel with save prompt
+  const handleCancel = useCallback(async () => {
+    const hasProgress = Object.keys(state.globalKnowledge).length > 0 || 
+                        Object.keys(state.productKnowledge).length > 0 ||
+                        state.products.length > 0;
+
+    if (hasProgress) {
+      const shouldSave = window.confirm(
+        'Você tem progresso não salvo. Deseja salvar antes de sair?\n\n' +
+        'Clique OK para salvar, ou Cancelar para sair sem salvar.'
+      );
+
+      if (shouldSave) {
+        const savedCount = await saveAllProgress();
+        if (savedCount > 0) {
+          toast.success(`${savedCount} item(s) salvos com sucesso!`);
+        }
+      }
+    }
+
+    onCancel();
+  }, [state, saveAllProgress, onCancel]);
 
   // Handle sending a message
   const handleSend = useCallback(async () => {
@@ -324,6 +518,9 @@ export function KnowledgeWizard({ onComplete, onCancel }: KnowledgeWizardProps) 
         productsDetected: response.productsDetected,
       };
 
+      // Increment messages in current category
+      newState.messagesInCurrentCategory = state.messagesInCurrentCategory + 1;
+
       // Extract company info in initial phase
       if (state.currentPhase === 'initial') {
         if (!state.companyName && userMessage.length > 1) {
@@ -332,26 +529,28 @@ export function KnowledgeWizard({ onComplete, onCancel }: KnowledgeWizardProps) 
           newState.companyDescription = userMessage;
           newState.currentPhase = 'global';
           newState.currentCategory = 'geral';
+          newState.messagesInCurrentCategory = 0;
         }
       }
 
       // Handle extracted info
       if (response.extractedInfo && response.extractedInfo.confidence > 0.5) {
         const { category, product, key, value } = response.extractedInfo;
+        const validCategory = validateCategory(category);
         
         if (product) {
           // Product-specific knowledge
           if (!newState.productKnowledge[product]) {
             newState.productKnowledge[product] = {};
           }
-          const existingContent = newState.productKnowledge[product][category] || '';
-          newState.productKnowledge[product][category] = existingContent 
+          const existingContent = newState.productKnowledge[product][validCategory] || '';
+          newState.productKnowledge[product][validCategory] = existingContent 
             ? `${existingContent}\n\n**${key}**: ${value}`
             : `**${key}**: ${value}`;
         } else {
           // Global knowledge
-          const existingContent = newState.globalKnowledge[category] || '';
-          newState.globalKnowledge[category] = existingContent
+          const existingContent = newState.globalKnowledge[validCategory] || '';
+          newState.globalKnowledge[validCategory] = existingContent
             ? `${existingContent}\n\n**${key}**: ${value}`
             : `**${key}**: ${value}`;
         }
@@ -376,85 +575,70 @@ export function KnowledgeWizard({ onComplete, onCancel }: KnowledgeWizardProps) 
         }
       }
 
-      // Handle category completion - generate and save content
-      if (response.categoryComplete && state.currentCategory) {
-        const isProductCategory = PRODUCT_CATEGORIES.includes(state.currentCategory);
-        const scope = isProductCategory && state.currentProduct ? 'product' : 'global';
-        
-        // Get relevant conversation excerpts (last 10 messages)
-        const recentConvo = messages.slice(-10).map(m => `${m.role}: ${m.content}`);
-        
-        // Get collected info for this category
-        const collectedInfo = scope === 'product' && state.currentProduct
-          ? newState.productKnowledge[state.currentProduct] || {}
-          : { [state.currentCategory]: newState.globalKnowledge[state.currentCategory] || '' };
+      // Determine if we should auto-save (after threshold messages in same category)
+      const shouldAutoSave = 
+        state.currentCategory && 
+        newState.messagesInCurrentCategory >= AUTO_SAVE_MESSAGE_THRESHOLD &&
+        state.lastSavedCategory !== state.currentCategory;
 
-        // Generate content
-        const generated = await generateCategoryContent(
+      // Handle category completion - generate and save content
+      const shouldSaveCategory = response.categoryComplete || shouldAutoSave;
+      
+      if (shouldSaveCategory && state.currentCategory) {
+        const savedItem = await saveCategoryProgress(
           state.currentCategory,
-          scope,
-          scope === 'product' ? state.currentProduct || undefined : undefined,
-          collectedInfo,
-          recentConvo
+          newState,
+          [...messages, userMsg],
+          !response.categoryComplete // isAutoSave
         );
 
-        if (generated && generated.content) {
-          // Find product ID if product-specific
-          let productId: string | undefined;
-          if (scope === 'product' && state.currentProduct) {
-            const product = newState.products.find(p => p.name === state.currentProduct);
-            productId = product?.id;
-          }
+        if (savedItem) {
+          newState.savedItems.push({
+            ...savedItem,
+            category: validateCategory(state.currentCategory),
+            productId: state.currentProduct 
+              ? newState.products.find(p => p.name === state.currentProduct)?.id 
+              : undefined,
+          });
+          messageMetadata.savedItem = savedItem;
+          newState.lastSavedCategory = state.currentCategory;
 
-          // Save to database
-          const savedItem = await saveKnowledgeItem(
-            generated.title,
-            generated.content,
-            state.currentCategory,
-            scope,
-            productId
-          );
-
-          if (savedItem) {
-            newState.savedItems.push({
-              ...savedItem,
-              category: state.currentCategory,
-              productId,
-            });
-            messageMetadata.savedItem = savedItem;
-
-            // Mark category as complete for product
-            if (scope === 'product' && state.currentProduct) {
-              const productIdx = newState.products.findIndex(p => p.name === state.currentProduct);
-              if (productIdx >= 0) {
-                newState.products[productIdx].categoriesCompleted.push(state.currentCategory);
-              }
-            }
-
-            // Save suggested FAQs as separate items
-            if (generated.suggestedFaqs && generated.suggestedFaqs.length > 0) {
-              const faqContent = generated.suggestedFaqs
-                .map(faq => `**${faq.question}**\n${faq.answer}`)
-                .join('\n\n---\n\n');
-              
-              await saveKnowledgeItem(
-                `FAQ - ${generated.title}`,
-                faqContent,
-                'faq',
-                scope,
-                productId
-              );
+          // Mark category as complete for product
+          if (PRODUCT_CATEGORIES.includes(state.currentCategory) && state.currentProduct) {
+            const productIdx = newState.products.findIndex(p => p.name === state.currentProduct);
+            if (productIdx >= 0) {
+              newState.products[productIdx].categoriesCompleted.push(state.currentCategory);
             }
           }
         }
       }
 
-      // Handle phase transitions
+      // Handle phase transitions - save current category before switching
       if (response.action === 'next_category' && response.nextCategory) {
-        newState.currentCategory = response.nextCategory;
+        const validNextCategory = validateCategory(response.nextCategory);
+        
+        // Save current category if not already saved
+        if (state.currentCategory && state.lastSavedCategory !== state.currentCategory) {
+          const savedItem = await saveCategoryProgress(
+            state.currentCategory,
+            newState,
+            [...messages, userMsg],
+            true // isAutoSave since we're transitioning
+          );
+          if (savedItem) {
+            newState.savedItems.push({
+              ...savedItem,
+              category: validateCategory(state.currentCategory),
+            });
+            newState.lastSavedCategory = state.currentCategory;
+          }
+        }
+
+        newState.currentCategory = validNextCategory;
+        newState.messagesInCurrentCategory = 0;
         
         // Check if moving to product phase
-        if (PRODUCT_CATEGORIES.includes(response.nextCategory) && newState.currentPhase === 'global') {
+        if (PRODUCT_CATEGORIES.includes(validNextCategory) && newState.currentPhase === 'global') {
           newState.currentPhase = 'product';
           if (newState.products.length > 0 && !newState.currentProduct) {
             newState.currentProduct = newState.products[0].name;
@@ -463,11 +647,31 @@ export function KnowledgeWizard({ onComplete, onCancel }: KnowledgeWizardProps) 
       }
 
       if (response.action === 'next_product' && response.nextProduct) {
+        // Save current product category before switching
+        if (state.currentCategory && state.lastSavedCategory !== state.currentCategory) {
+          await saveCategoryProgress(
+            state.currentCategory,
+            newState,
+            [...messages, userMsg],
+            true
+          );
+        }
+
         newState.currentProduct = response.nextProduct;
         newState.currentCategory = 'produto_servico';
+        newState.messagesInCurrentCategory = 0;
       }
 
       if (response.action === 'complete') {
+        // Save any remaining progress
+        if (state.currentCategory && state.lastSavedCategory !== state.currentCategory) {
+          await saveCategoryProgress(
+            state.currentCategory,
+            newState,
+            [...messages, userMsg],
+            true
+          );
+        }
         newState.currentPhase = 'complete';
       }
 
@@ -505,7 +709,7 @@ export function KnowledgeWizard({ onComplete, onCancel }: KnowledgeWizardProps) 
     } finally {
       setLoading(false);
     }
-  }, [input, loading, state, messages, createProductIfNeeded, saveKnowledgeItem, generateCategoryContent, onComplete]);
+  }, [input, loading, state, messages, createProductIfNeeded, saveCategoryProgress, onComplete]);
 
   // Calculate progress
   const calculateProgress = useCallback(() => {
@@ -544,6 +748,12 @@ export function KnowledgeWizard({ onComplete, onCancel }: KnowledgeWizardProps) 
           </div>
           
           <div className="flex items-center gap-2">
+            {isSaving && (
+              <Badge variant="secondary" className="flex items-center gap-1 animate-pulse">
+                <Save className="h-3 w-3" />
+                Salvando...
+              </Badge>
+            )}
             {state.products.length > 0 && (
               <Badge variant="secondary" className="flex items-center gap-1">
                 <Package className="h-3 w-3" />
@@ -554,7 +764,7 @@ export function KnowledgeWizard({ onComplete, onCancel }: KnowledgeWizardProps) 
               <FileText className="h-3 w-3" />
               {state.savedItems.length} itens salvos
             </Badge>
-            <Button variant="ghost" size="icon" onClick={onCancel}>
+            <Button variant="ghost" size="icon" onClick={handleCancel}>
               <X className="h-4 w-4" />
             </Button>
           </div>
@@ -569,11 +779,27 @@ export function KnowledgeWizard({ onComplete, onCancel }: KnowledgeWizardProps) 
           <Progress value={calculateProgress()} className="h-2" />
         </div>
 
-        {/* Category pills */}
-        {state.currentPhase !== 'initial' && (
+        {/* Category pills - show saved items */}
+        {state.savedItems.length > 0 && (
           <div className="flex flex-wrap gap-1 mt-3">
+            {state.savedItems.slice(-6).map((item, idx) => (
+              <Badge 
+                key={item.id || idx}
+                variant="default"
+                className="text-xs bg-green-500/20 text-green-700 border-green-500/30"
+              >
+                <CheckCircle2 className="h-3 w-3 mr-1" />
+                {CATEGORY_LABELS[item.category] || item.category}
+              </Badge>
+            ))}
+          </div>
+        )}
+
+        {/* Current category indicator */}
+        {state.currentPhase !== 'initial' && state.currentPhase !== 'complete' && (
+          <div className="flex flex-wrap gap-1 mt-2">
             {GLOBAL_CATEGORIES.slice(0, 4).map(cat => {
-              const isComplete = state.globalKnowledge[cat];
+              const isComplete = state.savedItems.some(item => item.category === cat);
               const isCurrent = state.currentCategory === cat && state.currentPhase === 'global';
               return (
                 <Badge 
@@ -671,15 +897,15 @@ export function KnowledgeWizard({ onComplete, onCancel }: KnowledgeWizardProps) 
             }}
             placeholder={state.currentPhase === 'complete' ? 'Configuração concluída!' : 'Digite sua resposta...'}
             className="min-h-[60px] resize-none"
-            disabled={loading || state.currentPhase === 'complete'}
+            disabled={loading || state.currentPhase === 'complete' || isSaving}
           />
           <Button
             onClick={handleSend}
-            disabled={loading || !input.trim() || state.currentPhase === 'complete'}
+            disabled={loading || !input.trim() || state.currentPhase === 'complete' || isSaving}
             size="icon"
             className="h-[60px] w-[60px]"
           >
-            {loading ? <Loader2 className="animate-spin" /> : <Send />}
+            {loading || isSaving ? <Loader2 className="animate-spin" /> : <Send />}
           </Button>
         </div>
       </CardFooter>
