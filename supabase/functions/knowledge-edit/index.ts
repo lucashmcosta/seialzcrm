@@ -148,20 +148,19 @@ Se precisar de mais informações, responda com:
       );
     }
 
-    const aiResponse = await fetch("https://api.lovable.ai/api/chat", {
+    const aiResponse = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
       method: "POST",
       headers: {
         "Authorization": `Bearer ${lovableApiKey}`,
         "Content-Type": "application/json",
       },
       body: JSON.stringify({
-        model: "gpt-4o-mini",
+        model: "google/gemini-3-flash-preview",
         messages: [
           { role: "system", content: systemPrompt },
           { role: "user", content: userPrompt },
         ],
         temperature: 0.3,
-        response_format: { type: "json_object" },
       }),
     });
 
