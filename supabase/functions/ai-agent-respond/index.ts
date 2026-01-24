@@ -810,7 +810,7 @@ async function searchRelevantKnowledge(
         org_id: organizationId,
         p_product_id: productId,
         p_categories: null,
-        match_threshold: 0.65,
+        match_threshold: 0.55, // Lower threshold for product-specific (was 0.65)
         match_count: matchCount,
       });
 
@@ -836,7 +836,7 @@ async function searchRelevantKnowledge(
           query_embedding: queryEmbedding,
           org_id: organizationId,
           p_categories: null,
-          match_threshold: 0.65,
+          match_threshold: 0.50, // Lower threshold for global fallback (was 0.65)
           match_count: remaining,
         });
 
@@ -1418,10 +1418,19 @@ serve(async (req) => {
       : null;
     console.log(`🎯 Product detection: ${detectedProductName || 'None (searching all knowledge)'}`);
 
-    // 7. Search for relevant knowledge (RAG) - use conversation context for better semantic matching
-    const recentMessages = messageHistory.slice(-5).map(m => m.content || '').join(' ');
-    const searchContext = recentMessages ? `${recentMessages} ${message}` : message;
-    console.log(`🔍 RAG search context (first 300 chars): "${searchContext.slice(0, 300)}..."`);
+    // 7. Search for relevant knowledge (RAG) - ONLY use INBOUND (user) messages for context
+    // Assistant messages pollute semantic similarity and cause RAG to miss relevant chunks
+    const recentUserMessages = messageHistory
+      .filter(m => m.direction === 'inbound')
+      .slice(-3) // Last 3 user messages only
+      .map(m => m.content || '')
+      .join(' ');
+
+    // Prioritize current message; only add context if current message is short
+    const searchContext = message.length < 50 && recentUserMessages 
+      ? `${recentUserMessages} ${message}` 
+      : message;
+    console.log(`🔍 RAG search context (user messages only): "${searchContext.slice(0, 200)}..."`);
     
     // Pass detected productId to RAG search for 2-step product-first + global fallback
     const retrievedKnowledge = await searchRelevantKnowledge(supabase, searchContext, organizationId, agentId, detectedProductId);
