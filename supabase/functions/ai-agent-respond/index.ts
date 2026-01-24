@@ -1206,8 +1206,47 @@ ${item.content}
 - Palavras-chave que DEVEM acionar send_payment_link: "pix", "qr", "qrcode", "pagamento", "pagar", "link", "checkout", "como pago", "me manda o pix"
 `;
 
+  // Add formatting rules if configured
+  const formattingRules = agent.formatting_rules as { max_consecutive_newlines?: number; strip_empty_lines?: boolean } | null;
+  if (formattingRules?.strip_empty_lines || formattingRules?.max_consecutive_newlines === 1) {
+    prompt += `
+## 📝 REGRAS DE FORMATAÇÃO - OBRIGATÓRIO
+⚠️ NUNCA use linhas em branco nas respostas
+⚠️ Evite quebras de linha desnecessárias
+⚠️ Mantenha respostas concisas em texto corrido
+⚠️ Use no máximo 1 quebra de linha para separar ideias distintas
+⚠️ Não coloque \\n\\n (duas quebras seguidas) NUNCA
+`;
+  }
 
   return prompt;
+}
+
+/**
+ * Sanitize agent response based on formatting rules
+ */
+function sanitizeAgentResponse(
+  response: string, 
+  formattingRules: { max_consecutive_newlines?: number; strip_empty_lines?: boolean } | null
+): string {
+  if (!response) return response;
+  
+  const maxNewlines = formattingRules?.max_consecutive_newlines ?? 2;
+  const stripEmpty = formattingRules?.strip_empty_lines ?? false;
+  
+  let sanitized = response;
+  
+  // Remove excessive newlines
+  if (stripEmpty || maxNewlines === 1) {
+    // Replace multiple newlines with at most maxNewlines
+    const pattern = new RegExp(`\\n{${maxNewlines + 1},}`, 'g');
+    sanitized = sanitized.replace(pattern, '\n'.repeat(maxNewlines));
+  }
+  
+  // Trim start and end
+  sanitized = sanitized.trim();
+  
+  return sanitized;
 }
 
 serve(async (req) => {
@@ -1983,6 +2022,12 @@ serve(async (req) => {
           console.error('Retry request failed:', retryResponse.status);
         }
       }
+    }
+
+    // Apply formatting rules to sanitize response
+    const formattingRules = agent.formatting_rules as { max_consecutive_newlines?: number; strip_empty_lines?: boolean } | null;
+    if (aiResponse) {
+      aiResponse = sanitizeAgentResponse(aiResponse, formattingRules);
     }
 
     // Graceful fallback if still no response - with detailed logging
