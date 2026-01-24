@@ -3422,6 +3422,24 @@ export type Database = {
           title: string
         }[]
       }
+      search_knowledge_all: {
+        Args: {
+          match_count?: number
+          match_threshold?: number
+          org_id: string
+          query_embedding: string
+        }
+        Returns: {
+          category: string
+          content: string
+          id: string
+          item_id: string
+          resolved_content: string
+          scope: string
+          similarity: number
+          title: string
+        }[]
+      }
       search_knowledge_chunks: {
         Args: {
           agent_id_filter?: string
