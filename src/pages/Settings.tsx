@@ -25,6 +25,8 @@ import { Trash } from './settings/Trash';
 import WhatsAppTemplates from './settings/WhatsAppTemplates';
 import { AIAgentSettings } from '@/components/settings/AIAgentSettings';
 import { KnowledgeBaseSettings } from '@/components/settings/KnowledgeBaseSettings';
+import { ProductsSettings } from '@/components/settings/ProductsSettings';
+import { KnowledgeEditChat } from '@/components/settings/KnowledgeEditChat';
 
 interface TabConfig {
   id: string;
@@ -63,7 +65,9 @@ export default function Settings() {
     // Show AI Agent and Knowledge Base if ANY AI integration is enabled (WhatsApp, OpenAI, Claude, etc.)
     ...(showAIFeatures ? [
       { id: 'aiAgent', label: 'Agente IA', permission: 'canManageIntegrations' as const },
+      { id: 'products', label: 'Produtos', permission: 'canManageIntegrations' as const },
       { id: 'knowledgeBase', label: 'Base de Conhecimento', permission: 'canManageIntegrations' as const },
+      { id: 'knowledgeEdit', label: 'Editar KB', permission: 'canManageIntegrations' as const },
     ] : []),
     { id: 'apiWebhooks', label: 'API & Webhooks', permission: 'canManageIntegrations' },
     { id: 'auditLogs', label: t('settings.auditLogs'), permission: 'canManageSettings' },
@@ -182,8 +186,16 @@ export default function Settings() {
                 <AIAgentSettings />
               </TabsContent>
 
+              <TabsContent value="products">
+                <ProductsSettings />
+              </TabsContent>
+
               <TabsContent value="knowledgeBase">
                 <KnowledgeBaseSettings />
+              </TabsContent>
+
+              <TabsContent value="knowledgeEdit">
+                <KnowledgeEditChat />
               </TabsContent>
 
               <TabsContent value="apiWebhooks">

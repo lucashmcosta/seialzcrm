@@ -71,3 +71,12 @@ verify_jwt = true
 
 [functions.reprocess-knowledge]
 verify_jwt = true
+
+[functions.process-knowledge-item]
+verify_jwt = false
+
+[functions.knowledge-edit]
+verify_jwt = true
+
+[functions.apply-knowledge-edit]
+verify_jwt = true
