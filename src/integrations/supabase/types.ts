@@ -536,6 +536,7 @@ export type Database = {
           enabled_tools: Json | null
           feedback_history: Json | null
           feedback_rules: Json | null
+          formatting_rules: Json | null
           goal: string
           greeting_message: string | null
           id: string
@@ -564,6 +565,7 @@ export type Database = {
           enabled_tools?: Json | null
           feedback_history?: Json | null
           feedback_rules?: Json | null
+          formatting_rules?: Json | null
           goal?: string
           greeting_message?: string | null
           id?: string
@@ -592,6 +594,7 @@ export type Database = {
           enabled_tools?: Json | null
           feedback_history?: Json | null
           feedback_rules?: Json | null
+          formatting_rules?: Json | null
           goal?: string
           greeting_message?: string | null
           id?: string

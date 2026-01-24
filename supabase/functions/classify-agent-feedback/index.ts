@@ -16,7 +16,7 @@ interface ClassifyFeedbackRequest {
 }
 
 interface ClassificationResult {
-  classification: 'KB_FACT' | 'AGENT_RULE' | 'MISSING_INFO' | 'FLOW_TOOL';
+  classification: 'KB_FACT' | 'AGENT_RULE' | 'MISSING_INFO' | 'FLOW_TOOL' | 'FORMATTING';
   reason: string;
   confidence: number;
   patch: {
@@ -38,6 +38,10 @@ interface ClassificationResult {
       rule: string;
       trigger: string;
     };
+    formatting_update?: {
+      max_consecutive_newlines: number;
+      strip_empty_lines: boolean;
+    };
   };
 }
 
@@ -55,8 +59,9 @@ Sua tarefa é analisar o feedback do usuário sobre uma resposta do agente e cla
 2) AGENT_RULE - Problema de TOM/ESTILO/COMPORTAMENTO
    → Resposta muito longa, robótica, sem empatia
    → Não perguntou nome, não cumprimentou adequadamente
-   → Ignorou instruções de estilo/formatação
+   → Ignorou instruções de estilo
    → ⚠️ NÃO inclui inventar dados - isso é KB_FACT!
+   → ⚠️ NÃO inclui formatação (quebras de linha) - isso é FORMATTING!
    → Destino: REGRAS DO AGENTE
    
 3) MISSING_INFO - FALTA DE INFORMAÇÃO
@@ -70,11 +75,22 @@ Sua tarefa é analisar o feedback do usuário sobre uma resposta do agente e cla
    → Agendamento precoce ou atrasado
    → Destino: GATILHOS DE FERRAMENTA
 
+5) FORMATTING - Problema de FORMATAÇÃO/ESTRUTURA
+   → Feedback menciona: quebras de linha excessivas, espaçamentos, parágrafos desnecessários
+   → Palavras-chave: "linha", "pular", "espaço", "parágrafo", "curto", "longo", "quebra", "enter"
+   → Feedback como: "para de pular linha", "sem linhas em branco", "texto muito espaçado"
+   → Destino: CONFIGURAÇÃO DE FORMATAÇÃO (não regras individuais!)
+   → Patch: { "formatting_update": { "max_consecutive_newlines": 1, "strip_empty_lines": true } }
+
 ⚠️ REGRA CRÍTICA PARA PAGAMENTO:
 - Agente INVENTOU PIX/QR/chave/CPF/dados bancários que NÃO EXISTEM → KB_FACT
   (O usuário vai fornecer o conteúdo correto para a Base de Conhecimento)
 - Agente DEVERIA ter usado ferramenta send_payment_link → FLOW_TOOL
 - TOM/ESTILO da resposta sobre pagamento foi ruim → AGENT_RULE
+
+⚠️ REGRA CRÍTICA PARA FORMATAÇÃO:
+- Qualquer feedback sobre "pular linha", "quebra de linha", "linhas em branco", "muito espaçado" → FORMATTING
+- NÃO é AGENT_RULE, é FORMATTING!
 
 INSTRUÇÕES PARA kb_update.content:
 - Gere o texto CORRETO que deve estar na Base de Conhecimento
@@ -96,8 +112,22 @@ Se o usuário disse "não aceitamos PIX direto, só pelo link", gerar:
     "kb_update": {
       "title": "Política de Pagamento - PIX e Cartão",
       "type": "policy",
-      "content": "Formas de pagamento aceitas: PIX e cartão de crédito, porém SOMENTE através do link de pagamento oficial. Ao clicar no link, o cliente escolhe a forma de pagamento (cartão ou PIX) diretamente na plataforma. A empresa NÃO possui chave PIX própria, QR code manual ou dados bancários para transferência direta. Quando o cliente perguntar sobre PIX, envie o link e explique que dentro do link há opção de pagar com PIX.",
+      "content": "Formas de pagamento aceitas: PIX e cartão de crédito, porém SOMENTE através do link de pagamento oficial.",
       "tags": ["pagamento", "política", "PIX", "link", "cartão"]
+    }
+  }
+}
+
+EXEMPLO PARA FORMATAÇÃO:
+Se o usuário disse "para de pular linha" ou "não usar linhas em branco", gerar:
+{
+  "classification": "FORMATTING",
+  "reason": "Usuário quer que o agente evite quebras de linha excessivas",
+  "confidence": 0.95,
+  "patch": {
+    "formatting_update": {
+      "max_consecutive_newlines": 1,
+      "strip_empty_lines": true
     }
   }
 }
@@ -106,17 +136,19 @@ LEMBRE-SE:
 - "Inventar dados" = problema de CONTEÚDO (KB_FACT), não de comportamento
 - "Estilo ruim" = problema de COMPORTAMENTO (AGENT_RULE)
 - "Não usou ferramenta" = problema de FLUXO (FLOW_TOOL)
+- "Pular linha / linhas em branco / espaçamento" = problema de FORMATAÇÃO (FORMATTING)
 
 SAÍDA (SEMPRE JSON PURO, sem markdown):
 {
-  "classification": "KB_FACT|AGENT_RULE|MISSING_INFO|FLOW_TOOL",
+  "classification": "KB_FACT|AGENT_RULE|MISSING_INFO|FLOW_TOOL|FORMATTING",
   "reason": "explicação curta",
   "confidence": 0.0-1.0,
   "patch": {
     "kb_update": { "title": "", "type": "policy|faq|product|general", "content": "", "tags": [] },
     "agent_rule_update": { "rule": "", "example_good_response": "" },
     "wizard_question": { "question": "", "slot": "" },
-    "flow_tool_update": { "rule": "", "trigger": "" }
+    "flow_tool_update": { "rule": "", "trigger": "" },
+    "formatting_update": { "max_consecutive_newlines": 1, "strip_empty_lines": true }
   }
 }
 

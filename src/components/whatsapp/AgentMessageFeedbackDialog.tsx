@@ -34,7 +34,7 @@ interface AgentMessageFeedbackDialogProps {
   onFeedbackApplied?: () => void;
 }
 
-type ClassificationType = 'KB_FACT' | 'AGENT_RULE' | 'MISSING_INFO' | 'FLOW_TOOL';
+type ClassificationType = 'KB_FACT' | 'AGENT_RULE' | 'MISSING_INFO' | 'FLOW_TOOL' | 'FORMATTING';
 
 interface ClassificationResult {
   classification: ClassificationType;
@@ -58,6 +58,10 @@ interface ClassificationResult {
     flow_tool_update?: {
       rule: string;
       trigger: string;
+    };
+    formatting_update?: {
+      max_consecutive_newlines: number;
+      strip_empty_lines: boolean;
     };
   };
 }
@@ -91,6 +95,12 @@ const CLASSIFICATION_INFO: Record<ClassificationType, {
     description: 'Erro no uso de ferramentas ou fluxo. Serão ajustados os gatilhos.',
     icon: Wrench,
     color: 'text-green-500',
+  },
+  FORMATTING: {
+    label: 'Formatação',
+    description: 'Problema de formatação (quebras de linha, espaçamento). Será ajustada a configuração.',
+    icon: SlidersHorizontal,
+    color: 'text-teal-500',
   },
 };
 
@@ -305,6 +315,24 @@ export function AgentMessageFeedbackDialog({
 
             toast.success('Gatilho de ferramenta atualizado!');
           }
+          break;
+        }
+
+        case 'FORMATTING': {
+          // Update formatting rules
+          const patch = classificationResult.patch.formatting_update;
+          
+          const formattingRules = {
+            max_consecutive_newlines: patch?.max_consecutive_newlines ?? 1,
+            strip_empty_lines: patch?.strip_empty_lines ?? true,
+          };
+
+          await supabase
+            .from('ai_agents')
+            .update({ formatting_rules: formattingRules })
+            .eq('id', agentId);
+
+          toast.success('Regras de formatação atualizadas! O agente não usará mais linhas em branco.');
           break;
         }
       }
