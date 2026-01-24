@@ -719,8 +719,71 @@ function isWithinWorkingHours(workingHours: WorkingHours): boolean {
 }
 
 /**
+ * Rerank results using Voyage AI rerank-2 model for semantic precision
+ */
+interface RerankResult {
+  index: number;
+  relevance_score: number;
+}
+
+async function rerankResults(
+  query: string,
+  documents: string[],
+  topK: number = 5
+): Promise<number[]> {
+  const voyageApiKey = Deno.env.get("VOYAGE_API_KEY");
+  
+  if (!voyageApiKey || documents.length === 0) {
+    console.log('⚠️ Rerank skipped: no API key or empty documents');
+    return documents.map((_, i) => i).slice(0, topK);
+  }
+  
+  // Skip reranking if we have fewer documents than requested
+  if (documents.length <= topK) {
+    console.log(`ℹ️ Skipping rerank: only ${documents.length} docs (need ${topK})`);
+    return documents.map((_, i) => i);
+  }
+  
+  try {
+    console.log(`🔄 Reranking ${documents.length} documents via Voyage AI...`);
+    
+    const response = await fetch('https://api.voyageai.com/v1/rerank', {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${voyageApiKey}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        model: 'rerank-2',
+        query: query,
+        documents: documents,
+        top_k: topK,
+      }),
+    });
+    
+    if (!response.ok) {
+      const errorText = await response.text();
+      console.error('❌ Rerank API error:', errorText);
+      return documents.map((_, i) => i).slice(0, topK);
+    }
+    
+    const data = await response.json();
+    const results: RerankResult[] = data.data || [];
+    
+    console.log(`✅ Rerank complete. Top ${Math.min(3, results.length)} relevance scores:`, 
+      results.slice(0, 3).map(r => `[${r.index}]=${r.relevance_score.toFixed(3)}`).join(', '));
+    
+    return results.map(r => r.index);
+  } catch (error) {
+    console.error('❌ Rerank error:', error);
+    return documents.map((_, i) => i).slice(0, topK);
+  }
+}
+
+/**
  * Search for relevant knowledge using RAG with Voyage AI embeddings
  * Implements 2-STEP SEARCH: product-first + global fallback
+ * Then RERANKS results for semantic precision
  */
 async function searchRelevantKnowledge(
   supabase: any,
@@ -728,7 +791,7 @@ async function searchRelevantKnowledge(
   organizationId: string,
   agentId: string,
   productId: string | null = null,
-  matchCount: number = 10
+  matchCount: number = 5  // Final count after reranking (was 10)
 ): Promise<{ content: string; title: string | null; type: string; scope: string; category: string }[]> {
   try {
     const voyageApiKey = Deno.env.get("VOYAGE_API_KEY");
@@ -737,6 +800,10 @@ async function searchRelevantKnowledge(
       console.warn('⚠️ VOYAGE_API_KEY not configured - RAG disabled');
       return [];
     }
+
+    // Reranking parameters: fetch MORE candidates, then filter to TOP
+    const candidateCount = 30;  // Fetch more candidates for reranker
+    const lowThreshold = 0.30;  // Lower threshold to maximize candidate pool
 
     console.log(`🔍 Generating query embedding via Voyage AI...`);
 
@@ -776,108 +843,107 @@ async function searchRelevantKnowledge(
 
     console.log(`✅ Query embedding generated (${queryEmbedding.length} dimensions)`);
 
-    const results: { content: string; title: string | null; type: string; scope: string; category: string }[] = [];
+    let candidates: any[] = [];
 
-    // NEW: If no productId, search ALL knowledge (product + global combined)
+    // STEP 1: Fetch broad candidate pool with LOW threshold
     if (!productId) {
-      console.log(`🔍 No productId context - searching ALL knowledge scopes`);
+      console.log(`🔍 No productId - searching ALL knowledge (threshold: ${lowThreshold}, limit: ${candidateCount})`);
       
       const { data: allResults, error: allError } = await supabase.rpc('search_knowledge_all', {
         query_embedding: queryEmbedding,
         org_id: organizationId,
-        match_threshold: 0.45, // Lowered from 0.65 to find more semantic matches
-        match_count: matchCount,
+        match_threshold: lowThreshold,
+        match_count: candidateCount,
       });
 
       if (allError) {
         console.warn('❌ search_knowledge_all error:', allError.message);
       } else if (allResults?.length > 0) {
-        console.log(`✅ Found ${allResults.length} chunks across all scopes`);
-        results.push(...allResults.map((r: any) => ({
-          content: r.content,
-          title: r.title,
-          type: 'knowledge',
-          scope: r.scope || 'global',
-          category: r.category || 'geral',
-        })));
+        console.log(`📊 Initial candidates: ${allResults.length} chunks across all scopes`);
+        candidates = allResults;
       }
     } else {
-      // STEP 1: If productId exists, search ONLY product-specific chunks first
-      console.log(`🎯 Step 1: Searching product-specific chunks (productId: ${productId})`);
+      // Product-first search
+      console.log(`🎯 Searching product-specific chunks (productId: ${productId}, threshold: ${lowThreshold})`);
       
       const { data: productResults, error: productError } = await supabase.rpc('search_knowledge_product', {
         query_embedding: queryEmbedding,
         org_id: organizationId,
         p_product_id: productId,
         p_categories: null,
-        match_threshold: 0.55, // Lower threshold for product-specific (was 0.65)
-        match_count: matchCount,
+        match_threshold: lowThreshold,
+        match_count: candidateCount,
       });
 
       if (productError) {
         console.warn('❌ Product RAG search error:', productError.message);
       } else if (productResults?.length > 0) {
-        console.log(`✅ Found ${productResults.length} product-specific chunks`);
-        results.push(...productResults.map((r: any) => ({
-          content: r.content,
-          title: r.title,
-          type: 'knowledge',
-          scope: 'product',
-          category: r.category || 'geral',
-        })));
+        console.log(`📊 Product candidates: ${productResults.length}`);
+        candidates.push(...productResults);
       }
 
-      // STEP 2: Complete with global chunks if needed
-      if (results.length < matchCount) {
-        const remaining = matchCount - results.length;
-        console.log(`🌐 Step 2: Searching global chunks (need ${remaining} more)`);
+      // Complete with global chunks
+      if (candidates.length < candidateCount) {
+        const remaining = candidateCount - candidates.length;
+        console.log(`🌐 Searching global chunks (need ${remaining} more)`);
         
         const { data: globalResults, error: globalError } = await supabase.rpc('search_knowledge_global', {
           query_embedding: queryEmbedding,
           org_id: organizationId,
           p_categories: null,
-          match_threshold: 0.50, // Lower threshold for global fallback (was 0.65)
+          match_threshold: lowThreshold,
           match_count: remaining,
         });
 
         if (globalError) {
           console.warn('❌ Global RAG search error:', globalError.message);
         } else if (globalResults?.length > 0) {
-          console.log(`✅ Found ${globalResults.length} global chunks`);
-          results.push(...globalResults.map((r: any) => ({
-            content: r.content,
-            title: r.title,
-            type: 'knowledge',
-            scope: 'global',
-            category: r.category || 'geral',
-          })));
+          console.log(`📊 Global candidates: ${globalResults.length}`);
+          candidates.push(...globalResults);
         }
       }
     }
 
-    // Fallback to legacy search if we have no results
-    if (results.length === 0) {
-      console.log('⚠️ Falling back to search_knowledge_all (no agent_id filter)');
+    // Fallback if no candidates found
+    if (candidates.length === 0) {
+      console.log('⚠️ No candidates found - trying fallback with lower threshold');
       const { data: fallbackResults, error: fallbackError } = await supabase.rpc('search_knowledge_all', {
         query_embedding: queryEmbedding,
         org_id: organizationId,
-        match_threshold: 0.40, // Lowered from 0.60 to maximize fallback coverage
-        match_count: matchCount,
+        match_threshold: 0.20, // Very low for last resort
+        match_count: candidateCount,
       });
 
       if (!fallbackError && fallbackResults?.length > 0) {
-        console.log(`✅ Fallback found ${fallbackResults.length} chunks`);
-        results.push(...fallbackResults.map((r: any) => ({
-          content: r.content,
-          title: r.title,
-          type: 'knowledge',
-          scope: r.scope || 'global',
-          category: r.category || 'geral',
-        })));
+        console.log(`📊 Fallback candidates: ${fallbackResults.length}`);
+        candidates = fallbackResults;
       }
     }
 
-    console.log(`🎯 Total RAG results: ${results.length}`);
+    console.log(`📊 Total candidates before rerank: ${candidates.length}`);
+
+    if (candidates.length === 0) {
+      console.log('⚠️ No candidates found for reranking');
+      return [];
+    }
+
+    // STEP 2: RERANK for semantic precision
+    const documents = candidates.map(c => c.content);
+    const rerankedIndices = await rerankResults(messageContent, documents, matchCount);
+
+    // Build final results from reranked indices
+    const results = rerankedIndices
+      .map(idx => candidates[idx])
+      .filter(Boolean)
+      .map(r => ({
+        content: r.content,
+        title: r.title,
+        type: 'knowledge',
+        scope: r.scope || 'global',
+        category: r.category || 'geral',
+      }));
+
+    console.log(`🎯 Final RAG results after rerank: ${results.length} high-relevance chunks`);
 
     return results;
   } catch (err) {
