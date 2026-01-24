@@ -23,6 +23,7 @@ interface ClassificationResult {
     kb_update?: {
       title: string;
       content: string;
+      type: 'faq' | 'policy' | 'product' | 'general';
       tags: string[];
     };
     agent_rule_update?: {
@@ -47,7 +48,7 @@ Sua tarefa é analisar o feedback do usuário sobre uma resposta do agente e cla
 1) KB_FACT - Problema de FATO/CONTEÚDO
    → O agente disse algo factualmente incorreto
    → Preço/prazo/documento/política errada
-   → ⚠️ AGENTE INVENTOU informação que não existe (PIX, QR code, chave Pix, CPF, dados bancários)
+   → ⚠️ AGENTE INVENTOU informação que não existe (PIX direto, QR code manual, chave Pix, CPF, dados bancários)
      Motivo: O conteúdo CORRETO precisa ser adicionado à Base de Conhecimento
    → Destino: BASE DE CONHECIMENTO (não regras do agente!)
    
@@ -75,6 +76,32 @@ Sua tarefa é analisar o feedback do usuário sobre uma resposta do agente e cla
 - Agente DEVERIA ter usado ferramenta send_payment_link → FLOW_TOOL
 - TOM/ESTILO da resposta sobre pagamento foi ruim → AGENT_RULE
 
+INSTRUÇÕES PARA kb_update.content:
+- Gere o texto CORRETO que deve estar na Base de Conhecimento
+- NÃO copie a resposta errada do agente - use o feedback do usuário
+- Seja EXPLÍCITO e CLARO (ex: "A empresa NÃO aceita..." ou "SOMENTE através de...")
+- Escolha o type correto:
+  → 'policy' = regras/políticas da empresa (pagamento, cancelamento, prazo, regras)
+  → 'faq' = perguntas frequentes gerais
+  → 'product' = informações de produto/serviço
+  → 'general' = outros
+
+EXEMPLO PARA POLÍTICA DE PAGAMENTO:
+Se o usuário disse "não aceitamos PIX direto, só pelo link", gerar:
+{
+  "classification": "KB_FACT",
+  "reason": "Agente informou política de pagamento incorreta",
+  "confidence": 0.95,
+  "patch": {
+    "kb_update": {
+      "title": "Política de Pagamento - PIX e Cartão",
+      "type": "policy",
+      "content": "Formas de pagamento aceitas: PIX e cartão de crédito, porém SOMENTE através do link de pagamento oficial. Ao clicar no link, o cliente escolhe a forma de pagamento (cartão ou PIX) diretamente na plataforma. A empresa NÃO possui chave PIX própria, QR code manual ou dados bancários para transferência direta. Quando o cliente perguntar sobre PIX, envie o link e explique que dentro do link há opção de pagar com PIX.",
+      "tags": ["pagamento", "política", "PIX", "link", "cartão"]
+    }
+  }
+}
+
 LEMBRE-SE:
 - "Inventar dados" = problema de CONTEÚDO (KB_FACT), não de comportamento
 - "Estilo ruim" = problema de COMPORTAMENTO (AGENT_RULE)
@@ -86,7 +113,7 @@ SAÍDA (SEMPRE JSON PURO, sem markdown):
   "reason": "explicação curta",
   "confidence": 0.0-1.0,
   "patch": {
-    "kb_update": { "title": "", "content": "", "tags": [] },
+    "kb_update": { "title": "", "type": "policy|faq|product|general", "content": "", "tags": [] },
     "agent_rule_update": { "rule": "", "example_good_response": "" },
     "wizard_question": { "question": "", "slot": "" },
     "flow_tool_update": { "rule": "", "trigger": "" }

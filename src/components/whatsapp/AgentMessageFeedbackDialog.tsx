@@ -44,6 +44,7 @@ interface ClassificationResult {
     kb_update?: {
       title: string;
       content: string;
+      type?: 'faq' | 'policy' | 'product' | 'general';
       tags: string[];
     };
     agent_rule_update?: {
@@ -169,19 +170,32 @@ export function AgentMessageFeedbackDialog({
           // Create knowledge item and process it for RAG
           const patch = classificationResult.patch.kb_update;
           if (patch?.content) {
+            // Infer type from tags if not provided
+            const inferTypeFromTags = (tags: string[]): 'policy' | 'faq' | 'product' | 'general' => {
+              const policyKeywords = ['política', 'policy', 'pagamento', 'cancelamento', 'prazo', 'regra', 'pix', 'cartão'];
+              const productKeywords = ['produto', 'serviço', 'preço', 'plano', 'product'];
+              const lowerTags = tags?.map(t => t.toLowerCase()) || [];
+              
+              if (lowerTags.some(t => policyKeywords.some(k => t.includes(k)))) return 'policy';
+              if (lowerTags.some(t => productKeywords.some(k => t.includes(k)))) return 'product';
+              return 'faq';
+            };
+            
+            const kbType = patch.type || inferTypeFromTags(patch.tags || []);
+            
             // Step 1: Insert the knowledge item (without content - it goes to chunks)
             const { data: newItem, error: insertError } = await supabase
               .from('knowledge_items')
               .insert({
                 organization_id: organizationId,
                 agent_id: agentId,
-                type: 'faq',
+                type: kbType,
                 title: patch.title || 'Correção via Feedback',
-                source: 'manual', // Use 'manual' as it's an allowed value
+                source: 'manual',
                 status: 'draft', // Will be set to published by process-knowledge
                 metadata: { 
                   tags: patch.tags || [],
-                  origin: 'chat_feedback', // Track that it came from feedback
+                  origin: 'chat_feedback',
                   original_message_id: message.id,
                   original_message: message.content.slice(0, 200),
                 },
