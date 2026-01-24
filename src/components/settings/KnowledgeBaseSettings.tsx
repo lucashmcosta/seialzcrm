@@ -11,10 +11,11 @@ import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, 
 import { Skeleton } from '@/components/ui/skeleton';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { toast } from 'sonner';
-import { Trash2, Book, HelpCircle, Package, FileText, Settings2, Search, BrainCircuit, Loader2, Wand2, Upload, FileType, RefreshCw, MessageSquare, Globe } from 'lucide-react';
+import { Trash2, Book, HelpCircle, Package, FileText, Settings2, Search, BrainCircuit, Loader2, Wand2, Upload, FileType, RefreshCw, MessageSquare, Globe, Sparkles } from 'lucide-react';
 import { ImportKnowledge } from './ImportKnowledge';
 import { KnowledgeWizardChat } from './KnowledgeWizardChat';
 import { ManualKnowledgeDialog } from './ManualKnowledgeDialog';
+import { KnowledgeWizard } from './KnowledgeWizard';
 
 interface KnowledgeItem {
   id: string;
@@ -393,6 +394,10 @@ export function KnowledgeBaseSettings() {
             <Upload className="h-4 w-4" />
             Importar
           </TabsTrigger>
+          <TabsTrigger value="wizard_intelligent" className="flex items-center gap-2">
+            <Sparkles className="h-4 w-4" />
+            Wizard Inteligente
+          </TabsTrigger>
         </TabsList>
 
         {/* Knowledge List Tab */}
@@ -673,6 +678,18 @@ export function KnowledgeBaseSettings() {
               />
             </CardContent>
           </Card>
+        </TabsContent>
+
+        {/* Intelligent Wizard Tab */}
+        <TabsContent value="wizard_intelligent" className="mt-4">
+          <KnowledgeWizard
+            onComplete={() => {
+              fetchData();
+              setActiveTab('knowledge');
+              toast.success('Base de conhecimento configurada!');
+            }}
+            onCancel={() => setActiveTab('knowledge')}
+          />
         </TabsContent>
       </Tabs>
     </div>
