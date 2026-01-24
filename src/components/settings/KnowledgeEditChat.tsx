@@ -125,6 +125,13 @@ export function KnowledgeEditChat() {
 
       if (error) throw error;
 
+      // Clear requestId from the message to hide buttons
+      setMessages(prev => prev.map(msg => 
+        msg.requestId === requestId 
+          ? { ...msg, requestId: undefined } 
+          : msg
+      ));
+
       if (data.success) {
         toast.success(`Aplicadas ${data.appliedChanges?.length || 0} mudanças`);
         
@@ -157,7 +164,13 @@ export function KnowledgeEditChat() {
   };
 
   const handleCancel = (requestId: string) => {
-    // Just add a message saying cancelled
+    // Clear requestId from the message to hide buttons
+    setMessages(prev => prev.map(msg => 
+      msg.requestId === requestId 
+        ? { ...msg, requestId: undefined } 
+        : msg
+    ));
+    
     const cancelMessage: ChatMessage = {
       id: crypto.randomUUID(),
       role: 'assistant',
