@@ -3518,6 +3518,14 @@ export type Database = {
     Functions: {
       current_user_id: { Args: never; Returns: string }
       current_user_org_ids: { Args: never; Returns: string[] }
+      get_opportunity_stage_counts: {
+        Args: { org_id: string }
+        Returns: {
+          opportunity_count: number
+          stage_id: string
+          total_amount: number
+        }[]
+      }
       handle_user_signup: {
         Args: {
           p_email: string
