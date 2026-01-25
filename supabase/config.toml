@@ -98,3 +98,6 @@ verify_jwt = true
 
 [functions.kommo-rollback]
 verify_jwt = true
+
+[functions.fix-orphan-opportunities]
+verify_jwt = true
