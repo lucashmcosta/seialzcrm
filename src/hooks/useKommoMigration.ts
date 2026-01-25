@@ -109,7 +109,7 @@ export function useKommoMigration() {
     enabled: !!organization,
   });
 
-  // Query para buscar migração em andamento (running)
+  // Query para buscar migração em andamento (running ou paused)
   const { data: pendingImport, refetch: refetchPendingImport } = useQuery({
     queryKey: ['kommo-pending-import', organization?.id],
     queryFn: async () => {
@@ -120,12 +120,18 @@ export function useKommoMigration() {
         .select('*')
         .eq('organization_id', organization.id)
         .eq('integration_slug', 'kommo')
-        .eq('status', 'running')
+        .in('status', ['running', 'paused'])
         .order('created_at', { ascending: false })
         .limit(1)
         .maybeSingle();
       
-      return data as ImportLog | null;
+      // Verificar se o registro tem credenciais válidas no config
+      const config = data?.config as Record<string, any> | null;
+      if (config?.subdomain && config?.access_token) {
+        return data as ImportLog | null;
+      }
+      
+      return null;
     },
     enabled: !!organization,
   });
