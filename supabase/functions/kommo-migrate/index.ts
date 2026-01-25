@@ -368,18 +368,89 @@ serve(async (req) => {
               }
             }
 
-            // If no linked contact found, try to find by querying
+            // If no linked contact found, try to find by querying source_external_id
             if (!contactId && linkedContacts.length > 0) {
-              const { data: existingContact } = await supabase
-                .from("contacts")
-                .select("id")
-                .eq("organization_id", orgId)
-                .eq("source_external_id", `kommo_${linkedContacts[0].id}`)
-                .is("deleted_at", null)
-                .maybeSingle();
-              
-              if (existingContact) {
-                contactId = existingContact.id;
+              for (const linkedContact of linkedContacts) {
+                // First try by source_external_id
+                const { data: existingContact } = await supabase
+                  .from("contacts")
+                  .select("id")
+                  .eq("organization_id", orgId)
+                  .eq("source_external_id", `kommo_${linkedContact.id}`)
+                  .is("deleted_at", null)
+                  .maybeSingle();
+                
+                if (existingContact) {
+                  contactId = existingContact.id;
+                  // Add to map for future lookups
+                  kommoContactIdMap[linkedContact.id] = existingContact.id;
+                  break;
+                }
+                
+                // If not found by external_id, try to fetch contact details from Kommo
+                // and match by email or phone
+                try {
+                  const contactResponse = await fetchWithRetry(
+                    `${baseUrl}/contacts/${linkedContact.id}`,
+                    { headers }
+                  );
+                  const contactData = await contactResponse.json();
+                  
+                  const email = contactData.custom_fields_values?.find(
+                    (f: any) => f.field_code === "EMAIL"
+                  )?.values?.[0]?.value?.toLowerCase();
+
+                  const phoneRaw = contactData.custom_fields_values?.find(
+                    (f: any) => f.field_code === "PHONE"
+                  )?.values?.[0]?.value;
+                  const phone = normalizePhone(phoneRaw);
+                  
+                  // Try to find by email
+                  if (email) {
+                    const { data: byEmail } = await supabase
+                      .from("contacts")
+                      .select("id")
+                      .eq("organization_id", orgId)
+                      .eq("email", email)
+                      .is("deleted_at", null)
+                      .maybeSingle();
+                    
+                    if (byEmail) {
+                      contactId = byEmail.id;
+                      kommoContactIdMap[linkedContact.id] = byEmail.id;
+                      // Update contact with Kommo ID for future reference
+                      await supabase
+                        .from("contacts")
+                        .update({ source_external_id: `kommo_${linkedContact.id}` })
+                        .eq("id", byEmail.id);
+                      break;
+                    }
+                  }
+                  
+                  // Try to find by phone
+                  if (phone) {
+                    const { data: byPhone } = await supabase
+                      .from("contacts")
+                      .select("id")
+                      .eq("organization_id", orgId)
+                      .eq("phone", phone)
+                      .is("deleted_at", null)
+                      .maybeSingle();
+                    
+                    if (byPhone) {
+                      contactId = byPhone.id;
+                      kommoContactIdMap[linkedContact.id] = byPhone.id;
+                      // Update contact with Kommo ID for future reference
+                      await supabase
+                        .from("contacts")
+                        .update({ source_external_id: `kommo_${linkedContact.id}` })
+                        .eq("id", byPhone.id);
+                      break;
+                    }
+                  }
+                } catch (contactFetchErr: any) {
+                  console.log(`Could not fetch Kommo contact ${linkedContact.id}: ${contactFetchErr.message}`);
+                }
               }
             }
 
