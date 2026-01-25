@@ -69,6 +69,52 @@ export function useKommoMigration() {
   });
   const [importLogId, setImportLogId] = useState<string | null>(null);
   const [importLog, setImportLog] = useState<ImportLog | null>(null);
+  const [credentialsInitialized, setCredentialsInitialized] = useState(false);
+
+  // Query para buscar credenciais já salvas na integração conectada
+  const { data: savedCredentials, isLoading: isLoadingCredentials } = useQuery({
+    queryKey: ['kommo-saved-credentials', organization?.id],
+    queryFn: async () => {
+      if (!organization) return null;
+      
+      const { data } = await supabase
+        .from('organization_integrations')
+        .select(`
+          config_values,
+          admin_integrations!inner(slug)
+        `)
+        .eq('organization_id', organization.id)
+        .eq('admin_integrations.slug', 'kommo')
+        .eq('is_enabled', true)
+        .maybeSingle();
+      
+      if (data?.config_values) {
+        const configValues = data.config_values as any;
+        // Limpar subdomain se veio com .kommo.com
+        let subdomain = configValues.subdomain || '';
+        if (subdomain.includes('.kommo.com')) {
+          subdomain = subdomain.replace('.kommo.com', '');
+        }
+        
+        return {
+          subdomain,
+          access_token: configValues.access_token,
+          account_name: configValues.account_name || subdomain,
+        } as KommoCredentials;
+      }
+      return null;
+    },
+    enabled: !!organization,
+  });
+
+  // Inicializar credentials com dados salvos e pular para step 2
+  useEffect(() => {
+    if (savedCredentials && !credentialsInitialized) {
+      setCredentials(savedCredentials);
+      setStep(2); // Pular direto para mapeamento
+      setCredentialsInitialized(true);
+    }
+  }, [savedCredentials, credentialsInitialized]);
 
   // Fetch CRM pipeline stages
   const { data: crmStages } = useQuery({
@@ -243,8 +289,10 @@ export function useKommoMigration() {
   }, [importLogId]);
 
   const reset = useCallback(() => {
-    setStep(1);
-    setCredentials(null);
+    // Se tem credenciais salvas, volta para step 2 (mapeamento), senão step 1
+    const initialStep = savedCredentials ? 2 : 1;
+    setStep(initialStep);
+    setCredentials(savedCredentials || null);
     setKommoPipelines([]);
     setStageMapping({});
     setConfig({
@@ -253,7 +301,8 @@ export function useKommoMigration() {
     });
     setImportLogId(null);
     setImportLog(null);
-  }, []);
+    setCredentialsInitialized(!!savedCredentials);
+  }, [savedCredentials]);
 
   const goToStep = useCallback((newStep: number) => {
     setStep(newStep);
@@ -269,6 +318,8 @@ export function useKommoMigration() {
     importLogId,
     importLog,
     crmStages,
+    savedCredentials,
+    isLoadingCredentials,
 
     // Setters
     setCredentials,
