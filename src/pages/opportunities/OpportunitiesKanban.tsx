@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo } from 'react';
+import { useState, useEffect, useMemo, useRef, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { DragDropContext, Droppable, Draggable, DropResult } from '@hello-pangea/dnd';
 import { Layout } from '@/components/Layout';
@@ -102,6 +102,10 @@ export default function OpportunitiesKanban() {
   const [hasMoreByStage, setHasMoreByStage] = useState<Record<string, boolean>>({});
   const [loadingMoreStage, setLoadingMoreStage] = useState<string | null>(null);
   
+  // Refs for infinite scroll sentinels
+  const scrollSentinelsRef = useRef<Record<string, HTMLDivElement | null>>({});
+  const loadingMoreRef = useRef<string | null>(null);
+
   // Table view states
   const [currentPage, setCurrentPage] = useState(1);
   const [itemsPerPage, setItemsPerPage] = useState(25);
@@ -232,8 +236,11 @@ export default function OpportunitiesKanban() {
     });
   };
 
-  const loadMoreForStage = async (stageId: string) => {
+  const loadMoreForStage = useCallback(async (stageId: string) => {
     if (!organization?.id) return;
+    if (loadingMoreRef.current === stageId) return; // Prevent duplicate calls
+    
+    loadingMoreRef.current = stageId;
     setLoadingMoreStage(stageId);
     
     const currentOpps = opportunitiesByStage[stageId] || [];
@@ -269,7 +276,35 @@ export default function OpportunitiesKanban() {
       setOpportunities(prev => [...prev, ...data]);
     }
     setLoadingMoreStage(null);
-  };
+    loadingMoreRef.current = null;
+  }, [organization?.id, opportunitiesByStage]);
+
+  // Intersection Observer for infinite scroll
+  useEffect(() => {
+    if (viewMode !== 'kanban') return;
+    
+    const observers: IntersectionObserver[] = [];
+    
+    stages.forEach((stage) => {
+      const sentinel = scrollSentinelsRef.current[stage.id];
+      if (!sentinel) return;
+      
+      const observer = new IntersectionObserver(
+        (entries) => {
+          const entry = entries[0];
+          if (entry.isIntersecting && hasMoreByStage[stage.id] && !loadingMoreRef.current) {
+            loadMoreForStage(stage.id);
+          }
+        },
+        { threshold: 0.1, rootMargin: '100px' }
+      );
+      
+      observer.observe(sentinel);
+      observers.push(observer);
+    });
+    
+    return () => observers.forEach(obs => obs.disconnect());
+  }, [stages, hasMoreByStage, viewMode, loadMoreForStage]);
 
   const handleDragEnd = async (result: DropResult) => {
     const { destination, source, draggableId } = result;
@@ -638,7 +673,7 @@ export default function OpportunitiesKanban() {
                           <CardContent
                             ref={provided.innerRef}
                             {...provided.droppableProps}
-                            className={`space-y-3 min-h-[200px] transition-colors ${
+                            className={`space-y-3 min-h-[200px] max-h-[calc(100vh-280px)] overflow-y-auto scrollbar-hide transition-colors ${
                               snapshot.isDraggingOver ? 'bg-muted/50' : ''
                             }`}
                           >
@@ -681,18 +716,15 @@ export default function OpportunitiesKanban() {
                               ))
                             )}
                             {provided.placeholder}
-                            {hasMore && (
-                              <Button 
-                                variant="ghost" 
-                                size="sm" 
-                                className="w-full mt-2"
-                                onClick={() => loadMoreForStage(stage.id)}
-                                disabled={loadingMoreStage === stage.id}
-                              >
-                                {loadingMoreStage === stage.id ? 'Carregando...' : 
-                                  `Carregar mais (${(realCount - loadedCount).toLocaleString()} restantes)`}
-                              </Button>
-                            )}
+                            {/* Sentinel element for infinite scroll */}
+                            <div 
+                              ref={(el) => { scrollSentinelsRef.current[stage.id] = el; }}
+                              className="h-4 flex items-center justify-center"
+                            >
+                              {loadingMoreStage === stage.id && (
+                                <div className="w-5 h-5 border-2 border-primary border-t-transparent rounded-full animate-spin" />
+                              )}
+                            </div>
                           </CardContent>
                         )}
                       </Droppable>
