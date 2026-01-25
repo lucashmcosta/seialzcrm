@@ -217,9 +217,15 @@ serve(async (req) => {
       const contactsData = await contactsResponse.json();
       const contacts = contactsData._embedded?.contacts || [];
 
-      // Update total on first page
-      if (cursor.contacts_page === 1) {
-        totalContacts = contactsData._page?.count || contacts.length * 10;
+      // Calculate total dynamically - don't trust API's _page.count for large datasets
+      // It returns estimates that can be lower than actual count (e.g., 2500 when there are 10k+)
+      const processedSoFar = (cursor.contacts_page - 1) * PAGE_SIZE + contacts.length;
+      if (contacts.length === PAGE_SIZE) {
+        // Page is full, assume at least one more page exists
+        totalContacts = Math.max(totalContacts, processedSoFar + PAGE_SIZE);
+      } else {
+        // Last page - we now know the real total
+        totalContacts = processedSoFar;
       }
 
       if (contacts.length === 0) {
@@ -466,12 +472,33 @@ serve(async (req) => {
       }
     }
 
-    // Calculate progress
-    const totalItems = totalContacts + totalOpportunities;
-    const processedItems = importedContacts + skippedContacts + importedOpportunities + skippedOpportunities;
-    const progressPercent = totalItems > 0 ? Math.min(Math.round((processedItems / totalItems) * 100), 100) : 0;
+    // Calculate progress - NEVER reach 100% until phase === "done"
+    // This prevents the UI from showing completion while migration is still running
+    let progressPercent = 0;
+    if (cursor.phase === "done") {
+      progressPercent = 100;
+    } else if (cursor.phase === "leads") {
+      // Contacts phase = 0-49%, Leads phase = 50-99%
+      const contactsProcessed = importedContacts + skippedContacts;
+      const contactsProgress = totalContacts > 0 
+        ? (contactsProcessed / totalContacts) * 50 
+        : 0;
+      
+      const leadsProcessed = importedOpportunities + skippedOpportunities;
+      const leadsProgress = totalOpportunities > 0 
+        ? (leadsProcessed / totalOpportunities) * 49 
+        : 0;
+      
+      progressPercent = Math.min(Math.round(50 + leadsProgress), 99);
+    } else {
+      // Contacts phase = 0-49%
+      const contactsProcessed = importedContacts + skippedContacts;
+      const estimatedTotal = Math.max(totalContacts, contactsProcessed + 1);
+      progressPercent = Math.min(Math.round((contactsProcessed / estimatedTotal) * 50), 49);
+    }
 
     // Check error threshold (20%)
+    const processedItems = importedContacts + skippedContacts + importedOpportunities + skippedOpportunities;
     const errorRate = processedItems > 0 ? (errors.length / processedItems) * 100 : 0;
     const shouldPause = errorRate > 20 && processedItems > 50;
 
