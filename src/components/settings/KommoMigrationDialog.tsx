@@ -2,7 +2,8 @@ import { useEffect } from 'react';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { Separator } from '@/components/ui/separator';
-import { ChevronLeft, ChevronRight, Upload } from 'lucide-react';
+import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
+import { ChevronLeft, ChevronRight, Upload, AlertCircle, Loader2, PlayCircle, XCircle } from 'lucide-react';
 
 import { useKommoMigration } from '@/hooks/useKommoMigration';
 import { KommoCredentialsStep } from './KommoCredentialsStep';
@@ -25,11 +26,15 @@ export function KommoMigrationDialog({ open, onOpenChange }: KommoMigrationDialo
     importLog,
     crmStages,
     savedCredentials,
+    pendingImport,
+    isResuming,
     setCredentials,
     setStageMapping,
     setConfig,
     goToStep,
     reset,
+    resumeMigration,
+    cancelPendingMigration,
     validateMutation,
     fetchPipelinesMutation,
     previewMutation,
@@ -41,7 +46,7 @@ export function KommoMigrationDialog({ open, onOpenChange }: KommoMigrationDialo
   useEffect(() => {
     if (!open) {
       // Only reset if migration is not in progress
-      if (!importLog || ['completed', 'failed', 'rolled_back'].includes(importLog.status)) {
+      if (!importLog || ['completed', 'failed', 'rolled_back', 'cancelled'].includes(importLog.status)) {
         reset();
       }
     }
@@ -65,6 +70,14 @@ export function KommoMigrationDialog({ open, onOpenChange }: KommoMigrationDialo
     if (importLog?.id) {
       rollbackMutation.mutate(importLog.id);
     }
+  };
+
+  const handleResumeMigration = () => {
+    resumeMigration();
+  };
+
+  const handleCancelPendingMigration = async () => {
+    await cancelPendingMigration();
   };
 
   // Check if can proceed to next step
@@ -119,6 +132,47 @@ export function KommoMigrationDialog({ open, onOpenChange }: KommoMigrationDialo
         </div>
 
         <Separator />
+
+        {/* Pending Migration Alert */}
+        {pendingImport && step < 4 && (
+          <Alert className="mx-1 border-warning/50 bg-warning/5">
+            <AlertCircle className="h-4 w-4 text-warning" />
+            <AlertTitle>Migração em andamento</AlertTitle>
+            <AlertDescription className="flex flex-col gap-3">
+              <span>
+                Há uma migração pausada ({pendingImport.progress_percent}% concluído, {pendingImport.imported_contacts} contatos importados).
+              </span>
+              <div className="flex gap-2">
+                <Button 
+                  size="sm" 
+                  onClick={handleResumeMigration}
+                  disabled={isResuming}
+                >
+                  {isResuming ? (
+                    <>
+                      <Loader2 className="h-4 w-4 mr-1 animate-spin" />
+                      Retomando...
+                    </>
+                  ) : (
+                    <>
+                      <PlayCircle className="h-4 w-4 mr-1" />
+                      Continuar
+                    </>
+                  )}
+                </Button>
+                <Button 
+                  size="sm" 
+                  variant="outline" 
+                  onClick={handleCancelPendingMigration}
+                  disabled={isResuming}
+                >
+                  <XCircle className="h-4 w-4 mr-1" />
+                  Cancelar
+                </Button>
+              </div>
+            </AlertDescription>
+          </Alert>
+        )}
 
         {/* Step Content */}
         <div className="flex-1 overflow-y-auto py-4 px-1">

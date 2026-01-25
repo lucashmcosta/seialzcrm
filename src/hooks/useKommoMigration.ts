@@ -47,6 +47,7 @@ export interface ImportLog {
   progress_percent: number;
   last_processed_item: string | null;
   config: any;
+  cursor_state?: any;
   imported_contact_ids: string[];
   imported_opportunity_ids: string[];
   rollback_available: boolean;
@@ -70,6 +71,7 @@ export function useKommoMigration() {
   const [importLogId, setImportLogId] = useState<string | null>(null);
   const [importLog, setImportLog] = useState<ImportLog | null>(null);
   const [credentialsInitialized, setCredentialsInitialized] = useState(false);
+  const [isResuming, setIsResuming] = useState(false);
 
   // Query para buscar credenciais já salvas na integração conectada
   const { data: savedCredentials, isLoading: isLoadingCredentials } = useQuery({
@@ -103,6 +105,27 @@ export function useKommoMigration() {
         } as KommoCredentials;
       }
       return null;
+    },
+    enabled: !!organization,
+  });
+
+  // Query para buscar migração em andamento (running)
+  const { data: pendingImport, refetch: refetchPendingImport } = useQuery({
+    queryKey: ['kommo-pending-import', organization?.id],
+    queryFn: async () => {
+      if (!organization) return null;
+      
+      const { data } = await supabase
+        .from('import_logs')
+        .select('*')
+        .eq('organization_id', organization.id)
+        .eq('integration_slug', 'kommo')
+        .eq('status', 'running')
+        .order('created_at', { ascending: false })
+        .limit(1)
+        .maybeSingle();
+      
+      return data as ImportLog | null;
     },
     enabled: !!organization,
   });
@@ -302,11 +325,73 @@ export function useKommoMigration() {
     setImportLogId(null);
     setImportLog(null);
     setCredentialsInitialized(!!savedCredentials);
-  }, [savedCredentials]);
+    setIsResuming(false);
+    refetchPendingImport();
+  }, [savedCredentials, refetchPendingImport]);
 
   const goToStep = useCallback((newStep: number) => {
     setStep(newStep);
   }, []);
+
+  // Função para retomar migração pendente
+  const resumeMigration = useCallback(async () => {
+    if (!pendingImport) return;
+    
+    setIsResuming(true);
+    setImportLogId(pendingImport.id);
+    setImportLog(pendingImport);
+    setStep(4); // Ir para tela de progresso
+    
+    try {
+      // Retomar loop de processamento
+      let shouldContinue = true;
+      
+      while (shouldContinue) {
+        const { data, error } = await supabase.functions.invoke('kommo-migrate', {
+          body: { import_log_id: pendingImport.id },
+        });
+        
+        if (error) {
+          console.error('Resume migration error:', error);
+          toast.error(`Erro ao retomar migração: ${error.message}`);
+          break;
+        }
+        
+        shouldContinue = data?.continue === true;
+        
+        if (shouldContinue) {
+          await new Promise(resolve => setTimeout(resolve, 500));
+        }
+      }
+      
+      // Invalidar queries após conclusão
+      queryClient.invalidateQueries({ queryKey: ['contacts'] });
+      queryClient.invalidateQueries({ queryKey: ['opportunities'] });
+      refetchPendingImport();
+    } finally {
+      setIsResuming(false);
+    }
+  }, [pendingImport, queryClient, refetchPendingImport]);
+
+  // Função para cancelar migração pendente
+  const cancelPendingMigration = useCallback(async () => {
+    if (!pendingImport) return;
+    
+    try {
+      await supabase
+        .from('import_logs')
+        .update({ 
+          status: 'cancelled',
+          completed_at: new Date().toISOString()
+        })
+        .eq('id', pendingImport.id);
+      
+      toast.success('Migração cancelada');
+      refetchPendingImport();
+    } catch (error: any) {
+      toast.error(`Erro ao cancelar: ${error.message}`);
+    }
+  }, [pendingImport, refetchPendingImport]);
 
   return {
     // State
@@ -320,6 +405,8 @@ export function useKommoMigration() {
     crmStages,
     savedCredentials,
     isLoadingCredentials,
+    pendingImport,
+    isResuming,
 
     // Setters
     setCredentials,
@@ -327,6 +414,10 @@ export function useKommoMigration() {
     setConfig,
     goToStep,
     reset,
+
+    // Actions
+    resumeMigration,
+    cancelPendingMigration,
 
     // Mutations
     validateMutation,
