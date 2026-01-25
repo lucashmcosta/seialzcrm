@@ -244,6 +244,17 @@ serve(async (req) => {
             )?.values?.[0]?.value;
             const phone = normalizePhone(phoneRaw);
 
+            // NOVA REGRA: Não importar contato sem telefone
+            if (!phone) {
+              skippedContacts++;
+              errors.push({
+                type: "contact_skipped",
+                kommo_id: contact.id,
+                reason: "Contato sem telefone - não importado",
+              });
+              continue;
+            }
+
             // Check for duplicates
             let existingContact = null;
             if (email) {
@@ -454,9 +465,14 @@ serve(async (req) => {
               }
             }
 
-            // Skip leads without contacts if not importing orphans
-            if (!contactId && !currentImportOrphan) {
+            // NOVA REGRA: Não criar oportunidade sem contato vinculado (ignora import_orphan_contacts)
+            if (!contactId) {
               skippedOpportunities++;
+              errors.push({
+                type: "opportunity_skipped",
+                kommo_id: lead.id,
+                reason: "Lead sem contato vinculado válido - não importado",
+              });
               continue;
             }
 
