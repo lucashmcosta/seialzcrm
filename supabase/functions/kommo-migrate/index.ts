@@ -410,7 +410,7 @@ serve(async (req) => {
                   .from("opportunities")
                   .update({
                     title: lead.name,
-                    value: lead.price || 0,
+                    amount: lead.price || 0,
                     pipeline_stage_id: mappedStageId,
                     contact_id: contactId,
                     updated_at: new Date().toISOString(),
@@ -429,7 +429,7 @@ serve(async (req) => {
                 organization_id: orgId,
                 contact_id: contactId,
                 title: lead.name || "Lead sem título",
-                value: lead.price || 0,
+                amount: lead.price || 0,
                 pipeline_stage_id: mappedStageId,
                 source: "kommo",
                 source_external_id: `kommo_${lead.id}`,
