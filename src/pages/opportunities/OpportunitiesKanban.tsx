@@ -95,6 +95,13 @@ export default function OpportunitiesKanban() {
   // View mode state
   const [viewMode, setViewMode] = useState<'kanban' | 'list'>('kanban');
   
+  // Kanban pagination states
+  const CARDS_PER_STAGE = 50;
+  const [stageCounts, setStageCounts] = useState<Record<string, { count: number; amount: number }>>({});
+  const [opportunitiesByStage, setOpportunitiesByStage] = useState<Record<string, Opportunity[]>>({});
+  const [hasMoreByStage, setHasMoreByStage] = useState<Record<string, boolean>>({});
+  const [loadingMoreStage, setLoadingMoreStage] = useState<string | null>(null);
+  
   // Table view states
   const [currentPage, setCurrentPage] = useState(1);
   const [itemsPerPage, setItemsPerPage] = useState(25);
@@ -126,24 +133,55 @@ export default function OpportunitiesKanban() {
       setStages(stagesData);
     }
 
-    // Fetch opportunities with contact and owner info
-    const { data: oppsData } = await supabase
-      .from('opportunities')
-      .select(`
-        *,
-        contacts (
-          full_name
-        ),
-        users (
-          full_name
-        )
-      `)
-      .eq('organization_id', organization.id)
-      .eq('status', 'open')
-      .is('deleted_at', null);
+    // Fetch REAL counts from RPC (no 1000 limit)
+    const { data: countsData } = await supabase
+      .rpc('get_opportunity_stage_counts', { org_id: organization.id });
 
-    if (oppsData) {
-      setOpportunities(oppsData);
+    if (countsData) {
+      const countsMap: Record<string, { count: number; amount: number }> = {};
+      countsData.forEach((item: { stage_id: string; opportunity_count: number; total_amount: number }) => {
+        countsMap[item.stage_id] = {
+          count: Number(item.opportunity_count),
+          amount: Number(item.total_amount)
+        };
+      });
+      setStageCounts(countsMap);
+    }
+
+    // Fetch first batch of opportunities per stage (for Kanban)
+    if (stagesData) {
+      const oppsByStage: Record<string, Opportunity[]> = {};
+      const hasMore: Record<string, boolean> = {};
+      
+      await Promise.all(stagesData.map(async (stage) => {
+        const { data } = await supabase
+          .from('opportunities')
+          .select(`
+            *,
+            contacts (
+              full_name
+            ),
+            users (
+              full_name
+            )
+          `)
+          .eq('organization_id', organization.id)
+          .eq('pipeline_stage_id', stage.id)
+          .eq('status', 'open')
+          .is('deleted_at', null)
+          .order('created_at', { ascending: false })
+          .limit(CARDS_PER_STAGE);
+        
+        oppsByStage[stage.id] = data || [];
+        hasMore[stage.id] = (data?.length || 0) === CARDS_PER_STAGE;
+      }));
+      
+      setOpportunitiesByStage(oppsByStage);
+      setHasMoreByStage(hasMore);
+      
+      // Also set flat opportunities array for table view
+      const allOpps = Object.values(oppsByStage).flat();
+      setOpportunities(allOpps);
     }
 
     // Fetch users for filter
@@ -176,9 +214,8 @@ export default function OpportunitiesKanban() {
   };
 
   const getOpportunitiesForStage = (stageId: string) => {
-    return opportunities.filter((opp) => {
-      const matchesStage = opp.pipeline_stage_id === stageId;
-      
+    const stageOpps = opportunitiesByStage[stageId] || [];
+    return stageOpps.filter((opp) => {
       const matchesSearch = !searchTerm || 
         opp.title.toLowerCase().includes(searchTerm.toLowerCase()) ||
         opp.contacts?.full_name?.toLowerCase().includes(searchTerm.toLowerCase());
@@ -191,8 +228,47 @@ export default function OpportunitiesKanban() {
       const matchesDateFrom = !filterDateFrom || !opp.close_date || opp.close_date >= filterDateFrom;
       const matchesDateTo = !filterDateTo || !opp.close_date || opp.close_date <= filterDateTo;
       
-      return matchesStage && matchesSearch && matchesOwner && matchesMinAmount && matchesMaxAmount && matchesDateFrom && matchesDateTo;
+      return matchesSearch && matchesOwner && matchesMinAmount && matchesMaxAmount && matchesDateFrom && matchesDateTo;
     });
+  };
+
+  const loadMoreForStage = async (stageId: string) => {
+    if (!organization?.id) return;
+    setLoadingMoreStage(stageId);
+    
+    const currentOpps = opportunitiesByStage[stageId] || [];
+    
+    const { data } = await supabase
+      .from('opportunities')
+      .select(`
+        *,
+        contacts (
+          full_name
+        ),
+        users (
+          full_name
+        )
+      `)
+      .eq('organization_id', organization.id)
+      .eq('pipeline_stage_id', stageId)
+      .eq('status', 'open')
+      .is('deleted_at', null)
+      .order('created_at', { ascending: false })
+      .range(currentOpps.length, currentOpps.length + CARDS_PER_STAGE - 1);
+
+    if (data) {
+      setOpportunitiesByStage(prev => ({
+        ...prev,
+        [stageId]: [...currentOpps, ...data]
+      }));
+      setHasMoreByStage(prev => ({
+        ...prev,
+        [stageId]: data.length === CARDS_PER_STAGE
+      }));
+      // Update flat array too
+      setOpportunities(prev => [...prev, ...data]);
+    }
+    setLoadingMoreStage(null);
   };
 
   const handleDragEnd = async (result: DropResult) => {
@@ -203,8 +279,36 @@ export default function OpportunitiesKanban() {
 
     const opportunityId = draggableId;
     const newStageId = destination.droppableId;
+    const oldStageId = source.droppableId;
 
-    // Optimistically update UI
+    // Find the opportunity being moved
+    const movedOpp = opportunitiesByStage[oldStageId]?.find(o => o.id === opportunityId);
+    if (!movedOpp) return;
+
+    // Optimistically update UI - move between stages
+    setOpportunitiesByStage(prev => {
+      const updatedOpp = { ...movedOpp, pipeline_stage_id: newStageId };
+      return {
+        ...prev,
+        [oldStageId]: prev[oldStageId]?.filter(o => o.id !== opportunityId) || [],
+        [newStageId]: [...(prev[newStageId] || []), updatedOpp]
+      };
+    });
+
+    // Update counts optimistically
+    setStageCounts(prev => ({
+      ...prev,
+      [oldStageId]: {
+        count: (prev[oldStageId]?.count || 1) - 1,
+        amount: (prev[oldStageId]?.amount || 0) - (Number(movedOpp.amount) || 0)
+      },
+      [newStageId]: {
+        count: (prev[newStageId]?.count || 0) + 1,
+        amount: (prev[newStageId]?.amount || 0) + (Number(movedOpp.amount) || 0)
+      }
+    }));
+
+    // Also update flat array for table view
     setOpportunities(prev =>
       prev.map(opp =>
         opp.id === opportunityId
@@ -507,10 +611,13 @@ export default function OpportunitiesKanban() {
             <div className="flex gap-4 overflow-x-auto pb-4">
               {stages.map((stage) => {
                 const stageOpportunities = getOpportunitiesForStage(stage.id);
-                const stageTotal = stageOpportunities.reduce(
+                const realCount = stageCounts[stage.id]?.count ?? stageOpportunities.length;
+                const realAmount = stageCounts[stage.id]?.amount ?? stageOpportunities.reduce(
                   (sum, opp) => sum + (Number(opp.amount) || 0),
                   0
                 );
+                const loadedCount = stageOpportunities.length;
+                const hasMore = hasMoreByStage[stage.id] && loadedCount < realCount;
 
                 return (
                   <div key={stage.id} className="flex-shrink-0 w-80">
@@ -519,11 +626,11 @@ export default function OpportunitiesKanban() {
                         <div className="flex justify-between items-center">
                           <CardTitle className="text-base font-medium">{stage.name}</CardTitle>
                           <span className="text-sm text-muted-foreground">
-                            {stageOpportunities.length}
+                            {realCount.toLocaleString()}
                           </span>
                         </div>
                         <p className="text-sm text-muted-foreground mt-1">
-                          {formatCurrency(stageTotal, organization?.default_currency || 'BRL')}
+                          {formatCurrency(realAmount, organization?.default_currency || 'BRL')}
                         </p>
                       </CardHeader>
                       <Droppable droppableId={stage.id}>
@@ -574,6 +681,18 @@ export default function OpportunitiesKanban() {
                               ))
                             )}
                             {provided.placeholder}
+                            {hasMore && (
+                              <Button 
+                                variant="ghost" 
+                                size="sm" 
+                                className="w-full mt-2"
+                                onClick={() => loadMoreForStage(stage.id)}
+                                disabled={loadingMoreStage === stage.id}
+                              >
+                                {loadingMoreStage === stage.id ? 'Carregando...' : 
+                                  `Carregar mais (${(realCount - loadedCount).toLocaleString()} restantes)`}
+                              </Button>
+                            )}
                           </CardContent>
                         )}
                       </Droppable>
