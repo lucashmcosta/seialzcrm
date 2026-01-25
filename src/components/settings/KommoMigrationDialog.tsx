@@ -24,6 +24,7 @@ export function KommoMigrationDialog({ open, onOpenChange }: KommoMigrationDialo
     config,
     importLog,
     crmStages,
+    savedCredentials,
     setCredentials,
     setStageMapping,
     setConfig,
@@ -125,6 +126,7 @@ export function KommoMigrationDialog({ open, onOpenChange }: KommoMigrationDialo
             <KommoCredentialsStep
               onValidated={handleCredentialsValidated}
               validateMutation={validateMutation}
+              savedCredentials={savedCredentials}
             />
           )}
 

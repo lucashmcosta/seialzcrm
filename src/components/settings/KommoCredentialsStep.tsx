@@ -3,17 +3,23 @@ import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { Label } from '@/components/ui/label';
 import { Alert, AlertDescription } from '@/components/ui/alert';
-import { CheckCircle2, Loader2, ExternalLink } from 'lucide-react';
+import { CheckCircle2, Loader2, ExternalLink, Link2 } from 'lucide-react';
+import type { KommoCredentials } from '@/hooks/useKommoMigration';
 
 interface KommoCredentialsStepProps {
   onValidated: (credentials: { subdomain: string; access_token: string; account_name: string }) => void;
   validateMutation: any;
+  savedCredentials?: KommoCredentials | null;
 }
 
-export function KommoCredentialsStep({ onValidated, validateMutation }: KommoCredentialsStepProps) {
+export function KommoCredentialsStep({ onValidated, validateMutation, savedCredentials }: KommoCredentialsStepProps) {
+  const [useOtherCredentials, setUseOtherCredentials] = useState(false);
   const [subdomain, setSubdomain] = useState('');
   const [accessToken, setAccessToken] = useState('');
   const [validatedAccount, setValidatedAccount] = useState<string | null>(null);
+
+  // Se tem credenciais salvas e não quer usar outras, mostrar resumo
+  const usingSavedCredentials = savedCredentials && !useOtherCredentials;
 
   const handleValidate = async () => {
     const result = await validateMutation.mutateAsync({ subdomain, access_token: accessToken });
@@ -28,12 +34,74 @@ export function KommoCredentialsStep({ onValidated, validateMutation }: KommoCre
     }
   };
 
+  const handleUseSavedCredentials = () => {
+    if (savedCredentials) {
+      onValidated({
+        subdomain: savedCredentials.subdomain,
+        access_token: savedCredentials.access_token,
+        account_name: savedCredentials.account_name || savedCredentials.subdomain,
+      });
+    }
+  };
+
   const isValid = validatedAccount !== null;
   const hasError = validateMutation.isError || (validateMutation.data && !validateMutation.data.valid);
   const errorMessage = validateMutation.data?.error || validateMutation.error?.message;
 
+  // Se está usando credenciais salvas, mostra UI simplificada
+  if (usingSavedCredentials) {
+    return (
+      <div className="space-y-6">
+        <Alert className="border-primary/50 bg-primary/5">
+          <Link2 className="h-4 w-4 text-primary" />
+          <AlertDescription className="text-foreground">
+            <div className="space-y-1">
+              <p className="font-medium">Usando credenciais da integração conectada</p>
+              <p className="text-sm text-muted-foreground">
+                Subdomínio: <strong>{savedCredentials.subdomain}.kommo.com</strong>
+              </p>
+              {savedCredentials.account_name && (
+                <p className="text-sm text-muted-foreground">
+                  Conta: <strong>{savedCredentials.account_name}</strong>
+                </p>
+              )}
+            </div>
+          </AlertDescription>
+        </Alert>
+
+        <div className="flex flex-col gap-3">
+          <Button onClick={handleUseSavedCredentials} className="w-full">
+            <CheckCircle2 className="h-4 w-4 mr-2" />
+            Continuar com estas credenciais
+          </Button>
+          
+          <Button 
+            variant="ghost" 
+            size="sm"
+            onClick={() => setUseOtherCredentials(true)}
+            className="text-muted-foreground"
+          >
+            Usar outras credenciais
+          </Button>
+        </div>
+      </div>
+    );
+  }
+
+  // UI padrão para inserir novas credenciais
   return (
     <div className="space-y-6">
+      {savedCredentials && useOtherCredentials && (
+        <Button 
+          variant="ghost" 
+          size="sm"
+          onClick={() => setUseOtherCredentials(false)}
+          className="text-muted-foreground -mt-2"
+        >
+          ← Usar credenciais da integração
+        </Button>
+      )}
+
       <div className="space-y-4">
         <div className="space-y-2">
           <Label htmlFor="subdomain">Subdomínio Kommo</Label>
