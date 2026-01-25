@@ -122,7 +122,7 @@ export function useKommoMigration() {
     },
   });
 
-  // Start migration mutation
+  // Start migration mutation - creates log and starts chunked processing
   const startMigrationMutation = useMutation({
     mutationFn: async () => {
       if (!organization || !credentials) throw new Error('Dados incompletos');
@@ -137,6 +137,8 @@ export function useKommoMigration() {
           config: {
             ...config,
             stage_mapping: stageMapping,
+            subdomain: credentials.subdomain,
+            access_token: credentials.access_token,
           },
         })
         .select()
@@ -145,21 +147,41 @@ export function useKommoMigration() {
       if (logError) throw logError;
       setImportLogId(log.id);
 
-      // Start migration
-      const { data, error } = await supabase.functions.invoke('kommo-migrate', {
-        body: {
-          organization_id: organization.id,
-          subdomain: credentials.subdomain,
-          access_token: credentials.access_token,
-          import_log_id: log.id,
-          stage_mapping: stageMapping,
-          duplicate_mode: config.duplicate_mode,
-          import_orphan_contacts: config.import_orphan_contacts,
-        },
-      });
+      // Start chunked migration loop
+      let shouldContinue = true;
+      let isFirstCall = true;
 
-      if (error) throw error;
-      return data;
+      while (shouldContinue) {
+        const { data, error } = await supabase.functions.invoke('kommo-migrate', {
+          body: isFirstCall ? {
+            import_log_id: log.id,
+            organization_id: organization.id,
+            subdomain: credentials.subdomain,
+            access_token: credentials.access_token,
+            stage_mapping: stageMapping,
+            duplicate_mode: config.duplicate_mode,
+            import_orphan_contacts: config.import_orphan_contacts,
+          } : {
+            import_log_id: log.id,
+          },
+        });
+
+        isFirstCall = false;
+
+        if (error) {
+          console.error('Migration chunk error:', error);
+          throw error;
+        }
+
+        shouldContinue = data?.continue === true;
+
+        // Small delay between chunks to avoid overwhelming
+        if (shouldContinue) {
+          await new Promise(resolve => setTimeout(resolve, 500));
+        }
+      }
+
+      return { success: true };
     },
     onError: (error: any) => {
       toast.error(`Erro ao iniciar migração: ${error.message}`);

@@ -6,37 +6,41 @@ const corsHeaders = {
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
 };
 
-const SUPABASE_URL = "https://qvmtzfvkhkhkhdpclzua.supabase.co";
-const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
-
-const BATCH_SIZE = 50;
-const KOMMO_RATE_LIMIT_DELAY = 150; // ms between requests (7 req/s max)
-
-// Helper to extract custom field value from Kommo contact/lead
-function getCustomFieldValue(customFields: any[], fieldCode: string): string | null {
-  if (!customFields) return null;
-  const field = customFields.find((f: any) => f.field_code === fieldCode);
-  return field?.values?.[0]?.value || null;
+interface CursorState {
+  phase: "contacts" | "leads" | "done";
+  contacts_page: number;
+  leads_page: number;
+  contacts_complete: boolean;
+  leads_complete: boolean;
 }
 
-// Normalize phone to E.164 format
-function normalizePhone(phone: string | null): string | null {
-  if (!phone) return null;
-  let digits = phone.replace(/\D/g, '');
-  if (digits.startsWith('0')) digits = digits.substring(1);
-  if (!digits.startsWith('55') && digits.length <= 11) {
-    digits = '55' + digits;
-  }
-  return '+' + digits;
+interface ImportLog {
+  id: string;
+  organization_id: string;
+  config: {
+    stage_mapping?: Record<string, string>;
+    duplicate_mode?: string;
+    import_orphan_contacts?: boolean;
+    subdomain?: string;
+    access_token?: string;
+  };
+  cursor_state: CursorState;
+  status: string;
+  total_contacts: number;
+  imported_contacts: number;
+  skipped_contacts: number;
+  total_opportunities: number;
+  imported_opportunities: number;
+  skipped_opportunities: number;
+  progress_percent: number;
+  imported_contact_ids: string[];
+  imported_opportunity_ids: string[];
+  errors: any[];
+  error_count: number;
 }
 
-// Split name into first and last name
-function splitName(fullName: string): { firstName: string; lastName: string | null } {
-  const parts = fullName.trim().split(/\s+/);
-  const firstName = parts[0] || fullName;
-  const lastName = parts.length > 1 ? parts.slice(1).join(' ') : null;
-  return { firstName, lastName };
-}
+// Page size for Kommo API
+const PAGE_SIZE = 250;
 
 // Delay helper for rate limiting
 const delay = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
@@ -57,14 +61,12 @@ async function fetchWithRetry(
     }
     
     if (response.status === 429) {
-      // Rate limited - exponential backoff: 1s, 2s, 4s, 8s, 16s
       const backoffMs = Math.pow(2, attempt) * 1000;
       console.log(`Rate limited (429). Retry ${attempt + 1}/${maxRetries} in ${backoffMs}ms`);
       await delay(backoffMs);
       continue;
     }
     
-    // Non-retryable error
     lastError = new Error(`HTTP ${response.status}: ${response.statusText}`);
     break;
   }
@@ -72,381 +74,455 @@ async function fetchWithRetry(
   throw lastError || new Error('Max retries exceeded');
 }
 
+// Normalize phone to E.164 format
+function normalizePhone(phone: string | undefined): string | null {
+  if (!phone) return null;
+  const digits = phone.replace(/\D/g, "");
+  if (digits.length >= 10 && digits.length <= 15) {
+    return digits.startsWith("55") ? `+${digits}` : `+55${digits}`;
+  }
+  return null;
+}
+
 serve(async (req) => {
   if (req.method === "OPTIONS") {
     return new Response(null, { headers: corsHeaders });
   }
 
-  const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
-
   try {
-    const authHeader = req.headers.get("Authorization");
-    if (!authHeader) {
-      return new Response(
-        JSON.stringify({ error: "Não autorizado" }),
-        { status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" } }
-      );
+    const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
+    const supabaseServiceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
+    const supabase = createClient(supabaseUrl, supabaseServiceKey);
+
+    const { import_log_id, subdomain, access_token, organization_id, stage_mapping, duplicate_mode, import_orphan_contacts } = await req.json();
+
+    if (!import_log_id) {
+      throw new Error("import_log_id é obrigatório");
     }
 
-    const {
-      organization_id,
-      subdomain,
-      access_token,
-      import_log_id,
-      stage_mapping,
-      duplicate_mode = 'skip',
-      import_orphan_contacts = true,
-    } = await req.json();
+    // Fetch import log
+    const { data: importLog, error: logError } = await supabase
+      .from("import_logs")
+      .select("*")
+      .eq("id", import_log_id)
+      .single();
 
-    if (!organization_id || !subdomain || !access_token || !import_log_id) {
-      return new Response(
-        JSON.stringify({ error: "Parâmetros obrigatórios faltando" }),
-        { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
-      );
+    if (logError || !importLog) {
+      throw new Error("Import log não encontrado");
     }
 
-    // Update log to running
-    await supabase
-      .from('import_logs')
-      .update({ 
-        status: 'running', 
-        started_at: new Date().toISOString(),
-        config: { subdomain, stage_mapping, duplicate_mode, import_orphan_contacts }
-      })
-      .eq('id', import_log_id);
+    const log = importLog as ImportLog;
 
-    const baseUrl = `https://${subdomain}.kommo.com/api/v4`;
+    // Initialize config on first call
+    if (log.status === "pending") {
+      const config = {
+        subdomain: subdomain || log.config?.subdomain,
+        access_token: access_token || log.config?.access_token,
+        stage_mapping: stage_mapping || log.config?.stage_mapping,
+        duplicate_mode: duplicate_mode || log.config?.duplicate_mode || "skip",
+        import_orphan_contacts: import_orphan_contacts ?? log.config?.import_orphan_contacts ?? true,
+      };
+
+      await supabase
+        .from("import_logs")
+        .update({
+          status: "running",
+          started_at: new Date().toISOString(),
+          config,
+          cursor_state: {
+            phase: "contacts",
+            contacts_page: 1,
+            leads_page: 1,
+            contacts_complete: false,
+            leads_complete: false,
+          },
+        })
+        .eq("id", import_log_id);
+
+      log.config = config;
+      log.status = "running";
+      log.cursor_state = {
+        phase: "contacts",
+        contacts_page: 1,
+        leads_page: 1,
+        contacts_complete: false,
+        leads_complete: false,
+      };
+    }
+
+    const currentSubdomain = log.config?.subdomain;
+    const currentToken = log.config?.access_token;
+    const currentStageMapping = log.config?.stage_mapping || {};
+    const currentDuplicateMode = log.config?.duplicate_mode || "skip";
+    const currentImportOrphan = log.config?.import_orphan_contacts ?? true;
+    const orgId = log.organization_id;
+
+    if (!currentSubdomain || !currentToken) {
+      throw new Error("Credenciais não encontradas no config");
+    }
+
+    const baseUrl = `https://${currentSubdomain}.kommo.com/api/v4`;
     const headers = {
-      "Authorization": `Bearer ${access_token}`,
+      Authorization: `Bearer ${currentToken}`,
       "Content-Type": "application/json",
     };
 
-    const errors: any[] = [];
-    const importedContactIds: string[] = [];
-    const importedOpportunityIds: string[] = [];
-    const kommoToContactIdMap: Record<number, string> = {};
-    
-    let totalContacts = 0;
-    let importedContacts = 0;
-    let skippedContacts = 0;
-    let totalLeads = 0;
-    let importedOpportunities = 0;
-    let skippedOpportunities = 0;
-
-    // Helper to update progress
-    const updateProgress = async (data: any) => {
-      await supabase
-        .from('import_logs')
-        .update({
-          ...data,
-          updated_at: new Date().toISOString(),
-        })
-        .eq('id', import_log_id);
+    let cursor = log.cursor_state || {
+      phase: "contacts" as const,
+      contacts_page: 1,
+      leads_page: 1,
+      contacts_complete: false,
+      leads_complete: false,
     };
 
-    // ============ STEP 1: Import Contacts ============
-    let contactPage = 1;
-    let hasMoreContacts = true;
-    
-    while (hasMoreContacts) {
-      await delay(KOMMO_RATE_LIMIT_DELAY);
+    const errors: any[] = [...(log.errors || [])];
+    let importedContacts = log.imported_contacts || 0;
+    let skippedContacts = log.skipped_contacts || 0;
+    let importedOpportunities = log.imported_opportunities || 0;
+    let skippedOpportunities = log.skipped_opportunities || 0;
+    let importedContactIds = [...(log.imported_contact_ids || [])];
+    let importedOpportunityIds = [...(log.imported_opportunity_ids || [])];
+    let totalContacts = log.total_contacts || 0;
+    let totalOpportunities = log.total_opportunities || 0;
+
+    // Create a map of Kommo contact IDs to CRM contact IDs
+    const kommoContactIdMap: Record<number, string> = {};
+
+    // Load existing contact mappings from previously imported contacts
+    if (importedContactIds.length > 0) {
+      const { data: existingContacts } = await supabase
+        .from("contacts")
+        .select("id, source_external_id")
+        .in("id", importedContactIds);
       
-      const contactsResponse = await fetchWithRetry(
-        `${baseUrl}/contacts?limit=250&page=${contactPage}&with=leads`,
-        { headers }
-      );
-      
-      const contactsData = await contactsResponse.json();
-      const contacts = contactsData._embedded?.contacts || [];
-      
-      if (contacts.length === 0) {
-        hasMoreContacts = false;
-        break;
-      }
-
-      totalContacts += contacts.length;
-
-      // Process contacts in batches
-      for (let i = 0; i < contacts.length; i += BATCH_SIZE) {
-        const batch = contacts.slice(i, i + BATCH_SIZE);
-        
-        for (const contact of batch) {
-          try {
-            const hasLeads = (contact._embedded?.leads?.length || 0) > 0;
-            
-            // Skip orphan contacts if not importing them
-            if (!import_orphan_contacts && !hasLeads) {
-              skippedContacts++;
-              continue;
-            }
-
-            const email = getCustomFieldValue(contact.custom_fields_values, 'EMAIL');
-            const phone = normalizePhone(getCustomFieldValue(contact.custom_fields_values, 'PHONE'));
-            const { firstName, lastName } = splitName(contact.name || 'Sem nome');
-
-            // Check for duplicates
-            if (duplicate_mode !== 'create') {
-              const { data: existing } = await supabase
-                .from('contacts')
-                .select('id')
-                .eq('organization_id', organization_id)
-                .or(`email.eq.${email || 'NONE'},phone.eq.${phone || 'NONE'}`)
-                .limit(1);
-
-              if (existing && existing.length > 0) {
-                if (duplicate_mode === 'skip') {
-                  skippedContacts++;
-                  kommoToContactIdMap[contact.id] = existing[0].id;
-                  continue;
-                } else if (duplicate_mode === 'update') {
-                  // Update existing contact
-                  const { error: updateError } = await supabase
-                    .from('contacts')
-                    .update({
-                      full_name: contact.name,
-                      first_name: firstName,
-                      last_name: lastName,
-                      email: email || undefined,
-                      phone: phone || undefined,
-                      source_external_id: String(contact.id),
-                      updated_at: new Date().toISOString(),
-                    })
-                    .eq('id', existing[0].id);
-
-                  if (updateError) throw updateError;
-                  
-                  kommoToContactIdMap[contact.id] = existing[0].id;
-                  importedContacts++;
-                  continue;
-                }
-              }
-            }
-
-            // Insert new contact
-            const { data: newContact, error: insertError } = await supabase
-              .from('contacts')
-              .insert({
-                organization_id,
-                full_name: contact.name || 'Sem nome',
-                first_name: firstName,
-                last_name: lastName,
-                email: email,
-                phone: phone,
-                source: 'kommo',
-                source_external_id: String(contact.id),
-                lifecycle_stage: 'lead',
-              })
-              .select('id')
-              .single();
-
-            if (insertError) throw insertError;
-            
-            kommoToContactIdMap[contact.id] = newContact.id;
-            importedContactIds.push(newContact.id);
-            importedContacts++;
-
-          } catch (error: any) {
-            errors.push({
-              type: 'contact',
-              kommo_id: contact.id,
-              name: contact.name,
-              error: error.message,
-            });
+      existingContacts?.forEach((c: any) => {
+        if (c.source_external_id) {
+          const kommoId = parseInt(c.source_external_id.replace("kommo_", ""));
+          if (!isNaN(kommoId)) {
+            kommoContactIdMap[kommoId] = c.id;
           }
         }
-
-        // Update progress after each batch
-        const progressPercent = Math.round((importedContacts + skippedContacts) / Math.max(totalContacts, 1) * 50);
-        await updateProgress({
-          total_contacts: totalContacts,
-          imported_contacts: importedContacts,
-          skipped_contacts: skippedContacts,
-          progress_percent: progressPercent,
-          last_processed_item: `Contato: ${batch[batch.length - 1]?.name || 'N/A'}`,
-          imported_contact_ids: importedContactIds,
-          error_count: errors.length,
-          errors: errors.slice(-50), // Keep last 50 errors
-        });
-
-        // Check error threshold (20%)
-        const totalProcessed = importedContacts + skippedContacts;
-        if (totalProcessed > 10 && errors.length / totalProcessed > 0.2) {
-          await updateProgress({
-            status: 'paused',
-            errors,
-            error_count: errors.length,
-          });
-          return new Response(
-            JSON.stringify({ 
-              status: 'paused', 
-              message: 'Migração pausada: mais de 20% de erros detectados',
-              error_count: errors.length,
-              total_processed: totalProcessed,
-            }),
-            { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
-          );
-        }
-      }
-
-      hasMoreContacts = !!contactsData._links?.next;
-      contactPage++;
+      });
     }
 
-    // ============ STEP 2: Import Leads/Opportunities ============
-    let leadPage = 1;
-    let hasMoreLeads = true;
-    
-    while (hasMoreLeads) {
-      await delay(KOMMO_RATE_LIMIT_DELAY);
-      
-      const leadsResponse = await fetchWithRetry(
-        `${baseUrl}/leads?limit=250&page=${leadPage}&with=contacts`,
+    // ============ PHASE: CONTACTS ============
+    if (cursor.phase === "contacts" && !cursor.contacts_complete) {
+      console.log(`Processing contacts page ${cursor.contacts_page}`);
+
+      const contactsResponse = await fetchWithRetry(
+        `${baseUrl}/contacts?limit=${PAGE_SIZE}&page=${cursor.contacts_page}&with=leads`,
         { headers }
       );
-      
-      const leadsData = await leadsResponse.json();
-      const leads = leadsData._embedded?.leads || [];
-      
-      if (leads.length === 0) {
-        hasMoreLeads = false;
-        break;
+
+      const contactsData = await contactsResponse.json();
+      const contacts = contactsData._embedded?.contacts || [];
+
+      // Update total on first page
+      if (cursor.contacts_page === 1) {
+        totalContacts = contactsData._page?.count || contacts.length * 10;
       }
 
-      totalLeads += leads.length;
-
-      // Process leads in batches
-      for (let i = 0; i < leads.length; i += BATCH_SIZE) {
-        const batch = leads.slice(i, i + BATCH_SIZE);
-        
-        for (const lead of batch) {
+      if (contacts.length === 0) {
+        cursor.contacts_complete = true;
+        cursor.phase = "leads";
+      } else {
+        // Process this batch of contacts
+        for (const contact of contacts) {
           try {
-            // Check for duplicates by source_external_id
-            if (duplicate_mode === 'skip') {
-              const { data: existing } = await supabase
-                .from('opportunities')
-                .select('id')
-                .eq('organization_id', organization_id)
-                .eq('source_external_id', String(lead.id))
-                .limit(1);
+            const email = contact.custom_fields_values?.find(
+              (f: any) => f.field_code === "EMAIL"
+            )?.values?.[0]?.value?.toLowerCase();
 
-              if (existing && existing.length > 0) {
-                skippedOpportunities++;
+            const phoneRaw = contact.custom_fields_values?.find(
+              (f: any) => f.field_code === "PHONE"
+            )?.values?.[0]?.value;
+            const phone = normalizePhone(phoneRaw);
+
+            // Check for duplicates
+            let existingContact = null;
+            if (email) {
+              const { data } = await supabase
+                .from("contacts")
+                .select("id")
+                .eq("organization_id", orgId)
+                .eq("email", email)
+                .is("deleted_at", null)
+                .maybeSingle();
+              existingContact = data;
+            }
+            if (!existingContact && phone) {
+              const { data } = await supabase
+                .from("contacts")
+                .select("id")
+                .eq("organization_id", orgId)
+                .eq("phone", phone)
+                .is("deleted_at", null)
+                .maybeSingle();
+              existingContact = data;
+            }
+
+            if (existingContact) {
+              if (currentDuplicateMode === "skip") {
+                skippedContacts++;
+                kommoContactIdMap[contact.id] = existingContact.id;
+                continue;
+              } else if (currentDuplicateMode === "update") {
+                await supabase
+                  .from("contacts")
+                  .update({
+                    full_name: contact.name,
+                    email: email || undefined,
+                    phone: phone || undefined,
+                    source_external_id: `kommo_${contact.id}`,
+                    updated_at: new Date().toISOString(),
+                  })
+                  .eq("id", existingContact.id);
+                importedContacts++;
+                importedContactIds.push(existingContact.id);
+                kommoContactIdMap[contact.id] = existingContact.id;
                 continue;
               }
             }
 
-            // Get mapped stage
-            const kommoStageKey = `${lead.pipeline_id}_${lead.status_id}`;
-            let pipelineStageId = stage_mapping?.[kommoStageKey] || stage_mapping?.[String(lead.status_id)];
-            
-            // If no mapping, get first stage of org
-            if (!pipelineStageId) {
-              const { data: defaultStage } = await supabase
-                .from('pipeline_stages')
-                .select('id')
-                .eq('organization_id', organization_id)
-                .order('order_index')
-                .limit(1);
-              
-              pipelineStageId = defaultStage?.[0]?.id;
-            }
-
-            if (!pipelineStageId) {
-              throw new Error('Nenhuma etapa de pipeline disponível');
-            }
-
-            // Get contact ID from mapping
-            const kommoContactId = lead._embedded?.contacts?.[0]?.id;
-            const contactId = kommoContactId ? kommoToContactIdMap[kommoContactId] : null;
-
-            // Insert opportunity
-            const { data: newOpp, error: insertError } = await supabase
-              .from('opportunities')
+            // Create new contact
+            const { data: newContact, error: insertError } = await supabase
+              .from("contacts")
               .insert({
-                organization_id,
-                title: lead.name || 'Oportunidade Importada',
-                amount: lead.price || 0,
-                pipeline_stage_id: pipelineStageId,
-                contact_id: contactId,
-                source: 'kommo',
-                source_external_id: String(lead.id),
-                close_date: lead.closest_task_at 
-                  ? new Date(lead.closest_task_at * 1000).toISOString().split('T')[0]
-                  : null,
+                organization_id: orgId,
+                full_name: contact.name || "Sem nome",
+                email,
+                phone,
+                source: "kommo",
+                source_external_id: `kommo_${contact.id}`,
               })
-              .select('id')
+              .select("id")
               .single();
 
-            if (insertError) throw insertError;
-            
-            importedOpportunityIds.push(newOpp.id);
-            importedOpportunities++;
-
-          } catch (error: any) {
+            if (insertError) {
+              errors.push({
+                type: "contact",
+                kommo_id: contact.id,
+                error: insertError.message,
+              });
+            } else {
+              importedContacts++;
+              importedContactIds.push(newContact.id);
+              kommoContactIdMap[contact.id] = newContact.id;
+            }
+          } catch (err: any) {
             errors.push({
-              type: 'lead',
-              kommo_id: lead.id,
-              name: lead.name,
-              error: error.message,
+              type: "contact",
+              kommo_id: contact.id,
+              error: err.message,
             });
           }
         }
 
-        // Update progress after each batch
-        const progressPercent = 50 + Math.round((importedOpportunities + skippedOpportunities) / Math.max(totalLeads, 1) * 50);
-        await updateProgress({
-          total_opportunities: totalLeads,
-          imported_opportunities: importedOpportunities,
-          skipped_opportunities: skippedOpportunities,
-          progress_percent: Math.min(progressPercent, 100),
-          last_processed_item: `Lead: ${batch[batch.length - 1]?.name || 'N/A'}`,
-          imported_opportunity_ids: importedOpportunityIds,
-          error_count: errors.length,
-          errors: errors.slice(-50),
-        });
+        // Check if there are more pages
+        if (contacts.length < PAGE_SIZE) {
+          cursor.contacts_complete = true;
+          cursor.phase = "leads";
+        } else {
+          cursor.contacts_page++;
+        }
       }
-
-      hasMoreLeads = !!leadsData._links?.next;
-      leadPage++;
     }
 
-    // ============ STEP 3: Finalize ============
-    await updateProgress({
-      status: 'completed',
-      completed_at: new Date().toISOString(),
-      progress_percent: 100,
-      total_contacts: totalContacts,
-      imported_contacts: importedContacts,
-      skipped_contacts: skippedContacts,
-      total_opportunities: totalLeads,
-      imported_opportunities: importedOpportunities,
-      skipped_opportunities: skippedOpportunities,
-      imported_contact_ids: importedContactIds,
-      imported_opportunity_ids: importedOpportunityIds,
-      error_count: errors.length,
-      errors: errors.slice(-100),
-    });
+    // ============ PHASE: LEADS ============
+    if (cursor.phase === "leads" && !cursor.leads_complete) {
+      console.log(`Processing leads page ${cursor.leads_page}`);
 
-    return new Response(
-      JSON.stringify({
-        status: 'completed',
+      const leadsResponse = await fetchWithRetry(
+        `${baseUrl}/leads?limit=${PAGE_SIZE}&page=${cursor.leads_page}&with=contacts`,
+        { headers }
+      );
+
+      const leadsData = await leadsResponse.json();
+      const leads = leadsData._embedded?.leads || [];
+
+      // Update total on first page
+      if (cursor.leads_page === 1) {
+        totalOpportunities = leadsData._page?.count || leads.length * 10;
+      }
+
+      if (leads.length === 0) {
+        cursor.leads_complete = true;
+        cursor.phase = "done";
+      } else {
+        for (const lead of leads) {
+          try {
+            // Find associated contact
+            let contactId: string | null = null;
+            const linkedContacts = lead._embedded?.contacts || [];
+
+            for (const linkedContact of linkedContacts) {
+              if (kommoContactIdMap[linkedContact.id]) {
+                contactId = kommoContactIdMap[linkedContact.id];
+                break;
+              }
+            }
+
+            // If no linked contact found, try to find by querying
+            if (!contactId && linkedContacts.length > 0) {
+              const { data: existingContact } = await supabase
+                .from("contacts")
+                .select("id")
+                .eq("organization_id", orgId)
+                .eq("source_external_id", `kommo_${linkedContacts[0].id}`)
+                .is("deleted_at", null)
+                .maybeSingle();
+              
+              if (existingContact) {
+                contactId = existingContact.id;
+              }
+            }
+
+            // Skip leads without contacts if not importing orphans
+            if (!contactId && !currentImportOrphan) {
+              skippedOpportunities++;
+              continue;
+            }
+
+            // Map stage
+            const stageKey = `${lead.pipeline_id}_${lead.status_id}`;
+            const mappedStageId = currentStageMapping[stageKey];
+
+            if (!mappedStageId) {
+              skippedOpportunities++;
+              continue;
+            }
+
+            // Check for duplicate leads
+            const { data: existingLead } = await supabase
+              .from("opportunities")
+              .select("id")
+              .eq("organization_id", orgId)
+              .eq("source_external_id", `kommo_${lead.id}`)
+              .is("deleted_at", null)
+              .maybeSingle();
+
+            if (existingLead) {
+              if (currentDuplicateMode === "skip") {
+                skippedOpportunities++;
+                continue;
+              } else if (currentDuplicateMode === "update") {
+                await supabase
+                  .from("opportunities")
+                  .update({
+                    title: lead.name,
+                    value: lead.price || 0,
+                    pipeline_stage_id: mappedStageId,
+                    contact_id: contactId,
+                    updated_at: new Date().toISOString(),
+                  })
+                  .eq("id", existingLead.id);
+                importedOpportunities++;
+                importedOpportunityIds.push(existingLead.id);
+                continue;
+              }
+            }
+
+            // Create new opportunity
+            const { data: newOpp, error: oppError } = await supabase
+              .from("opportunities")
+              .insert({
+                organization_id: orgId,
+                contact_id: contactId,
+                title: lead.name || "Lead sem título",
+                value: lead.price || 0,
+                pipeline_stage_id: mappedStageId,
+                source: "kommo",
+                source_external_id: `kommo_${lead.id}`,
+              })
+              .select("id")
+              .single();
+
+            if (oppError) {
+              errors.push({
+                type: "lead",
+                kommo_id: lead.id,
+                error: oppError.message,
+              });
+            } else {
+              importedOpportunities++;
+              importedOpportunityIds.push(newOpp.id);
+            }
+          } catch (err: any) {
+            errors.push({
+              type: "lead",
+              kommo_id: lead.id,
+              error: err.message,
+            });
+          }
+        }
+
+        // Check if there are more pages
+        if (leads.length < PAGE_SIZE) {
+          cursor.leads_complete = true;
+          cursor.phase = "done";
+        } else {
+          cursor.leads_page++;
+        }
+      }
+    }
+
+    // Calculate progress
+    const totalItems = totalContacts + totalOpportunities;
+    const processedItems = importedContacts + skippedContacts + importedOpportunities + skippedOpportunities;
+    const progressPercent = totalItems > 0 ? Math.min(Math.round((processedItems / totalItems) * 100), 100) : 0;
+
+    // Check error threshold (20%)
+    const errorRate = processedItems > 0 ? (errors.length / processedItems) * 100 : 0;
+    const shouldPause = errorRate > 20 && processedItems > 50;
+
+    // Determine final status
+    let status = "running";
+    if (cursor.phase === "done") {
+      status = "completed";
+    } else if (shouldPause) {
+      status = "paused";
+    }
+
+    // Update import log
+    await supabase
+      .from("import_logs")
+      .update({
+        status,
+        cursor_state: cursor,
         total_contacts: totalContacts,
         imported_contacts: importedContacts,
         skipped_contacts: skippedContacts,
-        total_leads: totalLeads,
+        total_opportunities: totalOpportunities,
         imported_opportunities: importedOpportunities,
         skipped_opportunities: skippedOpportunities,
+        progress_percent: progressPercent,
+        imported_contact_ids: importedContactIds,
+        imported_opportunity_ids: importedOpportunityIds,
+        errors,
         error_count: errors.length,
-      }),
-      { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
-    );
+        rollback_available: cursor.phase === "done",
+        completed_at: cursor.phase === "done" ? new Date().toISOString() : null,
+      })
+      .eq("id", import_log_id);
 
-  } catch (error) {
-    const errorMessage = error instanceof Error ? error.message : "Erro interno na migração";
-    console.error("Migration error:", error);
+    const shouldContinue = cursor.phase !== "done" && !shouldPause;
 
     return new Response(
-      JSON.stringify({ error: errorMessage }),
+      JSON.stringify({
+        success: true,
+        continue: shouldContinue,
+        phase: cursor.phase,
+        progress: progressPercent,
+        imported_contacts: importedContacts,
+        imported_opportunities: importedOpportunities,
+        status,
+      }),
+      { headers: { ...corsHeaders, "Content-Type": "application/json" } }
+    );
+  } catch (error: any) {
+    console.error("Kommo migration error:", error);
+    return new Response(
+      JSON.stringify({ error: error.message }),
       { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
     );
   }
