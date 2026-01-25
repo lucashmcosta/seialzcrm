@@ -1502,6 +1502,7 @@ export type Database = {
           created_at: string | null
           created_by_user_id: string | null
           current_batch: number | null
+          cursor_state: Json | null
           error_count: number | null
           errors: Json | null
           id: string
@@ -1530,6 +1531,7 @@ export type Database = {
           created_at?: string | null
           created_by_user_id?: string | null
           current_batch?: number | null
+          cursor_state?: Json | null
           error_count?: number | null
           errors?: Json | null
           id?: string
@@ -1558,6 +1560,7 @@ export type Database = {
           created_at?: string | null
           created_by_user_id?: string | null
           current_batch?: number | null
+          cursor_state?: Json | null
           error_count?: number | null
           errors?: Json | null
           id?: string

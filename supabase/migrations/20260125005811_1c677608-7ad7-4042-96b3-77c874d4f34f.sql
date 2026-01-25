@@ -1,0 +1,2 @@
+-- Add cursor_state column for chunked processing
+ALTER TABLE import_logs ADD COLUMN IF NOT EXISTS cursor_state JSONB DEFAULT '{"phase": "contacts", "contacts_page": 1, "leads_page": 1, "contacts_complete": false, "leads_complete": false}';
