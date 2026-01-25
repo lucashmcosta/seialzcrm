@@ -353,11 +353,3 @@ export function IntegrationsSettings() {
     </>
   );
 }
-        confirmText="Desconectar"
-        variant="destructive"
-        onConfirm={handleDisconnectConfirm}
-        loading={disconnectMutation.isPending}
-      />
-    </>
-  );
-}

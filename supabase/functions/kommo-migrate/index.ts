@@ -41,6 +41,37 @@ function splitName(fullName: string): { firstName: string; lastName: string | nu
 // Delay helper for rate limiting
 const delay = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
 
+// Fetch with exponential backoff retry for rate limiting
+async function fetchWithRetry(
+  url: string, 
+  options: RequestInit, 
+  maxRetries = 5
+): Promise<Response> {
+  let lastError: Error | null = null;
+  
+  for (let attempt = 0; attempt < maxRetries; attempt++) {
+    const response = await fetch(url, options);
+    
+    if (response.ok) {
+      return response;
+    }
+    
+    if (response.status === 429) {
+      // Rate limited - exponential backoff: 1s, 2s, 4s, 8s, 16s
+      const backoffMs = Math.pow(2, attempt) * 1000;
+      console.log(`Rate limited (429). Retry ${attempt + 1}/${maxRetries} in ${backoffMs}ms`);
+      await delay(backoffMs);
+      continue;
+    }
+    
+    // Non-retryable error
+    lastError = new Error(`HTTP ${response.status}: ${response.statusText}`);
+    break;
+  }
+  
+  throw lastError || new Error('Max retries exceeded');
+}
+
 serve(async (req) => {
   if (req.method === "OPTIONS") {
     return new Response(null, { headers: corsHeaders });
@@ -120,19 +151,10 @@ serve(async (req) => {
     while (hasMoreContacts) {
       await delay(KOMMO_RATE_LIMIT_DELAY);
       
-      const contactsResponse = await fetch(
+      const contactsResponse = await fetchWithRetry(
         `${baseUrl}/contacts?limit=250&page=${contactPage}&with=leads`,
         { headers }
       );
-      
-      if (!contactsResponse.ok) {
-        if (contactsResponse.status === 429) {
-          // Rate limited - wait and retry
-          await delay(1000);
-          continue;
-        }
-        throw new Error(`Erro ao buscar contatos: ${contactsResponse.status}`);
-      }
       
       const contactsData = await contactsResponse.json();
       const contacts = contactsData._embedded?.contacts || [];
@@ -277,18 +299,10 @@ serve(async (req) => {
     while (hasMoreLeads) {
       await delay(KOMMO_RATE_LIMIT_DELAY);
       
-      const leadsResponse = await fetch(
+      const leadsResponse = await fetchWithRetry(
         `${baseUrl}/leads?limit=250&page=${leadPage}&with=contacts`,
         { headers }
       );
-      
-      if (!leadsResponse.ok) {
-        if (leadsResponse.status === 429) {
-          await delay(1000);
-          continue;
-        }
-        throw new Error(`Erro ao buscar leads: ${leadsResponse.status}`);
-      }
       
       const leadsData = await leadsResponse.json();
       const leads = leadsData._embedded?.leads || [];
