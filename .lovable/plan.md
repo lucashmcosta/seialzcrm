@@ -1,161 +1,115 @@
 
 
-# Plano: Remover Geração de Botões de Texto do Agente IA
+# Plano: Adicionar Coluna `metadata` na Tabela `messages`
 
-## Status Atual
+## Diagnóstico
 
-### ✅ Já Implementado (Railway)
-- Content Templates via Twilio (botões interativos nativos)
-- `interactive` e `buttons` usam templates
-- Se template falhar → lança erro (sem fallback texto)
+O log do Railway mostra claramente o erro:
 
-### ❌ Falta Fazer
-1. **Prompt do AI agent** - pode ainda gerar `[BUTTONS]`
-2. **Processamento de `[BUTTONS]`** no `ai-agent.ts` do Railway
-
----
-
-## Análise do Código Lovable
-
-Verifiquei os prompts dos agentes da Blueviza e a função `generatePromptFromWizard`:
-
-**Achados:**
-- O `generatePromptFromWizard` no Wizard (SDRAgentWizard.tsx) **não contém instruções sobre `[BUTTONS]`**
-- Os prompts armazenados dos agentes Blueviza também **não mencionam `[BUTTONS]`**
-- A edge function `ai-agent-respond` **não injeta instruções sobre botões**
-
-**Conclusão:** A tag `[BUTTONS]` provavelmente está sendo gerada:
-1. Por comportamento aprendido da IA (padrões de resposta)
-2. Ou por instruções antigas no prompt antes da migração comportamental
-3. Ou por lógica no backend Railway que instrui a IA a gerar opções
-
----
-
-## Solução Proposta
-
-### Parte 1: Adicionar Instrução Explícita para NÃO Gerar Botões
-
-Modificar o Wizard para adicionar regra explícita no prompt gerado:
-
-**Arquivo:** `src/components/settings/SDRAgentWizard.tsx`
-
-**Localização:** Função `generatePromptFromWizard`, seção "REGRAS FINAIS" (linha ~502)
-
-**Adicionar:**
-```typescript
-## REGRAS FINAIS
-✅ Responda SOMENTE em português brasileiro
-✅ Use informações da BASE DE CONHECIMENTO quando disponível
-✅ Personalize com o nome do cliente quando disponível
-❌ NUNCA invente informações
-❌ NUNCA use tags como [BUTTONS], [OPTIONS] ou formate opções numeradas (1. 2. 3.)
-❌ NUNCA ofereça "escolha uma opção" - responda naturalmente
+```text
+❌ Error saving outbound message: {
+  code: 'PGRST204',
+  message: "Could not find the 'metadata' column of 'messages' in the schema cache"
+}
 ```
 
-### Parte 2: Adicionar Regra na Edge Function Supabase
+**Fluxo atual:**
+1. Cliente envia mensagem "bora fechar esse visto?"
+2. Railway processa e gera resposta da IA
+3. Twilio envia com sucesso (SM247209c16822779c027d0248e2a18b8a)
+4. Railway tenta salvar no banco com coluna `metadata`
+5. Banco rejeita porque coluna não existe
+6. UI mostra "Unknown error"
 
-Mesmo que o Railway processe a maioria das mensagens, a edge function deve ter a mesma regra para consistência.
+**Nota importante:** A mensagem FOI enviada para o WhatsApp do cliente! O erro acontece apenas ao salvar no banco de dados local.
 
-**Arquivo:** `supabase/functions/ai-agent-respond/index.ts`
+---
 
-**Localização:** Função `buildSystemPrompt`, seção "REGRAS IMPORTANTES" (linha ~1190)
+## Solução
 
-**Adicionar nas regras:**
-```typescript
-9. NUNCA use tags [BUTTONS] ou formate opções como lista numerada (1. 2. 3.)
-10. NUNCA ofereça "escolha uma opção" - responda de forma natural e fluída
+Adicionar a coluna `metadata` (tipo JSONB) na tabela `messages` para compatibilidade com o Railway backend.
+
+---
+
+## Migration SQL
+
+```sql
+-- Adicionar coluna metadata para compatibilidade com Railway backend
+ALTER TABLE messages 
+ADD COLUMN IF NOT EXISTS metadata JSONB DEFAULT NULL;
+
+-- Índice GIN para busca eficiente dentro do JSON (opcional mas recomendado)
+CREATE INDEX IF NOT EXISTS idx_messages_metadata 
+ON messages USING GIN (metadata) 
+WHERE metadata IS NOT NULL;
+
+-- Comentário explicativo
+COMMENT ON COLUMN messages.metadata IS 'Metadados adicionais da mensagem (ex: tool_calls, tokens_used, model)';
 ```
 
-### Parte 3: Instruções para o Backend Railway
+---
 
-Você precisa fazer no código Railway:
+## O que a coluna `metadata` guarda
 
-1. **Remover processamento de `[BUTTONS]`** no `ai-agent.ts`:
-   - Desabilitar detecção de `[BUTTONS]` na resposta
-   - Remover conversão para texto numerado
-   - Remover atualização de `button_options` na thread
+Baseado no comportamento típico de integrações com IA:
 
-2. **Adicionar mesma instrução anti-botões** no prompt do agente:
-   ```javascript
-   prompt += `
-   ❌ NUNCA use tags [BUTTONS] ou formate opções como lista numerada (1. 2. 3.)
-   ❌ NUNCA ofereça "escolha uma opção" - responda naturalmente
-   `;
-   ```
+```json
+{
+  "model": "gpt-4o",
+  "tokens_used": 450,
+  "tool_calls": ["mark_name_asked"],
+  "processing_time_ms": 3500,
+  "twilio_sid": "SM247209c16822779c027d0248e2a18b8a"
+}
+```
 
 ---
 
-## Arquivos a Modificar no Lovable
-
-| Arquivo | Modificação |
-|---------|-------------|
-| `src/components/settings/SDRAgentWizard.tsx` | Adicionar regra anti-botões em `generatePromptFromWizard` |
-| `supabase/functions/ai-agent-respond/index.ts` | Adicionar regra anti-botões em `buildSystemPrompt` |
-
----
-
-## Arquivos a Modificar no Railway (Manual)
-
-| Arquivo | Modificação |
-|---------|-------------|
-| `src/services/ai-agent.ts` | Remover lógica de processamento `[BUTTONS]` |
-| `src/services/ai-agent.ts` | Adicionar regra anti-botões no prompt |
-
----
-
-## Resumo
+## Resumo Visual
 
 ```text
 ┌─────────────────────────────────────────────────────────────┐
-│                    FLUXO ATUAL (COM PROBLEMA)               │
+│                    PROBLEMA ATUAL                           │
 ├─────────────────────────────────────────────────────────────┤
-│ IA gera resposta → inclui [BUTTONS] → Railway converte      │
-│ para texto numerado → "1. Opção A  2. Opção B"              │
+│ Railway tenta: INSERT INTO messages (... metadata ...)      │
+│ Banco responde: "coluna 'metadata' não existe"              │
+│ Resultado: Erro + mensagem não salva no CRM                 │
 └─────────────────────────────────────────────────────────────┘
 
                               ↓
 
 ┌─────────────────────────────────────────────────────────────┐
-│                    FLUXO DESEJADO                           │
+│                    SOLUÇÃO                                  │
 ├─────────────────────────────────────────────────────────────┤
-│ IA gera resposta → SEM tags → texto natural enviado         │
-│ Se quiser botões → usa WhatsApp Template (aprovado)         │
+│ Criar coluna: ALTER TABLE messages ADD COLUMN metadata JSONB│
+│ Resultado: Railway salva normalmente + mensagem aparece     │
 └─────────────────────────────────────────────────────────────┘
 ```
 
 ---
 
-## Seção Técnica
+## Arquivos a Modificar
 
-### Mudança 1: SDRAgentWizard.tsx (linha ~506)
-
-```diff
-## REGRAS FINAIS
-✅ Responda SOMENTE em português brasileiro
-✅ Use informações da BASE DE CONHECIMENTO quando disponível
-✅ Personalize com o nome do cliente quando disponível
-❌ NUNCA invente informações
-+❌ NUNCA use tags [BUTTONS], [OPTIONS] ou formate opções numeradas (1. 2. 3.)
-+❌ NUNCA ofereça "escolha uma das opções abaixo" - responda naturalmente
-```
-
-### Mudança 2: ai-agent-respond/index.ts (linha ~1197)
-
-```diff
-## REGRAS IMPORTANTES
-1. Responda APENAS com a mensagem para o cliente...
-...
-8. Revise as ÚLTIMAS 3 mensagens do usuário...
-+9. NUNCA use tags [BUTTONS] ou formate opções como lista numerada (1. 2. 3.)
-+10. NUNCA ofereça "escolha uma opção" - responda de forma natural e fluída
-```
+| Arquivo | Modificação |
+|---------|-------------|
+| Nova migration SQL | Adiciona coluna `metadata` JSONB na tabela `messages` |
 
 ---
 
-## Próximos Passos Após Implementação
+## Impacto
 
-1. ✅ Lovable: Aprovar este plano para aplicar mudanças
-2. 📋 Railway: Aplicar as mudanças manuais descritas acima
-3. 🔄 Regenerar prompts: Editar e salvar os agentes Blueviza para aplicar novo prompt
-4. 🧪 Testar: Enviar mensagens e verificar que não há mais `[BUTTONS]` ou opções numeradas
+- Nenhuma alteração no código frontend necessária
+- Railway continuará funcionando normalmente
+- Mensagens passarão a ser salvas corretamente
+- UI mostrará as mensagens em vez de "Unknown error"
+
+---
+
+## Seção Técnica
+
+A migration adiciona:
+
+1. **Coluna `metadata`**: Tipo JSONB, nullable, default NULL
+2. **Índice GIN**: Para busca eficiente dentro do JSON (útil se precisar filtrar por tool_calls ou model no futuro)
+3. **Comentário**: Documenta o propósito da coluna
 
