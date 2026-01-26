@@ -281,12 +281,18 @@ export function UsersSettings() {
         }
       }
 
-      const { error } = await supabase
+      const { data, error } = await supabase
         .from('user_organizations')
         .update({ is_active: !currentStatus })
-        .eq('id', membershipId);
+        .eq('id', membershipId)
+        .select('id, is_active')
+        .single();
 
       if (error) throw error;
+
+      if (!data) {
+        throw new Error('Sem permissão para atualizar este usuário');
+      }
 
       // Update seat count
       const { data: subscription } = await supabase
