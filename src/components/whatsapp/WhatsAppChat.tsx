@@ -13,6 +13,7 @@ import { WhatsAppTemplateSelector } from './WhatsAppTemplateSelector';
 import { AudioRecorder } from './AudioRecorder';
 import { AudioMessagePlayer } from './AudioMessagePlayer';
 import { MediaUploadButton } from './MediaUploadButton';
+import { WhatsAppFormattedText } from './WhatsAppFormattedText';
 
 interface Message {
   id: string;
@@ -441,7 +442,7 @@ export function WhatsAppChat({ contactId, threadId: initialThreadId, onThreadCre
 
                     {/* Content */}
                     {message.content && (
-                      <p className="text-sm whitespace-pre-wrap break-words">{message.content}</p>
+                      <WhatsAppFormattedText content={message.content} />
                     )}
 
                     {/* Error */}
