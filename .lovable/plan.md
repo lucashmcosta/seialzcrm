@@ -1,23 +1,30 @@
 
-# Plano: Corrigir Atualização de Status de Usuário
+
+# Plano: Corrigir Política RLS para Atualização de Usuários
 
 ## Problema Identificado
 
-A tabela `user_organizations` só tem política RLS para `SELECT`. Não há políticas para `UPDATE`, `INSERT` ou `DELETE`, então:
-1. O admin tenta desativar um usuário
-2. Supabase recusa silenciosamente (0 rows affected, sem erro)
-3. O código exibe toast de sucesso mesmo sem mudança
-4. A UI recarrega os mesmos dados do banco
+A política RLS criada anteriormente está usando `auth.uid()` diretamente, mas na tabela `user_organizations` o campo `user_id` armazena o ID da tabela `users`, não o ID do auth.
+
+**Dados atuais:**
+- `auth.uid()` do Lucas: `d2dc1e4b-55e9-4c29-b110-cbf9ddf0d3e8`
+- `user_id` do Lucas na `user_organizations`: `58ce5ec9-2780-46db-bff3-a72d95024727`
+
+A política atual verifica:
+```sql
+WHERE uo.user_id = auth.uid()  -- Nunca vai dar match!
+```
+
+Precisa verificar:
+```sql
+WHERE uo.user_id = current_user_id()  -- Usa a função que faz a conversão
+```
 
 ## Solução
 
-### Parte 1: Criar Políticas RLS para UPDATE
+### Alterar a Política RLS Existente
 
-Precisamos de uma política que permita admins da organização atualizarem membros.
-
-### Parte 2: Verificar se o UPDATE realmente funcionou
-
-Modificar o código para verificar se alguma linha foi afetada.
+Precisamos recriar a política usando `current_user_id()` em vez de `auth.uid()`.
 
 ---
 
@@ -25,19 +32,19 @@ Modificar o código para verificar se alguma linha foi afetada.
 
 | Tipo | Local | Descrição |
 |------|-------|-----------|
-| SQL | Nova migration | Criar política RLS para UPDATE |
-| React | `UsersSettings.tsx` | Verificar resultado do update |
+| SQL | Nova migration | Recriar política RLS correta |
 
 ---
 
 ## Implementação
 
-### 1. Nova Migration SQL
-
-Criar arquivo: `supabase/migrations/XXXXXXX_add_user_orgs_update_policy.sql`
+### Nova Migration SQL
 
 ```sql
--- Permitir que admins da organização atualizem membros
+-- Remover política incorreta
+DROP POLICY IF EXISTS "Admins can update org memberships" ON user_organizations;
+
+-- Criar política corrigida usando current_user_id()
 CREATE POLICY "Admins can update org memberships"
 ON user_organizations
 FOR UPDATE
@@ -47,9 +54,9 @@ USING (
     SELECT uo.organization_id 
     FROM user_organizations uo
     JOIN permission_profiles pp ON pp.id = uo.permission_profile_id
-    WHERE uo.user_id = auth.uid() 
+    WHERE uo.user_id = current_user_id() 
     AND uo.is_active = true
-    AND pp.can_manage_users = true
+    AND (pp.permissions->>'can_manage_users')::boolean = true
   )
 )
 WITH CHECK (
@@ -57,124 +64,72 @@ WITH CHECK (
     SELECT uo.organization_id 
     FROM user_organizations uo
     JOIN permission_profiles pp ON pp.id = uo.permission_profile_id
-    WHERE uo.user_id = auth.uid() 
+    WHERE uo.user_id = current_user_id() 
     AND uo.is_active = true
-    AND pp.can_manage_users = true
+    AND (pp.permissions->>'can_manage_users')::boolean = true
   )
 );
 ```
 
-Esta política:
-- Verifica se o usuário logado pertence à mesma organização
-- Verifica se o perfil de permissão tem `can_manage_users = true`
-- Usa `USING` para filtrar linhas que podem ser atualizadas
-- Usa `WITH CHECK` para validar os novos valores
-
-### 2. Modificar UsersSettings.tsx
-
-Atualizar a função `toggleStatus` para verificar se o update funcionou:
-
-**Localização**: Linhas 284-289
-
-**Mudança**:
-```typescript
-// ANTES
-const { error } = await supabase
-  .from('user_organizations')
-  .update({ is_active: !currentStatus })
-  .eq('id', membershipId);
-
-if (error) throw error;
-
-// DEPOIS
-const { error, count } = await supabase
-  .from('user_organizations')
-  .update({ is_active: !currentStatus })
-  .eq('id', membershipId)
-  .select();  // Adiciona select() para retornar dados
-
-if (error) throw error;
-
-// Verificar se alguma linha foi atualizada
-if (!count && count !== undefined) {
-  throw new Error('Sem permissão para atualizar este usuário');
-}
-```
-
-**Alternativa mais robusta** (usando `.select()` para verificar):
-```typescript
-const { data, error } = await supabase
-  .from('user_organizations')
-  .update({ is_active: !currentStatus })
-  .eq('id', membershipId)
-  .select('id, is_active')
-  .single();
-
-if (error) throw error;
-
-if (!data) {
-  throw new Error('Sem permissão para atualizar este usuário');
-}
-
-// Verificar se realmente mudou
-if (data.is_active === currentStatus) {
-  throw new Error('Falha ao atualizar status do usuário');
-}
-```
-
 ---
 
-## Fluxo Corrigido
+## Por que isso vai funcionar agora?
 
 ```text
-Admin clica "Desativar"
-       ↓
-UPDATE com RLS (política verifica can_manage_users)
-       ↓
-┌─────────────────────────────────────┐
-│ Política permite?                   │
-├────────────┬────────────────────────┤
-│ SIM        │ NÃO                    │
-│ ↓          │ ↓                      │
-│ Atualiza   │ Retorna 0 rows         │
-│ is_active  │ ou null                │
-│ ↓          │ ↓                      │
-│ Toast ✅   │ Toast erro ❌          │
-│ Recarrega  │ UI não muda            │
-└────────────┴────────────────────────┘
+┌─────────────────────────────────────────────────────────┐
+│ ANTES (incorreto)                                       │
+├─────────────────────────────────────────────────────────┤
+│ uo.user_id = auth.uid()                                 │
+│                                                         │
+│ 58ce5ec9-... = d2dc1e4b-...  → FALSE (IDs diferentes)   │
+│ ↓                                                       │
+│ 0 rows afetadas                                         │
+└─────────────────────────────────────────────────────────┘
+
+┌─────────────────────────────────────────────────────────┐
+│ DEPOIS (correto)                                        │
+├─────────────────────────────────────────────────────────┤
+│ uo.user_id = current_user_id()                          │
+│                                                         │
+│ current_user_id() retorna 58ce5ec9-... (user.id)        │
+│ 58ce5ec9-... = 58ce5ec9-...  → TRUE                     │
+│ ↓                                                       │
+│ UPDATE permitido!                                       │
+└─────────────────────────────────────────────────────────┘
 ```
 
 ---
 
 ## Seção Técnica
 
-### Por que não havia erro?
+### Função current_user_id()
 
-O Supabase com RLS não retorna erro quando uma política bloqueia - simplesmente não afeta nenhuma linha. Isso é "segurança por design" para não vazar informações sobre existência de dados.
-
-### Estrutura atual de permissões
+Já existe uma função `SECURITY DEFINER` que faz a conversão:
 
 ```sql
--- permission_profiles tem a coluna can_manage_users
-SELECT column_name FROM information_schema.columns 
-WHERE table_name = 'permission_profiles' 
-AND column_name = 'can_manage_users';
+CREATE FUNCTION current_user_id() RETURNS uuid
+SELECT id FROM users WHERE auth_user_id = auth.uid() LIMIT 1;
 ```
 
-A política usa essa permissão para controlar quem pode ativar/desativar usuários.
+Esta função:
+1. Pega o `auth.uid()` (ID do auth)
+2. Busca na tabela `users` o registro que tem esse `auth_user_id`
+3. Retorna o `id` da tabela `users`
 
-### Checklist de Segurança
+### Por que isso é importante?
 
-1. **Não permitir auto-desativação**: Adicionar validação no frontend para impedir que o usuário desative a si mesmo
-2. **Validar organização**: A política garante que só admins da mesma org podem modificar
-3. **Auditar mudanças**: Considerar adicionar log de auditoria para mudanças de status
+O sistema usa dois IDs diferentes:
+- `auth.uid()`: ID gerado pelo Supabase Auth
+- `users.id`: ID interno do sistema
+
+A tabela `user_organizations` usa `users.id`, então precisamos da função de conversão.
 
 ---
 
 ## Ordem de Implementação
 
-1. **Criar a migration** com a política RLS
+1. **Criar nova migration** para recriar a política
 2. **Rodar a migration** no Supabase
-3. **Modificar** `UsersSettings.tsx` para verificar resultado
-4. **Testar** desativando um usuário
-5. **Verificar** que a UI atualiza corretamente
+3. **Testar** desativando um usuário
+4. **Verificar** que a UI atualiza corretamente
+
