@@ -1,32 +1,23 @@
 
-# Plano: Mostrar Usuários Desativados na Lista
+# Plano: Corrigir Recursão Infinita na Política RLS
 
 ## Problema Identificado
 
-A desativação funcionou corretamente! O banco de dados mostra:
-- **Vitor Carvalho** com `is_active: false`
+A política "Admins can view all org memberships" que criamos está causando recursão infinita:
 
-Porém, a **política RLS de SELECT** na tabela `user_organizations` não está permitindo que admins vejam usuários inativos.
-
-### Causa Raiz
-
-A função `current_user_org_ids()` usada na política de SELECT filtra apenas organizações onde o usuário está ativo:
-
-```sql
-WHERE uo.user_id = current_user_id()
-AND uo.is_active = true  -- Este filtro é o problema
+```
+Erro: infinite recursion detected in policy for relation "user_organizations"
 ```
 
-A política de SELECT atual:
-```sql
-USING (organization_id = ANY (current_user_org_ids()))
-```
-
-Isso impede que administradores vejam usuários desativados da mesma organização.
+Isso acontece porque:
+1. O PostgreSQL tenta verificar a política de SELECT na tabela `user_organizations`
+2. A política faz uma sub-query na mesma tabela `user_organizations`
+3. Essa sub-query também precisa passar pelas políticas de SELECT
+4. Loop infinito
 
 ## Solução
 
-Criar uma **nova política de SELECT** específica que permite admins verem todos os membros (ativos e inativos) da organização.
+Criar uma função `SECURITY DEFINER` com `SET row_security TO 'off'` que verifica se o usuário atual tem permissão `can_manage_users`. Esta abordagem é a mesma usada pela função `current_user_org_ids()` que já existe.
 
 ---
 
@@ -34,7 +25,7 @@ Criar uma **nova política de SELECT** específica que permite admins verem todo
 
 | Tipo | Local | Descrição |
 |------|-------|-----------|
-| SQL | Nova migration | Adicionar política SELECT para admins verem todos os membros |
+| SQL | Nova migration | Criar função helper e recriar política |
 
 ---
 
@@ -43,76 +34,96 @@ Criar uma **nova política de SELECT** específica que permite admins verem todo
 ### Nova Migration SQL
 
 ```sql
--- Política para admins verem todos os membros (ativos e inativos)
+-- 1. Criar função que verifica se usuário é admin (com RLS desabilitado)
+CREATE OR REPLACE FUNCTION current_user_managed_org_ids()
+RETURNS uuid[]
+LANGUAGE sql
+STABLE
+SECURITY DEFINER
+SET search_path = 'public'
+SET row_security = 'off'
+AS $$
+  SELECT COALESCE(
+    array_agg(uo.organization_id),
+    '{}'::uuid[]
+  )
+  FROM user_organizations uo
+  JOIN permission_profiles pp ON pp.id = uo.permission_profile_id
+  WHERE uo.user_id = current_user_id()
+  AND uo.is_active = true
+  AND (pp.permissions->>'can_manage_users')::boolean = true
+$$;
+
+-- 2. Remover política que causa recursão
+DROP POLICY IF EXISTS "Admins can view all org memberships" 
+ON user_organizations;
+
+-- 3. Recriar política usando a nova função
 CREATE POLICY "Admins can view all org memberships"
 ON user_organizations
 FOR SELECT
 TO authenticated
 USING (
-  organization_id IN (
-    SELECT uo.organization_id 
-    FROM user_organizations uo
-    JOIN permission_profiles pp ON pp.id = uo.permission_profile_id
-    WHERE uo.user_id = current_user_id() 
-    AND uo.is_active = true
-    AND (pp.permissions->>'can_manage_users')::boolean = true
-  )
+  organization_id = ANY (current_user_managed_org_ids())
 );
 ```
 
-Esta política:
-1. Verifica se o usuário logado tem `can_manage_users = true`
-2. Permite ver TODOS os membros daquela organização
-3. Funciona em conjunto com a política existente (OR entre políticas)
-
 ---
 
-## Como as Políticas Funcionam Juntas
+## Como Funciona
 
 ```text
 ┌─────────────────────────────────────────────────────────────┐
-│ POLÍTICA 1: "Users can view org memberships"                │
-│ → Usuário comum vê membros das suas organizações ativas     │
+│ ANTES (recursão infinita)                                   │
 ├─────────────────────────────────────────────────────────────┤
-│ POLÍTICA 2: "Admins can view all org memberships" (NOVA)    │
-│ → Admin vê TODOS os membros (ativos + inativos)             │
+│ Política SELECT → Sub-query em user_organizations           │
+│       ↓                                                     │
+│ Sub-query precisa verificar política SELECT                 │
+│       ↓                                                     │
+│ Política SELECT → Sub-query em user_organizations           │
+│       ↓                                                     │
+│ ∞ LOOP                                                      │
 └─────────────────────────────────────────────────────────────┘
 
-PostgreSQL faz OR entre políticas do mesmo tipo (SELECT)
-Se QUALQUER uma permitir, o acesso é concedido.
-```
-
----
-
-## Fluxo Esperado Após a Correção
-
-```text
-Admin clica "Desativar" no Vitor
-       ↓
-UPDATE is_active = false ✓ (já funciona)
-       ↓
-Recarrega lista de usuários
-       ↓
-Política nova permite ver Vitor (is_active = false)
-       ↓
-UI mostra Vitor com badge "Desativado"
-       ↓
-Botão muda para "Ativar"
+┌─────────────────────────────────────────────────────────────┐
+│ DEPOIS (correto)                                            │
+├─────────────────────────────────────────────────────────────┤
+│ Política SELECT chama current_user_managed_org_ids()        │
+│       ↓                                                     │
+│ Função tem SECURITY DEFINER + row_security = 'off'          │
+│       ↓                                                     │
+│ Função consulta user_organizations SEM passar por RLS       │
+│       ↓                                                     │
+│ Retorna array de org_ids onde usuário é admin               │
+│       ↓                                                     │
+│ Política aplica o filtro sem recursão                       │
+└─────────────────────────────────────────────────────────────┘
 ```
 
 ---
 
 ## Seção Técnica
 
-### Por que não modificar current_user_org_ids()?
+### Por que SECURITY DEFINER + row_security = 'off'?
 
-A função `current_user_org_ids()` é usada em várias partes do sistema para garantir que usuários desativados não tenham acesso. Modificá-la quebraria essa segurança.
+- **SECURITY DEFINER**: Executa com permissões do dono da função (superuser), não do usuário chamador
+- **row_security = 'off'**: Desabilita RLS dentro da função, evitando recursão
 
-A solução correta é criar uma política adicional específica para admins.
+Esta é exatamente a mesma abordagem usada em `current_user_org_ids()`.
 
-### Ordem de Execução
+### Resultado Esperado
 
-1. Criar migration com a nova política
-2. Aplicar migration no Supabase
-3. Testar visualização da lista de usuários
-4. Verificar que Vitor Carvalho aparece como "Desativado"
+Após a migração:
+1. Admins poderão ver **todos** os membros (ativos e inativos)
+2. Usuários normais verão apenas membros das organizações onde estão ativos
+3. Sem recursão infinita
+4. Lista de usuários desativados aparecerá com badge "Desativado"
+
+---
+
+## Ordem de Implementação
+
+1. Criar migration com função e política corrigida
+2. Executar migration no Supabase
+3. Recarregar página de Usuários
+4. Verificar que lista mostra todos os usuários (incluindo inativos)
