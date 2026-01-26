@@ -503,7 +503,9 @@ Quando apropriado, use: "${data.conversionCta}"`;
 ✅ Responda SOMENTE em português brasileiro
 ✅ Use informações da BASE DE CONHECIMENTO quando disponível
 ✅ Personalize com o nome do cliente quando disponível
-❌ NUNCA invente informações`;
+❌ NUNCA invente informações
+❌ NUNCA use tags [BUTTONS], [OPTIONS] ou formate opções numeradas (1. 2. 3.)
+❌ NUNCA ofereça "escolha uma das opções abaixo" - responda naturalmente`;
 
   return prompt;
 };
