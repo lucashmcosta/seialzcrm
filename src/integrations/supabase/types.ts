@@ -2137,6 +2137,7 @@ export type Database = {
           is_sample: boolean | null
           media_type: string | null
           media_urls: Json | null
+          metadata: Json | null
           organization_id: string
           reply_to_message_id: string | null
           sender_agent_id: string | null
@@ -2161,6 +2162,7 @@ export type Database = {
           is_sample?: boolean | null
           media_type?: string | null
           media_urls?: Json | null
+          metadata?: Json | null
           organization_id: string
           reply_to_message_id?: string | null
           sender_agent_id?: string | null
@@ -2185,6 +2187,7 @@ export type Database = {
           is_sample?: boolean | null
           media_type?: string | null
           media_urls?: Json | null
+          metadata?: Json | null
           organization_id?: string
           reply_to_message_id?: string | null
           sender_agent_id?: string | null
