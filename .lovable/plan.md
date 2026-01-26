@@ -1,133 +1,180 @@
 
-# Plano: Sincronizar Formatação CRM = WhatsApp
+# Plano: Corrigir Atualização de Status de Usuário
 
 ## Problema Identificado
 
-O Railway envia a mensagem para o WhatsApp **antes** de salvar no Supabase:
-1. Railway → envia com `\n\n` (parágrafos) → WhatsApp mostra bonito ✅
-2. Railway → salva no Supabase → trigger comprime para `\n` → CRM mostra feio ❌
+A tabela `user_organizations` só tem política RLS para `SELECT`. Não há políticas para `UPDATE`, `INSERT` ou `DELETE`, então:
+1. O admin tenta desativar um usuário
+2. Supabase recusa silenciosamente (0 rows affected, sem erro)
+3. O código exibe toast de sucesso mesmo sem mudança
+4. A UI recarrega os mesmos dados do banco
 
-## Solução em 2 Partes
+## Solução
 
-### Parte 1: Atualizar Configuração do Agente Lucas
+### Parte 1: Criar Políticas RLS para UPDATE
 
-| Campo | Valor Atual | Novo Valor |
-|-------|-------------|------------|
-| `max_consecutive_newlines` | 1 | 2 |
-| `strip_empty_lines` | true | false |
+Precisamos de uma política que permita admins da organização atualizarem membros.
 
-Isso permite parágrafos e evita que o trigger destrua a formatação.
+### Parte 2: Verificar se o UPDATE realmente funcionou
 
-### Parte 2: Alterar Fluxo no Railway
+Modificar o código para verificar se alguma linha foi afetada.
 
-O Railway precisa mudar de:
-```
-Gera resposta → Envia WhatsApp → Salva no Supabase
-```
+---
 
-Para:
-```
-Gera resposta → Salva no Supabase (trigger aplica formatting) → Envia WhatsApp
-```
+## Arquivos a Modificar
 
-Assim o trigger do banco normaliza ANTES do envio, garantindo que:
-- O texto salvo = texto enviado = texto exibido no CRM
+| Tipo | Local | Descrição |
+|------|-------|-----------|
+| SQL | Nova migration | Criar política RLS para UPDATE |
+| React | `UsersSettings.tsx` | Verificar resultado do update |
 
-## Arquivos/Mudanças Necessárias
+---
 
-| Local | Ação | Descrição |
-|-------|------|-----------|
-| Supabase (ai_agents) | UPDATE | Mudar formatting_rules do Lucas |
-| Railway Backend | Modificar | Inverter ordem: salvar → buscar → enviar |
+## Implementação
 
-## Implementação Detalhada
+### 1. Nova Migration SQL
 
-### 1. UPDATE no Supabase
+Criar arquivo: `supabase/migrations/XXXXXXX_add_user_orgs_update_policy.sql`
 
 ```sql
-UPDATE ai_agents
-SET formatting_rules = jsonb_build_object(
-  'max_consecutive_newlines', 2,
-  'strip_empty_lines', false
+-- Permitir que admins da organização atualizem membros
+CREATE POLICY "Admins can update org memberships"
+ON user_organizations
+FOR UPDATE
+TO authenticated
+USING (
+  organization_id IN (
+    SELECT uo.organization_id 
+    FROM user_organizations uo
+    JOIN permission_profiles pp ON pp.id = uo.permission_profile_id
+    WHERE uo.user_id = auth.uid() 
+    AND uo.is_active = true
+    AND pp.can_manage_users = true
+  )
 )
-WHERE id = 'ea45e397-d87b-4e4d-ba14-95b5baf7cb2c';
+WITH CHECK (
+  organization_id IN (
+    SELECT uo.organization_id 
+    FROM user_organizations uo
+    JOIN permission_profiles pp ON pp.id = uo.permission_profile_id
+    WHERE uo.user_id = auth.uid() 
+    AND uo.is_active = true
+    AND pp.can_manage_users = true
+  )
+);
 ```
 
-### 2. Modificação no Railway (guia para você)
+Esta política:
+- Verifica se o usuário logado pertence à mesma organização
+- Verifica se o perfil de permissão tem `can_manage_users = true`
+- Usa `USING` para filtrar linhas que podem ser atualizadas
+- Usa `WITH CHECK` para validar os novos valores
 
-O código do Railway precisa seguir este padrão:
+### 2. Modificar UsersSettings.tsx
 
+Atualizar a função `toggleStatus` para verificar se o update funcionou:
+
+**Localização**: Linhas 284-289
+
+**Mudança**:
 ```typescript
-// ANTES (problemático)
-const response = await generateAIResponse(...);
-await sendToWhatsApp(response);  // Cliente recebe com \n\n
-await saveToSupabase(response);  // Trigger comprime para \n
+// ANTES
+const { error } = await supabase
+  .from('user_organizations')
+  .update({ is_active: !currentStatus })
+  .eq('id', membershipId);
 
-// DEPOIS (correto)
-const response = await generateAIResponse(...);
+if (error) throw error;
 
-// 1. Salva primeiro (trigger aplica formatting_rules)
-const { data: savedMessage } = await supabase
-  .from('messages')
-  .insert({
-    content: response,
-    direction: 'outbound',
-    sender_type: 'agent',
-    thread_id: threadId,
-    whatsapp_status: 'pending',
-    // ... outros campos
-  })
-  .select('content')  // Busca o content já normalizado
+// DEPOIS
+const { error, count } = await supabase
+  .from('user_organizations')
+  .update({ is_active: !currentStatus })
+  .eq('id', membershipId)
+  .select();  // Adiciona select() para retornar dados
+
+if (error) throw error;
+
+// Verificar se alguma linha foi atualizada
+if (!count && count !== undefined) {
+  throw new Error('Sem permissão para atualizar este usuário');
+}
+```
+
+**Alternativa mais robusta** (usando `.select()` para verificar):
+```typescript
+const { data, error } = await supabase
+  .from('user_organizations')
+  .update({ is_active: !currentStatus })
+  .eq('id', membershipId)
+  .select('id, is_active')
   .single();
 
-// 2. Envia o texto normalizado pelo trigger
-await sendToWhatsApp(savedMessage.content);
+if (error) throw error;
 
-// 3. Atualiza status
-await supabase
-  .from('messages')
-  .update({ whatsapp_status: 'sent' })
-  .eq('id', savedMessage.id);
+if (!data) {
+  throw new Error('Sem permissão para atualizar este usuário');
+}
+
+// Verificar se realmente mudou
+if (data.is_active === currentStatus) {
+  throw new Error('Falha ao atualizar status do usuário');
+}
 ```
 
-## Resultado Esperado
+---
 
-| Antes | Depois |
-|-------|--------|
-| WhatsApp: 4 parágrafos | WhatsApp: 4 parágrafos ✅ |
-| CRM: texto corrido | CRM: 4 parágrafos ✅ |
+## Fluxo Corrigido
+
+```text
+Admin clica "Desativar"
+       ↓
+UPDATE com RLS (política verifica can_manage_users)
+       ↓
+┌─────────────────────────────────────┐
+│ Política permite?                   │
+├────────────┬────────────────────────┤
+│ SIM        │ NÃO                    │
+│ ↓          │ ↓                      │
+│ Atualiza   │ Retorna 0 rows         │
+│ is_active  │ ou null                │
+│ ↓          │ ↓                      │
+│ Toast ✅   │ Toast erro ❌          │
+│ Recarrega  │ UI não muda            │
+└────────────┴────────────────────────┘
+```
+
+---
 
 ## Seção Técnica
 
-### Por que o trigger é importante?
+### Por que não havia erro?
 
-O trigger `sanitize_agent_message` aplica:
-1. `sender_name` automático (busca do agente ativo)
-2. `sender_agent_id` automático
-3. `formatting_rules` (max_consecutive_newlines, trim)
+O Supabase com RLS não retorna erro quando uma política bloqueia - simplesmente não afeta nenhuma linha. Isso é "segurança por design" para não vazar informações sobre existência de dados.
 
-Se você salvar ANTES de enviar, o trigger garante consistência entre banco e WhatsApp.
+### Estrutura atual de permissões
 
-### Fluxo Ideal
-
-```text
-Railway gera resposta
-       ↓
-INSERT no Supabase (trigger sanitiza)
-       ↓
-SELECT content (já normalizado)
-       ↓
-Envia para Twilio/WhatsApp
-       ↓
-UPDATE whatsapp_status = 'sent'
+```sql
+-- permission_profiles tem a coluna can_manage_users
+SELECT column_name FROM information_schema.columns 
+WHERE table_name = 'permission_profiles' 
+AND column_name = 'can_manage_users';
 ```
 
-### Checklist para Railway
+A política usa essa permissão para controlar quem pode ativar/desativar usuários.
 
-1. Gerar resposta AI normalmente
-2. **INSERT** na tabela `messages` com `whatsapp_status: 'pending'`
-3. **SELECT** o campo `content` do registro inserido (já passou pelo trigger)
-4. Enviar esse `content` para Twilio
-5. **UPDATE** o registro com `whatsapp_status: 'sent'` e `whatsapp_message_sid`
+### Checklist de Segurança
 
-Isso garante que o texto exibido no CRM é IDÊNTICO ao enviado pro cliente.
+1. **Não permitir auto-desativação**: Adicionar validação no frontend para impedir que o usuário desative a si mesmo
+2. **Validar organização**: A política garante que só admins da mesma org podem modificar
+3. **Auditar mudanças**: Considerar adicionar log de auditoria para mudanças de status
+
+---
+
+## Ordem de Implementação
+
+1. **Criar a migration** com a política RLS
+2. **Rodar a migration** no Supabase
+3. **Modificar** `UsersSettings.tsx` para verificar resultado
+4. **Testar** desativando um usuário
+5. **Verificar** que a UI atualiza corretamente
