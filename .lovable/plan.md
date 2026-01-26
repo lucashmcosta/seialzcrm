@@ -1,159 +1,133 @@
 
-# Plano: Formatação WhatsApp 100% Idêntica (com Links Clicáveis)
+# Plano: Sincronizar Formatação CRM = WhatsApp
 
-## Problema
+## Problema Identificado
 
-O chat no CRM mostra texto diferente do que o cliente vê no WhatsApp:
-- Listas com `-` em vez de `•`
-- Sem espaçamento entre parágrafos
-- Links não são clicáveis
-- Formatação (*negrito*, _itálico_) não renderizada
+O Railway envia a mensagem para o WhatsApp **antes** de salvar no Supabase:
+1. Railway → envia com `\n\n` (parágrafos) → WhatsApp mostra bonito ✅
+2. Railway → salva no Supabase → trigger comprime para `\n` → CRM mostra feio ❌
 
----
+## Solução em 2 Partes
 
-## Solução
+### Parte 1: Atualizar Configuração do Agente Lucas
 
-Criar componente `WhatsAppFormattedText` que replica exatamente a renderização do WhatsApp, incluindo links clicáveis.
+| Campo | Valor Atual | Novo Valor |
+|-------|-------------|------------|
+| `max_consecutive_newlines` | 1 | 2 |
+| `strip_empty_lines` | true | false |
 
----
+Isso permite parágrafos e evita que o trigger destrua a formatação.
 
-## Arquivos a Modificar
+### Parte 2: Alterar Fluxo no Railway
 
-| Arquivo | Ação | Descrição |
-|---------|------|-----------|
-| `src/components/whatsapp/WhatsAppFormattedText.tsx` | CRIAR | Componente de formatação |
-| `src/components/whatsapp/WhatsAppChat.tsx` | EDITAR | Importar e usar o novo componente |
-
----
-
-## Implementação
-
-### 1. CRIAR: WhatsAppFormattedText.tsx
-
-```tsx
-import React from 'react';
-
-interface WhatsAppFormattedTextProps {
-  content: string;
-  className?: string;
-}
-
-export function WhatsAppFormattedText({ content, className = '' }: WhatsAppFormattedTextProps) {
-  const formatWhatsAppText = (text: string): string => {
-    // 1. Escapar HTML para prevenir XSS
-    let formatted = text
-      .replace(/&/g, '&amp;')
-      .replace(/</g, '&lt;')
-      .replace(/>/g, '&gt;');
-    
-    // 2. Converter listas: "- texto" no início de linha → "• texto"
-    formatted = formatted.replace(/^- /gm, '• ');
-    
-    // 3. Links: https://... → <a href="...">...</a>
-    formatted = formatted.replace(
-      /(https?:\/\/[^\s<]+)/g, 
-      '<a href="$1" target="_blank" rel="noopener noreferrer" class="text-blue-500 underline hover:text-blue-600">$1</a>'
-    );
-    
-    // 4. Negrito: *texto* → <strong>texto</strong>
-    formatted = formatted.replace(/\*([^*]+)\*/g, '<strong>$1</strong>');
-    
-    // 5. Itálico: _texto_ → <em>texto</em>
-    formatted = formatted.replace(/_([^_]+)_/g, '<em>$1</em>');
-    
-    // 6. Riscado: ~texto~ → <del>texto</del>
-    formatted = formatted.replace(/~([^~]+)~/g, '<del>$1</del>');
-    
-    // 7. Monospace: ```texto``` → <code>texto</code>
-    formatted = formatted.replace(/```([^`]+)```/g, '<code class="bg-black/10 dark:bg-white/10 px-1 rounded font-mono text-xs">$1</code>');
-    
-    // 8. Quebras de linha duplas (parágrafos) → espaço visual
-    formatted = formatted.replace(/\n\n/g, '</p><p class="mt-3">');
-    
-    // 9. Quebras de linha simples → <br>
-    formatted = formatted.replace(/\n/g, '<br />');
-    
-    // Wrap em parágrafo
-    formatted = `<p>${formatted}</p>`;
-    
-    return formatted;
-  };
-
-  return (
-    <div 
-      className={`text-sm break-words [&_p]:leading-relaxed ${className}`}
-      dangerouslySetInnerHTML={{ __html: formatWhatsAppText(content) }}
-    />
-  );
-}
+O Railway precisa mudar de:
 ```
-
-### 2. EDITAR: WhatsAppChat.tsx
-
-**Adicionar import (linha 16):**
-```tsx
-import { WhatsAppFormattedText } from './WhatsAppFormattedText';
-```
-
-**Substituir linha 443-445:**
-
-De:
-```tsx
-{message.content && (
-  <p className="text-sm whitespace-pre-wrap break-words">{message.content}</p>
-)}
+Gera resposta → Envia WhatsApp → Salva no Supabase
 ```
 
 Para:
-```tsx
-{message.content && (
-  <WhatsAppFormattedText content={message.content} />
-)}
+```
+Gera resposta → Salva no Supabase (trigger aplica formatting) → Envia WhatsApp
 ```
 
----
+Assim o trigger do banco normaliza ANTES do envio, garantindo que:
+- O texto salvo = texto enviado = texto exibido no CRM
 
-## Formatações Suportadas
+## Arquivos/Mudanças Necessárias
 
-| Sintaxe | Resultado | Exemplo |
-|---------|-----------|---------|
-| `- texto` | • texto | Bullet point |
-| `https://...` | Link clicável azul | Links |
-| `*texto*` | **texto** | Negrito |
-| `_texto_` | *texto* | Itálico |
-| `~texto~` | ~~texto~~ | Riscado |
-| ``` `texto` ``` | `texto` | Código/mono |
-| `\n` | Quebra de linha | |
-| `\n\n` | Novo parágrafo com espaço | |
+| Local | Ação | Descrição |
+|-------|------|-----------|
+| Supabase (ai_agents) | UPDATE | Mudar formatting_rules do Lucas |
+| Railway Backend | Modificar | Inverter ordem: salvar → buscar → enviar |
 
----
+## Implementação Detalhada
 
-## Resultado Visual
+### 1. UPDATE no Supabase
 
-```text
-ANTES (CRM):
-- 6 dias úteis (se for urgente)
-- 10 a 15 dias úteis
-https://example.com
-
-DEPOIS (CRM = WhatsApp):
-• 6 dias úteis (se for urgente)
-• 10 a 15 dias úteis
-https://example.com  ← clicável em azul
+```sql
+UPDATE ai_agents
+SET formatting_rules = jsonb_build_object(
+  'max_consecutive_newlines', 2,
+  'strip_empty_lines', false
+)
+WHERE id = 'ea45e397-d87b-4e4d-ba14-95b5baf7cb2c';
 ```
 
----
+### 2. Modificação no Railway (guia para você)
+
+O código do Railway precisa seguir este padrão:
+
+```typescript
+// ANTES (problemático)
+const response = await generateAIResponse(...);
+await sendToWhatsApp(response);  // Cliente recebe com \n\n
+await saveToSupabase(response);  // Trigger comprime para \n
+
+// DEPOIS (correto)
+const response = await generateAIResponse(...);
+
+// 1. Salva primeiro (trigger aplica formatting_rules)
+const { data: savedMessage } = await supabase
+  .from('messages')
+  .insert({
+    content: response,
+    direction: 'outbound',
+    sender_type: 'agent',
+    thread_id: threadId,
+    whatsapp_status: 'pending',
+    // ... outros campos
+  })
+  .select('content')  // Busca o content já normalizado
+  .single();
+
+// 2. Envia o texto normalizado pelo trigger
+await sendToWhatsApp(savedMessage.content);
+
+// 3. Atualiza status
+await supabase
+  .from('messages')
+  .update({ whatsapp_status: 'sent' })
+  .eq('id', savedMessage.id);
+```
+
+## Resultado Esperado
+
+| Antes | Depois |
+|-------|--------|
+| WhatsApp: 4 parágrafos | WhatsApp: 4 parágrafos ✅ |
+| CRM: texto corrido | CRM: 4 parágrafos ✅ |
 
 ## Seção Técnica
 
-### Segurança
-- HTML escapado antes do processamento (previne XSS)
-- Links com `rel="noopener noreferrer"` para segurança
-- `target="_blank"` para abrir em nova aba
+### Por que o trigger é importante?
 
-### Ordem das Regex (importante)
-1. Escape HTML primeiro
-2. Bullets (não interfere com outras)
-3. Links (antes de outras formatações para não quebrar URLs)
-4. Negrito/Itálico/Riscado
-5. Quebras de linha por último
+O trigger `sanitize_agent_message` aplica:
+1. `sender_name` automático (busca do agente ativo)
+2. `sender_agent_id` automático
+3. `formatting_rules` (max_consecutive_newlines, trim)
+
+Se você salvar ANTES de enviar, o trigger garante consistência entre banco e WhatsApp.
+
+### Fluxo Ideal
+
+```text
+Railway gera resposta
+       ↓
+INSERT no Supabase (trigger sanitiza)
+       ↓
+SELECT content (já normalizado)
+       ↓
+Envia para Twilio/WhatsApp
+       ↓
+UPDATE whatsapp_status = 'sent'
+```
+
+### Checklist para Railway
+
+1. Gerar resposta AI normalmente
+2. **INSERT** na tabela `messages` com `whatsapp_status: 'pending'`
+3. **SELECT** o campo `content` do registro inserido (já passou pelo trigger)
+4. Enviar esse `content` para Twilio
+5. **UPDATE** o registro com `whatsapp_status: 'sent'` e `whatsapp_message_sid`
+
+Isso garante que o texto exibido no CRM é IDÊNTICO ao enviado pro cliente.
