@@ -993,10 +993,14 @@ export type Database = {
           created_at: string | null
           facts: Json | null
           id: string
+          name_asked: boolean | null
+          name_confirmed: boolean | null
+          name_confirmed_at: string | null
           next_action: string | null
           next_action_date: string | null
           objections: Json | null
           organization_id: string
+          original_whatsapp_name: string | null
           preferences: Json | null
           qualification: Json | null
           updated_at: string | null
@@ -1006,10 +1010,14 @@ export type Database = {
           created_at?: string | null
           facts?: Json | null
           id?: string
+          name_asked?: boolean | null
+          name_confirmed?: boolean | null
+          name_confirmed_at?: string | null
           next_action?: string | null
           next_action_date?: string | null
           objections?: Json | null
           organization_id: string
+          original_whatsapp_name?: string | null
           preferences?: Json | null
           qualification?: Json | null
           updated_at?: string | null
@@ -1019,10 +1027,14 @@ export type Database = {
           created_at?: string | null
           facts?: Json | null
           id?: string
+          name_asked?: boolean | null
+          name_confirmed?: boolean | null
+          name_confirmed_at?: string | null
           next_action?: string | null
           next_action_date?: string | null
           objections?: Json | null
           organization_id?: string
+          original_whatsapp_name?: string | null
           preferences?: Json | null
           qualification?: Json | null
           updated_at?: string | null
