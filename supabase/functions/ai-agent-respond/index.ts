@@ -34,16 +34,56 @@ const AVAILABLE_TOOLS = [
     type: "function",
     function: {
       name: "update_contact",
-      description: "Atualiza informações do contato no CRM. Use quando o cliente corrigir seu nome, informar email, telefone ou empresa.",
+      description: `Atualiza informações do contato no CRM.
+
+📌 CONTEXTO IMPORTANTE:
+O nome atual no sistema veio do perfil do WhatsApp e provavelmente NÃO é o nome real do cliente.
+Exemplos comuns: "g.s." (real: Gianluca Silveira), "Mãe do Pedro" (real: Maria Santos)
+
+⚠️ REGRAS PARA NOME:
+1. Use APENAS quando o cliente CONFIRMAR o nome real
+2. O fluxo correto é:
+   - Agente pergunta: "Posso confirmar seu nome completo para nosso cadastro?"
+   - Cliente responde: "Gianluca Silveira" ou "Meu nome é Maria"
+   - Agente confirma: "Perfeito, Gianluca!" e usa a tool
+3. Marque name_was_confirmed: true ao usar
+
+Para email, telefone e empresa: pode atualizar diretamente quando informado.`,
       parameters: {
         type: "object",
         properties: {
-          full_name: { type: "string", description: "Nome completo correto do contato" },
-          first_name: { type: "string", description: "Primeiro nome do contato" },
+          full_name: { 
+            type: "string", 
+            description: "Nome completo REAL do contato (não o nome do WhatsApp)" 
+          },
+          first_name: { type: "string", description: "Primeiro nome real do contato" },
           last_name: { type: "string", description: "Sobrenome do contato" },
           email: { type: "string", description: "Email do contato" },
           phone: { type: "string", description: "Telefone do contato" },
           company_name: { type: "string", description: "Nome da empresa do contato" },
+          name_was_confirmed: {
+            type: "boolean",
+            description: "OBRIGATÓRIO para nome. True = cliente informou/confirmou o nome real."
+          }
+        },
+      },
+    },
+  },
+  {
+    type: "function", 
+    function: {
+      name: "mark_name_asked",
+      description: `Marca que você já perguntou o nome do cliente nesta conversa.
+    
+USE ESTA TOOL IMEDIATAMENTE após perguntar o nome para evitar perguntar novamente.
+Exemplo de uso: Após enviar "Posso confirmar seu nome completo?", chame esta tool.`,
+      parameters: {
+        type: "object",
+        properties: {
+          question_asked: { 
+            type: "string", 
+            description: "A pergunta que você fez (ex: 'Perguntei nome completo para cadastro')" 
+          }
         },
       },
     },
@@ -265,11 +305,63 @@ async function executeTool(
   try {
     switch (toolName) {
       case 'update_contact': {
-        // Only update non-empty fields
         const updateData: Record<string, any> = {};
-        if (args.full_name) updateData.full_name = args.full_name;
-        if (args.first_name) updateData.first_name = args.first_name;
-        if (args.last_name) updateData.last_name = args.last_name;
+        
+        // VALIDAÇÃO: Nome só pode ser alterado com confirmação
+        if (args.full_name || args.first_name || args.last_name) {
+          if (!args.name_was_confirmed) {
+            return { 
+              success: false, 
+              message: 'ERRO: Para atualizar o nome, o cliente precisa ter confirmado. Use name_was_confirmed: true apenas quando o cliente informou o nome real.',
+              data: { requires_confirmation: true }
+            };
+          }
+          
+          // Buscar dados atuais para salvar o nome original do WhatsApp
+          const { data: currentContact } = await supabase
+            .from('contacts')
+            .select('full_name')
+            .eq('id', context.contactId)
+            .single();
+          
+          // Preparar dados do nome
+          if (args.full_name) updateData.full_name = args.full_name;
+          if (args.first_name) updateData.first_name = args.first_name;
+          if (args.last_name) updateData.last_name = args.last_name;
+          
+          // Atualizar memórias: marcar como confirmado e salvar nome original do WhatsApp
+          const memoryUpdate: Record<string, any> = {
+            name_confirmed: true,
+            name_confirmed_at: new Date().toISOString(),
+            name_asked: true,
+            updated_at: new Date().toISOString(),
+          };
+          
+          // Salvar nome original do WhatsApp se ainda não tiver
+          if (currentContact?.full_name) {
+            const { data: existingMemory } = await supabase
+              .from('contact_memories')
+              .select('original_whatsapp_name')
+              .eq('contact_id', context.contactId)
+              .single();
+            
+            if (!existingMemory?.original_whatsapp_name) {
+              memoryUpdate.original_whatsapp_name = currentContact.full_name;
+            }
+          }
+          
+          await supabase
+            .from('contact_memories')
+            .upsert({
+              organization_id: context.organizationId,
+              contact_id: context.contactId,
+              ...memoryUpdate,
+            }, {
+              onConflict: 'contact_id',
+            });
+        }
+        
+        // Outros campos não precisam de confirmação
         if (args.email) updateData.email = args.email;
         if (args.phone) updateData.phone = args.phone;
         if (args.company_name) updateData.company_name = args.company_name;
@@ -287,7 +379,34 @@ async function executeTool(
           console.error('Error updating contact:', error);
           return { success: false, message: error.message };
         }
-        return { success: true, message: 'Contato atualizado com sucesso', data: updateData };
+        
+        return { 
+          success: true, 
+          message: 'Contato atualizado com sucesso', 
+          data: updateData 
+        };
+      }
+
+      case 'mark_name_asked': {
+        // Marcar que já perguntou o nome
+        const { error } = await supabase
+          .from('contact_memories')
+          .upsert({
+            organization_id: context.organizationId,
+            contact_id: context.contactId,
+            name_asked: true,
+            updated_at: new Date().toISOString(),
+          }, {
+            onConflict: 'contact_id',
+          });
+
+        if (error) {
+          console.error('Error marking name asked:', error);
+          return { success: false, message: error.message };
+        }
+        
+        console.log('✅ Marked name as asked for contact:', context.contactId);
+        return { success: true, message: 'Marcado que perguntou o nome' };
       }
 
       case 'create_opportunity': {
@@ -953,6 +1072,54 @@ async function searchRelevantKnowledge(
 }
 
 /**
+ * Detecta se o nome parece ser um nome real ou um nome de perfil do WhatsApp
+ * Retorna: 'real' | 'suspicious' | 'unknown'
+ */
+function analyzeNameQuality(name: string | null): 'real' | 'suspicious' | 'unknown' {
+  if (!name || name.trim() === '') return 'unknown';
+  
+  const trimmed = name.trim();
+  
+  // Padrões suspeitos (provavelmente não é nome real)
+  const suspiciousPatterns = [
+    /^[a-z]\.[a-z]\.?$/i,           // "g.s.", "m.s."
+    /^[a-z]{1,2}$/i,                // "gs", "ms" 
+    /^.{1,3}$/,                      // Muito curto (1-3 chars)
+    /[✨🌟💫⭐️🔥💖💕🦋🌸🌺🌷]/,    // Emojis decorativos
+    /^(mãe|pai|tia|tio|vó|vô)\s/i, // "Mãe do Pedro"
+    /^\+?\d{10,}/,                   // Número de telefone
+    /^[^a-záàâãéèêíìîóòôõúùûç\s]+$/i, // Sem letras
+    /^(admin|user|cliente|test)/i,   // Nomes genéricos
+    /^[A-Z]\s+[A-Z]$/,              // "G S" - iniciais
+    /\d{4,}/,                        // Contém números (ex: "Maria123")
+  ];
+  
+  for (const pattern of suspiciousPatterns) {
+    if (pattern.test(trimmed)) {
+      return 'suspicious';
+    }
+  }
+  
+  // Parece um nome real se:
+  // - Tem pelo menos 2 palavras
+  // - Primeira palavra tem 3+ letras
+  // - Total de 5+ caracteres
+  const words = trimmed.split(/\s+/).filter(w => w.length > 0);
+  const firstWord = words[0] || '';
+  
+  if (words.length >= 2 && firstWord.length >= 3 && trimmed.length >= 8) {
+    return 'real';
+  }
+  
+  // Pode ser nome real incompleto (só primeiro nome com 4+ letras)
+  if (words.length === 1 && firstWord.length >= 4 && /^[a-záàâãéèêíìîóòôõúùûç]+$/i.test(firstWord)) {
+    return 'suspicious'; // Suspeito porque está incompleto
+  }
+  
+  return 'unknown';
+}
+
+/**
  * Build system prompt based on agent configuration
  */
 function buildSystemPrompt(
@@ -1008,6 +1175,64 @@ ${agent.custom_instructions}
 - Origem: ${contact.source || 'WhatsApp'}
 `;
   }
+
+  // NAME CONFIRMATION LOGIC - Analisar qualidade do nome e gerar instruções dinâmicas
+  const nameQuality = analyzeNameQuality(contact?.full_name);
+  const nameConfirmed = memories?.name_confirmed === true;
+  const nameAsked = memories?.name_asked === true;
+
+  let nameInstruction = '';
+
+  if (nameConfirmed) {
+    // Nome já foi confirmado - não precisa perguntar
+    nameInstruction = `
+✅ NOME CONFIRMADO: "${contact?.full_name}"
+   O cliente já confirmou este nome. Não pergunte novamente.
+   Use o nome naturalmente na conversa.`;
+   
+  } else if (nameAsked) {
+    // Já perguntou mas cliente não respondeu ainda
+    nameInstruction = `
+⏳ AGUARDANDO CONFIRMAÇÃO DE NOME
+   Você já perguntou o nome do cliente nesta conversa.
+   ❌ NÃO pergunte novamente
+   ✅ Aguarde o cliente responder ou continue a conversa normalmente
+   ✅ Se o cliente informar o nome, use update_contact com name_was_confirmed: true`;
+   
+  } else if (nameQuality === 'suspicious' || nameQuality === 'unknown') {
+    // Nome parece ser do WhatsApp, precisa confirmar
+    nameInstruction = `
+⚠️ NOME PRECISA SER CONFIRMADO
+   Nome atual: "${contact?.full_name || 'Não informado'}"
+   Este nome veio do WhatsApp e provavelmente NÃO é o nome real.
+   
+   📋 O QUE FAZER:
+   1. Na sua PRIMEIRA resposta, inclua naturalmente uma pergunta sobre o nome
+      Exemplos:
+      - "Antes de continuar, posso confirmar seu nome completo para nosso cadastro?"
+      - "Para te atender melhor, qual seu nome completo?"
+      - "Com quem estou falando? Gostaria de saber seu nome completo."
+   
+   2. IMEDIATAMENTE após perguntar, use a tool mark_name_asked
+   
+   3. Quando o cliente responder o nome, use update_contact com name_was_confirmed: true
+   
+   ❌ NÃO use update_contact para nome sem o cliente ter informado
+   ❌ NÃO pergunte o nome mais de uma vez`;
+   
+  } else {
+    // Nome parece real, mas ainda não foi confirmado explicitamente
+    nameInstruction = `
+ℹ️ NOME PARECE CORRETO: "${contact?.full_name}"
+   O nome parece ser real, mas não foi confirmado pelo cliente.
+   Você pode usar o nome normalmente.
+   Se o cliente corrigir o nome, use update_contact com name_was_confirmed: true.`;
+  }
+
+  prompt += `
+## 📛 STATUS DO NOME DO CONTATO
+${nameInstruction}
+`;
 
   // Add company context
   if (company) {
@@ -1087,9 +1312,12 @@ Você tem acesso a ferramentas que DEVE usar quando apropriado:
 `;
     if (enabledTools.includes('update_contact')) {
       prompt += `
-- **update_contact**: Atualize o contato quando o cliente corrigir informações (nome, email, telefone, empresa).
-  IMPORTANTE: Na PRIMEIRA mensagem ou quando tiver dúvida, confirme o nome do contato naturalmente.
-  Se o nome registrado parecer incompleto ou incorreto, pergunte "Posso confirmar seu nome?"
+- **update_contact**: Atualize informações do contato (email, telefone, empresa).
+  Para NOME: use APENAS quando o cliente CONFIRMAR seu nome real.
+  Sempre passe name_was_confirmed: true quando atualizar o nome.
+  
+- **mark_name_asked**: Use IMEDIATAMENTE após perguntar o nome do cliente.
+  Isso evita que você pergunte o nome mais de uma vez na mesma conversa.
 `;
     }
     if (enabledTools.includes('create_opportunity')) {
@@ -1284,7 +1512,11 @@ serve(async (req) => {
     }
 
     const organizationId = agent.organization_id;
-    const enabledTools = (agent.enabled_tools as string[]) || ['update_contact', 'transfer_to_human'];
+    // Include mark_name_asked automatically when update_contact is enabled
+    const baseTools = (agent.enabled_tools as string[]) || ['update_contact', 'transfer_to_human'];
+    const enabledTools = baseTools.includes('update_contact') && !baseTools.includes('mark_name_asked')
+      ? [...baseTools, 'mark_name_asked']
+      : baseTools;
 
     // 2. Check working hours
     const workingHours = agent.working_hours as WorkingHours;
