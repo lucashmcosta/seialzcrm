@@ -1,30 +1,32 @@
 
-
-# Plano: Corrigir Política RLS para Atualização de Usuários
+# Plano: Mostrar Usuários Desativados na Lista
 
 ## Problema Identificado
 
-A política RLS criada anteriormente está usando `auth.uid()` diretamente, mas na tabela `user_organizations` o campo `user_id` armazena o ID da tabela `users`, não o ID do auth.
+A desativação funcionou corretamente! O banco de dados mostra:
+- **Vitor Carvalho** com `is_active: false`
 
-**Dados atuais:**
-- `auth.uid()` do Lucas: `d2dc1e4b-55e9-4c29-b110-cbf9ddf0d3e8`
-- `user_id` do Lucas na `user_organizations`: `58ce5ec9-2780-46db-bff3-a72d95024727`
+Porém, a **política RLS de SELECT** na tabela `user_organizations` não está permitindo que admins vejam usuários inativos.
 
-A política atual verifica:
+### Causa Raiz
+
+A função `current_user_org_ids()` usada na política de SELECT filtra apenas organizações onde o usuário está ativo:
+
 ```sql
-WHERE uo.user_id = auth.uid()  -- Nunca vai dar match!
+WHERE uo.user_id = current_user_id()
+AND uo.is_active = true  -- Este filtro é o problema
 ```
 
-Precisa verificar:
+A política de SELECT atual:
 ```sql
-WHERE uo.user_id = current_user_id()  -- Usa a função que faz a conversão
+USING (organization_id = ANY (current_user_org_ids()))
 ```
+
+Isso impede que administradores vejam usuários desativados da mesma organização.
 
 ## Solução
 
-### Alterar a Política RLS Existente
-
-Precisamos recriar a política usando `current_user_id()` em vez de `auth.uid()`.
+Criar uma **nova política de SELECT** específica que permite admins verem todos os membros (ativos e inativos) da organização.
 
 ---
 
@@ -32,7 +34,7 @@ Precisamos recriar a política usando `current_user_id()` em vez de `auth.uid()`
 
 | Tipo | Local | Descrição |
 |------|-------|-----------|
-| SQL | Nova migration | Recriar política RLS correta |
+| SQL | Nova migration | Adicionar política SELECT para admins verem todos os membros |
 
 ---
 
@@ -41,25 +43,12 @@ Precisamos recriar a política usando `current_user_id()` em vez de `auth.uid()`
 ### Nova Migration SQL
 
 ```sql
--- Remover política incorreta
-DROP POLICY IF EXISTS "Admins can update org memberships" ON user_organizations;
-
--- Criar política corrigida usando current_user_id()
-CREATE POLICY "Admins can update org memberships"
+-- Política para admins verem todos os membros (ativos e inativos)
+CREATE POLICY "Admins can view all org memberships"
 ON user_organizations
-FOR UPDATE
+FOR SELECT
 TO authenticated
 USING (
-  organization_id IN (
-    SELECT uo.organization_id 
-    FROM user_organizations uo
-    JOIN permission_profiles pp ON pp.id = uo.permission_profile_id
-    WHERE uo.user_id = current_user_id() 
-    AND uo.is_active = true
-    AND (pp.permissions->>'can_manage_users')::boolean = true
-  )
-)
-WITH CHECK (
   organization_id IN (
     SELECT uo.organization_id 
     FROM user_organizations uo
@@ -71,65 +60,59 @@ WITH CHECK (
 );
 ```
 
+Esta política:
+1. Verifica se o usuário logado tem `can_manage_users = true`
+2. Permite ver TODOS os membros daquela organização
+3. Funciona em conjunto com a política existente (OR entre políticas)
+
 ---
 
-## Por que isso vai funcionar agora?
+## Como as Políticas Funcionam Juntas
 
 ```text
-┌─────────────────────────────────────────────────────────┐
-│ ANTES (incorreto)                                       │
-├─────────────────────────────────────────────────────────┤
-│ uo.user_id = auth.uid()                                 │
-│                                                         │
-│ 58ce5ec9-... = d2dc1e4b-...  → FALSE (IDs diferentes)   │
-│ ↓                                                       │
-│ 0 rows afetadas                                         │
-└─────────────────────────────────────────────────────────┘
+┌─────────────────────────────────────────────────────────────┐
+│ POLÍTICA 1: "Users can view org memberships"                │
+│ → Usuário comum vê membros das suas organizações ativas     │
+├─────────────────────────────────────────────────────────────┤
+│ POLÍTICA 2: "Admins can view all org memberships" (NOVA)    │
+│ → Admin vê TODOS os membros (ativos + inativos)             │
+└─────────────────────────────────────────────────────────────┘
 
-┌─────────────────────────────────────────────────────────┐
-│ DEPOIS (correto)                                        │
-├─────────────────────────────────────────────────────────┤
-│ uo.user_id = current_user_id()                          │
-│                                                         │
-│ current_user_id() retorna 58ce5ec9-... (user.id)        │
-│ 58ce5ec9-... = 58ce5ec9-...  → TRUE                     │
-│ ↓                                                       │
-│ UPDATE permitido!                                       │
-└─────────────────────────────────────────────────────────┘
+PostgreSQL faz OR entre políticas do mesmo tipo (SELECT)
+Se QUALQUER uma permitir, o acesso é concedido.
+```
+
+---
+
+## Fluxo Esperado Após a Correção
+
+```text
+Admin clica "Desativar" no Vitor
+       ↓
+UPDATE is_active = false ✓ (já funciona)
+       ↓
+Recarrega lista de usuários
+       ↓
+Política nova permite ver Vitor (is_active = false)
+       ↓
+UI mostra Vitor com badge "Desativado"
+       ↓
+Botão muda para "Ativar"
 ```
 
 ---
 
 ## Seção Técnica
 
-### Função current_user_id()
+### Por que não modificar current_user_org_ids()?
 
-Já existe uma função `SECURITY DEFINER` que faz a conversão:
+A função `current_user_org_ids()` é usada em várias partes do sistema para garantir que usuários desativados não tenham acesso. Modificá-la quebraria essa segurança.
 
-```sql
-CREATE FUNCTION current_user_id() RETURNS uuid
-SELECT id FROM users WHERE auth_user_id = auth.uid() LIMIT 1;
-```
+A solução correta é criar uma política adicional específica para admins.
 
-Esta função:
-1. Pega o `auth.uid()` (ID do auth)
-2. Busca na tabela `users` o registro que tem esse `auth_user_id`
-3. Retorna o `id` da tabela `users`
+### Ordem de Execução
 
-### Por que isso é importante?
-
-O sistema usa dois IDs diferentes:
-- `auth.uid()`: ID gerado pelo Supabase Auth
-- `users.id`: ID interno do sistema
-
-A tabela `user_organizations` usa `users.id`, então precisamos da função de conversão.
-
----
-
-## Ordem de Implementação
-
-1. **Criar nova migration** para recriar a política
-2. **Rodar a migration** no Supabase
-3. **Testar** desativando um usuário
-4. **Verificar** que a UI atualiza corretamente
-
+1. Criar migration com a nova política
+2. Aplicar migration no Supabase
+3. Testar visualização da lista de usuários
+4. Verificar que Vitor Carvalho aparece como "Desativado"
