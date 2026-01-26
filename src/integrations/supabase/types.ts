@@ -3532,6 +3532,7 @@ export type Database = {
     }
     Functions: {
       current_user_id: { Args: never; Returns: string }
+      current_user_managed_org_ids: { Args: never; Returns: string[] }
       current_user_org_ids: { Args: never; Returns: string[] }
       get_opportunity_stage_counts: {
         Args: { org_id: string }
