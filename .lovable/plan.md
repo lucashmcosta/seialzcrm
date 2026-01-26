@@ -1,115 +1,159 @@
 
+# Plano: Formatação WhatsApp 100% Idêntica (com Links Clicáveis)
 
-# Plano: Adicionar Coluna `metadata` na Tabela `messages`
+## Problema
 
-## Diagnóstico
-
-O log do Railway mostra claramente o erro:
-
-```text
-❌ Error saving outbound message: {
-  code: 'PGRST204',
-  message: "Could not find the 'metadata' column of 'messages' in the schema cache"
-}
-```
-
-**Fluxo atual:**
-1. Cliente envia mensagem "bora fechar esse visto?"
-2. Railway processa e gera resposta da IA
-3. Twilio envia com sucesso (SM247209c16822779c027d0248e2a18b8a)
-4. Railway tenta salvar no banco com coluna `metadata`
-5. Banco rejeita porque coluna não existe
-6. UI mostra "Unknown error"
-
-**Nota importante:** A mensagem FOI enviada para o WhatsApp do cliente! O erro acontece apenas ao salvar no banco de dados local.
+O chat no CRM mostra texto diferente do que o cliente vê no WhatsApp:
+- Listas com `-` em vez de `•`
+- Sem espaçamento entre parágrafos
+- Links não são clicáveis
+- Formatação (*negrito*, _itálico_) não renderizada
 
 ---
 
 ## Solução
 
-Adicionar a coluna `metadata` (tipo JSONB) na tabela `messages` para compatibilidade com o Railway backend.
-
----
-
-## Migration SQL
-
-```sql
--- Adicionar coluna metadata para compatibilidade com Railway backend
-ALTER TABLE messages 
-ADD COLUMN IF NOT EXISTS metadata JSONB DEFAULT NULL;
-
--- Índice GIN para busca eficiente dentro do JSON (opcional mas recomendado)
-CREATE INDEX IF NOT EXISTS idx_messages_metadata 
-ON messages USING GIN (metadata) 
-WHERE metadata IS NOT NULL;
-
--- Comentário explicativo
-COMMENT ON COLUMN messages.metadata IS 'Metadados adicionais da mensagem (ex: tool_calls, tokens_used, model)';
-```
-
----
-
-## O que a coluna `metadata` guarda
-
-Baseado no comportamento típico de integrações com IA:
-
-```json
-{
-  "model": "gpt-4o",
-  "tokens_used": 450,
-  "tool_calls": ["mark_name_asked"],
-  "processing_time_ms": 3500,
-  "twilio_sid": "SM247209c16822779c027d0248e2a18b8a"
-}
-```
-
----
-
-## Resumo Visual
-
-```text
-┌─────────────────────────────────────────────────────────────┐
-│                    PROBLEMA ATUAL                           │
-├─────────────────────────────────────────────────────────────┤
-│ Railway tenta: INSERT INTO messages (... metadata ...)      │
-│ Banco responde: "coluna 'metadata' não existe"              │
-│ Resultado: Erro + mensagem não salva no CRM                 │
-└─────────────────────────────────────────────────────────────┘
-
-                              ↓
-
-┌─────────────────────────────────────────────────────────────┐
-│                    SOLUÇÃO                                  │
-├─────────────────────────────────────────────────────────────┤
-│ Criar coluna: ALTER TABLE messages ADD COLUMN metadata JSONB│
-│ Resultado: Railway salva normalmente + mensagem aparece     │
-└─────────────────────────────────────────────────────────────┘
-```
+Criar componente `WhatsAppFormattedText` que replica exatamente a renderização do WhatsApp, incluindo links clicáveis.
 
 ---
 
 ## Arquivos a Modificar
 
-| Arquivo | Modificação |
-|---------|-------------|
-| Nova migration SQL | Adiciona coluna `metadata` JSONB na tabela `messages` |
+| Arquivo | Ação | Descrição |
+|---------|------|-----------|
+| `src/components/whatsapp/WhatsAppFormattedText.tsx` | CRIAR | Componente de formatação |
+| `src/components/whatsapp/WhatsAppChat.tsx` | EDITAR | Importar e usar o novo componente |
 
 ---
 
-## Impacto
+## Implementação
 
-- Nenhuma alteração no código frontend necessária
-- Railway continuará funcionando normalmente
-- Mensagens passarão a ser salvas corretamente
-- UI mostrará as mensagens em vez de "Unknown error"
+### 1. CRIAR: WhatsAppFormattedText.tsx
+
+```tsx
+import React from 'react';
+
+interface WhatsAppFormattedTextProps {
+  content: string;
+  className?: string;
+}
+
+export function WhatsAppFormattedText({ content, className = '' }: WhatsAppFormattedTextProps) {
+  const formatWhatsAppText = (text: string): string => {
+    // 1. Escapar HTML para prevenir XSS
+    let formatted = text
+      .replace(/&/g, '&amp;')
+      .replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;');
+    
+    // 2. Converter listas: "- texto" no início de linha → "• texto"
+    formatted = formatted.replace(/^- /gm, '• ');
+    
+    // 3. Links: https://... → <a href="...">...</a>
+    formatted = formatted.replace(
+      /(https?:\/\/[^\s<]+)/g, 
+      '<a href="$1" target="_blank" rel="noopener noreferrer" class="text-blue-500 underline hover:text-blue-600">$1</a>'
+    );
+    
+    // 4. Negrito: *texto* → <strong>texto</strong>
+    formatted = formatted.replace(/\*([^*]+)\*/g, '<strong>$1</strong>');
+    
+    // 5. Itálico: _texto_ → <em>texto</em>
+    formatted = formatted.replace(/_([^_]+)_/g, '<em>$1</em>');
+    
+    // 6. Riscado: ~texto~ → <del>texto</del>
+    formatted = formatted.replace(/~([^~]+)~/g, '<del>$1</del>');
+    
+    // 7. Monospace: ```texto``` → <code>texto</code>
+    formatted = formatted.replace(/```([^`]+)```/g, '<code class="bg-black/10 dark:bg-white/10 px-1 rounded font-mono text-xs">$1</code>');
+    
+    // 8. Quebras de linha duplas (parágrafos) → espaço visual
+    formatted = formatted.replace(/\n\n/g, '</p><p class="mt-3">');
+    
+    // 9. Quebras de linha simples → <br>
+    formatted = formatted.replace(/\n/g, '<br />');
+    
+    // Wrap em parágrafo
+    formatted = `<p>${formatted}</p>`;
+    
+    return formatted;
+  };
+
+  return (
+    <div 
+      className={`text-sm break-words [&_p]:leading-relaxed ${className}`}
+      dangerouslySetInnerHTML={{ __html: formatWhatsAppText(content) }}
+    />
+  );
+}
+```
+
+### 2. EDITAR: WhatsAppChat.tsx
+
+**Adicionar import (linha 16):**
+```tsx
+import { WhatsAppFormattedText } from './WhatsAppFormattedText';
+```
+
+**Substituir linha 443-445:**
+
+De:
+```tsx
+{message.content && (
+  <p className="text-sm whitespace-pre-wrap break-words">{message.content}</p>
+)}
+```
+
+Para:
+```tsx
+{message.content && (
+  <WhatsAppFormattedText content={message.content} />
+)}
+```
+
+---
+
+## Formatações Suportadas
+
+| Sintaxe | Resultado | Exemplo |
+|---------|-----------|---------|
+| `- texto` | • texto | Bullet point |
+| `https://...` | Link clicável azul | Links |
+| `*texto*` | **texto** | Negrito |
+| `_texto_` | *texto* | Itálico |
+| `~texto~` | ~~texto~~ | Riscado |
+| ``` `texto` ``` | `texto` | Código/mono |
+| `\n` | Quebra de linha | |
+| `\n\n` | Novo parágrafo com espaço | |
+
+---
+
+## Resultado Visual
+
+```text
+ANTES (CRM):
+- 6 dias úteis (se for urgente)
+- 10 a 15 dias úteis
+https://example.com
+
+DEPOIS (CRM = WhatsApp):
+• 6 dias úteis (se for urgente)
+• 10 a 15 dias úteis
+https://example.com  ← clicável em azul
+```
 
 ---
 
 ## Seção Técnica
 
-A migration adiciona:
+### Segurança
+- HTML escapado antes do processamento (previne XSS)
+- Links com `rel="noopener noreferrer"` para segurança
+- `target="_blank"` para abrir em nova aba
 
-1. **Coluna `metadata`**: Tipo JSONB, nullable, default NULL
-2. **Índice GIN**: Para busca eficiente dentro do JSON (útil se precisar filtrar por tool_calls ou model no futuro)
-3. **Comentário**: Documenta o propósito da coluna
-
+### Ordem das Regex (importante)
+1. Escape HTML primeiro
+2. Bullets (não interfere com outras)
+3. Links (antes de outras formatações para não quebrar URLs)
+4. Negrito/Itálico/Riscado
+5. Quebras de linha por último
