@@ -40,6 +40,11 @@ const CompaniesList = lazy(() => import("./pages/companies/CompaniesList"));
 const CompanyDetail = lazy(() => import("./pages/companies/CompanyDetail"));
 const CompanyForm = lazy(() => import("./pages/companies/CompanyForm"));
 
+// Lazy load WhatsApp Template pages
+const TemplatesList = lazy(() => import("./pages/whatsapp/TemplatesList"));
+const TemplateForm = lazy(() => import("./pages/whatsapp/TemplateForm"));
+const TemplateDetail = lazy(() => import("./pages/whatsapp/TemplateDetail"));
+
 // Lazy load Admin pages
 const AdminLogin = lazy(() => import("./pages/admin/AdminLogin"));
 const AdminMFASetup = lazy(() => import("./pages/admin/AdminMFASetup"));
@@ -323,6 +328,41 @@ const App = () => (
               </ProtectedRoute>
             }
           />
+          
+          {/* WhatsApp Templates routes */}
+          <Route
+            path="/whatsapp/templates"
+            element={
+              <ProtectedRoute>
+                <TemplatesList />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/whatsapp/templates/new"
+            element={
+              <ProtectedRoute>
+                <TemplateForm />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/whatsapp/templates/:id"
+            element={
+              <ProtectedRoute>
+                <TemplateDetail />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/whatsapp/templates/:id/edit"
+            element={
+              <ProtectedRoute>
+                <TemplateForm />
+              </ProtectedRoute>
+            }
+          />
+          
           <Route path="*" element={<NotFound />} />
         </Routes>
         </Suspense>
