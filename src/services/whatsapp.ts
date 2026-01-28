@@ -1,4 +1,4 @@
-const API_BASE = `${import.meta.env.VITE_RAILWAY_WHATSAPP_URL}/api/whatsapp`;
+const API_BASE = 'https://seialz-backend-production.up.railway.app/api/whatsapp';
 
 export interface WhatsAppTemplate {
   id: string;
