@@ -3458,6 +3458,50 @@ export type Database = {
         }
         Relationships: []
       }
+      whatsapp_template_actions: {
+        Row: {
+          created_at: string | null
+          description: string | null
+          id: string
+          position: number
+          section: string | null
+          template_id: string
+          title: string
+          type: string
+          value: string | null
+        }
+        Insert: {
+          created_at?: string | null
+          description?: string | null
+          id?: string
+          position?: number
+          section?: string | null
+          template_id: string
+          title: string
+          type: string
+          value?: string | null
+        }
+        Update: {
+          created_at?: string | null
+          description?: string | null
+          id?: string
+          position?: number
+          section?: string | null
+          template_id?: string
+          title?: string
+          type?: string
+          value?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "whatsapp_template_actions_template_id_fkey"
+            columns: ["template_id"]
+            isOneToOne: false
+            referencedRelation: "whatsapp_templates"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       whatsapp_templates: {
         Row: {
           body: string
