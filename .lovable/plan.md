@@ -1,34 +1,70 @@
 
-# Plano: Atualizar URL do Backend Railway
 
-## Objetivo
+# Plano: Corrigir Formato das Variáveis no Template
 
-Alterar a URL do serviço WhatsApp para usar diretamente a URL do backend Railway, removendo a dependência de variável de ambiente.
+## Problema Identificado
+
+A função `extractVariables` está retornando as variáveis no formato incorreto:
+
+| Atual (errado) | Esperado (correto) |
+|----------------|-------------------|
+| `{ key: "{{1}}", name: "", example: "" }` | `{ key: "1", name: "", example: "" }` |
+
+Isso causa erro no backend que espera apenas o número da variável.
 
 ## Arquivo a Modificar
 
 | Arquivo | Modificação |
 |---------|-------------|
-| `src/services/whatsapp.ts` | Alterar linha 1 para usar URL hardcoded |
+| `src/lib/template-validation.ts` | Corrigir função `extractVariables` para retornar apenas o número |
 
-## Mudança
+## Mudança Específica
 
-**Antes (linha 1):**
+**Antes (linhas 67-75):**
 ```typescript
-const API_BASE = `${import.meta.env.VITE_RAILWAY_WHATSAPP_URL}/api/whatsapp`;
+export function extractVariables(body: string): string[] {
+  const matches = body.match(/\{\{(\d+)\}\}/g);
+  return matches ? [...new Set(matches)].sort((a, b) => {
+    const numA = parseInt(a.replace(/[{}]/g, ''));
+    const numB = parseInt(b.replace(/[{}]/g, ''));
+    return numA - numB;
+  }) : [];
+}
 ```
 
-**Depois (linha 1):**
+**Depois:**
 ```typescript
-const API_BASE = 'https://seialz-backend-production.up.railway.app/api/whatsapp';
+export function extractVariables(body: string): string[] {
+  const matches = body.match(/\{\{(\d+)\}\}/g);
+  if (!matches) return [];
+  
+  // Remove duplicatas e extrai apenas o número
+  const unique = [...new Set(matches)];
+  return unique
+    .map(match => match.replace(/[{}]/g, ''))  // "{{1}}" vira "1"
+    .sort((a, b) => parseInt(a) - parseInt(b));
+}
 ```
 
 ## Resultado Esperado
 
-As chamadas à API do WhatsApp irão apontar corretamente para:
-- `https://seialz-backend-production.up.railway.app/api/whatsapp/templates`
-- `https://seialz-backend-production.up.railway.app/api/whatsapp/templates/:id`
-- `https://seialz-backend-production.up.railway.app/api/whatsapp/send`
-- etc.
+Quando o usuário digitar `Olá {{1}}, sua compra {{2}} foi confirmada`:
+- **Antes:** `["{{1}}", "{{2}}"]`
+- **Depois:** `["1", "2"]`
 
-Isso resolve o problema da URL incorreta que estava sendo gerada (`undefined/api/whatsapp/templates`).
+O backend receberá:
+```json
+{
+  "variables": [
+    { "key": "1", "name": "nome_cliente", "example": "Lucas" },
+    { "key": "2", "name": "numero_pedido", "example": "12345" }
+  ]
+}
+```
+
+## Impacto na Interface
+
+O componente `VariablesTable.tsx` também será afetado positivamente:
+- A coluna "Variável" mostrará `1`, `2`, etc. ao invés de `{{1}}`, `{{2}}`
+- A exibição fica mais limpa e consistente com o esperado
+
