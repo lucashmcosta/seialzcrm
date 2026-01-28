@@ -67,11 +67,13 @@ export const templateSchema = z.object({
 // Extract variables from body
 export function extractVariables(body: string): string[] {
   const matches = body.match(/\{\{(\d+)\}\}/g);
-  return matches ? [...new Set(matches)].sort((a, b) => {
-    const numA = parseInt(a.replace(/[{}]/g, ''));
-    const numB = parseInt(b.replace(/[{}]/g, ''));
-    return numA - numB;
-  }) : [];
+  if (!matches) return [];
+  
+  // Remove duplicatas e extrai apenas o número
+  const unique = [...new Set(matches)];
+  return unique
+    .map(match => match.replace(/[{}]/g, ''))  // "{{1}}" vira "1"
+    .sort((a, b) => parseInt(a) - parseInt(b));
 }
 
 // Validate specific template type
