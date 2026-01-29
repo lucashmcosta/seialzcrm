@@ -9,7 +9,11 @@ export function useTemplates(orgId: string | undefined) {
 
   const query = useQuery({
     queryKey: ['whatsapp-templates', orgId],
-    queryFn: () => whatsappService.listTemplates(orgId!),
+    queryFn: async () => {
+      const templates = await whatsappService.listTemplates(orgId!);
+      // Filtrar apenas templates ativos (soft delete retorna is_active = false)
+      return templates.filter(t => t.is_active !== false);
+    },
     enabled: !!orgId,
   });
 
@@ -124,12 +128,39 @@ export function useDeleteTemplate() {
   return useMutation({
     mutationFn: ({ orgId, templateId }: { orgId: string; templateId: string }) =>
       whatsappService.deleteTemplate(orgId, templateId),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['whatsapp-templates'] });
-      toast({ description: 'Template removido!' });
+    
+    // Atualização otimista - remove da lista antes da resposta do servidor
+    onMutate: async ({ orgId, templateId }) => {
+      // Cancelar queries em andamento para evitar conflitos
+      await queryClient.cancelQueries({ queryKey: ['whatsapp-templates', orgId] });
+      
+      // Snapshot do estado anterior para rollback
+      const previousTemplates = queryClient.getQueryData<WhatsAppTemplate[]>(['whatsapp-templates', orgId]);
+      
+      // Remover otimisticamente da cache
+      queryClient.setQueryData<WhatsAppTemplate[]>(
+        ['whatsapp-templates', orgId],
+        (old) => old?.filter(t => t.id !== templateId) || []
+      );
+      
+      return { previousTemplates, orgId };
     },
-    onError: (error: Error) => {
-      toast({ variant: 'destructive', description: error.message });
+    
+    // Reverter em caso de erro
+    onError: (err: Error, { orgId }, context) => {
+      if (context?.previousTemplates) {
+        queryClient.setQueryData(['whatsapp-templates', orgId], context.previousTemplates);
+      }
+      toast({ variant: 'destructive', description: err.message });
+    },
+    
+    // Sincronizar com servidor após mutação (sucesso ou erro)
+    onSettled: (_data, _error, { orgId }) => {
+      queryClient.invalidateQueries({ queryKey: ['whatsapp-templates', orgId] });
+    },
+    
+    onSuccess: () => {
+      toast({ description: 'Template removido!' });
     },
   });
 }
