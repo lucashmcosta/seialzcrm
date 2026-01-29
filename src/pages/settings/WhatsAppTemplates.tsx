@@ -1,206 +1,170 @@
-import { useState } from 'react';
-import { useOrganization } from '@/hooks/useOrganization';
-import { useTranslation } from '@/lib/i18n';
-import { supabase } from '@/integrations/supabase/client';
-import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { useState, useMemo } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import { Card, CardContent } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
-import { ScrollArea } from '@/components/ui/scroll-area';
-import { useToast } from '@/hooks/use-toast';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select';
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu';
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogDescription,
+  DialogFooter,
+} from '@/components/ui/dialog';
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from '@/components/ui/table';
+import { Skeleton } from '@/components/ui/skeleton';
 import { ConfirmDialog } from '@/components/ui/confirm-dialog';
-import { CreateTemplateDialog } from '@/components/whatsapp/CreateTemplateDialog';
+import { Label } from '@/components/ui/label';
+import { ApprovalStatusBadge } from '@/components/whatsapp/templates/ApprovalStatusBadge';
 import { 
-  RefreshCw, 
+  useTemplates, 
+  useDeleteTemplate, 
+  useSyncTemplates,
+  useSubmitForApproval,
+} from '@/hooks/useWhatsAppTemplates';
+import { useOrganization } from '@/hooks/useOrganization';
+import { 
   Plus, 
+  RefreshCw, 
+  MoreHorizontal, 
+  Eye, 
+  Pencil, 
   Trash2, 
-  Clock, 
-  CheckCircle, 
-  XCircle,
+  Send,
   MessageSquare,
   Loader2,
-  AlertCircle
 } from 'lucide-react';
+import { formatDistanceToNow } from 'date-fns';
+import { ptBR } from 'date-fns/locale';
 
-interface Template {
-  id: string;
-  twilio_content_sid: string;
-  friendly_name: string;
-  body: string;
-  language: string;
-  category: string | null;
-  status: string;
-  template_type: string;
-  variables: unknown;
-  last_synced_at: string | null;
-  created_at: string;
-  is_active: boolean;
-}
+type FilterStatus = 'all' | 'approved' | 'pending' | 'rejected' | 'not_submitted' | 'draft';
+type FilterType = 'all' | 'text' | 'quick-reply' | 'list-picker' | 'call-to-action' | 'media';
+type FilterLanguage = 'all' | 'pt_BR' | 'pt-BR' | 'en' | 'es';
 
 export default function WhatsAppTemplates() {
-  const { organization, locale } = useOrganization();
-  const { t } = useTranslation(locale as any);
-  const { toast } = useToast();
-  const queryClient = useQueryClient();
+  const navigate = useNavigate();
+  const { organization } = useOrganization();
+  const { data: templates, isLoading } = useTemplates(organization?.id);
+  const deleteMutation = useDeleteTemplate();
+  const syncMutation = useSyncTemplates();
+  const submitMutation = useSubmitForApproval();
 
-  const [createDialogOpen, setCreateDialogOpen] = useState(false);
+  const [filterStatus, setFilterStatus] = useState<FilterStatus>('all');
+  const [filterType, setFilterType] = useState<FilterType>('all');
+  const [filterLanguage, setFilterLanguage] = useState<FilterLanguage>('all');
   const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false);
-  const [selectedTemplate, setSelectedTemplate] = useState<Template | null>(null);
+  const [selectedTemplateId, setSelectedTemplateId] = useState<string | null>(null);
+  const [selectedTemplateName, setSelectedTemplateName] = useState<string>('');
+  const [submitDialogOpen, setSubmitDialogOpen] = useState(false);
+  const [selectedCategory, setSelectedCategory] = useState<string>('UTILITY');
 
-  // Fetch templates
-  const { data: templates, isLoading, refetch } = useQuery({
-    queryKey: ['whatsapp-templates', organization?.id],
-    queryFn: async () => {
-      if (!organization?.id) return [];
+  // Filter templates
+  const filteredTemplates = useMemo(() => {
+    return templates?.filter(template => {
+      if (filterStatus !== 'all' && template.status !== filterStatus) return false;
+      if (filterType !== 'all' && template.template_type !== filterType) return false;
+      if (filterLanguage !== 'all' && template.language !== filterLanguage) return false;
+      return true;
+    }) || [];
+  }, [templates, filterStatus, filterType, filterLanguage]);
 
-      const { data, error } = await supabase
-        .from('whatsapp_templates')
-        .select('*')
-        .eq('organization_id', organization.id)
-        .eq('is_active', true)
-        .order('friendly_name');
-
-      if (error) throw error;
-      return (data || []) as Template[];
-    },
-    enabled: !!organization?.id,
-  });
-
-  // Sync templates mutation
-  const syncMutation = useMutation({
-    mutationFn: async () => {
-      const { data, error } = await supabase.functions.invoke('twilio-whatsapp-templates', {
-        body: {
-          organizationId: organization?.id,
-          action: 'sync',
-        },
-      });
-
-      if (error) throw error;
-      if (data?.error) throw new Error(data.error);
-      return data;
-    },
-    onSuccess: (data) => {
-      toast({
-        description: `${data.synced || 0} templates sincronizados do Twilio`,
-      });
-      refetch();
-    },
-    onError: (error: any) => {
-      toast({
-        variant: 'destructive',
-        description: error.message || 'Erro ao sincronizar templates',
-      });
-    },
-  });
-
-  // Delete template mutation
-  const deleteMutation = useMutation({
-    mutationFn: async (templateId: string) => {
-      const { data, error } = await supabase.functions.invoke('twilio-whatsapp-templates', {
-        method: 'DELETE',
-        body: {
-          organizationId: organization?.id,
-          templateId,
-        },
-      });
-
-      if (error) throw error;
-      return data;
-    },
-    onSuccess: () => {
-      toast({ description: 'Template removido com sucesso' });
-      queryClient.invalidateQueries({ queryKey: ['whatsapp-templates'] });
-      setDeleteConfirmOpen(false);
-      setSelectedTemplate(null);
-    },
-    onError: (error: any) => {
-      toast({
-        variant: 'destructive',
-        description: error.message || 'Erro ao remover template',
-      });
-    },
-  });
-
-  const handleDelete = (template: Template) => {
-    setSelectedTemplate(template);
+  const handleDelete = (templateId: string, templateName: string) => {
+    setSelectedTemplateId(templateId);
+    setSelectedTemplateName(templateName);
     setDeleteConfirmOpen(true);
   };
 
-  const confirmDelete = () => {
-    if (selectedTemplate) {
-      deleteMutation.mutate(selectedTemplate.id);
+  const confirmDelete = async () => {
+    if (selectedTemplateId && organization?.id) {
+      await deleteMutation.mutateAsync({
+        orgId: organization.id,
+        templateId: selectedTemplateId,
+      });
+      setDeleteConfirmOpen(false);
+      setSelectedTemplateId(null);
     }
   };
 
-  const getStatusBadge = (status: string) => {
-    switch (status) {
-      case 'approved':
-        return (
-          <Badge variant="default" className="bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-400">
-            <CheckCircle className="w-3 h-3 mr-1" />
-            Aprovado
-          </Badge>
-        );
-      case 'pending':
-        return (
-          <Badge variant="secondary" className="bg-yellow-100 text-yellow-800 dark:bg-yellow-900/30 dark:text-yellow-400">
-            <Clock className="w-3 h-3 mr-1" />
-            Pendente
-          </Badge>
-        );
-      case 'rejected':
-        return (
-          <Badge variant="destructive">
-            <XCircle className="w-3 h-3 mr-1" />
-            Rejeitado
-          </Badge>
-        );
-      default:
-        return (
-          <Badge variant="outline">
-            <AlertCircle className="w-3 h-3 mr-1" />
-            {status}
-          </Badge>
-        );
+  const handleSync = () => {
+    if (organization?.id) {
+      syncMutation.mutate(organization.id);
     }
   };
 
-  const getCategoryLabel = (category: string | null) => {
-    switch (category) {
-      case 'marketing':
-        return 'Marketing';
-      case 'utility':
-        return 'Utilidade';
-      case 'authentication':
-        return 'Autenticação';
-      default:
-        return category || 'Geral';
+  const openSubmitDialog = (templateId: string) => {
+    setSelectedTemplateId(templateId);
+    setSelectedCategory('UTILITY');
+    setSubmitDialogOpen(true);
+  };
+
+  const confirmSubmitForApproval = async () => {
+    if (selectedTemplateId && organization?.id) {
+      await submitMutation.mutateAsync({
+        orgId: organization.id,
+        templateId: selectedTemplateId,
+        category: selectedCategory,
+      });
+      setSubmitDialogOpen(false);
+      setSelectedTemplateId(null);
     }
   };
 
-  if (isLoading) {
-    return (
-      <div className="flex items-center justify-center py-12">
-        <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
-      </div>
-    );
-  }
+  const getTypeLabel = (type: string) => {
+    const labels: Record<string, string> = {
+      'text': 'Texto',
+      'quick-reply': 'Resposta Rápida',
+      'list-picker': 'Lista',
+      'call-to-action': 'CTA',
+      'media': 'Mídia',
+    };
+    return labels[type] || type;
+  };
+
+  const getLanguageLabel = (lang: string) => {
+    const labels: Record<string, string> = {
+      'pt_BR': 'Português',
+      'pt-BR': 'Português',
+      'en': 'English',
+      'es': 'Español',
+    };
+    return labels[lang] || lang;
+  };
 
   return (
     <div className="space-y-6">
       {/* Header */}
-      <div className="flex items-center justify-between">
+      <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-4">
         <div>
-          <h2 className="text-lg font-semibold">Templates WhatsApp</h2>
-          <p className="text-sm text-muted-foreground">
-            Gerencie os templates de mensagem para WhatsApp Business
+          <h2 className="text-lg font-semibold text-foreground">WhatsApp Templates</h2>
+          <p className="text-sm text-muted-foreground mt-1">
+            Gerencie templates de mensagem para WhatsApp Business
           </p>
         </div>
         <div className="flex gap-2">
           <Button
             variant="outline"
-            onClick={() => syncMutation.mutate()}
+            onClick={handleSync}
             disabled={syncMutation.isPending}
           >
             {syncMutation.isPending ? (
@@ -210,48 +174,103 @@ export default function WhatsAppTemplates() {
             )}
             Sincronizar
           </Button>
-          <Button onClick={() => setCreateDialogOpen(true)}>
+          <Button onClick={() => navigate('/whatsapp/templates/new')}>
             <Plus className="w-4 h-4 mr-2" />
-            Criar Template
+            Novo Template
           </Button>
         </div>
       </div>
 
-      {/* Info Card */}
-      <Card className="bg-muted/50">
-        <CardContent className="py-4">
-          <div className="flex items-start gap-3">
-            <MessageSquare className="w-5 h-5 text-green-600 mt-0.5" />
-            <div className="text-sm">
-              <p className="font-medium">Templates são necessários para iniciar conversas</p>
-              <p className="text-muted-foreground mt-1">
-                O WhatsApp exige templates aprovados para enviar mensagens fora da janela de 24 horas.
-                Templates precisam ser aprovados pelo WhatsApp antes de serem usados.
-              </p>
-            </div>
-          </div>
-        </CardContent>
-      </Card>
+      {/* Filters */}
+      <div className="flex flex-wrap gap-3">
+        <Select value={filterStatus} onValueChange={(v) => setFilterStatus(v as FilterStatus)}>
+          <SelectTrigger className="w-[160px]">
+            <SelectValue placeholder="Status" />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="all">Todos os Status</SelectItem>
+            <SelectItem value="approved">Aprovado</SelectItem>
+            <SelectItem value="pending">Aguardando Aprovação</SelectItem>
+            <SelectItem value="rejected">Rejeitado</SelectItem>
+            <SelectItem value="not_submitted">Não Submetido</SelectItem>
+            <SelectItem value="draft">Rascunho</SelectItem>
+          </SelectContent>
+        </Select>
 
-      {/* Templates List */}
-      {!templates || templates.length === 0 ? (
+        <Select value={filterType} onValueChange={(v) => setFilterType(v as FilterType)}>
+          <SelectTrigger className="w-[160px]">
+            <SelectValue placeholder="Tipo" />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="all">Todos os Tipos</SelectItem>
+            <SelectItem value="text">Texto</SelectItem>
+            <SelectItem value="quick-reply">Resposta Rápida</SelectItem>
+            <SelectItem value="list-picker">Lista</SelectItem>
+            <SelectItem value="call-to-action">CTA</SelectItem>
+            <SelectItem value="media">Mídia</SelectItem>
+          </SelectContent>
+        </Select>
+
+        <Select value={filterLanguage} onValueChange={(v) => setFilterLanguage(v as FilterLanguage)}>
+          <SelectTrigger className="w-[160px]">
+            <SelectValue placeholder="Idioma" />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="all">Todos os Idiomas</SelectItem>
+            <SelectItem value="pt_BR">Português</SelectItem>
+            <SelectItem value="en">English</SelectItem>
+            <SelectItem value="es">Español</SelectItem>
+          </SelectContent>
+        </Select>
+      </div>
+
+      {/* Content */}
+      {isLoading ? (
+        <Card>
+          <CardContent className="p-0">
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>Nome</TableHead>
+                  <TableHead>Tipo</TableHead>
+                  <TableHead>Idioma</TableHead>
+                  <TableHead>Status</TableHead>
+                  <TableHead>Criado</TableHead>
+                  <TableHead className="w-12"></TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {[1, 2, 3].map((i) => (
+                  <TableRow key={i}>
+                    <TableCell><Skeleton className="h-4 w-40" /></TableCell>
+                    <TableCell><Skeleton className="h-4 w-24" /></TableCell>
+                    <TableCell><Skeleton className="h-4 w-20" /></TableCell>
+                    <TableCell><Skeleton className="h-6 w-24" /></TableCell>
+                    <TableCell><Skeleton className="h-4 w-28" /></TableCell>
+                    <TableCell><Skeleton className="h-8 w-8" /></TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+          </CardContent>
+        </Card>
+      ) : filteredTemplates.length === 0 ? (
         <Card>
           <CardContent className="py-12 text-center">
             <MessageSquare className="w-12 h-12 mx-auto text-muted-foreground mb-4" />
             <h3 className="font-medium mb-2">Nenhum template encontrado</h3>
             <p className="text-sm text-muted-foreground mb-4">
-              Crie um novo template ou sincronize os existentes do Twilio
+              {templates?.length === 0 
+                ? 'Crie um novo template ou sincronize os existentes do Twilio'
+                : 'Nenhum template corresponde aos filtros selecionados'
+              }
             </p>
             <div className="flex gap-2 justify-center">
-              <Button
-                variant="outline"
-                onClick={() => syncMutation.mutate()}
-                disabled={syncMutation.isPending}
-              >
+              <Button variant="outline" onClick={handleSync} disabled={syncMutation.isPending}>
                 <RefreshCw className="w-4 h-4 mr-2" />
                 Sincronizar do Twilio
               </Button>
-              <Button onClick={() => setCreateDialogOpen(true)}>
+              <Button onClick={() => navigate('/whatsapp/templates/new')}>
                 <Plus className="w-4 h-4 mr-2" />
                 Criar Template
               </Button>
@@ -259,75 +278,142 @@ export default function WhatsAppTemplates() {
           </CardContent>
         </Card>
       ) : (
-        <ScrollArea className="h-[calc(100vh-400px)]">
-          <div className="grid gap-4">
-            {templates.map((template) => (
-              <Card key={template.id}>
-                <CardHeader className="pb-2">
-                  <div className="flex items-start justify-between">
-                    <div className="flex-1 min-w-0">
-                      <CardTitle className="text-base flex items-center gap-2">
-                        {template.friendly_name}
-                        {getStatusBadge(template.status)}
-                      </CardTitle>
-                      <CardDescription className="mt-1">
-                        <span className="inline-flex items-center gap-2">
-                          <Badge variant="outline" className="text-xs">
-                            {getCategoryLabel(template.category)}
-                          </Badge>
-                          <span className="text-xs">
-                            Idioma: {template.language || 'pt-BR'}
-                          </span>
-                        </span>
-                      </CardDescription>
-                    </div>
-                    <Button
-                      variant="ghost"
-                      size="icon"
-                      className="text-muted-foreground hover:text-destructive"
-                      onClick={() => handleDelete(template)}
-                    >
-                      <Trash2 className="w-4 h-4" />
-                    </Button>
-                  </div>
-                </CardHeader>
-                <CardContent>
-                  <div className="bg-muted/50 rounded-lg p-3">
-                    <p className="text-sm whitespace-pre-wrap">{template.body}</p>
-                  </div>
-                  {template.last_synced_at && (
-                    <p className="text-xs text-muted-foreground mt-2">
-                      Última sincronização: {new Date(template.last_synced_at).toLocaleString()}
-                    </p>
-                  )}
-                </CardContent>
-              </Card>
-            ))}
-          </div>
-        </ScrollArea>
+        <Card>
+          <CardContent className="p-0">
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>Nome</TableHead>
+                  <TableHead>Tipo</TableHead>
+                  <TableHead>Idioma</TableHead>
+                  <TableHead>Status</TableHead>
+                  <TableHead>Criado</TableHead>
+                  <TableHead className="w-12"></TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {filteredTemplates.map((template) => (
+                  <TableRow key={template.id}>
+                    <TableCell>
+                      <div className="font-medium">{template.friendly_name}</div>
+                      <div className="text-xs text-muted-foreground truncate max-w-xs">
+                        {template.body}
+                      </div>
+                    </TableCell>
+                    <TableCell>
+                      <Badge variant="outline">{getTypeLabel(template.template_type)}</Badge>
+                    </TableCell>
+                    <TableCell>{getLanguageLabel(template.language)}</TableCell>
+                    <TableCell>
+                      <ApprovalStatusBadge status={template.status} />
+                    </TableCell>
+                    <TableCell className="text-muted-foreground text-sm">
+                      {formatDistanceToNow(new Date(template.created_at), {
+                        addSuffix: true,
+                        locale: ptBR,
+                      })}
+                    </TableCell>
+                    <TableCell>
+                      <DropdownMenu>
+                        <DropdownMenuTrigger asChild>
+                          <Button variant="ghost" size="icon">
+                            <MoreHorizontal className="w-4 h-4" />
+                          </Button>
+                        </DropdownMenuTrigger>
+                        <DropdownMenuContent align="end">
+                          <DropdownMenuItem onClick={() => navigate(`/whatsapp/templates/${template.id}`)}>
+                            <Eye className="w-4 h-4 mr-2" />
+                            Ver Detalhes
+                          </DropdownMenuItem>
+                          {template.status !== 'approved' && (
+                            <DropdownMenuItem onClick={() => navigate(`/whatsapp/templates/${template.id}/edit`)}>
+                              <Pencil className="w-4 h-4 mr-2" />
+                              Editar
+                            </DropdownMenuItem>
+                          )}
+                          {(template.status === 'not_submitted' || template.status === 'draft') && (
+                            <DropdownMenuItem onClick={() => openSubmitDialog(template.id)}>
+                              <Send className="w-4 h-4 mr-2" />
+                              Submeter para Aprovação
+                            </DropdownMenuItem>
+                          )}
+                          <DropdownMenuSeparator />
+                          <DropdownMenuItem 
+                            onClick={() => handleDelete(template.id, template.friendly_name)}
+                            className="text-destructive focus:text-destructive"
+                          >
+                            <Trash2 className="w-4 h-4 mr-2" />
+                            Excluir
+                          </DropdownMenuItem>
+                        </DropdownMenuContent>
+                      </DropdownMenu>
+                    </TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+          </CardContent>
+        </Card>
       )}
 
-      {/* Create Template Dialog */}
-      <CreateTemplateDialog
-        open={createDialogOpen}
-        onOpenChange={setCreateDialogOpen}
-        onSuccess={() => {
-          refetch();
-        }}
-      />
-
-      {/* Delete Confirmation Dialog */}
+      {/* Delete Confirmation */}
       <ConfirmDialog
         open={deleteConfirmOpen}
         onOpenChange={setDeleteConfirmOpen}
-        title="Remover Template"
-        description={`Tem certeza que deseja remover o template "${selectedTemplate?.friendly_name}"? Esta ação não pode ser desfeita.`}
-        confirmText="Remover"
+        title="Excluir Template"
+        description={`Tem certeza que deseja excluir o template "${selectedTemplateName}"? Esta ação não pode ser desfeita.`}
+        confirmText="Excluir"
         cancelText="Cancelar"
         variant="destructive"
         onConfirm={confirmDelete}
         loading={deleteMutation.isPending}
       />
+
+      {/* Submit for Approval Dialog */}
+      <Dialog open={submitDialogOpen} onOpenChange={setSubmitDialogOpen}>
+        <DialogContent size="sm">
+          <DialogHeader>
+            <DialogTitle>Submeter para Aprovação</DialogTitle>
+            <DialogDescription>
+              Selecione a categoria do template antes de submeter para aprovação do WhatsApp.
+            </DialogDescription>
+          </DialogHeader>
+          
+          <div className="space-y-3">
+            <Label>Categoria</Label>
+            <Select value={selectedCategory} onValueChange={setSelectedCategory}>
+              <SelectTrigger>
+                <SelectValue placeholder="Selecione a categoria" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="UTILITY">Utilidade</SelectItem>
+                <SelectItem value="MARKETING">Marketing</SelectItem>
+                <SelectItem value="AUTHENTICATION">Autenticação</SelectItem>
+              </SelectContent>
+            </Select>
+            <p className="text-xs text-muted-foreground">
+              A categoria determina as regras de envio e custos do WhatsApp.
+            </p>
+          </div>
+          
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setSubmitDialogOpen(false)}>
+              Cancelar
+            </Button>
+            <Button 
+              onClick={confirmSubmitForApproval} 
+              disabled={submitMutation.isPending}
+            >
+              {submitMutation.isPending ? (
+                <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+              ) : (
+                <Send className="w-4 h-4 mr-2" />
+              )}
+              Submeter
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

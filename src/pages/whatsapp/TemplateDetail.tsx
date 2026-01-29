@@ -68,7 +68,7 @@ export default function TemplateDetail() {
   const handleDelete = async () => {
     if (!organization?.id || !id) return;
     await deleteMutation.mutateAsync({ orgId: organization.id, templateId: id });
-    navigate('/whatsapp/templates');
+    navigate('/settings?tab=whatsappTemplates');
   };
 
   const openSubmitDialog = () => {
@@ -149,7 +149,7 @@ export default function TemplateDetail() {
       <Layout>
         <div className="text-center py-12">
           <p className="text-muted-foreground">Template não encontrado</p>
-          <Button variant="link" onClick={() => navigate('/whatsapp/templates')}>
+          <Button variant="link" onClick={() => navigate('/settings?tab=whatsappTemplates')}>
             Voltar para lista
           </Button>
         </div>
@@ -167,7 +167,7 @@ export default function TemplateDetail() {
         {/* Header */}
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-4">
-            <Button variant="ghost" size="icon" onClick={() => navigate('/whatsapp/templates')}>
+            <Button variant="ghost" size="icon" onClick={() => navigate('/settings?tab=whatsappTemplates')}>
               <ArrowLeft className="w-4 h-4" />
             </Button>
             <div>
