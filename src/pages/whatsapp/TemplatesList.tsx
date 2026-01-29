@@ -19,6 +19,14 @@ import {
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
 import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogDescription,
+  DialogFooter,
+} from '@/components/ui/dialog';
+import {
   Table,
   TableBody,
   TableCell,
@@ -28,6 +36,7 @@ import {
 } from '@/components/ui/table';
 import { Skeleton } from '@/components/ui/skeleton';
 import { ConfirmDialog } from '@/components/ui/confirm-dialog';
+import { Label } from '@/components/ui/label';
 import { ApprovalStatusBadge } from '@/components/whatsapp/templates/ApprovalStatusBadge';
 import { 
   useTemplates, 
@@ -68,6 +77,8 @@ export default function TemplatesList() {
   const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false);
   const [selectedTemplateId, setSelectedTemplateId] = useState<string | null>(null);
   const [selectedTemplateName, setSelectedTemplateName] = useState<string>('');
+  const [submitDialogOpen, setSubmitDialogOpen] = useState(false);
+  const [selectedCategory, setSelectedCategory] = useState<string>('UTILITY');
 
   // Filter templates
   const filteredTemplates = templates?.filter(template => {
@@ -100,13 +111,21 @@ export default function TemplatesList() {
     }
   };
 
-  const handleSubmitForApproval = async (templateId: string, category: string) => {
-    if (organization?.id) {
+  const openSubmitDialog = (templateId: string) => {
+    setSelectedTemplateId(templateId);
+    setSelectedCategory('UTILITY');
+    setSubmitDialogOpen(true);
+  };
+
+  const confirmSubmitForApproval = async () => {
+    if (selectedTemplateId && organization?.id) {
       await submitMutation.mutateAsync({
         orgId: organization.id,
-        templateId,
-        category: category || 'UTILITY',
+        templateId: selectedTemplateId,
+        category: selectedCategory,
       });
+      setSubmitDialogOpen(false);
+      setSelectedTemplateId(null);
     }
   };
 
@@ -306,8 +325,8 @@ export default function TemplatesList() {
                                 Editar
                               </DropdownMenuItem>
                             )}
-                            {template.status === 'not_submitted' && (
-                              <DropdownMenuItem onClick={() => handleSubmitForApproval(template.id, template.category || 'UTILITY')}>
+                            {(template.status === 'not_submitted' || template.status === 'pending') && (
+                              <DropdownMenuItem onClick={() => openSubmitDialog(template.id)}>
                                 <Send className="w-4 h-4 mr-2" />
                                 Submeter para Aprovação
                               </DropdownMenuItem>
@@ -344,6 +363,52 @@ export default function TemplatesList() {
         onConfirm={confirmDelete}
         loading={deleteMutation.isPending}
       />
+
+      {/* Submit for Approval Dialog */}
+      <Dialog open={submitDialogOpen} onOpenChange={setSubmitDialogOpen}>
+        <DialogContent size="sm">
+          <DialogHeader>
+            <DialogTitle>Submeter para Aprovação</DialogTitle>
+            <DialogDescription>
+              Selecione a categoria do template antes de submeter para aprovação do WhatsApp.
+            </DialogDescription>
+          </DialogHeader>
+          
+          <div className="space-y-3">
+            <Label>Categoria</Label>
+            <Select value={selectedCategory} onValueChange={setSelectedCategory}>
+              <SelectTrigger>
+                <SelectValue placeholder="Selecione a categoria" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="UTILITY">Utilidade</SelectItem>
+                <SelectItem value="MARKETING">Marketing</SelectItem>
+                <SelectItem value="AUTHENTICATION">Autenticação</SelectItem>
+              </SelectContent>
+            </Select>
+            <p className="text-xs text-muted-foreground">
+              A categoria determina as regras de envio e custos do WhatsApp.
+            </p>
+          </div>
+          
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setSubmitDialogOpen(false)}>
+              Cancelar
+            </Button>
+            <Button 
+              onClick={confirmSubmitForApproval} 
+              disabled={submitMutation.isPending}
+            >
+              {submitMutation.isPending ? (
+                <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+              ) : (
+                <Send className="w-4 h-4 mr-2" />
+              )}
+              Submeter
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </Layout>
   );
 }
