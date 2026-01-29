@@ -1,8 +1,40 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { useEffect } from 'react';
+import { supabase } from '@/integrations/supabase/client';
 import { whatsappService, WhatsAppTemplate, CreateTemplateInput, SendTemplateInput } from '@/services/whatsapp';
 import { useToast } from '@/hooks/use-toast';
 
 export function useTemplates(orgId: string | undefined) {
+  const queryClient = useQueryClient();
+
+  // Subscribe to realtime changes
+  useEffect(() => {
+    if (!orgId) return;
+
+    const channel = supabase
+      .channel(`whatsapp_templates_${orgId}`)
+      .on(
+        'postgres_changes',
+        {
+          event: '*',
+          schema: 'public',
+          table: 'whatsapp_templates',
+          filter: `organization_id=eq.${orgId}`,
+        },
+        (payload) => {
+          console.log('[Realtime] WhatsApp template change:', payload.eventType);
+          // Invalidate queries to refresh data
+          queryClient.invalidateQueries({ queryKey: ['whatsapp-templates', orgId] });
+          queryClient.invalidateQueries({ queryKey: ['whatsapp-template'] });
+        }
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, [orgId, queryClient]);
+
   return useQuery({
     queryKey: ['whatsapp-templates', orgId],
     queryFn: () => whatsappService.listTemplates(orgId!),
@@ -11,6 +43,35 @@ export function useTemplates(orgId: string | undefined) {
 }
 
 export function useTemplate(orgId: string | undefined, templateId: string | undefined) {
+  const queryClient = useQueryClient();
+
+  // Subscribe to realtime changes for this specific template
+  useEffect(() => {
+    if (!orgId || !templateId) return;
+
+    const channel = supabase
+      .channel(`whatsapp_template_${templateId}`)
+      .on(
+        'postgres_changes',
+        {
+          event: 'UPDATE',
+          schema: 'public',
+          table: 'whatsapp_templates',
+          filter: `id=eq.${templateId}`,
+        },
+        (payload) => {
+          console.log('[Realtime] Template updated:', payload.new);
+          // Invalidate to refresh
+          queryClient.invalidateQueries({ queryKey: ['whatsapp-template', orgId, templateId] });
+        }
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, [orgId, templateId, queryClient]);
+
   return useQuery({
     queryKey: ['whatsapp-template', orgId, templateId],
     queryFn: () => whatsappService.getTemplate(orgId!, templateId!),
