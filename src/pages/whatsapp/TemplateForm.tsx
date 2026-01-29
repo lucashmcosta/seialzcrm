@@ -162,7 +162,7 @@ export default function TemplateForm() {
       } else {
         await createMutation.mutateAsync(data);
       }
-      navigate('/whatsapp/templates');
+      navigate('/settings?tab=whatsappTemplates');
     } catch (error) {
       // Error handled by mutation
     }
@@ -185,7 +185,7 @@ export default function TemplateForm() {
       <div className="space-y-6">
         {/* Header */}
         <div className="flex items-center gap-4">
-          <Button variant="ghost" size="icon" onClick={() => navigate('/whatsapp/templates')}>
+          <Button variant="ghost" size="icon" onClick={() => navigate('/settings?tab=whatsappTemplates')}>
             <ArrowLeft className="w-4 h-4" />
           </Button>
           <h1 className="text-3xl font-bold">

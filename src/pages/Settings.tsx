@@ -1,5 +1,5 @@
-import { useState, useMemo } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useState, useMemo, useEffect } from 'react';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import { Layout } from '@/components/Layout';
 import { useOrganization } from '@/hooks/useOrganization';
 import { useTranslation } from '@/lib/i18n';
@@ -41,8 +41,18 @@ export default function Settings() {
   const { permissions } = usePermissions();
   const { hasWhatsApp } = useWhatsAppIntegration();
   const { hasAI } = useAIIntegration();
-  const [selectedTab, setSelectedTab] = useState('general');
+  const [searchParams] = useSearchParams();
+  const initialTab = searchParams.get('tab') || 'general';
+  const [selectedTab, setSelectedTab] = useState(initialTab);
   const [searchTerm, setSearchTerm] = useState('');
+
+  // Update selected tab when URL param changes
+  useEffect(() => {
+    const tabFromUrl = searchParams.get('tab');
+    if (tabFromUrl && tabFromUrl !== selectedTab) {
+      setSelectedTab(tabFromUrl);
+    }
+  }, [searchParams]);
 
   // Show AI features if either WhatsApp OR any AI integration is enabled
   const showAIFeatures = hasWhatsApp || hasAI;
