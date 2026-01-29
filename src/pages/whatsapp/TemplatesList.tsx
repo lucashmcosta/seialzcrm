@@ -59,7 +59,7 @@ import {
 import { formatDistanceToNow } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 
-type FilterStatus = 'all' | 'approved' | 'pending' | 'rejected' | 'not_submitted';
+type FilterStatus = 'all' | 'approved' | 'pending' | 'rejected' | 'not_submitted' | 'draft';
 type FilterType = 'all' | 'text' | 'quick-reply' | 'list-picker' | 'call-to-action' | 'media';
 type FilterLanguage = 'all' | 'pt_BR' | 'pt-BR' | 'en' | 'es';
 
@@ -185,9 +185,10 @@ export default function TemplatesList() {
             <SelectContent>
               <SelectItem value="all">Todos os Status</SelectItem>
               <SelectItem value="approved">Aprovado</SelectItem>
-              <SelectItem value="pending">Pendente</SelectItem>
+              <SelectItem value="pending">Aguardando Aprovação</SelectItem>
               <SelectItem value="rejected">Rejeitado</SelectItem>
               <SelectItem value="not_submitted">Não Submetido</SelectItem>
+              <SelectItem value="draft">Rascunho</SelectItem>
             </SelectContent>
           </Select>
 
@@ -325,7 +326,7 @@ export default function TemplatesList() {
                                 Editar
                               </DropdownMenuItem>
                             )}
-                            {(template.status === 'not_submitted' || template.status === 'pending') && (
+                            {(template.status === 'not_submitted' || template.status === 'draft') && (
                               <DropdownMenuItem onClick={() => openSubmitDialog(template.id)}>
                                 <Send className="w-4 h-4 mr-2" />
                                 Submeter para Aprovação
