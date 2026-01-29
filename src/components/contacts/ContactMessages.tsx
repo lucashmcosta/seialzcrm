@@ -471,7 +471,7 @@ export function ContactMessages({ contactId, opportunityId }: ContactMessagesPro
   // Template selector is now a Dialog, not a component replacement
 
   return (
-    <div className="flex flex-col h-full">
+    <div className="flex flex-col h-[calc(100vh-320px)] min-h-[400px]">
       {/* 24h Window Warning */}
       {!isIn24hWindow && messages.length > 0 && (
         <Alert className="mb-4 border-orange-200 bg-orange-50 dark:bg-orange-950/20">
@@ -485,7 +485,7 @@ export function ContactMessages({ contactId, opportunityId }: ContactMessagesPro
       )}
 
       {/* Messages */}
-      <ScrollArea className="flex-1 min-h-[250px] max-h-[400px]">
+      <ScrollArea className="flex-1 min-h-0">
         <div className="space-y-3 p-1">
           {messages.length === 0 ? (
             <div className="flex flex-col items-center justify-center py-12 text-muted-foreground">
@@ -637,7 +637,7 @@ export function ContactMessages({ contactId, opportunityId }: ContactMessagesPro
             </div>
           </div>
         ) : (
-          <Button onClick={() => setShowTemplates(true)} className="w-full" variant="outline">
+          <Button onClick={() => setShowTemplates(true)} className="w-full">
             <FileText className="w-4 h-4 mr-2" />
             {locale === 'pt-BR' ? 'Enviar Template' : 'Send Template'}
           </Button>

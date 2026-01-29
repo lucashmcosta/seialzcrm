@@ -304,7 +304,7 @@ export default function ContactDetail() {
               />
             </Tabs.Panel>
 
-            <Tabs.Panel id="messages">
+            <Tabs.Panel id="messages" className="flex-1 min-h-0">
               <ContactMessages contactId={contact.id} />
             </Tabs.Panel>
 
