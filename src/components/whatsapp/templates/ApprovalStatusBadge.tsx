@@ -2,7 +2,7 @@ import { Badge } from '@/components/ui/badge';
 import { CheckCircle, Clock, XCircle, AlertCircle } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
-export type ApprovalStatus = 'approved' | 'pending' | 'rejected' | 'not_submitted';
+export type ApprovalStatus = 'approved' | 'pending' | 'rejected' | 'not_submitted' | 'draft';
 
 interface ApprovalStatusBadgeProps {
   status: ApprovalStatus | string;
@@ -20,7 +20,7 @@ const statusConfig: Record<ApprovalStatus, {
     className: 'bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-400 hover:bg-green-100',
   },
   pending: {
-    label: 'Pendente',
+    label: 'Aguardando Aprovação',
     icon: Clock,
     className: 'bg-yellow-100 text-yellow-800 dark:bg-yellow-900/30 dark:text-yellow-400 hover:bg-yellow-100',
   },
@@ -31,6 +31,11 @@ const statusConfig: Record<ApprovalStatus, {
   },
   not_submitted: {
     label: 'Não Submetido',
+    icon: AlertCircle,
+    className: 'bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-400 hover:bg-slate-100',
+  },
+  draft: {
+    label: 'Rascunho',
     icon: AlertCircle,
     className: 'bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-400 hover:bg-slate-100',
   },

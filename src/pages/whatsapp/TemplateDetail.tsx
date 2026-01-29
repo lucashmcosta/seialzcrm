@@ -158,7 +158,7 @@ export default function TemplateDetail() {
   }
 
   const canEdit = template.status !== 'approved';
-  const canSubmit = template.status === 'not_submitted' || template.status === 'pending';
+  const canSubmit = template.status === 'not_submitted' || template.status === 'draft';
   const canTest = template.status === 'approved';
 
   return (
@@ -219,6 +219,26 @@ export default function TemplateDetail() {
                   <p className="font-medium text-destructive">Template Rejeitado</p>
                   <p className="text-sm text-muted-foreground mt-1">
                     {template.rejection_reason}
+                  </p>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+        )}
+
+        {/* Pending approval notice */}
+        {template.status === 'pending' && (
+          <Card className="border-yellow-200 bg-yellow-50 dark:border-yellow-900/50 dark:bg-yellow-950/30">
+            <CardContent className="pt-4">
+              <div className="flex items-start gap-3">
+                <Clock className="w-5 h-5 text-yellow-600 dark:text-yellow-500 mt-0.5" />
+                <div>
+                  <p className="font-medium text-yellow-800 dark:text-yellow-400">
+                    Aguardando Aprovação do WhatsApp
+                  </p>
+                  <p className="text-sm text-yellow-700 dark:text-yellow-500 mt-1">
+                    Este template foi submetido e está aguardando revisão do WhatsApp. 
+                    O processo pode levar de alguns minutos a 24 horas.
                   </p>
                 </div>
               </div>
