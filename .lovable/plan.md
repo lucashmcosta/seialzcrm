@@ -1,367 +1,271 @@
 
-# Plano: Módulo de Mensagens Completo
+# Plano: Corrigir Problemas do Chat e Lista de Contatos
 
 ## Resumo
 
-Implementar duas melhorias fundamentais no sistema de mensagens:
+Corrigir dois bugs críticos:
 
-1. **Botão "Nova Conversa"** na página de Mensagens para iniciar conversas via WhatsApp com qualquer contato
-2. **Chat Completo na Aba de Mensagens do Contato** com todas as funcionalidades do módulo principal (arquivos, áudio, emoji, IA)
-
----
-
-## Problema Atual
-
-### 1. Página de Mensagens (`/messages`)
-- Não existe botão para iniciar nova conversa
-- O usuário só pode ver/responder conversas já existentes
-- Falta o ícone "+" ou "Nova Conversa" no header
-
-### 2. Aba de Mensagens no Contato (`ContactMessages.tsx`)
-- Componente muito básico - apenas texto simples
-- Usa canal "internal" (notas internas) ao invés de WhatsApp
-- Não tem funcionalidades do chat real:
-  - Enviar arquivos/imagens
-  - Gravar e enviar áudio
-  - Emoji picker
-  - Melhoria de texto com IA
-  - Status de entrega (✓ ✓✓)
-  - Janela de 24h / Templates
-  - Realtime updates
+1. **ContactMessages**: O chat deve permitir **ler** todas as mensagens mesmo fora da janela 24h
+2. **NewConversationDialog**: Mostrar nome corretamente ou fallback para telefone
 
 ---
 
-## Solução
+## Problema 1: ContactMessages não permite ler mensagens
 
-### Parte 1: Botão "Nova Conversa" na Página de Mensagens
+### Diagnóstico
 
-Adicionar um botão no header da lista de conversas que abre um dialog para selecionar um contato e iniciar a conversa.
+Ao analisar o código, identifiquei que:
 
-**Componentes:**
-1. Botão "+" no header da lista
-2. Dialog para buscar e selecionar contato
-3. Ao selecionar, criar thread WhatsApp e abrir no chat
+1. A área de mensagens (ScrollArea) está sendo renderizada corretamente nas linhas 490-556
+2. O problema pode estar na condição `showTemplates` que **substitui todo o componente** (linhas 465-473)
+3. Ou a altura `max-h-[400px]` pode não estar funcionando corretamente no contexto
 
-### Parte 2: Reescrever `ContactMessages.tsx`
+**Problema real identificado**: Quando o usuário está fora da janela 24h e clica em "Enviar Template", o `showTemplates` fica `true` e substitui TODO o componente pelo `WhatsAppTemplateSelector`. Mesmo após enviar, se o usuário não receber resposta, não consegue ver as mensagens pois ficou preso no seletor de templates.
 
-Substituir o componente básico atual por uma versão que:
-- Use o canal **WhatsApp** (não internal)
-- Busque a thread WhatsApp existente do contato
-- Tenha todas as funcionalidades do chat principal:
-  - Upload de arquivos e imagens
-  - Gravação de áudio
-  - Emoji picker
-  - Correção de texto com IA
-  - Status de entrega das mensagens
-  - Janela de 24h e seleção de templates
-  - Realtime updates
+### Solução
+
+Modificar a lógica para:
+
+1. **Sempre mostrar as mensagens** - o ScrollArea deve estar visível independente do estado
+2. **Templates como overlay/modal** - não substituir todo o componente
+3. **Permitir cancelar** - voltar para ver as mensagens sem enviar template
+
+**Mudanças:**
+
+```tsx
+// ANTES (substitui tudo):
+if (showTemplates) {
+  return (
+    <WhatsAppTemplateSelector ... />
+  );
+}
+
+// DEPOIS (modal sobre o chat):
+return (
+  <div className="flex flex-col h-full">
+    {/* Alert 24h - sempre visível */}
+    
+    {/* Messages - SEMPRE visíveis */}
+    <ScrollArea className="flex-1 min-h-[200px]">
+      {/* mensagens */}
+    </ScrollArea>
+    
+    {/* Input ou botão template */}
+    
+    {/* Template Selector como Dialog */}
+    <Dialog open={showTemplates} onOpenChange={setShowTemplates}>
+      <DialogContent>
+        <WhatsAppTemplateSelector ... />
+      </DialogContent>
+    </Dialog>
+  </div>
+);
+```
 
 ---
 
-## Arquivos a Modificar/Criar
+## Problema 2: Nomes não aparecem na lista de contatos
 
-| Arquivo | Ação |
-|---------|------|
-| `src/pages/messages/MessagesList.tsx` | Adicionar botão + e dialog de nova conversa |
-| `src/components/contacts/ContactMessages.tsx` | **Reescrever completamente** com WhatsApp chat |
-| `src/components/messages/NewConversationDialog.tsx` | **Criar** - Dialog para selecionar contato |
+### Diagnóstico
+
+Consultei o banco de dados e descobri que os primeiros contatos (quando ordenados por `full_name`) têm nomes compostos apenas por caracteres especiais/emojis invisíveis:
+
+| full_name | phone |
+|-----------|-------|
+| `­­` (caracteres invisíveis) | +5511983907268 |
+| `‍️` (zwj + emoji invisível) | +5511913591723 |
+| `.` | +5515996108283 |
+
+Quando ordenados alfabeticamente, caracteres especiais vêm antes das letras. Por isso aparecem 50 contatos "sem nome" visualmente.
+
+### Solução
+
+1. **Filtrar contatos com nomes válidos** - nome deve ter pelo menos 1 caractere alfanumérico
+2. **Mostrar fallback para telefone** - se nome for inválido, mostrar o telefone como nome
+3. **Ordenar por nome válido** - contatos sem nome real aparecem no final
+
+**Mudanças na query:**
+
+```tsx
+// Função para validar se nome é "real"
+const isValidName = (name: string | null): boolean => {
+  if (!name) return false;
+  // Remove caracteres especiais e verifica se sobra algo
+  const cleaned = name.replace(/[^\p{L}\p{N}\s]/gu, '').trim();
+  return cleaned.length > 0;
+};
+
+// Na renderização, mostrar fallback:
+<p className="font-medium text-sm truncate">
+  {isValidName(contact.full_name) 
+    ? contact.full_name 
+    : contact.phone}
+</p>
+```
+
+**OU ordenar melhor no banco:**
+
+```tsx
+// Primeiro: contatos com nome alfanumérico válido
+// Depois: ordenar por nome
+// Por último: contatos sem nome válido (mostrar telefone)
+
+// Adicionar campo computed ou usar CASE WHEN
+```
+
+---
+
+## Arquivos a Modificar
+
+| Arquivo | Mudança |
+|---------|---------|
+| `src/components/contacts/ContactMessages.tsx` | Templates como Dialog, não substituir todo o componente |
+| `src/components/messages/NewConversationDialog.tsx` | Validar nome e mostrar fallback |
 
 ---
 
 ## Mudanças Detalhadas
 
-### 1. Criar `NewConversationDialog.tsx`
+### 1. ContactMessages.tsx
 
-Dialog que permite buscar contatos e iniciar uma nova conversa WhatsApp.
-
-```text
-+------------------------------------------+
-|  Nova Conversa                      [X]  |
-+------------------------------------------+
-|  🔍 Buscar contato...                    |
-+------------------------------------------+
-|  👤 João Silva                           |
-|     +55 11 99999-9999                    |
-|  ─────────────────────────────────────── |
-|  👤 Maria Santos                         |
-|     +55 21 88888-8888                    |
-|  ─────────────────────────────────────── |
-|  👤 Pedro Costa                          |
-|     +55 31 77777-7777                    |
-+------------------------------------------+
-```
-
-**Funcionalidades:**
-- Busca em tempo real por nome ou telefone
-- Mostra apenas contatos com telefone válido
-- Ao clicar, cria/busca thread WhatsApp e seleciona no chat
-
-### 2. Adicionar Botão no Header de Mensagens
-
-No `MessagesList.tsx`, adicionar botão ao lado do contador:
+**Estrutura corrigida:**
 
 ```tsx
-<div className="flex items-center justify-between mb-4">
-  <h1 className="text-xl font-semibold text-foreground">
-    {t('nav.messages')}
-  </h1>
-  <div className="flex items-center gap-2">
-    <Button 
-      variant="outline" 
-      size="icon"
-      onClick={() => setShowNewConversation(true)}
-    >
-      <MessageSquarePlus className="w-4 h-4" />
-    </Button>
-    <Badge color="gray" size="md">
-      {threads?.length || 0}
-    </Badge>
+import { Dialog, DialogContent } from '@/components/ui/dialog';
+
+// ...
+
+return (
+  <div className="flex flex-col h-full">
+    {/* 24h Warning - sempre visível */}
+    {!isIn24hWindow && messages.length > 0 && (
+      <Alert>...</Alert>
+    )}
+
+    {/* Messages - SEMPRE visíveis */}
+    <ScrollArea className="flex-1 min-h-[200px]">
+      {/* lista de mensagens */}
+    </ScrollArea>
+
+    {/* Input Area */}
+    <div className="pt-4 border-t mt-4">
+      {isIn24hWindow || messages.length === 0 ? (
+        // Input completo com upload, audio, emoji, IA
+      ) : (
+        // Botão para abrir templates
+        <Button onClick={() => setShowTemplates(true)}>
+          Enviar Template
+        </Button>
+      )}
+    </div>
+
+    {/* Template Selector as Dialog */}
+    <Dialog open={showTemplates} onOpenChange={setShowTemplates}>
+      <DialogContent className="max-w-2xl max-h-[80vh] overflow-y-auto">
+        <WhatsAppTemplateSelector
+          onSelect={handleSendTemplate}
+          onCancel={() => setShowTemplates(false)}
+          loading={submitting}
+        />
+      </DialogContent>
+    </Dialog>
   </div>
-</div>
+);
 ```
 
-### 3. Reescrever `ContactMessages.tsx`
+### 2. NewConversationDialog.tsx
 
-O novo componente terá a mesma estrutura visual do chat principal, mas integrado dentro da aba do contato.
+**Adicionar validação de nome:**
 
-**Estrutura:**
+```tsx
+// Função helper para validar nome
+const getDisplayName = (contact: Contact): string => {
+  const name = contact.full_name?.trim();
+  if (!name) return contact.phone;
+  
+  // Remove caracteres não-alfanuméricos e verifica se sobra algo
+  const cleanName = name.replace(/[^\p{L}\p{N}\s]/gu, '').trim();
+  if (cleanName.length === 0) return contact.phone;
+  
+  return name;
+};
 
-```text
-+------------------------------------------------+
-| [Alerta de janela 24h - se aplicável]          |
-+------------------------------------------------+
-|                                                 |
-|   Mensagens do contato aparecem aqui           |
-|   com balões verdes (enviadas) e               |
-|   cinzas (recebidas)                           |
-|                                                 |
-|   Suporte a:                                   |
-|   - Imagens, áudio, vídeo, documentos          |
-|   - Status ✓ ✓✓ (azul)                        |
-|   - Badge "Agente IA" quando aplicável         |
-|                                                 |
-+------------------------------------------------+
-| [📎] [🎤] | Digite uma mensagem...  | [✨] [▶] |
-+------------------------------------------------+
+// Na renderização:
+{contacts?.map((contact) => {
+  const displayName = getDisplayName(contact);
+  const showPhoneAsSecondary = displayName !== contact.phone;
+  
+  return (
+    <button key={contact.id} ...>
+      <Avatar fallbackText={displayName} size="md" />
+      <div className="flex-1 min-w-0">
+        <p className="font-medium text-sm truncate">{displayName}</p>
+        {showPhoneAsSecondary && (
+          <p className="text-xs text-muted-foreground truncate">
+            {contact.phone}
+          </p>
+        )}
+      </div>
+    </button>
+  );
+})}
 ```
-
-**Props do componente:**
-```typescript
-interface ContactMessagesProps {
-  contactId: string;
-}
-```
-
-**Funcionalidades incluídas:**
-- `MediaUploadButton` - Upload de arquivos
-- `AudioRecorder` - Gravação de áudio
-- `EmojiPicker` - Seleção de emojis
-- AI Text Improvement (se IA habilitada)
-- `WhatsAppTemplateSelector` - Para fora da janela 24h
-- `WhatsAppFormattedText` - Renderização de markdown
-- Realtime subscription para mensagens
-- Status de entrega (sending → sent → delivered → read)
 
 ---
 
-## Fluxo de Dados
+## Comportamento Final
 
-### Nova Conversa
+### ContactMessages:
 
-```text
-┌─────────────────┐     ┌──────────────────┐     ┌────────────────┐
-│ Clica no "+"    │────▶│ Dialog abre      │────▶│ Busca contatos │
-│                 │     │ com busca        │     │ com telefone   │
-└─────────────────┘     └──────────────────┘     └────────────────┘
-                                                         │
-         ┌───────────────────────────────────────────────┘
-         ▼
-┌─────────────────┐     ┌──────────────────┐     ┌────────────────┐
-│ Seleciona       │────▶│ Busca thread     │────▶│ Abre chat com  │
-│ contato         │     │ WhatsApp ou cria │     │ thread         │
-└─────────────────┘     └──────────────────┘     └────────────────┘
-```
+1. **Sempre mostra mensagens** - usuário pode rolar e ler toda a conversa
+2. **Fora da janela 24h**: mostra botão "Enviar Template"
+3. **Ao clicar**: abre Dialog com seletor de templates
+4. **Pode cancelar**: fecha Dialog e continua lendo as mensagens
 
-### Aba de Mensagens do Contato
+### NewConversationDialog:
 
-```text
-┌─────────────────┐     ┌──────────────────┐     ┌────────────────┐
-│ Abre aba        │────▶│ Busca thread     │────▶│ Carrega        │
-│ "Mensagens"     │     │ WhatsApp         │     │ mensagens      │
-└─────────────────┘     └──────────────────┘     └────────────────┘
-                                                         │
-         ┌───────────────────────────────────────────────┘
-         ▼
-┌─────────────────┐     ┌──────────────────┐
-│ Inscreve em     │────▶│ UI atualiza em   │
-│ Realtime        │     │ tempo real       │
-└─────────────────┘     └──────────────────┘
-```
+1. **Contatos com nome válido**: mostra nome + telefone abaixo
+2. **Contatos sem nome válido**: mostra telefone como nome principal
+3. **Avatar**: usa o nome de exibição (válido ou telefone)
 
 ---
 
 ## Checklist de Validação
 
-**Nova Conversa:**
-- [ ] Botão "+" aparece no header de mensagens
-- [ ] Dialog abre ao clicar
-- [ ] Busca de contatos funciona
-- [ ] Contatos sem telefone não aparecem
-- [ ] Ao selecionar, thread é criada/buscada
-- [ ] Chat abre com o contato selecionado
-
-**Aba de Mensagens do Contato:**
-- [ ] Chat WhatsApp aparece na aba
-- [ ] Mensagens carregam corretamente
-- [ ] Upload de arquivos funciona
-- [ ] Gravação de áudio funciona
-- [ ] Emoji picker funciona
-- [ ] Melhoria de texto com IA funciona (se disponível)
-- [ ] Status de entrega aparece
-- [ ] Janela de 24h é respeitada
-- [ ] Templates aparecem quando fora da janela
-- [ ] Realtime atualiza mensagens automaticamente
+- [ ] Mensagens sempre visíveis, mesmo fora da janela 24h
+- [ ] Scroll funciona para ler histórico
+- [ ] Template Selector abre como Dialog
+- [ ] Pode cancelar seleção de template
+- [ ] Contatos mostram nome ou fallback para telefone
+- [ ] Avatar funciona com fallback
+- [ ] Busca continua funcionando
 
 ---
 
 ## Seção Técnica
 
-### Estrutura do NewConversationDialog
+### Regex para validar nome
 
 ```typescript
-// src/components/messages/NewConversationDialog.tsx
-
-interface NewConversationDialogProps {
-  open: boolean;
-  onOpenChange: (open: boolean) => void;
-  onSelectContact: (contactId: string, threadId: string) => void;
-}
-
-// Busca contatos com telefone válido
-const { data: contacts } = useQuery({
-  queryKey: ['contacts-with-phone', organization?.id, search],
-  queryFn: async () => {
-    return supabase
-      .from('contacts')
-      .select('id, full_name, phone')
-      .eq('organization_id', organization.id)
-      .not('phone', 'is', null)
-      .ilike('full_name', `%${search}%`)
-      .is('deleted_at', null)
-      .limit(20);
-  }
-});
-
-// Ao selecionar contato
-const handleSelect = async (contactId: string) => {
-  // Busca thread existente ou cria nova
-  const { data: thread } = await supabase
-    .from('message_threads')
-    .select('id')
-    .eq('organization_id', organization.id)
-    .eq('contact_id', contactId)
-    .eq('channel', 'whatsapp')
-    .maybeSingle();
-
-  if (thread) {
-    onSelectContact(contactId, thread.id);
-  } else {
-    // Cria nova thread
-    const { data: newThread } = await supabase
-      .from('message_threads')
-      .insert({
-        organization_id: organization.id,
-        contact_id: contactId,
-        channel: 'whatsapp'
-      })
-      .select()
-      .single();
-    
-    onSelectContact(contactId, newThread.id);
-  }
-};
+// Remove caracteres especiais Unicode (emojis, zero-width joiners, etc)
+const cleanName = name.replace(/[^\p{L}\p{N}\s]/gu, '').trim();
 ```
 
-### Estrutura do ContactMessages Reescrito
+- `\p{L}` - qualquer letra (Unicode)
+- `\p{N}` - qualquer número (Unicode)
+- `\s` - espaços
+- `u` flag - modo Unicode
 
-```typescript
-// src/components/contacts/ContactMessages.tsx
+Isso remove:
+- Emojis
+- Zero-width joiners (`‍`)
+- Soft hyphens (`­`)
+- Outros caracteres especiais
 
-interface ContactMessagesProps {
-  contactId: string;
-}
+### Por que Dialog ao invés de substituir?
 
-// Componentes reutilizados:
-import { MediaUploadButton } from '@/components/whatsapp/MediaUploadButton';
-import { AudioRecorder } from '@/components/whatsapp/AudioRecorder';
-import { WhatsAppTemplateSelector } from '@/components/whatsapp/WhatsAppTemplateSelector';
-import { WhatsAppFormattedText } from '@/components/whatsapp/WhatsAppFormattedText';
-import { AudioMessagePlayer } from '@/components/whatsapp/AudioMessagePlayer';
-import EmojiPicker from 'emoji-picker-react';
-
-// Estados principais:
-const [threadId, setThreadId] = useState<string | null>(null);
-const [messages, setMessages] = useState<Message[]>([]);
-const [isIn24hWindow, setIsIn24hWindow] = useState(false);
-const [showTemplates, setShowTemplates] = useState(false);
-
-// Realtime subscription:
-useEffect(() => {
-  if (!threadId) return;
-  
-  const channel = supabase
-    .channel(`contact-messages-${threadId}`)
-    .on('postgres_changes', {
-      event: 'INSERT',
-      schema: 'public',
-      table: 'messages',
-      filter: `thread_id=eq.${threadId}`,
-    }, (payload) => {
-      setMessages(prev => [...prev, payload.new]);
-    })
-    .subscribe();
-
-  return () => supabase.removeChannel(channel);
-}, [threadId]);
-```
-
-### Integração com o Hook de IA
-
-```typescript
-// Verificar se organização tem IA
-const { data: hasAI } = useQuery({
-  queryKey: ['org-has-ai', organization?.id],
-  queryFn: async () => {
-    const { data } = await supabase
-      .from('organization_integrations')
-      .select('is_enabled, integration:admin_integrations!inner(slug)')
-      .eq('organization_id', organization.id)
-      .eq('is_enabled', true)
-      .in('integration.slug', ['claude-ai', 'openai-gpt']);
-    
-    return data && data.length > 0;
-  }
-});
-
-// Se hasAI, mostrar botão de melhoria de texto
-{hasAI && messageText.trim() && (
-  <DropdownMenu>
-    <DropdownMenuTrigger asChild>
-      <Button variant="ghost" size="icon">
-        <Sparkles className="w-4 h-4" />
-      </Button>
-    </DropdownMenuTrigger>
-    <DropdownMenuContent>
-      <DropdownMenuItem onClick={() => handleImproveText('grammar')}>
-        Corrigir gramática
-      </DropdownMenuItem>
-      <DropdownMenuItem onClick={() => handleImproveText('professional')}>
-        Tornar profissional
-      </DropdownMenuItem>
-      <DropdownMenuItem onClick={() => handleImproveText('friendly')}>
-        Tornar amigável
-      </DropdownMenuItem>
-    </DropdownMenuContent>
-  </DropdownMenu>
-)}
-```
+Usando Dialog:
+1. O componente pai continua renderizado
+2. Usuário vê as mensagens por baixo
+3. Pode fechar sem enviar
+4. Melhor UX de não "perder" o contexto
