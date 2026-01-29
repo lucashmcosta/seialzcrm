@@ -7,12 +7,18 @@ import { useToast } from '@/hooks/use-toast';
 export function useTemplates(orgId: string | undefined) {
   const queryClient = useQueryClient();
 
-  // Subscribe to realtime changes
+  const query = useQuery({
+    queryKey: ['whatsapp-templates', orgId],
+    queryFn: () => whatsappService.listTemplates(orgId!),
+    enabled: !!orgId,
+  });
+
+  // Subscribe to realtime changes - effect runs after initial render
   useEffect(() => {
     if (!orgId) return;
 
     const channel = supabase
-      .channel(`whatsapp_templates_${orgId}`)
+      .channel(`whatsapp-templates-list-${orgId}`)
       .on(
         'postgres_changes',
         {
@@ -33,24 +39,26 @@ export function useTemplates(orgId: string | undefined) {
     return () => {
       supabase.removeChannel(channel);
     };
-  }, [orgId, queryClient]);
+  }, [orgId]); // queryClient is stable, no need in deps
 
-  return useQuery({
-    queryKey: ['whatsapp-templates', orgId],
-    queryFn: () => whatsappService.listTemplates(orgId!),
-    enabled: !!orgId,
-  });
+  return query;
 }
 
 export function useTemplate(orgId: string | undefined, templateId: string | undefined) {
   const queryClient = useQueryClient();
+
+  const query = useQuery({
+    queryKey: ['whatsapp-template', orgId, templateId],
+    queryFn: () => whatsappService.getTemplate(orgId!, templateId!),
+    enabled: !!orgId && !!templateId,
+  });
 
   // Subscribe to realtime changes for this specific template
   useEffect(() => {
     if (!orgId || !templateId) return;
 
     const channel = supabase
-      .channel(`whatsapp_template_${templateId}`)
+      .channel(`whatsapp-template-detail-${templateId}`)
       .on(
         'postgres_changes',
         {
@@ -70,13 +78,9 @@ export function useTemplate(orgId: string | undefined, templateId: string | unde
     return () => {
       supabase.removeChannel(channel);
     };
-  }, [orgId, templateId, queryClient]);
+  }, [orgId, templateId]); // queryClient is stable, no need in deps
 
-  return useQuery({
-    queryKey: ['whatsapp-template', orgId, templateId],
-    queryFn: () => whatsappService.getTemplate(orgId!, templateId!),
-    enabled: !!orgId && !!templateId,
-  });
+  return query;
 }
 
 export function useCreateTemplate() {
