@@ -1,21 +1,45 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useOrganization } from '@/hooks/useOrganization';
 import { useTranslation } from '@/lib/i18n';
 import { supabase } from '@/integrations/supabase/client';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
+import { ScrollArea } from '@/components/ui/scroll-area';
+import { Alert, AlertDescription } from '@/components/ui/alert';
+import { Badge } from '@/components/base/badges/badges';
+import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu';
 import { useToast } from '@/hooks/use-toast';
-import { Loader2, Send, MessageSquare } from 'lucide-react';
+import { useQuery } from '@tanstack/react-query';
+import { useAI } from '@/hooks/useAI';
+import { Loader2, Send, Clock, Check, CheckCheck, AlertCircle, Bot, Sparkles, SpellCheck, Briefcase, Smile } from 'lucide-react';
+import { FaceSmile } from '@untitledui/icons';
 import { formatDistanceToNow } from 'date-fns';
 import { ptBR, enUS } from 'date-fns/locale';
+import { WhatsAppTemplateSelector } from '@/components/whatsapp/WhatsAppTemplateSelector';
+import { AudioRecorder } from '@/components/whatsapp/AudioRecorder';
+import { AudioMessagePlayer } from '@/components/whatsapp/AudioMessagePlayer';
+import { MediaUploadButton } from '@/components/whatsapp/MediaUploadButton';
+import { WhatsAppFormattedText } from '@/components/whatsapp/WhatsAppFormattedText';
+import EmojiPicker, { EmojiClickData, Theme } from 'emoji-picker-react';
 
 interface Message {
   id: string;
   content: string;
   direction: string;
   sent_at: string;
-  created_at: string;
+  whatsapp_status: string | null;
+  media_urls: string[] | null;
+  media_type: string | null;
+  error_message: string | null;
+  sender_type: 'user' | 'agent' | 'system' | null;
+  sender_name: string | null;
+  sender_agent_id: string | null;
 }
 
 interface ContactMessagesProps {
@@ -25,44 +49,152 @@ interface ContactMessagesProps {
 
 export function ContactMessages({ contactId, opportunityId }: ContactMessagesProps) {
   const { organization, locale, userProfile } = useOrganization();
-  const { t } = useTranslation(locale as any);
+  const { t } = useTranslation(locale as 'pt-BR' | 'en-US');
   const { toast } = useToast();
+  const scrollRef = useRef<HTMLDivElement>(null);
+  const textareaRef = useRef<HTMLTextAreaElement>(null);
+
   const [messages, setMessages] = useState<Message[]>([]);
   const [threadId, setThreadId] = useState<string | null>(null);
+  const [resolvedContactId, setResolvedContactId] = useState<string | null>(contactId || null);
   const [loading, setLoading] = useState(true);
   const [messageText, setMessageText] = useState('');
   const [submitting, setSubmitting] = useState(false);
+  const [isIn24hWindow, setIsIn24hWindow] = useState(false);
+  const [showTemplates, setShowTemplates] = useState(false);
+  const [showEmojiPicker, setShowEmojiPicker] = useState(false);
+  const [aiImproving, setAiImproving] = useState(false);
+
+  const { generate: generateAI } = useAI();
+  const dateLocale = locale === 'pt-BR' ? ptBR : enUS;
+
+  // Check if organization has AI enabled
+  const { data: hasAI } = useQuery({
+    queryKey: ['org-has-ai', organization?.id],
+    queryFn: async () => {
+      if (!organization?.id) return false;
+      
+      const { data } = await supabase
+        .from('organization_integrations')
+        .select('is_enabled, integration:admin_integrations!inner(slug)')
+        .eq('organization_id', organization.id)
+        .eq('is_enabled', true)
+        .in('integration.slug', ['claude-ai', 'openai-gpt']);
+      
+      return data && data.length > 0;
+    },
+    enabled: !!organization?.id,
+  });
 
   useEffect(() => {
     fetchThread();
   }, [contactId, opportunityId, organization?.id]);
 
+  // Real-time subscription
+  useEffect(() => {
+    if (!threadId) return;
+
+    const channel = supabase
+      .channel(`contact-whatsapp-messages-${threadId}`)
+      .on('postgres_changes', {
+        event: 'INSERT',
+        schema: 'public',
+        table: 'messages',
+        filter: `thread_id=eq.${threadId}`,
+      }, (payload) => {
+        const newMessage = payload.new as Message;
+        setMessages((prev) => {
+          // Avoid duplicates and remove temp messages
+          const filtered = prev.filter(
+            (m) => !m.id.startsWith('temp-') && m.id !== newMessage.id
+          );
+          return [...filtered, newMessage];
+        });
+        scrollToBottom();
+      })
+      .on('postgres_changes', {
+        event: 'UPDATE',
+        schema: 'public',
+        table: 'messages',
+        filter: `thread_id=eq.${threadId}`,
+      }, (payload) => {
+        setMessages((prev) =>
+          prev.map((m) => (m.id === payload.new.id ? (payload.new as Message) : m))
+        );
+      })
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, [threadId]);
+
+  const scrollToBottom = () => {
+    setTimeout(() => {
+      scrollRef.current?.scrollIntoView({ behavior: 'smooth' });
+    }, 100);
+  };
+
   const fetchThread = async () => {
-    if (!organization?.id) return;
+    if (!organization?.id) {
+      setLoading(false);
+      return;
+    }
+
+    // Need either contactId or opportunityId
     if (!contactId && !opportunityId) {
       setLoading(false);
       return;
     }
 
     try {
-      // Check if thread exists
-      let query = supabase
-        .from('message_threads')
-        .select('id')
-        .eq('organization_id', organization.id)
-        .eq('channel', 'internal');
+      let targetContactId = contactId;
 
-      if (opportunityId) {
-        query = query.eq('opportunity_id', opportunityId);
-      } else if (contactId) {
-        query = query.eq('contact_id', contactId);
+      // If opportunityId is provided, get the contact_id from the opportunity
+      if (opportunityId && !contactId) {
+        const { data: opportunity } = await supabase
+          .from('opportunities')
+          .select('contact_id')
+          .eq('id', opportunityId)
+          .single();
+
+        if (!opportunity?.contact_id) {
+          // No contact linked to this opportunity
+          setLoading(false);
+          return;
+        }
+
+        targetContactId = opportunity.contact_id;
       }
 
-      const { data: threadData } = await query.maybeSingle();
+      if (!targetContactId) {
+        setLoading(false);
+        return;
+      }
 
-      if (threadData) {
-        setThreadId(threadData.id);
-        fetchMessages(threadData.id);
+      // Store the resolved contact ID for use in send functions
+      setResolvedContactId(targetContactId);
+
+      const { data: thread } = await supabase
+        .from('message_threads')
+        .select('id, whatsapp_last_inbound_at')
+        .eq('organization_id', organization.id)
+        .eq('contact_id', targetContactId)
+        .eq('channel', 'whatsapp')
+        .maybeSingle();
+
+      if (thread) {
+        setThreadId(thread.id);
+        
+        // Check 24h window
+        if (thread.whatsapp_last_inbound_at) {
+          const lastInbound = new Date(thread.whatsapp_last_inbound_at);
+          const now = new Date();
+          const hoursDiff = (now.getTime() - lastInbound.getTime()) / (1000 * 60 * 60);
+          setIsIn24hWindow(hoursDiff < 24);
+        }
+
+        await fetchMessages(thread.id);
       } else {
         setLoading(false);
       }
@@ -76,13 +208,14 @@ export function ContactMessages({ contactId, opportunityId }: ContactMessagesPro
     try {
       const { data, error } = await supabase
         .from('messages')
-        .select('*')
+        .select('id, content, direction, sent_at, whatsapp_status, media_urls, media_type, error_message, sender_type, sender_name, sender_agent_id')
         .eq('thread_id', thread)
         .is('deleted_at', null)
         .order('sent_at', { ascending: true });
 
       if (error) throw error;
-      setMessages(data || []);
+      setMessages((data as Message[]) || []);
+      scrollToBottom();
     } catch (error) {
       console.error('Error fetching messages:', error);
     } finally {
@@ -90,114 +223,367 @@ export function ContactMessages({ contactId, opportunityId }: ContactMessagesPro
     }
   };
 
-  const handleSendMessage = async () => {
-    if (!organization?.id || !userProfile?.id || !messageText.trim()) return;
+  const uploadMediaToStorage = async (file: File): Promise<{ url: string; mediaType: string }> => {
+    const fileExt = file.name.split('.').pop()?.toLowerCase() || 'bin';
+    const fileName = `${Date.now()}-${Math.random().toString(36).substring(7)}.${fileExt}`;
+    const filePath = `${organization?.id}/${fileName}`;
 
-    setSubmitting(true);
+    let mediaType = 'document';
+    if (file.type.startsWith('image/')) mediaType = 'image';
+    else if (file.type.startsWith('audio/')) mediaType = 'audio';
+    else if (file.type.startsWith('video/')) mediaType = 'video';
+
+    const { error: uploadError } = await supabase.storage
+      .from('whatsapp-media')
+      .upload(filePath, file);
+
+    if (uploadError) throw uploadError;
+
+    const { data: { publicUrl } } = supabase.storage
+      .from('whatsapp-media')
+      .getPublicUrl(filePath);
+
+    return { url: publicUrl, mediaType };
+  };
+
+  const handleSendMessage = async (mediaUrl?: string, mediaType?: string) => {
+    if (!organization?.id || !resolvedContactId || (!messageText.trim() && !mediaUrl)) return;
+
+    if (!isIn24hWindow && !mediaUrl && messages.length > 0) {
+      setShowTemplates(true);
+      return;
+    }
+
+    // Optimistic UI
+    const tempId = `temp-${Date.now()}`;
+    const tempMessage: Message = {
+      id: tempId,
+      content: messageText || (mediaUrl ? '📎 Mídia' : ''),
+      direction: 'outbound',
+      sent_at: new Date().toISOString(),
+      whatsapp_status: 'sending',
+      media_urls: mediaUrl ? [mediaUrl] : null,
+      media_type: mediaType || null,
+      error_message: null,
+      sender_type: 'user',
+      sender_name: userProfile?.full_name || null,
+      sender_agent_id: null,
+    };
+
+    setMessages((prev) => [...prev, tempMessage]);
+    const savedText = messageText;
+    setMessageText('');
+    scrollToBottom();
+
     try {
-      let currentThreadId = threadId;
-
-      // Create thread if doesn't exist
-      if (!currentThreadId) {
-        const { data: newThread, error: threadError } = await supabase
-          .from('message_threads')
-          .insert({
-            organization_id: organization.id,
-            contact_id: contactId || null,
-            opportunity_id: opportunityId || null,
-            channel: 'internal',
-          })
-          .select()
-          .single();
-
-        if (threadError) throw threadError;
-        currentThreadId = newThread.id;
-        setThreadId(currentThreadId);
-      }
-
-      // Insert message
-      const { error } = await supabase
-        .from('messages')
-        .insert({
-          organization_id: organization.id,
-          thread_id: currentThreadId,
-          sender_user_id: userProfile.id,
-          content: messageText,
-          direction: 'internal',
-          sent_at: new Date().toISOString(),
-        });
+      const { data, error } = await supabase.functions.invoke('twilio-whatsapp-send', {
+        body: {
+          organizationId: organization.id,
+          contactId: resolvedContactId,
+          threadId,
+          message: savedText || (mediaUrl ? '📎 Mídia' : ''),
+          mediaUrl,
+          mediaType,
+          userId: userProfile?.id,
+        },
+      });
 
       if (error) throw error;
 
-      // Create activity
-      await supabase.from('activities').insert({
-        organization_id: organization.id,
-        contact_id: contactId || null,
-        opportunity_id: opportunityId || null,
-        activity_type: 'message',
-        title: 'Message sent',
-        body: messageText,
-        created_by_user_id: userProfile.id,
-        occurred_at: new Date().toISOString(),
+      if (data.error) {
+        if (data.requiresTemplate) {
+          setShowTemplates(true);
+          setMessages((prev) => prev.filter((m) => m.id !== tempId));
+          toast({ description: locale === 'pt-BR' ? 'Fora da janela de 24h. Selecione um template aprovado.' : 'Outside 24h window. Select an approved template.' });
+          return;
+        }
+        throw new Error(data.error);
+      }
+
+      if (data.threadId && data.threadId !== threadId) {
+        setThreadId(data.threadId);
+      }
+    } catch (error: any) {
+      console.error('Error sending message:', error);
+      // Remove temp message on error
+      setMessages((prev) => prev.filter((m) => m.id !== tempId));
+      toast({ variant: 'destructive', description: error.message || 'Erro ao enviar mensagem' });
+    }
+  };
+
+  const handleSendTemplate = async (templateId: string, variables: Record<string, string>) => {
+    if (!organization?.id || !resolvedContactId) return;
+
+    setSubmitting(true);
+    setShowTemplates(false);
+
+    try {
+      const { data, error } = await supabase.functions.invoke('twilio-whatsapp-send', {
+        body: {
+          organizationId: organization.id,
+          contactId: resolvedContactId,
+          threadId,
+          templateId,
+          templateVariables: variables,
+          userId: userProfile?.id,
+        },
       });
 
-      setMessageText('');
-      fetchMessages(currentThreadId);
-    } catch (error) {
-      console.error('Error sending message:', error);
-      toast({ variant: 'destructive', description: t('common.error') });
+      if (error) throw error;
+      if (data.error) throw new Error(data.error);
+
+      if (data.threadId && data.threadId !== threadId) {
+        setThreadId(data.threadId);
+        await fetchMessages(data.threadId);
+      }
+
+      toast({ description: locale === 'pt-BR' ? 'Mensagem enviada!' : 'Message sent!' });
+    } catch (error: any) {
+      console.error('Error sending template:', error);
+      toast({ variant: 'destructive', description: error.message || 'Erro ao enviar template' });
     } finally {
       setSubmitting(false);
     }
   };
 
-  const dateLocale = locale === 'pt-BR' ? ptBR : enUS;
+  const handleMediaUpload = async (file: File) => {
+    if (!organization?.id) return;
+
+    try {
+      const { url, mediaType } = await uploadMediaToStorage(file);
+      await handleSendMessage(url, mediaType);
+    } catch (error: any) {
+      console.error('Error uploading media:', error);
+      toast({ variant: 'destructive', description: error.message || 'Erro ao enviar mídia' });
+    }
+  };
+
+  const handleAudioSend = async (audioBlob: Blob) => {
+    if (!organization?.id) return;
+
+    try {
+      const audioFile = new File([audioBlob], `audio-${Date.now()}.ogg`, { type: audioBlob.type });
+      const { url } = await uploadMediaToStorage(audioFile);
+      await handleSendMessage(url, 'audio');
+    } catch (error: any) {
+      console.error('Error sending audio:', error);
+      toast({ variant: 'destructive', description: error.message || 'Erro ao enviar áudio' });
+    }
+  };
+
+  const handleImproveText = async (mode: 'grammar' | 'professional' | 'friendly') => {
+    if (!messageText.trim()) return;
+
+    setAiImproving(true);
+
+    try {
+      const result = await generateAI({
+        action: 'improve_text',
+        context: { text: messageText, mode }
+      });
+
+      setMessageText(result.content);
+    } catch (error: any) {
+      console.error('AI improvement error:', error);
+    } finally {
+      setAiImproving(false);
+    }
+  };
+
+  const onEmojiClick = (emojiData: EmojiClickData) => {
+    setMessageText((prev) => prev + emojiData.emoji);
+    setShowEmojiPicker(false);
+    textareaRef.current?.focus();
+  };
+
+  const renderStatusIcon = (status: string | null) => {
+    switch (status) {
+      case 'sending':
+        return <Clock className="w-3 h-3 text-muted-foreground" />;
+      case 'sent':
+        return <Check className="w-3 h-3 text-muted-foreground" />;
+      case 'delivered':
+        return <CheckCheck className="w-3 h-3 text-muted-foreground" />;
+      case 'read':
+        return <CheckCheck className="w-3 h-3 text-blue-500" />;
+      case 'failed':
+        return <AlertCircle className="w-3 h-3 text-destructive" />;
+      default:
+        return null;
+    }
+  };
+
+  const renderMediaContent = (message: Message) => {
+    if (!message.media_urls || message.media_urls.length === 0) return null;
+
+    return (
+      <div className="mb-2 space-y-2">
+        {message.media_urls.map((url, i) => {
+          if (message.media_type === 'audio' || url.match(/\.(ogg|mp3|wav|m4a)$/i)) {
+            return <AudioMessagePlayer key={i} src={url} />;
+          }
+          if (message.media_type === 'video' || url.match(/\.(mp4|mov|webm|avi)$/i)) {
+            return (
+              <video key={i} src={url} controls className="max-w-full rounded" preload="metadata" />
+            );
+          }
+          if (message.media_type === 'image' || url.match(/\.(jpg|jpeg|png|gif|webp)$/i)) {
+            return (
+              <img
+                key={i}
+                src={url}
+                alt="Media"
+                className="max-w-full rounded cursor-pointer hover:opacity-90 transition-opacity"
+                onClick={() => window.open(url, '_blank')}
+              />
+            );
+          }
+          return (
+            <a
+              key={i}
+              href={url}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="flex items-center gap-2 p-2 rounded bg-background/50 hover:bg-background/80 transition-colors text-sm underline"
+            >
+              Ver documento
+            </a>
+          );
+        })}
+      </div>
+    );
+  };
 
   if (loading) {
     return (
-      <Card>
-        <CardContent className="py-8 flex justify-center">
-          <Loader2 className="h-8 w-8 animate-spin" />
-        </CardContent>
-      </Card>
+      <div className="flex items-center justify-center py-8">
+        <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
+      </div>
+    );
+  }
+
+  if (showTemplates) {
+    return (
+      <WhatsAppTemplateSelector
+        onSelect={handleSendTemplate}
+        onCancel={() => setShowTemplates(false)}
+        loading={submitting}
+      />
     );
   }
 
   return (
-    <Card>
-      <CardHeader>
-        <CardTitle>Messages</CardTitle>
-      </CardHeader>
-      <CardContent>
-        <div className="space-y-4">
-          <div className="space-y-3 min-h-[200px] max-h-[400px] overflow-y-auto">
-            {messages.length === 0 ? (
-              <div className="flex flex-col items-center justify-center py-12 text-muted-foreground">
-                <MessageSquare className="w-12 h-12 mb-2 opacity-20" />
-                <p>No messages yet</p>
+    <div className="flex flex-col h-full">
+      {/* 24h Window Warning */}
+      {!isIn24hWindow && messages.length > 0 && (
+        <Alert className="mb-4 border-orange-200 bg-orange-50 dark:bg-orange-950/20">
+          <Clock className="h-4 w-4 text-orange-500" />
+          <AlertDescription className="text-orange-700 dark:text-orange-300">
+            {locale === 'pt-BR'
+              ? 'Fora da janela de 24h. Você precisará usar um template aprovado para enviar mensagens.'
+              : 'Outside 24h window. You need to use an approved template to send messages.'}
+          </AlertDescription>
+        </Alert>
+      )}
+
+      {/* Messages */}
+      <ScrollArea className="flex-1 min-h-[250px] max-h-[400px]">
+        <div className="space-y-3 p-1">
+          {messages.length === 0 ? (
+            <div className="flex flex-col items-center justify-center py-12 text-muted-foreground">
+              <div className="w-12 h-12 rounded-full bg-green-100 dark:bg-green-900/30 flex items-center justify-center mb-3">
+                <svg viewBox="0 0 24 24" className="w-6 h-6 text-green-600 dark:text-green-400" fill="currentColor">
+                  <path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347m-5.421 7.403h-.004a9.87 9.87 0 01-5.031-1.378l-.361-.214-3.741.982.998-3.648-.235-.374a9.86 9.86 0 01-1.51-5.26c.001-5.45 4.436-9.884 9.888-9.884 2.64 0 5.122 1.03 6.988 2.898a9.825 9.825 0 012.893 6.994c-.003 5.45-4.437 9.884-9.885 9.884m8.413-18.297A11.815 11.815 0 0012.05 0C5.495 0 .16 5.335.157 11.892c0 2.096.547 4.142 1.588 5.945L.057 24l6.305-1.654a11.882 11.882 0 005.683 1.448h.005c6.554 0 11.89-5.335 11.893-11.893a11.821 11.821 0 00-3.48-8.413z"/>
+                </svg>
               </div>
-            ) : (
-              messages.map((message) => (
-                <div key={message.id} className="flex gap-3">
-                  <div className="flex-shrink-0 w-8 h-8 rounded-full bg-primary/10 flex items-center justify-center text-primary text-sm font-semibold">
-                    {userProfile?.full_name?.charAt(0) || 'U'}
-                  </div>
-                  <div className="flex-1 min-w-0">
-                    <div className="bg-muted rounded-lg p-3">
-                      <p className="text-sm text-foreground whitespace-pre-wrap">{message.content}</p>
+              <p className="text-sm">{locale === 'pt-BR' ? 'Nenhuma mensagem WhatsApp' : 'No WhatsApp messages'}</p>
+              <p className="text-xs">{locale === 'pt-BR' ? 'Envie uma mensagem para iniciar a conversa' : 'Send a message to start the conversation'}</p>
+            </div>
+          ) : (
+            messages.map((message) => {
+              const isOutbound = message.direction === 'outbound';
+              return (
+                <div
+                  key={message.id}
+                  className={`flex ${isOutbound ? 'justify-end' : 'justify-start'}`}
+                >
+                  <div
+                    className={`max-w-[75%] rounded-lg p-3 ${
+                      isOutbound
+                        ? 'bg-green-100 dark:bg-green-900/40 text-green-900 dark:text-green-100'
+                        : 'bg-muted'
+                    }`}
+                  >
+                    {/* Agent Badge */}
+                    {isOutbound && message.sender_type === 'agent' && (
+                      <div className="flex items-center gap-2 mb-2">
+                        <Badge color="purple" size="sm" icon={<Bot className="w-3 h-3" />}>
+                          {message.sender_name || 'Agente IA'}
+                        </Badge>
+                      </div>
+                    )}
+
+                    {/* Media */}
+                    {renderMediaContent(message)}
+
+                    {/* Content */}
+                    {message.content && (
+                      <WhatsAppFormattedText content={message.content} />
+                    )}
+
+                    {/* Error */}
+                    {message.error_message && (
+                      <p className="text-xs text-destructive mt-1">{message.error_message}</p>
+                    )}
+
+                    {/* Footer */}
+                    <div className="flex items-center justify-end gap-1 mt-1">
+                      <span className="text-xs text-muted-foreground">
+                        {formatDistanceToNow(new Date(message.sent_at), {
+                          addSuffix: true,
+                          locale: dateLocale,
+                        })}
+                      </span>
+                      {isOutbound && renderStatusIcon(message.whatsapp_status)}
                     </div>
-                    <p className="text-xs text-muted-foreground mt-1">
-                      {formatDistanceToNow(new Date(message.sent_at), { addSuffix: true, locale: dateLocale })}
-                    </p>
                   </div>
                 </div>
-              ))
-            )}
-          </div>
+              );
+            })
+          )}
+          <div ref={scrollRef} />
+        </div>
+      </ScrollArea>
 
-          <div className="flex gap-2">
+      {/* Input */}
+      <div className="pt-4 border-t mt-4">
+        {isIn24hWindow || messages.length === 0 ? (
+          <div className="flex gap-2 items-end">
+            <div className="flex gap-1">
+              <MediaUploadButton onFileSelected={handleMediaUpload} disabled={submitting} />
+              <AudioRecorder onSend={handleAudioSend} disabled={submitting} />
+              
+              {/* Emoji Picker */}
+              <Popover open={showEmojiPicker} onOpenChange={setShowEmojiPicker}>
+                <PopoverTrigger asChild>
+                  <Button variant="ghost" size="icon" className="h-9 w-9" disabled={submitting}>
+                    <FaceSmile className="w-5 h-5 text-muted-foreground" />
+                  </Button>
+                </PopoverTrigger>
+                <PopoverContent className="w-auto p-0 border-none" align="start" side="top">
+                  <EmojiPicker
+                    onEmojiClick={onEmojiClick}
+                    theme={Theme.AUTO}
+                    lazyLoadEmojis
+                    searchPlaceholder={locale === 'pt-BR' ? 'Buscar emoji...' : 'Search emoji...'}
+                  />
+                </PopoverContent>
+              </Popover>
+            </div>
+
             <Textarea
-              placeholder="Type a message..."
+              ref={textareaRef}
+              placeholder={locale === 'pt-BR' ? 'Digite uma mensagem...' : 'Type a message...'}
               value={messageText}
               onChange={(e) => setMessageText(e.target.value)}
               onKeyDown={(e) => {
@@ -207,14 +593,57 @@ export function ContactMessages({ contactId, opportunityId }: ContactMessagesPro
                 }
               }}
               rows={2}
-              className="flex-1"
+              className="flex-1 resize-none"
+              disabled={submitting || aiImproving}
             />
-            <Button onClick={handleSendMessage} disabled={submitting || !messageText.trim()}>
-              {submitting ? <Loader2 className="w-4 h-4 animate-spin" /> : <Send className="w-4 h-4" />}
-            </Button>
+
+            <div className="flex flex-col gap-1">
+              {/* AI Improve */}
+              {hasAI && messageText.trim() && (
+                <DropdownMenu>
+                  <DropdownMenuTrigger asChild>
+                    <Button variant="ghost" size="icon" className="h-9 w-9" disabled={aiImproving}>
+                      {aiImproving ? (
+                        <Loader2 className="w-4 h-4 animate-spin" />
+                      ) : (
+                        <Sparkles className="w-4 h-4 text-muted-foreground" />
+                      )}
+                    </Button>
+                  </DropdownMenuTrigger>
+                  <DropdownMenuContent align="end">
+                    <DropdownMenuItem onClick={() => handleImproveText('grammar')}>
+                      <SpellCheck className="w-4 h-4 mr-2" />
+                      {locale === 'pt-BR' ? 'Corrigir gramática' : 'Fix grammar'}
+                    </DropdownMenuItem>
+                    <DropdownMenuItem onClick={() => handleImproveText('professional')}>
+                      <Briefcase className="w-4 h-4 mr-2" />
+                      {locale === 'pt-BR' ? 'Tornar profissional' : 'Make professional'}
+                    </DropdownMenuItem>
+                    <DropdownMenuItem onClick={() => handleImproveText('friendly')}>
+                      <Smile className="w-4 h-4 mr-2" />
+                      {locale === 'pt-BR' ? 'Tornar amigável' : 'Make friendly'}
+                    </DropdownMenuItem>
+                  </DropdownMenuContent>
+                </DropdownMenu>
+              )}
+
+              {/* Send */}
+              <Button
+                onClick={() => handleSendMessage()}
+                disabled={submitting || !messageText.trim() || aiImproving}
+                size="icon"
+                className="h-9 w-9"
+              >
+                {submitting ? <Loader2 className="w-4 h-4 animate-spin" /> : <Send className="w-4 h-4" />}
+              </Button>
+            </div>
           </div>
-        </div>
-      </CardContent>
-    </Card>
+        ) : (
+          <Button onClick={() => setShowTemplates(true)} className="w-full">
+            {locale === 'pt-BR' ? 'Enviar Template' : 'Send Template'}
+          </Button>
+        )}
+      </div>
+    </div>
   );
 }
