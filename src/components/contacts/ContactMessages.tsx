@@ -9,6 +9,12 @@ import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Badge } from '@/components/base/badges/badges';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog';
+import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
@@ -17,7 +23,7 @@ import {
 import { useToast } from '@/hooks/use-toast';
 import { useQuery } from '@tanstack/react-query';
 import { useAI } from '@/hooks/useAI';
-import { Loader2, Send, Clock, Check, CheckCheck, AlertCircle, Bot, Sparkles, SpellCheck, Briefcase, Smile } from 'lucide-react';
+import { Loader2, Send, Clock, Check, CheckCheck, AlertCircle, Bot, Sparkles, SpellCheck, Briefcase, Smile, FileText } from 'lucide-react';
 import { FaceSmile } from '@untitledui/icons';
 import { formatDistanceToNow } from 'date-fns';
 import { ptBR, enUS } from 'date-fns/locale';
@@ -462,15 +468,7 @@ export function ContactMessages({ contactId, opportunityId }: ContactMessagesPro
     );
   }
 
-  if (showTemplates) {
-    return (
-      <WhatsAppTemplateSelector
-        onSelect={handleSendTemplate}
-        onCancel={() => setShowTemplates(false)}
-        loading={submitting}
-      />
-    );
-  }
+  // Template selector is now a Dialog, not a component replacement
 
   return (
     <div className="flex flex-col h-full">
@@ -639,11 +637,28 @@ export function ContactMessages({ contactId, opportunityId }: ContactMessagesPro
             </div>
           </div>
         ) : (
-          <Button onClick={() => setShowTemplates(true)} className="w-full">
+          <Button onClick={() => setShowTemplates(true)} className="w-full" variant="outline">
+            <FileText className="w-4 h-4 mr-2" />
             {locale === 'pt-BR' ? 'Enviar Template' : 'Send Template'}
           </Button>
         )}
       </div>
+
+      {/* Template Selector Dialog */}
+      <Dialog open={showTemplates} onOpenChange={setShowTemplates}>
+        <DialogContent className="max-w-2xl max-h-[80vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle>
+              {locale === 'pt-BR' ? 'Selecionar Template' : 'Select Template'}
+            </DialogTitle>
+          </DialogHeader>
+          <WhatsAppTemplateSelector
+            onSelect={handleSendTemplate}
+            onCancel={() => setShowTemplates(false)}
+            loading={submitting}
+          />
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
