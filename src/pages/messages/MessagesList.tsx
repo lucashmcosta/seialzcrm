@@ -37,6 +37,7 @@ import { ptBR, enUS } from 'date-fns/locale';
 import { useToast } from '@/hooks/use-toast';
 import { Loader2, Check, CheckCheck, Clock, AlertCircle, Sparkles, SpellCheck, Briefcase, Smile, Bot, MessageSquarePlus } from 'lucide-react';
 import { AgentMessageFeedbackDialog } from '@/components/whatsapp/AgentMessageFeedbackDialog';
+import { NewConversationDialog } from '@/components/messages/NewConversationDialog';
 import { WhatsAppTemplateSelector } from '@/components/whatsapp/WhatsAppTemplateSelector';
 import { AudioRecorder } from '@/components/whatsapp/AudioRecorder';
 import { MediaUploadButton } from '@/components/whatsapp/MediaUploadButton';
@@ -227,6 +228,9 @@ export default function MessagesList() {
   // Agent feedback state
   const [feedbackMessage, setFeedbackMessage] = useState<Message | null>(null);
   const [showFeedbackDialog, setShowFeedbackDialog] = useState(false);
+  
+  // New conversation dialog state
+  const [showNewConversation, setShowNewConversation] = useState(false);
   
   // Check if organization has AI enabled
   const { data: hasAI } = useQuery({
@@ -751,9 +755,20 @@ export default function MessagesList() {
               <h1 className="text-xl font-semibold text-foreground">
                 {t('nav.messages')}
               </h1>
-              <Badge color="gray" size="md">
-                {threads?.length || 0}
-              </Badge>
+              <div className="flex items-center gap-2">
+                <Button
+                  variant="outline"
+                  size="icon"
+                  className="h-8 w-8"
+                  onClick={() => setShowNewConversation(true)}
+                  title={locale === 'pt-BR' ? 'Nova Conversa' : 'New Conversation'}
+                >
+                  <MessageSquarePlus className="w-4 h-4" />
+                </Button>
+                <Badge color="gray" size="md">
+                  {threads?.length || 0}
+                </Badge>
+              </div>
             </div>
             <div className="relative">
               <SearchLg className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
@@ -1209,6 +1224,16 @@ export default function MessagesList() {
           }}
         />
       )}
+
+      {/* New Conversation Dialog */}
+      <NewConversationDialog
+        open={showNewConversation}
+        onOpenChange={setShowNewConversation}
+        onSelectContact={(contactId, threadId) => {
+          setSelectedThreadId(threadId);
+          refetchThreads();
+        }}
+      />
     </Layout>
   );
 }
