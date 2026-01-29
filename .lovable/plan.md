@@ -1,10 +1,10 @@
 
 
-# Plano: Modal de Seleção de Categoria para Submissão
+# Plano: Ajustes na Interface de WhatsApp Templates
 
 ## Resumo
 
-Adicionar um dialog de seleção de categoria que aparece antes de submeter o template para aprovação. A opção "Submeter para Aprovação" será exibida para templates com status `pending` ou `not_submitted`.
+Melhorar a exibição de status e clarificar o fluxo de aprovação de templates para os usuários.
 
 ---
 
@@ -12,61 +12,51 @@ Adicionar um dialog de seleção de categoria que aparece antes de submeter o te
 
 | Arquivo | Modificação |
 |---------|-------------|
-| `src/pages/whatsapp/TemplatesList.tsx` | Adicionar dialog de categoria e expandir condição de status |
-| `src/pages/whatsapp/TemplateDetail.tsx` | Adicionar dialog de categoria e expandir condição de status |
+| `src/components/whatsapp/templates/ApprovalStatusBadge.tsx` | Adicionar suporte ao status "draft" |
+| `src/pages/whatsapp/TemplatesList.tsx` | Adicionar filtro "draft" e corrigir condição de submissão |
+| `src/pages/whatsapp/TemplateDetail.tsx` | Adicionar mensagem de "Aguardando aprovação" e corrigir botão de submissão |
 
 ---
 
 ## Mudanças Detalhadas
 
-### 1. `src/pages/whatsapp/TemplatesList.tsx`
+### 1. ApprovalStatusBadge.tsx
 
-**Adicionar imports do Dialog:**
+**Adicionar suporte ao status "draft"** como alias de `not_submitted`:
+
 ```typescript
-import {
-  Dialog,
-  DialogContent,
-  DialogHeader,
-  DialogTitle,
-  DialogDescription,
-  DialogFooter,
-} from '@/components/ui/dialog';
-import { Label } from '@/components/ui/label';
-```
+export type ApprovalStatus = 'approved' | 'pending' | 'rejected' | 'not_submitted' | 'draft';
 
-**Adicionar novos estados:**
-```typescript
-const [submitDialogOpen, setSubmitDialogOpen] = useState(false);
-const [selectedCategory, setSelectedCategory] = useState<string>('UTILITY');
-// Reutilizar selectedTemplateId já existente
-```
-
-**Nova função para abrir o modal:**
-```typescript
-const openSubmitDialog = (templateId: string) => {
-  setSelectedTemplateId(templateId);
-  setSelectedCategory('UTILITY');
-  setSubmitDialogOpen(true);
-};
-
-const confirmSubmitForApproval = async () => {
-  if (selectedTemplateId && organization?.id) {
-    await submitMutation.mutateAsync({
-      orgId: organization.id,
-      templateId: selectedTemplateId,
-      category: selectedCategory,
-    });
-    setSubmitDialogOpen(false);
-    setSelectedTemplateId(null);
-  }
+const statusConfig: Record<ApprovalStatus, {...}> = {
+  // ... mantém os existentes ...
+  draft: {
+    label: 'Rascunho',
+    icon: AlertCircle,
+    className: 'bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-400 hover:bg-slate-100',
+  },
 };
 ```
 
-**Alterar condição no DropdownMenuItem (linha 309):**
+---
+
+### 2. TemplatesList.tsx
+
+**Atualizar o tipo e filtro de status:**
+
 ```typescript
-// De: template.status === 'not_submitted'
-// Para: template.status === 'not_submitted' || template.status === 'pending'
-{(template.status === 'not_submitted' || template.status === 'pending') && (
+type FilterStatus = 'all' | 'approved' | 'pending' | 'rejected' | 'not_submitted' | 'draft';
+```
+
+**Adicionar opção "Rascunho" no filtro:**
+```typescript
+<SelectItem value="draft">Rascunho</SelectItem>
+```
+
+**Corrigir condição do botão "Submeter para Aprovação":**
+Mudar de `pending || not_submitted` para apenas `draft || not_submitted`:
+
+```typescript
+{(template.status === 'not_submitted' || template.status === 'draft') && (
   <DropdownMenuItem onClick={() => openSubmitDialog(template.id)}>
     <Send className="w-4 h-4 mr-2" />
     Submeter para Aprovação
@@ -74,202 +64,87 @@ const confirmSubmitForApproval = async () => {
 )}
 ```
 
-**Adicionar Dialog de Categoria (após ConfirmDialog existente):**
+---
+
+### 3. TemplateDetail.tsx
+
+**Corrigir condição do botão de submissão:**
 ```typescript
-<Dialog open={submitDialogOpen} onOpenChange={setSubmitDialogOpen}>
-  <DialogContent size="sm">
-    <DialogHeader>
-      <DialogTitle>Submeter para Aprovação</DialogTitle>
-      <DialogDescription>
-        Selecione a categoria do template antes de submeter para aprovação do WhatsApp.
-      </DialogDescription>
-    </DialogHeader>
-    
-    <div className="space-y-3">
-      <Label>Categoria</Label>
-      <Select value={selectedCategory} onValueChange={setSelectedCategory}>
-        <SelectTrigger>
-          <SelectValue placeholder="Selecione a categoria" />
-        </SelectTrigger>
-        <SelectContent>
-          <SelectItem value="UTILITY">Utilidade</SelectItem>
-          <SelectItem value="MARKETING">Marketing</SelectItem>
-          <SelectItem value="AUTHENTICATION">Autenticação</SelectItem>
-        </SelectContent>
-      </Select>
-      <p className="text-xs text-muted-foreground">
-        A categoria determina as regras de envio e custos do WhatsApp.
-      </p>
-    </div>
-    
-    <DialogFooter>
-      <Button variant="outline" onClick={() => setSubmitDialogOpen(false)}>
-        Cancelar
-      </Button>
-      <Button 
-        onClick={confirmSubmitForApproval} 
-        disabled={submitMutation.isPending}
-      >
-        {submitMutation.isPending ? (
-          <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-        ) : (
-          <Send className="w-4 h-4 mr-2" />
-        )}
-        Submeter
-      </Button>
-    </DialogFooter>
-  </DialogContent>
-</Dialog>
+const canSubmit = template.status === 'not_submitted' || template.status === 'draft';
+```
+
+**Adicionar card informativo quando status é "pending":**
+Após o card de rejeição, adicionar:
+
+```typescript
+{template.status === 'pending' && (
+  <Card className="border-yellow-200 bg-yellow-50 dark:border-yellow-900/50 dark:bg-yellow-950/30">
+    <CardContent className="pt-4">
+      <div className="flex items-start gap-3">
+        <Clock className="w-5 h-5 text-yellow-600 dark:text-yellow-500 mt-0.5" />
+        <div>
+          <p className="font-medium text-yellow-800 dark:text-yellow-400">
+            Aguardando Aprovação do WhatsApp
+          </p>
+          <p className="text-sm text-yellow-700 dark:text-yellow-500 mt-1">
+            Este template foi submetido e está aguardando revisão do WhatsApp. 
+            O processo pode levar de alguns minutos a 24 horas.
+          </p>
+        </div>
+      </div>
+    </CardContent>
+  </Card>
+)}
 ```
 
 ---
 
-### 2. `src/pages/whatsapp/TemplateDetail.tsx`
+## Fluxo de Status
 
-**Adicionar imports do Dialog:**
-```typescript
-import {
-  Dialog,
-  DialogContent,
-  DialogHeader,
-  DialogTitle,
-  DialogDescription,
-  DialogFooter,
-} from '@/components/ui/dialog';
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from '@/components/ui/select';
-```
-
-**Adicionar novos estados:**
-```typescript
-const [submitDialogOpen, setSubmitDialogOpen] = useState(false);
-const [selectedCategory, setSelectedCategory] = useState<string>('UTILITY');
-```
-
-**Alterar condição canSubmit (linha 138):**
-```typescript
-// De: const canSubmit = template.status === 'not_submitted';
-// Para:
-const canSubmit = template.status === 'not_submitted' || template.status === 'pending';
-```
-
-**Nova função para abrir o modal:**
-```typescript
-const openSubmitDialog = () => {
-  setSelectedCategory(template?.category || 'UTILITY');
-  setSubmitDialogOpen(true);
-};
-
-const confirmSubmitForApproval = async () => {
-  if (!organization?.id || !id) return;
-  await submitMutation.mutateAsync({
-    orgId: organization.id,
-    templateId: id,
-    category: selectedCategory,
-  });
-  setSubmitDialogOpen(false);
-};
-```
-
-**Alterar botão de submissão (linhas 168-181):**
-```typescript
-{canSubmit && (
-  <Button
-    variant="outline"
-    onClick={openSubmitDialog}  // Abre o dialog ao invés de submeter direto
-    disabled={submitMutation.isPending}
-  >
-    <Send className="w-4 h-4 mr-2" />
-    Submeter para Aprovação
-  </Button>
-)}
-```
-
-**Adicionar Dialog de Categoria (após ConfirmDialog existente):**
-```typescript
-<Dialog open={submitDialogOpen} onOpenChange={setSubmitDialogOpen}>
-  <DialogContent size="sm">
-    <DialogHeader>
-      <DialogTitle>Submeter para Aprovação</DialogTitle>
-      <DialogDescription>
-        Selecione a categoria do template "{template?.friendly_name}" antes de submeter.
-      </DialogDescription>
-    </DialogHeader>
-    
-    <div className="space-y-3">
-      <Label>Categoria</Label>
-      <Select value={selectedCategory} onValueChange={setSelectedCategory}>
-        <SelectTrigger>
-          <SelectValue placeholder="Selecione a categoria" />
-        </SelectTrigger>
-        <SelectContent>
-          <SelectItem value="UTILITY">Utilidade</SelectItem>
-          <SelectItem value="MARKETING">Marketing</SelectItem>
-          <SelectItem value="AUTHENTICATION">Autenticação</SelectItem>
-        </SelectContent>
-      </Select>
-      <p className="text-xs text-muted-foreground">
-        A categoria determina as regras de envio e custos do WhatsApp.
-      </p>
-    </div>
-    
-    <DialogFooter>
-      <Button variant="outline" onClick={() => setSubmitDialogOpen(false)}>
-        Cancelar
-      </Button>
-      <Button 
-        onClick={confirmSubmitForApproval} 
-        disabled={submitMutation.isPending}
-      >
-        {submitMutation.isPending ? (
-          <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-        ) : (
-          <Send className="w-4 h-4 mr-2" />
-        )}
-        Submeter
-      </Button>
-    </DialogFooter>
-  </DialogContent>
-</Dialog>
-```
+| Status | Cor | Descrição | Ação Disponível |
+|--------|-----|-----------|-----------------|
+| `draft` / `not_submitted` | Cinza | Template criado localmente, ainda não submetido | "Submeter para Aprovação" |
+| `pending` | Amarelo | Submetido, aguardando aprovação do WhatsApp | Aguardar / Editar |
+| `approved` | Verde | Aprovado pelo WhatsApp | Enviar mensagens |
+| `rejected` | Vermelho | Rejeitado pelo WhatsApp | Ver motivo / Editar / Re-submeter |
 
 ---
 
 ## Comportamento Final
 
-1. **Lista de Templates:**
-   - Menu de ações mostra "Submeter para Aprovação" para templates com status `pending` ou `not_submitted`
-   - Ao clicar, abre modal com dropdown de categoria
-   - Após selecionar e confirmar, chama `POST /api/whatsapp/templates/:id/approve?orgId={orgId}` com body `{ category: "UTILITY" }`
-   - Lista atualiza automaticamente após sucesso
+1. **Na lista de templates:**
+   - Status exibido com cores corretas (verde/amarelo/vermelho/cinza)
+   - Filtro inclui opção "Rascunho" 
+   - Botão "Submeter para Aprovação" só aparece para `draft` ou `not_submitted`
 
-2. **Detalhe do Template:**
-   - Botão "Submeter para Aprovação" aparece para status `pending` ou `not_submitted`
-   - Abre o mesmo modal de seleção de categoria
-   - Categoria pré-selecionada é a do template atual (se existir) ou UTILITY
+2. **Na página de detalhes:**
+   - Data de criação visível
+   - Badge de status colorido
+   - Card informativo amarelo quando "pending" explicando que está aguardando aprovação
+   - Card vermelho com motivo quando "rejected"
+   - Botão "Submeter para Aprovação" apenas para `draft` ou `not_submitted`
 
 ---
 
 ## Seção Técnica
 
-### Endpoint Chamado
-```
-POST /api/whatsapp/templates/:id/approve?orgId={orgId}
-Body: { "category": "UTILITY" | "MARKETING" | "AUTHENTICATION" }
-```
+### Mapeamento de Status do Backend
 
-### Categorias do WhatsApp
-| Categoria | Descrição |
-|-----------|-----------|
-| UTILITY | Mensagens transacionais (confirmações, atualizações) |
-| MARKETING | Promoções e campanhas |
-| AUTHENTICATION | OTPs e códigos de verificação |
+O backend pode retornar os seguintes status:
+- `draft` - Template salvo localmente, não submetido
+- `not_submitted` - Criado no Twilio, mas não submetido para aprovação
+- `pending` - Submetido e aguardando aprovação do WhatsApp
+- `approved` - Aprovado pelo WhatsApp
+- `rejected` - Rejeitado pelo WhatsApp (com `rejection_reason`)
 
-### Hook Utilizado
-`useSubmitForApproval()` do arquivo `src/hooks/useWhatsAppTemplates.ts` - já implementado e funcionando.
+### Interface WhatsAppTemplate
+
+```typescript
+interface WhatsAppTemplate {
+  status: string; // 'draft' | 'not_submitted' | 'pending' | 'approved' | 'rejected'
+  rejection_reason?: string; // Presente quando status === 'rejected'
+  created_at: string;
+  // ...outros campos
+}
+```
 
