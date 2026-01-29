@@ -174,7 +174,7 @@ export function ContactMessages({ contactId, opportunityId }: ContactMessagesPro
     if (textarea) {
       textarea.style.height = 'auto';
       const scrollHeight = textarea.scrollHeight;
-      const maxHeight = 150;
+      const maxHeight = 130; // ~6 linhas
       
       setTextareaOverflow(scrollHeight > maxHeight);
       textarea.style.height = `${Math.min(scrollHeight, maxHeight)}px`;
@@ -638,8 +638,8 @@ export function ContactMessages({ contactId, opportunityId }: ContactMessagesPro
                 }
               }}
               rows={1}
-              className={`flex-1 resize-none min-h-[40px] max-h-[150px] ${
-                textareaOverflow ? 'overflow-y-auto scrollbar-none' : 'overflow-hidden'
+              className={`flex-1 resize-none min-h-[40px] max-h-[130px] ${
+                textareaOverflow ? 'overflow-y-auto scrollbar-hide' : 'overflow-hidden'
               }`}
               disabled={submitting || aiImproving}
             />
