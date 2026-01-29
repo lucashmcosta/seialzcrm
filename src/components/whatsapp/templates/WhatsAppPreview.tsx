@@ -22,10 +22,13 @@ export function WhatsAppPreview({
   mediaUrl,
   className,
 }: WhatsAppPreviewProps) {
+  // Normalize variables to always be an array
+  const normalizedVariables = Array.isArray(variables) ? variables : [];
+
   // Replace variables with examples
   const getPreviewBody = () => {
     let preview = body;
-    variables.forEach((v, index) => {
+    normalizedVariables.forEach((v, index) => {
       const placeholder = `{{${index + 1}}}`;
       preview = preview.replace(
         new RegExp(placeholder.replace(/[{}]/g, '\\$&'), 'g'),

@@ -3516,6 +3516,7 @@ export type Database = {
           last_synced_at: string | null
           organization_id: string
           rejection_reason: string | null
+          source: string | null
           status: string | null
           template_type: string | null
           twilio_content_sid: string
@@ -3535,6 +3536,7 @@ export type Database = {
           last_synced_at?: string | null
           organization_id: string
           rejection_reason?: string | null
+          source?: string | null
           status?: string | null
           template_type?: string | null
           twilio_content_sid: string
@@ -3554,6 +3556,7 @@ export type Database = {
           last_synced_at?: string | null
           organization_id?: string
           rejection_reason?: string | null
+          source?: string | null
           status?: string | null
           template_type?: string | null
           twilio_content_sid?: string
