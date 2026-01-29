@@ -70,6 +70,7 @@ export function ContactMessages({ contactId, opportunityId }: ContactMessagesPro
   const [showTemplates, setShowTemplates] = useState(false);
   const [showEmojiPicker, setShowEmojiPicker] = useState(false);
   const [aiImproving, setAiImproving] = useState(false);
+  const [textareaOverflow, setTextareaOverflow] = useState(false);
 
   const { generate: generateAI } = useAI();
   const dateLocale = locale === 'pt-BR' ? ptBR : enUS;
@@ -135,10 +136,49 @@ export function ContactMessages({ contactId, opportunityId }: ContactMessagesPro
     };
   }, [threadId]);
 
+  // Real-time subscription for thread updates (24h window)
+  useEffect(() => {
+    if (!threadId) return;
+
+    const channel = supabase
+      .channel(`contact-thread-updates-${threadId}`)
+      .on('postgres_changes', {
+        event: 'UPDATE',
+        schema: 'public',
+        table: 'message_threads',
+        filter: `id=eq.${threadId}`,
+      }, (payload) => {
+        const updated = payload.new as { whatsapp_last_inbound_at: string | null };
+        if (updated.whatsapp_last_inbound_at) {
+          const lastInbound = new Date(updated.whatsapp_last_inbound_at);
+          const now = new Date();
+          const hoursDiff = (now.getTime() - lastInbound.getTime()) / (1000 * 60 * 60);
+          setIsIn24hWindow(hoursDiff < 24);
+        }
+      })
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, [threadId]);
+
   const scrollToBottom = () => {
     setTimeout(() => {
       scrollRef.current?.scrollIntoView({ behavior: 'smooth' });
     }, 100);
+  };
+
+  const adjustTextareaHeight = () => {
+    const textarea = textareaRef.current;
+    if (textarea) {
+      textarea.style.height = 'auto';
+      const scrollHeight = textarea.scrollHeight;
+      const maxHeight = 150;
+      
+      setTextareaOverflow(scrollHeight > maxHeight);
+      textarea.style.height = `${Math.min(scrollHeight, maxHeight)}px`;
+    }
   };
 
   const fetchThread = async () => {
@@ -583,15 +623,24 @@ export function ContactMessages({ contactId, opportunityId }: ContactMessagesPro
               ref={textareaRef}
               placeholder={locale === 'pt-BR' ? 'Digite uma mensagem...' : 'Type a message...'}
               value={messageText}
-              onChange={(e) => setMessageText(e.target.value)}
+              onChange={(e) => {
+                setMessageText(e.target.value);
+                adjustTextareaHeight();
+              }}
               onKeyDown={(e) => {
                 if (e.key === 'Enter' && !e.shiftKey) {
                   e.preventDefault();
                   handleSendMessage();
+                  if (textareaRef.current) {
+                    textareaRef.current.style.height = 'auto';
+                  }
+                  setTextareaOverflow(false);
                 }
               }}
-              rows={2}
-              className="flex-1 resize-none"
+              rows={1}
+              className={`flex-1 resize-none min-h-[40px] max-h-[150px] ${
+                textareaOverflow ? 'overflow-y-auto scrollbar-none' : 'overflow-hidden'
+              }`}
               disabled={submitting || aiImproving}
             />
 
