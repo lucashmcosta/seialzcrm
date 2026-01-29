@@ -16,9 +16,22 @@ import { Loader2, Search, Phone, MessageSquare } from 'lucide-react';
 
 interface Contact {
   id: string;
-  full_name: string;
+  full_name: string | null;
   phone: string;
 }
+
+// Helper function to validate if a name has real alphanumeric content
+const getDisplayName = (contact: Contact): string => {
+  const name = contact.full_name?.trim();
+  if (!name) return contact.phone;
+  
+  // Remove non-alphanumeric characters (emojis, zero-width joiners, special chars)
+  // Keeps letters, numbers, and spaces from any language
+  const cleanName = name.replace(/[^\p{L}\p{N}\s]/gu, '').trim();
+  if (cleanName.length === 0) return contact.phone;
+  
+  return name;
+};
 
 interface NewConversationDialogProps {
   open: boolean;
@@ -147,23 +160,30 @@ export function NewConversationDialog({
               </div>
             ) : (
               <div className="space-y-1">
-                {contacts?.map((contact) => (
-                  <button
-                    key={contact.id}
-                    onClick={() => handleSelect(contact)}
-                    disabled={selecting !== null}
-                    className="w-full flex items-center gap-3 p-3 rounded-lg hover:bg-accent transition-colors text-left disabled:opacity-50"
-                  >
-                    <Avatar fallbackText={contact.full_name} size="md" />
-                    <div className="flex-1 min-w-0">
-                      <p className="font-medium text-sm truncate">{contact.full_name}</p>
-                      <p className="text-xs text-muted-foreground truncate">{contact.phone}</p>
-                    </div>
-                    {selecting === contact.id && (
-                      <Loader2 className="w-4 h-4 animate-spin text-muted-foreground" />
-                    )}
-                  </button>
-                ))}
+                {contacts?.map((contact) => {
+                  const displayName = getDisplayName(contact);
+                  const showPhoneAsSecondary = displayName !== contact.phone;
+                  
+                  return (
+                    <button
+                      key={contact.id}
+                      onClick={() => handleSelect(contact)}
+                      disabled={selecting !== null}
+                      className="w-full flex items-center gap-3 p-3 rounded-lg hover:bg-accent transition-colors text-left disabled:opacity-50"
+                    >
+                      <Avatar fallbackText={displayName} size="md" />
+                      <div className="flex-1 min-w-0">
+                        <p className="font-medium text-sm truncate">{displayName}</p>
+                        {showPhoneAsSecondary && (
+                          <p className="text-xs text-muted-foreground truncate">{contact.phone}</p>
+                        )}
+                      </div>
+                      {selecting === contact.id && (
+                        <Loader2 className="w-4 h-4 animate-spin text-muted-foreground" />
+                      )}
+                    </button>
+                  );
+                })}
               </div>
             )}
           </ScrollArea>
