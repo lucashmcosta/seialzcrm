@@ -467,8 +467,14 @@ serve(async (req) => {
             const statusMap: Record<string, string> = {
               'approved': 'approved', 'pending': 'pending', 'rejected': 'rejected',
               'paused': 'rejected', 'disabled': 'rejected', 'unsubmitted': 'draft',
+              'received': 'pending', 'under_review': 'pending', 'in_review': 'pending', 'submitted': 'pending',
             }
-            templateStatus = statusMap[approvalData.whatsapp.status] || 'draft'
+            const whatsappStatus = approvalData.whatsapp.status
+            const mappedStatus = statusMap[whatsappStatus]
+            if (!mappedStatus) {
+              console.warn(`[SETUP-SYNC] Unknown approval status: "${whatsappStatus}" for ${template.sid} - defaulting to draft`)
+            }
+            templateStatus = mappedStatus || 'draft'
             templateCategory = (approvalData.whatsapp.category || 'utility').toLowerCase()
             rejectionReason = approvalData.whatsapp.rejection_reason || null
           }
