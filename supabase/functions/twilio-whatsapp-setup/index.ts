@@ -132,12 +132,204 @@ serve(async (req) => {
     }
 
     const supabaseUrl = Deno.env.get('SUPABASE_URL') ?? ''
+    const serviceRoleKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''
     
     // Webhook URLs for the Messaging Service
     const inboundWebhookUrl = `${supabaseUrl}/functions/v1/twilio-whatsapp-webhook/inbound?orgId=${organizationId}`
     const statusWebhookUrl = `${supabaseUrl}/functions/v1/twilio-whatsapp-webhook/status?orgId=${organizationId}`
 
     console.log('Webhook URLs:', { inboundWebhookUrl, statusWebhookUrl })
+
+    // Mode: check-webhooks - diagnose webhook configuration
+    if (mode === 'check-webhooks') {
+      console.log('Mode: check-webhooks - diagnosing webhook configuration')
+      
+      const supabase = createClient(supabaseUrl, serviceRoleKey)
+      
+      const { data: integration } = await supabase
+        .from('organization_integrations')
+        .select('config_values, admin_integrations!inner(slug)')
+        .eq('organization_id', organizationId)
+        .eq('admin_integrations.slug', 'twilio-whatsapp')
+        .eq('is_enabled', true)
+        .maybeSingle()
+      
+      const configValues = integration?.config_values as any
+      const messagingServiceSid = configValues?.messaging_service_sid
+      
+      let serviceWebhooks: any = null
+      let senders: string[] = []
+      let numberWebhooks: any[] = []
+      
+      if (messagingServiceSid) {
+        // Fetch current Messaging Service config
+        const serviceResp = await fetch(
+          `https://messaging.twilio.com/v1/Services/${messagingServiceSid}`,
+          { headers: { 'Authorization': authHeader } }
+        )
+        if (serviceResp.ok) {
+          const serviceData = await serviceResp.json()
+          serviceWebhooks = {
+            inbound_request_url: serviceData.inbound_request_url,
+            status_callback: serviceData.status_callback,
+            use_inbound_webhook_on_number: serviceData.use_inbound_webhook_on_number,
+          }
+        }
+        
+        // Fetch senders
+        const sendersResp = await fetch(
+          `https://messaging.twilio.com/v1/Services/${messagingServiceSid}/Senders?PageSize=100`,
+          { headers: { 'Authorization': authHeader } }
+        )
+        if (sendersResp.ok) {
+          const sendersData = await sendersResp.json()
+          senders = (sendersData.senders || []).map((s: any) => s.sender)
+        }
+      }
+      
+      // Check number-level webhooks
+      const availableNumbers = configValues?.available_numbers || []
+      for (const num of availableNumbers) {
+        try {
+          // Find number SID
+          const searchUrl = `https://api.twilio.com/2010-04-01/Accounts/${accountSid}/IncomingPhoneNumbers.json?PhoneNumber=${encodeURIComponent(num)}`
+          const searchResp = await fetch(searchUrl, { headers: { 'Authorization': authHeader } })
+          if (searchResp.ok) {
+            const searchData = await searchResp.json()
+            const numberData = searchData.incoming_phone_numbers?.[0]
+            if (numberData) {
+              numberWebhooks.push({
+                number: num,
+                sms_url: numberData.sms_url,
+                sms_method: numberData.sms_method,
+                status_callback: numberData.status_callback,
+              })
+            }
+          }
+        } catch (e) {
+          console.warn('Error checking number webhook:', num, e)
+        }
+      }
+      
+      const expectedInboundUrl = inboundWebhookUrl
+      const isServiceConfigured = serviceWebhooks?.inbound_request_url === expectedInboundUrl
+      const hasWhatsAppSenders = senders.some((s: string) => s.startsWith('whatsapp:'))
+      
+      return new Response(JSON.stringify({
+        success: true,
+        messaging_service_sid: messagingServiceSid,
+        webhooks: serviceWebhooks,
+        senders,
+        number_webhooks: numberWebhooks,
+        expected_inbound_url: expectedInboundUrl,
+        expected_status_url: statusWebhookUrl,
+        is_inbound_configured: isServiceConfigured,
+        has_whatsapp_senders: hasWhatsAppSenders,
+        diagnosis: !messagingServiceSid 
+          ? 'Messaging Service não encontrado. Execute o setup novamente.'
+          : !isServiceConfigured
+          ? 'URL de webhook incorreta no Messaging Service. Use "Corrigir Webhooks" para atualizar.'
+          : !hasWhatsAppSenders
+          ? 'Nenhum sender WhatsApp associado ao Messaging Service. Verifique se o número tem WhatsApp habilitado no Twilio.'
+          : 'Configuração OK. Se mensagens não chegam, verifique as configurações do WhatsApp Sandbox no Console do Twilio.',
+      }), { headers: { ...corsHeaders, 'Content-Type': 'application/json' } })
+    }
+
+    // Mode: update-webhook - fix/update webhook URLs
+    if (mode === 'update-webhook') {
+      console.log('Mode: update-webhook - updating webhook URLs')
+      
+      const { webhookUrl } = body
+      const supabase = createClient(supabaseUrl, serviceRoleKey)
+      
+      const { data: integration } = await supabase
+        .from('organization_integrations')
+        .select('id, config_values, admin_integrations!inner(slug)')
+        .eq('organization_id', organizationId)
+        .eq('admin_integrations.slug', 'twilio-whatsapp')
+        .eq('is_enabled', true)
+        .maybeSingle()
+      
+      if (!integration) {
+        return new Response(JSON.stringify({ error: 'Integração WhatsApp não encontrada' }),
+          { status: 404, headers: { ...corsHeaders, 'Content-Type': 'application/json' } })
+      }
+      
+      const configValues = integration.config_values as any
+      const messagingServiceSid = configValues?.messaging_service_sid
+      const newInboundUrl = webhookUrl || inboundWebhookUrl
+      
+      if (!messagingServiceSid) {
+        return new Response(JSON.stringify({ error: 'Messaging Service não configurado' }),
+          { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } })
+      }
+      
+      // Update Messaging Service webhooks
+      const updateResp = await fetch(`https://messaging.twilio.com/v1/Services/${messagingServiceSid}`, {
+        method: 'POST',
+        headers: {
+          'Authorization': authHeader,
+          'Content-Type': 'application/x-www-form-urlencoded',
+        },
+        body: new URLSearchParams({
+          InboundRequestUrl: newInboundUrl,
+          InboundMethod: 'POST',
+          StatusCallback: statusWebhookUrl,
+          UseInboundWebhookOnNumber: 'true',
+        }).toString(),
+      })
+      
+      const updateOk = updateResp.ok
+      if (!updateOk) {
+        const errText = await updateResp.text()
+        console.error('Failed to update Messaging Service:', errText)
+      }
+      
+      // Also update number-level webhooks
+      const availableNumbers = configValues?.available_numbers || []
+      for (const num of availableNumbers) {
+        try {
+          const searchUrl = `https://api.twilio.com/2010-04-01/Accounts/${accountSid}/IncomingPhoneNumbers.json?PhoneNumber=${encodeURIComponent(num)}`
+          const searchResp = await fetch(searchUrl, { headers: { 'Authorization': authHeader } })
+          if (searchResp.ok) {
+            const searchData = await searchResp.json()
+            const numberData = searchData.incoming_phone_numbers?.[0]
+            if (numberData) {
+              await fetch(`https://api.twilio.com/2010-04-01/Accounts/${accountSid}/IncomingPhoneNumbers/${numberData.sid}.json`, {
+                method: 'POST',
+                headers: {
+                  'Authorization': authHeader,
+                  'Content-Type': 'application/x-www-form-urlencoded',
+                },
+                body: `SmsUrl=${encodeURIComponent(newInboundUrl)}&SmsMethod=POST&StatusCallback=${encodeURIComponent(statusWebhookUrl)}&StatusCallbackMethod=POST`,
+              })
+            }
+          }
+        } catch (e) {
+          console.warn('Error updating number webhook:', num, e)
+        }
+      }
+      
+      // Save to config_values
+      await supabase
+        .from('organization_integrations')
+        .update({
+          config_values: {
+            ...configValues,
+            inbound_webhook_url: newInboundUrl,
+            status_webhook_url: statusWebhookUrl,
+            webhooks_configured: updateOk,
+            webhook_mode: webhookUrl ? 'custom' : 'edge-function',
+          }
+        })
+        .eq('id', integration.id)
+      
+      return new Response(JSON.stringify({
+        success: updateOk,
+        inbound_webhook_url: newInboundUrl,
+        message: updateOk ? 'Webhooks atualizados com sucesso!' : 'Falha ao atualizar webhooks no Twilio.',
+      }), { headers: { ...corsHeaders, 'Content-Type': 'application/json' } })
+    }
 
     // Step 2: Fetch available phone numbers from Twilio
     let phoneNumbers: TwilioPhoneNumber[] = []
@@ -375,7 +567,7 @@ serve(async (req) => {
     // Step 8: Initialize Supabase and save configuration
     const supabase = createClient(
       supabaseUrl,
-      Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''
+      serviceRoleKey
     )
 
     // Get the integration ID for twilio-whatsapp
