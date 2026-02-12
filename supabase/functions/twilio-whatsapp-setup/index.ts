@@ -214,6 +214,8 @@ serve(async (req) => {
       const expectedInboundUrl = inboundWebhookUrl
       const isServiceConfigured = serviceWebhooks?.inbound_request_url === expectedInboundUrl
       const hasWhatsAppSenders = senders.some((s: string) => s.startsWith('whatsapp:'))
+      // Also check if any number has the correct SmsUrl configured (direct webhook approach)
+      const hasNumberWebhook = numberWebhooks.some((nw: any) => nw.sms_url === expectedInboundUrl)
       
       return new Response(JSON.stringify({
         success: true,
@@ -225,13 +227,14 @@ serve(async (req) => {
         expected_status_url: statusWebhookUrl,
         is_inbound_configured: isServiceConfigured,
         has_whatsapp_senders: hasWhatsAppSenders,
+        has_number_webhook: hasNumberWebhook,
         diagnosis: !messagingServiceSid 
           ? 'Messaging Service não encontrado. Execute o setup novamente.'
-          : !isServiceConfigured
-          ? 'URL de webhook incorreta no Messaging Service. Use "Corrigir Webhooks" para atualizar.'
-          : !hasWhatsAppSenders
-          ? 'Nenhum sender WhatsApp associado ao Messaging Service. Verifique se o número tem WhatsApp habilitado no Twilio.'
-          : 'Configuração OK. Se mensagens não chegam, verifique as configurações do WhatsApp Sandbox no Console do Twilio.',
+          : !isServiceConfigured && !hasNumberWebhook
+          ? 'URL de webhook não configurada. Use "Corrigir Webhooks" para atualizar.'
+          : hasNumberWebhook
+          ? 'Configuração OK. Webhook configurado diretamente no número.'
+          : 'Configuração OK via Messaging Service.',
       }), { headers: { ...corsHeaders, 'Content-Type': 'application/json' } })
     }
 
@@ -310,51 +313,58 @@ serve(async (req) => {
         }
       }
       
-      // Associate WhatsApp Sender to Messaging Service via Senders API
+      // Configure webhook directly on IncomingPhoneNumber (most reliable method)
       const primaryNumber = configValues?.whatsapp_number || configValues?.primary_number || configValues?.phone_number
       let senderAssociated = false
       
-      console.log('[FIX] config_values keys:', Object.keys(configValues || {}))
-      console.log('[FIX] whatsapp_number:', configValues?.whatsapp_number)
-      console.log('[FIX] primary_number:', configValues?.primary_number)
-      console.log('[FIX] phone_number:', configValues?.phone_number)
       console.log('[FIX] Resolved primaryNumber:', primaryNumber)
       
-      if (primaryNumber && messagingServiceSid) {
+      if (primaryNumber) {
         try {
           const cleanNumber = primaryNumber.replace('whatsapp:', '')
-          const senderValue = `whatsapp:${cleanNumber}`
-          const assocUrl = `https://messaging.twilio.com/v1/Services/${messagingServiceSid}/ChannelSenders`
-          console.log('[FIX] Adding sender:', senderValue, 'to service:', messagingServiceSid)
-          console.log('[FIX] URL:', assocUrl)
           
-          const assocResp = await fetch(assocUrl, {
-            method: 'POST',
-            headers: {
-              'Authorization': authHeader,
-              'Content-Type': 'application/x-www-form-urlencoded',
-            },
-            body: `Sender=${encodeURIComponent(senderValue)}&SenderType=whatsapp`,
-          })
+          // Step 1: Find the PhoneNumber SID
+          const searchUrl = `https://api.twilio.com/2010-04-01/Accounts/${accountSid}/IncomingPhoneNumbers.json?PhoneNumber=${encodeURIComponent(cleanNumber)}`
+          const searchResp = await fetch(searchUrl, { headers: { 'Authorization': authHeader } })
+          const searchData = await searchResp.json()
+          const phoneNumberSid = searchData.incoming_phone_numbers?.[0]?.sid
+          console.log('[FIX] PhoneNumber SID:', phoneNumberSid)
           
-          const assocStatus = assocResp.status
-          const assocText = await assocResp.text()
-          console.log('[FIX] Add sender response:', assocStatus, assocText)
-          
-          if (assocResp.ok || assocStatus === 409) {
-            senderAssociated = true
-            console.log('[FIX] ✅ WhatsApp Sender associated to Messaging Service')
-          } else if (assocText.includes('21714')) {
-            senderAssociated = true
-            console.log('[FIX] Sender already associated (21714)')
+          if (phoneNumberSid) {
+            // Step 2: Configure webhook directly on the phone number
+            const updateUrl = `https://api.twilio.com/2010-04-01/Accounts/${accountSid}/IncomingPhoneNumbers/${phoneNumberSid}.json`
+            const updateResp = await fetch(updateUrl, {
+              method: 'POST',
+              headers: {
+                'Authorization': authHeader,
+                'Content-Type': 'application/x-www-form-urlencoded',
+              },
+              body: new URLSearchParams({
+                SmsUrl: newInboundUrl,
+                SmsMethod: 'POST',
+                StatusCallback: statusWebhookUrl,
+                StatusCallbackMethod: 'POST',
+              }).toString(),
+            })
+            
+            const respText = await updateResp.text()
+            console.log('[FIX] Update IncomingPhoneNumber response:', updateResp.status)
+            console.log('[FIX] Response body:', respText.substring(0, 500))
+            
+            if (updateResp.ok) {
+              senderAssociated = true
+              console.log('[FIX] ✅ Webhook configured directly on phone number:', cleanNumber)
+            } else {
+              console.error('[FIX] Failed to update phone number webhook:', respText)
+            }
           } else {
-            console.error('[FIX] Failed to associate sender:', assocText)
+            console.error('[FIX] PhoneNumber not found in Twilio account:', cleanNumber)
           }
         } catch (e) {
-          console.error('[FIX] Error associating sender:', e)
+          console.error('[FIX] Error configuring phone number webhook:', e)
         }
       } else {
-        console.warn('[FIX] No primaryNumber or messagingServiceSid. primaryNumber:', primaryNumber, 'sid:', messagingServiceSid)
+        console.warn('[FIX] No primaryNumber found in config_values')
       }
       
       // Save to config_values
@@ -522,42 +532,49 @@ serve(async (req) => {
       }
     }
 
-    // Step 5: Associate the selected WhatsApp number as a Sender in the Messaging Service
+    // Step 5: Configure webhook directly on the selected WhatsApp number
     let whatsappSendersAssociated: string[] = [...associatedNumbers]
     
     const whatsappNumberToAssociate = selectedNumber 
       || (phoneNumbers.length > 0 ? phoneNumbers[0].phone_number : null)
     
-    if (messagingServiceSid && whatsappNumberToAssociate) {
-      try {
-        const cleanNum = whatsappNumberToAssociate.replace('whatsapp:', '')
-        const senderValue = `whatsapp:${cleanNum}`
-        console.log('Step 5: Adding WhatsApp Sender:', senderValue, 'to Messaging Service:', messagingServiceSid)
-        
-        const assocUrl = `https://messaging.twilio.com/v1/Services/${messagingServiceSid}/ChannelSenders`
-        const assocResp = await fetch(assocUrl, {
-          method: 'POST',
-          headers: {
-            'Authorization': authHeader,
-            'Content-Type': 'application/x-www-form-urlencoded',
-          },
-          body: `Sender=${encodeURIComponent(senderValue)}&SenderType=whatsapp`,
-        })
-        
-        const assocStatus = assocResp.status
-        const assocText = await assocResp.text()
-        console.log('Step 5: Add sender response:', assocStatus, assocText)
-        
-        if (assocResp.ok || assocStatus === 409 || assocText.includes('21714')) {
-          if (!whatsappSendersAssociated.includes(cleanNum)) {
-            whatsappSendersAssociated.push(cleanNum)
+    if (whatsappNumberToAssociate) {
+      const cleanNum = whatsappNumberToAssociate.replace('whatsapp:', '')
+      // Find SID for this specific number
+      const matchedPhone = phoneNumbers.find(p => p.phone_number === cleanNum)
+      const phoneSid = matchedPhone?.sid
+      
+      if (phoneSid) {
+        try {
+          const updateUrl = `https://api.twilio.com/2010-04-01/Accounts/${accountSid}/IncomingPhoneNumbers/${phoneSid}.json`
+          const updateResp = await fetch(updateUrl, {
+            method: 'POST',
+            headers: {
+              'Authorization': authHeader,
+              'Content-Type': 'application/x-www-form-urlencoded',
+            },
+            body: new URLSearchParams({
+              SmsUrl: inboundWebhookUrl,
+              SmsMethod: 'POST',
+              StatusCallback: statusWebhookUrl,
+              StatusCallbackMethod: 'POST',
+            }).toString(),
+          })
+          
+          if (updateResp.ok) {
+            if (!whatsappSendersAssociated.includes(cleanNum)) {
+              whatsappSendersAssociated.push(cleanNum)
+            }
+            console.log('✅ Step 5: Webhook configured on selected number:', cleanNum)
+          } else {
+            const errText = await updateResp.text()
+            console.warn('Step 5: Could not update webhook on number:', cleanNum, errText)
           }
-          console.log('✅ WhatsApp Sender associated:', cleanNum)
-        } else {
-          console.warn('Could not associate WhatsApp sender:', cleanNum, assocText)
+        } catch (e) {
+          console.warn('Step 5: Error configuring webhook on number:', e)
         }
-      } catch (e) {
-        console.warn('Error associating WhatsApp sender:', e)
+      } else {
+        console.log('Step 5: Selected number not in phoneNumbers list, will be handled in Step 6')
       }
     }
 
