@@ -187,53 +187,56 @@ serve(async (req) => {
         }
       }
       
-      // Check number-level webhooks
-      const availableNumbers = configValues?.available_numbers || []
-      for (const num of availableNumbers) {
+      // Check WhatsApp Sender webhook via v2 API
+      let senderWebhook: any = null
+      const primaryNumber = configValues?.whatsapp_number || configValues?.primary_number || configValues?.phone_number
+      
+      if (primaryNumber) {
         try {
-          // Find number SID
-          const searchUrl = `https://api.twilio.com/2010-04-01/Accounts/${accountSid}/IncomingPhoneNumbers.json?PhoneNumber=${encodeURIComponent(num)}`
-          const searchResp = await fetch(searchUrl, { headers: { 'Authorization': authHeader } })
-          if (searchResp.ok) {
-            const searchData = await searchResp.json()
-            const numberData = searchData.incoming_phone_numbers?.[0]
-            if (numberData) {
-              numberWebhooks.push({
-                number: num,
-                sms_url: numberData.sms_url,
-                sms_method: numberData.sms_method,
-                status_callback: numberData.status_callback,
-              })
+          const cleanNumber = primaryNumber.replace('whatsapp:', '')
+          const senderIdFormat = `whatsapp:${cleanNumber}`
+          
+          const sendersListUrl = `https://messaging.twilio.com/v2/Channels/Senders?Channel=whatsapp`
+          const sendersResp = await fetch(sendersListUrl, { headers: { 'Authorization': authHeader } })
+          if (sendersResp.ok) {
+            const sendersData = await sendersResp.json()
+            const sender = sendersData.results?.find((s: any) => s.sender_id === senderIdFormat)
+            if (sender) {
+              senderWebhook = {
+                sender_id: sender.sender_id,
+                sid: sender.sid,
+                webhook_url: sender.webhook_configuration?.url || null,
+                status_callback_url: sender.webhook_configuration?.status_callback_url || null,
+              }
             }
           }
         } catch (e) {
-          console.warn('Error checking number webhook:', num, e)
+          console.warn('Error checking sender webhook:', e)
         }
       }
       
       const expectedInboundUrl = inboundWebhookUrl
       const isServiceConfigured = serviceWebhooks?.inbound_request_url === expectedInboundUrl
       const hasWhatsAppSenders = senders.some((s: string) => s.startsWith('whatsapp:'))
-      // Also check if any number has the correct SmsUrl configured (direct webhook approach)
-      const hasNumberWebhook = numberWebhooks.some((nw: any) => nw.sms_url === expectedInboundUrl)
+      const hasSenderWebhook = senderWebhook?.webhook_url === expectedInboundUrl
       
       return new Response(JSON.stringify({
         success: true,
         messaging_service_sid: messagingServiceSid,
         webhooks: serviceWebhooks,
         senders,
-        number_webhooks: numberWebhooks,
+        sender_webhook: senderWebhook,
         expected_inbound_url: expectedInboundUrl,
         expected_status_url: statusWebhookUrl,
         is_inbound_configured: isServiceConfigured,
         has_whatsapp_senders: hasWhatsAppSenders,
-        has_number_webhook: hasNumberWebhook,
+        has_sender_webhook: hasSenderWebhook,
         diagnosis: !messagingServiceSid 
           ? 'Messaging Service não encontrado. Execute o setup novamente.'
-          : !isServiceConfigured && !hasNumberWebhook
+          : hasSenderWebhook
+          ? 'Configuração OK. Webhook configurado no WhatsApp Sender via API v2.'
+          : !isServiceConfigured
           ? 'URL de webhook não configurada. Use "Corrigir Webhooks" para atualizar.'
-          : hasNumberWebhook
-          ? 'Configuração OK. Webhook configurado diretamente no número.'
           : 'Configuração OK via Messaging Service.',
       }), { headers: { ...corsHeaders, 'Content-Type': 'application/json' } })
     }
@@ -288,83 +291,72 @@ serve(async (req) => {
         console.error('Failed to update Messaging Service:', errText)
       }
       
-      // Also update number-level webhooks
-      const availableNumbers = configValues?.available_numbers || []
-      for (const num of availableNumbers) {
-        try {
-          const searchUrl = `https://api.twilio.com/2010-04-01/Accounts/${accountSid}/IncomingPhoneNumbers.json?PhoneNumber=${encodeURIComponent(num)}`
-          const searchResp = await fetch(searchUrl, { headers: { 'Authorization': authHeader } })
-          if (searchResp.ok) {
-            const searchData = await searchResp.json()
-            const numberData = searchData.incoming_phone_numbers?.[0]
-            if (numberData) {
-              await fetch(`https://api.twilio.com/2010-04-01/Accounts/${accountSid}/IncomingPhoneNumbers/${numberData.sid}.json`, {
-                method: 'POST',
-                headers: {
-                  'Authorization': authHeader,
-                  'Content-Type': 'application/x-www-form-urlencoded',
-                },
-                body: `SmsUrl=${encodeURIComponent(newInboundUrl)}&SmsMethod=POST&StatusCallback=${encodeURIComponent(statusWebhookUrl)}&StatusCallbackMethod=POST`,
-              })
-            }
-          }
-        } catch (e) {
-          console.warn('Error updating number webhook:', num, e)
-        }
-      }
-      
-      // Configure webhook directly on IncomingPhoneNumber (most reliable method)
+      // Use Twilio Senders API v2 to configure webhook on WhatsApp Sender
       const primaryNumber = configValues?.whatsapp_number || configValues?.primary_number || configValues?.phone_number
       let senderAssociated = false
       
-      console.log('[FIX] Resolved primaryNumber:', primaryNumber)
+      console.log('[FIX-v2] Resolved primaryNumber:', primaryNumber)
       
       if (primaryNumber) {
         try {
           const cleanNumber = primaryNumber.replace('whatsapp:', '')
+          const senderIdFormat = `whatsapp:${cleanNumber}`
           
-          // Step 1: Find the PhoneNumber SID
-          const searchUrl = `https://api.twilio.com/2010-04-01/Accounts/${accountSid}/IncomingPhoneNumbers.json?PhoneNumber=${encodeURIComponent(cleanNumber)}`
-          const searchResp = await fetch(searchUrl, { headers: { 'Authorization': authHeader } })
-          const searchData = await searchResp.json()
-          const phoneNumberSid = searchData.incoming_phone_numbers?.[0]?.sid
-          console.log('[FIX] PhoneNumber SID:', phoneNumberSid)
+          // Step 1: List WhatsApp Senders via v2 API
+          const sendersListUrl = `https://messaging.twilio.com/v2/Channels/Senders?Channel=whatsapp`
+          const sendersResp = await fetch(sendersListUrl, {
+            headers: { 'Authorization': authHeader }
+          })
+          const sendersData = await sendersResp.json()
+          console.log('[FIX-v2] Senders list response:', sendersResp.status)
+          console.log('[FIX-v2] Senders count:', sendersData.results?.length || 0)
           
-          if (phoneNumberSid) {
-            // Step 2: Configure webhook directly on the phone number
-            const updateUrl = `https://api.twilio.com/2010-04-01/Accounts/${accountSid}/IncomingPhoneNumbers/${phoneNumberSid}.json`
-            const updateResp = await fetch(updateUrl, {
+          // Step 2: Find our sender
+          const sender = sendersData.results?.find((s: any) => s.sender_id === senderIdFormat)
+          console.log('[FIX-v2] Looking for sender_id:', senderIdFormat)
+          console.log('[FIX-v2] Found sender:', sender ? sender.sid : 'NOT FOUND')
+          
+          if (sender) {
+            // Step 3: Update webhook on the Sender resource
+            const updateSenderUrl = `https://messaging.twilio.com/v2/Channels/Senders/${sender.sid}`
+            const webhookConfig = {
+              webhook_configuration: {
+                url: newInboundUrl,
+                method: 'POST',
+                fallback_url: '',
+                fallback_method: 'POST',
+                status_callback_url: statusWebhookUrl,
+                status_callback_method: 'POST',
+              }
+            }
+            
+            const updateSenderResp = await fetch(updateSenderUrl, {
               method: 'POST',
               headers: {
                 'Authorization': authHeader,
-                'Content-Type': 'application/x-www-form-urlencoded',
+                'Content-Type': 'application/json',
               },
-              body: new URLSearchParams({
-                SmsUrl: newInboundUrl,
-                SmsMethod: 'POST',
-                StatusCallback: statusWebhookUrl,
-                StatusCallbackMethod: 'POST',
-              }).toString(),
+              body: JSON.stringify(webhookConfig),
             })
             
-            const respText = await updateResp.text()
-            console.log('[FIX] Update IncomingPhoneNumber response:', updateResp.status)
-            console.log('[FIX] Response body:', respText.substring(0, 500))
+            const respText = await updateSenderResp.text()
+            console.log('[FIX-v2] Update Sender webhook response:', updateSenderResp.status)
+            console.log('[FIX-v2] Response body:', respText.substring(0, 500))
             
-            if (updateResp.ok) {
+            if (updateSenderResp.ok) {
               senderAssociated = true
-              console.log('[FIX] ✅ Webhook configured directly on phone number:', cleanNumber)
+              console.log('[FIX-v2] ✅ Webhook configured on WhatsApp Sender:', senderIdFormat)
             } else {
-              console.error('[FIX] Failed to update phone number webhook:', respText)
+              console.error('[FIX-v2] Failed to update Sender webhook:', respText)
             }
           } else {
-            console.error('[FIX] PhoneNumber not found in Twilio account:', cleanNumber)
+            console.warn('[FIX-v2] Sender not found. Available senders:', JSON.stringify(sendersData.results?.map((s: any) => s.sender_id) || []))
           }
         } catch (e) {
-          console.error('[FIX] Error configuring phone number webhook:', e)
+          console.error('[FIX-v2] Error configuring Sender webhook:', e)
         }
       } else {
-        console.warn('[FIX] No primaryNumber found in config_values')
+        console.warn('[FIX-v2] No primaryNumber found in config_values')
       }
       
       // Save to config_values
@@ -532,85 +524,75 @@ serve(async (req) => {
       }
     }
 
-    // Step 5: Configure webhook directly on the selected WhatsApp number
+    // Step 5: Configure webhook on WhatsApp Sender via Twilio v2 API
     let whatsappSendersAssociated: string[] = [...associatedNumbers]
+    let numbersWithWebhook: string[] = []
     
     const whatsappNumberToAssociate = selectedNumber 
       || (phoneNumbers.length > 0 ? phoneNumbers[0].phone_number : null)
     
     if (whatsappNumberToAssociate) {
       const cleanNum = whatsappNumberToAssociate.replace('whatsapp:', '')
-      // Find SID for this specific number
-      const matchedPhone = phoneNumbers.find(p => p.phone_number === cleanNum)
-      const phoneSid = matchedPhone?.sid
+      const senderIdFormat = `whatsapp:${cleanNum}`
       
-      if (phoneSid) {
-        try {
-          const updateUrl = `https://api.twilio.com/2010-04-01/Accounts/${accountSid}/IncomingPhoneNumbers/${phoneSid}.json`
-          const updateResp = await fetch(updateUrl, {
+      try {
+        // List WhatsApp Senders via v2 API
+        const sendersListUrl = `https://messaging.twilio.com/v2/Channels/Senders?Channel=whatsapp`
+        const sendersResp = await fetch(sendersListUrl, {
+          headers: { 'Authorization': authHeader }
+        })
+        const sendersData = await sendersResp.json()
+        console.log('[SETUP-v2] Senders list response:', sendersResp.status, 'count:', sendersData.results?.length || 0)
+        
+        const sender = sendersData.results?.find((s: any) => s.sender_id === senderIdFormat)
+        console.log('[SETUP-v2] Looking for sender_id:', senderIdFormat, 'Found:', sender ? sender.sid : 'NOT FOUND')
+        
+        if (sender) {
+          // Configure webhook on the Sender
+          const updateSenderUrl = `https://messaging.twilio.com/v2/Channels/Senders/${sender.sid}`
+          const webhookConfig = {
+            webhook_configuration: {
+              url: inboundWebhookUrl,
+              method: 'POST',
+              fallback_url: '',
+              fallback_method: 'POST',
+              status_callback_url: statusWebhookUrl,
+              status_callback_method: 'POST',
+            }
+          }
+          
+          const updateSenderResp = await fetch(updateSenderUrl, {
             method: 'POST',
             headers: {
               'Authorization': authHeader,
-              'Content-Type': 'application/x-www-form-urlencoded',
+              'Content-Type': 'application/json',
             },
-            body: new URLSearchParams({
-              SmsUrl: inboundWebhookUrl,
-              SmsMethod: 'POST',
-              StatusCallback: statusWebhookUrl,
-              StatusCallbackMethod: 'POST',
-            }).toString(),
+            body: JSON.stringify(webhookConfig),
           })
           
-          if (updateResp.ok) {
+          const respText = await updateSenderResp.text()
+          console.log('[SETUP-v2] Update Sender webhook response:', updateSenderResp.status)
+          console.log('[SETUP-v2] Response:', respText.substring(0, 500))
+          
+          if (updateSenderResp.ok) {
             if (!whatsappSendersAssociated.includes(cleanNum)) {
               whatsappSendersAssociated.push(cleanNum)
             }
-            console.log('✅ Step 5: Webhook configured on selected number:', cleanNum)
+            numbersWithWebhook.push(cleanNum)
+            console.log('[SETUP-v2] ✅ Webhook configured on WhatsApp Sender:', senderIdFormat)
           } else {
-            const errText = await updateResp.text()
-            console.warn('Step 5: Could not update webhook on number:', cleanNum, errText)
+            console.warn('[SETUP-v2] Failed to update Sender webhook:', respText)
           }
-        } catch (e) {
-          console.warn('Step 5: Error configuring webhook on number:', e)
+        } else {
+          console.warn('[SETUP-v2] Sender not found. Available:', JSON.stringify(sendersData.results?.map((s: any) => s.sender_id) || []))
         }
-      } else {
-        console.log('Step 5: Selected number not in phoneNumbers list, will be handled in Step 6')
+      } catch (e) {
+        console.warn('[SETUP-v2] Error configuring Sender webhook:', e)
       }
     }
 
     console.log('WhatsApp senders associated:', whatsappSendersAssociated)
-
-    // Step 6: Configure webhooks directly on phone numbers (as fallback)
-    // This ensures webhooks work for WhatsApp even if Messaging Service isn't triggered
-    let numbersWithWebhook: string[] = []
-    
-    for (const number of phoneNumbers) {
-      try {
-        const updateNumberUrl = `https://api.twilio.com/2010-04-01/Accounts/${accountSid}/IncomingPhoneNumbers/${number.sid}.json`
-        
-        // Configure both SMS and Voice webhooks (WhatsApp uses SMS endpoints)
-        const numberUpdateResponse = await fetch(updateNumberUrl, {
-          method: 'POST',
-          headers: {
-            'Authorization': authHeader,
-            'Content-Type': 'application/x-www-form-urlencoded',
-          },
-          body: `SmsUrl=${encodeURIComponent(inboundWebhookUrl)}&SmsMethod=POST&StatusCallback=${encodeURIComponent(statusWebhookUrl)}&StatusCallbackMethod=POST`
-        })
-
-        if (numberUpdateResponse.ok) {
-          numbersWithWebhook.push(number.phone_number)
-          console.log('Configured webhook directly on number:', number.phone_number)
-        } else {
-          const errorText = await numberUpdateResponse.text()
-          console.warn('Could not update webhook on number:', number.phone_number, errorText)
-        }
-      } catch (e) {
-        console.warn('Error updating number webhook:', number.phone_number, e)
-      }
-    }
-    
-    console.log('Numbers with direct webhook configured:', numbersWithWebhook)
+    console.log('Numbers with webhook configured:', numbersWithWebhook)
 
     // Step 7: Sync templates from Twilio Content API
     let templates: any[] = []
