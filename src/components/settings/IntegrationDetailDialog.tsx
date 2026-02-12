@@ -19,16 +19,21 @@ interface IntegrationDetailDialogProps {
   onReconfigure: () => void;
 }
 
+interface SenderDetail {
+  sender_id: string;
+  sid: string;
+  status: string;
+  callback_url?: string;
+  status_callback_url?: string;
+  webhook_correct: boolean;
+}
+
 interface WebhookCheckResult {
-  messaging_service_sid: string | null;
-  webhooks: {
-    inbound_request_url: string;
-    status_callback: string;
-    use_inbound_webhook_on_number: boolean;
-  } | null;
-  senders: string[];
-  expected_inbound_url: string;
-  is_inbound_configured: boolean;
+  senders: SenderDetail[];
+  allCorrect: boolean;
+  expectedWebhookUrl?: string;
+  messaging_service_sid?: string | null;
+  is_inbound_configured?: boolean;
 }
 
 export function IntegrationDetailDialog({
@@ -71,7 +76,13 @@ export function IntegrationDetailDialog({
         },
       });
       if (error) throw error;
-      setWebhookResult(data);
+      const result: WebhookCheckResult = {
+        senders: data.senders || [],
+        allCorrect: data.allCorrect || false,
+        expectedWebhookUrl: data.expectedWebhookUrl || '',
+        is_inbound_configured: data.senders?.some((s: any) => s.webhook_correct) || false,
+      };
+      setWebhookResult(result);
     } catch (err: any) {
       toast.error('Erro ao verificar webhooks: ' + (err.message || 'Erro desconhecido'));
     } finally {
@@ -213,23 +224,39 @@ export function IntegrationDetailDialog({
         </Button>
 
         {webhookResult && (
-          <div className="space-y-2 bg-muted/50 rounded-lg p-3">
-            <StatusItem
-              label="Inbound Webhook"
-              value={webhookResult.is_inbound_configured ? 'Configurado' : 'Incorreto'}
-              success={webhookResult.is_inbound_configured}
-            />
-            <StatusItem
-              label="Senders"
-              value={
-                (webhookResult.senders?.length ?? 0) > 0
-                  ? webhookResult.senders!.map((s) => s.replace('whatsapp:', '')).join(', ')
-                  : 'Nenhum associado'
-              }
-              success={(webhookResult.senders?.length ?? 0) > 0}
-            />
+          <div className="space-y-3 bg-muted/50 rounded-lg p-3">
+            {webhookResult.senders.length > 0 ? (
+              webhookResult.senders.map((sender) => (
+                <div key={sender.sid} className="space-y-1.5 border-b last:border-b-0 pb-2 last:pb-0">
+                  <div className="flex items-center justify-between">
+                    <span className="text-sm font-medium">{sender.sender_id.replace('whatsapp:', '')}</span>
+                    <Badge variant={sender.status === 'ONLINE' ? 'success' : 'destructive'} size="sm">
+                      {sender.status}
+                    </Badge>
+                  </div>
+                  <div className="flex items-center justify-between">
+                    <span className="text-xs text-muted-foreground">Webhook</span>
+                    <div className="flex items-center gap-1">
+                      {sender.webhook_correct ? (
+                        <CheckCircle2 className="h-3.5 w-3.5 text-green-500" />
+                      ) : (
+                        <XCircle className="h-3.5 w-3.5 text-destructive" />
+                      )}
+                      <span className="text-xs">{sender.webhook_correct ? 'Correto' : 'Incorreto'}</span>
+                    </div>
+                  </div>
+                  {sender.callback_url && (
+                    <p className="text-xs text-muted-foreground font-mono truncate" title={sender.callback_url}>
+                      {sender.callback_url}
+                    </p>
+                  )}
+                </div>
+              ))
+            ) : (
+              <p className="text-sm text-muted-foreground text-center">Nenhum WhatsApp Sender encontrado</p>
+            )}
 
-            {(!webhookResult.is_inbound_configured || (webhookResult.senders?.length ?? 0) === 0) && (
+            {!webhookResult.allCorrect && (
               <Button
                 variant="default"
                 size="sm"
