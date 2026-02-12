@@ -222,14 +222,14 @@ export function IntegrationDetailDialog({
             <StatusItem
               label="Senders"
               value={
-                webhookResult.senders.length > 0
-                  ? webhookResult.senders.map((s) => s.replace('whatsapp:', '')).join(', ')
+                (webhookResult.senders?.length ?? 0) > 0
+                  ? webhookResult.senders!.map((s) => s.replace('whatsapp:', '')).join(', ')
                   : 'Nenhum associado'
               }
-              success={webhookResult.senders.length > 0}
+              success={(webhookResult.senders?.length ?? 0) > 0}
             />
 
-            {(!webhookResult.is_inbound_configured || webhookResult.senders.length === 0) && (
+            {(!webhookResult.is_inbound_configured || (webhookResult.senders?.length ?? 0) === 0) && (
               <Button
                 variant="default"
                 size="sm"
