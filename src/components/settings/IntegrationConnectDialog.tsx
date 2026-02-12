@@ -41,6 +41,13 @@ export function IntegrationConnectDialog({
   const [configValues, setConfigValues] = useState<Record<string, any>>({});
   const [setupPhase, setSetupPhase] = useState<'form' | 'configuring'>('form');
   const [credentialsFromVoice, setCredentialsFromVoice] = useState(false);
+  const [availableNumbers, setAvailableNumbers] = useState<Array<{
+    phone_number: string;
+    friendly_name: string;
+    is_whatsapp_sender: boolean;
+  }>>([]);
+  const [selectedWhatsAppNumber, setSelectedWhatsAppNumber] = useState<string>('');
+  const [loadingNumbers, setLoadingNumbers] = useState(false);
 
   const isTwilioVoice = integration.slug === 'twilio-voice';
   const isTwilioWhatsApp = integration.slug === 'twilio-whatsapp';
@@ -79,12 +86,58 @@ export function IntegrationConnectDialog({
     }
   }, [voiceIntegration, isTwilioWhatsApp]);
 
+  // Fetch available numbers when Voice credentials are detected for WhatsApp
+  useEffect(() => {
+    if (!credentialsFromVoice || !isTwilioWhatsApp || !configValues.account_sid || !configValues.auth_token || !organization?.id || !open) return;
+
+    const fetchNumbers = async () => {
+      setLoadingNumbers(true);
+      try {
+        const { data, error } = await supabase.functions.invoke('twilio-whatsapp-setup', {
+          body: {
+            organizationId: organization.id,
+            accountSid: configValues.account_sid,
+            authToken: configValues.auth_token,
+            mode: 'list-numbers',
+          },
+        });
+
+        if (data?.success && data.phoneNumbers) {
+          const whatsappSenders: string[] = data.whatsappSenders || [];
+          const numbers = data.phoneNumbers.map((n: any) => ({
+            phone_number: n.phone_number,
+            friendly_name: n.friendly_name,
+            is_whatsapp_sender: whatsappSenders.includes(n.phone_number),
+          }));
+          setAvailableNumbers(numbers);
+
+          // Auto-select first WhatsApp Sender, or first number
+          const firstSender = numbers.find((n: any) => n.is_whatsapp_sender);
+          if (firstSender) {
+            setSelectedWhatsAppNumber(firstSender.phone_number);
+          } else if (numbers.length > 0) {
+            setSelectedWhatsAppNumber(numbers[0].phone_number);
+          }
+        }
+      } catch (e) {
+        console.warn('Error fetching numbers:', e);
+      } finally {
+        setLoadingNumbers(false);
+      }
+    };
+
+    fetchNumbers();
+  }, [credentialsFromVoice, isTwilioWhatsApp, configValues.account_sid, configValues.auth_token, organization?.id, open]);
+
   // Reset state when dialog opens/closes
   useEffect(() => {
     if (!open) {
       setConfigValues({});
       setSetupPhase('form');
       setCredentialsFromVoice(false);
+      setAvailableNumbers([]);
+      setSelectedWhatsAppNumber('');
+      setLoadingNumbers(false);
     }
   }, [open]);
 
@@ -188,6 +241,7 @@ export function IntegrationConnectDialog({
             organizationId: organization.id,
             accountSid: configValues.account_sid,
             authToken: configValues.auth_token,
+            selectedNumber: selectedWhatsAppNumber || undefined,
           },
         });
 
@@ -370,9 +424,44 @@ export function IntegrationConnectDialog({
                 <Alert className="bg-primary/10 border-primary/20">
                   <Info className="h-4 w-4" />
                   <AlertDescription>
-                    Credenciais detectadas da integração Twilio Voice. Você pode simplesmente clicar em Conectar.
+                    Credenciais detectadas da integração Twilio Voice. Selecione o número para WhatsApp abaixo.
                   </AlertDescription>
                 </Alert>
+              )}
+
+              {/* WhatsApp number selector */}
+              {isTwilioWhatsApp && credentialsFromVoice && (
+                <div className="space-y-2">
+                  <Label>Número para WhatsApp <span className="text-destructive">*</span></Label>
+                  {loadingNumbers ? (
+                    <div className="flex items-center gap-2 py-2">
+                      <Loader2 className="h-4 w-4 animate-spin" />
+                      <span className="text-sm text-muted-foreground">Buscando números da conta Twilio...</span>
+                    </div>
+                  ) : availableNumbers.length > 0 ? (
+                    <>
+                      <Select value={selectedWhatsAppNumber} onValueChange={setSelectedWhatsAppNumber}>
+                        <SelectTrigger>
+                          <SelectValue placeholder="Selecione o número..." />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {availableNumbers.map((num) => (
+                            <SelectItem key={num.phone_number} value={num.phone_number}>
+                              {num.phone_number}{num.is_whatsapp_sender ? ' (WhatsApp Sender)' : ''} — {num.friendly_name}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                      <p className="text-xs text-muted-foreground">
+                        Números marcados como "WhatsApp Sender" já estão configurados no Twilio.
+                      </p>
+                    </>
+                  ) : (
+                    <p className="text-sm text-destructive">
+                      Nenhum número encontrado na conta Twilio.
+                    </p>
+                  )}
+                </div>
               )}
               
               {fields.length > 0 ? (
