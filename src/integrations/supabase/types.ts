@@ -3514,6 +3514,7 @@ export type Database = {
           is_active: boolean | null
           language: string | null
           last_synced_at: string | null
+          metadata: Json | null
           organization_id: string
           rejection_reason: string | null
           source: string | null
@@ -3534,6 +3535,7 @@ export type Database = {
           is_active?: boolean | null
           language?: string | null
           last_synced_at?: string | null
+          metadata?: Json | null
           organization_id: string
           rejection_reason?: string | null
           source?: string | null
@@ -3554,6 +3556,7 @@ export type Database = {
           is_active?: boolean | null
           language?: string | null
           last_synced_at?: string | null
+          metadata?: Json | null
           organization_id?: string
           rejection_reason?: string | null
           source?: string | null

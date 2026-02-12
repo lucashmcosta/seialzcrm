@@ -445,7 +445,33 @@ serve(async (req) => {
     
     for (const template of templates) {
       const types = template.types || {}
-      const whatsappType = types['twilio/whatsapp'] || types['twilio/text'] || {}
+
+      // Extract body, buttons, actions from correct type
+      let extractedBody = ''
+      let buttons: any[] = []
+      let actions: any[] = []
+      if (types['twilio/quick-reply']) {
+        extractedBody = types['twilio/quick-reply'].body || ''
+        buttons = (types['twilio/quick-reply'].actions || []).map((a: any) => ({ title: a.title, id: a.id }))
+      } else if (types['twilio/call-to-action']) {
+        extractedBody = types['twilio/call-to-action'].body || ''
+        actions = (types['twilio/call-to-action'].actions || []).map((a: any) => ({
+          type: a.type, title: a.title, url: a.url, phone: a.phone
+        }))
+      } else if (types['twilio/list-picker']) {
+        extractedBody = types['twilio/list-picker'].body || ''
+        actions = types['twilio/list-picker'].items || []
+      } else if (types['twilio/card'] || types['whatsapp/card']) {
+        const card = types['twilio/card'] || types['whatsapp/card']
+        extractedBody = card.body || card.title || ''
+        actions = card.actions || []
+      } else if (types['whatsapp/authentication']) {
+        extractedBody = types['whatsapp/authentication'].body || 'Authentication template'
+      } else if (types['twilio/media']) {
+        extractedBody = types['twilio/media'].body || ''
+      } else if (types['twilio/text']) {
+        extractedBody = types['twilio/text'].body || ''
+      }
 
       // Fetch real approval status from Twilio
       let templateStatus = 'draft'
@@ -504,8 +530,9 @@ serve(async (req) => {
             for (const k of tk) { if (tm[k]) return tm[k] }
             return 'text'
           })(),
-          body: whatsappType.body || '',
+          body: extractedBody,
           variables: template.variables || [],
+          metadata: { buttons, actions },
           status: templateStatus,
           category: templateCategory,
           rejection_reason: rejectionReason,

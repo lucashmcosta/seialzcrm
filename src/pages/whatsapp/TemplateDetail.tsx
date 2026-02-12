@@ -372,8 +372,8 @@ export default function TemplateDetail() {
               header={template.header}
               footer={template.footer}
               variables={template.variables || []}
-              buttons={template.buttons || []}
-              actions={template.actions || []}
+              buttons={(template as any).metadata?.buttons || []}
+              actions={(template as any).metadata?.actions || []}
             />
           </div>
         </div>
