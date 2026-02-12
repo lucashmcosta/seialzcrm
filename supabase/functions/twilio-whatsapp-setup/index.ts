@@ -453,12 +453,16 @@ serve(async (req) => {
       let rejectionReason: string | null = null
 
       try {
+        console.log(`[SETUP-SYNC] Template ${template.sid} (${template.friendly_name}) - Fetching approval...`)
         const approvalUrl = `https://content.twilio.com/v1/Content/${template.sid}/ApprovalRequests`
         const approvalResp = await fetch(approvalUrl, {
           headers: { 'Authorization': authHeader }
         })
+        console.log(`[SETUP-SYNC] Template ${template.sid} - HTTP ${approvalResp.status}`)
         if (approvalResp.ok) {
           const approvalData = await approvalResp.json()
+          console.log(`[SETUP-SYNC] Template ${template.sid} - Response:`, JSON.stringify(approvalData))
+          console.log(`[SETUP-SYNC] Template ${template.sid} - approvalData.whatsapp:`, JSON.stringify(approvalData?.whatsapp))
           if (approvalData.whatsapp) {
             const statusMap: Record<string, string> = {
               'approved': 'approved', 'pending': 'pending', 'rejected': 'rejected',
@@ -468,9 +472,13 @@ serve(async (req) => {
             templateCategory = (approvalData.whatsapp.category || 'utility').toLowerCase()
             rejectionReason = approvalData.whatsapp.rejection_reason || null
           }
+          console.log(`[SETUP-SYNC] Template ${template.sid} - Mapped: status=${templateStatus}, category=${templateCategory}`)
+        } else {
+          const errorText = await approvalResp.text()
+          console.warn(`[SETUP-SYNC] Template ${template.sid} - Non-OK response:`, errorText)
         }
-      } catch (e) {
-        console.warn('Error fetching approval for', template.sid, e)
+      } catch (e: any) {
+        console.error(`[SETUP-SYNC] Template ${template.sid} - Error fetching approval:`, e?.message || e)
       }
       
       const { error: templateError } = await supabase
