@@ -1,38 +1,102 @@
 
+# Corrigir Sincronizacao de Templates WhatsApp - Status e Content Type
 
-# Correcao: Mapear status "under_review" e similares do Twilio
+## Causa Raiz
 
-## Problema
+Os logs mostram claramente o problema:
 
-O Twilio retorna status como `received`, `under_review`, `in_review`, `submitted` que nao estao no `statusMap`, fazendo o template cair no fallback `'draft'`.
+```text
+ApprovalRequests HTTP status: 405
+"The requested resource /v1/Content/HX.../ApprovalRequests/whatsapp does not support the attempted HTTP method GET"
+```
+
+A URL esta ERRADA para o GET. Segundo a documentacao oficial do Twilio:
+
+- **GET** (buscar status): `GET /v1/Content/{sid}/ApprovalRequests` (SEM `/whatsapp`)
+- **POST** (submeter): `POST /v1/Content/{sid}/ApprovalRequests/whatsapp` (COM `/whatsapp`)
+
+O codigo atual usa `/ApprovalRequests/whatsapp` para ambos, o que faz o GET retornar 405 e todos os templates caem no fallback `'draft'`.
 
 ## Mudancas
 
-Atualizar o `statusMap` em 3 locais (2 arquivos) e adicionar log de warning para status desconhecidos:
+### 1. twilio-whatsapp-templates/index.ts
 
-### 1. `supabase/functions/twilio-whatsapp-templates/index.ts`
-
-**Linha 100-104** (bloco GET sync):
+**Linha 90 (GET sync)** - Remover `/whatsapp` da URL de GET:
 ```typescript
-const statusMap: Record<string, string> = {
-  'approved': 'approved', 'pending': 'pending', 'rejected': 'rejected',
-  'paused': 'rejected', 'disabled': 'rejected', 'unsubmitted': 'draft',
-  'received': 'pending', 'under_review': 'pending', 'in_review': 'pending', 'submitted': 'pending',
-}
-const mappedStatus = statusMap[approvalData.whatsapp.status]
-if (!mappedStatus) {
-  console.warn(`[SYNC-GET] Unknown approval status: "${approvalData.whatsapp.status}" for ${template.sid} - defaulting to draft`)
-}
-templateStatus = mappedStatus || 'draft'
+// ANTES:
+const approvalUrl = `https://content.twilio.com/v1/Content/${template.sid}/ApprovalRequests/whatsapp`
+// DEPOIS:
+const approvalUrl = `https://content.twilio.com/v1/Content/${template.sid}/ApprovalRequests`
 ```
 
-**Linha 241-245** (bloco POST sync) - mesma mudanca.
+**Linha 237 (POST sync)** - Mesmo fix:
+```typescript
+const approvalUrl = `https://content.twilio.com/v1/Content/${template.sid}/ApprovalRequests`
+```
 
-### 2. `supabase/functions/twilio-whatsapp-setup/index.ts`
+**Linhas 130 e 277 (upsert)** - Mapear `template_type` real a partir de `template.types`:
+```typescript
+// Extrair content type real
+const typeKeys = Object.keys(template.types || {})
+const typeMap: Record<string, string> = {
+  'twilio/text': 'text',
+  'twilio/quick-reply': 'quick-reply',
+  'twilio/list-picker': 'list-picker',
+  'twilio/call-to-action': 'call-to-action',
+  'twilio/media': 'media',
+  'twilio/card': 'call-to-action',
+  'whatsapp/authentication': 'text',
+  'whatsapp/card': 'call-to-action',
+  'whatsapp/list-picker': 'list-picker',
+}
+let contentType = 'text'
+for (const key of typeKeys) {
+  if (typeMap[key]) { contentType = typeMap[key]; break }
+}
 
-**Linha 467-471** (Step 9) - mesma mudanca.
+// No upsert:
+template_type: contentType, // ao inves de 'text' hardcoded
+```
 
-## Deploy
+**Linha 341 (submit-approval)** - Manter `/whatsapp` (POST esta correto como esta).
 
-Ambas edge functions serao redeployadas apos a correcao.
+### 2. twilio-whatsapp-setup/index.ts
 
+**Linha 457 (Step 9)** - Remover `/whatsapp` da URL de GET:
+```typescript
+const approvalUrl = `https://content.twilio.com/v1/Content/${template.sid}/ApprovalRequests`
+```
+
+**Linha 497 (upsert)** - Mesmo mapeamento de `template_type`.
+
+### 3. Frontend - Adicionar labels para novos tipos
+
+**WhatsAppTemplates.tsx (linha 134)** e **TemplateDetail.tsx** - Adicionar `'authentication'` ao mapa de labels:
+```typescript
+const labels: Record<string, string> = {
+  'text': 'Texto',
+  'quick-reply': 'Resposta Rapida',
+  'list-picker': 'Lista',
+  'call-to-action': 'CTA',
+  'media': 'Midia',
+  'authentication': 'Autenticacao',
+  'card': 'Card',
+}
+```
+
+## Resumo
+
+| Problema | Causa | Fix |
+|----------|-------|-----|
+| Todos "Rascunho" | GET usa URL errada (`/whatsapp`) retorna 405 | Remover `/whatsapp` do GET |
+| Todos "Texto" | `template_type: 'text'` hardcoded | Mapear de `template.types` |
+| Submit funciona | POST para `/ApprovalRequests/whatsapp` esta correto | Nenhuma mudanca |
+
+## Arquivos
+
+| Arquivo | Mudanca |
+|---------|---------|
+| `supabase/functions/twilio-whatsapp-templates/index.ts` | Fix URL do GET + mapear template_type |
+| `supabase/functions/twilio-whatsapp-setup/index.ts` | Fix URL do GET + mapear template_type |
+| `src/pages/settings/WhatsAppTemplates.tsx` | Adicionar labels de tipo |
+| `src/pages/whatsapp/TemplateDetail.tsx` | Adicionar labels de tipo |
