@@ -461,12 +461,16 @@ serve(async (req) => {
       });
     }
 
-    // Determine primary number
+    // Determine primary number — prioritize ONLINE senders over OFFLINE ones
+    const onlineSender = v2Senders.find((s) => s.status === "ONLINE" || s.status === "ONLINE:UPDATING");
     const primaryNumber =
       selectedNumber ||
+      (onlineSender ? onlineSender.sender_id.replace("whatsapp:", "") : null) ||
       (v2Senders.length > 0 ? v2Senders[0].sender_id.replace("whatsapp:", "") : null) ||
       (phoneNumbers.length > 0 ? phoneNumbers[0].phone_number : null);
     const whatsappFrom = primaryNumber ? `whatsapp:${primaryNumber}` : null;
+
+    console.log("Primary number selected:", primaryNumber, onlineSender ? "(ONLINE sender)" : "(fallback)");
 
     // Find the v2 sender SID for the primary number
     const primarySender = v2Senders.find((s) => s.sender_id === `whatsapp:${primaryNumber}`);
