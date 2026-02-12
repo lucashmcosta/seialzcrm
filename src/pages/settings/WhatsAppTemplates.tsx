@@ -137,6 +137,8 @@ export default function WhatsAppTemplates() {
       'list-picker': 'Lista',
       'call-to-action': 'CTA',
       'media': 'Mídia',
+      'authentication': 'Autenticação',
+      'card': 'Card',
     };
     return labels[type] || type;
   };

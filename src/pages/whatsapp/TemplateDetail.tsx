@@ -107,6 +107,8 @@ export default function TemplateDetail() {
       'list-picker': 'Lista',
       'call-to-action': 'Call-to-Action',
       'media': 'Mídia',
+      'authentication': 'Autenticação',
+      'card': 'Card',
     };
     return labels[type] || type;
   };

@@ -454,7 +454,7 @@ serve(async (req) => {
 
       try {
         console.log(`[SETUP-SYNC] Template ${template.sid} (${template.friendly_name}) - Fetching approval...`)
-        const approvalUrl = `https://content.twilio.com/v1/Content/${template.sid}/ApprovalRequests/whatsapp`
+        const approvalUrl = `https://content.twilio.com/v1/Content/${template.sid}/ApprovalRequests`
         const approvalResp = await fetch(approvalUrl, {
           headers: { 'Authorization': authHeader }
         })
@@ -494,7 +494,16 @@ serve(async (req) => {
           twilio_content_sid: template.sid,
           friendly_name: template.friendly_name || template.sid,
           language: template.language || 'pt_BR',
-          template_type: 'text',
+          template_type: (() => {
+            const tk = Object.keys(template.types || {})
+            const tm: Record<string, string> = {
+              'twilio/text': 'text', 'twilio/quick-reply': 'quick-reply', 'twilio/list-picker': 'list-picker',
+              'twilio/call-to-action': 'call-to-action', 'twilio/media': 'media', 'twilio/card': 'call-to-action',
+              'whatsapp/authentication': 'text', 'whatsapp/card': 'call-to-action', 'whatsapp/list-picker': 'list-picker',
+            }
+            for (const k of tk) { if (tm[k]) return tm[k] }
+            return 'text'
+          })(),
           body: whatsappType.body || '',
           variables: template.variables || [],
           status: templateStatus,

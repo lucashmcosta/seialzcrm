@@ -87,7 +87,7 @@ serve(async (req) => {
 
           try {
             console.log(`[SYNC-GET] Template ${template.sid} (${template.friendly_name}) - Fetching approval status...`)
-            const approvalUrl = `https://content.twilio.com/v1/Content/${template.sid}/ApprovalRequests/whatsapp`
+            const approvalUrl = `https://content.twilio.com/v1/Content/${template.sid}/ApprovalRequests`
             const approvalResp = await fetch(approvalUrl, {
               headers: { 'Authorization': 'Basic ' + btoa(`${accountSid}:${authToken}`) }
             })
@@ -95,7 +95,6 @@ serve(async (req) => {
             if (approvalResp.ok) {
               const approvalData = await approvalResp.json()
               console.log(`[SYNC-GET] Template ${template.sid} - ApprovalRequests response:`, JSON.stringify(approvalData))
-              console.log(`[SYNC-GET] Template ${template.sid} - approvalData.whatsapp:`, JSON.stringify(approvalData?.whatsapp))
               if (approvalData.whatsapp) {
                 const statusMap: Record<string, string> = {
                   'approved': 'approved', 'pending': 'pending', 'rejected': 'rejected',
@@ -120,6 +119,18 @@ serve(async (req) => {
             console.error(`[SYNC-GET] Template ${template.sid} - Error fetching approval:`, e?.message || e)
           }
           
+          // Extract real content type from template.types
+          const typeKeys = Object.keys(template.types || {})
+          const typeMap: Record<string, string> = {
+            'twilio/text': 'text', 'twilio/quick-reply': 'quick-reply', 'twilio/list-picker': 'list-picker',
+            'twilio/call-to-action': 'call-to-action', 'twilio/media': 'media', 'twilio/card': 'call-to-action',
+            'whatsapp/authentication': 'text', 'whatsapp/card': 'call-to-action', 'whatsapp/list-picker': 'list-picker',
+          }
+          let contentType = 'text'
+          for (const key of typeKeys) {
+            if (typeMap[key]) { contentType = typeMap[key]; break }
+          }
+
           const { error } = await supabase
             .from('whatsapp_templates')
             .upsert({
@@ -127,7 +138,7 @@ serve(async (req) => {
               twilio_content_sid: template.sid,
               friendly_name: template.friendly_name || template.sid,
               language: template.language || 'pt_BR',
-              template_type: 'text',
+              template_type: contentType,
               body: whatsappType.body || '',
               variables: template.variables || [],
               status: templateStatus,
@@ -234,7 +245,7 @@ serve(async (req) => {
 
           try {
             console.log(`[SYNC-POST] Template ${template.sid} (${template.friendly_name}) - Fetching approval status...`)
-            const approvalUrl = `https://content.twilio.com/v1/Content/${template.sid}/ApprovalRequests/whatsapp`
+            const approvalUrl = `https://content.twilio.com/v1/Content/${template.sid}/ApprovalRequests`
             const approvalResp = await fetch(approvalUrl, {
               headers: { 'Authorization': authHeaderVal }
             })
@@ -242,7 +253,6 @@ serve(async (req) => {
             if (approvalResp.ok) {
               const approvalData = await approvalResp.json()
               console.log(`[SYNC-POST] Template ${template.sid} - ApprovalRequests response:`, JSON.stringify(approvalData))
-              console.log(`[SYNC-POST] Template ${template.sid} - approvalData.whatsapp:`, JSON.stringify(approvalData?.whatsapp))
               if (approvalData.whatsapp) {
                 const statusMap: Record<string, string> = {
                   'approved': 'approved', 'pending': 'pending', 'rejected': 'rejected',
@@ -267,6 +277,18 @@ serve(async (req) => {
             console.error(`[SYNC-POST] Template ${template.sid} - Error fetching approval:`, e?.message || e)
           }
 
+          // Extract real content type
+          const typeKeys2 = Object.keys(template.types || {})
+          const typeMap2: Record<string, string> = {
+            'twilio/text': 'text', 'twilio/quick-reply': 'quick-reply', 'twilio/list-picker': 'list-picker',
+            'twilio/call-to-action': 'call-to-action', 'twilio/media': 'media', 'twilio/card': 'call-to-action',
+            'whatsapp/authentication': 'text', 'whatsapp/card': 'call-to-action', 'whatsapp/list-picker': 'list-picker',
+          }
+          let contentType2 = 'text'
+          for (const key of typeKeys2) {
+            if (typeMap2[key]) { contentType2 = typeMap2[key]; break }
+          }
+
           const { error } = await supabase
             .from('whatsapp_templates')
             .upsert({
@@ -274,7 +296,7 @@ serve(async (req) => {
               twilio_content_sid: template.sid,
               friendly_name: template.friendly_name || template.sid,
               language: template.language || 'pt_BR',
-              template_type: 'text',
+              template_type: contentType2,
               body: whatsappType.body || '',
               variables: template.variables || [],
               status: templateStatus,
