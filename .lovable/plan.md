@@ -1,50 +1,82 @@
 
 
-# Corrigir associacao de WhatsApp Sender ao Messaging Service
+# Atualizar IntegrationDetailDialog para o novo formato da API v2
 
-## Diagnostico
+## Problema
 
-Os logs confirmam o problema:
-- O codigo esta usando a API `/PhoneNumbers` para associar o numero
-- Twilio retorna erro **21715: "Number does not have right capabilities"**
-- Isso acontece porque o numero e um WhatsApp Sender, nao um PhoneNumber regular
+A edge function `check-webhooks` agora retorna senders como objetos detalhados, mas o frontend ainda espera o formato antigo (array de strings).
 
-## Solucao
-
-Trocar de volta para a API `/Senders` com a URL e parametros corretos. A documentacao do Twilio Messaging Service Senders usa:
-
-```text
-POST https://messaging.twilio.com/v1/Services/{ServiceSid}/Senders
-Content-Type: application/x-www-form-urlencoded
-Body: Sender=whatsapp:+551150265098&SenderType=whatsapp
+**Formato antigo (esperado pelo frontend):**
+```json
+{ "senders": ["whatsapp:+55..."], "is_inbound_configured": true }
 ```
 
-O problema anterior com 404 pode ter sido causado por falta do parametro `SenderType` ou encoding incorreto.
+**Formato novo (retornado pela API v2):**
+```json
+{
+  "senders": [{ "sender_id": "whatsapp:+55...", "sid": "XE...", "status": "ONLINE", "callback_url": "...", "webhook_correct": true }],
+  "allCorrect": true
+}
+```
 
 ## Mudancas
 
-### Arquivo: `supabase/functions/twilio-whatsapp-setup/index.ts`
+### Arquivo: `src/components/settings/IntegrationDetailDialog.tsx`
 
-No bloco `update-webhook` (linhas 313-378), substituir a logica de associacao via `/PhoneNumbers` por `/Senders`:
+**1. Atualizar interface `WebhookCheckResult` (linhas 22-32)**
+
+Substituir a interface atual por uma que reflita o novo formato:
 
 ```typescript
-// ANTES (errado - usa PhoneNumbers API)
-const assocUrl = `https://messaging.twilio.com/v1/Services/${messagingServiceSid}/PhoneNumbers`
-body: `PhoneNumberSid=${numberData.sid}`
+interface SenderDetail {
+  sender_id: string;
+  sid: string;
+  status: string;
+  callback_url?: string;
+  status_callback_url?: string;
+  webhook_correct: boolean;
+}
 
-// DEPOIS (correto - usa Senders API)
-const senderValue = `whatsapp:${cleanNumber}`
-const assocUrl = `https://messaging.twilio.com/v1/Services/${messagingServiceSid}/Senders`
-body: `Sender=${encodeURIComponent(senderValue)}&SenderType=whatsapp`
+interface WebhookCheckResult {
+  senders: SenderDetail[];
+  allCorrect: boolean;
+  expectedWebhookUrl?: string;
+  // Campos legados mantidos para compatibilidade
+  messaging_service_sid?: string | null;
+  is_inbound_configured?: boolean;
+}
 ```
 
-A logica simplifica porque nao precisa mais buscar o PhoneNumber SID primeiro. Basta chamar diretamente a API de Senders com o formato `whatsapp:+55...`.
+**2. Atualizar `handleCheckWebhooks` (linhas 61-80)**
 
-Tambem aplicar a mesma correcao no setup inicial (Step 5) para que novas integracoes ja funcionem corretamente.
+Apos receber `data` da edge function, normalizar os dados:
 
-### Resumo de mudancas
+```typescript
+const result: WebhookCheckResult = {
+  senders: data.senders || [],
+  allCorrect: data.allCorrect || false,
+  expectedWebhookUrl: data.expectedWebhookUrl || '',
+  is_inbound_configured: data.senders?.some((s: any) => s.webhook_correct) || false,
+};
+setWebhookResult(result);
+```
 
-| Arquivo | Mudanca |
-|---------|---------|
-| `supabase/functions/twilio-whatsapp-setup/index.ts` | Trocar `/PhoneNumbers` por `/Senders` com `SenderType=whatsapp` no mode `update-webhook` e no setup inicial |
+**3. Atualizar bloco de renderizacao do resultado (linhas 215-249)**
+
+Substituir os StatusItems simples por uma lista detalhada de cada sender:
+
+- Para cada sender, mostrar:
+  - Numero (sender_id sem prefixo `whatsapp:`)
+  - Status com badge colorida (ONLINE = verde, outro = vermelho)
+  - Webhook correto? (CheckCircle2 verde ou XCircle vermelho)
+  - URL do callback atual (truncada)
+- Manter o botao "Corrigir Webhooks" visivel quando `allCorrect` for `false`
+
+**4. Logica do botao "Corrigir Webhooks"**
+
+Mostrar o botao quando `!webhookResult.allCorrect` ao inves de checar campos individuais antigos.
+
+## Resultado esperado
+
+Ao clicar "Verificar Webhooks", o usuario vera uma lista detalhada com o status de cada WhatsApp Sender, incluindo se o webhook esta configurado corretamente, o status ONLINE/OFFLINE, e a URL configurada.
 
