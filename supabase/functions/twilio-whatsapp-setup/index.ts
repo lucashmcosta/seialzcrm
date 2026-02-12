@@ -454,7 +454,7 @@ serve(async (req) => {
 
       try {
         console.log(`[SETUP-SYNC] Template ${template.sid} (${template.friendly_name}) - Fetching approval...`)
-        const approvalUrl = `https://content.twilio.com/v1/Content/${template.sid}/ApprovalRequests`
+        const approvalUrl = `https://content.twilio.com/v1/Content/${template.sid}/ApprovalRequests/whatsapp`
         const approvalResp = await fetch(approvalUrl, {
           headers: { 'Authorization': authHeader }
         })

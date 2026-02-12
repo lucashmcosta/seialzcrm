@@ -87,7 +87,7 @@ serve(async (req) => {
 
           try {
             console.log(`[SYNC-GET] Template ${template.sid} (${template.friendly_name}) - Fetching approval status...`)
-            const approvalUrl = `https://content.twilio.com/v1/Content/${template.sid}/ApprovalRequests`
+            const approvalUrl = `https://content.twilio.com/v1/Content/${template.sid}/ApprovalRequests/whatsapp`
             const approvalResp = await fetch(approvalUrl, {
               headers: { 'Authorization': 'Basic ' + btoa(`${accountSid}:${authToken}`) }
             })
@@ -228,7 +228,7 @@ serve(async (req) => {
 
           try {
             console.log(`[SYNC-POST] Template ${template.sid} (${template.friendly_name}) - Fetching approval status...`)
-            const approvalUrl = `https://content.twilio.com/v1/Content/${template.sid}/ApprovalRequests`
+            const approvalUrl = `https://content.twilio.com/v1/Content/${template.sid}/ApprovalRequests/whatsapp`
             const approvalResp = await fetch(approvalUrl, {
               headers: { 'Authorization': authHeaderVal }
             })
@@ -326,7 +326,7 @@ serve(async (req) => {
         const authHeaderVal = 'Basic ' + btoa(`${config.account_sid}:${config.auth_token}`)
 
         // Submit to Twilio
-        const approvalUrl = `https://content.twilio.com/v1/Content/${templateRow.twilio_content_sid}/ApprovalRequests`
+        const approvalUrl = `https://content.twilio.com/v1/Content/${templateRow.twilio_content_sid}/ApprovalRequests/whatsapp`
         const approvalResp = await fetch(approvalUrl, {
           method: 'POST',
           headers: {
