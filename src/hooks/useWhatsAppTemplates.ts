@@ -170,7 +170,13 @@ export function useSyncTemplates() {
   const { toast } = useToast();
 
   return useMutation({
-    mutationFn: (orgId: string) => whatsappService.syncWithTwilio(orgId),
+    mutationFn: async (orgId: string) => {
+      const { data, error } = await supabase.functions.invoke('twilio-whatsapp-templates', {
+        body: { action: 'sync', organizationId: orgId },
+      });
+      if (error) throw new Error(error.message || 'Erro ao sincronizar templates');
+      return data as { synced: number; total: number };
+    },
     onSuccess: (data) => {
       queryClient.invalidateQueries({ queryKey: ['whatsapp-templates'] });
       toast({ description: `${data.synced} templates sincronizados!` });
@@ -186,8 +192,13 @@ export function useSubmitForApproval() {
   const { toast } = useToast();
 
   return useMutation({
-    mutationFn: ({ orgId, templateId, category }: { orgId: string; templateId: string; category: string }) =>
-      whatsappService.submitForApproval(orgId, templateId, category),
+    mutationFn: async ({ orgId, templateId, category }: { orgId: string; templateId: string; category: string }) => {
+      const { data, error } = await supabase.functions.invoke('twilio-whatsapp-templates', {
+        body: { action: 'submit-approval', organizationId: orgId, templateId, category },
+      });
+      if (error) throw new Error(error.message || 'Erro ao submeter para aprovação');
+      return data;
+    },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['whatsapp-templates'] });
       queryClient.invalidateQueries({ queryKey: ['whatsapp-template'] });

@@ -446,6 +446,32 @@ serve(async (req) => {
     for (const template of templates) {
       const types = template.types || {}
       const whatsappType = types['twilio/whatsapp'] || types['twilio/text'] || {}
+
+      // Fetch real approval status from Twilio
+      let templateStatus = 'draft'
+      let templateCategory = 'utility'
+      let rejectionReason: string | null = null
+
+      try {
+        const approvalUrl = `https://content.twilio.com/v1/Content/${template.sid}/ApprovalRequests`
+        const approvalResp = await fetch(approvalUrl, {
+          headers: { 'Authorization': authHeader }
+        })
+        if (approvalResp.ok) {
+          const approvalData = await approvalResp.json()
+          if (approvalData.whatsapp) {
+            const statusMap: Record<string, string> = {
+              'approved': 'approved', 'pending': 'pending', 'rejected': 'rejected',
+              'paused': 'rejected', 'disabled': 'rejected', 'unsubmitted': 'draft',
+            }
+            templateStatus = statusMap[approvalData.whatsapp.status] || 'draft'
+            templateCategory = (approvalData.whatsapp.category || 'utility').toLowerCase()
+            rejectionReason = approvalData.whatsapp.rejection_reason || null
+          }
+        }
+      } catch (e) {
+        console.warn('Error fetching approval for', template.sid, e)
+      }
       
       const { error: templateError } = await supabase
         .from('whatsapp_templates')
@@ -457,8 +483,9 @@ serve(async (req) => {
           template_type: 'text',
           body: whatsappType.body || '',
           variables: template.variables || [],
-          status: 'approved',
-          category: 'utility',
+          status: templateStatus,
+          category: templateCategory,
+          rejection_reason: rejectionReason,
           last_synced_at: new Date().toISOString(),
         }, {
           onConflict: 'organization_id,twilio_content_sid'
