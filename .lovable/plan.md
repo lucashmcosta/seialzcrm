@@ -1,65 +1,50 @@
 
-# Adicionar botao "Verificar Webhooks" no dialog de detalhes da integracao WhatsApp
 
-## Problema
+# Corrigir associacao de WhatsApp Sender ao Messaging Service
 
-O botao "Verificar Webhooks" foi criado no componente `WhatsAppIntegrationStatus`, mas esse componente nao e usado em nenhuma pagina. O dialog que realmente aparece quando voce clica na integracao WhatsApp e o `IntegrationDetailDialog` (o que aparece na sua screenshot).
+## Diagnostico
+
+Os logs confirmam o problema:
+- O codigo esta usando a API `/PhoneNumbers` para associar o numero
+- Twilio retorna erro **21715: "Number does not have right capabilities"**
+- Isso acontece porque o numero e um WhatsApp Sender, nao um PhoneNumber regular
 
 ## Solucao
 
-Adicionar a funcionalidade de verificacao e correcao de webhooks diretamente dentro do `IntegrationDetailDialog.tsx`, na secao `renderWhatsAppConfig()`.
+Trocar de volta para a API `/Senders` com a URL e parametros corretos. A documentacao do Twilio Messaging Service Senders usa:
+
+```text
+POST https://messaging.twilio.com/v1/Services/{ServiceSid}/Senders
+Content-Type: application/x-www-form-urlencoded
+Body: Sender=whatsapp:+551150265098&SenderType=whatsapp
+```
+
+O problema anterior com 404 pode ter sido causado por falta do parametro `SenderType` ou encoding incorreto.
 
 ## Mudancas
 
-### Arquivo: `src/components/settings/IntegrationDetailDialog.tsx`
+### Arquivo: `supabase/functions/twilio-whatsapp-setup/index.ts`
 
-1. Adicionar estados para controle do check/fix de webhooks
-2. Adicionar funcao `handleCheckWebhooks` que chama a edge function com `mode: 'check-webhooks'`
-3. Adicionar funcao `handleFixWebhooks` que chama com `mode: 'update-webhook'`
-4. Na secao `renderWhatsAppConfig()`, adicionar:
-   - Botao **"Verificar Webhooks"** abaixo das informacoes de configuracao
-   - Resultado visual com indicadores verde/vermelho mostrando se inbound esta configurado corretamente
-   - Botao **"Corrigir Webhooks"** que aparece apenas quando ha problemas detectados
-   - Lista de senders associados ao Messaging Service
+No bloco `update-webhook` (linhas 313-378), substituir a logica de associacao via `/PhoneNumbers` por `/Senders`:
 
-O resultado visual ficara assim no dialog:
-
-```text
-Numero Principal      (11) 5026-5098
-Messaging Service     ...48a2024e
-Webhooks              Configurados automaticamente
-Configurado em        11/02/2026 as 21:20
-
-[Verificar Webhooks]
-
---- Apos clicar ---
-Inbound Webhook       OK (ou Incorreto)
-Senders               whatsapp:+5511... (ou Nenhum)
-[Corrigir Webhooks]   (aparece se houver problema)
-```
-
-### Detalhes tecnicos
-
-A funcao de verificacao chamara:
 ```typescript
-const response = await supabase.functions.invoke('twilio-whatsapp-setup', {
-  body: {
-    mode: 'check-webhooks',
-    organizationId: orgIntegration.organization_id,
-    accountSid: configValues.account_sid,
-    authToken: configValues.auth_token,
-  }
-})
+// ANTES (errado - usa PhoneNumbers API)
+const assocUrl = `https://messaging.twilio.com/v1/Services/${messagingServiceSid}/PhoneNumbers`
+body: `PhoneNumberSid=${numberData.sid}`
+
+// DEPOIS (correto - usa Senders API)
+const senderValue = `whatsapp:${cleanNumber}`
+const assocUrl = `https://messaging.twilio.com/v1/Services/${messagingServiceSid}/Senders`
+body: `Sender=${encodeURIComponent(senderValue)}&SenderType=whatsapp`
 ```
 
-E exibira o resultado com os campos `is_inbound_configured`, `senders`, e `webhooks` retornados pela edge function.
+A logica simplifica porque nao precisa mais buscar o PhoneNumber SID primeiro. Basta chamar diretamente a API de Senders com o formato `whatsapp:+55...`.
 
-### Arquivo a remover (opcional)
+Tambem aplicar a mesma correcao no setup inicial (Step 5) para que novas integracoes ja funcionem corretamente.
 
-O componente `WhatsAppIntegrationStatus.tsx` pode ser removido ja que sua funcionalidade sera incorporada diretamente no `IntegrationDetailDialog`. Mas podemos manter por enquanto para nao quebrar nada.
-
-## Arquivos a modificar
+### Resumo de mudancas
 
 | Arquivo | Mudanca |
 |---------|---------|
-| `src/components/settings/IntegrationDetailDialog.tsx` | Adicionar verificacao e correcao de webhooks na secao WhatsApp |
+| `supabase/functions/twilio-whatsapp-setup/index.ts` | Trocar `/PhoneNumbers` por `/Senders` com `SenderType=whatsapp` no mode `update-webhook` e no setup inicial |
+
