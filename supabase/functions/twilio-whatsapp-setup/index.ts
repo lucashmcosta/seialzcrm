@@ -104,7 +104,7 @@ serve(async (req) => {
         if (servicesResp.ok) {
           const servicesData = await servicesResp.json()
           for (const svc of (servicesData.services || [])) {
-            const sendersUrl = `https://messaging.twilio.com/v1/Services/${svc.sid}/Senders?PageSize=100`
+            const sendersUrl = `https://messaging.twilio.com/v1/Services/${svc.sid}/ChannelSenders?PageSize=100`
             const sendersResp = await fetch(sendersUrl, { headers: { 'Authorization': authHeader } })
             if (sendersResp.ok) {
               const sendersData = await sendersResp.json()
@@ -178,7 +178,7 @@ serve(async (req) => {
         
         // Fetch senders
         const sendersResp = await fetch(
-          `https://messaging.twilio.com/v1/Services/${messagingServiceSid}/Senders?PageSize=100`,
+          `https://messaging.twilio.com/v1/Services/${messagingServiceSid}/ChannelSenders?PageSize=100`,
           { headers: { 'Authorization': authHeader } }
         )
         if (sendersResp.ok) {
@@ -324,7 +324,7 @@ serve(async (req) => {
         try {
           const cleanNumber = primaryNumber.replace('whatsapp:', '')
           const senderValue = `whatsapp:${cleanNumber}`
-          const assocUrl = `https://messaging.twilio.com/v1/Services/${messagingServiceSid}/Senders`
+          const assocUrl = `https://messaging.twilio.com/v1/Services/${messagingServiceSid}/ChannelSenders`
           console.log('[FIX] Adding sender:', senderValue, 'to service:', messagingServiceSid)
           console.log('[FIX] URL:', assocUrl)
           
@@ -534,7 +534,7 @@ serve(async (req) => {
         const senderValue = `whatsapp:${cleanNum}`
         console.log('Step 5: Adding WhatsApp Sender:', senderValue, 'to Messaging Service:', messagingServiceSid)
         
-        const assocUrl = `https://messaging.twilio.com/v1/Services/${messagingServiceSid}/Senders`
+        const assocUrl = `https://messaging.twilio.com/v1/Services/${messagingServiceSid}/ChannelSenders`
         const assocResp = await fetch(assocUrl, {
           method: 'POST',
           headers: {
