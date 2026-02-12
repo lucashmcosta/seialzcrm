@@ -28,7 +28,7 @@ serve(async (req) => {
     console.log('=== twilio-whatsapp-setup called ===');
     
     const body = await req.json()
-    const { organizationId, accountSid, authToken } = body
+    const { organizationId, accountSid, authToken, selectedNumber, mode } = body
     
     console.log('Request body received:', { 
       organizationId, 
@@ -72,6 +72,64 @@ serve(async (req) => {
 
     const accountData = await accountResponse.json()
     console.log('Twilio account validated:', accountData.friendly_name)
+
+    // Mode: list-numbers - return available numbers and existing WhatsApp senders without setup
+    if (mode === 'list-numbers') {
+      console.log('Mode: list-numbers - fetching available numbers and WhatsApp senders')
+
+      // Fetch phone numbers
+      let phoneNumbersList: { sid: string; phone_number: string; friendly_name: string }[] = []
+      try {
+        const phoneNumbersUrl = `https://api.twilio.com/2010-04-01/Accounts/${accountSid}/IncomingPhoneNumbers.json?PageSize=100`
+        const phoneNumbersResponse = await fetch(phoneNumbersUrl, {
+          headers: { 'Authorization': authHeader }
+        })
+        if (phoneNumbersResponse.ok) {
+          const data = await phoneNumbersResponse.json()
+          phoneNumbersList = (data.incoming_phone_numbers || []).map((pn: any) => ({
+            sid: pn.sid,
+            phone_number: pn.phone_number,
+            friendly_name: pn.friendly_name || pn.phone_number,
+          }))
+        }
+      } catch (e) {
+        console.warn('Error fetching phone numbers:', e)
+      }
+
+      // Fetch existing WhatsApp Senders from Messaging Services
+      const whatsappSenders: string[] = []
+      try {
+        const servicesUrl = 'https://messaging.twilio.com/v1/Services?PageSize=100'
+        const servicesResp = await fetch(servicesUrl, { headers: { 'Authorization': authHeader } })
+        if (servicesResp.ok) {
+          const servicesData = await servicesResp.json()
+          for (const svc of (servicesData.services || [])) {
+            const sendersUrl = `https://messaging.twilio.com/v1/Services/${svc.sid}/Senders?PageSize=100`
+            const sendersResp = await fetch(sendersUrl, { headers: { 'Authorization': authHeader } })
+            if (sendersResp.ok) {
+              const sendersData = await sendersResp.json()
+              for (const sender of (sendersData.senders || [])) {
+                if (sender.sender?.startsWith('whatsapp:')) {
+                  const number = sender.sender.replace('whatsapp:', '')
+                  if (!whatsappSenders.includes(number)) {
+                    whatsappSenders.push(number)
+                  }
+                }
+              }
+            }
+          }
+        }
+      } catch (e) {
+        console.warn('Error fetching WhatsApp senders:', e)
+      }
+
+      console.log('list-numbers result:', { phoneNumbers: phoneNumbersList.length, whatsappSenders })
+
+      return new Response(
+        JSON.stringify({ success: true, phoneNumbers: phoneNumbersList, whatsappSenders }),
+        { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      )
+    }
 
     const supabaseUrl = Deno.env.get('SUPABASE_URL') ?? ''
     
@@ -334,8 +392,9 @@ serve(async (req) => {
       )
     }
 
-    // Determine primary WhatsApp number
-    const primaryNumber = phoneNumbers.length > 0 ? phoneNumbers[0].phone_number : null
+    // Determine primary WhatsApp number (use selectedNumber if provided)
+    const primaryNumber = selectedNumber
+      || (phoneNumbers.length > 0 ? phoneNumbers[0].phone_number : null)
     const whatsappFrom = primaryNumber ? `whatsapp:${primaryNumber}` : null
 
     // Upsert organization integration with full config
