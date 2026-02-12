@@ -1,102 +1,104 @@
 
-# Corrigir Sincronizacao de Templates WhatsApp - Status e Content Type
 
-## Causa Raiz
+# Fix: Extrair body e botoes do tipo correto do Twilio
 
-Os logs mostram claramente o problema:
+## Problema
 
-```text
-ApprovalRequests HTTP status: 405
-"The requested resource /v1/Content/HX.../ApprovalRequests/whatsapp does not support the attempted HTTP method GET"
-```
-
-A URL esta ERRADA para o GET. Segundo a documentacao oficial do Twilio:
-
-- **GET** (buscar status): `GET /v1/Content/{sid}/ApprovalRequests` (SEM `/whatsapp`)
-- **POST** (submeter): `POST /v1/Content/{sid}/ApprovalRequests/whatsapp` (COM `/whatsapp`)
-
-O codigo atual usa `/ApprovalRequests/whatsapp` para ambos, o que faz o GET retornar 405 e todos os templates caem no fallback `'draft'`.
+O body e sempre extraido de `types['twilio/whatsapp'] || types['twilio/text']`, que e vazio para templates Quick Reply, CTA, etc. Tambem nao ha coluna no banco para armazenar botoes/acoes.
 
 ## Mudancas
 
-### 1. twilio-whatsapp-templates/index.ts
+### 1. Migracao: Adicionar coluna `metadata` JSONB
 
-**Linha 90 (GET sync)** - Remover `/whatsapp` da URL de GET:
-```typescript
-// ANTES:
-const approvalUrl = `https://content.twilio.com/v1/Content/${template.sid}/ApprovalRequests/whatsapp`
-// DEPOIS:
-const approvalUrl = `https://content.twilio.com/v1/Content/${template.sid}/ApprovalRequests`
+```sql
+ALTER TABLE whatsapp_templates ADD COLUMN IF NOT EXISTS metadata jsonb DEFAULT '{}';
 ```
 
-**Linha 237 (POST sync)** - Mesmo fix:
+Essa coluna armazenara botoes, acoes e outros dados extras do template.
+
+### 2. Edge Functions: Extrair body do tipo correto
+
+Em ambos os arquivos (`twilio-whatsapp-templates/index.ts` e `twilio-whatsapp-setup/index.ts`), substituir:
+
 ```typescript
-const approvalUrl = `https://content.twilio.com/v1/Content/${template.sid}/ApprovalRequests`
+const whatsappType = types['twilio/whatsapp'] || types['twilio/text'] || {}
 ```
 
-**Linhas 130 e 277 (upsert)** - Mapear `template_type` real a partir de `template.types`:
+Por logica que itera todos os tipos possiveis:
+
 ```typescript
-// Extrair content type real
-const typeKeys = Object.keys(template.types || {})
-const typeMap: Record<string, string> = {
-  'twilio/text': 'text',
-  'twilio/quick-reply': 'quick-reply',
-  'twilio/list-picker': 'list-picker',
-  'twilio/call-to-action': 'call-to-action',
-  'twilio/media': 'media',
-  'twilio/card': 'call-to-action',
-  'whatsapp/authentication': 'text',
-  'whatsapp/card': 'call-to-action',
-  'whatsapp/list-picker': 'list-picker',
-}
-let contentType = 'text'
-for (const key of typeKeys) {
-  if (typeMap[key]) { contentType = typeMap[key]; break }
-}
+const types = template.types || {}
+let extractedBody = ''
+let buttons: any[] = []
+let actions: any[] = []
+let header = ''
+let footer = ''
 
-// No upsert:
-template_type: contentType, // ao inves de 'text' hardcoded
-```
-
-**Linha 341 (submit-approval)** - Manter `/whatsapp` (POST esta correto como esta).
-
-### 2. twilio-whatsapp-setup/index.ts
-
-**Linha 457 (Step 9)** - Remover `/whatsapp` da URL de GET:
-```typescript
-const approvalUrl = `https://content.twilio.com/v1/Content/${template.sid}/ApprovalRequests`
-```
-
-**Linha 497 (upsert)** - Mesmo mapeamento de `template_type`.
-
-### 3. Frontend - Adicionar labels para novos tipos
-
-**WhatsAppTemplates.tsx (linha 134)** e **TemplateDetail.tsx** - Adicionar `'authentication'` ao mapa de labels:
-```typescript
-const labels: Record<string, string> = {
-  'text': 'Texto',
-  'quick-reply': 'Resposta Rapida',
-  'list-picker': 'Lista',
-  'call-to-action': 'CTA',
-  'media': 'Midia',
-  'authentication': 'Autenticacao',
-  'card': 'Card',
+if (types['twilio/quick-reply']) {
+  extractedBody = types['twilio/quick-reply'].body || ''
+  buttons = (types['twilio/quick-reply'].actions || []).map((a: any) => ({ title: a.title, id: a.id }))
+} else if (types['twilio/call-to-action']) {
+  extractedBody = types['twilio/call-to-action'].body || ''
+  actions = (types['twilio/call-to-action'].actions || []).map((a: any) => ({
+    type: a.type, title: a.title, url: a.url, phone: a.phone
+  }))
+} else if (types['twilio/list-picker']) {
+  extractedBody = types['twilio/list-picker'].body || ''
+  actions = types['twilio/list-picker'].items || []
+} else if (types['twilio/card'] || types['whatsapp/card']) {
+  const card = types['twilio/card'] || types['whatsapp/card']
+  extractedBody = card.body || card.title || ''
+  actions = card.actions || []
+} else if (types['whatsapp/authentication']) {
+  extractedBody = types['whatsapp/authentication'].body || 'Authentication template'
+} else if (types['twilio/media']) {
+  extractedBody = types['twilio/media'].body || ''
+} else if (types['twilio/text']) {
+  extractedBody = types['twilio/text'].body || ''
 }
 ```
 
-## Resumo
+No upsert:
 
-| Problema | Causa | Fix |
-|----------|-------|-----|
-| Todos "Rascunho" | GET usa URL errada (`/whatsapp`) retorna 405 | Remover `/whatsapp` do GET |
-| Todos "Texto" | `template_type: 'text'` hardcoded | Mapear de `template.types` |
-| Submit funciona | POST para `/ApprovalRequests/whatsapp` esta correto | Nenhuma mudanca |
+```typescript
+body: extractedBody,
+metadata: { buttons, actions, header, footer },
+```
+
+Aplicar em 3 locais:
+- `twilio-whatsapp-templates/index.ts` bloco GET sync (linha ~79-142)
+- `twilio-whatsapp-templates/index.ts` bloco POST sync (linha ~237-300)
+- `twilio-whatsapp-setup/index.ts` Step 9 (linha ~446-507)
+
+### 3. Frontend: TemplateDetail.tsx
+
+Ler `metadata` do template e passar botoes/acoes para o `WhatsAppPreview`:
+
+```typescript
+const metadata = template.metadata || {}
+const buttons = metadata.buttons || []
+const actions = metadata.actions || []
+
+<WhatsAppPreview
+  body={template.body}
+  header={template.header}
+  footer={template.footer}
+  variables={template.variables || []}
+  buttons={buttons}
+  actions={actions}
+/>
+```
+
+### 4. Deploy
+
+Deploy das duas edge functions apos as mudancas.
 
 ## Arquivos
 
 | Arquivo | Mudanca |
 |---------|---------|
-| `supabase/functions/twilio-whatsapp-templates/index.ts` | Fix URL do GET + mapear template_type |
-| `supabase/functions/twilio-whatsapp-setup/index.ts` | Fix URL do GET + mapear template_type |
-| `src/pages/settings/WhatsAppTemplates.tsx` | Adicionar labels de tipo |
-| `src/pages/whatsapp/TemplateDetail.tsx` | Adicionar labels de tipo |
+| Migration SQL | Adicionar coluna `metadata` JSONB |
+| `supabase/functions/twilio-whatsapp-templates/index.ts` | Extrair body/buttons/actions do tipo correto (2 blocos) |
+| `supabase/functions/twilio-whatsapp-setup/index.ts` | Extrair body/buttons/actions do tipo correto (1 bloco) |
+| `src/pages/whatsapp/TemplateDetail.tsx` | Ler metadata para passar buttons/actions ao preview |
+
