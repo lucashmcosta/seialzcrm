@@ -33,7 +33,27 @@ const OpportunitiesKanban = lazy(() => import("./pages/opportunities/Opportuniti
 const OpportunityDetail = lazy(() => import("./pages/opportunities/OpportunityDetail"));
 const TasksList = lazy(() => import("./pages/tasks/TasksList"));
 const MessagesList = lazy(() => import("./pages/messages/MessagesList"));
-const Settings = lazy(() => import("./pages/Settings"));
+// Settings layout + grid (replaces old Settings page)
+const SettingsLayout = lazy(() => import("./components/settings/SettingsLayout").then(m => ({ default: m.SettingsLayout })));
+const SettingsGrid = lazy(() => import("./components/settings/SettingsGrid").then(m => ({ default: m.SettingsGrid })));
+const GeneralSettings = lazy(() => import("./components/settings/GeneralSettings").then(m => ({ default: m.GeneralSettings })));
+const ThemeSettings = lazy(() => import("./components/settings/ThemeSettings").then(m => ({ default: m.ThemeSettings })));
+const UsersSettings = lazy(() => import("./components/settings/UsersSettings").then(m => ({ default: m.UsersSettings })));
+const PipelineSettings = lazy(() => import("./components/settings/PipelineSettings").then(m => ({ default: m.PipelineSettings })));
+const DuplicatePreventionSettings = lazy(() => import("./components/settings/DuplicatePreventionSettings").then(m => ({ default: m.DuplicatePreventionSettings })));
+const CustomFieldsSettings = lazy(() => import("./components/settings/CustomFieldsSettings").then(m => ({ default: m.CustomFieldsSettings })));
+const TagsSettings = lazy(() => import("./components/settings/TagsSettings").then(m => ({ default: m.TagsSettings })));
+const PermissionProfilesSettings = lazy(() => import("./components/settings/PermissionProfilesSettings").then(m => ({ default: m.PermissionProfilesSettings })));
+const BillingSettings = lazy(() => import("./components/settings/BillingSettings").then(m => ({ default: m.BillingSettings })));
+const IntegrationsSettings = lazy(() => import("./components/settings/IntegrationsSettings").then(m => ({ default: m.IntegrationsSettings })));
+const ApiWebhooksSettings = lazy(() => import("./components/settings/ApiWebhooksSettings").then(m => ({ default: m.ApiWebhooksSettings })));
+const AIAgentSettings = lazy(() => import("./components/settings/AIAgentSettings").then(m => ({ default: m.AIAgentSettings })));
+const KnowledgeBaseSettings = lazy(() => import("./components/settings/KnowledgeBaseSettings").then(m => ({ default: m.KnowledgeBaseSettings })));
+const KnowledgeEditChat = lazy(() => import("./components/settings/KnowledgeEditChat").then(m => ({ default: m.KnowledgeEditChat })));
+const ProductsSettings = lazy(() => import("./components/settings/ProductsSettings").then(m => ({ default: m.ProductsSettings })));
+const WhatsAppTemplatesPage = lazy(() => import("./pages/settings/WhatsAppTemplates"));
+const AuditLogs = lazy(() => import("./pages/settings/AuditLogs").then(m => ({ default: m.AuditLogs })));
+const Trash = lazy(() => import("./pages/settings/Trash").then(m => ({ default: m.Trash })));
 const Profile = lazy(() => import("./pages/Profile"));
 const NotFound = lazy(() => import("./pages/NotFound"));
 const CompaniesList = lazy(() => import("./pages/companies/CompaniesList"));
@@ -280,14 +300,28 @@ const App = () => (
               </ProtectedRoute>
             }
           />
-          <Route
-            path="/settings"
-            element={
-              <ProtectedRoute>
-                <Settings />
-              </ProtectedRoute>
-            }
-          />
+          <Route path="/settings" element={<ProtectedRoute><SettingsLayout /></ProtectedRoute>}>
+            <Route index element={<SettingsGrid />} />
+            <Route path="general" element={<GeneralSettings />} />
+            <Route path="theme" element={<ThemeSettings />} />
+            <Route path="users" element={<UsersSettings />} />
+            <Route path="permissions" element={<PermissionProfilesSettings />} />
+            <Route path="billing" element={<BillingSettings />} />
+            <Route path="pipeline" element={<PipelineSettings />} />
+            <Route path="duplicates" element={<DuplicatePreventionSettings />} />
+            <Route path="custom-fields" element={<CustomFieldsSettings />} />
+            <Route path="tags" element={<TagsSettings />} />
+            <Route path="integrations" element={<IntegrationsSettings />} />
+            <Route path="whatsapp-templates" element={<WhatsAppTemplatesPage />} />
+            <Route path="ai-agent" element={<AIAgentSettings />} />
+            <Route path="api-webhooks" element={<ApiWebhooksSettings />} />
+            <Route path="products" element={<ProductsSettings />} />
+            <Route path="knowledge-base" element={<KnowledgeBaseSettings />} />
+            <Route path="edit-kb" element={<KnowledgeEditChat />} />
+            <Route path="audit-logs" element={<AuditLogs />} />
+            <Route path="trash" element={<Trash />} />
+            <Route path="*" element={<Navigate to="/settings" replace />} />
+          </Route>
           <Route
             path="/profile"
             element={
