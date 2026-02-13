@@ -475,7 +475,7 @@ export function WhatsAppChat({ contactId, threadId: initialThreadId, onThreadCre
         {isIn24hWindow || messages.length === 0 ? (
           <div className="flex gap-2">
             <div className="flex gap-1">
-              <MediaUploadButton onFileSelected={handleMediaUpload} disabled={submitting} />
+              <MediaUploadButton onFileSelected={handleMediaUpload} onTemplateClick={() => setShowTemplates(true)} disabled={submitting} />
               <AudioRecorder onSend={handleAudioSend} disabled={submitting} />
             </div>
             <Textarea
@@ -503,19 +503,6 @@ export function WhatsAppChat({ contactId, threadId: initialThreadId, onThreadCre
                 ) : (
                   <Send className="w-4 h-4" />
                 )}
-              </Button>
-              <Button
-                variant="outline"
-                size="icon"
-                onClick={() => setShowTemplates(true)}
-                title="Usar template"
-              >
-                <svg viewBox="0 0 24 24" className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth="2">
-                  <rect x="3" y="3" width="18" height="18" rx="2" />
-                  <line x1="7" y1="8" x2="17" y2="8" />
-                  <line x1="7" y1="12" x2="14" y2="12" />
-                  <line x1="7" y1="16" x2="11" y2="16" />
-                </svg>
               </Button>
             </div>
           </div>

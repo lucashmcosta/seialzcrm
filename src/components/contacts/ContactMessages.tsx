@@ -598,7 +598,7 @@ export function ContactMessages({ contactId, opportunityId }: ContactMessagesPro
         {isIn24hWindow || messages.length === 0 ? (
           <div className="flex gap-2 items-end">
             <div className="flex gap-1">
-              <MediaUploadButton onFileSelected={handleMediaUpload} disabled={submitting} />
+              <MediaUploadButton onFileSelected={handleMediaUpload} onTemplateClick={() => setShowTemplates(true)} disabled={submitting} />
               <AudioRecorder onSend={handleAudioSend} disabled={submitting} />
               
               {/* Emoji Picker */}
