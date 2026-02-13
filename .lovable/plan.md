@@ -1,88 +1,117 @@
 
-# Prevencao de duplicatas no lead-webhook
+# Melhorias no Modulo de Mensagens
 
-## Problema
+## Resumo
 
-A edge function `lead-webhook` cria contatos e oportunidades sem nenhuma verificacao de duplicatas. Quando um lead externo envia o mesmo contato mais de uma vez (mesmo telefone ou email), o sistema cria registros duplicados. Isso ja gerou duplicatas reais no banco (ex: "Vilma Renatta de Souza" 2x, "Fernanda dos Santos Pezzotti" 2x).
+Tres melhorias: painel redimensionavel, lista simplificada e filtros "Nao lidas" / "Nao respondidas", com os 3 ajustes solicitados pelo usuario.
 
-O frontend (`ContactForm`) ja tem logica de duplicatas, mas o webhook ignora completamente.
+---
 
-## Solucao
+## 1. Migration SQL
 
-Adicionar verificacao de duplicatas na edge function `lead-webhook`, respeitando as configuracoes da organizacao (`duplicate_check_mode` e `duplicate_enforce_block`).
+Criar tabela `message_thread_reads` para suportar multiplos atendentes e adicionar campo `last_inbound_at` na `message_threads`:
 
-## O que muda
+```sql
+-- Tabela separada para tracking de leitura por usuario
+CREATE TABLE message_thread_reads (
+  thread_id uuid NOT NULL REFERENCES message_threads(id) ON DELETE CASCADE,
+  user_id uuid NOT NULL REFERENCES profiles(id) ON DELETE CASCADE,
+  last_read_at timestamptz NOT NULL DEFAULT now(),
+  PRIMARY KEY (thread_id, user_id)
+);
 
-**Arquivo**: `supabase/functions/lead-webhook/index.ts`
+ALTER TABLE message_thread_reads ENABLE ROW LEVEL SECURITY;
 
-### Logica de duplicatas no webhook
+CREATE POLICY "Users can read own thread reads"
+  ON message_thread_reads FOR SELECT
+  USING (user_id = auth.uid());
 
-1. Antes de criar o contato, buscar as configuracoes da organizacao (`duplicate_check_mode`)
-2. Com base no modo configurado (`email`, `phone`, `email_or_phone`), verificar se ja existe um contato com o mesmo dado
-3. Se encontrar duplicata:
-   - Se `duplicate_enforce_block = true`: retornar erro 409 (Conflict) com os dados do contato existente
-   - Se `duplicate_enforce_block = false`: reusar o contato existente em vez de criar um novo (e ainda criar oportunidade se solicitado)
-4. Se modo = `none`: comportamento atual (sempre cria)
+CREATE POLICY "Users can upsert own thread reads"
+  ON message_thread_reads FOR INSERT
+  WITH CHECK (user_id = auth.uid());
 
-### Fluxo atualizado
+CREATE POLICY "Users can update own thread reads"
+  ON message_thread_reads FOR UPDATE
+  USING (user_id = auth.uid());
 
-```text
-Webhook recebe lead
-    |
-    v
-Busca org settings (duplicate_check_mode)
-    |
-    v
-Modo = "none"? --> Cria contato normalmente
-    |
-    v (modo != none)
-Busca contato existente por email/phone
-    |
-    v
-Encontrou duplicata?
-    |-- NAO --> Cria contato normalmente
-    |-- SIM + enforce_block --> Retorna 409 com contato existente
-    |-- SIM + !enforce_block --> Reutiliza contato existente, cria oportunidade se solicitado
+-- Campo last_inbound_at na message_threads para comparacao precisa
+ALTER TABLE message_threads
+  ADD COLUMN last_inbound_at timestamptz DEFAULT NULL;
+
+-- Preencher last_inbound_at com dados existentes (copiar de whatsapp_last_inbound_at onde disponivel)
+UPDATE message_threads
+  SET last_inbound_at = whatsapp_last_inbound_at
+  WHERE whatsapp_last_inbound_at IS NOT NULL;
 ```
 
-### Resposta 409 (duplicata bloqueada)
+---
 
-```json
-{
-  "error": "Duplicate contact found",
-  "existing_contact_id": "uuid",
-  "existing_contact_name": "Nome",
-  "duplicate_field": "phone"
-}
-```
-
-### Resposta 200 (duplicata reutilizada)
-
-```json
-{
-  "success": true,
-  "contact_id": "uuid-existente",
-  "opportunity_id": "uuid-novo-ou-null",
-  "activity_id": "uuid-novo-ou-null",
-  "message": "Existing contact reused, opportunity created",
-  "duplicate_reused": true
-}
-```
-
-## Limpeza de duplicatas existentes
-
-Apos o deploy, sera necessario limpar os registros duplicados que ja existem no banco. Isso pode ser feito manualmente via SQL no Cloud View, mas nao faz parte desta implementacao automatica (requer decisao humana sobre qual registro manter).
-
-## Detalhes tecnicos
-
-No `lead-webhook/index.ts`, apos validar a API key e antes de criar o contato (linha 131):
-
-1. Buscar `duplicate_check_mode` e `duplicate_enforce_block` da organizacao
-2. Montar query de busca por duplicata baseada no modo
-3. Se duplicata encontrada, decidir entre bloquear (409) ou reutilizar
-
-A busca de duplicatas usa o telefone normalizado (ja passa por `normalizePhoneToE164`) para garantir que `+5588981061115` e `88981061115` sejam reconhecidos como o mesmo numero.
+## 2. Arquivo modificado
 
 | Arquivo | Mudanca |
 |---------|---------|
-| `supabase/functions/lead-webhook/index.ts` | Adicionar verificacao de duplicatas antes de criar contato |
+| `src/pages/messages/MessagesList.tsx` | Layout redimensionavel, remover preview, adicionar filtros, upsert `last_read_at` ao selecionar thread, carregar `last_inbound_at` e `last_read_at` na query |
+
+Nenhum arquivo novo sera criado.
+
+---
+
+## 3. Ordem de implementacao
+
+### Passo 1: Migration SQL
+- Criar tabela `message_thread_reads` com PK composta `(thread_id, user_id)`
+- Adicionar coluna `last_inbound_at` na `message_threads`
+- Preencher `last_inbound_at` com dados existentes
+- RLS: usuario so le/escreve seus proprios registros
+
+### Passo 2: Atualizar query de threads para incluir `last_inbound_at` e `last_read_at`
+- No select da query de threads (linha 283), adicionar `last_inbound_at`
+- Apos o select principal, buscar os registros de `message_thread_reads` para o usuario atual (um unico select com `WHERE user_id = userProfile.id AND thread_id IN (...)`)
+- Fazer merge: cada thread recebe `last_read_at` do registro correspondente (ou null)
+- Calcular `unread`: `last_message_direction === 'inbound' && (last_read_at === null || last_inbound_at > last_read_at)`
+- Atualizar interface `ChatThread` com `last_inbound_at` e `last_read_at`
+
+### Passo 3: Upsert `last_read_at` ao abrir conversa
+- Na funcao `fetchMessages` (linha 456), apos carregar mensagens, fazer upsert:
+  ```typescript
+  await supabase
+    .from('message_thread_reads')
+    .upsert({
+      thread_id: threadId,
+      user_id: userProfile?.id,
+      last_read_at: new Date().toISOString()
+    }, { onConflict: 'thread_id,user_id' });
+  ```
+- Atualizar o estado local da thread para refletir como lida
+
+### Passo 4: Layout redimensionavel
+- Importar `ResizablePanelGroup`, `ResizablePanel`, `ResizableHandle` de `@/components/ui/resizable`
+- Substituir `<div className="flex h-[calc(100vh-2rem)] overflow-hidden">` (linha 787) por `<ResizablePanelGroup direction="horizontal" className="h-[calc(100vh-2rem)]">`
+- Painel esquerdo: `<ResizablePanel defaultSize={25} minSize={15} maxSize={40}>` no lugar de `<div className="w-80 ...">` (linha 789)
+- Adicionar `<ResizableHandle withHandle />` entre os paineis
+- Painel direito: `<ResizablePanel defaultSize={75}>` no lugar de `<div className="flex-1 ...">` (linha 861)
+- Remover classes `w-80` e `flex-1`
+
+### Passo 5: Simplificar itens da lista
+- No `ChatListItem`, remover o bloco de preview (linhas 177-186) que mostra a ultima mensagem
+- Manter: Avatar + Nome + dot de nao lida + timestamp
+
+### Passo 6: Filtros
+- Adicionar estado `const [filter, setFilter] = useState<'all' | 'unread' | 'unanswered'>('all')`
+- Renderizar 3 chips abaixo da barra de busca: "Todas", "Nao lidas", "Nao respondidas"
+- Atualizar `filteredThreads` para combinar busca + filtro:
+  - `unread`: `thread.last_message_direction === 'inbound' && (!thread.last_read_at || new Date(thread.last_inbound_at) > new Date(thread.last_read_at))`
+  - `unanswered`: `thread.last_message_direction === 'inbound'`
+
+### Passo 7: Atualizar `last_inbound_at` via Realtime
+- Quando uma nova mensagem inbound chega via Realtime e pertence a uma thread no estado, atualizar `last_inbound_at` localmente para que o dot de "nao lida" apareca imediatamente
+
+---
+
+## 4. Pontos de atencao
+
+- **Multi-tenant / multi-atendente**: A tabela `message_thread_reads` com PK `(thread_id, user_id)` garante que cada atendente tem seu proprio tracking de leitura independente. RLS garante isolamento.
+- **`last_inbound_at` vs `updated_at`**: Conforme solicitado, a comparacao de "nao lida" usa `last_inbound_at` (timestamp da ultima mensagem inbound), nao `updated_at` da thread.
+- **`needs_human_attention` vs `unread`**: Continuam como conceitos separados. `needs_human_attention` = agente IA escalou. `unread` = usuario nao viu a mensagem.
+- **Performance**: O upsert no `message_thread_reads` e operacao leve por PK. A busca dos reads e um unico SELECT com IN clause.
+- **Resizable panels**: O pacote `react-resizable-panels` e o componente `@/components/ui/resizable` ja existem no projeto.
