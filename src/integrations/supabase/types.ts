@@ -2048,6 +2048,39 @@ export type Database = {
           },
         ]
       }
+      message_thread_reads: {
+        Row: {
+          last_read_at: string
+          thread_id: string
+          user_id: string
+        }
+        Insert: {
+          last_read_at?: string
+          thread_id: string
+          user_id: string
+        }
+        Update: {
+          last_read_at?: string
+          thread_id?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "message_thread_reads_thread_id_fkey"
+            columns: ["thread_id"]
+            isOneToOne: false
+            referencedRelation: "message_threads"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "message_thread_reads_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "users"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       message_threads: {
         Row: {
           agent_typing: boolean | null
@@ -2059,6 +2092,7 @@ export type Database = {
           created_at: string | null
           external_id: string | null
           id: string
+          last_inbound_at: string | null
           needs_human_attention: boolean | null
           opportunity_id: string | null
           organization_id: string
@@ -2076,6 +2110,7 @@ export type Database = {
           created_at?: string | null
           external_id?: string | null
           id?: string
+          last_inbound_at?: string | null
           needs_human_attention?: boolean | null
           opportunity_id?: string | null
           organization_id: string
@@ -2093,6 +2128,7 @@ export type Database = {
           created_at?: string | null
           external_id?: string | null
           id?: string
+          last_inbound_at?: string | null
           needs_human_attention?: boolean | null
           opportunity_id?: string | null
           organization_id?: string
