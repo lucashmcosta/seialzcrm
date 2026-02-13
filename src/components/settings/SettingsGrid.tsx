@@ -162,7 +162,7 @@ export function SettingsGrid() {
               <h2 className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">{group.title}</h2>
               <p className="text-xs text-muted-foreground/70 mt-0.5">{group.description}</p>
             </div>
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 items-stretch">
               {group.items.map((item) => (
                 <SettingsCard
                   key={item.to}
