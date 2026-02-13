@@ -160,28 +160,6 @@ serve(async (req) => {
     let opportunityId: string | null = null;
     let activityId: string | null = null;
 
-    // Create activity/note if notes provided
-    if (payload.notes && payload.notes.trim() !== '') {
-      const { data: activity, error: activityError } = await supabase
-        .from('activities')
-        .insert({
-          organization_id: organizationId,
-          contact_id: contactId,
-          activity_type: 'note',
-          title: 'Nota do lead externo',
-          body: payload.notes.trim(),
-        })
-        .select('id')
-        .single();
-
-      if (activityError) {
-        console.error('Error creating activity:', activityError);
-        // Don't fail the whole request, just log the error
-      } else {
-        activityId = activity?.id || null;
-      }
-    }
-
     // Create opportunity if requested
     if (payload.create_opportunity) {
       // Get first pipeline stage for this organization
@@ -215,6 +193,28 @@ serve(async (req) => {
         } else {
           opportunityId = opportunity?.id || null;
         }
+      }
+    }
+
+    // Create activity/note if notes provided (after opportunity so we can link it)
+    if (payload.notes && payload.notes.trim() !== '') {
+      const { data: activity, error: activityError } = await supabase
+        .from('activities')
+        .insert({
+          organization_id: organizationId,
+          contact_id: contactId,
+          opportunity_id: opportunityId,
+          activity_type: 'note',
+          title: 'Nota do lead externo',
+          body: payload.notes.trim(),
+        })
+        .select('id')
+        .single();
+
+      if (activityError) {
+        console.error('Error creating activity:', activityError);
+      } else {
+        activityId = activity?.id || null;
       }
     }
 
