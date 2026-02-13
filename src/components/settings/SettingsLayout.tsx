@@ -106,7 +106,7 @@ export function SettingsLayout() {
               </>
             )}
 
-            <div className="animate-in fade-in duration-200">
+            <div key={location.pathname} className="animate-in fade-in duration-200">
               <Outlet />
             </div>
           </div>

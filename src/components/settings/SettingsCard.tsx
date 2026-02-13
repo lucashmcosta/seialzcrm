@@ -17,12 +17,12 @@ export function SettingsCard({ icon: Icon, label, description, badge, badgeVaria
     <Link
       to={to}
       className={cn(
-        'block w-full text-left p-4 rounded-xl border border-border bg-card',
+        'flex flex-col w-full h-full text-left p-4 rounded-xl border border-border bg-card',
         'transition-all duration-200 group',
         'hover:border-primary/20 hover:bg-primary/5 hover:shadow-sm'
       )}
     >
-      <div className="flex items-start gap-3.5">
+      <div className="flex items-start gap-3.5 flex-1">
         <div className="w-9 h-9 rounded-lg flex items-center justify-center flex-shrink-0 bg-primary/10 text-primary transition-colors group-hover:bg-primary/15">
           <Icon className="w-[18px] h-[18px]" />
         </div>
