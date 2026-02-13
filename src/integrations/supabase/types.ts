@@ -3578,7 +3578,24 @@ export type Database = {
       }
     }
     Views: {
-      [_ in never]: never
+      best_time_per_contact: {
+        Row: {
+          best_connect_rate: number | null
+          best_time_slot: string | null
+          contact_id: string | null
+          times_connected: number | null
+          total_attempts: number | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "calls_contact_id_fkey"
+            columns: ["contact_id"]
+            isOneToOne: false
+            referencedRelation: "contacts"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
     }
     Functions: {
       current_user_id: { Args: never; Returns: string }

@@ -128,35 +128,125 @@ serve(async (req) => {
     const firstName = nameParts[0];
     const lastName = nameParts.length > 1 ? nameParts.slice(1).join(' ') : null;
 
-    // Create contact
-    const { data: contact, error: contactError } = await supabase
-      .from('contacts')
-      .insert({
-        organization_id: organizationId,
-        full_name: payload.name.trim(),
-        first_name: firstName,
-        last_name: lastName,
-        email: payload.email || null,
-        phone: payload.phone ? normalizePhoneToE164(payload.phone) : null,
-        company_name: payload.company || null,
-        source: payload.source || 'api',
-        utm_source: payload.utm_source || null,
-        utm_medium: payload.utm_medium || null,
-        utm_campaign: payload.utm_campaign || null,
-        lifecycle_stage: 'lead',
-      })
-      .select('id')
+    // Fetch organization duplicate settings
+    const { data: orgSettings } = await supabase
+      .from('organizations')
+      .select('duplicate_check_mode, duplicate_enforce_block')
+      .eq('id', organizationId)
       .single();
 
-    if (contactError) {
-      console.error('Error creating contact:', contactError);
-      return new Response(
-        JSON.stringify({ error: 'Failed to create contact', details: contactError.message }),
-        { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-      );
+    const duplicateCheckMode = orgSettings?.duplicate_check_mode || 'none';
+    const duplicateEnforceBlock = orgSettings?.duplicate_enforce_block ?? false;
+
+    // Check for duplicate contacts
+    let existingContactId: string | null = null;
+    let existingContactName: string | null = null;
+    let duplicateField: string | null = null;
+
+    if (duplicateCheckMode !== 'none') {
+      const normalizedPhone = payload.phone ? normalizePhoneToE164(payload.phone) : null;
+      const normalizedEmail = payload.email?.trim().toLowerCase() || null;
+
+      // Build duplicate query based on mode
+      if (duplicateCheckMode === 'phone' && normalizedPhone) {
+        const { data: dup } = await supabase
+          .from('contacts')
+          .select('id, full_name')
+          .eq('organization_id', organizationId)
+          .eq('phone', normalizedPhone)
+          .is('deleted_at', null)
+          .limit(1)
+          .maybeSingle();
+        if (dup) { existingContactId = dup.id; existingContactName = dup.full_name; duplicateField = 'phone'; }
+
+      } else if (duplicateCheckMode === 'email' && normalizedEmail) {
+        const { data: dup } = await supabase
+          .from('contacts')
+          .select('id, full_name')
+          .eq('organization_id', organizationId)
+          .eq('email', normalizedEmail)
+          .is('deleted_at', null)
+          .limit(1)
+          .maybeSingle();
+        if (dup) { existingContactId = dup.id; existingContactName = dup.full_name; duplicateField = 'email'; }
+
+      } else if (duplicateCheckMode === 'email_or_phone') {
+        // Check phone first, then email
+        if (normalizedPhone) {
+          const { data: dup } = await supabase
+            .from('contacts')
+            .select('id, full_name')
+            .eq('organization_id', organizationId)
+            .eq('phone', normalizedPhone)
+            .is('deleted_at', null)
+            .limit(1)
+            .maybeSingle();
+          if (dup) { existingContactId = dup.id; existingContactName = dup.full_name; duplicateField = 'phone'; }
+        }
+        if (!existingContactId && normalizedEmail) {
+          const { data: dup } = await supabase
+            .from('contacts')
+            .select('id, full_name')
+            .eq('organization_id', organizationId)
+            .eq('email', normalizedEmail)
+            .is('deleted_at', null)
+            .limit(1)
+            .maybeSingle();
+          if (dup) { existingContactId = dup.id; existingContactName = dup.full_name; duplicateField = 'email'; }
+        }
+      }
     }
 
-    const contactId = contact.id;
+    let contactId: string;
+    let duplicateReused = false;
+
+    if (existingContactId) {
+      if (duplicateEnforceBlock) {
+        console.log(`Duplicate contact blocked: ${existingContactName} (${duplicateField})`);
+        return new Response(
+          JSON.stringify({
+            error: 'Duplicate contact found',
+            existing_contact_id: existingContactId,
+            existing_contact_name: existingContactName,
+            duplicate_field: duplicateField,
+          }),
+          { status: 409, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        );
+      }
+      // Reuse existing contact
+      contactId = existingContactId;
+      duplicateReused = true;
+      console.log(`Reusing existing contact: ${existingContactName} (${existingContactId})`);
+    } else {
+      // Create new contact
+      const { data: contact, error: contactError } = await supabase
+        .from('contacts')
+        .insert({
+          organization_id: organizationId,
+          full_name: payload.name.trim(),
+          first_name: firstName,
+          last_name: lastName,
+          email: payload.email || null,
+          phone: payload.phone ? normalizePhoneToE164(payload.phone) : null,
+          company_name: payload.company || null,
+          source: payload.source || 'api',
+          utm_source: payload.utm_source || null,
+          utm_medium: payload.utm_medium || null,
+          utm_campaign: payload.utm_campaign || null,
+          lifecycle_stage: 'lead',
+        })
+        .select('id')
+        .single();
+
+      if (contactError) {
+        console.error('Error creating contact:', contactError);
+        return new Response(
+          JSON.stringify({ error: 'Failed to create contact', details: contactError.message }),
+          { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        );
+      }
+      contactId = contact.id;
+    }
     let opportunityId: string | null = null;
     let activityId: string | null = null;
 
@@ -232,9 +322,10 @@ serve(async (req) => {
         contact_id: contactId,
         opportunity_id: opportunityId,
         activity_id: activityId,
-        message: 'Lead created successfully',
+        message: duplicateReused ? 'Existing contact reused' : 'Lead created successfully',
+        duplicate_reused: duplicateReused,
       }),
-      { status: 201, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      { status: duplicateReused ? 200 : 201, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
     );
 
   } catch (error) {
