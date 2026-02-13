@@ -1,4 +1,4 @@
-import { useRef, useState } from 'react';
+import { useRef } from 'react';
 import { Button } from '@/components/ui/button';
 import {
   DropdownMenu,
@@ -6,15 +6,17 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
-import { Paperclip, Image, FileText, Loader2 } from 'lucide-react';
+import { Plus, Image, FileText, Video, FileStack } from 'lucide-react';
 
 interface MediaUploadButtonProps {
   onFileSelected: (file: File) => void;
+  onTemplateClick?: () => void;
   disabled?: boolean;
 }
 
-export function MediaUploadButton({ onFileSelected, disabled }: MediaUploadButtonProps) {
+export function MediaUploadButton({ onFileSelected, onTemplateClick, disabled }: MediaUploadButtonProps) {
   const imageInputRef = useRef<HTMLInputElement>(null);
+  const videoInputRef = useRef<HTMLInputElement>(null);
   const documentInputRef = useRef<HTMLInputElement>(null);
 
   const handleFileChange = (event: React.ChangeEvent<HTMLInputElement>) => {
@@ -26,13 +28,19 @@ export function MediaUploadButton({ onFileSelected, disabled }: MediaUploadButto
     event.target.value = '';
   };
 
-
   return (
     <>
       <input
         ref={imageInputRef}
         type="file"
         accept="image/*"
+        className="hidden"
+        onChange={handleFileChange}
+      />
+      <input
+        ref={videoInputRef}
+        type="file"
+        accept="video/*"
         className="hidden"
         onChange={handleFileChange}
       />
@@ -46,19 +54,29 @@ export function MediaUploadButton({ onFileSelected, disabled }: MediaUploadButto
       
       <DropdownMenu>
         <DropdownMenuTrigger asChild>
-          <Button variant="outline" size="icon" disabled={disabled}>
-            <Paperclip className="w-4 h-4" />
+          <Button variant="ghost" size="icon" disabled={disabled}>
+            <Plus className="w-5 h-5" />
           </Button>
         </DropdownMenuTrigger>
-        <DropdownMenuContent align="end">
+        <DropdownMenuContent align="start" side="top">
           <DropdownMenuItem onClick={() => imageInputRef.current?.click()}>
             <Image className="w-4 h-4 mr-2" />
             Imagem
+          </DropdownMenuItem>
+          <DropdownMenuItem onClick={() => videoInputRef.current?.click()}>
+            <Video className="w-4 h-4 mr-2" />
+            Vídeo
           </DropdownMenuItem>
           <DropdownMenuItem onClick={() => documentInputRef.current?.click()}>
             <FileText className="w-4 h-4 mr-2" />
             Documento
           </DropdownMenuItem>
+          {onTemplateClick && (
+            <DropdownMenuItem onClick={onTemplateClick}>
+              <FileStack className="w-4 h-4 mr-2" />
+              Template
+            </DropdownMenuItem>
+          )}
         </DropdownMenuContent>
       </DropdownMenu>
     </>

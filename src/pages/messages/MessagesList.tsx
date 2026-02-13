@@ -1049,7 +1049,7 @@ export default function MessagesList() {
                       replyingTo && "border border-t-0 border-border rounded-b-lg p-2 bg-card"
                     )}>
                       <div className="flex gap-1">
-                        <MediaUploadButton onFileSelected={handleFileSelected} disabled={submitting || mediaUploading || !isIn24hWindow} />
+                        <MediaUploadButton onFileSelected={handleFileSelected} onTemplateClick={() => setShowTemplates(true)} disabled={submitting || mediaUploading || !isIn24hWindow} />
                         <AudioRecorder onSend={handleAudioSend} disabled={submitting || mediaUploading || !isIn24hWindow} />
                         
                         {/* Emoji Picker */}
