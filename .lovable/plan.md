@@ -1,82 +1,62 @@
 
+# Substituir botao de anexo por botao "+" com menu expandido
 
-# Atualizar IntegrationDetailDialog para o novo formato da API v2
+## O que muda
 
-## Problema
+O botao com icone de clipe (Paperclip) no `MediaUploadButton` sera substituido por um botao "+" que abre um menu com 4 opcoes:
 
-A edge function `check-webhooks` agora retorna senders como objetos detalhados, mas o frontend ainda espera o formato antigo (array de strings).
+1. **Imagem** - selecionar imagem da galeria
+2. **Video** - selecionar video
+3. **Documento** - selecionar PDF, DOC, etc.
+4. **Template** - abrir o seletor de templates WhatsApp
 
-**Formato antigo (esperado pelo frontend):**
-```json
-{ "senders": ["whatsapp:+55..."], "is_inbound_configured": true }
-```
+## Alteracoes
 
-**Formato novo (retornado pela API v2):**
-```json
-{
-  "senders": [{ "sender_id": "whatsapp:+55...", "sid": "XE...", "status": "ONLINE", "callback_url": "...", "webhook_correct": true }],
-  "allCorrect": true
-}
-```
+### Arquivo 1: `src/components/whatsapp/MediaUploadButton.tsx`
 
-## Mudancas
+- Trocar o icone `Paperclip` por `Plus` (lucide-react)
+- Adicionar input de video (`accept="video/*"`)
+- Adicionar nova prop `onTemplateClick` para disparar a abertura do seletor de templates
+- Adicionar item "Template" no dropdown com icone de documento/template
+- Adicionar item "Video" no dropdown
 
-### Arquivo: `src/components/settings/IntegrationDetailDialog.tsx`
-
-**1. Atualizar interface `WebhookCheckResult` (linhas 22-32)**
-
-Substituir a interface atual por uma que reflita o novo formato:
-
+Nova interface:
 ```typescript
-interface SenderDetail {
-  sender_id: string;
-  sid: string;
-  status: string;
-  callback_url?: string;
-  status_callback_url?: string;
-  webhook_correct: boolean;
-}
-
-interface WebhookCheckResult {
-  senders: SenderDetail[];
-  allCorrect: boolean;
-  expectedWebhookUrl?: string;
-  // Campos legados mantidos para compatibilidade
-  messaging_service_sid?: string | null;
-  is_inbound_configured?: boolean;
+interface MediaUploadButtonProps {
+  onFileSelected: (file: File) => void;
+  onTemplateClick?: () => void;
+  disabled?: boolean;
 }
 ```
 
-**2. Atualizar `handleCheckWebhooks` (linhas 61-80)**
-
-Apos receber `data` da edge function, normalizar os dados:
-
-```typescript
-const result: WebhookCheckResult = {
-  senders: data.senders || [],
-  allCorrect: data.allCorrect || false,
-  expectedWebhookUrl: data.expectedWebhookUrl || '',
-  is_inbound_configured: data.senders?.some((s: any) => s.webhook_correct) || false,
-};
-setWebhookResult(result);
+Menu resultante:
+```text
++-------------------------------+
+|  [Imagem icon]   Imagem       |
+|  [Video icon]    Video        |
+|  [Doc icon]      Documento    |
+|  [Template icon] Template     |
++-------------------------------+
 ```
 
-**3. Atualizar bloco de renderizacao do resultado (linhas 215-249)**
+### Arquivo 2: `src/pages/messages/MessagesList.tsx`
 
-Substituir os StatusItems simples por uma lista detalhada de cada sender:
+- Passar `onTemplateClick={() => setShowTemplates(true)}` para o `MediaUploadButton`
+- Remover o botao separado de template que existe hoje (se houver nesse contexto)
 
-- Para cada sender, mostrar:
-  - Numero (sender_id sem prefixo `whatsapp:`)
-  - Status com badge colorida (ONLINE = verde, outro = vermelho)
-  - Webhook correto? (CheckCircle2 verde ou XCircle vermelho)
-  - URL do callback atual (truncada)
-- Manter o botao "Corrigir Webhooks" visivel quando `allCorrect` for `false`
+### Arquivo 3: `src/components/whatsapp/WhatsAppChat.tsx`
 
-**4. Logica do botao "Corrigir Webhooks"**
+- Passar `onTemplateClick={() => setShowTemplates(true)}` para o `MediaUploadButton`
+- Remover o botao separado de template (o botao com icone SVG de retangulo nas linhas 507-519)
+- Simplificar o layout dos botoes ao lado do textarea
 
-Mostrar o botao quando `!webhookResult.allCorrect` ao inves de checar campos individuais antigos.
+### Arquivo 4: `src/components/contacts/ContactMessages.tsx`
 
-## Resultado esperado
+- Passar `onTemplateClick` para o `MediaUploadButton` (se houver seletor de templates nesse contexto)
 
-Ao clicar "Verificar Webhooks", o usuario vera uma lista detalhada com o status de cada WhatsApp Sender, incluindo se o webhook esta configurado corretamente, o status ONLINE/OFFLINE, e a URL configurada.
+## Detalhes tecnicos
 
+- O `MediaUploadButton` tera 3 inputs hidden: imagem (`image/*`), video (`video/*`), documento (`.pdf,.doc,...`)
+- O item "Template" nao abre file picker, apenas chama `onTemplateClick()`
+- O item "Template" so aparece se `onTemplateClick` foi passado como prop
+- O botao "+" usa `variant="ghost"` e `size="icon"` para manter consistencia com os outros botoes da barra
