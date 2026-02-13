@@ -1,62 +1,101 @@
 
-# Substituir botao de anexo por botao "+" com menu expandido
 
-## O que muda
+# Corrigir exibicao de respostas (reply) no WhatsApp
 
-O botao com icone de clipe (Paperclip) no `MediaUploadButton` sera substituido por um botao "+" que abre um menu com 4 opcoes:
+## Problema
 
-1. **Imagem** - selecionar imagem da galeria
-2. **Video** - selecionar video
-3. **Documento** - selecionar PDF, DOC, etc.
-4. **Template** - abrir o seletor de templates WhatsApp
+A funcionalidade de reply (responder mensagem) nao mostra a mensagem citada nem para o atendente nem para o cliente porque:
+
+1. **Mensagens recebidas em tempo real**: O Supabase Realtime envia apenas a row crua da tabela `messages`. O campo `reply_to_message_id` vem preenchido, mas o join `reply_to_message` (que traz `content` e `direction` da mensagem original) nao existe no payload. Resultado: a mensagem chega mas o `QuotedMessage` nunca aparece.
+
+2. **Mensagens enviadas pelo atendente**: A mensagem temporaria (optimistic UI) tem o `reply_to_message` correto e aparece. Porem, quando a mensagem real chega pelo Realtime, ela substitui a temporaria -- e como o payload real nao tem o join, o quote desaparece.
+
+## Solucao
+
+Quando uma mensagem chega via Realtime e tem `reply_to_message_id` preenchido, buscar o conteudo da mensagem original no array local de mensagens (que ja esta carregado). Se nao encontrar localmente, fazer uma query pontual ao banco.
 
 ## Alteracoes
 
-### Arquivo 1: `src/components/whatsapp/MediaUploadButton.tsx`
+### Arquivo: `src/pages/messages/MessagesList.tsx`
 
-- Trocar o icone `Paperclip` por `Plus` (lucide-react)
-- Adicionar input de video (`accept="video/*"`)
-- Adicionar nova prop `onTemplateClick` para disparar a abertura do seletor de templates
-- Adicionar item "Template" no dropdown com icone de documento/template
-- Adicionar item "Video" no dropdown
+**1. Criar funcao helper `resolveReplyContext`**
 
-Nova interface:
 ```typescript
-interface MediaUploadButtonProps {
-  onFileSelected: (file: File) => void;
-  onTemplateClick?: () => void;
-  disabled?: boolean;
+const resolveReplyContext = async (message: Message): Promise<Message> => {
+  if (!message.reply_to_message_id || message.reply_to_message) {
+    return message; // Ja tem contexto ou nao e reply
+  }
+
+  // Tentar resolver localmente primeiro
+  const localOriginal = messages.find(m => m.id === message.reply_to_message_id);
+  if (localOriginal) {
+    return {
+      ...message,
+      reply_to_message: {
+        content: localOriginal.content,
+        direction: localOriginal.direction,
+      },
+    };
+  }
+
+  // Buscar no banco se nao encontrou localmente
+  const { data } = await supabase
+    .from('messages')
+    .select('content, direction')
+    .eq('id', message.reply_to_message_id)
+    .single();
+
+  if (data) {
+    return {
+      ...message,
+      reply_to_message: data,
+    };
+  }
+
+  return message;
+};
+```
+
+**2. Atualizar o handler de INSERT no Realtime (linhas 358-364)**
+
+Antes de adicionar a mensagem ao state, resolver o contexto de reply:
+
+```typescript
+if (newMessage.thread_id === selectedThreadId) {
+  const enriched = await resolveReplyContext(newMessage);
+  setMessages((prev) => {
+    const filtered = prev.filter(
+      (m) => !m.id.startsWith('temp-') && m.id !== enriched.id
+    );
+    return [...filtered, enriched];
+  });
+  scrollToBottom();
 }
 ```
 
-Menu resultante:
-```text
-+-------------------------------+
-|  [Imagem icon]   Imagem       |
-|  [Video icon]    Video        |
-|  [Doc icon]      Documento    |
-|  [Template icon] Template     |
-+-------------------------------+
+**3. Atualizar o handler de UPDATE no Realtime (linhas 378-381)**
+
+Preservar o `reply_to_message` que ja existe no state local ao atualizar:
+
+```typescript
+if (updatedMessage.thread_id === selectedThreadId) {
+  setMessages((prev) =>
+    prev.map((m) => {
+      if (m.id === updatedMessage.id) {
+        return {
+          ...updatedMessage,
+          reply_to_message: updatedMessage.reply_to_message || m.reply_to_message,
+        };
+      }
+      return m;
+    })
+  );
+}
 ```
 
-### Arquivo 2: `src/pages/messages/MessagesList.tsx`
+## Resultado
 
-- Passar `onTemplateClick={() => setShowTemplates(true)}` para o `MediaUploadButton`
-- Remover o botao separado de template que existe hoje (se houver nesse contexto)
+- Quando o cliente responde a uma mensagem (reply), o atendente vera a mensagem citada com a barra lateral colorida
+- Quando o atendente responde a uma mensagem, o quote permanece visivel mesmo apos a mensagem real substituir a temporaria
+- Funciona tanto para mensagens ja carregadas (resolucao local instantanea) quanto para mensagens antigas (fallback com query ao banco)
 
-### Arquivo 3: `src/components/whatsapp/WhatsAppChat.tsx`
-
-- Passar `onTemplateClick={() => setShowTemplates(true)}` para o `MediaUploadButton`
-- Remover o botao separado de template (o botao com icone SVG de retangulo nas linhas 507-519)
-- Simplificar o layout dos botoes ao lado do textarea
-
-### Arquivo 4: `src/components/contacts/ContactMessages.tsx`
-
-- Passar `onTemplateClick` para o `MediaUploadButton` (se houver seletor de templates nesse contexto)
-
-## Detalhes tecnicos
-
-- O `MediaUploadButton` tera 3 inputs hidden: imagem (`image/*`), video (`video/*`), documento (`.pdf,.doc,...`)
-- O item "Template" nao abre file picker, apenas chama `onTemplateClick()`
-- O item "Template" so aparece se `onTemplateClick` foi passado como prop
-- O botao "+" usa `variant="ghost"` e `size="icon"` para manter consistencia com os outros botoes da barra
