@@ -1,7 +1,6 @@
-import { Outlet, Navigate, useSearchParams, useLocation, useNavigate } from 'react-router-dom';
+import { Outlet, Navigate, useSearchParams, useLocation } from 'react-router-dom';
 import { Layout } from '@/components/Layout';
 import { Breadcrumbs } from '@/components/application/breadcrumbs/breadcrumbs';
-import { ArrowLeft } from 'lucide-react';
 import { getSettingsLabelByPath } from './SettingsGrid';
 import { useWhatsAppIntegration } from '@/hooks/useWhatsAppIntegration';
 import { useAIIntegration } from '@/hooks/useAIIntegration';
@@ -40,7 +39,6 @@ const flagProtectedRoutes: Record<string, 'hasWhatsApp' | 'showAIFeatures'> = {
 export function SettingsLayout() {
   const [searchParams] = useSearchParams();
   const location = useLocation();
-  const navigate = useNavigate();
   const { hasWhatsApp } = useWhatsAppIntegration();
   const { hasAI } = useAIIntegration();
 
@@ -76,35 +74,20 @@ export function SettingsLayout() {
       <div className="flex flex-col h-full max-w-full overflow-x-hidden">
         <div className="flex-1 overflow-y-auto overflow-x-hidden">
           <div className="p-6 max-w-5xl mx-auto">
-            {isIndex ? (
-              <>
-                {/* Index header */}
-                <div className="mb-6">
-                  <button
-                    onClick={() => navigate(-1)}
-                    className="flex items-center gap-2 text-sm text-muted-foreground hover:text-foreground transition-colors mb-3"
-                  >
-                    <ArrowLeft className="h-4 w-4" />
-                    Voltar
-                  </button>
-                  <h1 className="text-2xl font-bold text-foreground tracking-tight">Configurações</h1>
-                  <p className="text-sm text-muted-foreground mt-1">Gerencie sua conta, equipe, integrações e preferências</p>
-                </div>
-              </>
-            ) : (
-              <>
-                {/* Detail header with breadcrumb */}
-                <div className="mb-6">
-                  <Breadcrumbs
-                    items={[
-                      { label: 'Configurações', href: '/settings' },
-                      { label: sectionLabel || childSlug || '' },
-                    ]}
-                    className="mb-4"
-                  />
-                </div>
-              </>
-            )}
+            <div className="mb-6">
+              <Breadcrumbs
+                items={
+                  childSlug && sectionLabel
+                    ? [
+                        { label: 'Configurações', href: '/settings' },
+                        { label: sectionLabel },
+                      ]
+                    : [
+                        { label: 'Configurações' },
+                      ]
+                }
+              />
+            </div>
 
             <div key={location.pathname} className="animate-in fade-in duration-200">
               <Outlet />
