@@ -1,149 +1,155 @@
 
+# Corrigir Layout de Mensagens e Logica da Janela de 24h
 
-# Unificar Contatos Duplicados + Fix last_inbound_at
+## Problema 1: Layout das bolhas de mensagem
 
-## Passo 1: Deploy imediato -- Fix `last_inbound_at` no webhook
+Atualmente, as bolhas de mensagem nos 3 componentes de chat estao com layout inconsistente. As correcoes serao aplicadas em:
 
-Adicionar `last_inbound_at` nos dois pontos do arquivo `supabase/functions/twilio-whatsapp-webhook/index.ts`:
+### Arquivos afetados
 
-**Linha 376 (update de thread existente):**
-```typescript
-.update({
-  whatsapp_last_inbound_at: new Date().toISOString(),
-  last_inbound_at: new Date().toISOString(),
-  external_id: waId,
-  updated_at: new Date().toISOString(),
-})
-```
+| Arquivo | Componente | Uso |
+|---------|-----------|-----|
+| `src/pages/messages/MessagesList.tsx` | Chat principal (inbox) | Modulo de mensagens |
+| `src/components/contacts/ContactMessages.tsx` | Chat na ficha do contato/oportunidade | Detalhe do contato |
+| `src/components/whatsapp/WhatsAppChat.tsx` | Chat legado | Uso secundario |
 
-**Linha 392 (insert de thread nova):**
-```typescript
-.insert({
-  organization_id: orgId,
-  contact_id: contactId,
-  channel: 'whatsapp',
-  subject: 'WhatsApp',
-  external_id: waId,
-  whatsapp_last_inbound_at: new Date().toISOString(),
-  last_inbound_at: new Date().toISOString(),
-})
-```
+### Correcoes de layout
 
-Deploy da edge function `twilio-whatsapp-webhook`.
+- **Alinhamento**: Outbound (direita) com fundo verde, Inbound (esquerda) com fundo `bg-muted` -- ja esta correto no codigo, mas sera revisado o espaçamento
+- **max-width**: Garantir `max-w-[70%]` em todas as bolhas (MessagesList ja tem 70%, ContactMessages e WhatsAppChat tem 75% -- padronizar para 70%)
+- **Padding/border-radius**: Manter `p-3 rounded-lg` consistente
+- **Espacamento**: `space-y-3` entre mensagens (ja esta nos 3 componentes)
+- **Quebra de linha**: Garantir `whitespace-pre-wrap break-words` no texto das mensagens. No MessagesList (linha 1057) ja tem, mas ContactMessages usa `WhatsAppFormattedText` que ja faz isso internamente
+- **Nome do remetente**: No MessagesList o nome aparece no footer. Padronizar nos outros componentes tambem
 
----
+### Detalhes tecnicos
 
-## Passo 2: Script SQL de unificacao completo
+**MessagesList.tsx** (linhas 982-1084):
+- Mudar `max-w-[70%]` -- ja esta correto
+- Layout da bolha esta OK, apenas garantir consistencia
 
-Dados levantados:
+**ContactMessages.tsx** (linhas 548-553):
+- Mudar `max-w-[75%]` para `max-w-[70%]`
+- Adicionar nome do remetente no footer (contato para inbound, usuario/agente para outbound)
 
-| Item | Contato Principal | Contato Duplicado |
-|------|-------------------|-------------------|
-| ID | `699b8729-a619-4423-9565-1f76bb15beea` | `228ae7b0-cc34-46e9-ba82-96e6cfc0754f` |
-| Nome | andre rodrigues da cruz | Andre Cruz |
-| Phone | +5543988758000 | +554388758000 |
-| Thread ID | `9a9d191c-d73f-4a0d-a693-f6c09115cd5e` | `11dc02fc-d26f-42fd-b9ea-426755f6de2c` |
-| Mensagens | 1 (outbound) | 15 (toda a conversa) |
-
-Ambos tem thread WhatsApp, entao precisamos mesclar as threads.
-
-**Thread principal**: `9a9d191c` (mais antiga, criada 22:00:29)
-**Thread duplicada**: `11dc02fc` (criada 22:02:07, tem 15 mensagens)
-
-### SQL completo (a ser executado no SQL Editor com Live selecionado):
-
-```sql
-BEGIN;
-
--- == ETAPA 1: Mesclar threads WhatsApp ==
-
--- Mover todas as mensagens da thread duplicada para a thread principal
-UPDATE messages 
-  SET thread_id = '9a9d191c-d73f-4a0d-a693-f6c09115cd5e'
-  WHERE thread_id = '11dc02fc-d26f-42fd-b9ea-426755f6de2c';
-
--- Mover message_thread_reads da thread duplicada
-UPDATE message_thread_reads 
-  SET thread_id = '9a9d191c-d73f-4a0d-a693-f6c09115cd5e'
-  WHERE thread_id = '11dc02fc-d26f-42fd-b9ea-426755f6de2c'
-  AND NOT EXISTS (
-    SELECT 1 FROM message_thread_reads mtr 
-    WHERE mtr.thread_id = '9a9d191c-d73f-4a0d-a693-f6c09115cd5e' 
-    AND mtr.user_id = message_thread_reads.user_id
-  );
--- Deletar reads duplicados que nao puderam ser movidos
-DELETE FROM message_thread_reads 
-  WHERE thread_id = '11dc02fc-d26f-42fd-b9ea-426755f6de2c';
-
--- Mover scheduled_messages da thread duplicada
-UPDATE scheduled_messages 
-  SET thread_id = '9a9d191c-d73f-4a0d-a693-f6c09115cd5e'
-  WHERE thread_id = '11dc02fc-d26f-42fd-b9ea-426755f6de2c';
-
--- Mover ai_agent_logs da thread duplicada
-UPDATE ai_agent_logs 
-  SET thread_id = '9a9d191c-d73f-4a0d-a693-f6c09115cd5e'
-  WHERE thread_id = '11dc02fc-d26f-42fd-b9ea-426755f6de2c';
-
--- Atualizar thread principal com dados mais recentes da duplicada
-UPDATE message_threads SET
-  last_inbound_at = '2026-02-13 22:27:51.005+00',
-  whatsapp_last_inbound_at = '2026-02-13 22:27:51.005+00',
-  updated_at = '2026-02-13 22:32:51.493366+00',
-  external_id = '554388758000',
-  subject = 'WhatsApp'
-  WHERE id = '9a9d191c-d73f-4a0d-a693-f6c09115cd5e';
-
--- Deletar thread duplicada (agora vazia)
-DELETE FROM message_threads 
-  WHERE id = '11dc02fc-d26f-42fd-b9ea-426755f6de2c';
-
--- == ETAPA 2: Mover registros vinculados ao contato duplicado ==
-
-UPDATE opportunities SET contact_id = '699b8729-a619-4423-9565-1f76bb15beea' 
-  WHERE contact_id = '228ae7b0-cc34-46e9-ba82-96e6cfc0754f';
-
-UPDATE tasks SET contact_id = '699b8729-a619-4423-9565-1f76bb15beea' 
-  WHERE contact_id = '228ae7b0-cc34-46e9-ba82-96e6cfc0754f';
-
-UPDATE activities SET contact_id = '699b8729-a619-4423-9565-1f76bb15beea' 
-  WHERE contact_id = '228ae7b0-cc34-46e9-ba82-96e6cfc0754f';
-
-UPDATE calls SET contact_id = '699b8729-a619-4423-9565-1f76bb15beea' 
-  WHERE contact_id = '228ae7b0-cc34-46e9-ba82-96e6cfc0754f';
-
-UPDATE ai_agent_logs SET contact_id = '699b8729-a619-4423-9565-1f76bb15beea' 
-  WHERE contact_id = '228ae7b0-cc34-46e9-ba82-96e6cfc0754f';
-
-UPDATE contact_memories SET contact_id = '699b8729-a619-4423-9565-1f76bb15beea' 
-  WHERE contact_id = '228ae7b0-cc34-46e9-ba82-96e6cfc0754f';
-
-UPDATE scheduled_messages SET contact_id = '699b8729-a619-4423-9565-1f76bb15beea' 
-  WHERE contact_id = '228ae7b0-cc34-46e9-ba82-96e6cfc0754f';
-
--- == ETAPA 3: Deletar contato duplicado ==
-
-DELETE FROM contacts WHERE id = '228ae7b0-cc34-46e9-ba82-96e6cfc0754f';
-
-COMMIT;
-```
-
-### O que esse script faz, em ordem:
-
-1. Move as 15 mensagens da thread duplicada para a thread principal
-2. Move/limpa `message_thread_reads`, `scheduled_messages` e `ai_agent_logs` vinculados a thread duplicada
-3. Atualiza `last_inbound_at`, `whatsapp_last_inbound_at`, `updated_at` e `external_id` na thread principal com os valores mais recentes
-4. Deleta a thread duplicada (agora vazia)
-5. Move todos os registros de outras tabelas (opportunities, tasks, etc.) do contato duplicado para o principal
-6. Deleta o contato duplicado
-
-### Resultado final:
-- 1 contato: "andre rodrigues da cruz" com phone `+5543988758000`
-- 1 thread WhatsApp com todas as 16 mensagens unificadas
+**WhatsAppChat.tsx** (linhas 434-438):
+- Mudar `max-w-[75%]` para `max-w-[70%]`
+- Adicionar nome do remetente no footer
 
 ---
 
-## Ordem de execucao
+## Problema 2: Logica da janela de 24h
 
-1. Corrigir webhook (`last_inbound_at`) e deploy
-2. Voce executa o SQL acima no Cloud View > Run SQL (com **Live** selecionado)
+### Problemas atuais
+
+1. **MessagesList.tsx** (linha 497-504): Usa `whatsapp_last_inbound_at` para calcular janela -- precisa usar `last_inbound_at` como fallback
+2. **ContactMessages.tsx** (linha 236-241): Mesma coisa, usa apenas `whatsapp_last_inbound_at`
+3. **WhatsAppChat.tsx** (linha 114-119): Mesma coisa
+4. **ContactMessages.tsx** (linha 152): Realtime subscription tambem so monitora `whatsapp_last_inbound_at`
+5. **Aviso de template**: No MessagesList aparece como banner + textarea desabilitada. Deve substituir o campo de digitacao inteiro pelo aviso com botao de template, nao mostrar ambos
+6. **Timer/recalculo**: Nao ha recalculo periodico -- se a janela expira enquanto o usuario esta na tela, o estado nao muda
+
+### Correcoes
+
+**Logica de calculo da janela (todos os 3 componentes):**
+
+```typescript
+// Usar last_inbound_at com fallback para whatsapp_last_inbound_at
+const lastInboundAt = thread.last_inbound_at || thread.whatsapp_last_inbound_at;
+if (lastInboundAt) {
+  const lastInbound = new Date(lastInboundAt);
+  const now = new Date();
+  const hoursDiff = (now.getTime() - lastInbound.getTime()) / (1000 * 60 * 60);
+  setIsIn24hWindow(hoursDiff < 24);
+} else {
+  setIsIn24hWindow(false);
+}
+```
+
+**Timer de recalculo (setInterval a cada 60s) -- adicionar nos 3 componentes:**
+
+```typescript
+useEffect(() => {
+  if (!selectedThread?.last_inbound_at && !selectedThread?.whatsapp_last_inbound_at) return;
+  
+  const checkWindow = () => {
+    const lastInboundAt = selectedThread.last_inbound_at || selectedThread.whatsapp_last_inbound_at;
+    if (lastInboundAt) {
+      const hoursDiff = (Date.now() - new Date(lastInboundAt).getTime()) / (1000 * 60 * 60);
+      setIsIn24hWindow(hoursDiff < 24);
+    }
+  };
+  
+  const interval = setInterval(checkWindow, 60000);
+  return () => clearInterval(interval);
+}, [selectedThread?.last_inbound_at, selectedThread?.whatsapp_last_inbound_at]);
+```
+
+**Realtime subscription (ContactMessages.tsx, linha 151-153):**
+- Monitorar tambem `last_inbound_at` no payload do UPDATE
+
+**Area de input quando janela fechada (MessagesList.tsx, linhas 1107-1124):**
+
+Substituir o layout atual (banner de aviso + textarea desabilitada) por um bloco unico que substitui toda a area de input:
+
+```tsx
+{/* Input Area */}
+<div className="border-t border-border p-4 bg-card">
+  {!isIn24hWindow && messages.length > 0 ? (
+    // Janela fechada: aviso + botao template no lugar do input
+    <div className="flex flex-col items-center gap-3 py-4 text-center">
+      <div className="flex items-center gap-2 text-amber-600 dark:text-amber-400">
+        <Clock className="h-5 w-5" />
+        <p className="text-sm font-medium">
+          Fora da janela de 24h
+        </p>
+      </div>
+      <p className="text-xs text-muted-foreground">
+        Use um template aprovado para reabrir a conversa
+      </p>
+      <Button onClick={() => setShowTemplates(true)} size="sm">
+        <FileText className="w-4 h-4 mr-2" />
+        Selecionar template
+      </Button>
+    </div>
+  ) : (
+    // Janela aberta: input normal
+    <>
+      {replyingTo && <ReplyPreview ... />}
+      <div className="flex gap-2">
+        {/* botoes + textarea + send */}
+      </div>
+    </>
+  )}
+</div>
+```
+
+**Mesma logica para ContactMessages.tsx (linhas 597-693):**
+
+Substituir o bloco atual que mostra botao "Enviar Template" quando janela fechada por um aviso mais claro no lugar do input.
+
+**WhatsAppChat.tsx (linhas 473-526):**
+
+Mesmo padrao -- substituir input por aviso quando janela fechada.
+
+**Busca do campo `last_inbound_at` nas queries:**
+
+- **ContactMessages.tsx** (linha 227): Adicionar `last_inbound_at` no select da query de thread
+- **WhatsAppChat.tsx** (linha 103): Adicionar `last_inbound_at` no select da query de thread
+
+---
+
+## Resumo de mudancas
+
+| Arquivo | Mudanca |
+|---------|---------|
+| `src/pages/messages/MessagesList.tsx` | Corrigir area de input (janela fechada substitui input inteiro); adicionar timer de recalculo; usar `last_inbound_at` como campo primario |
+| `src/components/contacts/ContactMessages.tsx` | max-width 70%; buscar `last_inbound_at` na query; timer de recalculo; substituir input quando janela fechada; nome do remetente no footer |
+| `src/components/whatsapp/WhatsAppChat.tsx` | max-width 70%; buscar `last_inbound_at` na query; timer de recalculo; substituir input quando janela fechada |
+
+## Ordem de implementacao
+
+1. Corrigir layout das bolhas nos 3 componentes
+2. Corrigir logica da janela de 24h nos 3 componentes
+3. Adicionar timer de recalculo
+4. Substituir area de input quando janela fechada
