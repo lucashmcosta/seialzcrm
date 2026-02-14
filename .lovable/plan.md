@@ -1,117 +1,81 @@
 
-# Melhorias no Modulo de Mensagens
 
-## Resumo
+# Corrigir Duplicacao de Contatos por Variacao do 9o Digito
 
-Tres melhorias: painel redimensionavel, lista simplificada e filtros "Nao lidas" / "Nao respondidas", com os 3 ajustes solicitados pelo usuario.
+## Problema identificado
 
----
+O sistema esta criando contatos duplicados porque o telefone chega em formatos diferentes:
+- `+5543988758000` (com o 9o digito)
+- `+554388758000` (sem o 9o digito)
 
-## 1. Migration SQL
+No Brasil, numeros de celular tiveram a adicao do 9o digito. Esses dois numeros pertencem a mesma pessoa, mas a funcao `normalizePhoneForSearch` nos webhooks nao gera a variacao com/sem o 9o digito, entao o sistema nao encontra o contato existente e cria um novo.
 
-Criar tabela `message_thread_reads` para suportar multiplos atendentes e adicionar campo `last_inbound_at` na `message_threads`:
+Isso resulta em duas conversas separadas na lista de mensagens para o mesmo cliente.
 
-```sql
--- Tabela separada para tracking de leitura por usuario
-CREATE TABLE message_thread_reads (
-  thread_id uuid NOT NULL REFERENCES message_threads(id) ON DELETE CASCADE,
-  user_id uuid NOT NULL REFERENCES profiles(id) ON DELETE CASCADE,
-  last_read_at timestamptz NOT NULL DEFAULT now(),
-  PRIMARY KEY (thread_id, user_id)
-);
+## Solucao
 
-ALTER TABLE message_thread_reads ENABLE ROW LEVEL SECURITY;
-
-CREATE POLICY "Users can read own thread reads"
-  ON message_thread_reads FOR SELECT
-  USING (user_id = auth.uid());
-
-CREATE POLICY "Users can upsert own thread reads"
-  ON message_thread_reads FOR INSERT
-  WITH CHECK (user_id = auth.uid());
-
-CREATE POLICY "Users can update own thread reads"
-  ON message_thread_reads FOR UPDATE
-  USING (user_id = auth.uid());
-
--- Campo last_inbound_at na message_threads para comparacao precisa
-ALTER TABLE message_threads
-  ADD COLUMN last_inbound_at timestamptz DEFAULT NULL;
-
--- Preencher last_inbound_at com dados existentes (copiar de whatsapp_last_inbound_at onde disponivel)
-UPDATE message_threads
-  SET last_inbound_at = whatsapp_last_inbound_at
-  WHERE whatsapp_last_inbound_at IS NOT NULL;
-```
+Atualizar a funcao `normalizePhoneForSearch` em dois arquivos de edge functions para gerar variacoes com e sem o 9o digito brasileiro. Tambem criar um script para unificar os contatos duplicados existentes.
 
 ---
 
-## 2. Arquivo modificado
+## Detalhes tecnicos
+
+### Arquivos modificados
 
 | Arquivo | Mudanca |
 |---------|---------|
-| `src/pages/messages/MessagesList.tsx` | Layout redimensionavel, remover preview, adicionar filtros, upsert `last_read_at` ao selecionar thread, carregar `last_inbound_at` e `last_read_at` na query |
+| `supabase/functions/twilio-whatsapp-webhook/index.ts` | Adicionar logica do 9o digito na `normalizePhoneForSearch` |
+| `supabase/functions/twilio-webhook/index.ts` | Mesma correcao na versao dessa funcao |
 
-Nenhum arquivo novo sera criado.
+### Logica do 9o digito
 
----
+Para numeros brasileiros (+55), apos extrair o DDD (2 digitos apos 55):
+- Se o numero local tem 9 digitos e comeca com 9: gerar variacao sem o 9 (8 digitos)
+- Se o numero local tem 8 digitos: gerar variacao com 9 na frente (9 digitos)
 
-## 3. Ordem de implementacao
+Exemplo para `+5543988758000`:
+- DDD = `43`, local = `988758000` (9 digitos, comeca com 9)
+- Variacao sem 9: `+554388758000`
 
-### Passo 1: Migration SQL
-- Criar tabela `message_thread_reads` com PK composta `(thread_id, user_id)`
-- Adicionar coluna `last_inbound_at` na `message_threads`
-- Preencher `last_inbound_at` com dados existentes
-- RLS: usuario so le/escreve seus proprios registros
+Codigo a adicionar em ambas as funcoes:
 
-### Passo 2: Atualizar query de threads para incluir `last_inbound_at` e `last_read_at`
-- No select da query de threads (linha 283), adicionar `last_inbound_at`
-- Apos o select principal, buscar os registros de `message_thread_reads` para o usuario atual (um unico select com `WHERE user_id = userProfile.id AND thread_id IN (...)`)
-- Fazer merge: cada thread recebe `last_read_at` do registro correspondente (ou null)
-- Calcular `unread`: `last_message_direction === 'inbound' && (last_read_at === null || last_inbound_at > last_read_at)`
-- Atualizar interface `ChatThread` com `last_inbound_at` e `last_read_at`
+```typescript
+// Handle Brazil 9th digit variation
+if (digits.startsWith('55') && digits.length >= 12) {
+  const ddd = digits.slice(2, 4)
+  const local = digits.slice(4)
+  
+  if (local.length === 9 && local.startsWith('9')) {
+    // Has 9th digit -> generate without
+    const without9 = ddd + local.slice(1)
+    variations.add('+55' + without9)
+    variations.add('55' + without9)
+    variations.add(without9)
+  } else if (local.length === 8) {
+    // Missing 9th digit -> generate with
+    const with9 = ddd + '9' + local
+    variations.add('+55' + with9)
+    variations.add('55' + with9)
+    variations.add(with9)
+  }
+}
+```
 
-### Passo 3: Upsert `last_read_at` ao abrir conversa
-- Na funcao `fetchMessages` (linha 456), apos carregar mensagens, fazer upsert:
-  ```typescript
-  await supabase
-    .from('message_thread_reads')
-    .upsert({
-      thread_id: threadId,
-      user_id: userProfile?.id,
-      last_read_at: new Date().toISOString()
-    }, { onConflict: 'thread_id,user_id' });
-  ```
-- Atualizar o estado local da thread para refletir como lida
+### Limpeza de dados existentes
 
-### Passo 4: Layout redimensionavel
-- Importar `ResizablePanelGroup`, `ResizablePanel`, `ResizableHandle` de `@/components/ui/resizable`
-- Substituir `<div className="flex h-[calc(100vh-2rem)] overflow-hidden">` (linha 787) por `<ResizablePanelGroup direction="horizontal" className="h-[calc(100vh-2rem)]">`
-- Painel esquerdo: `<ResizablePanel defaultSize={25} minSize={15} maxSize={40}>` no lugar de `<div className="w-80 ...">` (linha 789)
-- Adicionar `<ResizableHandle withHandle />` entre os paineis
-- Painel direito: `<ResizablePanel defaultSize={75}>` no lugar de `<div className="flex-1 ...">` (linha 861)
-- Remover classes `w-80` e `flex-1`
+Para os contatos duplicados que ja existem (como "Andre Cruz" e "andre rodrigues da cruz"), sera necessario unificar manualmente ou via SQL. Os dois contatos encontrados:
 
-### Passo 5: Simplificar itens da lista
-- No `ChatListItem`, remover o bloco de preview (linhas 177-186) que mostra a ultima mensagem
-- Manter: Avatar + Nome + dot de nao lida + timestamp
+- `andre rodrigues da cruz` — phone `+5543988758000` (criado 24/jan)
+- `Andre Cruz` — phone `+554388758000` (criado 13/fev)
 
-### Passo 6: Filtros
-- Adicionar estado `const [filter, setFilter] = useState<'all' | 'unread' | 'unanswered'>('all')`
-- Renderizar 3 chips abaixo da barra de busca: "Todas", "Nao lidas", "Nao respondidas"
-- Atualizar `filteredThreads` para combinar busca + filtro:
-  - `unread`: `thread.last_message_direction === 'inbound' && (!thread.last_read_at || new Date(thread.last_inbound_at) > new Date(thread.last_read_at))`
-  - `unanswered`: `thread.last_message_direction === 'inbound'`
+Opcoes:
+1. Mover as mensagens/threads do contato duplicado para o original e deletar o duplicado
+2. Ou manter ambos e apenas prevenir novos duplicados (a correcao do codigo ja faz isso)
 
-### Passo 7: Atualizar `last_inbound_at` via Realtime
-- Quando uma nova mensagem inbound chega via Realtime e pertence a uma thread no estado, atualizar `last_inbound_at` localmente para que o dot de "nao lida" apareca imediatamente
+### Ordem de implementacao
 
----
+1. Atualizar `normalizePhoneForSearch` em `twilio-whatsapp-webhook/index.ts`
+2. Atualizar `normalizePhoneForSearch` em `twilio-webhook/index.ts`
+3. Deploy das edge functions
+4. (Opcional) Script SQL para unificar contatos duplicados existentes
 
-## 4. Pontos de atencao
-
-- **Multi-tenant / multi-atendente**: A tabela `message_thread_reads` com PK `(thread_id, user_id)` garante que cada atendente tem seu proprio tracking de leitura independente. RLS garante isolamento.
-- **`last_inbound_at` vs `updated_at`**: Conforme solicitado, a comparacao de "nao lida" usa `last_inbound_at` (timestamp da ultima mensagem inbound), nao `updated_at` da thread.
-- **`needs_human_attention` vs `unread`**: Continuam como conceitos separados. `needs_human_attention` = agente IA escalou. `unread` = usuario nao viu a mensagem.
-- **Performance**: O upsert no `message_thread_reads` e operacao leve por PK. A busca dos reads e um unico SELECT com IN clause.
-- **Resizable panels**: O pacote `react-resizable-panels` e o componente `@/components/ui/resizable` ja existem no projeto.
