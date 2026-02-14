@@ -38,6 +38,26 @@ function normalizePhoneForSearch(phone: string): string[] {
     variations.add('55' + digits)
     variations.add('+55' + digits)
   }
+
+  // Handle Brazil 9th digit variation
+  if (digits.startsWith('55') && digits.length >= 12) {
+    const ddd = digits.slice(2, 4)
+    const local = digits.slice(4)
+    
+    if (local.length === 9 && local.startsWith('9')) {
+      // Has 9th digit -> generate without
+      const without9 = ddd + local.slice(1)
+      variations.add('+55' + without9)
+      variations.add('55' + without9)
+      variations.add(without9)
+    } else if (local.length === 8) {
+      // Missing 9th digit -> generate with
+      const with9 = ddd + '9' + local
+      variations.add('+55' + with9)
+      variations.add('55' + with9)
+      variations.add(with9)
+    }
+  }
   
   return Array.from(variations)
 }
