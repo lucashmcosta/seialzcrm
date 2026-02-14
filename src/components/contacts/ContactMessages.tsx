@@ -148,9 +148,10 @@ export function ContactMessages({ contactId, opportunityId }: ContactMessagesPro
         table: 'message_threads',
         filter: `id=eq.${threadId}`,
       }, (payload) => {
-        const updated = payload.new as { whatsapp_last_inbound_at: string | null };
-        if (updated.whatsapp_last_inbound_at) {
-          const lastInbound = new Date(updated.whatsapp_last_inbound_at);
+        const updated = payload.new as { whatsapp_last_inbound_at: string | null; last_inbound_at: string | null };
+        const lastInboundAt = updated.last_inbound_at || updated.whatsapp_last_inbound_at;
+        if (lastInboundAt) {
+          const lastInbound = new Date(lastInboundAt);
           const now = new Date();
           const hoursDiff = (now.getTime() - lastInbound.getTime()) / (1000 * 60 * 60);
           setIsIn24hWindow(hoursDiff < 24);
@@ -161,6 +162,30 @@ export function ContactMessages({ contactId, opportunityId }: ContactMessagesPro
     return () => {
       supabase.removeChannel(channel);
     };
+  }, [threadId]);
+
+  // 60s timer to recalculate 24h window
+  useEffect(() => {
+    if (!threadId) return;
+    
+    const checkWindow = async () => {
+      const { data: thread } = await supabase
+        .from('message_threads')
+        .select('last_inbound_at, whatsapp_last_inbound_at')
+        .eq('id', threadId)
+        .single();
+      
+      if (thread) {
+        const lastInboundAt = (thread as any).last_inbound_at || thread.whatsapp_last_inbound_at;
+        if (lastInboundAt) {
+          const hoursDiff = (Date.now() - new Date(lastInboundAt).getTime()) / (1000 * 60 * 60);
+          setIsIn24hWindow(hoursDiff < 24);
+        }
+      }
+    };
+    
+    const interval = setInterval(checkWindow, 60000);
+    return () => clearInterval(interval);
   }, [threadId]);
 
   const scrollToBottom = () => {
@@ -223,7 +248,7 @@ export function ContactMessages({ contactId, opportunityId }: ContactMessagesPro
 
       const { data: thread } = await supabase
         .from('message_threads')
-        .select('id, whatsapp_last_inbound_at')
+        .select('id, whatsapp_last_inbound_at, last_inbound_at')
         .eq('organization_id', organization.id)
         .eq('contact_id', targetContactId)
         .eq('channel', 'whatsapp')
@@ -233,8 +258,9 @@ export function ContactMessages({ contactId, opportunityId }: ContactMessagesPro
         setThreadId(thread.id);
         
         // Check 24h window
-        if (thread.whatsapp_last_inbound_at) {
-          const lastInbound = new Date(thread.whatsapp_last_inbound_at);
+        const lastInboundAt = (thread as any).last_inbound_at || thread.whatsapp_last_inbound_at;
+        if (lastInboundAt) {
+          const lastInbound = new Date(lastInboundAt);
           const now = new Date();
           const hoursDiff = (now.getTime() - lastInbound.getTime()) / (1000 * 60 * 60);
           setIsIn24hWindow(hoursDiff < 24);
@@ -512,17 +538,7 @@ export function ContactMessages({ contactId, opportunityId }: ContactMessagesPro
 
   return (
     <div className="flex flex-col h-[calc(100vh-320px)] min-h-[400px]">
-      {/* 24h Window Warning */}
-      {!isIn24hWindow && messages.length > 0 && (
-        <Alert className="mb-4 border-orange-200 bg-orange-50 dark:bg-orange-950/20">
-          <Clock className="h-4 w-4 text-orange-500" />
-          <AlertDescription className="text-orange-700 dark:text-orange-300">
-            {locale === 'pt-BR'
-              ? 'Fora da janela de 24h. Você precisará usar um template aprovado para enviar mensagens.'
-              : 'Outside 24h window. You need to use an approved template to send messages.'}
-          </AlertDescription>
-        </Alert>
-      )}
+      {/* 24h window warning removed - handled in input area */}
 
       {/* Messages */}
       <ScrollArea className="flex-1 min-h-0">
@@ -546,7 +562,7 @@ export function ContactMessages({ contactId, opportunityId }: ContactMessagesPro
                   className={`flex ${isOutbound ? 'justify-end' : 'justify-start'}`}
                 >
                   <div
-                    className={`max-w-[75%] rounded-lg p-3 ${
+                    className={`max-w-[70%] rounded-lg p-3 ${
                       isOutbound
                         ? 'bg-green-100 dark:bg-green-900/40 text-green-900 dark:text-green-100'
                         : 'bg-muted'
@@ -574,12 +590,17 @@ export function ContactMessages({ contactId, opportunityId }: ContactMessagesPro
                       <p className="text-xs text-destructive mt-1">{message.error_message}</p>
                     )}
 
-                    {/* Footer */}
+                    {/* Footer - Name + Time + Status */}
                     <div className="flex items-center justify-end gap-1 mt-1">
-                      <span className="text-xs text-muted-foreground">
-                        {formatDistanceToNow(new Date(message.sent_at), {
-                          addSuffix: true,
-                          locale: dateLocale,
+                      <span className="text-[10px] text-muted-foreground/70 whitespace-nowrap">
+                        {isOutbound 
+                          ? (message.sender_name ? `${message.sender_name} - ` : '')
+                          : ''
+                        }
+                        {new Date(message.sent_at).toLocaleTimeString(locale, {
+                          hour: '2-digit',
+                          minute: '2-digit',
+                          hour12: false
                         })}
                       </span>
                       {isOutbound && renderStatusIcon(message.whatsapp_status)}
@@ -595,7 +616,25 @@ export function ContactMessages({ contactId, opportunityId }: ContactMessagesPro
 
       {/* Input */}
       <div className="pt-4 border-t mt-4">
-        {isIn24hWindow || messages.length === 0 ? (
+        {!isIn24hWindow && messages.length > 0 ? (
+          <div className="flex flex-col items-center gap-3 py-4 text-center">
+            <div className="flex items-center gap-2 text-amber-600 dark:text-amber-400">
+              <Clock className="h-5 w-5" />
+              <p className="text-sm font-medium">
+                {locale === 'pt-BR' ? 'Fora da janela de 24h' : 'Outside 24h window'}
+              </p>
+            </div>
+            <p className="text-xs text-muted-foreground">
+              {locale === 'pt-BR'
+                ? 'Use um template aprovado para reabrir a conversa'
+                : 'Use an approved template to reopen the conversation'}
+            </p>
+            <Button onClick={() => setShowTemplates(true)} size="sm">
+              <FileText className="w-4 h-4 mr-2" />
+              {locale === 'pt-BR' ? 'Selecionar template' : 'Select template'}
+            </Button>
+          </div>
+        ) : (
           <div className="flex gap-2 items-end">
             <div className="flex gap-1">
               <MediaUploadButton onFileSelected={handleMediaUpload} onTemplateClick={() => setShowTemplates(true)} disabled={submitting} />
@@ -685,11 +724,6 @@ export function ContactMessages({ contactId, opportunityId }: ContactMessagesPro
               </Button>
             </div>
           </div>
-        ) : (
-          <Button onClick={() => setShowTemplates(true)} className="w-full">
-            <FileText className="w-4 h-4 mr-2" />
-            {locale === 'pt-BR' ? 'Enviar Template' : 'Send Template'}
-          </Button>
         )}
       </div>
 
