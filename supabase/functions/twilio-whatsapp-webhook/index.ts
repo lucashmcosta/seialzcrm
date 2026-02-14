@@ -374,6 +374,7 @@ serve(async (req) => {
           .from('message_threads')
           .update({
             whatsapp_last_inbound_at: new Date().toISOString(),
+            last_inbound_at: new Date().toISOString(),
             external_id: waId,
             updated_at: new Date().toISOString(),
           })
@@ -390,6 +391,7 @@ serve(async (req) => {
             subject: 'WhatsApp',
             external_id: waId,
             whatsapp_last_inbound_at: new Date().toISOString(),
+            last_inbound_at: new Date().toISOString(),
           })
           .select('id')
           .single()
