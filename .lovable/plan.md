@@ -1,81 +1,149 @@
 
 
-# Corrigir Duplicacao de Contatos por Variacao do 9o Digito
+# Unificar Contatos Duplicados + Fix last_inbound_at
 
-## Problema identificado
+## Passo 1: Deploy imediato -- Fix `last_inbound_at` no webhook
 
-O sistema esta criando contatos duplicados porque o telefone chega em formatos diferentes:
-- `+5543988758000` (com o 9o digito)
-- `+554388758000` (sem o 9o digito)
+Adicionar `last_inbound_at` nos dois pontos do arquivo `supabase/functions/twilio-whatsapp-webhook/index.ts`:
 
-No Brasil, numeros de celular tiveram a adicao do 9o digito. Esses dois numeros pertencem a mesma pessoa, mas a funcao `normalizePhoneForSearch` nos webhooks nao gera a variacao com/sem o 9o digito, entao o sistema nao encontra o contato existente e cria um novo.
+**Linha 376 (update de thread existente):**
+```typescript
+.update({
+  whatsapp_last_inbound_at: new Date().toISOString(),
+  last_inbound_at: new Date().toISOString(),
+  external_id: waId,
+  updated_at: new Date().toISOString(),
+})
+```
 
-Isso resulta em duas conversas separadas na lista de mensagens para o mesmo cliente.
+**Linha 392 (insert de thread nova):**
+```typescript
+.insert({
+  organization_id: orgId,
+  contact_id: contactId,
+  channel: 'whatsapp',
+  subject: 'WhatsApp',
+  external_id: waId,
+  whatsapp_last_inbound_at: new Date().toISOString(),
+  last_inbound_at: new Date().toISOString(),
+})
+```
 
-## Solucao
-
-Atualizar a funcao `normalizePhoneForSearch` em dois arquivos de edge functions para gerar variacoes com e sem o 9o digito brasileiro. Tambem criar um script para unificar os contatos duplicados existentes.
+Deploy da edge function `twilio-whatsapp-webhook`.
 
 ---
 
-## Detalhes tecnicos
+## Passo 2: Script SQL de unificacao completo
 
-### Arquivos modificados
+Dados levantados:
 
-| Arquivo | Mudanca |
-|---------|---------|
-| `supabase/functions/twilio-whatsapp-webhook/index.ts` | Adicionar logica do 9o digito na `normalizePhoneForSearch` |
-| `supabase/functions/twilio-webhook/index.ts` | Mesma correcao na versao dessa funcao |
+| Item | Contato Principal | Contato Duplicado |
+|------|-------------------|-------------------|
+| ID | `699b8729-a619-4423-9565-1f76bb15beea` | `228ae7b0-cc34-46e9-ba82-96e6cfc0754f` |
+| Nome | andre rodrigues da cruz | Andre Cruz |
+| Phone | +5543988758000 | +554388758000 |
+| Thread ID | `9a9d191c-d73f-4a0d-a693-f6c09115cd5e` | `11dc02fc-d26f-42fd-b9ea-426755f6de2c` |
+| Mensagens | 1 (outbound) | 15 (toda a conversa) |
 
-### Logica do 9o digito
+Ambos tem thread WhatsApp, entao precisamos mesclar as threads.
 
-Para numeros brasileiros (+55), apos extrair o DDD (2 digitos apos 55):
-- Se o numero local tem 9 digitos e comeca com 9: gerar variacao sem o 9 (8 digitos)
-- Se o numero local tem 8 digitos: gerar variacao com 9 na frente (9 digitos)
+**Thread principal**: `9a9d191c` (mais antiga, criada 22:00:29)
+**Thread duplicada**: `11dc02fc` (criada 22:02:07, tem 15 mensagens)
 
-Exemplo para `+5543988758000`:
-- DDD = `43`, local = `988758000` (9 digitos, comeca com 9)
-- Variacao sem 9: `+554388758000`
+### SQL completo (a ser executado no SQL Editor com Live selecionado):
 
-Codigo a adicionar em ambas as funcoes:
+```sql
+BEGIN;
 
-```typescript
-// Handle Brazil 9th digit variation
-if (digits.startsWith('55') && digits.length >= 12) {
-  const ddd = digits.slice(2, 4)
-  const local = digits.slice(4)
-  
-  if (local.length === 9 && local.startsWith('9')) {
-    // Has 9th digit -> generate without
-    const without9 = ddd + local.slice(1)
-    variations.add('+55' + without9)
-    variations.add('55' + without9)
-    variations.add(without9)
-  } else if (local.length === 8) {
-    // Missing 9th digit -> generate with
-    const with9 = ddd + '9' + local
-    variations.add('+55' + with9)
-    variations.add('55' + with9)
-    variations.add(with9)
-  }
-}
+-- == ETAPA 1: Mesclar threads WhatsApp ==
+
+-- Mover todas as mensagens da thread duplicada para a thread principal
+UPDATE messages 
+  SET thread_id = '9a9d191c-d73f-4a0d-a693-f6c09115cd5e'
+  WHERE thread_id = '11dc02fc-d26f-42fd-b9ea-426755f6de2c';
+
+-- Mover message_thread_reads da thread duplicada
+UPDATE message_thread_reads 
+  SET thread_id = '9a9d191c-d73f-4a0d-a693-f6c09115cd5e'
+  WHERE thread_id = '11dc02fc-d26f-42fd-b9ea-426755f6de2c'
+  AND NOT EXISTS (
+    SELECT 1 FROM message_thread_reads mtr 
+    WHERE mtr.thread_id = '9a9d191c-d73f-4a0d-a693-f6c09115cd5e' 
+    AND mtr.user_id = message_thread_reads.user_id
+  );
+-- Deletar reads duplicados que nao puderam ser movidos
+DELETE FROM message_thread_reads 
+  WHERE thread_id = '11dc02fc-d26f-42fd-b9ea-426755f6de2c';
+
+-- Mover scheduled_messages da thread duplicada
+UPDATE scheduled_messages 
+  SET thread_id = '9a9d191c-d73f-4a0d-a693-f6c09115cd5e'
+  WHERE thread_id = '11dc02fc-d26f-42fd-b9ea-426755f6de2c';
+
+-- Mover ai_agent_logs da thread duplicada
+UPDATE ai_agent_logs 
+  SET thread_id = '9a9d191c-d73f-4a0d-a693-f6c09115cd5e'
+  WHERE thread_id = '11dc02fc-d26f-42fd-b9ea-426755f6de2c';
+
+-- Atualizar thread principal com dados mais recentes da duplicada
+UPDATE message_threads SET
+  last_inbound_at = '2026-02-13 22:27:51.005+00',
+  whatsapp_last_inbound_at = '2026-02-13 22:27:51.005+00',
+  updated_at = '2026-02-13 22:32:51.493366+00',
+  external_id = '554388758000',
+  subject = 'WhatsApp'
+  WHERE id = '9a9d191c-d73f-4a0d-a693-f6c09115cd5e';
+
+-- Deletar thread duplicada (agora vazia)
+DELETE FROM message_threads 
+  WHERE id = '11dc02fc-d26f-42fd-b9ea-426755f6de2c';
+
+-- == ETAPA 2: Mover registros vinculados ao contato duplicado ==
+
+UPDATE opportunities SET contact_id = '699b8729-a619-4423-9565-1f76bb15beea' 
+  WHERE contact_id = '228ae7b0-cc34-46e9-ba82-96e6cfc0754f';
+
+UPDATE tasks SET contact_id = '699b8729-a619-4423-9565-1f76bb15beea' 
+  WHERE contact_id = '228ae7b0-cc34-46e9-ba82-96e6cfc0754f';
+
+UPDATE activities SET contact_id = '699b8729-a619-4423-9565-1f76bb15beea' 
+  WHERE contact_id = '228ae7b0-cc34-46e9-ba82-96e6cfc0754f';
+
+UPDATE calls SET contact_id = '699b8729-a619-4423-9565-1f76bb15beea' 
+  WHERE contact_id = '228ae7b0-cc34-46e9-ba82-96e6cfc0754f';
+
+UPDATE ai_agent_logs SET contact_id = '699b8729-a619-4423-9565-1f76bb15beea' 
+  WHERE contact_id = '228ae7b0-cc34-46e9-ba82-96e6cfc0754f';
+
+UPDATE contact_memories SET contact_id = '699b8729-a619-4423-9565-1f76bb15beea' 
+  WHERE contact_id = '228ae7b0-cc34-46e9-ba82-96e6cfc0754f';
+
+UPDATE scheduled_messages SET contact_id = '699b8729-a619-4423-9565-1f76bb15beea' 
+  WHERE contact_id = '228ae7b0-cc34-46e9-ba82-96e6cfc0754f';
+
+-- == ETAPA 3: Deletar contato duplicado ==
+
+DELETE FROM contacts WHERE id = '228ae7b0-cc34-46e9-ba82-96e6cfc0754f';
+
+COMMIT;
 ```
 
-### Limpeza de dados existentes
+### O que esse script faz, em ordem:
 
-Para os contatos duplicados que ja existem (como "Andre Cruz" e "andre rodrigues da cruz"), sera necessario unificar manualmente ou via SQL. Os dois contatos encontrados:
+1. Move as 15 mensagens da thread duplicada para a thread principal
+2. Move/limpa `message_thread_reads`, `scheduled_messages` e `ai_agent_logs` vinculados a thread duplicada
+3. Atualiza `last_inbound_at`, `whatsapp_last_inbound_at`, `updated_at` e `external_id` na thread principal com os valores mais recentes
+4. Deleta a thread duplicada (agora vazia)
+5. Move todos os registros de outras tabelas (opportunities, tasks, etc.) do contato duplicado para o principal
+6. Deleta o contato duplicado
 
-- `andre rodrigues da cruz` — phone `+5543988758000` (criado 24/jan)
-- `Andre Cruz` — phone `+554388758000` (criado 13/fev)
+### Resultado final:
+- 1 contato: "andre rodrigues da cruz" com phone `+5543988758000`
+- 1 thread WhatsApp com todas as 16 mensagens unificadas
 
-Opcoes:
-1. Mover as mensagens/threads do contato duplicado para o original e deletar o duplicado
-2. Ou manter ambos e apenas prevenir novos duplicados (a correcao do codigo ja faz isso)
+---
 
-### Ordem de implementacao
+## Ordem de execucao
 
-1. Atualizar `normalizePhoneForSearch` em `twilio-whatsapp-webhook/index.ts`
-2. Atualizar `normalizePhoneForSearch` em `twilio-webhook/index.ts`
-3. Deploy das edge functions
-4. (Opcional) Script SQL para unificar contatos duplicados existentes
-
+1. Corrigir webhook (`last_inbound_at`) e deploy
+2. Voce executa o SQL acima no Cloud View > Run SQL (com **Live** selecionado)
