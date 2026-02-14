@@ -841,10 +841,11 @@ export default function MessagesList() {
 
   return (
     <Layout>
-      <ResizablePanelGroup direction="horizontal" className="h-screen">
+      <div className="h-screen overflow-hidden">
+      <ResizablePanelGroup direction="horizontal" className="h-full">
         {/* Left Panel - Chat List */}
         <ResizablePanel defaultSize={25} minSize={15} maxSize={40}>
-          <div className="border-r border-border flex flex-col bg-card h-full">
+          <div className="border-r border-border flex flex-col bg-card h-full overflow-hidden">
             {/* Header */}
             <div className="p-4 border-b border-border">
               <div className="flex items-center justify-between mb-4">
@@ -1290,6 +1291,7 @@ export default function MessagesList() {
           </div>
         </ResizablePanel>
       </ResizablePanelGroup>
+      </div>
 
       {/* Media Preview Dialog */}
       <MediaPreviewDialog
