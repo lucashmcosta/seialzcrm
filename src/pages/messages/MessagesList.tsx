@@ -36,7 +36,7 @@ import { useQuery } from '@tanstack/react-query';
 import { formatDistanceToNow } from 'date-fns';
 import { ptBR, enUS } from 'date-fns/locale';
 import { useToast } from '@/hooks/use-toast';
-import { Loader2, Check, CheckCheck, Clock, AlertCircle, Sparkles, SpellCheck, Briefcase, Smile, Bot, MessageSquarePlus } from 'lucide-react';
+import { Loader2, Check, CheckCheck, Clock, AlertCircle, Sparkles, SpellCheck, Briefcase, Smile, Bot, MessageSquarePlus, FileText } from 'lucide-react';
 import { AgentMessageFeedbackDialog } from '@/components/whatsapp/AgentMessageFeedbackDialog';
 import { NewConversationDialog } from '@/components/messages/NewConversationDialog';
 import { WhatsAppTemplateSelector } from '@/components/whatsapp/WhatsAppTemplateSelector';
@@ -468,6 +468,22 @@ export default function MessagesList() {
     };
   }, [organization?.id, refetchThreads]);
 
+  // 60s timer to recalculate 24h window
+  useEffect(() => {
+    if (!selectedThread?.last_inbound_at && !selectedThread?.whatsapp_last_inbound_at) return;
+    
+    const checkWindow = () => {
+      const lastInboundAt = selectedThread.last_inbound_at || selectedThread.whatsapp_last_inbound_at;
+      if (lastInboundAt) {
+        const hoursDiff = (Date.now() - new Date(lastInboundAt).getTime()) / (1000 * 60 * 60);
+        setIsIn24hWindow(hoursDiff < 24);
+      }
+    };
+    
+    const interval = setInterval(checkWindow, 60000);
+    return () => clearInterval(interval);
+  }, [selectedThread?.last_inbound_at, selectedThread?.whatsapp_last_inbound_at]);
+
   const scrollToBottom = () => {
     setTimeout(() => {
       scrollRef.current?.scrollIntoView({ behavior: 'smooth' });
@@ -494,8 +510,9 @@ export default function MessagesList() {
 
       // Check 24h window
       const thread = threads?.find((t) => t.id === threadId);
-      if (thread?.whatsapp_last_inbound_at) {
-        const lastInbound = new Date(thread.whatsapp_last_inbound_at);
+      const lastInboundAt = thread?.last_inbound_at || thread?.whatsapp_last_inbound_at;
+      if (lastInboundAt) {
+        const lastInbound = new Date(lastInboundAt);
         const now = new Date();
         const hoursDiff = (now.getTime() - lastInbound.getTime()) / (1000 * 60 * 60);
         setIsIn24hWindow(hoursDiff < 24);
@@ -1105,133 +1122,135 @@ export default function MessagesList() {
 
                     {/* Input Area */}
                     <div className="border-t border-border p-4 bg-card">
-                      {!isIn24hWindow && messages.length > 0 && (
-                        <div className="mb-3 p-3 rounded-lg bg-amber-50 dark:bg-amber-950/20 border border-amber-200 dark:border-amber-800">
-                          <p className="text-sm text-amber-700 dark:text-amber-300">
+                      {!isIn24hWindow && messages.length > 0 ? (
+                        <div className="flex flex-col items-center gap-3 py-4 text-center">
+                          <div className="flex items-center gap-2 text-amber-600 dark:text-amber-400">
+                            <Clock className="h-5 w-5" />
+                            <p className="text-sm font-medium">
+                              {locale === 'pt-BR' ? 'Fora da janela de 24h' : 'Outside 24h window'}
+                            </p>
+                          </div>
+                          <p className="text-xs text-muted-foreground">
                             {locale === 'pt-BR'
-                              ? 'Fora da janela de 24h. Use um template aprovado.'
-                              : 'Outside 24h window. Use an approved template.'}
+                              ? 'Use um template aprovado para reabrir a conversa'
+                              : 'Use an approved template to reopen the conversation'}
                           </p>
-                          <Button
-                            size="sm"
-                            variant="outline"
-                            className="mt-2"
-                            onClick={() => setShowTemplates(true)}
-                          >
+                          <Button onClick={() => setShowTemplates(true)} size="sm">
+                            <FileText className="w-4 h-4 mr-2" />
                             {locale === 'pt-BR' ? 'Selecionar template' : 'Select template'}
                           </Button>
                         </div>
-                      )}
+                      ) : (
+                        <>
+                          {/* Reply Preview */}
+                          {replyingTo && (
+                            <ReplyPreview
+                              message={replyingTo}
+                              onClose={() => setReplyingTo(null)}
+                            />
+                          )}
 
-                      {/* Reply Preview */}
-                      {replyingTo && (
-                        <ReplyPreview
-                          message={replyingTo}
-                          onClose={() => setReplyingTo(null)}
-                        />
-                      )}
-
-                      <div className={cn(
-                        "flex gap-2",
-                        replyingTo && "border border-t-0 border-border rounded-b-lg p-2 bg-card"
-                      )}>
-                        <div className="flex gap-1">
-                          <MediaUploadButton onFileSelected={handleFileSelected} onTemplateClick={() => setShowTemplates(true)} disabled={submitting || mediaUploading || !isIn24hWindow} />
-                          <AudioRecorder onSend={handleAudioSend} disabled={submitting || mediaUploading || !isIn24hWindow} />
-                          
-                          {/* Emoji Picker */}
-                          <Popover open={showEmojiPicker} onOpenChange={setShowEmojiPicker}>
-                            <PopoverTrigger asChild>
-                              <Button
-                                variant="ghost"
-                                size="icon"
-                                disabled={!isIn24hWindow && messages.length > 0}
-                                className="h-10 w-10"
-                              >
-                                <FaceSmile className="h-5 w-5" />
-                              </Button>
-                            </PopoverTrigger>
-                            <PopoverContent className="w-auto p-0 border-none" align="start" side="top">
-                              <EmojiPicker
-                                onEmojiClick={handleEmojiClick}
-                                theme={document.documentElement.classList.contains('dark') ? Theme.DARK : Theme.LIGHT}
-                                lazyLoadEmojis
-                                searchPlaceHolder={locale === 'pt-BR' ? 'Buscar emoji...' : 'Search emoji...'}
+                          <div className={cn(
+                            "flex gap-2",
+                            replyingTo && "border border-t-0 border-border rounded-b-lg p-2 bg-card"
+                          )}>
+                            <div className="flex gap-1">
+                              <MediaUploadButton onFileSelected={handleFileSelected} onTemplateClick={() => setShowTemplates(true)} disabled={submitting || mediaUploading} />
+                              <AudioRecorder onSend={handleAudioSend} disabled={submitting || mediaUploading} />
+                              
+                              {/* Emoji Picker */}
+                              <Popover open={showEmojiPicker} onOpenChange={setShowEmojiPicker}>
+                                <PopoverTrigger asChild>
+                                  <Button
+                                    variant="ghost"
+                                    size="icon"
+                                    className="h-10 w-10"
+                                  >
+                                    <FaceSmile className="h-5 w-5" />
+                                  </Button>
+                                </PopoverTrigger>
+                                <PopoverContent className="w-auto p-0 border-none" align="start" side="top">
+                                  <EmojiPicker
+                                    onEmojiClick={handleEmojiClick}
+                                    theme={document.documentElement.classList.contains('dark') ? Theme.DARK : Theme.LIGHT}
+                                    lazyLoadEmojis
+                                    searchPlaceHolder={locale === 'pt-BR' ? 'Buscar emoji...' : 'Search emoji...'}
+                                  />
+                                </PopoverContent>
+                              </Popover>
+                            </div>
+                            <div className="relative flex-1">
+                              <Textarea
+                                ref={textareaRef}
+                                placeholder={locale === 'pt-BR' ? 'Digite uma mensagem...' : 'Type a message...'}
+                                value={messageText}
+                                onChange={(e) => {
+                                  setMessageText(e.target.value);
+                                  adjustTextareaHeight();
+                                }}
+                                onKeyDown={(e) => {
+                                  if (e.key === 'Enter' && !e.shiftKey) {
+                                    e.preventDefault();
+                                    handleSendMessage();
+                                    if (textareaRef.current) {
+                                      textareaRef.current.style.height = 'auto';
+                                    }
+                                    setTextareaOverflow(false);
+                                  }
+                                }}
+                                rows={1}
+                                className={`w-full resize-none min-h-[40px] max-h-[150px] pr-10 ${textareaOverflow ? 'overflow-y-auto' : 'overflow-hidden'}`}
                               />
-                            </PopoverContent>
-                          </Popover>
-                        </div>
-                        <div className="relative flex-1">
-                          <Textarea
-                            ref={textareaRef}
-                            placeholder={locale === 'pt-BR' ? 'Digite uma mensagem...' : 'Type a message...'}
-                            value={messageText}
-                            onChange={(e) => {
-                              setMessageText(e.target.value);
-                              adjustTextareaHeight();
-                            }}
-                            onKeyDown={(e) => {
-                              if (e.key === 'Enter' && !e.shiftKey) {
-                                e.preventDefault();
-                                handleSendMessage();
-                                if (textareaRef.current) {
-                                  textareaRef.current.style.height = 'auto';
-                                }
-                                setTextareaOverflow(false);
-                              }
-                            }}
-                            rows={1}
-                            className={`w-full resize-none min-h-[40px] max-h-[150px] pr-10 ${textareaOverflow ? 'overflow-y-auto' : 'overflow-hidden'}`}
-                            disabled={!isIn24hWindow && messages.length > 0}
-                          />
-                          
-                          {/* AI Improve Button */}
-                          {hasAI && (
-                            <DropdownMenu open={aiMenuOpen} onOpenChange={setAiMenuOpen}>
-                              <DropdownMenuTrigger asChild>
-                                <Button
-                                  variant="ghost"
-                                  size="icon"
-                                  className="absolute right-1 top-1/2 -translate-y-1/2 h-7 w-7"
-                                  disabled={!messageText.trim() || aiImproving || (!isIn24hWindow && messages.length > 0)}
-                                >
-                                  {aiImproving ? (
-                                    <Loader2 className="h-4 w-4 animate-spin" />
-                                  ) : (
-                                    <Sparkles className="h-4 w-4 text-purple-500" />
-                                  )}
-                                </Button>
-                              </DropdownMenuTrigger>
-                              <DropdownMenuContent align="end">
-                                <DropdownMenuItem onClick={() => handleImproveText('grammar')}>
-                                  <SpellCheck className="h-4 w-4 mr-2" />
-                                  {locale === 'pt-BR' ? 'Corrigir gramática' : 'Fix grammar'}
-                                </DropdownMenuItem>
-                                <DropdownMenuItem onClick={() => handleImproveText('professional')}>
-                                  <Briefcase className="h-4 w-4 mr-2" />
-                                  {locale === 'pt-BR' ? 'Tornar profissional' : 'Make professional'}
-                                </DropdownMenuItem>
-                                <DropdownMenuItem onClick={() => handleImproveText('friendly')}>
-                                  <Smile className="h-4 w-4 mr-2" />
-                                  {locale === 'pt-BR' ? 'Tornar amigável' : 'Make friendly'}
-                                </DropdownMenuItem>
-                              </DropdownMenuContent>
-                            </DropdownMenu>
-                          )}
-                        </div>
-                        <Button
-                          onClick={handleSendMessage}
-                          disabled={submitting || !messageText.trim() || (!isIn24hWindow && messages.length > 0)}
-                          size="icon"
-                          className="bg-green-600 hover:bg-green-700 shrink-0"
-                        >
-                          {submitting ? (
-                            <Loader2 className="h-4 w-4 animate-spin" />
-                          ) : (
-                            <Send01 className="h-4 w-4" />
-                          )}
-                        </Button>
-                      </div>
+                              
+                              {/* AI Improve Button */}
+                              {hasAI && (
+                                <DropdownMenu open={aiMenuOpen} onOpenChange={setAiMenuOpen}>
+                                  <DropdownMenuTrigger asChild>
+                                    <Button
+                                      variant="ghost"
+                                      size="icon"
+                                      className="absolute right-1 top-1/2 -translate-y-1/2 h-7 w-7"
+                                      disabled={!messageText.trim() || aiImproving}
+                                    >
+                                      {aiImproving ? (
+                                        <Loader2 className="h-4 w-4 animate-spin" />
+                                      ) : (
+                                        <Sparkles className="h-4 w-4 text-purple-500" />
+                                      )}
+                                    </Button>
+                                  </DropdownMenuTrigger>
+                                  <DropdownMenuContent align="end">
+                                    <DropdownMenuItem onClick={() => handleImproveText('grammar')}>
+                                      <SpellCheck className="h-4 w-4 mr-2" />
+                                      {locale === 'pt-BR' ? 'Corrigir gramática' : 'Fix grammar'}
+                                    </DropdownMenuItem>
+                                    <DropdownMenuItem onClick={() => handleImproveText('professional')}>
+                                      <Briefcase className="h-4 w-4 mr-2" />
+                                      {locale === 'pt-BR' ? 'Tornar profissional' : 'Make professional'}
+                                    </DropdownMenuItem>
+                                    <DropdownMenuItem onClick={() => handleImproveText('friendly')}>
+                                      <Smile className="h-4 w-4 mr-2" />
+                                      {locale === 'pt-BR' ? 'Tornar amigável' : 'Make friendly'}
+                                    </DropdownMenuItem>
+                                  </DropdownMenuContent>
+                                </DropdownMenu>
+                              )}
+                            </div>
+                            <Button
+                              onClick={handleSendMessage}
+                              disabled={submitting || !messageText.trim()}
+                              size="icon"
+                              className="bg-green-600 hover:bg-green-700 shrink-0"
+                            >
+                              {submitting ? (
+                                <Loader2 className="h-4 w-4 animate-spin" />
+                              ) : (
+                                <Send01 className="h-4 w-4" />
+                              )}
+                            </Button>
+                          </div>
+                        </>
+                      )}
                     </div>
                   </>
                 )}
