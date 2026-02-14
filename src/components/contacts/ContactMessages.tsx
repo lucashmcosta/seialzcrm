@@ -53,6 +53,19 @@ interface ContactMessagesProps {
   opportunityId?: string;
 }
 
+const getLastInboundTime = (
+  thread: { last_inbound_at?: string | null; whatsapp_last_inbound_at?: string | null } | null | undefined,
+  msgs: Message[]
+): Date | null => {
+  if (thread?.last_inbound_at) return new Date(thread.last_inbound_at);
+  if (thread?.whatsapp_last_inbound_at) return new Date(thread.whatsapp_last_inbound_at);
+  const lastInbound = msgs
+    ?.filter(m => m.direction === 'inbound')
+    ?.sort((a, b) => new Date(b.sent_at).getTime() - new Date(a.sent_at).getTime())?.[0];
+  if (lastInbound) return new Date(lastInbound.sent_at);
+  return null;
+};
+
 export function ContactMessages({ contactId, opportunityId }: ContactMessagesProps) {
   const { organization, locale, userProfile } = useOrganization();
   const { t } = useTranslation(locale as 'pt-BR' | 'en-US');
@@ -168,25 +181,31 @@ export function ContactMessages({ contactId, opportunityId }: ContactMessagesPro
   useEffect(() => {
     if (!threadId) return;
     
-    const checkWindow = async () => {
-      const { data: thread } = await supabase
+    const checkWindow = () => {
+      // Use messages as fallback for window calculation
+      const threadData = { last_inbound_at: null as string | null, whatsapp_last_inbound_at: null as string | null };
+      // We'll fetch fresh thread data for accuracy
+      supabase
         .from('message_threads')
         .select('last_inbound_at, whatsapp_last_inbound_at')
         .eq('id', threadId)
-        .single();
-      
-      if (thread) {
-        const lastInboundAt = (thread as any).last_inbound_at || thread.whatsapp_last_inbound_at;
-        if (lastInboundAt) {
-          const hoursDiff = (Date.now() - new Date(lastInboundAt).getTime()) / (1000 * 60 * 60);
-          setIsIn24hWindow(hoursDiff < 24);
-        }
-      }
+        .single()
+        .then(({ data: thread }) => {
+          if (thread) {
+            const lastInboundTime = getLastInboundTime(thread as any, messages);
+            if (lastInboundTime) {
+              const hoursDiff = (Date.now() - lastInboundTime.getTime()) / (1000 * 60 * 60);
+              setIsIn24hWindow(hoursDiff < 24);
+            } else {
+              setIsIn24hWindow(false);
+            }
+          }
+        });
     };
     
     const interval = setInterval(checkWindow, 60000);
     return () => clearInterval(interval);
-  }, [threadId]);
+  }, [threadId, messages]);
 
   const scrollToBottom = () => {
     setTimeout(() => {
@@ -257,7 +276,7 @@ export function ContactMessages({ contactId, opportunityId }: ContactMessagesPro
       if (thread) {
         setThreadId(thread.id);
         
-        // Check 24h window
+        // Check 24h window - will be recalculated after messages load
         const lastInboundAt = (thread as any).last_inbound_at || thread.whatsapp_last_inbound_at;
         if (lastInboundAt) {
           const lastInbound = new Date(lastInboundAt);
@@ -286,7 +305,23 @@ export function ContactMessages({ contactId, opportunityId }: ContactMessagesPro
         .order('sent_at', { ascending: true });
 
       if (error) throw error;
-      setMessages((data as Message[]) || []);
+      const loadedMessages = (data as Message[]) || [];
+      setMessages(loadedMessages);
+      
+      // Recalculate 24h window with message fallback
+      if (!isIn24hWindow && loadedMessages.length > 0) {
+        const { data: threadData } = await supabase
+          .from('message_threads')
+          .select('last_inbound_at, whatsapp_last_inbound_at')
+          .eq('id', thread)
+          .single();
+        const lastInboundTime = getLastInboundTime(threadData as any, loadedMessages);
+        if (lastInboundTime) {
+          const hoursDiff = (Date.now() - lastInboundTime.getTime()) / (1000 * 60 * 60);
+          setIsIn24hWindow(hoursDiff < 24);
+        }
+      }
+      
       scrollToBottom();
     } catch (error) {
       console.error('Error fetching messages:', error);
@@ -537,7 +572,7 @@ export function ContactMessages({ contactId, opportunityId }: ContactMessagesPro
   // Template selector is now a Dialog, not a component replacement
 
   return (
-    <div className="flex flex-col h-[calc(100vh-320px)] min-h-[400px]">
+    <div className="flex flex-col flex-1 min-h-0">
       {/* 24h window warning removed - handled in input area */}
 
       {/* Messages */}

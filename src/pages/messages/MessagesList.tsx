@@ -179,6 +179,19 @@ const ChatListItem = ({ value, locale, className, ...otherProps }: ChatListItemP
 
 type ThreadFilter = 'all' | 'unread' | 'unanswered';
 
+const getLastInboundTime = (
+  thread: { last_inbound_at?: string | null; whatsapp_last_inbound_at?: string | null } | null | undefined,
+  msgs: Message[]
+): Date | null => {
+  if (thread?.last_inbound_at) return new Date(thread.last_inbound_at);
+  if (thread?.whatsapp_last_inbound_at) return new Date(thread.whatsapp_last_inbound_at);
+  const lastInbound = msgs
+    ?.filter(m => m.direction === 'inbound')
+    ?.sort((a, b) => new Date(b.sent_at).getTime() - new Date(a.sent_at).getTime())?.[0];
+  if (lastInbound) return new Date(lastInbound.sent_at);
+  return null;
+};
+
 export default function MessagesList() {
   const { organization, locale, userProfile } = useOrganization();
   const { t } = useTranslation(locale as 'pt-BR' | 'en-US');
@@ -470,19 +483,21 @@ export default function MessagesList() {
 
   // 60s timer to recalculate 24h window
   useEffect(() => {
-    if (!selectedThread?.last_inbound_at && !selectedThread?.whatsapp_last_inbound_at) return;
+    if (!selectedThread) return;
     
     const checkWindow = () => {
-      const lastInboundAt = selectedThread.last_inbound_at || selectedThread.whatsapp_last_inbound_at;
-      if (lastInboundAt) {
-        const hoursDiff = (Date.now() - new Date(lastInboundAt).getTime()) / (1000 * 60 * 60);
+      const lastInboundTime = getLastInboundTime(selectedThread, messages);
+      if (lastInboundTime) {
+        const hoursDiff = (Date.now() - lastInboundTime.getTime()) / (1000 * 60 * 60);
         setIsIn24hWindow(hoursDiff < 24);
+      } else {
+        setIsIn24hWindow(false);
       }
     };
     
     const interval = setInterval(checkWindow, 60000);
     return () => clearInterval(interval);
-  }, [selectedThread?.last_inbound_at, selectedThread?.whatsapp_last_inbound_at]);
+  }, [selectedThread?.id, selectedThread?.last_inbound_at, selectedThread?.whatsapp_last_inbound_at, messages]);
 
   const scrollToBottom = () => {
     setTimeout(() => {
@@ -508,13 +523,11 @@ export default function MessagesList() {
       if (error) throw error;
       setMessages((data as Message[]) || []);
 
-      // Check 24h window
+      // Check 24h window with 3-level fallback
       const thread = threads?.find((t) => t.id === threadId);
-      const lastInboundAt = thread?.last_inbound_at || thread?.whatsapp_last_inbound_at;
-      if (lastInboundAt) {
-        const lastInbound = new Date(lastInboundAt);
-        const now = new Date();
-        const hoursDiff = (now.getTime() - lastInbound.getTime()) / (1000 * 60 * 60);
+      const lastInboundTime = getLastInboundTime(thread, (data as Message[]) || []);
+      if (lastInboundTime) {
+        const hoursDiff = (Date.now() - lastInboundTime.getTime()) / (1000 * 60 * 60);
         setIsIn24hWindow(hoursDiff < 24);
       } else {
         setIsIn24hWindow(false);
@@ -828,7 +841,7 @@ export default function MessagesList() {
 
   return (
     <Layout>
-      <ResizablePanelGroup direction="horizontal" className="h-[calc(100vh-2rem)]">
+      <ResizablePanelGroup direction="horizontal" className="h-screen">
         {/* Left Panel - Chat List */}
         <ResizablePanel defaultSize={25} minSize={15} maxSize={40}>
           <div className="border-r border-border flex flex-col bg-card h-full">
