@@ -124,7 +124,7 @@ serve(async (req) => {
         } else if (context?.mode === 'friendly') {
           userPrompt = `Reescreva este texto de forma mais amigável e simpática, mantendo a mensagem. Retorne apenas o texto reescrito:\n\n${context?.text}`;
         } else if (context?.mode === 'persuasive') {
-          userPrompt = `Reescreva este texto de forma mais persuasiva, usando técnicas de copywriting para engajar e converter o prospect. Mantenha a mensagem principal. Retorne apenas o texto reescrito:\n\n${context?.text}`;
+          userPrompt = `Reescreva este texto de forma mais persuasiva para WhatsApp. Regras obrigatórias:\n- Mantenha o mesmo tamanho aproximado do texto original (não expanda)\n- NÃO use formatação: sem asteriscos, sem underline, sem listas com hífen, sem emojis excessivos\n- Use linguagem direta, humana e conversacional\n- Mantenha a mensagem principal intacta\n- Retorne APENAS o texto reescrito, sem explicações\n\nTexto original:\n${context?.text}`;
         }
         break;
       case "generate_agent_prompt":
