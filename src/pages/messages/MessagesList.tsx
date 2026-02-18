@@ -36,7 +36,7 @@ import { useQuery } from '@tanstack/react-query';
 import { formatDistanceToNow } from 'date-fns';
 import { ptBR, enUS } from 'date-fns/locale';
 import { useToast } from '@/hooks/use-toast';
-import { Loader2, Check, CheckCheck, Clock, AlertCircle, Sparkles, SpellCheck, Briefcase, Smile, Bot, MessageSquarePlus, FileText } from 'lucide-react';
+import { Loader2, Check, CheckCheck, Clock, AlertCircle, Sparkles, SpellCheck, Briefcase, Smile, Bot, MessageSquarePlus, FileText, Target } from 'lucide-react';
 import { AgentMessageFeedbackDialog } from '@/components/whatsapp/AgentMessageFeedbackDialog';
 import { NewConversationDialog } from '@/components/messages/NewConversationDialog';
 import { WhatsAppTemplateSelector } from '@/components/whatsapp/WhatsAppTemplateSelector';
@@ -158,7 +158,7 @@ const ChatListItem = ({ value, locale, className, ...otherProps }: ChatListItemP
             <span className="font-semibold text-sm text-foreground truncate">
               {value.contact_name}
             </span>
-            {value.unread && (
+            {(value.unread || value.last_message_direction === 'inbound') && (
               <span className="h-2 w-2 shrink-0 rounded-full bg-primary" />
             )}
           </div>
@@ -256,7 +256,7 @@ export default function MessagesList() {
   });
   
   // Handle AI text improvement
-  const handleImproveText = async (mode: 'grammar' | 'professional' | 'friendly') => {
+  const handleImproveText = async (mode: 'grammar' | 'professional' | 'friendly' | 'persuasive') => {
     if (!messageText.trim()) return;
     
     setAiMenuOpen(false);
@@ -1245,6 +1245,10 @@ export default function MessagesList() {
                                     <DropdownMenuItem onClick={() => handleImproveText('friendly')}>
                                       <Smile className="h-4 w-4 mr-2" />
                                       {locale === 'pt-BR' ? 'Tornar amigável' : 'Make friendly'}
+                                    </DropdownMenuItem>
+                                    <DropdownMenuItem onClick={() => handleImproveText('persuasive')}>
+                                      <Target className="h-4 w-4 mr-2" />
+                                      {locale === 'pt-BR' ? 'Tornar persuasivo' : 'Make persuasive'}
                                     </DropdownMenuItem>
                                   </DropdownMenuContent>
                                 </DropdownMenu>
