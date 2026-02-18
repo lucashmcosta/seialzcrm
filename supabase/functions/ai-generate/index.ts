@@ -233,8 +233,15 @@ Por favor, gere o prompt completo atualizado incorporando o feedback acima de fo
       if (!claudeResponse.ok) {
         const errorText = await claudeResponse.text();
         console.error("Claude API error:", claudeResponse.status, errorText);
+        let userMessage = `Erro na API do Claude: ${claudeResponse.status}`;
+        try {
+          const errorJson = JSON.parse(errorText);
+          if (errorJson?.error?.message) {
+            userMessage = errorJson.error.message;
+          }
+        } catch (_) {}
         return new Response(
-          JSON.stringify({ error: `Erro na API do Claude: ${claudeResponse.status}` }),
+          JSON.stringify({ error: userMessage }),
           { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
         );
       }
