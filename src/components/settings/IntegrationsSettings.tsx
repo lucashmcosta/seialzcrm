@@ -332,6 +332,7 @@ export function IntegrationsSettings() {
           orgIntegration={selectedOrgIntegration}
           onDisconnect={() => handleDisconnectClick(selectedOrgIntegration.id)}
           onReconfigure={handleReconfigure}
+          onConfigUpdated={() => queryClient.invalidateQueries({ queryKey: ['organization-integrations', organization?.id] })}
         />
       )}
 
