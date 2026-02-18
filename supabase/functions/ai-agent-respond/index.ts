@@ -1808,7 +1808,7 @@ serve(async (req) => {
     const toolsExecuted: string[] = [];
 
     if (integrationSlug === 'claude-ai') {
-      const model = configValues.default_model || 'claude-sonnet-4-20250514';
+      const model = configValues.default_model || 'claude-sonnet-4-6';
       const maxTokens = 1024;
       modelUsed = model;
 
