@@ -65,32 +65,17 @@ serve(async (req) => {
     const organizationId = userOrg.user_organizations[0].organization_id;
     const userId = userOrg.id;
 
-    // Find active AI integration (Claude or OpenAI)
-    const { data: aiIntegrations, error: intError } = await supabase
+    // Find active AI integration (Claude or OpenAI) — optional, falls back to Lovable AI
+    const { data: aiIntegrations } = await supabase
       .from("organization_integrations")
       .select("*, integration:admin_integrations!inner(*)")
       .eq("organization_id", organizationId)
       .eq("is_enabled", true)
       .in("integration.slug", ["claude-ai", "openai-gpt"]);
 
-    if (intError || !aiIntegrations || aiIntegrations.length === 0) {
-      return new Response(
-        JSON.stringify({ error: "No AI integration configured. Please connect Claude or ChatGPT in Settings > Integrations." }),
-        { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
-      );
-    }
-
-    // Prefer Claude if both are configured
-    const aiIntegration = aiIntegrations.find(i => i.integration.slug === "claude-ai") || aiIntegrations[0];
-    const integrationSlug = aiIntegration.integration.slug;
-    const configValues = aiIntegration.config_values as Record<string, any>;
-    
-    if (!configValues?.api_key) {
-      return new Response(
-        JSON.stringify({ error: "API key not configured for AI integration" }),
-        { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
-      );
-    }
+    const aiIntegration = aiIntegrations?.find(i => i.integration.slug === "claude-ai") || aiIntegrations?.[0] || null;
+    const integrationSlug = aiIntegration?.integration?.slug || "lovable-ai";
+    const configValues = aiIntegration?.config_values as Record<string, any> | undefined;
 
     const { action, prompt, context }: AIRequest = await req.json();
 
@@ -123,6 +108,8 @@ serve(async (req) => {
           userPrompt = `Reescreva este texto de forma mais profissional e formal, mantendo a mensagem. Retorne apenas o texto reescrito:\n\n${context?.text}`;
         } else if (context?.mode === 'friendly') {
           userPrompt = `Reescreva este texto de forma mais amigável e simpática, mantendo a mensagem. Retorne apenas o texto reescrito:\n\n${context?.text}`;
+        } else if (context?.mode === 'persuasive') {
+          userPrompt = `Reescreva este texto de forma mais persuasiva, usando técnicas de copywriting para engajar e converter o prospect. Mantenha a mensagem principal. Retorne apenas o texto reescrito:\n\n${context?.text}`;
         }
         break;
       case "generate_agent_prompt":
@@ -207,7 +194,7 @@ Por favor, gere o prompt completo atualizado incorporando o feedback acima de fo
     let tokensUsed = { prompt: 0, completion: 0, total: 0 };
     let modelUsed = "";
 
-    if (integrationSlug === "claude-ai") {
+    if (integrationSlug === "claude-ai" && configValues?.api_key) {
       // Call Claude API
       const model = configValues.default_model || "claude-sonnet-4-20250514";
       const maxTokens = configValues.max_tokens || 1024;
@@ -231,24 +218,22 @@ Por favor, gere o prompt completo atualizado incorporando o feedback acima de fo
       if (!claudeResponse.ok) {
         const errorText = await claudeResponse.text();
         console.error("Claude API error:", claudeResponse.status, errorText);
-        return new Response(
-          JSON.stringify({ error: `Claude API error: ${claudeResponse.status}` }),
-          { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
-        );
+        // Fall through to Lovable AI fallback below
+        console.log("Falling back to Lovable AI gateway...");
+      } else {
+        const claudeData = await claudeResponse.json();
+        response = {
+          content: claudeData.content?.[0]?.text || "",
+          model: claudeData.model,
+        };
+        tokensUsed = {
+          prompt: claudeData.usage?.input_tokens || 0,
+          completion: claudeData.usage?.output_tokens || 0,
+          total: (claudeData.usage?.input_tokens || 0) + (claudeData.usage?.output_tokens || 0),
+        };
       }
 
-      const claudeData = await claudeResponse.json();
-      response = {
-        content: claudeData.content?.[0]?.text || "",
-        model: claudeData.model,
-      };
-      tokensUsed = {
-        prompt: claudeData.usage?.input_tokens || 0,
-        completion: claudeData.usage?.output_tokens || 0,
-        total: (claudeData.usage?.input_tokens || 0) + (claudeData.usage?.output_tokens || 0),
-      };
-
-    } else if (integrationSlug === "openai-gpt") {
+    } else if (integrationSlug === "openai-gpt" && configValues?.api_key) {
       // Call OpenAI API
       const model = configValues.default_model || "gpt-4o-mini";
       const maxTokens = configValues.max_tokens || 1024;
@@ -279,21 +264,71 @@ Por favor, gere o prompt completo atualizado incorporando o feedback acima de fo
       if (!openaiResponse.ok) {
         const errorText = await openaiResponse.text();
         console.error("OpenAI API error:", openaiResponse.status, errorText);
+        // Fall through to Lovable AI fallback below
+        console.log("Falling back to Lovable AI gateway...");
+      } else {
+        const openaiData = await openaiResponse.json();
+        response = {
+          content: openaiData.choices?.[0]?.message?.content || "",
+          model: openaiData.model,
+        };
+        tokensUsed = {
+          prompt: openaiData.usage?.prompt_tokens || 0,
+          completion: openaiData.usage?.completion_tokens || 0,
+          total: openaiData.usage?.total_tokens || 0,
+        };
+      }
+    }
+
+    // Lovable AI gateway fallback (used when no org integration or org API fails)
+    if (!response) {
+      const lovableApiKey = Deno.env.get("LOVABLE_API_KEY");
+      if (!lovableApiKey) {
         return new Response(
-          JSON.stringify({ error: `OpenAI API error: ${openaiResponse.status}` }),
+          JSON.stringify({ error: "No AI provider available. Please configure an AI integration in Settings > Integrations." }),
           { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
         );
       }
 
-      const openaiData = await openaiResponse.json();
+      modelUsed = "google/gemini-3-flash-preview";
+      const lovableResponse = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
+        method: "POST",
+        headers: {
+          "Authorization": `Bearer ${lovableApiKey}`,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          model: modelUsed,
+          messages: [
+            { role: "system", content: systemPrompt },
+            { role: "user", content: userPrompt },
+          ],
+        }),
+      });
+
+      if (!lovableResponse.ok) {
+        const errorText = await lovableResponse.text();
+        console.error("Lovable AI gateway error:", lovableResponse.status, errorText);
+        const userMessage = lovableResponse.status === 429
+          ? "Taxa de requisições excedida. Tente novamente em alguns segundos."
+          : lovableResponse.status === 402
+          ? "Créditos de IA insuficientes."
+          : `Erro no serviço de IA: ${lovableResponse.status}`;
+        return new Response(
+          JSON.stringify({ error: userMessage }),
+          { status: lovableResponse.status, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+        );
+      }
+
+      const lovableData = await lovableResponse.json();
       response = {
-        content: openaiData.choices?.[0]?.message?.content || "",
-        model: openaiData.model,
+        content: lovableData.choices?.[0]?.message?.content || "",
+        model: modelUsed,
       };
       tokensUsed = {
-        prompt: openaiData.usage?.prompt_tokens || 0,
-        completion: openaiData.usage?.completion_tokens || 0,
-        total: openaiData.usage?.total_tokens || 0,
+        prompt: lovableData.usage?.prompt_tokens || 0,
+        completion: lovableData.usage?.completion_tokens || 0,
+        total: lovableData.usage?.total_tokens || 0,
       };
     }
 
