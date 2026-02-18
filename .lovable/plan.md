@@ -1,39 +1,29 @@
 
-# Fix: Modelos Claude incorretos — Atualizar para modelos válidos incluindo 4.5 e 4.6
+# Fix: Executar a migração que corrige os modelos Claude no banco de dados
 
-## Problema raiz
+## O que está errado
 
-O `config_schema` salvo no banco para a integração `claude-ai` tem modelos **inventados** que não existem na Anthropic:
+A edge function foi corrigida (fallback agora é `claude-3-5-sonnet-20241022`), mas a migração do banco **nunca foi executada**. O banco ainda tem:
 
+```json
+{
+  "default": "claude-sonnet-4-20250514",
+  "options": ["claude-sonnet-4-20250514", "claude-3-5-sonnet-20241022", ...]
+}
 ```
-claude-sonnet-4-20250514  ← NÃO EXISTE
-```
 
-Isso causa o erro `400` mesmo com créditos disponíveis — a Anthropic rejeita a requisição porque o modelo é inválido.
-
-Há dois lugares para corrigir:
-
-1. **Banco de dados** — o `config_schema` da tabela `admin_integrations` (lista de opções do select)
-2. **Edge function** — o fallback hardcoded `"claude-sonnet-4-20250514"` na linha 214
-
-## Modelos Claude válidos (Feb 2026)
-
-| Modelo | ID na API | Velocidade | Capacidade |
-|--------|-----------|------------|------------|
-| Claude 3.5 Haiku | `claude-3-5-haiku-20241022` | Rápido | Básico |
-| Claude 3.5 Sonnet | `claude-3-5-sonnet-20241022` | Médio | Melhor custo-benefício |
-| Claude 3.7 Sonnet | `claude-3-7-sonnet-20250219` | Médio | Raciocínio avançado |
-| Claude Sonnet 4 | `claude-sonnet-4-5` | Médio | Alta performance |
-| Claude Sonnet 4.5 | `claude-sonnet-4-5` | Médio | Claude mais recente |
-| Claude Opus 4 | `claude-opus-4-5` | Lento | Máxima capacidade |
-
-> Os modelos 4.5 e 4.6 usam o identificador `claude-sonnet-4-5` e `claude-opus-4-5` na API da Anthropic (nomeação interna da Anthropic para os "Claude 4" family).
+Isso causa dois problemas:
+1. A UI de integração mostra `claude-sonnet-4-20250514` como modelo selecionado (inválido)
+2. Quando o usuário reconecta a integração, salva `claude-sonnet-4-20250514` no `config_values` — quebrando tudo novamente
+3. As organizações sem `default_model` no `config_values` usam o fallback do código (corrigido), mas o `config_schema` ainda mostra o modelo inválido como padrão
 
 ## Mudanças necessárias
 
-### 1. Banco de dados — `admin_integrations` (via SQL)
+### 1. Migração SQL — corrigir `config_schema` no banco
 
-Atualizar o `config_schema` da integração `claude-ai` com modelos válidos e adicionar os novos:
+Atualizar o campo `default_model` no `config_schema` da integração `claude-ai` com:
+- Valor padrão correto: `claude-3-5-sonnet-20241022`
+- Opções válidas incluindo os modelos 3.5, 3.7, Sonnet 4.5 e Opus 4
 
 ```sql
 UPDATE admin_integrations
@@ -59,29 +49,30 @@ SET config_schema = jsonb_set(
 WHERE slug = 'claude-ai';
 ```
 
-### 2. Edge function — `supabase/functions/ai-generate/index.ts`
+### 2. Corrigir `config_values` das organizações existentes que têm modelo inválido salvo
 
-Corrigir o fallback hardcoded na linha 214:
+As organizações que já conectaram e salvaram `default_model: "claude-sonnet-4-20250514"` precisam ser corrigidas:
 
-```typescript
-// ANTES (modelo inválido)
-const model = configValues.default_model || "claude-sonnet-4-20250514";
-
-// DEPOIS (modelo válido como fallback)
-const model = configValues.default_model || "claude-3-5-sonnet-20241022";
+```sql
+UPDATE organization_integrations
+SET config_values = config_values - 'default_model' || '{"default_model": "claude-3-5-sonnet-20241022"}'::jsonb
+WHERE integration_id = (SELECT id FROM admin_integrations WHERE slug = 'claude-ai')
+AND config_values->>'default_model' = 'claude-sonnet-4-20250514';
 ```
 
-### 3. Atualizar `config_values` da organização existente
+### 3. Resultado esperado
 
-A organização do usuário já tem `config_values` salvo **sem** `default_model` (confirmado pelo banco: apenas `api_key` e `max_tokens`). Como o fallback no edge function estava inválido, isso causava o erro.
+Após a migração:
+- A UI vai mostrar as opções corretas (3.5 Haiku, 3.5 Sonnet, 3.7 Sonnet, Sonnet 4.5, Opus 4)
+- O modelo padrão será `claude-3-5-sonnet-20241022` (válido)
+- Organizações com modelo inválido salvo serão corrigidas automaticamente
+- Nenhuma reconexão necessária pelo usuário
 
-Após corrigir o edge function, o fallback `"claude-3-5-sonnet-20241022"` será usado automaticamente — sem precisar que o usuário reconecte a integração.
+## Arquivos afetados
 
-## Resumo de arquivos
+| Recurso | Mudança |
+|---------|---------|
+| `admin_integrations` (banco) | Atualizar `config_schema` com modelos válidos |
+| `organization_integrations` (banco) | Corrigir `default_model` inválido nas orgs existentes |
 
-| Arquivo/Recurso | Mudança |
-|----------------|---------|
-| `admin_integrations` (banco) | Atualizar `config_schema` com modelos válidos incluindo 4.5 e 4.6 |
-| `supabase/functions/ai-generate/index.ts` | Corrigir fallback de `claude-sonnet-4-20250514` para `claude-3-5-sonnet-20241022` |
-
-**Sem mudanças no frontend.** O `IntegrationConnectDialog` lê as opções dinamicamente do `config_schema` — automaticamente mostrará os novos modelos ao reconectar.
+Nenhuma mudança em arquivos de código — apenas dados no banco.
