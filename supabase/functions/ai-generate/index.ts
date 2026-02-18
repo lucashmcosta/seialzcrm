@@ -211,7 +211,7 @@ Por favor, gere o prompt completo atualizado incorporando o feedback acima de fo
 
     if (integrationSlug === "claude-ai" && configValues?.api_key) {
       // Call Claude API
-      const model = configValues.default_model || "claude-sonnet-4-20250514";
+      const model = configValues.default_model || "claude-3-5-sonnet-20241022";
       const maxTokens = configValues.max_tokens || 1024;
       modelUsed = model;
 
