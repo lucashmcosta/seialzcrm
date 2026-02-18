@@ -1,78 +1,104 @@
 
-# Fix: Executar a migração que corrige os modelos Claude no banco de dados
+# Fix: Edição inline de configurações sem precisar reconfigurar
 
-## O que está errado
+## Problema identificado
 
-A edge function foi corrigida (fallback agora é `claude-3-5-sonnet-20241022`), mas a migração do banco **nunca foi executada**. O banco ainda tem:
+O `IntegrationDetailDialog` exibe os campos como **somente leitura** (texto mascarado em caixas cinzas). Para alterar qualquer campo — incluindo o modelo Claude — a empresa é forçada a clicar em "Reconfigurar", que reseta tudo e exige digitar novamente todas as credenciais do zero.
 
-```json
-{
-  "default": "claude-sonnet-4-20250514",
-  "options": ["claude-sonnet-4-20250514", "claude-3-5-sonnet-20241022", ...]
-}
+Isso é especialmente problemático para Claude porque:
+1. O campo `default_model` não aparece (não estava salvo no `config_values`)
+2. A empresa precisa redigitar a API key inteira para só trocar o modelo
+
+## Solução
+
+Adicionar um **botão "Editar"** no `IntegrationDetailDialog` que transforma os campos em inputs editáveis. Ao salvar, atualiza apenas os `config_values` no banco — sem desconectar, sem perder nada.
+
+O fluxo:
+- **Modo visualização** (padrão): campos mascarados como hoje, mais botão "Editar"
+- **Modo edição**: campos viram inputs/selects editáveis (usando o `config_schema` da integração)
+- **Salvar**: faz `UPDATE` em `organization_integrations.config_values` — sem tocar em `is_enabled` nem `connected_at`
+- **Cancelar**: volta ao modo visualização sem salvar
+
+## Mudanças técnicas
+
+### 1. `IntegrationDetailDialog.tsx` — Adicionar modo de edição
+
+**Props novas necessárias:**
+- `integrationSchema: any` — o `config_schema` da integração (para renderizar os campos corretamente)
+
+**Estado novo:**
+```tsx
+const [isEditing, setIsEditing] = useState(false);
+const [editValues, setEditValues] = useState<Record<string, any>>({});
+const [isSaving, setIsSaving] = useState(false);
 ```
 
-Isso causa dois problemas:
-1. A UI de integração mostra `claude-sonnet-4-20250514` como modelo selecionado (inválido)
-2. Quando o usuário reconecta a integração, salva `claude-sonnet-4-20250514` no `config_values` — quebrando tudo novamente
-3. As organizações sem `default_model` no `config_values` usam o fallback do código (corrigido), mas o `config_schema` ainda mostra o modelo inválido como padrão
+**Lógica de edição:**
+- Ao clicar em "Editar": copiar `configValues` atual para `editValues` (pré-populado com valores existentes, incluindo defaults do schema para campos sem valor)
+- Para campos sensíveis (api_key): mostrar input vazio com placeholder "Deixe em branco para manter atual" — ao salvar, se vazio, não sobrescreve o valor existente
+- Para campos não-sensíveis (max_tokens, default_model): mostrar com valor atual pré-preenchido
 
-## Mudanças necessárias
+**Renderização em modo edição:**
+- Ler campos do `config_schema.fields` e renderizar cada um como input/select (mesmo padrão do `IntegrationConnectDialog`)
+- Campo sensível vazio = manter valor atual no save
 
-### 1. Migração SQL — corrigir `config_schema` no banco
-
-Atualizar o campo `default_model` no `config_schema` da integração `claude-ai` com:
-- Valor padrão correto: `claude-3-5-sonnet-20241022`
-- Opções válidas incluindo os modelos 3.5, 3.7, Sonnet 4.5 e Opus 4
-
-```sql
-UPDATE admin_integrations
-SET config_schema = jsonb_set(
-  config_schema,
-  '{fields,1}',
-  '{
-    "key": "default_model",
-    "label": "Modelo Padrão",
-    "type": "select",
-    "required": true,
-    "default": "claude-3-5-sonnet-20241022",
-    "description": "Modelo a ser usado nas requisições",
-    "options": [
-      "claude-3-5-haiku-20241022",
-      "claude-3-5-sonnet-20241022",
-      "claude-3-7-sonnet-20250219",
-      "claude-sonnet-4-5",
-      "claude-opus-4-5"
-    ]
-  }'::jsonb
-)
-WHERE slug = 'claude-ai';
+**Lógica de salvar:**
+```tsx
+const handleSave = async () => {
+  // Montar novo config_values:
+  // Para cada campo no schema:
+  //   - Se sensível E editValues[key] está vazio → manter configValues[key] (valor atual)
+  //   - Caso contrário → usar editValues[key]
+  const merged = { ...configValues };
+  for (const field of schema.fields) {
+    if (isSensitiveField(field.key) && !editValues[field.key]) {
+      // mantém valor atual
+    } else if (editValues[field.key] !== undefined) {
+      merged[field.key] = editValues[field.key];
+    }
+  }
+  
+  await supabase
+    .from('organization_integrations')
+    .update({ config_values: merged })
+    .eq('id', orgIntegration.id);
+};
 ```
 
-### 2. Corrigir `config_values` das organizações existentes que têm modelo inválido salvo
+### 2. `IntegrationsSettings.tsx` — Passar `config_schema` para o dialog
 
-As organizações que já conectaram e salvaram `default_model: "claude-sonnet-4-20250514"` precisam ser corrigidas:
+Atualmente o dialog recebe `integration` (que já contém `config_schema`). Precisamos garantir que `IntegrationDetailDialog` acesse `integration.config_schema`.
 
-```sql
-UPDATE organization_integrations
-SET config_values = config_values - 'default_model' || '{"default_model": "claude-3-5-sonnet-20241022"}'::jsonb
-WHERE integration_id = (SELECT id FROM admin_integrations WHERE slug = 'claude-ai')
-AND config_values->>'default_model' = 'claude-sonnet-4-20250514';
+### 3. Layout do dialog em modo edição
+
+- Substituir o bloco `renderGenericConfig()` (campos read-only) por campos editáveis quando `isEditing === true`
+- Botões no footer mudam de `[Reconfigurar] [Desconectar]` para `[Salvar] [Cancelar]` (quando editando)
+- Quando não está editando: adicionar botão "Editar" ao lado de "Reconfigurar"
+
+### Layout proposto do footer:
+
+**Modo visualização:**
+```
+[Editar]  [Reconfigurar]  [Desconectar]
 ```
 
-### 3. Resultado esperado
+**Modo edição:**
+```
+[Cancelar]  [Salvar]
+```
 
-Após a migração:
-- A UI vai mostrar as opções corretas (3.5 Haiku, 3.5 Sonnet, 3.7 Sonnet, Sonnet 4.5, Opus 4)
-- O modelo padrão será `claude-3-5-sonnet-20241022` (válido)
-- Organizações com modelo inválido salvo serão corrigidas automaticamente
-- Nenhuma reconexão necessária pelo usuário
+## Comportamento especial para campos sensíveis
 
-## Arquivos afetados
+Campos como `api_key`, `auth_token`, `password`:
+- Input de texto com `type="password"`
+- Placeholder: `"Deixe em branco para manter a chave atual"`
+- Se enviado vazio: **mantém o valor salvo no banco** (não sobrescreve)
+- Se preenchido: substitui pelo novo valor
 
-| Recurso | Mudança |
+## Arquivos alterados
+
+| Arquivo | Mudança |
 |---------|---------|
-| `admin_integrations` (banco) | Atualizar `config_schema` com modelos válidos |
-| `organization_integrations` (banco) | Corrigir `default_model` inválido nas orgs existentes |
+| `src/components/settings/IntegrationDetailDialog.tsx` | Adicionar modo edição com campos do schema |
 
-Nenhuma mudança em arquivos de código — apenas dados no banco.
+Nenhuma mudança no banco de dados necessária. O `config_schema` já existe na integração (campo `integration` passado via props).
