@@ -1,104 +1,106 @@
 
-# Fix: Edição inline de configurações sem precisar reconfigurar
+# Fix: Corrigir modelos Claude com IDs reais da API Anthropic (Feb 2026)
 
-## Problema identificado
+## O problema agora
 
-O `IntegrationDetailDialog` exibe os campos como **somente leitura** (texto mascarado em caixas cinzas). Para alterar qualquer campo — incluindo o modelo Claude — a empresa é forçada a clicar em "Reconfigurar", que reseta tudo e exige digitar novamente todas as credenciais do zero.
+O dropdown mostra:
+- `claude-sonnet-4-20250514` — **NÃO EXISTE** na API
+- `claude-3-opus-20240229` — modelo antigo (Claude 3, não Claude 4)
 
-Isso é especialmente problemático para Claude porque:
-1. O campo `default_model` não aparece (não estava salvo no `config_values`)
-2. A empresa precisa redigitar a API key inteira para só trocar o modelo
+O banco (`admin_integrations.config_schema`) NUNCA foi atualizado com os IDs corretos. A migração SQL dos planos anteriores nunca foi executada — por isso os modelos errados continuam aparecendo.
 
-## Solução
+## IDs corretos da API Anthropic (confirmados na screenshot do docs)
 
-Adicionar um **botão "Editar"** no `IntegrationDetailDialog` que transforma os campos em inputs editáveis. Ao salvar, atualiza apenas os `config_values` no banco — sem desconectar, sem perder nada.
+| Nome | API ID | Descrição |
+|------|--------|-----------|
+| Claude Haiku 4.5 | `claude-haiku-4-5` | Mais rápido, $1/MTok |
+| Claude Sonnet 4.6 | `claude-sonnet-4-6` | Melhor custo-benefício, $3/MTok |
+| Claude Opus 4.6 | `claude-opus-4-6` | Mais inteligente, $5/MTok |
+| Claude 3.5 Sonnet | `claude-3-5-sonnet-20241022` | Legado, ainda válido |
+| Claude 3.5 Haiku | `claude-3-5-haiku-20241022` | Legado, rápido |
+| Claude 3.7 Sonnet | `claude-3-7-sonnet-20250219` | Legado, raciocínio |
 
-O fluxo:
-- **Modo visualização** (padrão): campos mascarados como hoje, mais botão "Editar"
-- **Modo edição**: campos viram inputs/selects editáveis (usando o `config_schema` da integração)
-- **Salvar**: faz `UPDATE` em `organization_integrations.config_values` — sem tocar em `is_enabled` nem `connected_at`
-- **Cancelar**: volta ao modo visualização sem salvar
+## Mudanças necessárias
 
-## Mudanças técnicas
+### 1. Migration SQL — `admin_integrations` (arquivo novo em `supabase/migrations/`)
 
-### 1. `IntegrationDetailDialog.tsx` — Adicionar modo de edição
+Criar arquivo de migração que executa o UPDATE no banco com os modelos corretos:
 
-**Props novas necessárias:**
-- `integrationSchema: any` — o `config_schema` da integração (para renderizar os campos corretamente)
-
-**Estado novo:**
-```tsx
-const [isEditing, setIsEditing] = useState(false);
-const [editValues, setEditValues] = useState<Record<string, any>>({});
-const [isSaving, setIsSaving] = useState(false);
-```
-
-**Lógica de edição:**
-- Ao clicar em "Editar": copiar `configValues` atual para `editValues` (pré-populado com valores existentes, incluindo defaults do schema para campos sem valor)
-- Para campos sensíveis (api_key): mostrar input vazio com placeholder "Deixe em branco para manter atual" — ao salvar, se vazio, não sobrescreve o valor existente
-- Para campos não-sensíveis (max_tokens, default_model): mostrar com valor atual pré-preenchido
-
-**Renderização em modo edição:**
-- Ler campos do `config_schema.fields` e renderizar cada um como input/select (mesmo padrão do `IntegrationConnectDialog`)
-- Campo sensível vazio = manter valor atual no save
-
-**Lógica de salvar:**
-```tsx
-const handleSave = async () => {
-  // Montar novo config_values:
-  // Para cada campo no schema:
-  //   - Se sensível E editValues[key] está vazio → manter configValues[key] (valor atual)
-  //   - Caso contrário → usar editValues[key]
-  const merged = { ...configValues };
-  for (const field of schema.fields) {
-    if (isSensitiveField(field.key) && !editValues[field.key]) {
-      // mantém valor atual
-    } else if (editValues[field.key] !== undefined) {
-      merged[field.key] = editValues[field.key];
+```sql
+UPDATE admin_integrations
+SET config_schema = '{
+  "fields": [
+    {
+      "key": "api_key",
+      "label": "API Key",
+      "type": "password",
+      "required": true,
+      "placeholder": "sk-ant-api03-...",
+      "description": "Encontre sua API key em console.anthropic.com"
+    },
+    {
+      "key": "default_model",
+      "label": "Modelo Padrão",
+      "type": "select",
+      "required": true,
+      "default": "claude-sonnet-4-6",
+      "description": "Modelo a ser usado nas requisições",
+      "options": [
+        "claude-haiku-4-5",
+        "claude-sonnet-4-6",
+        "claude-opus-4-6",
+        "claude-3-5-haiku-20241022",
+        "claude-3-5-sonnet-20241022",
+        "claude-3-7-sonnet-20250219"
+      ]
+    },
+    {
+      "key": "max_tokens",
+      "label": "Max Tokens",
+      "type": "number",
+      "required": false,
+      "default": 1024,
+      "description": "Limite máximo de tokens por resposta"
     }
-  }
-  
-  await supabase
-    .from('organization_integrations')
-    .update({ config_values: merged })
-    .eq('id', orgIntegration.id);
-};
+  ]
+}'::jsonb
+WHERE slug = 'claude-ai';
+
+-- Corrigir organizações que têm modelos inválidos salvos
+UPDATE organization_integrations
+SET config_values = config_values - 'default_model' || '{"default_model": "claude-sonnet-4-6"}'::jsonb
+WHERE integration_id = (SELECT id FROM admin_integrations WHERE slug = 'claude-ai')
+AND (
+  config_values->>'default_model' = 'claude-sonnet-4-20250514'
+  OR config_values->>'default_model' = 'claude-3-opus-20240229'
+  OR config_values->>'default_model' IS NULL
+  OR config_values->>'default_model' = ''
+);
 ```
 
-### 2. `IntegrationsSettings.tsx` — Passar `config_schema` para o dialog
+### 2. `supabase/functions/ai-generate/index.ts` — Atualizar fallback
 
-Atualmente o dialog recebe `integration` (que já contém `config_schema`). Precisamos garantir que `IntegrationDetailDialog` acesse `integration.config_schema`.
-
-### 3. Layout do dialog em modo edição
-
-- Substituir o bloco `renderGenericConfig()` (campos read-only) por campos editáveis quando `isEditing === true`
-- Botões no footer mudam de `[Reconfigurar] [Desconectar]` para `[Salvar] [Cancelar]` (quando editando)
-- Quando não está editando: adicionar botão "Editar" ao lado de "Reconfigurar"
-
-### Layout proposto do footer:
-
-**Modo visualização:**
-```
-[Editar]  [Reconfigurar]  [Desconectar]
+Linha 214 atualmente tem:
+```typescript
+const model = configValues.default_model || "claude-3-5-sonnet-20241022";
 ```
 
-**Modo edição:**
-```
-[Cancelar]  [Salvar]
+Atualizar para o modelo mais recente e válido:
+```typescript
+const model = configValues.default_model || "claude-sonnet-4-6";
 ```
 
-## Comportamento especial para campos sensíveis
+## Resultado esperado
 
-Campos como `api_key`, `auth_token`, `password`:
-- Input de texto com `type="password"`
-- Placeholder: `"Deixe em branco para manter a chave atual"`
-- Se enviado vazio: **mantém o valor salvo no banco** (não sobrescreve)
-- Se preenchido: substitui pelo novo valor
+Após as mudanças:
+- Dropdown mostrará: `claude-haiku-4-5`, `claude-sonnet-4-6`, `claude-opus-4-6` (+ 3 legados)
+- Default será `claude-sonnet-4-6` (válido e recomendado)
+- Organizações com modelo inválido salvo serão corrigidas automaticamente
+- Edge function usará `claude-sonnet-4-6` como fallback
 
 ## Arquivos alterados
 
 | Arquivo | Mudança |
 |---------|---------|
-| `src/components/settings/IntegrationDetailDialog.tsx` | Adicionar modo edição com campos do schema |
-
-Nenhuma mudança no banco de dados necessária. O `config_schema` já existe na integração (campo `integration` passado via props).
+| `supabase/migrations/[timestamp]_fix_claude_models.sql` | Novo — corrige config_schema e org configs |
+| `supabase/functions/ai-generate/index.ts` | Atualiza fallback para `claude-sonnet-4-6` |
