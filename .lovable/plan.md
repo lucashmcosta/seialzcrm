@@ -1,44 +1,79 @@
 
+# Two Small Improvements to the Messages Module
 
-# Fix: Impedir Scroll da Pagina Inteira no Modulo de Mensagens
+## Change 1: Blue dot always visible when last message is from the client
 
-## Causa raiz
+### Current behavior
+The blue dot in the conversation list (`ChatListItem`) only appears when `value.unread === true`. This means if an agent has already read a message but hasn't replied, the dot disappears and there's no visual indicator that the last message was inbound (from the client).
 
-O problema esta em duas camadas:
+### Desired behavior
+The blue dot should always be shown (even if read) when the last message in the thread came from the client (`last_message_direction === 'inbound'`). The dot can stay the same blue color (`bg-primary`) — it now serves double duty as an "unread" indicator and an "unanswered inbound" indicator.
 
-1. **Layout.tsx (linha 183)**: `<main className="min-h-screen">` forca o conteudo a ter no minimo a altura da viewport, permitindo que cresça alem dela e cause scroll na pagina.
-2. **MessagesList.tsx (linha 844)**: `ResizablePanelGroup` tem `h-screen`, mas esta dentro do `<main>` que permite overflow -- entao a pagina inteira rola em vez de apenas as areas internas.
+### Implementation
+In `ChatListItem` (lines 161-163 of `MessagesList.tsx`), change the condition from:
 
-## Solucao
-
-### 1. MessagesList.tsx -- Envolver tudo em container fixo
-
-Adicionar um wrapper `div` com `h-screen overflow-hidden` ao redor do `ResizablePanelGroup` (dentro do `<Layout>`, antes do panel group). Isso garante que o modulo de mensagens nunca ultrapasse a viewport.
-
-```
-<Layout>
-  <div className="h-screen overflow-hidden">
-    <ResizablePanelGroup direction="horizontal" className="h-full">
-      ...
-    </ResizablePanelGroup>
-  </div>
-</Layout>
+```tsx
+// Before — only shows if unread
+{value.unread && (
+  <span className="h-2 w-2 shrink-0 rounded-full bg-primary" />
+)}
 ```
 
-Mudanca: linha 844 -- trocar `className="h-screen"` do ResizablePanelGroup para `className="h-full"`, e envolver com o div fixo.
+To:
 
-### 2. Garantir overflow-hidden nos paineis
+```tsx
+// After — shows if unread OR last message is from client
+{(value.unread || value.last_message_direction === 'inbound') && (
+  <span className="h-2 w-2 shrink-0 rounded-full bg-primary" />
+)}
+```
 
-- **Painel esquerdo (linha 847)**: Ja tem `flex flex-col h-full` -- adicionar `overflow-hidden` para evitar vazamento
-- **Painel direito**: Verificar se o container do chat tambem tem `overflow-hidden`
+---
 
-### Nenhuma mudanca no Layout.tsx
+## Change 2: Add "Tornar persuasivo" option to the AI menu
 
-O Layout serve outras paginas que precisam de scroll (Dashboard, Contatos, etc). A solucao e o proprio MessagesList controlar sua altura, nao alterar o Layout global.
+### Current options (3)
+1. Corrigir gramática (`grammar`)
+2. Tornar profissional (`professional`)
+3. Tornar amigável (`friendly`)
 
-## Arquivos afetados
+### New option (4th)
+**Tornar persuasivo** (`persuasive`) — rewrites the text with persuasive language aimed at converting/engaging the prospect.
 
-| Arquivo | Mudanca |
-|---------|---------|
-| `src/pages/messages/MessagesList.tsx` | Envolver conteudo com `div h-screen overflow-hidden`; ajustar classes do ResizablePanelGroup e paineis |
+### Implementation
 
+**Step 1 — Extend the type in `handleImproveText`** (line 259):
+
+```typescript
+// Before
+const handleImproveText = async (mode: 'grammar' | 'professional' | 'friendly') => {
+
+// After
+const handleImproveText = async (mode: 'grammar' | 'professional' | 'friendly' | 'persuasive') => {
+```
+
+**Step 2 — Add the menu item** in the `DropdownMenuContent` (after line 1248, after the "Tornar amigável" item):
+
+```tsx
+<DropdownMenuItem onClick={() => handleImproveText('persuasive')}>
+  <Target className="h-4 w-4 mr-2" />
+  {locale === 'pt-BR' ? 'Tornar persuasivo' : 'Make persuasive'}
+</DropdownMenuItem>
+```
+
+Use the `Target` icon from `lucide-react` (already installed). Add `Target` to the existing lucide-react import on line 39.
+
+**Step 3 — The `ai-generate` edge function** already handles the `improve_text` action and receives `{ text, mode }` in the context. The `persuasive` mode value will be passed through, and the AI prompt should handle it naturally. No edge function changes needed — the AI will interpret the `persuasive` mode and apply persuasive copywriting techniques.
+
+---
+
+## Files to change
+
+| File | Lines | Change |
+|------|-------|--------|
+| `src/pages/messages/MessagesList.tsx` | 39 | Add `Target` to lucide-react imports |
+| `src/pages/messages/MessagesList.tsx` | 161-163 | Show dot when `unread OR last_message_direction === 'inbound'` |
+| `src/pages/messages/MessagesList.tsx` | 259 | Add `'persuasive'` to the mode union type |
+| `src/pages/messages/MessagesList.tsx` | 1245-1249 | Add new `DropdownMenuItem` for "Tornar persuasivo" |
+
+All changes are in a single file — small and contained.
