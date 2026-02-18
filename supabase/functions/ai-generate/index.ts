@@ -65,17 +65,32 @@ serve(async (req) => {
     const organizationId = userOrg.user_organizations[0].organization_id;
     const userId = userOrg.id;
 
-    // Find active AI integration (Claude or OpenAI) — optional, falls back to Lovable AI
-    const { data: aiIntegrations } = await supabase
+    // Find active AI integration (Claude or OpenAI)
+    const { data: aiIntegrations, error: intError } = await supabase
       .from("organization_integrations")
       .select("*, integration:admin_integrations!inner(*)")
       .eq("organization_id", organizationId)
       .eq("is_enabled", true)
       .in("integration.slug", ["claude-ai", "openai-gpt"]);
 
-    const aiIntegration = aiIntegrations?.find(i => i.integration.slug === "claude-ai") || aiIntegrations?.[0] || null;
-    const integrationSlug = aiIntegration?.integration?.slug || "lovable-ai";
-    const configValues = aiIntegration?.config_values as Record<string, any> | undefined;
+    if (intError || !aiIntegrations || aiIntegrations.length === 0) {
+      return new Response(
+        JSON.stringify({ error: "Nenhuma integração de IA configurada. Conecte o Claude ou ChatGPT em Configurações > Integrações." }),
+        { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
+    }
+
+    // Prefer Claude if both are configured
+    const aiIntegration = aiIntegrations.find(i => i.integration.slug === "claude-ai") || aiIntegrations[0];
+    const integrationSlug = aiIntegration.integration.slug;
+    const configValues = aiIntegration.config_values as Record<string, any>;
+
+    if (!configValues?.api_key) {
+      return new Response(
+        JSON.stringify({ error: "API key não configurada para a integração de IA." }),
+        { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
+    }
 
     const { action, prompt, context }: AIRequest = await req.json();
 
@@ -218,39 +233,41 @@ Por favor, gere o prompt completo atualizado incorporando o feedback acima de fo
       if (!claudeResponse.ok) {
         const errorText = await claudeResponse.text();
         console.error("Claude API error:", claudeResponse.status, errorText);
-        // Fall through to Lovable AI fallback below
-        console.log("Falling back to Lovable AI gateway...");
-      } else {
-        const claudeData = await claudeResponse.json();
-        response = {
-          content: claudeData.content?.[0]?.text || "",
-          model: claudeData.model,
-        };
-        tokensUsed = {
-          prompt: claudeData.usage?.input_tokens || 0,
-          completion: claudeData.usage?.output_tokens || 0,
-          total: (claudeData.usage?.input_tokens || 0) + (claudeData.usage?.output_tokens || 0),
-        };
+        return new Response(
+          JSON.stringify({ error: `Erro na API do Claude: ${claudeResponse.status}` }),
+          { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+        );
       }
 
-    } else if (integrationSlug === "openai-gpt" && configValues?.api_key) {
+      const claudeData = await claudeResponse.json();
+      response = {
+        content: claudeData.content?.[0]?.text || "",
+        model: claudeData.model,
+      };
+      tokensUsed = {
+        prompt: claudeData.usage?.input_tokens || 0,
+        completion: claudeData.usage?.output_tokens || 0,
+        total: (claudeData.usage?.input_tokens || 0) + (claudeData.usage?.output_tokens || 0),
+      };
+
+    } else if (integrationSlug === "openai-gpt") {
       // Call OpenAI API
       const model = configValues.default_model || "gpt-4o-mini";
       const maxTokens = configValues.max_tokens || 1024;
       modelUsed = model;
 
-      const headers: Record<string, string> = {
+      const openaiHeaders: Record<string, string> = {
         "Content-Type": "application/json",
         "Authorization": `Bearer ${configValues.api_key}`,
       };
 
       if (configValues.organization_id) {
-        headers["OpenAI-Organization"] = configValues.organization_id;
+        openaiHeaders["OpenAI-Organization"] = configValues.organization_id;
       }
 
       const openaiResponse = await fetch("https://api.openai.com/v1/chat/completions", {
         method: "POST",
-        headers,
+        headers: openaiHeaders,
         body: JSON.stringify({
           model,
           max_tokens: maxTokens,
@@ -264,71 +281,21 @@ Por favor, gere o prompt completo atualizado incorporando o feedback acima de fo
       if (!openaiResponse.ok) {
         const errorText = await openaiResponse.text();
         console.error("OpenAI API error:", openaiResponse.status, errorText);
-        // Fall through to Lovable AI fallback below
-        console.log("Falling back to Lovable AI gateway...");
-      } else {
-        const openaiData = await openaiResponse.json();
-        response = {
-          content: openaiData.choices?.[0]?.message?.content || "",
-          model: openaiData.model,
-        };
-        tokensUsed = {
-          prompt: openaiData.usage?.prompt_tokens || 0,
-          completion: openaiData.usage?.completion_tokens || 0,
-          total: openaiData.usage?.total_tokens || 0,
-        };
-      }
-    }
-
-    // Lovable AI gateway fallback (used when no org integration or org API fails)
-    if (!response) {
-      const lovableApiKey = Deno.env.get("LOVABLE_API_KEY");
-      if (!lovableApiKey) {
         return new Response(
-          JSON.stringify({ error: "No AI provider available. Please configure an AI integration in Settings > Integrations." }),
+          JSON.stringify({ error: `Erro na API do OpenAI: ${openaiResponse.status}` }),
           { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
         );
       }
 
-      modelUsed = "google/gemini-3-flash-preview";
-      const lovableResponse = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
-        method: "POST",
-        headers: {
-          "Authorization": `Bearer ${lovableApiKey}`,
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          model: modelUsed,
-          messages: [
-            { role: "system", content: systemPrompt },
-            { role: "user", content: userPrompt },
-          ],
-        }),
-      });
-
-      if (!lovableResponse.ok) {
-        const errorText = await lovableResponse.text();
-        console.error("Lovable AI gateway error:", lovableResponse.status, errorText);
-        const userMessage = lovableResponse.status === 429
-          ? "Taxa de requisições excedida. Tente novamente em alguns segundos."
-          : lovableResponse.status === 402
-          ? "Créditos de IA insuficientes."
-          : `Erro no serviço de IA: ${lovableResponse.status}`;
-        return new Response(
-          JSON.stringify({ error: userMessage }),
-          { status: lovableResponse.status, headers: { ...corsHeaders, "Content-Type": "application/json" } }
-        );
-      }
-
-      const lovableData = await lovableResponse.json();
+      const openaiData = await openaiResponse.json();
       response = {
-        content: lovableData.choices?.[0]?.message?.content || "",
-        model: modelUsed,
+        content: openaiData.choices?.[0]?.message?.content || "",
+        model: openaiData.model,
       };
       tokensUsed = {
-        prompt: lovableData.usage?.prompt_tokens || 0,
-        completion: lovableData.usage?.completion_tokens || 0,
-        total: lovableData.usage?.total_tokens || 0,
+        prompt: openaiData.usage?.prompt_tokens || 0,
+        completion: openaiData.usage?.completion_tokens || 0,
+        total: openaiData.usage?.total_tokens || 0,
       };
     }
 
