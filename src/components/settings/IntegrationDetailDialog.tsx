@@ -3,7 +3,8 @@ import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } f
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Label } from '@/components/ui/label';
-import { Phone, CheckCircle2, XCircle, Settings2, ExternalLink, Loader2, RefreshCw, Wrench } from 'lucide-react';
+import { Input } from '@/components/ui/input';
+import { Phone, CheckCircle2, XCircle, Settings2, ExternalLink, Loader2, RefreshCw, Wrench, Pencil } from 'lucide-react';
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { formatPhoneDisplay } from '@/lib/phoneUtils';
@@ -17,6 +18,7 @@ interface IntegrationDetailDialogProps {
   orgIntegration: any;
   onDisconnect: () => void;
   onReconfigure: () => void;
+  onConfigUpdated?: () => void;
 }
 
 interface SenderDetail {
@@ -43,13 +45,20 @@ export function IntegrationDetailDialog({
   orgIntegration,
   onDisconnect,
   onReconfigure,
+  onConfigUpdated,
 }: IntegrationDetailDialogProps) {
   const configValues = orgIntegration?.config_values || {};
   const connectedAt = orgIntegration?.connected_at;
+  const configSchema = integration?.config_schema;
 
   const [checkingWebhooks, setCheckingWebhooks] = useState(false);
   const [fixingWebhooks, setFixingWebhooks] = useState(false);
   const [webhookResult, setWebhookResult] = useState<WebhookCheckResult | null>(null);
+
+  // Edit mode state
+  const [isEditing, setIsEditing] = useState(false);
+  const [editValues, setEditValues] = useState<Record<string, any>>({});
+  const [isSaving, setIsSaving] = useState(false);
 
   const maskSecret = (value: string | undefined) => {
     if (!value) return '•••••••••••••';
@@ -61,6 +70,78 @@ export function IntegrationDetailDialog({
     const lowerKey = key.toLowerCase();
     const sensitivePatterns = ['secret', 'token', 'password', 'key', 'api_key', 'apikey', 'sid'];
     return sensitivePatterns.some(pattern => lowerKey.includes(pattern));
+  };
+
+  const handleStartEditing = () => {
+    const schema = configSchema;
+    const initialValues: Record<string, any> = {};
+
+    if (schema?.fields) {
+      schema.fields.forEach((field: any) => {
+        // For sensitive fields, start empty so user can leave blank to keep current
+        if (isSensitiveField(field.key)) {
+          initialValues[field.key] = '';
+        } else {
+          // Pre-populate with current value or schema default
+          initialValues[field.key] = configValues[field.key] ?? field.default ?? '';
+        }
+      });
+    } else {
+      // No schema: pre-populate all non-sensitive fields
+      Object.entries(configValues).forEach(([key, value]) => {
+        initialValues[key] = isSensitiveField(key) ? '' : value;
+      });
+    }
+
+    setEditValues(initialValues);
+    setIsEditing(true);
+  };
+
+  const handleCancelEditing = () => {
+    setIsEditing(false);
+    setEditValues({});
+  };
+
+  const handleSave = async () => {
+    setIsSaving(true);
+    try {
+      const merged = { ...configValues };
+      const schema = configSchema;
+
+      if (schema?.fields) {
+        schema.fields.forEach((field: any) => {
+          const newVal = editValues[field.key];
+          if (isSensitiveField(field.key) && !newVal) {
+            // Keep current value — don't overwrite
+          } else if (newVal !== undefined && newVal !== '') {
+            merged[field.key] = newVal;
+          } else if (!isSensitiveField(field.key) && newVal !== undefined) {
+            merged[field.key] = newVal;
+          }
+        });
+      } else {
+        Object.entries(editValues).forEach(([key, val]) => {
+          if (isSensitiveField(key) && !val) return;
+          merged[key] = val;
+        });
+      }
+
+      const { error } = await supabase
+        .from('organization_integrations')
+        .update({ config_values: merged })
+        .eq('id', orgIntegration.id);
+
+      if (error) throw error;
+
+      toast.success('Configurações atualizadas com sucesso!');
+      setIsEditing(false);
+      setEditValues({});
+      onConfigUpdated?.();
+    } catch (err: any) {
+      toast.error('Erro ao salvar: ' + (err.message || 'Erro desconhecido'));
+    } finally {
+      setIsSaving(false);
+    }
   };
 
   const handleCheckWebhooks = async () => {
@@ -103,7 +184,6 @@ export function IntegrationDetailDialog({
       });
       if (error) throw error;
       toast.success('Webhooks corrigidos com sucesso!');
-      // Re-check after fix
       await handleCheckWebhooks();
     } catch (err: any) {
       toast.error('Erro ao corrigir webhooks: ' + (err.message || 'Erro desconhecido'));
@@ -125,6 +205,93 @@ export function IntegrationDetailDialog({
       </div>
     </div>
   );
+
+  const renderEditField = (field: any) => {
+    const sensitive = isSensitiveField(field.key);
+    const label = field.label || field.key.replace(/([A-Z])/g, ' $1').replace(/_/g, ' ');
+
+    if (field.type === 'select' && field.options?.length) {
+      return (
+        <div key={field.key} className="space-y-2">
+          <Label>{label}{field.required && <span className="text-destructive ml-1">*</span>}</Label>
+          <select
+            className="w-full h-9 px-3 rounded-md border border-input bg-background text-sm focus:outline-none focus:ring-2 focus:ring-ring"
+            value={editValues[field.key] ?? ''}
+            onChange={(e) => setEditValues(prev => ({ ...prev, [field.key]: e.target.value }))}
+          >
+            {!editValues[field.key] && <option value="">Selecione...</option>}
+            {field.options.map((opt: string) => (
+              <option key={opt} value={opt}>{opt}</option>
+            ))}
+          </select>
+          {field.description && <p className="text-xs text-muted-foreground">{field.description}</p>}
+        </div>
+      );
+    }
+
+    if (field.type === 'number') {
+      return (
+        <div key={field.key} className="space-y-2">
+          <Label>{label}{field.required && <span className="text-destructive ml-1">*</span>}</Label>
+          <Input
+            type="number"
+            value={editValues[field.key] ?? ''}
+            onChange={(e) => setEditValues(prev => ({ ...prev, [field.key]: e.target.value }))}
+          />
+          {field.description && <p className="text-xs text-muted-foreground">{field.description}</p>}
+        </div>
+      );
+    }
+
+    return (
+      <div key={field.key} className="space-y-2">
+        <Label>{label}{field.required && !sensitive && <span className="text-destructive ml-1">*</span>}</Label>
+        <Input
+          type={sensitive ? 'password' : 'text'}
+          value={editValues[field.key] ?? ''}
+          onChange={(e) => setEditValues(prev => ({ ...prev, [field.key]: e.target.value }))}
+          placeholder={sensitive ? 'Deixe em branco para manter a chave atual' : ''}
+        />
+        {field.description && <p className="text-xs text-muted-foreground">{field.description}</p>}
+      </div>
+    );
+  };
+
+  const renderEditMode = () => {
+    const schema = configSchema;
+
+    if (schema?.fields?.length) {
+      return (
+        <div className="space-y-4">
+          {schema.fields.map((field: any) => renderEditField(field))}
+        </div>
+      );
+    }
+
+    // Fallback: render editable inputs for each config value
+    const entries = Object.entries(configValues);
+    if (entries.length === 0) return null;
+
+    return (
+      <div className="space-y-4">
+        {entries.map(([key, value]) => {
+          const sensitive = isSensitiveField(key);
+          const label = key.replace(/([A-Z])/g, ' $1').replace(/_/g, ' ');
+          return (
+            <div key={key} className="space-y-2">
+              <Label className="capitalize">{label}</Label>
+              <Input
+                type={sensitive ? 'password' : 'text'}
+                value={editValues[key] ?? ''}
+                onChange={(e) => setEditValues(prev => ({ ...prev, [key]: e.target.value }))}
+                placeholder={sensitive ? 'Deixe em branco para manter a chave atual' : ''}
+              />
+            </div>
+          );
+        })}
+      </div>
+    );
+  };
 
   const renderTwilioConfig = () => (
     <div className="space-y-4">
@@ -299,14 +466,17 @@ export function IntegrationDetailDialog({
     );
   };
 
+  const isGenericIntegration = integration?.slug !== 'twilio-voice' && integration?.slug !== 'twilio-whatsapp';
+
   const renderConfigDetails = () => {
+    if (isEditing) return renderEditMode();
     if (integration?.slug === 'twilio-voice') return renderTwilioConfig();
     if (integration?.slug === 'twilio-whatsapp') return renderWhatsAppConfig();
     return renderGenericConfig();
   };
 
   return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
+    <Dialog open={open} onOpenChange={(v) => { if (!v) handleCancelEditing(); onOpenChange(v); }}>
       <DialogContent className="max-w-md">
         <DialogHeader>
           <div className="flex items-center gap-3">
@@ -319,36 +489,68 @@ export function IntegrationDetailDialog({
             )}
             <div>
               <DialogTitle>{integration?.name}</DialogTitle>
-              <DialogDescription>Configurações da integração</DialogDescription>
+              <DialogDescription>
+                {isEditing ? 'Editando configurações' : 'Configurações da integração'}
+              </DialogDescription>
             </div>
           </div>
         </DialogHeader>
 
         <div className="space-y-6 py-4">
-          <div className="flex items-center justify-between">
-            <Label className="text-muted-foreground">Status</Label>
-            <Badge className="bg-green-500">Conectado</Badge>
-          </div>
+          {!isEditing && (
+            <>
+              <div className="flex items-center justify-between">
+                <Label className="text-muted-foreground">Status</Label>
+                <Badge className="bg-green-500">Conectado</Badge>
+              </div>
 
-          {connectedAt && (
-            <div className="flex items-center justify-between">
-              <Label className="text-muted-foreground">Conectado em</Label>
-              <span className="text-sm">{format(new Date(connectedAt), "dd 'de' MMMM 'de' yyyy", { locale: ptBR })}</span>
-            </div>
+              {connectedAt && (
+                <div className="flex items-center justify-between">
+                  <Label className="text-muted-foreground">Conectado em</Label>
+                  <span className="text-sm">{format(new Date(connectedAt), "dd 'de' MMMM 'de' yyyy", { locale: ptBR })}</span>
+                </div>
+              )}
+
+              <div className="border-t" />
+            </>
           )}
 
-          <div className="border-t" />
+          {isEditing && isGenericIntegration && (
+            <div className="bg-muted/50 rounded-lg px-3 py-2 text-sm text-muted-foreground">
+              Campos sensíveis (chaves de API, tokens) podem ser deixados em branco para manter o valor atual.
+            </div>
+          )}
 
           {renderConfigDetails()}
         </div>
 
         <div className="flex gap-3 pt-4 border-t">
-          <Button variant="outline" className="flex-1" onClick={onReconfigure}>
-            Reconfigurar
-          </Button>
-          <Button variant="destructive" className="flex-1" onClick={onDisconnect}>
-            Desconectar
-          </Button>
+          {isEditing ? (
+            <>
+              <Button variant="outline" className="flex-1" onClick={handleCancelEditing} disabled={isSaving}>
+                Cancelar
+              </Button>
+              <Button className="flex-1" onClick={handleSave} disabled={isSaving}>
+                {isSaving ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : null}
+                Salvar
+              </Button>
+            </>
+          ) : (
+            <>
+              {isGenericIntegration && (
+                <Button variant="outline" onClick={handleStartEditing}>
+                  <Pencil className="h-4 w-4 mr-2" />
+                  Editar
+                </Button>
+              )}
+              <Button variant="outline" className="flex-1" onClick={onReconfigure}>
+                Reconfigurar
+              </Button>
+              <Button variant="destructive" className="flex-1" onClick={onDisconnect}>
+                Desconectar
+              </Button>
+            </>
+          )}
         </div>
       </DialogContent>
     </Dialog>
