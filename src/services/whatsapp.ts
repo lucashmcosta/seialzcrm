@@ -43,10 +43,27 @@ export interface SendTemplateInput {
   variables?: Record<string, string>;
 }
 
+const ERROR_TRANSLATIONS: Record<string, string> = {
+  'Variables cannot be at the beginning of the message': 'A mensagem não pode começar com uma variável. Adicione texto antes de {{1}}.',
+  'Validation failed': 'Falha na validação do template.',
+  'Template name already exists': 'Já existe um template com esse nome.',
+  'Invalid template body': 'Corpo do template inválido.',
+  'Variables must be sequential': 'As variáveis devem ser sequenciais: {{1}}, {{2}}, etc.',
+  'Body is required': 'O corpo da mensagem é obrigatório.',
+};
+
+function translateError(msg: string): string {
+  return ERROR_TRANSLATIONS[msg] || msg;
+}
+
 async function handleResponse<T>(response: Response): Promise<T> {
   if (!response.ok) {
     const error = await response.json().catch(() => ({}));
-    throw new Error(error.message || error.error || 'Erro na requisição');
+    const detail = Array.isArray(error.details) && error.details.length > 0
+      ? error.details[0]
+      : null;
+    const rawMessage = detail || error.message || error.error || 'Erro na requisição';
+    throw new Error(translateError(rawMessage));
   }
   return response.json();
 }
