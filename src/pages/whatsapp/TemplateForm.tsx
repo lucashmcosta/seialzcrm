@@ -95,9 +95,10 @@ export default function TemplateForm() {
   // Validation
   const nameError = getTemplateNameError(friendlyName);
   const bodyError = !body.trim() ? 'Corpo é obrigatório' : body.length > 1024 ? 'Máximo 1024 caracteres' : null;
+  const bodyStartsWithVariable = /^\s*\{\{\d+\}\}/.test(body);
 
   const isStep1Valid = !nameError && language && category && templateType;
-  const isStep2Valid = !bodyError;
+  const isStep2Valid = !bodyError && !bodyStartsWithVariable;
   const isStep3Valid = variables.every(v => v.example.trim()) || variables.length === 0;
 
   // Insert variable at cursor
@@ -315,6 +316,14 @@ export default function TemplateForm() {
                           {body.length}/1024
                         </span>
                       </div>
+                      {bodyStartsWithVariable && (
+                        <Alert variant="destructive">
+                          <AlertCircle className="w-4 h-4" />
+                          <AlertDescription>
+                            A mensagem não pode começar com uma variável. Adicione texto antes de {'{{1}}'}, por exemplo: <strong>Olá {'{{1}}'}, ...</strong>
+                          </AlertDescription>
+                        </Alert>
+                      )}
                     </div>
 
                     {/* Quick Reply buttons */}
