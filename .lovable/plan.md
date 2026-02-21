@@ -1,95 +1,89 @@
 
-# Fix: Traduzir erros de validação do backend para português
+# Atribuição de Responsavel em Contatos e Oportunidades
 
-## Problema
+## Situacao Atual
 
-O backend Railway retorna erros de validação em inglês dentro do campo `details[]`:
+O campo `owner_user_id` ja existe no banco de dados para `contacts` e `opportunities`, mas:
+- Nenhum formulario permite definir/alterar o responsavel
+- A tela de detalhe do contato nao mostra quem e o responsavel
+- A tela de detalhe da oportunidade mostra o nome do responsavel, mas nao permite alterar
+- Ao criar contato ou oportunidade, o responsavel fica vazio (null)
 
-```json
-{
-  "error": "Validation failed",
-  "details": ["Variables cannot be at the beginning of the message"]
-}
-```
+## O que sera implementado
 
-O `handleResponse` em `src/services/whatsapp.ts` ignora o campo `details` e só exibe a mensagem genérica "Validation failed".
+### 1. Componente reutilizavel: OwnerSelector
 
-Mesmo que exibisse o `details`, apareceria em inglês para o usuário.
+Um select dropdown que carrega os usuarios da organizacao e permite escolher o responsavel. Sera usado em todos os pontos abaixo.
 
----
+- Busca usuarios via `user_organizations` + `users` filtrando pela org ativa
+- Mostra avatar + nome
+- Opcao "Sem responsavel" para limpar
+- Arquivo: `src/components/common/OwnerSelector.tsx`
 
-## Solução em 2 partes
+### 2. Formulario de Contato — campo de responsavel
 
-### Parte 1 — `src/services/whatsapp.ts`
+- Adicionar o `OwnerSelector` no `ContactForm.tsx`
+- Ao criar, define o responsavel como o usuario logado por padrao
+- Ao editar, carrega o responsavel atual e permite alterar
+- Salva o `owner_user_id` no insert/update
 
-Criar um mapa de tradução dos erros conhecidos do backend, e aplicar na função `handleResponse`:
+### 3. Tela de Detalhe do Contato — mostrar e alterar responsavel
 
-```typescript
-const ERROR_TRANSLATIONS: Record<string, string> = {
-  'Variables cannot be at the beginning of the message': 'A mensagem não pode começar com uma variável. Adicione texto antes de {{1}}.',
-  'Validation failed': 'Falha na validação do template.',
-  'Template name already exists': 'Já existe um template com esse nome.',
-  'Invalid template body': 'Corpo do template inválido.',
-  'Variables must be sequential': 'As variáveis devem ser sequenciais: {{1}}, {{2}}, etc.',
-  'Body is required': 'O corpo da mensagem é obrigatório.',
-};
+- No `ContactDetail.tsx`, na area de detalhes, adicionar uma linha mostrando o responsavel atual
+- Clicar no nome abre o `OwnerSelector` inline para trocar rapidamente
+- A troca salva direto no banco sem precisar ir no formulario de edicao
 
-function translateError(msg: string): string {
-  return ERROR_TRANSLATIONS[msg] || msg;
-}
+### 4. Dialog de Oportunidade — campo de responsavel
 
-async function handleResponse<T>(response: Response): Promise<T> {
-  if (!response.ok) {
-    const error = await response.json().catch(() => ({}));
-    // Extrai o primeiro detalhe do array details[], se existir
-    const detail = Array.isArray(error.details) && error.details.length > 0
-      ? error.details[0]
-      : null;
-    const rawMessage = detail || error.message || error.error || 'Erro na requisição';
-    throw new Error(translateError(rawMessage));
-  }
-  return response.json();
-}
-```
+- Adicionar o `OwnerSelector` no `OpportunityDialog.tsx`
+- Ao criar, define o responsavel como o usuario logado por padrao
+- Ao editar, carrega o responsavel atual
+- Salva o `owner_user_id` no insert/update
 
-### Parte 2 — `src/pages/whatsapp/TemplateForm.tsx`
+### 5. Tela de Detalhe da Oportunidade — alterar responsavel inline
 
-Adicionar validação client-side no Step 2 que detecta se o corpo começa com `{{número}}` e mostra um alerta inline **vermelho** antes de o usuário clicar "Próximo":
-
-```typescript
-// Junto às outras validações existentes (linha ~97)
-const bodyStartsWithVariable = /^\s*\{\{\d+\}\}/.test(body);
-
-// isStep2Valid deve também checar isso
-const isStep2Valid = !bodyError && !bodyStartsWithVariable;
-```
-
-No JSX do Step 2, logo abaixo do `<Textarea>`, adicionar o alerta condicional:
-
-```tsx
-{bodyStartsWithVariable && (
-  <Alert variant="destructive">
-    <AlertCircle className="w-4 h-4" />
-    <AlertDescription>
-      A mensagem não pode começar com uma variável. Adicione texto antes de {'{{1}}'}, por exemplo: <strong>Olá {'{{1}}'}, ...</strong>
-    </AlertDescription>
-  </Alert>
-)}
-```
+- No `OpportunityDetail.tsx`, onde ja mostra `opportunity.users?.full_name`, transformar num selector clicavel
+- Permite trocar o responsavel direto sem abrir o dialog de edicao
 
 ---
 
-## Arquivos alterados
+## Detalhes tecnicos
 
-| Arquivo | Mudança |
+### Componente OwnerSelector
+
+```
+Arquivo: src/components/common/OwnerSelector.tsx
+
+Props:
+- value: string | null (owner_user_id atual)
+- onChange: (userId: string | null) => void
+- size?: 'sm' | 'default'
+
+Query:
+  SELECT u.id, u.full_name, u.avatar_url
+  FROM users u
+  JOIN user_organizations uo ON uo.user_id = u.id
+  WHERE uo.organization_id = org.id AND uo.is_active = true
+```
+
+### Arquivos modificados
+
+| Arquivo | Mudanca |
 |---------|---------|
-| `src/services/whatsapp.ts` | Adiciona mapa de tradução de erros + extrai campo `details[]` no `handleResponse` |
-| `src/pages/whatsapp/TemplateForm.tsx` | Validação client-side: bloqueia avanço e exibe alerta se o corpo começa com variável |
+| `src/components/common/OwnerSelector.tsx` | Novo componente de select de responsavel |
+| `src/pages/contacts/ContactForm.tsx` | Adiciona campo OwnerSelector, default = usuario logado |
+| `src/pages/contacts/ContactDetail.tsx` | Mostra responsavel + selector inline para trocar |
+| `src/components/opportunities/OpportunityDialog.tsx` | Adiciona campo OwnerSelector no formulario |
+| `src/pages/opportunities/OpportunityDetail.tsx` | Transforma nome do owner em selector clicavel |
 
----
+### Nenhuma migracao necessaria
 
-## Resultado esperado
+Os campos `owner_user_id` ja existem em ambas as tabelas com foreign key para `users`. Nao precisa alterar o banco.
 
-- O toast de erro exibirá em português: **"A mensagem não pode começar com uma variável. Adicione texto antes de {{1}}."**
-- No Step 2, antes mesmo de tentar salvar, o usuário verá um aviso vermelho inline com exemplo de como corrigir
-- O botão "Próximo" ficará desabilitado enquanto a mensagem começar com variável
+### Fluxo do usuario
+
+1. Cria contato -> responsavel ja vem preenchido com seu nome
+2. Na lista, ve a coluna de responsavel (ja existe)
+3. No detalhe do contato, ve e pode trocar o responsavel com 1 clique
+4. Mesma logica para oportunidades
+5. Bulk actions de atribuicao continua funcionando como ja funciona
