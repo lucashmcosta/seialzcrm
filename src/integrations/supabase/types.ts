@@ -2085,17 +2085,22 @@ export type Database = {
         Row: {
           agent_typing: boolean | null
           agent_typing_at: string | null
+          assigned_at: string | null
+          assigned_user_id: string | null
           awaiting_button_response: boolean | null
           button_options: Json | null
           channel: string | null
           contact_id: string
           created_at: string | null
           external_id: string | null
+          first_human_response_at: string | null
           id: string
           last_inbound_at: string | null
           needs_human_attention: boolean | null
           opportunity_id: string | null
           organization_id: string
+          resolved_at: string | null
+          status: string
           subject: string | null
           updated_at: string | null
           whatsapp_last_inbound_at: string | null
@@ -2103,17 +2108,22 @@ export type Database = {
         Insert: {
           agent_typing?: boolean | null
           agent_typing_at?: string | null
+          assigned_at?: string | null
+          assigned_user_id?: string | null
           awaiting_button_response?: boolean | null
           button_options?: Json | null
           channel?: string | null
           contact_id: string
           created_at?: string | null
           external_id?: string | null
+          first_human_response_at?: string | null
           id?: string
           last_inbound_at?: string | null
           needs_human_attention?: boolean | null
           opportunity_id?: string | null
           organization_id: string
+          resolved_at?: string | null
+          status?: string
           subject?: string | null
           updated_at?: string | null
           whatsapp_last_inbound_at?: string | null
@@ -2121,22 +2131,34 @@ export type Database = {
         Update: {
           agent_typing?: boolean | null
           agent_typing_at?: string | null
+          assigned_at?: string | null
+          assigned_user_id?: string | null
           awaiting_button_response?: boolean | null
           button_options?: Json | null
           channel?: string | null
           contact_id?: string
           created_at?: string | null
           external_id?: string | null
+          first_human_response_at?: string | null
           id?: string
           last_inbound_at?: string | null
           needs_human_attention?: boolean | null
           opportunity_id?: string | null
           organization_id?: string
+          resolved_at?: string | null
+          status?: string
           subject?: string | null
           updated_at?: string | null
           whatsapp_last_inbound_at?: string | null
         }
         Relationships: [
+          {
+            foreignKeyName: "message_threads_assigned_user_id_fkey"
+            columns: ["assigned_user_id"]
+            isOneToOne: false
+            referencedRelation: "users"
+            referencedColumns: ["id"]
+          },
           {
             foreignKeyName: "message_threads_contact_id_fkey"
             columns: ["contact_id"]

@@ -532,6 +532,17 @@ serve(async (req) => {
         } catch (agentError) {
           console.error('Error triggering AI agent:', agentError)
         }
+      } else if (!aiAgent && threadId) {
+        // Org WITHOUT active AI agent: flag thread for human attention
+        console.log('No active AI agent for org', orgId, '- setting needs_human_attention=true')
+        
+        await supabase
+          .from('message_threads')
+          .update({
+            needs_human_attention: true,
+            updated_at: new Date().toISOString(),
+          })
+          .eq('id', threadId)
       }
 
       // Return empty response (no auto-reply from webhook itself)
