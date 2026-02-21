@@ -271,14 +271,15 @@ export default function MessagesList() {
     queryFn: async () => {
       if (!organization?.id) return false;
       
-      const { data } = await supabase
-        .from('organization_integrations')
-        .select('is_enabled, integration:admin_integrations!inner(slug)')
+      // Check if org has an active AI agent (same logic as webhook)
+      const { data: agents } = await supabase
+        .from('ai_agents')
+        .select('id')
         .eq('organization_id', organization.id)
         .eq('is_enabled', true)
-        .in('integration.slug', ['claude-ai', 'openai-gpt']);
+        .limit(1);
       
-      return data && data.length > 0;
+      return agents && agents.length > 0;
     },
     enabled: !!organization?.id,
   });
