@@ -1,89 +1,48 @@
 
-# Atribuição de Responsavel em Contatos e Oportunidades
 
-## Situacao Atual
+# Fix: Botao "Devolver ao AI" aparecendo em orgs sem agente ativo
 
-O campo `owner_user_id` ja existe no banco de dados para `contacts` e `opportunities`, mas:
-- Nenhum formulario permite definir/alterar o responsavel
-- A tela de detalhe do contato nao mostra quem e o responsavel
-- A tela de detalhe da oportunidade mostra o nome do responsavel, mas nao permite alterar
-- Ao criar contato ou oportunidade, o responsavel fica vazio (null)
+## Problema
 
-## O que sera implementado
+A query `hasAI` no `MessagesList.tsx` (linhas 269-284) verifica apenas se a org tem uma **integracao AI configurada** (chave OpenAI/Claude em `organization_integrations`). Ela **nao** verifica se existe um `ai_agents` com `is_enabled = true`.
 
-### 1. Componente reutilizavel: OwnerSelector
+O webhook usa a checagem correta: `ai_agents.is_enabled = true`. Entao uma org pode ter a chave da OpenAI configurada mas o agente desativado, e o botao "Devolver ao AI" aparece incorretamente.
 
-Um select dropdown que carrega os usuarios da organizacao e permite escolher o responsavel. Sera usado em todos os pontos abaixo.
+## Correcao
 
-- Busca usuarios via `user_organizations` + `users` filtrando pela org ativa
-- Mostra avatar + nome
-- Opcao "Sem responsavel" para limpar
-- Arquivo: `src/components/common/OwnerSelector.tsx`
+Atualizar a query `hasAI` para tambem verificar se existe um agente ativo na tabela `ai_agents`:
 
-### 2. Formulario de Contato — campo de responsavel
+```typescript
+const { data: hasAI } = useQuery({
+  queryKey: ['org-has-ai', organization?.id],
+  queryFn: async () => {
+    if (!organization?.id) return false;
 
-- Adicionar o `OwnerSelector` no `ContactForm.tsx`
-- Ao criar, define o responsavel como o usuario logado por padrao
-- Ao editar, carrega o responsavel atual e permite alterar
-- Salva o `owner_user_id` no insert/update
+    // Check if org has an active AI agent (same logic as webhook)
+    const { data: agents } = await supabase
+      .from('ai_agents')
+      .select('id')
+      .eq('organization_id', organization.id)
+      .eq('is_enabled', true)
+      .limit(1);
 
-### 3. Tela de Detalhe do Contato — mostrar e alterar responsavel
-
-- No `ContactDetail.tsx`, na area de detalhes, adicionar uma linha mostrando o responsavel atual
-- Clicar no nome abre o `OwnerSelector` inline para trocar rapidamente
-- A troca salva direto no banco sem precisar ir no formulario de edicao
-
-### 4. Dialog de Oportunidade — campo de responsavel
-
-- Adicionar o `OwnerSelector` no `OpportunityDialog.tsx`
-- Ao criar, define o responsavel como o usuario logado por padrao
-- Ao editar, carrega o responsavel atual
-- Salva o `owner_user_id` no insert/update
-
-### 5. Tela de Detalhe da Oportunidade — alterar responsavel inline
-
-- No `OpportunityDetail.tsx`, onde ja mostra `opportunity.users?.full_name`, transformar num selector clicavel
-- Permite trocar o responsavel direto sem abrir o dialog de edicao
-
----
-
-## Detalhes tecnicos
-
-### Componente OwnerSelector
-
-```
-Arquivo: src/components/common/OwnerSelector.tsx
-
-Props:
-- value: string | null (owner_user_id atual)
-- onChange: (userId: string | null) => void
-- size?: 'sm' | 'default'
-
-Query:
-  SELECT u.id, u.full_name, u.avatar_url
-  FROM users u
-  JOIN user_organizations uo ON uo.user_id = u.id
-  WHERE uo.organization_id = org.id AND uo.is_active = true
+    return agents && agents.length > 0;
+  },
+  enabled: !!organization?.id,
+});
 ```
 
-### Arquivos modificados
+Isso alinha a logica do frontend com a do webhook: o botao so aparece se a org realmente tem um agente AI ativo e habilitado.
+
+## Arquivo modificado
 
 | Arquivo | Mudanca |
 |---------|---------|
-| `src/components/common/OwnerSelector.tsx` | Novo componente de select de responsavel |
-| `src/pages/contacts/ContactForm.tsx` | Adiciona campo OwnerSelector, default = usuario logado |
-| `src/pages/contacts/ContactDetail.tsx` | Mostra responsavel + selector inline para trocar |
-| `src/components/opportunities/OpportunityDialog.tsx` | Adiciona campo OwnerSelector no formulario |
-| `src/pages/opportunities/OpportunityDetail.tsx` | Transforma nome do owner em selector clicavel |
+| `src/pages/messages/MessagesList.tsx` | Substituir query `hasAI` (linhas 269-284) para checar `ai_agents.is_enabled` ao inves de `organization_integrations` |
 
-### Nenhuma migracao necessaria
+## Impacto
 
-Os campos `owner_user_id` ja existem em ambas as tabelas com foreign key para `users`. Nao precisa alterar o banco.
+- Botao "Devolver ao AI" so aparece quando a org tem agente ativo
+- Botao "Melhorar com AI" no campo de texto tambem usa `hasAI`, entao ficara consistente
+- Nenhuma outra mudanca necessaria, o condicional na linha 1174 ja esta correto (`selectedThread.needs_human_attention && hasAI`)
 
-### Fluxo do usuario
-
-1. Cria contato -> responsavel ja vem preenchido com seu nome
-2. Na lista, ve a coluna de responsavel (ja existe)
-3. No detalhe do contato, ve e pode trocar o responsavel com 1 clique
-4. Mesma logica para oportunidades
-5. Bulk actions de atribuicao continua funcionando como ja funciona
