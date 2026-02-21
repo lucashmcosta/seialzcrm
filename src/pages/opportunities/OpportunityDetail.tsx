@@ -21,6 +21,7 @@ import { ContactMessages } from '@/components/contacts/ContactMessages';
 import { ContactNotes } from '@/components/contacts/ContactNotes';
 import { OpportunityDialog } from '@/components/opportunities/OpportunityDialog';
 import { ClickToCallButton } from '@/components/calls/ClickToCallButton';
+import { OwnerSelector } from '@/components/common/OwnerSelector';
 
 interface Opportunity {
   id: string;
@@ -342,7 +343,22 @@ export default function OpportunityDetail() {
                       </div>
                       <div>
                         <p className="text-sm text-muted-foreground">{t('opportunities.owner')}</p>
-                        <p className="text-lg font-semibold">{opportunity.users?.full_name || '-'}</p>
+                        <OwnerSelector
+                          value={(opportunity as any).owner_user_id || null}
+                          onChange={async (userId) => {
+                            const { error } = await supabase
+                              .from('opportunities')
+                              .update({ owner_user_id: userId })
+                              .eq('id', opportunity.id);
+                            if (error) {
+                              toast({ title: t('common.error'), variant: 'destructive' });
+                            } else {
+                              fetchOpportunity();
+                              toast({ title: t('opportunities.updated') });
+                            }
+                          }}
+                          size="sm"
+                        />
                       </div>
                       <div>
                         <p className="text-sm text-muted-foreground">{t('common.status')}</p>

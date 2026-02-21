@@ -15,6 +15,7 @@ import { Checkbox } from '@/components/ui/checkbox';
 import { toast } from 'sonner';
 import { ArrowLeft } from 'lucide-react';
 import { NameInput } from '@/components/NameInput';
+import { OwnerSelector } from '@/components/common/OwnerSelector';
 
 export default function ContactForm() {
   const { id } = useParams();
@@ -34,6 +35,7 @@ export default function ContactForm() {
     company_id: null as string | null,
     lifecycle_stage: 'lead' as 'lead' | 'customer' | 'inactive',
     do_not_contact: false,
+    owner_user_id: userProfile?.id || null as string | null,
   });
   const [loading, setLoading] = useState(false);
   const [duplicates, setDuplicates] = useState<any[]>([]);
@@ -85,6 +87,7 @@ export default function ContactForm() {
         company_id: data.company_id || null,
         lifecycle_stage: data.lifecycle_stage || 'lead',
         do_not_contact: data.do_not_contact || false,
+        owner_user_id: data.owner_user_id || null,
       });
     }
   };
@@ -174,7 +177,7 @@ export default function ContactForm() {
     const contactData = {
       ...formData,
       organization_id: organization.id,
-      owner_user_id: userProfile.id,
+      owner_user_id: formData.owner_user_id || userProfile.id,
     };
 
     if (isEdit) {
@@ -339,6 +342,14 @@ export default function ContactForm() {
                     <SelectItem value="inactive">{t('lifecycle.inactive')}</SelectItem>
                   </SelectContent>
                 </Select>
+              </div>
+
+              <div>
+                <Label>{t('contacts.owner') || 'Responsável'}</Label>
+                <OwnerSelector
+                  value={formData.owner_user_id}
+                  onChange={(userId) => setFormData({ ...formData, owner_user_id: userId })}
+                />
               </div>
 
               <div className="flex items-center space-x-2">

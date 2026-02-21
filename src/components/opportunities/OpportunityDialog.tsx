@@ -9,6 +9,7 @@ import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Loader2 } from 'lucide-react';
 import { toast } from 'sonner';
+import { OwnerSelector } from '@/components/common/OwnerSelector';
 
 interface Contact {
   id: string;
@@ -44,7 +45,7 @@ export function OpportunityDialog({ open, onOpenChange, opportunity, stages, onS
   const [contacts, setContacts] = useState<Contact[]>([]);
   const [companies, setCompanies] = useState<Array<{ id: string; name: string }>>([]);
   const [submitting, setSubmitting] = useState(false);
-  const [formData, setFormData] = useState<Opportunity & { company_id?: string | null }>({
+  const [formData, setFormData] = useState<Opportunity & { company_id?: string | null; owner_user_id?: string | null }>({
     title: '',
     amount: 0,
     currency: organization?.default_currency || 'BRL',
@@ -52,11 +53,12 @@ export function OpportunityDialog({ open, onOpenChange, opportunity, stages, onS
     company_id: null,
     pipeline_stage_id: stages[0]?.id || '',
     close_date: null,
+    owner_user_id: userProfile?.id || null,
   });
 
   useEffect(() => {
     if (opportunity) {
-      setFormData(opportunity);
+      setFormData({ ...opportunity, owner_user_id: (opportunity as any).owner_user_id || null });
     } else {
       setFormData({
         title: '',
@@ -65,6 +67,7 @@ export function OpportunityDialog({ open, onOpenChange, opportunity, stages, onS
         contact_id: null,
         pipeline_stage_id: stages[0]?.id || '',
         close_date: null,
+        owner_user_id: userProfile?.id || null,
       });
     }
   }, [opportunity, organization, stages]);
@@ -126,6 +129,7 @@ export function OpportunityDialog({ open, onOpenChange, opportunity, stages, onS
             company_id: formData.company_id,
             pipeline_stage_id: formData.pipeline_stage_id,
             close_date: formData.close_date,
+            owner_user_id: formData.owner_user_id,
           })
           .eq('id', opportunity.id);
 
@@ -137,7 +141,7 @@ export function OpportunityDialog({ open, onOpenChange, opportunity, stages, onS
           .from('opportunities')
           .insert({
             organization_id: organization.id,
-            owner_user_id: userProfile.id,
+            owner_user_id: formData.owner_user_id || userProfile.id,
             title: formData.title,
             amount: formData.amount,
             currency: formData.currency,
@@ -272,6 +276,13 @@ export function OpportunityDialog({ open, onOpenChange, opportunity, stages, onS
                   ))}
                 </SelectContent>
               </Select>
+            </div>
+            <div className="space-y-2">
+              <Label>{t('opportunities.owner') || 'Responsável'}</Label>
+              <OwnerSelector
+                value={formData.owner_user_id || null}
+                onChange={(userId) => setFormData({ ...formData, owner_user_id: userId })}
+              />
             </div>
             <div className="space-y-2">
               <Label htmlFor="close_date">{t('opportunities.closeDate')}</Label>

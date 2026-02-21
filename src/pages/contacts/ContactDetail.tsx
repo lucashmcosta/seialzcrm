@@ -11,7 +11,7 @@ import { useOutboundCall } from '@/contexts/OutboundCallContext';
 import { formatPhoneDisplay } from '@/lib/phoneUtils';
 import { Card } from '@/components/ui/card';
 import { toast } from 'sonner';
-import { Mail, Phone, Building2, Edit, Trash2, MoreVertical } from 'lucide-react';
+import { Mail, Phone, Building2, Edit, Trash2, MoreVertical, User } from 'lucide-react';
 import { Breadcrumbs } from '@/components/application/breadcrumbs/breadcrumbs';
 import { Tabs } from '@/components/application/tabs/tabs';
 import { NativeSelect } from '@/components/base/select/select-native';
@@ -35,6 +35,7 @@ import {
   AlertDialogTitle,
   AlertDialogTrigger,
 } from '@/components/ui/alert-dialog';
+import { OwnerSelector } from '@/components/common/OwnerSelector';
 import { ActivityTimeline } from '@/components/contacts/ActivityTimeline';
 import { ContactTasks } from '@/components/contacts/ContactTasks';
 import { ContactCalls } from '@/components/contacts/ContactCalls';
@@ -276,6 +277,28 @@ export default function ContactDetail() {
                       </div>
                     </div>
                   )}
+                  <div className="flex items-center gap-3">
+                    <User className="h-4 w-4 text-muted-foreground" />
+                    <div className="flex-1">
+                      <div className="text-sm text-muted-foreground">{t('contacts.owner') || 'Responsável'}</div>
+                      <OwnerSelector
+                        value={contact.owner_user_id}
+                        onChange={async (userId) => {
+                          const { error } = await supabase
+                            .from('contacts')
+                            .update({ owner_user_id: userId })
+                            .eq('id', contact.id);
+                          if (error) {
+                            toast.error(t('common.error'));
+                          } else {
+                            setContact({ ...contact, owner_user_id: userId });
+                            toast.success(t('contacts.updated'));
+                          }
+                        }}
+                        size="sm"
+                      />
+                    </div>
+                  </div>
                 </div>
               </Card>
             </Tabs.Panel>
