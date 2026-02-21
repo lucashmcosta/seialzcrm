@@ -36,7 +36,7 @@ import { useQuery } from '@tanstack/react-query';
 import { formatDistanceToNow } from 'date-fns';
 import { ptBR, enUS } from 'date-fns/locale';
 import { useToast } from '@/hooks/use-toast';
-import { Loader2, Check, CheckCheck, Clock, AlertCircle, Sparkles, SpellCheck, Briefcase, Smile, Bot, MessageSquarePlus, FileText, Target } from 'lucide-react';
+import { Loader2, Check, CheckCheck, Clock, AlertCircle, Sparkles, SpellCheck, Briefcase, Smile, Bot, MessageSquarePlus, FileText, Target, UserCheck, CheckCircle, RotateCcw, ArrowLeftRight } from 'lucide-react';
 import { AgentMessageFeedbackDialog } from '@/components/whatsapp/AgentMessageFeedbackDialog';
 import { NewConversationDialog } from '@/components/messages/NewConversationDialog';
 import { WhatsAppTemplateSelector } from '@/components/whatsapp/WhatsAppTemplateSelector';
@@ -46,6 +46,7 @@ import { MediaPreviewDialog } from '@/components/whatsapp/MediaPreviewDialog';
 import { AudioMessagePlayer } from '@/components/whatsapp/AudioMessagePlayer';
 import { QuotedMessage } from '@/components/whatsapp/QuotedMessage';
 import { ReplyPreview } from '@/components/whatsapp/ReplyPreview';
+import { OwnerSelector } from '@/components/common/OwnerSelector';
 import EmojiPicker, { EmojiClickData, Theme } from 'emoji-picker-react';
 import { cn } from '@/lib/utils';
 import { useAI } from '@/hooks/useAI';
@@ -108,6 +109,9 @@ interface ChatThread {
   last_read_at: string | null;
   unread: boolean;
   needs_human_attention: boolean;
+  status: string;
+  assigned_user_id: string | null;
+  assigned_user_name: string | null;
 }
 
 interface Message {
@@ -129,6 +133,13 @@ interface Message {
   sender_agent_id: string | null;
 }
 
+const statusConfig: Record<string, { label: string; labelEn: string; color: string; dotColor: string }> = {
+  open: { label: 'Aberta', labelEn: 'Open', color: 'text-green-700 dark:text-green-400', dotColor: 'bg-green-500' },
+  awaiting_client: { label: 'Aguardando', labelEn: 'Awaiting', color: 'text-amber-700 dark:text-amber-400', dotColor: 'bg-amber-500' },
+  resolved: { label: 'Resolvida', labelEn: 'Resolved', color: 'text-muted-foreground', dotColor: 'bg-muted-foreground' },
+  closed: { label: 'Fechada', labelEn: 'Closed', color: 'text-muted-foreground', dotColor: 'bg-muted-foreground' },
+};
+
 interface ChatListItemProps extends ListBoxItemProps<ChatThread> {
   value: ChatThread;
   locale: 'pt-BR' | 'en-US';
@@ -136,6 +147,8 @@ interface ChatListItemProps extends ListBoxItemProps<ChatThread> {
 
 const ChatListItem = ({ value, locale, className, ...otherProps }: ChatListItemProps) => {
   if (!value) return null;
+
+  const status = statusConfig[value.status] || statusConfig.open;
 
   return (
     <ListBoxItem
@@ -166,8 +179,23 @@ const ChatListItem = ({ value, locale, className, ...otherProps }: ChatListItemP
             {formatRelativeTime(value.updated_at, locale)}
           </span>
         </div>
+        <div className="flex items-center gap-1.5 mt-0.5">
+          {/* Status dot */}
+          <span className={cn('h-1.5 w-1.5 rounded-full shrink-0', status.dotColor)} />
+          <span className={cn('text-[10px] font-medium', status.color)}>
+            {locale === 'pt-BR' ? status.label : status.labelEn}
+          </span>
+          {value.assigned_user_name && (
+            <>
+              <span className="text-[10px] text-muted-foreground">·</span>
+              <span className="text-[10px] text-muted-foreground truncate max-w-[80px]">
+                {value.assigned_user_name}
+              </span>
+            </>
+          )}
+        </div>
         {value.needs_human_attention && (
-          <div className="flex items-center gap-1 text-destructive">
+          <div className="flex items-center gap-1 text-destructive mt-0.5">
             <AlertCircle className="h-3 w-3" />
             <span className="text-[10px] font-medium">Atenção</span>
           </div>
@@ -177,7 +205,7 @@ const ChatListItem = ({ value, locale, className, ...otherProps }: ChatListItemP
   );
 };
 
-type ThreadFilter = 'all' | 'unread' | 'unanswered';
+type ThreadFilter = 'mine' | 'unassigned' | 'all_open' | 'resolved';
 
 const getLastInboundTime = (
   thread: { last_inbound_at?: string | null; whatsapp_last_inbound_at?: string | null } | null | undefined,
@@ -209,7 +237,7 @@ export default function MessagesList() {
   const [isIn24hWindow, setIsIn24hWindow] = useState(false);
   const [showTemplates, setShowTemplates] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
-  const [filter, setFilter] = useState<ThreadFilter>('all');
+  const [filter, setFilter] = useState<ThreadFilter>('all_open');
   
   // Media preview state
   const [previewFile, setPreviewFile] = useState<File | null>(null);
@@ -277,6 +305,113 @@ export default function MessagesList() {
     }
   };
 
+  // === THREAD ACTIONS ===
+  const handleTakeOver = async (threadId: string) => {
+    if (!userProfile?.id) return;
+    const { error } = await supabase
+      .from('message_threads')
+      .update({
+        assigned_user_id: userProfile.id,
+        assigned_at: new Date().toISOString(),
+        needs_human_attention: true,
+        status: 'open',
+      })
+      .eq('id', threadId);
+    if (error) {
+      toast({ variant: 'destructive', description: 'Erro ao assumir conversa' });
+    } else {
+      refetchThreads();
+    }
+  };
+
+  const handleResolve = async (threadId: string) => {
+    const { error } = await supabase
+      .from('message_threads')
+      .update({
+        status: 'resolved',
+        resolved_at: new Date().toISOString(),
+        needs_human_attention: false,
+      })
+      .eq('id', threadId);
+    if (error) {
+      toast({ variant: 'destructive', description: 'Erro ao resolver conversa' });
+    } else {
+      refetchThreads();
+    }
+  };
+
+  const handleReturnToAI = async (threadId: string) => {
+    const { error } = await supabase
+      .from('message_threads')
+      .update({
+        needs_human_attention: false,
+        assigned_user_id: null,
+        assigned_at: null,
+        status: 'open',
+      })
+      .eq('id', threadId);
+    if (error) {
+      toast({ variant: 'destructive', description: 'Erro ao devolver ao AI' });
+    } else {
+      refetchThreads();
+    }
+  };
+
+  const handleReopen = async (threadId: string) => {
+    const { error } = await supabase
+      .from('message_threads')
+      .update({
+        status: 'open',
+        resolved_at: null,
+      })
+      .eq('id', threadId);
+    if (error) {
+      toast({ variant: 'destructive', description: 'Erro ao reabrir conversa' });
+    } else {
+      refetchThreads();
+    }
+  };
+
+  const handleAssign = async (threadId: string, userId: string | null) => {
+    const { error } = await supabase
+      .from('message_threads')
+      .update({
+        assigned_user_id: userId,
+        assigned_at: userId ? new Date().toISOString() : null,
+        needs_human_attention: userId ? true : false,
+      })
+      .eq('id', threadId);
+    if (error) {
+      toast({ variant: 'destructive', description: 'Erro ao atribuir conversa' });
+    } else {
+      refetchThreads();
+    }
+  };
+
+  // Auto-assign when sending message
+  const autoAssignOnSend = async (threadId: string, thread: ChatThread) => {
+    if (!userProfile?.id) return;
+    
+    const updates: Record<string, any> = {
+      status: 'awaiting_client',
+    };
+    
+    if (!thread.assigned_user_id) {
+      updates.assigned_user_id = userProfile.id;
+      updates.assigned_at = new Date().toISOString();
+    }
+
+    if (thread.needs_human_attention && !thread.assigned_user_id) {
+      // First human response after handoff
+      updates.first_human_response_at = new Date().toISOString();
+    }
+
+    await supabase
+      .from('message_threads')
+      .update(updates)
+      .eq('id', threadId);
+  };
+
   // Fetch threads
   const { data: threads, isLoading: threadsLoading, refetch: refetchThreads } = useQuery({
     queryKey: ['whatsapp-threads', organization?.id, userProfile?.id],
@@ -292,7 +427,11 @@ export default function MessagesList() {
           whatsapp_last_inbound_at,
           last_inbound_at,
           needs_human_attention,
-          contacts!inner(full_name, phone)
+          status,
+          assigned_user_id,
+          assigned_at,
+          contacts!inner(full_name, phone),
+          assigned_user:users!message_threads_assigned_user_id_fkey(full_name)
         `)
         .eq('organization_id', organization.id)
         .eq('channel', 'whatsapp')
@@ -331,6 +470,7 @@ export default function MessagesList() {
             .maybeSingle();
 
           const contact = thread.contacts as any;
+          const assignedUser = (thread as any).assigned_user as any;
           const lastReadAt = readMap[thread.id] || null;
           const lastInboundAt = (thread as any).last_inbound_at || thread.whatsapp_last_inbound_at || null;
           
@@ -353,6 +493,9 @@ export default function MessagesList() {
             last_read_at: lastReadAt,
             unread: !!isUnread,
             needs_human_attention: (thread as any).needs_human_attention || false,
+            status: (thread as any).status || 'open',
+            assigned_user_id: (thread as any).assigned_user_id || null,
+            assigned_user_name: assignedUser?.full_name || null,
           } as ChatThread;
         })
       );
@@ -363,6 +506,18 @@ export default function MessagesList() {
   });
 
   const selectedThread = threads?.find((t) => t.id === selectedThreadId);
+
+  // Set default filter based on assigned threads
+  useEffect(() => {
+    if (threads && threads.length > 0 && userProfile?.id) {
+      const hasMine = threads.some(t => t.assigned_user_id === userProfile.id && ['open', 'awaiting_client'].includes(t.status));
+      if (hasMine) {
+        setFilter('mine');
+      } else {
+        setFilter('unassigned');
+      }
+    }
+  }, [threads?.length, userProfile?.id]);
 
   // Fetch messages when thread selected
   useEffect(() => {
@@ -460,12 +615,20 @@ export default function MessagesList() {
     };
   }, [organization?.id, selectedThreadId, refetchThreads]);
 
-  // Real-time subscription for new threads
+  // Real-time subscription for thread UPDATES (status, assignment changes)
   useEffect(() => {
     if (!organization?.id) return;
 
     const channel = supabase
-      .channel(`org-threads-${organization.id}`)
+      .channel(`org-thread-updates-${organization.id}`)
+      .on('postgres_changes', {
+        event: 'UPDATE',
+        schema: 'public',
+        table: 'message_threads',
+        filter: `organization_id=eq.${organization.id}`,
+      }, () => {
+        refetchThreads();
+      })
       .on('postgres_changes', {
         event: 'INSERT',
         schema: 'public',
@@ -584,6 +747,11 @@ export default function MessagesList() {
     setReplyingTo(null);
     scrollToBottom();
 
+    // Auto-assign on send
+    if (selectedThreadId && selectedThread) {
+      autoAssignOnSend(selectedThreadId, selectedThread);
+    }
+
     try {
       const { data, error } = await supabase.functions.invoke('twilio-whatsapp-send', {
         body: {
@@ -646,6 +814,11 @@ export default function MessagesList() {
 
     setMessages((prev) => [...prev, tempMessage]);
     scrollToBottom();
+
+    // Auto-assign on template send
+    if (selectedThreadId && selectedThread) {
+      autoAssignOnSend(selectedThreadId, selectedThread);
+    }
 
     try {
       const { data, error } = await supabase.functions.invoke('twilio-whatsapp-send', {
@@ -828,15 +1001,25 @@ export default function MessagesList() {
       return false;
     }
     // Status filter
-    if (filter === 'unread') return thread.unread;
-    if (filter === 'unanswered') return thread.last_message_direction === 'inbound';
-    return true;
+    switch (filter) {
+      case 'mine':
+        return thread.assigned_user_id === userProfile?.id && ['open', 'awaiting_client'].includes(thread.status);
+      case 'unassigned':
+        return !thread.assigned_user_id && thread.status === 'open';
+      case 'all_open':
+        return ['open', 'awaiting_client'].includes(thread.status);
+      case 'resolved':
+        return thread.status === 'resolved';
+      default:
+        return true;
+    }
   });
 
   const filterOptions: { key: ThreadFilter; label: string }[] = [
-    { key: 'all', label: locale === 'pt-BR' ? 'Todas' : 'All' },
-    { key: 'unread', label: locale === 'pt-BR' ? 'Não lidas' : 'Unread' },
-    { key: 'unanswered', label: locale === 'pt-BR' ? 'Não respondidas' : 'Unanswered' },
+    { key: 'mine', label: locale === 'pt-BR' ? 'Minhas' : 'Mine' },
+    { key: 'unassigned', label: locale === 'pt-BR' ? 'Não atribuídas' : 'Unassigned' },
+    { key: 'all_open', label: locale === 'pt-BR' ? 'Todas abertas' : 'All Open' },
+    { key: 'resolved', label: locale === 'pt-BR' ? 'Resolvidas' : 'Resolved' },
   ];
 
   return (
@@ -863,7 +1046,7 @@ export default function MessagesList() {
                     <MessageSquarePlus className="w-4 h-4" />
                   </Button>
                   <Badge color="gray" size="md">
-                    {threads?.length || 0}
+                    {filteredThreads?.length || 0}
                   </Badge>
                 </div>
               </div>
@@ -877,7 +1060,7 @@ export default function MessagesList() {
                 />
               </div>
               {/* Filter chips */}
-              <div className="flex gap-1.5">
+              <div className="flex gap-1.5 flex-wrap">
                 {filterOptions.map((opt) => (
                   <button
                     key={opt.key}
@@ -942,60 +1125,125 @@ export default function MessagesList() {
             {selectedThread ? (
               <>
                 {/* Chat Header */}
-                <div className="h-16 border-b border-border flex items-center justify-between px-6">
-                  <div className="flex items-center gap-3">
-                    <Avatar fallbackText={selectedThread.contact_name} size="md" />
-                    <div>
-                      <div className="flex items-center gap-2">
-                        <span className="font-semibold text-foreground">
-                          {selectedThread.contact_name}
-                        </span>
-                        {isIn24hWindow && (
-                          <BadgeWithDot color="success" size="sm">
-                            {locale === 'pt-BR' ? 'Online' : 'Online'}
-                          </BadgeWithDot>
-                        )}
+                <div className="border-b border-border px-6 py-3">
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-3">
+                      <Avatar fallbackText={selectedThread.contact_name} size="md" />
+                      <div>
+                        <div className="flex items-center gap-2">
+                          <span className="font-semibold text-foreground">
+                            {selectedThread.contact_name}
+                          </span>
+                          {isIn24hWindow && (
+                            <BadgeWithDot color="success" size="sm">
+                              {locale === 'pt-BR' ? 'Online' : 'Online'}
+                            </BadgeWithDot>
+                          )}
+                          {/* Thread status badge */}
+                          {selectedThread.status && statusConfig[selectedThread.status] && (
+                            <span className={cn('text-xs font-medium', statusConfig[selectedThread.status].color)}>
+                              {locale === 'pt-BR' ? statusConfig[selectedThread.status].label : statusConfig[selectedThread.status].labelEn}
+                            </span>
+                          )}
+                        </div>
+                        <p className="text-xs text-muted-foreground">
+                          {selectedThread.contact_phone}
+                          {selectedThread.assigned_user_name && (
+                            <span> · {locale === 'pt-BR' ? 'Atribuída a' : 'Assigned to'} {selectedThread.assigned_user_name}</span>
+                          )}
+                        </p>
                       </div>
-                      <p className="text-xs text-muted-foreground">
-                        {selectedThread.contact_phone}
-                      </p>
                     </div>
-                  </div>
 
-                  <div className="flex items-center gap-2">
-                    <Button variant="outline" size="sm" asChild>
-                      <Link to={`/contacts/${selectedThread.contact_id}`}>
-                        <User01 className="w-4 h-4 mr-2" />
-                        {locale === 'pt-BR' ? 'Ver perfil' : 'View profile'}
-                      </Link>
-                    </Button>
+                    <div className="flex items-center gap-2">
+                      {/* Action buttons */}
+                      {(!selectedThread.assigned_user_id || selectedThread.assigned_user_id !== userProfile?.id) && selectedThread.status !== 'resolved' && (
+                        <Button variant="outline" size="sm" onClick={() => handleTakeOver(selectedThread.id)}>
+                          <UserCheck className="w-4 h-4 mr-1" />
+                          {locale === 'pt-BR' ? 'Assumir' : 'Take Over'}
+                        </Button>
+                      )}
+                      
+                      {['open', 'awaiting_client'].includes(selectedThread.status) && (
+                        <Button variant="outline" size="sm" onClick={() => handleResolve(selectedThread.id)}>
+                          <CheckCircle className="w-4 h-4 mr-1" />
+                          {locale === 'pt-BR' ? 'Resolver' : 'Resolve'}
+                        </Button>
+                      )}
+                      
+                      {selectedThread.needs_human_attention && hasAI && (
+                        <Button variant="outline" size="sm" onClick={() => handleReturnToAI(selectedThread.id)}>
+                          <Bot className="w-4 h-4 mr-1" />
+                          {locale === 'pt-BR' ? 'Devolver ao AI' : 'Return to AI'}
+                        </Button>
+                      )}
+                      
+                      {selectedThread.status === 'resolved' && (
+                        <Button variant="outline" size="sm" onClick={() => handleReopen(selectedThread.id)}>
+                          <RotateCcw className="w-4 h-4 mr-1" />
+                          {locale === 'pt-BR' ? 'Reabrir' : 'Reopen'}
+                        </Button>
+                      )}
+
+                      {/* Manual assignment dropdown */}
+                      <OwnerSelector
+                        value={selectedThread.assigned_user_id}
+                        onChange={(userId) => handleAssign(selectedThread.id, userId)}
+                        size="sm"
+                        placeholder={locale === 'pt-BR' ? 'Atribuir' : 'Assign'}
+                      />
+
+                      <Button variant="outline" size="sm" asChild>
+                        <Link to={`/contacts/${selectedThread.contact_id}`}>
+                          <User01 className="w-4 h-4 mr-2" />
+                          {locale === 'pt-BR' ? 'Ver perfil' : 'View profile'}
+                        </Link>
+                      </Button>
+                    </div>
                   </div>
                 </div>
 
                 {/* Messages Area */}
                 {showTemplates ? (
-                  <div className="flex-1 p-6">
-                    <WhatsAppTemplateSelector
-                      onSelect={handleSendTemplate}
-                      onCancel={() => setShowTemplates(false)}
-                      loading={submitting}
-                    />
+                  <div className="flex-1 overflow-hidden">
+                    <div className="flex items-center justify-between px-6 py-3 border-b border-border">
+                      <h3 className="font-semibold text-foreground text-sm">
+                        {locale === 'pt-BR' ? 'Selecione um template' : 'Select a template'}
+                      </h3>
+                      <Button variant="ghost" size="sm" onClick={() => setShowTemplates(false)}>
+                        <XClose className="w-4 h-4" />
+                      </Button>
+                    </div>
+                    <ScrollArea className="flex-1 h-[calc(100%-48px)]">
+                      <WhatsAppTemplateSelector
+                        onSelect={handleSendTemplate}
+                        onCancel={() => setShowTemplates(false)}
+                      />
+                    </ScrollArea>
                   </div>
                 ) : (
                   <>
-                    <ScrollArea className="flex-1 p-6">
+                    <ScrollArea className="flex-1">
                       {messagesLoading ? (
-                        <div className="flex items-center justify-center h-full">
-                          <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
+                        <div className="p-6 space-y-4">
+                          {[1, 2, 3].map((i) => (
+                            <div key={i} className={`flex ${i % 2 === 0 ? 'justify-end' : 'justify-start'}`}>
+                              <Skeleton className="h-16 w-48 rounded-lg" />
+                            </div>
+                          ))}
                         </div>
                       ) : (
-                        <div className="space-y-3">
+                        <div className="p-6 space-y-3">
                           {messages.map((message) => {
                             const isOutbound = message.direction === 'outbound';
+
                             return (
                               <div
                                 key={message.id}
-                                className={`group flex items-center gap-1 ${isOutbound ? 'justify-end' : 'justify-start'}`}
+                                className={cn(
+                                  'flex items-end gap-2 group',
+                                  isOutbound ? 'justify-end' : 'justify-start'
+                                )}
                               >
                                 {/* Reply button - left side for inbound */}
                                 {!isOutbound && (
