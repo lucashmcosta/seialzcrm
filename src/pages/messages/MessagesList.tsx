@@ -265,21 +265,35 @@ export default function MessagesList() {
   // New conversation dialog state
   const [showNewConversation, setShowNewConversation] = useState(false);
   
-  // Check if organization has AI enabled
-  const { data: hasAI } = useQuery({
-    queryKey: ['org-has-ai', organization?.id],
+  // Check if organization has an active AI agent (controls "Return to AI" button)
+  const { data: hasAIAgent } = useQuery({
+    queryKey: ['org-has-ai-agent', organization?.id],
     queryFn: async () => {
       if (!organization?.id) return false;
-      
-      // Check if org has an active AI agent (same logic as webhook)
       const { data: agents } = await supabase
         .from('ai_agents')
         .select('id')
         .eq('organization_id', organization.id)
         .eq('is_enabled', true)
         .limit(1);
-      
       return agents && agents.length > 0;
+    },
+    enabled: !!organization?.id,
+  });
+
+  // Check if organization has AI integration configured (controls text improvement buttons)
+  const { data: hasAIIntegration } = useQuery({
+    queryKey: ['org-has-ai-integration', organization?.id],
+    queryFn: async () => {
+      if (!organization?.id) return false;
+      const { data } = await supabase
+        .from('organization_integrations')
+        .select('id, admin_integrations!inner(slug)')
+        .eq('organization_id', organization.id)
+        .eq('is_enabled', true)
+        .in('admin_integrations.slug', ['openai-gpt', 'claude-ai', 'lovable-ai'])
+        .limit(1);
+      return data && data.length > 0;
     },
     enabled: !!organization?.id,
   });
@@ -1172,7 +1186,7 @@ export default function MessagesList() {
                         </Button>
                       )}
                       
-                      {selectedThread.needs_human_attention && hasAI && (
+                      {selectedThread.needs_human_attention && hasAIAgent && (
                         <Button variant="outline" size="sm" onClick={() => handleReturnToAI(selectedThread.id)}>
                           <Bot className="w-4 h-4 mr-1" />
                           {locale === 'pt-BR' ? 'Devolver ao AI' : 'Return to AI'}
@@ -1466,7 +1480,7 @@ export default function MessagesList() {
                               />
                               
                               {/* AI Improve Button */}
-                              {hasAI && (
+                              {hasAIIntegration && (
                                 <DropdownMenu open={aiMenuOpen} onOpenChange={setAiMenuOpen}>
                                   <DropdownMenuTrigger asChild>
                                     <Button
