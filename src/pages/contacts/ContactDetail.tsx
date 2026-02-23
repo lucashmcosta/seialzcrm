@@ -36,6 +36,7 @@ import {
   AlertDialogTrigger,
 } from '@/components/ui/alert-dialog';
 import { OwnerSelector } from '@/components/common/OwnerSelector';
+import { SendToSignatureButton } from '@/components/signature/SendToSignatureButton';
 import { ActivityTimeline } from '@/components/contacts/ActivityTimeline';
 import { ContactTasks } from '@/components/contacts/ContactTasks';
 import { ContactCalls } from '@/components/contacts/ContactCalls';
@@ -158,6 +159,7 @@ export default function ContactDetail() {
             </div>
 
             <div className="flex items-center gap-2">
+              <SendToSignatureButton contactId={contact.id} />
               {permissions.canEditContacts && (
                 <Button color="secondary" size="sm" asChild>
                   <Link to={`/contacts/${contact.id}/edit`}>
