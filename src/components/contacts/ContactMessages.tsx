@@ -23,7 +23,7 @@ import {
 import { useToast } from '@/hooks/use-toast';
 import { useQuery } from '@tanstack/react-query';
 import { useAI } from '@/hooks/useAI';
-import { Loader2, Send, Clock, Check, CheckCheck, AlertCircle, Bot, Sparkles, SpellCheck, Briefcase, Smile, FileText } from 'lucide-react';
+import { Loader2, Send, Clock, Check, CheckCheck, AlertCircle, Bot, Sparkles, SpellCheck, Briefcase, Smile, Target, FileText } from 'lucide-react';
 import { FaceSmile } from '@untitledui/icons';
 import { formatDistanceToNow } from 'date-fns';
 import { ptBR, enUS } from 'date-fns/locale';
@@ -478,7 +478,7 @@ export function ContactMessages({ contactId, opportunityId }: ContactMessagesPro
     }
   };
 
-  const handleImproveText = async (mode: 'grammar' | 'professional' | 'friendly') => {
+  const handleImproveText = async (mode: 'grammar' | 'professional' | 'friendly' | 'persuasive') => {
     if (!messageText.trim()) return;
 
     setAiImproving(true);
@@ -743,6 +743,10 @@ export function ContactMessages({ contactId, opportunityId }: ContactMessagesPro
                     <DropdownMenuItem onClick={() => handleImproveText('friendly')}>
                       <Smile className="w-4 h-4 mr-2" />
                       {locale === 'pt-BR' ? 'Tornar amigável' : 'Make friendly'}
+                    </DropdownMenuItem>
+                    <DropdownMenuItem onClick={() => handleImproveText('persuasive')}>
+                      <Target className="w-4 h-4 mr-2" />
+                      {locale === 'pt-BR' ? 'Tornar persuasivo' : 'Make persuasive'}
                     </DropdownMenuItem>
                   </DropdownMenuContent>
                 </DropdownMenu>
