@@ -36,6 +36,15 @@ export default function ContactForm() {
     lifecycle_stage: 'lead' as 'lead' | 'customer' | 'inactive',
     do_not_contact: false,
     owner_user_id: userProfile?.id || null as string | null,
+    cpf: '',
+    rg: '',
+    rg_issuer: '',
+    nationality: '',
+    address_street: '',
+    address_neighborhood: '',
+    address_city: '',
+    address_state: '',
+    address_zip: '',
   });
   const [loading, setLoading] = useState(false);
   const [duplicates, setDuplicates] = useState<any[]>([]);
@@ -88,6 +97,15 @@ export default function ContactForm() {
         lifecycle_stage: data.lifecycle_stage || 'lead',
         do_not_contact: data.do_not_contact || false,
         owner_user_id: data.owner_user_id || null,
+        cpf: (data as any).cpf || '',
+        rg: (data as any).rg || '',
+        rg_issuer: (data as any).rg_issuer || '',
+        nationality: (data as any).nationality || '',
+        address_street: (data as any).address_street || '',
+        address_neighborhood: (data as any).address_neighborhood || '',
+        address_city: (data as any).address_city || '',
+        address_state: (data as any).address_state || '',
+        address_zip: (data as any).address_zip || '',
       });
     }
   };
@@ -350,6 +368,97 @@ export default function ContactForm() {
                   value={formData.owner_user_id}
                   onChange={(userId) => setFormData({ ...formData, owner_user_id: userId })}
                 />
+              </div>
+
+              {/* Documentos */}
+              <div className="space-y-4">
+                <h3 className="text-sm font-semibold text-foreground border-b pb-2">Documentos</h3>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div>
+                    <Label htmlFor="cpf">CPF</Label>
+                    <Input
+                      id="cpf"
+                      value={formData.cpf}
+                      onChange={(e) => setFormData({ ...formData, cpf: e.target.value })}
+                      placeholder="000.000.000-00"
+                    />
+                  </div>
+                  <div>
+                    <Label htmlFor="rg">RG</Label>
+                    <Input
+                      id="rg"
+                      value={formData.rg}
+                      onChange={(e) => setFormData({ ...formData, rg: e.target.value })}
+                    />
+                  </div>
+                  <div>
+                    <Label htmlFor="rg_issuer">Órgão Emissor</Label>
+                    <Input
+                      id="rg_issuer"
+                      value={formData.rg_issuer}
+                      onChange={(e) => setFormData({ ...formData, rg_issuer: e.target.value })}
+                      placeholder="SSP/SP"
+                    />
+                  </div>
+                  <div>
+                    <Label htmlFor="nationality">Nacionalidade</Label>
+                    <Input
+                      id="nationality"
+                      value={formData.nationality}
+                      onChange={(e) => setFormData({ ...formData, nationality: e.target.value })}
+                      placeholder="brasileiro(a)"
+                    />
+                  </div>
+                </div>
+              </div>
+
+              {/* Endereço */}
+              <div className="space-y-4">
+                <h3 className="text-sm font-semibold text-foreground border-b pb-2">Endereço</h3>
+                <div>
+                  <Label htmlFor="address_street">Rua / Número</Label>
+                  <Input
+                    id="address_street"
+                    value={formData.address_street}
+                    onChange={(e) => setFormData({ ...formData, address_street: e.target.value })}
+                  />
+                </div>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div>
+                    <Label htmlFor="address_neighborhood">Bairro</Label>
+                    <Input
+                      id="address_neighborhood"
+                      value={formData.address_neighborhood}
+                      onChange={(e) => setFormData({ ...formData, address_neighborhood: e.target.value })}
+                    />
+                  </div>
+                  <div>
+                    <Label htmlFor="address_city">Cidade</Label>
+                    <Input
+                      id="address_city"
+                      value={formData.address_city}
+                      onChange={(e) => setFormData({ ...formData, address_city: e.target.value })}
+                    />
+                  </div>
+                  <div>
+                    <Label htmlFor="address_state">Estado</Label>
+                    <Input
+                      id="address_state"
+                      value={formData.address_state}
+                      onChange={(e) => setFormData({ ...formData, address_state: e.target.value })}
+                      placeholder="SP"
+                    />
+                  </div>
+                  <div>
+                    <Label htmlFor="address_zip">CEP</Label>
+                    <Input
+                      id="address_zip"
+                      value={formData.address_zip}
+                      onChange={(e) => setFormData({ ...formData, address_zip: e.target.value })}
+                      placeholder="00000-000"
+                    />
+                  </div>
+                </div>
               </div>
 
               <div className="flex items-center space-x-2">
