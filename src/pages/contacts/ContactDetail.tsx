@@ -305,61 +305,54 @@ export default function ContactDetail() {
               </Card>
 
               {/* Documentos */}
-              {(contact.cpf || contact.rg || contact.nationality) && (
-                <Card className="p-6">
-                  <h2 className="text-lg font-semibold mb-4 text-foreground">Documentos</h2>
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                    {contact.cpf && (
-                      <div className="flex items-center gap-3">
-                        <FileText className="h-4 w-4 text-muted-foreground" />
-                        <div>
-                          <div className="text-sm text-muted-foreground">CPF</div>
-                          <div className="text-foreground">{contact.cpf}</div>
-                        </div>
-                      </div>
-                    )}
-                    {contact.rg && (
-                      <div className="flex items-center gap-3">
-                        <FileText className="h-4 w-4 text-muted-foreground" />
-                        <div>
-                          <div className="text-sm text-muted-foreground">RG</div>
-                          <div className="text-foreground">
-                            {contact.rg}
-                            {contact.rg_issuer && ` - ${contact.rg_issuer}`}
-                          </div>
-                        </div>
-                      </div>
-                    )}
-                    {contact.nationality && (
-                      <div className="flex items-center gap-3">
-                        <User className="h-4 w-4 text-muted-foreground" />
-                        <div>
-                          <div className="text-sm text-muted-foreground">Nacionalidade</div>
-                          <div className="text-foreground">{contact.nationality}</div>
-                        </div>
-                      </div>
-                    )}
+              <Card className="p-6">
+                <h2 className="text-lg font-semibold mb-4 text-foreground">Documentos</h2>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div className="flex items-center gap-3">
+                    <FileText className="h-4 w-4 text-muted-foreground" />
+                    <div>
+                      <div className="text-sm text-muted-foreground">CPF</div>
+                      <div className="text-foreground">{contact.cpf || '—'}</div>
+                    </div>
                   </div>
-                </Card>
-              )}
-
-              {/* Endereço */}
-              {(contact.address_street || contact.address_city) && (
-                <Card className="p-6">
-                  <h2 className="text-lg font-semibold mb-4 text-foreground">Endereço</h2>
-                  <div className="flex items-start gap-3">
-                    <MapPin className="h-4 w-4 text-muted-foreground mt-0.5" />
-                    <div className="text-foreground">
-                      {contact.address_street && <div>{contact.address_street}</div>}
-                      {contact.address_neighborhood && <div>{contact.address_neighborhood}</div>}
-                      <div>
-                        {[contact.address_city, contact.address_state].filter(Boolean).join(' - ')}
-                        {contact.address_zip && ` · CEP ${contact.address_zip}`}
+                  <div className="flex items-center gap-3">
+                    <FileText className="h-4 w-4 text-muted-foreground" />
+                    <div>
+                      <div className="text-sm text-muted-foreground">RG</div>
+                      <div className="text-foreground">
+                        {contact.rg ? `${contact.rg}${contact.rg_issuer ? ` - ${contact.rg_issuer}` : ''}` : '—'}
                       </div>
                     </div>
                   </div>
-                </Card>
-              )}
+                  <div className="flex items-center gap-3">
+                    <User className="h-4 w-4 text-muted-foreground" />
+                    <div>
+                      <div className="text-sm text-muted-foreground">Nacionalidade</div>
+                      <div className="text-foreground">{contact.nationality || '—'}</div>
+                    </div>
+                  </div>
+                </div>
+              </Card>
+
+              {/* Endereço */}
+              <Card className="p-6">
+                <h2 className="text-lg font-semibold mb-4 text-foreground">Endereço</h2>
+                <div className="flex items-start gap-3">
+                  <MapPin className="h-4 w-4 text-muted-foreground mt-0.5" />
+                  <div className="text-foreground">
+                    {contact.address_street || contact.address_city ? (
+                      <>
+                        {contact.address_street && <div>{contact.address_street}</div>}
+                        {contact.address_neighborhood && <div>{contact.address_neighborhood}</div>}
+                        <div>
+                          {[contact.address_city, contact.address_state].filter(Boolean).join(' - ')}
+                          {contact.address_zip && ` · CEP ${contact.address_zip}`}
+                        </div>
+                      </>
+                    ) : '—'}
+                  </div>
+                </div>
+              </Card>
             </Tabs.Panel>
 
             <Tabs.Panel id="timeline">
