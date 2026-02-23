@@ -10,8 +10,12 @@ import { OrganizationProvider } from "@/contexts/OrganizationContext";
 import { BrowserRouter, Routes, Route, Navigate, useLocation } from "react-router-dom";
 import { PageLoader } from "./components/common/PageLoader";
 // Lazy load call handlers (heavy Twilio SDK)
-const InboundCallHandler = lazy(() => import("./components/calls/InboundCallHandler").then(m => ({ default: m.InboundCallHandler })));
-const OutboundCallHandler = lazy(() => import("./components/calls/OutboundCallHandler").then(m => ({ default: m.OutboundCallHandler })));
+const InboundCallHandler = lazy(() =>
+  import("./components/calls/InboundCallHandler").then(m => ({ default: m.InboundCallHandler }))
+);
+const OutboundCallHandler = lazy(() =>
+  import("./components/calls/OutboundCallHandler").then(m => ({ default: m.OutboundCallHandler }))
+);
 
 // Auth pages - load immediately (small)
 import SignUp from "./pages/auth/SignUp";
