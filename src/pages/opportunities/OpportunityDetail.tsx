@@ -22,6 +22,7 @@ import { ContactNotes } from '@/components/contacts/ContactNotes';
 import { OpportunityDialog } from '@/components/opportunities/OpportunityDialog';
 import { ClickToCallButton } from '@/components/calls/ClickToCallButton';
 import { OwnerSelector } from '@/components/common/OwnerSelector';
+import { SendToSignatureButton } from '@/components/signature/SendToSignatureButton';
 
 interface Opportunity {
   id: string;
@@ -263,6 +264,12 @@ export default function OpportunityDetail() {
                   contactId={opportunity.contact_id || undefined}
                   opportunityId={opportunity.id}
                   size="sm"
+                />
+              )}
+              {opportunity.contact_id && (
+                <SendToSignatureButton
+                  contactId={opportunity.contact_id}
+                  opportunityId={opportunity.id}
                 />
               )}
               {permissions.canEditOpportunities && (

@@ -10,7 +10,7 @@ import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/comp
 import { ConfirmDialog } from '@/components/ui/confirm-dialog';
 import { useTranslation } from '@/lib/i18n';
 import { useOrganization } from '@/hooks/useOrganization';
-import { MessageSquare, Phone, Mail, Webhook, AlertTriangle, Plus, Bot, Sparkles, Upload, RefreshCw } from 'lucide-react';
+import { MessageSquare, Phone, Mail, Webhook, AlertTriangle, Plus, Bot, Sparkles, Upload, RefreshCw, PenTool } from 'lucide-react';
 import { IntegrationConnectDialog } from './IntegrationConnectDialog';
 import { IntegrationDetailDialog } from './IntegrationDetailDialog';
 import { PhoneNumberSettings } from './PhoneNumberSettings';
@@ -29,6 +29,7 @@ const iconMap: Record<string, any> = {
   'claude-ai': Sparkles,
   'openai-gpt': Bot,
   automation: RefreshCw,
+  suvsign: PenTool,
   kommo: RefreshCw,
   other: Webhook,
   default: Webhook,
