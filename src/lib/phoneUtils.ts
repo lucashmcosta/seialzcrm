@@ -17,6 +17,7 @@ export const COUNTRIES: Country[] = [
   { code: 'AR', name: 'Argentina', dialCode: '54', flag: '🇦🇷', placeholder: '11 1234-5678' },
   { code: 'CL', name: 'Chile', dialCode: '56', flag: '🇨🇱', placeholder: '9 1234 5678' },
   { code: 'MX', name: 'México', dialCode: '52', flag: '🇲🇽', placeholder: '55 1234 5678' },
+  { code: 'AU', name: 'Australia', dialCode: '61', flag: '🇦🇺', placeholder: '412 345 678' },
 ];
 
 /**
@@ -109,6 +110,13 @@ export function formatPhoneForCountry(phone: string, countryCode: string): strin
       // 10 dígitos = 55 1234 5678
       if (cleaned.length === 10) {
         return `${cleaned.slice(0, 2)} ${cleaned.slice(2, 6)} ${cleaned.slice(6)}`;
+      }
+      break;
+      
+    case 'AU':
+      // 9 dígitos = 412 345 678
+      if (cleaned.length === 9) {
+        return `${cleaned.slice(0, 3)} ${cleaned.slice(3, 6)} ${cleaned.slice(6)}`;
       }
       break;
   }
