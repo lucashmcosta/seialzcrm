@@ -1058,8 +1058,14 @@ export type Database = {
       }
       contacts: {
         Row: {
+          address_city: string | null
+          address_neighborhood: string | null
+          address_state: string | null
+          address_street: string | null
+          address_zip: string | null
           company_id: string | null
           company_name: string | null
+          cpf: string | null
           created_at: string | null
           deleted_at: string | null
           do_not_contact: boolean | null
@@ -1070,9 +1076,12 @@ export type Database = {
           is_sample: boolean | null
           last_name: string | null
           lifecycle_stage: Database["public"]["Enums"]["lifecycle_stage"] | null
+          nationality: string | null
           organization_id: string
           owner_user_id: string | null
           phone: string | null
+          rg: string | null
+          rg_issuer: string | null
           source: string | null
           source_external_id: string | null
           updated_at: string | null
@@ -1081,8 +1090,14 @@ export type Database = {
           utm_source: string | null
         }
         Insert: {
+          address_city?: string | null
+          address_neighborhood?: string | null
+          address_state?: string | null
+          address_street?: string | null
+          address_zip?: string | null
           company_id?: string | null
           company_name?: string | null
+          cpf?: string | null
           created_at?: string | null
           deleted_at?: string | null
           do_not_contact?: boolean | null
@@ -1095,9 +1110,12 @@ export type Database = {
           lifecycle_stage?:
             | Database["public"]["Enums"]["lifecycle_stage"]
             | null
+          nationality?: string | null
           organization_id: string
           owner_user_id?: string | null
           phone?: string | null
+          rg?: string | null
+          rg_issuer?: string | null
           source?: string | null
           source_external_id?: string | null
           updated_at?: string | null
@@ -1106,8 +1124,14 @@ export type Database = {
           utm_source?: string | null
         }
         Update: {
+          address_city?: string | null
+          address_neighborhood?: string | null
+          address_state?: string | null
+          address_street?: string | null
+          address_zip?: string | null
           company_id?: string | null
           company_name?: string | null
+          cpf?: string | null
           created_at?: string | null
           deleted_at?: string | null
           do_not_contact?: boolean | null
@@ -1120,9 +1144,12 @@ export type Database = {
           lifecycle_stage?:
             | Database["public"]["Enums"]["lifecycle_stage"]
             | null
+          nationality?: string | null
           organization_id?: string
           owner_user_id?: string | null
           phone?: string | null
+          rg?: string | null
+          rg_issuer?: string | null
           source?: string | null
           source_external_id?: string | null
           updated_at?: string | null

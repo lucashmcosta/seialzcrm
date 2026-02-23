@@ -45,7 +45,7 @@ export function SendToSignatureButton({ contactId, opportunityId, size = 'sm' }:
       // Fetch contact data
       const { data: contact } = await supabase
         .from('contacts')
-        .select('full_name, first_name, last_name, email, phone')
+        .select('full_name, first_name, last_name, email, phone, cpf, rg, rg_issuer, nationality, address_street, address_neighborhood, address_city, address_state, address_zip')
         .eq('id', contactId)
         .single();
 
@@ -61,7 +61,17 @@ export function SendToSignatureButton({ contactId, opportunityId, size = 'sm' }:
           email: contact.email || '',
           phone: contact.phone || '',
         },
-        custom: {} as Record<string, string>,
+        custom: {
+          ...(contact.cpf && { cpf: contact.cpf }),
+          ...(contact.rg && { rg: contact.rg }),
+          ...(contact.rg_issuer && { rg_issuer: contact.rg_issuer }),
+          ...(contact.nationality && { nationality: contact.nationality }),
+          ...(contact.address_street && { address_street: contact.address_street }),
+          ...(contact.address_neighborhood && { address_neighborhood: contact.address_neighborhood }),
+          ...(contact.address_city && { address_city: contact.address_city }),
+          ...(contact.address_state && { address_state: contact.address_state }),
+          ...(contact.address_zip && { address_zip: contact.address_zip }),
+        } as Record<string, string>,
       };
 
       // If there's an opportunity, fetch its data
