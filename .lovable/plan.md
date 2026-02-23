@@ -1,32 +1,30 @@
 
-
-# Fix: Separar hasAI (agente) de hasAIIntegration (melhoria de texto)
+# Fix: Adicionar opcao "Tornar persuasivo" no chat do perfil do contato
 
 ## Problema
 
-A correcao anterior unificou tudo sob `hasAI` (que agora checa `ai_agents.is_enabled`). Isso fez os botoes de melhoria de texto (corrigir gramatica, tornar persuasivo, etc.) sumirem para orgs que tem a chave OpenAI configurada mas nao tem agente ativo.
+O componente `ContactMessages.tsx` (linha 746) tem apenas 3 opcoes no menu de melhoria de texto com AI:
+- Corrigir gramatica
+- Tornar profissional
+- Tornar amigavel
 
-As funcoes de melhoria de texto usam a edge function `ai-generate`, que depende da **integracao AI** (chave OpenAI/Claude em `organization_integrations`), NAO do agente.
+Falta a 4a opcao **"Tornar persuasivo"** que ja existe no `MessagesList.tsx` (linha 1512).
 
 ## Correcao
 
-Manter duas queries separadas:
+Adicionar o item de menu "Tornar persuasivo" no `DropdownMenuContent` do `ContactMessages.tsx`, logo apos "Tornar amigavel" (depois da linha 746):
 
-| Query | Checa | Controla |
-|-------|-------|----------|
-| `hasAIAgent` | `ai_agents.is_enabled = true` | Botao "Devolver ao AI" |
-| `hasAIIntegration` | `organization_integrations` com slug openai/claude | Botoes de melhoria de texto (corrigir, persuasivo, etc.) |
+```tsx
+<DropdownMenuItem onClick={() => handleImproveText('persuasive')}>
+  <Target className="w-4 h-4 mr-2" />
+  {locale === 'pt-BR' ? 'Tornar persuasivo' : 'Make persuasive'}
+</DropdownMenuItem>
+```
 
-## Mudancas no MessagesList.tsx
-
-1. Renomear a query atual `hasAI` para `hasAIAgent`
-2. Adicionar nova query `hasAIIntegration` que restaura a logica anterior (checa `organization_integrations` com slugs de AI)
-3. Atualizar condicional do botao "Devolver ao AI" (linha 1175): usar `hasAIAgent`
-4. Atualizar condicional dos botoes de melhoria de texto (linha 1469): usar `hasAIIntegration`
+Tambem verificar se o icone `Target` ja esta importado no componente. Se nao, adicionar ao import do `lucide-react`.
 
 ## Arquivo modificado
 
 | Arquivo | Mudanca |
 |---------|---------|
-| `src/pages/messages/MessagesList.tsx` | Separar `hasAI` em duas queries: `hasAIAgent` e `hasAIIntegration` |
-
+| `src/components/contacts/ContactMessages.tsx` | Adicionar opcao "Tornar persuasivo" no dropdown e importar icone `Target` se necessario |
