@@ -9,30 +9,30 @@ const corsHeaders = {
 // Normaliza telefone para formato E.164 (assume Brasil como padrão)
 function normalizePhoneToE164(phone: string): string {
   if (!phone) return '';
-  
-  // Remove tudo que não é número ou +
   let cleaned = phone.replace(/[^\d+]/g, '');
-  
-  // Se já está em E.164 (começa com +), retorna como está
-  if (cleaned.startsWith('+')) {
-    return cleaned;
-  }
-  
-  // Números brasileiros típicos: 10-11 dígitos (com DDD)
-  // Se tem 10-11 dígitos e começa com DDD válido (11-99), assume Brasil
+  if (cleaned.startsWith('+')) return cleaned;
   if (cleaned.length >= 10 && cleaned.length <= 11) {
     const ddd = parseInt(cleaned.substring(0, 2));
-    if (ddd >= 11 && ddd <= 99) {
-      return `+55${cleaned}`;
-    }
+    if (ddd >= 11 && ddd <= 99) return `+55${cleaned}`;
   }
-  
-  // Para outros casos, assume Brasil por padrão
   return `+55${cleaned}`;
 }
 
+// Apply transform to a value
+function applyTransform(value: string | null | undefined, transformType: string): string | null {
+  if (value == null || value === '') return null;
+  const strValue = String(value);
+  switch (transformType) {
+    case 'phone_e164': return normalizePhoneToE164(strValue);
+    case 'lowercase': return strValue.toLowerCase();
+    case 'uppercase': return strValue.toUpperCase();
+    case 'direct':
+    default: return strValue;
+  }
+}
+
 interface LeadPayload {
-  name: string;
+  name?: string;
   email?: string;
   phone?: string;
   company?: string;
@@ -44,40 +44,38 @@ interface LeadPayload {
   create_opportunity?: boolean;
   opportunity_title?: string;
   opportunity_value?: number;
+  [key: string]: unknown;
+}
+
+// Check if scopes array has a specific scope
+function hasScope(scopes: string[], scope: string): boolean {
+  return scopes.includes(scope);
+}
+
+// Check write access for contacts (backward compat with leads:write)
+function hasContactWriteScope(scopes: string[]): boolean {
+  return hasScope(scopes, 'contacts:write') || hasScope(scopes, 'leads:write');
 }
 
 serve(async (req) => {
-  // Handle CORS preflight requests
   if (req.method === 'OPTIONS') {
     return new Response(null, { headers: corsHeaders });
   }
 
-  // Only allow POST requests
-  if (req.method !== 'POST') {
-    return new Response(
-      JSON.stringify({ error: 'Method not allowed' }),
-      { status: 405, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-    );
-  }
-
   try {
-    // Get API key from header
     const apiKey = req.headers.get('x-api-key');
-    
     if (!apiKey) {
-      console.error('Missing x-api-key header');
       return new Response(
         JSON.stringify({ error: 'Missing API key. Include x-api-key header.' }),
         { status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       );
     }
 
-    // Create Supabase client with service role
     const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
     const supabaseServiceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
     const supabase = createClient(supabaseUrl, supabaseServiceKey);
 
-    // Validate API key and get organization
+    // Validate API key
     const { data: apiKeyData, error: apiKeyError } = await supabase
       .from('organization_api_keys')
       .select('id, organization_id, scopes, is_active')
@@ -85,7 +83,6 @@ serve(async (req) => {
       .single();
 
     if (apiKeyError || !apiKeyData) {
-      console.error('Invalid API key:', apiKeyError?.message);
       return new Response(
         JSON.stringify({ error: 'Invalid API key' }),
         { status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
@@ -93,42 +90,210 @@ serve(async (req) => {
     }
 
     if (!apiKeyData.is_active) {
-      console.error('API key is inactive');
       return new Response(
         JSON.stringify({ error: 'API key is inactive' }),
         { status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       );
     }
 
-    // Check if key has leads:write scope
-    const scopes = apiKeyData.scopes || [];
-    if (!scopes.includes('leads:write')) {
-      console.error('API key does not have leads:write scope');
-      return new Response(
-        JSON.stringify({ error: 'API key does not have permission to create leads' }),
-        { status: 403, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-      );
-    }
-
+    const scopes: string[] = apiKeyData.scopes || [];
     const organizationId = apiKeyData.organization_id;
 
-    // Parse request body
-    const payload: LeadPayload = await req.json();
+    // Update last_used_at
+    await supabase
+      .from('organization_api_keys')
+      .update({ last_used_at: new Date().toISOString() })
+      .eq('id', apiKeyData.id);
 
-    // Validate required fields
-    if (!payload.name || payload.name.trim() === '') {
+    // ==================== GET REQUEST ====================
+    if (req.method === 'GET') {
+      const url = new URL(req.url);
+      const entity = url.searchParams.get('entity') || 'contacts';
+      const limit = Math.min(parseInt(url.searchParams.get('limit') || '50'), 100);
+      const offset = parseInt(url.searchParams.get('offset') || '0');
+
+      if (entity === 'contacts') {
+        if (!hasScope(scopes, 'contacts:read')) {
+          return new Response(
+            JSON.stringify({ error: 'API key does not have contacts:read scope' }),
+            { status: 403, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+          );
+        }
+        const { data, error, count } = await supabase
+          .from('contacts')
+          .select('id, full_name, email, phone, company_name, source, lifecycle_stage, created_at', { count: 'exact' })
+          .eq('organization_id', organizationId)
+          .is('deleted_at', null)
+          .order('created_at', { ascending: false })
+          .range(offset, offset + limit - 1);
+
+        if (error) throw error;
+        return new Response(
+          JSON.stringify({ data, total: count, limit, offset }),
+          { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        );
+      }
+
+      if (entity === 'opportunities') {
+        if (!hasScope(scopes, 'opportunities:read')) {
+          return new Response(
+            JSON.stringify({ error: 'API key does not have opportunities:read scope' }),
+            { status: 403, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+          );
+        }
+        const { data, error, count } = await supabase
+          .from('opportunities')
+          .select('id, title, amount, status, contact_id, created_at', { count: 'exact' })
+          .eq('organization_id', organizationId)
+          .is('deleted_at', null)
+          .order('created_at', { ascending: false })
+          .range(offset, offset + limit - 1);
+
+        if (error) throw error;
+        return new Response(
+          JSON.stringify({ data, total: count, limit, offset }),
+          { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        );
+      }
+
+      if (entity === 'activities') {
+        if (!hasScope(scopes, 'activities:read')) {
+          return new Response(
+            JSON.stringify({ error: 'API key does not have activities:read scope' }),
+            { status: 403, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+          );
+        }
+        const { data, error, count } = await supabase
+          .from('activities')
+          .select('id, title, body, activity_type, contact_id, occurred_at', { count: 'exact' })
+          .eq('organization_id', organizationId)
+          .is('deleted_at', null)
+          .order('occurred_at', { ascending: false })
+          .range(offset, offset + limit - 1);
+
+        if (error) throw error;
+        return new Response(
+          JSON.stringify({ data, total: count, limit, offset }),
+          { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        );
+      }
+
       return new Response(
-        JSON.stringify({ error: 'Field "name" is required' }),
+        JSON.stringify({ error: 'Invalid entity. Use: contacts, opportunities, activities' }),
         { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       );
     }
 
-    // Parse name into first_name and last_name
-    const nameParts = payload.name.trim().split(' ');
+    // ==================== POST REQUEST ====================
+    if (req.method !== 'POST') {
+      return new Response(
+        JSON.stringify({ error: 'Method not allowed. Use GET or POST.' }),
+        { status: 405, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      );
+    }
+
+    // Check write scope
+    if (!hasContactWriteScope(scopes)) {
+      return new Response(
+        JSON.stringify({ error: 'API key does not have permission to create leads. Required: contacts:write or leads:write' }),
+        { status: 403, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      );
+    }
+
+    const rawPayload: LeadPayload = await req.json();
+
+    // ---- Field Mapping ----
+    // Fetch inbound field mappings for this org
+    const { data: contactMappings } = await supabase
+      .from('webhook_field_mappings')
+      .select('*')
+      .eq('organization_id', organizationId)
+      .eq('direction', 'inbound')
+      .eq('entity_type', 'contact');
+
+    const { data: opportunityMappings } = await supabase
+      .from('webhook_field_mappings')
+      .select('*')
+      .eq('organization_id', organizationId)
+      .eq('direction', 'inbound')
+      .eq('entity_type', 'opportunity');
+
+    let payload: LeadPayload;
+
+    if (contactMappings && contactMappings.length > 0) {
+      // Apply field mapping: translate external fields to internal
+      const mapped: Record<string, unknown> = {};
+
+      // Check required fields
+      for (const m of contactMappings) {
+        const rawValue = rawPayload[m.external_field];
+        const value = rawValue != null ? applyTransform(String(rawValue), m.transform_type) : (m.default_value || null);
+
+        if (m.is_required && (value == null || value === '')) {
+          return new Response(
+            JSON.stringify({ error: `Required field "${m.external_field}" is missing` }),
+            { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+          );
+        }
+
+        if (value != null) {
+          mapped[m.internal_field] = value;
+        }
+      }
+
+      // Build the payload from mapped fields
+      payload = {
+        name: (mapped.full_name as string) || rawPayload.name || '',
+        email: (mapped.email as string) || rawPayload.email,
+        phone: (mapped.phone as string) || rawPayload.phone,
+        company: (mapped.company_name as string) || rawPayload.company,
+        source: (mapped.source as string) || rawPayload.source,
+        utm_source: (mapped.utm_source as string) || rawPayload.utm_source,
+        utm_medium: (mapped.utm_medium as string) || rawPayload.utm_medium,
+        utm_campaign: (mapped.utm_campaign as string) || rawPayload.utm_campaign,
+        notes: (mapped.notes as string) || rawPayload.notes,
+        create_opportunity: rawPayload.create_opportunity,
+        opportunity_title: rawPayload.opportunity_title,
+        opportunity_value: rawPayload.opportunity_value,
+      };
+
+      // Handle opportunity mappings
+      if (opportunityMappings && opportunityMappings.length > 0) {
+        for (const m of opportunityMappings) {
+          const rawValue = rawPayload[m.external_field];
+          const value = rawValue != null ? applyTransform(String(rawValue), m.transform_type) : (m.default_value || null);
+          if (value != null) {
+            if (m.internal_field === 'title') payload.opportunity_title = value;
+            if (m.internal_field === 'amount') { payload.opportunity_value = parseFloat(value); payload.create_opportunity = true; }
+            if (m.internal_field === 'source') payload.source = value;
+          }
+        }
+        // If any opportunity mapping matched, auto-enable create_opportunity
+        if (payload.opportunity_title || payload.opportunity_value) {
+          payload.create_opportunity = true;
+        }
+      }
+
+      console.log('Field mapping applied. Translated payload:', JSON.stringify(payload));
+    } else {
+      // No mapping configured — use raw payload as-is (backward compatible)
+      payload = rawPayload;
+    }
+
+    // Validate required fields
+    if (!payload.name || String(payload.name).trim() === '') {
+      return new Response(
+        JSON.stringify({ error: 'Field "name" (or mapped equivalent) is required' }),
+        { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      );
+    }
+
+    // Parse name
+    const nameParts = String(payload.name).trim().split(' ');
     const firstName = nameParts[0];
     const lastName = nameParts.length > 1 ? nameParts.slice(1).join(' ') : null;
 
-    // Fetch organization duplicate settings
+    // Duplicate check
     const { data: orgSettings } = await supabase
       .from('organizations')
       .select('duplicate_check_mode, duplicate_enforce_block')
@@ -138,7 +303,6 @@ serve(async (req) => {
     const duplicateCheckMode = orgSettings?.duplicate_check_mode || 'none';
     const duplicateEnforceBlock = orgSettings?.duplicate_enforce_block ?? false;
 
-    // Check for duplicate contacts
     let existingContactId: string | null = null;
     let existingContactName: string | null = null;
     let duplicateField: string | null = null;
@@ -147,51 +311,19 @@ serve(async (req) => {
       const normalizedPhone = payload.phone ? normalizePhoneToE164(payload.phone) : null;
       const normalizedEmail = payload.email?.trim().toLowerCase() || null;
 
-      // Build duplicate query based on mode
       if (duplicateCheckMode === 'phone' && normalizedPhone) {
-        const { data: dup } = await supabase
-          .from('contacts')
-          .select('id, full_name')
-          .eq('organization_id', organizationId)
-          .eq('phone', normalizedPhone)
-          .is('deleted_at', null)
-          .limit(1)
-          .maybeSingle();
+        const { data: dup } = await supabase.from('contacts').select('id, full_name').eq('organization_id', organizationId).eq('phone', normalizedPhone).is('deleted_at', null).limit(1).maybeSingle();
         if (dup) { existingContactId = dup.id; existingContactName = dup.full_name; duplicateField = 'phone'; }
-
       } else if (duplicateCheckMode === 'email' && normalizedEmail) {
-        const { data: dup } = await supabase
-          .from('contacts')
-          .select('id, full_name')
-          .eq('organization_id', organizationId)
-          .eq('email', normalizedEmail)
-          .is('deleted_at', null)
-          .limit(1)
-          .maybeSingle();
+        const { data: dup } = await supabase.from('contacts').select('id, full_name').eq('organization_id', organizationId).eq('email', normalizedEmail).is('deleted_at', null).limit(1).maybeSingle();
         if (dup) { existingContactId = dup.id; existingContactName = dup.full_name; duplicateField = 'email'; }
-
       } else if (duplicateCheckMode === 'email_or_phone') {
-        // Check phone first, then email
         if (normalizedPhone) {
-          const { data: dup } = await supabase
-            .from('contacts')
-            .select('id, full_name')
-            .eq('organization_id', organizationId)
-            .eq('phone', normalizedPhone)
-            .is('deleted_at', null)
-            .limit(1)
-            .maybeSingle();
+          const { data: dup } = await supabase.from('contacts').select('id, full_name').eq('organization_id', organizationId).eq('phone', normalizedPhone).is('deleted_at', null).limit(1).maybeSingle();
           if (dup) { existingContactId = dup.id; existingContactName = dup.full_name; duplicateField = 'phone'; }
         }
         if (!existingContactId && normalizedEmail) {
-          const { data: dup } = await supabase
-            .from('contacts')
-            .select('id, full_name')
-            .eq('organization_id', organizationId)
-            .eq('email', normalizedEmail)
-            .is('deleted_at', null)
-            .limit(1)
-            .maybeSingle();
+          const { data: dup } = await supabase.from('contacts').select('id, full_name').eq('organization_id', organizationId).eq('email', normalizedEmail).is('deleted_at', null).limit(1).maybeSingle();
           if (dup) { existingContactId = dup.id; existingContactName = dup.full_name; duplicateField = 'email'; }
         }
       }
@@ -202,28 +334,19 @@ serve(async (req) => {
 
     if (existingContactId) {
       if (duplicateEnforceBlock) {
-        console.log(`Duplicate contact blocked: ${existingContactName} (${duplicateField})`);
         return new Response(
-          JSON.stringify({
-            error: 'Duplicate contact found',
-            existing_contact_id: existingContactId,
-            existing_contact_name: existingContactName,
-            duplicate_field: duplicateField,
-          }),
+          JSON.stringify({ error: 'Duplicate contact found', existing_contact_id: existingContactId, existing_contact_name: existingContactName, duplicate_field: duplicateField }),
           { status: 409, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
         );
       }
-      // Reuse existing contact
       contactId = existingContactId;
       duplicateReused = true;
-      console.log(`Reusing existing contact: ${existingContactName} (${existingContactId})`);
     } else {
-      // Create new contact
       const { data: contact, error: contactError } = await supabase
         .from('contacts')
         .insert({
           organization_id: organizationId,
-          full_name: payload.name.trim(),
+          full_name: String(payload.name).trim(),
           first_name: firstName,
           last_name: lastName,
           email: payload.email || null,
@@ -239,7 +362,6 @@ serve(async (req) => {
         .single();
 
       if (contactError) {
-        console.error('Error creating contact:', contactError);
         return new Response(
           JSON.stringify({ error: 'Failed to create contact', details: contactError.message }),
           { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
@@ -247,13 +369,12 @@ serve(async (req) => {
       }
       contactId = contact.id;
     }
+
     let opportunityId: string | null = null;
     let activityId: string | null = null;
 
-    // Create opportunity if requested
     if (payload.create_opportunity) {
-      // Get first pipeline stage for this organization
-      const { data: stages, error: stagesError } = await supabase
+      const { data: stages } = await supabase
         .from('pipeline_stages')
         .select('id')
         .eq('organization_id', organizationId)
@@ -261,9 +382,7 @@ serve(async (req) => {
         .order('order_index', { ascending: true })
         .limit(1);
 
-      if (stagesError || !stages || stages.length === 0) {
-        console.error('Error getting pipeline stage:', stagesError?.message);
-      } else {
+      if (stages && stages.length > 0) {
         const { data: opportunity, error: opportunityError } = await supabase
           .from('opportunities')
           .insert({
@@ -277,17 +396,11 @@ serve(async (req) => {
           .select('id')
           .single();
 
-        if (opportunityError) {
-          console.error('Error creating opportunity:', opportunityError);
-          // Don't fail the whole request, just log the error
-        } else {
-          opportunityId = opportunity?.id || null;
-        }
+        if (!opportunityError) opportunityId = opportunity?.id || null;
       }
     }
 
-    // Create activity/note if notes provided (after opportunity so we can link it)
-    if (payload.notes && payload.notes.trim() !== '') {
+    if (payload.notes && String(payload.notes).trim() !== '') {
       const { data: activity, error: activityError } = await supabase
         .from('activities')
         .insert({
@@ -296,25 +409,15 @@ serve(async (req) => {
           opportunity_id: opportunityId,
           activity_type: 'note',
           title: 'Nota do lead externo',
-          body: payload.notes.trim(),
+          body: String(payload.notes).trim(),
         })
         .select('id')
         .single();
 
-      if (activityError) {
-        console.error('Error creating activity:', activityError);
-      } else {
-        activityId = activity?.id || null;
-      }
+      if (!activityError) activityId = activity?.id || null;
     }
 
-    // Update last_used_at for the API key
-    await supabase
-      .from('organization_api_keys')
-      .update({ last_used_at: new Date().toISOString() })
-      .eq('id', apiKeyData.id);
-
-    console.log(`Lead created successfully: contact_id=${contactId}, opportunity_id=${opportunityId}`);
+    console.log(`Lead processed: contact_id=${contactId}, opportunity_id=${opportunityId}, mapping=${contactMappings && contactMappings.length > 0 ? 'yes' : 'no'}`);
 
     return new Response(
       JSON.stringify({

@@ -3516,6 +3516,56 @@ export type Database = {
         }
         Relationships: []
       }
+      webhook_field_mappings: {
+        Row: {
+          created_at: string | null
+          default_value: string | null
+          direction: string
+          entity_type: string
+          external_field: string
+          id: string
+          internal_field: string
+          is_required: boolean | null
+          organization_id: string
+          transform_type: string | null
+          updated_at: string | null
+        }
+        Insert: {
+          created_at?: string | null
+          default_value?: string | null
+          direction?: string
+          entity_type?: string
+          external_field: string
+          id?: string
+          internal_field: string
+          is_required?: boolean | null
+          organization_id: string
+          transform_type?: string | null
+          updated_at?: string | null
+        }
+        Update: {
+          created_at?: string | null
+          default_value?: string | null
+          direction?: string
+          entity_type?: string
+          external_field?: string
+          id?: string
+          internal_field?: string
+          is_required?: boolean | null
+          organization_id?: string
+          transform_type?: string | null
+          updated_at?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "webhook_field_mappings_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       whatsapp_template_actions: {
         Row: {
           created_at: string | null
