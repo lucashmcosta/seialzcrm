@@ -62,6 +62,7 @@ export function SendToSignatureButton({ contactId, opportunityId, size = 'sm' }:
           phone: contact.phone || '',
         },
         custom: {
+          contact_id: contactId,
           ...(contact.cpf && { cpf: contact.cpf }),
           ...(contact.rg && { rg: contact.rg }),
           ...(contact.rg_issuer && { rg_issuer: contact.rg_issuer }),
