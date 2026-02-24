@@ -39,16 +39,16 @@ import AcceptInvitation from "./pages/invite/AcceptInvitation";
 import DocsIndex from "./pages/docs/DocsIndex";
 import DocsModule from "./pages/docs/DocsModule";
 
-// Lazy load CRM pages
-const Onboarding = lazy(() => import("./pages/Onboarding"));
-const Dashboard = lazy(() => import("./pages/Dashboard"));
-const ContactsList = lazy(() => import("./pages/contacts/ContactsList"));
-const ContactDetail = lazy(() => import("./pages/contacts/ContactDetail"));
-const ContactForm = lazy(() => import("./pages/contacts/ContactForm"));
-const OpportunitiesKanban = lazy(() => import("./pages/opportunities/OpportunitiesKanban"));
-const OpportunityDetail = lazy(() => import("./pages/opportunities/OpportunityDetail"));
-const TasksList = lazy(() => import("./pages/tasks/TasksList"));
-const MessagesList = lazy(() => import("./pages/messages/MessagesList"));
+// Lazy load CRM pages with retry for chunk resilience
+const Onboarding = lazy(() => retryImport(() => import("./pages/Onboarding")));
+const Dashboard = lazy(() => retryImport(() => import("./pages/Dashboard")));
+const ContactsList = lazy(() => retryImport(() => import("./pages/contacts/ContactsList")));
+const ContactDetail = lazy(() => retryImport(() => import("./pages/contacts/ContactDetail")));
+const ContactForm = lazy(() => retryImport(() => import("./pages/contacts/ContactForm")));
+const OpportunitiesKanban = lazy(() => retryImport(() => import("./pages/opportunities/OpportunitiesKanban")));
+const OpportunityDetail = lazy(() => retryImport(() => import("./pages/opportunities/OpportunityDetail")));
+const TasksList = lazy(() => retryImport(() => import("./pages/tasks/TasksList")));
+const MessagesList = lazy(() => retryImport(() => import("./pages/messages/MessagesList")));
 // Settings layout + grid (replaces old Settings page)
 const SettingsLayout = lazy(() => import("./components/settings/SettingsLayout").then(m => ({ default: m.SettingsLayout })));
 const SettingsGrid = lazy(() => import("./components/settings/SettingsGrid").then(m => ({ default: m.SettingsGrid })));
