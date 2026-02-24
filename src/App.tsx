@@ -9,12 +9,24 @@ import { AuthProvider, useAuthContext } from "@/contexts/AuthContext";
 import { OrganizationProvider } from "@/contexts/OrganizationContext";
 import { BrowserRouter, Routes, Route, Navigate, useLocation } from "react-router-dom";
 import { PageLoader } from "./components/common/PageLoader";
-// Lazy load call handlers (heavy Twilio SDK)
+// Retry wrapper for dynamic imports (handles stale chunks after deployments)
+function retryImport<T>(fn: () => Promise<T>, retries = 2): Promise<T> {
+  return fn().catch((err) => {
+    if (retries > 0) {
+      return new Promise<T>((resolve) => setTimeout(() => resolve(retryImport(fn, retries - 1)), 1000));
+    }
+    // Force full reload on persistent chunk failures
+    window.location.reload();
+    throw err;
+  });
+}
+
+// Lazy load call handlers (heavy Twilio SDK) with retry
 const InboundCallHandler = lazy(() =>
-  import("./components/calls/InboundCallHandler").then(m => ({ default: m.InboundCallHandler }))
+  retryImport(() => import("./components/calls/InboundCallHandler")).then(m => ({ default: m.InboundCallHandler }))
 );
 const OutboundCallHandler = lazy(() =>
-  import("./components/calls/OutboundCallHandler").then(m => ({ default: m.OutboundCallHandler }))
+  retryImport(() => import("./components/calls/OutboundCallHandler")).then(m => ({ default: m.OutboundCallHandler }))
 );
 
 // Auth pages - load immediately (small)
