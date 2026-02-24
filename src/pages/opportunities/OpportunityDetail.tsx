@@ -377,6 +377,22 @@ export default function OpportunityDetail() {
                             : t('status.open')}
                         </Badge>
                       </div>
+                      {(opportunity as any).created_at && (
+                        <div>
+                          <p className="text-sm text-muted-foreground">Criado em</p>
+                          <p className="text-lg font-semibold">
+                            {new Date((opportunity as any).created_at).toLocaleDateString(locale, { day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' })}
+                          </p>
+                        </div>
+                      )}
+                      {(opportunity as any).updated_at && (
+                        <div>
+                          <p className="text-sm text-muted-foreground">Atualizado em</p>
+                          <p className="text-lg font-semibold">
+                            {new Date((opportunity as any).updated_at).toLocaleDateString(locale, { day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' })}
+                          </p>
+                        </div>
+                      )}
                     </div>
                   </div>
                 </CardContent>
