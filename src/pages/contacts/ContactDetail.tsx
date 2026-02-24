@@ -11,7 +11,7 @@ import { useOutboundCall } from '@/contexts/OutboundCallContext';
 import { formatPhoneDisplay } from '@/lib/phoneUtils';
 import { Card } from '@/components/ui/card';
 import { toast } from 'sonner';
-import { Mail, Phone, Building2, Edit, Trash2, MoreVertical, User, FileText, MapPin } from 'lucide-react';
+import { Mail, Phone, Building2, Edit, Trash2, MoreVertical, User, FileText, MapPin, Calendar } from 'lucide-react';
 import { Breadcrumbs } from '@/components/application/breadcrumbs/breadcrumbs';
 import { Tabs } from '@/components/application/tabs/tabs';
 import { NativeSelect } from '@/components/base/select/select-native';
@@ -301,6 +301,28 @@ export default function ContactDetail() {
                       />
                     </div>
                   </div>
+                  {contact.created_at && (
+                    <div className="flex items-center gap-3">
+                      <Calendar className="h-4 w-4 text-muted-foreground" />
+                      <div>
+                        <div className="text-sm text-muted-foreground">Criado em</div>
+                        <div className="text-foreground">
+                          {new Date(contact.created_at).toLocaleDateString(locale, { day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' })}
+                        </div>
+                      </div>
+                    </div>
+                  )}
+                  {contact.updated_at && (
+                    <div className="flex items-center gap-3">
+                      <Calendar className="h-4 w-4 text-muted-foreground" />
+                      <div>
+                        <div className="text-sm text-muted-foreground">Atualizado em</div>
+                        <div className="text-foreground">
+                          {new Date(contact.updated_at).toLocaleDateString(locale, { day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' })}
+                        </div>
+                      </div>
+                    </div>
+                  )}
                 </div>
               </Card>
 
