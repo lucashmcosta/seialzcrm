@@ -1,44 +1,50 @@
 
 
-# Adicionar Data de Criacao e Ultima Atualizacao no Contato e Oportunidade
+# Adicionar "Criado por" e "Atualizado por" (colunas genericas)
 
 ## O que muda
 
-Exibir **data de criacao** e **ultima atualizacao** nas paginas de detalhe do Contato e da Oportunidade. Sem campo de origem e sem informacao de quem criou.
+Colunas com nomes genericos: `created_by` e `updated_by` (tipo UUID, nullable). Sem "user_id" no nome - nao indica se foi usuario ou sistema, e simplesmente quem fez.
+
+- `NULL` = "Sistema"
+- UUID preenchido = buscar nome na tabela `users`
 
 ---
 
-## Contato (`src/pages/contacts/ContactDetail.tsx`)
+## 1. Migracao de banco de dados
 
-No card "Detalhes" (grid existente, linhas 239-303), adicionar dois novos itens ao final do grid:
-
-- **Criado em** - icone `Calendar`, valor formatado de `contact.created_at`
-- **Atualizado em** - icone `Calendar`, valor formatado de `contact.updated_at`
-
-Importar `Calendar` do `lucide-react`.
-
----
-
-## Oportunidade (`src/pages/opportunities/OpportunityDetail.tsx`)
-
-Na aba "overview" (grid existente, linhas 319-380), adicionar dois campos na coluna direita (apos status):
-
-- **Criado em** - valor formatado de `opportunity.created_at`
-- **Atualizado em** - valor formatado de `opportunity.updated_at`
-
----
-
-## Formato de data
-
-Ambos usarao: `dia mes ano, hora:minuto`
-Exemplo: `24 fev 2026, 14:06`
-
-```typescript
-new Date(value).toLocaleDateString(locale, {
-  day: '2-digit', month: 'short', year: 'numeric',
-  hour: '2-digit', minute: '2-digit'
-})
+```sql
+ALTER TABLE contacts ADD COLUMN created_by uuid;
+ALTER TABLE contacts ADD COLUMN updated_by uuid;
+ALTER TABLE opportunities ADD COLUMN created_by uuid;
+ALTER TABLE opportunities ADD COLUMN updated_by uuid;
 ```
+
+Sem foreign key formal. Colunas nullable. Registros existentes ficam NULL = "Sistema".
+
+---
+
+## 2. Contato (`src/pages/contacts/ContactDetail.tsx`)
+
+- Apos carregar o contato, se `created_by` ou `updated_by` tiver valor, buscar nomes na tabela `users` com `.in('id', [ids])`
+- Exibir no grid de detalhes (abaixo das datas ja existentes):
+  - **Criado por** - icone `User`, nome ou "Sistema"
+  - **Atualizado por** - icone `User`, nome ou "Sistema"
+
+---
+
+## 3. Oportunidade (`src/pages/opportunities/OpportunityDetail.tsx`)
+
+- Mesma logica: buscar nomes se IDs existirem
+- Exibir na aba overview, abaixo das datas
+
+---
+
+## 4. Salvar nos formularios
+
+- **ContactForm** (`src/pages/contacts/ContactForm.tsx`): no insert, enviar `created_by: userProfile.id`
+- **OpportunityDialog** (`src/components/opportunities/OpportunityDialog.tsx`): no insert, enviar `created_by: userProfile.id`
+- Nos updates do ContactDetail e OpportunityDetail: enviar `updated_by: userProfile.id`
 
 ---
 
@@ -46,6 +52,9 @@ new Date(value).toLocaleDateString(locale, {
 
 | Arquivo | Mudanca |
 |---------|---------|
-| `src/pages/contacts/ContactDetail.tsx` | Adicionar `created_at` e `updated_at` no grid de detalhes + importar `Calendar` |
-| `src/pages/opportunities/OpportunityDetail.tsx` | Adicionar `created_at` e `updated_at` na aba overview |
+| Migracao SQL | 4 colunas: `created_by` e `updated_by` em `contacts` e `opportunities` |
+| `src/pages/contacts/ContactDetail.tsx` | Buscar nomes, exibir "Criado por" e "Atualizado por" |
+| `src/pages/opportunities/OpportunityDetail.tsx` | Buscar nomes, exibir "Criado por" e "Atualizado por" |
+| `src/pages/contacts/ContactForm.tsx` | Enviar `created_by` ao criar |
+| `src/components/opportunities/OpportunityDialog.tsx` | Enviar `created_by` ao criar |
 
