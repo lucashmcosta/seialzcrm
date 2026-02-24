@@ -1,89 +1,81 @@
 
-# Corrigir Pesquisa de Oportunidades por Nome do Cliente
 
-## Problema Identificado
+# Notas Internas nas Conversas (usando tabela `activities`)
 
-A pesquisa server-side retorna **erro 400** porque o Supabase PostgREST nao suporta filtrar colunas de tabelas relacionadas (como `contacts.full_name`) dentro do `.or()`. A query atual:
+## Resumo
 
-```
-.or(`title.ilike.%${searchTerm}%,contacts.full_name.ilike.%${searchTerm}%`)
-```
+Adicionar opcao "Nota" no menu "+" do chat. As notas serao salvas na tabela `activities` (com `activity_type = 'note'`) vinculadas ao contato da conversa, NAO na tabela `messages`. Isso evita confusao entre mensagens reais e notas internas.
 
-...falha silenciosamente (retorna array vazio no frontend).
+As notas aparecerao inline no chat com visual diferenciado (fundo amarelo), intercaladas com as mensagens por ordem cronologica.
 
-## Solucao
+## Como funciona para o usuario
 
-Fazer duas queries separadas e combinar os resultados:
+1. Clica no "+" e seleciona "Nota"
+2. A area de digitacao muda para fundo amarelo com indicador "Nota interna - nao sera enviada ao cliente"
+3. Digita a nota e envia
+4. A nota aparece no chat com fundo amarelo e badge "Nota interna"
+5. A nota fica salva na tabela `activities`, visivel tambem na aba Notas do contato
 
-1. **Query 1**: Buscar por titulo da oportunidade (`title.ilike`)
-2. **Query 2**: Buscar contatos pelo nome (`full_name.ilike`), pegar seus IDs, e depois buscar oportunidades com esses `contact_id`s
+## Detalhes Tecnicos
 
-Alternativamente (mais simples e eficiente): como os titulos das oportunidades ja contem o nome do cliente (ex: "Voo Atrasado - Fausto Jose Rangel dos santos"), podemos buscar apenas pelo titulo. Porem, para garantir que funcione em todos os casos, faremos as duas queries.
+### 1. MediaUploadButton (`src/components/whatsapp/MediaUploadButton.tsx`)
 
-## Mudancas Tecnicas
+- Adicionar prop `onNoteClick`
+- Novo item no dropdown com icone `StickyNote` e texto "Nota"
 
-### Arquivo: `src/pages/opportunities/OpportunitiesKanban.tsx`
+### 2. MessagesList (`src/pages/messages/MessagesList.tsx`)
 
-Substituir o `useEffect` de pesquisa (linhas 126-154) para fazer duas queries e mesclar resultados:
+**Novos estados:**
+- `isNoteMode: boolean` - controla se o input esta no modo nota
+- `inlineNotes: array` - notas carregadas da tabela `activities` para o contato atual
 
-```typescript
-useEffect(() => {
-  if (!searchTerm || searchTerm.length < 2 || !organization?.id) {
-    setSearchResults(null);
-    return;
-  }
+**Busca de notas:**
+- Ao selecionar uma thread, alem de buscar mensagens, buscar notas da tabela `activities` onde `contact_id` = contato da thread e `activity_type = 'note'`
+- Cada nota tera campos: `id`, `body`, `occurred_at`, `created_by_user_id`
 
-  const timer = setTimeout(async () => {
-    // Query 1: Search by opportunity title
-    const { data: byTitle } = await supabase
-      .from('opportunities')
-      .select(`*, contacts(full_name), users(full_name)`)
-      .eq('organization_id', organization.id)
-      .is('deleted_at', null)
-      .ilike('title', `%${searchTerm}%`)
-      .order('created_at', { ascending: false })
-      .limit(100);
+**Mesclagem para exibicao:**
+- Criar um array unificado combinando `messages` e `inlineNotes`, ordenado por data (`sent_at` para mensagens, `occurred_at` para notas)
+- Cada item tera um campo `_type: 'message' | 'note'` para diferenciar na renderizacao
 
-    // Query 2: Find contacts matching the name, then get their opportunities
-    const { data: matchingContacts } = await supabase
-      .from('contacts')
-      .select('id')
-      .eq('organization_id', organization.id)
-      .ilike('full_name', `%${searchTerm}%`)
-      .limit(50);
+**Renderizacao das notas:**
+- Notas aparecem com fundo amarelo (`bg-yellow-100 dark:bg-yellow-900/30`), centralizadas (nao alinhadas a esquerda ou direita)
+- Badge "Nota interna" com icone de nota no topo
+- Exibe o nome do autor e horario
 
-    let byContact: Opportunity[] = [];
-    if (matchingContacts && matchingContacts.length > 0) {
-      const contactIds = matchingContacts.map(c => c.id);
-      const { data } = await supabase
-        .from('opportunities')
-        .select(`*, contacts(full_name), users(full_name)`)
-        .eq('organization_id', organization.id)
-        .is('deleted_at', null)
-        .in('contact_id', contactIds)
-        .order('created_at', { ascending: false })
-        .limit(100);
-      byContact = data || [];
-    }
+**Salvar nota:**
+- Quando usuario envia no modo nota, inserir na tabela `activities`:
+  ```
+  organization_id, contact_id, activity_type: 'note',
+  title: 'Nota na conversa', body: texto,
+  created_by_user_id: userProfile.id, occurred_at: now()
+  ```
+- Adicionar a nota otimisticamente ao array `inlineNotes`
+- Desativar `isNoteMode` apos envio
 
-    // Merge results, removing duplicates by ID
-    const merged = [...(byTitle || [])];
-    const existingIds = new Set(merged.map(o => o.id));
-    byContact.forEach(opp => {
-      if (!existingIds.has(opp.id)) {
-        merged.push(opp);
-      }
-    });
+**Visual do input em modo nota:**
+- Barra amarela acima do textarea: "Nota interna - nao sera enviada ao cliente" com botao X para cancelar
+- Textarea com borda/fundo amarelo sutil
 
-    setSearchResults(merged);
-  }, 300);
-
-  return () => clearTimeout(timer);
-}, [searchTerm, organization?.id]);
+**Passar `onNoteClick` para MediaUploadButton:**
+```tsx
+<MediaUploadButton
+  onFileSelected={handleFileSelected}
+  onTemplateClick={() => setShowTemplates(true)}
+  onNoteClick={() => setIsNoteMode(true)}
+  disabled={submitting || mediaUploading}
+/>
 ```
 
-### Resumo
+### Resumo das mudancas
 
 | Arquivo | Mudanca |
 |---------|---------|
-| `src/pages/opportunities/OpportunitiesKanban.tsx` | Substituir query `.or()` com coluna de tabela relacionada por duas queries separadas (por titulo + por contact_id) e mesclar resultados sem duplicatas |
+| `src/components/whatsapp/MediaUploadButton.tsx` | Prop `onNoteClick` + item "Nota" no menu |
+| `src/pages/messages/MessagesList.tsx` | Estado `isNoteMode`, busca de notas em `activities`, mesclagem cronologica com mensagens, visual amarelo para notas, handler de salvamento em `activities` |
+
+### Vantagens desta abordagem
+
+- Notas ficam na tabela `activities`, sem poluir a tabela `messages`
+- As mesmas notas aparecem na aba "Notas" do contato (componente `ContactNotes` ja existente)
+- Separacao clara entre comunicacao com cliente e anotacoes internas
+
