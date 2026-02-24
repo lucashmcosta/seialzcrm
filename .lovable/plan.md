@@ -1,79 +1,32 @@
 
-# Corrigir Kanban (status Ganho/Perdido) e Pesquisa por Nome do Cliente
+# Corrigir Pesquisa de Oportunidades por Nome do Cliente
 
-## Problema 1: Kanban nao mostra oportunidades ganhas/perdidas
+## Problema Identificado
 
-**Causa raiz:** Na busca de oportunidades por estagio (linha 174), o filtro `.eq('status', 'open')` e aplicado a TODAS as colunas, incluindo as de tipo "won" e "lost". Quando uma oportunidade e marcada como ganha, seu status muda para "won", mas o Kanban so busca "open" - entao ela desaparece.
+A pesquisa server-side retorna **erro 400** porque o Supabase PostgREST nao suporta filtrar colunas de tabelas relacionadas (como `contacts.full_name`) dentro do `.or()`. A query atual:
 
-**Solucao:** Ajustar o filtro de status de acordo com o tipo do estagio:
-- Estagios tipo `won` -> buscar `status = 'won'`
-- Estagios tipo `lost` -> buscar `status = 'lost'`
-- Estagios normais -> buscar `status = 'open'`
+```
+.or(`title.ilike.%${searchTerm}%,contacts.full_name.ilike.%${searchTerm}%`)
+```
 
-Isso se aplica em 3 pontos:
-1. Busca inicial por estagio (fetchData, ~linha 160-181)
-2. Busca de paginacao/infinite scroll (loadMoreForStage, ~linha 248-264)
-3. Contagem do RPC ja deve estar correta pois usa stage_id sem filtro de status
+...falha silenciosamente (retorna array vazio no frontend).
 
-## Problema 2: Pesquisa por nome do cliente nao funciona
+## Solucao
 
-**Causa raiz:** A pesquisa e feita apenas client-side sobre os dados ja carregados em memoria (max 50 por estagio). Se a oportunidade nao esta na primeira pagina, nao sera encontrada. Alem disso, na view de tabela, os dados sao os mesmos do Kanban (limitados).
+Fazer duas queries separadas e combinar os resultados:
 
-**Solucao:** Quando o usuario digitar um termo de pesquisa, fazer uma busca no banco de dados usando `ilike` no titulo da oportunidade e um join com contatos. Isso garante que a pesquisa cubra todas as oportunidades, nao apenas as carregadas.
+1. **Query 1**: Buscar por titulo da oportunidade (`title.ilike`)
+2. **Query 2**: Buscar contatos pelo nome (`full_name.ilike`), pegar seus IDs, e depois buscar oportunidades com esses `contact_id`s
 
-Adicionar um `useEffect` com debounce que, ao detectar `searchTerm`, faz uma query no Supabase filtrando por titulo ou nome do contato, e atualiza os resultados exibidos.
-
----
+Alternativamente (mais simples e eficiente): como os titulos das oportunidades ja contem o nome do cliente (ex: "Voo Atrasado - Fausto Jose Rangel dos santos"), podemos buscar apenas pelo titulo. Porem, para garantir que funcione em todos os casos, faremos as duas queries.
 
 ## Mudancas Tecnicas
 
 ### Arquivo: `src/pages/opportunities/OpportunitiesKanban.tsx`
 
-**Mudanca 1 - Filtro de status por tipo de estagio:**
-
-Na funcao `fetchData`, dentro do `Promise.all` que busca oportunidades por estagio, substituir o filtro fixo `.eq('status', 'open')` por um filtro dinamico:
+Substituir o `useEffect` de pesquisa (linhas 126-154) para fazer duas queries e mesclar resultados:
 
 ```typescript
-// Determinar o status correto baseado no tipo do estagio
-const statusFilter = stage.type === 'won' ? 'won' : stage.type === 'lost' ? 'lost' : 'open';
-
-const { data } = await supabase
-  .from('opportunities')
-  .select(`...`)
-  .eq('organization_id', organization.id)
-  .eq('pipeline_stage_id', stage.id)
-  .eq('status', statusFilter)  // <-- filtro dinamico
-  .is('deleted_at', null)
-  .order('created_at', { ascending: false })
-  .limit(CARDS_PER_STAGE);
-```
-
-Aplicar a mesma logica na funcao `loadMoreForStage`:
-
-```typescript
-// Encontrar o tipo do estagio para determinar o filtro de status
-const stageType = stages.find(s => s.id === stageId)?.type;
-const statusFilter = stageType === 'won' ? 'won' : stageType === 'lost' ? 'lost' : 'open';
-
-const { data } = await supabase
-  .from('opportunities')
-  .select(`...`)
-  .eq('organization_id', organization.id)
-  .eq('pipeline_stage_id', stageId)
-  .eq('status', statusFilter)  // <-- filtro dinamico
-  .is('deleted_at', null)
-  ...
-```
-
-**Mudanca 2 - Pesquisa server-side por nome do cliente:**
-
-Adicionar uma funcao de pesquisa que consulta o banco quando o usuario digita:
-
-```typescript
-// Novo estado para resultados de pesquisa
-const [searchResults, setSearchResults] = useState<Opportunity[] | null>(null);
-
-// useEffect com debounce para pesquisa server-side
 useEffect(() => {
   if (!searchTerm || searchTerm.length < 2 || !organization?.id) {
     setSearchResults(null);
@@ -81,39 +34,56 @@ useEffect(() => {
   }
 
   const timer = setTimeout(async () => {
-    const { data } = await supabase
+    // Query 1: Search by opportunity title
+    const { data: byTitle } = await supabase
       .from('opportunities')
       .select(`*, contacts(full_name), users(full_name)`)
       .eq('organization_id', organization.id)
       .is('deleted_at', null)
-      .or(`title.ilike.%${searchTerm}%,contacts.full_name.ilike.%${searchTerm}%`)
+      .ilike('title', `%${searchTerm}%`)
+      .order('created_at', { ascending: false })
       .limit(100);
 
-    setSearchResults(data || []);
+    // Query 2: Find contacts matching the name, then get their opportunities
+    const { data: matchingContacts } = await supabase
+      .from('contacts')
+      .select('id')
+      .eq('organization_id', organization.id)
+      .ilike('full_name', `%${searchTerm}%`)
+      .limit(50);
+
+    let byContact: Opportunity[] = [];
+    if (matchingContacts && matchingContacts.length > 0) {
+      const contactIds = matchingContacts.map(c => c.id);
+      const { data } = await supabase
+        .from('opportunities')
+        .select(`*, contacts(full_name), users(full_name)`)
+        .eq('organization_id', organization.id)
+        .is('deleted_at', null)
+        .in('contact_id', contactIds)
+        .order('created_at', { ascending: false })
+        .limit(100);
+      byContact = data || [];
+    }
+
+    // Merge results, removing duplicates by ID
+    const merged = [...(byTitle || [])];
+    const existingIds = new Set(merged.map(o => o.id));
+    byContact.forEach(opp => {
+      if (!existingIds.has(opp.id)) {
+        merged.push(opp);
+      }
+    });
+
+    setSearchResults(merged);
   }, 300);
 
   return () => clearTimeout(timer);
 }, [searchTerm, organization?.id]);
 ```
 
-Usar `searchResults` quando disponivel (pesquisa ativa) em vez dos dados do kanban, tanto no filtro `getOpportunitiesForStage` quanto no `filteredOpportunities` da tabela.
-
-Na view Kanban, quando ha pesquisa ativa, os cards filtrados usarao os resultados do servidor. Na view tabela, `filteredOpportunities` usara `searchResults` quando disponivel:
-
-```typescript
-const filteredOpportunities = useMemo(() => {
-  const baseData = searchResults !== null ? searchResults : opportunities;
-  return baseData.filter((opp) => {
-    // manter filtros de owner, amount, date
-    // remover filtro de searchTerm pois ja veio filtrado do servidor
-    ...
-  });
-}, [opportunities, searchResults, ...]);
-```
-
-### Resumo das mudancas
+### Resumo
 
 | Arquivo | Mudanca |
 |---------|---------|
-| `src/pages/opportunities/OpportunitiesKanban.tsx` | Filtro de status dinamico por tipo de estagio (won/lost/open) |
-| `src/pages/opportunities/OpportunitiesKanban.tsx` | Pesquisa server-side com debounce para buscar por titulo e nome do contato |
+| `src/pages/opportunities/OpportunitiesKanban.tsx` | Substituir query `.or()` com coluna de tabela relacionada por duas queries separadas (por titulo + por contact_id) e mesclar resultados sem duplicatas |
