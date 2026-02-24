@@ -6,15 +6,16 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
-import { Plus, Image, FileText, Video, FileStack } from 'lucide-react';
+import { Plus, Image, FileText, Video, FileStack, StickyNote } from 'lucide-react';
 
 interface MediaUploadButtonProps {
   onFileSelected: (file: File) => void;
   onTemplateClick?: () => void;
+  onNoteClick?: () => void;
   disabled?: boolean;
 }
 
-export function MediaUploadButton({ onFileSelected, onTemplateClick, disabled }: MediaUploadButtonProps) {
+export function MediaUploadButton({ onFileSelected, onTemplateClick, onNoteClick, disabled }: MediaUploadButtonProps) {
   const imageInputRef = useRef<HTMLInputElement>(null);
   const videoInputRef = useRef<HTMLInputElement>(null);
   const documentInputRef = useRef<HTMLInputElement>(null);
@@ -75,6 +76,12 @@ export function MediaUploadButton({ onFileSelected, onTemplateClick, disabled }:
             <DropdownMenuItem onClick={onTemplateClick}>
               <FileStack className="w-4 h-4 mr-2" />
               Template
+            </DropdownMenuItem>
+          )}
+          {onNoteClick && (
+            <DropdownMenuItem onClick={onNoteClick}>
+              <StickyNote className="w-4 h-4 mr-2" />
+              Nota
             </DropdownMenuItem>
           )}
         </DropdownMenuContent>
