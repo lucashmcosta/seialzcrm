@@ -1,161 +1,119 @@
 
-# Receber Documento Assinado do SuvSign (Webhook)
+# Corrigir Kanban (status Ganho/Perdido) e Pesquisa por Nome do Cliente
 
-## Resumo
+## Problema 1: Kanban nao mostra oportunidades ganhas/perdidas
 
-Criar uma edge function dedicada `suvsign-webhook` para receber o webhook `document.completed` do SuvSign. Ao receber, a funcao vai:
+**Causa raiz:** Na busca de oportunidades por estagio (linha 174), o filtro `.eq('status', 'open')` e aplicado a TODAS as colunas, incluindo as de tipo "won" e "lost". Quando uma oportunidade e marcada como ganha, seu status muda para "won", mas o Kanban so busca "open" - entao ela desaparece.
 
-1. Validar a assinatura HMAC-SHA256 (seguranca)
-2. Localizar a oportunidade pelo `deal_id` do metadata
-3. Baixar o PDF assinado e salvar no Storage do Supabase
-4. Criar um registro na tabela `attachments` vinculado a oportunidade
-5. Registrar uma atividade no timeline da oportunidade
-6. Retornar 200 para confirmar recebimento
+**Solucao:** Ajustar o filtro de status de acordo com o tipo do estagio:
+- Estagios tipo `won` -> buscar `status = 'won'`
+- Estagios tipo `lost` -> buscar `status = 'lost'`
+- Estagios normais -> buscar `status = 'open'`
 
-Alem disso, atualizar o `SendToSignatureButton` para enviar `contact_id` no payload, permitindo que o webhook saiba qual contato esta associado.
+Isso se aplica em 3 pontos:
+1. Busca inicial por estagio (fetchData, ~linha 160-181)
+2. Busca de paginacao/infinite scroll (loadMoreForStage, ~linha 248-264)
+3. Contagem do RPC ja deve estar correta pois usa stage_id sem filtro de status
+
+## Problema 2: Pesquisa por nome do cliente nao funciona
+
+**Causa raiz:** A pesquisa e feita apenas client-side sobre os dados ja carregados em memoria (max 50 por estagio). Se a oportunidade nao esta na primeira pagina, nao sera encontrada. Alem disso, na view de tabela, os dados sao os mesmos do Kanban (limitados).
+
+**Solucao:** Quando o usuario digitar um termo de pesquisa, fazer uma busca no banco de dados usando `ilike` no titulo da oportunidade e um join com contatos. Isso garante que a pesquisa cubra todas as oportunidades, nao apenas as carregadas.
+
+Adicionar um `useEffect` com debounce que, ao detectar `searchTerm`, faz uma query no Supabase filtrando por titulo ou nome do contato, e atualiza os resultados exibidos.
 
 ---
 
-## Mudancas
+## Mudancas Tecnicas
 
-### 1. Atualizar `SendToSignatureButton.tsx` - Enviar `contact_id` no payload
+### Arquivo: `src/pages/opportunities/OpportunitiesKanban.tsx`
 
-Adicionar `contact_id` ao objeto `custom` do payload enviado ao SuvSign, para que ele retorne via webhook metadata.
+**Mudanca 1 - Filtro de status por tipo de estagio:**
+
+Na funcao `fetchData`, dentro do `Promise.all` que busca oportunidades por estagio, substituir o filtro fixo `.eq('status', 'open')` por um filtro dinamico:
 
 ```typescript
-// Adicionar junto com os outros campos custom:
-payload.custom.contact_id = contactId;
+// Determinar o status correto baseado no tipo do estagio
+const statusFilter = stage.type === 'won' ? 'won' : stage.type === 'lost' ? 'lost' : 'open';
+
+const { data } = await supabase
+  .from('opportunities')
+  .select(`...`)
+  .eq('organization_id', organization.id)
+  .eq('pipeline_stage_id', stage.id)
+  .eq('status', statusFilter)  // <-- filtro dinamico
+  .is('deleted_at', null)
+  .order('created_at', { ascending: false })
+  .limit(CARDS_PER_STAGE);
 ```
 
-### 2. Criar Edge Function `suvsign-webhook`
+Aplicar a mesma logica na funcao `loadMoreForStage`:
 
-**Arquivo:** `supabase/functions/suvsign-webhook/index.ts`
+```typescript
+// Encontrar o tipo do estagio para determinar o filtro de status
+const stageType = stages.find(s => s.id === stageId)?.type;
+const statusFilter = stageType === 'won' ? 'won' : stageType === 'lost' ? 'lost' : 'open';
 
-Fluxo da funcao:
-
-```text
-POST /suvsign-webhook
-  |
-  +-- Validar X-Webhook-Signature (HMAC-SHA256) usando secret da org
-  |
-  +-- Extrair deal_id e contact_id do payload metadata
-  |
-  +-- Buscar a oportunidade pelo deal_id
-  |     (para obter organization_id e confirmar existencia)
-  |
-  +-- Baixar o PDF de data.document.file_url
-  |
-  +-- Upload do PDF no bucket "attachments"
-  |     path: {opportunity_id}/{timestamp}_signed.pdf
-  |
-  +-- Inserir registro na tabela "attachments"
-  |     entity_type: "opportunity"
-  |     entity_id: opportunity_id
-  |
-  +-- Inserir atividade no timeline
-  |     activity_type: "system"
-  |     title: "Documento assinado: {titulo}"
-  |
-  +-- Retornar 200 OK
+const { data } = await supabase
+  .from('opportunities')
+  .select(`...`)
+  .eq('organization_id', organization.id)
+  .eq('pipeline_stage_id', stageId)
+  .eq('status', statusFilter)  // <-- filtro dinamico
+  .is('deleted_at', null)
+  ...
 ```
 
-**Autenticacao do webhook:** O SuvSign envia um header `X-Webhook-Signature` com HMAC-SHA256 do body. O secret precisa ser armazenado como um Supabase secret (`SUVSIGN_WEBHOOK_SECRET`).
+**Mudanca 2 - Pesquisa server-side por nome do cliente:**
 
-**Alternativa simplificada:** Como cada organizacao pode ter um secret diferente no SuvSign, podemos armazenar o webhook_secret no `config_values` da `organization_integrations`. A funcao buscara o secret da org pelo `connector_id` do metadata.
+Adicionar uma funcao de pesquisa que consulta o banco quando o usuario digita:
 
-### 3. Adicionar campo `webhook_secret` ao config_schema do SuvSign
+```typescript
+// Novo estado para resultados de pesquisa
+const [searchResults, setSearchResults] = useState<Opportunity[] | null>(null);
 
-Atualizar o `config_schema` na tabela `admin_integrations` para incluir um campo `webhook_secret`:
-
-```json
-{
-  "key": "webhook_secret",
-  "label": "Webhook Secret",
-  "type": "password",
-  "placeholder": "Secret para validacao HMAC",
-  "required": false,
-  "description": "Encontre no SuvSign em Configuracoes > Webhooks. Usado para validar assinatura dos webhooks recebidos."
-}
-```
-
-### 4. Atualizar `config.toml`
-
-```toml
-[functions.suvsign-webhook]
-verify_jwt = false
-```
-
----
-
-## Detalhes Tecnicos
-
-### Edge Function: `suvsign-webhook/index.ts`
-
-```text
-Payload recebido (POST body):
-{
-  "event": "document.completed",
-  "document_id": "uuid",
-  "timestamp": "2026-02-24T15:30:00Z",
-  "data": {
-    "document": {
-      "id": "uuid",
-      "title": "Nome do Contrato",
-      "status": "completed",
-      "completed_at": "2026-02-24T15:30:00Z",
-      "file_url": "https://...supabase.co/storage/.../doc.pdf"
-    },
-    "signatories": [...],
-    "metadata": {
-      "deal_id": "uuid-da-oportunidade",
-      "contact_id": "uuid-do-contato",
-      "connector_id": "uuid-do-connector"
-    }
+// useEffect com debounce para pesquisa server-side
+useEffect(() => {
+  if (!searchTerm || searchTerm.length < 2 || !organization?.id) {
+    setSearchResults(null);
+    return;
   }
-}
+
+  const timer = setTimeout(async () => {
+    const { data } = await supabase
+      .from('opportunities')
+      .select(`*, contacts(full_name), users(full_name)`)
+      .eq('organization_id', organization.id)
+      .is('deleted_at', null)
+      .or(`title.ilike.%${searchTerm}%,contacts.full_name.ilike.%${searchTerm}%`)
+      .limit(100);
+
+    setSearchResults(data || []);
+  }, 300);
+
+  return () => clearTimeout(timer);
+}, [searchTerm, organization?.id]);
 ```
 
-**Fluxo de validacao HMAC:**
-1. Ler `connector_id` do metadata
-2. Buscar `organization_integrations` pelo `connector_id` no `config_values`
-3. Extrair `webhook_secret` do `config_values`
-4. Se webhook_secret existir, validar HMAC-SHA256 do body contra `X-Webhook-Signature`
-5. Se nao existir, aceitar sem validacao (campo opcional)
+Usar `searchResults` quando disponivel (pesquisa ativa) em vez dos dados do kanban, tanto no filtro `getOpportunitiesForStage` quanto no `filteredOpportunities` da tabela.
 
-**Busca da oportunidade:**
-- Buscar em `opportunities` pelo `id = deal_id`
-- Usar o `organization_id` da oportunidade para as insercoes seguintes
-- Se nao encontrar, retornar 404
+Na view Kanban, quando ha pesquisa ativa, os cards filtrados usarao os resultados do servidor. Na view tabela, `filteredOpportunities` usara `searchResults` quando disponivel:
 
-**Download e upload do PDF:**
-- Fazer `fetch(data.document.file_url)` para baixar o PDF
-- Upload no bucket `attachments` com path `{opportunity_id}/{timestamp}_signed.pdf`
-- Registrar na tabela `attachments` com `entity_type: 'opportunity'`
-
-**Atividade no timeline:**
-- Inserir em `activities` com `activity_type: 'system'`
-- Titulo: `Documento assinado: {document.title}`
-- Body: `Assinado em {completed_at} por {lista de signatarios}`
-- Vinculado a `opportunity_id` e `contact_id`
-
-### URL do Webhook para configurar no SuvSign
-
-A URL que o usuario deve cadastrar no SuvSign:
-
-```text
-https://qvmtzfvkhkhkhdpclzua.supabase.co/functions/v1/suvsign-webhook
+```typescript
+const filteredOpportunities = useMemo(() => {
+  const baseData = searchResults !== null ? searchResults : opportunities;
+  return baseData.filter((opp) => {
+    // manter filtros de owner, amount, date
+    // remover filtro de searchTerm pois ja veio filtrado do servidor
+    ...
+  });
+}, [opportunities, searchResults, ...]);
 ```
 
-Nao requer autenticacao (JWT desabilitado), a seguranca e feita via HMAC.
+### Resumo das mudancas
 
-### Tabelas utilizadas (sem alteracoes de schema)
-
-- `organization_integrations` - buscar config do SuvSign (webhook_secret)
-- `opportunities` - localizar o negocio pelo deal_id
-- `attachments` - salvar referencia do PDF (entity_type: 'opportunity')
-- `activities` - registrar evento no timeline (activity_type: 'system')
-- Storage bucket `attachments` - armazenar o PDF
-
-### Secret necessario
-
-Nenhum secret global do Supabase e necessario. O webhook_secret e armazenado por organizacao no `config_values` da integracao.
+| Arquivo | Mudanca |
+|---------|---------|
+| `src/pages/opportunities/OpportunitiesKanban.tsx` | Filtro de status dinamico por tipo de estagio (won/lost/open) |
+| `src/pages/opportunities/OpportunitiesKanban.tsx` | Pesquisa server-side com debounce para buscar por titulo e nome do contato |
