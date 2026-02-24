@@ -58,7 +58,7 @@ const getLifecycleColor = (stage: string | null): "gray" | "blue" | "purple" | "
 export default function ContactDetail() {
   const { id } = useParams();
   const navigate = useNavigate();
-  const { organization, locale, loading: orgLoading } = useOrganization();
+  const { organization, locale, loading: orgLoading, userProfile } = useOrganization();
   const { t } = useTranslation(locale as any);
   const { permissions } = usePermissions();
   const { hasVoiceIntegration } = useVoiceIntegration();
@@ -66,6 +66,8 @@ export default function ContactDetail() {
   const [contact, setContact] = useState<any>(null);
   const [loading, setLoading] = useState(true);
   const [selectedTab, setSelectedTab] = useState<Key>("details");
+  const [createdByName, setCreatedByName] = useState<string | null>(null);
+  const [updatedByName, setUpdatedByName] = useState<string | null>(null);
 
   const tabs = [
     { id: "details", label: t('contacts.details') },
@@ -100,6 +102,22 @@ export default function ContactDetail() {
     }
 
     setContact(data);
+
+    // Fetch created_by / updated_by names
+    const byIds = [data?.created_by, data?.updated_by].filter(Boolean) as string[];
+    if (byIds.length > 0) {
+      const { data: users } = await supabase
+        .from('users')
+        .select('id, full_name')
+        .in('id', byIds);
+      const map = new Map((users || []).map((u: any) => [u.id, u.full_name]));
+      setCreatedByName(data?.created_by ? map.get(data.created_by) || 'Sistema' : null);
+      setUpdatedByName(data?.updated_by ? map.get(data.updated_by) || 'Sistema' : null);
+    } else {
+      setCreatedByName(null);
+      setUpdatedByName(null);
+    }
+
     setLoading(false);
   };
 
@@ -288,7 +306,7 @@ export default function ContactDetail() {
                         onChange={async (userId) => {
                           const { error } = await supabase
                             .from('contacts')
-                            .update({ owner_user_id: userId })
+                            .update({ owner_user_id: userId, updated_by: userProfile?.id || null } as any)
                             .eq('id', contact.id);
                           if (error) {
                             toast.error(t('common.error'));
@@ -323,6 +341,20 @@ export default function ContactDetail() {
                       </div>
                     </div>
                   )}
+                  <div className="flex items-center gap-3">
+                    <User className="h-4 w-4 text-muted-foreground" />
+                    <div>
+                      <div className="text-sm text-muted-foreground">Criado por</div>
+                      <div className="text-foreground">{createdByName || 'Sistema'}</div>
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-3">
+                    <User className="h-4 w-4 text-muted-foreground" />
+                    <div>
+                      <div className="text-sm text-muted-foreground">Atualizado por</div>
+                      <div className="text-foreground">{updatedByName || 'Sistema'}</div>
+                    </div>
+                  </div>
                 </div>
               </Card>
 

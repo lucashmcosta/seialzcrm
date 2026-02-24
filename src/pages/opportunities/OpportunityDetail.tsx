@@ -55,6 +55,9 @@ export default function OpportunityDetail() {
   const [loading, setLoading] = useState(true);
   const [editDialogOpen, setEditDialogOpen] = useState(false);
   const [selectedTab, setSelectedTab] = useState<Key>('overview');
+  const [createdByName, setCreatedByName] = useState<string | null>(null);
+  const [updatedByName, setUpdatedByName] = useState<string | null>(null);
+  const { userProfile } = useOrganization();
 
   const tabs = [
     { id: 'overview', label: t('opportunities.overviewTab') },
@@ -97,6 +100,22 @@ export default function OpportunityDetail() {
     }
 
     setOpportunity(data);
+
+    // Fetch created_by / updated_by names
+    const byIds = [(data as any)?.created_by, (data as any)?.updated_by].filter(Boolean) as string[];
+    if (byIds.length > 0) {
+      const { data: users } = await supabase
+        .from('users')
+        .select('id, full_name')
+        .in('id', byIds);
+      const map = new Map((users || []).map((u: any) => [u.id, u.full_name]));
+      setCreatedByName((data as any)?.created_by ? map.get((data as any).created_by) || 'Sistema' : null);
+      setUpdatedByName((data as any)?.updated_by ? map.get((data as any).updated_by) || 'Sistema' : null);
+    } else {
+      setCreatedByName(null);
+      setUpdatedByName(null);
+    }
+
     setLoading(false);
   };
 
@@ -355,7 +374,7 @@ export default function OpportunityDetail() {
                           onChange={async (userId) => {
                             const { error } = await supabase
                               .from('opportunities')
-                              .update({ owner_user_id: userId })
+                              .update({ owner_user_id: userId, updated_by: userProfile?.id || null } as any)
                               .eq('id', opportunity.id);
                             if (error) {
                               toast({ title: t('common.error'), variant: 'destructive' });
@@ -393,6 +412,14 @@ export default function OpportunityDetail() {
                           </p>
                         </div>
                       )}
+                      <div>
+                        <p className="text-sm text-muted-foreground">Criado por</p>
+                        <p className="text-lg font-semibold">{createdByName || 'Sistema'}</p>
+                      </div>
+                      <div>
+                        <p className="text-sm text-muted-foreground">Atualizado por</p>
+                        <p className="text-lg font-semibold">{updatedByName || 'Sistema'}</p>
+                      </div>
                     </div>
                   </div>
                 </CardContent>

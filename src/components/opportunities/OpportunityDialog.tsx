@@ -130,7 +130,8 @@ export function OpportunityDialog({ open, onOpenChange, opportunity, stages, onS
             pipeline_stage_id: formData.pipeline_stage_id,
             close_date: formData.close_date,
             owner_user_id: formData.owner_user_id,
-          })
+            updated_by: userProfile?.id || null,
+          } as any)
           .eq('id', opportunity.id);
 
         if (error) throw error;
@@ -150,7 +151,8 @@ export function OpportunityDialog({ open, onOpenChange, opportunity, stages, onS
             pipeline_stage_id: formData.pipeline_stage_id,
             close_date: formData.close_date,
             status: 'open',
-          });
+            created_by: userProfile.id,
+          } as any);
 
         if (error) throw error;
         toast.success(t('opportunities.created'));
