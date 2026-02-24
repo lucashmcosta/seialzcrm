@@ -1,0 +1,3 @@
+UPDATE admin_integrations
+SET config_schema = '{"fields": [{"key": "base_url", "label": "URL do SuvSign", "type": "text", "placeholder": "https://suvsign.com", "required": true, "description": "URL base da sua instancia SuvSign"}, {"key": "template_id", "label": "ID do Template (opcional)", "type": "text", "placeholder": "ID do template de documento", "required": false, "description": "Se vazio, o usuario escolhe o template diretamente na tela do SuvSign"}, {"key": "connector_id", "label": "ID do Conector", "type": "text", "placeholder": "ID do conector configurado", "required": true, "description": "Encontre no SuvSign em Conectores > Ver Codigo"}]}'
+WHERE slug = 'suvsign';
