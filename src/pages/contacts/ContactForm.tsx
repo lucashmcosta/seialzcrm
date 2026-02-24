@@ -201,7 +201,7 @@ export default function ContactForm() {
     if (isEdit) {
       const { error } = await supabase
         .from('contacts')
-        .update(contactData)
+        .update({ ...contactData, updated_by: userProfile.id } as any)
         .eq('id', id);
 
       if (error) {
@@ -215,7 +215,7 @@ export default function ContactForm() {
     } else {
       const { data, error } = await supabase
         .from('contacts')
-        .insert(contactData)
+        .insert({ ...contactData, created_by: userProfile.id } as any)
         .select()
         .single();
 

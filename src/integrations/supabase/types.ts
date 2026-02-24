@@ -1067,6 +1067,7 @@ export type Database = {
           company_name: string | null
           cpf: string | null
           created_at: string | null
+          created_by: string | null
           deleted_at: string | null
           do_not_contact: boolean | null
           email: string | null
@@ -1085,6 +1086,7 @@ export type Database = {
           source: string | null
           source_external_id: string | null
           updated_at: string | null
+          updated_by: string | null
           utm_campaign: string | null
           utm_medium: string | null
           utm_source: string | null
@@ -1099,6 +1101,7 @@ export type Database = {
           company_name?: string | null
           cpf?: string | null
           created_at?: string | null
+          created_by?: string | null
           deleted_at?: string | null
           do_not_contact?: boolean | null
           email?: string | null
@@ -1119,6 +1122,7 @@ export type Database = {
           source?: string | null
           source_external_id?: string | null
           updated_at?: string | null
+          updated_by?: string | null
           utm_campaign?: string | null
           utm_medium?: string | null
           utm_source?: string | null
@@ -1133,6 +1137,7 @@ export type Database = {
           company_name?: string | null
           cpf?: string | null
           created_at?: string | null
+          created_by?: string | null
           deleted_at?: string | null
           do_not_contact?: boolean | null
           email?: string | null
@@ -1153,6 +1158,7 @@ export type Database = {
           source?: string | null
           source_external_id?: string | null
           updated_at?: string | null
+          updated_by?: string | null
           utm_campaign?: string | null
           utm_medium?: string | null
           utm_source?: string | null
@@ -2391,6 +2397,7 @@ export type Database = {
           company_id: string | null
           contact_id: string | null
           created_at: string | null
+          created_by: string | null
           currency: string | null
           deleted_at: string | null
           id: string
@@ -2403,6 +2410,7 @@ export type Database = {
           status: Database["public"]["Enums"]["opportunity_status"] | null
           title: string
           updated_at: string | null
+          updated_by: string | null
         }
         Insert: {
           amount?: number | null
@@ -2410,6 +2418,7 @@ export type Database = {
           company_id?: string | null
           contact_id?: string | null
           created_at?: string | null
+          created_by?: string | null
           currency?: string | null
           deleted_at?: string | null
           id?: string
@@ -2422,6 +2431,7 @@ export type Database = {
           status?: Database["public"]["Enums"]["opportunity_status"] | null
           title: string
           updated_at?: string | null
+          updated_by?: string | null
         }
         Update: {
           amount?: number | null
@@ -2429,6 +2439,7 @@ export type Database = {
           company_id?: string | null
           contact_id?: string | null
           created_at?: string | null
+          created_by?: string | null
           currency?: string | null
           deleted_at?: string | null
           id?: string
@@ -2441,6 +2452,7 @@ export type Database = {
           status?: Database["public"]["Enums"]["opportunity_status"] | null
           title?: string
           updated_at?: string | null
+          updated_by?: string | null
         }
         Relationships: [
           {
