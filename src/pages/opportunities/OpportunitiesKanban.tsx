@@ -130,24 +130,48 @@ export default function OpportunitiesKanban() {
     }
 
     const timer = setTimeout(async () => {
-      const { data } = await supabase
+      // Query 1: Search by opportunity title
+      const { data: byTitle } = await supabase
         .from('opportunities')
-        .select(`
-          *,
-          contacts (
-            full_name
-          ),
-          users (
-            full_name
-          )
-        `)
+        .select(`*, contacts(full_name), users(full_name)`)
         .eq('organization_id', organization.id)
         .is('deleted_at', null)
-        .or(`title.ilike.%${searchTerm}%,contacts.full_name.ilike.%${searchTerm}%`)
+        .ilike('title', `%${searchTerm}%`)
         .order('created_at', { ascending: false })
         .limit(100);
 
-      setSearchResults(data || []);
+      // Query 2: Find contacts matching the name, then get their opportunities
+      const { data: matchingContacts } = await supabase
+        .from('contacts')
+        .select('id')
+        .eq('organization_id', organization.id)
+        .ilike('full_name', `%${searchTerm}%`)
+        .limit(50);
+
+      let byContact: any[] = [];
+      if (matchingContacts && matchingContacts.length > 0) {
+        const contactIds = matchingContacts.map(c => c.id);
+        const { data } = await supabase
+          .from('opportunities')
+          .select(`*, contacts(full_name), users(full_name)`)
+          .eq('organization_id', organization.id)
+          .is('deleted_at', null)
+          .in('contact_id', contactIds)
+          .order('created_at', { ascending: false })
+          .limit(100);
+        byContact = data || [];
+      }
+
+      // Merge results, removing duplicates by ID
+      const merged = [...(byTitle || [])];
+      const existingIds = new Set(merged.map(o => o.id));
+      byContact.forEach(opp => {
+        if (!existingIds.has(opp.id)) {
+          merged.push(opp);
+        }
+      });
+
+      setSearchResults(merged);
     }, 300);
 
     return () => clearTimeout(timer);
