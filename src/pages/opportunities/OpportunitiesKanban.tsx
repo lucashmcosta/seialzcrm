@@ -84,6 +84,7 @@ export default function OpportunitiesKanban() {
   const [editingOpportunity, setEditingOpportunity] = useState<Opportunity | null>(null);
   const [deleteId, setDeleteId] = useState<string | null>(null);
   const [searchTerm, setSearchTerm] = useState('');
+  const [searchResults, setSearchResults] = useState<Opportunity[] | null>(null);
   const [users, setUsers] = useState<User[]>([]);
   const [filterOwner, setFilterOwner] = useState<string>('all');
   const [filterMinAmount, setFilterMinAmount] = useState<string>('');
@@ -120,6 +121,37 @@ export default function OpportunitiesKanban() {
     if (!organization?.id) return;
     fetchData();
   }, [organization?.id]);
+
+  // Server-side search with debounce
+  useEffect(() => {
+    if (!searchTerm || searchTerm.length < 2 || !organization?.id) {
+      setSearchResults(null);
+      return;
+    }
+
+    const timer = setTimeout(async () => {
+      const { data } = await supabase
+        .from('opportunities')
+        .select(`
+          *,
+          contacts (
+            full_name
+          ),
+          users (
+            full_name
+          )
+        `)
+        .eq('organization_id', organization.id)
+        .is('deleted_at', null)
+        .or(`title.ilike.%${searchTerm}%,contacts.full_name.ilike.%${searchTerm}%`)
+        .order('created_at', { ascending: false })
+        .limit(100);
+
+      setSearchResults(data || []);
+    }, 300);
+
+    return () => clearTimeout(timer);
+  }, [searchTerm, organization?.id]);
 
   const fetchData = async () => {
     if (!organization?.id) return;
@@ -158,6 +190,7 @@ export default function OpportunitiesKanban() {
       const hasMore: Record<string, boolean> = {};
       
       await Promise.all(stagesData.map(async (stage) => {
+        const statusFilter = stage.type === 'won' ? 'won' : stage.type === 'lost' ? 'lost' : 'open';
         const { data } = await supabase
           .from('opportunities')
           .select(`
@@ -171,7 +204,7 @@ export default function OpportunitiesKanban() {
           `)
           .eq('organization_id', organization.id)
           .eq('pipeline_stage_id', stage.id)
-          .eq('status', 'open')
+          .eq('status', statusFilter)
           .is('deleted_at', null)
           .order('created_at', { ascending: false })
           .limit(CARDS_PER_STAGE);
@@ -218,12 +251,10 @@ export default function OpportunitiesKanban() {
   };
 
   const getOpportunitiesForStage = (stageId: string) => {
-    const stageOpps = opportunitiesByStage[stageId] || [];
+    const stageOpps = searchResults !== null 
+      ? searchResults.filter(opp => opp.pipeline_stage_id === stageId)
+      : (opportunitiesByStage[stageId] || []);
     return stageOpps.filter((opp) => {
-      const matchesSearch = !searchTerm || 
-        opp.title.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        opp.contacts?.full_name?.toLowerCase().includes(searchTerm.toLowerCase());
-      
       const matchesOwner = filterOwner === 'all' || opp.owner_user_id === filterOwner;
       
       const matchesMinAmount = !filterMinAmount || (opp.amount && Number(opp.amount) >= Number(filterMinAmount));
@@ -232,7 +263,7 @@ export default function OpportunitiesKanban() {
       const matchesDateFrom = !filterDateFrom || !opp.close_date || opp.close_date >= filterDateFrom;
       const matchesDateTo = !filterDateTo || !opp.close_date || opp.close_date <= filterDateTo;
       
-      return matchesSearch && matchesOwner && matchesMinAmount && matchesMaxAmount && matchesDateFrom && matchesDateTo;
+      return matchesOwner && matchesMinAmount && matchesMaxAmount && matchesDateFrom && matchesDateTo;
     });
   };
 
@@ -258,7 +289,10 @@ export default function OpportunitiesKanban() {
       `)
       .eq('organization_id', organization.id)
       .eq('pipeline_stage_id', stageId)
-      .eq('status', 'open')
+      .eq('status', (() => {
+        const stageType = stages.find(s => s.id === stageId)?.type;
+        return stageType === 'won' ? 'won' : stageType === 'lost' ? 'lost' : 'open';
+      })())
       .is('deleted_at', null)
       .order('created_at', { ascending: false })
       .range(currentOpps.length, currentOpps.length + CARDS_PER_STAGE - 1);
@@ -412,11 +446,8 @@ export default function OpportunitiesKanban() {
 
   // Filtered opportunities for table view (applies all filters except stage)
   const filteredOpportunities = useMemo(() => {
-    return opportunities.filter((opp) => {
-      const matchesSearch = !searchTerm || 
-        opp.title.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        opp.contacts?.full_name?.toLowerCase().includes(searchTerm.toLowerCase());
-      
+    const baseData = searchResults !== null ? searchResults : opportunities;
+    return baseData.filter((opp) => {
       const matchesOwner = filterOwner === 'all' || opp.owner_user_id === filterOwner;
       
       const matchesMinAmount = !filterMinAmount || (opp.amount && Number(opp.amount) >= Number(filterMinAmount));
@@ -425,9 +456,9 @@ export default function OpportunitiesKanban() {
       const matchesDateFrom = !filterDateFrom || !opp.close_date || opp.close_date >= filterDateFrom;
       const matchesDateTo = !filterDateTo || !opp.close_date || opp.close_date <= filterDateTo;
       
-      return matchesSearch && matchesOwner && matchesMinAmount && matchesMaxAmount && matchesDateFrom && matchesDateTo;
+      return matchesOwner && matchesMinAmount && matchesMaxAmount && matchesDateFrom && matchesDateTo;
     });
-  }, [opportunities, searchTerm, filterOwner, filterMinAmount, filterMaxAmount, filterDateFrom, filterDateTo]);
+  }, [opportunities, searchResults, filterOwner, filterMinAmount, filterMaxAmount, filterDateFrom, filterDateTo]);
 
   // Sorted opportunities for table view
   const sortedOpportunities = useMemo(() => {
