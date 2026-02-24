@@ -95,12 +95,18 @@ export function SendToSignatureButton({ contactId, opportunityId, size = 'sm' }:
       const templateId = suvsignConfig.template_id;
       const connectorId = suvsignConfig.connector_id;
 
-      if (!templateId || !connectorId) {
-        toast.error('Configuração do SuvSign incompleta. Verifique template_id e connector_id.');
+      if (!connectorId) {
+        toast.error('Configuração do SuvSign incompleta. Verifique o connector_id.');
         return;
       }
 
-      const url = `${baseUrl}/create-from-template?template_id=${encodeURIComponent(templateId)}&connector_id=${encodeURIComponent(connectorId)}&data=${encodeURIComponent(JSON.stringify(payload))}`;
+      const params = new URLSearchParams();
+      if (templateId) {
+        params.set('template_id', templateId);
+      }
+      params.set('connector_id', connectorId);
+      params.set('data', JSON.stringify(payload));
+      const url = `${baseUrl}/create-from-template?${params.toString()}`;
 
       window.open(url, '_blank');
     } catch (error) {
