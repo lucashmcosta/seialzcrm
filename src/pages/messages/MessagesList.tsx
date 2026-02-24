@@ -36,7 +36,7 @@ import { useQuery } from '@tanstack/react-query';
 import { formatDistanceToNow } from 'date-fns';
 import { ptBR, enUS } from 'date-fns/locale';
 import { useToast } from '@/hooks/use-toast';
-import { Loader2, Check, CheckCheck, Clock, AlertCircle, Sparkles, SpellCheck, Briefcase, Smile, Bot, MessageSquarePlus, FileText, Target, UserCheck, CheckCircle, RotateCcw, ArrowLeftRight } from 'lucide-react';
+import { Loader2, Check, CheckCheck, Clock, AlertCircle, Sparkles, SpellCheck, Briefcase, Smile, Bot, MessageSquarePlus, FileText, Target, UserCheck, CheckCircle, RotateCcw, ArrowLeftRight, StickyNote } from 'lucide-react';
 import { AgentMessageFeedbackDialog } from '@/components/whatsapp/AgentMessageFeedbackDialog';
 import { NewConversationDialog } from '@/components/messages/NewConversationDialog';
 import { WhatsAppTemplateSelector } from '@/components/whatsapp/WhatsAppTemplateSelector';
@@ -132,6 +132,18 @@ interface Message {
   sender_name: string | null;
   sender_agent_id: string | null;
 }
+
+interface InlineNote {
+  id: string;
+  body: string | null;
+  occurred_at: string;
+  created_by_user_id: string | null;
+  author_name?: string;
+}
+
+type ChatItem = 
+  | { _type: 'message'; data: Message }
+  | { _type: 'note'; data: InlineNote };
 
 const statusConfig: Record<string, { label: string; labelEn: string; color: string; dotColor: string }> = {
   open: { label: 'Aberta', labelEn: 'Open', color: 'text-green-700 dark:text-green-400', dotColor: 'bg-green-500' },
@@ -265,6 +277,9 @@ export default function MessagesList() {
   // New conversation dialog state
   const [showNewConversation, setShowNewConversation] = useState(false);
   
+  // Note mode state
+  const [isNoteMode, setIsNoteMode] = useState(false);
+  const [inlineNotes, setInlineNotes] = useState<InlineNote[]>([]);
   // Check if organization has an active AI agent (controls "Return to AI" button)
   const { data: hasAIAgent } = useQuery({
     queryKey: ['org-has-ai-agent', organization?.id],
@@ -686,6 +701,7 @@ export default function MessagesList() {
   const fetchMessages = async (threadId: string) => {
     setMessagesLoading(true);
     setReplyingTo(null);
+    setIsNoteMode(false);
     try {
       const { data, error } = await supabase
         .from('messages')
@@ -701,8 +717,32 @@ export default function MessagesList() {
       if (error) throw error;
       setMessages((data as Message[]) || []);
 
-      // Check 24h window with 3-level fallback
+      // Fetch inline notes from activities for this contact
       const thread = threads?.find((t) => t.id === threadId);
+      if (thread?.contact_id && organization?.id) {
+        const { data: notesData } = await supabase
+          .from('activities')
+          .select('id, body, occurred_at, created_by_user_id, users:created_by_user_id(full_name)')
+          .eq('organization_id', organization.id)
+          .eq('contact_id', thread.contact_id)
+          .eq('activity_type', 'note')
+          .is('deleted_at', null)
+          .order('occurred_at', { ascending: true });
+
+        setInlineNotes(
+          (notesData || []).map((n: any) => ({
+            id: n.id,
+            body: n.body,
+            occurred_at: n.occurred_at,
+            created_by_user_id: n.created_by_user_id,
+            author_name: n.users?.full_name || null,
+          }))
+        );
+      } else {
+        setInlineNotes([]);
+      }
+
+      // Check 24h window with 3-level fallback
       const lastInboundTime = getLastInboundTime(thread, (data as Message[]) || []);
       if (lastInboundTime) {
         const hoursDiff = (Date.now() - lastInboundTime.getTime()) / (1000 * 60 * 60);
@@ -730,7 +770,46 @@ export default function MessagesList() {
     }
   };
 
+  const handleSendNote = async () => {
+    if (!organization?.id || !messageText.trim() || !selectedThread) return;
+
+    const noteText = messageText.trim();
+    const tempId = `note-temp-${Date.now()}`;
+    const tempNote: InlineNote = {
+      id: tempId,
+      body: noteText,
+      occurred_at: new Date().toISOString(),
+      created_by_user_id: userProfile?.id || null,
+      author_name: userProfile?.full_name || null,
+    };
+
+    setInlineNotes((prev) => [...prev, tempNote]);
+    setMessageText('');
+    setIsNoteMode(false);
+    scrollToBottom();
+
+    try {
+      const { error } = await supabase.from('activities').insert({
+        organization_id: organization.id,
+        contact_id: selectedThread.contact_id,
+        activity_type: 'note' as any,
+        title: 'Nota na conversa',
+        body: noteText,
+        created_by_user_id: userProfile?.id,
+        occurred_at: new Date().toISOString(),
+      });
+      if (error) throw error;
+    } catch (err: any) {
+      setInlineNotes((prev) => prev.filter((n) => n.id !== tempId));
+      toast({ variant: 'destructive', description: 'Erro ao salvar nota' });
+    }
+  };
+
   const handleSendMessage = async () => {
+    if (isNoteMode) {
+      handleSendNote();
+      return;
+    }
     if (!organization?.id || !messageText.trim() || !selectedThread) return;
 
     if (!isIn24hWindow) {
@@ -1249,149 +1328,189 @@ export default function MessagesList() {
                         </div>
                       ) : (
                         <div className="p-6 space-y-3">
-                          {messages.map((message) => {
-                            const isOutbound = message.direction === 'outbound';
+                          {/* Merge messages and notes chronologically */}
+                          {(() => {
+                            const chatItems: ChatItem[] = [
+                              ...messages.map((m) => ({ _type: 'message' as const, data: m })),
+                              ...inlineNotes.map((n) => ({ _type: 'note' as const, data: n })),
+                            ].sort((a, b) => {
+                              const dateA = a._type === 'message' ? a.data.sent_at : a.data.occurred_at;
+                              const dateB = b._type === 'message' ? b.data.sent_at : b.data.occurred_at;
+                              return new Date(dateA).getTime() - new Date(dateB).getTime();
+                            });
 
-                            return (
-                              <div
-                                key={message.id}
-                                className={cn(
-                                  'flex items-end gap-2 group',
-                                  isOutbound ? 'justify-end' : 'justify-start'
-                                )}
-                              >
-                                {/* Reply button - left side for inbound */}
-                                {!isOutbound && (
-                                  <Button
-                                    variant="ghost"
-                                    size="icon"
-                                    className="h-7 w-7 opacity-0 group-hover:opacity-100 transition-opacity shrink-0"
-                                    onClick={() => handleReplyClick(message)}
-                                    title={locale === 'pt-BR' ? 'Responder' : 'Reply'}
-                                  >
-                                    <CornerUpLeft className="h-4 w-4" />
-                                  </Button>
-                                )}
-                                
+                            return chatItems.map((item) => {
+                              if (item._type === 'note') {
+                                const note = item.data;
+                                return (
+                                  <div key={`note-${note.id}`} className="flex justify-center">
+                                    <div className="max-w-[70%] rounded-lg p-3 min-w-[80px] bg-yellow-100 dark:bg-yellow-900/30 border border-yellow-300 dark:border-yellow-700">
+                                      <div className="flex items-center gap-1 mb-1">
+                                        <StickyNote className="w-3 h-3 text-yellow-600 dark:text-yellow-400" />
+                                        <span className="text-[10px] font-medium text-yellow-600 dark:text-yellow-400">Nota interna</span>
+                                      </div>
+                                      <p className="text-sm whitespace-pre-wrap break-words text-yellow-900 dark:text-yellow-100">
+                                        {note.body}
+                                      </p>
+                                      <div className="mt-1 flex items-center justify-end gap-1">
+                                        <span className="text-[10px] text-yellow-600/70 dark:text-yellow-400/70 whitespace-nowrap">
+                                          {note.author_name ? `${note.author_name} - ` : ''}
+                                          {new Date(note.occurred_at).toLocaleTimeString(locale, {
+                                            hour: '2-digit',
+                                            minute: '2-digit',
+                                            hour12: false
+                                          })}
+                                        </span>
+                                      </div>
+                                    </div>
+                                  </div>
+                                );
+                              }
+
+                              const message = item.data;
+                              const isOutbound = message.direction === 'outbound';
+
+                              return (
                                 <div
+                                  key={message.id}
                                   className={cn(
-                                    'relative max-w-[70%] rounded-lg p-3 min-w-[80px]',
-                                    isOutbound
-                                      ? 'bg-green-100 dark:bg-green-900/40 text-green-900 dark:text-green-100'
-                                      : 'bg-muted'
+                                    'flex items-end gap-2 group',
+                                    isOutbound ? 'justify-end' : 'justify-start'
                                   )}
                                 >
-                                  {/* Agent Badge + Feedback Button for agent messages */}
-                                  {isOutbound && message.sender_type === 'agent' && (
-                                    <div className="flex items-center gap-2 mb-2">
-                                      <Badge color="purple" size="sm" icon={<Bot className="w-3 h-3" />}>
-                                        {message.sender_name || 'Agente IA'}
-                                      </Badge>
-                                      <Button
-                                        variant="ghost"
-                                        size="sm"
-                                        className="h-6 px-2 text-xs opacity-0 group-hover:opacity-100 transition-opacity"
-                                        onClick={() => {
-                                          setFeedbackMessage(message);
-                                          setShowFeedbackDialog(true);
-                                        }}
-                                      >
-                                        <MessageSquarePlus className="w-3 h-3 mr-1" />
-                                        Feedback
-                                      </Button>
-                                    </div>
+                                  {/* Reply button - left side for inbound */}
+                                  {!isOutbound && (
+                                    <Button
+                                      variant="ghost"
+                                      size="icon"
+                                      className="h-7 w-7 opacity-0 group-hover:opacity-100 transition-opacity shrink-0"
+                                      onClick={() => handleReplyClick(message)}
+                                      title={locale === 'pt-BR' ? 'Responder' : 'Reply'}
+                                    >
+                                      <CornerUpLeft className="h-4 w-4" />
+                                    </Button>
                                   )}
                                   
-                                  {/* Quoted Message */}
-                                  {message.reply_to_message && (
-                                    <QuotedMessage
-                                      content={message.reply_to_message.content}
-                                      direction={message.reply_to_message.direction}
-                                    />
-                                  )}
-                                  {/* Media */}
-                                  {message.media_urls && message.media_urls.length > 0 && (
-                                    <div className="space-y-2">
-                                      {message.media_urls.map((url, i) => {
-                                        if (message.media_type === 'audio' || url.match(/\.(ogg|mp3|wav|m4a)$/i)) {
-                                          return <AudioMessagePlayer key={i} src={url} />;
-                                        }
-                                        if (message.media_type === 'image' || url.match(/\.(jpg|jpeg|png|gif|webp)$/i)) {
-                                          return (
-                                            <img
-                                              key={i}
-                                              src={url}
-                                              alt="Media"
-                                              className="max-w-[180px] max-h-[180px] rounded cursor-pointer hover:opacity-90 object-cover"
-                                              onClick={() => setPreviewImageUrl(url)}
-                                            />
-                                          );
-                                        }
-                                        return (
-                                          <a
-                                            key={i}
-                                            href={url}
-                                            target="_blank"
-                                            rel="noopener noreferrer"
-                                            className="flex items-center gap-2 p-2 rounded bg-background/50 hover:bg-background/80"
-                                          >
-                                            <span className="text-sm underline">
-                                              {locale === 'pt-BR' ? 'Ver documento' : 'View document'}
-                                            </span>
-                                          </a>
-                                        );
-                                      })}
-                                    </div>
-                                  )}
-
-                                  {/* Content - hide media placeholders */}
-                                  {message.content && 
-                                   !(message.media_urls && message.media_urls.length > 0 && 
-                                     ['📎 Mídia', '📷 Imagem', '🎵 Áudio', '🎬 Vídeo', '📎 Media', '📷 Image', '🎵 Audio', '🎬 Video'].includes(message.content)) && (
-                                    <p className="text-sm whitespace-pre-wrap break-words">
-                                      {message.content}
-                                    </p>
-                                  )}
-
-                                  {/* Error */}
-                                  {message.error_message && (
-                                    <p className="text-xs text-destructive mt-1">
-                                      {message.error_message}
-                                    </p>
-                                  )}
-
-                                  {/* Footer - Name + Time + Status */}
-                                  <div className="mt-1 flex items-center justify-end gap-1">
-                                    <span className="text-[10px] text-muted-foreground/70 whitespace-nowrap">
-                                      {isOutbound 
-                                        ? (message.sender_name ? `${message.sender_name} - ` : '')
-                                        : (selectedThread?.contact_name ? `${selectedThread.contact_name} - ` : '')
-                                      }
-                                      {new Date(message.sent_at).toLocaleTimeString(locale, {
-                                        hour: '2-digit',
-                                        minute: '2-digit',
-                                        hour12: false
-                                      })}
-                                    </span>
-                                    {isOutbound && renderStatusIcon(message.whatsapp_status)}
-                                  </div>
-                                </div>
-                                
-                                {/* Reply button - right side for outbound */}
-                                {isOutbound && (
-                                  <Button
-                                    variant="ghost"
-                                    size="icon"
-                                    className="h-7 w-7 opacity-0 group-hover:opacity-100 transition-opacity shrink-0"
-                                    onClick={() => handleReplyClick(message)}
-                                    title={locale === 'pt-BR' ? 'Responder' : 'Reply'}
+                                  <div
+                                    className={cn(
+                                      'relative max-w-[70%] rounded-lg p-3 min-w-[80px]',
+                                      isOutbound
+                                        ? 'bg-green-100 dark:bg-green-900/40 text-green-900 dark:text-green-100'
+                                        : 'bg-muted'
+                                    )}
                                   >
-                                    <CornerUpLeft className="h-4 w-4" />
-                                  </Button>
-                                )}
-                              </div>
-                            );
-                          })}
+                                    {/* Agent Badge + Feedback Button for agent messages */}
+                                    {isOutbound && message.sender_type === 'agent' && (
+                                      <div className="flex items-center gap-2 mb-2">
+                                        <Badge color="purple" size="sm" icon={<Bot className="w-3 h-3" />}>
+                                          {message.sender_name || 'Agente IA'}
+                                        </Badge>
+                                        <Button
+                                          variant="ghost"
+                                          size="sm"
+                                          className="h-6 px-2 text-xs opacity-0 group-hover:opacity-100 transition-opacity"
+                                          onClick={() => {
+                                            setFeedbackMessage(message);
+                                            setShowFeedbackDialog(true);
+                                          }}
+                                        >
+                                          <MessageSquarePlus className="w-3 h-3 mr-1" />
+                                          Feedback
+                                        </Button>
+                                      </div>
+                                    )}
+                                    
+                                    {/* Quoted Message */}
+                                    {message.reply_to_message && (
+                                      <QuotedMessage
+                                        content={message.reply_to_message.content}
+                                        direction={message.reply_to_message.direction}
+                                      />
+                                    )}
+                                    {/* Media */}
+                                    {message.media_urls && message.media_urls.length > 0 && (
+                                      <div className="space-y-2">
+                                        {message.media_urls.map((url, i) => {
+                                          if (message.media_type === 'audio' || url.match(/\.(ogg|mp3|wav|m4a)$/i)) {
+                                            return <AudioMessagePlayer key={i} src={url} />;
+                                          }
+                                          if (message.media_type === 'image' || url.match(/\.(jpg|jpeg|png|gif|webp)$/i)) {
+                                            return (
+                                              <img
+                                                key={i}
+                                                src={url}
+                                                alt="Media"
+                                                className="max-w-[180px] max-h-[180px] rounded cursor-pointer hover:opacity-90 object-cover"
+                                                onClick={() => setPreviewImageUrl(url)}
+                                              />
+                                            );
+                                          }
+                                          return (
+                                            <a
+                                              key={i}
+                                              href={url}
+                                              target="_blank"
+                                              rel="noopener noreferrer"
+                                              className="flex items-center gap-2 p-2 rounded bg-background/50 hover:bg-background/80"
+                                            >
+                                              <span className="text-sm underline">
+                                                {locale === 'pt-BR' ? 'Ver documento' : 'View document'}
+                                              </span>
+                                            </a>
+                                          );
+                                        })}
+                                      </div>
+                                    )}
+
+                                    {/* Content - hide media placeholders */}
+                                    {message.content && 
+                                     !(message.media_urls && message.media_urls.length > 0 && 
+                                       ['📎 Mídia', '📷 Imagem', '🎵 Áudio', '🎬 Vídeo', '📎 Media', '📷 Image', '🎵 Audio', '🎬 Video'].includes(message.content)) && (
+                                      <p className="text-sm whitespace-pre-wrap break-words">
+                                        {message.content}
+                                      </p>
+                                    )}
+
+                                    {/* Error */}
+                                    {message.error_message && (
+                                      <p className="text-xs text-destructive mt-1">
+                                        {message.error_message}
+                                      </p>
+                                    )}
+
+                                    {/* Footer - Name + Time + Status */}
+                                    <div className="mt-1 flex items-center justify-end gap-1">
+                                      <span className="text-[10px] text-muted-foreground/70 whitespace-nowrap">
+                                        {isOutbound 
+                                          ? (message.sender_name ? `${message.sender_name} - ` : '')
+                                          : (selectedThread?.contact_name ? `${selectedThread.contact_name} - ` : '')
+                                        }
+                                        {new Date(message.sent_at).toLocaleTimeString(locale, {
+                                          hour: '2-digit',
+                                          minute: '2-digit',
+                                          hour12: false
+                                        })}
+                                      </span>
+                                      {isOutbound && renderStatusIcon(message.whatsapp_status)}
+                                    </div>
+                                  </div>
+                                  
+                                  {/* Reply button - right side for outbound */}
+                                  {isOutbound && (
+                                    <Button
+                                      variant="ghost"
+                                      size="icon"
+                                      className="h-7 w-7 opacity-0 group-hover:opacity-100 transition-opacity shrink-0"
+                                      onClick={() => handleReplyClick(message)}
+                                      title={locale === 'pt-BR' ? 'Responder' : 'Reply'}
+                                    >
+                                      <CornerUpLeft className="h-4 w-4" />
+                                    </Button>
+                                  )}
+                                </div>
+                              );
+                            });
+                          })()}
                           <div ref={scrollRef} />
                         </div>
                       )}
@@ -1419,8 +1538,21 @@ export default function MessagesList() {
                         </div>
                       ) : (
                         <>
+                          {/* Note Mode Indicator */}
+                          {isNoteMode && (
+                            <div className="flex items-center gap-2 px-3 py-1.5 bg-yellow-100 dark:bg-yellow-900/30 border border-yellow-300 dark:border-yellow-700 rounded-t-lg">
+                              <StickyNote className="w-3.5 h-3.5 text-yellow-600 dark:text-yellow-400" />
+                              <span className="text-xs font-medium text-yellow-700 dark:text-yellow-400">
+                                {locale === 'pt-BR' ? 'Nota interna - não será enviada ao cliente' : 'Internal note - will not be sent to client'}
+                              </span>
+                              <button onClick={() => setIsNoteMode(false)} className="ml-auto">
+                                <XClose className="w-3.5 h-3.5 text-yellow-600 dark:text-yellow-400" />
+                              </button>
+                            </div>
+                          )}
+
                           {/* Reply Preview */}
-                          {replyingTo && (
+                          {replyingTo && !isNoteMode && (
                             <ReplyPreview
                               message={replyingTo}
                               onClose={() => setReplyingTo(null)}
@@ -1429,10 +1561,11 @@ export default function MessagesList() {
 
                           <div className={cn(
                             "flex gap-2",
-                            replyingTo && "border border-t-0 border-border rounded-b-lg p-2 bg-card"
+                            replyingTo && !isNoteMode && "border border-t-0 border-border rounded-b-lg p-2 bg-card",
+                            isNoteMode && "border border-t-0 border-yellow-300 dark:border-yellow-700 rounded-b-lg p-2 bg-yellow-50 dark:bg-yellow-900/20"
                           )}>
                             <div className="flex gap-1">
-                              <MediaUploadButton onFileSelected={handleFileSelected} onTemplateClick={() => setShowTemplates(true)} disabled={submitting || mediaUploading} />
+                              <MediaUploadButton onFileSelected={handleFileSelected} onTemplateClick={() => setShowTemplates(true)} onNoteClick={() => setIsNoteMode(true)} disabled={submitting || mediaUploading} />
                               <AudioRecorder onSend={handleAudioSend} disabled={submitting || mediaUploading} />
                               
                               {/* Emoji Picker */}
@@ -1459,7 +1592,7 @@ export default function MessagesList() {
                             <div className="relative flex-1">
                               <Textarea
                                 ref={textareaRef}
-                                placeholder={locale === 'pt-BR' ? 'Digite uma mensagem...' : 'Type a message...'}
+                                placeholder={isNoteMode ? (locale === 'pt-BR' ? 'Escreva uma nota interna...' : 'Write an internal note...') : (locale === 'pt-BR' ? 'Digite uma mensagem...' : 'Type a message...')}
                                 value={messageText}
                                 onChange={(e) => {
                                   setMessageText(e.target.value);
@@ -1521,7 +1654,12 @@ export default function MessagesList() {
                               onClick={handleSendMessage}
                               disabled={submitting || !messageText.trim()}
                               size="icon"
-                              className="bg-green-600 hover:bg-green-700 shrink-0"
+                              className={cn(
+                                "shrink-0",
+                                isNoteMode
+                                  ? "bg-yellow-500 hover:bg-yellow-600 text-yellow-950"
+                                  : "bg-green-600 hover:bg-green-700"
+                              )}
                             >
                               {submitting ? (
                                 <Loader2 className="h-4 w-4 animate-spin" />
