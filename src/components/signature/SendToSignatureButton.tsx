@@ -78,7 +78,7 @@ export function SendToSignatureButton({ contactId, opportunityId, size = 'sm' }:
       if (opportunityId) {
         const { data: opportunity } = await supabase
           .from('opportunities')
-          .select('id, title, amount, currency')
+          .select('id, title, amount, currency, close_date')
           .eq('id', opportunityId)
           .single();
 
@@ -87,6 +87,14 @@ export function SendToSignatureButton({ contactId, opportunityId, size = 'sm' }:
           payload.custom.deal_title = opportunity.title;
           if (opportunity.amount) {
             payload.custom.deal_amount = String(opportunity.amount);
+          }
+          if (opportunity.close_date) {
+            const date = new Date(opportunity.close_date + 'T00:00:00');
+            payload.custom.deal_close_date = date.toLocaleDateString('pt-BR', {
+              day: 'numeric',
+              month: 'long',
+              year: 'numeric',
+            });
           }
         }
       }
