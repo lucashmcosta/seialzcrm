@@ -215,13 +215,13 @@ Por favor, gere o prompt completo atualizado incorporando o feedback acima de fo
       const maxTokens = configValues.max_tokens || 1024;
       modelUsed = model;
 
-      const maxRetries = 3;
+      const maxRetries = 5;
       let claudeResponse: Response | null = null;
       let lastErrorText = "";
 
       for (let attempt = 0; attempt < maxRetries; attempt++) {
         if (attempt > 0) {
-          // Exponential backoff: 2s, 4s
+          // Exponential backoff: 2s, 4s, 8s, 16s
           const delayMs = Math.pow(2, attempt) * 1000;
           console.log(`Claude retry attempt ${attempt + 1} after ${delayMs}ms`);
           await new Promise(r => setTimeout(r, delayMs));
