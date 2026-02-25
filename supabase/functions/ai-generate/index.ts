@@ -210,39 +210,73 @@ Por favor, gere o prompt completo atualizado incorporando o feedback acima de fo
     let modelUsed = "";
 
     if (integrationSlug === "claude-ai" && configValues?.api_key) {
-      // Call Claude API
+      // Call Claude API with retry for overloaded errors
       const model = configValues.default_model || "claude-sonnet-4-6";
       const maxTokens = configValues.max_tokens || 1024;
       modelUsed = model;
 
-      const claudeResponse = await fetch("https://api.anthropic.com/v1/messages", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          "x-api-key": configValues.api_key,
-          "anthropic-version": "2023-06-01",
-        },
-        body: JSON.stringify({
-          model,
-          max_tokens: maxTokens,
-          system: systemPrompt,
-          messages: [{ role: "user", content: userPrompt }],
-        }),
-      });
+      const maxRetries = 3;
+      let claudeResponse: Response | null = null;
+      let lastErrorText = "";
+
+      for (let attempt = 0; attempt < maxRetries; attempt++) {
+        if (attempt > 0) {
+          // Exponential backoff: 2s, 4s
+          const delayMs = Math.pow(2, attempt) * 1000;
+          console.log(`Claude retry attempt ${attempt + 1} after ${delayMs}ms`);
+          await new Promise(r => setTimeout(r, delayMs));
+        }
+
+        claudeResponse = await fetch("https://api.anthropic.com/v1/messages", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            "x-api-key": configValues.api_key,
+            "anthropic-version": "2023-06-01",
+          },
+          body: JSON.stringify({
+            model,
+            max_tokens: maxTokens,
+            system: systemPrompt,
+            messages: [{ role: "user", content: userPrompt }],
+          }),
+        });
+
+        // If success or non-retryable error, break
+        if (claudeResponse.ok || (claudeResponse.status !== 529 && claudeResponse.status !== 503 && claudeResponse.status !== 429)) {
+          break;
+        }
+
+        lastErrorText = await claudeResponse.text();
+        console.error(`Claude API overloaded (attempt ${attempt + 1}):`, claudeResponse.status, lastErrorText);
+        claudeResponse = null; // Mark as consumed so we know to use lastErrorText
+      }
+
+      if (!claudeResponse) {
+        // All retries exhausted with overloaded errors
+        return new Response(
+          JSON.stringify({ error: "O serviço de IA está temporariamente sobrecarregado. Tente novamente em alguns segundos." }),
+          { status: 503, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+        );
+      }
 
       if (!claudeResponse.ok) {
         const errorText = await claudeResponse.text();
         console.error("Claude API error:", claudeResponse.status, errorText);
         let userMessage = `Erro na API do Claude: ${claudeResponse.status}`;
-        try {
-          const errorJson = JSON.parse(errorText);
-          if (errorJson?.error?.message) {
-            userMessage = errorJson.error.message;
-          }
-        } catch (_) {}
+        if (claudeResponse.status === 529 || claudeResponse.status === 503) {
+          userMessage = "O serviço de IA está temporariamente sobrecarregado. Tente novamente em alguns segundos.";
+        } else {
+          try {
+            const errorJson = JSON.parse(errorText);
+            if (errorJson?.error?.message) {
+              userMessage = errorJson.error.message;
+            }
+          } catch (_) {}
+        }
         return new Response(
           JSON.stringify({ error: userMessage }),
-          { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+          { status: claudeResponse.status === 529 ? 503 : 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
         );
       }
 
