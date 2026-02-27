@@ -54,6 +54,28 @@ export function SendToSignatureButton({ contactId, opportunityId, size = 'sm' }:
         return;
       }
 
+      // Validate required fields
+      const firstName = contact.first_name || contact.full_name?.split(' ')[0] || '';
+      const missingFields: string[] = [];
+
+      if (!firstName) missingFields.push('Nome');
+      if (!contact.email) missingFields.push('Email');
+      if (!contact.phone) missingFields.push('Telefone');
+      if (!contact.cpf) missingFields.push('CPF');
+      if (!contact.rg) missingFields.push('RG');
+      if (!contact.rg_issuer) missingFields.push('Órgão Emissor do RG');
+      if (!contact.nationality) missingFields.push('Nacionalidade');
+      if (!contact.address_street) missingFields.push('Endereço');
+      if (!contact.address_neighborhood) missingFields.push('Bairro');
+      if (!contact.address_city) missingFields.push('Cidade');
+      if (!contact.address_state) missingFields.push('Estado');
+      if (!contact.address_zip) missingFields.push('CEP');
+
+      if (missingFields.length > 0) {
+        toast.error(`Campos obrigatórios não preenchidos: ${missingFields.join(', ')}`);
+        return;
+      }
+
       const payload: any = {
         client: {
           firstName: contact.first_name || contact.full_name?.split(' ')[0] || '',
