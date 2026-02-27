@@ -1,31 +1,9 @@
 
 
-## Plano: Validar campos obrigatórios antes de enviar para assinatura
+## Restaurar contato e revincular à oportunidade
 
-### Alteração
+Duas operações SQL via insert tool:
 
-**Arquivo:** `src/components/signature/SendToSignatureButton.tsx`
-
-Após buscar o contato (linha 52-55), adicionar validação dos campos obrigatórios antes de montar o payload. Campos obrigatórios (baseado no payload):
-
-**client:**
-- `firstName` (nome)
-- `email`
-- `phone`
-
-**custom:**
-- `cpf`
-- `rg`
-- `rg_issuer`
-- `nationality`
-- `address_street`
-- `address_neighborhood`
-- `address_city`
-- `address_state`
-- `address_zip`
-
-Se algum campo estiver vazio, exibir um `toast.error` listando os campos faltantes e interromper o envio. `lastName` é o único campo que pode ir vazio.
-
-Exemplo da mensagem:
-> "Campos obrigatórios não preenchidos: Email, CPF, Endereço"
+1. **Restaurar contato**: `UPDATE contacts SET deleted_at = NULL WHERE id = 'a82dc5d1-b51c-46fc-8454-4b4002ad2778'`
+2. **Revincular à oportunidade**: `UPDATE opportunities SET contact_id = 'a82dc5d1-b51c-46fc-8454-4b4002ad2778' WHERE id = 'f5db173b-caed-49b7-b68e-e4c1d878a64c'`
 
