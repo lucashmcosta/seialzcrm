@@ -1,9 +1,33 @@
 
 
-## Restaurar contato e revincular à oportunidade
+## Correção: CORS headers na edge function `twilio-whatsapp-send`
 
-Duas operações SQL via insert tool:
+### Problema
+Os headers CORS atuais (linha 6) são:
+```
+'authorization, x-client-info, apikey, content-type'
+```
 
-1. **Restaurar contato**: `UPDATE contacts SET deleted_at = NULL WHERE id = 'a82dc5d1-b51c-46fc-8454-4b4002ad2778'`
-2. **Revincular à oportunidade**: `UPDATE opportunities SET contact_id = 'a82dc5d1-b51c-46fc-8454-4b4002ad2778' WHERE id = 'f5db173b-caed-49b7-b68e-e4c1d878a64c'`
+Faltam os headers que o Supabase JS SDK v2.86+ envia automaticamente:
+- `x-supabase-client-platform`
+- `x-supabase-client-platform-version`  
+- `x-supabase-client-runtime`
+- `x-supabase-client-runtime-version`
+
+O browser bloqueia a requisição no preflight porque esses headers não são aceitos.
+
+### Alteração
+
+**Arquivo:** `supabase/functions/twilio-whatsapp-send/index.ts` (linha 6)
+
+Atualizar o `Access-Control-Allow-Headers` para incluir todos os headers necessários:
+
+```typescript
+const corsHeaders = {
+  'Access-Control-Allow-Origin': '*',
+  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type, x-supabase-client-platform, x-supabase-client-platform-version, x-supabase-client-runtime, x-supabase-client-runtime-version',
+}
+```
+
+Uma única linha alterada, sem mudança de lógica.
 
