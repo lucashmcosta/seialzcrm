@@ -1344,12 +1344,12 @@ export default function MessagesList() {
                                 const note = item.data;
                                 return (
                                   <div key={`note-${note.id}`} className="flex justify-center">
-                                    <div className="max-w-[70%] rounded-lg p-3 min-w-[80px] bg-yellow-100 dark:bg-yellow-900/30 border border-yellow-300 dark:border-yellow-700">
+                                    <div className="max-w-[70%] rounded-lg p-3 min-w-[80px] overflow-hidden bg-yellow-100 dark:bg-yellow-900/30 border border-yellow-300 dark:border-yellow-700">
                                       <div className="flex items-center gap-1 mb-1">
                                         <StickyNote className="w-3 h-3 text-yellow-600 dark:text-yellow-400" />
                                         <span className="text-[10px] font-medium text-yellow-600 dark:text-yellow-400">Nota interna</span>
                                       </div>
-                                      <p className="text-sm whitespace-pre-wrap break-words text-yellow-900 dark:text-yellow-100">
+                                      <p className="text-sm whitespace-pre-wrap break-all text-yellow-900 dark:text-yellow-100">
                                         {note.body}
                                       </p>
                                       <div className="mt-1 flex items-center justify-end gap-1">
@@ -1393,7 +1393,7 @@ export default function MessagesList() {
                                   
                                   <div
                                     className={cn(
-                                      'relative max-w-[70%] rounded-lg p-3 min-w-[80px]',
+                                      'relative max-w-[70%] rounded-lg p-3 min-w-[80px] overflow-hidden',
                                       isOutbound
                                         ? 'bg-green-100 dark:bg-green-900/40 text-green-900 dark:text-green-100'
                                         : 'bg-muted'
@@ -1466,7 +1466,7 @@ export default function MessagesList() {
                                     {message.content && 
                                      !(message.media_urls && message.media_urls.length > 0 && 
                                        ['📎 Mídia', '📷 Imagem', '🎵 Áudio', '🎬 Vídeo', '📎 Media', '📷 Image', '🎵 Audio', '🎬 Video'].includes(message.content)) && (
-                                      <p className="text-sm whitespace-pre-wrap break-words">
+                                      <p className="text-sm whitespace-pre-wrap break-all">
                                         {message.content}
                                       </p>
                                     )}
