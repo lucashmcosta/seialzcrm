@@ -1215,7 +1215,7 @@ export default function MessagesList() {
 
         {/* Right Panel - Chat */}
         <ResizablePanel defaultSize={75}>
-          <div className="flex flex-col bg-background h-full">
+          <div className="flex flex-col bg-background h-full overflow-hidden">
             {selectedThread ? (
               <>
                 {/* Chat Header */}
