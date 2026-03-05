@@ -1355,6 +1355,10 @@ export default function MessagesList() {
                                       <div className="mt-1 flex items-center justify-end gap-1">
                                         <span className="text-[10px] text-yellow-600/70 dark:text-yellow-400/70 whitespace-nowrap">
                                           {note.author_name ? `${note.author_name} - ` : ''}
+                                          {new Date(note.occurred_at).toLocaleDateString(locale, {
+                                            day: '2-digit',
+                                            month: '2-digit',
+                                          })}{' - '}
                                           {new Date(note.occurred_at).toLocaleTimeString(locale, {
                                             hour: '2-digit',
                                             minute: '2-digit',
