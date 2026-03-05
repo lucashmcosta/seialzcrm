@@ -1485,6 +1485,10 @@ export default function MessagesList() {
                                           ? (message.sender_name ? `${message.sender_name} - ` : '')
                                           : (selectedThread?.contact_name ? `${selectedThread.contact_name} - ` : '')
                                         }
+                                        {new Date(message.sent_at).toLocaleDateString(locale, {
+                                          day: '2-digit',
+                                          month: '2-digit',
+                                        })}{' - '}
                                         {new Date(message.sent_at).toLocaleTimeString(locale, {
                                           hour: '2-digit',
                                           minute: '2-digit',
