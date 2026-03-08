@@ -390,9 +390,6 @@ serve(async (req) => {
           console.log('CTWA referral saved for contact:', contactId)
         }
       }
-        console.error('Could not find or create contact')
-        return new Response('OK', { status: 200 })
-      }
 
       // Find or create message thread
       let threadId: string | null = null
