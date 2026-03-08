@@ -369,6 +369,31 @@ serve(async (req) => {
         return new Response('OK', { status: 200 })
       }
 
+      // Save CTWA Referral data to contact (only on first message with referral)
+      if (hasReferral && contactId) {
+        const { error: referralError } = await supabase.from('contacts').update({
+          ad_referral_source_url: referralSourceUrl,
+          ad_referral_headline: referralHeadline,
+          ad_referral_body: referralBody,
+          ad_referral_media_url: referralMediaUrl,
+          ad_referral_source_id: referralSourceId,
+          ad_referral_source_type: referralSourceType,
+          ad_referral_captured_at: new Date().toISOString(),
+          source: 'ctwa',
+          utm_source: 'meta_ads',
+          utm_medium: 'ctwa',
+        } as any).eq('id', contactId)
+
+        if (referralError) {
+          console.error('Error saving CTWA referral:', referralError)
+        } else {
+          console.log('CTWA referral saved for contact:', contactId)
+        }
+      }
+        console.error('Could not find or create contact')
+        return new Response('OK', { status: 200 })
+      }
+
       // Find or create message thread
       let threadId: string | null = null
       
