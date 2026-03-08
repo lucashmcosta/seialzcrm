@@ -280,6 +280,64 @@ export default function MessagesList() {
   // Note mode state
   const [isNoteMode, setIsNoteMode] = useState(false);
   const [inlineNotes, setInlineNotes] = useState<InlineNote[]>([]);
+
+  // Export state
+  const [isExporting, setIsExporting] = useState(false);
+
+  const handleExportConversations = async () => {
+    if (!organization?.id) return;
+    setIsExporting(true);
+    try {
+      const { data: sessionData } = await supabase.auth.getSession();
+      const token = sessionData?.session?.access_token;
+      if (!token) throw new Error('No session');
+
+      const response = await fetch(
+        `https://qvmtzfvkhkhkhdpclzua.supabase.co/functions/v1/export-conversations`,
+        {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${token}`,
+            'apikey': 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InF2bXR6ZnZraGtoa2hkcGNsenVhIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjQzODM3MzIsImV4cCI6MjA3OTk1OTczMn0.7uhE97klvxSwYrJMu_NYIaNCLBaIUhFNtcF2oRLYRUE',
+          },
+          body: JSON.stringify({
+            organization_id: organization.id,
+            opportunity_status: 'won',
+          }),
+        }
+      );
+
+      if (!response.ok) {
+        const err = await response.json().catch(() => ({ error: 'Export failed' }));
+        throw new Error(err.error || 'Export failed');
+      }
+
+      const text = await response.text();
+      const blob = new Blob([text], { type: 'text/plain;charset=utf-8' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `conversas-won-${new Date().toISOString().slice(0, 10)}.txt`;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+
+      toast({
+        title: locale === 'pt-BR' ? 'Exportação concluída' : 'Export completed',
+        description: locale === 'pt-BR' ? 'Arquivo baixado com sucesso' : 'File downloaded successfully',
+      });
+    } catch (error: any) {
+      toast({
+        title: locale === 'pt-BR' ? 'Erro na exportação' : 'Export error',
+        description: error.message,
+        variant: 'destructive',
+      });
+    } finally {
+      setIsExporting(false);
+    }
+  };
   // Check if organization has an active AI agent (controls "Return to AI" button)
   const { data: hasAIAgent } = useQuery({
     queryKey: ['org-has-ai-agent', organization?.id],
