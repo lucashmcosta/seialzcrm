@@ -1,28 +1,68 @@
 
 
-## Correção: Mensagens cortadas no chat
+## Validacao: Captura de Referral CTWA (Click-to-WhatsApp Ads)
 
-### Problema
-As bolhas de mensagem com URLs longas (sem espaços) não estão quebrando corretamente. O `break-words` do CSS não é suficiente para URLs muito longas. O `overflow-hidden` no container pai está simplesmente cortando o conteúdo em vez de permitir a quebra.
+### Situacao atual
 
-### Correção
+1. **Webhook de mensagens recebidas** esta na Edge Function `twilio-whatsapp-webhook/index.ts` (rota `/inbound`), no Supabase
+2. O webhook **ja recebe o payload do Twilio via formData** (linha 232), mas **nao extrai nenhum campo `Referral.*`**
+3. A tabela `contacts` ja tem campos `utm_source`, `utm_medium`, `utm_campaign` e `source` — podem ser reaproveitados
+4. **Nao existe nenhuma captura de Referral hoje** — o dado esta sendo ignorado
 
-**Arquivo:** `src/pages/messages/MessagesList.tsx`
+### O que precisa ser feito
 
-1. **Linha 1396** — Adicionar `overflow-hidden` na bolha de mensagem para conter o conteúdo:
-```tsx
-'relative max-w-[70%] rounded-lg p-3 min-w-[80px] overflow-hidden',
+#### 1. Adicionar colunas na tabela `contacts` para dados do anuncio
+
+```sql
+ALTER TABLE contacts ADD COLUMN IF NOT EXISTS ad_referral_source_url text;
+ALTER TABLE contacts ADD COLUMN IF NOT EXISTS ad_referral_headline text;
+ALTER TABLE contacts ADD COLUMN IF NOT EXISTS ad_referral_body text;
+ALTER TABLE contacts ADD COLUMN IF NOT EXISTS ad_referral_media_url text;
+ALTER TABLE contacts ADD COLUMN IF NOT EXISTS ad_referral_source_id text;  -- ad_id do Meta
+ALTER TABLE contacts ADD COLUMN IF NOT EXISTS ad_referral_source_type text; -- "ad"
+ALTER TABLE contacts ADD COLUMN IF NOT EXISTS ad_referral_captured_at timestamptz;
 ```
 
-2. **Linha 1469** — Trocar `break-words` por `break-all` no parágrafo de conteúdo, que força a quebra de URLs longas:
-```tsx
-<p className="text-sm whitespace-pre-wrap break-all">
+#### 2. Atualizar o webhook `twilio-whatsapp-webhook` (rota `/inbound`)
+
+Apos a linha 263 (onde extrai `originalRepliedMessageSid`), adicionar extracao dos campos Referral:
+
+```typescript
+const referralSourceUrl = params['Referral.SourceUrl'] || null;
+const referralHeadline = params['Referral.Headline'] || null;
+const referralBody = params['Referral.Body'] || null;
+const referralMediaUrl = params['Referral.MediaUrl'] || null;
+const referralSourceId = params['Referral.SourceId'] || null;
+const referralSourceType = params['Referral.SourceType'] || null;
+const hasReferral = !!(referralSourceUrl || referralSourceId);
 ```
 
-3. **Linha 1347** — Mesmo fix para as notas inline (que também usam `max-w-[70%]`):
-```tsx
-<div className="max-w-[70%] rounded-lg p-3 min-w-[80px] overflow-hidden bg-yellow-100 ...">
+Apos criar/encontrar o contato (bloco linha 323-350), se `hasReferral`, atualizar o contato:
+
+```typescript
+if (hasReferral && contactId) {
+  await supabase.from('contacts').update({
+    ad_referral_source_url: referralSourceUrl,
+    ad_referral_headline: referralHeadline,
+    ad_referral_body: referralBody,
+    ad_referral_media_url: referralMediaUrl,
+    ad_referral_source_id: referralSourceId,
+    ad_referral_source_type: referralSourceType,
+    ad_referral_captured_at: new Date().toISOString(),
+    source: 'ctwa',  // marcar origem como Click-to-WhatsApp Ad
+    utm_source: 'meta_ads',
+    utm_medium: 'ctwa',
+  }).eq('id', contactId);
+}
 ```
 
-Isso garante que qualquer texto longo (URLs, hashes do Facebook, etc.) quebre dentro da bolha em vez de expandir para fora da tela.
+Tambem logar o referral para debug.
+
+#### 3. Exibir dados do anuncio no ContactDetail
+
+Na pagina de detalhe do contato, exibir uma secao "Origem do Anuncio" quando `ad_referral_source_id` existir, mostrando headline, body e link do anuncio.
+
+### Nota sobre Railway
+
+O webhook principal de mensagens esta **no Supabase** (Edge Function `twilio-whatsapp-webhook`). O Railway e usado para envio e batching, mas o **recebimento** de mensagens inbound passa por esta Edge Function. Entao a captura do Referral deve ser feita aqui.
 
