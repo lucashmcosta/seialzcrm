@@ -160,7 +160,7 @@ Deno.serve(async (req) => {
       while (hasMore) {
         const { data: msgs } = await supabase
           .from('messages')
-          .select('content, sender_type, sender_name, created_at, message_type')
+          .select('content, sender_type, sender_name, created_at, media_type')
           .eq('thread_id', threadId)
           .is('deleted_at', null)
           .order('created_at', { ascending: true })
