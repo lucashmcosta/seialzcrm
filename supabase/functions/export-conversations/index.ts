@@ -183,7 +183,7 @@ Deno.serve(async (req) => {
           const senderLabel = msg.sender_type === 'contact' ? 'Cliente' :
             msg.sender_type === 'system' ? `Agente IA` :
             `Agente - ${msg.sender_name || 'Humano'}`
-          const type = msg.message_type && msg.message_type !== 'text' ? ` [${msg.message_type}]` : ''
+          const type = msg.media_type && msg.media_type !== 'text' ? ` [${msg.media_type}]` : ''
           lines.push(`[${ts}] [${senderLabel}]${type}: ${msg.content || '[mídia]'}`)
         }
       }
