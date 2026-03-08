@@ -1058,6 +1058,13 @@ export type Database = {
       }
       contacts: {
         Row: {
+          ad_referral_body: string | null
+          ad_referral_captured_at: string | null
+          ad_referral_headline: string | null
+          ad_referral_media_url: string | null
+          ad_referral_source_id: string | null
+          ad_referral_source_type: string | null
+          ad_referral_source_url: string | null
           address_city: string | null
           address_neighborhood: string | null
           address_state: string | null
@@ -1092,6 +1099,13 @@ export type Database = {
           utm_source: string | null
         }
         Insert: {
+          ad_referral_body?: string | null
+          ad_referral_captured_at?: string | null
+          ad_referral_headline?: string | null
+          ad_referral_media_url?: string | null
+          ad_referral_source_id?: string | null
+          ad_referral_source_type?: string | null
+          ad_referral_source_url?: string | null
           address_city?: string | null
           address_neighborhood?: string | null
           address_state?: string | null
@@ -1128,6 +1142,13 @@ export type Database = {
           utm_source?: string | null
         }
         Update: {
+          ad_referral_body?: string | null
+          ad_referral_captured_at?: string | null
+          ad_referral_headline?: string | null
+          ad_referral_media_url?: string | null
+          ad_referral_source_id?: string | null
+          ad_referral_source_type?: string | null
+          ad_referral_source_url?: string | null
           address_city?: string | null
           address_neighborhood?: string | null
           address_state?: string | null
