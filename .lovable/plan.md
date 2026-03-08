@@ -1,19 +1,28 @@
 
 
-## Fix: Export de conversas retornando sem mensagens
+## Correção: Mensagens cortadas no chat
 
-### Problema identificado
-A edge function `export-conversations` faz `.select('content, sender_type, sender_name, created_at, message_type')` mas a coluna `message_type` **não existe** na tabela `messages`. O Supabase retorna erro silencioso e os dados vêm vazios.
+### Problema
+As bolhas de mensagem com URLs longas (sem espaços) não estão quebrando corretamente. O `break-words` do CSS não é suficiente para URLs muito longas. O `overflow-hidden` no container pai está simplesmente cortando o conteúdo em vez de permitir a quebra.
 
-### Solução
-Remover `message_type` do select na edge function. Verificar também se existem outras colunas que possam ser usadas (como `type` ou `media_type`).
+### Correção
 
-### Arquivo a editar
-| Arquivo | Mudança |
-|---------|---------|
-| `supabase/functions/export-conversations/index.ts` | Remover `message_type` do select, usar coluna correta se existir |
+**Arquivo:** `src/pages/messages/MessagesList.tsx`
 
-### Detalhes técnicos
-- Confirmar colunas reais da tabela `messages` e ajustar o select
-- Redesploar a edge function automaticamente
+1. **Linha 1396** — Adicionar `overflow-hidden` na bolha de mensagem para conter o conteúdo:
+```tsx
+'relative max-w-[70%] rounded-lg p-3 min-w-[80px] overflow-hidden',
+```
+
+2. **Linha 1469** — Trocar `break-words` por `break-all` no parágrafo de conteúdo, que força a quebra de URLs longas:
+```tsx
+<p className="text-sm whitespace-pre-wrap break-all">
+```
+
+3. **Linha 1347** — Mesmo fix para as notas inline (que também usam `max-w-[70%]`):
+```tsx
+<div className="max-w-[70%] rounded-lg p-3 min-w-[80px] overflow-hidden bg-yellow-100 ...">
+```
+
+Isso garante que qualquer texto longo (URLs, hashes do Facebook, etc.) quebre dentro da bolha em vez de expandir para fora da tela.
 
