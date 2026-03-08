@@ -36,7 +36,7 @@ import { useQuery } from '@tanstack/react-query';
 import { formatDistanceToNow } from 'date-fns';
 import { ptBR, enUS } from 'date-fns/locale';
 import { useToast } from '@/hooks/use-toast';
-import { Loader2, Check, CheckCheck, Clock, AlertCircle, Sparkles, SpellCheck, Briefcase, Smile, Bot, MessageSquarePlus, FileText, Target, UserCheck, CheckCircle, RotateCcw, ArrowLeftRight, StickyNote } from 'lucide-react';
+import { Loader2, Check, CheckCheck, Clock, AlertCircle, Sparkles, SpellCheck, Briefcase, Smile, Bot, MessageSquarePlus, FileText, Target, UserCheck, CheckCircle, RotateCcw, ArrowLeftRight, StickyNote, Download } from 'lucide-react';
 import { AgentMessageFeedbackDialog } from '@/components/whatsapp/AgentMessageFeedbackDialog';
 import { NewConversationDialog } from '@/components/messages/NewConversationDialog';
 import { WhatsAppTemplateSelector } from '@/components/whatsapp/WhatsAppTemplateSelector';
