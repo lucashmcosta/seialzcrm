@@ -261,6 +261,21 @@ serve(async (req) => {
       const waId = params.WaId || ''
       const numMedia = parseInt(params.NumMedia || '0')
       const originalRepliedMessageSid = params.OriginalRepliedMessageSid || null
+
+      // Extract CTWA (Click-to-WhatsApp Ads) Referral data
+      const referralSourceUrl = params['Referral.SourceUrl'] || null
+      const referralHeadline = params['Referral.Headline'] || null
+      const referralBody = params['Referral.Body'] || null
+      const referralMediaUrl = params['Referral.MediaUrl'] || null
+      const referralSourceId = params['Referral.SourceId'] || null
+      const referralSourceType = params['Referral.SourceType'] || null
+      const hasReferral = !!(referralSourceUrl || referralSourceId)
+
+      if (hasReferral) {
+        console.log('CTWA Referral detected:', JSON.stringify({
+          referralSourceUrl, referralHeadline, referralSourceId, referralSourceType
+        }))
+      }
       
       // Collect media URLs and content types
       const rawMediaUrls: string[] = []
