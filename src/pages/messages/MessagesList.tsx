@@ -1207,7 +1207,6 @@ export default function MessagesList() {
                   >
                     <MessageSquarePlus className="w-4 h-4" />
                   </Button>
-                  </Button>
                   <Badge color="gray" size="md">
                     {filteredThreads?.length || 0}
                   </Badge>
