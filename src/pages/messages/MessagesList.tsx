@@ -1192,10 +1192,21 @@ export default function MessagesList() {
                     variant="outline"
                     size="icon"
                     className="h-8 w-8"
+                    onClick={handleExportConversations}
+                    disabled={isExporting}
+                    title={locale === 'pt-BR' ? 'Exportar conversas (oportunidades ganhas)' : 'Export conversations (won opportunities)'}
+                  >
+                    {isExporting ? <Loader2 className="w-4 h-4 animate-spin" /> : <Download className="w-4 h-4" />}
+                  </Button>
+                  <Button
+                    variant="outline"
+                    size="icon"
+                    className="h-8 w-8"
                     onClick={() => setShowNewConversation(true)}
                     title={locale === 'pt-BR' ? 'Nova Conversa' : 'New Conversation'}
                   >
                     <MessageSquarePlus className="w-4 h-4" />
+                  </Button>
                   </Button>
                   <Badge color="gray" size="md">
                     {filteredThreads?.length || 0}
