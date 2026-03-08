@@ -104,3 +104,6 @@ verify_jwt = false
 
 [functions.suvsign-webhook]
 verify_jwt = false
+
+[functions.export-conversations]
+verify_jwt = false
