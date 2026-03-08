@@ -11,7 +11,7 @@ import { useOutboundCall } from '@/contexts/OutboundCallContext';
 import { formatPhoneDisplay } from '@/lib/phoneUtils';
 import { Card } from '@/components/ui/card';
 import { toast } from 'sonner';
-import { Mail, Phone, Building2, Edit, Trash2, MoreVertical, User, FileText, MapPin, Calendar } from 'lucide-react';
+import { Mail, Phone, Building2, Edit, Trash2, MoreVertical, User, FileText, MapPin, Calendar, Megaphone, ExternalLink } from 'lucide-react';
 import { Breadcrumbs } from '@/components/application/breadcrumbs/breadcrumbs';
 import { Tabs } from '@/components/application/tabs/tabs';
 import { NativeSelect } from '@/components/base/select/select-native';
@@ -407,6 +407,68 @@ export default function ContactDetail() {
                   </div>
                 </div>
               </Card>
+
+              {/* Origem do Anúncio (CTWA) */}
+              {contact.ad_referral_source_id && (
+                <Card className="p-6">
+                  <div className="flex items-center gap-2 mb-4">
+                    <Megaphone className="h-5 w-5 text-primary" />
+                    <h2 className="text-lg font-semibold text-foreground">Origem do Anúncio</h2>
+                    <Badge color="blue" size="sm">CTWA</Badge>
+                  </div>
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    {contact.ad_referral_headline && (
+                      <div>
+                        <div className="text-sm text-muted-foreground">Título do Anúncio</div>
+                        <div className="text-foreground font-medium">{contact.ad_referral_headline}</div>
+                      </div>
+                    )}
+                    {contact.ad_referral_body && (
+                      <div>
+                        <div className="text-sm text-muted-foreground">Texto do Anúncio</div>
+                        <div className="text-foreground">{contact.ad_referral_body}</div>
+                      </div>
+                    )}
+                    {contact.ad_referral_source_id && (
+                      <div>
+                        <div className="text-sm text-muted-foreground">Ad ID (Meta)</div>
+                        <div className="text-foreground font-mono text-sm">{contact.ad_referral_source_id}</div>
+                      </div>
+                    )}
+                    {contact.ad_referral_source_url && (
+                      <div>
+                        <div className="text-sm text-muted-foreground">Link do Anúncio</div>
+                        <a 
+                          href={contact.ad_referral_source_url} 
+                          target="_blank" 
+                          rel="noopener noreferrer"
+                          className="text-primary hover:underline inline-flex items-center gap-1 text-sm"
+                        >
+                          Abrir anúncio <ExternalLink className="h-3 w-3" />
+                        </a>
+                      </div>
+                    )}
+                    {contact.ad_referral_captured_at && (
+                      <div>
+                        <div className="text-sm text-muted-foreground">Capturado em</div>
+                        <div className="text-foreground">
+                          {new Date(contact.ad_referral_captured_at).toLocaleDateString(locale, { day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' })}
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                  {contact.ad_referral_media_url && (
+                    <div className="mt-4">
+                      <div className="text-sm text-muted-foreground mb-2">Imagem do Anúncio</div>
+                      <img 
+                        src={contact.ad_referral_media_url} 
+                        alt="Anúncio" 
+                        className="rounded-lg max-w-xs max-h-48 object-cover border border-border"
+                      />
+                    </div>
+                  )}
+                </Card>
+              )}
             </Tabs.Panel>
 
             <Tabs.Panel id="timeline">

@@ -261,6 +261,21 @@ serve(async (req) => {
       const waId = params.WaId || ''
       const numMedia = parseInt(params.NumMedia || '0')
       const originalRepliedMessageSid = params.OriginalRepliedMessageSid || null
+
+      // Extract CTWA (Click-to-WhatsApp Ads) Referral data
+      const referralSourceUrl = params['Referral.SourceUrl'] || null
+      const referralHeadline = params['Referral.Headline'] || null
+      const referralBody = params['Referral.Body'] || null
+      const referralMediaUrl = params['Referral.MediaUrl'] || null
+      const referralSourceId = params['Referral.SourceId'] || null
+      const referralSourceType = params['Referral.SourceType'] || null
+      const hasReferral = !!(referralSourceUrl || referralSourceId)
+
+      if (hasReferral) {
+        console.log('CTWA Referral detected:', JSON.stringify({
+          referralSourceUrl, referralHeadline, referralSourceId, referralSourceType
+        }))
+      }
       
       // Collect media URLs and content types
       const rawMediaUrls: string[] = []
@@ -350,6 +365,31 @@ serve(async (req) => {
       }
 
       if (!contactId) {
+        console.error('Could not find or create contact')
+        return new Response('OK', { status: 200 })
+      }
+
+      // Save CTWA Referral data to contact (only on first message with referral)
+      if (hasReferral && contactId) {
+        const { error: referralError } = await supabase.from('contacts').update({
+          ad_referral_source_url: referralSourceUrl,
+          ad_referral_headline: referralHeadline,
+          ad_referral_body: referralBody,
+          ad_referral_media_url: referralMediaUrl,
+          ad_referral_source_id: referralSourceId,
+          ad_referral_source_type: referralSourceType,
+          ad_referral_captured_at: new Date().toISOString(),
+          source: 'ctwa',
+          utm_source: 'meta_ads',
+          utm_medium: 'ctwa',
+        } as any).eq('id', contactId)
+
+        if (referralError) {
+          console.error('Error saving CTWA referral:', referralError)
+        } else {
+          console.log('CTWA referral saved for contact:', contactId)
+        }
+      }
         console.error('Could not find or create contact')
         return new Response('OK', { status: 200 })
       }
