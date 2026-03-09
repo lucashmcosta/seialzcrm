@@ -118,7 +118,7 @@ serve(async (req) => {
           'Content-Type': 'application/x-www-form-urlencoded',
         },
         body: new URLSearchParams({
-          To: twilioConfig.phone_number,
+          To: to,
           From: twilioConfig.phone_number,
           Url: `${webhookBaseUrl}/twiml?to=${encodeURIComponent(to)}&orgId=${userOrg.organization_id}`,
           StatusCallback: `${webhookBaseUrl}/status?orgId=${userOrg.organization_id}`,
