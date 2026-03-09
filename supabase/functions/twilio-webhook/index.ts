@@ -358,14 +358,24 @@ ${clientElements}
       let callerId = params.From || ''
 
       if (orgId) {
-        const { data: integration } = await supabase
-          .from('organization_integrations')
-          .select('config_values')
-          .eq('organization_id', orgId)
+        const { data: twilioIntegration } = await supabase
+          .from('admin_integrations')
+          .select('id')
+          .eq('slug', 'twilio-voice')
           .single()
 
-        if (integration?.config_values?.phone_number) {
-          callerId = integration.config_values.phone_number
+        if (twilioIntegration) {
+          const { data: integration } = await supabase
+            .from('organization_integrations')
+            .select('config_values')
+            .eq('organization_id', orgId)
+            .eq('integration_id', twilioIntegration.id)
+            .eq('is_enabled', true)
+            .single()
+
+          if (integration?.config_values?.phone_number) {
+            callerId = integration.config_values.phone_number
+          }
         }
       }
 
