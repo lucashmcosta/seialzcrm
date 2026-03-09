@@ -562,10 +562,20 @@ ${clientElements}
 
 async function checkRecordingEnabled(supabase: any, orgId: string): Promise<boolean> {
   try {
+    const { data: twilioIntegration } = await supabase
+      .from('admin_integrations')
+      .select('id')
+      .eq('slug', 'twilio-voice')
+      .single()
+
+    if (!twilioIntegration) return false
+
     const { data } = await supabase
       .from('organization_integrations')
       .select('config_values')
       .eq('organization_id', orgId)
+      .eq('integration_id', twilioIntegration.id)
+      .eq('is_enabled', true)
       .single()
     
     return data?.config_values?.enable_recording === true
