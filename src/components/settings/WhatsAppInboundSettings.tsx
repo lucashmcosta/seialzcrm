@@ -54,21 +54,21 @@ export function WhatsAppInboundSettings({ integrationId }: WhatsAppInboundSettin
         .single();
 
       if (error) throw error;
-      return (data?.whatsapp_inbound_settings as unknown as InboundSettings) || DEFAULT_SETTINGS;
+      return ((data as any)?.whatsapp_inbound_settings as InboundSettings) || DEFAULT_SETTINGS;
     },
     enabled: !!integrationId,
   });
 
   // Fetch pipelines
   const { data: pipelines } = useQuery({
-    queryKey: ['pipelines', organization?.id],
+    queryKey: ['pipelines-for-inbound', organization?.id],
     queryFn: async () => {
       const { data } = await supabase
-        .from('pipelines')
+        .from('pipelines' as any)
         .select('id, name, stages:pipeline_stages(id, name, order_index)')
         .eq('organization_id', organization!.id)
         .order('created_at');
-      return data || [];
+      return (data as any[]) || [];
     },
     enabled: !!organization?.id && settings.auto_create_opportunity,
   });
