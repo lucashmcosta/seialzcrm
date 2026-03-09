@@ -443,6 +443,11 @@ export function IntegrationDetailDialog({
           </div>
         )}
       </div>
+
+      {/* Inbound Settings */}
+      {orgIntegration?.id && (
+        <WhatsAppInboundSettings integrationId={orgIntegration.id} />
+      )}
     </div>
   );
 

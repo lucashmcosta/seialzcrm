@@ -297,7 +297,7 @@ serve(async (req) => {
       
       const { data: integration } = await supabase
         .from('organization_integrations')
-        .select('config_values, admin_integrations!inner(slug)')
+        .select('config_values, whatsapp_inbound_settings, admin_integrations!inner(slug)')
         .eq('organization_id', orgId)
         .eq('admin_integrations.slug', 'twilio-whatsapp')
         .eq('is_enabled', true)
@@ -307,6 +307,13 @@ serve(async (req) => {
         const config = integration.config_values as any
         twilioAccountSid = config.account_sid || ''
         twilioAuthToken = config.auth_token || ''
+      }
+
+      // Parse inbound settings
+      const inboundSettings = (integration?.whatsapp_inbound_settings as any) || {
+        auto_create_contact: true,
+        default_lifecycle_stage: 'lead',
+        auto_create_opportunity: false,
       }
 
       // Persist media to storage
@@ -339,8 +346,8 @@ serve(async (req) => {
         contactId = existingContact.id
         contactOwnerId = existingContact.owner_user_id
         console.log('Found existing contact:', contactId)
-      } else {
-        // Auto-create contact
+      } else if (inboundSettings.auto_create_contact) {
+        // Auto-create contact only if enabled
         const contactName = profileName || `WhatsApp ${from}`
         
         const { data: newContact, error: createError } = await supabase
@@ -350,7 +357,7 @@ serve(async (req) => {
             full_name: contactName,
             phone: from,
             source: 'whatsapp',
-            lifecycle_stage: 'lead',
+            lifecycle_stage: inboundSettings.default_lifecycle_stage || 'lead',
           })
           .select('id, owner_user_id')
           .single()
@@ -359,9 +366,64 @@ serve(async (req) => {
           contactId = newContact.id
           contactOwnerId = newContact.owner_user_id
           console.log('Created new contact:', contactId)
+
+          // Auto-create opportunity if enabled
+          if (inboundSettings.auto_create_opportunity) {
+            try {
+              const oppData: any = {
+                organization_id: orgId,
+                contact_id: contactId,
+                title: `Oportunidade - ${contactName}`,
+                status: 'open',
+              }
+
+              if (inboundSettings.default_pipeline_id) {
+                oppData.pipeline_id = inboundSettings.default_pipeline_id
+              }
+              if (inboundSettings.default_stage_id) {
+                oppData.stage_id = inboundSettings.default_stage_id
+              } else if (inboundSettings.default_pipeline_id) {
+                // Get first stage of pipeline
+                const { data: firstStage } = await supabase
+                  .from('pipeline_stages')
+                  .select('id')
+                  .eq('pipeline_id', inboundSettings.default_pipeline_id)
+                  .order('order_index', { ascending: true })
+                  .limit(1)
+                  .single()
+                if (firstStage) {
+                  oppData.stage_id = firstStage.id
+                }
+              }
+
+              if (contactOwnerId) {
+                oppData.owner_user_id = contactOwnerId
+              }
+
+              const { data: newOpp, error: oppError } = await supabase
+                .from('opportunities')
+                .insert(oppData)
+                .select('id')
+                .single()
+
+              if (newOpp) {
+                console.log('Auto-created opportunity:', newOpp.id)
+              } else if (oppError) {
+                console.error('Error auto-creating opportunity:', oppError)
+              }
+            } catch (oppErr) {
+              console.error('Error in auto-create opportunity:', oppErr)
+            }
+          }
         } else if (createError) {
           console.error('Error creating contact:', createError)
         }
+      } else {
+        console.log('Auto-create contact disabled, skipping unknown number:', from)
+        return new Response('<?xml version="1.0" encoding="UTF-8"?><Response></Response>', { 
+          status: 200, 
+          headers: { ...corsHeaders, 'Content-Type': 'text/xml' } 
+        })
       }
 
       if (!contactId) {
