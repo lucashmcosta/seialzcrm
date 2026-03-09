@@ -1,0 +1,1 @@
+ALTER TABLE organization_integrations ADD COLUMN IF NOT EXISTS whatsapp_inbound_settings jsonb DEFAULT '{"auto_create_contact": true, "default_lifecycle_stage": "lead", "auto_create_opportunity": false}'::jsonb;

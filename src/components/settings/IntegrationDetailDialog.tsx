@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import { WhatsAppInboundSettings } from '@/components/settings/WhatsAppInboundSettings';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Label } from '@/components/ui/label';
@@ -442,6 +443,11 @@ export function IntegrationDetailDialog({
           </div>
         )}
       </div>
+
+      {/* Inbound Settings */}
+      {orgIntegration?.id && (
+        <WhatsAppInboundSettings integrationId={orgIntegration.id} />
+      )}
     </div>
   );
 

@@ -1,50 +1,28 @@
 
 
-## Plano: Configurações de Entrada para WhatsApp (Inbound Settings)
+## Correção: Mensagens cortadas no chat
 
 ### Problema
-O webhook de WhatsApp (`twilio-whatsapp-webhook`) **sempre** cria contatos automaticamente quando recebe mensagens de números desconhecidos. Não existe controle para:
-- Criar ou não contato automaticamente
-- Criar ou não oportunidade automaticamente
-- Definir pipeline/estágio padrão para oportunidades criadas
-- Definir lifecycle stage do contato
+As bolhas de mensagem com URLs longas (sem espaços) não estão quebrando corretamente. O `break-words` do CSS não é suficiente para URLs muito longas. O `overflow-hidden` no container pai está simplesmente cortando o conteúdo em vez de permitir a quebra.
 
-O webhook de voz (`twilio-webhook`) já tem esse controle via `inbound_settings` na tabela `phone_numbers`, mas o WhatsApp não usa essa tabela.
+### Correção
 
-### Solução
-Adicionar um campo `whatsapp_inbound_settings` (JSONB) na tabela `organization_integrations` e criar uma UI de configuração na seção de integrações/WhatsApp.
+**Arquivo:** `src/pages/messages/MessagesList.tsx`
 
-### Estrutura do JSON
-
-```json
-{
-  "auto_create_contact": true,
-  "default_lifecycle_stage": "lead",
-  "auto_create_opportunity": false,
-  "default_pipeline_id": null,
-  "default_stage_id": null,
-  "default_opportunity_owner": "contact_owner"
-}
+1. **Linha 1396** — Adicionar `overflow-hidden` na bolha de mensagem para conter o conteúdo:
+```tsx
+'relative max-w-[70%] rounded-lg p-3 min-w-[80px] overflow-hidden',
 ```
 
-### Arquivos a criar/editar
+2. **Linha 1469** — Trocar `break-words` por `break-all` no parágrafo de conteúdo, que força a quebra de URLs longas:
+```tsx
+<p className="text-sm whitespace-pre-wrap break-all">
+```
 
-| Arquivo | Ação |
-|---------|------|
-| Migration SQL | Adicionar coluna `whatsapp_inbound_settings` em `organization_integrations` |
-| `src/components/settings/WhatsAppInboundSettings.tsx` | Criar - UI com switches e selects para configurar as regras |
-| `src/components/settings/IntegrationDetailDialog.tsx` | Editar - Incluir a seção de inbound settings no dialog do WhatsApp |
-| `supabase/functions/twilio-whatsapp-webhook/index.ts` | Editar - Consultar `whatsapp_inbound_settings` antes de criar contato/oportunidade |
+3. **Linha 1347** — Mesmo fix para as notas inline (que também usam `max-w-[70%]`):
+```tsx
+<div className="max-w-[70%] rounded-lg p-3 min-w-[80px] overflow-hidden bg-yellow-100 ...">
+```
 
-### Detalhes técnicos
-
-1. **Migration**: `ALTER TABLE organization_integrations ADD COLUMN whatsapp_inbound_settings jsonb DEFAULT '{"auto_create_contact": true, "default_lifecycle_stage": "lead", "auto_create_opportunity": false}'`
-
-2. **UI**: Novo componente com:
-   - Switch "Criar contato automaticamente" (default: on)
-   - Select "Estágio do ciclo de vida" (lead, subscriber, opportunity, customer)
-   - Switch "Criar oportunidade automaticamente" (default: off)
-   - Se oportunidade ativada: Select de pipeline e estágio
-
-3. **Webhook**: No trecho onde hoje faz auto-create (linha ~343), buscar as settings da `organization_integrations` e respeitar as configurações. Se `auto_create_contact = false`, não criar e retornar OK silenciosamente.
+Isso garante que qualquer texto longo (URLs, hashes do Facebook, etc.) quebre dentro da bolha em vez de expandir para fora da tela.
 

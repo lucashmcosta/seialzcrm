@@ -2576,6 +2576,7 @@ export type Database = {
           is_enabled: boolean | null
           organization_id: string | null
           updated_at: string | null
+          whatsapp_inbound_settings: Json | null
         }
         Insert: {
           config_values?: Json | null
@@ -2588,6 +2589,7 @@ export type Database = {
           is_enabled?: boolean | null
           organization_id?: string | null
           updated_at?: string | null
+          whatsapp_inbound_settings?: Json | null
         }
         Update: {
           config_values?: Json | null
@@ -2600,6 +2602,7 @@ export type Database = {
           is_enabled?: boolean | null
           organization_id?: string | null
           updated_at?: string | null
+          whatsapp_inbound_settings?: Json | null
         }
         Relationships: [
           {
