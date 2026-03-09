@@ -417,9 +417,16 @@ serve(async (req) => {
         });
       }
 
-      // Associate phone numbers to Messaging Service (for outbound)
+      // Associate ONLY the selected phone number to Messaging Service (for outbound)
+      // CRITICAL: Do not associate other orgs' numbers to this Messaging Service
       if (messagingServiceSid) {
-        for (const number of phoneNumbers) {
+        const numbersToAssociate = selectedNumber
+          ? phoneNumbers.filter(n => n.phone_number === selectedNumber)
+          : phoneNumbers;
+        
+        console.log(`Associating ${numbersToAssociate.length} of ${phoneNumbers.length} numbers to Messaging Service (selected: ${selectedNumber || 'all'})`);
+        
+        for (const number of numbersToAssociate) {
           try {
             const resp = await fetch(`https://messaging.twilio.com/v1/Services/${messagingServiceSid}/PhoneNumbers`, {
               method: "POST",
