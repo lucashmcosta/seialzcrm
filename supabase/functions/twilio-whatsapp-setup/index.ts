@@ -346,10 +346,18 @@ serve(async (req) => {
     const v2Senders = await fetchWhatsAppSenders();
 
     // ─── Configure webhooks on WhatsApp Senders via v2 ───
+    // CRITICAL: Only configure the sender matching the selectedNumber to avoid
+    // overwriting webhooks of other organizations sharing the same Twilio account
     const webhookResults: { sender_id: string; sid: string; success: boolean; error?: string }[] = [];
+    const targetSenderId = selectedNumber ? `whatsapp:${selectedNumber}` : null;
 
     for (const sender of v2Senders) {
       if (sender.status === "ONLINE" || sender.status === "ONLINE:UPDATING") {
+        // If a specific number was selected, only configure that sender
+        if (targetSenderId && sender.sender_id !== targetSenderId) {
+          console.log(`[setup] Skipping sender ${sender.sender_id} - does not match selected number ${selectedNumber}`);
+          continue;
+        }
         const result = await updateSenderWebhook(sender.sid, inboundWebhookUrl, statusWebhookUrl);
         webhookResults.push({
           sender_id: sender.sender_id,
