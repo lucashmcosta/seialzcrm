@@ -289,7 +289,7 @@ serve(async (req) => {
         }
       }
 
-      console.log(`Inbound WhatsApp - From: ${from}, Body: ${body}, Media: ${numMedia}`)
+      console.log(`Inbound WhatsApp - From: ${from}, To: ${to}, Body: ${body}, Media: ${numMedia}`)
 
       // Get Twilio credentials for media download
       let twilioAccountSid = ''
@@ -307,6 +307,21 @@ serve(async (req) => {
         const config = integration.config_values as any
         twilioAccountSid = config.account_sid || ''
         twilioAuthToken = config.auth_token || ''
+
+        // CRITICAL: Validate that the To number matches this org's configured number
+        // This prevents cross-org message leaks when multiple orgs share a Twilio account
+        const configuredNumber = config.whatsapp_number
+        if (configuredNumber && to) {
+          const toNormalized = to.replace('+', '').replace(/\D/g, '')
+          const configNormalized = configuredNumber.replace('+', '').replace(/\D/g, '')
+          if (toNormalized !== configNormalized) {
+            console.warn(`[SECURITY] Message To ${to} does NOT match org ${orgId} configured number ${configuredNumber}. Rejecting to prevent cross-org leak.`)
+            return new Response('<?xml version="1.0" encoding="UTF-8"?><Response></Response>', { 
+              status: 200, 
+              headers: { ...corsHeaders, 'Content-Type': 'text/xml' } 
+            })
+          }
+        }
       }
 
       // Parse inbound settings
