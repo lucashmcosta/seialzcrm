@@ -6,7 +6,7 @@ const SESSION_CHECK_INTERVAL = 30000; // 30 segundos
 
 export function useSingleSession() {
   useEffect(() => {
-    let intervalId: NodeJS.Timeout;
+    let intervalId: ReturnType<typeof setInterval>;
 
     const getOrCreateDeviceId = (): string => {
       let deviceId = localStorage.getItem(DEVICE_ID_KEY);
