@@ -62,7 +62,7 @@ export function OutboundCallProvider({ children }: { children: ReactNode }) {
   
   const deviceRef = useRef<Device | null>(null);
   const activeCallRef = useRef<Call | null>(null);
-  const timerRef = useRef<NodeJS.Timeout | null>(null);
+  const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const callIdRef = useRef<string | null>(null);
   const callStartTimeRef = useRef<Date | null>(null);
   const pendingCallRef = useRef<CallInfo | null>(null);
