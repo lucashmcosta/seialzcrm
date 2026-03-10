@@ -44,7 +44,7 @@ export function IncomingCallModal({
   const [duration, setDuration] = useState(0);
   const [digits, setDigits] = useState('');
   const [showDialPad, setShowDialPad] = useState(false);
-  const timerRef = useRef<NodeJS.Timeout | null>(null);
+  const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const audioRef = useRef<HTMLAudioElement | null>(null);
 
   // Play ringtone when ringing

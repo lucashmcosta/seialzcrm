@@ -392,7 +392,7 @@ export function OutboundCallProvider({ children }: { children: ReactNode }) {
       return;
     }
     
-    let timer: NodeJS.Timeout | null = null;
+    let timer: ReturnType<typeof setTimeout> | null = null;
     let isMounted = true;
     
     // Check auth before initializing
