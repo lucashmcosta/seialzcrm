@@ -1,24 +1,28 @@
 
 
-## Tornar Allan Tavares admin na Viagi
+## Correção: Mensagens cortadas no chat
 
-### Situação atual
-- **Usuário**: Allan Tavares (`atavares@viagi.com.br`)
-- **Org**: Viagi (`b246ef6f-6242-4011-a112-6d8783d2896a`)
-- **Perfil atual**: Sales Rep (só pode ver/editar contatos e oportunidades)
+### Problema
+As bolhas de mensagem com URLs longas (sem espaços) não estão quebrando corretamente. O `break-words` do CSS não é suficiente para URLs muito longas. O `overflow-hidden` no container pai está simplesmente cortando o conteúdo em vez de permitir a quebra.
 
-### O que precisa ser feito
-Atualizar o `permission_profile_id` no registro `user_organizations` de Allan para o perfil **Admin** (`2f5bd892-8392-43a9-8a03-325f25541747`), que já existe na Viagi e inclui todas as permissões (settings, integrações, billing, users, etc.).
+### Correção
 
-### Operação
-Uma única query UPDATE na tabela `user_organizations`:
+**Arquivo:** `src/pages/messages/MessagesList.tsx`
 
-```sql
-UPDATE user_organizations
-SET permission_profile_id = '2f5bd892-8392-43a9-8a03-325f25541747'
-WHERE user_id = '200dbbd9-5143-402f-86c8-8667dd6f691e'
-  AND organization_id = 'b246ef6f-6242-4011-a112-6d8783d2896a';
+1. **Linha 1396** — Adicionar `overflow-hidden` na bolha de mensagem para conter o conteúdo:
+```tsx
+'relative max-w-[70%] rounded-lg p-3 min-w-[80px] overflow-hidden',
 ```
 
-Nenhuma mudança de código necessária -- apenas uma operação de dados.
+2. **Linha 1469** — Trocar `break-words` por `break-all` no parágrafo de conteúdo, que força a quebra de URLs longas:
+```tsx
+<p className="text-sm whitespace-pre-wrap break-all">
+```
+
+3. **Linha 1347** — Mesmo fix para as notas inline (que também usam `max-w-[70%]`):
+```tsx
+<div className="max-w-[70%] rounded-lg p-3 min-w-[80px] overflow-hidden bg-yellow-100 ...">
+```
+
+Isso garante que qualquer texto longo (URLs, hashes do Facebook, etc.) quebre dentro da bolha em vez de expandir para fora da tela.
 
