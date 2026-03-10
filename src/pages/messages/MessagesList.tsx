@@ -1266,7 +1266,8 @@ export default function MessagesList() {
                   selectionMode="single"
                   selectedKeys={selectedThreadId ? new Set([selectedThreadId]) : new Set()}
                   onSelectionChange={(keys) => {
-                    const key = Array.from(keys).at(0) as string;
+                    const keysArray = Array.from(keys);
+                    const key = keysArray[0] as string;
                     setSelectedThreadId(key || null);
                   }}
                 >
