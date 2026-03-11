@@ -182,7 +182,7 @@ export function WhatsAppTemplateSelector({
           </CardContent>
         </Card>
       ) : (
-        <ScrollArea className="max-h-[300px]">
+        <ScrollArea className="max-h-[60vh]">
           <div className="space-y-2">
             {templates.map((template) => (
               <Card

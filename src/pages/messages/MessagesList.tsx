@@ -1368,21 +1368,11 @@ export default function MessagesList() {
 
                 {/* Messages Area */}
                 {showTemplates ? (
-                  <div className="flex-1 overflow-hidden">
-                    <div className="flex items-center justify-between px-6 py-3 border-b border-border">
-                      <h3 className="font-semibold text-foreground text-sm">
-                        {locale === 'pt-BR' ? 'Selecione um template' : 'Select a template'}
-                      </h3>
-                      <Button variant="ghost" size="sm" onClick={() => setShowTemplates(false)}>
-                        <XClose className="w-4 h-4" />
-                      </Button>
-                    </div>
-                    <ScrollArea className="flex-1 h-[calc(100%-48px)]">
-                      <WhatsAppTemplateSelector
-                        onSelect={handleSendTemplate}
-                        onCancel={() => setShowTemplates(false)}
-                      />
-                    </ScrollArea>
+                  <div className="flex-1 overflow-auto p-4">
+                    <WhatsAppTemplateSelector
+                      onSelect={handleSendTemplate}
+                      onCancel={() => setShowTemplates(false)}
+                    />
                   </div>
                 ) : (
                   <>
