@@ -1368,7 +1368,7 @@ export default function MessagesList() {
 
                 {/* Messages Area */}
                 {showTemplates ? (
-                  <div className="flex-1 overflow-auto p-4">
+                  <div className="flex-1 flex flex-col min-h-0 overflow-hidden">
                     <WhatsAppTemplateSelector
                       onSelect={handleSendTemplate}
                       onCancel={() => setShowTemplates(false)}
