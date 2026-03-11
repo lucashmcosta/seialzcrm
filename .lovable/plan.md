@@ -1,23 +1,28 @@
 
 
-## Fix: Template Selector Layout in Messages
+## Correção: Mensagens cortadas no chat
 
-The template selector view has two layout problems:
+### Problema
+As bolhas de mensagem com URLs longas (sem espaços) não estão quebrando corretamente. O `break-words` do CSS não é suficiente para URLs muito longas. O `overflow-hidden` no container pai está simplesmente cortando o conteúdo em vez de permitir a quebra.
 
-1. **Parent container**: The `flex-1 overflow-hidden` div doesn't use flex-col, so the `ScrollArea` with `flex-1` doesn't expand properly
-2. **Internal ScrollArea cap**: `WhatsAppTemplateSelector` has a hardcoded `max-h-[300px]` on its template list, cutting off content unnecessarily
+### Correção
 
-### Changes
+**Arquivo:** `src/pages/messages/MessagesList.tsx`
 
-**`src/pages/messages/MessagesList.tsx` (lines 1371-1386)**
-- Add `flex flex-col` to the outer container so `flex-1` on the ScrollArea works
-- Remove the redundant header since `WhatsAppTemplateSelector` already has its own header/cancel button — OR keep the header but ensure proper flex layout
+1. **Linha 1396** — Adicionar `overflow-hidden` na bolha de mensagem para conter o conteúdo:
+```tsx
+'relative max-w-[70%] rounded-lg p-3 min-w-[80px] overflow-hidden',
+```
 
-**`src/components/whatsapp/WhatsAppTemplateSelector.tsx`**
-- Remove `max-h-[300px]` from the `ScrollArea` so it fills available space naturally
-- Change to `flex-1 overflow-auto` pattern so templates use all available vertical space
-- Wrap the component in a flex-col container with `h-full`
+2. **Linha 1469** — Trocar `break-words` por `break-all` no parágrafo de conteúdo, que força a quebra de URLs longas:
+```tsx
+<p className="text-sm whitespace-pre-wrap break-all">
+```
 
-### Result
-Templates will fill the full chat area height with proper scrolling, matching the rest of the messages UI.
+3. **Linha 1347** — Mesmo fix para as notas inline (que também usam `max-w-[70%]`):
+```tsx
+<div className="max-w-[70%] rounded-lg p-3 min-w-[80px] overflow-hidden bg-yellow-100 ...">
+```
+
+Isso garante que qualquer texto longo (URLs, hashes do Facebook, etc.) quebre dentro da bolha em vez de expandir para fora da tela.
 
