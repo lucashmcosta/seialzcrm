@@ -159,8 +159,8 @@ export function WhatsAppTemplateSelector({
   }
 
   return (
-    <div className="space-y-4">
-      <div className="flex items-center justify-between">
+    <div className="flex flex-col h-full min-h-0">
+      <div className="flex items-center justify-between px-4 py-3 shrink-0">
         <div>
           <h4 className="text-sm font-medium">Selecione um Template</h4>
           <p className="text-xs text-muted-foreground">
@@ -173,7 +173,7 @@ export function WhatsAppTemplateSelector({
       </div>
 
       {templates.length === 0 ? (
-        <Card>
+        <Card className="mx-4">
           <CardContent className="py-8 text-center">
             <p className="text-muted-foreground">Nenhum template disponível</p>
             <p className="text-xs text-muted-foreground mt-1">
@@ -182,7 +182,7 @@ export function WhatsAppTemplateSelector({
           </CardContent>
         </Card>
       ) : (
-        <ScrollArea className="max-h-[60vh]">
+        <div className="flex-1 min-h-0 overflow-y-auto px-4 pb-4">
           <div className="space-y-2">
             {templates.map((template) => (
               <Card
@@ -210,7 +210,7 @@ export function WhatsAppTemplateSelector({
               </Card>
             ))}
           </div>
-        </ScrollArea>
+        </div>
       )}
     </div>
   );
