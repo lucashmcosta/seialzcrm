@@ -23,6 +23,7 @@ import { OpportunityDialog } from '@/components/opportunities/OpportunityDialog'
 import { ClickToCallButton } from '@/components/calls/ClickToCallButton';
 import { OwnerSelector } from '@/components/common/OwnerSelector';
 import { SendToSignatureButton } from '@/components/signature/SendToSignatureButton';
+import { TagSelector } from '@/components/common/TagSelector';
 
 interface Opportunity {
   id: string;
