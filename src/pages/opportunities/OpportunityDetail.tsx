@@ -421,6 +421,13 @@ export default function OpportunityDetail() {
                         <p className="text-sm text-muted-foreground">Atualizado por</p>
                         <p className="text-lg font-semibold">{updatedByName || 'Sistema'}</p>
                       </div>
+                      {organization && (
+                        <TagSelector
+                          entityType="opportunity"
+                          entityId={opportunity.id}
+                          organizationId={organization.id}
+                        />
+                      )}
                     </div>
                   </div>
                 </CardContent>
