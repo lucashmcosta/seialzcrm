@@ -1,38 +1,28 @@
 
 
-## Fix: "Create Opportunity" from Contact Detail
+## Correção: Mensagens cortadas no chat
 
-### Problem
-The "Create Opportunity" button in `ContactOpportunities` navigates to `/opportunities/new?contact=${contactId}`, but **no route exists** for `/opportunities/new`. The route `/opportunities/:id` catches it, treating "new" as an opportunity ID, and `OpportunityDetail` tries to fetch an opportunity with `id="new"` — which fails.
+### Problema
+As bolhas de mensagem com URLs longas (sem espaços) não estão quebrando corretamente. O `break-words` do CSS não é suficiente para URLs muito longas. O `overflow-hidden` no container pai está simplesmente cortando o conteúdo em vez de permitir a quebra.
 
-### Solution
-Replace the navigation link with an inline `OpportunityDialog` (the same dialog used in `OpportunitiesKanban`). This opens a create dialog directly from the contact page with the contact pre-selected.
+### Correção
 
-### Changes
+**Arquivo:** `src/pages/messages/MessagesList.tsx`
 
-**`src/components/contacts/ContactOpportunities.tsx`**
-- Remove the `Link` to `/opportunities/new`
-- Add state for dialog open/close and pipeline stages
-- Fetch pipeline stages on mount
-- Render `OpportunityDialog` with the contact pre-selected
-- On success, refresh the opportunities list
-
-Key structure:
+1. **Linha 1396** — Adicionar `overflow-hidden` na bolha de mensagem para conter o conteúdo:
 ```tsx
-const [dialogOpen, setDialogOpen] = useState(false);
-const [stages, setStages] = useState([]);
-
-// Fetch stages on mount
-// Button opens dialog instead of navigating
-<Button onClick={() => setDialogOpen(true)}>...</Button>
-
-<OpportunityDialog
-  open={dialogOpen}
-  onOpenChange={setDialogOpen}
-  stages={stages}
-  onSuccess={() => { setDialogOpen(false); fetchOpportunities(); }}
-/>
+'relative max-w-[70%] rounded-lg p-3 min-w-[80px] overflow-hidden',
 ```
 
-The `OpportunityDialog` already supports a `contact_id` in its form data via `opportunity` prop — we pass the contactId as a pre-filled opportunity to set the contact automatically.
+2. **Linha 1469** — Trocar `break-words` por `break-all` no parágrafo de conteúdo, que força a quebra de URLs longas:
+```tsx
+<p className="text-sm whitespace-pre-wrap break-all">
+```
+
+3. **Linha 1347** — Mesmo fix para as notas inline (que também usam `max-w-[70%]`):
+```tsx
+<div className="max-w-[70%] rounded-lg p-3 min-w-[80px] overflow-hidden bg-yellow-100 ...">
+```
+
+Isso garante que qualquer texto longo (URLs, hashes do Facebook, etc.) quebre dentro da bolha em vez de expandir para fora da tela.
 

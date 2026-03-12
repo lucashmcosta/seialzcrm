@@ -8,6 +8,7 @@ import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Plus, ExternalLink } from 'lucide-react';
 import { Skeleton } from '@/components/ui/skeleton';
+import { OpportunityDialog } from '@/components/opportunities/OpportunityDialog';
 
 interface Opportunity {
   id: string;
@@ -23,6 +24,11 @@ interface Opportunity {
   };
 }
 
+interface PipelineStage {
+  id: string;
+  name: string;
+}
+
 interface ContactOpportunitiesProps {
   contactId: string;
 }
@@ -32,12 +38,25 @@ export function ContactOpportunities({ contactId }: ContactOpportunitiesProps) {
   const { t } = useTranslation(locale as any);
   const [opportunities, setOpportunities] = useState<Opportunity[]>([]);
   const [loading, setLoading] = useState(true);
+  const [dialogOpen, setDialogOpen] = useState(false);
+  const [stages, setStages] = useState<PipelineStage[]>([]);
 
   useEffect(() => {
     if (organization?.id) {
       fetchOpportunities();
+      fetchStages();
     }
   }, [organization?.id, contactId]);
+
+  const fetchStages = async () => {
+    if (!organization) return;
+    const { data } = await supabase
+      .from('pipeline_stages')
+      .select('id, name')
+      .eq('organization_id', organization.id)
+      .order('order_index');
+    setStages(data || []);
+  };
 
   const fetchOpportunities = async () => {
     if (!organization) return;
@@ -113,12 +132,10 @@ export function ContactOpportunities({ contactId }: ContactOpportunitiesProps) {
         <h2 className="text-lg font-semibold text-foreground">
           {t('opportunities.title')}
         </h2>
-        <Link to={`/opportunities/new?contact=${contactId}`}>
-          <Button size="sm">
-            <Plus className="h-4 w-4 mr-2" />
-            {t('opportunities.newOpportunity')}
-          </Button>
-        </Link>
+        <Button size="sm" onClick={() => setDialogOpen(true)}>
+          <Plus className="h-4 w-4 mr-2" />
+          {t('opportunities.newOpportunity')}
+        </Button>
       </div>
 
       {opportunities.length === 0 ? (
@@ -163,6 +180,17 @@ export function ContactOpportunities({ contactId }: ContactOpportunitiesProps) {
           ))}
         </div>
       )}
+
+      <OpportunityDialog
+        open={dialogOpen}
+        onOpenChange={setDialogOpen}
+        stages={stages}
+        opportunity={{ title: '', amount: 0, currency: 'BRL', contact_id: contactId, pipeline_stage_id: stages[0]?.id || '', close_date: null }}
+        onSuccess={() => {
+          setDialogOpen(false);
+          fetchOpportunities();
+        }}
+      />
     </Card>
   );
 }
