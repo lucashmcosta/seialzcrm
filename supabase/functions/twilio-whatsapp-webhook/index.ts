@@ -392,23 +392,40 @@ serve(async (req) => {
                 status: 'open',
               }
 
-              if (inboundSettings.default_pipeline_id) {
-                oppData.pipeline_id = inboundSettings.default_pipeline_id
-              }
+              // Resolve pipeline_stage_id
+              let resolvedStageId: string | null = null
+
               if (inboundSettings.default_stage_id) {
-                oppData.stage_id = inboundSettings.default_stage_id
-              } else if (inboundSettings.default_pipeline_id) {
-                // Get first stage of pipeline
+                // Validate stage belongs to org
+                const { data: validStage } = await supabase
+                  .from('pipeline_stages')
+                  .select('id')
+                  .eq('id', inboundSettings.default_stage_id)
+                  .eq('organization_id', orgId)
+                  .single()
+                if (validStage) {
+                  resolvedStageId = validStage.id
+                }
+              }
+
+              if (!resolvedStageId) {
+                // Fallback: first stage by order_index
                 const { data: firstStage } = await supabase
                   .from('pipeline_stages')
                   .select('id')
-                  .eq('pipeline_id', inboundSettings.default_pipeline_id)
+                  .eq('organization_id', orgId)
                   .order('order_index', { ascending: true })
                   .limit(1)
                   .single()
                 if (firstStage) {
-                  oppData.stage_id = firstStage.id
+                  resolvedStageId = firstStage.id
                 }
+              }
+
+              if (!resolvedStageId) {
+                console.error('No pipeline stages found for org', orgId, '- skipping opportunity creation')
+              } else {
+                oppData.pipeline_stage_id = resolvedStageId
               }
 
               if (contactOwnerId) {
