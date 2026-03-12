@@ -325,8 +325,10 @@ export default function OpportunitiesKanban() {
       
       const matchesDateFrom = !filterDateFrom || !opp.close_date || opp.close_date >= filterDateFrom;
       const matchesDateTo = !filterDateTo || !opp.close_date || opp.close_date <= filterDateTo;
+
+      const matchesTag = filterTag === 'all' || (tagsByOpportunity[opp.id]?.some(t => t.id === filterTag));
       
-      return matchesOwner && matchesMinAmount && matchesMaxAmount && matchesDateFrom && matchesDateTo;
+      return matchesOwner && matchesMinAmount && matchesMaxAmount && matchesDateFrom && matchesDateTo && matchesTag;
     });
   };
 
