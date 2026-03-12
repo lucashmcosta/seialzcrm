@@ -1,28 +1,30 @@
 
 
-## Correção: Mensagens cortadas no chat
+## Add Tags to Opportunity Detail Page
 
-### Problema
-As bolhas de mensagem com URLs longas (sem espaços) não estão quebrando corretamente. O `break-words` do CSS não é suficiente para URLs muito longas. O `overflow-hidden` no container pai está simplesmente cortando o conteúdo em vez de permitir a quebra.
+### Problem
+Tags (etiquetas) are configured in Settings but there's no UI to assign/view them on the Opportunity Detail page.
 
-### Correção
+### Database
+Already exists: `tag_assignments` table with `organization_id`, `tag_id`, `entity_type`, `entity_id`. We use `entity_type = 'opportunity'` and `entity_id = opportunity.id`.
 
-**Arquivo:** `src/pages/messages/MessagesList.tsx`
+### Changes
 
-1. **Linha 1396** — Adicionar `overflow-hidden` na bolha de mensagem para conter o conteúdo:
-```tsx
-'relative max-w-[70%] rounded-lg p-3 min-w-[80px] overflow-hidden',
-```
+**New component: `src/components/common/TagSelector.tsx`**
+- Reusable component that works for both contacts and opportunities
+- Props: `entityType` ('contact' | 'opportunity'), `entityId`, `organizationId`
+- Fetches all org tags and current assignments
+- Displays assigned tags as colored badges with X to remove
+- Has a popover/dropdown to add tags (shows unassigned tags)
+- Insert/delete from `tag_assignments` table
 
-2. **Linha 1469** — Trocar `break-words` por `break-all` no parágrafo de conteúdo, que força a quebra de URLs longas:
-```tsx
-<p className="text-sm whitespace-pre-wrap break-all">
-```
+**`src/pages/opportunities/OpportunityDetail.tsx`**
+- Import and render `TagSelector` in the overview tab, below the status badge section
+- Pass `entityType="opportunity"`, `entityId={opportunity.id}`, `organizationId={organization.id}`
 
-3. **Linha 1347** — Mesmo fix para as notas inline (que também usam `max-w-[70%]`):
-```tsx
-<div className="max-w-[70%] rounded-lg p-3 min-w-[80px] overflow-hidden bg-yellow-100 ...">
-```
-
-Isso garante que qualquer texto longo (URLs, hashes do Facebook, etc.) quebre dentro da bolha em vez de expandir para fora da tela.
+### UI Design
+- Show assigned tags as small colored badges (using each tag's `color` field)
+- Click "+" button to open a popover listing available tags
+- Click a tag to assign it; click X on a badge to remove it
+- Matches the existing visual style (small section in the right column of overview)
 
