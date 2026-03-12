@@ -728,6 +728,31 @@ export default function OpportunitiesKanban() {
                     />
                   </div>
                 </div>
+
+                {allTags.length > 0 && (
+                  <div className="space-y-2">
+                    <label className="text-sm font-medium">Etiqueta</label>
+                    <Select value={filterTag} onValueChange={setFilterTag}>
+                      <SelectTrigger>
+                        <SelectValue placeholder="Todas" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="all">Todas</SelectItem>
+                        {allTags.map((tag) => (
+                          <SelectItem key={tag.id} value={tag.id}>
+                            <div className="flex items-center gap-2">
+                              <span
+                                className="h-2.5 w-2.5 rounded-full shrink-0"
+                                style={{ backgroundColor: tag.color || 'hsl(var(--muted-foreground))' }}
+                              />
+                              {tag.name}
+                            </div>
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                )}
               </div>
             </PopoverContent>
           </Popover>
