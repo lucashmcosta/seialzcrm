@@ -60,6 +60,12 @@ interface User {
   full_name: string;
 }
 
+interface Tag {
+  id: string;
+  name: string;
+  color: string | null;
+}
+
 // Column configuration for table view
 const availableColumns: ColumnConfig[] = [
   { id: 'title', label: 'Título', isRequired: true },
@@ -91,7 +97,12 @@ export default function OpportunitiesKanban() {
   const [filterMaxAmount, setFilterMaxAmount] = useState<string>('');
   const [filterDateFrom, setFilterDateFrom] = useState<string>('');
   const [filterDateTo, setFilterDateTo] = useState<string>('');
+  const [filterTag, setFilterTag] = useState<string>('all');
   const [showFilters, setShowFilters] = useState(false);
+  
+  // Tags state
+  const [allTags, setAllTags] = useState<Tag[]>([]);
+  const [tagsByOpportunity, setTagsByOpportunity] = useState<Record<string, Tag[]>>({});
   
   // View mode state
   const [viewMode, setViewMode] = useState<'kanban' | 'list'>('kanban');
@@ -264,6 +275,34 @@ export default function OpportunitiesKanban() {
       setUsers(usersList);
     }
 
+    // Fetch tags and assignments
+    const [tagsRes, assignmentsRes] = await Promise.all([
+      supabase
+        .from('tags')
+        .select('id, name, color')
+        .eq('organization_id', organization.id)
+        .order('name'),
+      supabase
+        .from('tag_assignments')
+        .select('tag_id, entity_id')
+        .eq('entity_type', 'opportunity')
+        .eq('organization_id', organization.id),
+    ]);
+
+    if (tagsRes.data) setAllTags(tagsRes.data);
+    if (assignmentsRes.data && tagsRes.data) {
+      const tagsMap: Record<string, Tag[]> = {};
+      const tagsById = new Map(tagsRes.data.map(t => [t.id, t]));
+      assignmentsRes.data.forEach((a) => {
+        const tag = tagsById.get(a.tag_id);
+        if (tag) {
+          if (!tagsMap[a.entity_id]) tagsMap[a.entity_id] = [];
+          tagsMap[a.entity_id].push(tag);
+        }
+      });
+      setTagsByOpportunity(tagsMap);
+    }
+
     setLoading(false);
   };
 
@@ -286,8 +325,10 @@ export default function OpportunitiesKanban() {
       
       const matchesDateFrom = !filterDateFrom || !opp.close_date || opp.close_date >= filterDateFrom;
       const matchesDateTo = !filterDateTo || !opp.close_date || opp.close_date <= filterDateTo;
+
+      const matchesTag = filterTag === 'all' || (tagsByOpportunity[opp.id]?.some(t => t.id === filterTag));
       
-      return matchesOwner && matchesMinAmount && matchesMaxAmount && matchesDateFrom && matchesDateTo;
+      return matchesOwner && matchesMinAmount && matchesMaxAmount && matchesDateFrom && matchesDateTo && matchesTag;
     });
   };
 
@@ -458,6 +499,7 @@ export default function OpportunitiesKanban() {
     setFilterMaxAmount('');
     setFilterDateFrom('');
     setFilterDateTo('');
+    setFilterTag('all');
   };
 
   const activeFiltersCount = [
@@ -466,6 +508,7 @@ export default function OpportunitiesKanban() {
     filterMaxAmount,
     filterDateFrom,
     filterDateTo,
+    filterTag !== 'all',
   ].filter(Boolean).length;
 
   // Filtered opportunities for table view (applies all filters except stage)
@@ -479,10 +522,12 @@ export default function OpportunitiesKanban() {
       
       const matchesDateFrom = !filterDateFrom || !opp.close_date || opp.close_date >= filterDateFrom;
       const matchesDateTo = !filterDateTo || !opp.close_date || opp.close_date <= filterDateTo;
+
+      const matchesTag = filterTag === 'all' || (tagsByOpportunity[opp.id]?.some(t => t.id === filterTag));
       
-      return matchesOwner && matchesMinAmount && matchesMaxAmount && matchesDateFrom && matchesDateTo;
+      return matchesOwner && matchesMinAmount && matchesMaxAmount && matchesDateFrom && matchesDateTo && matchesTag;
     });
-  }, [opportunities, searchResults, filterOwner, filterMinAmount, filterMaxAmount, filterDateFrom, filterDateTo]);
+  }, [opportunities, searchResults, filterOwner, filterMinAmount, filterMaxAmount, filterDateFrom, filterDateTo, filterTag, tagsByOpportunity]);
 
   // Sorted opportunities for table view
   const sortedOpportunities = useMemo(() => {
@@ -683,6 +728,31 @@ export default function OpportunitiesKanban() {
                     />
                   </div>
                 </div>
+
+                {allTags.length > 0 && (
+                  <div className="space-y-2">
+                    <label className="text-sm font-medium">Etiqueta</label>
+                    <Select value={filterTag} onValueChange={setFilterTag}>
+                      <SelectTrigger>
+                        <SelectValue placeholder="Todas" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="all">Todas</SelectItem>
+                        {allTags.map((tag) => (
+                          <SelectItem key={tag.id} value={tag.id}>
+                            <div className="flex items-center gap-2">
+                              <span
+                                className="h-2.5 w-2.5 rounded-full shrink-0"
+                                style={{ backgroundColor: tag.color || 'hsl(var(--muted-foreground))' }}
+                              />
+                              {tag.name}
+                            </div>
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                )}
               </div>
             </PopoverContent>
           </Popover>
@@ -763,6 +833,7 @@ export default function OpportunitiesKanban() {
                                         onEdit={() => handleEdit(opp)}
                                         onDelete={() => setDeleteId(opp.id)}
                                         onClick={() => navigate(`/opportunities/${opp.id}`)}
+                                        tags={tagsByOpportunity[opp.id] || []}
                                         formatCurrency={formatCurrency}
                                       />
                                     </div>
