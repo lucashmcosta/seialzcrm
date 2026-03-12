@@ -60,6 +60,12 @@ interface User {
   full_name: string;
 }
 
+interface Tag {
+  id: string;
+  name: string;
+  color: string | null;
+}
+
 // Column configuration for table view
 const availableColumns: ColumnConfig[] = [
   { id: 'title', label: 'Título', isRequired: true },
