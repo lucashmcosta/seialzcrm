@@ -97,7 +97,12 @@ export default function OpportunitiesKanban() {
   const [filterMaxAmount, setFilterMaxAmount] = useState<string>('');
   const [filterDateFrom, setFilterDateFrom] = useState<string>('');
   const [filterDateTo, setFilterDateTo] = useState<string>('');
+  const [filterTag, setFilterTag] = useState<string>('all');
   const [showFilters, setShowFilters] = useState(false);
+  
+  // Tags state
+  const [allTags, setAllTags] = useState<Tag[]>([]);
+  const [tagsByOpportunity, setTagsByOpportunity] = useState<Record<string, Tag[]>>({});
   
   // View mode state
   const [viewMode, setViewMode] = useState<'kanban' | 'list'>('kanban');
