@@ -499,6 +499,7 @@ export default function OpportunitiesKanban() {
     setFilterMaxAmount('');
     setFilterDateFrom('');
     setFilterDateTo('');
+    setFilterTag('all');
   };
 
   const activeFiltersCount = [
