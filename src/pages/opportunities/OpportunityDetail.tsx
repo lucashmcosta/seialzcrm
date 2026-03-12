@@ -23,6 +23,7 @@ import { OpportunityDialog } from '@/components/opportunities/OpportunityDialog'
 import { ClickToCallButton } from '@/components/calls/ClickToCallButton';
 import { OwnerSelector } from '@/components/common/OwnerSelector';
 import { SendToSignatureButton } from '@/components/signature/SendToSignatureButton';
+import { TagSelector } from '@/components/common/TagSelector';
 
 interface Opportunity {
   id: string;
@@ -420,6 +421,13 @@ export default function OpportunityDetail() {
                         <p className="text-sm text-muted-foreground">Atualizado por</p>
                         <p className="text-lg font-semibold">{updatedByName || 'Sistema'}</p>
                       </div>
+                      {organization && (
+                        <TagSelector
+                          entityType="opportunity"
+                          entityId={opportunity.id}
+                          organizationId={organization.id}
+                        />
+                      )}
                     </div>
                   </div>
                 </CardContent>
