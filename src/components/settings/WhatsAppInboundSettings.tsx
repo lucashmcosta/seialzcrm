@@ -59,15 +59,19 @@ export function WhatsAppInboundSettings({ integrationId }: WhatsAppInboundSettin
     enabled: !!integrationId,
   });
 
-  // Fetch pipelines
-  const { data: pipelines } = useQuery({
-    queryKey: ['pipelines-for-inbound', organization?.id],
+  // Fetch pipeline stages directly
+  const { data: stages } = useQuery({
+    queryKey: ['pipeline-stages-for-inbound', organization?.id],
     queryFn: async () => {
-      const { data } = await supabase
-        .from('pipelines' as any)
-        .select('id, name, stages:pipeline_stages(id, name, order_index)')
+      const { data, error } = await supabase
+        .from('pipeline_stages')
+        .select('id, name, order_index')
         .eq('organization_id', organization!.id)
-        .order('created_at');
+        .order('order_index', { ascending: true });
+      if (error) {
+        console.error('Error fetching pipeline_stages:', error);
+        return [];
+      }
       return (data as any[]) || [];
     },
     enabled: !!organization?.id && settings.auto_create_opportunity,
@@ -82,12 +86,8 @@ export function WhatsAppInboundSettings({ integrationId }: WhatsAppInboundSettin
   const updateSetting = <K extends keyof InboundSettings>(key: K, value: InboundSettings[K]) => {
     setSettings(prev => {
       const updated = { ...prev, [key]: value };
-      // Reset dependent fields
       if (key === 'auto_create_opportunity' && !value) {
         updated.default_pipeline_id = null;
-        updated.default_stage_id = null;
-      }
-      if (key === 'default_pipeline_id') {
         updated.default_stage_id = null;
       }
       return updated;
@@ -112,9 +112,6 @@ export function WhatsAppInboundSettings({ integrationId }: WhatsAppInboundSettin
       setSaving(false);
     }
   };
-
-  const selectedPipeline = pipelines?.find((p: any) => p.id === settings.default_pipeline_id);
-  const stages = selectedPipeline?.stages?.sort((a: any, b: any) => a.order_index - b.order_index) || [];
 
   if (isLoading) {
     return (
@@ -172,38 +169,28 @@ export function WhatsAppInboundSettings({ integrationId }: WhatsAppInboundSettin
         />
       </div>
 
-      {/* Pipeline & Stage selectors */}
+      {/* Stage selector */}
       {settings.auto_create_opportunity && (
         <div className="space-y-3 pl-4 border-l-2 border-primary/20">
           <div className="space-y-2">
-            <Label className="text-sm">Pipeline</Label>
-            <select
-              className="w-full h-9 px-3 rounded-md border border-input bg-background text-sm focus:outline-none focus:ring-2 focus:ring-ring"
-              value={settings.default_pipeline_id || ''}
-              onChange={(e) => updateSetting('default_pipeline_id', e.target.value || null)}
-            >
-              <option value="">Selecione um pipeline...</option>
-              {pipelines?.map((p: any) => (
-                <option key={p.id} value={p.id}>{p.name}</option>
-              ))}
-            </select>
-          </div>
-
-          {settings.default_pipeline_id && stages.length > 0 && (
-            <div className="space-y-2">
-              <Label className="text-sm">Estágio inicial</Label>
+            <Label className="text-sm">Etapa inicial do pipeline</Label>
+            {stages && stages.length > 0 ? (
               <select
                 className="w-full h-9 px-3 rounded-md border border-input bg-background text-sm focus:outline-none focus:ring-2 focus:ring-ring"
                 value={settings.default_stage_id || ''}
                 onChange={(e) => updateSetting('default_stage_id', e.target.value || null)}
               >
-                <option value="">Primeiro estágio (padrão)</option>
+                <option value="">Primeira etapa (padrão)</option>
                 {stages.map((s: any) => (
                   <option key={s.id} value={s.id}>{s.name}</option>
                 ))}
               </select>
-            </div>
-          )}
+            ) : (
+              <p className="text-xs text-muted-foreground">
+                Nenhuma etapa cadastrada. Crie um pipeline em Configurações &gt; Pipeline.
+              </p>
+            )}
+          </div>
         </div>
       )}
 
