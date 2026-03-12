@@ -508,6 +508,7 @@ export default function OpportunitiesKanban() {
     filterMaxAmount,
     filterDateFrom,
     filterDateTo,
+    filterTag !== 'all',
   ].filter(Boolean).length;
 
   // Filtered opportunities for table view (applies all filters except stage)
