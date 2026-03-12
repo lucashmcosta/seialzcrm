@@ -275,6 +275,34 @@ export default function OpportunitiesKanban() {
       setUsers(usersList);
     }
 
+    // Fetch tags and assignments
+    const [tagsRes, assignmentsRes] = await Promise.all([
+      supabase
+        .from('tags')
+        .select('id, name, color')
+        .eq('organization_id', organization.id)
+        .order('name'),
+      supabase
+        .from('tag_assignments')
+        .select('tag_id, entity_id')
+        .eq('entity_type', 'opportunity')
+        .eq('organization_id', organization.id),
+    ]);
+
+    if (tagsRes.data) setAllTags(tagsRes.data);
+    if (assignmentsRes.data && tagsRes.data) {
+      const tagsMap: Record<string, Tag[]> = {};
+      const tagsById = new Map(tagsRes.data.map(t => [t.id, t]));
+      assignmentsRes.data.forEach((a) => {
+        const tag = tagsById.get(a.tag_id);
+        if (tag) {
+          if (!tagsMap[a.entity_id]) tagsMap[a.entity_id] = [];
+          tagsMap[a.entity_id].push(tag);
+        }
+      });
+      setTagsByOpportunity(tagsMap);
+    }
+
     setLoading(false);
   };
 
