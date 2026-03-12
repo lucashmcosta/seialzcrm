@@ -432,16 +432,18 @@ serve(async (req) => {
                 oppData.owner_user_id = contactOwnerId
               }
 
-              const { data: newOpp, error: oppError } = await supabase
-                .from('opportunities')
-                .insert(oppData)
-                .select('id')
-                .single()
+              if (resolvedStageId) {
+                const { data: newOpp, error: oppError } = await supabase
+                  .from('opportunities')
+                  .insert(oppData)
+                  .select('id')
+                  .single()
 
-              if (newOpp) {
-                console.log('Auto-created opportunity:', newOpp.id)
-              } else if (oppError) {
-                console.error('Error auto-creating opportunity:', oppError)
+                if (newOpp) {
+                  console.log('Auto-created opportunity:', newOpp.id)
+                } else if (oppError) {
+                  console.error('Error auto-creating opportunity:', oppError)
+                }
               }
             } catch (oppErr) {
               console.error('Error in auto-create opportunity:', oppErr)
