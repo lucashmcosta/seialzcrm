@@ -833,6 +833,7 @@ export default function OpportunitiesKanban() {
                                         onEdit={() => handleEdit(opp)}
                                         onDelete={() => setDeleteId(opp.id)}
                                         onClick={() => navigate(`/opportunities/${opp.id}`)}
+                                        tags={tagsByOpportunity[opp.id] || []}
                                         formatCurrency={formatCurrency}
                                       />
                                     </div>
