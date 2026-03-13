@@ -1,26 +1,28 @@
 
 
-## Ajustes na Tela de Login
+## Correção: Mensagens cortadas no chat
 
-### Mudanças
+### Problema
+As bolhas de mensagem com URLs longas (sem espaços) não estão quebrando corretamente. O `break-words` do CSS não é suficiente para URLs muito longas. O `overflow-hidden` no container pai está simplesmente cortando o conteúdo em vez de permitir a quebra.
 
-1. **Logo maior** — Trocar `w-72` por `w-[420px]` no banner e `w-48` por `w-64` no mobile
-2. **Cursor piscando** — Adicionar um `<span>` com animação CSS de blink após a tagline "Do clique ao contrato fechado"
+### Correção
 
-### Arquivos
+**Arquivo:** `src/pages/messages/MessagesList.tsx`
 
-- **`src/components/auth/AuthLayout.tsx`**:
-  - Linha 40: `className="w-72 mb-10"` → `className="w-[420px] mb-12"`
-  - Linha 48-49: Adicionar cursor piscando `|` após o texto da tagline com classe `auth-cursor-blink`
-  - Linha 82: Logo mobile `w-48` → `w-64`
+1. **Linha 1396** — Adicionar `overflow-hidden` na bolha de mensagem para conter o conteúdo:
+```tsx
+'relative max-w-[70%] rounded-lg p-3 min-w-[80px] overflow-hidden',
+```
 
-- **`src/index.css`**: Adicionar animação CSS:
-  ```css
-  .auth-cursor-blink {
-    animation: blink 1s step-end infinite;
-  }
-  @keyframes blink {
-    50% { opacity: 0; }
-  }
-  ```
+2. **Linha 1469** — Trocar `break-words` por `break-all` no parágrafo de conteúdo, que força a quebra de URLs longas:
+```tsx
+<p className="text-sm whitespace-pre-wrap break-all">
+```
+
+3. **Linha 1347** — Mesmo fix para as notas inline (que também usam `max-w-[70%]`):
+```tsx
+<div className="max-w-[70%] rounded-lg p-3 min-w-[80px] overflow-hidden bg-yellow-100 ...">
+```
+
+Isso garante que qualquer texto longo (URLs, hashes do Facebook, etc.) quebre dentro da bolha em vez de expandir para fora da tela.
 

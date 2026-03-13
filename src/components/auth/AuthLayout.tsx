@@ -32,7 +32,7 @@ export function AuthLayout({ children }: AuthLayoutProps) {
           <motion.img
             src={seialzLogo}
             alt="Seialz"
-            className="w-72 mb-10"
+            className="w-[420px] mb-12"
             initial={{ opacity: 0, y: -20 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ duration: 0.6 }}
@@ -45,7 +45,7 @@ export function AuthLayout({ children }: AuthLayoutProps) {
             animate={{ opacity: 1 }}
             transition={{ delay: 0.3, duration: 0.6 }}
           >
-            Do clique ao contrato fechado
+            Do clique ao contrato fechado<span className="auth-cursor-blink">|</span>
           </motion.p>
 
           <div className="space-y-6 w-full">
@@ -77,7 +77,7 @@ export function AuthLayout({ children }: AuthLayoutProps) {
         <div className="w-full max-w-md">
           {/* Mobile logo */}
           <div className="lg:hidden flex justify-center mb-8">
-            <img src={seialzLogo} alt="Seialz" className="w-48 auth-logo-mobile" />
+            <img src={seialzLogo} alt="Seialz" className="w-64 auth-logo-mobile" />
           </div>
           {children}
         </div>
