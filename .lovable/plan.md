@@ -1,28 +1,23 @@
 
 
-## Create Admin User for njunior@seialz.com
+## Create User njunior@centraltrabalhista.com.br in Central Trabalhista
 
-### Problem
-Cannot create admin users from the app or via direct SQL because:
-1. Auth users can only be created via Supabase Auth Admin API (requires service_role key)
-2. `admin_users` table blocks INSERT via RLS
+### Approach
+Same as the admin user creation — use a temporary edge function with `verify_jwt = false` that:
+1. Creates the auth user via `supabase.auth.admin.createUser()`
+2. Handles the auto-created user record and org from the `handle_new_user` trigger
+3. Cleans up the auto-created organization
+4. Links the user to Central Trabalhista org with the **Admin** permission profile (`d0639f2f-8cdb-4c46-905c-04e27f4913f8`)
 
-### Solution
-Create an edge function `create-admin-user` that uses the service_role key to:
-1. Create the auth user with email `njunior@seialz.com` and password `123456`
-2. Insert the corresponding record in `admin_users`
-3. Call it once to create the user, then optionally remove the function
+### Details
+- **Email:** njunior@centraltrabalhista.com.br
+- **Password:** 123456
+- **Organization:** Central Trabalhista (`40ae935c-a7f7-4ad7-8ea4-91be6404a95f`)
+- **Permission Profile:** Admin (`d0639f2f-8cdb-4c46-905c-04e27f4913f8`)
 
 ### Changes
-
-**1. New edge function: `supabase/functions/create-admin-user/index.ts`**
-- Uses `SUPABASE_SERVICE_ROLE_KEY` to call `supabase.auth.admin.createUser()`
-- Inserts into `admin_users` table with service role client (bypasses RLS)
-- Sets `verify_jwt = false` temporarily so we can call it directly
-- Accepts `email`, `password`, `full_name` in the request body
-
-**2. `supabase/config.toml`**
-- Add `[functions.create-admin-user]` with `verify_jwt = false`
-
-After creating the user, we deploy the function, call it via curl, and then delete it for security.
+1. **Create** `supabase/functions/create-tenant-user/index.ts` — temporary edge function
+2. **Update** `supabase/config.toml` — add `[functions.create-tenant-user]` with `verify_jwt = false`
+3. **Deploy & call** the function with the user data
+4. **Delete** the function and revert config.toml after success
 
