@@ -32,7 +32,7 @@ export function AuthLayout({ children }: AuthLayoutProps) {
           <motion.img
             src={seialzLogo}
             alt="Seialz"
-            className="w-72 mb-10"
+            className="w-[420px] mb-12"
             initial={{ opacity: 0, y: -20 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ duration: 0.6 }}
