@@ -1,21 +1,20 @@
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { supabase } from '@/integrations/supabase/client';
-import { Button } from '@/components/base/buttons/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { useTranslation } from '@/lib/i18n';
 import { useToast } from '@/hooks/use-toast';
-import { Building2 } from 'lucide-react';
 import { NameInput } from '@/components/NameInput';
+import { AuthLayout } from '@/components/auth/AuthLayout';
+import { motion } from 'framer-motion';
 
 export default function SignUp() {
   const navigate = useNavigate();
   const { t } = useTranslation('pt-BR');
   const { toast } = useToast();
   const [loading, setLoading] = useState(false);
-  
+
   const [formData, setFormData] = useState({
     fullName: '',
     email: '',
@@ -70,76 +69,89 @@ export default function SignUp() {
   };
 
   return (
-    <div className="min-h-screen bg-background flex items-center justify-center p-4">
-      <Card className="w-full max-w-md">
-        <CardHeader className="text-center">
-          <div className="mx-auto mb-4 w-16 h-16 bg-primary rounded-lg flex items-center justify-center">
-            <Building2 className="w-10 h-10 text-primary-foreground" />
-          </div>
-          <CardTitle className="text-2xl">{t('auth.createAccount')}</CardTitle>
-          <CardDescription>Crie sua conta e comece a gerenciar seus contatos</CardDescription>
-        </CardHeader>
-        <CardContent>
-          <form onSubmit={handleSignUp} className="space-y-4">
-            <NameInput
-              locale="pt-BR"
-              fullName={formData.fullName}
-              onFullNameChange={(value) => setFormData({ ...formData, fullName: value })}
+    <AuthLayout>
+      <motion.div
+        initial={{ opacity: 0, y: 20 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ duration: 0.5 }}
+      >
+        <div className="mb-8">
+          <h1 className="text-3xl font-bold text-foreground" style={{ fontFamily: "'Michroma', sans-serif" }}>
+            {t('auth.createAccount')}
+          </h1>
+          <p className="text-muted-foreground mt-2" style={{ fontFamily: "'Outfit', sans-serif" }}>
+            Crie sua conta e comece a gerenciar seus contatos
+          </p>
+        </div>
+
+        <form onSubmit={handleSignUp} className="space-y-5">
+          <NameInput
+            locale="pt-BR"
+            fullName={formData.fullName}
+            onFullNameChange={(value) => setFormData({ ...formData, fullName: value })}
+            required
+          />
+
+          <div className="space-y-2">
+            <Label htmlFor="email" className="text-sm font-medium text-foreground">{t('auth.email')}</Label>
+            <Input
+              id="email"
+              type="email"
+              value={formData.email}
+              onChange={(e) => setFormData({ ...formData, email: e.target.value })}
               required
+              className="h-12 rounded-xl"
+              glowOnFocus={false}
             />
+          </div>
 
-            <div className="space-y-2">
-              <Label htmlFor="email">{t('auth.email')}</Label>
-              <Input
-                id="email"
-                type="email"
-                value={formData.email}
-                onChange={(e) => setFormData({ ...formData, email: e.target.value })}
-                required
-              />
-            </div>
+          <div className="space-y-2">
+            <Label htmlFor="password" className="text-sm font-medium text-foreground">{t('auth.password')}</Label>
+            <Input
+              id="password"
+              type="password"
+              value={formData.password}
+              onChange={(e) => setFormData({ ...formData, password: e.target.value })}
+              required
+              minLength={6}
+              className="h-12 rounded-xl"
+              glowOnFocus={false}
+            />
+          </div>
 
-            <div className="space-y-2">
-              <Label htmlFor="password">{t('auth.password')}</Label>
-              <Input
-                id="password"
-                type="password"
-                value={formData.password}
-                onChange={(e) => setFormData({ ...formData, password: e.target.value })}
-                required
-                minLength={6}
-              />
-            </div>
+          <div className="space-y-2">
+            <Label htmlFor="organizationName" className="text-sm font-medium text-foreground">{t('auth.organizationName')}</Label>
+            <Input
+              id="organizationName"
+              type="text"
+              value={formData.organizationName}
+              onChange={(e) => setFormData({ ...formData, organizationName: e.target.value })}
+              required
+              className="h-12 rounded-xl"
+              glowOnFocus={false}
+            />
+          </div>
 
-            <div className="space-y-2">
-              <Label htmlFor="organizationName">{t('auth.organizationName')}</Label>
-              <Input
-                id="organizationName"
-                type="text"
-                value={formData.organizationName}
-                onChange={(e) => setFormData({ ...formData, organizationName: e.target.value })}
-                required
-              />
-            </div>
+          <button
+            type="submit"
+            disabled={loading}
+            className="w-full h-12 rounded-xl font-semibold text-sm transition-all duration-200 disabled:opacity-50 auth-btn-primary"
+          >
+            {loading ? t('common.loading') : t('auth.signUp')}
+          </button>
 
-            <Button type="submit" color="primary" className="w-full" disabled={loading}>
-              {loading ? t('common.loading') : t('auth.signUp')}
-            </Button>
-
-            <div className="text-center text-sm">
-              <span className="text-muted-foreground">{t('auth.alreadyHaveAccount')} </span>
-              <Button
-                type="button"
-                color="link"
-                className="p-0 h-auto"
-                onClick={() => navigate('/auth/signin')}
-              >
-                {t('auth.signIn')}
-              </Button>
-            </div>
-          </form>
-        </CardContent>
-      </Card>
-    </div>
+          <div className="text-center text-sm pt-2">
+            <span className="text-muted-foreground">{t('auth.alreadyHaveAccount')} </span>
+            <button
+              type="button"
+              className="font-semibold auth-link-green hover:underline"
+              onClick={() => navigate('/auth/signin')}
+            >
+              {t('auth.signIn')}
+            </button>
+          </div>
+        </form>
+      </motion.div>
+    </AuthLayout>
   );
 }
