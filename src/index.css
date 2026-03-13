@@ -219,27 +219,48 @@
   color: hsl(150, 100%, 50%);
 }
 
-.auth-logo-mobile {
-  filter: brightness(0) saturate(100%) invert(60%) sepia(98%) saturate(1000%) hue-rotate(100deg) brightness(105%) contrast(105%);
-}
-
 .auth-cursor-blink {
   animation: blink 1s step-end infinite;
 }
 
 @keyframes blink {
+  0%, 100% { opacity: 1; }
   50% { opacity: 0; }
 }
 
-.auth-logo-pulse {
-  animation: logoPulse 3s ease-in-out infinite;
+/* ═══ SEIALZ LOGO ═══ */
+.seialz-logo {
+  font-family: 'Michroma', sans-serif;
+  white-space: nowrap;
+  letter-spacing: 3px;
+  line-height: 1.2;
 }
 
-@keyframes logoPulse {
-  0%, 100% {
-    filter: drop-shadow(0 0 8px hsla(150, 100%, 50%, 0.3));
-  }
-  50% {
-    filter: drop-shadow(0 0 24px hsla(150, 100%, 50%, 0.6)) drop-shadow(0 0 48px hsla(150, 100%, 50%, 0.2));
-  }
+.seialz-logo .br {
+  opacity: 0.22;
+  letter-spacing: 8px;
 }
+
+.seialz-logo .cur {
+  display: inline-block;
+  transform: scaleX(0.35);
+  letter-spacing: 0;
+  margin: 0 -4px 0 2px;
+  animation: blink 1s step-end infinite;
+}
+
+.logo-static .cur {
+  animation: none;
+}
+
+/* Tamanhos */
+.logo-xl { font-size: 64px; }
+.logo-lg { font-size: 36px; }
+.logo-md { font-size: 20px; }
+.logo-sm { font-size: 14px; }
+
+/* Temas */
+.logo-dark  { color: hsl(150, 100%, 50%); }
+.logo-light { color: hsl(152, 50%, 27%); }
+.logo-green { color: hsl(153, 100%, 12%); }
+.logo-white { color: hsl(0, 0%, 100%); }
