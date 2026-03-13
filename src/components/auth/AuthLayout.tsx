@@ -45,7 +45,7 @@ export function AuthLayout({ children }: AuthLayoutProps) {
             animate={{ opacity: 1 }}
             transition={{ delay: 0.3, duration: 0.6 }}
           >
-            Do clique ao contrato fechado
+            Do clique ao contrato fechado<span className="auth-cursor-blink">|</span>
           </motion.p>
 
           <div className="space-y-6 w-full">
