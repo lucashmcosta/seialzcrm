@@ -1,3 +1,5 @@
+@import url('https://fonts.googleapis.com/css2?family=Michroma&family=Outfit:wght@300;400;500;600;700&display=swap');
+
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
@@ -191,4 +193,32 @@
   body {
     @apply bg-background text-foreground font-sans;
   }
+}
+
+/* Auth Pages — Seialz Brand */
+.auth-banner-bg {
+  background-color: hsl(240, 10%, 4%);
+}
+
+.auth-grid-pattern {
+  background-image:
+    linear-gradient(hsla(150, 100%, 50%, 0.04) 1px, transparent 1px),
+    linear-gradient(90deg, hsla(150, 100%, 50%, 0.04) 1px, transparent 1px);
+  background-size: 60px 60px;
+}
+
+.auth-btn-primary {
+  background-color: hsl(150, 100%, 50%);
+  color: hsl(240, 10%, 4%);
+}
+.auth-btn-primary:hover {
+  background-color: hsl(150, 100%, 44%);
+}
+
+.auth-link-green {
+  color: hsl(150, 100%, 50%);
+}
+
+.auth-logo-mobile {
+  filter: brightness(0) saturate(100%) invert(60%) sepia(98%) saturate(1000%) hue-rotate(100deg) brightness(105%) contrast(105%);
 }
