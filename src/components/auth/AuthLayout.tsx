@@ -1,6 +1,6 @@
 import { motion } from 'framer-motion';
 import { Zap, BarChart3, Shield } from 'lucide-react';
-import seialzLogo from '@/assets/seialz-logo-green.png';
+import { SeialzLogo } from '@/components/SeialzLogo';
 
 const features = [
   { icon: Zap, text: 'Automação inteligente de vendas' },
