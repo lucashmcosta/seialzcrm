@@ -222,3 +222,11 @@
 .auth-logo-mobile {
   filter: brightness(0) saturate(100%) invert(60%) sepia(98%) saturate(1000%) hue-rotate(100deg) brightness(105%) contrast(105%);
 }
+
+.auth-cursor-blink {
+  animation: blink 1s step-end infinite;
+}
+
+@keyframes blink {
+  50% { opacity: 0; }
+}
