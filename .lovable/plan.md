@@ -1,28 +1,27 @@
 
 
-## Correção: Mensagens cortadas no chat
+## Criar usuário admin na Plamev
+
+Usar a Edge Function `create-user` já existente para criar o usuário com os seguintes dados:
+
+- **Email:** lcosta@plamev.com.br
+- **Nome:** L Costa
+- **Senha:** 123456
+- **Organização:** Plamev (`0cc6e2a4-adff-4b0d-a734-3c3422d9fb8e`)
+- **Perfil:** Admin (`26e9aa0d-53b0-469e-8459-09be80ec5052`)
 
 ### Problema
-As bolhas de mensagem com URLs longas (sem espaços) não estão quebrando corretamente. O `break-words` do CSS não é suficiente para URLs muito longas. O `overflow-hidden` no container pai está simplesmente cortando o conteúdo em vez de permitir a quebra.
 
-### Correção
+A edge function `create-user` exige um chamador autenticado com permissão `can_manage_users`. Para executar sem depender de sessão, vou criar uma **edge function temporária** (`admin-create-user-temp`) que usa `SERVICE_ROLE_KEY` diretamente, cria o usuário no auth, limpa a org auto-criada pelo trigger, e vincula à Plamev com perfil Admin. Após execução bem-sucedida, a function será removida.
 
-**Arquivo:** `src/pages/messages/MessagesList.tsx`
+### Dados necessários antes de prosseguir
 
-1. **Linha 1396** — Adicionar `overflow-hidden` na bolha de mensagem para conter o conteúdo:
-```tsx
-'relative max-w-[70%] rounded-lg p-3 min-w-[80px] overflow-hidden',
-```
+Preciso confirmar o **nome completo** do usuário. Vou usar "L Costa" como placeholder — me confirme o nome correto.
 
-2. **Linha 1469** — Trocar `break-words` por `break-all` no parágrafo de conteúdo, que força a quebra de URLs longas:
-```tsx
-<p className="text-sm whitespace-pre-wrap break-all">
-```
+### Passos
 
-3. **Linha 1347** — Mesmo fix para as notas inline (que também usam `max-w-[70%]`):
-```tsx
-<div className="max-w-[70%] rounded-lg p-3 min-w-[80px] overflow-hidden bg-yellow-100 ...">
-```
-
-Isso garante que qualquer texto longo (URLs, hashes do Facebook, etc.) quebre dentro da bolha em vez de expandir para fora da tela.
+1. Criar `supabase/functions/admin-create-user-temp/index.ts` com SERVICE_ROLE_KEY
+2. Registrar no `config.toml` com `verify_jwt = false`
+3. Invocar a function via curl para criar o usuário
+4. Remover a function e entrada no config.toml
 
