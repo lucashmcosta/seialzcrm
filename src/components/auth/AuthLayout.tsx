@@ -77,7 +77,7 @@ export function AuthLayout({ children }: AuthLayoutProps) {
         <div className="w-full max-w-md">
           {/* Mobile logo */}
           <div className="lg:hidden flex justify-center mb-8">
-            <img src={seialzLogo} alt="Seialz" className="w-64 auth-logo-mobile" />
+            <SeialzLogo size="lg" theme="dark" />
           </div>
           {children}
         </div>
