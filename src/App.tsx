@@ -38,6 +38,7 @@ import AcceptInvitation from "./pages/invite/AcceptInvitation";
 // Public docs - load immediately
 import DocsIndex from "./pages/docs/DocsIndex";
 import DocsModule from "./pages/docs/DocsModule";
+const ApiDocs = lazy(() => retryImport(() => import("./pages/docs/ApiDocs")));
 
 // Lazy load CRM pages with retry for chunk resilience
 const Onboarding = lazy(() => retryImport(() => import("./pages/Onboarding")));
