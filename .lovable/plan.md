@@ -1,23 +1,48 @@
 
 
-## Create User njunior@centraltrabalhista.com.br in Central Trabalhista
+## Nova Página de Login e Cadastro — Seialz
 
-### Approach
-Same as the admin user creation — use a temporary edge function with `verify_jwt = false` that:
-1. Creates the auth user via `supabase.auth.admin.createUser()`
-2. Handles the auto-created user record and org from the `handle_new_user` trigger
-3. Cleans up the auto-created organization
-4. Links the user to Central Trabalhista org with the **Admin** permission profile (`d0639f2f-8cdb-4c46-905c-04e27f4913f8`)
+### Visão Geral
+Redesign das páginas de login (`/auth/signin`) e cadastro (`/auth/signup`) com layout moderno split-screen (meia tela), usando os brand assets da Seialz.
 
-### Details
-- **Email:** njunior@centraltrabalhista.com.br
-- **Password:** 123456
-- **Organization:** Central Trabalhista (`40ae935c-a7f7-4ad7-8ea4-91be6404a95f`)
-- **Permission Profile:** Admin (`d0639f2f-8cdb-4c46-905c-04e27f4913f8`)
+### Layout
 
-### Changes
-1. **Create** `supabase/functions/create-tenant-user/index.ts` — temporary edge function
-2. **Update** `supabase/config.toml` — add `[functions.create-tenant-user]` with `verify_jwt = false`
-3. **Deploy & call** the function with the user data
-4. **Delete** the function and revert config.toml after success
+```text
+┌──────────────────────┬──────────────────────┐
+│                      │                      │
+│   BANNER SEIALZ      │   FORMULÁRIO         │
+│                      │                      │
+│   Fundo #09090B      │   Logo Seialz        │
+│   Grid sutil verde   │   Título / Subtítulo │
+│   Logo grande        │   Inputs             │
+│   Tagline            │   Botão primário     │
+│   Features bullets   │   Link signup/signin │
+│                      │                      │
+└──────────────────────┴──────────────────────┘
+        (mobile: banner escondido, form full)
+```
+
+### Design
+
+- **Lado esquerdo (banner)**: Fundo `#09090B` com grid pattern sutil em `#00FF88` (igual landing), logo da Seialz, tagline "Do clique ao contrato fechado", e 3 bullets com features
+- **Lado direito (form)**: Fundo branco (light) ou escuro (dark), formulário centralizado com a logo Seialz no topo
+- **Fonte**: Michroma para títulos, Outfit para body (via Google Fonts import no CSS)
+- **Cor primária dos botões**: `#00FF88` com texto `#09090B`
+- **Inputs**: Estilo dark/tech com bordas sutis
+- **Mobile**: Banner escondido, formulário ocupa tela inteira
+
+### Arquivos a Modificar
+
+1. **Copiar logo** `user-uploads://seialz-logo-transparent-green-1200x240.png` → `src/assets/seialz-logo-green.png`
+2. **`src/pages/auth/SignIn.tsx`** — Redesign completo com layout split-screen, mantendo toda a lógica de autenticação existente (session, device_id, redirect)
+3. **`src/pages/auth/SignUp.tsx`** — Mesmo layout split-screen, mantendo lógica de signup
+4. **`src/index.css`** — Adicionar import das fontes Michroma e Outfit, e estilos do grid pattern para o banner
+
+### Detalhes Técnicos
+
+- Componente compartilhado `AuthLayout` para evitar duplicação do banner entre SignIn e SignUp
+- Responsivo: `lg:grid-cols-2` para split, `grid-cols-1` para mobile
+- Animações sutis com framer-motion (já instalado) no banner
+- Toda lógica de auth permanece inalterada — apenas visual muda
+- Botão verde `#00FF88` com hover `#00E07A` usando classes inline do Tailwind
 
