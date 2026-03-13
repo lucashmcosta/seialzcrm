@@ -29,14 +29,14 @@ export function AuthLayout({ children }: AuthLayoutProps) {
         />
 
         <div className="relative z-10 flex flex-col items-center px-12 max-w-lg">
-          <motion.img
-            src={seialzLogo}
-            alt="Seialz"
-            className="w-[420px] mb-12 auth-logo-pulse"
+          <motion.div
             initial={{ opacity: 0, y: -20 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ duration: 0.6 }}
-          />
+            className="mb-12"
+          >
+            <SeialzLogo size="xl" theme="dark" />
+          </motion.div>
 
           <motion.p
             className="text-center text-lg mb-12 auth-tagline"
