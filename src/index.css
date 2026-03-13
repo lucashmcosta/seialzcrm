@@ -230,3 +230,16 @@
 @keyframes blink {
   50% { opacity: 0; }
 }
+
+.auth-logo-pulse {
+  animation: logoPulse 3s ease-in-out infinite;
+}
+
+@keyframes logoPulse {
+  0%, 100% {
+    filter: drop-shadow(0 0 8px hsla(150, 100%, 50%, 0.3));
+  }
+  50% {
+    filter: drop-shadow(0 0 24px hsla(150, 100%, 50%, 0.6)) drop-shadow(0 0 48px hsla(150, 100%, 50%, 0.2));
+  }
+}
