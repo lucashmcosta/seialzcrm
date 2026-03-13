@@ -154,6 +154,7 @@ const App = () => (
           
           {/* Public Documentation */}
           <Route path="/docs" element={<DocsIndex />} />
+          <Route path="/docs/api" element={<ApiDocs />} />
           <Route path="/docs/:module" element={<DocsModule />} />
           
           {/* Auth routes */}
