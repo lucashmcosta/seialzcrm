@@ -216,7 +216,7 @@ export function AudioRecorder({ onSend, disabled }: AudioRecorderProps) {
           onClick={cancelRecording}
           className="text-muted-foreground"
         >
-          <Trash2 className="w-4 h-4" />
+          <TrashSimple className="w-4 h-4" />
         </Button>
         <Button
           size="icon"
