@@ -741,7 +741,7 @@ export function ContactMessages({ contactId, opportunityId }: ContactMessagesPro
                       {locale === 'pt-BR' ? 'Tornar profissional' : 'Make professional'}
                     </DropdownMenuItem>
                     <DropdownMenuItem onClick={() => handleImproveText('friendly')}>
-                      <Smile className="w-4 h-4 mr-2" />
+                      <Smiley className="w-4 h-4 mr-2" />
                       {locale === 'pt-BR' ? 'Tornar amigável' : 'Make friendly'}
                     </DropdownMenuItem>
                     <DropdownMenuItem onClick={() => handleImproveText('persuasive')}>
