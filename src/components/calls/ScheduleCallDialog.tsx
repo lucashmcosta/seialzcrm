@@ -152,7 +152,7 @@ export function ScheduleCallDialog({
               Cancelar
             </Button>
             <Button type="submit" disabled={loading || !date}>
-              {loading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+              {loading && <SpinnerGap className="mr-2 h-4 w-4 animate-spin" />}
               Agendar
             </Button>
           </DialogFooter>

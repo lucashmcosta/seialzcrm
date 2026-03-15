@@ -139,7 +139,7 @@ export function MinimizedCallWidget({
             className="h-8 w-8"
             onClick={onExpand}
           >
-            <Maximize2 className="h-4 w-4" />
+            <ArrowsOutSimple className="h-4 w-4" />
           </Button>
         </div>
       </div>

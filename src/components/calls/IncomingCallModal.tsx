@@ -238,7 +238,7 @@ export function IncomingCallModal({
                   className="h-14 w-14 rounded-full"
                   onClick={onEndCall}
                 >
-                  <PhoneOff className="h-6 w-6" />
+                  <PhoneDisconnect className="h-6 w-6" />
                 </Button>
               </>
             )}

@@ -64,12 +64,12 @@ export function ClickToCallButton({
   const getIcon = () => {
     switch (status) {
       case 'calling':
-        return <Loader2 className="h-4 w-4 animate-spin" />;
+        return <SpinnerGap className="h-4 w-4 animate-spin" />;
       case 'ringing':
       case 'connected':
         return <PhoneCall className="h-4 w-4 text-green-500" />;
       case 'ended':
-        return <PhoneOff className="h-4 w-4" />;
+        return <PhoneDisconnect className="h-4 w-4" />;
       default:
         return <Phone className="h-4 w-4" />;
     }

@@ -15,11 +15,11 @@ const statusConfig: Record<string, {
   'queued': { label: 'Na fila', variant: 'secondary', icon: Clock, className: 'text-muted-foreground' },
   'ringing': { label: 'Tocando', variant: 'default', icon: Phone, className: 'bg-yellow-500 text-white' },
   'in-progress': { label: 'Em andamento', variant: 'default', icon: PhoneCall, className: 'bg-green-500 text-white' },
-  'completed': { label: 'Concluída', variant: 'outline', icon: PhoneOff, className: 'border-green-500 text-green-600' },
-  'busy': { label: 'Ocupado', variant: 'destructive', icon: PhoneMissed, className: '' },
-  'no-answer': { label: 'Não atendeu', variant: 'destructive', icon: PhoneMissed, className: 'bg-orange-500' },
-  'canceled': { label: 'Cancelada', variant: 'secondary', icon: PhoneOff, className: '' },
-  'failed': { label: 'Falhou', variant: 'destructive', icon: PhoneMissed, className: '' },
+  'completed': { label: 'Concluída', variant: 'outline', icon: PhoneDisconnect, className: 'border-green-500 text-green-600' },
+  'busy': { label: 'Ocupado', variant: 'destructive', icon: PhoneX, className: '' },
+  'no-answer': { label: 'Não atendeu', variant: 'destructive', icon: PhoneX, className: 'bg-orange-500' },
+  'canceled': { label: 'Cancelada', variant: 'secondary', icon: PhoneDisconnect, className: '' },
+  'failed': { label: 'Falhou', variant: 'destructive', icon: PhoneX, className: '' },
 };
 
 export function CallStatusBadge({ status, showIcon = true }: CallStatusBadgeProps) {
