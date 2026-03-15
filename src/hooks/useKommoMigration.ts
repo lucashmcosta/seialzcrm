@@ -252,7 +252,9 @@ export function useKommoMigration() {
       return data;
     },
     onSuccess: (data) => {
-      setKommoPipelines(data.pipelines || []);
+      const pipelines = data.pipelines || [];
+      setKommoPipelines(pipelines);
+      setSelectedPipelineIds(pipelines.map((p: KommoPipeline) => p.id));
       // Extract users from pipeline data if available
       if (data.users && Array.isArray(data.users)) {
         setUserMappings(data.users.map((u: any) => ({
