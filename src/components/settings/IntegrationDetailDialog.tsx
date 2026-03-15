@@ -384,9 +384,9 @@ export function IntegrationDetailDialog({
           disabled={checkingWebhooks}
         >
           {checkingWebhooks ? (
-            <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+             <SpinnerGap className="h-4 w-4 mr-2 animate-spin" />
           ) : (
-            <RefreshCw className="h-4 w-4 mr-2" />
+             <ArrowsClockwise className="h-4 w-4 mr-2" />
           )}
           Verificar Webhooks
         </Button>
