@@ -157,7 +157,7 @@ export function KommoProgressStep({
       {/* Errors Alert */}
       {importLog.error_count > 0 && (
         <Alert variant="destructive" className="border-destructive/50">
-          <FileWarning className="h-4 w-4" />
+          <FileWarningIcon className="h-4 w-4" />
           <AlertTitle>Erros durante a migração</AlertTitle>
           <AlertDescription className="flex items-center justify-between">
             <span>{importLog.error_count} registro(s) com erro</span>
