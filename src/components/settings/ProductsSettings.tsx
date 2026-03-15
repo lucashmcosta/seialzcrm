@@ -367,7 +367,7 @@ export function ProductsSettings() {
                           size="sm"
                           onClick={() => handleEdit(product)}
                         >
-                          <Pencil className="h-4 w-4" />
+                          <PencilSimple className="h-4 w-4" />
                         </Button>
                         <Button
                           variant="ghost"
