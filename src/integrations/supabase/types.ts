@@ -24,9 +24,13 @@ export type Database = {
           deleted_at: string | null
           id: string
           is_sample: boolean | null
+          media_source_url: string | null
+          media_status: string | null
+          media_storage_url: string | null
           occurred_at: string | null
           opportunity_id: string | null
           organization_id: string
+          source_external_id: string | null
           title: string
         }
         Insert: {
@@ -38,9 +42,13 @@ export type Database = {
           deleted_at?: string | null
           id?: string
           is_sample?: boolean | null
+          media_source_url?: string | null
+          media_status?: string | null
+          media_storage_url?: string | null
           occurred_at?: string | null
           opportunity_id?: string | null
           organization_id: string
+          source_external_id?: string | null
           title: string
         }
         Update: {
@@ -52,9 +60,13 @@ export type Database = {
           deleted_at?: string | null
           id?: string
           is_sample?: boolean | null
+          media_source_url?: string | null
+          media_status?: string | null
+          media_storage_url?: string | null
           occurred_at?: string | null
           opportunity_id?: string | null
           organization_id?: string
+          source_external_id?: string | null
           title?: string
         }
         Relationships: [
@@ -953,6 +965,8 @@ export type Database = {
           name: string
           organization_id: string
           phone: string | null
+          source: string | null
+          source_external_id: string | null
           updated_at: string | null
         }
         Insert: {
@@ -964,6 +978,8 @@ export type Database = {
           name: string
           organization_id: string
           phone?: string | null
+          source?: string | null
+          source_external_id?: string | null
           updated_at?: string | null
         }
         Update: {
@@ -975,6 +991,8 @@ export type Database = {
           name?: string
           organization_id?: string
           phone?: string | null
+          source?: string | null
+          source_external_id?: string | null
           updated_at?: string | null
         }
         Relationships: [
@@ -1338,6 +1356,7 @@ export type Database = {
           options: Json | null
           order_index: number
           organization_id: string
+          source_external_id: string | null
           updated_at: string | null
         }
         Insert: {
@@ -1351,6 +1370,7 @@ export type Database = {
           options?: Json | null
           order_index?: number
           organization_id: string
+          source_external_id?: string | null
           updated_at?: string | null
         }
         Update: {
@@ -1364,6 +1384,7 @@ export type Database = {
           options?: Json | null
           order_index?: number
           organization_id?: string
+          source_external_id?: string | null
           updated_at?: string | null
         }
         Relationships: [
@@ -1572,10 +1593,18 @@ export type Database = {
           error_count: number | null
           errors: Json | null
           id: string
+          imported_activity_ids: string[] | null
+          imported_companies: number | null
+          imported_company_ids: string[] | null
           imported_contact_ids: string[] | null
           imported_contacts: number | null
+          imported_custom_fields: number | null
+          imported_events: number | null
+          imported_notes: number | null
           imported_opportunities: number | null
           imported_opportunity_ids: string[] | null
+          imported_task_ids: string[] | null
+          imported_tasks: number | null
           integration_slug: string
           last_processed_item: string | null
           organization_id: string
@@ -1587,8 +1616,13 @@ export type Database = {
           started_at: string | null
           status: string | null
           total_batches: number | null
+          total_companies: number | null
           total_contacts: number | null
+          total_custom_fields: number | null
+          total_events: number | null
+          total_notes: number | null
           total_opportunities: number | null
+          total_tasks: number | null
           updated_at: string | null
         }
         Insert: {
@@ -1601,10 +1635,18 @@ export type Database = {
           error_count?: number | null
           errors?: Json | null
           id?: string
+          imported_activity_ids?: string[] | null
+          imported_companies?: number | null
+          imported_company_ids?: string[] | null
           imported_contact_ids?: string[] | null
           imported_contacts?: number | null
+          imported_custom_fields?: number | null
+          imported_events?: number | null
+          imported_notes?: number | null
           imported_opportunities?: number | null
           imported_opportunity_ids?: string[] | null
+          imported_task_ids?: string[] | null
+          imported_tasks?: number | null
           integration_slug: string
           last_processed_item?: string | null
           organization_id: string
@@ -1616,8 +1658,13 @@ export type Database = {
           started_at?: string | null
           status?: string | null
           total_batches?: number | null
+          total_companies?: number | null
           total_contacts?: number | null
+          total_custom_fields?: number | null
+          total_events?: number | null
+          total_notes?: number | null
           total_opportunities?: number | null
+          total_tasks?: number | null
           updated_at?: string | null
         }
         Update: {
@@ -1630,10 +1677,18 @@ export type Database = {
           error_count?: number | null
           errors?: Json | null
           id?: string
+          imported_activity_ids?: string[] | null
+          imported_companies?: number | null
+          imported_company_ids?: string[] | null
           imported_contact_ids?: string[] | null
           imported_contacts?: number | null
+          imported_custom_fields?: number | null
+          imported_events?: number | null
+          imported_notes?: number | null
           imported_opportunities?: number | null
           imported_opportunity_ids?: string[] | null
+          imported_task_ids?: string[] | null
+          imported_tasks?: number | null
           integration_slug?: string
           last_processed_item?: string | null
           organization_id?: string
@@ -1645,8 +1700,13 @@ export type Database = {
           started_at?: string | null
           status?: string | null
           total_batches?: number | null
+          total_companies?: number | null
           total_contacts?: number | null
+          total_custom_fields?: number | null
+          total_events?: number | null
+          total_notes?: number | null
           total_opportunities?: number | null
+          total_tasks?: number | null
           updated_at?: string | null
         }
         Relationships: [
@@ -2098,6 +2158,51 @@ export type Database = {
             columns: ["product_id"]
             isOneToOne: false
             referencedRelation: "products"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      kommo_user_mappings: {
+        Row: {
+          created_at: string | null
+          id: string
+          kommo_user_email: string | null
+          kommo_user_id: number
+          kommo_user_name: string | null
+          organization_id: string
+          seialz_user_id: string | null
+        }
+        Insert: {
+          created_at?: string | null
+          id?: string
+          kommo_user_email?: string | null
+          kommo_user_id: number
+          kommo_user_name?: string | null
+          organization_id: string
+          seialz_user_id?: string | null
+        }
+        Update: {
+          created_at?: string | null
+          id?: string
+          kommo_user_email?: string | null
+          kommo_user_id?: number
+          kommo_user_name?: string | null
+          organization_id?: string
+          seialz_user_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "kommo_user_mappings_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "kommo_user_mappings_seialz_user_id_fkey"
+            columns: ["seialz_user_id"]
+            isOneToOne: false
+            referencedRelation: "users"
             referencedColumns: ["id"]
           },
         ]
@@ -3369,6 +3474,7 @@ export type Database = {
           opportunity_id: string | null
           organization_id: string
           priority: Database["public"]["Enums"]["task_priority"] | null
+          source_external_id: string | null
           status: Database["public"]["Enums"]["task_status"] | null
           task_type: string | null
           title: string
@@ -3388,6 +3494,7 @@ export type Database = {
           opportunity_id?: string | null
           organization_id: string
           priority?: Database["public"]["Enums"]["task_priority"] | null
+          source_external_id?: string | null
           status?: Database["public"]["Enums"]["task_status"] | null
           task_type?: string | null
           title: string
@@ -3407,6 +3514,7 @@ export type Database = {
           opportunity_id?: string | null
           organization_id?: string
           priority?: Database["public"]["Enums"]["task_priority"] | null
+          source_external_id?: string | null
           status?: Database["public"]["Enums"]["task_status"] | null
           task_type?: string | null
           title?: string
