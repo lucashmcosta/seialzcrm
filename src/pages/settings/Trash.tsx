@@ -214,7 +214,7 @@ export function Trash() {
               <AlertDialogContent>
                 <AlertDialogHeader>
                   <AlertDialogTitle className="flex items-center gap-2">
-                    <AlertTriangle className="h-5 w-5 text-destructive" />
+                    <Warning className="h-5 w-5 text-destructive" />
                     {t('trash.confirmEmpty')}
                   </AlertDialogTitle>
                   <AlertDialogDescription>
