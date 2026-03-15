@@ -114,8 +114,9 @@ Deno.serve(async (req) => {
         import_events: body.import_events ?? l.config?.import_events ?? false,
         import_custom_fields: body.import_custom_fields ?? l.config?.import_custom_fields ?? false,
       };
-      await sb.from("import_logs").update({ status: "running", started_at: new Date().toISOString(), config: cfg, cursor_state: defaultCursor() }).eq("id", import_log_id);
-      l.config = cfg; l.status = "running"; l.cursor_state = defaultCursor();
+      // Bug fix #2: limpar erros de execuções anteriores ao iniciar nova migração
+      await sb.from("import_logs").update({ status: "running", started_at: new Date().toISOString(), config: cfg, cursor_state: defaultCursor(), errors: [], error_count: 0 }).eq("id", import_log_id);
+      l.config = cfg; l.status = "running"; l.cursor_state = defaultCursor(); l.errors = [];
     }
 
     const cfg = l.config as ImportConfig;
@@ -134,7 +135,7 @@ Deno.serve(async (req) => {
     const dupMode = cfg.duplicate_mode || "skip";
 
     let c: CursorState = l.cursor_state || defaultCursor();
-    const errs: any[] = [...(l.errors || [])];
+    const errs: any[] = l.status === "running" && l.errors?.length ? [...l.errors] : [];
 
     // Counters
     let ic = l.imported_contacts || 0, sc = l.skipped_contacts || 0;
@@ -237,9 +238,9 @@ Deno.serve(async (req) => {
               } else {
                 const { data: n, error: ie } = await sb.from("companies").insert({ organization_id: orgId, name: co.name || "Empresa sem nome", phone: ph || null, source: "kommo", source_external_id: sei }).select("id").single();
                 if (!ie && n) { iCo++; coIds.push(n.id); coMap[String(co.id)] = n.id; }
-                else if (ie) errs.push({ type: "company", id: co.id, error: ie.message });
+                else if (ie) errs.push({ type: "company", kommo_id: co.id, error: ie.message });
               }
-            } catch (e: any) { errs.push({ type: "company", id: co.id, error: e.message }); }
+            } catch (e: any) { errs.push({ type: "company", kommo_id: co.id, error: e.message }); }
           }
           if (items.length < PS) { c.companies_complete = true; c.phase = nextPhase("companies", cfg); }
           else c.companies_page++;
@@ -275,9 +276,9 @@ Deno.serve(async (req) => {
                 if (dupMode === "update") { await sb.from("contacts").update({ full_name: ct.name, email, phone, source_external_id: `kommo_${ct.id}`, company_id: compId || undefined, owner_user_id: owner || undefined }).eq("id", ex.id); ic++; cIds.push(ex.id); cMap[String(ct.id)] = ex.id; continue; }
               }
               const { data: n, error: ie } = await sb.from("contacts").insert({ organization_id: orgId, full_name: ct.name || "Sem nome", email, phone, source: "kommo", source_external_id: `kommo_${ct.id}`, company_id: compId, owner_user_id: owner }).select("id").single();
-              if (ie) errs.push({ type: "contact", id: ct.id, error: ie.message });
+              if (ie) errs.push({ type: "contact", kommo_id: ct.id, error: ie.message });
               else { ic++; cIds.push(n.id); cMap[String(ct.id)] = n.id; }
-            } catch (e: any) { errs.push({ type: "contact", id: ct.id, error: e.message }); }
+            } catch (e: any) { errs.push({ type: "contact", kommo_id: ct.id, error: e.message }); }
           }
           if (items.length < PS) { c.contacts_complete = true; c.phase = nextPhase("contacts", cfg); }
           else c.contacts_page++;
@@ -321,9 +322,9 @@ Deno.serve(async (req) => {
                 if (dupMode === "update") { await sb.from("opportunities").update({ title: ld.name, amount: ld.price || 0, pipeline_stage_id: stageId, contact_id: contactId, owner_user_id: owner || undefined }).eq("id", ex.id); io++; oIds.push(ex.id); continue; }
               }
               const { data: n, error: oe } = await sb.from("opportunities").insert({ organization_id: orgId, contact_id: contactId, title: ld.name || "Lead sem título", amount: ld.price || 0, pipeline_stage_id: stageId, source: "kommo", source_external_id: `kommo_${ld.id}`, owner_user_id: owner }).select("id").single();
-              if (oe) errs.push({ type: "lead", id: ld.id, error: oe.message });
+              if (oe) errs.push({ type: "opportunity", kommo_id: ld.id, error: oe.message });
               else { io++; oIds.push(n.id); }
-            } catch (e: any) { errs.push({ type: "lead", id: ld.id, error: e.message }); }
+            } catch (e: any) { errs.push({ type: "opportunity", kommo_id: ld.id, error: e.message }); }
           }
           if (items.length < PS) { c.leads_complete = true; c.phase = nextPhase("leads", cfg); }
           else c.leads_page++;
@@ -350,12 +351,21 @@ Deno.serve(async (req) => {
               let ctId: string | null = null, opId: string | null = null;
               if (tk.entity_type === "contacts" && tk.entity_id) ctId = cMap[String(tk.entity_id)] || null;
               else if (tk.entity_type === "leads" && tk.entity_id) { const { data: o } = await sb.from("opportunities").select("id").eq("organization_id", orgId).eq("source_external_id", `kommo_${tk.entity_id}`).is("deleted_at", null).maybeSingle(); opId = o?.id || null; }
-              const auid = tk.responsible_user_id ? (uMap[String(tk.responsible_user_id)] || defUser) : defUser;
-              if (!auid) { errs.push({ type: "task", id: tk.id, error: "No fallback user" }); continue; }
+              // Bug fix #1: fallback robusto — se defUser vazio, buscar primeiro usuário ativo da org
+              let auid = tk.responsible_user_id ? (uMap[String(tk.responsible_user_id)] || defUser) : defUser;
+              if (!auid) {
+                const { data: fallbackUser } = await sb.from("user_organizations").select("user_id").eq("organization_id", orgId).eq("is_active", true).limit(1).single();
+                if (fallbackUser) { defUser = fallbackUser.user_id; auid = defUser; c.default_user_id = defUser; }
+              }
+              if (!auid) {
+                // Último recurso: usar created_by_user_id do log de importação
+                if (l.created_by_user_id) { defUser = l.created_by_user_id; auid = defUser; c.default_user_id = defUser; }
+                else { errs.push({ type: "task", kommo_id: tk.id, error: "Nenhum usuário disponível na organização" }); continue; }
+              }
               const due = tk.complete_till ? new Date(tk.complete_till * 1000).toISOString() : null;
               const { data: n, error: ie } = await sb.from("tasks").insert({ organization_id: orgId, title: tk.text || "Tarefa Kommo", description: `Importado da Kommo (ID: ${tk.id})`, status: tk.is_completed ? "completed" : "pending", due_at: due, contact_id: ctId, opportunity_id: opId, assigned_user_id: auid, created_by_user_id: auid, source_external_id: sei }).select("id").single();
-              if (!ie && n) { iT++; tIds.push(n.id); } else if (ie) errs.push({ type: "task", id: tk.id, error: ie.message });
-            } catch (e: any) { errs.push({ type: "task", id: tk.id, error: e.message }); }
+              if (!ie && n) { iT++; tIds.push(n.id); } else if (ie) errs.push({ type: "task", kommo_id: tk.id, error: ie.message });
+            } catch (e: any) { errs.push({ type: "task", kommo_id: tk.id, error: e.message }); }
           }
           if (items.length < PS) { c.tasks_complete = true; c.phase = nextPhase("tasks", cfg); }
           else c.tasks_page++;
@@ -383,8 +393,8 @@ Deno.serve(async (req) => {
           let mUrl: string | null = null, mSt = "none";
           if (n.params?.file_name || n.params?.link) { mUrl = n.params?.link || null; mSt = mUrl ? "pending" : "none"; }
           const { data: na, error: ie } = await sb.from("activities").insert({ organization_id: orgId, contact_id: ctId, opportunity_id: opId, activity_type: at, title: n.note_type === "common" ? "Nota" : `Nota (${n.note_type})`, body: n.params?.text || n.text || "", source_external_id: sei, created_by_user_id: cby, occurred_at: n.created_at ? new Date(n.created_at * 1000).toISOString() : new Date().toISOString(), media_source_url: mUrl, media_status: mSt }).select("id").single();
-          if (!ie && na) { iN++; aIds.push(na.id); } else if (ie) errs.push({ type: isLead ? "note_lead" : "note_contact", id: n.id, error: ie.message });
-        } catch (e: any) { errs.push({ type: isLead ? "note_lead" : "note_contact", id: n.id, error: e.message }); }
+          if (!ie && na) { iN++; aIds.push(na.id); } else if (ie) errs.push({ type: isLead ? "note_lead" : "note_contact", kommo_id: n.id, error: ie.message });
+        } catch (e: any) { errs.push({ type: isLead ? "note_lead" : "note_contact", kommo_id: n.id, error: e.message }); }
       }
       if (notes.length < PS) { c[completeKey] = true; c.phase = nextPhase(isLead ? "notes_leads" : "notes_contacts", cfg); }
       else c[pageKey]++;
@@ -414,7 +424,7 @@ Deno.serve(async (req) => {
               const cby = ev.created_by ? (uMap[String(ev.created_by)] || null) : null;
               const { data: na, error: ie } = await sb.from("activities").insert({ organization_id: orgId, contact_id: ctId, opportunity_id: opId, activity_type: "pipeline_stage_change", title: `Evento: ${ev.type}`, body: JSON.stringify(ev.value_after || ev.value_before || {}), source_external_id: sei, created_by_user_id: cby, occurred_at: ev.created_at ? new Date(ev.created_at * 1000).toISOString() : new Date().toISOString() }).select("id").single();
               if (!ie && na) { iE++; aIds.push(na.id); }
-            } catch (e: any) { errs.push({ type: "event", id: ev.id, error: e.message }); }
+            } catch (e: any) { errs.push({ type: "event", kommo_id: ev.id, error: e.message }); }
           }
           if (items.length < PS) { c.events_complete = true; c.phase = "done"; }
           else c.events_page++;
