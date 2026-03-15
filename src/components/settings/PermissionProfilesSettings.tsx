@@ -191,7 +191,7 @@ export function PermissionProfilesSettings() {
                     size="sm"
                     onClick={() => handleOpenDialog(profile)}
                   >
-                    <Edit className="h-4 w-4" />
+                    <PencilSimple className="h-4 w-4" />
                   </Button>
                   <Button
                     variant="outline"
