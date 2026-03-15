@@ -240,7 +240,7 @@ export function SimpleLogoUploader({
                   className="bg-primary rounded-lg flex items-center justify-center"
                   style={{ width: logoSize, height: logoSize }}
                 >
-                  <ImageIcon className="w-1/2 h-1/2 text-primary-foreground" />
+                  <ImageSquare className="w-1/2 h-1/2 text-primary-foreground" />
                 </div>
               )}
               <span className="text-sm text-muted-foreground">
