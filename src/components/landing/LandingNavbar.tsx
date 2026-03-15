@@ -61,7 +61,7 @@ export function LandingNavbar() {
           </Link>
           <button
             onClick={() => scrollTo('#cta')}
-            className="auth-btn-primary px-5 py-2 rounded-full text-sm font-semibold font-['Outfit'] transition-all hover:shadow-[0_0_20px_hsl(150,100%,50%,0.3)]"
+            className="hidden md:inline-flex auth-btn-primary px-5 py-2 rounded-full text-sm font-semibold font-['Outfit'] transition-all hover:shadow-[0_0_20px_hsl(150,100%,50%,0.3)]"
           >
             Agendar Diagnóstico
           </button>
@@ -89,5 +89,18 @@ export function LandingNavbar() {
         </div>
       )}
     </nav>
+
+    {/* Mobile floating CTA */}
+    {scrolled && (
+      <div className="md:hidden fixed bottom-6 left-4 right-4 z-50">
+        <button
+          onClick={() => scrollTo('#cta')}
+          className="w-full auth-btn-primary py-3.5 rounded-full text-sm font-bold font-['Outfit'] shadow-[0_0_25px_hsl(150,100%,50%,0.3)] transition-all"
+        >
+          AGENDAR DIAGNÓSTICO
+        </button>
+      </div>
+    )}
+    </>
   );
 }
