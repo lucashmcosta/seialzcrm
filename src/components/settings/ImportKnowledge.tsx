@@ -321,7 +321,7 @@ export function ImportKnowledge({ agents, onSuccess }: ImportKnowledgeProps) {
             </div>
           ) : (
             <>
-              <Upload className="h-10 w-10 mx-auto mb-3 text-muted-foreground" />
+              <UploadSimple className="h-10 w-10 mx-auto mb-3 text-muted-foreground" />
               <p className="font-medium">Arraste arquivo ou clique para selecionar</p>
               <p className="text-sm text-muted-foreground mt-1">
                 TXT, PDF (com texto), DOCX, MD • Máx 20MB
