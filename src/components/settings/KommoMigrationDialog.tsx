@@ -150,7 +150,7 @@ export function KommoMigrationDialog({ open, onOpenChange }: KommoMigrationDialo
                 >
                   {isResuming ? (
                     <>
-                      <Loader2 className="h-4 w-4 mr-1 animate-spin" />
+                      <SpinnerGap className="h-4 w-4 mr-1 animate-spin" />
                       Retomando...
                     </>
                   ) : (
