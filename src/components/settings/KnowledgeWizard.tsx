@@ -856,7 +856,7 @@ export function KnowledgeWizard({ onComplete, onCancel }: KnowledgeWizardProps) 
                   {/* Show saved item indicator */}
                   {msg.metadata?.savedItem && (
                     <div className="flex items-center gap-1 mt-2 text-xs opacity-70">
-                      <CheckCircle2 className="h-3 w-3" />
+                      <CheckCircle className="h-3 w-3" />
                       Item salvo: {msg.metadata.savedItem.title}
                     </div>
                   )}
