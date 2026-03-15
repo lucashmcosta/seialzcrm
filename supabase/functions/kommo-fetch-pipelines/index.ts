@@ -19,14 +19,23 @@ serve(async (req) => {
       );
     }
 
-    const { subdomain, access_token } = await req.json();
+    const { subdomain: rawSubdomain, access_token } = await req.json();
 
-    if (!subdomain || !access_token) {
+    if (!rawSubdomain || !access_token) {
       return new Response(
         JSON.stringify({ error: "Subdomínio e access token são obrigatórios" }),
         { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
     }
+
+    // Sanitize subdomain: remove protocol, .kommo.com suffix, trailing slashes
+    const subdomain = rawSubdomain
+      .replace(/^https?:\/\//i, '')
+      .replace(/\.kommo\.com.*$/i, '')
+      .replace(/[\/\s]/g, '')
+      .trim();
+
+    console.log("Sanitized subdomain:", subdomain);
 
     // Fetch pipelines from Kommo API
     const kommoUrl = `https://${subdomain}.kommo.com/api/v4/leads/pipelines`;
