@@ -2099,7 +2099,7 @@ export function SDRAgentWizard({
                   disabled={!canProceed() || isSaving}
                 >
                   {isSaving ? (
-                    <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                    <SpinnerGap className="h-4 w-4 mr-2 animate-spin" />
                   ) : (
                     <Check className="h-4 w-4 mr-2" />
                   )}

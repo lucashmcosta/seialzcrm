@@ -146,7 +146,7 @@ export function SDRAgentCard({ agent, isLoading, onConfigure, onToggle, onDuplic
               </DropdownMenuTrigger>
               <DropdownMenuContent align="end">
                 <DropdownMenuItem onClick={onConfigure}>
-                  <Settings className="h-4 w-4 mr-2" />
+                  <GearSix className="h-4 w-4 mr-2" />
                   Editar
                 </DropdownMenuItem>
                 {onDuplicate && (

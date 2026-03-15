@@ -374,9 +374,9 @@ export function PhoneNumberSettings() {
             {/* Save Button */}
             <Button onClick={handleSave} disabled={saving} className="w-full">
               {saving ? (
-                <Loader2 className="h-4 w-4 animate-spin mr-2" />
+                 <SpinnerGap className="h-4 w-4 animate-spin mr-2" />
               ) : (
-                <Save className="h-4 w-4 mr-2" />
+                 <FloppyDisk className="h-4 w-4 mr-2" />
               )}
               Salvar Configurações
             </Button>

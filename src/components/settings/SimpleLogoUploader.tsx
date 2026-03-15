@@ -288,7 +288,7 @@ export function SimpleLogoUploader({
             Cancelar
           </Button>
           <Button onClick={handleSave} disabled={saving}>
-            {saving && <Loader2 className="w-4 h-4 mr-2 animate-spin" />}
+            {saving && <SpinnerGap className="w-4 h-4 mr-2 animate-spin" />}
             Salvar
           </Button>
         </DialogFooter>

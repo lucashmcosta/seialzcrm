@@ -219,7 +219,7 @@ export function KommoProgressStep({
               </>
             ) : (
               <>
-                <RotateCcw className="h-4 w-4 mr-2" />
+                <ArrowCounterClockwise className="h-4 w-4 mr-2" />
                 Desfazer Migração
               </>
             )}

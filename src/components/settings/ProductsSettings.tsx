@@ -374,7 +374,7 @@ export function ProductsSettings() {
                           size="sm"
                           onClick={() => handleDelete(product)}
                         >
-                          <Trash2 className="h-4 w-4 text-destructive" />
+                          <TrashSimple className="h-4 w-4 text-destructive" />
                         </Button>
                       </div>
                     </TableCell>

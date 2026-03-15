@@ -227,7 +227,7 @@ export function TagsSettings() {
                         size="icon"
                         onClick={() => handleDeleteClick(tag.id)}
                       >
-                        <Trash2 className="w-4 h-4" />
+                        <TrashSimple className="w-4 h-4" />
                       </Button>
                     </div>
                   </TableCell>

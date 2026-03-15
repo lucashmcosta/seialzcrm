@@ -288,7 +288,7 @@ export function WhatsAppIntegrationStatus({ onReconfigure }: WhatsAppIntegration
               size="sm"
               onClick={onReconfigure}
             >
-              <Settings2 className="h-4 w-4 mr-2" />
+              <GearSix className="h-4 w-4 mr-2" />
               Reconectar
             </Button>
           )}

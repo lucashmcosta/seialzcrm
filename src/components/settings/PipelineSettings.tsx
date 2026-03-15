@@ -254,7 +254,7 @@ export function PipelineSettings() {
                           size="icon"
                           onClick={() => handleDeleteClick(stage.id)}
                         >
-                          <Trash2 className="w-4 h-4" />
+                          <TrashSimple className="w-4 h-4" />
                         </Button>
                       )}
                     </div>

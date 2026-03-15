@@ -198,7 +198,7 @@ export function PermissionProfilesSettings() {
                     size="sm"
                     onClick={() => handleDeleteClick(profile.id)}
                   >
-                    <Trash2 className="h-4 w-4" />
+                    <TrashSimple className="h-4 w-4" />
                   </Button>
                 </div>
               </div>
