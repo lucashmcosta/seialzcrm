@@ -304,7 +304,7 @@ export function TaskDialog({ open, onOpenChange, task, onSuccess }: TaskDialogPr
               {t('common.cancel')}
             </Button>
             <Button type="submit" disabled={submitting}>
-              {submitting && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+              {submitting && <SpinnerGap className="mr-2 h-4 w-4 animate-spin" />}
               {t('common.save')}
             </Button>
           </div>

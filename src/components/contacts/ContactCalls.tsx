@@ -271,7 +271,7 @@ export function ContactCalls({ contactId, opportunityId, contactPhone, contactNa
                   </div>
                   <DialogFooter>
                     <Button type="submit" disabled={submitting}>
-                      {submitting && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                      {submitting && <SpinnerGap className="mr-2 h-4 w-4 animate-spin" />}
                       Salvar
                     </Button>
                   </DialogFooter>

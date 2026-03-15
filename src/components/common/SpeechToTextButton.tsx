@@ -79,9 +79,9 @@ export function SpeechToTextButton({
               )}
             >
               {isListening ? (
-                <MicOff className="h-5 w-5" />
+                <MicrophoneSlash className="h-5 w-5" />
               ) : (
-                <Mic className="h-5 w-5" />
+                <Microphone className="h-5 w-5" />
               )}
             </Button>
           </TooltipTrigger>

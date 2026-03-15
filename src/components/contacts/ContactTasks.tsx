@@ -248,7 +248,7 @@ export function ContactTasks({ contactId, opportunityId }: ContactTasksProps) {
                   className="flex-shrink-0 mt-1"
                 >
                   {task.status === 'completed' ? (
-                    <CheckCircle2 className="w-5 h-5 text-primary" />
+                    <CheckCircle className="w-5 h-5 text-primary" />
                   ) : (
                     <Circle className="w-5 h-5 text-muted-foreground" />
                   )}

@@ -148,7 +148,7 @@ export function SendToSignatureButton({ contactId, opportunityId, size = 'sm' }:
 
   return (
     <Button variant="outline" size={size} onClick={handleSendToSignature}>
-      <PenTool className="h-4 w-4 mr-2" />
+      <PenNib className="h-4 w-4 mr-2" />
       Enviar para Assinatura
     </Button>
   );

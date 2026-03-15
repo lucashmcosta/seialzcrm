@@ -153,7 +153,7 @@ export function BulkActionsBar({
                 onClick={() => setConfirmOpen(true)}
                 disabled={processing}
               >
-                <Trash2 className="h-4 w-4 mr-2" />
+                <TrashSimple className="h-4 w-4 mr-2" />
                 {t('common.delete')}
               </Button>
             )}
