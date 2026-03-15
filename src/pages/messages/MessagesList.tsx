@@ -1706,7 +1706,7 @@ export default function MessagesList() {
                                       {locale === 'pt-BR' ? 'Tornar profissional' : 'Make professional'}
                                     </DropdownMenuItem>
                                     <DropdownMenuItem onClick={() => handleImproveText('friendly')}>
-                                      <Smile className="h-4 w-4 mr-2" />
+                                      <Smiley className="h-4 w-4 mr-2" />
                                       {locale === 'pt-BR' ? 'Tornar amigável' : 'Make friendly'}
                                     </DropdownMenuItem>
                                     <DropdownMenuItem onClick={() => handleImproveText('persuasive')}>
