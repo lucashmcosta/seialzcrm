@@ -165,7 +165,7 @@ export function useKommoMigration() {
   });
 
   // Query para buscar usuários do CRM via user_organizations
-  const { data: crmUsers } = useQuery({
+  const { data: crmUsers, refetch: refetchCrmUsers } = useQuery({
     queryKey: ['crm-users', organization?.id],
     queryFn: async () => {
       if (!organization) return [];
