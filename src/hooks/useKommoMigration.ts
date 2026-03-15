@@ -501,6 +501,7 @@ export function useKommoMigration() {
     credentials,
     kommoPipelines,
     stageMapping,
+    selectedPipelineIds,
     userMappings,
     config,
     importLogId,
