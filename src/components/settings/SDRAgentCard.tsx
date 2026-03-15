@@ -84,7 +84,7 @@ export function SDRAgentCard({ agent, isLoading, onConfigure, onToggle, onDuplic
               </div>
             </div>
             <Button variant="outline" size="sm" className="shrink-0">
-              <Zap className="h-4 w-4 mr-2" />
+              <Lightning className="h-4 w-4 mr-2" />
               Configurar
             </Button>
           </div>
