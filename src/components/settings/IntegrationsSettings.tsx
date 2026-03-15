@@ -8,13 +8,19 @@ import { Switch } from '@/components/ui/switch';
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import { ConfirmDialog } from '@/components/ui/confirm-dialog';
+import { Alert, AlertDescription } from '@/components/ui/alert';
 import { useTranslation } from '@/lib/i18n';
 import { useOrganization } from '@/hooks/useOrganization';
-import { ChatCircle, Phone, EnvelopeSimple, Plugs, Warning, Plus, Robot, Sparkle, UploadSimple, ArrowsClockwise, PenNib } from '@phosphor-icons/react';
+import { 
+  ChatCircle, Phone, EnvelopeSimple, Plugs, Warning, Plus, Robot, Sparkle, 
+  UploadSimple, ArrowsClockwise, PenNib, CheckCircle, XCircle, Clock, Users, Briefcase
+} from '@phosphor-icons/react';
 import { IntegrationConnectDialog } from './IntegrationConnectDialog';
 import { IntegrationDetailDialog } from './IntegrationDetailDialog';
 import { PhoneNumberSettings } from './PhoneNumberSettings';
 import { KommoMigrationDialog } from './KommoMigrationDialog';
+import { format } from 'date-fns';
+import { ptBR } from 'date-fns/locale';
 
 import { toast } from 'sonner';
 
@@ -57,6 +63,7 @@ export function IntegrationsSettings() {
   const [disconnectingId, setDisconnectingId] = useState<string | null>(null);
   const [selectedCategory, setSelectedCategory] = useState('all');
   const [kommoMigrationOpen, setKommoMigrationOpen] = useState(false);
+
   // Fetch available integrations
   const { data: availableIntegrations, isLoading: loadingIntegrations } = useQuery({
     queryKey: ['available-integrations'],
@@ -66,7 +73,6 @@ export function IntegrationsSettings() {
         .select('*')
         .in('status', ['available', 'beta'])
         .order('sort_order');
-
       if (error) throw error;
       return data;
     },
@@ -77,13 +83,29 @@ export function IntegrationsSettings() {
     queryKey: ['organization-integrations', organization?.id],
     queryFn: async () => {
       if (!organization) return [];
-      
       const { data, error } = await supabase
         .from('organization_integrations')
         .select('*, integration:admin_integrations(*)')
         .eq('organization_id', organization.id);
-
       if (error) throw error;
+      return data;
+    },
+    enabled: !!organization,
+  });
+
+  // Fetch last Kommo import log
+  const { data: lastKommoImport } = useQuery({
+    queryKey: ['kommo-last-import', organization?.id],
+    queryFn: async () => {
+      if (!organization) return null;
+      const { data } = await supabase
+        .from('import_logs')
+        .select('*')
+        .eq('organization_id', organization.id)
+        .eq('integration_slug', 'kommo')
+        .order('created_at', { ascending: false })
+        .limit(1)
+        .maybeSingle();
       return data;
     },
     enabled: !!organization,
@@ -104,7 +126,6 @@ export function IntegrationsSettings() {
         .from('organization_integrations')
         .update({ is_enabled: false })
         .eq('id', orgIntegrationId);
-
       if (error) throw error;
     },
     onSuccess: () => {
@@ -123,7 +144,6 @@ export function IntegrationsSettings() {
         .from('organization_integrations')
         .update({ is_enabled: enabled })
         .eq('id', orgIntegrationId);
-
       if (error) throw error;
     },
     onSuccess: (_, { enabled }) => {
@@ -136,10 +156,7 @@ export function IntegrationsSettings() {
   });
 
   const getIntegrationStatus = (integrationId: string) => {
-    const connection = orgIntegrations?.find(
-      (oi) => oi.integration_id === integrationId
-    );
-    return connection;
+    return orgIntegrations?.find((oi) => oi.integration_id === integrationId);
   };
 
   const handleConnect = (integration: any) => {
@@ -155,11 +172,8 @@ export function IntegrationsSettings() {
 
   const handleToggle = (integration: any, orgIntegration: any, newState: boolean) => {
     if (orgIntegration) {
-      // Integration exists - just toggle enable/disable
-      // Don't open dialog, just update the database
       toggleMutation.mutate({ orgIntegrationId: orgIntegration.id, enabled: newState });
     } else if (newState) {
-      // No connection exists yet - open connect dialog
       handleConnect(integration);
     }
   };
@@ -180,6 +194,159 @@ export function IntegrationsSettings() {
   const handleReconfigure = () => {
     setDetailDialogOpen(false);
     setConnectDialogOpen(true);
+  };
+
+  // Kommo token expiry check
+  const getKommoTokenExpiry = (connection: any) => {
+    if (!connection?.config_values?.token_expires_at) return null;
+    const expiresAt = new Date(connection.config_values.token_expires_at);
+    const now = new Date();
+    const daysLeft = Math.ceil((expiresAt.getTime() - now.getTime()) / (1000 * 60 * 60 * 24));
+    return { expiresAt, daysLeft, isExpiring: daysLeft <= 30, isExpired: daysLeft <= 0 };
+  };
+
+  const renderKommoCard = (integration: any, connection: any, isConnected: boolean, isBeta: boolean) => {
+    const Icon = iconMap[integration.slug] || iconMap.default;
+    const tokenExpiry = getKommoTokenExpiry(connection);
+
+    // Determine connection status
+    let statusBadge;
+    if (tokenExpiry?.isExpired) {
+      statusBadge = <Badge variant="destructive" className="text-xs">Token expirado</Badge>;
+    } else if (tokenExpiry?.isExpiring) {
+      statusBadge = <Badge variant="outline" className="text-xs border-yellow-500 text-yellow-600">Token expirando</Badge>;
+    } else if (isConnected) {
+      statusBadge = <Badge className="text-xs bg-green-600">Conectado</Badge>;
+    } else {
+      statusBadge = <Badge variant="secondary" className="text-xs">Desconectado</Badge>;
+    }
+
+    return (
+      <Card key={integration.id} className="p-4">
+        <div className="flex items-start justify-between gap-3">
+          <div className="flex items-start gap-3 flex-1 min-w-0">
+            {integration.logo_url ? (
+              <img
+                src={integration.logo_url}
+                alt={integration.name}
+                className="w-10 h-10 rounded-lg object-contain bg-muted p-1 shrink-0"
+              />
+            ) : (
+              <div className="p-2 rounded-lg bg-muted shrink-0">
+                <Icon className="h-6 w-6 text-muted-foreground" />
+              </div>
+            )}
+            <div className="min-w-0">
+              <div className="flex items-center gap-2 flex-wrap">
+                <h3 className="font-medium text-foreground truncate">{integration.name}</h3>
+                {statusBadge}
+                {isBeta && (
+                  <TooltipProvider>
+                    <Tooltip>
+                      <TooltipTrigger asChild>
+                        <Badge variant="outline" className="flex items-center gap-1 shrink-0">
+                          <Warning className="w-3 h-3" />
+                          Beta
+                        </Badge>
+                      </TooltipTrigger>
+                      <TooltipContent>
+                        <p className="max-w-xs">
+                          Esta integração está em fase beta e pode apresentar comportamentos instáveis.
+                        </p>
+                      </TooltipContent>
+                    </Tooltip>
+                  </TooltipProvider>
+                )}
+              </div>
+              <p className="text-sm text-muted-foreground mt-1 line-clamp-2">
+                {integration.description}
+              </p>
+            </div>
+          </div>
+          <Switch
+            checked={isConnected}
+            onCheckedChange={(checked) => handleToggle(integration, connection, checked)}
+            disabled={toggleMutation.isPending}
+          />
+        </div>
+
+        {/* Token expiry warning */}
+        {isConnected && tokenExpiry?.isExpiring && !tokenExpiry?.isExpired && (
+          <Alert className="mt-3 border-yellow-500/50 bg-yellow-500/5 py-2">
+            <Warning className="h-3.5 w-3.5 text-yellow-600" />
+            <AlertDescription className="text-xs text-yellow-700 dark:text-yellow-400">
+              Token expira em {tokenExpiry.daysLeft} dia(s). Reconecte a integração para renovar.
+            </AlertDescription>
+          </Alert>
+        )}
+
+        {isConnected && tokenExpiry?.isExpired && (
+          <Alert variant="destructive" className="mt-3 py-2">
+            <XCircle className="h-3.5 w-3.5" />
+            <AlertDescription className="text-xs">
+              Token expirado. Reconecte a integração para continuar importando dados.
+            </AlertDescription>
+          </Alert>
+        )}
+
+        {/* Last import summary */}
+        {isConnected && lastKommoImport && (
+          <div className="mt-3 p-2.5 rounded-md bg-muted/50 space-y-1.5">
+            <div className="flex items-center justify-between">
+              <span className="text-xs text-muted-foreground">Última importação</span>
+              <Badge variant={lastKommoImport.status === 'completed' ? 'default' : 'secondary'} className="text-[10px] h-5">
+                {lastKommoImport.status === 'completed' ? 'Concluída' : 
+                 lastKommoImport.status === 'running' ? 'Em andamento' :
+                 lastKommoImport.status === 'failed' ? 'Falhou' : lastKommoImport.status}
+              </Badge>
+            </div>
+            {lastKommoImport.completed_at && (
+              <p className="text-[11px] text-muted-foreground">
+                {format(new Date(lastKommoImport.completed_at), "dd/MM/yyyy 'às' HH:mm", { locale: ptBR })}
+              </p>
+            )}
+            <div className="flex gap-3 text-[11px] text-muted-foreground">
+              <span className="flex items-center gap-1">
+                <Users className="h-3 w-3" />
+                {lastKommoImport.imported_contacts || 0} contatos
+              </span>
+              <span className="flex items-center gap-1">
+                <Briefcase className="h-3 w-3" />
+                {lastKommoImport.imported_opportunities || 0} oportunidades
+              </span>
+            </div>
+          </div>
+        )}
+
+        {/* Actions */}
+        <div className="mt-3 flex justify-end gap-2">
+          {isConnected && (
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => setKommoMigrationOpen(true)}
+            >
+              <UploadSimple className="h-4 w-4 mr-1" />
+              Importar dados
+            </Button>
+          )}
+          <Button
+            variant="link"
+            size="sm"
+            className="h-auto p-0 text-primary"
+            onClick={() => {
+              if (connection) {
+                handleConfigure(integration, connection);
+              } else {
+                handleConnect(integration);
+              }
+            }}
+          >
+            {t('settings.viewIntegration') || 'Ver integração'}
+          </Button>
+        </div>
+      </Card>
+    );
   };
 
   const isLoading = loadingIntegrations || loadingOrgIntegrations;
@@ -226,6 +393,11 @@ export function IntegrationsSettings() {
               const connection = getIntegrationStatus(integration.id);
               const isConnected = !!connection?.is_enabled;
               const isBeta = integration.status === 'beta';
+
+              // Use expanded Kommo card
+              if (integration.slug === 'kommo') {
+                return renderKommoCard(integration, connection, isConnected, isBeta);
+              }
 
               return (
                 <Card key={integration.id} className="p-4">
@@ -275,16 +447,6 @@ export function IntegrationsSettings() {
                     />
                   </div>
                   <div className="mt-4 flex justify-end gap-2">
-                    {integration.slug === 'kommo' && isConnected && (
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        onClick={() => setKommoMigrationOpen(true)}
-                      >
-                        <UploadSimple className="h-4 w-4 mr-1" />
-                        Migrar Dados
-                      </Button>
-                    )}
                     <Button
                       variant="link"
                       size="sm"
@@ -310,8 +472,7 @@ export function IntegrationsSettings() {
           </div>
         )}
 
-
-        {/* Phone Number Settings - only show if org has telephony integration */}
+        {/* Phone Number Settings */}
         {orgIntegrations?.some(oi => oi.is_enabled && oi.integration?.category === 'telephony') && (
           <PhoneNumberSettings />
         )}
@@ -334,6 +495,10 @@ export function IntegrationsSettings() {
           onDisconnect={() => handleDisconnectClick(selectedOrgIntegration.id)}
           onReconfigure={handleReconfigure}
           onConfigUpdated={() => queryClient.invalidateQueries({ queryKey: ['organization-integrations', organization?.id] })}
+          onOpenMigration={selectedIntegration?.slug === 'kommo' ? () => {
+            setDetailDialogOpen(false);
+            setKommoMigrationOpen(true);
+          } : undefined}
         />
       )}
 

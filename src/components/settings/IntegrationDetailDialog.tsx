@@ -1,15 +1,19 @@
 import { useState } from 'react';
+import { useQuery } from '@tanstack/react-query';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { WhatsAppInboundSettings } from '@/components/settings/WhatsAppInboundSettings';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Label } from '@/components/ui/label';
 import { Input } from '@/components/ui/input';
-import { Phone, CheckCircle, XCircle, GearSix, ArrowSquareOut, SpinnerGap, ArrowsClockwise, Wrench, PencilSimple } from '@phosphor-icons/react';
+import { Card } from '@/components/ui/card';
+import { ScrollArea } from '@/components/ui/scroll-area';
+import { Phone, CheckCircle, XCircle, GearSix, ArrowSquareOut, SpinnerGap, ArrowsClockwise, Wrench, PencilSimple, UploadSimple, Users, Briefcase, Buildings, Clock, ArrowCounterClockwise } from '@phosphor-icons/react';
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { formatPhoneDisplay } from '@/lib/phoneUtils';
 import { supabase } from '@/integrations/supabase/client';
+import { useOrganization } from '@/hooks/useOrganization';
 import { toast } from 'sonner';
 
 interface IntegrationDetailDialogProps {
@@ -20,6 +24,7 @@ interface IntegrationDetailDialogProps {
   onDisconnect: () => void;
   onReconfigure: () => void;
   onConfigUpdated?: () => void;
+  onOpenMigration?: () => void;
 }
 
 interface SenderDetail {
@@ -47,7 +52,9 @@ export function IntegrationDetailDialog({
   onDisconnect,
   onReconfigure,
   onConfigUpdated,
+  onOpenMigration,
 }: IntegrationDetailDialogProps) {
+  const { organization } = useOrganization();
   const configValues = orgIntegration?.config_values || {};
   const connectedAt = orgIntegration?.connected_at;
   const configSchema = integration?.config_schema;
@@ -56,10 +63,29 @@ export function IntegrationDetailDialog({
   const [fixingWebhooks, setFixingWebhooks] = useState(false);
   const [webhookResult, setWebhookResult] = useState<WebhookCheckResult | null>(null);
 
-  // Edit mode state
   const [isEditing, setIsEditing] = useState(false);
   const [editValues, setEditValues] = useState<Record<string, any>>({});
   const [isSaving, setIsSaving] = useState(false);
+
+  const isKommo = integration?.slug === 'kommo';
+
+  // Fetch Kommo migration history
+  const { data: kommoImportLogs } = useQuery({
+    queryKey: ['kommo-import-logs', organization?.id],
+    queryFn: async () => {
+      if (!organization) return [];
+      const { data, error } = await supabase
+        .from('import_logs')
+        .select('*')
+        .eq('organization_id', organization.id)
+        .eq('integration_slug', 'kommo')
+        .order('created_at', { ascending: false })
+        .limit(20);
+      if (error) throw error;
+      return data || [];
+    },
+    enabled: !!organization && isKommo && open,
+  });
 
   const maskSecret = (value: string | undefined) => {
     if (!value) return '•••••••••••••';
@@ -79,16 +105,13 @@ export function IntegrationDetailDialog({
 
     if (schema?.fields) {
       schema.fields.forEach((field: any) => {
-        // For sensitive fields, start empty so user can leave blank to keep current
         if (isSensitiveField(field.key)) {
           initialValues[field.key] = '';
         } else {
-          // Pre-populate with current value or schema default
           initialValues[field.key] = configValues[field.key] ?? field.default ?? '';
         }
       });
     } else {
-      // No schema: pre-populate all non-sensitive fields
       Object.entries(configValues).forEach(([key, value]) => {
         initialValues[key] = isSensitiveField(key) ? '' : value;
       });
@@ -260,7 +283,6 @@ export function IntegrationDetailDialog({
 
   const renderEditMode = () => {
     const schema = configSchema;
-
     if (schema?.fields?.length) {
       return (
         <div className="space-y-4">
@@ -268,11 +290,8 @@ export function IntegrationDetailDialog({
         </div>
       );
     }
-
-    // Fallback: render editable inputs for each config value
     const entries = Object.entries(configValues);
     if (entries.length === 0) return null;
-
     return (
       <div className="space-y-4">
         {entries.map(([key, value]) => {
@@ -374,7 +393,6 @@ export function IntegrationDetailDialog({
         </div>
       )}
 
-      {/* Webhook verification section */}
       <div className="border-t pt-4 space-y-3">
         <Button
           variant="outline"
@@ -444,12 +462,123 @@ export function IntegrationDetailDialog({
         )}
       </div>
 
-      {/* Inbound Settings */}
       {orgIntegration?.id && (
         <WhatsAppInboundSettings integrationId={orgIntegration.id} />
       )}
     </div>
   );
+
+  const renderKommoConfig = () => {
+    const getStatusBadge = (status: string) => {
+      switch (status) {
+        case 'completed': return <Badge className="text-[10px] bg-green-600">Concluída</Badge>;
+        case 'running': return <Badge variant="secondary" className="text-[10px]">Em andamento</Badge>;
+        case 'failed': return <Badge variant="destructive" className="text-[10px]">Falhou</Badge>;
+        case 'rolled_back': return <Badge variant="outline" className="text-[10px]">Desfeita</Badge>;
+        case 'cancelled': return <Badge variant="outline" className="text-[10px]">Cancelada</Badge>;
+        default: return <Badge variant="secondary" className="text-[10px]">{status}</Badge>;
+      }
+    };
+
+    return (
+      <div className="space-y-4">
+        {/* Connection info */}
+        <div className="space-y-2">
+          <Label className="text-muted-foreground">Subdomínio</Label>
+          <p className="text-sm bg-muted px-3 py-2 rounded-md">
+            {configValues.subdomain || configValues.account_name || 'Não configurado'}.kommo.com
+          </p>
+        </div>
+        <div className="space-y-2">
+          <Label className="text-muted-foreground">Access Token</Label>
+          <p className="font-mono text-sm bg-muted px-3 py-2 rounded-md">{maskSecret(configValues.access_token)}</p>
+        </div>
+
+        {/* Token expiry */}
+        {configValues.token_expires_at && (
+          <div className="flex items-center justify-between">
+            <Label className="text-muted-foreground">Token expira em</Label>
+            <span className="text-sm">
+              {format(new Date(configValues.token_expires_at), "dd/MM/yyyy", { locale: ptBR })}
+            </span>
+          </div>
+        )}
+
+        {/* Import data button */}
+        {onOpenMigration && (
+          <Button
+            variant="outline"
+            className="w-full"
+            onClick={onOpenMigration}
+          >
+            <UploadSimple className="h-4 w-4 mr-2" />
+            Importar dados do Kommo
+          </Button>
+        )}
+
+        {/* Migration History */}
+        {kommoImportLogs && kommoImportLogs.length > 0 && (
+          <div className="space-y-3">
+            <div className="border-t pt-4">
+              <Label className="text-sm font-medium">Histórico de migrações</Label>
+            </div>
+            <ScrollArea className="max-h-64">
+              <div className="space-y-2">
+                {kommoImportLogs.map((log: any) => (
+                  <Card key={log.id} className="p-3">
+                    <div className="flex items-start justify-between gap-2">
+                      <div className="space-y-1 min-w-0 flex-1">
+                        <div className="flex items-center gap-2">
+                          {getStatusBadge(log.status)}
+                          <span className="text-xs text-muted-foreground">
+                            {log.created_at && format(new Date(log.created_at), "dd/MM/yy HH:mm", { locale: ptBR })}
+                          </span>
+                        </div>
+                        <div className="flex flex-wrap gap-x-3 gap-y-0.5 text-[11px] text-muted-foreground">
+                          {(log.imported_contacts > 0 || log.total_contacts > 0) && (
+                            <span className="flex items-center gap-1">
+                              <Users className="h-3 w-3" />
+                              {log.imported_contacts}/{log.total_contacts}
+                            </span>
+                          )}
+                          {(log.imported_opportunities > 0 || log.total_opportunities > 0) && (
+                            <span className="flex items-center gap-1">
+                              <Briefcase className="h-3 w-3" />
+                              {log.imported_opportunities}/{log.total_opportunities}
+                            </span>
+                          )}
+                          {(log.imported_companies > 0 || log.total_companies > 0) && (
+                            <span className="flex items-center gap-1">
+                              <Buildings className="h-3 w-3" />
+                              {log.imported_companies}/{log.total_companies}
+                            </span>
+                          )}
+                        </div>
+                        {log.error_count > 0 && (
+                          <p className="text-[11px] text-destructive">{log.error_count} erro(s)</p>
+                        )}
+                      </div>
+                      {log.status === 'completed' && log.rollback_available && !log.rollback_executed_at && (
+                        <Button variant="ghost" size="sm" className="h-7 text-xs shrink-0"
+                          onClick={() => {
+                            // Just inform - rollback happens via wizard
+                            toast.info('Use o wizard de migração para desfazer esta importação.');
+                          }}
+                        >
+                          <ArrowCounterClockwise className="h-3 w-3 mr-1" />
+                          Desfazer
+                        </Button>
+                      )}
+                    </div>
+                  </Card>
+                ))}
+              </div>
+            </ScrollArea>
+          </div>
+        )}
+      </div>
+    );
+  };
 
   const renderGenericConfig = () => {
     const entries = Object.entries(configValues);
@@ -472,12 +601,13 @@ export function IntegrationDetailDialog({
     );
   };
 
-  const isGenericIntegration = integration?.slug !== 'twilio-voice' && integration?.slug !== 'twilio-whatsapp';
+  const isGenericIntegration = integration?.slug !== 'twilio-voice' && integration?.slug !== 'twilio-whatsapp' && !isKommo;
 
   const renderConfigDetails = () => {
     if (isEditing) return renderEditMode();
     if (integration?.slug === 'twilio-voice') return renderTwilioConfig();
     if (integration?.slug === 'twilio-whatsapp') return renderWhatsAppConfig();
+    if (isKommo) return renderKommoConfig();
     return renderGenericConfig();
   };
 
@@ -543,7 +673,7 @@ export function IntegrationDetailDialog({
             </>
           ) : (
             <>
-              {isGenericIntegration && (
+              {(isGenericIntegration || isKommo) && (
                 <Button variant="outline" onClick={handleStartEditing}>
                   <PencilSimple className="h-4 w-4 mr-2" />
                   Editar
