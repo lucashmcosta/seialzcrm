@@ -99,7 +99,7 @@ export function KommoPreviewStep({
       <div className="space-y-3">
         <h4 className="text-sm font-medium">Dados encontrados no Kommo</h4>
         <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
-          {counters.map(({ icon: Icon, label, count, always, configKey }) => {
+          {counters.map(({ icon: Icon, label, count, always, configKey, note }) => {
             const isEnabled = always || (configKey && config[configKey]);
             return (
               <Card
@@ -112,8 +112,9 @@ export function KommoPreviewStep({
                       <Icon className="h-4 w-4 text-primary" />
                     </div>
                     <div>
-                      <p className="text-lg font-bold leading-none">{count}</p>
+                      <p className="text-lg font-bold leading-none">{count.toLocaleString('pt-BR')}</p>
                       <p className="text-xs text-muted-foreground mt-0.5">{label}</p>
+                      {note && <p className="text-[10px] text-muted-foreground/70 mt-0.5">{note}</p>}
                     </div>
                   </div>
                   {!always && configKey && (
