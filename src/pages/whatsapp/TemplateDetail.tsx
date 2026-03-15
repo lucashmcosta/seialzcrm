@@ -196,7 +196,7 @@ export default function TemplateDetail() {
                 onClick={openSubmitDialog}
                 disabled={submitMutation.isPending}
               >
-                <Send className="w-4 h-4 mr-2" />
+                 <PaperPlaneTilt className="w-4 h-4 mr-2" />
                 Submeter para Aprovação
               </Button>
             )}
