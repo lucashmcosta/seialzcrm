@@ -122,7 +122,14 @@ Deno.serve(async (req) => {
     const orgId = l.organization_id;
     if (!cfg.subdomain || !cfg.access_token) throw new Error("Missing credentials");
 
-    const base = `https://${cfg.subdomain}.kommo.com/api/v4`;
+    // Sanitize subdomain: remove protocol and .kommo.com suffix
+    const sanitizedSubdomain = cfg.subdomain
+      .replace(/^https?:\/\//i, '')
+      .replace(/\.kommo\.com.*$/i, '')
+      .replace(/[\/\s]/g, '')
+      .trim();
+
+    const base = `https://${sanitizedSubdomain}.kommo.com/api/v4`;
     const hd = { Authorization: `Bearer ${cfg.access_token}`, "Content-Type": "application/json" };
     const dupMode = cfg.duplicate_mode || "skip";
 
