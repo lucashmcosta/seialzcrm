@@ -353,9 +353,9 @@ export default function TemplateDetail() {
                     className="w-full"
                   >
                     {sendMutation.isPending ? (
-                      <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                       <SpinnerGap className="w-4 h-4 mr-2 animate-spin" />
                     ) : (
-                      <Send className="w-4 h-4 mr-2" />
+                      <PaperPlaneTilt className="w-4 h-4 mr-2" />
                     )}
                     Enviar Teste
                   </Button>
