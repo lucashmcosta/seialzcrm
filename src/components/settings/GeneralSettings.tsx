@@ -138,7 +138,7 @@ export function GeneralSettings() {
                   variant="outline"
                   onClick={() => setLogoDialogOpen(true)}
                 >
-                  <Pencil className="w-4 h-4 mr-2" />
+                  <PencilSimple className="w-4 h-4 mr-2" />
                   {t('settings.changeLogo')}
                 </Button>
                 <span className="text-xs text-muted-foreground">
