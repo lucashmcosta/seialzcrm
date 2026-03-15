@@ -23,7 +23,7 @@ import {
 import { useToast } from '@/hooks/use-toast';
 import { useQuery } from '@tanstack/react-query';
 import { useAI } from '@/hooks/useAI';
-import { Loader2, Send, Clock, Check, CheckCheck, AlertCircle, Bot, Sparkles, SpellCheck, Briefcase, Smile, Target, FileText } from 'lucide-react';
+import { SpinnerGap, PaperPlaneTilt, Clock, Check, Checks, WarningCircle, Robot, Sparkle, SpellCheck, Briefcase, Smiley, Target, FileText } from '@phosphor-icons/react';
 import { FaceSmile } from '@untitledui/icons';
 import { formatDistanceToNow } from 'date-fns';
 import { ptBR, enUS } from 'date-fns/locale';

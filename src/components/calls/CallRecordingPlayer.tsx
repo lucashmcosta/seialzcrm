@@ -1,6 +1,6 @@
 import { useState, useRef } from 'react';
 import { Button } from '@/components/ui/button';
-import { Play, Pause, Download, Volume2 } from 'lucide-react';
+import { Play, Pause, DownloadSimple, SpeakerHigh } from '@phosphor-icons/react';
 
 interface CallRecordingPlayerProps {
   recordingUrl: string;

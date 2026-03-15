@@ -7,7 +7,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { ConfirmDialog } from '@/components/ui/confirm-dialog';
 import { useToast } from '@/hooks/use-toast';
-import { Loader2, Upload, Download, Trash2, File, FileText, Image, FileSpreadsheet } from 'lucide-react';
+import { SpinnerGap, UploadSimple, DownloadSimple, TrashSimple, File, FileText, Image, FileXls } from '@phosphor-icons/react';
 import { formatDistanceToNow } from 'date-fns';
 import { ptBR, enUS } from 'date-fns/locale';
 

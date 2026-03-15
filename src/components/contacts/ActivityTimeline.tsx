@@ -4,7 +4,7 @@ import { useTranslation } from '@/lib/i18n';
 import { supabase } from '@/integrations/supabase/client';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
-import { Loader2, MessageSquare, Phone, CheckSquare, FileText, PhoneOutgoing, PhoneIncoming, User, Clock } from 'lucide-react';
+import { SpinnerGap, ChatCircle, Phone, CheckSquare, FileText, PhoneOutgoing, PhoneIncoming, User, Clock } from '@phosphor-icons/react';
 import { formatDistanceToNow, format } from 'date-fns';
 import { ptBR, enUS } from 'date-fns/locale';
 import { formatPhoneDisplay } from '@/lib/phoneUtils';

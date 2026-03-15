@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { Button } from '@/components/ui/button';
-import { Phone, PhoneCall, PhoneOff, Loader2 } from 'lucide-react';
+import { Phone, PhoneCall, PhoneDisconnect, SpinnerGap } from '@phosphor-icons/react';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
 

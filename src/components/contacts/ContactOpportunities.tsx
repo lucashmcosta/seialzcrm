@@ -6,7 +6,7 @@ import { useTranslation } from '@/lib/i18n';
 import { Card } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
-import { Plus, ExternalLink } from 'lucide-react';
+import { Plus, ArrowSquareOut } from '@phosphor-icons/react';
 import { Skeleton } from '@/components/ui/skeleton';
 import { OpportunityDialog } from '@/components/opportunities/OpportunityDialog';
 

@@ -3,7 +3,7 @@ import { Device, Call } from '@twilio/voice-sdk';
 import { Dialog, DialogContent } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { Avatar, AvatarFallback } from '@/components/ui/avatar';
-import { Phone, PhoneOff, Mic, MicOff, Volume2, VolumeX } from 'lucide-react';
+import { Phone, PhoneDisconnect, Microphone, MicrophoneSlash, SpeakerHigh, SpeakerSlash } from '@phosphor-icons/react';
 import { DialPad } from './DialPad';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';

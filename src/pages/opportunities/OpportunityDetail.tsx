@@ -12,7 +12,7 @@ import { useOrganization } from '@/hooks/useOrganization';
 import { useTranslation } from '@/lib/i18n';
 import { usePermissions } from '@/hooks/usePermissions';
 import { toast } from '@/hooks/use-toast';
-import { ArrowLeft, Edit, TrendingUp, TrendingDown, DollarSign, Calendar, User, Building2 } from 'lucide-react';
+import { ArrowLeft, PencilSimple, TrendUp, TrendDown, CurrencyDollar, Calendar, User, Buildings } from '@phosphor-icons/react';
 import { ActivityTimeline } from '@/components/contacts/ActivityTimeline';
 import { ContactTasks } from '@/components/contacts/ContactTasks';
 import { ContactAttachments } from '@/components/contacts/ContactAttachments';

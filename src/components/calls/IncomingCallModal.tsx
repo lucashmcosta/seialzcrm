@@ -2,7 +2,7 @@ import { useEffect, useState, useRef } from 'react';
 import { Dialog, DialogContent } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { Avatar, AvatarFallback } from '@/components/ui/avatar';
-import { Phone, PhoneOff, Mic, MicOff, User, Minimize2, Grid3X3 } from 'lucide-react';
+import { Phone, PhoneDisconnect, Microphone, MicrophoneSlash, User, ArrowsInSimple, GridFour } from '@phosphor-icons/react';
 import { Call } from '@twilio/voice-sdk';
 import { formatPhoneDisplay } from '@/lib/phoneUtils';
 import { DialPad } from './DialPad';

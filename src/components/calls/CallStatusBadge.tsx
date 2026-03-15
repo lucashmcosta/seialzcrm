@@ -1,5 +1,5 @@
 import { Badge } from '@/components/ui/badge';
-import { Phone, PhoneCall, PhoneOff, PhoneMissed, Clock } from 'lucide-react';
+import { Phone, PhoneCall, PhoneDisconnect, PhoneX, Clock } from '@phosphor-icons/react';
 
 interface CallStatusBadgeProps {
   status: string;

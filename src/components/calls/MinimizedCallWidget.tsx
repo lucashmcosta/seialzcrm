@@ -1,7 +1,7 @@
 import { useState, useRef, useEffect } from 'react';
 import { Button } from '@/components/ui/button';
 import { Avatar, AvatarFallback } from '@/components/ui/avatar';
-import { PhoneOff, Mic, MicOff, Maximize2, User, GripVertical } from 'lucide-react';
+import { PhoneDisconnect, Microphone, MicrophoneSlash, ArrowsOutSimple, User, DotsSixVertical } from '@phosphor-icons/react';
 import { formatPhoneDisplay } from '@/lib/phoneUtils';
 
 interface MinimizedCallWidgetProps {

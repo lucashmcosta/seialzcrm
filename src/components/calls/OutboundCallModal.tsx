@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { Dialog, DialogContent } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { Avatar, AvatarFallback } from '@/components/ui/avatar';
-import { PhoneOff, Mic, MicOff, Minimize2, Grid3X3 } from 'lucide-react';
+import { PhoneDisconnect, Microphone, MicrophoneSlash, ArrowsInSimple, GridFour } from '@phosphor-icons/react';
 import { DialPad } from './DialPad';
 import { formatPhoneDisplay } from '@/lib/phoneUtils';
 import { CallStatus } from '@/contexts/OutboundCallContext';
