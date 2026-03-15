@@ -191,8 +191,8 @@ export function KnowledgeEditChat() {
   const getActionIcon = (action: string) => {
     switch (action) {
       case 'create': return <Plus className="h-4 w-4 text-emerald-600 dark:text-emerald-400" />;
-      case 'update': return <FileEdit className="h-4 w-4 text-primary" />;
-      case 'delete': return <Trash2 className="h-4 w-4 text-destructive" />;
+      case 'update': return <NotePencil className="h-4 w-4 text-primary" />;
+      case 'delete': return <TrashSimple className="h-4 w-4 text-destructive" />;
       default: return null;
     }
   };
