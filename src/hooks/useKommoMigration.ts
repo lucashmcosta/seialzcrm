@@ -516,6 +516,7 @@ export function useKommoMigration() {
     // Setters
     setCredentials,
     setStageMapping,
+    setSelectedPipelineIds,
     setUserMappings,
     setConfig,
     goToStep,
