@@ -374,7 +374,7 @@ export function KnowledgeBaseSettings() {
             Conhecimentos ({items.length})
           </TabsTrigger>
           <TabsTrigger value="import" className="flex items-center gap-2">
-            <Upload className="h-4 w-4" />
+            <UploadSimple className="h-4 w-4" />
             Importar
           </TabsTrigger>
           <TabsTrigger value="wizard_intelligent" className="flex items-center gap-2">
