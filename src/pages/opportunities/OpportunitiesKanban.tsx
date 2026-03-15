@@ -973,7 +973,7 @@ export default function OpportunitiesKanban() {
                         />
                         <TableRowAction
                           label={t('common.delete')}
-                          icon={<Trash01 className="h-4 w-4" />}
+                          icon={<TrashSimple size={16} weight="light" />}
                           variant="destructive"
                           onAction={() => setDeleteId(opp.id)}
                         />
