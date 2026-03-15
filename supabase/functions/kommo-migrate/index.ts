@@ -182,11 +182,6 @@ Deno.serve(async (req) => {
       c.default_user_id = defUser;
     }
 
-    // Helper: convert Kommo Unix timestamp to ISO string
-    function kommoDate(ts: number | undefined | null): string | undefined {
-      if (!ts) return undefined;
-      return new Date(ts * 1000).toISOString();
-    }
 
     // === USERS ===
     if (c.phase === "users" && !c.users_complete) {
