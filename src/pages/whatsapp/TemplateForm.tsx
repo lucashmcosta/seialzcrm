@@ -318,7 +318,7 @@ export default function TemplateForm() {
                       </div>
                       {bodyStartsWithVariable && (
                         <Alert variant="destructive">
-                          <AlertCircle className="w-4 h-4" />
+                           <WarningCircle className="w-4 h-4" />
                           <AlertDescription>
                             A mensagem não pode começar com uma variável. Adicione texto antes de {'{{1}}'}, por exemplo: <strong>Olá {'{{1}}'}, ...</strong>
                           </AlertDescription>
