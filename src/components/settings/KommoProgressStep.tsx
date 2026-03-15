@@ -7,18 +7,13 @@ import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { 
-  CheckCircle, 
-  XCircle, 
-  SpinnerGap, 
-  Users, 
-  Briefcase, 
-  Warning,
-  ArrowCounterClockwise,
-  Warning as FileWarningIcon,
-  Clock
+  CheckCircle, XCircle, SpinnerGap, Users, Briefcase, Warning,
+  ArrowCounterClockwise, Clock, Buildings, ListChecks, Note, CalendarBlank, Sliders,
+  Warning as FileWarningIcon, Image as ImageIcon
 } from '@phosphor-icons/react';
 
-import type { ImportLog } from '@/hooks/useKommoMigration';
+import type { ImportLog, MigrationPhase } from '@/hooks/useKommoMigration';
+import { PHASE_ORDER, PHASE_LABELS } from '@/hooks/useKommoMigration';
 
 interface KommoProgressStepProps {
   importLog: ImportLog | null;
@@ -27,6 +22,19 @@ interface KommoProgressStepProps {
   rollbackMutation: any;
 }
 
+const PHASE_ICONS: Record<MigrationPhase, any> = {
+  users: Users,
+  pipelines: Sliders,
+  custom_fields: Sliders,
+  companies: Buildings,
+  contacts: Users,
+  leads: Briefcase,
+  tasks: ListChecks,
+  notes_contacts: Note,
+  notes_leads: Note,
+  events: CalendarBlank,
+};
+
 export function KommoProgressStep({
   importLog,
   onRollback,
@@ -34,7 +42,6 @@ export function KommoProgressStep({
   rollbackMutation,
 }: KommoProgressStepProps) {
   const [showErrorsDialog, setShowErrorsDialog] = useState(false);
-  const [showPauseDialog, setShowPauseDialog] = useState(false);
 
   if (!importLog) {
     return (
@@ -56,7 +63,18 @@ export function KommoProgressStep({
     (isCompleted || isFailed) &&
     !rollbackMutation.isPending;
 
-  // Calculate time since completion for rollback availability
+  const currentPhase: MigrationPhase | null = importLog.cursor_state?.phase || null;
+
+  const getPhaseStatus = (phase: MigrationPhase): 'done' | 'active' | 'pending' => {
+    if (!currentPhase) return 'pending';
+    const currentIdx = PHASE_ORDER.indexOf(currentPhase);
+    const phaseIdx = PHASE_ORDER.indexOf(phase);
+    if (isCompleted) return 'done';
+    if (phaseIdx < currentIdx) return 'done';
+    if (phaseIdx === currentIdx) return 'active';
+    return 'pending';
+  };
+
   const getTimeRemaining = () => {
     if (!importLog.completed_at) return null;
     const completedAt = new Date(importLog.completed_at);
@@ -87,6 +105,19 @@ export function KommoProgressStep({
     return 'Aguardando...';
   };
 
+  // Check if media download is pending
+  const hasMediaPending = importLog.cursor_state?.media_pending === true;
+
+  // Stats for the counters grid
+  const statsItems = [
+    { label: 'Contatos', imported: importLog.imported_contacts, total: importLog.total_contacts, icon: Users },
+    { label: 'Oportunidades', imported: importLog.imported_opportunities, total: importLog.total_opportunities, icon: Briefcase },
+    { label: 'Empresas', imported: importLog.imported_companies || 0, total: importLog.total_companies || 0, icon: Buildings },
+    { label: 'Tarefas', imported: importLog.imported_tasks || 0, total: importLog.total_tasks || 0, icon: ListChecks },
+    { label: 'Notas', imported: importLog.imported_notes || 0, total: importLog.total_notes || 0, icon: Note },
+    { label: 'Eventos', imported: importLog.imported_events || 0, total: importLog.total_events || 0, icon: CalendarBlank },
+  ].filter(s => s.total > 0);
+
   return (
     <div className="space-y-6">
       {/* Status Header */}
@@ -95,10 +126,10 @@ export function KommoProgressStep({
         <h3 className="text-lg font-medium">{getStatusLabel()}</h3>
       </div>
 
-      {/* Progress Bar */}
+      {/* Overall Progress Bar */}
       <div className="space-y-2">
         <div className="flex justify-between text-sm">
-          <span className="text-muted-foreground">Progresso</span>
+          <span className="text-muted-foreground">Progresso geral</span>
           <span className="font-medium">{importLog.progress_percent}%</span>
         </div>
         <Progress value={importLog.progress_percent} className="h-2" />
@@ -109,50 +140,72 @@ export function KommoProgressStep({
         )}
       </div>
 
-      {/* Stats Grid */}
-      <div className="grid grid-cols-2 gap-4">
-        <Card className="p-4">
-          <div className="flex items-center gap-2 mb-2">
-            <Users className="h-4 w-4 text-muted-foreground" />
-            <span className="text-sm font-medium">Contatos</span>
-          </div>
-          <div className="space-y-1">
-            <div className="flex justify-between text-sm">
-              <span className="text-muted-foreground">Importados:</span>
-              <span className="text-green-600">{importLog.imported_contacts}</span>
+      {/* Phase Progress Bars */}
+      <Card className="p-4 space-y-3">
+        <h4 className="text-sm font-medium mb-2">Fases da migração</h4>
+        {PHASE_ORDER.map((phase) => {
+          const status = getPhaseStatus(phase);
+          const Icon = PHASE_ICONS[phase];
+          return (
+            <div key={phase} className="flex items-center gap-3">
+              <div className={`p-1 rounded ${
+                status === 'done' ? 'text-green-600' : 
+                status === 'active' ? 'text-primary' : 
+                'text-muted-foreground/40'
+              }`}>
+                {status === 'active' ? (
+                  <SpinnerGap className="h-4 w-4 animate-spin" />
+                ) : status === 'done' ? (
+                  <CheckCircle className="h-4 w-4" />
+                ) : (
+                  <Icon className="h-4 w-4" />
+                )}
+              </div>
+              <span className={`text-sm flex-1 ${
+                status === 'pending' ? 'text-muted-foreground/50' : 'text-foreground'
+              }`}>
+                {PHASE_LABELS[phase]}
+              </span>
+              <Badge 
+                variant={status === 'done' ? 'default' : status === 'active' ? 'secondary' : 'outline'}
+                className={`text-xs ${
+                  status === 'done' ? 'bg-green-600' : ''
+                }`}
+              >
+                {status === 'done' ? 'Concluído' : status === 'active' ? 'Em andamento' : 'Pendente'}
+              </Badge>
             </div>
-            <div className="flex justify-between text-sm">
-              <span className="text-muted-foreground">Pulados:</span>
-              <span className="text-yellow-600">{importLog.skipped_contacts}</span>
-            </div>
-            <div className="flex justify-between text-sm">
-              <span className="text-muted-foreground">Total:</span>
-              <span>{importLog.total_contacts}</span>
-            </div>
-          </div>
-        </Card>
+          );
+        })}
+      </Card>
 
-        <Card className="p-4">
-          <div className="flex items-center gap-2 mb-2">
-            <Briefcase className="h-4 w-4 text-muted-foreground" />
-            <span className="text-sm font-medium">Oportunidades</span>
-          </div>
-          <div className="space-y-1">
-            <div className="flex justify-between text-sm">
-              <span className="text-muted-foreground">Importadas:</span>
-              <span className="text-green-600">{importLog.imported_opportunities}</span>
-            </div>
-            <div className="flex justify-between text-sm">
-              <span className="text-muted-foreground">Puladas:</span>
-              <span className="text-yellow-600">{importLog.skipped_opportunities}</span>
-            </div>
-            <div className="flex justify-between text-sm">
-              <span className="text-muted-foreground">Total:</span>
-              <span>{importLog.total_opportunities}</span>
-            </div>
-          </div>
-        </Card>
-      </div>
+      {/* Media indicator */}
+      {hasMediaPending && (
+        <Alert className="border-primary/30 bg-primary/5">
+          <ImageIcon className="h-4 w-4 text-primary" />
+          <AlertDescription className="text-muted-foreground">
+            Download de mídias em andamento em segundo plano. Isso pode levar alguns minutos adicionais.
+          </AlertDescription>
+        </Alert>
+      )}
+
+      {/* Stats Grid */}
+      {statsItems.length > 0 && (
+        <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
+          {statsItems.map(({ label, imported, total, icon: SIcon }) => (
+            <Card key={label} className="p-3">
+              <div className="flex items-center gap-2 mb-1">
+                <SIcon className="h-3.5 w-3.5 text-muted-foreground" />
+                <span className="text-xs font-medium">{label}</span>
+              </div>
+              <p className="text-sm">
+                <span className="text-green-600 font-medium">{imported}</span>
+                <span className="text-muted-foreground"> / {total}</span>
+              </p>
+            </Card>
+          ))}
+        </div>
+      )}
 
       {/* Errors Alert */}
       {importLog.error_count > 0 && (
@@ -248,7 +301,7 @@ export function KommoProgressStep({
                 <Card key={idx} className="p-3">
                   <div className="flex items-start gap-2">
                     <Badge variant={error.type === 'contact' ? 'secondary' : 'outline'}>
-                      {error.type === 'contact' ? 'Contato' : 'Lead'}
+                      {error.type === 'contact' ? 'Contato' : error.type === 'company' ? 'Empresa' : 'Lead'}
                     </Badge>
                     <div className="flex-1 min-w-0">
                       <p className="font-medium text-sm truncate">
