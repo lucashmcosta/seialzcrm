@@ -107,7 +107,7 @@ export function AgentFeedbackRules({
               >
                 <div className="flex items-start gap-3 p-3">
                   <div className="flex items-center gap-2 mt-1">
-                    <GripVertical className="h-4 w-4 text-muted-foreground cursor-move" />
+                    <DotsSixVertical className="h-4 w-4 text-muted-foreground cursor-move" />
                     <Switch
                       checked={rule.isActive}
                       onCheckedChange={() => toggleRule(rule.id)}
