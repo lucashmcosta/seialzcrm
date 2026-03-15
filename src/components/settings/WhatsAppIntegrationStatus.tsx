@@ -270,7 +270,7 @@ export function WhatsAppIntegrationStatus({ onReconfigure }: WhatsAppIntegration
             size="sm"
             onClick={() => refetch()}
           >
-            <RefreshCw className="h-4 w-4 mr-2" />
+            <ArrowsClockwise className="h-4 w-4 mr-2" />
             Atualizar
           </Button>
           <Button
