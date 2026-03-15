@@ -75,7 +75,7 @@ export function Layout({ children }: LayoutProps) {
     footerItems.push({ label: t('nav.admin'), href: '/saas-admin', icon: ShieldCheck });
   }
 
-  footerItems.push({ label: 'Central de Ajuda', href: '/docs', icon: HelpCircle });
+  footerItems.push({ label: 'Central de Ajuda', href: '/docs', icon: Question });
 
   // Logo section with skeleton
   const logoSize = organization?.logo_size || 40;
