@@ -32,6 +32,7 @@ interface ImportConfig {
 }
 
 const PS = 250;
+const MAX_EVENTS = 5000; // Bug E: cap events to prevent hours-long imports
 const delay = (ms: number) => new Promise(r => setTimeout(r, ms));
 
 // Helper: convert Kommo Unix timestamp to ISO string
@@ -135,7 +136,12 @@ Deno.serve(async (req) => {
         import_events: body.import_events ?? l.config?.import_events ?? false,
         import_custom_fields: body.import_custom_fields ?? l.config?.import_custom_fields ?? false,
       };
-      // Bug fix #2: limpar erros de execuções anteriores ao iniciar nova migração
+
+      // Bug C: Log user_mapping para debug
+      console.log("[kommo-migrate] user_mapping from config:", JSON.stringify(cfg.user_mapping));
+      console.log("[kommo-migrate] user_mapping keys count:", Object.keys(cfg.user_mapping || {}).length);
+
+      // Limpar erros de execuções anteriores ao iniciar nova migração
       await sb.from("import_logs").update({ status: "running", started_at: new Date().toISOString(), config: cfg, cursor_state: defaultCursor(), errors: [], error_count: 0 }).eq("id", import_log_id);
       l.config = cfg; l.status = "running"; l.cursor_state = defaultCursor(); l.errors = [];
     }
@@ -183,18 +189,29 @@ Deno.serve(async (req) => {
       ec?.forEach((x: any) => { if (x.source_external_id) cMap[x.source_external_id.replace("kommo_", "")] = x.id; });
     }
 
-    // Bug fix #3: Rebuild user map from DB if empty (e.g. Users phase failed on previous run)
+    // Bug C fix: Rebuild user map from DB if empty (e.g. Users phase failed on previous run)
     if (!Object.keys(uMap).length) {
+      // First try from kommo_user_mappings table
       const { data: mappings } = await sb.from("kommo_user_mappings").select("kommo_user_id, seialz_user_id").eq("organization_id", orgId).not("seialz_user_id", "is", null);
       mappings?.forEach((m: any) => { uMap[String(m.kommo_user_id)] = m.seialz_user_id; });
+      
+      // If still empty, try from config.user_mapping
+      if (!Object.keys(uMap).length && cfg.user_mapping) {
+        const converted = convertUserMappings(cfg.user_mapping);
+        Object.assign(uMap, converted);
+        console.log("[kommo-migrate] Rebuilt uMap from config.user_mapping:", Object.keys(uMap).length, "entries");
+      }
+      
       c.kommo_user_id_map = uMap;
+      console.log("[kommo-migrate] uMap after rebuild:", Object.keys(uMap).length, "entries");
     }
 
-    // Ensure defUser is always populated
+    // Bug D fix: Ensure defUser is ALWAYS populated with multiple fallbacks
     if (!defUser) {
       const { data: fallbackOrg } = await sb.from("user_organizations").select("user_id").eq("organization_id", orgId).eq("is_active", true).limit(1).single();
       defUser = fallbackOrg?.user_id || l.created_by_user_id || "";
       c.default_user_id = defUser;
+      console.log("[kommo-migrate] defUser set to:", defUser);
     }
 
 
@@ -205,13 +222,17 @@ Deno.serve(async (req) => {
         if (r.status !== 204) {
           const users = (await r.json())._embedded?.users || [];
           const um = cfg.user_mapping || {};
+          console.log("[kommo-migrate] Users phase - user_mapping keys:", Object.keys(um).length, "kommo users:", users.length);
+          
           const { data: ou } = await sb.from("user_organizations").select("user_id").eq("organization_id", orgId).eq("is_active", true).limit(1);
-          defUser = ou?.[0]?.user_id || "";
+          defUser = ou?.[0]?.user_id || l.created_by_user_id || "";
+          
           for (const u of users) {
             const sid = um[String(u.id)] || null;
             await sb.from("kommo_user_mappings").upsert({ organization_id: orgId, kommo_user_id: u.id, kommo_user_name: u.name, kommo_user_email: u.email, seialz_user_id: sid }, { onConflict: "organization_id,kommo_user_id" });
             if (sid) uMap[String(u.id)] = sid;
           }
+          console.log("[kommo-migrate] Users phase complete - uMap entries:", Object.keys(uMap).length);
         }
       } catch (e: any) { errs.push({ type: "users", error: e.message }); }
       c.users_complete = true; c.default_user_id = defUser; c.kommo_user_id_map = uMap;
@@ -295,6 +316,11 @@ Deno.serve(async (req) => {
         tc = items.length === PS ? Math.max(tc, ps + PS) : ps;
         if (!items.length) { c.contacts_complete = true; c.phase = nextPhase("contacts", cfg); }
         else {
+          // Bug B debug: log first contact's created_at to verify Kommo sends it
+          if (c.contacts_page === 1 && items.length > 0) {
+            console.log("[kommo-migrate] Sample contact created_at:", items[0].created_at, "type:", typeof items[0].created_at, "kommoDate:", kommoDate(items[0].created_at));
+          }
+          
           for (const ct of items) {
             try {
               const email = ct.custom_fields_values?.find((f: any) => f.field_code === "EMAIL")?.values?.[0]?.value?.toLowerCase();
@@ -307,11 +333,16 @@ Deno.serve(async (req) => {
               const lc = ct._embedded?.companies?.[0];
               if (lc) compId = coMap[String(lc.id)] || null;
               const owner = ct.responsible_user_id ? (uMap[String(ct.responsible_user_id)] || defUser) : defUser;
+              
+              // Bug B fix: ensure created_at is always a valid date
+              const createdAt = kommoDate(ct.created_at) || new Date().toISOString();
+              const updatedAt = kommoDate(ct.updated_at) || createdAt;
+              
               if (ex) {
                 if (dupMode === "skip") { sc++; cMap[String(ct.id)] = ex.id; continue; }
-                if (dupMode === "update") { await sb.from("contacts").update({ full_name: ct.name, email, phone, source_external_id: `kommo_${ct.id}`, company_id: compId || undefined, owner_user_id: owner || undefined, updated_at: kommoDate(ct.updated_at) }).eq("id", ex.id); ic++; cIds.push(ex.id); cMap[String(ct.id)] = ex.id; continue; }
+                if (dupMode === "update") { await sb.from("contacts").update({ full_name: ct.name, email, phone, source_external_id: `kommo_${ct.id}`, company_id: compId || undefined, owner_user_id: owner || undefined, updated_at: updatedAt }).eq("id", ex.id); ic++; cIds.push(ex.id); cMap[String(ct.id)] = ex.id; continue; }
               }
-              const { data: n, error: ie } = await sb.from("contacts").insert({ organization_id: orgId, full_name: ct.name || "Sem nome", email, phone, source: "kommo", source_external_id: `kommo_${ct.id}`, company_id: compId, owner_user_id: owner || null, created_at: kommoDate(ct.created_at), updated_at: kommoDate(ct.updated_at) }).select("id").single();
+              const { data: n, error: ie } = await sb.from("contacts").insert({ organization_id: orgId, full_name: ct.name || "Sem nome", email, phone, source: "kommo", source_external_id: `kommo_${ct.id}`, company_id: compId, owner_user_id: owner || null, created_at: createdAt, updated_at: updatedAt }).select("id").single();
               if (ie) errs.push({ type: "contact", kommo_id: ct.id, error: ie.message });
               else { ic++; cIds.push(n.id); cMap[String(ct.id)] = n.id; }
             } catch (e: any) { errs.push({ type: "contact", kommo_id: ct.id, error: e.message }); }
@@ -353,11 +384,16 @@ Deno.serve(async (req) => {
               if (!stageId) { so++; continue; }
               const owner = ld.responsible_user_id ? (uMap[String(ld.responsible_user_id)] || defUser) : defUser;
               const ex = await findExisting(sb, "opportunities", orgId, `kommo_${ld.id}`);
+              
+              // Bug B fix: ensure created_at/updated_at for leads too
+              const createdAt = kommoDate(ld.created_at) || new Date().toISOString();
+              const updatedAt = kommoDate(ld.updated_at) || createdAt;
+              
               if (ex) {
                 if (dupMode === "skip") { so++; continue; }
-                if (dupMode === "update") { await sb.from("opportunities").update({ title: ld.name, amount: ld.price || 0, pipeline_stage_id: stageId, contact_id: contactId, owner_user_id: owner || undefined, updated_at: kommoDate(ld.updated_at) }).eq("id", ex.id); io++; oIds.push(ex.id); continue; }
+                if (dupMode === "update") { await sb.from("opportunities").update({ title: ld.name, amount: ld.price || 0, pipeline_stage_id: stageId, contact_id: contactId, owner_user_id: owner || undefined, updated_at: updatedAt }).eq("id", ex.id); io++; oIds.push(ex.id); continue; }
               }
-              const { data: n, error: oe } = await sb.from("opportunities").insert({ organization_id: orgId, contact_id: contactId, title: ld.name || "Lead sem título", amount: ld.price || 0, pipeline_stage_id: stageId, source: "kommo", source_external_id: `kommo_${ld.id}`, owner_user_id: owner || null, created_at: kommoDate(ld.created_at), updated_at: kommoDate(ld.updated_at) }).select("id").single();
+              const { data: n, error: oe } = await sb.from("opportunities").insert({ organization_id: orgId, contact_id: contactId, title: ld.name || "Lead sem título", amount: ld.price || 0, pipeline_stage_id: stageId, source: "kommo", source_external_id: `kommo_${ld.id}`, owner_user_id: owner || null, created_at: createdAt, updated_at: updatedAt }).select("id").single();
               if (oe) errs.push({ type: "opportunity", kommo_id: ld.id, error: oe.message });
               else { io++; oIds.push(n.id); }
             } catch (e: any) { errs.push({ type: "opportunity", kommo_id: ld.id, error: e.message }); }
@@ -371,6 +407,14 @@ Deno.serve(async (req) => {
 
     // === TASKS ===
     if (c.phase === "tasks" && !c.tasks_complete) {
+      // Bug D fix: ensure defUser before starting tasks
+      if (!defUser) {
+        const { data: fallbackUser } = await sb.from("user_organizations").select("user_id").eq("organization_id", orgId).eq("is_active", true).limit(1).single();
+        defUser = fallbackUser?.user_id || l.created_by_user_id || "";
+        c.default_user_id = defUser;
+        console.log("[kommo-migrate] Tasks phase: defUser was empty, set to:", defUser);
+      }
+      
       const r = await apiFetch(`${base}/tasks?limit=${PS}&page=${c.tasks_page}`, { headers: hd });
       if (r.status === 204) { c.tasks_complete = true; c.phase = nextPhase("tasks", cfg); }
       else {
@@ -387,19 +431,18 @@ Deno.serve(async (req) => {
               let ctId: string | null = null, opId: string | null = null;
               if (tk.entity_type === "contacts" && tk.entity_id) ctId = cMap[String(tk.entity_id)] || null;
               else if (tk.entity_type === "leads" && tk.entity_id) { const { data: o } = await sb.from("opportunities").select("id").eq("organization_id", orgId).eq("source_external_id", `kommo_${tk.entity_id}`).is("deleted_at", null).maybeSingle(); opId = o?.id || null; }
-              // Bug fix #1: fallback robusto — se defUser vazio, buscar primeiro usuário ativo da org
+              // Bug D fix: robust fallback chain for assigned user
               let auid = tk.responsible_user_id ? (uMap[String(tk.responsible_user_id)] || defUser) : defUser;
               if (!auid) {
-                const { data: fallbackUser } = await sb.from("user_organizations").select("user_id").eq("organization_id", orgId).eq("is_active", true).limit(1).single();
-                if (fallbackUser) { defUser = fallbackUser.user_id; auid = defUser; c.default_user_id = defUser; }
+                auid = l.created_by_user_id || "";
+                if (auid) { defUser = auid; c.default_user_id = defUser; }
               }
               if (!auid) {
-                // Último recurso: usar created_by_user_id do log de importação
-                if (l.created_by_user_id) { defUser = l.created_by_user_id; auid = defUser; c.default_user_id = defUser; }
-                else { errs.push({ type: "task", kommo_id: tk.id, error: "Nenhum usuário disponível na organização" }); continue; }
+                errs.push({ type: "task", kommo_id: tk.id, error: "Nenhum usuário disponível na organização" }); continue;
               }
               const due = tk.complete_till ? new Date(tk.complete_till * 1000).toISOString() : null;
-              const { data: n, error: ie } = await sb.from("tasks").insert({ organization_id: orgId, title: tk.text || "Tarefa Kommo", description: `Importado da Kommo (ID: ${tk.id})`, status: tk.is_completed ? "completed" : "pending", due_at: due, contact_id: ctId, opportunity_id: opId, assigned_user_id: auid, created_by_user_id: auid, source_external_id: sei, created_at: kommoDate(tk.created_at), updated_at: kommoDate(tk.updated_at) }).select("id").single();
+              const createdAt = kommoDate(tk.created_at) || new Date().toISOString();
+              const { data: n, error: ie } = await sb.from("tasks").insert({ organization_id: orgId, title: tk.text || "Tarefa Kommo", description: `Importado da Kommo (ID: ${tk.id})`, status: tk.is_completed ? "completed" : "pending", due_at: due, contact_id: ctId, opportunity_id: opId, assigned_user_id: auid, created_by_user_id: auid, source_external_id: sei, created_at: createdAt, updated_at: kommoDate(tk.updated_at) || createdAt }).select("id").single();
               if (!ie && n) { iT++; tIds.push(n.id); } else if (ie) errs.push({ type: "task", kommo_id: tk.id, error: ie.message });
             } catch (e: any) { errs.push({ type: "task", kommo_id: tk.id, error: e.message }); }
           }
@@ -415,7 +458,11 @@ Deno.serve(async (req) => {
       if (r.status === 204) { c[completeKey] = true; c.phase = nextPhase(isLead ? "notes_leads" : "notes_contacts", cfg); return; }
       const notes = (await r.json())._embedded?.notes || [];
       if (!notes.length) { c[completeKey] = true; c.phase = nextPhase(isLead ? "notes_leads" : "notes_contacts", cfg); return; }
-      if (!isLead) { const ps = (c[pageKey] - 1) * PS + notes.length; tN = notes.length === PS ? Math.max(tN, ps + PS) : Math.max(tN, ps); }
+      
+      // Bug F fix: count total notes for BOTH contact and lead notes
+      const ps = (c[pageKey] - 1) * PS + notes.length;
+      tN = notes.length === PS ? Math.max(tN, ps + PS) : Math.max(tN, ps);
+      
       for (const n of notes) {
         try {
           const sei = `kommo_note_${n.id}`;
@@ -441,29 +488,36 @@ Deno.serve(async (req) => {
 
     // === EVENTS ===
     if (c.phase === "events" && !c.events_complete) {
-      const r = await apiFetch(`${base}/events?limit=${PS}&page=${c.events_page}&filter[type]=lead_status_changed,entity_linked`, { headers: hd });
-      if (r.status === 204) { c.events_complete = true; c.phase = "done"; }
-      else {
-        const items = (await r.json())._embedded?.events || [];
-        if (!items.length) { c.events_complete = true; c.phase = "done"; }
+      // Bug E fix: cap events at MAX_EVENTS to prevent hours-long imports
+      if (iE >= MAX_EVENTS) {
+        console.log(`[kommo-migrate] Events capped at ${MAX_EVENTS}. Skipping remaining.`);
+        c.events_complete = true; c.phase = "done";
+      } else {
+        const r = await apiFetch(`${base}/events?limit=${PS}&page=${c.events_page}&filter[type]=lead_status_changed,entity_linked`, { headers: hd });
+        if (r.status === 204) { c.events_complete = true; c.phase = "done"; }
         else {
-          const ps = (c.events_page - 1) * PS + items.length;
-          tE = items.length === PS ? Math.max(tE, ps + PS) : ps;
-          for (const ev of items) {
-            try {
-              const sei = `kommo_event_${ev.id}`;
-              const { data: ex } = await sb.from("activities").select("id").eq("organization_id", orgId).eq("source_external_id", sei).is("deleted_at", null).maybeSingle();
-              if (ex) continue;
-              let ctId: string | null = null, opId: string | null = null;
-              if (ev.entity_type === "contact" && ev.entity_id) ctId = cMap[String(ev.entity_id)] || null;
-              else if (ev.entity_type === "lead" && ev.entity_id) { const { data: o } = await sb.from("opportunities").select("id").eq("organization_id", orgId).eq("source_external_id", `kommo_${ev.entity_id}`).is("deleted_at", null).maybeSingle(); opId = o?.id || null; }
-              const cby = ev.created_by ? (uMap[String(ev.created_by)] || null) : null;
-              const { data: na, error: ie } = await sb.from("activities").insert({ organization_id: orgId, contact_id: ctId, opportunity_id: opId, activity_type: "pipeline_stage_change", title: `Evento: ${ev.type}`, body: JSON.stringify(ev.value_after || ev.value_before || {}), source_external_id: sei, created_by_user_id: cby, occurred_at: ev.created_at ? new Date(ev.created_at * 1000).toISOString() : new Date().toISOString() }).select("id").single();
-              if (!ie && na) { iE++; aIds.push(na.id); }
-            } catch (e: any) { errs.push({ type: "event", kommo_id: ev.id, error: e.message }); }
+          const items = (await r.json())._embedded?.events || [];
+          if (!items.length) { c.events_complete = true; c.phase = "done"; }
+          else {
+            const ps = (c.events_page - 1) * PS + items.length;
+            tE = items.length === PS ? Math.max(tE, ps + PS) : ps;
+            for (const ev of items) {
+              if (iE >= MAX_EVENTS) break; // Bug E: stop at cap
+              try {
+                const sei = `kommo_event_${ev.id}`;
+                const { data: ex } = await sb.from("activities").select("id").eq("organization_id", orgId).eq("source_external_id", sei).is("deleted_at", null).maybeSingle();
+                if (ex) continue;
+                let ctId: string | null = null, opId: string | null = null;
+                if (ev.entity_type === "contact" && ev.entity_id) ctId = cMap[String(ev.entity_id)] || null;
+                else if (ev.entity_type === "lead" && ev.entity_id) { const { data: o } = await sb.from("opportunities").select("id").eq("organization_id", orgId).eq("source_external_id", `kommo_${ev.entity_id}`).is("deleted_at", null).maybeSingle(); opId = o?.id || null; }
+                const cby = ev.created_by ? (uMap[String(ev.created_by)] || null) : null;
+                const { data: na, error: ie } = await sb.from("activities").insert({ organization_id: orgId, contact_id: ctId, opportunity_id: opId, activity_type: "pipeline_stage_change", title: `Evento: ${ev.type}`, body: JSON.stringify(ev.value_after || ev.value_before || {}), source_external_id: sei, created_by_user_id: cby, occurred_at: ev.created_at ? new Date(ev.created_at * 1000).toISOString() : new Date().toISOString() }).select("id").single();
+                if (!ie && na) { iE++; aIds.push(na.id); }
+              } catch (e: any) { errs.push({ type: "event", kommo_id: ev.id, error: e.message }); }
+            }
+            if (items.length < PS || iE >= MAX_EVENTS) { c.events_complete = true; c.phase = "done"; }
+            else c.events_page++;
           }
-          if (items.length < PS) { c.events_complete = true; c.phase = "done"; }
-          else c.events_page++;
         }
       }
     }

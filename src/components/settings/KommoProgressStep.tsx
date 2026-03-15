@@ -9,7 +9,7 @@ import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, D
 import { 
   CheckCircle, XCircle, SpinnerGap, Users, Briefcase, Warning,
   ArrowCounterClockwise, Clock, Buildings, ListChecks, Note, CalendarBlank, Sliders,
-  Warning as FileWarningIcon, Image as ImageIcon
+  Warning as FileWarningIcon, Image as ImageIcon, SkipForward
 } from '@phosphor-icons/react';
 
 import type { ImportLog, MigrationPhase } from '@/hooks/useKommoMigration';
@@ -33,6 +33,16 @@ const PHASE_ICONS: Record<MigrationPhase, any> = {
   notes_contacts: Note,
   notes_leads: Note,
   events: CalendarBlank,
+};
+
+// Bug A fix: Map phases to their config flags
+const PHASE_CONFIG_MAP: Partial<Record<MigrationPhase, string>> = {
+  companies: 'import_companies',
+  tasks: 'import_tasks',
+  notes_contacts: 'import_notes',
+  notes_leads: 'import_notes',
+  events: 'import_events',
+  custom_fields: 'import_custom_fields',
 };
 
 export function KommoProgressStep({
@@ -68,8 +78,21 @@ export function KommoProgressStep({
     ? JSON.parse(importLog.cursor_state) 
     : importLog.cursor_state;
   const currentPhase: MigrationPhase | 'done' | null = cursorState?.phase || null;
+  
+  // Get config to check which phases are enabled
+  const importConfig = importLog.config || {};
 
-  const getPhaseStatus = (phase: MigrationPhase): 'done' | 'active' | 'pending' => {
+  // Bug A fix: check if a phase is disabled in config
+  const isPhaseDisabled = (phase: MigrationPhase): boolean => {
+    const configKey = PHASE_CONFIG_MAP[phase];
+    if (!configKey) return false; // users, pipelines, contacts, leads are always enabled
+    return importConfig[configKey] === false;
+  };
+
+  const getPhaseStatus = (phase: MigrationPhase): 'done' | 'active' | 'pending' | 'skipped' => {
+    // Bug A fix: disabled phases show as skipped
+    if (isPhaseDisabled(phase)) return 'skipped';
+    
     if (!currentPhase) return 'pending';
     if (isCompleted || currentPhase === 'done') return 'done';
     const currentIdx = PHASE_ORDER.indexOf(currentPhase as MigrationPhase);
@@ -152,6 +175,24 @@ export function KommoProgressStep({
         {PHASE_ORDER.map((phase) => {
           const status = getPhaseStatus(phase);
           const Icon = PHASE_ICONS[phase];
+          
+          // Hide skipped phases or show them dimmed
+          if (status === 'skipped') {
+            return (
+              <div key={phase} className="flex items-center gap-3 opacity-40">
+                <div className="p-1 rounded text-muted-foreground/40">
+                  <SkipForward className="h-4 w-4" />
+                </div>
+                <span className="text-sm flex-1 text-muted-foreground/50 line-through">
+                  {PHASE_LABELS[phase]}
+                </span>
+                <Badge variant="outline" className="text-xs">
+                  Pulado
+                </Badge>
+              </div>
+            );
+          }
+          
           return (
             <div key={phase} className="flex items-center gap-3">
               <div className={`p-1 rounded ${
@@ -211,6 +252,16 @@ export function KommoProgressStep({
             </Card>
           ))}
         </div>
+      )}
+
+      {/* Events cap warning */}
+      {(importLog.imported_events || 0) >= 5000 && (
+        <Alert className="border-yellow-500/50 bg-yellow-500/5">
+          <Warning className="h-4 w-4 text-yellow-600" />
+          <AlertDescription>
+            Importação de eventos limitada a 5.000 para manter o tempo de migração razoável.
+          </AlertDescription>
+        </Alert>
       )}
 
       {/* Errors Alert */}
