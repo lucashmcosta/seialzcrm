@@ -14,7 +14,7 @@ import {
   Briefcase, 
   Warning,
   ArrowCounterClockwise,
-  FileWarning,
+  Warning as FileWarningIcon,
   Clock
 } from '@phosphor-icons/react';
 
