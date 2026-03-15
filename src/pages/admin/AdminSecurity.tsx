@@ -139,7 +139,7 @@ export default function AdminSecurity() {
               <CardTitle className="text-sm font-medium">
                 Tentativas Falhadas (24h)
               </CardTitle>
-              <AlertTriangle className="h-4 w-4 text-destructive" />
+              <Warning size={16} className="text-destructive" />
             </CardHeader>
             <CardContent>
               <div className="text-2xl font-bold">{failedLogins.length}</div>
