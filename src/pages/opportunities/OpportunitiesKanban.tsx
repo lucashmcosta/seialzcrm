@@ -631,6 +631,10 @@ export default function OpportunitiesKanban() {
     return format(new Date(date), 'dd MMM yyyy', { locale: locale === 'en-US' ? enUS : ptBR });
   };
 
+  // Total pipeline stats for Seialz topbar
+  const totalDeals = useMemo(() => Object.values(stageCounts).reduce((sum, s) => sum + s.count, 0), [stageCounts]);
+  const totalPipelineAmount = useMemo(() => Object.values(stageCounts).reduce((sum, s) => sum + s.amount, 0), [stageCounts]);
+
   if (loading) {
     return (
       <Layout>
@@ -640,10 +644,6 @@ export default function OpportunitiesKanban() {
       </Layout>
     );
   }
-
-  // Total pipeline stats for Seialz topbar
-  const totalDeals = useMemo(() => Object.values(stageCounts).reduce((sum, s) => sum + s.count, 0), [stageCounts]);
-  const totalAmount = useMemo(() => Object.values(stageCounts).reduce((sum, s) => sum + s.amount, 0), [stageCounts]);
 
   const filterPanel = (
     <Popover open={showFilters} onOpenChange={setShowFilters}>
