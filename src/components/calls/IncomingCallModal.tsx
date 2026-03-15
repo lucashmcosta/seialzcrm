@@ -222,7 +222,7 @@ export function IncomingCallModal({
                   className="h-14 w-14 rounded-full"
                   onClick={onToggleMute}
                 >
-                  {isMuted ? <MicOff className="h-6 w-6" /> : <Mic className="h-6 w-6" />}
+                  {isMuted ? <MicrophoneSlash className="h-6 w-6" /> : <Microphone className="h-6 w-6" />}
                 </Button>
                 <Button
                   variant={showDialPad ? 'default' : 'outline'}
