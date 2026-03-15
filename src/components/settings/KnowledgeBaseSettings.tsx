@@ -356,7 +356,7 @@ export function KnowledgeBaseSettings() {
       <Card className="border-primary/20 bg-primary/5">
         <CardHeader className="pb-3">
           <div className="flex items-center gap-2">
-            <BrainCircuit className="h-5 w-5 text-primary" />
+            <Brain className="h-5 w-5 text-primary" />
             <CardTitle className="text-lg">Base de Conhecimento (RAG)</CardTitle>
           </div>
           <CardDescription>
