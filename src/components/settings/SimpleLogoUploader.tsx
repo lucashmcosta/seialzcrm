@@ -189,7 +189,7 @@ export function SimpleLogoUploader({
               >
                 {uploading ? (
                   <>
-                    <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                     <SpinnerGap className="w-4 h-4 mr-2 animate-spin" />
                     Enviando...
                   </>
                 ) : (
