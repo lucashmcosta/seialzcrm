@@ -1373,7 +1373,7 @@ export function SDRAgentWizard({
                         className="h-6 w-6 opacity-0 group-hover:opacity-100 transition-opacity ml-auto"
                         onClick={() => removeFeedbackEntry(entry.id)}
                       >
-                        <Trash2 className="h-3 w-3 text-muted-foreground" />
+                        <TrashSimple className="h-3 w-3 text-muted-foreground" />
                       </Button>
                     </div>
                     <p className="text-sm">{entry.feedback}</p>
