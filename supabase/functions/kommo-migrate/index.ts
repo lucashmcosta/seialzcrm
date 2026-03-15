@@ -238,9 +238,9 @@ Deno.serve(async (req) => {
               } else {
                 const { data: n, error: ie } = await sb.from("companies").insert({ organization_id: orgId, name: co.name || "Empresa sem nome", phone: ph || null, source: "kommo", source_external_id: sei }).select("id").single();
                 if (!ie && n) { iCo++; coIds.push(n.id); coMap[String(co.id)] = n.id; }
-                else if (ie) errs.push({ type: "company", id: co.id, error: ie.message });
+                else if (ie) errs.push({ type: "company", kommo_id: co.id, error: ie.message });
               }
-            } catch (e: any) { errs.push({ type: "company", id: co.id, error: e.message }); }
+            } catch (e: any) { errs.push({ type: "company", kommo_id: co.id, error: e.message }); }
           }
           if (items.length < PS) { c.companies_complete = true; c.phase = nextPhase("companies", cfg); }
           else c.companies_page++;
