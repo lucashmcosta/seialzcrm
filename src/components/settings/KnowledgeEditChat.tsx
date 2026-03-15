@@ -210,7 +210,7 @@ export function KnowledgeEditChat() {
     <Card className="h-[600px] flex flex-col">
       <CardHeader className="pb-3">
         <CardTitle className="flex items-center gap-2">
-          <Sparkles className="h-5 w-5 text-primary" />
+          <Sparkle className="h-5 w-5 text-primary" />
           Edição Conversacional
         </CardTitle>
         <CardDescription>
