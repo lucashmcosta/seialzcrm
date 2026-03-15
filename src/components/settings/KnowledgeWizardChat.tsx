@@ -9,21 +9,21 @@ import { ScrollArea } from '@/components/ui/scroll-area';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
 import { toast } from 'sonner';
 import { 
-  Send, 
-  Loader2, 
-  ChevronDown, 
-  ChevronUp, 
+  PaperPlaneTilt, 
+  SpinnerGap, 
+  CaretDown, 
+  CaretUp, 
   Check, 
   Circle, 
-  Sparkles,
-  MessageSquare,
+  Sparkle,
+  ChatCircle,
   FileText,
-  RefreshCw,
-  HelpCircle,
+  ArrowsClockwise,
+  Question,
   Shield,
   Package,
   ArrowLeft
-} from 'lucide-react';
+} from '@phosphor-icons/react';
 
 interface ChatMessage {
   role: 'assistant' | 'user';

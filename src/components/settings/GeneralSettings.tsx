@@ -9,7 +9,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Switch } from '@/components/ui/switch';
 import { useToast } from '@/hooks/use-toast';
-import { Loader2, Trash2, ImageIcon, Pencil } from 'lucide-react';
+import { SpinnerGap, TrashSimple, ImageSquare, PencilSimple } from '@phosphor-icons/react';
 import { SimpleLogoUploader } from '@/components/settings/SimpleLogoUploader';
 import {
   AlertDialog,

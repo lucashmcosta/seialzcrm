@@ -11,7 +11,7 @@ import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, D
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { ConfirmDialog } from '@/components/ui/confirm-dialog';
 import { useToast } from '@/hooks/use-toast';
-import { Loader2, Plus, Pencil, Trash2 } from 'lucide-react';
+import { SpinnerGap, Plus, PencilSimple, TrashSimple } from '@phosphor-icons/react';
 
 interface PipelineStage {
   id: string;

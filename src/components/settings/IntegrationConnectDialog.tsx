@@ -17,7 +17,7 @@ import { Textarea } from '@/components/ui/textarea';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { toast } from 'sonner';
-import { Loader2, Info } from 'lucide-react';
+import { SpinnerGap, Info } from '@phosphor-icons/react';
 
 interface IntegrationConnectDialogProps {
   open: boolean;

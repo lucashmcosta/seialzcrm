@@ -4,7 +4,7 @@ import { Badge } from '@/components/ui/badge';
 import { supabase } from '@/integrations/supabase/client';
 import { useOrganization } from '@/hooks/useOrganization';
 import { useTranslation } from '@/lib/i18n';
-import { CreditCard, Users } from 'lucide-react';
+import { CreditCard, Users } from '@phosphor-icons/react';
 
 interface Subscription {
   plan_name: string | null;

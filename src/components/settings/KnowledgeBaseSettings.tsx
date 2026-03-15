@@ -11,7 +11,7 @@ import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, 
 import { Skeleton } from '@/components/ui/skeleton';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { toast } from 'sonner';
-import { Trash2, Book, HelpCircle, Package, FileText, Settings2, Search, BrainCircuit, Loader2, Wand2, Upload, FileType, RefreshCw, MessageSquare, Globe, Sparkles } from 'lucide-react';
+import { TrashSimple, Book, Question, Package, FileText, GearSix, MagnifyingGlass, Brain, SpinnerGap, MagicWand, UploadSimple, FileDoc, ArrowsClockwise, ChatCircle, Globe, Sparkle } from '@phosphor-icons/react';
 import { ImportKnowledge } from './ImportKnowledge';
 import { KnowledgeWizardChat } from './KnowledgeWizardChat';
 import { ManualKnowledgeDialog } from './ManualKnowledgeDialog';

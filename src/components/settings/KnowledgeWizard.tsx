@@ -9,16 +9,16 @@ import { Badge } from '@/components/ui/badge';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Progress } from '@/components/ui/progress';
 import { 
-  Send, 
-  Loader2, 
+  PaperPlaneTilt, 
+  SpinnerGap, 
   X, 
-  BrainCircuit, 
+  Brain, 
   Package, 
   FileText, 
-  CheckCircle2,
-  AlertCircle,
-  Save
-} from 'lucide-react';
+  CheckCircle,
+  WarningCircle,
+  FloppyDisk
+} from '@phosphor-icons/react';
 import { cn } from '@/lib/utils';
 import { SpeechToTextButton } from '@/components/common/SpeechToTextButton';
 

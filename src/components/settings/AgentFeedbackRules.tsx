@@ -5,8 +5,8 @@ import { Badge } from '@/components/ui/badge';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { 
-  AlertTriangle, Trash2, GripVertical, ChevronDown, ChevronUp 
-} from 'lucide-react';
+  Warning, TrashSimple, DotsSixVertical, CaretDown, CaretUp 
+} from '@phosphor-icons/react';
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { cn } from '@/lib/utils';

@@ -7,16 +7,16 @@ import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { 
-  CheckCircle2, 
+  CheckCircle, 
   XCircle, 
-  Loader2, 
+  SpinnerGap, 
   Users, 
   Briefcase, 
-  AlertTriangle,
-  RotateCcw,
+  Warning,
+  ArrowCounterClockwise,
   FileWarning,
   Clock
-} from 'lucide-react';
+} from '@phosphor-icons/react';
 
 import type { ImportLog } from '@/hooks/useKommoMigration';
 

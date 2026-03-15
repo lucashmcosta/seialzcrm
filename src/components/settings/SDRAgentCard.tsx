@@ -1,4 +1,4 @@
-import { Bot, Settings, Zap, Copy, MoreVertical } from 'lucide-react';
+import { Robot, GearSix, Lightning, Copy, DotsThreeVertical } from '@phosphor-icons/react';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';

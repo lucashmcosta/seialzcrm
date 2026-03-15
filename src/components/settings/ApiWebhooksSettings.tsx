@@ -12,7 +12,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { ConfirmDialog } from '@/components/ui/confirm-dialog';
 import { useOrganization } from '@/hooks/useOrganization';
 import { useAuth } from '@/hooks/useAuth';
-import { Key, Copy, Plus, Trash2, Eye, EyeOff, ArrowRightLeft, AlertCircle } from 'lucide-react';
+import { Key, Copy, Plus, TrashSimple, Eye, EyeSlash, ArrowsLeftRight, WarningCircle } from '@phosphor-icons/react';
 import { toast } from 'sonner';
 
 // Grouped scopes for the UI

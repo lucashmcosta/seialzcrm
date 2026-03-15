@@ -10,9 +10,9 @@ import {
   DialogTitle 
 } from '@/components/ui/dialog';
 import { 
-  Loader2, History, RotateCcw, Eye, Check, 
-  AlertCircle, ChevronDown, ChevronUp 
-} from 'lucide-react';
+  SpinnerGap, ClockCounterClockwise, ArrowCounterClockwise, Eye, Check, 
+  WarningCircle, CaretDown, CaretUp 
+} from '@phosphor-icons/react';
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { toast } from 'sonner';

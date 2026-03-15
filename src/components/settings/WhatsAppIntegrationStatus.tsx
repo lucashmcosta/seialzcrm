@@ -4,16 +4,16 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { 
-  CheckCircle2, 
+  CheckCircle, 
   XCircle, 
-  MessageSquare, 
-  Settings2, 
-  RefreshCw,
-  ExternalLink,
-  Search,
+  ChatCircle, 
+  GearSix, 
+  ArrowsClockwise,
+  ArrowSquareOut,
+  MagnifyingGlass,
   Wrench,
-  AlertTriangle
-} from 'lucide-react';
+  Warning
+} from '@phosphor-icons/react';
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { supabase } from '@/integrations/supabase/client';

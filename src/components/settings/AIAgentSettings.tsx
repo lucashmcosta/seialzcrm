@@ -4,7 +4,7 @@ import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
 import { SDRAgentCard } from './SDRAgentCard';
 import { SDRAgentWizard } from './SDRAgentWizard';
-import { Loader2, Plus } from 'lucide-react';
+import { SpinnerGap, Plus } from '@phosphor-icons/react';
 import { Button } from '@/components/ui/button';
 import type { Json } from '@/integrations/supabase/types';
 

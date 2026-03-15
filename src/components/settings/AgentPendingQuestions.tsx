@@ -6,8 +6,8 @@ import { Label } from '@/components/ui/label';
 import { Badge } from '@/components/ui/badge';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { 
-  Loader2, HelpCircle, Check, X, MessageSquare, Trash2 
-} from 'lucide-react';
+  SpinnerGap, Question, Check, X, ChatCircle, TrashSimple 
+} from '@phosphor-icons/react';
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { toast } from 'sonner';

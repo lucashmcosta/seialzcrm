@@ -11,16 +11,16 @@ import { Progress } from '@/components/ui/progress';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { toast } from 'sonner';
 import { 
-  Upload, 
+  UploadSimple, 
   Globe, 
   FileText, 
-  FileType, 
-  Loader2, 
-  AlertCircle, 
-  CheckCircle2,
+  FileDoc, 
+  SpinnerGap, 
+  WarningCircle, 
+  CheckCircle,
   X,
   Package
-} from 'lucide-react';
+} from '@phosphor-icons/react';
 
 interface ImportKnowledgeProps {
   agents: { id: string; name: string }[];

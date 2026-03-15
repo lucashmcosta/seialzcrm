@@ -15,7 +15,7 @@ import { supabase } from '@/integrations/supabase/client';
 import { useOrganization } from '@/hooks/useOrganization';
 import { useTranslation } from '@/lib/i18n';
 import { toast } from '@/hooks/use-toast';
-import { Plus, Edit, Trash2 } from 'lucide-react';
+import { Plus, PencilSimple, TrashSimple } from '@phosphor-icons/react';
 
 interface PermissionProfile {
   id: string;
