@@ -87,7 +87,7 @@ const CLASSIFICATION_INFO: Record<ClassificationType, {
   MISSING_INFO: {
     label: 'Informação Faltando',
     description: 'O agente não tinha informação suficiente. Será criada pergunta para completar.',
-    icon: HelpCircle,
+    icon: Question,
     color: 'text-amber-500',
   },
   FLOW_TOOL: {
