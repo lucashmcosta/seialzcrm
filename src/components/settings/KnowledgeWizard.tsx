@@ -823,7 +823,7 @@ export function KnowledgeWizard({ onComplete, onCancel }: KnowledgeWizardProps) 
                     isCurrent && "ring-2 ring-primary/50"
                   )}
                 >
-                  {isComplete && <CheckCircle2 className="h-3 w-3 mr-1" />}
+                  {isComplete && <CheckCircle className="h-3 w-3 mr-1" />}
                   {CATEGORY_LABELS[cat]}
                 </Badge>
               );
