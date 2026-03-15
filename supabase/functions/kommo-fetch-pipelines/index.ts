@@ -68,12 +68,37 @@ Deno.serve(async (req) => {
         name: status.name,
         sort: status.sort,
         color: status.color,
-        type: status.type, // 0 = normal, 1 = success (won), 2 = failure (lost)
+        type: status.type,
       })) || [],
     })) || [];
 
+    // Fetch users in parallel so they're available for Step 3
+    let users: any[] = [];
+    try {
+      const usersUrl = `https://${subdomain}.kommo.com/api/v4/users`;
+      console.log("Fetching Kommo users from:", usersUrl);
+      const usersResponse = await fetch(usersUrl, {
+        method: "GET",
+        headers: {
+          "Authorization": `Bearer ${access_token}`,
+          "Content-Type": "application/json",
+        },
+      });
+      console.log("Users response status:", usersResponse.status);
+      if (usersResponse.ok && usersResponse.status !== 204) {
+        const usersData = await usersResponse.json();
+        console.log("Users data keys:", Object.keys(usersData));
+        users = usersData?._embedded?.users
+          || usersData?.users
+          || (Array.isArray(usersData) ? usersData : []);
+        console.log("Parsed users count:", users.length);
+      }
+    } catch (usersErr) {
+      console.error("Error fetching Kommo users (non-blocking):", usersErr);
+    }
+
     return new Response(
-      JSON.stringify({ pipelines }),
+      JSON.stringify({ pipelines, users }),
       { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
     );
   } catch (error) {
