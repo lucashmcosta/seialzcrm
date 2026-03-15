@@ -433,7 +433,7 @@ export function AgentMessageFeedbackDialog({
             </div>
 
             <div className="flex items-center gap-2 p-3 bg-primary/5 rounded-lg">
-              <Sparkles className="h-4 w-4 text-primary shrink-0" />
+              <Sparkle className="h-4 w-4 text-primary shrink-0" />
               <p className="text-sm text-muted-foreground">
                 O sistema irá classificar automaticamente o tipo de feedback e aplicar no lugar certo.
               </p>
