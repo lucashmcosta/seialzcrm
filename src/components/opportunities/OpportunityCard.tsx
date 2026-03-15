@@ -50,10 +50,10 @@ export function OpportunityCard({
           <h4 className="font-medium text-sm flex-1 pr-2 text-foreground">{title}</h4>
           <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
             <Button variant="ghost" size="icon" className="h-7 w-7" onClick={(e) => { e.stopPropagation(); onEdit(); }}>
-              <Edit className="h-3 w-3" />
+              <PencilSimple className="h-3 w-3" />
             </Button>
             <Button variant="ghost" size="icon" className="h-7 w-7" onClick={(e) => { e.stopPropagation(); onDelete(); }}>
-              <Trash2 className="h-3 w-3 text-destructive" />
+              <TrashSimple className="h-3 w-3 text-destructive" />
             </Button>
           </div>
         </div>

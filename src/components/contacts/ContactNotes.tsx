@@ -151,7 +151,7 @@ export function ContactNotes({ contactId, opportunityId }: ContactNotesProps) {
             notes.map((note) => (
               <div key={note.id} className="flex gap-4 pb-4 border-b last:border-0">
                 <div className="flex-shrink-0 w-8 h-8 rounded-full bg-primary/10 flex items-center justify-center text-primary">
-                  <MessageSquare className="w-4 h-4" />
+                  <ChatCircle className="w-4 h-4" />
                 </div>
                 <div className="flex-1 min-w-0">
                   <div className="flex items-center justify-between">

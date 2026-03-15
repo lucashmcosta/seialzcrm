@@ -157,7 +157,7 @@ export function ContactOpportunities({ contactId }: ContactOpportunitiesProps) {
                       <h3 className="font-medium text-foreground">
                         {opportunity.title}
                       </h3>
-                      <ExternalLink className="h-3 w-3 text-muted-foreground" />
+                      <ArrowSquareOut className="h-3 w-3 text-muted-foreground" />
                     </div>
                     <div className="text-sm text-muted-foreground">
                       {(opportunity.pipeline_stages as any)?.name || 'N/A'}

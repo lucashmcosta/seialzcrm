@@ -248,10 +248,10 @@ export function ContactAttachments({ contactId, entityId, entityType }: ContactA
                   </div>
                   <div className="flex gap-1">
                     <Button variant="ghost" size="icon" onClick={() => handleDownload(attachment)}>
-                      <Download className="w-4 h-4" />
+                      <DownloadSimple className="w-4 h-4" />
                     </Button>
                     <Button variant="ghost" size="icon" onClick={() => handleDeleteClick(attachment)}>
-                      <Trash2 className="w-4 h-4" />
+                      <TrashSimple className="w-4 h-4" />
                     </Button>
                   </div>
                 </div>

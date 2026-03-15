@@ -301,11 +301,11 @@ export default function OpportunityDetail() {
                   {opportunity.status === 'open' && (
                     <>
                       <Button variant="outline" onClick={handleMarkWon}>
-                        <TrendingUp className="h-4 w-4 mr-2" />
+                        <TrendUp className="h-4 w-4 mr-2" />
                         {t('opportunities.markWon')}
                       </Button>
                       <Button variant="outline" onClick={handleMarkLost}>
-                        <TrendingDown className="h-4 w-4 mr-2" />
+                        <TrendDown className="h-4 w-4 mr-2" />
                         {t('opportunities.markLost')}
                       </Button>
                     </>

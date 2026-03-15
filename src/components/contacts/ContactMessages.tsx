@@ -759,7 +759,7 @@ export function ContactMessages({ contactId, opportunityId }: ContactMessagesPro
                 size="icon"
                 className="h-9 w-9"
               >
-                {submitting ? <Loader2 className="w-4 h-4 animate-spin" /> : <Send className="w-4 h-4" />}
+                {submitting ? <SpinnerGap className="w-4 h-4 animate-spin" /> : <PaperPlaneTilt className="w-4 h-4" />}
               </Button>
             </div>
           </div>
