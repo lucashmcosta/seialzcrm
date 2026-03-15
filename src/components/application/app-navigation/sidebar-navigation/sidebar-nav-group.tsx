@@ -54,8 +54,10 @@ export const SidebarNavGroup = ({ item }: SidebarNavGroupProps) => {
         )}
       >
         <Icon
+          size={20}
+          weight={isActive ? "bold" : "light"}
           className={cn(
-            "h-5 w-5 shrink-0 transition-colors",
+            "shrink-0 transition-colors",
             isActive ? "text-primary" : "text-muted-foreground group-hover:text-foreground"
           )}
         />
