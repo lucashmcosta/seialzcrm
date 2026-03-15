@@ -59,7 +59,7 @@ export function DuplicatePreventionSettings() {
       <CardContent>
         <form onSubmit={handleSubmit} className="space-y-6">
           <Alert>
-            <AlertCircle className="h-4 w-4" />
+            <WarningCircle className="h-4 w-4" />
             <AlertDescription>
               We recommend using phone-based duplicate detection as it's more reliable than email.
               Many people have multiple email addresses, but phone numbers are typically unique.
@@ -111,7 +111,7 @@ export function DuplicatePreventionSettings() {
           )}
 
           <Button type="submit" disabled={loading}>
-            {loading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+            {loading && <SpinnerGap className="mr-2 h-4 w-4 animate-spin" />}
             {t('common.save')}
           </Button>
         </form>

@@ -191,8 +191,8 @@ export function KnowledgeEditChat() {
   const getActionIcon = (action: string) => {
     switch (action) {
       case 'create': return <Plus className="h-4 w-4 text-emerald-600 dark:text-emerald-400" />;
-      case 'update': return <FileEdit className="h-4 w-4 text-primary" />;
-      case 'delete': return <Trash2 className="h-4 w-4 text-destructive" />;
+      case 'update': return <NotePencil className="h-4 w-4 text-primary" />;
+      case 'delete': return <TrashSimple className="h-4 w-4 text-destructive" />;
       default: return null;
     }
   };
@@ -210,7 +210,7 @@ export function KnowledgeEditChat() {
     <Card className="h-[600px] flex flex-col">
       <CardHeader className="pb-3">
         <CardTitle className="flex items-center gap-2">
-          <Sparkles className="h-5 w-5 text-primary" />
+          <Sparkle className="h-5 w-5 text-primary" />
           Edição Conversacional
         </CardTitle>
         <CardDescription>
@@ -224,7 +224,7 @@ export function KnowledgeEditChat() {
           <div className="space-y-4 py-4">
             {messages.length === 0 && (
               <div className="text-center text-muted-foreground py-12">
-                <MessageSquare className="h-12 w-12 mx-auto mb-4 opacity-50" />
+                <ChatCircle className="h-12 w-12 mx-auto mb-4 opacity-50" />
                 <p className="text-lg font-medium mb-2">Comece a conversar</p>
                 <p className="text-sm">
                   Exemplos: "Muda o preço do EB2 para $16.000" ou "Adiciona que aceitamos PIX"
@@ -298,7 +298,7 @@ export function KnowledgeEditChat() {
                       {/* Warnings */}
                       {message.warnings && message.warnings.length > 0 && (
                         <div className="flex items-start gap-2 p-2 bg-yellow-500/10 rounded-md">
-                          <AlertCircle className="h-4 w-4 text-yellow-500 shrink-0 mt-0.5" />
+                          <WarningCircle className="h-4 w-4 text-yellow-500 shrink-0 mt-0.5" />
                           <div className="text-xs text-yellow-600">
                             {message.warnings.map((w, i) => (
                               <p key={i}>{w}</p>
@@ -316,7 +316,7 @@ export function KnowledgeEditChat() {
                             disabled={applying}
                           >
                             {applying ? (
-                              <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                              <SpinnerGap className="h-4 w-4 mr-2 animate-spin" />
                             ) : (
                               <Check className="h-4 w-4 mr-2" />
                             )}
@@ -343,7 +343,7 @@ export function KnowledgeEditChat() {
               <div className="flex justify-start">
                 <div className="bg-muted rounded-lg px-4 py-3">
                   <div className="flex items-center gap-2 text-sm text-muted-foreground">
-                    <Loader2 className="h-4 w-4 animate-spin" />
+                     <SpinnerGap className="h-4 w-4 animate-spin" />
                     Analisando pedido...
                   </div>
                 </div>
@@ -369,9 +369,9 @@ export function KnowledgeEditChat() {
               className="shrink-0"
             >
               {loading ? (
-                <Loader2 className="h-4 w-4 animate-spin" />
+                 <SpinnerGap className="h-4 w-4 animate-spin" />
               ) : (
-                <Send className="h-4 w-4" />
+                 <PaperPlaneTilt className="h-4 w-4" />
               )}
             </Button>
           </div>

@@ -163,11 +163,11 @@ export function SimpleLogoUploader({
           <Tabs value={activeTab} onValueChange={setActiveTab}>
             <TabsList className="grid w-full grid-cols-2">
               <TabsTrigger value="upload">
-                <Upload className="w-4 h-4 mr-2" />
+                 <UploadSimple className="w-4 h-4 mr-2" />
                 Upload
               </TabsTrigger>
               <TabsTrigger value="url">
-                <Link className="w-4 h-4 mr-2" />
+                <LinkIcon className="w-4 h-4 mr-2" />
                 URL
               </TabsTrigger>
             </TabsList>
@@ -189,12 +189,12 @@ export function SimpleLogoUploader({
               >
                 {uploading ? (
                   <>
-                    <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                     <SpinnerGap className="w-4 h-4 mr-2 animate-spin" />
                     Enviando...
                   </>
                 ) : (
                   <>
-                    <Upload className="w-4 h-4 mr-2" />
+                    <UploadSimple className="w-4 h-4 mr-2" />
                     Clique para selecionar uma imagem
                   </>
                 )}
@@ -240,7 +240,7 @@ export function SimpleLogoUploader({
                   className="bg-primary rounded-lg flex items-center justify-center"
                   style={{ width: logoSize, height: logoSize }}
                 >
-                  <ImageIcon className="w-1/2 h-1/2 text-primary-foreground" />
+                  <ImageSquare className="w-1/2 h-1/2 text-primary-foreground" />
                 </div>
               )}
               <span className="text-sm text-muted-foreground">
@@ -277,7 +277,7 @@ export function SimpleLogoUploader({
               onClick={handleRemoveLogo}
               className="text-destructive hover:text-destructive"
             >
-              <Trash2 className="w-4 h-4 mr-2" />
+              <TrashSimple className="w-4 h-4 mr-2" />
               Remover logo
             </Button>
           )}
@@ -288,7 +288,7 @@ export function SimpleLogoUploader({
             Cancelar
           </Button>
           <Button onClick={handleSave} disabled={saving}>
-            {saving && <Loader2 className="w-4 h-4 mr-2 animate-spin" />}
+            {saving && <SpinnerGap className="w-4 h-4 mr-2 animate-spin" />}
             Salvar
           </Button>
         </DialogFooter>

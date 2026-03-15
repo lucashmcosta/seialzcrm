@@ -129,7 +129,7 @@ export function GeneralSettings() {
                   className="rounded-lg bg-primary flex items-center justify-center"
                   style={{ width: logoSize, height: logoSize }}
                 >
-                  <ImageIcon className="w-1/2 h-1/2 text-primary-foreground" />
+                  <ImageSquare className="w-1/2 h-1/2 text-primary-foreground" />
                 </div>
               )}
               <div className="flex flex-col gap-1">
@@ -138,7 +138,7 @@ export function GeneralSettings() {
                   variant="outline"
                   onClick={() => setLogoDialogOpen(true)}
                 >
-                  <Pencil className="w-4 h-4 mr-2" />
+                  <PencilSimple className="w-4 h-4 mr-2" />
                   {t('settings.changeLogo')}
                 </Button>
                 <span className="text-xs text-muted-foreground">
@@ -225,7 +225,7 @@ export function GeneralSettings() {
           </div>
 
           <Button type="submit" disabled={loading}>
-            {loading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+            {loading && <SpinnerGap className="mr-2 h-4 w-4 animate-spin" />}
             {t('common.save')}
           </Button>
         </form>
@@ -239,8 +239,8 @@ export function GeneralSettings() {
           <AlertDialog>
             <AlertDialogTrigger asChild>
               <Button variant="destructive" disabled={resetting}>
-                {resetting && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-                <Trash2 className="mr-2 h-4 w-4" />
+                 {resetting && <SpinnerGap className="mr-2 h-4 w-4 animate-spin" />}
+                 <TrashSimple className="mr-2 h-4 w-4" />
                 {t('settings.resetSampleData')}
               </Button>
             </AlertDialogTrigger>

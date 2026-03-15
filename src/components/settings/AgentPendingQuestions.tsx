@@ -134,7 +134,7 @@ export function AgentPendingQuestions({
   if (isLoading) {
     return (
       <div className="flex items-center justify-center py-8">
-        <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
+        <SpinnerGap className="h-5 w-5 animate-spin text-muted-foreground" />
       </div>
     );
   }
@@ -147,7 +147,7 @@ export function AgentPendingQuestions({
     <Card className="border-amber-500/30 bg-amber-500/5">
       <CardHeader className="pb-3">
         <CardTitle className="text-base flex items-center gap-2">
-          <HelpCircle className="h-5 w-5 text-amber-500" />
+          <Question className="h-5 w-5 text-amber-500" />
           Perguntas Pendentes
           <Badge variant="secondary" className="ml-2">
             {questions.length}
@@ -210,7 +210,7 @@ export function AgentPendingQuestions({
                 disabled={submitting === question.id || !answers[question.id]?.trim()}
               >
                 {submitting === question.id ? (
-                  <Loader2 className="h-4 w-4 animate-spin mr-1" />
+                  <SpinnerGap className="h-4 w-4 animate-spin mr-1" />
                 ) : (
                   <Check className="h-4 w-4 mr-1" />
                 )}

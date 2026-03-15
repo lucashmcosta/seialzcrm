@@ -14,7 +14,7 @@ import {
   Briefcase, 
   Warning,
   ArrowCounterClockwise,
-  FileWarning,
+  Warning as FileWarningIcon,
   Clock
 } from '@phosphor-icons/react';
 
@@ -39,7 +39,7 @@ export function KommoProgressStep({
   if (!importLog) {
     return (
       <div className="flex flex-col items-center justify-center py-12 space-y-4">
-        <Loader2 className="h-8 w-8 animate-spin text-primary" />
+        <SpinnerGap className="h-8 w-8 animate-spin text-primary" />
         <p className="text-muted-foreground">Iniciando migração...</p>
       </div>
     );
@@ -70,11 +70,11 @@ export function KommoProgressStep({
   };
 
   const renderStatusIcon = () => {
-    if (isRunning) return <Loader2 className="h-6 w-6 animate-spin text-primary" />;
-    if (isPaused) return <AlertTriangle className="h-6 w-6 text-yellow-500" />;
-    if (isCompleted) return <CheckCircle2 className="h-6 w-6 text-green-500" />;
+    if (isRunning) return <SpinnerGap className="h-6 w-6 animate-spin text-primary" />;
+    if (isPaused) return <Warning className="h-6 w-6 text-yellow-500" />;
+    if (isCompleted) return <CheckCircle className="h-6 w-6 text-green-500" />;
     if (isFailed) return <XCircle className="h-6 w-6 text-destructive" />;
-    if (isRolledBack) return <RotateCcw className="h-6 w-6 text-muted-foreground" />;
+    if (isRolledBack) return <ArrowCounterClockwise className="h-6 w-6 text-muted-foreground" />;
     return <Clock className="h-6 w-6 text-muted-foreground" />;
   };
 
@@ -157,7 +157,7 @@ export function KommoProgressStep({
       {/* Errors Alert */}
       {importLog.error_count > 0 && (
         <Alert variant="destructive" className="border-destructive/50">
-          <FileWarning className="h-4 w-4" />
+          <FileWarningIcon className="h-4 w-4" />
           <AlertTitle>Erros durante a migração</AlertTitle>
           <AlertDescription className="flex items-center justify-between">
             <span>{importLog.error_count} registro(s) com erro</span>
@@ -175,7 +175,7 @@ export function KommoProgressStep({
       {/* Paused Alert */}
       {isPaused && (
         <Alert className="border-yellow-500/50 bg-yellow-500/5">
-          <AlertTriangle className="h-4 w-4 text-yellow-600" />
+          <Warning className="h-4 w-4 text-yellow-600" />
           <AlertTitle>Migração pausada</AlertTitle>
           <AlertDescription>
             Mais de 20% dos registros falharam. Revise os erros antes de continuar.
@@ -186,7 +186,7 @@ export function KommoProgressStep({
       {/* Rollback Info */}
       {canRollback && (
         <Alert className="border-primary/50 bg-primary/5">
-          <RotateCcw className="h-4 w-4" />
+           <ArrowCounterClockwise className="h-4 w-4" />
           <AlertTitle>Rollback disponível</AlertTitle>
           <AlertDescription>
             Você pode desfazer esta migração{' '}
@@ -197,7 +197,7 @@ export function KommoProgressStep({
 
       {isRolledBack && (
         <Alert>
-          <RotateCcw className="h-4 w-4" />
+          <ArrowCounterClockwise className="h-4 w-4" />
           <AlertDescription>
             Esta migração foi desfeita. Todos os registros importados foram removidos.
           </AlertDescription>
@@ -214,12 +214,12 @@ export function KommoProgressStep({
           >
             {rollbackMutation.isPending ? (
               <>
-                <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                <SpinnerGap className="h-4 w-4 mr-2 animate-spin" />
                 Desfazendo...
               </>
             ) : (
               <>
-                <RotateCcw className="h-4 w-4 mr-2" />
+                <ArrowCounterClockwise className="h-4 w-4 mr-2" />
                 Desfazer Migração
               </>
             )}

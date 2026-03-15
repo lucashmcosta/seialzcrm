@@ -332,7 +332,7 @@ export function UsersSettings() {
     return (
       <Card>
         <CardContent className="py-8 flex justify-center">
-          <Loader2 className="h-8 w-8 animate-spin" />
+          <SpinnerGap className="h-8 w-8 animate-spin" />
         </CardContent>
       </Card>
     );
@@ -351,16 +351,16 @@ export function UsersSettings() {
               <Button>
                 <UserPlus className="w-4 h-4 mr-2" />
                 Adicionar Usuário
-                <ChevronDown className="w-4 h-4 ml-2" />
+                <CaretDown className="w-4 h-4 ml-2" />
               </Button>
             </DropdownMenuTrigger>
             <DropdownMenuContent align="end" className="w-56">
               <DropdownMenuItem onClick={() => setInviteDialogOpen(true)}>
-                <Mail className="w-4 h-4 mr-2" />
+                <EnvelopeSimple className="w-4 h-4 mr-2" />
                 Convidar por email
               </DropdownMenuItem>
               <DropdownMenuItem onClick={() => setCreateDialogOpen(true)}>
-                <UserRoundPlus className="w-4 h-4 mr-2" />
+                <UserCirclePlus className="w-4 h-4 mr-2" />
                 Criar conta diretamente
               </DropdownMenuItem>
             </DropdownMenuContent>
@@ -508,7 +508,7 @@ export function UsersSettings() {
                 Cancelar
               </Button>
               <Button type="submit" disabled={inviteSubmitting}>
-                {inviteSubmitting && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                {inviteSubmitting && <SpinnerGap className="mr-2 h-4 w-4 animate-spin" />}
                 Enviar Convite
               </Button>
             </DialogFooter>
@@ -585,7 +585,7 @@ export function UsersSettings() {
                 Cancelar
               </Button>
               <Button type="submit" disabled={createSubmitting}>
-                {createSubmitting && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                {createSubmitting && <SpinnerGap className="mr-2 h-4 w-4 animate-spin" />}
                 Criar Usuário
               </Button>
             </DialogFooter>

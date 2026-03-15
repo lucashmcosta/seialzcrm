@@ -70,7 +70,7 @@ export function SDRAgentCard({ agent, isLoading, onConfigure, onToggle, onDuplic
         <CardContent className="p-6">
           <div className="flex items-start gap-4">
             <div className="p-3 rounded-lg bg-muted group-hover:bg-primary/10 transition-colors">
-              <Bot className="h-8 w-8 text-muted-foreground group-hover:text-primary transition-colors" />
+              <Robot className="h-8 w-8 text-muted-foreground group-hover:text-primary transition-colors" />
             </div>
             <div className="flex-1 space-y-1">
               <h3 className="font-semibold text-lg">Agente SDR</h3>
@@ -84,7 +84,7 @@ export function SDRAgentCard({ agent, isLoading, onConfigure, onToggle, onDuplic
               </div>
             </div>
             <Button variant="outline" size="sm" className="shrink-0">
-              <Zap className="h-4 w-4 mr-2" />
+              <Lightning className="h-4 w-4 mr-2" />
               Configurar
             </Button>
           </div>
@@ -110,7 +110,7 @@ export function SDRAgentCard({ agent, isLoading, onConfigure, onToggle, onDuplic
             "p-3 rounded-lg transition-colors",
             isActive ? "bg-primary/10" : "bg-muted"
           )}>
-            <Bot className={cn(
+            <Robot className={cn(
               "h-8 w-8 transition-colors",
               isActive ? "text-primary" : "text-muted-foreground"
             )} />
@@ -141,12 +141,12 @@ export function SDRAgentCard({ agent, isLoading, onConfigure, onToggle, onDuplic
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
                 <Button variant="ghost" size="icon" className="h-8 w-8">
-                  <MoreVertical className="h-4 w-4" />
+                  <DotsThreeVertical className="h-4 w-4" />
                 </Button>
               </DropdownMenuTrigger>
               <DropdownMenuContent align="end">
                 <DropdownMenuItem onClick={onConfigure}>
-                  <Settings className="h-4 w-4 mr-2" />
+                  <GearSix className="h-4 w-4 mr-2" />
                   Editar
                 </DropdownMenuItem>
                 {onDuplicate && (

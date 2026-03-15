@@ -98,7 +98,7 @@ export function KommoMigrationDialog({ open, onOpenChange }: KommoMigrationDialo
       <DialogContent size="lg" className="max-h-[90vh] overflow-hidden flex flex-col">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
-            <Upload className="h-5 w-5" />
+            <UploadSimple className="h-5 w-5" />
             Migrar dados do Kommo
           </DialogTitle>
           <DialogDescription>
@@ -136,7 +136,7 @@ export function KommoMigrationDialog({ open, onOpenChange }: KommoMigrationDialo
         {/* Pending Migration Alert */}
         {pendingImport && step < 4 && (
           <Alert className="mx-1 border-warning/50 bg-warning/5">
-            <AlertCircle className="h-4 w-4 text-warning" />
+            <WarningCircle className="h-4 w-4 text-warning" />
             <AlertTitle>Migração em andamento</AlertTitle>
             <AlertDescription className="flex flex-col gap-3">
               <span>
@@ -150,7 +150,7 @@ export function KommoMigrationDialog({ open, onOpenChange }: KommoMigrationDialo
                 >
                   {isResuming ? (
                     <>
-                      <Loader2 className="h-4 w-4 mr-1 animate-spin" />
+                      <SpinnerGap className="h-4 w-4 mr-1 animate-spin" />
                       Retomando...
                     </>
                   ) : (
@@ -224,7 +224,7 @@ export function KommoMigrationDialog({ open, onOpenChange }: KommoMigrationDialo
               onClick={() => goToStep(step - 1)}
               disabled={step === 1}
             >
-              <ChevronLeft className="h-4 w-4 mr-1" />
+              <CaretLeft className="h-4 w-4 mr-1" />
               Voltar
             </Button>
 
@@ -234,7 +234,7 @@ export function KommoMigrationDialog({ open, onOpenChange }: KommoMigrationDialo
                 disabled={!canProceedFromStep3 || startMigrationMutation.isPending}
               >
                 Iniciar Migração
-                <ChevronRight className="h-4 w-4 ml-1" />
+                 <CaretRight className="h-4 w-4 ml-1" />
               </Button>
             ) : (
               <Button
@@ -245,7 +245,7 @@ export function KommoMigrationDialog({ open, onOpenChange }: KommoMigrationDialo
                 }
               >
                 Próximo
-                <ChevronRight className="h-4 w-4 ml-1" />
+                <CaretRight className="h-4 w-4 ml-1" />
               </Button>
             )}
           </div>

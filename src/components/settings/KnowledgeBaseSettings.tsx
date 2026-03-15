@@ -51,7 +51,7 @@ interface Product {
 const contentTypeConfig: Record<string, { label: string; icon: React.ElementType; color: string; description: string }> = {
   faq: { 
     label: 'FAQ', 
-    icon: HelpCircle, 
+    icon: Question, 
     color: 'bg-primary/10 text-primary',
     description: 'Perguntas frequentes e suas respostas',
   },
@@ -63,7 +63,7 @@ const contentTypeConfig: Record<string, { label: string; icon: React.ElementType
   },
   instruction: { 
     label: 'Instrução', 
-    icon: Settings2, 
+    icon: GearSix, 
     color: 'bg-accent text-accent-foreground',
     description: 'Instruções e procedimentos a seguir',
   },
@@ -75,13 +75,13 @@ const contentTypeConfig: Record<string, { label: string; icon: React.ElementType
   },
   process: { 
     label: 'Processo', 
-    icon: Settings2, 
+    icon: GearSix, 
     color: 'bg-muted text-muted-foreground',
     description: 'Processos e fluxos de trabalho',
   },
   objection: { 
     label: 'Objeção', 
-    icon: HelpCircle, 
+    icon: Question, 
     color: 'bg-destructive/10 text-destructive',
     description: 'Respostas a objeções comuns',
   },
@@ -96,14 +96,14 @@ const contentTypeConfig: Record<string, { label: string; icon: React.ElementType
 import { CATEGORY_LABELS as categoryLabels, getCategoryLabel } from '@/lib/knowledge-categories';
 
 const sourceLabels: Record<string, { label: string; icon: React.ElementType }> = {
-  wizard: { label: 'Wizard IA', icon: Wand2 },
-  wizard_chat: { label: 'Chat IA', icon: MessageSquare },
+  wizard: { label: 'Wizard IA', icon: MagicWand },
+  wizard_chat: { label: 'Chat IA', icon: ChatCircle },
   manual: { label: 'Manual', icon: FileText },
-  import_txt: { label: 'TXT', icon: FileType },
-  import_md: { label: 'Markdown', icon: FileType },
-  import_pdf: { label: 'PDF', icon: FileType },
-  import_docx: { label: 'DOCX', icon: FileType },
-  import_url: { label: 'URL', icon: Search },
+  import_txt: { label: 'TXT', icon: FileDoc },
+  import_md: { label: 'Markdown', icon: FileDoc },
+  import_pdf: { label: 'PDF', icon: FileDoc },
+  import_docx: { label: 'DOCX', icon: FileDoc },
+  import_url: { label: 'URL', icon: MagnifyingGlass },
 };
 
 const statusConfig: Record<string, { label: string; color: string }> = {
@@ -356,7 +356,7 @@ export function KnowledgeBaseSettings() {
       <Card className="border-primary/20 bg-primary/5">
         <CardHeader className="pb-3">
           <div className="flex items-center gap-2">
-            <BrainCircuit className="h-5 w-5 text-primary" />
+            <Brain className="h-5 w-5 text-primary" />
             <CardTitle className="text-lg">Base de Conhecimento (RAG)</CardTitle>
           </div>
           <CardDescription>
@@ -374,11 +374,11 @@ export function KnowledgeBaseSettings() {
             Conhecimentos ({items.length})
           </TabsTrigger>
           <TabsTrigger value="import" className="flex items-center gap-2">
-            <Upload className="h-4 w-4" />
+            <UploadSimple className="h-4 w-4" />
             Importar
           </TabsTrigger>
           <TabsTrigger value="wizard_intelligent" className="flex items-center gap-2">
-            <Sparkles className="h-4 w-4" />
+            <Sparkle className="h-4 w-4" />
             Wizard Inteligente
           </TabsTrigger>
         </TabsList>
@@ -389,7 +389,7 @@ export function KnowledgeBaseSettings() {
           <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
             <div className="flex flex-1 gap-2 flex-wrap">
               <div className="relative flex-1 min-w-[200px] max-w-xs">
-                <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
+                <MagnifyingGlass className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
                 <Input
                   placeholder="Buscar..."
                   value={searchTerm}
@@ -460,11 +460,11 @@ export function KnowledgeBaseSettings() {
                 </SelectContent>
               </Select>
               <Button variant="outline" size="icon" onClick={fetchData} title="Atualizar">
-                <RefreshCw className="h-4 w-4" />
+                <ArrowsClockwise className="h-4 w-4" />
               </Button>
               {items.filter((i) => (i.status === 'processing' || i.status === 'error') && i.metadata?.original_content).length > 0 && (
                 <Button variant="outline" onClick={handleReprocessAll} title="Reprocessar itens pendentes">
-                  <RefreshCw className="mr-2 h-4 w-4" />
+                  <ArrowsClockwise className="mr-2 h-4 w-4" />
                   Reprocessar ({items.filter((i) => (i.status === 'processing' || i.status === 'error') && i.metadata?.original_content).length})
                 </Button>
               )}
@@ -476,7 +476,7 @@ export function KnowledgeBaseSettings() {
               <Dialog open={dialogOpen} onOpenChange={handleDialogClose}>
                 <DialogTrigger asChild>
                   <Button>
-                    <MessageSquare className="mr-2 h-4 w-4" />
+                    <ChatCircle className="mr-2 h-4 w-4" />
                     Criar com IA
                   </Button>
                 </DialogTrigger>
@@ -505,11 +505,11 @@ export function KnowledgeBaseSettings() {
                 {items.length === 0 && (
                   <div className="mt-4 flex gap-2 justify-center">
                     <Button onClick={() => setDialogOpen(true)}>
-                      <Wand2 className="mr-2 h-4 w-4" />
+                      <MagicWand className="mr-2 h-4 w-4" />
                       Criar com IA
                     </Button>
                     <Button variant="outline" onClick={() => setActiveTab('import')}>
-                      <Upload className="mr-2 h-4 w-4" />
+                      <UploadSimple className="mr-2 h-4 w-4" />
                       Importar Arquivo
                     </Button>
                   </div>
@@ -549,7 +549,7 @@ export function KnowledgeBaseSettings() {
                             {typeConfig.label}
                           </Badge>
                           <Badge variant="outline" className={status.color}>
-                            {item.status === 'processing' && <Loader2 className="mr-1 h-3 w-3 animate-spin" />}
+                            {item.status === 'processing' && <SpinnerGap className="mr-1 h-3 w-3 animate-spin" />}
                             {status.label}
                           </Badge>
                         </div>
@@ -562,7 +562,7 @@ export function KnowledgeBaseSettings() {
                               onClick={() => handleReprocess(item.id)}
                               title="Reprocessar"
                             >
-                              <RefreshCw className="h-4 w-4" />
+                              <ArrowsClockwise className="h-4 w-4" />
                             </Button>
                           )}
                           <AlertDialog>
@@ -572,7 +572,7 @@ export function KnowledgeBaseSettings() {
                                 size="icon"
                                 className="h-8 w-8"
                               >
-                                <Trash2 className="h-4 w-4 text-destructive" />
+                                <TrashSimple className="h-4 w-4 text-destructive" />
                               </Button>
                             </AlertDialogTrigger>
                             <AlertDialogContent>

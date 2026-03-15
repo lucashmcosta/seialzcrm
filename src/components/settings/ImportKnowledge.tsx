@@ -250,11 +250,11 @@ export function ImportKnowledge({ agents, onSuccess }: ImportKnowledgeProps) {
     const ext = selectedFile.name.split('.').pop()?.toLowerCase();
     switch (ext) {
       case 'pdf':
-        return <FileType className="h-8 w-8 text-destructive" />;
+        return <FileDoc className="h-8 w-8 text-destructive" />;
       case 'docx':
-        return <FileType className="h-8 w-8 text-primary" />;
+        return <FileDoc className="h-8 w-8 text-primary" />;
       case 'md':
-        return <FileType className="h-8 w-8 text-accent-foreground" />;
+        return <FileDoc className="h-8 w-8 text-accent-foreground" />;
       default:
         return <FileText className="h-8 w-8 text-muted-foreground" />;
     }
@@ -264,7 +264,7 @@ export function ImportKnowledge({ agents, onSuccess }: ImportKnowledgeProps) {
     <Tabs defaultValue="file" className="w-full">
       <TabsList className="grid w-full grid-cols-2">
         <TabsTrigger value="file" className="flex items-center gap-2">
-          <Upload className="h-4 w-4" />
+          <UploadSimple className="h-4 w-4" />
           Upload Arquivo
         </TabsTrigger>
         <TabsTrigger value="url" className="flex items-center gap-2">
@@ -321,7 +321,7 @@ export function ImportKnowledge({ agents, onSuccess }: ImportKnowledgeProps) {
             </div>
           ) : (
             <>
-              <Upload className="h-10 w-10 mx-auto mb-3 text-muted-foreground" />
+              <UploadSimple className="h-10 w-10 mx-auto mb-3 text-muted-foreground" />
               <p className="font-medium">Arraste arquivo ou clique para selecionar</p>
               <p className="text-sm text-muted-foreground mt-1">
                 TXT, PDF (com texto), DOCX, MD • Máx 20MB
@@ -333,7 +333,7 @@ export function ImportKnowledge({ agents, onSuccess }: ImportKnowledgeProps) {
         {/* PDF Warning */}
         <Card className="border-warning/50 bg-warning/10">
           <CardContent className="p-3 flex items-start gap-2">
-            <AlertCircle className="h-4 w-4 text-warning mt-0.5 flex-shrink-0" />
+            <WarningCircle className="h-4 w-4 text-warning mt-0.5 flex-shrink-0" />
             <div className="text-sm">
               <p className="font-medium text-warning">PDFs</p>
               <p className="text-muted-foreground">
@@ -461,12 +461,12 @@ export function ImportKnowledge({ agents, onSuccess }: ImportKnowledgeProps) {
             >
               {uploading ? (
                 <>
-                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                   <SpinnerGap className="mr-2 h-4 w-4 animate-spin" />
                   Importando...
                 </>
               ) : (
                 <>
-                  <CheckCircle2 className="mr-2 h-4 w-4" />
+                  <CheckCircle className="mr-2 h-4 w-4" />
                   Importar Arquivo
                 </>
               )}
@@ -602,7 +602,7 @@ export function ImportKnowledge({ agents, onSuccess }: ImportKnowledgeProps) {
           >
             {importingUrl ? (
               <>
-                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                <SpinnerGap className="mr-2 h-4 w-4 animate-spin" />
                 Importando...
               </>
             ) : (

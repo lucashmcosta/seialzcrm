@@ -32,7 +32,7 @@ export function KommoPreviewStep({
   if (previewMutation.isPending) {
     return (
       <div className="flex flex-col items-center justify-center py-12 space-y-4">
-        <Loader2 className="h-8 w-8 animate-spin text-primary" />
+        <SpinnerGap className="h-8 w-8 animate-spin text-primary" />
         <p className="text-muted-foreground">Buscando dados do Kommo...</p>
       </div>
     );
@@ -82,7 +82,7 @@ export function KommoPreviewStep({
 
       {isLargeImport && (
         <Alert className="border-yellow-500/50 bg-yellow-500/5">
-          <AlertTriangle className="h-4 w-4 text-yellow-600" />
+          <Warning className="h-4 w-4 text-yellow-600" />
           <AlertTitle>Importação grande</AlertTitle>
           <AlertDescription>
             Você tem mais de 5.000 registros. A migração pode levar vários minutos.

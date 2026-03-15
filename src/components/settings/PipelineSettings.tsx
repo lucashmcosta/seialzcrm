@@ -129,7 +129,7 @@ export function PipelineSettings() {
     return (
       <Card>
         <CardContent className="py-8 flex justify-center">
-          <Loader2 className="h-8 w-8 animate-spin" />
+          <SpinnerGap className="h-8 w-8 animate-spin" />
         </CardContent>
       </Card>
     );
@@ -246,7 +246,7 @@ export function PipelineSettings() {
                           setDialogOpen(true);
                         }}
                       >
-                        <Pencil className="w-4 h-4" />
+                        <PencilSimple className="w-4 h-4" />
                       </Button>
                       {stage.type === 'custom' && (
                         <Button
@@ -254,7 +254,7 @@ export function PipelineSettings() {
                           size="icon"
                           onClick={() => handleDeleteClick(stage.id)}
                         >
-                          <Trash2 className="w-4 h-4" />
+                          <TrashSimple className="w-4 h-4" />
                         </Button>
                       )}
                     </div>

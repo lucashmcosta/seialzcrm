@@ -333,7 +333,7 @@ export function ManualKnowledgeDialog({ agents, products = [], onSuccess }: Manu
               Cancelar
             </Button>
             <Button type="submit" disabled={saving || !title.trim() || !content.trim()}>
-              {saving && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+              {saving && <SpinnerGap className="mr-2 h-4 w-4 animate-spin" />}
               Salvar
             </Button>
           </DialogFooter>

@@ -127,7 +127,7 @@ export function WhatsAppIntegrationStatus({ onReconfigure }: WhatsAppIntegration
     return (
       <Card>
         <CardContent className="py-8 flex items-center justify-center">
-          <RefreshCw className="h-5 w-5 animate-spin text-muted-foreground" />
+          <ArrowsClockwise className="h-5 w-5 animate-spin text-muted-foreground" />
         </CardContent>
       </Card>
     );
@@ -150,7 +150,7 @@ export function WhatsAppIntegrationStatus({ onReconfigure }: WhatsAppIntegration
       <span className="text-sm text-muted-foreground">{label}</span>
       <div className="flex items-center gap-2">
         {success ? (
-          <CheckCircle2 className="h-4 w-4 text-green-500" />
+          <CheckCircle className="h-4 w-4 text-green-500" />
         ) : (
           <XCircle className="h-4 w-4 text-destructive" />
         )}
@@ -166,7 +166,7 @@ export function WhatsAppIntegrationStatus({ onReconfigure }: WhatsAppIntegration
       <CardHeader className="pb-3">
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-2">
-            <MessageSquare className="h-5 w-5 text-green-600" />
+            <ChatCircle className="h-5 w-5 text-green-600" />
             <CardTitle className="text-lg">WhatsApp Business</CardTitle>
           </div>
           <Badge variant={hasWhatsApp ? 'default' : 'secondary'}>
@@ -219,9 +219,9 @@ export function WhatsAppIntegrationStatus({ onReconfigure }: WhatsAppIntegration
           }`}>
             <div className="flex items-start gap-2">
               {diagnosis.is_inbound_configured && diagnosis.has_whatsapp_senders ? (
-                <CheckCircle2 className="h-4 w-4 text-green-600 mt-0.5 shrink-0" />
+                 <CheckCircle className="h-4 w-4 text-green-600 mt-0.5 shrink-0" />
               ) : (
-                <AlertTriangle className="h-4 w-4 text-amber-600 mt-0.5 shrink-0" />
+                 <Warning className="h-4 w-4 text-amber-600 mt-0.5 shrink-0" />
               )}
               <div className="space-y-1 text-sm">
                 <p className="font-medium">{diagnosis.diagnosis}</p>
@@ -241,7 +241,7 @@ export function WhatsAppIntegrationStatus({ onReconfigure }: WhatsAppIntegration
                 disabled={fixing}
                 className="w-full mt-2"
               >
-                {fixing ? <RefreshCw className="h-4 w-4 mr-2 animate-spin" /> : <Wrench className="h-4 w-4 mr-2" />}
+                {fixing ? <ArrowsClockwise className="h-4 w-4 mr-2 animate-spin" /> : <Wrench className="h-4 w-4 mr-2" />}
                 Corrigir Webhooks
               </Button>
             )}
@@ -259,7 +259,7 @@ export function WhatsAppIntegrationStatus({ onReconfigure }: WhatsAppIntegration
               className="p-0 h-auto text-amber-600 dark:text-amber-400"
               onClick={() => window.open('https://console.twilio.com/us1/develop/sms/senders/whatsapp-senders', '_blank')}
             >
-              Abrir Console Twilio <ExternalLink className="h-3 w-3 ml-1" />
+              Abrir Console Twilio <ArrowSquareOut className="h-3 w-3 ml-1" />
             </Button>
           </div>
         )}
@@ -270,7 +270,7 @@ export function WhatsAppIntegrationStatus({ onReconfigure }: WhatsAppIntegration
             size="sm"
             onClick={() => refetch()}
           >
-            <RefreshCw className="h-4 w-4 mr-2" />
+            <ArrowsClockwise className="h-4 w-4 mr-2" />
             Atualizar
           </Button>
           <Button
@@ -279,7 +279,7 @@ export function WhatsAppIntegrationStatus({ onReconfigure }: WhatsAppIntegration
             onClick={handleCheckWebhooks}
             disabled={checking}
           >
-            {checking ? <RefreshCw className="h-4 w-4 mr-2 animate-spin" /> : <Search className="h-4 w-4 mr-2" />}
+            {checking ? <ArrowsClockwise className="h-4 w-4 mr-2 animate-spin" /> : <MagnifyingGlass className="h-4 w-4 mr-2" />}
             Verificar Webhooks
           </Button>
           {onReconfigure && (
@@ -288,7 +288,7 @@ export function WhatsAppIntegrationStatus({ onReconfigure }: WhatsAppIntegration
               size="sm"
               onClick={onReconfigure}
             >
-              <Settings2 className="h-4 w-4 mr-2" />
+              <GearSix className="h-4 w-4 mr-2" />
               Reconectar
             </Button>
           )}

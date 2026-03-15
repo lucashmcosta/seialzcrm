@@ -108,7 +108,7 @@ const KNOWLEDGE_TYPES: Array<{
     id: 'faq_only',
     label: 'Somente FAQs',
     description: 'Adicionar perguntas frequentes à base existente',
-    icon: HelpCircle,
+    icon: Question,
   },
   {
     id: 'policy',
@@ -357,7 +357,7 @@ export function KnowledgeWizardChat({ agentId, onComplete, onCancel }: Knowledge
       <div className="flex flex-col h-full max-h-[70vh]">
         <div className="flex items-center gap-3 p-4 border-b">
           <div className="p-2 rounded-full bg-primary/10">
-            <MessageSquare className="h-5 w-5 text-primary" />
+             <ChatCircle className="h-5 w-5 text-primary" />
           </div>
           <div>
             <h3 className="font-semibold">Criar Base de Conhecimento</h3>
@@ -406,7 +406,7 @@ export function KnowledgeWizardChat({ agentId, onComplete, onCancel }: Knowledge
             <ArrowLeft className="h-4 w-4" />
           </Button>
           <div className="p-2 rounded-full bg-primary/10">
-            <MessageSquare className="h-5 w-5 text-primary" />
+            <ChatCircle className="h-5 w-5 text-primary" />
           </div>
           <div>
             <h3 className="font-semibold">
@@ -462,7 +462,7 @@ export function KnowledgeWizardChat({ agentId, onComplete, onCancel }: Knowledge
               {isLoading && (
                 <div className="flex justify-start">
                   <div className="bg-muted rounded-lg px-4 py-2">
-                    <Loader2 className="h-4 w-4 animate-spin" />
+                     <SpinnerGap className="h-4 w-4 animate-spin" />
                   </div>
                 </div>
               )}
@@ -500,7 +500,7 @@ export function KnowledgeWizardChat({ agentId, onComplete, onCancel }: Knowledge
                   disabled={isLoading}
                 />
                 <Button onClick={handleSend} disabled={isLoading || !inputValue.trim()}>
-                  {isLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}
+                  {isLoading ? <SpinnerGap className="h-4 w-4 animate-spin" /> : <PaperPlaneTilt className="h-4 w-4" />}
                 </Button>
               </div>
             </div>
@@ -515,12 +515,12 @@ export function KnowledgeWizardChat({ agentId, onComplete, onCancel }: Knowledge
                   <Button onClick={handleSynthesize} disabled={isSynthesizing} className="w-full">
                     {isSynthesizing ? (
                       <>
-                        <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                        <SpinnerGap className="mr-2 h-4 w-4 animate-spin" />
                         Gerando documentos...
                       </>
                     ) : (
                       <>
-                        <Sparkles className="mr-2 h-4 w-4" />
+                        <Sparkle className="mr-2 h-4 w-4" />
                         Gerar Conhecimento
                       </>
                     )}
@@ -554,7 +554,7 @@ export function KnowledgeWizardChat({ agentId, onComplete, onCancel }: Knowledge
                   </ScrollArea>
                   <div className="flex gap-2">
                     <Button variant="outline" onClick={() => setFinalDocuments(null)} className="flex-1">
-                      <RefreshCw className="mr-2 h-4 w-4" />
+                      <ArrowsClockwise className="mr-2 h-4 w-4" />
                       Regenerar
                     </Button>
                     <Button onClick={handleSave} className="flex-1">
@@ -574,7 +574,7 @@ export function KnowledgeWizardChat({ agentId, onComplete, onCancel }: Knowledge
             <Collapsible open={slotsOpen} onOpenChange={setSlotsOpen}>
               <CollapsibleTrigger className="flex items-center justify-between w-full p-3 hover:bg-muted/50">
                 <span className="text-sm font-medium">Informações Coletadas</span>
-                {slotsOpen ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
+                {slotsOpen ? <CaretUp className="h-4 w-4" /> : <CaretDown className="h-4 w-4" />}
               </CollapsibleTrigger>
               <CollapsibleContent>
                 <div className="p-3 space-y-2">

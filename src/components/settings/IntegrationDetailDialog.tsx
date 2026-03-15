@@ -198,7 +198,7 @@ export function IntegrationDetailDialog({
       <span className="text-sm text-muted-foreground">{label}</span>
       <div className="flex items-center gap-2">
         {success ? (
-          <CheckCircle2 className="h-4 w-4 text-green-500" />
+           <CheckCircle className="h-4 w-4 text-green-500" />
         ) : (
           <XCircle className="h-4 w-4 text-destructive" />
         )}
@@ -316,7 +316,7 @@ export function IntegrationDetailDialog({
         <div className="flex items-center gap-2">
           {configValues.enable_recording ? (
             <>
-              <CheckCircle2 className="h-4 w-4 text-green-500" />
+              <CheckCircle className="h-4 w-4 text-green-500" />
               <span className="text-sm">Ativada</span>
             </>
           ) : (
@@ -369,7 +369,7 @@ export function IntegrationDetailDialog({
             className="p-0 h-auto text-amber-600 dark:text-amber-400"
             onClick={() => window.open('https://console.twilio.com/us1/develop/sms/senders/whatsapp-senders', '_blank')}
           >
-            Abrir Console Twilio <ExternalLink className="h-3 w-3 ml-1" />
+            Abrir Console Twilio <ArrowSquareOut className="h-3 w-3 ml-1" />
           </Button>
         </div>
       )}
@@ -384,9 +384,9 @@ export function IntegrationDetailDialog({
           disabled={checkingWebhooks}
         >
           {checkingWebhooks ? (
-            <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+             <SpinnerGap className="h-4 w-4 mr-2 animate-spin" />
           ) : (
-            <RefreshCw className="h-4 w-4 mr-2" />
+             <ArrowsClockwise className="h-4 w-4 mr-2" />
           )}
           Verificar Webhooks
         </Button>
@@ -406,7 +406,7 @@ export function IntegrationDetailDialog({
                     <span className="text-xs text-muted-foreground">Webhook</span>
                     <div className="flex items-center gap-1">
                       {sender.webhook_correct ? (
-                        <CheckCircle2 className="h-3.5 w-3.5 text-green-500" />
+                        <CheckCircle className="h-3.5 w-3.5 text-green-500" />
                       ) : (
                         <XCircle className="h-3.5 w-3.5 text-destructive" />
                       )}
@@ -433,7 +433,7 @@ export function IntegrationDetailDialog({
                 disabled={fixingWebhooks}
               >
                 {fixingWebhooks ? (
-                  <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                   <SpinnerGap className="h-4 w-4 mr-2 animate-spin" />
                 ) : (
                   <Wrench className="h-4 w-4 mr-2" />
                 )}
@@ -490,7 +490,7 @@ export function IntegrationDetailDialog({
               <img src={integration.logo_url} alt={integration.name} className="w-10 h-10 rounded-lg object-contain bg-muted p-1" />
             ) : (
               <div className="p-2 rounded-lg bg-muted">
-                <Settings2 className="h-6 w-6 text-muted-foreground" />
+                <GearSix className="h-6 w-6 text-muted-foreground" />
               </div>
             )}
             <div>
@@ -537,7 +537,7 @@ export function IntegrationDetailDialog({
                 Cancelar
               </Button>
               <Button className="flex-1" onClick={handleSave} disabled={isSaving}>
-                {isSaving ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : null}
+                {isSaving ? <SpinnerGap className="h-4 w-4 mr-2 animate-spin" /> : null}
                 Salvar
               </Button>
             </>
@@ -545,7 +545,7 @@ export function IntegrationDetailDialog({
             <>
               {isGenericIntegration && (
                 <Button variant="outline" onClick={handleStartEditing}>
-                  <Pencil className="h-4 w-4 mr-2" />
+                  <PencilSimple className="h-4 w-4 mr-2" />
                   Editar
                 </Button>
               )}

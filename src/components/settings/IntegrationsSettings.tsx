@@ -10,7 +10,7 @@ import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/comp
 import { ConfirmDialog } from '@/components/ui/confirm-dialog';
 import { useTranslation } from '@/lib/i18n';
 import { useOrganization } from '@/hooks/useOrganization';
-import { ChatCircle, Phone, EnvelopeSimple, Webhooks, Warning, Plus, Robot, Sparkle, UploadSimple, ArrowsClockwise, PenNib } from '@phosphor-icons/react';
+import { ChatCircle, Phone, EnvelopeSimple, Plugs, Warning, Plus, Robot, Sparkle, UploadSimple, ArrowsClockwise, PenNib } from '@phosphor-icons/react';
 import { IntegrationConnectDialog } from './IntegrationConnectDialog';
 import { IntegrationDetailDialog } from './IntegrationDetailDialog';
 import { PhoneNumberSettings } from './PhoneNumberSettings';
@@ -19,20 +19,20 @@ import { KommoMigrationDialog } from './KommoMigrationDialog';
 import { toast } from 'sonner';
 
 const iconMap: Record<string, any> = {
-  whatsapp: MessageSquare,
+  whatsapp: ChatCircle,
   telephony: Phone,
   'twilio-voice': Phone,
-  'twilio-whatsapp': MessageSquare,
-  email: Mail,
-  webhooks: Webhook,
-  ai: Bot,
-  'claude-ai': Sparkles,
-  'openai-gpt': Bot,
-  automation: RefreshCw,
-  suvsign: PenTool,
-  kommo: RefreshCw,
-  other: Webhook,
-  default: Webhook,
+  'twilio-whatsapp': ChatCircle,
+  email: EnvelopeSimple,
+  webhooks: Plugs,
+  ai: Robot,
+  'claude-ai': Sparkle,
+  'openai-gpt': Robot,
+  automation: ArrowsClockwise,
+  suvsign: PenNib,
+  kommo: ArrowsClockwise,
+  other: Plugs,
+  default: Plugs,
 };
 
 const categories = [
@@ -250,7 +250,7 @@ export function IntegrationsSettings() {
                               <Tooltip>
                                 <TooltipTrigger asChild>
                                   <Badge variant="outline" className="flex items-center gap-1 shrink-0">
-                                    <AlertTriangle className="w-3 h-3" />
+                                    <Warning className="w-3 h-3" />
                                     Beta
                                   </Badge>
                                 </TooltipTrigger>
@@ -281,7 +281,7 @@ export function IntegrationsSettings() {
                         size="sm"
                         onClick={() => setKommoMigrationOpen(true)}
                       >
-                        <Upload className="h-4 w-4 mr-1" />
+                        <UploadSimple className="h-4 w-4 mr-1" />
                         Migrar Dados
                       </Button>
                     )}

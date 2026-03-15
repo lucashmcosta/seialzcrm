@@ -746,7 +746,7 @@ export function KnowledgeWizard({ onComplete, onCancel }: KnowledgeWizardProps) 
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-3">
             <div className="p-2 rounded-lg bg-primary/10">
-              <BrainCircuit className="h-5 w-5 text-primary" />
+              <Brain className="h-5 w-5 text-primary" />
             </div>
             <div>
               <h3 className="font-semibold">Wizard Inteligente</h3>
@@ -762,7 +762,7 @@ export function KnowledgeWizard({ onComplete, onCancel }: KnowledgeWizardProps) 
           <div className="flex items-center gap-2">
             {isSaving && (
               <Badge variant="secondary" className="flex items-center gap-1 animate-pulse">
-                <Save className="h-3 w-3" />
+                <FloppyDisk className="h-3 w-3" />
                 Salvando...
               </Badge>
             )}
@@ -800,7 +800,7 @@ export function KnowledgeWizard({ onComplete, onCancel }: KnowledgeWizardProps) 
                 variant="default"
                 className="text-xs bg-green-500/20 text-green-700 border-green-500/30"
               >
-                <CheckCircle2 className="h-3 w-3 mr-1" />
+                 <CheckCircle className="h-3 w-3 mr-1" />
                 {CATEGORY_LABELS[item.category] || item.category}
               </Badge>
             ))}
@@ -823,7 +823,7 @@ export function KnowledgeWizard({ onComplete, onCancel }: KnowledgeWizardProps) 
                     isCurrent && "ring-2 ring-primary/50"
                   )}
                 >
-                  {isComplete && <CheckCircle2 className="h-3 w-3 mr-1" />}
+                  {isComplete && <CheckCircle className="h-3 w-3 mr-1" />}
                   {CATEGORY_LABELS[cat]}
                 </Badge>
               );
@@ -856,7 +856,7 @@ export function KnowledgeWizard({ onComplete, onCancel }: KnowledgeWizardProps) 
                   {/* Show saved item indicator */}
                   {msg.metadata?.savedItem && (
                     <div className="flex items-center gap-1 mt-2 text-xs opacity-70">
-                      <CheckCircle2 className="h-3 w-3" />
+                      <CheckCircle className="h-3 w-3" />
                       Item salvo: {msg.metadata.savedItem.title}
                     </div>
                   )}
@@ -879,7 +879,7 @@ export function KnowledgeWizard({ onComplete, onCancel }: KnowledgeWizardProps) 
             {loading && (
               <div className="flex justify-start">
                 <div className="bg-muted rounded-lg px-4 py-2 flex items-center gap-2">
-                  <Loader2 className="h-4 w-4 animate-spin" />
+                  <SpinnerGap className="h-4 w-4 animate-spin" />
                   <span className="text-sm text-muted-foreground">Pensando...</span>
                 </div>
               </div>
@@ -891,7 +891,7 @@ export function KnowledgeWizard({ onComplete, onCancel }: KnowledgeWizardProps) 
       <CardFooter className="border-t p-3">
         {error && (
           <div className="flex items-center gap-2 text-destructive text-sm mb-2 w-full">
-            <AlertCircle className="h-4 w-4" />
+            <WarningCircle className="h-4 w-4" />
             {error}
           </div>
         )}
@@ -923,7 +923,7 @@ export function KnowledgeWizard({ onComplete, onCancel }: KnowledgeWizardProps) 
             size="icon"
             className="h-[60px] w-[60px]"
           >
-            {loading || isSaving ? <Loader2 className="animate-spin" /> : <Send />}
+            {loading || isSaving ? <SpinnerGap className="animate-spin" /> : <PaperPlaneTilt />}
           </Button>
         </div>
       </CardFooter>

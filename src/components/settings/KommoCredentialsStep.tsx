@@ -53,7 +53,7 @@ export function KommoCredentialsStep({ onValidated, validateMutation, savedCrede
     return (
       <div className="space-y-6">
         <Alert className="border-primary/50 bg-primary/5">
-          <Link2 className="h-4 w-4 text-primary" />
+          <LinkSimple className="h-4 w-4 text-primary" />
           <AlertDescription className="text-foreground">
             <div className="space-y-1">
               <p className="font-medium">Usando credenciais da integração conectada</p>
@@ -71,7 +71,7 @@ export function KommoCredentialsStep({ onValidated, validateMutation, savedCrede
 
         <div className="flex flex-col gap-3">
           <Button onClick={handleUseSavedCredentials} className="w-full">
-            <CheckCircle2 className="h-4 w-4 mr-2" />
+             <CheckCircle className="h-4 w-4 mr-2" />
             Continuar com estas credenciais
           </Button>
           
@@ -145,7 +145,7 @@ export function KommoCredentialsStep({ onValidated, validateMutation, savedCrede
               className="text-primary hover:underline inline-flex items-center gap-1"
             >
               Configurações → Integrações → Criar integração privada
-              <ExternalLink className="h-3 w-3" />
+              <ArrowSquareOut className="h-3 w-3" />
             </a>
           </p>
         </div>
@@ -159,7 +159,7 @@ export function KommoCredentialsStep({ onValidated, validateMutation, savedCrede
 
       {isValid && (
         <Alert className="border-primary/50 bg-primary/5">
-          <CheckCircle2 className="h-4 w-4 text-primary" />
+          <CheckCircle className="h-4 w-4 text-primary" />
           <AlertDescription className="text-foreground">
             Conectado com sucesso à conta: <strong>{validatedAccount}</strong>
           </AlertDescription>
@@ -174,12 +174,12 @@ export function KommoCredentialsStep({ onValidated, validateMutation, savedCrede
       >
         {validateMutation.isPending ? (
           <>
-            <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+            <SpinnerGap className="h-4 w-4 mr-2 animate-spin" />
             Validando...
           </>
         ) : isValid ? (
           <>
-            <CheckCircle2 className="h-4 w-4 mr-2" />
+            <CheckCircle className="h-4 w-4 mr-2" />
             Credenciais Válidas
           </>
         ) : (

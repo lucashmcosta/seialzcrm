@@ -116,7 +116,7 @@ export function WhatsAppInboundSettings({ integrationId }: WhatsAppInboundSettin
   if (isLoading) {
     return (
       <div className="flex items-center justify-center py-4">
-        <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />
+        <SpinnerGap className="h-4 w-4 animate-spin text-muted-foreground" />
       </div>
     );
   }
@@ -197,7 +197,7 @@ export function WhatsAppInboundSettings({ integrationId }: WhatsAppInboundSettin
       {/* Save button */}
       {hasChanges && (
         <Button size="sm" className="w-full" onClick={handleSave} disabled={saving}>
-          {saving ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : <Save className="h-4 w-4 mr-2" />}
+          {saving ? <SpinnerGap className="h-4 w-4 mr-2 animate-spin" /> : <FloppyDisk className="h-4 w-4 mr-2" />}
           Salvar Regras
         </Button>
       )}

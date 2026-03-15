@@ -110,18 +110,18 @@ export function AgentVersionHistory({
       <DialogContent className="max-w-2xl max-h-[80vh]">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
-            <History className="h-5 w-5" />
+            <ClockCounterClockwise className="h-5 w-5" />
             Histórico de Versões
           </DialogTitle>
         </DialogHeader>
 
         {isLoading ? (
           <div className="flex items-center justify-center py-12">
-            <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
+            <SpinnerGap className="h-6 w-6 animate-spin text-muted-foreground" />
           </div>
         ) : versions.length === 0 ? (
           <div className="flex flex-col items-center justify-center py-12 text-muted-foreground">
-            <AlertCircle className="h-8 w-8 mb-2" />
+            <WarningCircle className="h-8 w-8 mb-2" />
             <p>Nenhuma versão encontrada</p>
             <p className="text-sm">As versões são criadas automaticamente ao salvar o agente.</p>
           </div>
@@ -152,7 +152,7 @@ export function AgentVersionHistory({
                           )}
                           {version.is_rollback && (
                             <Badge variant="outline" className="text-xs">
-                              <RotateCcw className="h-3 w-3 mr-1" />
+                              <ArrowCounterClockwise className="h-3 w-3 mr-1" />
                               Rollback de v{version.rollback_from_version}
                             </Badge>
                           )}
@@ -172,9 +172,9 @@ export function AgentVersionHistory({
                           onClick={() => toggleExpand(version.id)}
                         >
                           {isExpanded ? (
-                            <ChevronUp className="h-4 w-4" />
+                             <CaretUp className="h-4 w-4" />
                           ) : (
-                            <ChevronDown className="h-4 w-4" />
+                             <CaretDown className="h-4 w-4" />
                           )}
                         </Button>
                         {!isCurrent && (
@@ -185,10 +185,10 @@ export function AgentVersionHistory({
                             disabled={isRestoring}
                           >
                             {isRestoring ? (
-                              <Loader2 className="h-4 w-4 animate-spin" />
+                              <SpinnerGap className="h-4 w-4 animate-spin" />
                             ) : (
                               <>
-                                <RotateCcw className="h-4 w-4 mr-1" />
+                                <ArrowCounterClockwise className="h-4 w-4 mr-1" />
                                 Restaurar
                               </>
                             )}

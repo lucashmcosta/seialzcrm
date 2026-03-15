@@ -409,7 +409,7 @@ export function IntegrationConnectDialog({
 
           {setupPhase === 'configuring' ? (
             <div className="flex flex-col items-center justify-center py-8 space-y-4">
-              <Loader2 className="h-8 w-8 animate-spin text-primary" />
+              <SpinnerGap className="h-8 w-8 animate-spin text-primary" />
               <p className="text-sm text-muted-foreground">
                 Configurando {integration.name} automaticamente...
               </p>
@@ -435,7 +435,7 @@ export function IntegrationConnectDialog({
                   <Label>Número para WhatsApp <span className="text-destructive">*</span></Label>
                   {loadingNumbers ? (
                     <div className="flex items-center gap-2 py-2">
-                      <Loader2 className="h-4 w-4 animate-spin" />
+                      <SpinnerGap className="h-4 w-4 animate-spin" />
                       <span className="text-sm text-muted-foreground">Buscando números da conta Twilio...</span>
                     </div>
                   ) : availableNumbers.length > 0 ? (

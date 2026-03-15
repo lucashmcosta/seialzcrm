@@ -15,9 +15,9 @@ import { Slider } from '@/components/ui/slider';
 import { Checkbox } from '@/components/ui/checkbox';
 import { 
   SpinnerGap, ArrowsClockwise, ArrowLeft, ArrowRight, Check, Sparkle, 
-  ChatCircle, Target, FileText, ChatCirclePlus, ClockCounterClockwise, 
+  ChatCircle, Target, FileText, ChatCircle as ChatCirclePlusIcon, ClockCounterClockwise, 
   TrashSimple, PaperPlaneTilt, Robot, User, ThumbsUp, ThumbsDown, Flask, Wrench,
-  SlidersHorizontal, CheckSquare, Database, ChatCircleWarning,
+  SlidersHorizontal, CheckSquare, Database, WarningCircle as ChatCircleWarningIcon,
   Smiley, Briefcase, Shield, WarningCircle
 } from '@phosphor-icons/react';
 import { supabase } from '@/integrations/supabase/client';
@@ -202,8 +202,8 @@ const CHANNELS = [
 const AGENT_MODES: { value: AgentMode; label: string; description: string; icon: any }[] = [
   { value: 'close_sale', label: 'Fechar Venda', description: 'Foco em avançar para compra, enviar link/CTA', icon: Target },
   { value: 'qualify', label: 'Qualificar', description: 'Coletar informações e passar para humano', icon: CheckSquare },
-  { value: 'schedule', label: 'Agendar', description: 'Marcar reuniões e demonstrações', icon: MessageSquare },
-  { value: 'support', label: 'Suporte', description: 'Resolver dúvidas e reduzir handoff', icon: MessageCircleWarning },
+  { value: 'schedule', label: 'Agendar', description: 'Marcar reuniões e demonstrações', icon: ChatCircle },
+  { value: 'support', label: 'Suporte', description: 'Resolver dúvidas e reduzir handoff', icon: ChatCircleWarningIcon },
   { value: 'hybrid', label: 'Híbrido', description: 'Múltiplos objetivos com prioridade', icon: SlidersHorizontal },
 ];
 
@@ -1034,11 +1034,11 @@ export function SDRAgentWizard({
             <span className="hidden sm:inline">Regras</span>
           </TabsTrigger>
           <TabsTrigger value="test" className="gap-1 text-xs sm:text-sm">
-            <Beaker className="h-4 w-4" />
+            <Flask className="h-4 w-4" />
             <span className="hidden sm:inline">Testar</span>
           </TabsTrigger>
           <TabsTrigger value="feedback" className="gap-1 text-xs sm:text-sm">
-            <MessageSquarePlus className="h-4 w-4" />
+            <ChatCirclePlusIcon className="h-4 w-4" />
             <span className="hidden sm:inline">Feedback</span>
           </TabsTrigger>
         </TabsList>
@@ -1196,9 +1196,9 @@ export function SDRAgentWizard({
             disabled={isGenerating}
           >
             {isGenerating ? (
-              <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+               <SpinnerGap className="h-4 w-4 mr-2 animate-spin" />
             ) : (
-              <RefreshCw className="h-4 w-4 mr-2" />
+               <ArrowsClockwise className="h-4 w-4 mr-2" />
             )}
             Regenerar
           </Button>
@@ -1206,7 +1206,7 @@ export function SDRAgentWizard({
 
         {isGenerating ? (
           <div className="flex flex-col items-center justify-center py-12 space-y-4">
-            <Loader2 className="h-8 w-8 animate-spin text-primary" />
+            <SpinnerGap className="h-8 w-8 animate-spin text-primary" />
             <p className="text-sm text-muted-foreground">Gerando instruções do agente...</p>
           </div>
         ) : (
@@ -1220,7 +1220,7 @@ export function SDRAgentWizard({
         )}
 
         <div className="flex items-center gap-2 p-3 bg-muted/50 rounded-lg">
-          <Sparkles className="h-4 w-4 text-primary shrink-0" />
+          <Sparkle className="h-4 w-4 text-primary shrink-0" />
           <p className="text-sm text-muted-foreground">
             Edite o texto acima livremente ou use a aba "Feedback" para refinamentos via IA.
           </p>
@@ -1250,7 +1250,7 @@ export function SDRAgentWizard({
               >
                 <div className="flex items-center gap-2 mb-1">
                   {msg.role === 'agent' ? (
-                    <Bot className="h-4 w-4 text-purple-500" />
+                    <Robot className="h-4 w-4 text-purple-500" />
                   ) : (
                     <User className="h-4 w-4 text-muted-foreground" />
                   )}
@@ -1286,7 +1286,7 @@ export function SDRAgentWizard({
           )}
           {isSimulating && (
             <div className="flex items-center gap-2 text-muted-foreground">
-              <Loader2 className="h-4 w-4 animate-spin" />
+              <SpinnerGap className="h-4 w-4 animate-spin" />
               <span className="text-sm">Agente pensando...</span>
             </div>
           )}
@@ -1307,7 +1307,7 @@ export function SDRAgentWizard({
             disabled={isSimulating}
           />
           <Button onClick={simulateMessage} disabled={isSimulating || !testInput.trim()}>
-            <Send className="h-4 w-4" />
+            <PaperPlaneTilt className="h-4 w-4" />
           </Button>
         </div>
         
@@ -1338,9 +1338,9 @@ export function SDRAgentWizard({
           className="w-full"
         >
           {isRefining ? (
-            <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+             <SpinnerGap className="h-4 w-4 mr-2 animate-spin" />
           ) : (
-            <Sparkles className="h-4 w-4 mr-2" />
+             <Sparkle className="h-4 w-4 mr-2" />
           )}
           Aplicar Feedback e Regenerar Prompt
         </Button>
@@ -1348,7 +1348,7 @@ export function SDRAgentWizard({
         {feedbackHistory.length > 0 && (
           <div className="space-y-2">
             <Label className="flex items-center gap-2">
-              <History className="h-4 w-4" />
+              <ClockCounterClockwise className="h-4 w-4" />
               Histórico de Feedbacks ({feedbackHistory.length})
             </Label>
             <ScrollArea className="h-[200px] rounded-md border p-3">
@@ -1373,7 +1373,7 @@ export function SDRAgentWizard({
                         className="h-6 w-6 opacity-0 group-hover:opacity-100 transition-opacity ml-auto"
                         onClick={() => removeFeedbackEntry(entry.id)}
                       >
-                        <Trash2 className="h-3 w-3 text-muted-foreground" />
+                        <TrashSimple className="h-3 w-3 text-muted-foreground" />
                       </Button>
                     </div>
                     <p className="text-sm">{entry.feedback}</p>
@@ -1474,7 +1474,7 @@ export function SDRAgentWizard({
             <div className="space-y-4 p-4 border rounded-lg bg-muted/30">
               <div>
                 <Label className="text-base font-medium flex items-center gap-2">
-                  <Sparkles className="h-4 w-4" />
+                  <Sparkle className="h-4 w-4" />
                   Modelo de IA
                 </Label>
                 <p className="text-sm text-muted-foreground">
@@ -1664,7 +1664,7 @@ export function SDRAgentWizard({
                   className="flex-1 gap-2"
                   onClick={() => updateField('formality', 'informal')}
                 >
-                  <Smile className="h-4 w-4" />
+                  <Smiley className="h-4 w-4" />
                   Informal
                 </Button>
                 <Button
@@ -1882,7 +1882,7 @@ export function SDRAgentWizard({
 
               <div className="space-y-2">
                 <Label className="flex items-center gap-2">
-                  <MessageCircleWarning className="h-4 w-4 text-muted-foreground" />
+                  <ChatCircleWarningIcon className="h-4 w-4 text-muted-foreground" />
                   Quando o assunto está fora do escopo
                 </Label>
                 <Textarea
@@ -1973,7 +1973,7 @@ export function SDRAgentWizard({
       <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
         <DialogHeader className="flex flex-row items-center justify-between">
           <DialogTitle className="flex items-center gap-2">
-            <Sparkles className="h-5 w-5 text-primary" />
+            <Sparkle className="h-5 w-5 text-primary" />
             {isEditMode ? 'Editar Agente SDR' : 'Configurar Agente SDR'}
           </DialogTitle>
           {isEditMode && existingAgent?.id && (
@@ -1986,7 +1986,7 @@ export function SDRAgentWizard({
                 size="sm"
                 onClick={() => setShowVersionHistory(true)}
               >
-                <History className="h-4 w-4 mr-1" />
+                <ClockCounterClockwise className="h-4 w-4 mr-1" />
                 Versões
               </Button>
             </div>
@@ -2018,7 +2018,7 @@ export function SDRAgentWizard({
                 disabled={!wizardData.generatedPrompt.trim() || isSaving}
               >
                 {isSaving ? (
-                  <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                   <SpinnerGap className="h-4 w-4 mr-2 animate-spin" />
                 ) : (
                   <Check className="h-4 w-4 mr-2" />
                 )}
@@ -2099,7 +2099,7 @@ export function SDRAgentWizard({
                   disabled={!canProceed() || isSaving}
                 >
                   {isSaving ? (
-                    <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                    <SpinnerGap className="h-4 w-4 mr-2 animate-spin" />
                   ) : (
                     <Check className="h-4 w-4 mr-2" />
                   )}

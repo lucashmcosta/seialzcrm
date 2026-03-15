@@ -85,7 +85,7 @@ export function AgentFeedbackRules({
         </div>
         {isAtLimit && (
           <div className="flex items-center gap-1 text-xs text-amber-500">
-            <AlertTriangle className="h-3 w-3" />
+            <Warning className="h-3 w-3" />
             Limite atingido
           </div>
         )}
@@ -107,7 +107,7 @@ export function AgentFeedbackRules({
               >
                 <div className="flex items-start gap-3 p-3">
                   <div className="flex items-center gap-2 mt-1">
-                    <GripVertical className="h-4 w-4 text-muted-foreground cursor-move" />
+                    <DotsSixVertical className="h-4 w-4 text-muted-foreground cursor-move" />
                     <Switch
                       checked={rule.isActive}
                       onCheckedChange={() => toggleRule(rule.id)}
@@ -134,9 +134,9 @@ export function AgentFeedbackRules({
                       onClick={() => toggleExpand(rule.id)}
                     >
                       {isExpanded ? (
-                        <ChevronUp className="h-4 w-4" />
+                        <CaretUp className="h-4 w-4" />
                       ) : (
-                        <ChevronDown className="h-4 w-4" />
+                        <CaretDown className="h-4 w-4" />
                       )}
                     </Button>
                     <Button
@@ -145,7 +145,7 @@ export function AgentFeedbackRules({
                       className="h-8 w-8 text-muted-foreground hover:text-destructive"
                       onClick={() => deleteRule(rule.id)}
                     >
-                      <Trash2 className="h-4 w-4" />
+                      <TrashSimple className="h-4 w-4" />
                     </Button>
                   </div>
                 </div>

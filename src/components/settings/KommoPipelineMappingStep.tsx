@@ -99,7 +99,7 @@ export function KommoPipelineMappingStep({
   if (fetchPipelinesMutation.isPending) {
     return (
       <div className="flex flex-col items-center justify-center py-12 space-y-4">
-        <Loader2 className="h-8 w-8 animate-spin text-primary" />
+        <SpinnerGap className="h-8 w-8 animate-spin text-primary" />
         <p className="text-muted-foreground">Buscando pipelines do Kommo...</p>
       </div>
     );
@@ -140,7 +140,7 @@ export function KommoPipelineMappingStep({
             disabled={!newStageName.trim() || creatingStage}
           >
             {creatingStage ? (
-              <Loader2 className="h-4 w-4 animate-spin" />
+              <SpinnerGap className="h-4 w-4 animate-spin" />
             ) : (
               <Plus className="h-4 w-4" />
             )}
@@ -155,7 +155,7 @@ export function KommoPipelineMappingStep({
             <h4 className="font-medium mb-4 flex items-center gap-2">
               Pipeline: {pipeline.name}
               {pipeline.stages.every(s => stageMapping[`${pipeline.id}_${s.id}`]) && (
-                <CheckCircle2 className="h-4 w-4 text-primary" />
+                <CheckCircle className="h-4 w-4 text-primary" />
               )}
             </h4>
             

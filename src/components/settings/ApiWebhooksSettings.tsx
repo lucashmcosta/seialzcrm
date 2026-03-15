@@ -433,7 +433,7 @@ export function ApiWebhooksSettings() {
                           {visibleKeys.has(key.id) ? key.api_key : maskApiKey(key.api_key)}
                         </code>
                         <Button variant="ghost" size="icon" className="h-6 w-6" onClick={() => toggleKeyVisibility(key.id)}>
-                          {visibleKeys.has(key.id) ? <EyeOff className="h-3 w-3" /> : <Eye className="h-3 w-3" />}
+                          {visibleKeys.has(key.id) ? <EyeSlash className="h-3 w-3" /> : <Eye className="h-3 w-3" />}
                         </Button>
                       </div>
                       <div className="flex flex-wrap items-center gap-1 mt-1">
@@ -452,10 +452,10 @@ export function ApiWebhooksSettings() {
                         <Copy className="h-4 w-4" />
                       </Button>
                       <Button variant="ghost" size="icon" onClick={() => toggleApiKeyMutation.mutate({ keyId: key.id, isActive: !key.is_active })}>
-                        {key.is_active ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                        {key.is_active ? <EyeSlash className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
                       </Button>
                       <Button variant="ghost" size="icon" onClick={() => handleDeleteKeyClick(key.id)}>
-                        <Trash2 className="h-4 w-4 text-destructive" />
+                        <TrashSimple className="h-4 w-4 text-destructive" />
                       </Button>
                     </div>
                   </div>
@@ -471,7 +471,7 @@ export function ApiWebhooksSettings() {
           {/* Field Mapping Section */}
           <div className="space-y-4 pt-4 border-t">
             <div className="flex items-center gap-2">
-              <ArrowRightLeft className="h-5 w-5" />
+              <ArrowsLeftRight className="h-5 w-5" />
               <Label className="text-base font-semibold">Field Mapping</Label>
             </div>
             <p className="text-sm text-muted-foreground">
@@ -540,7 +540,7 @@ export function ApiWebhooksSettings() {
                             className="h-7 w-7"
                             onClick={() => deleteMappingMutation.mutate(m.id)}
                           >
-                            <Trash2 className="h-3 w-3 text-destructive" />
+                            <TrashSimple className="h-3 w-3 text-destructive" />
                           </Button>
                         </td>
                       </tr>
@@ -679,7 +679,7 @@ export function ApiWebhooksSettings() {
 
               {fieldMappings && fieldMappings.length > 0 && (
                 <div className="flex items-start gap-2 p-3 border rounded-lg bg-background">
-                  <AlertCircle className="h-4 w-4 text-primary mt-0.5 shrink-0" />
+                  <WarningCircle className="h-4 w-4 text-primary mt-0.5 shrink-0" />
                   <p className="text-xs text-muted-foreground">
                     <strong>Field Mapping ativo:</strong> Os campos do payload serão traduzidos automaticamente conforme os mapeamentos configurados acima.
                     Campos não mapeados serão ignorados. Se não houver mapeamento, os campos padrão (name, email, phone, etc.) são aceitos normalmente.
