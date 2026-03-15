@@ -371,7 +371,7 @@ export default function Dashboard() {
                   <p className="text-sm text-muted-foreground">{t('dashboard.pipelineValue')}</p>
                   <p className="text-2xl font-bold">{formatCurrency(pipelineValue)}</p>
                 </div>
-                <TrendingUp className="w-8 h-8 text-primary" />
+                <TrendUp size={32} weight="light" className="text-primary" />
               </div>
             </Card>
             
