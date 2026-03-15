@@ -98,6 +98,7 @@ export default function OpportunitiesKanban() {
   const { permissions } = usePermissions();
   const { themePreset } = useTheme();
   const isSeialz = themePreset === 'seialz';
+  const [stages, setStages] = useState<PipelineStage[]>([]);
   const [opportunities, setOpportunities] = useState<Opportunity[]>([]);
   const [loading, setLoading] = useState(true);
   const [dialogOpen, setDialogOpen] = useState(false);
