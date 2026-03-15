@@ -277,7 +277,7 @@ export function SimpleLogoUploader({
               onClick={handleRemoveLogo}
               className="text-destructive hover:text-destructive"
             >
-              <Trash2 className="w-4 h-4 mr-2" />
+              <TrashSimple className="w-4 h-4 mr-2" />
               Remover logo
             </Button>
           )}
