@@ -6,7 +6,10 @@ import { Checkbox } from '@/components/ui/checkbox';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Badge } from '@/components/ui/badge';
-import { SpinnerGap, Users, Briefcase, Warning, ArrowRight } from '@phosphor-icons/react';
+import { 
+  SpinnerGap, Users, Briefcase, Warning, ArrowRight, 
+  Buildings, ListChecks, Note, CalendarBlank, Sliders, Clock 
+} from '@phosphor-icons/react';
 
 import type { KommoCredentials, MigrationConfig } from '@/hooks/useKommoMigration';
 
@@ -49,43 +52,88 @@ export function KommoPreviewStep({
   const preview = previewMutation.data;
   if (!preview) return null;
 
-  const totalRecords = (preview.total_contacts_number || 0) + (preview.total_leads_number || 0);
-  const isLargeImport = totalRecords > 5000;
+  const contactsCount = preview.total_contacts_number || preview.total_contacts || 0;
+  const leadsCount = preview.total_leads_number || preview.total_leads || 0;
+  const companiesCount = preview.total_companies_number || 0;
+  const tasksCount = preview.total_tasks_number || 0;
+  const notesCount = preview.total_notes_number || 0;
+  const eventsCount = preview.total_events_number || 0;
+  const customFieldsCount = preview.total_custom_fields_number || 0;
+
+  const selectedTotal = contactsCount + leadsCount 
+    + (config.import_companies ? companiesCount : 0)
+    + (config.import_tasks ? tasksCount : 0)
+    + (config.import_notes ? notesCount : 0)
+    + (config.import_events ? eventsCount : 0);
+
+  // Rough time estimate: ~100 records/sec
+  const estimatedMinutes = Math.max(1, Math.ceil(selectedTotal / 100 / 60));
+  const isLargeImport = selectedTotal > 5000;
+
+  const counters = [
+    { icon: Users, label: 'Contatos', count: contactsCount, always: true },
+    { icon: Briefcase, label: 'Oportunidades', count: leadsCount, always: true },
+    { icon: Buildings, label: 'Empresas', count: companiesCount, configKey: 'import_companies' as const },
+    { icon: ListChecks, label: 'Tarefas', count: tasksCount, configKey: 'import_tasks' as const },
+    { icon: Note, label: 'Notas', count: notesCount, configKey: 'import_notes' as const },
+    { icon: CalendarBlank, label: 'Eventos', count: eventsCount, configKey: 'import_events' as const },
+    { icon: Sliders, label: 'Campos custom.', count: customFieldsCount, configKey: 'import_custom_fields' as const },
+  ];
 
   return (
     <div className="space-y-6">
-      {/* Summary Cards */}
-      <div className="grid grid-cols-2 gap-4">
-        <Card className="p-4">
-          <div className="flex items-center gap-3">
-            <div className="p-2 rounded-lg bg-primary/10">
-              <Users className="h-5 w-5 text-primary" />
-            </div>
-            <div>
-              <p className="text-2xl font-bold">{preview.total_contacts}</p>
-              <p className="text-sm text-muted-foreground">Contatos</p>
-            </div>
-          </div>
-        </Card>
-        <Card className="p-4">
-          <div className="flex items-center gap-3">
-            <div className="p-2 rounded-lg bg-primary/10">
-              <Briefcase className="h-5 w-5 text-primary" />
-            </div>
-            <div>
-              <p className="text-2xl font-bold">{preview.total_leads}</p>
-              <p className="text-sm text-muted-foreground">Leads/Oportunidades</p>
-            </div>
-          </div>
-        </Card>
+      {/* Summary Cards with checkboxes */}
+      <div className="space-y-3">
+        <h4 className="text-sm font-medium">Dados encontrados no Kommo</h4>
+        <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
+          {counters.map(({ icon: Icon, label, count, always, configKey }) => {
+            const isEnabled = always || (configKey && config[configKey]);
+            return (
+              <Card
+                key={label}
+                className={`p-3 transition-opacity ${!isEnabled ? 'opacity-50' : ''}`}
+              >
+                <div className="flex items-start justify-between gap-2">
+                  <div className="flex items-center gap-2">
+                    <div className="p-1.5 rounded-md bg-primary/10">
+                      <Icon className="h-4 w-4 text-primary" />
+                    </div>
+                    <div>
+                      <p className="text-lg font-bold leading-none">{count}</p>
+                      <p className="text-xs text-muted-foreground mt-0.5">{label}</p>
+                    </div>
+                  </div>
+                  {!always && configKey && (
+                    <Checkbox
+                      checked={!!config[configKey]}
+                      onCheckedChange={(checked) =>
+                        onConfigChange({ ...config, [configKey]: !!checked })
+                      }
+                      className="mt-0.5"
+                    />
+                  )}
+                </div>
+              </Card>
+            );
+          })}
+        </div>
       </div>
+
+      {/* Time estimate */}
+      <Alert className="border-muted bg-muted/30">
+        <Clock className="h-4 w-4 text-muted-foreground" />
+        <AlertDescription className="text-muted-foreground">
+          <strong className="text-foreground">{selectedTotal.toLocaleString('pt-BR')}</strong> registros selecionados · 
+          Tempo estimado: <strong className="text-foreground">~{estimatedMinutes} min</strong>
+        </AlertDescription>
+      </Alert>
 
       {isLargeImport && (
         <Alert className="border-yellow-500/50 bg-yellow-500/5">
           <Warning className="h-4 w-4 text-yellow-600" />
           <AlertTitle>Importação grande</AlertTitle>
           <AlertDescription>
-            Você tem mais de 5.000 registros. A migração pode levar vários minutos.
+            A migração pode levar vários minutos. Você pode fechar esta janela — o progresso continua em segundo plano.
           </AlertDescription>
         </Alert>
       )}

@@ -10,6 +10,7 @@ import { KommoCredentialsStep } from './KommoCredentialsStep';
 import { KommoPipelineMappingStep } from './KommoPipelineMappingStep';
 import { KommoPreviewStep } from './KommoPreviewStep';
 import { KommoProgressStep } from './KommoProgressStep';
+import { KommoUserMappingStep } from './KommoUserMappingStep';
 
 interface KommoMigrationDialogProps {
   open: boolean;
@@ -22,14 +23,17 @@ export function KommoMigrationDialog({ open, onOpenChange }: KommoMigrationDialo
     credentials,
     kommoPipelines,
     stageMapping,
+    userMappings,
     config,
     importLog,
     crmStages,
+    crmUsers,
     savedCredentials,
     pendingImport,
     isResuming,
     setCredentials,
     setStageMapping,
+    setUserMappings,
     setConfig,
     goToStep,
     reset,
@@ -42,10 +46,8 @@ export function KommoMigrationDialog({ open, onOpenChange }: KommoMigrationDialo
     rollbackMutation,
   } = useKommoMigration();
 
-  // Reset state when dialog closes
   useEffect(() => {
     if (!open) {
-      // Only reset if migration is not in progress
       if (!importLog || ['completed', 'failed', 'rolled_back', 'cancelled'].includes(importLog.status)) {
         reset();
       }
@@ -62,7 +64,7 @@ export function KommoMigrationDialog({ open, onOpenChange }: KommoMigrationDialo
   };
 
   const handleStartMigration = async () => {
-    goToStep(4);
+    goToStep(5);
     startMigrationMutation.mutate();
   };
 
@@ -80,17 +82,18 @@ export function KommoMigrationDialog({ open, onOpenChange }: KommoMigrationDialo
     await cancelPendingMigration();
   };
 
-  // Check if can proceed to next step
   const canProceedFromStep1 = credentials !== null;
   const canProceedFromStep2 = kommoPipelines.length > 0 && 
     kommoPipelines.every(p => p.stages.every(s => stageMapping[`${p.id}_${s.id}`]));
-  const canProceedFromStep3 = previewMutation.data !== undefined;
+  const canProceedFromStep3 = true; // User mapping is optional
+  const canProceedFromStep4 = previewMutation.data !== undefined;
 
   const steps = [
     { number: 1, title: 'Credenciais' },
-    { number: 2, title: 'Mapeamento' },
-    { number: 3, title: 'Preview' },
-    { number: 4, title: 'Migração' },
+    { number: 2, title: 'Pipeline' },
+    { number: 3, title: 'Usuários' },
+    { number: 4, title: 'Preview' },
+    { number: 5, title: 'Migração' },
   ];
 
   return (
@@ -102,17 +105,17 @@ export function KommoMigrationDialog({ open, onOpenChange }: KommoMigrationDialo
             Migrar dados do Kommo
           </DialogTitle>
           <DialogDescription>
-            Importe seus contatos e oportunidades do Kommo para o CRM.
+            Importe seus contatos, oportunidades, empresas, tarefas e notas do Kommo.
           </DialogDescription>
         </DialogHeader>
 
         {/* Step Indicator */}
-        <div className="flex items-center justify-between px-4 py-2">
+        <div className="flex items-center justify-between px-2 py-2">
           {steps.map((s, idx) => (
             <div key={s.number} className="flex items-center">
               <div className="flex flex-col items-center">
                 <div
-                  className={`w-8 h-8 rounded-full flex items-center justify-center text-sm font-medium transition-colors
+                  className={`w-7 h-7 rounded-full flex items-center justify-center text-xs font-medium transition-colors
                     ${step === s.number 
                       ? 'bg-primary text-primary-foreground' 
                       : step > s.number 
@@ -122,10 +125,10 @@ export function KommoMigrationDialog({ open, onOpenChange }: KommoMigrationDialo
                 >
                   {s.number}
                 </div>
-                <span className="text-xs mt-1 text-muted-foreground">{s.title}</span>
+                <span className="text-[10px] mt-1 text-muted-foreground">{s.title}</span>
               </div>
               {idx < steps.length - 1 && (
-                <div className={`w-12 h-0.5 mx-2 mt-[-16px] ${step > s.number ? 'bg-primary' : 'bg-muted'}`} />
+                <div className={`w-8 sm:w-12 h-0.5 mx-1 mt-[-16px] ${step > s.number ? 'bg-primary' : 'bg-muted'}`} />
               )}
             </div>
           ))}
@@ -134,7 +137,7 @@ export function KommoMigrationDialog({ open, onOpenChange }: KommoMigrationDialo
         <Separator />
 
         {/* Pending Migration Alert */}
-        {pendingImport && step < 4 && (
+        {pendingImport && step < 5 && (
           <Alert className="mx-1 border-warning/50 bg-warning/5">
             <WarningCircle className="h-4 w-4 text-warning" />
             <AlertTitle>Migração em andamento</AlertTitle>
@@ -195,7 +198,15 @@ export function KommoMigrationDialog({ open, onOpenChange }: KommoMigrationDialo
             />
           )}
 
-          {step === 3 && credentials && (
+          {step === 3 && (
+            <KommoUserMappingStep
+              userMappings={userMappings}
+              crmUsers={crmUsers || []}
+              onMappingsChange={setUserMappings}
+            />
+          )}
+
+          {step === 4 && credentials && (
             <KommoPreviewStep
               credentials={credentials}
               config={config}
@@ -204,7 +215,7 @@ export function KommoMigrationDialog({ open, onOpenChange }: KommoMigrationDialo
             />
           )}
 
-          {step === 4 && (
+          {step === 5 && (
             <KommoProgressStep
               importLog={importLog}
               onRollback={handleRollback}
@@ -217,7 +228,7 @@ export function KommoMigrationDialog({ open, onOpenChange }: KommoMigrationDialo
         <Separator />
 
         {/* Navigation Footer */}
-        {step < 4 && (
+        {step < 5 && (
           <div className="flex justify-between pt-4">
             <Button
               variant="outline"
@@ -228,10 +239,10 @@ export function KommoMigrationDialog({ open, onOpenChange }: KommoMigrationDialo
               Voltar
             </Button>
 
-            {step === 3 ? (
+            {step === 4 ? (
               <Button
                 onClick={handleStartMigration}
-                disabled={!canProceedFromStep3 || startMigrationMutation.isPending}
+                disabled={!canProceedFromStep4 || startMigrationMutation.isPending}
               >
                 Iniciar Migração
                  <CaretRight className="h-4 w-4 ml-1" />
@@ -241,7 +252,8 @@ export function KommoMigrationDialog({ open, onOpenChange }: KommoMigrationDialo
                 onClick={() => goToStep(step + 1)}
                 disabled={
                   (step === 1 && !canProceedFromStep1) ||
-                  (step === 2 && !canProceedFromStep2)
+                  (step === 2 && !canProceedFromStep2) ||
+                  (step === 3 && !canProceedFromStep3)
                 }
               >
                 Próximo

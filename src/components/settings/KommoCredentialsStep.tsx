@@ -3,7 +3,8 @@ import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { Label } from '@/components/ui/label';
 import { Alert, AlertDescription } from '@/components/ui/alert';
-import { CheckCircle, SpinnerGap, ArrowSquareOut, LinkSimple } from '@phosphor-icons/react';
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
+import { CheckCircle, SpinnerGap, ArrowSquareOut, LinkSimple, CaretDown, CaretRight, Info } from '@phosphor-icons/react';
 import type { KommoCredentials } from '@/hooks/useKommoMigration';
 
 interface KommoCredentialsStepProps {
@@ -17,8 +18,8 @@ export function KommoCredentialsStep({ onValidated, validateMutation, savedCrede
   const [subdomain, setSubdomain] = useState('');
   const [accessToken, setAccessToken] = useState('');
   const [validatedAccount, setValidatedAccount] = useState<string | null>(null);
+  const [guideOpen, setGuideOpen] = useState(false);
 
-  // Se tem credenciais salvas e não quer usar outras, mostrar resumo
   const usingSavedCredentials = savedCredentials && !useOtherCredentials;
 
   const handleValidate = async () => {
@@ -48,7 +49,54 @@ export function KommoCredentialsStep({ onValidated, validateMutation, savedCrede
   const hasError = validateMutation.isError || (validateMutation.data && !validateMutation.data.valid);
   const errorMessage = validateMutation.data?.error || validateMutation.error?.message;
 
-  // Se está usando credenciais salvas, mostra UI simplificada
+  // Guia inline colapsável
+  const InlineGuide = () => (
+    <Collapsible open={guideOpen} onOpenChange={setGuideOpen}>
+      <CollapsibleTrigger asChild>
+        <Button variant="ghost" size="sm" className="w-full justify-start text-muted-foreground hover:text-foreground gap-2 px-0">
+          <Info className="h-4 w-4 text-primary" />
+          {guideOpen ? <CaretDown className="h-3 w-3" /> : <CaretRight className="h-3 w-3" />}
+          Como obter o Access Token do Kommo
+        </Button>
+      </CollapsibleTrigger>
+      <CollapsibleContent>
+        <div className="mt-2 p-4 rounded-lg bg-muted/50 space-y-3 text-sm">
+          <ol className="space-y-3 list-decimal list-inside text-muted-foreground">
+            <li>
+              Acesse{' '}
+              <a
+                href="https://www.kommo.com/pt-br/developers/"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="text-primary hover:underline inline-flex items-center gap-1"
+              >
+                Kommo Developers <ArrowSquareOut className="h-3 w-3" />
+              </a>
+            </li>
+            <li>
+              No painel do Kommo, vá em <strong className="text-foreground">Configurações → Integrações</strong>
+            </li>
+            <li>
+              Clique em <strong className="text-foreground">"Criar integração"</strong> e selecione <strong className="text-foreground">"Integração privada"</strong>
+            </li>
+            <li>
+              Dê um nome (ex: "Migração Seialz") e clique em <strong className="text-foreground">"Salvar"</strong>
+            </li>
+            <li>
+              Na aba <strong className="text-foreground">"Chaves e escopos"</strong>, copie o <strong className="text-foreground">Access Token (Long-lived)</strong>
+            </li>
+            <li>
+              Certifique-se de que os escopos incluem: <strong className="text-foreground">Contatos, Leads, Empresas, Tarefas, Notas</strong>
+            </li>
+          </ol>
+          <p className="text-xs text-muted-foreground/80 pt-1">
+            💡 O subdomínio é a parte antes de ".kommo.com" na URL do seu Kommo.
+          </p>
+        </div>
+      </CollapsibleContent>
+    </Collapsible>
+  );
+
   if (usingSavedCredentials) {
     return (
       <div className="space-y-6">
@@ -88,7 +136,6 @@ export function KommoCredentialsStep({ onValidated, validateMutation, savedCrede
     );
   }
 
-  // UI padrão para inserir novas credenciais
   return (
     <div className="space-y-6">
       {savedCredentials && useOtherCredentials && (
@@ -118,9 +165,6 @@ export function KommoCredentialsStep({ onValidated, validateMutation, savedCrede
             />
             <span className="text-muted-foreground text-sm whitespace-nowrap">.kommo.com</span>
           </div>
-          <p className="text-xs text-muted-foreground">
-            Ex: se seu Kommo é suaempresa.kommo.com, digite apenas "suaempresa"
-          </p>
         </div>
 
         <div className="space-y-2">
@@ -136,20 +180,10 @@ export function KommoCredentialsStep({ onValidated, validateMutation, savedCrede
             }}
             disabled={validateMutation.isPending}
           />
-          <p className="text-xs text-muted-foreground">
-            Gere em{' '}
-            <a
-              href="https://www.kommo.com/pt-br/developers/"
-              target="_blank"
-              rel="noopener noreferrer"
-              className="text-primary hover:underline inline-flex items-center gap-1"
-            >
-              Configurações → Integrações → Criar integração privada
-              <ArrowSquareOut className="h-3 w-3" />
-            </a>
-          </p>
         </div>
       </div>
+
+      <InlineGuide />
 
       {hasError && (
         <Alert variant="destructive">

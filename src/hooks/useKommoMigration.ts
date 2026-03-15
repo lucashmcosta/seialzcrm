@@ -23,12 +23,24 @@ export interface KommoPipeline {
 }
 
 export interface StageMapping {
-  [kommoStageKey: string]: string; // "pipeline_stage" -> crm_stage_id
+  [kommoStageKey: string]: string;
 }
 
 export interface MigrationConfig {
   duplicate_mode: 'skip' | 'update' | 'create';
   import_orphan_contacts: boolean;
+  import_companies: boolean;
+  import_tasks: boolean;
+  import_notes: boolean;
+  import_events: boolean;
+  import_custom_fields: boolean;
+}
+
+export interface KommoUserMapping {
+  kommo_user_id: number;
+  kommo_user_name: string;
+  kommo_user_email: string | null;
+  seialz_user_id: string | null;
 }
 
 export interface ImportLog {
@@ -44,17 +56,54 @@ export interface ImportLog {
   total_opportunities: number;
   imported_opportunities: number;
   skipped_opportunities: number;
+  total_companies: number;
+  imported_companies: number;
+  total_tasks: number;
+  imported_tasks: number;
+  total_notes: number;
+  imported_notes: number;
+  total_events: number;
+  imported_events: number;
+  total_custom_fields: number;
+  imported_custom_fields: number;
   progress_percent: number;
   last_processed_item: string | null;
   config: any;
   cursor_state?: any;
   imported_contact_ids: string[];
   imported_opportunity_ids: string[];
+  imported_company_ids: string[];
+  imported_task_ids: string[];
+  imported_activity_ids: string[];
   rollback_available: boolean;
   rollback_executed_at: string | null;
   errors: any[];
   error_count: number;
 }
+
+export type MigrationPhase = 
+  | 'users' | 'pipelines' | 'custom_fields' | 'companies' 
+  | 'contacts' | 'leads' | 'tasks' 
+  | 'notes_contacts' | 'notes_leads' | 'events';
+
+export const PHASE_LABELS: Record<MigrationPhase, string> = {
+  users: 'Usuários',
+  pipelines: 'Pipelines',
+  custom_fields: 'Campos customizados',
+  companies: 'Empresas',
+  contacts: 'Contatos',
+  leads: 'Oportunidades',
+  tasks: 'Tarefas',
+  notes_contacts: 'Notas (contatos)',
+  notes_leads: 'Notas (leads)',
+  events: 'Eventos',
+};
+
+export const PHASE_ORDER: MigrationPhase[] = [
+  'users', 'pipelines', 'custom_fields', 'companies',
+  'contacts', 'leads', 'tasks',
+  'notes_contacts', 'notes_leads', 'events',
+];
 
 export function useKommoMigration() {
   const { organization } = useOrganization();
@@ -64,9 +113,15 @@ export function useKommoMigration() {
   const [credentials, setCredentials] = useState<KommoCredentials | null>(null);
   const [kommoPipelines, setKommoPipelines] = useState<KommoPipeline[]>([]);
   const [stageMapping, setStageMapping] = useState<StageMapping>({});
+  const [userMappings, setUserMappings] = useState<KommoUserMapping[]>([]);
   const [config, setConfig] = useState<MigrationConfig>({
     duplicate_mode: 'skip',
     import_orphan_contacts: true,
+    import_companies: true,
+    import_tasks: true,
+    import_notes: true,
+    import_events: true,
+    import_custom_fields: true,
   });
   const [importLogId, setImportLogId] = useState<string | null>(null);
   const [importLog, setImportLog] = useState<ImportLog | null>(null);
@@ -92,7 +147,6 @@ export function useKommoMigration() {
       
       if (data?.config_values) {
         const configValues = data.config_values as any;
-        // Limpar subdomain se veio com .kommo.com
         let subdomain = configValues.subdomain || '';
         if (subdomain.includes('.kommo.com')) {
           subdomain = subdomain.replace('.kommo.com', '');
@@ -109,7 +163,22 @@ export function useKommoMigration() {
     enabled: !!organization,
   });
 
-  // Query para buscar migração em andamento (running ou paused)
+  // Query para buscar usuários do CRM
+  const { data: crmUsers } = useQuery({
+    queryKey: ['crm-users', organization?.id],
+    queryFn: async () => {
+      if (!organization) return [];
+      const { data, error } = await supabase
+        .from('users')
+        .select('id, full_name, email')
+        .eq('organization_id', organization.id);
+      if (error) throw error;
+      return data || [];
+    },
+    enabled: !!organization,
+  });
+
+  // Query para buscar migração em andamento
   const { data: pendingImport, refetch: refetchPendingImport } = useQuery({
     queryKey: ['kommo-pending-import', organization?.id],
     queryFn: async () => {
@@ -125,9 +194,8 @@ export function useKommoMigration() {
         .limit(1)
         .maybeSingle();
       
-      // Verificar se o registro tem credenciais válidas no config
-      const config = data?.config as Record<string, any> | null;
-      if (config?.subdomain && config?.access_token) {
+      const cfg = data?.config as Record<string, any> | null;
+      if (cfg?.subdomain && cfg?.access_token) {
         return data as ImportLog | null;
       }
       
@@ -140,7 +208,7 @@ export function useKommoMigration() {
   useEffect(() => {
     if (savedCredentials && !credentialsInitialized) {
       setCredentials(savedCredentials);
-      setStep(2); // Pular direto para mapeamento
+      setStep(2);
       setCredentialsInitialized(true);
     }
   }, [savedCredentials, credentialsInitialized]);
@@ -183,6 +251,15 @@ export function useKommoMigration() {
     },
     onSuccess: (data) => {
       setKommoPipelines(data.pipelines || []);
+      // Extract users from pipeline data if available
+      if (data.users && Array.isArray(data.users)) {
+        setUserMappings(data.users.map((u: any) => ({
+          kommo_user_id: u.id,
+          kommo_user_name: u.name || `Usuário ${u.id}`,
+          kommo_user_email: u.email || null,
+          seialz_user_id: null,
+        })));
+      }
     },
   });
 
@@ -197,12 +274,11 @@ export function useKommoMigration() {
     },
   });
 
-  // Start migration mutation - creates log and starts chunked processing
+  // Start migration mutation
   const startMigrationMutation = useMutation({
     mutationFn: async () => {
       if (!organization || !credentials) throw new Error('Dados incompletos');
 
-      // Create import log
       const { data: log, error: logError } = await supabase
         .from('import_logs')
         .insert({
@@ -212,6 +288,7 @@ export function useKommoMigration() {
           config: {
             ...config,
             stage_mapping: stageMapping,
+            user_mappings: userMappings.filter(m => m.seialz_user_id),
             subdomain: credentials.subdomain,
             access_token: credentials.access_token,
           },
@@ -222,7 +299,6 @@ export function useKommoMigration() {
       if (logError) throw logError;
       setImportLogId(log.id);
 
-      // Start chunked migration loop
       let shouldContinue = true;
       let isFirstCall = true;
 
@@ -234,8 +310,14 @@ export function useKommoMigration() {
             subdomain: credentials.subdomain,
             access_token: credentials.access_token,
             stage_mapping: stageMapping,
+            user_mappings: userMappings.filter(m => m.seialz_user_id),
             duplicate_mode: config.duplicate_mode,
             import_orphan_contacts: config.import_orphan_contacts,
+            import_companies: config.import_companies,
+            import_tasks: config.import_tasks,
+            import_notes: config.import_notes,
+            import_events: config.import_events,
+            import_custom_fields: config.import_custom_fields,
           } : {
             import_log_id: log.id,
           },
@@ -250,7 +332,6 @@ export function useKommoMigration() {
 
         shouldContinue = data?.continue === true;
 
-        // Small delay between chunks to avoid overwhelming
         if (shouldContinue) {
           await new Promise(resolve => setTimeout(resolve, 500));
         }
@@ -276,6 +357,7 @@ export function useKommoMigration() {
       toast.success(data.message || 'Rollback concluído com sucesso!');
       queryClient.invalidateQueries({ queryKey: ['contacts'] });
       queryClient.invalidateQueries({ queryKey: ['opportunities'] });
+      queryClient.invalidateQueries({ queryKey: ['companies'] });
     },
     onError: (error: any) => {
       toast.error(`Erro no rollback: ${error.message}`);
@@ -302,7 +384,6 @@ export function useKommoMigration() {
       )
       .subscribe();
 
-    // Also fetch initial state
     supabase
       .from('import_logs')
       .select('*')
@@ -317,16 +398,27 @@ export function useKommoMigration() {
     };
   }, [importLogId]);
 
+  // Helper to get current phase from cursor_state
+  const getCurrentPhase = useCallback((): MigrationPhase | null => {
+    if (!importLog?.cursor_state) return null;
+    return importLog.cursor_state.phase || null;
+  }, [importLog]);
+
   const reset = useCallback(() => {
-    // Se tem credenciais salvas, volta para step 2 (mapeamento), senão step 1
     const initialStep = savedCredentials ? 2 : 1;
     setStep(initialStep);
     setCredentials(savedCredentials || null);
     setKommoPipelines([]);
     setStageMapping({});
+    setUserMappings([]);
     setConfig({
       duplicate_mode: 'skip',
       import_orphan_contacts: true,
+      import_companies: true,
+      import_tasks: true,
+      import_notes: true,
+      import_events: true,
+      import_custom_fields: true,
     });
     setImportLogId(null);
     setImportLog(null);
@@ -339,17 +431,15 @@ export function useKommoMigration() {
     setStep(newStep);
   }, []);
 
-  // Função para retomar migração pendente
   const resumeMigration = useCallback(async () => {
     if (!pendingImport) return;
     
     setIsResuming(true);
     setImportLogId(pendingImport.id);
     setImportLog(pendingImport);
-    setStep(4); // Ir para tela de progresso
+    setStep(5);
     
     try {
-      // Retomar loop de processamento
       let shouldContinue = true;
       
       while (shouldContinue) {
@@ -370,16 +460,15 @@ export function useKommoMigration() {
         }
       }
       
-      // Invalidar queries após conclusão
       queryClient.invalidateQueries({ queryKey: ['contacts'] });
       queryClient.invalidateQueries({ queryKey: ['opportunities'] });
+      queryClient.invalidateQueries({ queryKey: ['companies'] });
       refetchPendingImport();
     } finally {
       setIsResuming(false);
     }
   }, [pendingImport, queryClient, refetchPendingImport]);
 
-  // Função para cancelar migração pendente
   const cancelPendingMigration = useCallback(async () => {
     if (!pendingImport) return;
     
@@ -405,10 +494,12 @@ export function useKommoMigration() {
     credentials,
     kommoPipelines,
     stageMapping,
+    userMappings,
     config,
     importLogId,
     importLog,
     crmStages,
+    crmUsers,
     savedCredentials,
     isLoadingCredentials,
     pendingImport,
@@ -417,9 +508,13 @@ export function useKommoMigration() {
     // Setters
     setCredentials,
     setStageMapping,
+    setUserMappings,
     setConfig,
     goToStep,
     reset,
+
+    // Computed
+    getCurrentPhase,
 
     // Actions
     resumeMigration,
