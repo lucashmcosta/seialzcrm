@@ -253,10 +253,10 @@ Deno.serve(async (req) => {
               const ph = co.custom_fields_values?.find((f: any) => f.field_code === "PHONE")?.values?.[0]?.value;
               const ex = await findExisting(sb, "companies", orgId, sei);
               if (ex) {
-                if (dupMode === "update") { await sb.from("companies").update({ name: co.name, phone: ph || undefined }).eq("id", ex.id); iCo++; coIds.push(ex.id); }
+                if (dupMode === "update") { await sb.from("companies").update({ name: co.name, phone: ph || undefined, updated_at: kommoDate(co.updated_at) }).eq("id", ex.id); iCo++; coIds.push(ex.id); }
                 coMap[String(co.id)] = ex.id;
               } else {
-                const { data: n, error: ie } = await sb.from("companies").insert({ organization_id: orgId, name: co.name || "Empresa sem nome", phone: ph || null, source: "kommo", source_external_id: sei }).select("id").single();
+                const { data: n, error: ie } = await sb.from("companies").insert({ organization_id: orgId, name: co.name || "Empresa sem nome", phone: ph || null, source: "kommo", source_external_id: sei, created_at: kommoDate(co.created_at), updated_at: kommoDate(co.updated_at) }).select("id").single();
                 if (!ie && n) { iCo++; coIds.push(n.id); coMap[String(co.id)] = n.id; }
                 else if (ie) errs.push({ type: "company", kommo_id: co.id, error: ie.message });
               }
