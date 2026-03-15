@@ -65,7 +65,7 @@ export function MediaUploadButton({ onFileSelected, onTemplateClick, onNoteClick
             Imagem
           </DropdownMenuItem>
           <DropdownMenuItem onClick={() => videoInputRef.current?.click()}>
-            <Video className="w-4 h-4 mr-2" />
+            <VideoCamera className="w-4 h-4 mr-2" />
             Vídeo
           </DropdownMenuItem>
           <DropdownMenuItem onClick={() => documentInputRef.current?.click()}>
