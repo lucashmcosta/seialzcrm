@@ -250,7 +250,7 @@ export function IntegrationsSettings() {
                               <Tooltip>
                                 <TooltipTrigger asChild>
                                   <Badge variant="outline" className="flex items-center gap-1 shrink-0">
-                                    <AlertTriangle className="w-3 h-3" />
+                                    <Warning className="w-3 h-3" />
                                     Beta
                                   </Badge>
                                 </TooltipTrigger>
