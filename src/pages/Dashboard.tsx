@@ -391,7 +391,7 @@ export default function Dashboard() {
                   <p className="text-sm text-muted-foreground">{t('dashboard.lostOpportunities')}</p>
                   <p className="text-2xl font-bold text-red-600">{lostCount}</p>
                 </div>
-                <TrendingDown className="w-8 h-8 text-red-600" />
+                <TrendDown size={32} weight="light" className="text-red-600" />
               </div>
             </Card>
             
