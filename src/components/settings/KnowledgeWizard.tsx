@@ -891,7 +891,7 @@ export function KnowledgeWizard({ onComplete, onCancel }: KnowledgeWizardProps) 
       <CardFooter className="border-t p-3">
         {error && (
           <div className="flex items-center gap-2 text-destructive text-sm mb-2 w-full">
-            <AlertCircle className="h-4 w-4" />
+            <WarningCircle className="h-4 w-4" />
             {error}
           </div>
         )}
