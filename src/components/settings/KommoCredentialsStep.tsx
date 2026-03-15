@@ -145,7 +145,7 @@ export function KommoCredentialsStep({ onValidated, validateMutation, savedCrede
               className="text-primary hover:underline inline-flex items-center gap-1"
             >
               Configurações → Integrações → Criar integração privada
-              <ExternalLink className="h-3 w-3" />
+              <ArrowSquareOut className="h-3 w-3" />
             </a>
           </p>
         </div>
