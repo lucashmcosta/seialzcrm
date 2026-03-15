@@ -63,13 +63,19 @@ export function KommoProgressStep({
     (isCompleted || isFailed) &&
     !rollbackMutation.isPending;
 
-  const currentPhase: MigrationPhase | null = importLog.cursor_state?.phase || null;
+  // Parse cursor_state if it comes as string
+  const cursorState = typeof importLog.cursor_state === 'string' 
+    ? JSON.parse(importLog.cursor_state) 
+    : importLog.cursor_state;
+  const currentPhase: MigrationPhase | 'done' | null = cursorState?.phase || null;
 
   const getPhaseStatus = (phase: MigrationPhase): 'done' | 'active' | 'pending' => {
     if (!currentPhase) return 'pending';
-    const currentIdx = PHASE_ORDER.indexOf(currentPhase);
+    if (isCompleted || currentPhase === 'done') return 'done';
+    const currentIdx = PHASE_ORDER.indexOf(currentPhase as MigrationPhase);
     const phaseIdx = PHASE_ORDER.indexOf(phase);
-    if (isCompleted) return 'done';
+    // If currentPhase is not in PHASE_ORDER (e.g. 'done'), all are done
+    if (currentIdx === -1) return 'done';
     if (phaseIdx < currentIdx) return 'done';
     if (phaseIdx === currentIdx) return 'active';
     return 'pending';
@@ -300,12 +306,21 @@ export function KommoProgressStep({
               {importLog.errors?.map((error: any, idx: number) => (
                 <Card key={idx} className="p-3">
                   <div className="flex items-start gap-2">
-                    <Badge variant={error.type === 'contact' ? 'secondary' : 'outline'}>
-                      {error.type === 'contact' ? 'Contato' : error.type === 'company' ? 'Empresa' : 'Lead'}
+                    <Badge variant="outline">
+                      {error.type === 'contact' ? 'Contato' : 
+                       error.type === 'company' ? 'Empresa' : 
+                       error.type === 'opportunity' ? 'Oportunidade' :
+                       error.type === 'task' ? 'Tarefa' :
+                       error.type === 'note_contact' ? 'Nota (contato)' :
+                       error.type === 'note_lead' ? 'Nota (lead)' :
+                       error.type === 'event' ? 'Evento' :
+                       error.type === 'users' ? 'Usuários' :
+                       error.type === 'custom_fields' ? 'Campo custom' :
+                       error.type || 'Desconhecido'}
                     </Badge>
                     <div className="flex-1 min-w-0">
                       <p className="font-medium text-sm truncate">
-                        {error.name || `ID: ${error.kommo_id}`}
+                        {error.name || (error.kommo_id ? `Kommo ID: ${error.kommo_id}` : error.id ? `ID: ${error.id}` : 'Sem ID')}
                       </p>
                       <p className="text-xs text-destructive">{error.error}</p>
                     </div>
