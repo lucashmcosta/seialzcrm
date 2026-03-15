@@ -264,7 +264,7 @@ export function ImportKnowledge({ agents, onSuccess }: ImportKnowledgeProps) {
     <Tabs defaultValue="file" className="w-full">
       <TabsList className="grid w-full grid-cols-2">
         <TabsTrigger value="file" className="flex items-center gap-2">
-          <Upload className="h-4 w-4" />
+          <UploadSimple className="h-4 w-4" />
           Upload Arquivo
         </TabsTrigger>
         <TabsTrigger value="url" className="flex items-center gap-2">
