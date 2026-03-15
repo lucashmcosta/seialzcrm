@@ -2,7 +2,7 @@ import { useNavigate } from 'react-router-dom';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
-import { Settings, ExternalLink } from 'lucide-react';
+import { GearSix, ArrowSquareOut } from '@phosphor-icons/react';
 
 interface Integration {
   id: string;
