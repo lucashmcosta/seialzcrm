@@ -114,8 +114,9 @@ Deno.serve(async (req) => {
         import_events: body.import_events ?? l.config?.import_events ?? false,
         import_custom_fields: body.import_custom_fields ?? l.config?.import_custom_fields ?? false,
       };
-      await sb.from("import_logs").update({ status: "running", started_at: new Date().toISOString(), config: cfg, cursor_state: defaultCursor() }).eq("id", import_log_id);
-      l.config = cfg; l.status = "running"; l.cursor_state = defaultCursor();
+      // Bug fix #2: limpar erros de execuções anteriores ao iniciar nova migração
+      await sb.from("import_logs").update({ status: "running", started_at: new Date().toISOString(), config: cfg, cursor_state: defaultCursor(), errors: [], error_count: 0 }).eq("id", import_log_id);
+      l.config = cfg; l.status = "running"; l.cursor_state = defaultCursor(); l.errors = [];
     }
 
     const cfg = l.config as ImportConfig;
