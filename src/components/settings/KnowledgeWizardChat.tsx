@@ -108,7 +108,7 @@ const KNOWLEDGE_TYPES: Array<{
     id: 'faq_only',
     label: 'Somente FAQs',
     description: 'Adicionar perguntas frequentes à base existente',
-    icon: HelpCircle,
+    icon: Question,
   },
   {
     id: 'policy',
