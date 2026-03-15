@@ -381,7 +381,7 @@ export default function Dashboard() {
                   <p className="text-sm text-muted-foreground">{t('dashboard.wonAmount')}</p>
                   <p className="text-2xl font-bold text-green-600">{formatCurrency(wonAmount)}</p>
                 </div>
-                <CheckCircle2 className="w-8 h-8 text-green-600" />
+                <CheckCircle size={32} weight="light" className="text-green-600" />
               </div>
             </Card>
             
