@@ -96,14 +96,14 @@ const contentTypeConfig: Record<string, { label: string; icon: React.ElementType
 import { CATEGORY_LABELS as categoryLabels, getCategoryLabel } from '@/lib/knowledge-categories';
 
 const sourceLabels: Record<string, { label: string; icon: React.ElementType }> = {
-  wizard: { label: 'Wizard IA', icon: Wand2 },
-  wizard_chat: { label: 'Chat IA', icon: MessageSquare },
+  wizard: { label: 'Wizard IA', icon: MagicWand },
+  wizard_chat: { label: 'Chat IA', icon: ChatCircle },
   manual: { label: 'Manual', icon: FileText },
-  import_txt: { label: 'TXT', icon: FileType },
-  import_md: { label: 'Markdown', icon: FileType },
-  import_pdf: { label: 'PDF', icon: FileType },
-  import_docx: { label: 'DOCX', icon: FileType },
-  import_url: { label: 'URL', icon: Search },
+  import_txt: { label: 'TXT', icon: FileDoc },
+  import_md: { label: 'Markdown', icon: FileDoc },
+  import_pdf: { label: 'PDF', icon: FileDoc },
+  import_docx: { label: 'DOCX', icon: FileDoc },
+  import_url: { label: 'URL', icon: MagnifyingGlass },
 };
 
 const statusConfig: Record<string, { label: string; color: string }> = {
