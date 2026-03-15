@@ -72,9 +72,10 @@ export function KommoPreviewStep({
   const estimatedMinutes = Math.max(1, Math.ceil(selectedTotal / 100 / 60));
   const isLargeImport = selectedTotal > 5000;
 
+  const hasPipelineFilter = selectedPipelineNames && selectedPipelineNames.length > 0;
   const counters = [
-    { icon: Users, label: 'Contatos', count: contactsCount, always: true },
-    { icon: Briefcase, label: 'Oportunidades', count: leadsCount, always: true },
+    { icon: Users, label: 'Contatos', count: contactsCount, always: true, note: hasPipelineFilter ? 'Total da conta (compartilhados entre pipelines)' : undefined },
+    { icon: Briefcase, label: 'Oportunidades', count: leadsCount, always: true, note: hasPipelineFilter ? `Apenas dos pipelines selecionados` : undefined },
     { icon: Buildings, label: 'Empresas', count: companiesCount, configKey: 'import_companies' as const },
     { icon: ListChecks, label: 'Tarefas', count: tasksCount, configKey: 'import_tasks' as const },
     { icon: Note, label: 'Notas', count: notesCount, configKey: 'import_notes' as const },
