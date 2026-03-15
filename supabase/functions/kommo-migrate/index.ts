@@ -135,7 +135,7 @@ Deno.serve(async (req) => {
     const dupMode = cfg.duplicate_mode || "skip";
 
     let c: CursorState = l.cursor_state || defaultCursor();
-    const errs: any[] = [...(l.errors || [])];
+    const errs: any[] = l.status === "running" && l.errors?.length ? [...l.errors] : [];
 
     // Counters
     let ic = l.imported_contacts || 0, sc = l.skipped_contacts || 0;
