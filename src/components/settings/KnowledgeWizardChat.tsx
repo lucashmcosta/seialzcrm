@@ -554,7 +554,7 @@ export function KnowledgeWizardChat({ agentId, onComplete, onCancel }: Knowledge
                   </ScrollArea>
                   <div className="flex gap-2">
                     <Button variant="outline" onClick={() => setFinalDocuments(null)} className="flex-1">
-                      <RefreshCw className="mr-2 h-4 w-4" />
+                      <ArrowsClockwise className="mr-2 h-4 w-4" />
                       Regenerar
                     </Button>
                     <Button onClick={handleSave} className="flex-1">
