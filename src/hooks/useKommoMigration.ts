@@ -416,6 +416,7 @@ export function useKommoMigration() {
     setCredentials(savedCredentials || null);
     setKommoPipelines([]);
     setStageMapping({});
+    setSelectedPipelineIds([]);
     setUserMappings([]);
     setConfig({
       duplicate_mode: 'skip',
