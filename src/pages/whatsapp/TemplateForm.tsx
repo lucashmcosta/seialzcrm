@@ -386,7 +386,7 @@ export default function TemplateForm() {
                           </Button>
                         </div>
                         <Alert>
-                          <AlertCircle className="w-4 h-4" />
+                           <WarningCircle className="w-4 h-4" />
                           <AlertDescription>
                             Máximo 2 URLs e 1 telefone. Títulos não aceitam variáveis.
                           </AlertDescription>
