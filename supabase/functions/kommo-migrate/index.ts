@@ -113,7 +113,7 @@ Deno.serve(async (req) => {
         stage_mapping: body.stage_mapping || l.config?.stage_mapping,
         duplicate_mode: body.duplicate_mode || l.config?.duplicate_mode || "skip",
         import_orphan_contacts: body.import_orphan_contacts ?? l.config?.import_orphan_contacts ?? true,
-        user_mapping: body.user_mapping || l.config?.user_mapping || {},
+        user_mapping: convertUserMappings(body.user_mappings || body.user_mapping || l.config?.user_mappings || l.config?.user_mapping),
         import_companies: body.import_companies ?? l.config?.import_companies ?? false,
         import_tasks: body.import_tasks ?? l.config?.import_tasks ?? false,
         import_notes: body.import_notes ?? l.config?.import_notes ?? false,
