@@ -101,7 +101,7 @@ export default function CompaniesList() {
         <Card className="p-6">
           <div className="mb-4">
             <div className="relative">
-              <Search className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" />
+              <MagnifyingGlass size={16} weight="light" className="absolute left-3 top-3 text-muted-foreground" />
               <Input
                 placeholder={t('common.search')}
                 value={search}
