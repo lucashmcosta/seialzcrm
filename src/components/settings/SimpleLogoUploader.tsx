@@ -194,7 +194,7 @@ export function SimpleLogoUploader({
                   </>
                 ) : (
                   <>
-                    <Upload className="w-4 h-4 mr-2" />
+                    <UploadSimple className="w-4 h-4 mr-2" />
                     Clique para selecionar uma imagem
                   </>
                 )}
