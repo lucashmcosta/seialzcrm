@@ -11,7 +11,7 @@ import { useOrganization } from '@/hooks/useOrganization';
 import { useTranslation } from '@/lib/i18n';
 import { usePermissions } from '@/hooks/usePermissions';
 import { supabase } from '@/integrations/supabase/client';
-import { Plus, Search } from 'lucide-react';
+import { Plus, MagnifyingGlass } from '@phosphor-icons/react';
 import { SavedViewsDropdown } from '@/components/SavedViewsDropdown';
 import { BulkActionsBar } from '@/components/BulkActionsBar';
 import { Breadcrumbs } from '@/components/application/breadcrumbs/breadcrumbs';

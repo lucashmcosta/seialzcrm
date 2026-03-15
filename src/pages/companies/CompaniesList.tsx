@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
-import { Building2, Plus, Search } from 'lucide-react';
+import { Buildings, Plus, MagnifyingGlass } from '@phosphor-icons/react';
 import { Layout } from '@/components/Layout';
 import { Button } from '@/components/base/buttons/button';
 import { Input } from '@/components/ui/input';
