@@ -143,7 +143,7 @@ export function NewConversationDialog({
           <ScrollArea className="h-[300px]">
             {isLoading ? (
               <div className="flex items-center justify-center py-8">
-                <Loader2 className="w-6 h-6 animate-spin text-muted-foreground" />
+                <SpinnerGap className="w-6 h-6 animate-spin text-muted-foreground" />
               </div>
             ) : contacts?.length === 0 ? (
               <div className="flex flex-col items-center justify-center py-8 text-muted-foreground">
