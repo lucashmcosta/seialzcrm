@@ -312,7 +312,7 @@ export default function TasksList() {
                                 variant="outline"
                                 onClick={() => handleCompleteTask(task.id)}
                               >
-                                <CheckCircle2 className="h-4 w-4 mr-1" />
+                                <CheckCircle size={16} weight="light" className="mr-1" />
                                 {t('tasks.complete')}
                               </Button>
                             )}

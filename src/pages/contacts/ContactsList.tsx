@@ -309,7 +309,7 @@ export default function ContactsList() {
         {/* Filters */}
         <div className="mb-6 flex flex-wrap gap-3">
           <div className="relative flex-1 min-w-[250px] max-w-sm">
-            <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-muted-foreground w-4 h-4" />
+            <MagnifyingGlass size={16} weight="light" className="absolute left-3 top-1/2 transform -translate-y-1/2 text-muted-foreground" />
             <Input
               placeholder={t('common.search')}
               value={searchTerm}

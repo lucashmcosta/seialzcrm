@@ -115,7 +115,7 @@ export default function CompaniesList() {
             <div className="text-center py-12 text-muted-foreground">{t('common.loading')}</div>
           ) : filteredCompanies.length === 0 ? (
             <div className="text-center py-12">
-              <Building2 className="w-12 h-12 text-muted-foreground mx-auto mb-4" />
+              <Buildings size={48} weight="light" className="text-muted-foreground mx-auto mb-4" />
               <p className="text-muted-foreground">{t('companies.noCompanies')}</p>
             </div>
           ) : (
