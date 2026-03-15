@@ -11,7 +11,7 @@ import {
   TableHeader,
   TableRow,
 } from '@/components/ui/table';
-import { Shield, AlertTriangle, Unlock } from 'lucide-react';
+import { Shield, Warning, LockOpen } from '@phosphor-icons/react';
 import { useToast } from '@/hooks/use-toast';
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
