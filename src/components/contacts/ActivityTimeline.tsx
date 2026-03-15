@@ -109,7 +109,7 @@ export function ActivityTimeline({ contactId, opportunityId }: ActivityTimelineP
       case 'note': return <ChatCircle className="w-4 h-4" />;
       case 'call': return <Phone className="w-4 h-4" />;
       case 'task': return <CheckSquare className="w-4 h-4" />;
-      case 'message': return <MessageSquare className="w-4 h-4" />;
+      case 'message': return <ChatCircle className="w-4 h-4" />;
       default: return <FileText className="w-4 h-4" />;
     }
   };
