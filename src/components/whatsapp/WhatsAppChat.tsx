@@ -394,9 +394,9 @@ export function WhatsAppChat({ contactId, threadId: initialThreadId, onThreadCre
       case 'image':
         return <Image className="w-3 h-3" />;
       case 'audio':
-        return <Volume2 className="w-3 h-3" />;
+         return <SpeakerHigh className="w-3 h-3" />;
       case 'video':
-        return <Video className="w-3 h-3" />;
+        return <VideoCamera className="w-3 h-3" />;
       case 'document':
         return <FileText className="w-3 h-3" />;
       default:
