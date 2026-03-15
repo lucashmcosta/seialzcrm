@@ -123,7 +123,7 @@ export function CreateIntegrationDialog({ open, onOpenChange }: CreateIntegratio
                   size="sm"
                   onClick={() => setLogoEditorOpen(true)}
                 >
-                  <Pencil className="w-4 h-4 mr-2" />
+                  <PencilSimple size={16} className="mr-2" />
                   {formData.logo_url ? 'Editar' : 'Adicionar'}
                 </Button>
                 {formData.logo_url && (
