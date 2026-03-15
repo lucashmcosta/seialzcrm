@@ -79,7 +79,7 @@ export function IntegrationCard({ integration }: IntegrationCardProps) {
             className="flex-1"
             onClick={() => navigate(`/admin/integrations/${integration.id}`)}
           >
-            <Settings className="h-4 w-4 mr-2" />
+            <GearSix size={16} className="mr-2" />
             Configurar
           </Button>
           {integration.documentation_url && (
