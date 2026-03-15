@@ -657,7 +657,7 @@ export default function OpportunitiesKanban() {
           <Popover open={showFilters} onOpenChange={setShowFilters}>
             <PopoverTrigger asChild>
               <Button variant="outline" className="relative">
-                <Filter className="h-4 w-4 mr-2" />
+                <FunnelSimple size={16} weight="light" className="mr-2" />
                 Filtros
                 {activeFiltersCount > 0 && (
                   <Badge variant="secondary" className="ml-2 h-5 w-5 p-0 flex items-center justify-center rounded-full">
