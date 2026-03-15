@@ -1664,7 +1664,7 @@ export function SDRAgentWizard({
                   className="flex-1 gap-2"
                   onClick={() => updateField('formality', 'informal')}
                 >
-                  <Smile className="h-4 w-4" />
+                  <Smiley className="h-4 w-4" />
                   Informal
                 </Button>
                 <Button
