@@ -70,11 +70,11 @@ export function KommoProgressStep({
   };
 
   const renderStatusIcon = () => {
-    if (isRunning) return <Loader2 className="h-6 w-6 animate-spin text-primary" />;
-    if (isPaused) return <AlertTriangle className="h-6 w-6 text-yellow-500" />;
-    if (isCompleted) return <CheckCircle2 className="h-6 w-6 text-green-500" />;
+    if (isRunning) return <SpinnerGap className="h-6 w-6 animate-spin text-primary" />;
+    if (isPaused) return <Warning className="h-6 w-6 text-yellow-500" />;
+    if (isCompleted) return <CheckCircle className="h-6 w-6 text-green-500" />;
     if (isFailed) return <XCircle className="h-6 w-6 text-destructive" />;
-    if (isRolledBack) return <RotateCcw className="h-6 w-6 text-muted-foreground" />;
+    if (isRolledBack) return <ArrowCounterClockwise className="h-6 w-6 text-muted-foreground" />;
     return <Clock className="h-6 w-6 text-muted-foreground" />;
   };
 

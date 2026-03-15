@@ -245,7 +245,7 @@ export function KommoMigrationDialog({ open, onOpenChange }: KommoMigrationDialo
                 }
               >
                 Próximo
-                <ChevronRight className="h-4 w-4 ml-1" />
+                <CaretRight className="h-4 w-4 ml-1" />
               </Button>
             )}
           </div>

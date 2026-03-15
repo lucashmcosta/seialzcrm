@@ -574,7 +574,7 @@ export function KnowledgeWizardChat({ agentId, onComplete, onCancel }: Knowledge
             <Collapsible open={slotsOpen} onOpenChange={setSlotsOpen}>
               <CollapsibleTrigger className="flex items-center justify-between w-full p-3 hover:bg-muted/50">
                 <span className="text-sm font-medium">Informações Coletadas</span>
-                {slotsOpen ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
+                {slotsOpen ? <CaretUp className="h-4 w-4" /> : <CaretDown className="h-4 w-4" />}
               </CollapsibleTrigger>
               <CollapsibleContent>
                 <div className="p-3 space-y-2">

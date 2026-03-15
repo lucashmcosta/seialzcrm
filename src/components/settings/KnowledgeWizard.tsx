@@ -923,7 +923,7 @@ export function KnowledgeWizard({ onComplete, onCancel }: KnowledgeWizardProps) 
             size="icon"
             className="h-[60px] w-[60px]"
           >
-            {loading || isSaving ? <Loader2 className="animate-spin" /> : <Send />}
+            {loading || isSaving ? <SpinnerGap className="animate-spin" /> : <PaperPlaneTilt />}
           </Button>
         </div>
       </CardFooter>

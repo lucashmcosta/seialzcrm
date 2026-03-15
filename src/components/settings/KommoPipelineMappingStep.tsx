@@ -155,7 +155,7 @@ export function KommoPipelineMappingStep({
             <h4 className="font-medium mb-4 flex items-center gap-2">
               Pipeline: {pipeline.name}
               {pipeline.stages.every(s => stageMapping[`${pipeline.id}_${s.id}`]) && (
-                <CheckCircle2 className="h-4 w-4 text-primary" />
+                <CheckCircle className="h-4 w-4 text-primary" />
               )}
             </h4>
             

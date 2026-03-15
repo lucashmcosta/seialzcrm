@@ -281,7 +281,7 @@ export function IntegrationsSettings() {
                         size="sm"
                         onClick={() => setKommoMigrationOpen(true)}
                       >
-                        <Upload className="h-4 w-4 mr-1" />
+                        <UploadSimple className="h-4 w-4 mr-1" />
                         Migrar Dados
                       </Button>
                     )}
