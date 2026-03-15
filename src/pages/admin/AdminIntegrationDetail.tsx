@@ -106,7 +106,7 @@ export default function AdminIntegrationDetail() {
               Excluir
             </Button>
             <Button onClick={handleSave} disabled={loading}>
-              <Save className="h-4 w-4 mr-2" />
+              <FloppyDisk size={16} className="mr-2" />
               {loading ? 'Salvando...' : 'Salvar'}
             </Button>
           </div>
