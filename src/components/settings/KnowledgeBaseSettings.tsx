@@ -378,7 +378,7 @@ export function KnowledgeBaseSettings() {
             Importar
           </TabsTrigger>
           <TabsTrigger value="wizard_intelligent" className="flex items-center gap-2">
-            <Sparkles className="h-4 w-4" />
+            <Sparkle className="h-4 w-4" />
             Wizard Inteligente
           </TabsTrigger>
         </TabsList>
