@@ -10,7 +10,7 @@ import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/comp
 import { ConfirmDialog } from '@/components/ui/confirm-dialog';
 import { useTranslation } from '@/lib/i18n';
 import { useOrganization } from '@/hooks/useOrganization';
-import { ChatCircle, Phone, EnvelopeSimple, Webhooks, Warning, Plus, Robot, Sparkle, UploadSimple, ArrowsClockwise, PenNib } from '@phosphor-icons/react';
+import { ChatCircle, Phone, EnvelopeSimple, Plugs, Warning, Plus, Robot, Sparkle, UploadSimple, ArrowsClockwise, PenNib } from '@phosphor-icons/react';
 import { IntegrationConnectDialog } from './IntegrationConnectDialog';
 import { IntegrationDetailDialog } from './IntegrationDetailDialog';
 import { PhoneNumberSettings } from './PhoneNumberSettings';
