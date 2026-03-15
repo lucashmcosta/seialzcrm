@@ -162,7 +162,7 @@ export default function AdminUsers() {
                     <TableCell>
                       {admin.mfa_enabled ? (
                         <Badge variant="default" className="gap-1">
-                          <Shield className="h-3 w-3" />
+                          <Shield size={12} />
                           Ativo
                         </Badge>
                       ) : (
