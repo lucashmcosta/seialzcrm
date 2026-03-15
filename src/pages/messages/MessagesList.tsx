@@ -1477,7 +1477,7 @@ export default function MessagesList() {
                                             setShowFeedbackDialog(true);
                                           }}
                                         >
-                                          <MessageSquarePlus className="w-3 h-3 mr-1" />
+                                          <ChatCircleDots className="w-3 h-3 mr-1" />
                                           Feedback
                                         </Button>
                                       </div>
