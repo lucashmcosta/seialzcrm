@@ -562,7 +562,7 @@ export function KnowledgeBaseSettings() {
                               onClick={() => handleReprocess(item.id)}
                               title="Reprocessar"
                             >
-                              <RefreshCw className="h-4 w-4" />
+                              <ArrowsClockwise className="h-4 w-4" />
                             </Button>
                           )}
                           <AlertDialog>
