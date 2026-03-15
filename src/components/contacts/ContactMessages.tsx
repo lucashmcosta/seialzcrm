@@ -733,7 +733,7 @@ export function ContactMessages({ contactId, opportunityId }: ContactMessagesPro
                   </DropdownMenuTrigger>
                   <DropdownMenuContent align="end">
                     <DropdownMenuItem onClick={() => handleImproveText('grammar')}>
-                      <SpellCheck className="w-4 h-4 mr-2" />
+                      <SealCheck className="w-4 h-4 mr-2" />
                       {locale === 'pt-BR' ? 'Corrigir gramática' : 'Fix grammar'}
                     </DropdownMenuItem>
                     <DropdownMenuItem onClick={() => handleImproveText('professional')}>
