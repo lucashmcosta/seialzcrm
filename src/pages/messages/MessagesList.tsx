@@ -1698,7 +1698,7 @@ export default function MessagesList() {
                                   </DropdownMenuTrigger>
                                   <DropdownMenuContent align="end">
                                     <DropdownMenuItem onClick={() => handleImproveText('grammar')}>
-                                      <SpellCheck className="h-4 w-4 mr-2" />
+                                      <TextAa className="h-4 w-4 mr-2" />
                                       {locale === 'pt-BR' ? 'Corrigir gramática' : 'Fix grammar'}
                                     </DropdownMenuItem>
                                     <DropdownMenuItem onClick={() => handleImproveText('professional')}>
