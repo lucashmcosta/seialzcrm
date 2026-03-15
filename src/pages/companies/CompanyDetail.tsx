@@ -135,7 +135,7 @@ export default function CompanyDetail() {
             <div className="flex gap-2">
               <Link to={`/companies/${id}/edit`}>
                 <Button color="secondary" size="md">
-                  <Edit className="w-4 h-4 mr-2" />
+                  <PencilSimple className="w-4 h-4 mr-2" />
                   {t('common.edit')}
                 </Button>
               </Link>
