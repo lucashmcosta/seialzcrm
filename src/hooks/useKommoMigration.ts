@@ -276,6 +276,16 @@ export function useKommoMigration() {
       if (error) throw error;
       return data;
     },
+    onSuccess: (data) => {
+      if (data.kommo_users && Array.isArray(data.kommo_users) && data.kommo_users.length > 0) {
+        setUserMappings(data.kommo_users.map((u: any) => ({
+          kommo_user_id: u.id,
+          kommo_user_name: u.name || `Usuário ${u.id}`,
+          kommo_user_email: u.email || null,
+          seialz_user_id: null,
+        })));
+      }
+    },
   });
 
   // Start migration mutation
