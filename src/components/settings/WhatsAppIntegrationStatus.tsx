@@ -241,7 +241,7 @@ export function WhatsAppIntegrationStatus({ onReconfigure }: WhatsAppIntegration
                 disabled={fixing}
                 className="w-full mt-2"
               >
-                {fixing ? <RefreshCw className="h-4 w-4 mr-2 animate-spin" /> : <Wrench className="h-4 w-4 mr-2" />}
+                {fixing ? <ArrowsClockwise className="h-4 w-4 mr-2 animate-spin" /> : <Wrench className="h-4 w-4 mr-2" />}
                 Corrigir Webhooks
               </Button>
             )}
