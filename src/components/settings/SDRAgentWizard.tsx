@@ -1250,7 +1250,7 @@ export function SDRAgentWizard({
               >
                 <div className="flex items-center gap-2 mb-1">
                   {msg.role === 'agent' ? (
-                    <Bot className="h-4 w-4 text-purple-500" />
+                    <Robot className="h-4 w-4 text-purple-500" />
                   ) : (
                     <User className="h-4 w-4 text-muted-foreground" />
                   )}
