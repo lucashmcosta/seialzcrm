@@ -58,7 +58,7 @@ export function IntegrationCard({ integration }: IntegrationCardProps) {
               />
             ) : (
               <div className="w-12 h-12 rounded-lg bg-muted flex items-center justify-center">
-                <Settings className="h-6 w-6 text-muted-foreground" />
+                <GearSix size={24} className="text-muted-foreground" />
               </div>
             )}
             <div>
