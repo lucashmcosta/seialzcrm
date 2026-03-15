@@ -8,10 +8,13 @@ import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, 
 import { useOrganization } from '@/hooks/useOrganization';
 import { useTranslation } from '@/lib/i18n';
 import { usePermissions } from '@/hooks/usePermissions';
+import { useTheme } from '@/contexts/ThemeContext';
 import { supabase } from '@/integrations/supabase/client';
 import { Plus, MagnifyingGlass, FunnelSimple, PencilSimple, TrashSimple } from '@phosphor-icons/react';
 import { OpportunityDialog } from '@/components/opportunities/OpportunityDialog';
 import { OpportunityCard } from '@/components/opportunities/OpportunityCard';
+import { SeialzOpportunityCard } from '@/components/opportunities/SeialzOpportunityCard';
+import { SeialzTopbar } from '@/components/seialz/SeialzTopbar';
 import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
@@ -29,6 +32,17 @@ import { BadgeWithDot } from '@/components/base/badges/badges';
 import { format } from 'date-fns';
 import { ptBR, enUS } from 'date-fns/locale';
 import type { SortDescriptor } from 'react-aria-components';
+
+// Stage color bars for Seialz theme
+const STAGE_COLORS = [
+  'hsl(153 100% 50%)',    // green
+  'hsl(220 100% 63%)',    // blue
+  'hsl(43 100% 50%)',     // yellow
+  'hsl(270 100% 70%)',    // purple
+  'hsl(350 100% 63%)',    // red
+  'hsl(180 100% 50%)',    // cyan
+  'hsl(30 100% 55%)',     // orange
+];
 
 interface PipelineStage {
   id: string;
@@ -82,6 +96,8 @@ export default function OpportunitiesKanban() {
   const { organization, locale } = useOrganization();
   const { t } = useTranslation(locale as 'pt-BR' | 'en-US');
   const { permissions } = usePermissions();
+  const { themePreset } = useTheme();
+  const isSeialz = themePreset === 'seialz';
   const [stages, setStages] = useState<PipelineStage[]>([]);
   const [opportunities, setOpportunities] = useState<Opportunity[]>([]);
   const [loading, setLoading] = useState(true);
@@ -615,6 +631,10 @@ export default function OpportunitiesKanban() {
     return format(new Date(date), 'dd MMM yyyy', { locale: locale === 'en-US' ? enUS : ptBR });
   };
 
+  // Total pipeline stats for Seialz topbar
+  const totalDeals = useMemo(() => Object.values(stageCounts).reduce((sum, s) => sum + s.count, 0), [stageCounts]);
+  const totalPipelineAmount = useMemo(() => Object.values(stageCounts).reduce((sum, s) => sum + s.amount, 0), [stageCounts]);
+
   if (loading) {
     return (
       <Layout>
@@ -625,6 +645,359 @@ export default function OpportunitiesKanban() {
     );
   }
 
+  const filterPanel = (
+    <Popover open={showFilters} onOpenChange={setShowFilters}>
+      <PopoverTrigger asChild>
+        <Button variant={isSeialz ? 'ghost' : 'outline'} size={isSeialz ? 'sm' : 'default'} className={isSeialz ? 'text-muted-foreground hover:text-foreground' : 'relative'}>
+          <FunnelSimple size={16} weight="light" className={isSeialz ? '' : 'mr-2'} />
+          {!isSeialz && 'Filtros'}
+          {activeFiltersCount > 0 && (
+            <Badge variant="secondary" className="ml-1 h-4 w-4 p-0 flex items-center justify-center rounded-full text-[10px]">
+              {activeFiltersCount}
+            </Badge>
+          )}
+        </Button>
+      </PopoverTrigger>
+      <PopoverContent className="w-80" align="end">
+        <div className="space-y-4">
+          <div className="flex items-center justify-between">
+            <h4 className="font-medium text-sm">Filtros Avançados</h4>
+            {activeFiltersCount > 0 && (
+              <Button variant="ghost" size="sm" onClick={clearFilters}>
+                Limpar
+              </Button>
+            )}
+          </div>
+
+          <div className="space-y-2">
+            <label className="text-sm font-medium">Responsável</label>
+            <Select value={filterOwner} onValueChange={setFilterOwner}>
+              <SelectTrigger>
+                <SelectValue placeholder="Todos" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">Todos</SelectItem>
+                {users.map((user) => (
+                  <SelectItem key={user.id} value={user.id}>
+                    {user.full_name}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+
+          <div className="space-y-2">
+            <label className="text-sm font-medium">Valor</label>
+            <div className="flex gap-2">
+              <Input
+                type="number"
+                placeholder="Mín"
+                value={filterMinAmount}
+                onChange={(e) => setFilterMinAmount(e.target.value)}
+              />
+              <Input
+                type="number"
+                placeholder="Máx"
+                value={filterMaxAmount}
+                onChange={(e) => setFilterMaxAmount(e.target.value)}
+              />
+            </div>
+          </div>
+
+          <div className="space-y-2">
+            <label className="text-sm font-medium">Data de Fechamento</label>
+            <div className="flex gap-2">
+              <Input
+                type="date"
+                value={filterDateFrom}
+                onChange={(e) => setFilterDateFrom(e.target.value)}
+              />
+              <Input
+                type="date"
+                value={filterDateTo}
+                onChange={(e) => setFilterDateTo(e.target.value)}
+              />
+            </div>
+          </div>
+
+          {allTags.length > 0 && (
+            <div className="space-y-2">
+              <label className="text-sm font-medium">Etiqueta</label>
+              <Select value={filterTag} onValueChange={setFilterTag}>
+                <SelectTrigger>
+                  <SelectValue placeholder="Todas" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">Todas</SelectItem>
+                  {allTags.map((tag) => (
+                    <SelectItem key={tag.id} value={tag.id}>
+                      <div className="flex items-center gap-2">
+                        <span
+                          className="h-2.5 w-2.5 rounded-full shrink-0"
+                          style={{ backgroundColor: tag.color || 'hsl(var(--muted-foreground))' }}
+                        />
+                        {tag.name}
+                      </div>
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+          )}
+        </div>
+      </PopoverContent>
+    </Popover>
+  );
+
+  // ═══════════════════════════════════════
+  // SEIALZ KANBAN RENDER
+  // ═══════════════════════════════════════
+  const renderSeialzKanban = () => (
+    <DragDropContext onDragEnd={permissions.canEditOpportunities ? handleDragEnd : () => {}}>
+      <div className="flex gap-3 overflow-x-auto pb-4 px-6 pt-4 flex-1">
+        {stages.map((stage, stageIndex) => {
+          const stageOpportunities = getOpportunitiesForStage(stage.id);
+          const realCount = stageCounts[stage.id]?.count ?? stageOpportunities.length;
+          const realAmount = stageCounts[stage.id]?.amount ?? stageOpportunities.reduce(
+            (sum, opp) => sum + (Number(opp.amount) || 0),
+            0
+          );
+          const loadedCount = stageOpportunities.length;
+          const hasMore = hasMoreByStage[stage.id] && loadedCount < realCount;
+          const stageColor = STAGE_COLORS[stageIndex % STAGE_COLORS.length];
+
+          return (
+            <div key={stage.id} className="flex-shrink-0 w-[272px] flex flex-col">
+              {/* Stage header with color bar */}
+              <div className="mb-3">
+                <div className="h-[2px] rounded-full mb-3" style={{ backgroundColor: stageColor }} />
+                <div className="flex items-center justify-between">
+                  <h3 className="text-[13px] font-medium text-foreground">{stage.name}</h3>
+                  <span className="font-data text-[11px] text-[hsl(var(--sz-t3))] bg-[hsl(var(--sz-bg3))] px-2 py-0.5 rounded">
+                    {realCount.toLocaleString()}
+                  </span>
+                </div>
+                <p className="font-data text-[11px] text-muted-foreground mt-1">
+                  {formatCurrency(realAmount, organization?.default_currency || 'BRL')}
+                </p>
+              </div>
+
+              {/* Droppable area */}
+              <Droppable droppableId={stage.id}>
+                {(provided, snapshot) => (
+                  <div
+                    ref={provided.innerRef}
+                    {...provided.droppableProps}
+                    className={`space-y-2 flex-1 min-h-[200px] max-h-[calc(100vh-220px)] overflow-y-auto scrollbar-hide rounded-md transition-colors ${
+                      snapshot.isDraggingOver ? 'bg-[hsl(var(--sz-green-dim))]' : ''
+                    }`}
+                  >
+                    {stageOpportunities.length === 0 ? (
+                      <p className="font-data text-[11px] text-[hsl(var(--sz-t3))] text-center py-8">
+                        Nenhuma oportunidade
+                      </p>
+                    ) : (
+                      stageOpportunities.map((opp, index) => (
+                        <Draggable
+                          key={opp.id}
+                          draggableId={opp.id}
+                          index={index}
+                          isDragDisabled={!permissions.canEditOpportunities}
+                        >
+                          {(provided, snapshot) => (
+                            <div
+                              ref={provided.innerRef}
+                              {...provided.draggableProps}
+                              {...provided.dragHandleProps}
+                              style={provided.draggableProps.style}
+                              className={snapshot.isDragging ? 'opacity-60' : ''}
+                            >
+                              <SeialzOpportunityCard
+                                id={opp.id}
+                                title={opp.title}
+                                amount={Number(opp.amount)}
+                                currency={opp.currency}
+                                contactName={opp.contacts?.full_name}
+                                ownerName={opp.users?.full_name}
+                                closeDate={opp.close_date}
+                                locale={locale}
+                                onEdit={() => handleEdit(opp)}
+                                onDelete={() => setDeleteId(opp.id)}
+                                onClick={() => navigate(`/opportunities/${opp.id}`)}
+                                tags={tagsByOpportunity[opp.id] || []}
+                                formatCurrency={formatCurrency}
+                              />
+                            </div>
+                          )}
+                        </Draggable>
+                      ))
+                    )}
+                    {provided.placeholder}
+                    <div
+                      ref={(el) => { scrollSentinelsRef.current[stage.id] = el; }}
+                      className="h-4 flex items-center justify-center"
+                    >
+                      {loadingMoreStage === stage.id && (
+                        <div className="w-4 h-4 border-2 border-primary border-t-transparent rounded-full animate-spin" />
+                      )}
+                    </div>
+                  </div>
+                )}
+              </Droppable>
+            </div>
+          );
+        })}
+      </div>
+    </DragDropContext>
+  );
+
+  // ═══════════════════════════════════════
+  // SEIALZ LAYOUT
+  // ═══════════════════════════════════════
+  if (isSeialz) {
+    return (
+      <Layout>
+        <div className="flex flex-col h-full">
+          <SeialzTopbar
+            title="Pipeline"
+            count={`${totalDeals} deals · ${formatCurrency(totalPipelineAmount, organization?.default_currency || 'BRL')}`}
+          >
+            <div className="relative">
+              <MagnifyingGlass size={14} weight="light" className="absolute left-2.5 top-1/2 -translate-y-1/2 text-muted-foreground" />
+              <input
+                placeholder="Buscar deals..."
+                value={searchTerm}
+                onChange={(e) => setSearchTerm(e.target.value)}
+                className="h-8 w-48 rounded-md bg-[hsl(var(--sz-bg3))] border border-[hsl(var(--sz-border))] pl-8 pr-3 text-[12px] text-foreground placeholder:text-[hsl(var(--sz-t3))] focus:outline-none focus:border-primary transition-colors"
+              />
+            </div>
+            <ViewSwitcher
+              view={viewMode}
+              onViewChange={(v) => setViewMode(v as 'kanban' | 'list')}
+              views={['kanban', 'list']}
+            />
+            {filterPanel}
+            <Button
+              size="sm"
+              onClick={handleNewOpportunity}
+              disabled={!permissions.canEditOpportunities}
+              className="h-8 text-[12px] font-medium"
+            >
+              <Plus size={14} weight="bold" className="mr-1.5" />
+              Novo Deal
+            </Button>
+          </SeialzTopbar>
+
+          {viewMode === 'kanban' ? renderSeialzKanban() : (
+            <div className="p-6">
+              {viewMode === 'list' && (
+                <div className="mb-4 flex justify-end">
+                  <ColumnSelector
+                    columns={availableColumns}
+                    visibleColumns={visibleColumns}
+                    onChange={setVisibleColumns}
+                  />
+                </div>
+              )}
+              <TableCard
+                footer={
+                  <PaginationWithPageSize
+                    currentPage={currentPage}
+                    totalPages={totalPages}
+                    totalItems={sortedOpportunities.length}
+                    itemsPerPage={itemsPerPage}
+                    onPageChange={setCurrentPage}
+                    onItemsPerPageChange={setItemsPerPage}
+                  />
+                }
+              >
+                <Table
+                  aria-label="Oportunidades"
+                  sortDescriptor={sortDescriptor}
+                  onSortChange={setSortDescriptor}
+                >
+                  <TableHeader>
+                    <TableCheckboxHeader
+                      isSelected={isAllSelected}
+                      isIndeterminate={isIndeterminate}
+                      onChange={handleSelectAll}
+                    />
+                    {visibleColumns.includes('title') && (
+                      <TableColumn id="title" allowsSorting sortDescriptor={sortDescriptor}>Título</TableColumn>
+                    )}
+                    {visibleColumns.includes('amount') && (
+                      <TableColumn id="amount" allowsSorting sortDescriptor={sortDescriptor}>Valor</TableColumn>
+                    )}
+                    {visibleColumns.includes('pipeline_stage') && (
+                      <TableColumn id="pipeline_stage" allowsSorting sortDescriptor={sortDescriptor}>Etapa</TableColumn>
+                    )}
+                    {visibleColumns.includes('contact') && (
+                      <TableColumn id="contact" allowsSorting sortDescriptor={sortDescriptor}>Contato</TableColumn>
+                    )}
+                    {visibleColumns.includes('owner') && (
+                      <TableColumn id="owner">Responsável</TableColumn>
+                    )}
+                    {visibleColumns.includes('close_date') && (
+                      <TableColumn id="close_date" allowsSorting sortDescriptor={sortDescriptor}>Data Fechamento</TableColumn>
+                    )}
+                    <TableColumn id="actions" className="w-12">Ações</TableColumn>
+                  </TableHeader>
+                  <TableBody items={paginatedOpportunities}>
+                    {(opp) => (
+                      <TableRow key={opp.id} className="cursor-pointer" onAction={() => navigate(`/opportunities/${opp.id}`)}>
+                        <TableCheckboxCell isSelected={selectedIds.includes(opp.id)} onChange={(checked) => handleSelectOne(opp.id, checked)} />
+                        {visibleColumns.includes('title') && <TableCell><span className="font-medium text-foreground">{opp.title}</span></TableCell>}
+                        {visibleColumns.includes('amount') && <TableCell><span className="text-foreground">{formatCurrency(Number(opp.amount) || 0, opp.currency || organization?.default_currency || 'BRL')}</span></TableCell>}
+                        {visibleColumns.includes('pipeline_stage') && <TableCell><BadgeWithDot color="brand">{getStageName(opp.pipeline_stage_id)}</BadgeWithDot></TableCell>}
+                        {visibleColumns.includes('contact') && <TableCell><span className="text-muted-foreground">{opp.contacts?.full_name || '-'}</span></TableCell>}
+                        {visibleColumns.includes('owner') && <TableCell><span className="text-muted-foreground">{opp.users?.full_name || '-'}</span></TableCell>}
+                        {visibleColumns.includes('close_date') && <TableCell><span className="text-muted-foreground">{formatDate(opp.close_date)}</span></TableCell>}
+                        <TableCell>
+                          <TableRowActionsDropdown>
+                            <TableRowAction label={t('common.edit')} icon={<PencilSimple size={16} weight="light" />} onAction={() => handleEdit(opp)} />
+                            <TableRowAction label={t('common.delete')} icon={<TrashSimple size={16} weight="light" />} variant="destructive" onAction={() => setDeleteId(opp.id)} />
+                          </TableRowActionsDropdown>
+                        </TableCell>
+                      </TableRow>
+                    )}
+                  </TableBody>
+                </Table>
+              </TableCard>
+            </div>
+          )}
+        </div>
+
+        <OpportunityDialog
+          open={dialogOpen}
+          onOpenChange={setDialogOpen}
+          opportunity={editingOpportunity}
+          stages={stages}
+          onSuccess={fetchData}
+        />
+
+        <AlertDialog open={!!deleteId} onOpenChange={(open) => !open && setDeleteId(null)}>
+          <AlertDialogContent>
+            <AlertDialogHeader>
+              <AlertDialogTitle>{t('opportunities.deleteConfirm')}</AlertDialogTitle>
+              <AlertDialogDescription>
+                Esta ação não pode ser desfeita. A oportunidade será removida do pipeline.
+              </AlertDialogDescription>
+            </AlertDialogHeader>
+            <AlertDialogFooter>
+              <AlertDialogCancel>{t('common.cancel')}</AlertDialogCancel>
+              <AlertDialogAction onClick={handleDelete}>
+                {t('common.delete')}
+              </AlertDialogAction>
+            </AlertDialogFooter>
+          </AlertDialogContent>
+        </AlertDialog>
+      </Layout>
+    );
+  }
+
+  // ═══════════════════════════════════════
+  // DEFAULT LAYOUT (unchanged)
+  // ═══════════════════════════════════════
   return (
     <Layout>
       <div className="p-8">
@@ -654,107 +1027,7 @@ export default function OpportunitiesKanban() {
             />
           </div>
           
-          <Popover open={showFilters} onOpenChange={setShowFilters}>
-            <PopoverTrigger asChild>
-              <Button variant="outline" className="relative">
-                <FunnelSimple size={16} weight="light" className="mr-2" />
-                Filtros
-                {activeFiltersCount > 0 && (
-                  <Badge variant="secondary" className="ml-2 h-5 w-5 p-0 flex items-center justify-center rounded-full">
-                    {activeFiltersCount}
-                  </Badge>
-                )}
-              </Button>
-            </PopoverTrigger>
-            <PopoverContent className="w-80" align="end">
-              <div className="space-y-4">
-                <div className="flex items-center justify-between">
-                  <h4 className="font-medium text-sm">Filtros Avançados</h4>
-                  {activeFiltersCount > 0 && (
-                    <Button variant="ghost" size="sm" onClick={clearFilters}>
-                      Limpar
-                    </Button>
-                  )}
-                </div>
-
-                <div className="space-y-2">
-                  <label className="text-sm font-medium">Responsável</label>
-                  <Select value={filterOwner} onValueChange={setFilterOwner}>
-                    <SelectTrigger>
-                      <SelectValue placeholder="Todos" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="all">Todos</SelectItem>
-                      {users.map((user) => (
-                        <SelectItem key={user.id} value={user.id}>
-                          {user.full_name}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                </div>
-
-                <div className="space-y-2">
-                  <label className="text-sm font-medium">Valor</label>
-                  <div className="flex gap-2">
-                    <Input
-                      type="number"
-                      placeholder="Mín"
-                      value={filterMinAmount}
-                      onChange={(e) => setFilterMinAmount(e.target.value)}
-                    />
-                    <Input
-                      type="number"
-                      placeholder="Máx"
-                      value={filterMaxAmount}
-                      onChange={(e) => setFilterMaxAmount(e.target.value)}
-                    />
-                  </div>
-                </div>
-
-                <div className="space-y-2">
-                  <label className="text-sm font-medium">Data de Fechamento</label>
-                  <div className="flex gap-2">
-                    <Input
-                      type="date"
-                      value={filterDateFrom}
-                      onChange={(e) => setFilterDateFrom(e.target.value)}
-                    />
-                    <Input
-                      type="date"
-                      value={filterDateTo}
-                      onChange={(e) => setFilterDateTo(e.target.value)}
-                    />
-                  </div>
-                </div>
-
-                {allTags.length > 0 && (
-                  <div className="space-y-2">
-                    <label className="text-sm font-medium">Etiqueta</label>
-                    <Select value={filterTag} onValueChange={setFilterTag}>
-                      <SelectTrigger>
-                        <SelectValue placeholder="Todas" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="all">Todas</SelectItem>
-                        {allTags.map((tag) => (
-                          <SelectItem key={tag.id} value={tag.id}>
-                            <div className="flex items-center gap-2">
-                              <span
-                                className="h-2.5 w-2.5 rounded-full shrink-0"
-                                style={{ backgroundColor: tag.color || 'hsl(var(--muted-foreground))' }}
-                              />
-                              {tag.name}
-                            </div>
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                  </div>
-                )}
-              </div>
-            </PopoverContent>
-          </Popover>
+          {filterPanel}
 
           {viewMode === 'list' && (
             <ColumnSelector
@@ -841,7 +1114,6 @@ export default function OpportunitiesKanban() {
                               ))
                             )}
                             {provided.placeholder}
-                            {/* Sentinel element for infinite scroll */}
                             <div 
                               ref={(el) => { scrollSentinelsRef.current[stage.id] = el; }}
                               className="h-4 flex items-center justify-center"
@@ -884,32 +1156,22 @@ export default function OpportunitiesKanban() {
                   onChange={handleSelectAll}
                 />
                 {visibleColumns.includes('title') && (
-                  <TableColumn id="title" allowsSorting sortDescriptor={sortDescriptor}>
-                    Título
-                  </TableColumn>
+                  <TableColumn id="title" allowsSorting sortDescriptor={sortDescriptor}>Título</TableColumn>
                 )}
                 {visibleColumns.includes('amount') && (
-                  <TableColumn id="amount" allowsSorting sortDescriptor={sortDescriptor}>
-                    Valor
-                  </TableColumn>
+                  <TableColumn id="amount" allowsSorting sortDescriptor={sortDescriptor}>Valor</TableColumn>
                 )}
                 {visibleColumns.includes('pipeline_stage') && (
-                  <TableColumn id="pipeline_stage" allowsSorting sortDescriptor={sortDescriptor}>
-                    Etapa
-                  </TableColumn>
+                  <TableColumn id="pipeline_stage" allowsSorting sortDescriptor={sortDescriptor}>Etapa</TableColumn>
                 )}
                 {visibleColumns.includes('contact') && (
-                  <TableColumn id="contact" allowsSorting sortDescriptor={sortDescriptor}>
-                    Contato
-                  </TableColumn>
+                  <TableColumn id="contact" allowsSorting sortDescriptor={sortDescriptor}>Contato</TableColumn>
                 )}
                 {visibleColumns.includes('owner') && (
                   <TableColumn id="owner">Responsável</TableColumn>
                 )}
                 {visibleColumns.includes('close_date') && (
-                  <TableColumn id="close_date" allowsSorting sortDescriptor={sortDescriptor}>
-                    Data Fechamento
-                  </TableColumn>
+                  <TableColumn id="close_date" allowsSorting sortDescriptor={sortDescriptor}>Data Fechamento</TableColumn>
                 )}
                 <TableColumn id="actions" className="w-12">Ações</TableColumn>
               </TableHeader>
