@@ -188,7 +188,7 @@ export default function AdminOrganizationDetail() {
             </div>
           </div>
           <Button onClick={handleRecalculateMetrics} variant="outline">
-            <RefreshCw className="h-4 w-4 mr-2" />
+            <ArrowsClockwise size={16} className="mr-2" />
             Recalcular Métricas
           </Button>
         </div>
