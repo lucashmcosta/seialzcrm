@@ -173,7 +173,7 @@ export function AuditLogs() {
                 onClick={() => setPage(Math.max(0, page - 1))}
                 disabled={page === 0}
               >
-                <ChevronLeft className="h-4 w-4 mr-2" />
+                <CaretLeft className="h-4 w-4 mr-2" />
                 {t('common.previous')}
               </Button>
               <span className="text-sm text-muted-foreground">
