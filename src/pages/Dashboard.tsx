@@ -361,7 +361,7 @@ export default function Dashboard() {
                   <p className="text-sm text-muted-foreground">{t('dashboard.openOpportunities')}</p>
                   <p className="text-2xl font-bold">{openOpportunities}</p>
                 </div>
-                <DollarSign className="w-8 h-8 text-primary" />
+                <CurrencyDollar size={32} weight="light" className="text-primary" />
               </div>
             </Card>
             
