@@ -172,7 +172,7 @@ Deno.serve(async (req) => {
       );
     }
 
-    const { subdomain: rawSubdomain, access_token } = await req.json();
+    const { subdomain: rawSubdomain, access_token, pipeline_ids } = await req.json();
 
     if (!rawSubdomain || !access_token) {
       return new Response(
