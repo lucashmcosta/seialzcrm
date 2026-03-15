@@ -37,7 +37,7 @@ export function LandingNavbar() {
       }`}
     >
       <div className="max-w-7xl mx-auto px-6 h-16 flex items-center justify-between">
-        <SeialzLogo size="sm" theme="dark" animated={false} />
+        <SeialzLogo size="md" theme="dark" animated={true} />
 
         {/* Desktop links */}
         <div className="hidden lg:flex items-center gap-6">
