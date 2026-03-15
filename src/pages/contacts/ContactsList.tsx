@@ -1,7 +1,7 @@
 import { useState, useEffect, useMemo } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import type { SortDescriptor } from 'react-aria-components';
-import { Edit01, Trash01 } from '@untitledui/icons';
+import { PencilSimple, TrashSimple } from '@phosphor-icons/react';
 import { Layout } from '@/components/Layout';
 import { Button } from '@/components/base/buttons/button';
 import { Input } from '@/components/ui/input';
