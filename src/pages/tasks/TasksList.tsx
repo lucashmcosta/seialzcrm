@@ -182,9 +182,9 @@ export default function TasksList() {
   };
 
   const getPriorityIcon = (priority: string) => {
-    if (priority === 'high') return <AlertCircle className="w-4 h-4 text-red-600" />;
-    if (priority === 'medium') return <Clock className="w-4 h-4 text-yellow-600" />;
-    return <Clock className="w-4 h-4 text-blue-600" />;
+    if (priority === 'high') return <WarningCircle size={16} weight="light" className="text-red-600" />;
+    if (priority === 'medium') return <Clock size={16} weight="light" className="text-yellow-600" />;
+    return <Clock size={16} weight="light" className="text-blue-600" />;
   };
 
   const isOverdue = (task: Task) => {
