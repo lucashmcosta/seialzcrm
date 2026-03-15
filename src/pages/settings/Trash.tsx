@@ -8,7 +8,7 @@ import { supabase } from '@/integrations/supabase/client';
 import { useOrganization } from '@/hooks/useOrganization';
 import { useTranslation } from '@/lib/i18n';
 import { toast } from 'sonner';
-import { ArrowCounterClockwise, TrashSimple, Warning } from '@phosphor-icons/react';
+import { ArrowCounterClockwise, Trash, Warning } from '@phosphor-icons/react';
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from '@/components/ui/alert-dialog';
 
 interface DeletedItem {
