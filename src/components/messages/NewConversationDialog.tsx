@@ -129,7 +129,7 @@ export function NewConversationDialog({
         <div className="space-y-4">
           {/* Search input */}
           <div className="relative">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+            <MagnifyingGlass className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
             <Input
               placeholder={locale === 'pt-BR' ? 'Buscar contato...' : 'Search contact...'}
               value={search}
