@@ -118,7 +118,7 @@ export function SendTemplateModal({
               <Label>Template</Label>
               {templatesLoading ? (
                 <div className="flex items-center gap-2 text-muted-foreground">
-                  <Loader2 className="w-4 h-4 animate-spin" />
+                  <SpinnerGap className="w-4 h-4 animate-spin" />
                   <span>Carregando templates...</span>
                 </div>
               ) : approvedTemplates.length === 0 ? (
