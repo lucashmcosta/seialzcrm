@@ -335,7 +335,7 @@ export default function WhatsAppTemplates() {
                           )}
                           {(template.status === 'not_submitted' || template.status === 'draft' || template.status === 'rejected') && (
                             <DropdownMenuItem onClick={() => openSubmitDialog(template.id)}>
-                              <Send className="w-4 h-4 mr-2" />
+                               <PaperPlaneTilt className="w-4 h-4 mr-2" />
                               Submeter para Aprovação
                             </DropdownMenuItem>
                           )}
