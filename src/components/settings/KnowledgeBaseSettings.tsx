@@ -389,7 +389,7 @@ export function KnowledgeBaseSettings() {
           <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
             <div className="flex flex-1 gap-2 flex-wrap">
               <div className="relative flex-1 min-w-[200px] max-w-xs">
-                <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
+                <MagnifyingGlass className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
                 <Input
                   placeholder="Buscar..."
                   value={searchTerm}
