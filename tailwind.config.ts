@@ -259,7 +259,10 @@ export default {
           'Liberation Mono',
           'Courier New',
           'monospace'
-        ]
+        ],
+        body: ['Outfit', 'sans-serif'],
+        data: ['Share Tech Mono', 'monospace'],
+        display: ['Michroma', 'sans-serif']
       }
     }
   },
