@@ -3,7 +3,7 @@ import ReactCrop, { Crop, PixelCrop, centerCrop, makeAspectCrop } from 'react-im
 import 'react-image-crop/dist/ReactCrop.css';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
-import { Upload, Link, Image as ImageIcon, Trash2 } from 'lucide-react';
+import { UploadSimple, Link as LinkIcon, ImageSquare, TrashSimple } from '@phosphor-icons/react';
 import {
   Dialog,
   DialogContent,
