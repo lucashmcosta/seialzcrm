@@ -99,6 +99,46 @@ async function getCustomFieldsCount(baseUrl: string, headers: Record<string, str
   }
 }
 
+function extractUsersFromPayload(usersData: any): any[] {
+  if (Array.isArray(usersData)) return usersData;
+  if (Array.isArray(usersData?._embedded?.users)) return usersData._embedded.users;
+  if (Array.isArray(usersData?.users)) return usersData.users;
+  return [];
+}
+
+async function fetchKommoUsers(baseUrl: string, headers: Record<string, string>): Promise<any[]> {
+  const usersUrl = `${baseUrl}/users`;
+
+  console.log("Fetching users from:", usersUrl);
+
+  try {
+    let usersResponse: Response;
+
+    try {
+      usersResponse = await fetchWithRetry(`${usersUrl}?with=role`, { headers });
+    } catch (withRoleError) {
+      console.warn("Users fetch with '?with=role' failed, retrying plain /users:", withRoleError);
+      usersResponse = await fetchWithRetry(usersUrl, { headers });
+    }
+
+    console.log("Users response status:", usersResponse.status);
+
+    const usersData = usersResponse.status === 204
+      ? { _embedded: { users: [] } }
+      : await usersResponse.json();
+
+    console.log("Users data:", JSON.stringify(usersData).substring(0, 500));
+
+    const parsedUsers = extractUsersFromPayload(usersData);
+    console.log("Users parsed count:", parsedUsers.length);
+
+    return parsedUsers;
+  } catch (error) {
+    console.error("Error fetching users list:", error);
+    return [];
+  }
+}
+
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") {
     return new Response(null, { headers: corsHeaders });
@@ -113,14 +153,29 @@ Deno.serve(async (req) => {
       );
     }
 
-    const { subdomain, access_token } = await req.json();
+    const { subdomain: rawSubdomain, access_token } = await req.json();
 
-    if (!subdomain || !access_token) {
+    if (!rawSubdomain || !access_token) {
       return new Response(
         JSON.stringify({ error: "Subdomínio e access token são obrigatórios" }),
         { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
     }
+
+    const subdomain = rawSubdomain
+      .replace(/^https?:\/\//i, '')
+      .replace(/\.kommo\.com.*$/i, '')
+      .replace(/[\/\s]/g, '')
+      .trim();
+
+    if (!subdomain) {
+      return new Response(
+        JSON.stringify({ error: "Subdomínio inválido" }),
+        { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
+    }
+
+    console.log("Sanitized subdomain for preview:", subdomain);
 
     const baseUrl = `https://${subdomain}.kommo.com/api/v4`;
     const headers = {
@@ -136,7 +191,7 @@ Deno.serve(async (req) => {
       leadsCount,
       companiesCount,
       tasksCount,
-      usersResponse,
+      usersPayload,
       contactNotesCount,
       leadNotesCount,
       contactCustomFields,
@@ -157,9 +212,7 @@ Deno.serve(async (req) => {
       getEntityCount(baseUrl, headers, "companies"),
       getEntityCount(baseUrl, headers, "tasks"),
       // Users (full list — typically small)
-      fetchWithRetry(`${baseUrl}/users`, { headers })
-        .then(r => r.status === 204 ? { _embedded: { users: [] } } : r.json())
-        .catch(() => ({ _embedded: { users: [] } })),
+      fetchKommoUsers(baseUrl, headers),
       // Notes counts (batch endpoints)
       getNotesCount(baseUrl, headers, "contacts"),
       getNotesCount(baseUrl, headers, "leads"),
@@ -198,7 +251,7 @@ Deno.serve(async (req) => {
     }));
 
     // Transform users list
-    const kommoUsers = (usersResponse._embedded?.users || []).map((user: any) => ({
+    const kommoUsers = usersPayload.map((user: any) => ({
       id: user.id,
       name: user.name,
       email: user.email,
