@@ -123,7 +123,7 @@ export const TableRowActionsDropdown = ({
     <DropdownMenu>
       <DropdownMenuTrigger asChild>
         <ButtonUtility size="sm">
-          <MoreVertical className="h-4 w-4" />
+          <DotsThreeVertical className="h-4 w-4" />
         </ButtonUtility>
       </DropdownMenuTrigger>
       <DropdownMenuContent align="end">{children}</DropdownMenuContent>
