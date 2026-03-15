@@ -162,6 +162,26 @@ Deno.serve(async (req) => {
       ec?.forEach((x: any) => { if (x.source_external_id) cMap[x.source_external_id.replace("kommo_", "")] = x.id; });
     }
 
+    // Bug fix #3: Rebuild user map from DB if empty (e.g. Users phase failed on previous run)
+    if (!Object.keys(uMap).length) {
+      const { data: mappings } = await sb.from("kommo_user_mappings").select("kommo_user_id, seialz_user_id").eq("organization_id", orgId).not("seialz_user_id", "is", null);
+      mappings?.forEach((m: any) => { uMap[String(m.kommo_user_id)] = m.seialz_user_id; });
+      c.kommo_user_id_map = uMap;
+    }
+
+    // Ensure defUser is always populated
+    if (!defUser) {
+      const { data: fallbackOrg } = await sb.from("user_organizations").select("user_id").eq("organization_id", orgId).eq("is_active", true).limit(1).single();
+      defUser = fallbackOrg?.user_id || l.created_by_user_id || "";
+      c.default_user_id = defUser;
+    }
+
+    // Helper: convert Kommo Unix timestamp to ISO string
+    function kommoDate(ts: number | undefined | null): string | undefined {
+      if (!ts) return undefined;
+      return new Date(ts * 1000).toISOString();
+    }
+
     // === USERS ===
     if (c.phase === "users" && !c.users_complete) {
       try {
@@ -233,10 +253,10 @@ Deno.serve(async (req) => {
               const ph = co.custom_fields_values?.find((f: any) => f.field_code === "PHONE")?.values?.[0]?.value;
               const ex = await findExisting(sb, "companies", orgId, sei);
               if (ex) {
-                if (dupMode === "update") { await sb.from("companies").update({ name: co.name, phone: ph || undefined }).eq("id", ex.id); iCo++; coIds.push(ex.id); }
+                if (dupMode === "update") { await sb.from("companies").update({ name: co.name, phone: ph || undefined, updated_at: kommoDate(co.updated_at) }).eq("id", ex.id); iCo++; coIds.push(ex.id); }
                 coMap[String(co.id)] = ex.id;
               } else {
-                const { data: n, error: ie } = await sb.from("companies").insert({ organization_id: orgId, name: co.name || "Empresa sem nome", phone: ph || null, source: "kommo", source_external_id: sei }).select("id").single();
+                const { data: n, error: ie } = await sb.from("companies").insert({ organization_id: orgId, name: co.name || "Empresa sem nome", phone: ph || null, source: "kommo", source_external_id: sei, created_at: kommoDate(co.created_at), updated_at: kommoDate(co.updated_at) }).select("id").single();
                 if (!ie && n) { iCo++; coIds.push(n.id); coMap[String(co.id)] = n.id; }
                 else if (ie) errs.push({ type: "company", kommo_id: co.id, error: ie.message });
               }
@@ -270,12 +290,12 @@ Deno.serve(async (req) => {
               let compId: string | null = null;
               const lc = ct._embedded?.companies?.[0];
               if (lc) compId = coMap[String(lc.id)] || null;
-              const owner = ct.responsible_user_id ? uMap[String(ct.responsible_user_id)] || null : null;
+              const owner = ct.responsible_user_id ? (uMap[String(ct.responsible_user_id)] || defUser) : defUser;
               if (ex) {
                 if (dupMode === "skip") { sc++; cMap[String(ct.id)] = ex.id; continue; }
-                if (dupMode === "update") { await sb.from("contacts").update({ full_name: ct.name, email, phone, source_external_id: `kommo_${ct.id}`, company_id: compId || undefined, owner_user_id: owner || undefined }).eq("id", ex.id); ic++; cIds.push(ex.id); cMap[String(ct.id)] = ex.id; continue; }
+                if (dupMode === "update") { await sb.from("contacts").update({ full_name: ct.name, email, phone, source_external_id: `kommo_${ct.id}`, company_id: compId || undefined, owner_user_id: owner || undefined, updated_at: kommoDate(ct.updated_at) }).eq("id", ex.id); ic++; cIds.push(ex.id); cMap[String(ct.id)] = ex.id; continue; }
               }
-              const { data: n, error: ie } = await sb.from("contacts").insert({ organization_id: orgId, full_name: ct.name || "Sem nome", email, phone, source: "kommo", source_external_id: `kommo_${ct.id}`, company_id: compId, owner_user_id: owner }).select("id").single();
+              const { data: n, error: ie } = await sb.from("contacts").insert({ organization_id: orgId, full_name: ct.name || "Sem nome", email, phone, source: "kommo", source_external_id: `kommo_${ct.id}`, company_id: compId, owner_user_id: owner || null, created_at: kommoDate(ct.created_at), updated_at: kommoDate(ct.updated_at) }).select("id").single();
               if (ie) errs.push({ type: "contact", kommo_id: ct.id, error: ie.message });
               else { ic++; cIds.push(n.id); cMap[String(ct.id)] = n.id; }
             } catch (e: any) { errs.push({ type: "contact", kommo_id: ct.id, error: e.message }); }
@@ -315,13 +335,13 @@ Deno.serve(async (req) => {
               const sk = `${ld.pipeline_id}_${ld.status_id}`;
               const stageId = cfg.stage_mapping?.[sk];
               if (!stageId) { so++; continue; }
-              const owner = ld.responsible_user_id ? uMap[String(ld.responsible_user_id)] || null : null;
+              const owner = ld.responsible_user_id ? (uMap[String(ld.responsible_user_id)] || defUser) : defUser;
               const ex = await findExisting(sb, "opportunities", orgId, `kommo_${ld.id}`);
               if (ex) {
                 if (dupMode === "skip") { so++; continue; }
-                if (dupMode === "update") { await sb.from("opportunities").update({ title: ld.name, amount: ld.price || 0, pipeline_stage_id: stageId, contact_id: contactId, owner_user_id: owner || undefined }).eq("id", ex.id); io++; oIds.push(ex.id); continue; }
+                if (dupMode === "update") { await sb.from("opportunities").update({ title: ld.name, amount: ld.price || 0, pipeline_stage_id: stageId, contact_id: contactId, owner_user_id: owner || undefined, updated_at: kommoDate(ld.updated_at) }).eq("id", ex.id); io++; oIds.push(ex.id); continue; }
               }
-              const { data: n, error: oe } = await sb.from("opportunities").insert({ organization_id: orgId, contact_id: contactId, title: ld.name || "Lead sem título", amount: ld.price || 0, pipeline_stage_id: stageId, source: "kommo", source_external_id: `kommo_${ld.id}`, owner_user_id: owner }).select("id").single();
+              const { data: n, error: oe } = await sb.from("opportunities").insert({ organization_id: orgId, contact_id: contactId, title: ld.name || "Lead sem título", amount: ld.price || 0, pipeline_stage_id: stageId, source: "kommo", source_external_id: `kommo_${ld.id}`, owner_user_id: owner || null, created_at: kommoDate(ld.created_at), updated_at: kommoDate(ld.updated_at) }).select("id").single();
               if (oe) errs.push({ type: "opportunity", kommo_id: ld.id, error: oe.message });
               else { io++; oIds.push(n.id); }
             } catch (e: any) { errs.push({ type: "opportunity", kommo_id: ld.id, error: e.message }); }
@@ -363,7 +383,7 @@ Deno.serve(async (req) => {
                 else { errs.push({ type: "task", kommo_id: tk.id, error: "Nenhum usuário disponível na organização" }); continue; }
               }
               const due = tk.complete_till ? new Date(tk.complete_till * 1000).toISOString() : null;
-              const { data: n, error: ie } = await sb.from("tasks").insert({ organization_id: orgId, title: tk.text || "Tarefa Kommo", description: `Importado da Kommo (ID: ${tk.id})`, status: tk.is_completed ? "completed" : "pending", due_at: due, contact_id: ctId, opportunity_id: opId, assigned_user_id: auid, created_by_user_id: auid, source_external_id: sei }).select("id").single();
+              const { data: n, error: ie } = await sb.from("tasks").insert({ organization_id: orgId, title: tk.text || "Tarefa Kommo", description: `Importado da Kommo (ID: ${tk.id})`, status: tk.is_completed ? "completed" : "pending", due_at: due, contact_id: ctId, opportunity_id: opId, assigned_user_id: auid, created_by_user_id: auid, source_external_id: sei, created_at: kommoDate(tk.created_at), updated_at: kommoDate(tk.updated_at) }).select("id").single();
               if (!ie && n) { iT++; tIds.push(n.id); } else if (ie) errs.push({ type: "task", kommo_id: tk.id, error: ie.message });
             } catch (e: any) { errs.push({ type: "task", kommo_id: tk.id, error: e.message }); }
           }
