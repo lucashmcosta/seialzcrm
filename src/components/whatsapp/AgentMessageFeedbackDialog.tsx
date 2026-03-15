@@ -394,7 +394,7 @@ export function AgentMessageFeedbackDialog({
       <DialogContent className="max-w-lg">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
-            <MessageSquare className="h-5 w-5 text-primary" />
+            <ChatCircle className="h-5 w-5 text-primary" />
             Feedback para o Agente
             {step !== 'input' && (
               <span className="text-sm font-normal text-muted-foreground ml-2">
