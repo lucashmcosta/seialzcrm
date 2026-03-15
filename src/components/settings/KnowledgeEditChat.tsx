@@ -298,7 +298,7 @@ export function KnowledgeEditChat() {
                       {/* Warnings */}
                       {message.warnings && message.warnings.length > 0 && (
                         <div className="flex items-start gap-2 p-2 bg-yellow-500/10 rounded-md">
-                          <AlertCircle className="h-4 w-4 text-yellow-500 shrink-0 mt-0.5" />
+                          <WarningCircle className="h-4 w-4 text-yellow-500 shrink-0 mt-0.5" />
                           <div className="text-xs text-yellow-600">
                             {message.warnings.map((w, i) => (
                               <p key={i}>{w}</p>
