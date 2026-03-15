@@ -6,7 +6,7 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Badge } from '@/components/ui/badge';
-import { ArrowLeft, RefreshCw, Ban, Trash2, Mail, Play, LogIn } from 'lucide-react';
+import { ArrowLeft, ArrowsClockwise, Prohibit, TrashSimple, EnvelopeSimple, Play, SignIn } from '@phosphor-icons/react';
 import { useToast } from '@/hooks/use-toast';
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
@@ -180,7 +180,7 @@ export default function AdminOrganizationDetail() {
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-4">
             <Button variant="ghost" size="icon" onClick={() => navigate('/admin/organizations')}>
-              <ArrowLeft className="h-4 w-4" />
+              <ArrowLeft size={16} />
             </Button>
             <div>
               <h1 className="text-3xl font-bold">{org.name}</h1>
@@ -188,7 +188,7 @@ export default function AdminOrganizationDetail() {
             </div>
           </div>
           <Button onClick={handleRecalculateMetrics} variant="outline">
-            <RefreshCw className="h-4 w-4 mr-2" />
+            <ArrowsClockwise size={16} className="mr-2" />
             Recalcular Métricas
           </Button>
         </div>
@@ -197,7 +197,7 @@ export default function AdminOrganizationDetail() {
           <Card className="border-destructive bg-destructive/10">
             <CardContent className="pt-6">
               <div className="flex items-center gap-2 text-destructive">
-                <Ban className="h-5 w-5" />
+                <Prohibit size={20} />
                 <div>
                   <p className="font-semibold">Conta Suspensa</p>
                   <p className="text-sm">
@@ -296,7 +296,7 @@ export default function AdminOrganizationDetail() {
                               email: userOrg.users?.email,
                             })}
                           >
-                            <LogIn className="h-4 w-4 mr-1" />
+                            <SignIn size={16} className="mr-1" />
                             Entrar como
                           </Button>
                         )}
@@ -428,7 +428,7 @@ export default function AdminOrganizationDetail() {
                 </div>
                 {org.subscriptions?.[0]?.status === 'trialing' && (
                   <Button variant="outline" onClick={() => setExtendTrialDialogOpen(true)}>
-                    <Play className="h-4 w-4 mr-2" />
+                    <Play size={16} className="mr-2" />
                     Estender Trial
                   </Button>
                 )}
@@ -444,18 +444,18 @@ export default function AdminOrganizationDetail() {
               <CardContent className="space-y-3">
                 {org.suspended_at ? (
                   <Button onClick={handleReactivate} variant="default" className="w-full justify-start">
-                    <Play className="h-4 w-4 mr-2" />
+                    <Play size={16} className="mr-2" />
                     Reativar Conta
                   </Button>
                 ) : (
                   <Button onClick={() => setSuspendDialogOpen(true)} variant="destructive" className="w-full justify-start">
-                    <Ban className="h-4 w-4 mr-2" />
+                    <Prohibit size={16} className="mr-2" />
                     Suspender Conta
                   </Button>
                 )}
                 
                 <Button onClick={handleSendEmail} variant="outline" className="w-full justify-start">
-                  <Mail className="h-4 w-4 mr-2" />
+                  <EnvelopeSimple size={16} className="mr-2" />
                   Enviar Email para Conta
                 </Button>
 
@@ -464,7 +464,7 @@ export default function AdminOrganizationDetail() {
                   variant="destructive" 
                   className="w-full justify-start"
                 >
-                  <Trash2 className="h-4 w-4 mr-2" />
+                  <TrashSimple size={16} className="mr-2" />
                   Deletar Conta Permanentemente
                 </Button>
               </CardContent>

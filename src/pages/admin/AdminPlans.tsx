@@ -4,7 +4,7 @@ import { AdminLayout } from '@/components/admin/AdminLayout';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
-import { Plus, Edit, Power, PowerOff } from 'lucide-react';
+import { Plus, PencilSimple, Power } from '@phosphor-icons/react';
 import { useToast } from '@/hooks/use-toast';
 import { CreatePlanDialog } from '@/components/admin/CreatePlanDialog';
 
@@ -184,7 +184,7 @@ export default function AdminPlans() {
                         onClick={() => handleEdit(plan)}
                         className="flex-1"
                       >
-                        <Edit className="mr-2 h-3 w-3" />
+                        <PencilSimple size={12} className="mr-2" />
                         Editar
                       </Button>
                       <Button
@@ -195,12 +195,12 @@ export default function AdminPlans() {
                       >
                         {plan.is_active ? (
                           <>
-                            <PowerOff className="mr-2 h-3 w-3" />
+                            <Power size={12} className="mr-2" />
                             Desativar
                           </>
                         ) : (
                           <>
-                            <Power className="mr-2 h-3 w-3" />
+                            <Power size={12} className="mr-2" />
                             Ativar
                           </>
                         )}

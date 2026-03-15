@@ -2,7 +2,7 @@ import { useNavigate } from 'react-router-dom';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
-import { Settings, ExternalLink } from 'lucide-react';
+import { GearSix, ArrowSquareOut } from '@phosphor-icons/react';
 
 interface Integration {
   id: string;
@@ -58,7 +58,7 @@ export function IntegrationCard({ integration }: IntegrationCardProps) {
               />
             ) : (
               <div className="w-12 h-12 rounded-lg bg-muted flex items-center justify-center">
-                <Settings className="h-6 w-6 text-muted-foreground" />
+                <GearSix size={24} className="text-muted-foreground" />
               </div>
             )}
             <div>
@@ -79,7 +79,7 @@ export function IntegrationCard({ integration }: IntegrationCardProps) {
             className="flex-1"
             onClick={() => navigate(`/admin/integrations/${integration.id}`)}
           >
-            <Settings className="h-4 w-4 mr-2" />
+            <GearSix size={16} className="mr-2" />
             Configurar
           </Button>
           {integration.documentation_url && (
@@ -88,7 +88,7 @@ export function IntegrationCard({ integration }: IntegrationCardProps) {
               size="icon"
               onClick={() => window.open(integration.documentation_url!, '_blank')}
             >
-              <ExternalLink className="h-4 w-4" />
+              <ArrowSquareOut size={16} />
             </Button>
           )}
         </div>

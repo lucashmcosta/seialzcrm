@@ -7,7 +7,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Label } from '@/components/ui/label';
 import { Switch } from '@/components/ui/switch';
 import { toast } from 'sonner';
-import { Check, Palette, Moon, Sun } from 'lucide-react';
+import { Check, Palette, Moon, Sun } from '@phosphor-icons/react';
 import { cn } from '@/lib/utils';
 
 const COLOR_PRESETS = [

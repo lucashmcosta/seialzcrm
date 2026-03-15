@@ -12,7 +12,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
 import { Badge } from '@/components/ui/badge';
 import { useToast } from '@/hooks/use-toast';
-import { Loader2, UserPlus, ChevronDown, Mail, UserRoundPlus, Clock, X } from 'lucide-react';
+import { SpinnerGap, UserPlus, CaretDown, EnvelopeSimple, UserCirclePlus, Clock, X } from '@phosphor-icons/react';
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 

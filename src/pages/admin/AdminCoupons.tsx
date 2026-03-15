@@ -3,7 +3,7 @@ import { supabase } from '@/integrations/supabase/client';
 import { AdminLayout } from '@/components/admin/AdminLayout';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
-import { Plus, Power, PowerOff } from 'lucide-react';
+import { Plus, Power } from '@phosphor-icons/react';
 import { useToast } from '@/hooks/use-toast';
 import { CreateCouponDialog } from '@/components/admin/CreateCouponDialog';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
@@ -165,9 +165,9 @@ export default function AdminCoupons() {
                         onClick={() => handleToggleActive(coupon)}
                       >
                         {coupon.is_active ? (
-                          <PowerOff className="h-4 w-4" />
+                          <Power size={16} />
                         ) : (
-                          <Power className="h-4 w-4" />
+                          <Power size={16} weight="bold" />
                         )}
                       </Button>
                     </TableCell>

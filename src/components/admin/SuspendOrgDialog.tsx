@@ -12,7 +12,7 @@ import {
 import { Textarea } from '@/components/ui/textarea';
 import { Label } from '@/components/ui/label';
 import { useToast } from '@/hooks/use-toast';
-import { AlertTriangle } from 'lucide-react';
+import { Warning } from '@phosphor-icons/react';
 
 interface SuspendOrgDialogProps {
   open: boolean;
@@ -104,7 +104,7 @@ export function SuspendOrgDialog({
       <DialogContent>
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2 text-destructive">
-            <AlertTriangle className="h-5 w-5" />
+            <Warning size={20} />
             Suspender Conta
           </DialogTitle>
           <DialogDescription>

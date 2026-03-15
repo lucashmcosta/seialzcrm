@@ -5,7 +5,7 @@ import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Label } from '@/components/ui/label';
 import { Input } from '@/components/ui/input';
-import { Phone, CheckCircle2, XCircle, Settings2, ExternalLink, Loader2, RefreshCw, Wrench, Pencil } from 'lucide-react';
+import { Phone, CheckCircle, XCircle, GearSix, ArrowSquareOut, SpinnerGap, ArrowsClockwise, Wrench, PencilSimple } from '@phosphor-icons/react';
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { formatPhoneDisplay } from '@/lib/phoneUtils';

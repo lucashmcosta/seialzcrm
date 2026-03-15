@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { AdminLayout } from '@/components/admin/AdminLayout';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { Building2, Users, DollarSign, Activity, Ban } from 'lucide-react';
+import { Buildings, Users, CurrencyDollar, Pulse, Prohibit } from '@phosphor-icons/react';
 import { LineChart, Line, BarChart, Bar, PieChart, Pie, Cell, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from 'recharts';
 
 interface KPIData {
@@ -114,17 +114,17 @@ export default function AdminDashboard() {
     {
       title: 'Total de Contas',
       value: kpis.totalOrgs,
-      icon: Building2,
+      icon: Buildings,
     },
     {
       title: 'Contas Ativas',
       value: kpis.activeOrgs,
-      icon: Activity,
+      icon: Pulse,
     },
     {
       title: 'Contas Suspensas',
       value: kpis.suspendedOrgs,
-      icon: Ban,
+      icon: Prohibit,
     },
     {
       title: 'Total de Usuários',
@@ -134,7 +134,7 @@ export default function AdminDashboard() {
     {
       title: 'MRR',
       value: `R$ ${kpis.mrr.toLocaleString('pt-BR')}`,
-      icon: DollarSign,
+      icon: CurrencyDollar,
     },
   ];
 

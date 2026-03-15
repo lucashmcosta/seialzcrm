@@ -11,7 +11,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 import { supabase } from '@/integrations/supabase/client';
 import { useOrganization } from '@/hooks/useOrganization';
 import { toast } from 'sonner';
-import { Plus, Pencil, Trash2, Package, GripVertical } from 'lucide-react';
+import { Plus, PencilSimple, TrashSimple, Package, DotsSixVertical } from '@phosphor-icons/react';
 
 interface Product {
   id: string;

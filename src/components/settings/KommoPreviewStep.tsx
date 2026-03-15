@@ -6,7 +6,7 @@ import { Checkbox } from '@/components/ui/checkbox';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Badge } from '@/components/ui/badge';
-import { Loader2, Users, Briefcase, AlertTriangle, ArrowRight } from 'lucide-react';
+import { SpinnerGap, Users, Briefcase, Warning, ArrowRight } from '@phosphor-icons/react';
 
 import type { KommoCredentials, MigrationConfig } from '@/hooks/useKommoMigration';
 

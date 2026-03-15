@@ -1,6 +1,6 @@
 import { useAdminAuth } from '@/hooks/useAdminAuth';
 import { Button } from '@/components/ui/button';
-import { LogOut, User } from 'lucide-react';
+import { SignOut, User } from '@phosphor-icons/react';
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -35,7 +35,7 @@ export function AdminHeader() {
           </DropdownMenuLabel>
           <DropdownMenuSeparator />
           <DropdownMenuItem onClick={signOut} className="text-destructive">
-            <LogOut className="h-4 w-4 mr-2" />
+            <SignOut size={16} className="mr-2" />
             Sair
           </DropdownMenuItem>
         </DropdownMenuContent>

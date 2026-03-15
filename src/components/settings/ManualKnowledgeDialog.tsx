@@ -10,7 +10,7 @@ import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, D
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
 import { Checkbox } from '@/components/ui/checkbox';
 import { toast } from 'sonner';
-import { Plus, Loader2, Globe, Package } from 'lucide-react';
+import { Plus, SpinnerGap, Globe, Package } from '@phosphor-icons/react';
 
 interface ManualKnowledgeDialogProps {
   agents: Array<{ id: string; name: string }>;

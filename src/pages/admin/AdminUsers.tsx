@@ -4,7 +4,7 @@ import { AdminLayout } from '@/components/admin/AdminLayout';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
-import { UserPlus, CheckCircle, XCircle, Shield, ShieldOff } from 'lucide-react';
+import { UserPlus, CheckCircle, XCircle, Shield, ShieldSlash } from '@phosphor-icons/react';
 import { useToast } from '@/hooks/use-toast';
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
@@ -23,7 +23,7 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
-import { MoreHorizontal } from 'lucide-react';
+import { DotsThree } from '@phosphor-icons/react';
 
 interface AdminUser {
   id: string;
@@ -133,7 +133,7 @@ export default function AdminUsers() {
         <div className="flex items-center justify-between">
           <h1 className="text-3xl font-bold">Administradores</h1>
           <Button onClick={() => setCreateDialogOpen(true)}>
-            <UserPlus className="h-4 w-4 mr-2" />
+            <UserPlus size={16} className="mr-2" />
             Novo Administrador
           </Button>
         </div>
@@ -162,12 +162,12 @@ export default function AdminUsers() {
                     <TableCell>
                       {admin.mfa_enabled ? (
                         <Badge variant="default" className="gap-1">
-                          <Shield className="h-3 w-3" />
+                          <Shield size={12} />
                           Ativo
                         </Badge>
                       ) : (
                         <Badge variant="secondary" className="gap-1">
-                          <ShieldOff className="h-3 w-3" />
+                          <ShieldSlash size={12} />
                           Inativo
                         </Badge>
                       )}
@@ -175,12 +175,12 @@ export default function AdminUsers() {
                     <TableCell>
                       {admin.is_active ? (
                         <Badge variant="default" className="gap-1">
-                          <CheckCircle className="h-3 w-3" />
+                          <CheckCircle size={12} />
                           Ativo
                         </Badge>
                       ) : (
                         <Badge variant="destructive" className="gap-1">
-                          <XCircle className="h-3 w-3" />
+                          <XCircle size={12} />
                           Inativo
                         </Badge>
                       )}
@@ -194,7 +194,7 @@ export default function AdminUsers() {
                       <DropdownMenu>
                         <DropdownMenuTrigger asChild>
                           <Button variant="ghost" size="icon">
-                            <MoreHorizontal className="h-4 w-4" />
+                            <DotsThree size={16} />
                           </Button>
                         </DropdownMenuTrigger>
                         <DropdownMenuContent align="end">

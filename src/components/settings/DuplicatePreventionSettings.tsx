@@ -8,7 +8,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Switch } from '@/components/ui/switch';
 import { useToast } from '@/hooks/use-toast';
-import { Loader2, AlertCircle } from 'lucide-react';
+import { SpinnerGap, WarningCircle } from '@phosphor-icons/react';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 
 export function DuplicatePreventionSettings() {

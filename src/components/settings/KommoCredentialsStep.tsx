@@ -3,7 +3,7 @@ import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { Label } from '@/components/ui/label';
 import { Alert, AlertDescription } from '@/components/ui/alert';
-import { CheckCircle2, Loader2, ExternalLink, Link2 } from 'lucide-react';
+import { CheckCircle, SpinnerGap, ArrowSquareOut, LinkSimple } from '@phosphor-icons/react';
 import type { KommoCredentials } from '@/hooks/useKommoMigration';
 
 interface KommoCredentialsStepProps {

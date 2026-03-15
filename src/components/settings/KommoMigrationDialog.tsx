@@ -3,7 +3,7 @@ import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } f
 import { Button } from '@/components/ui/button';
 import { Separator } from '@/components/ui/separator';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
-import { ChevronLeft, ChevronRight, Upload, AlertCircle, Loader2, PlayCircle, XCircle } from 'lucide-react';
+import { CaretLeft, CaretRight, UploadSimple, WarningCircle, SpinnerGap, PlayCircle, XCircle } from '@phosphor-icons/react';
 
 import { useKommoMigration } from '@/hooks/useKommoMigration';
 import { KommoCredentialsStep } from './KommoCredentialsStep';

@@ -12,7 +12,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog';
-import { Loader2, Upload, Link, Trash2, ImageIcon } from 'lucide-react';
+import { SpinnerGap, UploadSimple, Link as LinkIcon, TrashSimple, ImageSquare } from '@phosphor-icons/react';
 import { supabase } from '@/integrations/supabase/client';
 import { useToast } from '@/hooks/use-toast';
 

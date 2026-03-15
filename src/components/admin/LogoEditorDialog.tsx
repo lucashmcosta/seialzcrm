@@ -3,7 +3,7 @@ import ReactCrop, { Crop, PixelCrop, centerCrop, makeAspectCrop } from 'react-im
 import 'react-image-crop/dist/ReactCrop.css';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
-import { Upload, Link, Image as ImageIcon, Trash2 } from 'lucide-react';
+import { UploadSimple, Link as LinkIcon, ImageSquare, TrashSimple } from '@phosphor-icons/react';
 import {
   Dialog,
   DialogContent,
@@ -169,11 +169,11 @@ export function LogoEditorDialog({
         <Tabs defaultValue="upload" className="w-full">
           <TabsList className="grid w-full grid-cols-2">
             <TabsTrigger value="upload" className="flex items-center gap-2">
-              <Upload className="w-4 h-4" />
+              <UploadSimple size={16} />
               Upload de Arquivo
             </TabsTrigger>
             <TabsTrigger value="url" className="flex items-center gap-2">
-              <Link className="w-4 h-4" />
+              <LinkIcon size={16} />
               URL Externa
             </TabsTrigger>
           </TabsList>
@@ -194,7 +194,7 @@ export function LogoEditorDialog({
                 className="w-full h-20 border-dashed"
               >
                 <div className="flex flex-col items-center gap-2">
-                  <Upload className="w-6 h-6" />
+                  <UploadSimple size={24} />
                   <span>Clique para selecionar uma imagem</span>
                 </div>
               </Button>
@@ -291,7 +291,7 @@ export function LogoEditorDialog({
                 size="sm"
                 onClick={handleRemoveLogo}
               >
-                <Trash2 className="w-4 h-4 mr-2" />
+                <TrashSimple size={16} className="mr-2" />
                 Remover Logo
               </Button>
             </div>

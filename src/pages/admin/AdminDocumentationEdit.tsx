@@ -3,7 +3,7 @@ import { useParams, useNavigate } from 'react-router-dom';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
-import { ArrowLeft, Save, Eye } from 'lucide-react';
+import { ArrowLeft, FloppyDisk, Eye } from '@phosphor-icons/react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -101,7 +101,7 @@ export default function AdminDocumentationEdit() {
           </div>
           <div className="flex gap-2">
             <Button variant="outline" onClick={() => handleSave(false)} disabled={loading}>
-              <Save className="h-4 w-4 mr-2" />
+              <FloppyDisk size={16} className="mr-2" />
               Salvar Rascunho
             </Button>
             <Button onClick={() => handleSave(true)} disabled={loading}>

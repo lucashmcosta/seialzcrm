@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
-import { Pencil, Image as ImageIcon, Trash2 } from 'lucide-react';
+import { PencilSimple, ImageSquare, TrashSimple } from '@phosphor-icons/react';
 import {
   Dialog,
   DialogContent,
@@ -113,7 +113,7 @@ export function CreateIntegrationDialog({ open, onOpenChange }: CreateIntegratio
                 />
               ) : (
                 <div className="w-12 h-12 rounded-lg bg-muted flex items-center justify-center">
-                  <ImageIcon className="w-5 h-5 text-muted-foreground" />
+                  <ImageSquare size={20} className="text-muted-foreground" />
                 </div>
               )}
               <div className="flex gap-2">
@@ -123,7 +123,7 @@ export function CreateIntegrationDialog({ open, onOpenChange }: CreateIntegratio
                   size="sm"
                   onClick={() => setLogoEditorOpen(true)}
                 >
-                  <Pencil className="w-4 h-4 mr-2" />
+                  <PencilSimple size={16} className="mr-2" />
                   {formData.logo_url ? 'Editar' : 'Adicionar'}
                 </Button>
                 {formData.logo_url && (
@@ -133,7 +133,7 @@ export function CreateIntegrationDialog({ open, onOpenChange }: CreateIntegratio
                     size="icon"
                     onClick={() => setFormData({ ...formData, logo_url: '' })}
                   >
-                    <Trash2 className="w-4 h-4 text-destructive" />
+                    <TrashSimple size={16} className="text-destructive" />
                   </Button>
                 )}
               </div>

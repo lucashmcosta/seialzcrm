@@ -3,7 +3,7 @@ import { useParams, useNavigate } from 'react-router-dom';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
-import { ArrowLeft, Save, Trash2, Pencil, Image as ImageIcon } from 'lucide-react';
+import { ArrowLeft, FloppyDisk, TrashSimple, PencilSimple, ImageSquare } from '@phosphor-icons/react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -96,17 +96,17 @@ export default function AdminIntegrationDetail() {
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-4">
             <Button variant="ghost" size="icon" onClick={() => navigate('/admin/integrations')}>
-              <ArrowLeft className="h-5 w-5" />
+              <ArrowLeft size={20} />
             </Button>
             <h1 className="text-3xl font-bold">{integration?.name}</h1>
           </div>
           <div className="flex gap-2">
             <Button variant="destructive" onClick={() => setConfirmOpen(true)} disabled={loading}>
-              <Trash2 className="h-4 w-4 mr-2" />
+              <TrashSimple size={16} className="mr-2" />
               Excluir
             </Button>
             <Button onClick={handleSave} disabled={loading}>
-              <Save className="h-4 w-4 mr-2" />
+              <FloppyDisk size={16} className="mr-2" />
               {loading ? 'Salvando...' : 'Salvar'}
             </Button>
           </div>
@@ -199,7 +199,7 @@ export default function AdminIntegrationDetail() {
                       />
                 ) : (
                   <div className="w-16 h-16 rounded-lg bg-muted flex items-center justify-center">
-                    <ImageIcon className="w-6 h-6 text-muted-foreground" />
+                    <ImageSquare size={24} className="text-muted-foreground" />
                   </div>
                 )}
                 <div className="flex gap-2">
@@ -208,7 +208,7 @@ export default function AdminIntegrationDetail() {
                     variant="outline"
                     onClick={() => setLogoEditorOpen(true)}
                   >
-                    <Pencil className="w-4 h-4 mr-2" />
+                    <PencilSimple size={16} className="mr-2" />
                     {formData.logo_url ? 'Editar Logo' : 'Adicionar Logo'}
                   </Button>
                   {formData.logo_url && (
@@ -218,7 +218,7 @@ export default function AdminIntegrationDetail() {
                       size="icon"
                       onClick={() => setFormData({ ...formData, logo_url: '' })}
                     >
-                      <Trash2 className="w-4 h-4 text-destructive" />
+                      <TrashSimple size={16} className="text-destructive" />
                     </Button>
                   )}
                 </div>

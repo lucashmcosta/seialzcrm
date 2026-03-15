@@ -11,7 +11,7 @@ import {
   TableHeader,
   TableRow,
 } from '@/components/ui/table';
-import { Shield, AlertTriangle, Unlock } from 'lucide-react';
+import { Shield, Warning, LockOpen } from '@phosphor-icons/react';
 import { useToast } from '@/hooks/use-toast';
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
@@ -139,7 +139,7 @@ export default function AdminSecurity() {
               <CardTitle className="text-sm font-medium">
                 Tentativas Falhadas (24h)
               </CardTitle>
-              <AlertTriangle className="h-4 w-4 text-destructive" />
+              <Warning size={16} className="text-destructive" />
             </CardHeader>
             <CardContent>
               <div className="text-2xl font-bold">{failedLogins.length}</div>
@@ -151,7 +151,7 @@ export default function AdminSecurity() {
               <CardTitle className="text-sm font-medium">
                 Sessões Ativas
               </CardTitle>
-              <Shield className="h-4 w-4 text-green-600" />
+              <Shield size={16} className="text-green-600" />
             </CardHeader>
             <CardContent>
               <div className="text-2xl font-bold">{activeSessions.length}</div>
@@ -163,7 +163,7 @@ export default function AdminSecurity() {
               <CardTitle className="text-sm font-medium">
                 Admins Bloqueados
               </CardTitle>
-              <Unlock className="h-4 w-4 text-destructive" />
+              <LockOpen size={16} className="text-destructive" />
             </CardHeader>
             <CardContent>
               <div className="text-2xl font-bold">{lockedAdmins.length}</div>
@@ -305,7 +305,7 @@ export default function AdminSecurity() {
                             size="sm"
                             onClick={() => handleUnlockAdmin(admin.id)}
                           >
-                            <Unlock className="h-4 w-4 mr-2" />
+                            <LockOpen size={16} className="mr-2" />
                             Desbloquear
                           </Button>
                         </TableCell>

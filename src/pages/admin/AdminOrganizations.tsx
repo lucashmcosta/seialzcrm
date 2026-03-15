@@ -12,7 +12,7 @@ import {
   TableHeader,
   TableRow,
 } from '@/components/ui/table';
-import { Search, Eye } from 'lucide-react';
+import { MagnifyingGlass, Eye } from '@phosphor-icons/react';
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 
@@ -97,7 +97,7 @@ export default function AdminOrganizations() {
 
         <div className="flex items-center gap-4">
           <div className="relative flex-1">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+            <MagnifyingGlass className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
             <Input
               placeholder="Buscar por nome ou slug..."
               value={search}

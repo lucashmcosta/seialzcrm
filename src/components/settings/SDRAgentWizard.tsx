@@ -14,12 +14,12 @@ import { Switch } from '@/components/ui/switch';
 import { Slider } from '@/components/ui/slider';
 import { Checkbox } from '@/components/ui/checkbox';
 import { 
-  Loader2, RefreshCw, ArrowLeft, ArrowRight, Check, Sparkles, 
-  MessageSquare, Target, FileText, MessageSquarePlus, History, 
-  Trash2, Send, Bot, User, ThumbsUp, ThumbsDown, Beaker, Wrench,
-  SlidersHorizontal, CheckSquare, Database, MessageCircleWarning,
-  Smile, Briefcase, Shield, AlertCircle
-} from 'lucide-react';
+  SpinnerGap, ArrowsClockwise, ArrowLeft, ArrowRight, Check, Sparkle, 
+  ChatCircle, Target, FileText, ChatCirclePlus, ClockCounterClockwise, 
+  TrashSimple, PaperPlaneTilt, Robot, User, ThumbsUp, ThumbsDown, Flask, Wrench,
+  SlidersHorizontal, CheckSquare, Database, ChatCircleWarning,
+  Smiley, Briefcase, Shield, WarningCircle
+} from '@phosphor-icons/react';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
 import { format } from 'date-fns';

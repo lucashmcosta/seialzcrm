@@ -9,18 +9,18 @@ import { supabase } from '@/integrations/supabase/client';
 import { useOrganization } from '@/hooks/useOrganization';
 import { toast } from 'sonner';
 import { 
-  MessageSquare, 
-  Send, 
-  Loader2, 
+  ChatCircle, 
+  PaperPlaneTilt, 
+  SpinnerGap, 
   Check, 
   X, 
-  AlertCircle, 
-  Sparkles,
+  WarningCircle, 
+  Sparkle,
   ArrowRight,
-  FileEdit,
+  NotePencil,
   Plus,
-  Trash2
-} from 'lucide-react';
+  TrashSimple
+} from '@phosphor-icons/react';
 
 interface ProposedChange {
   item_id: string | null;
