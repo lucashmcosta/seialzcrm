@@ -517,6 +517,7 @@ export function useKommoMigration() {
 
   return {
     // State
+    organization,
     step,
     credentials,
     kommoPipelines,

@@ -19,6 +19,7 @@ interface KommoMigrationDialogProps {
 
 export function KommoMigrationDialog({ open, onOpenChange }: KommoMigrationDialogProps) {
   const {
+    organization,
     step,
     credentials,
     kommoPipelines,
@@ -48,8 +49,6 @@ export function KommoMigrationDialog({ open, onOpenChange }: KommoMigrationDialo
     startMigrationMutation,
     rollbackMutation,
   } = useKommoMigration();
-
-  const organizationId = credentials ? undefined : undefined; // Will get from hook
 
   useEffect(() => {
     if (!open) {
