@@ -194,7 +194,7 @@ export function LogoEditorDialog({
                 className="w-full h-20 border-dashed"
               >
                 <div className="flex flex-col items-center gap-2">
-                  <Upload className="w-6 h-6" />
+                  <UploadSimple size={24} />
                   <span>Clique para selecionar uma imagem</span>
                 </div>
               </Button>
