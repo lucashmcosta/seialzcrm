@@ -170,9 +170,9 @@ export default function WhatsAppTemplates() {
             disabled={syncMutation.isPending}
           >
             {syncMutation.isPending ? (
-              <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+               <SpinnerGap className="w-4 h-4 mr-2 animate-spin" />
             ) : (
-              <RefreshCw className="w-4 h-4 mr-2" />
+              <ArrowsClockwise className="w-4 h-4 mr-2" />
             )}
             Sincronizar
           </Button>
