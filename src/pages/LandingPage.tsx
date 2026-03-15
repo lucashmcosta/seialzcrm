@@ -151,11 +151,11 @@ export default function LandingPage() {
               <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
                 {[
                   {
-                    icon: Zap, title: 'Tecnologia',
+                    icon: Lightning, title: 'Tecnologia',
                     desc: 'Plataforma própria com IA que conecta Meta Ads, Google Ads, WhatsApp, discador, CRM e attribution num sistema só. Elimina gestor de tráfego, ferramentas avulsas e planilhas.',
                   },
                   {
-                    icon: Settings, title: 'Processo',
+                    icon: GearSix, title: 'Processo',
                     desc: 'Playbook comercial completo: scripts, rotina do time, funil estruturado, métricas. Dados de marketing informam vendas, dados de vendas informam marketing. Um loop, não dois departamentos.',
                   },
                   {
