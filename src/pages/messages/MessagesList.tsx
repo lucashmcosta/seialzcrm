@@ -1405,7 +1405,7 @@ export default function MessagesList() {
                                   <div key={`note-${note.id}`} className="flex justify-center">
                                     <div className="max-w-[70%] rounded-lg p-3 min-w-[80px] overflow-hidden bg-yellow-100 dark:bg-yellow-900/30 border border-yellow-300 dark:border-yellow-700">
                                       <div className="flex items-center gap-1 mb-1">
-                                        <StickyNote className="w-3 h-3 text-yellow-600 dark:text-yellow-400" />
+                                        <NotePencil className="w-3 h-3 text-yellow-600 dark:text-yellow-400" />
                                         <span className="text-[10px] font-medium text-yellow-600 dark:text-yellow-400">Nota interna</span>
                                       </div>
                                       <p className="text-sm whitespace-pre-wrap break-all text-yellow-900 dark:text-yellow-100">
