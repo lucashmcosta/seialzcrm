@@ -167,7 +167,7 @@ export function SimpleLogoUploader({
                 Upload
               </TabsTrigger>
               <TabsTrigger value="url">
-                <Link className="w-4 h-4 mr-2" />
+                <LinkIcon className="w-4 h-4 mr-2" />
                 URL
               </TabsTrigger>
             </TabsList>
