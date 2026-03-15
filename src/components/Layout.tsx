@@ -68,7 +68,7 @@ export function Layout({ children }: LayoutProps) {
   const footerItems: NavItemType[] = [];
 
   if (permissions.canManageSettings) {
-    footerItems.push({ label: t('nav.settings'), href: '/settings', icon: Settings01 });
+    footerItems.push({ label: t('nav.settings'), href: '/settings', icon: GearSix });
   }
 
   if (userProfile?.is_platform_admin) {
