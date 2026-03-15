@@ -1474,7 +1474,7 @@ export function SDRAgentWizard({
             <div className="space-y-4 p-4 border rounded-lg bg-muted/30">
               <div>
                 <Label className="text-base font-medium flex items-center gap-2">
-                  <Sparkles className="h-4 w-4" />
+                  <Sparkle className="h-4 w-4" />
                   Modelo de IA
                 </Label>
                 <p className="text-sm text-muted-foreground">
