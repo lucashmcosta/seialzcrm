@@ -184,7 +184,7 @@ export default function AdminPlans() {
                         onClick={() => handleEdit(plan)}
                         className="flex-1"
                       >
-                        <Edit className="mr-2 h-3 w-3" />
+                        <PencilSimple size={12} className="mr-2" />
                         Editar
                       </Button>
                       <Button
