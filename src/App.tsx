@@ -420,9 +420,9 @@ const App = () => (
         </Routes>
         </Suspense>
         </ThemeProvider>
+        </OutboundCallProvider>
         </OrganizationProvider>
         </AuthProvider>
-        </OutboundCallProvider>
       </BrowserRouter>
     </TooltipProvider>
   </QueryClientProvider>
