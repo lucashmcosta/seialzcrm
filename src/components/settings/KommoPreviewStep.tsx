@@ -52,13 +52,13 @@ export function KommoPreviewStep({
   const preview = previewMutation.data;
   if (!preview) return null;
 
-  const contactsCount = preview.total_contacts_number || preview.total_contacts || 0;
-  const leadsCount = preview.total_leads_number || preview.total_leads || 0;
-  const companiesCount = preview.total_companies_number || 0;
-  const tasksCount = preview.total_tasks_number || 0;
-  const notesCount = preview.total_notes_number || 0;
-  const eventsCount = preview.total_events_number || 0;
-  const customFieldsCount = preview.total_custom_fields_number || 0;
+  const contactsCount = preview.total_contacts || 0;
+  const leadsCount = preview.total_leads || 0;
+  const companiesCount = preview.total_companies || 0;
+  const tasksCount = preview.total_tasks || 0;
+  const notesCount = preview.total_notes || 0;
+  const eventsCount = 0; // Events counted during migration
+  const customFieldsCount = preview.total_custom_fields || 0;
 
   const selectedTotal = contactsCount + leadsCount 
     + (config.import_companies ? companiesCount : 0)

@@ -183,44 +183,45 @@ Deno.serve(async (req) => {
       "Content-Type": "application/json",
     };
 
-    // Fetch all counts and samples in parallel
+    // Fetch samples first (fast), then exact counts (slower, paginated)
     const [
       contactsSample,
       leadsSample,
-      contactsCount,
-      leadsCount,
-      companiesCount,
-      tasksCount,
       usersPayload,
-      contactNotesCount,
-      leadNotesCount,
       contactCustomFields,
       leadCustomFields,
       companyCustomFields,
     ] = await Promise.all([
-      // Sample contacts (first 10)
       fetchWithRetry(`${baseUrl}/contacts?limit=10&with=leads`, { headers })
         .then(r => r.status === 204 ? { _embedded: { contacts: [] } } : r.json())
         .catch(() => ({ _embedded: { contacts: [] } })),
-      // Sample leads (first 10)
       fetchWithRetry(`${baseUrl}/leads?limit=10&with=contacts`, { headers })
         .then(r => r.status === 204 ? { _embedded: { leads: [] } } : r.json())
         .catch(() => ({ _embedded: { leads: [] } })),
-      // Counts
-      getEntityCount(baseUrl, headers, "contacts"),
-      getEntityCount(baseUrl, headers, "leads"),
-      getEntityCount(baseUrl, headers, "companies"),
-      getEntityCount(baseUrl, headers, "tasks"),
-      // Users (full list — typically small)
       fetchKommoUsers(baseUrl, headers),
-      // Notes counts (batch endpoints)
-      getNotesCount(baseUrl, headers, "contacts"),
-      getNotesCount(baseUrl, headers, "leads"),
-      // Custom fields counts
       getCustomFieldsCount(baseUrl, headers, "contacts"),
       getCustomFieldsCount(baseUrl, headers, "leads"),
       getCustomFieldsCount(baseUrl, headers, "companies"),
     ]);
+
+    // Now fetch exact counts (paginated, takes longer)
+    console.log("Starting exact counts...");
+    const [
+      contactsCount,
+      leadsCount,
+      companiesCount,
+      tasksCount,
+      contactNotesCount,
+      leadNotesCount,
+    ] = await Promise.all([
+      getExactCount(baseUrl, headers, "contacts"),
+      getExactCount(baseUrl, headers, "leads"),
+      getExactCount(baseUrl, headers, "companies"),
+      getExactCount(baseUrl, headers, "tasks"),
+      getExactNotesCount(baseUrl, headers, "contacts"),
+      getExactNotesCount(baseUrl, headers, "leads"),
+    ]);
+    console.log("Exact counts done:", { contactsCount, leadsCount, companiesCount, tasksCount, contactNotesCount, leadNotesCount });
 
     // Transform sample contacts
     const sampleContacts = (contactsSample._embedded?.contacts || []).slice(0, 10).map((contact: any) => {
@@ -258,47 +259,26 @@ Deno.serve(async (req) => {
       is_active: user.rights?.is_active ?? true,
     }));
 
-    // Total notes = contacts notes + leads notes
-    const totalNotesCount = contactNotesCount.count + leadNotesCount.count;
-    const hasMoreNotes = contactNotesCount.hasMore || leadNotesCount.hasMore;
-
-    // Total custom fields
+    const totalNotesCount = contactNotesCount + leadNotesCount;
     const totalCustomFields = contactCustomFields + leadCustomFields + companyCustomFields;
 
     return new Response(
       JSON.stringify({
-        // Contacts
-        total_contacts: contactsCount.hasMore ? `${contactsCount.count}+` : contactsCount.count,
-        total_contacts_number: contactsCount.count,
-        has_more_contacts: contactsCount.hasMore,
-        sample_contacts: sampleContacts,
-        // Leads
-        total_leads: leadsCount.hasMore ? `${leadsCount.count}+` : leadsCount.count,
-        total_leads_number: leadsCount.count,
-        has_more_leads: leadsCount.hasMore,
-        sample_leads: sampleLeads,
-        // Companies
-        total_companies: companiesCount.hasMore ? `${companiesCount.count}+` : companiesCount.count,
-        total_companies_number: companiesCount.count,
-        has_more_companies: companiesCount.hasMore,
-        // Tasks
-        total_tasks: tasksCount.hasMore ? `${tasksCount.count}+` : tasksCount.count,
-        total_tasks_number: tasksCount.count,
-        has_more_tasks: tasksCount.hasMore,
-        // Users
+        total_contacts: contactsCount,
+        total_leads: leadsCount,
+        total_companies: companiesCount,
+        total_tasks: tasksCount,
         total_users: kommoUsers.length,
         kommo_users: kommoUsers,
-        // Notes
-        total_notes: hasMoreNotes ? `${totalNotesCount}+` : totalNotesCount,
-        total_notes_number: totalNotesCount,
-        total_notes_contacts: contactNotesCount.count,
-        total_notes_leads: leadNotesCount.count,
-        has_more_notes: hasMoreNotes,
-        // Custom Fields
+        total_notes: totalNotesCount,
+        total_notes_contacts: contactNotesCount,
+        total_notes_leads: leadNotesCount,
         total_custom_fields: totalCustomFields,
         custom_fields_contacts: contactCustomFields,
         custom_fields_leads: leadCustomFields,
         custom_fields_companies: companyCustomFields,
+        sample_contacts: sampleContacts,
+        sample_leads: sampleLeads,
       }),
       { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
     );
