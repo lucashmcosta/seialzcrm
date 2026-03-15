@@ -290,6 +290,7 @@ export function useKommoMigration() {
         config: {
           ...config,
           stage_mapping: stageMapping,
+          selected_pipeline_ids: selectedPipelineIds,
           user_mappings: userMappings.filter(m => m.seialz_user_id),
           subdomain: credentials.subdomain,
           access_token: credentials.access_token,
