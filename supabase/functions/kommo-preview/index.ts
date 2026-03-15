@@ -31,59 +31,75 @@ async function fetchWithRetry(url: string, options: RequestInit, maxRetries = 3)
       await new Promise(resolve => setTimeout(resolve, backoffMs));
       continue;
     }
-    // 204 No Content means empty list
     if (response.status === 204) return response;
     throw new Error(`HTTP ${response.status}: ${response.statusText}`);
   }
   throw new Error('Max retries exceeded');
 }
 
-// Get count from a paginated endpoint by fetching limit=250 and checking _links.next
-async function getEntityCount(baseUrl: string, headers: Record<string, string>, endpoint: string): Promise<{ count: number; hasMore: boolean }> {
-  try {
-    const response = await fetchWithRetry(`${baseUrl}/${endpoint}?limit=250`, { headers });
-    if (response.status === 204) return { count: 0, hasMore: false };
-    const data = await response.json();
-    const key = endpoint.split('/')[0]; // e.g. "companies" from "companies"
-    const items = data._embedded?.[key] || [];
-    const hasMore = !!data._links?.next;
-    
-    if (!hasMore) {
-      return { count: items.length, hasMore: false };
+// Get exact count by paginating through all pages
+async function getExactCount(baseUrl: string, headers: Record<string, string>, endpoint: string): Promise<number> {
+  let total = 0;
+  let page = 1;
+
+  while (true) {
+    try {
+      const response = await fetchWithRetry(
+        `${baseUrl}/${endpoint}?limit=250&page=${page}`,
+        { headers }
+      );
+
+      if (response.status === 204) break;
+
+      const data = await response.json();
+      const key = endpoint.split('/')[0];
+      const items = data._embedded?.[key] || [];
+
+      total += items.length;
+
+      if (items.length < 250 || !data._links?.next) break;
+
+      page++;
+      await new Promise(r => setTimeout(r, 150));
+    } catch (err) {
+      console.error(`Error fetching ${endpoint} page ${page}:`, err);
+      break;
     }
-    
-    // If has more, try to get a better estimate by checking page count
-    // Kommo sometimes returns _page with count info
-    const pageCount = data._page?.count;
-    if (pageCount && pageCount > items.length) {
-      return { count: pageCount, hasMore: true };
-    }
-    
-    return { count: items.length, hasMore: true };
-  } catch (err) {
-    console.error(`Error fetching ${endpoint}:`, err);
-    return { count: 0, hasMore: false };
   }
+
+  return total;
 }
 
-// Get notes count using batch endpoint
-async function getNotesCount(baseUrl: string, headers: Record<string, string>, entityType: string): Promise<{ count: number; hasMore: boolean }> {
-  try {
-    const response = await fetchWithRetry(`${baseUrl}/${entityType}/notes?limit=250`, { headers });
-    if (response.status === 204) return { count: 0, hasMore: false };
-    const data = await response.json();
-    const items = data._embedded?.notes || [];
-    const hasMore = !!data._links?.next;
-    const pageCount = data._page?.count;
-    
-    if (pageCount && pageCount > items.length) {
-      return { count: pageCount, hasMore: true };
+// Get exact notes count by paginating
+async function getExactNotesCount(baseUrl: string, headers: Record<string, string>, entityType: string): Promise<number> {
+  let total = 0;
+  let page = 1;
+
+  while (true) {
+    try {
+      const response = await fetchWithRetry(
+        `${baseUrl}/${entityType}/notes?limit=250&page=${page}`,
+        { headers }
+      );
+
+      if (response.status === 204) break;
+
+      const data = await response.json();
+      const items = data._embedded?.notes || [];
+
+      total += items.length;
+
+      if (items.length < 250 || !data._links?.next) break;
+
+      page++;
+      await new Promise(r => setTimeout(r, 150));
+    } catch (err) {
+      console.error(`Error fetching ${entityType}/notes page ${page}:`, err);
+      break;
     }
-    return { count: items.length, hasMore };
-  } catch (err) {
-    console.error(`Error fetching ${entityType}/notes:`, err);
-    return { count: 0, hasMore: false };
   }
+
+  return total;
 }
 
 // Get custom fields count for an entity type
@@ -108,16 +124,14 @@ function extractUsersFromPayload(usersData: any): any[] {
 
 async function fetchKommoUsers(baseUrl: string, headers: Record<string, string>): Promise<any[]> {
   const usersUrl = `${baseUrl}/users`;
-
   console.log("Fetching users from:", usersUrl);
 
   try {
     let usersResponse: Response;
-
     try {
       usersResponse = await fetchWithRetry(`${usersUrl}?with=role`, { headers });
-    } catch (withRoleError) {
-      console.warn("Users fetch with '?with=role' failed, retrying plain /users:", withRoleError);
+    } catch {
+      console.warn("Users fetch with '?with=role' failed, retrying plain /users");
       usersResponse = await fetchWithRetry(usersUrl, { headers });
     }
 
@@ -127,11 +141,8 @@ async function fetchKommoUsers(baseUrl: string, headers: Record<string, string>)
       ? { _embedded: { users: [] } }
       : await usersResponse.json();
 
-    console.log("Users data:", JSON.stringify(usersData).substring(0, 500));
-
     const parsedUsers = extractUsersFromPayload(usersData);
     console.log("Users parsed count:", parsedUsers.length);
-
     return parsedUsers;
   } catch (error) {
     console.error("Error fetching users list:", error);
@@ -183,7 +194,7 @@ Deno.serve(async (req) => {
       "Content-Type": "application/json",
     };
 
-    // Fetch samples first (fast), then exact counts (slower, paginated)
+    // Phase 1: Fetch samples and users (fast)
     const [
       contactsSample,
       leadsSample,
@@ -204,7 +215,7 @@ Deno.serve(async (req) => {
       getCustomFieldsCount(baseUrl, headers, "companies"),
     ]);
 
-    // Now fetch exact counts (paginated, takes longer)
+    // Phase 2: Exact counts (paginated, slower)
     console.log("Starting exact counts...");
     const [
       contactsCount,
