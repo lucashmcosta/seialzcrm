@@ -257,7 +257,6 @@ Deno.serve(async (req) => {
       email: user.email,
       is_active: user.rights?.is_active ?? true,
     }));
-    }));
 
     // Total notes = contacts notes + leads notes
     const totalNotesCount = contactNotesCount.count + leadNotesCount.count;
