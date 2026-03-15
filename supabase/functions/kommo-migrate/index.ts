@@ -27,6 +27,7 @@ interface ImportConfig {
   stage_mapping?: Record<string, string>; duplicate_mode?: string;
   import_orphan_contacts?: boolean; subdomain?: string; access_token?: string;
   user_mapping?: Record<string, string>;
+  selected_pipeline_ids?: number[];
   import_companies?: boolean; import_tasks?: boolean; import_notes?: boolean;
   import_events?: boolean; import_custom_fields?: boolean;
 }
