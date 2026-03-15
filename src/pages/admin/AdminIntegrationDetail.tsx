@@ -208,7 +208,7 @@ export default function AdminIntegrationDetail() {
                     variant="outline"
                     onClick={() => setLogoEditorOpen(true)}
                   >
-                    <Pencil className="w-4 h-4 mr-2" />
+                    <PencilSimple size={16} className="mr-2" />
                     {formData.logo_url ? 'Editar Logo' : 'Adicionar Logo'}
                   </Button>
                   {formData.logo_url && (
