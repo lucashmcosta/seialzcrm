@@ -19,20 +19,20 @@ import { KommoMigrationDialog } from './KommoMigrationDialog';
 import { toast } from 'sonner';
 
 const iconMap: Record<string, any> = {
-  whatsapp: MessageSquare,
+  whatsapp: ChatCircle,
   telephony: Phone,
   'twilio-voice': Phone,
-  'twilio-whatsapp': MessageSquare,
-  email: Mail,
-  webhooks: Webhook,
-  ai: Bot,
-  'claude-ai': Sparkles,
-  'openai-gpt': Bot,
-  automation: RefreshCw,
-  suvsign: PenTool,
-  kommo: RefreshCw,
-  other: Webhook,
-  default: Webhook,
+  'twilio-whatsapp': ChatCircle,
+  email: EnvelopeSimple,
+  webhooks: Plugs,
+  ai: Robot,
+  'claude-ai': Sparkle,
+  'openai-gpt': Robot,
+  automation: ArrowsClockwise,
+  suvsign: PenNib,
+  kommo: ArrowsClockwise,
+  other: Plugs,
+  default: Plugs,
 };
 
 const categories = [
