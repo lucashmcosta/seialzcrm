@@ -164,7 +164,7 @@ export default function LandingPage() {
                   },
                 ].map((p) => (
                   <div key={p.title} className="bg-[hsl(240,10%,7%)] border border-[hsl(150,100%,50%)]/10 rounded-2xl p-8">
-                    <p.icon className="text-[hsl(150,100%,50%)] mb-4" size={28} />
+                    <p.icon className="text-[hsl(150,100%,50%)] mb-4" size={28} weight="light" />
                     <h4 className="font-['Michroma'] text-lg mb-3">{p.title}</h4>
                     <p className="text-sm text-[hsl(0,0%,55%)] font-['Outfit'] leading-relaxed">{p.desc}</p>
                   </div>
