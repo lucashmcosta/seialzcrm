@@ -1,6 +1,6 @@
 import { useAdminAuth } from '@/hooks/useAdminAuth';
 import { Button } from '@/components/ui/button';
-import { LogOut, User } from 'lucide-react';
+import { SignOut, User } from '@phosphor-icons/react';
 import {
   DropdownMenu,
   DropdownMenuContent,
