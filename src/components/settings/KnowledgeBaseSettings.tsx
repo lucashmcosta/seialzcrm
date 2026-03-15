@@ -81,7 +81,7 @@ const contentTypeConfig: Record<string, { label: string; icon: React.ElementType
   },
   objection: { 
     label: 'Objeção', 
-    icon: HelpCircle, 
+    icon: Question, 
     color: 'bg-destructive/10 text-destructive',
     description: 'Respostas a objeções comuns',
   },
