@@ -224,7 +224,9 @@ Deno.serve(async (req) => {
     ]);
 
     // Phase 2: Exact counts (paginated, slower)
-    console.log("Starting exact counts...");
+    const hasPipelineFilter = Array.isArray(pipeline_ids) && pipeline_ids.length > 0;
+    console.log("Starting exact counts...", hasPipelineFilter ? `Filtering leads by pipelines: ${pipeline_ids}` : 'All pipelines');
+    
     const [
       contactsCount,
       leadsCount,
@@ -234,7 +236,9 @@ Deno.serve(async (req) => {
       leadNotesCount,
     ] = await Promise.all([
       getExactCount(baseUrl, headers, "contacts"),
-      getExactCount(baseUrl, headers, "leads"),
+      hasPipelineFilter 
+        ? getExactLeadsCountByPipelines(baseUrl, headers, pipeline_ids)
+        : getExactCount(baseUrl, headers, "leads"),
       getExactCount(baseUrl, headers, "companies"),
       getExactCount(baseUrl, headers, "tasks"),
       getExactNotesCount(baseUrl, headers, "contacts"),
