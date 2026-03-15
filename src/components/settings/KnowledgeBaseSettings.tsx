@@ -460,7 +460,7 @@ export function KnowledgeBaseSettings() {
                 </SelectContent>
               </Select>
               <Button variant="outline" size="icon" onClick={fetchData} title="Atualizar">
-                <RefreshCw className="h-4 w-4" />
+                <ArrowsClockwise className="h-4 w-4" />
               </Button>
               {items.filter((i) => (i.status === 'processing' || i.status === 'error') && i.metadata?.original_content).length > 0 && (
                 <Button variant="outline" onClick={handleReprocessAll} title="Reprocessar itens pendentes">
