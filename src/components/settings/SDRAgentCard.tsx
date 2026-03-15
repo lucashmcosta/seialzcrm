@@ -110,7 +110,7 @@ export function SDRAgentCard({ agent, isLoading, onConfigure, onToggle, onDuplic
             "p-3 rounded-lg transition-colors",
             isActive ? "bg-primary/10" : "bg-muted"
           )}>
-            <Bot className={cn(
+            <Robot className={cn(
               "h-8 w-8 transition-colors",
               isActive ? "text-primary" : "text-muted-foreground"
             )} />
