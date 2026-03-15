@@ -136,7 +136,7 @@ export function KommoMigrationDialog({ open, onOpenChange }: KommoMigrationDialo
         {/* Pending Migration Alert */}
         {pendingImport && step < 4 && (
           <Alert className="mx-1 border-warning/50 bg-warning/5">
-            <AlertCircle className="h-4 w-4 text-warning" />
+            <WarningCircle className="h-4 w-4 text-warning" />
             <AlertTitle>Migração em andamento</AlertTitle>
             <AlertDescription className="flex flex-col gap-3">
               <span>
