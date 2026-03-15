@@ -166,7 +166,7 @@ export function WhatsAppIntegrationStatus({ onReconfigure }: WhatsAppIntegration
       <CardHeader className="pb-3">
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-2">
-            <MessageSquare className="h-5 w-5 text-green-600" />
+            <ChatCircle className="h-5 w-5 text-green-600" />
             <CardTitle className="text-lg">WhatsApp Business</CardTitle>
           </div>
           <Badge variant={hasWhatsApp ? 'default' : 'secondary'}>
