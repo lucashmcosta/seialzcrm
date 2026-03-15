@@ -38,14 +38,15 @@ async function fetchWithRetry(url: string, options: RequestInit, maxRetries = 3)
 }
 
 // Get exact count by paginating through all pages
-async function getExactCount(baseUrl: string, headers: Record<string, string>, endpoint: string): Promise<number> {
+async function getExactCount(baseUrl: string, headers: Record<string, string>, endpoint: string, extraParams = ''): Promise<number> {
   let total = 0;
   let page = 1;
 
   while (true) {
     try {
+      const sep = extraParams ? '&' : '';
       const response = await fetchWithRetry(
-        `${baseUrl}/${endpoint}?limit=250&page=${page}`,
+        `${baseUrl}/${endpoint}?limit=250&page=${page}${sep}${extraParams}`,
         { headers }
       );
 
@@ -68,6 +69,13 @@ async function getExactCount(baseUrl: string, headers: Record<string, string>, e
   }
 
   return total;
+}
+
+// Get exact leads count filtered by pipeline_ids
+async function getExactLeadsCountByPipelines(baseUrl: string, headers: Record<string, string>, pipelineIds: number[]): Promise<number> {
+  // Build filter query params: filter[pipeline_id][]=id1&filter[pipeline_id][]=id2
+  const filterParams = pipelineIds.map(id => `filter[pipeline_id][]=${id}`).join('&');
+  return getExactCount(baseUrl, headers, 'leads', filterParams);
 }
 
 // Get exact notes count by paginating
