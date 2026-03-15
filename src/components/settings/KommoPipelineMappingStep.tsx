@@ -5,6 +5,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Card } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
+import { Checkbox } from '@/components/ui/checkbox';
 import { SpinnerGap, Plus, ArrowRight, CheckCircle } from '@phosphor-icons/react';
 import { supabase } from '@/integrations/supabase/client';
 import { useOrganization } from '@/hooks/useOrganization';
@@ -18,6 +19,8 @@ interface KommoPipelineMappingStepProps {
   crmStages: any[];
   stageMapping: StageMapping;
   onMappingChange: (mapping: StageMapping) => void;
+  selectedPipelineIds: number[];
+  onSelectedPipelinesChange: (ids: number[]) => void;
   fetchPipelinesMutation: any;
 }
 
@@ -27,6 +30,8 @@ export function KommoPipelineMappingStep({
   crmStages = [],
   stageMapping,
   onMappingChange,
+  selectedPipelineIds,
+  onSelectedPipelinesChange,
   fetchPipelinesMutation,
 }: KommoPipelineMappingStepProps) {
   const { organization } = useOrganization();
@@ -49,6 +54,14 @@ export function KommoPipelineMappingStep({
       ...stageMapping,
       [kommoStageKey]: crmStageId,
     });
+  };
+
+  const handlePipelineToggle = (pipelineId: number, checked: boolean) => {
+    if (checked) {
+      onSelectedPipelinesChange([...selectedPipelineIds, pipelineId]);
+    } else {
+      onSelectedPipelinesChange(selectedPipelineIds.filter(id => id !== pipelineId));
+    }
   };
 
   const handleCreateStage = async () => {
@@ -92,9 +105,10 @@ export function KommoPipelineMappingStep({
     }
   };
 
-  const allMapped = kommoPipelines.every(pipeline =>
-    pipeline.stages.every(stage => stageMapping[`${pipeline.id}_${stage.id}`])
-  );
+  const isPipelineSelected = (pipelineId: number) => selectedPipelineIds.includes(pipelineId);
+
+  const isPipelineFullyMapped = (pipeline: KommoPipeline) =>
+    pipeline.stages.every(s => stageMapping[`${pipeline.id}_${s.id}`]);
 
   if (fetchPipelinesMutation.isPending) {
     return (
@@ -116,11 +130,16 @@ export function KommoPipelineMappingStep({
     );
   }
 
+  const selectedCount = selectedPipelineIds.length;
+  const allSelectedMapped = kommoPipelines
+    .filter(p => isPipelineSelected(p.id))
+    .every(p => isPipelineFullyMapped(p));
+
   return (
     <div className="space-y-6">
       <div className="text-sm text-muted-foreground">
-        Para cada etapa do Kommo, selecione a etapa correspondente no seu CRM. 
-        Isso garantirá que as oportunidades sejam importadas na etapa correta.
+        Selecione quais pipelines importar e mapeie suas etapas para o CRM.
+        Pipelines não selecionados serão ignorados.
       </div>
 
       {/* Create new stage section */}
@@ -150,61 +169,83 @@ export function KommoPipelineMappingStep({
 
       {/* Pipeline mapping */}
       <div className="space-y-6">
-        {kommoPipelines.map((pipeline) => (
-          <Card key={pipeline.id} className="p-4">
-            <h4 className="font-medium mb-4 flex items-center gap-2">
-              Pipeline: {pipeline.name}
-              {pipeline.stages.every(s => stageMapping[`${pipeline.id}_${s.id}`]) && (
-                <CheckCircle className="h-4 w-4 text-primary" />
-              )}
-            </h4>
-            
-            <div className="space-y-3">
-              {pipeline.stages.map((stage) => {
-                const stageKey = `${pipeline.id}_${stage.id}`;
-                const typeInfo = getStageTypeLabel(stage.type);
-                
-                return (
-                  <div key={stage.id} className="flex items-center gap-3">
-                    <div className="flex-1 min-w-0">
-                      <div className="flex items-center gap-2">
-                        <span className="text-sm truncate">{stage.name}</span>
-                        {typeInfo && (
-                          <Badge variant="secondary" className={typeInfo.color}>
-                            {typeInfo.label}
-                          </Badge>
-                        )}
+        {kommoPipelines.map((pipeline) => {
+          const selected = isPipelineSelected(pipeline.id);
+          const fullyMapped = isPipelineFullyMapped(pipeline);
+
+          return (
+            <Card key={pipeline.id} className={`p-4 transition-opacity ${!selected ? 'opacity-50' : ''}`}>
+              <div className="flex items-center gap-3 mb-4">
+                <Checkbox
+                  checked={selected}
+                  onCheckedChange={(checked) => handlePipelineToggle(pipeline.id, !!checked)}
+                />
+                <h4 className="font-medium flex items-center gap-2 flex-1">
+                  {pipeline.name}
+                  <Badge variant="secondary" className="text-xs">
+                    {pipeline.stages.length} etapas
+                  </Badge>
+                  {selected && fullyMapped && (
+                    <CheckCircle className="h-4 w-4 text-primary" />
+                  )}
+                </h4>
+              </div>
+              
+              {selected && (
+                <div className="space-y-3 pl-7">
+                  {pipeline.stages.map((stage) => {
+                    const stageKey = `${pipeline.id}_${stage.id}`;
+                    const typeInfo = getStageTypeLabel(stage.type);
+                    
+                    return (
+                      <div key={stage.id} className="flex items-center gap-3">
+                        <div className="flex-1 min-w-0">
+                          <div className="flex items-center gap-2">
+                            <span className="text-sm truncate">{stage.name}</span>
+                            {typeInfo && (
+                              <Badge variant="secondary" className={typeInfo.color}>
+                                {typeInfo.label}
+                              </Badge>
+                            )}
+                          </div>
+                        </div>
+                        
+                        <ArrowRight className="h-4 w-4 text-muted-foreground shrink-0" />
+                        
+                        <Select
+                          value={stageMapping[stageKey] || ''}
+                          onValueChange={(value) => handleStageSelect(stageKey, value)}
+                        >
+                          <SelectTrigger className="w-48">
+                            <SelectValue placeholder="Selecionar etapa" />
+                          </SelectTrigger>
+                          <SelectContent>
+                            {localCrmStages.map((crmStage) => (
+                              <SelectItem key={crmStage.id} value={crmStage.id}>
+                                {crmStage.name}
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
                       </div>
-                    </div>
-                    
-                    <ArrowRight className="h-4 w-4 text-muted-foreground shrink-0" />
-                    
-                    <Select
-                      value={stageMapping[stageKey] || ''}
-                      onValueChange={(value) => handleStageSelect(stageKey, value)}
-                    >
-                      <SelectTrigger className="w-48">
-                        <SelectValue placeholder="Selecionar etapa" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        {localCrmStages.map((crmStage) => (
-                          <SelectItem key={crmStage.id} value={crmStage.id}>
-                            {crmStage.name}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                  </div>
-                );
-              })}
-            </div>
-          </Card>
-        ))}
+                    );
+                  })}
+                </div>
+              )}
+            </Card>
+          );
+        })}
       </div>
 
-      {!allMapped && (
+      {selectedCount === 0 && (
+        <p className="text-sm text-destructive text-center">
+          Selecione pelo menos 1 pipeline para continuar
+        </p>
+      )}
+
+      {selectedCount > 0 && !allSelectedMapped && (
         <p className="text-sm text-muted-foreground text-center">
-          Mapeie todas as etapas para continuar
+          Mapeie todas as etapas dos pipelines selecionados para continuar
         </p>
       )}
     </div>

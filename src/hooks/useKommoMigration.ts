@@ -113,6 +113,7 @@ export function useKommoMigration() {
   const [credentials, setCredentials] = useState<KommoCredentials | null>(null);
   const [kommoPipelines, setKommoPipelines] = useState<KommoPipeline[]>([]);
   const [stageMapping, setStageMapping] = useState<StageMapping>({});
+  const [selectedPipelineIds, setSelectedPipelineIds] = useState<number[]>([]);
   const [userMappings, setUserMappings] = useState<KommoUserMapping[]>([]);
   const [config, setConfig] = useState<MigrationConfig>({
     duplicate_mode: 'skip',
@@ -251,7 +252,9 @@ export function useKommoMigration() {
       return data;
     },
     onSuccess: (data) => {
-      setKommoPipelines(data.pipelines || []);
+      const pipelines = data.pipelines || [];
+      setKommoPipelines(pipelines);
+      setSelectedPipelineIds(pipelines.map((p: KommoPipeline) => p.id));
       // Extract users from pipeline data if available
       if (data.users && Array.isArray(data.users)) {
         setUserMappings(data.users.map((u: any) => ({
@@ -287,6 +290,7 @@ export function useKommoMigration() {
         config: {
           ...config,
           stage_mapping: stageMapping,
+          selected_pipeline_ids: selectedPipelineIds,
           user_mappings: userMappings.filter(m => m.seialz_user_id),
           subdomain: credentials.subdomain,
           access_token: credentials.access_token,
@@ -313,6 +317,7 @@ export function useKommoMigration() {
             subdomain: credentials.subdomain,
             access_token: credentials.access_token,
             stage_mapping: stageMapping,
+            selected_pipeline_ids: selectedPipelineIds,
             user_mappings: userMappings.filter(m => m.seialz_user_id),
             duplicate_mode: config.duplicate_mode,
             import_orphan_contacts: config.import_orphan_contacts,
@@ -413,6 +418,7 @@ export function useKommoMigration() {
     setCredentials(savedCredentials || null);
     setKommoPipelines([]);
     setStageMapping({});
+    setSelectedPipelineIds([]);
     setUserMappings([]);
     setConfig({
       duplicate_mode: 'skip',
@@ -497,6 +503,7 @@ export function useKommoMigration() {
     credentials,
     kommoPipelines,
     stageMapping,
+    selectedPipelineIds,
     userMappings,
     config,
     importLogId,
@@ -511,6 +518,7 @@ export function useKommoMigration() {
     // Setters
     setCredentials,
     setStageMapping,
+    setSelectedPipelineIds,
     setUserMappings,
     setConfig,
     goToStep,
