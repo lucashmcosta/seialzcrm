@@ -1348,7 +1348,7 @@ export function SDRAgentWizard({
         {feedbackHistory.length > 0 && (
           <div className="space-y-2">
             <Label className="flex items-center gap-2">
-              <History className="h-4 w-4" />
+              <ClockCounterClockwise className="h-4 w-4" />
               Histórico de Feedbacks ({feedbackHistory.length})
             </Label>
             <ScrollArea className="h-[200px] rounded-md border p-3">
