@@ -34,6 +34,12 @@ interface ImportConfig {
 const PS = 250;
 const delay = (ms: number) => new Promise(r => setTimeout(r, ms));
 
+// Helper: convert Kommo Unix timestamp to ISO string
+function kommoDate(ts: number | undefined | null): string | undefined {
+  if (!ts) return undefined;
+  return new Date(ts * 1000).toISOString();
+}
+
 async function apiFetch(url: string, opts: RequestInit, retries = 5): Promise<Response> {
   for (let i = 0; i < retries; i++) {
     const r = await fetch(url, opts);
