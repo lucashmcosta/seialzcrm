@@ -332,7 +332,7 @@ export function UsersSettings() {
     return (
       <Card>
         <CardContent className="py-8 flex justify-center">
-          <Loader2 className="h-8 w-8 animate-spin" />
+          <SpinnerGap className="h-8 w-8 animate-spin" />
         </CardContent>
       </Card>
     );
