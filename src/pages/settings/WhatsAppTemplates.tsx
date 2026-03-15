@@ -329,7 +329,7 @@ export default function WhatsAppTemplates() {
                           </DropdownMenuItem>
                           {template.status !== 'approved' && (
                             <DropdownMenuItem onClick={() => navigate(`/whatsapp/templates/${template.id}/edit`)}>
-                              <Pencil className="w-4 h-4 mr-2" />
+                              <PencilSimple className="w-4 h-4 mr-2" />
                               Editar
                             </DropdownMenuItem>
                           )}
