@@ -123,7 +123,7 @@ export function MinimizedCallWidget({
             className="h-8 w-8"
             onClick={onToggleMute}
           >
-            {isMuted ? <MicOff className="h-4 w-4" /> : <Mic className="h-4 w-4" />}
+            {isMuted ? <MicrophoneSlash className="h-4 w-4" /> : <Microphone className="h-4 w-4" />}
           </Button>
           <Button
             variant="destructive"
