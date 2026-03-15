@@ -1205,7 +1205,7 @@ export default function MessagesList() {
                     onClick={() => setShowNewConversation(true)}
                     title={locale === 'pt-BR' ? 'Nova Conversa' : 'New Conversation'}
                   >
-                    <MessageSquarePlus className="w-4 h-4" />
+                    <ChatCircleDots className="w-4 h-4" />
                   </Button>
                   <Badge color="gray" size="md">
                     {filteredThreads?.length || 0}
