@@ -159,7 +159,7 @@ export function KommoCredentialsStep({ onValidated, validateMutation, savedCrede
 
       {isValid && (
         <Alert className="border-primary/50 bg-primary/5">
-          <CheckCircle2 className="h-4 w-4 text-primary" />
+          <CheckCircle className="h-4 w-4 text-primary" />
           <AlertDescription className="text-foreground">
             Conectado com sucesso à conta: <strong>{validatedAccount}</strong>
           </AlertDescription>
