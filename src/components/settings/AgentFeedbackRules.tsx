@@ -134,9 +134,9 @@ export function AgentFeedbackRules({
                       onClick={() => toggleExpand(rule.id)}
                     >
                       {isExpanded ? (
-                        <ChevronUp className="h-4 w-4" />
+                        <CaretUp className="h-4 w-4" />
                       ) : (
-                        <ChevronDown className="h-4 w-4" />
+                        <CaretDown className="h-4 w-4" />
                       )}
                     </Button>
                     <Button
