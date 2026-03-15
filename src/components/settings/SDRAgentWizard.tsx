@@ -1986,7 +1986,7 @@ export function SDRAgentWizard({
                 size="sm"
                 onClick={() => setShowVersionHistory(true)}
               >
-                <History className="h-4 w-4 mr-1" />
+                <ClockCounterClockwise className="h-4 w-4 mr-1" />
                 Versões
               </Button>
             </div>
