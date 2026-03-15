@@ -224,7 +224,7 @@ export function KommoMigrationDialog({ open, onOpenChange }: KommoMigrationDialo
               onClick={() => goToStep(step - 1)}
               disabled={step === 1}
             >
-              <ChevronLeft className="h-4 w-4 mr-1" />
+              <CaretLeft className="h-4 w-4 mr-1" />
               Voltar
             </Button>
 
