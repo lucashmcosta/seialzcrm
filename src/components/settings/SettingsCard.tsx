@@ -1,10 +1,10 @@
 import { Link } from 'react-router-dom';
-import { ChevronRight } from 'lucide-react';
+import { CaretRight } from '@phosphor-icons/react';
 import { cn } from '@/lib/utils';
-import type { LucideIcon } from 'lucide-react';
+import type { ComponentType } from 'react';
 
 export interface SettingsCardProps {
-  icon: LucideIcon;
+  icon: ComponentType<{ size?: number; weight?: string; className?: string }>;
   label: string;
   description: string;
   badge?: string;
@@ -24,7 +24,7 @@ export function SettingsCard({ icon: Icon, label, description, badge, badgeVaria
     >
       <div className="flex items-start gap-3.5 flex-1">
         <div className="w-9 h-9 rounded-lg flex items-center justify-center flex-shrink-0 bg-primary/10 text-primary transition-colors group-hover:bg-primary/15">
-          <Icon className="w-[18px] h-[18px]" />
+          <Icon size={18} weight="light" />
         </div>
         <div className="flex-1 min-w-0">
           <div className="flex items-center gap-2">
@@ -44,7 +44,7 @@ export function SettingsCard({ icon: Icon, label, description, badge, badgeVaria
           </div>
           <p className="text-xs text-muted-foreground mt-0.5 leading-relaxed">{description}</p>
         </div>
-        <ChevronRight className="w-4 h-4 mt-0.5 flex-shrink-0 text-muted-foreground/40 group-hover:text-muted-foreground transition-colors" />
+        <CaretRight size={16} weight="bold" className="mt-0.5 flex-shrink-0 text-muted-foreground/40 group-hover:text-muted-foreground transition-colors" />
       </div>
     </Link>
   );

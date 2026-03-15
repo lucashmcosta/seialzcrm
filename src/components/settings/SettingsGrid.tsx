@@ -1,34 +1,34 @@
 import { useState, useMemo } from 'react';
 import {
-  Settings,
+  GearSix,
   Palette,
-  LayoutGrid,
+  SquaresFour,
   Tag,
   GitBranch,
-  Users,
+  UsersThree,
   Shield,
   Copy,
   Link,
-  MessageSquare,
-  Bot,
+  ChatCircleText,
+  Robot,
   Code,
   CreditCard,
   Package,
   BookOpen,
-  FileEdit,
+  NotePencil,
   Clock,
-  Trash2,
-  Search,
-} from 'lucide-react';
+  TrashSimple,
+  MagnifyingGlass,
+} from '@phosphor-icons/react';
 import { usePermissions } from '@/hooks/usePermissions';
 import { useWhatsAppIntegration } from '@/hooks/useWhatsAppIntegration';
 import { useAIIntegration } from '@/hooks/useAIIntegration';
 import { Input } from '@/components/ui/input';
 import { SettingsCard } from './SettingsCard';
-import type { LucideIcon } from 'lucide-react';
+import type { ComponentType } from 'react';
 
 interface SettingsItem {
-  icon: LucideIcon;
+  icon: ComponentType<{ size?: number; weight?: string; className?: string }>;
   label: string;
   description: string;
   to: string;
@@ -49,9 +49,9 @@ const settingsGroups: SettingsGroup[] = [
     title: 'Geral',
     description: 'Configurações básicas da sua conta e aparência',
     items: [
-      { icon: Settings, label: 'Geral', description: 'Nome da empresa, fuso horário e idioma', to: 'general' },
+      { icon: GearSix, label: 'Geral', description: 'Nome da empresa, fuso horário e idioma', to: 'general' },
       { icon: Palette, label: 'Tema e Cores', description: 'Personalize a aparência do seu CRM', to: 'theme', permission: 'canManageSettings' },
-      { icon: LayoutGrid, label: 'Campos Personalizados', description: 'Crie campos extras para contatos e oportunidades', to: 'custom-fields', permission: 'canManageSettings' },
+      { icon: SquaresFour, label: 'Campos Personalizados', description: 'Crie campos extras para contatos e oportunidades', to: 'custom-fields', permission: 'canManageSettings' },
       { icon: Tag, label: 'Etiquetas', description: 'Organize contatos e oportunidades com tags', to: 'tags', permission: 'canManageSettings' },
       { icon: GitBranch, label: 'Pipeline', description: 'Configure estágios do funil de vendas', to: 'pipeline', permission: 'canManageSettings' },
     ],
@@ -60,7 +60,7 @@ const settingsGroups: SettingsGroup[] = [
     title: 'Equipe & Permissões',
     description: 'Gerencie usuários e controle de acesso',
     items: [
-      { icon: Users, label: 'Usuários & Permissões', description: 'Adicione membros e gerencie acessos', to: 'users', permission: 'canManageUsers' },
+      { icon: UsersThree, label: 'Usuários & Permissões', description: 'Adicione membros e gerencie acessos', to: 'users', permission: 'canManageUsers' },
       { icon: Shield, label: 'Perfis de Permissão', description: 'Defina níveis de acesso personalizados', to: 'permissions', permission: 'canManageSettings' },
       { icon: Copy, label: 'Duplicatas', description: 'Regras para detecção de contatos duplicados', to: 'duplicates', permission: 'canManageSettings' },
     ],
@@ -70,8 +70,8 @@ const settingsGroups: SettingsGroup[] = [
     description: 'Conecte ferramentas externas e canais de comunicação',
     items: [
       { icon: Link, label: 'Integrações', description: 'Conecte com ferramentas que você já usa', to: 'integrations', permission: 'canManageIntegrations' },
-      { icon: MessageSquare, label: 'WhatsApp Templates', description: 'Gerencie modelos de mensagem do WhatsApp', to: 'whatsapp-templates', permission: 'canManageIntegrations', flag: 'hasWhatsApp' },
-      { icon: Bot, label: 'Agente IA', description: 'Configure assistente virtual inteligente', to: 'ai-agent', badge: 'Beta', badgeVariant: 'warning', permission: 'canManageIntegrations', flag: 'showAIFeatures' },
+      { icon: ChatCircleText, label: 'WhatsApp Templates', description: 'Gerencie modelos de mensagem do WhatsApp', to: 'whatsapp-templates', permission: 'canManageIntegrations', flag: 'hasWhatsApp' },
+      { icon: Robot, label: 'Agente IA', description: 'Configure assistente virtual inteligente', to: 'ai-agent', badge: 'Beta', badgeVariant: 'warning', permission: 'canManageIntegrations', flag: 'showAIFeatures' },
       { icon: Code, label: 'API & Webhooks', description: 'Acesse a API e configure webhooks', to: 'api-webhooks', permission: 'canManageIntegrations' },
     ],
   },
@@ -88,9 +88,9 @@ const settingsGroups: SettingsGroup[] = [
     description: 'Base de conhecimento e gerenciamento de dados',
     items: [
       { icon: BookOpen, label: 'Base de Conhecimento', description: 'Artigos e documentação para a equipe e IA', to: 'knowledge-base', permission: 'canManageIntegrations', flag: 'showAIFeatures' },
-      { icon: FileEdit, label: 'Editar KB', description: 'Edite e organize o conteúdo da base', to: 'edit-kb', permission: 'canManageIntegrations', flag: 'showAIFeatures' },
+      { icon: NotePencil, label: 'Editar KB', description: 'Edite e organize o conteúdo da base', to: 'edit-kb', permission: 'canManageIntegrations', flag: 'showAIFeatures' },
       { icon: Clock, label: 'Histórico de Alterações', description: 'Veja todas as mudanças feitas no sistema', to: 'audit-logs', permission: 'canManageSettings' },
-      { icon: Trash2, label: 'Lixeira', description: 'Itens deletados recentemente', to: 'trash', permission: 'canManageSettings' },
+      { icon: TrashSimple, label: 'Lixeira', description: 'Itens deletados recentemente', to: 'trash', permission: 'canManageSettings' },
     ],
   },
 ];
@@ -143,7 +143,7 @@ export function SettingsGrid() {
       {/* Search */}
       <div className="max-w-md mb-8">
         <div className="relative">
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+          <MagnifyingGlass size={16} weight="light" className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" />
           <Input
             type="text"
             placeholder="Buscar configurações..."
@@ -182,7 +182,7 @@ export function SettingsGrid() {
       {/* Empty state */}
       {filteredGroups.length === 0 && (
         <div className="text-center py-16">
-          <Search className="w-10 h-10 mx-auto text-muted-foreground/30 mb-3" />
+          <MagnifyingGlass size={40} weight="light" className="mx-auto text-muted-foreground/30 mb-3" />
           <p className="text-muted-foreground text-sm">Nenhuma configuração encontrada para "{search}"</p>
         </div>
       )}
