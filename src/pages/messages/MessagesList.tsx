@@ -1343,7 +1343,7 @@ export default function MessagesList() {
                       
                       {selectedThread.status === 'resolved' && (
                         <Button variant="outline" size="sm" onClick={() => handleReopen(selectedThread.id)}>
-                          <RotateCcw className="w-4 h-4 mr-1" />
+                          <ArrowCounterClockwise className="w-4 h-4 mr-1" />
                           {locale === 'pt-BR' ? 'Reabrir' : 'Reopen'}
                         </Button>
                       )}
