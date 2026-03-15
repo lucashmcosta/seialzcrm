@@ -131,7 +131,7 @@ export function MinimizedCallWidget({
             className="h-8 w-8"
             onClick={onEndCall}
           >
-            <PhoneOff className="h-4 w-4" />
+            <PhoneDisconnect className="h-4 w-4" />
           </Button>
           <Button
             variant="outline"
