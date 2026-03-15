@@ -110,7 +110,7 @@ export function AgentVersionHistory({
       <DialogContent className="max-w-2xl max-h-[80vh]">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
-            <History className="h-5 w-5" />
+            <ClockCounterClockwise className="h-5 w-5" />
             Histórico de Versões
           </DialogTitle>
         </DialogHeader>
