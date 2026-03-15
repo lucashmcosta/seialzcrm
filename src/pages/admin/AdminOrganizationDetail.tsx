@@ -197,7 +197,7 @@ export default function AdminOrganizationDetail() {
           <Card className="border-destructive bg-destructive/10">
             <CardContent className="pt-6">
               <div className="flex items-center gap-2 text-destructive">
-                <Ban className="h-5 w-5" />
+                <Prohibit size={20} />
                 <div>
                   <p className="font-semibold">Conta Suspensa</p>
                   <p className="text-sm">
