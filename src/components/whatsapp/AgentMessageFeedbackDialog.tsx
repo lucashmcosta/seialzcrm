@@ -410,7 +410,7 @@ export function AgentMessageFeedbackDialog({
             {/* Original message */}
             <div className="space-y-2">
               <Label className="flex items-center gap-2">
-                <Bot className="h-4 w-4 text-purple-500" />
+                <Robot className="h-4 w-4 text-purple-500" />
                 Mensagem original do agente:
               </Label>
               <div className="p-3 bg-muted rounded-lg text-sm max-h-32 overflow-y-auto">
