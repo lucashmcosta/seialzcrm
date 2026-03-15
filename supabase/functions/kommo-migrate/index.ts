@@ -322,9 +322,9 @@ Deno.serve(async (req) => {
                 if (dupMode === "update") { await sb.from("opportunities").update({ title: ld.name, amount: ld.price || 0, pipeline_stage_id: stageId, contact_id: contactId, owner_user_id: owner || undefined }).eq("id", ex.id); io++; oIds.push(ex.id); continue; }
               }
               const { data: n, error: oe } = await sb.from("opportunities").insert({ organization_id: orgId, contact_id: contactId, title: ld.name || "Lead sem título", amount: ld.price || 0, pipeline_stage_id: stageId, source: "kommo", source_external_id: `kommo_${ld.id}`, owner_user_id: owner }).select("id").single();
-              if (oe) errs.push({ type: "lead", id: ld.id, error: oe.message });
+              if (oe) errs.push({ type: "opportunity", kommo_id: ld.id, error: oe.message });
               else { io++; oIds.push(n.id); }
-            } catch (e: any) { errs.push({ type: "lead", id: ld.id, error: e.message }); }
+            } catch (e: any) { errs.push({ type: "opportunity", kommo_id: ld.id, error: e.message }); }
           }
           if (items.length < PS) { c.leads_complete = true; c.phase = nextPhase("leads", cfg); }
           else c.leads_page++;
