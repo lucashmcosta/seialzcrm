@@ -60,7 +60,7 @@ export function Layout({ children }: LayoutProps) {
     navItems.push({ 
       label: t('nav.messages'), 
       href: '/messages', 
-      icon: MessageChatCircle 
+      icon: ChatCircleText 
     });
   }
 
