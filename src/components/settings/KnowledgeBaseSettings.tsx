@@ -505,7 +505,7 @@ export function KnowledgeBaseSettings() {
                 {items.length === 0 && (
                   <div className="mt-4 flex gap-2 justify-center">
                     <Button onClick={() => setDialogOpen(true)}>
-                      <Wand2 className="mr-2 h-4 w-4" />
+                      <MagicWand className="mr-2 h-4 w-4" />
                       Criar com IA
                     </Button>
                     <Button variant="outline" onClick={() => setActiveTab('import')}>
