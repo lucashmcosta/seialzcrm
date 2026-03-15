@@ -99,7 +99,7 @@ export function Layout({ children }: LayoutProps) {
       ) : (
         <>
           <div className="w-10 h-10 bg-primary rounded-lg flex items-center justify-center">
-            <Building07 className="w-6 h-6 text-primary-foreground" />
+            <Buildings size={24} weight="light" className="text-primary-foreground" />
           </div>
           {organization && (
             <div>
