@@ -95,7 +95,7 @@ export function MinimizedCallWidget({
           className="cursor-move text-muted-foreground hover:text-foreground"
           onMouseDown={handleMouseDown}
         >
-          <GripVertical className="h-4 w-4" />
+          <DotsSixVertical className="h-4 w-4" />
         </div>
 
         {/* Avatar */}
