@@ -581,7 +581,7 @@ function EndpointCard({ endpoint, baseUrl }: { endpoint: Endpoint; baseUrl: stri
         className="w-full flex items-center gap-3 px-4 py-3 text-left hover:bg-gray-700/20 transition-colors"
         onClick={() => setOpen(!open)}
       >
-        {open ? <ChevronDown className="w-4 h-4 text-gray-400 shrink-0" /> : <ChevronRight className="w-4 h-4 text-gray-400 shrink-0" />}
+        {open ? <CaretDown className="w-4 h-4 text-gray-400 shrink-0" /> : <CaretRight className="w-4 h-4 text-gray-400 shrink-0" />}
         <MethodBadge method={endpoint.method} />
         <span className="font-mono text-sm text-gray-200 truncate">{endpoint.path}</span>
         <span className="text-sm text-gray-400 hidden sm:inline truncate">{endpoint.summary}</span>
