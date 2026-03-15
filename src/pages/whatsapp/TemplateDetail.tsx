@@ -216,7 +216,7 @@ export default function TemplateDetail() {
           <Card className="border-destructive bg-destructive/5">
             <CardContent className="pt-4">
               <div className="flex items-start gap-3">
-                <AlertCircle className="w-5 h-5 text-destructive mt-0.5" />
+                <WarningCircle className="w-5 h-5 text-destructive mt-0.5" />
                 <div>
                   <p className="font-medium text-destructive">Template Rejeitado</p>
                   <p className="text-sm text-muted-foreground mt-1">
