@@ -276,9 +276,9 @@ Deno.serve(async (req) => {
                 if (dupMode === "update") { await sb.from("contacts").update({ full_name: ct.name, email, phone, source_external_id: `kommo_${ct.id}`, company_id: compId || undefined, owner_user_id: owner || undefined }).eq("id", ex.id); ic++; cIds.push(ex.id); cMap[String(ct.id)] = ex.id; continue; }
               }
               const { data: n, error: ie } = await sb.from("contacts").insert({ organization_id: orgId, full_name: ct.name || "Sem nome", email, phone, source: "kommo", source_external_id: `kommo_${ct.id}`, company_id: compId, owner_user_id: owner }).select("id").single();
-              if (ie) errs.push({ type: "contact", id: ct.id, error: ie.message });
+              if (ie) errs.push({ type: "contact", kommo_id: ct.id, error: ie.message });
               else { ic++; cIds.push(n.id); cMap[String(ct.id)] = n.id; }
-            } catch (e: any) { errs.push({ type: "contact", id: ct.id, error: e.message }); }
+            } catch (e: any) { errs.push({ type: "contact", kommo_id: ct.id, error: e.message }); }
           }
           if (items.length < PS) { c.contacts_complete = true; c.phase = nextPhase("contacts", cfg); }
           else c.contacts_page++;
