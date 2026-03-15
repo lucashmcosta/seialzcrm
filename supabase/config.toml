@@ -107,3 +107,6 @@ verify_jwt = false
 
 [functions.export-conversations]
 verify_jwt = false
+
+[functions.kommo-media-download]
+verify_jwt = true

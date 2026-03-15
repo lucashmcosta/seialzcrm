@@ -15,16 +15,90 @@ function getCustomFieldValue(customFields: any[], fieldCode: string): string | n
 // Normalize phone to E.164 format
 function normalizePhone(phone: string | null): string | null {
   if (!phone) return null;
-  // Remove all non-digits
   let digits = phone.replace(/\D/g, '');
-  // If starts with 0, remove it
   if (digits.startsWith('0')) digits = digits.substring(1);
-  // If doesn't start with country code, assume Brazil (+55)
   if (!digits.startsWith('55') && digits.length <= 11) {
     digits = '55' + digits;
   }
-  // Add + prefix
   return '+' + digits;
+}
+
+// Fetch with retry for rate limiting
+async function fetchWithRetry(url: string, options: RequestInit, maxRetries = 3): Promise<Response> {
+  for (let attempt = 0; attempt < maxRetries; attempt++) {
+    const response = await fetch(url, options);
+    if (response.ok) return response;
+    if (response.status === 429) {
+      const backoffMs = Math.pow(2, attempt) * 1000;
+      await new Promise(resolve => setTimeout(resolve, backoffMs));
+      continue;
+    }
+    // 204 No Content means empty list
+    if (response.status === 204) return response;
+    throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+  }
+  throw new Error('Max retries exceeded');
+}
+
+// Get count from a paginated endpoint by fetching limit=250 and checking _links.next
+async function getEntityCount(baseUrl: string, headers: Record<string, string>, endpoint: string): Promise<{ count: number; hasMore: boolean }> {
+  try {
+    const response = await fetchWithRetry(`${baseUrl}/${endpoint}?limit=250`, { headers });
+    if (response.status === 204) return { count: 0, hasMore: false };
+    const data = await response.json();
+    const key = endpoint.split('/')[0]; // e.g. "companies" from "companies"
+    const items = data._embedded?.[key] || [];
+    const hasMore = !!data._links?.next;
+    
+    if (!hasMore) {
+      return { count: items.length, hasMore: false };
+    }
+    
+    // If has more, try to get a better estimate by checking page count
+    // Kommo sometimes returns _page with count info
+    const pageCount = data._page?.count;
+    if (pageCount && pageCount > items.length) {
+      return { count: pageCount, hasMore: true };
+    }
+    
+    return { count: items.length, hasMore: true };
+  } catch (err) {
+    console.error(`Error fetching ${endpoint}:`, err);
+    return { count: 0, hasMore: false };
+  }
+}
+
+// Get notes count using batch endpoint
+async function getNotesCount(baseUrl: string, headers: Record<string, string>, entityType: string): Promise<{ count: number; hasMore: boolean }> {
+  try {
+    const response = await fetchWithRetry(`${baseUrl}/${entityType}/notes?limit=250`, { headers });
+    if (response.status === 204) return { count: 0, hasMore: false };
+    const data = await response.json();
+    const items = data._embedded?.notes || [];
+    const hasMore = !!data._links?.next;
+    const pageCount = data._page?.count;
+    
+    if (pageCount && pageCount > items.length) {
+      return { count: pageCount, hasMore: true };
+    }
+    return { count: items.length, hasMore };
+  } catch (err) {
+    console.error(`Error fetching ${entityType}/notes:`, err);
+    return { count: 0, hasMore: false };
+  }
+}
+
+// Get custom fields count for an entity type
+async function getCustomFieldsCount(baseUrl: string, headers: Record<string, string>, entityType: string): Promise<number> {
+  try {
+    const response = await fetchWithRetry(`${baseUrl}/${entityType}/custom_fields`, { headers });
+    if (response.status === 204) return 0;
+    const data = await response.json();
+    return data._embedded?.custom_fields?.length || 0;
+  } catch (err) {
+    console.error(`Error fetching ${entityType}/custom_fields:`, err);
+    return 0;
+  }
 }
 
 serve(async (req) => {
@@ -56,37 +130,51 @@ serve(async (req) => {
       "Content-Type": "application/json",
     };
 
-    // Fetch first page of contacts to get total and sample
-    const contactsResponse = await fetch(`${baseUrl}/contacts?limit=10&with=leads`, { headers });
-    if (!contactsResponse.ok) {
-      throw new Error(`Erro ao buscar contatos: ${contactsResponse.status}`);
-    }
-    const contactsData = await contactsResponse.json();
-
-    // Fetch first page of leads to get total and sample
-    const leadsResponse = await fetch(`${baseUrl}/leads?limit=10&with=contacts`, { headers });
-    if (!leadsResponse.ok) {
-      throw new Error(`Erro ao buscar leads: ${leadsResponse.status}`);
-    }
-    const leadsData = await leadsResponse.json();
-
-    // Get total counts - Kommo API doesn't return total, we need to paginate or estimate
-    // For preview, we'll fetch one page with limit=1 to check if there are more
-    const contactsCountResponse = await fetch(`${baseUrl}/contacts?limit=250`, { headers });
-    const contactsCountData = await contactsCountResponse.json();
-    const totalContacts = contactsCountData._embedded?.contacts?.length || 0;
-    const hasMoreContacts = !!contactsCountData._links?.next;
-
-    const leadsCountResponse = await fetch(`${baseUrl}/leads?limit=250`, { headers });
-    const leadsCountData = await leadsCountResponse.json();
-    const totalLeads = leadsCountData._embedded?.leads?.length || 0;
-    const hasMoreLeads = !!leadsCountData._links?.next;
+    // Fetch all counts and samples in parallel
+    const [
+      contactsSample,
+      leadsSample,
+      contactsCount,
+      leadsCount,
+      companiesCount,
+      tasksCount,
+      usersResponse,
+      contactNotesCount,
+      leadNotesCount,
+      contactCustomFields,
+      leadCustomFields,
+      companyCustomFields,
+    ] = await Promise.all([
+      // Sample contacts (first 10)
+      fetchWithRetry(`${baseUrl}/contacts?limit=10&with=leads`, { headers })
+        .then(r => r.status === 204 ? { _embedded: { contacts: [] } } : r.json())
+        .catch(() => ({ _embedded: { contacts: [] } })),
+      // Sample leads (first 10)
+      fetchWithRetry(`${baseUrl}/leads?limit=10&with=contacts`, { headers })
+        .then(r => r.status === 204 ? { _embedded: { leads: [] } } : r.json())
+        .catch(() => ({ _embedded: { leads: [] } })),
+      // Counts
+      getEntityCount(baseUrl, headers, "contacts"),
+      getEntityCount(baseUrl, headers, "leads"),
+      getEntityCount(baseUrl, headers, "companies"),
+      getEntityCount(baseUrl, headers, "tasks"),
+      // Users (full list — typically small)
+      fetchWithRetry(`${baseUrl}/users`, { headers })
+        .then(r => r.status === 204 ? { _embedded: { users: [] } } : r.json())
+        .catch(() => ({ _embedded: { users: [] } })),
+      // Notes counts (batch endpoints)
+      getNotesCount(baseUrl, headers, "contacts"),
+      getNotesCount(baseUrl, headers, "leads"),
+      // Custom fields counts
+      getCustomFieldsCount(baseUrl, headers, "contacts"),
+      getCustomFieldsCount(baseUrl, headers, "leads"),
+      getCustomFieldsCount(baseUrl, headers, "companies"),
+    ]);
 
     // Transform sample contacts
-    const sampleContacts = (contactsData._embedded?.contacts || []).slice(0, 10).map((contact: any) => {
+    const sampleContacts = (contactsSample._embedded?.contacts || []).slice(0, 10).map((contact: any) => {
       const email = getCustomFieldValue(contact.custom_fields_values, 'EMAIL');
       const phone = getCustomFieldValue(contact.custom_fields_values, 'PHONE');
-      
       return {
         kommo_id: contact.id,
         kommo_name: contact.name,
@@ -100,7 +188,7 @@ serve(async (req) => {
     });
 
     // Transform sample leads
-    const sampleLeads = (leadsData._embedded?.leads || []).slice(0, 10).map((lead: any) => ({
+    const sampleLeads = (leadsSample._embedded?.leads || []).slice(0, 10).map((lead: any) => ({
       kommo_id: lead.id,
       kommo_name: lead.name,
       kommo_price: lead.price,
@@ -111,16 +199,55 @@ serve(async (req) => {
       contact_name: lead._embedded?.contacts?.[0]?.name || null,
     }));
 
+    // Transform users list
+    const kommoUsers = (usersResponse._embedded?.users || []).map((user: any) => ({
+      id: user.id,
+      name: user.name,
+      email: user.email,
+      is_active: user.rights?.is_active ?? true,
+    }));
+
+    // Total notes = contacts notes + leads notes
+    const totalNotesCount = contactNotesCount.count + leadNotesCount.count;
+    const hasMoreNotes = contactNotesCount.hasMore || leadNotesCount.hasMore;
+
+    // Total custom fields
+    const totalCustomFields = contactCustomFields + leadCustomFields + companyCustomFields;
+
     return new Response(
       JSON.stringify({
-        total_contacts: hasMoreContacts ? `${totalContacts}+` : totalContacts,
-        total_leads: hasMoreLeads ? `${totalLeads}+` : totalLeads,
-        total_contacts_number: totalContacts,
-        total_leads_number: totalLeads,
-        has_more_contacts: hasMoreContacts,
-        has_more_leads: hasMoreLeads,
+        // Contacts
+        total_contacts: contactsCount.hasMore ? `${contactsCount.count}+` : contactsCount.count,
+        total_contacts_number: contactsCount.count,
+        has_more_contacts: contactsCount.hasMore,
         sample_contacts: sampleContacts,
+        // Leads
+        total_leads: leadsCount.hasMore ? `${leadsCount.count}+` : leadsCount.count,
+        total_leads_number: leadsCount.count,
+        has_more_leads: leadsCount.hasMore,
         sample_leads: sampleLeads,
+        // Companies
+        total_companies: companiesCount.hasMore ? `${companiesCount.count}+` : companiesCount.count,
+        total_companies_number: companiesCount.count,
+        has_more_companies: companiesCount.hasMore,
+        // Tasks
+        total_tasks: tasksCount.hasMore ? `${tasksCount.count}+` : tasksCount.count,
+        total_tasks_number: tasksCount.count,
+        has_more_tasks: tasksCount.hasMore,
+        // Users
+        total_users: kommoUsers.length,
+        kommo_users: kommoUsers,
+        // Notes
+        total_notes: hasMoreNotes ? `${totalNotesCount}+` : totalNotesCount,
+        total_notes_number: totalNotesCount,
+        total_notes_contacts: contactNotesCount.count,
+        total_notes_leads: leadNotesCount.count,
+        has_more_notes: hasMoreNotes,
+        // Custom Fields
+        total_custom_fields: totalCustomFields,
+        custom_fields_contacts: contactCustomFields,
+        custom_fields_leads: leadCustomFields,
+        custom_fields_companies: companyCustomFields,
       }),
       { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
     );
