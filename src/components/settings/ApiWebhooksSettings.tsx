@@ -455,7 +455,7 @@ export function ApiWebhooksSettings() {
                         {key.is_active ? <EyeSlash className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
                       </Button>
                       <Button variant="ghost" size="icon" onClick={() => handleDeleteKeyClick(key.id)}>
-                        <Trash2 className="h-4 w-4 text-destructive" />
+                        <TrashSimple className="h-4 w-4 text-destructive" />
                       </Button>
                     </div>
                   </div>
