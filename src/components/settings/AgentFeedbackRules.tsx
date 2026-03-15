@@ -85,7 +85,7 @@ export function AgentFeedbackRules({
         </div>
         {isAtLimit && (
           <div className="flex items-center gap-1 text-xs text-amber-500">
-            <AlertTriangle className="h-3 w-3" />
+            <Warning className="h-3 w-3" />
             Limite atingido
           </div>
         )}
