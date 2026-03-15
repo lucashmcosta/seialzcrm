@@ -1307,7 +1307,7 @@ export function SDRAgentWizard({
             disabled={isSimulating}
           />
           <Button onClick={simulateMessage} disabled={isSimulating || !testInput.trim()}>
-            <Send className="h-4 w-4" />
+            <PaperPlaneTilt className="h-4 w-4" />
           </Button>
         </div>
         
