@@ -190,7 +190,7 @@ export default function ContactDetail() {
               <DropdownMenu>
                 <DropdownMenuTrigger asChild>
                   <Button color="ghost" size="icon">
-                    <MoreVertical className="h-4 w-4" />
+                    <DotsThreeVertical className="h-4 w-4" />
                   </Button>
                 </DropdownMenuTrigger>
                 <DropdownMenuContent align="end">
