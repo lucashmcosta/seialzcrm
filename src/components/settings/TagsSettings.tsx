@@ -220,7 +220,7 @@ export function TagsSettings() {
                           setDialogOpen(true);
                         }}
                       >
-                        <Pencil className="w-4 h-4" />
+                        <PencilSimple className="w-4 h-4" />
                       </Button>
                       <Button
                         variant="ghost"
