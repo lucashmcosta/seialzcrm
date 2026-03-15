@@ -57,6 +57,21 @@ function normPhone(p: string | undefined): string | null {
   return null;
 }
 
+// Convert user_mappings array format [{kommo_user_id, seialz_user_id}] to Record<string, string>
+function convertUserMappings(input: any): Record<string, string> {
+  if (!input) return {};
+  // Already a Record/object (not array)
+  if (!Array.isArray(input)) return input as Record<string, string>;
+  // Convert array of {kommo_user_id, seialz_user_id} to Record
+  const result: Record<string, string> = {};
+  for (const m of input) {
+    if (m.kommo_user_id && m.seialz_user_id) {
+      result[String(m.kommo_user_id)] = m.seialz_user_id;
+    }
+  }
+  return result;
+}
+
 const PHASES: Phase[] = ["users","pipelines","custom_fields","companies","contacts","leads","tasks","notes_contacts","notes_leads","events"];
 
 function nextPhase(cur: Phase, cfg: ImportConfig): Phase {
@@ -113,7 +128,7 @@ Deno.serve(async (req) => {
         stage_mapping: body.stage_mapping || l.config?.stage_mapping,
         duplicate_mode: body.duplicate_mode || l.config?.duplicate_mode || "skip",
         import_orphan_contacts: body.import_orphan_contacts ?? l.config?.import_orphan_contacts ?? true,
-        user_mapping: body.user_mapping || l.config?.user_mapping || {},
+        user_mapping: convertUserMappings(body.user_mappings || body.user_mapping || l.config?.user_mappings || l.config?.user_mapping),
         import_companies: body.import_companies ?? l.config?.import_companies ?? false,
         import_tasks: body.import_tasks ?? l.config?.import_tasks ?? false,
         import_notes: body.import_notes ?? l.config?.import_notes ?? false,

@@ -110,3 +110,6 @@ verify_jwt = false
 
 [functions.kommo-media-download]
 verify_jwt = true
+
+[functions.kommo-fix-owners]
+verify_jwt = false
