@@ -163,7 +163,7 @@ export function SimpleLogoUploader({
           <Tabs value={activeTab} onValueChange={setActiveTab}>
             <TabsList className="grid w-full grid-cols-2">
               <TabsTrigger value="upload">
-                <Upload className="w-4 h-4 mr-2" />
+                 <UploadSimple className="w-4 h-4 mr-2" />
                 Upload
               </TabsTrigger>
               <TabsTrigger value="url">
