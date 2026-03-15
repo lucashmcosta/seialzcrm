@@ -123,7 +123,7 @@ export default function CompanyDetail() {
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-4">
               <div className="w-12 h-12 bg-primary/10 rounded-lg flex items-center justify-center">
-                <Building2 className="w-6 h-6 text-primary" />
+                <Buildings className="w-6 h-6 text-primary" />
               </div>
               <div>
                 <h1 className="text-3xl font-bold text-foreground">{company.name}</h1>
