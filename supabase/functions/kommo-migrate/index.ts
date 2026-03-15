@@ -87,7 +87,7 @@ async function findExisting(sb: any, table: string, orgId: string, srcExtId: str
   return data;
 }
 
-serve(async (req) => {
+Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response(null, { headers: corsHeaders });
 
   try {
