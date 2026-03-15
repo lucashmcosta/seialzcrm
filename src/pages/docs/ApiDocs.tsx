@@ -624,7 +624,7 @@ function GroupSection({ group }: { group: EndpointGroup }) {
         onClick={() => setOpen(!open)}
         className="w-full flex items-center gap-3 text-left mb-3 group"
       >
-        {open ? <ChevronDown className="w-5 h-5 text-emerald-400" /> : <ChevronRight className="w-5 h-5 text-emerald-400" />}
+        {open ? <CaretDown className="w-5 h-5 text-emerald-400" /> : <CaretRight className="w-5 h-5 text-emerald-400" />}
         <h2 className="text-xl font-bold text-gray-100 group-hover:text-emerald-400 transition-colors">
           {group.title}
         </h2>
