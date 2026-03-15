@@ -800,7 +800,7 @@ export function KnowledgeWizard({ onComplete, onCancel }: KnowledgeWizardProps) 
                 variant="default"
                 className="text-xs bg-green-500/20 text-green-700 border-green-500/30"
               >
-                <CheckCircle2 className="h-3 w-3 mr-1" />
+                 <CheckCircle className="h-3 w-3 mr-1" />
                 {CATEGORY_LABELS[item.category] || item.category}
               </Badge>
             ))}
