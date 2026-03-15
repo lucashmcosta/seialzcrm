@@ -219,9 +219,9 @@ export function WhatsAppIntegrationStatus({ onReconfigure }: WhatsAppIntegration
           }`}>
             <div className="flex items-start gap-2">
               {diagnosis.is_inbound_configured && diagnosis.has_whatsapp_senders ? (
-                <CheckCircle2 className="h-4 w-4 text-green-600 mt-0.5 shrink-0" />
+                 <CheckCircle className="h-4 w-4 text-green-600 mt-0.5 shrink-0" />
               ) : (
-                <AlertTriangle className="h-4 w-4 text-amber-600 mt-0.5 shrink-0" />
+                 <Warning className="h-4 w-4 text-amber-600 mt-0.5 shrink-0" />
               )}
               <div className="space-y-1 text-sm">
                 <p className="font-medium">{diagnosis.diagnosis}</p>
