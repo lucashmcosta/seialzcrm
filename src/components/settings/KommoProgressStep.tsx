@@ -186,7 +186,7 @@ export function KommoProgressStep({
       {/* Rollback Info */}
       {canRollback && (
         <Alert className="border-primary/50 bg-primary/5">
-          <RotateCcw className="h-4 w-4" />
+           <ArrowCounterClockwise className="h-4 w-4" />
           <AlertTitle>Rollback disponível</AlertTitle>
           <AlertDescription>
             Você pode desfazer esta migração{' '}
