@@ -968,7 +968,7 @@ export default function OpportunitiesKanban() {
                       <TableRowActionsDropdown>
                         <TableRowAction
                           label={t('common.edit')}
-                          icon={<Edit01 className="h-4 w-4" />}
+                          icon={<PencilSimple size={16} weight="light" />}
                           onAction={() => handleEdit(opp)}
                         />
                         <TableRowAction
