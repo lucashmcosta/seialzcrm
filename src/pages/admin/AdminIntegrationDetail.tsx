@@ -102,7 +102,7 @@ export default function AdminIntegrationDetail() {
           </div>
           <div className="flex gap-2">
             <Button variant="destructive" onClick={() => setConfirmOpen(true)} disabled={loading}>
-              <Trash2 className="h-4 w-4 mr-2" />
+              <TrashSimple size={16} className="mr-2" />
               Excluir
             </Button>
             <Button onClick={handleSave} disabled={loading}>
