@@ -357,7 +357,7 @@ export function KnowledgeWizardChat({ agentId, onComplete, onCancel }: Knowledge
       <div className="flex flex-col h-full max-h-[70vh]">
         <div className="flex items-center gap-3 p-4 border-b">
           <div className="p-2 rounded-full bg-primary/10">
-            <MessageSquare className="h-5 w-5 text-primary" />
+             <ChatCircle className="h-5 w-5 text-primary" />
           </div>
           <div>
             <h3 className="font-semibold">Criar Base de Conhecimento</h3>
