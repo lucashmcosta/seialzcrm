@@ -197,7 +197,7 @@ export function KommoProgressStep({
 
       {isRolledBack && (
         <Alert>
-          <RotateCcw className="h-4 w-4" />
+          <ArrowCounterClockwise className="h-4 w-4" />
           <AlertDescription>
             Esta migração foi desfeita. Todos os registros importados foram removidos.
           </AlertDescription>
