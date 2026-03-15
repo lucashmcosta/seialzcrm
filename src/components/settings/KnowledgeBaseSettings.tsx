@@ -549,7 +549,7 @@ export function KnowledgeBaseSettings() {
                             {typeConfig.label}
                           </Badge>
                           <Badge variant="outline" className={status.color}>
-                            {item.status === 'processing' && <Loader2 className="mr-1 h-3 w-3 animate-spin" />}
+                            {item.status === 'processing' && <SpinnerGap className="mr-1 h-3 w-3 animate-spin" />}
                             {status.label}
                           </Badge>
                         </div>
