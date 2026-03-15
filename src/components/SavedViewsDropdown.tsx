@@ -19,7 +19,7 @@ import { supabase } from '@/integrations/supabase/client';
 import { useOrganization } from '@/hooks/useOrganization';
 import { useTranslation } from '@/lib/i18n';
 import { toast } from '@/hooks/use-toast';
-import { BookMarked, Plus, Trash2 } from 'lucide-react';
+import { BookmarkSimple, Plus, TrashSimple } from '@phosphor-icons/react';
 
 interface SavedView {
   id: string;

@@ -5,7 +5,7 @@ import { supabase } from '@/integrations/supabase/client';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
-import { Search, BookOpen, ArrowLeft } from 'lucide-react';
+import { MagnifyingGlass, BookOpen, ArrowLeft } from '@phosphor-icons/react';
 import { useAuth } from '@/hooks/useAuth';
 
 export default function DocsIndex() {

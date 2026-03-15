@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
 import { SeialzLogo } from '@/components/SeialzLogo';
-import { Menu, X } from 'lucide-react';
+import { List, X } from '@phosphor-icons/react';
 
 const navLinks = [
   { label: 'O Problema', href: '#problema' },

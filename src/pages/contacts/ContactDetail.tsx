@@ -11,7 +11,7 @@ import { useOutboundCall } from '@/contexts/OutboundCallContext';
 import { formatPhoneDisplay } from '@/lib/phoneUtils';
 import { Card } from '@/components/ui/card';
 import { toast } from 'sonner';
-import { Mail, Phone, Building2, Edit, Trash2, MoreVertical, User, FileText, MapPin, Calendar, Megaphone, ExternalLink } from 'lucide-react';
+import { EnvelopeSimple, Phone, Buildings, PencilSimple, TrashSimple, DotsThreeVertical, User, FileText, MapPin, Calendar, Megaphone, ArrowSquareOut } from '@phosphor-icons/react';
 import { Breadcrumbs } from '@/components/application/breadcrumbs/breadcrumbs';
 import { Tabs } from '@/components/application/tabs/tabs';
 import { NativeSelect } from '@/components/base/select/select-native';

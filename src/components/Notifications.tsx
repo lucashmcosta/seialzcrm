@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { Bell } from 'lucide-react';
+import { Bell } from '@phosphor-icons/react';
 import { Button } from '@/components/ui/button';
 import {
   DropdownMenu,

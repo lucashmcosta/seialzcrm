@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { useParams, useNavigate, Link } from 'react-router-dom';
-import { ArrowLeft } from 'lucide-react';
+import { ArrowLeft } from '@phosphor-icons/react';
 import { Layout } from '@/components/Layout';
 import { Button } from '@/components/base/buttons/button';
 import { Input } from '@/components/ui/input';

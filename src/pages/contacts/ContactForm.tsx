@@ -13,7 +13,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Card } from '@/components/ui/card';
 import { Checkbox } from '@/components/ui/checkbox';
 import { toast } from 'sonner';
-import { ArrowLeft } from 'lucide-react';
+import { ArrowLeft } from '@phosphor-icons/react';
 import { NameInput } from '@/components/NameInput';
 import { OwnerSelector } from '@/components/common/OwnerSelector';
 

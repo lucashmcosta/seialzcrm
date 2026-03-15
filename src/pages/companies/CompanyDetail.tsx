@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { useParams, useNavigate, Link } from 'react-router-dom';
-import { Building2, Edit, Trash2, ArrowLeft, Users, Briefcase } from 'lucide-react';
+import { Buildings, PencilSimple, TrashSimple, ArrowLeft, UsersThree, Briefcase } from '@phosphor-icons/react';
 import { Layout } from '@/components/Layout';
 import { Button } from '@/components/base/buttons/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
