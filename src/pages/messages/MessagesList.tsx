@@ -1608,7 +1608,7 @@ export default function MessagesList() {
                           {/* Note Mode Indicator */}
                           {isNoteMode && (
                             <div className="flex items-center gap-2 px-3 py-1.5 bg-yellow-100 dark:bg-yellow-900/30 border border-yellow-300 dark:border-yellow-700 rounded-t-lg">
-                              <StickyNote className="w-3.5 h-3.5 text-yellow-600 dark:text-yellow-400" />
+                              <NotePencil className="w-3.5 h-3.5 text-yellow-600 dark:text-yellow-400" />
                               <span className="text-xs font-medium text-yellow-700 dark:text-yellow-400">
                                 {locale === 'pt-BR' ? 'Nota interna - não será enviada ao cliente' : 'Internal note - will not be sent to client'}
                               </span>
