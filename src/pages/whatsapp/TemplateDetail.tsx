@@ -186,7 +186,7 @@ export default function TemplateDetail() {
                 variant="outline"
                 onClick={() => navigate(`/whatsapp/templates/${id}/edit`)}
               >
-                <Pencil className="w-4 h-4 mr-2" />
+                <PencilSimple className="w-4 h-4 mr-2" />
                 Editar
               </Button>
             )}
