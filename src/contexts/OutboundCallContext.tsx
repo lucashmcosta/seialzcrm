@@ -3,6 +3,7 @@ import { useLocation } from 'react-router-dom';
 import { Device, Call } from '@twilio/voice-sdk';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
+import { useVoiceIntegration } from '@/hooks/useVoiceIntegration';
 
 export type CallStatus = 'idle' | 'initializing' | 'ready' | 'connecting' | 'ringing' | 'connected' | 'ended' | 'failed';
 
@@ -48,6 +49,7 @@ const OutboundCallContext = createContext<OutboundCallContextType | undefined>(u
 
 export function OutboundCallProvider({ children }: { children: ReactNode }) {
   const location = useLocation();
+  const { hasVoiceIntegration, loading: voiceLoading } = useVoiceIntegration();
   const [status, setStatus] = useState<CallStatus>('idle');
   const [callInfo, setCallInfo] = useState<CallInfo | null>(null);
   const [duration, setDuration] = useState(0);
@@ -384,11 +386,17 @@ export function OutboundCallProvider({ children }: { children: ReactNode }) {
   }, [getToken, getUserData]);
 
   // Initialize device on mount (persistent)
-  // CRITICAL SECURITY: Never initialize in admin portal or without auth
+  // CRITICAL SECURITY: Never initialize in admin portal or without auth or without voice integration
   useEffect(() => {
     // Skip initialization in admin routes
     if (isAdminRoute) {
       console.log('[OutboundCall] Skipping initialization in admin route');
+      return;
+    }
+
+    // Skip if voice integration is not enabled or still loading
+    if (voiceLoading || !hasVoiceIntegration) {
+      console.log('[OutboundCall] Voice integration not enabled, skipping device initialization');
       return;
     }
     
@@ -426,7 +434,7 @@ export function OutboundCallProvider({ children }: { children: ReactNode }) {
       }
       fullCleanup();
     };
-  }, [isAdminRoute]);
+  }, [isAdminRoute, hasVoiceIntegration, voiceLoading]);
 
   // Start a new call
   const startCall = useCallback((params: CallInfo) => {
