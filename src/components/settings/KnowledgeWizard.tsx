@@ -879,7 +879,7 @@ export function KnowledgeWizard({ onComplete, onCancel }: KnowledgeWizardProps) 
             {loading && (
               <div className="flex justify-start">
                 <div className="bg-muted rounded-lg px-4 py-2 flex items-center gap-2">
-                  <Loader2 className="h-4 w-4 animate-spin" />
+                  <SpinnerGap className="h-4 w-4 animate-spin" />
                   <span className="text-sm text-muted-foreground">Pensando...</span>
                 </div>
               </div>
