@@ -180,7 +180,7 @@ export default function AdminOrganizationDetail() {
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-4">
             <Button variant="ghost" size="icon" onClick={() => navigate('/admin/organizations')}>
-              <ArrowLeft className="h-4 w-4" />
+              <ArrowLeft size={16} />
             </Button>
             <div>
               <h1 className="text-3xl font-bold">{org.name}</h1>
