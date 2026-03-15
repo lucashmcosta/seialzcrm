@@ -500,7 +500,7 @@ export function KnowledgeWizardChat({ agentId, onComplete, onCancel }: Knowledge
                   disabled={isLoading}
                 />
                 <Button onClick={handleSend} disabled={isLoading || !inputValue.trim()}>
-                  {isLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}
+                  {isLoading ? <SpinnerGap className="h-4 w-4 animate-spin" /> : <PaperPlaneTilt className="h-4 w-4" />}
                 </Button>
               </div>
             </div>
