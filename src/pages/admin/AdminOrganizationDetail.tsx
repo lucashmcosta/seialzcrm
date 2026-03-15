@@ -6,7 +6,7 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Badge } from '@/components/ui/badge';
-import { ArrowLeft, RefreshCw, Ban, Trash2, Mail, Play, LogIn } from 'lucide-react';
+import { ArrowLeft, ArrowsClockwise, Prohibit, TrashSimple, EnvelopeSimple, Play, SignIn } from '@phosphor-icons/react';
 import { useToast } from '@/hooks/use-toast';
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
