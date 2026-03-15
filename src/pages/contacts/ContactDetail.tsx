@@ -290,7 +290,7 @@ export default function ContactDetail() {
                   )}
                   {contact.company_name && (
                     <div className="flex items-center gap-3">
-                      <Building2 className="h-4 w-4 text-muted-foreground" />
+                      <Buildings className="h-4 w-4 text-muted-foreground" />
                       <div>
                         <div className="text-sm text-muted-foreground">{t('contacts.company')}</div>
                         <div className="text-foreground">{contact.company_name}</div>
