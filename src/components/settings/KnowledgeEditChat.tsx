@@ -224,7 +224,7 @@ export function KnowledgeEditChat() {
           <div className="space-y-4 py-4">
             {messages.length === 0 && (
               <div className="text-center text-muted-foreground py-12">
-                <MessageSquare className="h-12 w-12 mx-auto mb-4 opacity-50" />
+                <ChatCircle className="h-12 w-12 mx-auto mb-4 opacity-50" />
                 <p className="text-lg font-medium mb-2">Comece a conversar</p>
                 <p className="text-sm">
                   Exemplos: "Muda o preço do EB2 para $16.000" ou "Adiciona que aceitamos PIX"
