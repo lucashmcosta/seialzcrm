@@ -762,7 +762,7 @@ export function KnowledgeWizard({ onComplete, onCancel }: KnowledgeWizardProps) 
           <div className="flex items-center gap-2">
             {isSaving && (
               <Badge variant="secondary" className="flex items-center gap-1 animate-pulse">
-                <Save className="h-3 w-3" />
+                <FloppyDisk className="h-3 w-3" />
                 Salvando...
               </Badge>
             )}
