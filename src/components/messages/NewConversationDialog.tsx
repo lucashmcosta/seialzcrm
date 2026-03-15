@@ -121,7 +121,7 @@ export function NewConversationDialog({
       <DialogContent className="sm:max-w-md">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
-            <MessageSquare className="w-5 h-5" />
+            <ChatCircle className="w-5 h-5" />
             {locale === 'pt-BR' ? 'Nova Conversa' : 'New Conversation'}
           </DialogTitle>
         </DialogHeader>
