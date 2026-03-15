@@ -141,7 +141,7 @@ export function SDRAgentCard({ agent, isLoading, onConfigure, onToggle, onDuplic
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
                 <Button variant="ghost" size="icon" className="h-8 w-8">
-                  <MoreVertical className="h-4 w-4" />
+                  <DotsThreeVertical className="h-4 w-4" />
                 </Button>
               </DropdownMenuTrigger>
               <DropdownMenuContent align="end">
