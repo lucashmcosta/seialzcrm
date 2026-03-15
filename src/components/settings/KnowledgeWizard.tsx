@@ -746,7 +746,7 @@ export function KnowledgeWizard({ onComplete, onCancel }: KnowledgeWizardProps) 
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-3">
             <div className="p-2 rounded-lg bg-primary/10">
-              <BrainCircuit className="h-5 w-5 text-primary" />
+              <Brain className="h-5 w-5 text-primary" />
             </div>
             <div>
               <h3 className="font-semibold">Wizard Inteligente</h3>
