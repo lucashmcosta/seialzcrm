@@ -406,7 +406,7 @@ export function KnowledgeWizardChat({ agentId, onComplete, onCancel }: Knowledge
             <ArrowLeft className="h-4 w-4" />
           </Button>
           <div className="p-2 rounded-full bg-primary/10">
-            <MessageSquare className="h-5 w-5 text-primary" />
+            <ChatCircle className="h-5 w-5 text-primary" />
           </div>
           <div>
             <h3 className="font-semibold">
