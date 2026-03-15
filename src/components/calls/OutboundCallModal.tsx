@@ -70,7 +70,7 @@ function DialPadToggle({
           className="h-12 w-12 rounded-full"
           onClick={() => setShowDialPad(!showDialPad)}
         >
-          <Grid3X3 className="h-5 w-5" />
+          <GridFour className="h-5 w-5" />
         </Button>
       </div>
     </div>
