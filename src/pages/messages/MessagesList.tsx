@@ -1465,7 +1465,7 @@ export default function MessagesList() {
                                     {/* Agent Badge + Feedback Button for agent messages */}
                                     {isOutbound && message.sender_type === 'agent' && (
                                       <div className="flex items-center gap-2 mb-2">
-                                        <Badge color="purple" size="sm" icon={<Bot className="w-3 h-3" />}>
+                                        <Badge color="purple" size="sm" icon={<Robot className="w-3 h-3" />}>
                                           {message.sender_name || 'Agente IA'}
                                         </Badge>
                                         <Button
