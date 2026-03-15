@@ -263,7 +263,7 @@ export default function Onboarding() {
       <Card className="w-full max-w-2xl">
         <CardHeader className="text-center">
           <div className="mx-auto mb-4 w-16 h-16 bg-primary rounded-lg flex items-center justify-center">
-            <Sparkles className="w-10 h-10 text-primary-foreground" />
+            <Sparkle className="w-10 h-10 text-primary-foreground" />
           </div>
           <CardTitle className="text-2xl">{t('onboarding.welcome')}</CardTitle>
           <CardDescription>
