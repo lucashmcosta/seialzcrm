@@ -96,7 +96,7 @@ export default function AdminIntegrationDetail() {
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-4">
             <Button variant="ghost" size="icon" onClick={() => navigate('/admin/integrations')}>
-              <ArrowLeft className="h-5 w-5" />
+              <ArrowLeft size={20} />
             </Button>
             <h1 className="text-3xl font-bold">{integration?.name}</h1>
           </div>
