@@ -1,6 +1,6 @@
 import * as React from "react";
 import { cn } from "@/lib/utils";
-import { ChevronDown } from "lucide-react";
+import { CaretDown } from "@phosphor-icons/react";
 
 interface NativeSelectProps extends React.SelectHTMLAttributes<HTMLSelectElement> {
   options: { label: string; value: string }[];

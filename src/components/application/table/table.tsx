@@ -8,7 +8,7 @@ import {
   TableHeader as AriaTableHeader,
   type SortDescriptor,
 } from "react-aria-components";
-import { MoreVertical, ArrowUp, ArrowDown, ChevronsUpDown } from "lucide-react";
+import { DotsThreeVertical, ArrowUp, ArrowDown, CaretUpDown } from "@phosphor-icons/react";
 import { cn } from "@/lib/utils";
 import { Card } from "@/components/ui/card";
 import { Checkbox } from "@/components/ui/checkbox";
