@@ -259,7 +259,7 @@ export default function WhatsAppTemplates() {
       ) : filteredTemplates.length === 0 ? (
         <Card>
           <CardContent className="py-12 text-center">
-            <MessageSquare className="w-12 h-12 mx-auto text-muted-foreground mb-4" />
+            <ChatCircle className="w-12 h-12 mx-auto text-muted-foreground mb-4" />
             <h3 className="font-medium mb-2">Nenhum template encontrado</h3>
             <p className="text-sm text-muted-foreground mb-4">
               {templates?.length === 0 
