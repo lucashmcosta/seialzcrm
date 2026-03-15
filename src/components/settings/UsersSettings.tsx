@@ -360,7 +360,7 @@ export function UsersSettings() {
                 Convidar por email
               </DropdownMenuItem>
               <DropdownMenuItem onClick={() => setCreateDialogOpen(true)}>
-                <UserRoundPlus className="w-4 h-4 mr-2" />
+                <UserCirclePlus className="w-4 h-4 mr-2" />
                 Criar conta diretamente
               </DropdownMenuItem>
             </DropdownMenuContent>
