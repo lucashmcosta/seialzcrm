@@ -198,6 +198,8 @@ export function KommoMigrationDialog({ open, onOpenChange }: KommoMigrationDialo
               crmStages={crmStages || []}
               stageMapping={stageMapping}
               onMappingChange={setStageMapping}
+              selectedPipelineIds={selectedPipelineIds}
+              onSelectedPipelinesChange={setSelectedPipelineIds}
               fetchPipelinesMutation={fetchPipelinesMutation}
             />
           )}
