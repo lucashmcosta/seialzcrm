@@ -8,7 +8,7 @@ import {
   TableHeader as AriaTableHeader,
   type SortDescriptor,
 } from "react-aria-components";
-import { MoreVertical, ArrowUp, ArrowDown, ChevronsUpDown } from "lucide-react";
+import { DotsThreeVertical, ArrowUp, ArrowDown, CaretUpDown } from "@phosphor-icons/react";
 import { cn } from "@/lib/utils";
 import { Card } from "@/components/ui/card";
 import { Checkbox } from "@/components/ui/checkbox";
@@ -123,7 +123,7 @@ export const TableRowActionsDropdown = ({
     <DropdownMenu>
       <DropdownMenuTrigger asChild>
         <ButtonUtility size="sm">
-          <MoreVertical className="h-4 w-4" />
+          <DotsThreeVertical className="h-4 w-4" />
         </ButtonUtility>
       </DropdownMenuTrigger>
       <DropdownMenuContent align="end">{children}</DropdownMenuContent>
@@ -227,7 +227,7 @@ export const TableColumn = ({
                 <ArrowDown className="w-3.5 h-3.5" />
               )
             ) : (
-              <ChevronsUpDown className="w-3.5 h-3.5 opacity-50" />
+              <CaretUpDown className="w-3.5 h-3.5 opacity-50" />
             )}
           </span>
         )}

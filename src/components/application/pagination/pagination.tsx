@@ -1,4 +1,4 @@
-import { ChevronLeft, ChevronRight } from "lucide-react";
+import { CaretLeft, CaretRight } from "@phosphor-icons/react";
 import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { cn } from "@/lib/utils";
@@ -38,7 +38,7 @@ export const PaginationPageMinimalCenter = ({
         disabled={!canGoPrevious}
         className="gap-1"
       >
-        <ChevronLeft className="h-4 w-4" />
+         <CaretLeft className="h-4 w-4" />
         Anterior
       </Button>
 
@@ -55,7 +55,7 @@ export const PaginationPageMinimalCenter = ({
         className="gap-1"
       >
         Próximo
-        <ChevronRight className="h-4 w-4" />
+         <CaretRight className="h-4 w-4" />
       </Button>
     </div>
   );
@@ -99,7 +99,7 @@ export const PaginationWithPageSize = ({
           disabled={!canGoPrevious}
           className="gap-1"
         >
-          <ChevronLeft className="h-4 w-4" />
+          <CaretLeft className="h-4 w-4" />
           Anterior
         </Button>
 
@@ -116,7 +116,7 @@ export const PaginationWithPageSize = ({
           className="gap-1"
         >
           Próximo
-          <ChevronRight className="h-4 w-4" />
+          <CaretRight className="h-4 w-4" />
         </Button>
       </div>
     </div>
