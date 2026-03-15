@@ -148,7 +148,7 @@ export function Layout({ children }: LayoutProps) {
         onClick={signOut}
         className="w-full"
       >
-        <LogOut01 className="w-4 h-4 mr-2" />
+        <SignOut size={16} weight="light" className="mr-2" />
         {t('auth.signOut')}
       </Button>
     </div>
