@@ -386,6 +386,56 @@ export function OutboundCallProvider({ children }: { children: ReactNode }) {
     }
   }, [getToken, getUserData]);
 
+  // Check voice integration availability (inline, no external context dependency)
+  useEffect(() => {
+    if (isAdminRoute) {
+      setVoiceLoading(false);
+      return;
+    }
+    let cancelled = false;
+    const check = async () => {
+      try {
+        const { data: session } = await supabase.auth.getSession();
+        if (!session?.session?.access_token || cancelled) {
+          setVoiceLoading(false);
+          return;
+        }
+        // Get user's org
+        const { data: userData } = await supabase
+          .from('users')
+          .select('id')
+          .eq('auth_user_id', session.session.user.id)
+          .maybeSingle();
+        if (!userData || cancelled) { setVoiceLoading(false); return; }
+        
+        const { data: orgData } = await supabase
+          .from('user_organizations')
+          .select('organization_id')
+          .eq('user_id', userData.id)
+          .eq('is_active', true)
+          .maybeSingle();
+        if (!orgData || cancelled) { setVoiceLoading(false); return; }
+
+        const { data } = await supabase
+          .from('organization_integrations')
+          .select('id, admin_integrations!inner(slug, category)')
+          .eq('organization_id', orgData.organization_id)
+          .eq('is_enabled', true)
+          .or('slug.eq.twilio-voice,category.eq.telephony', { referencedTable: 'admin_integrations' })
+          .maybeSingle();
+        
+        if (!cancelled) {
+          setHasVoiceIntegration(!!data);
+          setVoiceLoading(false);
+        }
+      } catch {
+        if (!cancelled) { setVoiceLoading(false); }
+      }
+    };
+    check();
+    return () => { cancelled = true; };
+  }, [isAdminRoute]);
+
   // Initialize device on mount (persistent)
   // CRITICAL SECURITY: Never initialize in admin portal or without auth or without voice integration
   useEffect(() => {
