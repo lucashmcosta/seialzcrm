@@ -141,7 +141,7 @@ export function BulkActionsBar({
                 onClick={handleMarkDoNotContact}
                 disabled={processing}
               >
-                <Ban className="h-4 w-4 mr-2" />
+                <Prohibit className="h-4 w-4 mr-2" />
                 {t('contacts.doNotContact')}
               </Button>
             )}
