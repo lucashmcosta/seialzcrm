@@ -177,7 +177,7 @@ export function ContactAttachments({ contactId, entityId, entityType }: ContactA
   const getFileIcon = (mimeType: string | null) => {
     if (!mimeType) return <File className="w-5 h-5" />;
     if (mimeType.startsWith('image/')) return <Image className="w-5 h-5" />;
-    if (mimeType.includes('spreadsheet') || mimeType.includes('excel')) return <FileSpreadsheet className="w-5 h-5" />;
+    if (mimeType.includes('spreadsheet') || mimeType.includes('excel')) return <FileXls className="w-5 h-5" />;
     if (mimeType.includes('text') || mimeType.includes('document')) return <FileText className="w-5 h-5" />;
     return <File className="w-5 h-5" />;
   };
