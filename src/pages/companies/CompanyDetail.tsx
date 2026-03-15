@@ -142,7 +142,7 @@ export default function CompanyDetail() {
               <AlertDialog>
                 <AlertDialogTrigger asChild>
                   <Button color="destructive" size="md">
-                    <Trash2 className="w-4 h-4 mr-2" />
+                    <TrashSimple className="w-4 h-4 mr-2" />
                     {t('common.delete')}
                   </Button>
                 </AlertDialogTrigger>
