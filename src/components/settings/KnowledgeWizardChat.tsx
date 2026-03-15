@@ -515,7 +515,7 @@ export function KnowledgeWizardChat({ agentId, onComplete, onCancel }: Knowledge
                   <Button onClick={handleSynthesize} disabled={isSynthesizing} className="w-full">
                     {isSynthesizing ? (
                       <>
-                        <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                        <SpinnerGap className="mr-2 h-4 w-4 animate-spin" />
                         Gerando documentos...
                       </>
                     ) : (
