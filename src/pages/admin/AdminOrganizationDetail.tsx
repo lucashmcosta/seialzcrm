@@ -449,7 +449,7 @@ export default function AdminOrganizationDetail() {
                   </Button>
                 ) : (
                   <Button onClick={() => setSuspendDialogOpen(true)} variant="destructive" className="w-full justify-start">
-                    <Ban className="h-4 w-4 mr-2" />
+                    <Prohibit size={16} className="mr-2" />
                     Suspender Conta
                   </Button>
                 )}
