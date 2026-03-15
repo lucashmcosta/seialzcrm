@@ -1,17 +1,18 @@
 import { ReactNode } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import {
-  Building07,
-  Users01,
-  Briefcase01,
-  Settings01,
-  LogOut01,
-  HomeLine,
-  CheckDone01,
-  Shield01,
-  HelpCircle,
-  MessageChatCircle,
-} from '@untitledui/icons';
+  Buildings,
+  UsersThree,
+  Briefcase,
+  GearSix,
+  SignOut,
+  House,
+  CheckSquare,
+  ShieldCheck,
+  Question,
+  ChatCircleText,
+} from '@phosphor-icons/react';
+import type { Icon as PhosphorIcon } from '@phosphor-icons/react';
 import { Button } from '@/components/ui/button';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import { useAuth } from '@/hooks/useAuth';
