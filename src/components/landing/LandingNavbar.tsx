@@ -14,10 +14,18 @@ const navLinks = [
 
 export function LandingNavbar() {
   const [scrolled, setScrolled] = useState(false);
+  const [ctaVisible, setCtaVisible] = useState(false);
   const [mobileOpen, setMobileOpen] = useState(false);
 
   useEffect(() => {
-    const handleScroll = () => setScrolled(window.scrollY > 20);
+    const handleScroll = () => {
+      setScrolled(window.scrollY > 20);
+      const ctaSection = document.getElementById('cta');
+      if (ctaSection) {
+        const rect = ctaSection.getBoundingClientRect();
+        setCtaVisible(rect.top < window.innerHeight);
+      }
+    };
     window.addEventListener('scroll', handleScroll);
     return () => window.removeEventListener('scroll', handleScroll);
   }, []);
