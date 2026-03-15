@@ -333,7 +333,7 @@ export function ImportKnowledge({ agents, onSuccess }: ImportKnowledgeProps) {
         {/* PDF Warning */}
         <Card className="border-warning/50 bg-warning/10">
           <CardContent className="p-3 flex items-start gap-2">
-            <AlertCircle className="h-4 w-4 text-warning mt-0.5 flex-shrink-0" />
+            <WarningCircle className="h-4 w-4 text-warning mt-0.5 flex-shrink-0" />
             <div className="text-sm">
               <p className="font-medium text-warning">PDFs</p>
               <p className="text-muted-foreground">
