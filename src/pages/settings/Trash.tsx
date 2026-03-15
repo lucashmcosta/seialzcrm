@@ -280,7 +280,7 @@ export function Trash() {
                           onClick={() => handleRestore(item)}
                           disabled={processing}
                         >
-                          <RotateCcw className="h-4 w-4 mr-2" />
+                          <ArrowCounterClockwise className="h-4 w-4 mr-2" />
                           {t('trash.restore')}
                         </Button>
                         <AlertDialog>
