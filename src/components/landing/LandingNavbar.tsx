@@ -100,7 +100,7 @@ export function LandingNavbar() {
     </nav>
 
     {/* Mobile floating CTA */}
-    {scrolled && (
+    {scrolled && !ctaVisible && (
       <div className="md:hidden fixed bottom-6 left-4 right-4 z-50">
         <button
           onClick={() => scrollTo('#cta')}
