@@ -204,7 +204,7 @@ export function IncomingCallModal({
                   className="h-14 w-14 rounded-full"
                   onClick={onReject}
                 >
-                  <PhoneOff className="h-6 w-6" />
+                  <PhoneDisconnect className="h-6 w-6" />
                 </Button>
                 <Button
                   size="lg"
