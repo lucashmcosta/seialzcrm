@@ -202,8 +202,8 @@ const CHANNELS = [
 const AGENT_MODES: { value: AgentMode; label: string; description: string; icon: any }[] = [
   { value: 'close_sale', label: 'Fechar Venda', description: 'Foco em avançar para compra, enviar link/CTA', icon: Target },
   { value: 'qualify', label: 'Qualificar', description: 'Coletar informações e passar para humano', icon: CheckSquare },
-  { value: 'schedule', label: 'Agendar', description: 'Marcar reuniões e demonstrações', icon: MessageSquare },
-  { value: 'support', label: 'Suporte', description: 'Resolver dúvidas e reduzir handoff', icon: MessageCircleWarning },
+  { value: 'schedule', label: 'Agendar', description: 'Marcar reuniões e demonstrações', icon: ChatCircle },
+  { value: 'support', label: 'Suporte', description: 'Resolver dúvidas e reduzir handoff', icon: ChatCircleWarningIcon },
   { value: 'hybrid', label: 'Híbrido', description: 'Múltiplos objetivos com prioridade', icon: SlidersHorizontal },
 ];
 
