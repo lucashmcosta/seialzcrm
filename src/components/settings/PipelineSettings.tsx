@@ -246,7 +246,7 @@ export function PipelineSettings() {
                           setDialogOpen(true);
                         }}
                       >
-                        <Pencil className="w-4 h-4" />
+                        <PencilSimple className="w-4 h-4" />
                       </Button>
                       {stage.type === 'custom' && (
                         <Button
