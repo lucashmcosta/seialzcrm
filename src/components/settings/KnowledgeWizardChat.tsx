@@ -462,7 +462,7 @@ export function KnowledgeWizardChat({ agentId, onComplete, onCancel }: Knowledge
               {isLoading && (
                 <div className="flex justify-start">
                   <div className="bg-muted rounded-lg px-4 py-2">
-                    <Loader2 className="h-4 w-4 animate-spin" />
+                     <SpinnerGap className="h-4 w-4 animate-spin" />
                   </div>
                 </div>
               )}
