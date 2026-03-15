@@ -860,7 +860,7 @@ export default function OpportunitiesKanban() {
         <div className="flex flex-col h-full">
           <SeialzTopbar
             title="Pipeline"
-            count={`${totalDeals} deals · ${formatCurrency(totalAmount, organization?.default_currency || 'BRL')}`}
+            count={`${totalDeals} deals · ${formatCurrency(totalPipelineAmount, organization?.default_currency || 'BRL')}`}
           >
             <div className="relative">
               <MagnifyingGlass size={14} weight="light" className="absolute left-2.5 top-1/2 -translate-y-1/2 text-muted-foreground" />
