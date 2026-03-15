@@ -461,7 +461,7 @@ export function ImportKnowledge({ agents, onSuccess }: ImportKnowledgeProps) {
             >
               {uploading ? (
                 <>
-                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                   <SpinnerGap className="mr-2 h-4 w-4 animate-spin" />
                   Importando...
                 </>
               ) : (
