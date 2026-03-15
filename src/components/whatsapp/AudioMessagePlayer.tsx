@@ -1,7 +1,7 @@
 import { useState, useRef, useEffect } from 'react';
 import { Button } from '@/components/ui/button';
 import { Slider } from '@/components/ui/slider';
-import { Play, Pause, Volume2 } from 'lucide-react';
+import { Play, Pause, SpeakerHigh } from '@phosphor-icons/react';
 
 interface AudioMessagePlayerProps {
   src: string;

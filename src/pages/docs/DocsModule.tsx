@@ -4,7 +4,7 @@ import { supabase } from '@/integrations/supabase/client';
 import { Card } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Separator } from '@/components/ui/separator';
-import { ArrowLeft, BookOpen, Calendar, Tag } from 'lucide-react';
+import { ArrowLeft, BookOpen, Calendar, Tag } from '@phosphor-icons/react';
 import { useAuth } from '@/hooks/useAuth';
 
 export default function DocsModule() {

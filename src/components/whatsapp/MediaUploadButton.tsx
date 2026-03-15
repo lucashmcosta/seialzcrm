@@ -6,7 +6,7 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
-import { Plus, Image, FileText, Video, FileStack, StickyNote } from 'lucide-react';
+import { Plus, Image, FileText, VideoCamera, Files, Note } from '@phosphor-icons/react';
 
 interface MediaUploadButtonProps {
   onFileSelected: (file: File) => void;

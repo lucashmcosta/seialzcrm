@@ -12,7 +12,7 @@ import {
 import { Input } from '@/components/ui/input';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Avatar } from '@/components/base/avatar/avatar';
-import { Loader2, Search, Phone, MessageSquare } from 'lucide-react';
+import { SpinnerGap, MagnifyingGlass, Phone, ChatCircle } from '@phosphor-icons/react';
 
 interface Contact {
   id: string;

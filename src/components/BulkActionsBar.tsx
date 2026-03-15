@@ -5,7 +5,7 @@ import { ConfirmDialog } from '@/components/ui/confirm-dialog';
 import { supabase } from '@/integrations/supabase/client';
 import { useTranslation } from '@/lib/i18n';
 import { toast } from '@/hooks/use-toast';
-import { X, User, Ban, Trash2 } from 'lucide-react';
+import { X, User, Prohibit, TrashSimple } from '@phosphor-icons/react';
 
 interface User {
   id: string;

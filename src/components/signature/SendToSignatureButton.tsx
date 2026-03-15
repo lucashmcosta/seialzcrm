@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { useOrganization } from '@/hooks/useOrganization';
 import { Button } from '@/components/ui/button';
-import { PenTool } from 'lucide-react';
+import { PenNib } from '@phosphor-icons/react';
 import { toast } from 'sonner';
 
 interface SendToSignatureButtonProps {

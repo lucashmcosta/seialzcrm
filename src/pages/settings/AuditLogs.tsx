@@ -7,7 +7,7 @@ import { Button } from '@/components/ui/button';
 import { supabase } from '@/integrations/supabase/client';
 import { useOrganization } from '@/hooks/useOrganization';
 import { useTranslation } from '@/lib/i18n';
-import { ChevronLeft, ChevronRight, Eye } from 'lucide-react';
+import { CaretLeft, CaretRight, Eye } from '@phosphor-icons/react';
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from '@/components/ui/sheet';
 
 interface AuditLog {

@@ -7,7 +7,7 @@ import {
 } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { X, Send, Loader2 } from 'lucide-react';
+import { X, PaperPlaneTilt, SpinnerGap } from '@phosphor-icons/react';
 
 interface MediaPreviewDialogProps {
   file: File | null;

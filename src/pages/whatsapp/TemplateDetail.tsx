@@ -36,14 +36,14 @@ import { useOrganization } from '@/hooks/useOrganization';
 import { extractVariables } from '@/lib/template-validation';
 import {
   ArrowLeft,
-  Pencil,
-  Trash2,
-  Send,
-  Loader2,
-  AlertCircle,
+  PencilSimple,
+  TrashSimple,
+  PaperPlaneTilt,
+  SpinnerGap,
+  WarningCircle,
   Clock,
   Calendar,
-} from 'lucide-react';
+} from '@phosphor-icons/react';
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 

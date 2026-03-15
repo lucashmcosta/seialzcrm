@@ -46,15 +46,15 @@ import {
 import { useOrganization } from '@/hooks/useOrganization';
 import { 
   Plus, 
-  RefreshCw, 
-  MoreHorizontal, 
+  ArrowsClockwise, 
+  DotsThree, 
   Eye, 
-  Pencil, 
-  Trash2, 
-  Send,
-  MessageSquare,
-  Loader2,
-} from 'lucide-react';
+  PencilSimple, 
+  TrashSimple, 
+  PaperPlaneTilt,
+  ChatCircle,
+  SpinnerGap,
+} from '@phosphor-icons/react';
 import { formatDistanceToNow } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 
