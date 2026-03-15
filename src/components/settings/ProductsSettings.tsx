@@ -344,7 +344,7 @@ export function ProductsSettings() {
                 {products.map((product) => (
                   <TableRow key={product.id}>
                     <TableCell>
-                      <GripVertical className="h-4 w-4 text-muted-foreground cursor-grab" />
+                      <DotsSixVertical className="h-4 w-4 text-muted-foreground cursor-grab" />
                     </TableCell>
                     <TableCell className="font-medium">{product.name}</TableCell>
                     <TableCell className="font-mono text-sm text-muted-foreground">
