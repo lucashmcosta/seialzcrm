@@ -242,7 +242,7 @@ export default function LandingPage() {
                 { icon: UserCheck, title: 'Diretor Comercial Dedicado', desc: 'Acompanhamento semanal. Coaching do time. Relatórios. Gestão de verdade.' },
               ].map((f) => (
                 <div key={f.title} className="bg-[hsl(240,10%,7%)] border border-[hsl(150,100%,50%)]/10 rounded-2xl p-6 hover:border-[hsl(150,100%,50%)]/30 transition-colors group">
-                  <f.icon className="text-[hsl(150,100%,50%)] mb-4 group-hover:scale-110 transition-transform" size={24} />
+                  <f.icon className="text-[hsl(150,100%,50%)] mb-4 group-hover:scale-110 transition-transform" size={24} weight="light" />
                   <h4 className="font-['Michroma'] text-sm mb-2">{f.title}</h4>
                   <p className="text-sm text-[hsl(0,0%,50%)] font-['Outfit'] leading-relaxed">{f.desc}</p>
                 </div>
