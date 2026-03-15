@@ -70,7 +70,7 @@ export function VariablesTable({ body, variables, onChange }: VariablesTableProp
         <Label>Variáveis Detectadas</Label>
         {missingExamples && (
           <div className="flex items-center gap-1 text-xs text-amber-600 dark:text-amber-400">
-            <AlertCircle className="w-3 h-3" />
+            <WarningCircle className="w-3 h-3" />
             <span>Exemplos são obrigatórios para aprovação</span>
           </div>
         )}

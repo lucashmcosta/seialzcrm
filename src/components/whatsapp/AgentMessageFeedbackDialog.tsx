@@ -87,7 +87,7 @@ const CLASSIFICATION_INFO: Record<ClassificationType, {
   MISSING_INFO: {
     label: 'Informação Faltando',
     description: 'O agente não tinha informação suficiente. Será criada pergunta para completar.',
-    icon: HelpCircle,
+    icon: Question,
     color: 'text-amber-500',
   },
   FLOW_TOOL: {
@@ -394,7 +394,7 @@ export function AgentMessageFeedbackDialog({
       <DialogContent className="max-w-lg">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
-            <MessageSquare className="h-5 w-5 text-primary" />
+            <ChatCircle className="h-5 w-5 text-primary" />
             Feedback para o Agente
             {step !== 'input' && (
               <span className="text-sm font-normal text-muted-foreground ml-2">
@@ -410,7 +410,7 @@ export function AgentMessageFeedbackDialog({
             {/* Original message */}
             <div className="space-y-2">
               <Label className="flex items-center gap-2">
-                <Bot className="h-4 w-4 text-purple-500" />
+                <Robot className="h-4 w-4 text-purple-500" />
                 Mensagem original do agente:
               </Label>
               <div className="p-3 bg-muted rounded-lg text-sm max-h-32 overflow-y-auto">
@@ -433,7 +433,7 @@ export function AgentMessageFeedbackDialog({
             </div>
 
             <div className="flex items-center gap-2 p-3 bg-primary/5 rounded-lg">
-              <Sparkles className="h-4 w-4 text-primary shrink-0" />
+              <Sparkle className="h-4 w-4 text-primary shrink-0" />
               <p className="text-sm text-muted-foreground">
                 O sistema irá classificar automaticamente o tipo de feedback e aplicar no lugar certo.
               </p>
@@ -509,7 +509,7 @@ export function AgentMessageFeedbackDialog({
         {/* Step 3: Applying */}
         {step === 'applying' && (
           <div className="flex flex-col items-center justify-center py-8 space-y-4">
-            <Loader2 className="h-8 w-8 animate-spin text-primary" />
+            <SpinnerGap className="h-8 w-8 animate-spin text-primary" />
             <p className="text-muted-foreground">Aplicando feedback...</p>
             <Progress value={50} className="w-48" />
           </div>
@@ -523,7 +523,7 @@ export function AgentMessageFeedbackDialog({
               </Button>
               <Button onClick={handleClassify} disabled={isClassifying || !idealResponse.trim()}>
                 {isClassifying ? (
-                  <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                  <SpinnerGap className="h-4 w-4 mr-2 animate-spin" />
                 ) : (
                   <ArrowRight className="h-4 w-4 mr-2" />
                 )}

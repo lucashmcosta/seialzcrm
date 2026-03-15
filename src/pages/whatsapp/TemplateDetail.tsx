@@ -186,7 +186,7 @@ export default function TemplateDetail() {
                 variant="outline"
                 onClick={() => navigate(`/whatsapp/templates/${id}/edit`)}
               >
-                <Pencil className="w-4 h-4 mr-2" />
+                <PencilSimple className="w-4 h-4 mr-2" />
                 Editar
               </Button>
             )}
@@ -196,7 +196,7 @@ export default function TemplateDetail() {
                 onClick={openSubmitDialog}
                 disabled={submitMutation.isPending}
               >
-                <Send className="w-4 h-4 mr-2" />
+                 <PaperPlaneTilt className="w-4 h-4 mr-2" />
                 Submeter para Aprovação
               </Button>
             )}
@@ -205,7 +205,7 @@ export default function TemplateDetail() {
               className="text-destructive hover:text-destructive"
               onClick={() => setDeleteConfirmOpen(true)}
             >
-              <Trash2 className="w-4 h-4 mr-2" />
+              <TrashSimple className="w-4 h-4 mr-2" />
               Excluir
             </Button>
           </div>
@@ -216,7 +216,7 @@ export default function TemplateDetail() {
           <Card className="border-destructive bg-destructive/5">
             <CardContent className="pt-4">
               <div className="flex items-start gap-3">
-                <AlertCircle className="w-5 h-5 text-destructive mt-0.5" />
+                <WarningCircle className="w-5 h-5 text-destructive mt-0.5" />
                 <div>
                   <p className="font-medium text-destructive">Template Rejeitado</p>
                   <p className="text-sm text-muted-foreground mt-1">
@@ -353,9 +353,9 @@ export default function TemplateDetail() {
                     className="w-full"
                   >
                     {sendMutation.isPending ? (
-                      <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                       <SpinnerGap className="w-4 h-4 mr-2 animate-spin" />
                     ) : (
-                      <Send className="w-4 h-4 mr-2" />
+                      <PaperPlaneTilt className="w-4 h-4 mr-2" />
                     )}
                     Enviar Teste
                   </Button>
@@ -428,9 +428,9 @@ export default function TemplateDetail() {
               disabled={submitMutation.isPending}
             >
               {submitMutation.isPending ? (
-                <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+               <SpinnerGap className="w-4 h-4 mr-2 animate-spin" />
               ) : (
-                <Send className="w-4 h-4 mr-2" />
+                <PaperPlaneTilt className="w-4 h-4 mr-2" />
               )}
               Submeter
             </Button>

@@ -322,11 +322,11 @@ export function WhatsAppChat({ contactId, threadId: initialThreadId, onThreadCre
       case 'sent':
         return <Check className="w-3 h-3 text-muted-foreground" />;
       case 'delivered':
-        return <CheckCheck className="w-3 h-3 text-muted-foreground" />;
+         return <Checks className="w-3 h-3 text-muted-foreground" />;
       case 'read':
-        return <CheckCheck className="w-3 h-3 text-blue-500" />;
+        return <Checks className="w-3 h-3 text-blue-500" />;
       case 'failed':
-        return <AlertCircle className="w-3 h-3 text-destructive" />;
+        return <WarningCircle className="w-3 h-3 text-destructive" />;
       default:
         return null;
     }
@@ -394,9 +394,9 @@ export function WhatsAppChat({ contactId, threadId: initialThreadId, onThreadCre
       case 'image':
         return <Image className="w-3 h-3" />;
       case 'audio':
-        return <Volume2 className="w-3 h-3" />;
+         return <SpeakerHigh className="w-3 h-3" />;
       case 'video':
-        return <Video className="w-3 h-3" />;
+        return <VideoCamera className="w-3 h-3" />;
       case 'document':
         return <FileText className="w-3 h-3" />;
       default:
@@ -407,7 +407,7 @@ export function WhatsAppChat({ contactId, threadId: initialThreadId, onThreadCre
   if (loading) {
     return (
       <div className="flex items-center justify-center py-8">
-        <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
+        <SpinnerGap className="h-6 w-6 animate-spin text-muted-foreground" />
       </div>
     );
   }
@@ -530,9 +530,9 @@ export function WhatsAppChat({ contactId, threadId: initialThreadId, onThreadCre
                 className="bg-green-600 hover:bg-green-700"
               >
                 {submitting ? (
-                  <Loader2 className="w-4 h-4 animate-spin" />
+                   <SpinnerGap className="w-4 h-4 animate-spin" />
                 ) : (
-                  <Send className="w-4 h-4" />
+                  <PaperPlaneTilt className="w-4 h-4" />
                 )}
               </Button>
             </div>

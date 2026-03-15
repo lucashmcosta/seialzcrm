@@ -121,7 +121,7 @@ export function NewConversationDialog({
       <DialogContent className="sm:max-w-md">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
-            <MessageSquare className="w-5 h-5" />
+            <ChatCircle className="w-5 h-5" />
             {locale === 'pt-BR' ? 'Nova Conversa' : 'New Conversation'}
           </DialogTitle>
         </DialogHeader>
@@ -129,7 +129,7 @@ export function NewConversationDialog({
         <div className="space-y-4">
           {/* Search input */}
           <div className="relative">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+            <MagnifyingGlass className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
             <Input
               placeholder={locale === 'pt-BR' ? 'Buscar contato...' : 'Search contact...'}
               value={search}
@@ -143,7 +143,7 @@ export function NewConversationDialog({
           <ScrollArea className="h-[300px]">
             {isLoading ? (
               <div className="flex items-center justify-center py-8">
-                <Loader2 className="w-6 h-6 animate-spin text-muted-foreground" />
+                <SpinnerGap className="w-6 h-6 animate-spin text-muted-foreground" />
               </div>
             ) : contacts?.length === 0 ? (
               <div className="flex flex-col items-center justify-center py-8 text-muted-foreground">
@@ -179,7 +179,7 @@ export function NewConversationDialog({
                         )}
                       </div>
                       {selecting === contact.id && (
-                        <Loader2 className="w-4 h-4 animate-spin text-muted-foreground" />
+                        <SpinnerGap className="w-4 h-4 animate-spin text-muted-foreground" />
                       )}
                     </button>
                   );

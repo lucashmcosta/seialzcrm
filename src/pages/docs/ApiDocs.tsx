@@ -581,7 +581,7 @@ function EndpointCard({ endpoint, baseUrl }: { endpoint: Endpoint; baseUrl: stri
         className="w-full flex items-center gap-3 px-4 py-3 text-left hover:bg-gray-700/20 transition-colors"
         onClick={() => setOpen(!open)}
       >
-        {open ? <ChevronDown className="w-4 h-4 text-gray-400 shrink-0" /> : <ChevronRight className="w-4 h-4 text-gray-400 shrink-0" />}
+        {open ? <CaretDown className="w-4 h-4 text-gray-400 shrink-0" /> : <CaretRight className="w-4 h-4 text-gray-400 shrink-0" />}
         <MethodBadge method={endpoint.method} />
         <span className="font-mono text-sm text-gray-200 truncate">{endpoint.path}</span>
         <span className="text-sm text-gray-400 hidden sm:inline truncate">{endpoint.summary}</span>
@@ -624,7 +624,7 @@ function GroupSection({ group }: { group: EndpointGroup }) {
         onClick={() => setOpen(!open)}
         className="w-full flex items-center gap-3 text-left mb-3 group"
       >
-        {open ? <ChevronDown className="w-5 h-5 text-emerald-400" /> : <ChevronRight className="w-5 h-5 text-emerald-400" />}
+        {open ? <CaretDown className="w-5 h-5 text-emerald-400" /> : <CaretRight className="w-5 h-5 text-emerald-400" />}
         <h2 className="text-xl font-bold text-gray-100 group-hover:text-emerald-400 transition-colors">
           {group.title}
         </h2>
@@ -670,7 +670,7 @@ export default function ApiDocs() {
               href="/docs"
               className="text-sm text-gray-400 hover:text-gray-200 transition-colors flex items-center gap-1"
             >
-              Docs <ExternalLink className="w-3.5 h-3.5" />
+              Docs <ArrowSquareOut className="w-3.5 h-3.5" />
             </a>
           </div>
         </div>

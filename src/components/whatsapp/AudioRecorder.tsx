@@ -183,7 +183,7 @@ export function AudioRecorder({ onSend, disabled }: AudioRecorderProps) {
           disabled={isSending}
           className="text-destructive hover:text-destructive"
         >
-          <Trash2 className="w-4 h-4" />
+           <TrashSimple className="w-4 h-4" />
         </Button>
         <Button
           size="icon"
@@ -192,9 +192,9 @@ export function AudioRecorder({ onSend, disabled }: AudioRecorderProps) {
           className="bg-green-600 hover:bg-green-700"
         >
           {isSending ? (
-            <Loader2 className="w-4 h-4 animate-spin" />
+            <SpinnerGap className="w-4 h-4 animate-spin" />
           ) : (
-            <Send className="w-4 h-4" />
+            <PaperPlaneTilt className="w-4 h-4" />
           )}
         </Button>
       </div>
@@ -216,7 +216,7 @@ export function AudioRecorder({ onSend, disabled }: AudioRecorderProps) {
           onClick={cancelRecording}
           className="text-muted-foreground"
         >
-          <Trash2 className="w-4 h-4" />
+          <TrashSimple className="w-4 h-4" />
         </Button>
         <Button
           size="icon"
@@ -238,7 +238,7 @@ export function AudioRecorder({ onSend, disabled }: AudioRecorderProps) {
       disabled={disabled}
       title="Gravar áudio"
     >
-      <Mic className="w-4 h-4" />
+      <Microphone className="w-4 h-4" />
     </Button>
   );
 }

@@ -175,7 +175,7 @@ export default function TemplateForm() {
     return (
       <Layout>
         <div className="flex items-center justify-center py-12">
-          <Loader2 className="w-8 h-8 animate-spin text-muted-foreground" />
+          <SpinnerGap className="w-8 h-8 animate-spin text-muted-foreground" />
         </div>
       </Layout>
     );
@@ -318,7 +318,7 @@ export default function TemplateForm() {
                       </div>
                       {bodyStartsWithVariable && (
                         <Alert variant="destructive">
-                          <AlertCircle className="w-4 h-4" />
+                           <WarningCircle className="w-4 h-4" />
                           <AlertDescription>
                             A mensagem não pode começar com uma variável. Adicione texto antes de {'{{1}}'}, por exemplo: <strong>Olá {'{{1}}'}, ...</strong>
                           </AlertDescription>
@@ -343,7 +343,7 @@ export default function TemplateForm() {
                           </Button>
                         </div>
                         <Alert>
-                          <AlertCircle className="w-4 h-4" />
+                           <WarningCircle className="w-4 h-4" />
                           <AlertDescription>
                             Títulos dos botões são fixos após aprovação pelo WhatsApp.
                           </AlertDescription>
@@ -386,7 +386,7 @@ export default function TemplateForm() {
                           </Button>
                         </div>
                         <Alert>
-                          <AlertCircle className="w-4 h-4" />
+                           <WarningCircle className="w-4 h-4" />
                           <AlertDescription>
                             Máximo 2 URLs e 1 telefone. Títulos não aceitam variáveis.
                           </AlertDescription>
@@ -458,7 +458,7 @@ export default function TemplateForm() {
                     {/* List picker warning */}
                     {templateType === 'list-picker' && (
                       <Alert variant="destructive">
-                        <AlertCircle className="w-4 h-4" />
+                        <WarningCircle className="w-4 h-4" />
                         <AlertDescription>
                           Este tipo só funciona IN-SESSION (dentro da janela de 24h) e NÃO pode ser aprovado pelo WhatsApp.
                         </AlertDescription>
@@ -504,9 +504,9 @@ export default function TemplateForm() {
                       disabled={!isStep3Valid || isSubmitting}
                     >
                       {isSubmitting ? (
-                        <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                        <SpinnerGap className="w-4 h-4 mr-2 animate-spin" />
                       ) : (
-                        <Save className="w-4 h-4 mr-2" />
+                        <FloppyDisk className="w-4 h-4 mr-2" />
                       )}
                       {isEditing ? 'Salvar Alterações' : 'Criar Template'}
                     </Button>

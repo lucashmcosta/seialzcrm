@@ -90,7 +90,7 @@ export function WhatsAppTemplateSelector({
   if (loadingTemplates) {
     return (
       <div className="flex items-center justify-center py-8">
-        <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
+        <SpinnerGap className="h-6 w-6 animate-spin text-muted-foreground" />
       </div>
     );
   }
@@ -145,7 +145,7 @@ export function WhatsAppTemplateSelector({
                 disabled={loading}
               >
                 {loading ? (
-                  <Loader2 className="w-4 h-4 animate-spin mr-2" />
+                  <SpinnerGap className="w-4 h-4 animate-spin mr-2" />
                 ) : (
                   <Check className="w-4 h-4 mr-2" />
                 )}

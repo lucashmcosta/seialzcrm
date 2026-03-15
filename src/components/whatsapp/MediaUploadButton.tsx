@@ -65,7 +65,7 @@ export function MediaUploadButton({ onFileSelected, onTemplateClick, onNoteClick
             Imagem
           </DropdownMenuItem>
           <DropdownMenuItem onClick={() => videoInputRef.current?.click()}>
-            <Video className="w-4 h-4 mr-2" />
+            <VideoCamera className="w-4 h-4 mr-2" />
             Vídeo
           </DropdownMenuItem>
           <DropdownMenuItem onClick={() => documentInputRef.current?.click()}>
@@ -74,13 +74,13 @@ export function MediaUploadButton({ onFileSelected, onTemplateClick, onNoteClick
           </DropdownMenuItem>
           {onTemplateClick && (
             <DropdownMenuItem onClick={onTemplateClick}>
-              <FileStack className="w-4 h-4 mr-2" />
+              <Files className="w-4 h-4 mr-2" />
               Template
             </DropdownMenuItem>
           )}
           {onNoteClick && (
             <DropdownMenuItem onClick={onNoteClick}>
-              <StickyNote className="w-4 h-4 mr-2" />
+              <Note className="w-4 h-4 mr-2" />
               Nota
             </DropdownMenuItem>
           )}

@@ -170,9 +170,9 @@ export default function WhatsAppTemplates() {
             disabled={syncMutation.isPending}
           >
             {syncMutation.isPending ? (
-              <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+               <SpinnerGap className="w-4 h-4 mr-2 animate-spin" />
             ) : (
-              <RefreshCw className="w-4 h-4 mr-2" />
+              <ArrowsClockwise className="w-4 h-4 mr-2" />
             )}
             Sincronizar
           </Button>
@@ -259,7 +259,7 @@ export default function WhatsAppTemplates() {
       ) : filteredTemplates.length === 0 ? (
         <Card>
           <CardContent className="py-12 text-center">
-            <MessageSquare className="w-12 h-12 mx-auto text-muted-foreground mb-4" />
+            <ChatCircle className="w-12 h-12 mx-auto text-muted-foreground mb-4" />
             <h3 className="font-medium mb-2">Nenhum template encontrado</h3>
             <p className="text-sm text-muted-foreground mb-4">
               {templates?.length === 0 
@@ -269,7 +269,7 @@ export default function WhatsAppTemplates() {
             </p>
             <div className="flex gap-2 justify-center">
               <Button variant="outline" onClick={handleSync} disabled={syncMutation.isPending}>
-                <RefreshCw className="w-4 h-4 mr-2" />
+                <ArrowsClockwise className="w-4 h-4 mr-2" />
                 Sincronizar do Twilio
               </Button>
               <Button onClick={() => navigate('/whatsapp/templates/new')}>
@@ -319,7 +319,7 @@ export default function WhatsAppTemplates() {
                       <DropdownMenu>
                         <DropdownMenuTrigger asChild>
                           <Button variant="ghost" size="icon">
-                            <MoreHorizontal className="w-4 h-4" />
+                            <DotsThree className="w-4 h-4" />
                           </Button>
                         </DropdownMenuTrigger>
                         <DropdownMenuContent align="end">
@@ -329,13 +329,13 @@ export default function WhatsAppTemplates() {
                           </DropdownMenuItem>
                           {template.status !== 'approved' && (
                             <DropdownMenuItem onClick={() => navigate(`/whatsapp/templates/${template.id}/edit`)}>
-                              <Pencil className="w-4 h-4 mr-2" />
+                              <PencilSimple className="w-4 h-4 mr-2" />
                               Editar
                             </DropdownMenuItem>
                           )}
                           {(template.status === 'not_submitted' || template.status === 'draft' || template.status === 'rejected') && (
                             <DropdownMenuItem onClick={() => openSubmitDialog(template.id)}>
-                              <Send className="w-4 h-4 mr-2" />
+                               <PaperPlaneTilt className="w-4 h-4 mr-2" />
                               Submeter para Aprovação
                             </DropdownMenuItem>
                           )}
@@ -344,7 +344,7 @@ export default function WhatsAppTemplates() {
                             onClick={() => handleDelete(template.id, template.friendly_name)}
                             className="text-destructive focus:text-destructive"
                           >
-                            <Trash2 className="w-4 h-4 mr-2" />
+                            <TrashSimple className="w-4 h-4 mr-2" />
                             Excluir
                           </DropdownMenuItem>
                         </DropdownMenuContent>
@@ -407,9 +407,9 @@ export default function WhatsAppTemplates() {
               disabled={submitMutation.isPending}
             >
               {submitMutation.isPending ? (
-                <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                 <SpinnerGap className="w-4 h-4 mr-2 animate-spin" />
               ) : (
-                <Send className="w-4 h-4 mr-2" />
+                <PaperPlaneTilt className="w-4 h-4 mr-2" />
               )}
               Submeter
             </Button>

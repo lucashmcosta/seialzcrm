@@ -31,25 +31,25 @@ const templateTypes: {
     value: 'text',
     label: 'Texto',
     description: 'Mensagem simples de texto',
-    icon: MessageSquare,
+     icon: ChatCircle,
   },
   {
     value: 'quick-reply',
     label: 'Resposta Rápida',
     description: 'Botões de resposta rápida (max 10)',
-    icon: MousePointerClick,
+    icon: CursorClick,
   },
   {
     value: 'list-picker',
     label: 'Lista',
     description: 'Menu com lista de opções (max 10)',
-    icon: List,
+    icon: ListBullets,
   },
   {
     value: 'call-to-action',
     label: 'Call-to-Action',
     description: 'Botões com links ou telefone',
-    icon: ExternalLink,
+    icon: ArrowSquareOut,
   },
   {
     value: 'media',
@@ -61,7 +61,7 @@ const templateTypes: {
 
 export function TemplateTypeSelector({ value, onValueChange, disabled }: TemplateTypeSelectorProps) {
   const selectedType = templateTypes.find(t => t.value === value);
-  const SelectedIcon = selectedType?.icon || MessageSquare;
+  const SelectedIcon = selectedType?.icon || ChatCircle;
 
   return (
     <Select value={value} onValueChange={onValueChange} disabled={disabled}>

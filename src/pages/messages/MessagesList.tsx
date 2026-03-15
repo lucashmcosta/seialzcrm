@@ -36,7 +36,7 @@ import { useQuery } from '@tanstack/react-query';
 import { formatDistanceToNow } from 'date-fns';
 import { ptBR, enUS } from 'date-fns/locale';
 import { useToast } from '@/hooks/use-toast';
-import { SpinnerGap, Check, Checks, Clock, WarningCircle, Sparkle, SealCheck, Briefcase, Smiley, Robot, ChatCircleDots, FileText, Target, UserCheck, CheckCircle, ArrowCounterClockwise, ArrowsLeftRight, Note, DownloadSimple } from '@phosphor-icons/react';
+import { SpinnerGap, Check, Checks, Clock, WarningCircle, Sparkle, Briefcase, Smiley, Robot, ChatCircleDots, FileText, Target, UserCheck, CheckCircle, ArrowCounterClockwise, ArrowsLeftRight, Note, DownloadSimple, NotePencil, TextAa } from '@phosphor-icons/react';
 import { AgentMessageFeedbackDialog } from '@/components/whatsapp/AgentMessageFeedbackDialog';
 import { NewConversationDialog } from '@/components/messages/NewConversationDialog';
 import { WhatsAppTemplateSelector } from '@/components/whatsapp/WhatsAppTemplateSelector';
@@ -208,7 +208,7 @@ const ChatListItem = ({ value, locale, className, ...otherProps }: ChatListItemP
         </div>
         {value.needs_human_attention && (
           <div className="flex items-center gap-1 text-destructive mt-0.5">
-            <AlertCircle className="h-3 w-3" />
+            <WarningCircle className="h-3 w-3" />
             <span className="text-[10px] font-medium">Atenção</span>
           </div>
         )}
@@ -1128,11 +1128,11 @@ export default function MessagesList() {
       case 'sent':
         return <Check className="w-3 h-3 text-muted-foreground" />;
       case 'delivered':
-        return <CheckCheck className="w-3 h-3 text-muted-foreground" />;
+         return <Checks className="w-3 h-3 text-muted-foreground" />;
       case 'read':
-        return <CheckCheck className="w-3 h-3 text-blue-500" />;
+        return <Checks className="w-3 h-3 text-blue-500" />;
       case 'failed':
-        return <AlertCircle className="w-3 h-3 text-destructive" />;
+        return <WarningCircle className="w-3 h-3 text-destructive" />;
       default:
         return null;
     }
@@ -1196,7 +1196,7 @@ export default function MessagesList() {
                     disabled={isExporting}
                     title={locale === 'pt-BR' ? 'Exportar conversas (oportunidades ganhas)' : 'Export conversations (won opportunities)'}
                   >
-                    {isExporting ? <Loader2 className="w-4 h-4 animate-spin" /> : <Download className="w-4 h-4" />}
+                    {isExporting ? <SpinnerGap className="w-4 h-4 animate-spin" /> : <DownloadSimple className="w-4 h-4" />}
                   </Button>
                   <Button
                     variant="outline"
@@ -1205,7 +1205,7 @@ export default function MessagesList() {
                     onClick={() => setShowNewConversation(true)}
                     title={locale === 'pt-BR' ? 'Nova Conversa' : 'New Conversation'}
                   >
-                    <MessageSquarePlus className="w-4 h-4" />
+                    <ChatCircleDots className="w-4 h-4" />
                   </Button>
                   <Badge color="gray" size="md">
                     {filteredThreads?.length || 0}
@@ -1336,14 +1336,14 @@ export default function MessagesList() {
                       
                       {selectedThread.needs_human_attention && hasAIAgent && (
                         <Button variant="outline" size="sm" onClick={() => handleReturnToAI(selectedThread.id)}>
-                          <Bot className="w-4 h-4 mr-1" />
+                          <Robot className="w-4 h-4 mr-1" />
                           {locale === 'pt-BR' ? 'Devolver ao AI' : 'Return to AI'}
                         </Button>
                       )}
                       
                       {selectedThread.status === 'resolved' && (
                         <Button variant="outline" size="sm" onClick={() => handleReopen(selectedThread.id)}>
-                          <RotateCcw className="w-4 h-4 mr-1" />
+                          <ArrowCounterClockwise className="w-4 h-4 mr-1" />
                           {locale === 'pt-BR' ? 'Reabrir' : 'Reopen'}
                         </Button>
                       )}
@@ -1405,7 +1405,7 @@ export default function MessagesList() {
                                   <div key={`note-${note.id}`} className="flex justify-center">
                                     <div className="max-w-[70%] rounded-lg p-3 min-w-[80px] overflow-hidden bg-yellow-100 dark:bg-yellow-900/30 border border-yellow-300 dark:border-yellow-700">
                                       <div className="flex items-center gap-1 mb-1">
-                                        <StickyNote className="w-3 h-3 text-yellow-600 dark:text-yellow-400" />
+                                        <NotePencil className="w-3 h-3 text-yellow-600 dark:text-yellow-400" />
                                         <span className="text-[10px] font-medium text-yellow-600 dark:text-yellow-400">Nota interna</span>
                                       </div>
                                       <p className="text-sm whitespace-pre-wrap break-all text-yellow-900 dark:text-yellow-100">
@@ -1465,7 +1465,7 @@ export default function MessagesList() {
                                     {/* Agent Badge + Feedback Button for agent messages */}
                                     {isOutbound && message.sender_type === 'agent' && (
                                       <div className="flex items-center gap-2 mb-2">
-                                        <Badge color="purple" size="sm" icon={<Bot className="w-3 h-3" />}>
+                                        <Badge color="purple" size="sm" icon={<Robot className="w-3 h-3" />}>
                                           {message.sender_name || 'Agente IA'}
                                         </Badge>
                                         <Button
@@ -1477,7 +1477,7 @@ export default function MessagesList() {
                                             setShowFeedbackDialog(true);
                                           }}
                                         >
-                                          <MessageSquarePlus className="w-3 h-3 mr-1" />
+                                          <ChatCircleDots className="w-3 h-3 mr-1" />
                                           Feedback
                                         </Button>
                                       </div>
@@ -1608,7 +1608,7 @@ export default function MessagesList() {
                           {/* Note Mode Indicator */}
                           {isNoteMode && (
                             <div className="flex items-center gap-2 px-3 py-1.5 bg-yellow-100 dark:bg-yellow-900/30 border border-yellow-300 dark:border-yellow-700 rounded-t-lg">
-                              <StickyNote className="w-3.5 h-3.5 text-yellow-600 dark:text-yellow-400" />
+                              <NotePencil className="w-3.5 h-3.5 text-yellow-600 dark:text-yellow-400" />
                               <span className="text-xs font-medium text-yellow-700 dark:text-yellow-400">
                                 {locale === 'pt-BR' ? 'Nota interna - não será enviada ao cliente' : 'Internal note - will not be sent to client'}
                               </span>
@@ -1690,15 +1690,15 @@ export default function MessagesList() {
                                       disabled={!messageText.trim() || aiImproving}
                                     >
                                       {aiImproving ? (
-                                        <Loader2 className="h-4 w-4 animate-spin" />
+                                       <SpinnerGap className="h-4 w-4 animate-spin" />
                                       ) : (
-                                        <Sparkles className="h-4 w-4 text-purple-500" />
+                                        <Sparkle className="h-4 w-4 text-purple-500" />
                                       )}
                                     </Button>
                                   </DropdownMenuTrigger>
                                   <DropdownMenuContent align="end">
                                     <DropdownMenuItem onClick={() => handleImproveText('grammar')}>
-                                      <SpellCheck className="h-4 w-4 mr-2" />
+                                      <TextAa className="h-4 w-4 mr-2" />
                                       {locale === 'pt-BR' ? 'Corrigir gramática' : 'Fix grammar'}
                                     </DropdownMenuItem>
                                     <DropdownMenuItem onClick={() => handleImproveText('professional')}>
@@ -1706,7 +1706,7 @@ export default function MessagesList() {
                                       {locale === 'pt-BR' ? 'Tornar profissional' : 'Make professional'}
                                     </DropdownMenuItem>
                                     <DropdownMenuItem onClick={() => handleImproveText('friendly')}>
-                                      <Smile className="h-4 w-4 mr-2" />
+                                      <Smiley className="h-4 w-4 mr-2" />
                                       {locale === 'pt-BR' ? 'Tornar amigável' : 'Make friendly'}
                                     </DropdownMenuItem>
                                     <DropdownMenuItem onClick={() => handleImproveText('persuasive')}>
@@ -1729,7 +1729,7 @@ export default function MessagesList() {
                               )}
                             >
                               {submitting ? (
-                                <Loader2 className="h-4 w-4 animate-spin" />
+                                <SpinnerGap className="h-4 w-4 animate-spin" />
                               ) : (
                                 <Send01 className="h-4 w-4" />
                               )}

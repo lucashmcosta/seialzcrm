@@ -8,7 +8,7 @@ import { supabase } from '@/integrations/supabase/client';
 import { useOrganization } from '@/hooks/useOrganization';
 import { useTranslation } from '@/lib/i18n';
 import { toast } from 'sonner';
-import { ArrowCounterClockwise, TrashSimple, Warning } from '@phosphor-icons/react';
+import { ArrowCounterClockwise, TrashSimple as TrashIcon, Warning } from '@phosphor-icons/react';
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from '@/components/ui/alert-dialog';
 
 interface DeletedItem {
@@ -207,14 +207,14 @@ export function Trash() {
             <AlertDialog>
               <AlertDialogTrigger asChild>
                 <Button variant="destructive" disabled={processing}>
-                  <Trash2 className="h-4 w-4 mr-2" />
+                   <TrashIcon className="h-4 w-4 mr-2" />
                   {t('trash.emptyTrash')}
                 </Button>
               </AlertDialogTrigger>
               <AlertDialogContent>
                 <AlertDialogHeader>
                   <AlertDialogTitle className="flex items-center gap-2">
-                    <AlertTriangle className="h-5 w-5 text-destructive" />
+                    <Warning className="h-5 w-5 text-destructive" />
                     {t('trash.confirmEmpty')}
                   </AlertDialogTitle>
                   <AlertDialogDescription>
@@ -280,7 +280,7 @@ export function Trash() {
                           onClick={() => handleRestore(item)}
                           disabled={processing}
                         >
-                          <RotateCcw className="h-4 w-4 mr-2" />
+                          <ArrowCounterClockwise className="h-4 w-4 mr-2" />
                           {t('trash.restore')}
                         </Button>
                         <AlertDialog>
@@ -290,7 +290,7 @@ export function Trash() {
                               size="sm"
                               disabled={processing}
                             >
-                              <Trash2 className="h-4 w-4 mr-2" />
+                              <TrashIcon className="h-4 w-4 mr-2" />
                               {t('trash.deleteForever')}
                             </Button>
                           </AlertDialogTrigger>
