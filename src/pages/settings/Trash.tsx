@@ -207,7 +207,7 @@ export function Trash() {
             <AlertDialog>
               <AlertDialogTrigger asChild>
                 <Button variant="destructive" disabled={processing}>
-                  <Trash2 className="h-4 w-4 mr-2" />
+                   <Trash className="h-4 w-4 mr-2" />
                   {t('trash.emptyTrash')}
                 </Button>
               </AlertDialogTrigger>
