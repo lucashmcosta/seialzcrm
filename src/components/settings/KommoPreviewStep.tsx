@@ -18,6 +18,7 @@ interface KommoPreviewStepProps {
   config: MigrationConfig;
   onConfigChange: (config: MigrationConfig) => void;
   previewMutation: any;
+  selectedPipelineNames?: string[];
 }
 
 export function KommoPreviewStep({
