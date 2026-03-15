@@ -433,7 +433,7 @@ export function IntegrationDetailDialog({
                 disabled={fixingWebhooks}
               >
                 {fixingWebhooks ? (
-                  <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                   <SpinnerGap className="h-4 w-4 mr-2 animate-spin" />
                 ) : (
                   <Wrench className="h-4 w-4 mr-2" />
                 )}
