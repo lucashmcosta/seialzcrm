@@ -70,7 +70,7 @@ export function SDRAgentCard({ agent, isLoading, onConfigure, onToggle, onDuplic
         <CardContent className="p-6">
           <div className="flex items-start gap-4">
             <div className="p-3 rounded-lg bg-muted group-hover:bg-primary/10 transition-colors">
-              <Bot className="h-8 w-8 text-muted-foreground group-hover:text-primary transition-colors" />
+              <Robot className="h-8 w-8 text-muted-foreground group-hover:text-primary transition-colors" />
             </div>
             <div className="flex-1 space-y-1">
               <h3 className="font-semibold text-lg">Agente SDR</h3>
