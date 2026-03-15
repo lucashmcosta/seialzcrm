@@ -280,20 +280,22 @@ export function useKommoMigration() {
     mutationFn: async () => {
       if (!organization || !credentials) throw new Error('Dados incompletos');
 
+      const insertPayload = {
+        organization_id: organization.id,
+        integration_slug: 'kommo',
+        status: 'pending',
+        config: {
+          ...config,
+          stage_mapping: stageMapping,
+          user_mappings: userMappings.filter(m => m.seialz_user_id),
+          subdomain: credentials.subdomain,
+          access_token: credentials.access_token,
+        } as any,
+      };
+
       const { data: log, error: logError } = await supabase
         .from('import_logs')
-        .insert({
-          organization_id: organization.id,
-          integration_slug: 'kommo',
-          status: 'pending',
-          config: {
-            ...config,
-            stage_mapping: stageMapping,
-            user_mappings: userMappings.filter(m => m.seialz_user_id),
-            subdomain: credentials.subdomain,
-            access_token: credentials.access_token,
-          },
-        })
+        .insert(insertPayload)
         .select()
         .single();
 
