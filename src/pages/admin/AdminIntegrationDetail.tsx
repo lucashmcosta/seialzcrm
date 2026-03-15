@@ -199,7 +199,7 @@ export default function AdminIntegrationDetail() {
                       />
                 ) : (
                   <div className="w-16 h-16 rounded-lg bg-muted flex items-center justify-center">
-                    <ImageIcon className="w-6 h-6 text-muted-foreground" />
+                    <ImageSquare size={24} className="text-muted-foreground" />
                   </div>
                 )}
                 <div className="flex gap-2">
