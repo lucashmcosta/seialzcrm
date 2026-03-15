@@ -140,7 +140,7 @@ export function KommoPipelineMappingStep({
             disabled={!newStageName.trim() || creatingStage}
           >
             {creatingStage ? (
-              <Loader2 className="h-4 w-4 animate-spin" />
+              <SpinnerGap className="h-4 w-4 animate-spin" />
             ) : (
               <Plus className="h-4 w-4" />
             )}
