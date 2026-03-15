@@ -1,10 +1,10 @@
 import { Link } from 'react-router-dom';
 import { CaretRight } from '@phosphor-icons/react';
 import { cn } from '@/lib/utils';
-import type { ComponentType } from 'react';
+import type { Icon as PhosphorIcon } from '@phosphor-icons/react';
 
 export interface SettingsCardProps {
-  icon: ComponentType<{ size?: number; weight?: string; className?: string }>;
+  icon: PhosphorIcon;
   label: string;
   description: string;
   badge?: string;

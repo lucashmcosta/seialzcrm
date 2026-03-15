@@ -25,10 +25,10 @@ import { useWhatsAppIntegration } from '@/hooks/useWhatsAppIntegration';
 import { useAIIntegration } from '@/hooks/useAIIntegration';
 import { Input } from '@/components/ui/input';
 import { SettingsCard } from './SettingsCard';
-import type { ComponentType } from 'react';
+import type { Icon as PhosphorIcon } from '@phosphor-icons/react';
 
 interface SettingsItem {
-  icon: ComponentType<{ size?: number; weight?: string; className?: string }>;
+  icon: PhosphorIcon;
   label: string;
   description: string;
   to: string;
