@@ -317,6 +317,7 @@ export function useKommoMigration() {
             subdomain: credentials.subdomain,
             access_token: credentials.access_token,
             stage_mapping: stageMapping,
+            selected_pipeline_ids: selectedPipelineIds,
             user_mappings: userMappings.filter(m => m.seialz_user_id),
             duplicate_mode: config.duplicate_mode,
             import_orphan_contacts: config.import_orphan_contacts,
