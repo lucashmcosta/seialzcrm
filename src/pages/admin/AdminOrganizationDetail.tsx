@@ -444,7 +444,7 @@ export default function AdminOrganizationDetail() {
               <CardContent className="space-y-3">
                 {org.suspended_at ? (
                   <Button onClick={handleReactivate} variant="default" className="w-full justify-start">
-                    <Play className="h-4 w-4 mr-2" />
+                    <Play size={16} className="mr-2" />
                     Reativar Conta
                   </Button>
                 ) : (
