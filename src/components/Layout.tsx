@@ -40,10 +40,10 @@ export function Layout({ children }: LayoutProps) {
 
   // Build navigation items
   const navItems: NavItemType[] = [
-    { label: t('nav.dashboard'), href: '/dashboard', icon: HomeLine },
-    { label: t('nav.contacts'), href: '/contacts', icon: Users01 },
-    { label: t('nav.opportunities'), href: '/opportunities', icon: Briefcase01 },
-    { label: t('nav.tasks'), href: '/tasks', icon: CheckDone01 },
+    { label: t('nav.dashboard'), href: '/dashboard', icon: House },
+    { label: t('nav.contacts'), href: '/contacts', icon: UsersThree },
+    { label: t('nav.opportunities'), href: '/opportunities', icon: Briefcase },
+    { label: t('nav.tasks'), href: '/tasks', icon: CheckSquare },
   ];
 
   // Add Companies menu if module is enabled
