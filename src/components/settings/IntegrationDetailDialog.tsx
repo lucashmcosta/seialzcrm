@@ -537,7 +537,7 @@ export function IntegrationDetailDialog({
                 Cancelar
               </Button>
               <Button className="flex-1" onClick={handleSave} disabled={isSaving}>
-                {isSaving ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : null}
+                {isSaving ? <SpinnerGap className="h-4 w-4 mr-2 animate-spin" /> : null}
                 Salvar
               </Button>
             </>
