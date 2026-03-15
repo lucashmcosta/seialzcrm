@@ -1,27 +1,17 @@
 
 
-## Criar usuário admin na Plamev
+# Problema: Edge Function não deployada
 
-Usar a Edge Function `create-user` já existente para criar o usuário com os seguintes dados:
+O código do `kommo-preview` já está correto com contagens exatas (paginação completa). O problema é que a **Edge Function não foi deployada** — o preview ainda roda a versão antiga que retorna "250+".
 
-- **Email:** lcosta@plamev.com.br
-- **Nome:** L Costa
-- **Senha:** 123456
-- **Organização:** Plamev (`0cc6e2a4-adff-4b0d-a734-3c3422d9fb8e`)
-- **Perfil:** Admin (`26e9aa0d-53b0-469e-8459-09be80ec5052`)
+A evidência está no screenshot:
+- Contagens mostram "250+" (lógica antiga)
+- Tempo estimado mostra "~NaN min" (provavelmente campo `has_more` antigo causando cálculo inválido)
 
-### Problema
+## Plano
 
-A edge function `create-user` exige um chamador autenticado com permissão `can_manage_users`. Para executar sem depender de sessão, vou criar uma **edge function temporária** (`admin-create-user-temp`) que usa `SERVICE_ROLE_KEY` diretamente, cria o usuário no auth, limpa a org auto-criada pelo trigger, e vincula à Plamev com perfil Admin. Após execução bem-sucedida, a function será removida.
+1. **Deploy da Edge Function `kommo-preview`** — a versão local já tem `getExactCount` com paginação completa
+2. **Verificar se o `selectedTotal` não gera NaN** — a fórmula `Math.ceil(selectedTotal / 100 / 60)` está correta, mas se `total_contacts` vier como string "250+" do backend antigo, o cálculo quebra
 
-### Dados necessários antes de prosseguir
-
-Preciso confirmar o **nome completo** do usuário. Vou usar "L Costa" como placeholder — me confirme o nome correto.
-
-### Passos
-
-1. Criar `supabase/functions/admin-create-user-temp/index.ts` com SERVICE_ROLE_KEY
-2. Registrar no `config.toml` com `verify_jwt = false`
-3. Invocar a function via curl para criar o usuário
-4. Remover a function e entrada no config.toml
+Não há mudança de código necessária — apenas o deploy da função atualizada.
 
