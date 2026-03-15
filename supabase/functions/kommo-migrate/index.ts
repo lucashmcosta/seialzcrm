@@ -393,8 +393,8 @@ Deno.serve(async (req) => {
           let mUrl: string | null = null, mSt = "none";
           if (n.params?.file_name || n.params?.link) { mUrl = n.params?.link || null; mSt = mUrl ? "pending" : "none"; }
           const { data: na, error: ie } = await sb.from("activities").insert({ organization_id: orgId, contact_id: ctId, opportunity_id: opId, activity_type: at, title: n.note_type === "common" ? "Nota" : `Nota (${n.note_type})`, body: n.params?.text || n.text || "", source_external_id: sei, created_by_user_id: cby, occurred_at: n.created_at ? new Date(n.created_at * 1000).toISOString() : new Date().toISOString(), media_source_url: mUrl, media_status: mSt }).select("id").single();
-          if (!ie && na) { iN++; aIds.push(na.id); } else if (ie) errs.push({ type: isLead ? "note_lead" : "note_contact", id: n.id, error: ie.message });
-        } catch (e: any) { errs.push({ type: isLead ? "note_lead" : "note_contact", id: n.id, error: e.message }); }
+          if (!ie && na) { iN++; aIds.push(na.id); } else if (ie) errs.push({ type: isLead ? "note_lead" : "note_contact", kommo_id: n.id, error: ie.message });
+        } catch (e: any) { errs.push({ type: isLead ? "note_lead" : "note_contact", kommo_id: n.id, error: e.message }); }
       }
       if (notes.length < PS) { c[completeKey] = true; c.phase = nextPhase(isLead ? "notes_leads" : "notes_contacts", cfg); }
       else c[pageKey]++;
