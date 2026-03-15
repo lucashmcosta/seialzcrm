@@ -540,7 +540,7 @@ export function ApiWebhooksSettings() {
                             className="h-7 w-7"
                             onClick={() => deleteMappingMutation.mutate(m.id)}
                           >
-                            <Trash2 className="h-3 w-3 text-destructive" />
+                            <TrashSimple className="h-3 w-3 text-destructive" />
                           </Button>
                         </td>
                       </tr>
