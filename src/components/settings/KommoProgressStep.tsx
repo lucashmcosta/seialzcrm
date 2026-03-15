@@ -306,12 +306,21 @@ export function KommoProgressStep({
               {importLog.errors?.map((error: any, idx: number) => (
                 <Card key={idx} className="p-3">
                   <div className="flex items-start gap-2">
-                    <Badge variant={error.type === 'contact' ? 'secondary' : 'outline'}>
-                      {error.type === 'contact' ? 'Contato' : error.type === 'company' ? 'Empresa' : 'Lead'}
+                    <Badge variant="outline">
+                      {error.type === 'contact' ? 'Contato' : 
+                       error.type === 'company' ? 'Empresa' : 
+                       error.type === 'opportunity' ? 'Oportunidade' :
+                       error.type === 'task' ? 'Tarefa' :
+                       error.type === 'note_contact' ? 'Nota (contato)' :
+                       error.type === 'note_lead' ? 'Nota (lead)' :
+                       error.type === 'event' ? 'Evento' :
+                       error.type === 'users' ? 'Usuários' :
+                       error.type === 'custom_fields' ? 'Campo custom' :
+                       error.type || 'Desconhecido'}
                     </Badge>
                     <div className="flex-1 min-w-0">
                       <p className="font-medium text-sm truncate">
-                        {error.name || `ID: ${error.kommo_id}`}
+                        {error.name || (error.kommo_id ? `Kommo ID: ${error.kommo_id}` : error.id ? `ID: ${error.id}` : 'Sem ID')}
                       </p>
                       <p className="text-xs text-destructive">{error.error}</p>
                     </div>
