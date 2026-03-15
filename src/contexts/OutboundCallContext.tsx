@@ -3,6 +3,7 @@ import { useLocation } from 'react-router-dom';
 import { Device, Call } from '@twilio/voice-sdk';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
+import { useVoiceIntegration } from '@/hooks/useVoiceIntegration';
 
 export type CallStatus = 'idle' | 'initializing' | 'ready' | 'connecting' | 'ringing' | 'connected' | 'ended' | 'failed';
 
