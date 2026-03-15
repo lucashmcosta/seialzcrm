@@ -113,7 +113,7 @@ export function CreateIntegrationDialog({ open, onOpenChange }: CreateIntegratio
                 />
               ) : (
                 <div className="w-12 h-12 rounded-lg bg-muted flex items-center justify-center">
-                  <ImageIcon className="w-5 h-5 text-muted-foreground" />
+                  <ImageSquare size={20} className="text-muted-foreground" />
                 </div>
               )}
               <div className="flex gap-2">
