@@ -72,7 +72,7 @@ export function Layout({ children }: LayoutProps) {
   }
 
   if (userProfile?.is_platform_admin) {
-    footerItems.push({ label: t('nav.admin'), href: '/saas-admin', icon: Shield01 });
+    footerItems.push({ label: t('nav.admin'), href: '/saas-admin', icon: ShieldCheck });
   }
 
   footerItems.push({ label: 'Central de Ajuda', href: '/docs', icon: HelpCircle });
