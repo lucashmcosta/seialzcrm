@@ -173,9 +173,9 @@ export default function Profile() {
                     <Label htmlFor="avatar" className="cursor-pointer">
                       <div className="flex items-center gap-2 px-4 py-2 border rounded-md hover:bg-accent">
                         {uploading ? (
-                          <Loader2 className="h-4 w-4 animate-spin" />
+                           <SpinnerGap className="h-4 w-4 animate-spin" />
                         ) : (
-                          <Upload className="h-4 w-4" />
+                          <UploadSimple className="h-4 w-4" />
                         )}
                         <span>{t('profile.uploadAvatar')}</span>
                       </div>
