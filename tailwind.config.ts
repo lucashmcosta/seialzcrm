@@ -69,6 +69,25 @@ export default {
         glass: {
           bg: 'var(--glass-bg)',
           border: 'var(--glass-border)'
+        },
+        /* Seialz DS specific tokens */
+        sz: {
+          bg: 'hsl(var(--sz-bg, 0 0% 100%))',
+          bg2: 'hsl(var(--sz-bg2, 0 0% 98%))',
+          bg3: 'hsl(var(--sz-bg3, 0 0% 96%))',
+          bg4: 'hsl(var(--sz-bg4, 0 0% 93%))',
+          bg5: 'hsl(var(--sz-bg5, 0 0% 90%))',
+          t1: 'hsl(var(--sz-t1, 0 0% 10%))',
+          t2: 'hsl(var(--sz-t2, 0 0% 40%))',
+          t3: 'hsl(var(--sz-t3, 0 0% 60%))',
+          tm: 'hsl(var(--sz-tm, 0 0% 80%))',
+          green: 'hsl(var(--sz-green, 153 100% 50%))',
+          'green-hover': 'hsl(var(--sz-green-hover, 153 100% 44%))',
+          'green-dark': 'hsl(var(--sz-green-dark, 153 100% 27%))',
+          info: 'hsl(var(--sz-info, 220 100% 63%))',
+          purple: 'hsl(var(--sz-purple, 270 100% 70%))',
+          border: 'hsl(var(--sz-border, 0 0% 90%))',
+          border2: 'hsl(var(--sz-border2, 0 0% 85%))',
         }
       },
       borderRadius: {
