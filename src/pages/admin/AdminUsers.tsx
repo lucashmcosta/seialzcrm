@@ -133,7 +133,7 @@ export default function AdminUsers() {
         <div className="flex items-center justify-between">
           <h1 className="text-3xl font-bold">Administradores</h1>
           <Button onClick={() => setCreateDialogOpen(true)}>
-            <UserPlus className="h-4 w-4 mr-2" />
+            <UserPlus size={16} className="mr-2" />
             Novo Administrador
           </Button>
         </div>
