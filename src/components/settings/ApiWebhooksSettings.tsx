@@ -433,7 +433,7 @@ export function ApiWebhooksSettings() {
                           {visibleKeys.has(key.id) ? key.api_key : maskApiKey(key.api_key)}
                         </code>
                         <Button variant="ghost" size="icon" className="h-6 w-6" onClick={() => toggleKeyVisibility(key.id)}>
-                          {visibleKeys.has(key.id) ? <EyeOff className="h-3 w-3" /> : <Eye className="h-3 w-3" />}
+                          {visibleKeys.has(key.id) ? <EyeSlash className="h-3 w-3" /> : <Eye className="h-3 w-3" />}
                         </Button>
                       </div>
                       <div className="flex flex-wrap items-center gap-1 mt-1">
