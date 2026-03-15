@@ -6,6 +6,7 @@ import { Label } from '@/components/ui/label';
 import { Card } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Checkbox } from '@/components/ui/checkbox';
+import { Separator } from '@/components/ui/separator';
 import { SpinnerGap, Plus, ArrowRight, CheckCircle } from '@phosphor-icons/react';
 import { supabase } from '@/integrations/supabase/client';
 import { useOrganization } from '@/hooks/useOrganization';
@@ -24,6 +25,8 @@ interface KommoPipelineMappingStepProps {
   fetchPipelinesMutation: any;
 }
 
+const CREATE_PREFIX = '__create__';
+
 export function KommoPipelineMappingStep({
   credentials,
   kommoPipelines,
@@ -37,6 +40,7 @@ export function KommoPipelineMappingStep({
   const { organization } = useOrganization();
   const [newStageName, setNewStageName] = useState('');
   const [creatingStage, setCreatingStage] = useState(false);
+  const [creatingStagForKey, setCreatingStageForKey] = useState<string | null>(null);
   const [localCrmStages, setLocalCrmStages] = useState(crmStages);
 
   useEffect(() => {
@@ -49,11 +53,51 @@ export function KommoPipelineMappingStep({
     }
   }, [credentials]);
 
-  const handleStageSelect = (kommoStageKey: string, crmStageId: string) => {
+  const handleStageSelect = async (kommoStageKey: string, value: string, kommoStageName: string) => {
+    // "Create new" option selected
+    if (value.startsWith(CREATE_PREFIX)) {
+      const stageName = value.replace(CREATE_PREFIX, '');
+      await createAndMapStage(kommoStageKey, stageName);
+      return;
+    }
+
     onMappingChange({
       ...stageMapping,
-      [kommoStageKey]: crmStageId,
+      [kommoStageKey]: value,
     });
+  };
+
+  const createAndMapStage = async (kommoStageKey: string, stageName: string) => {
+    if (!organization) return;
+
+    setCreatingStageForKey(kommoStageKey);
+    try {
+      const maxOrder = Math.max(...localCrmStages.map(s => s.order_index || 0), 0);
+
+      const { data, error } = await supabase
+        .from('pipeline_stages')
+        .insert({
+          organization_id: organization.id,
+          name: stageName.trim(),
+          order_index: maxOrder + 1,
+          stage_type: 'custom',
+        })
+        .select()
+        .single();
+
+      if (error) throw error;
+
+      setLocalCrmStages(prev => [...prev, data]);
+      onMappingChange({
+        ...stageMapping,
+        [kommoStageKey]: data.id,
+      });
+      toast.success(`Stage "${stageName}" criado`);
+    } catch (error: any) {
+      toast.error(`Erro ao criar stage: ${error.message}`);
+    } finally {
+      setCreatingStageForKey(null);
+    }
   };
 
   const handlePipelineToggle = (pipelineId: number, checked: boolean) => {
@@ -70,7 +114,7 @@ export function KommoPipelineMappingStep({
     setCreatingStage(true);
     try {
       const maxOrder = Math.max(...localCrmStages.map(s => s.order_index || 0), 0);
-      
+
       const { data, error } = await supabase
         .from('pipeline_stages')
         .insert({
@@ -139,12 +183,12 @@ export function KommoPipelineMappingStep({
     <div className="space-y-6">
       <div className="text-sm text-muted-foreground">
         Selecione quais pipelines importar e mapeie suas etapas para o CRM.
-        Pipelines não selecionados serão ignorados.
+        Use a opção "➕ Criar" no dropdown para criar stages automaticamente.
       </div>
 
       {/* Create new stage section */}
       <Card className="p-4 bg-muted/50">
-        <Label className="text-sm font-medium">Criar nova etapa no CRM</Label>
+        <Label className="text-sm font-medium">Criar nova etapa manualmente</Label>
         <div className="flex gap-2 mt-2">
           <Input
             placeholder="Nome da nova etapa"
@@ -190,13 +234,14 @@ export function KommoPipelineMappingStep({
                   )}
                 </h4>
               </div>
-              
+
               {selected && (
                 <div className="space-y-3 pl-7">
                   {pipeline.stages.map((stage) => {
                     const stageKey = `${pipeline.id}_${stage.id}`;
                     const typeInfo = getStageTypeLabel(stage.type);
-                    
+                    const isCreatingThis = creatingStagForKey === stageKey;
+
                     return (
                       <div key={stage.id} className="flex items-center gap-3">
                         <div className="flex-1 min-w-0">
@@ -209,24 +254,36 @@ export function KommoPipelineMappingStep({
                             )}
                           </div>
                         </div>
-                        
+
                         <ArrowRight className="h-4 w-4 text-muted-foreground shrink-0" />
-                        
-                        <Select
-                          value={stageMapping[stageKey] || ''}
-                          onValueChange={(value) => handleStageSelect(stageKey, value)}
-                        >
-                          <SelectTrigger className="w-48">
-                            <SelectValue placeholder="Selecionar etapa" />
-                          </SelectTrigger>
-                          <SelectContent>
-                            {localCrmStages.map((crmStage) => (
-                              <SelectItem key={crmStage.id} value={crmStage.id}>
-                                {crmStage.name}
+
+                        {isCreatingThis ? (
+                          <div className="w-48 flex items-center justify-center">
+                            <SpinnerGap className="h-4 w-4 animate-spin text-primary" />
+                            <span className="text-xs text-muted-foreground ml-2">Criando...</span>
+                          </div>
+                        ) : (
+                          <Select
+                            value={stageMapping[stageKey] || ''}
+                            onValueChange={(value) => handleStageSelect(stageKey, value, stage.name)}
+                          >
+                            <SelectTrigger className="w-48">
+                              <SelectValue placeholder="Selecionar etapa" />
+                            </SelectTrigger>
+                            <SelectContent>
+                              {/* Create new option */}
+                              <SelectItem value={`${CREATE_PREFIX}${stage.name}`}>
+                                ➕ Criar "{stage.name}"
                               </SelectItem>
-                            ))}
-                          </SelectContent>
-                        </Select>
+                              <Separator className="my-1" />
+                              {localCrmStages.map((crmStage) => (
+                                <SelectItem key={crmStage.id} value={crmStage.id}>
+                                  {crmStage.name}
+                                </SelectItem>
+                              ))}
+                            </SelectContent>
+                          </Select>
+                        )}
                       </div>
                     );
                   })}
@@ -244,8 +301,8 @@ export function KommoPipelineMappingStep({
       )}
 
       {selectedCount > 0 && !allSelectedMapped && (
-        <p className="text-sm text-muted-foreground text-center">
-          Mapeie todas as etapas dos pipelines selecionados para continuar
+        <p className="text-sm text-warning text-center">
+          Mapeie todos os stages dos pipelines selecionados ou crie novos stages
         </p>
       )}
     </div>
