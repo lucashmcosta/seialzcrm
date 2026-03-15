@@ -1034,7 +1034,7 @@ export function SDRAgentWizard({
             <span className="hidden sm:inline">Regras</span>
           </TabsTrigger>
           <TabsTrigger value="test" className="gap-1 text-xs sm:text-sm">
-            <Beaker className="h-4 w-4" />
+            <Flask className="h-4 w-4" />
             <span className="hidden sm:inline">Testar</span>
           </TabsTrigger>
           <TabsTrigger value="feedback" className="gap-1 text-xs sm:text-sm">
