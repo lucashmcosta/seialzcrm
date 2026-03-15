@@ -234,7 +234,7 @@ export function KommoMigrationDialog({ open, onOpenChange }: KommoMigrationDialo
                 disabled={!canProceedFromStep3 || startMigrationMutation.isPending}
               >
                 Iniciar Migração
-                <ChevronRight className="h-4 w-4 ml-1" />
+                 <CaretRight className="h-4 w-4 ml-1" />
               </Button>
             ) : (
               <Button
