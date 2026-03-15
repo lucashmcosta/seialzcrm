@@ -266,12 +266,12 @@ export function TaskDialog({ open, onOpenChange, task, onSuccess }: TaskDialogPr
           <div className="grid grid-cols-2 gap-4">
             <div>
               <Label htmlFor="contact_id">{t('opportunities.contact')} ({t('common.none')})</Label>
-              <Select value={formData.contact_id} onValueChange={(v) => setFormData({ ...formData, contact_id: v })}>
+              <Select value={formData.contact_id || 'none'} onValueChange={(v) => setFormData({ ...formData, contact_id: v === 'none' ? '' : v })}>
                 <SelectTrigger>
                   <SelectValue placeholder={t('common.select')} />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="">{t('common.none')}</SelectItem>
+                  <SelectItem value="none">{t('common.none')}</SelectItem>
                   {contacts.map((contact) => (
                     <SelectItem key={contact.id} value={contact.id}>
                       {contact.full_name}
@@ -283,12 +283,12 @@ export function TaskDialog({ open, onOpenChange, task, onSuccess }: TaskDialogPr
 
             <div>
               <Label htmlFor="opportunity_id">{t('opportunities.title')} ({t('common.none')})</Label>
-              <Select value={formData.opportunity_id} onValueChange={(v) => setFormData({ ...formData, opportunity_id: v })}>
+              <Select value={formData.opportunity_id || 'none'} onValueChange={(v) => setFormData({ ...formData, opportunity_id: v === 'none' ? '' : v })}>
                 <SelectTrigger>
                   <SelectValue placeholder={t('common.select')} />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="">{t('common.none')}</SelectItem>
+                  <SelectItem value="none">{t('common.none')}</SelectItem>
                   {opportunities.map((opp) => (
                     <SelectItem key={opp.id} value={opp.id}>
                       {opp.title}
