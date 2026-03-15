@@ -9,8 +9,7 @@ import { useOrganization } from '@/hooks/useOrganization';
 import { useTranslation } from '@/lib/i18n';
 import { usePermissions } from '@/hooks/usePermissions';
 import { supabase } from '@/integrations/supabase/client';
-import { Plus, Search, Filter } from 'lucide-react';
-import { Edit01, Trash01 } from '@untitledui/icons';
+import { Plus, MagnifyingGlass, FunnelSimple, PencilSimple, TrashSimple } from '@phosphor-icons/react';
 import { OpportunityDialog } from '@/components/opportunities/OpportunityDialog';
 import { OpportunityCard } from '@/components/opportunities/OpportunityCard';
 import { Input } from '@/components/ui/input';
@@ -646,7 +645,7 @@ export default function OpportunitiesKanban() {
 
         <div className="mb-6 flex gap-4 items-start flex-wrap">
           <div className="relative flex-1 max-w-md">
-            <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-muted-foreground h-4 w-4" />
+            <MagnifyingGlass size={16} weight="light" className="absolute left-3 top-1/2 transform -translate-y-1/2 text-muted-foreground" />
             <Input
               placeholder="Buscar oportunidades..."
               value={searchTerm}
@@ -658,7 +657,7 @@ export default function OpportunitiesKanban() {
           <Popover open={showFilters} onOpenChange={setShowFilters}>
             <PopoverTrigger asChild>
               <Button variant="outline" className="relative">
-                <Filter className="h-4 w-4 mr-2" />
+                <FunnelSimple size={16} weight="light" className="mr-2" />
                 Filtros
                 {activeFiltersCount > 0 && (
                   <Badge variant="secondary" className="ml-2 h-5 w-5 p-0 flex items-center justify-center rounded-full">
@@ -969,12 +968,12 @@ export default function OpportunitiesKanban() {
                       <TableRowActionsDropdown>
                         <TableRowAction
                           label={t('common.edit')}
-                          icon={<Edit01 className="h-4 w-4" />}
+                          icon={<PencilSimple size={16} weight="light" />}
                           onAction={() => handleEdit(opp)}
                         />
                         <TableRowAction
                           label={t('common.delete')}
-                          icon={<Trash01 className="h-4 w-4" />}
+                          icon={<TrashSimple size={16} weight="light" />}
                           variant="destructive"
                           onAction={() => setDeleteId(opp.id)}
                         />

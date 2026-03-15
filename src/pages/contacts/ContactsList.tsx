@@ -1,7 +1,7 @@
 import { useState, useEffect, useMemo } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import type { SortDescriptor } from 'react-aria-components';
-import { Edit01, Trash01 } from '@untitledui/icons';
+import { PencilSimple, TrashSimple } from '@phosphor-icons/react';
 import { Layout } from '@/components/Layout';
 import { Button } from '@/components/base/buttons/button';
 import { Input } from '@/components/ui/input';
@@ -11,7 +11,7 @@ import { useOrganization } from '@/hooks/useOrganization';
 import { useTranslation } from '@/lib/i18n';
 import { usePermissions } from '@/hooks/usePermissions';
 import { supabase } from '@/integrations/supabase/client';
-import { Plus, Search } from 'lucide-react';
+import { Plus, MagnifyingGlass } from '@phosphor-icons/react';
 import { SavedViewsDropdown } from '@/components/SavedViewsDropdown';
 import { BulkActionsBar } from '@/components/BulkActionsBar';
 import { Breadcrumbs } from '@/components/application/breadcrumbs/breadcrumbs';
@@ -309,7 +309,7 @@ export default function ContactsList() {
         {/* Filters */}
         <div className="mb-6 flex flex-wrap gap-3">
           <div className="relative flex-1 min-w-[250px] max-w-sm">
-            <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-muted-foreground w-4 h-4" />
+            <MagnifyingGlass size={16} weight="light" className="absolute left-3 top-1/2 transform -translate-y-1/2 text-muted-foreground" />
             <Input
               placeholder={t('common.search')}
               value={searchTerm}
@@ -485,12 +485,12 @@ export default function ContactsList() {
                       <TableRowActionsDropdown>
                         <TableRowAction
                           label={t('common.edit')}
-                          icon={<Edit01 className="w-4 h-4" />}
+                          icon={<PencilSimple size={16} weight="light" />}
                           onAction={() => navigate(`/contacts/${contact.id}/edit`)}
                         />
                         <TableRowAction
                           label={t('common.delete')}
-                          icon={<Trash01 className="w-4 h-4" />}
+                          icon={<TrashSimple size={16} weight="light" />}
                           variant="destructive"
                           onAction={() => handleDelete(contact.id)}
                         />

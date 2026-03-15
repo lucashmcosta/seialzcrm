@@ -1,17 +1,18 @@
 import { ReactNode } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import {
-  Building07,
-  Users01,
-  Briefcase01,
-  Settings01,
-  LogOut01,
-  HomeLine,
-  CheckDone01,
-  Shield01,
-  HelpCircle,
-  MessageChatCircle,
-} from '@untitledui/icons';
+  Buildings,
+  UsersThree,
+  Briefcase,
+  GearSix,
+  SignOut,
+  House,
+  CheckSquare,
+  ShieldCheck,
+  Question,
+  ChatCircleText,
+} from '@phosphor-icons/react';
+import type { Icon as PhosphorIcon } from '@phosphor-icons/react';
 import { Button } from '@/components/ui/button';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import { useAuth } from '@/hooks/useAuth';
@@ -39,10 +40,10 @@ export function Layout({ children }: LayoutProps) {
 
   // Build navigation items
   const navItems: NavItemType[] = [
-    { label: t('nav.dashboard'), href: '/dashboard', icon: HomeLine },
-    { label: t('nav.contacts'), href: '/contacts', icon: Users01 },
-    { label: t('nav.opportunities'), href: '/opportunities', icon: Briefcase01 },
-    { label: t('nav.tasks'), href: '/tasks', icon: CheckDone01 },
+    { label: t('nav.dashboard'), href: '/dashboard', icon: House },
+    { label: t('nav.contacts'), href: '/contacts', icon: UsersThree },
+    { label: t('nav.opportunities'), href: '/opportunities', icon: Briefcase },
+    { label: t('nav.tasks'), href: '/tasks', icon: CheckSquare },
   ];
 
   // Add Companies menu if module is enabled
@@ -50,7 +51,7 @@ export function Layout({ children }: LayoutProps) {
     navItems.splice(2, 0, { 
       label: t('nav.companies'), 
       href: '/companies', 
-      icon: Building07 
+      icon: Buildings 
     });
   }
 
@@ -59,7 +60,7 @@ export function Layout({ children }: LayoutProps) {
     navItems.push({ 
       label: t('nav.messages'), 
       href: '/messages', 
-      icon: MessageChatCircle 
+      icon: ChatCircleText 
     });
   }
 
@@ -67,14 +68,14 @@ export function Layout({ children }: LayoutProps) {
   const footerItems: NavItemType[] = [];
 
   if (permissions.canManageSettings) {
-    footerItems.push({ label: t('nav.settings'), href: '/settings', icon: Settings01 });
+    footerItems.push({ label: t('nav.settings'), href: '/settings', icon: GearSix });
   }
 
   if (userProfile?.is_platform_admin) {
-    footerItems.push({ label: t('nav.admin'), href: '/saas-admin', icon: Shield01 });
+    footerItems.push({ label: t('nav.admin'), href: '/saas-admin', icon: ShieldCheck });
   }
 
-  footerItems.push({ label: 'Central de Ajuda', href: '/docs', icon: HelpCircle });
+  footerItems.push({ label: 'Central de Ajuda', href: '/docs', icon: Question });
 
   // Logo section with skeleton
   const logoSize = organization?.logo_size || 40;
@@ -98,7 +99,7 @@ export function Layout({ children }: LayoutProps) {
       ) : (
         <>
           <div className="w-10 h-10 bg-primary rounded-lg flex items-center justify-center">
-            <Building07 className="w-6 h-6 text-primary-foreground" />
+            <Buildings size={24} weight="light" className="text-primary-foreground" />
           </div>
           {organization && (
             <div>
@@ -147,7 +148,7 @@ export function Layout({ children }: LayoutProps) {
         onClick={signOut}
         className="w-full"
       >
-        <LogOut01 className="w-4 h-4 mr-2" />
+        <SignOut size={16} weight="light" className="mr-2" />
         {t('auth.signOut')}
       </Button>
     </div>

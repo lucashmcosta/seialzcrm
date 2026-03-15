@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
-import { Building2, Plus, Search } from 'lucide-react';
+import { Buildings, Plus, MagnifyingGlass } from '@phosphor-icons/react';
 import { Layout } from '@/components/Layout';
 import { Button } from '@/components/base/buttons/button';
 import { Input } from '@/components/ui/input';
@@ -101,7 +101,7 @@ export default function CompaniesList() {
         <Card className="p-6">
           <div className="mb-4">
             <div className="relative">
-              <Search className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" />
+              <MagnifyingGlass size={16} weight="light" className="absolute left-3 top-3 text-muted-foreground" />
               <Input
                 placeholder={t('common.search')}
                 value={search}
@@ -115,7 +115,7 @@ export default function CompaniesList() {
             <div className="text-center py-12 text-muted-foreground">{t('common.loading')}</div>
           ) : filteredCompanies.length === 0 ? (
             <div className="text-center py-12">
-              <Building2 className="w-12 h-12 text-muted-foreground mx-auto mb-4" />
+              <Buildings size={48} weight="light" className="text-muted-foreground mx-auto mb-4" />
               <p className="text-muted-foreground">{t('companies.noCompanies')}</p>
             </div>
           ) : (

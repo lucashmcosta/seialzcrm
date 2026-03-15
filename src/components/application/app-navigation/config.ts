@@ -3,7 +3,7 @@ import type { ComponentType, ReactNode } from "react";
 export interface NavItemType {
   label: string;
   href: string;
-  icon: ComponentType<{ className?: string }>;
+  icon: ComponentType<{ size?: number | string; weight?: string; className?: string }>;
   badge?: number | ReactNode;
   items?: NavItemType[];
 }

@@ -8,7 +8,7 @@ import { Card } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { Plus, Search, CheckCircle2, Clock, AlertCircle } from 'lucide-react';
+import { Plus, MagnifyingGlass, CheckCircle, Clock, WarningCircle } from '@phosphor-icons/react';
 import { supabase } from '@/integrations/supabase/client';
 import { TaskDialog } from '@/components/tasks/TaskDialog';
 import { useToast } from '@/hooks/use-toast';
@@ -182,9 +182,9 @@ export default function TasksList() {
   };
 
   const getPriorityIcon = (priority: string) => {
-    if (priority === 'high') return <AlertCircle className="w-4 h-4 text-red-600" />;
-    if (priority === 'medium') return <Clock className="w-4 h-4 text-yellow-600" />;
-    return <Clock className="w-4 h-4 text-blue-600" />;
+    if (priority === 'high') return <WarningCircle size={16} weight="light" className="text-red-600" />;
+    if (priority === 'medium') return <Clock size={16} weight="light" className="text-yellow-600" />;
+    return <Clock size={16} weight="light" className="text-blue-600" />;
   };
 
   const isOverdue = (task: Task) => {
@@ -207,7 +207,7 @@ export default function TasksList() {
           {/* Filters */}
           <div className="px-6 pb-4 flex flex-wrap gap-3">
             <div className="relative flex-1 min-w-[200px]">
-              <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+              <MagnifyingGlass size={16} weight="light" className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" />
               <Input
                 placeholder={t('tasks.searchPlaceholder')}
                 value={searchTerm}
@@ -312,7 +312,7 @@ export default function TasksList() {
                                 variant="outline"
                                 onClick={() => handleCompleteTask(task.id)}
                               >
-                                <CheckCircle2 className="h-4 w-4 mr-1" />
+                                <CheckCircle size={16} weight="light" className="mr-1" />
                                 {t('tasks.complete')}
                               </Button>
                             )}

@@ -1,7 +1,7 @@
 import { useState, useEffect } from "react";
 import { Link, useLocation } from "react-router-dom";
 import { motion, AnimatePresence } from "framer-motion";
-import { ChevronRight } from "@untitledui/icons";
+import { CaretRight } from "@phosphor-icons/react";
 import { cn } from "@/lib/utils";
 import type { NavItemType } from "../config";
 import { SidebarNavItem } from "./sidebar-nav-item";
@@ -54,8 +54,10 @@ export const SidebarNavGroup = ({ item }: SidebarNavGroupProps) => {
         )}
       >
         <Icon
+          size={20}
+          weight={isActive ? "bold" : "light"}
           className={cn(
-            "h-5 w-5 shrink-0 transition-colors",
+            "shrink-0 transition-colors",
             isActive ? "text-primary" : "text-muted-foreground group-hover:text-foreground"
           )}
         />
@@ -68,7 +70,7 @@ export const SidebarNavGroup = ({ item }: SidebarNavGroupProps) => {
           animate={{ rotate: isOpen ? 90 : 0 }}
           transition={{ duration: 0.2 }}
         >
-          <ChevronRight className="h-4 w-4 text-muted-foreground" />
+          <CaretRight size={16} weight="bold" className="text-muted-foreground" />
         </motion.div>
       </button>
 

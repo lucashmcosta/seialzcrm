@@ -1,16 +1,10 @@
 import React from 'react';
-import { LayoutGrid, List, Columns } from 'lucide-react';
+import { SquaresFour, List, Columns } from '@phosphor-icons/react';
 import { cn } from '@/lib/utils';
 
 /**
  * ViewSwitcher Component
  * Toggle between different view modes (Grid, List, Kanban).
- * Part of the Base44 Design System.
- *
- * @param view - Current view mode
- * @param onViewChange - View change handler
- * @param views - Available views (defaults to grid, list)
- * @param className - Additional classes
  */
 
 type ViewMode = 'grid' | 'list' | 'kanban';
@@ -23,7 +17,7 @@ interface ViewSwitcherProps {
 }
 
 const viewIcons: Record<ViewMode, React.ElementType> = {
-  grid: LayoutGrid,
+  grid: SquaresFour,
   list: List,
   kanban: Columns,
 };
@@ -61,7 +55,7 @@ export const ViewSwitcher: React.FC<ViewSwitcherProps> = ({
             )}
             title={viewLabels[v]}
           >
-            <Icon className="h-4 w-4" />
+            <Icon size={16} weight={view === v ? "bold" : "light"} />
           </button>
         );
       })}

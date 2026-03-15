@@ -1,12 +1,11 @@
 import React from 'react';
-import { Search } from 'lucide-react';
+import { MagnifyingGlass } from '@phosphor-icons/react';
 import { Input } from '@/components/ui/input';
 import { cn } from '@/lib/utils';
 
 /**
  * SearchBar Component
  * Standardized search input with pill styling and consistent appearance.
- * Part of the Base44 Design System.
  *
  * @param value - Current search value
  * @param onChange - Change handler
@@ -29,7 +28,7 @@ export const SearchBar: React.FC<SearchBarProps> = ({
 }) => {
   return (
     <div className={cn('relative', className)}>
-      <Search className="absolute left-4 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+      <MagnifyingGlass size={16} weight="light" className="absolute left-4 top-1/2 -translate-y-1/2 text-muted-foreground" />
       <Input
         type="text"
         value={value}
