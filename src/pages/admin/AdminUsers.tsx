@@ -167,7 +167,7 @@ export default function AdminUsers() {
                         </Badge>
                       ) : (
                         <Badge variant="secondary" className="gap-1">
-                          <ShieldOff className="h-3 w-3" />
+                          <ShieldSlash size={12} />
                           Inativo
                         </Badge>
                       )}
