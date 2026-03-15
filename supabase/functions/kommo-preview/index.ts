@@ -153,14 +153,29 @@ Deno.serve(async (req) => {
       );
     }
 
-    const { subdomain, access_token } = await req.json();
+    const { subdomain: rawSubdomain, access_token } = await req.json();
 
-    if (!subdomain || !access_token) {
+    if (!rawSubdomain || !access_token) {
       return new Response(
         JSON.stringify({ error: "Subdomínio e access token são obrigatórios" }),
         { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
     }
+
+    const subdomain = rawSubdomain
+      .replace(/^https?:\/\//i, '')
+      .replace(/\.kommo\.com.*$/i, '')
+      .replace(/[\/\s]/g, '')
+      .trim();
+
+    if (!subdomain) {
+      return new Response(
+        JSON.stringify({ error: "Subdomínio inválido" }),
+        { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
+    }
+
+    console.log("Sanitized subdomain for preview:", subdomain);
 
     const baseUrl = `https://${subdomain}.kommo.com/api/v4`;
     const headers = {
@@ -176,7 +191,7 @@ Deno.serve(async (req) => {
       leadsCount,
       companiesCount,
       tasksCount,
-      usersResponse,
+      usersPayload,
       contactNotesCount,
       leadNotesCount,
       contactCustomFields,
@@ -197,9 +212,7 @@ Deno.serve(async (req) => {
       getEntityCount(baseUrl, headers, "companies"),
       getEntityCount(baseUrl, headers, "tasks"),
       // Users (full list — typically small)
-      fetchWithRetry(`${baseUrl}/users`, { headers })
-        .then(r => r.status === 204 ? { _embedded: { users: [] } } : r.json())
-        .catch(() => ({ _embedded: { users: [] } })),
+      fetchKommoUsers(baseUrl, headers),
       // Notes counts (batch endpoints)
       getNotesCount(baseUrl, headers, "contacts"),
       getNotesCount(baseUrl, headers, "leads"),
@@ -238,11 +251,12 @@ Deno.serve(async (req) => {
     }));
 
     // Transform users list
-    const kommoUsers = (usersResponse._embedded?.users || []).map((user: any) => ({
+    const kommoUsers = usersPayload.map((user: any) => ({
       id: user.id,
       name: user.name,
       email: user.email,
       is_active: user.rights?.is_active ?? true,
+    }));
     }));
 
     // Total notes = contacts notes + leads notes

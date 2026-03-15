@@ -276,14 +276,22 @@ export function useKommoMigration() {
       if (error) throw error;
       return data;
     },
-    onSuccess: (data) => {
-      if (data.kommo_users && Array.isArray(data.kommo_users) && data.kommo_users.length > 0) {
-        setUserMappings(data.kommo_users.map((u: any) => ({
-          kommo_user_id: u.id,
-          kommo_user_name: u.name || `Usuário ${u.id}`,
-          kommo_user_email: u.email || null,
-          seialz_user_id: null,
-        })));
+    onSuccess: (previewData) => {
+      console.log('kommo-preview response users:', previewData?.kommo_users?.length || 0);
+
+      if (previewData?.kommo_users && Array.isArray(previewData.kommo_users)) {
+        setUserMappings((currentMappings) => {
+          if (currentMappings.length > 0 || previewData.kommo_users.length === 0) {
+            return currentMappings;
+          }
+
+          return previewData.kommo_users.map((u: any) => ({
+            kommo_user_id: u.id,
+            kommo_user_name: u.name || `Usuário ${u.id}`,
+            kommo_user_email: u.email || null,
+            seialz_user_id: null,
+          }));
+        });
       }
     },
   });
