@@ -495,6 +495,10 @@ export function IntegrationsSettings() {
           onDisconnect={() => handleDisconnectClick(selectedOrgIntegration.id)}
           onReconfigure={handleReconfigure}
           onConfigUpdated={() => queryClient.invalidateQueries({ queryKey: ['organization-integrations', organization?.id] })}
+          onOpenMigration={selectedIntegration?.slug === 'kommo' ? () => {
+            setDetailDialogOpen(false);
+            setKommoMigrationOpen(true);
+          } : undefined}
         />
       )}
 
