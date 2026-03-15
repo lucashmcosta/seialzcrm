@@ -98,7 +98,7 @@ export function KommoMigrationDialog({ open, onOpenChange }: KommoMigrationDialo
       <DialogContent size="lg" className="max-h-[90vh] overflow-hidden flex flex-col">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
-            <Upload className="h-5 w-5" />
+            <UploadSimple className="h-5 w-5" />
             Migrar dados do Kommo
           </DialogTitle>
           <DialogDescription>
