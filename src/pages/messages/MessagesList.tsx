@@ -1690,9 +1690,9 @@ export default function MessagesList() {
                                       disabled={!messageText.trim() || aiImproving}
                                     >
                                       {aiImproving ? (
-                                        <Loader2 className="h-4 w-4 animate-spin" />
+                                       <SpinnerGap className="h-4 w-4 animate-spin" />
                                       ) : (
-                                        <Sparkles className="h-4 w-4 text-purple-500" />
+                                        <Sparkle className="h-4 w-4 text-purple-500" />
                                       )}
                                     </Button>
                                   </DropdownMenuTrigger>
