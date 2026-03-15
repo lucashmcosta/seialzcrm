@@ -129,7 +129,7 @@ export function GeneralSettings() {
                   className="rounded-lg bg-primary flex items-center justify-center"
                   style={{ width: logoSize, height: logoSize }}
                 >
-                  <ImageIcon className="w-1/2 h-1/2 text-primary-foreground" />
+                  <ImageSquare className="w-1/2 h-1/2 text-primary-foreground" />
                 </div>
               )}
               <div className="flex flex-col gap-1">
