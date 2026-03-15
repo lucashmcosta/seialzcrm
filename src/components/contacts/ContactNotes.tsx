@@ -132,7 +132,7 @@ export function ContactNotes({ contactId, opportunityId }: ContactNotesProps) {
             />
             <div className="flex gap-2">
               <Button onClick={handleAddNote} disabled={submitting} size="sm">
-                {submitting && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                {submitting && <SpinnerGap className="mr-2 h-4 w-4 animate-spin" />}
                 {t('common.save')}
               </Button>
               <Button variant="outline" onClick={() => setShowNoteForm(false)} size="sm">
