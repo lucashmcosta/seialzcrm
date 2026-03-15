@@ -169,11 +169,11 @@ export function LogoEditorDialog({
         <Tabs defaultValue="upload" className="w-full">
           <TabsList className="grid w-full grid-cols-2">
             <TabsTrigger value="upload" className="flex items-center gap-2">
-              <Upload className="w-4 h-4" />
+              <UploadSimple size={16} />
               Upload de Arquivo
             </TabsTrigger>
             <TabsTrigger value="url" className="flex items-center gap-2">
-              <Link className="w-4 h-4" />
+              <LinkIcon size={16} />
               URL Externa
             </TabsTrigger>
           </TabsList>
