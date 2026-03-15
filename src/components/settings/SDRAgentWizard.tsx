@@ -1220,7 +1220,7 @@ export function SDRAgentWizard({
         )}
 
         <div className="flex items-center gap-2 p-3 bg-muted/50 rounded-lg">
-          <Sparkles className="h-4 w-4 text-primary shrink-0" />
+          <Sparkle className="h-4 w-4 text-primary shrink-0" />
           <p className="text-sm text-muted-foreground">
             Edite o texto acima livremente ou use a aba "Feedback" para refinamentos via IA.
           </p>
