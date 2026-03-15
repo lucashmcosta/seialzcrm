@@ -249,7 +249,7 @@ export default function OpportunityDetail() {
                   )}
                   {opportunity.pipeline_stages && (
                     <span className="flex items-center gap-1">
-                      <Building2 className="h-4 w-4" />
+                      <Buildings className="h-4 w-4" />
                       {opportunity.pipeline_stages.name}
                     </span>
                   )}
