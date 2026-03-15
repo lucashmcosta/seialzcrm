@@ -29,10 +29,10 @@ export function KommoPreviewStep({
   selectedPipelineNames,
 }: KommoPreviewStepProps) {
   useEffect(() => {
-    if (credentials && !previewMutation.data && !previewMutation.isPending) {
+    if (credentials && !previewMutation.isPending) {
       previewMutation.mutate(credentials);
     }
-  }, [credentials]);
+  }, []); // Always fetch on mount
 
   if (previewMutation.isPending) {
     return (
