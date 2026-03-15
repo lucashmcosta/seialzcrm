@@ -471,7 +471,7 @@ export function ApiWebhooksSettings() {
           {/* Field Mapping Section */}
           <div className="space-y-4 pt-4 border-t">
             <div className="flex items-center gap-2">
-              <ArrowRightLeft className="h-5 w-5" />
+              <ArrowsLeftRight className="h-5 w-5" />
               <Label className="text-base font-semibold">Field Mapping</Label>
             </div>
             <p className="text-sm text-muted-foreground">
