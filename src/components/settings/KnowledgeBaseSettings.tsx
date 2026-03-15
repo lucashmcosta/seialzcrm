@@ -51,7 +51,7 @@ interface Product {
 const contentTypeConfig: Record<string, { label: string; icon: React.ElementType; color: string; description: string }> = {
   faq: { 
     label: 'FAQ', 
-    icon: HelpCircle, 
+    icon: Question, 
     color: 'bg-primary/10 text-primary',
     description: 'Perguntas frequentes e suas respostas',
   },
