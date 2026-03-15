@@ -121,7 +121,7 @@ export function AgentVersionHistory({
           </div>
         ) : versions.length === 0 ? (
           <div className="flex flex-col items-center justify-center py-12 text-muted-foreground">
-            <AlertCircle className="h-8 w-8 mb-2" />
+            <WarningCircle className="h-8 w-8 mb-2" />
             <p>Nenhuma versão encontrada</p>
             <p className="text-sm">As versões são criadas automaticamente ao salvar o agente.</p>
           </div>
