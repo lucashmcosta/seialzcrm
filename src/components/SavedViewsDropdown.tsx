@@ -118,7 +118,7 @@ export function SavedViewsDropdown({
       <DropdownMenu>
         <DropdownMenuTrigger asChild>
           <Button variant="outline" size="sm">
-            <BookMarked className="h-4 w-4 mr-2" />
+            <BookmarkSimple className="h-4 w-4 mr-2" />
             {t('savedViews.save')}
           </Button>
         </DropdownMenuTrigger>
