@@ -383,7 +383,7 @@ Deno.serve(async (req) => {
                 else { errs.push({ type: "task", kommo_id: tk.id, error: "Nenhum usuário disponível na organização" }); continue; }
               }
               const due = tk.complete_till ? new Date(tk.complete_till * 1000).toISOString() : null;
-              const { data: n, error: ie } = await sb.from("tasks").insert({ organization_id: orgId, title: tk.text || "Tarefa Kommo", description: `Importado da Kommo (ID: ${tk.id})`, status: tk.is_completed ? "completed" : "pending", due_at: due, contact_id: ctId, opportunity_id: opId, assigned_user_id: auid, created_by_user_id: auid, source_external_id: sei }).select("id").single();
+              const { data: n, error: ie } = await sb.from("tasks").insert({ organization_id: orgId, title: tk.text || "Tarefa Kommo", description: `Importado da Kommo (ID: ${tk.id})`, status: tk.is_completed ? "completed" : "pending", due_at: due, contact_id: ctId, opportunity_id: opId, assigned_user_id: auid, created_by_user_id: auid, source_external_id: sei, created_at: kommoDate(tk.created_at), updated_at: kommoDate(tk.updated_at) }).select("id").single();
               if (!ie && n) { iT++; tIds.push(n.id); } else if (ie) errs.push({ type: "task", kommo_id: tk.id, error: ie.message });
             } catch (e: any) { errs.push({ type: "task", kommo_id: tk.id, error: e.message }); }
           }
