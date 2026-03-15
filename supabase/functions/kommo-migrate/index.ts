@@ -424,7 +424,7 @@ Deno.serve(async (req) => {
               const cby = ev.created_by ? (uMap[String(ev.created_by)] || null) : null;
               const { data: na, error: ie } = await sb.from("activities").insert({ organization_id: orgId, contact_id: ctId, opportunity_id: opId, activity_type: "pipeline_stage_change", title: `Evento: ${ev.type}`, body: JSON.stringify(ev.value_after || ev.value_before || {}), source_external_id: sei, created_by_user_id: cby, occurred_at: ev.created_at ? new Date(ev.created_at * 1000).toISOString() : new Date().toISOString() }).select("id").single();
               if (!ie && na) { iE++; aIds.push(na.id); }
-            } catch (e: any) { errs.push({ type: "event", id: ev.id, error: e.message }); }
+            } catch (e: any) { errs.push({ type: "event", kommo_id: ev.id, error: e.message }); }
           }
           if (items.length < PS) { c.events_complete = true; c.phase = "done"; }
           else c.events_page++;
