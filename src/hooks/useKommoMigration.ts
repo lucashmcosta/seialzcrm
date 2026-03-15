@@ -113,6 +113,7 @@ export function useKommoMigration() {
   const [credentials, setCredentials] = useState<KommoCredentials | null>(null);
   const [kommoPipelines, setKommoPipelines] = useState<KommoPipeline[]>([]);
   const [stageMapping, setStageMapping] = useState<StageMapping>({});
+  const [selectedPipelineIds, setSelectedPipelineIds] = useState<number[]>([]);
   const [userMappings, setUserMappings] = useState<KommoUserMapping[]>([]);
   const [config, setConfig] = useState<MigrationConfig>({
     duplicate_mode: 'skip',
