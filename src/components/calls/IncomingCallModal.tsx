@@ -141,7 +141,7 @@ export function IncomingCallModal({
               className="absolute top-2 right-10"
               onClick={onMinimize}
             >
-              <Minimize2 className="h-4 w-4" />
+              <ArrowsInSimple className="h-4 w-4" />
             </Button>
           )}
 
