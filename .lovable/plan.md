@@ -1,27 +1,55 @@
 
 
-## Criar usuário admin na Plamev
+# Plano: Remover rounded-full no tema Seialz
 
-Usar a Edge Function `create-user` já existente para criar o usuário com os seguintes dados:
+## Problema
+No tema Seialz, todos os botoes, inputs, selects, badges, tabs, modais e filtros estao com `rounded-full` (pill). O design system Seialz usa `border-radius: 6px` (angular), nao pill.
 
-- **Email:** lcosta@plamev.com.br
-- **Nome:** L Costa
-- **Senha:** 123456
-- **Organização:** Plamev (`0cc6e2a4-adff-4b0d-a734-3c3422d9fb8e`)
-- **Perfil:** Admin (`26e9aa0d-53b0-469e-8459-09be80ec5052`)
+## Solucao
+Adicionar overrides CSS no `.theme-seialz` no `index.css` para forcar `border-radius` correto em todos os componentes shadcn, sem mexer nos componentes individuais (preserva o estilo pill do tema default).
 
-### Problema
+## Arquivo a modificar
 
-A edge function `create-user` exige um chamador autenticado com permissão `can_manage_users`. Para executar sem depender de sessão, vou criar uma **edge function temporária** (`admin-create-user-temp`) que usa `SERVICE_ROLE_KEY` diretamente, cria o usuário no auth, limpa a org auto-criada pelo trigger, e vincula à Plamev com perfil Admin. Após execução bem-sucedida, a function será removida.
+**`src/index.css`** — Adicionar bloco de overrides apos o `.theme-seialz` existente:
 
-### Dados necessários antes de prosseguir
+```css
+/* ═══ SEIALZ: Override rounded-full → 6px ═══ */
+.theme-seialz button,
+.theme-seialz [role="combobox"],
+.theme-seialz input,
+.theme-seialz textarea,
+.theme-seialz select,
+.theme-seialz [data-radix-collection-item],
+.theme-seialz [role="dialog"],
+.theme-seialz [role="alertdialog"],
+.theme-seialz .rounded-full,
+.theme-seialz .rounded-xl,
+.theme-seialz .rounded-2xl {
+  border-radius: 6px !important;
+}
 
-Preciso confirmar o **nome completo** do usuário. Vou usar "L Costa" como placeholder — me confirme o nome correto.
+/* Preservar circular em avatars e status dots */
+.theme-seialz [data-slot="avatar"],
+.theme-seialz .rounded-full.h-1,
+.theme-seialz .rounded-full.h-1\.5,
+.theme-seialz .rounded-full.h-2,
+.theme-seialz .rounded-full.h-2\.5,
+.theme-seialz .rounded-full.w-1,
+.theme-seialz .rounded-full.w-1\.5,
+.theme-seialz .rounded-full.w-2,
+.theme-seialz .rounded-full.w-2\.5,
+.theme-seialz .overflow-hidden.rounded-full /* avatars */,
+.theme-seialz [class*="shrink-0"][class*="overflow-hidden"][class*="rounded-full"] {
+  border-radius: 9999px !important;
+}
 
-### Passos
+/* Switch e scrollbar thumb permanecem pill */
+.theme-seialz [role="switch"],
+.theme-seialz [role="switch"] span,
+.theme-seialz [data-radix-scroll-area-thumb] {
+  border-radius: 9999px !important;
+}
+```
 
-1. Criar `supabase/functions/admin-create-user-temp/index.ts` com SERVICE_ROLE_KEY
-2. Registrar no `config.toml` com `verify_jwt = false`
-3. Invocar a function via curl para criar o usuário
-4. Remover a function e entrada no config.toml
+Isso afeta: buttons, selects, inputs, badges, tabs, modais (`rounded-2xl`), dialogs, dropdowns — tudo vira 6px. Avatars, switches e dots de status preservam circular.
 
