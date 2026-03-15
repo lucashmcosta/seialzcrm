@@ -250,11 +250,11 @@ export function ImportKnowledge({ agents, onSuccess }: ImportKnowledgeProps) {
     const ext = selectedFile.name.split('.').pop()?.toLowerCase();
     switch (ext) {
       case 'pdf':
-        return <FileType className="h-8 w-8 text-destructive" />;
+        return <FileDoc className="h-8 w-8 text-destructive" />;
       case 'docx':
-        return <FileType className="h-8 w-8 text-primary" />;
+        return <FileDoc className="h-8 w-8 text-primary" />;
       case 'md':
-        return <FileType className="h-8 w-8 text-accent-foreground" />;
+        return <FileDoc className="h-8 w-8 text-accent-foreground" />;
       default:
         return <FileText className="h-8 w-8 text-muted-foreground" />;
     }
