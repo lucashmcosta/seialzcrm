@@ -399,3 +399,40 @@
     font-family: 'Michroma', sans-serif;
   }
 }
+
+/* ═══ SEIALZ: Override rounded-full → 6px ═══ */
+.theme-seialz button,
+.theme-seialz [role="combobox"],
+.theme-seialz input,
+.theme-seialz textarea,
+.theme-seialz select,
+.theme-seialz [data-radix-collection-item],
+.theme-seialz [role="dialog"],
+.theme-seialz [role="alertdialog"],
+.theme-seialz .rounded-full,
+.theme-seialz .rounded-xl,
+.theme-seialz .rounded-2xl {
+  border-radius: 6px !important;
+}
+
+/* Preservar circular em avatars e status dots */
+.theme-seialz [data-slot="avatar"],
+.theme-seialz .rounded-full.h-1,
+.theme-seialz .rounded-full.h-1\.5,
+.theme-seialz .rounded-full.h-2,
+.theme-seialz .rounded-full.h-2\.5,
+.theme-seialz .rounded-full.w-1,
+.theme-seialz .rounded-full.w-1\.5,
+.theme-seialz .rounded-full.w-2,
+.theme-seialz .rounded-full.w-2\.5,
+.theme-seialz .overflow-hidden.rounded-full,
+.theme-seialz [class*="shrink-0"][class*="overflow-hidden"][class*="rounded-full"] {
+  border-radius: 9999px !important;
+}
+
+/* Switch e scrollbar thumb permanecem pill */
+.theme-seialz [role="switch"],
+.theme-seialz [role="switch"] span,
+.theme-seialz [data-radix-scroll-area-thumb] {
+  border-radius: 9999px !important;
+}
