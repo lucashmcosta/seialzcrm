@@ -1338,9 +1338,9 @@ export function SDRAgentWizard({
           className="w-full"
         >
           {isRefining ? (
-            <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+             <SpinnerGap className="h-4 w-4 mr-2 animate-spin" />
           ) : (
-            <Sparkles className="h-4 w-4 mr-2" />
+             <Sparkle className="h-4 w-4 mr-2" />
           )}
           Aplicar Feedback e Regenerar Prompt
         </Button>
