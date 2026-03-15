@@ -75,7 +75,7 @@ const contentTypeConfig: Record<string, { label: string; icon: React.ElementType
   },
   process: { 
     label: 'Processo', 
-    icon: Settings2, 
+    icon: GearSix, 
     color: 'bg-muted text-muted-foreground',
     description: 'Processos e fluxos de trabalho',
   },
