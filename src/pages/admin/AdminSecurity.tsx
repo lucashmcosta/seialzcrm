@@ -151,7 +151,7 @@ export default function AdminSecurity() {
               <CardTitle className="text-sm font-medium">
                 Sessões Ativas
               </CardTitle>
-              <Shield className="h-4 w-4 text-green-600" />
+              <Shield size={16} className="text-green-600" />
             </CardHeader>
             <CardContent>
               <div className="text-2xl font-bold">{activeSessions.length}</div>
