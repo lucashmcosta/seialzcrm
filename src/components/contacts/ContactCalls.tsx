@@ -13,7 +13,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { useToast } from '@/hooks/use-toast';
-import { Loader2, Phone, PhoneIncoming, PhoneOutgoing, Calendar, Plus, User, Clock } from 'lucide-react';
+import { SpinnerGap, Phone, PhoneIncoming, PhoneOutgoing, Calendar, Plus, User, Clock } from '@phosphor-icons/react';
 import { CallStatusBadge } from '@/components/calls/CallStatusBadge';
 import { CallRecordingPlayer } from '@/components/calls/CallRecordingPlayer';
 import { ScheduleCallDialog } from '@/components/calls/ScheduleCallDialog';

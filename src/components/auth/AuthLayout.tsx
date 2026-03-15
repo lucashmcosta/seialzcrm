@@ -1,5 +1,5 @@
 import { motion } from 'framer-motion';
-import { Zap, BarChart3, Shield } from 'lucide-react';
+import { Lightning, ChartBar, Shield } from '@phosphor-icons/react';
 import { SeialzLogo } from '@/components/SeialzLogo';
 
 const features = [
