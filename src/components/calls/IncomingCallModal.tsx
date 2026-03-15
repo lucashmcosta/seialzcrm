@@ -230,7 +230,7 @@ export function IncomingCallModal({
                   className="h-14 w-14 rounded-full"
                   onClick={() => setShowDialPad(!showDialPad)}
                 >
-                  <Grid3X3 className="h-6 w-6" />
+                  <GridFour className="h-6 w-6" />
                 </Button>
                 <Button
                   variant="destructive"
