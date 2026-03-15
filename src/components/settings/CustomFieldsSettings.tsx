@@ -271,7 +271,7 @@ export function CustomFieldsSettings() {
                         <PencilSimple className="w-4 h-4" />
                       </Button>
                       <Button variant="ghost" size="icon" onClick={() => handleDeleteClick(field.id)}>
-                        <Trash2 className="w-4 h-4" />
+                        <TrashSimple className="w-4 h-4" />
                       </Button>
                     </div>
                   </TableCell>

@@ -188,7 +188,7 @@ export function AgentVersionHistory({
                               <SpinnerGap className="h-4 w-4 animate-spin" />
                             ) : (
                               <>
-                                <RotateCcw className="h-4 w-4 mr-1" />
+                                <ArrowCounterClockwise className="h-4 w-4 mr-1" />
                                 Restaurar
                               </>
                             )}

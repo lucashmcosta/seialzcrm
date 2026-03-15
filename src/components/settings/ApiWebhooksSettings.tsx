@@ -679,7 +679,7 @@ export function ApiWebhooksSettings() {
 
               {fieldMappings && fieldMappings.length > 0 && (
                 <div className="flex items-start gap-2 p-3 border rounded-lg bg-background">
-                  <AlertCircle className="h-4 w-4 text-primary mt-0.5 shrink-0" />
+                  <WarningCircle className="h-4 w-4 text-primary mt-0.5 shrink-0" />
                   <p className="text-xs text-muted-foreground">
                     <strong>Field Mapping ativo:</strong> Os campos do payload serão traduzidos automaticamente conforme os mapeamentos configurados acima.
                     Campos não mapeados serão ignorados. Se não houver mapeamento, os campos padrão (name, email, phone, etc.) são aceitos normalmente.

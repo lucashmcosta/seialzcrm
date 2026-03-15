@@ -239,8 +239,8 @@ export function GeneralSettings() {
           <AlertDialog>
             <AlertDialogTrigger asChild>
               <Button variant="destructive" disabled={resetting}>
-                {resetting && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-                <Trash2 className="mr-2 h-4 w-4" />
+                 {resetting && <SpinnerGap className="mr-2 h-4 w-4 animate-spin" />}
+                 <TrashSimple className="mr-2 h-4 w-4" />
                 {t('settings.resetSampleData')}
               </Button>
             </AlertDialogTrigger>

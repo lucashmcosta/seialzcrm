@@ -210,7 +210,7 @@ export function AgentPendingQuestions({
                 disabled={submitting === question.id || !answers[question.id]?.trim()}
               >
                 {submitting === question.id ? (
-                  <Loader2 className="h-4 w-4 animate-spin mr-1" />
+                  <SpinnerGap className="h-4 w-4 animate-spin mr-1" />
                 ) : (
                   <Check className="h-4 w-4 mr-1" />
                 )}

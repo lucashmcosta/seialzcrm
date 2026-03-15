@@ -545,7 +545,7 @@ export function IntegrationDetailDialog({
             <>
               {isGenericIntegration && (
                 <Button variant="outline" onClick={handleStartEditing}>
-                  <Pencil className="h-4 w-4 mr-2" />
+                  <PencilSimple className="h-4 w-4 mr-2" />
                   Editar
                 </Button>
               )}

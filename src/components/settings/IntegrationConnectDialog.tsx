@@ -435,7 +435,7 @@ export function IntegrationConnectDialog({
                   <Label>Número para WhatsApp <span className="text-destructive">*</span></Label>
                   {loadingNumbers ? (
                     <div className="flex items-center gap-2 py-2">
-                      <Loader2 className="h-4 w-4 animate-spin" />
+                      <SpinnerGap className="h-4 w-4 animate-spin" />
                       <span className="text-sm text-muted-foreground">Buscando números da conta Twilio...</span>
                     </div>
                   ) : availableNumbers.length > 0 ? (
