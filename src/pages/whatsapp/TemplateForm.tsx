@@ -458,7 +458,7 @@ export default function TemplateForm() {
                     {/* List picker warning */}
                     {templateType === 'list-picker' && (
                       <Alert variant="destructive">
-                        <AlertCircle className="w-4 h-4" />
+                        <WarningCircle className="w-4 h-4" />
                         <AlertDescription>
                           Este tipo só funciona IN-SESSION (dentro da janela de 24h) e NÃO pode ser aprovado pelo WhatsApp.
                         </AlertDescription>
