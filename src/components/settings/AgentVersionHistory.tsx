@@ -117,7 +117,7 @@ export function AgentVersionHistory({
 
         {isLoading ? (
           <div className="flex items-center justify-center py-12">
-            <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
+            <SpinnerGap className="h-6 w-6 animate-spin text-muted-foreground" />
           </div>
         ) : versions.length === 0 ? (
           <div className="flex flex-col items-center justify-center py-12 text-muted-foreground">
