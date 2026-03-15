@@ -1336,7 +1336,7 @@ export default function MessagesList() {
                       
                       {selectedThread.needs_human_attention && hasAIAgent && (
                         <Button variant="outline" size="sm" onClick={() => handleReturnToAI(selectedThread.id)}>
-                          <Bot className="w-4 h-4 mr-1" />
+                          <Robot className="w-4 h-4 mr-1" />
                           {locale === 'pt-BR' ? 'Devolver ao AI' : 'Return to AI'}
                         </Button>
                       )}
