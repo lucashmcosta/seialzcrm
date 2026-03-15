@@ -149,7 +149,7 @@ Deno.serve(async (req) => {
       for (let i = 0; i < log.imported_contact_ids.length; i += 500) {
         const chunk = log.imported_contact_ids.slice(i, i + 500);
         await supabase.from("activities").delete().in("contact_id", chunk);
-        await supabase.from("messages").delete().in("contact_id", chunk);
+        await supabase.from("contact_memories").delete().in("contact_id", chunk);
       }
       results.contacts = await batchDelete("contacts", log.imported_contact_ids);
     }
