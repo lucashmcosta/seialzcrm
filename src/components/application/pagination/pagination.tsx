@@ -38,7 +38,7 @@ export const PaginationPageMinimalCenter = ({
         disabled={!canGoPrevious}
         className="gap-1"
       >
-        <ChevronLeft className="h-4 w-4" />
+         <CaretLeft className="h-4 w-4" />
         Anterior
       </Button>
 
