@@ -80,8 +80,7 @@ export function KommoPipelineMappingStep({
           organization_id: organization.id,
           name: stageName.trim(),
           order_index: maxOrder + 1,
-          stage_type: 'custom',
-        })
+        } as any)
         .select()
         .single();
 
