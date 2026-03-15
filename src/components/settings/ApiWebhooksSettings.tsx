@@ -452,7 +452,7 @@ export function ApiWebhooksSettings() {
                         <Copy className="h-4 w-4" />
                       </Button>
                       <Button variant="ghost" size="icon" onClick={() => toggleApiKeyMutation.mutate({ keyId: key.id, isActive: !key.is_active })}>
-                        {key.is_active ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                        {key.is_active ? <EyeSlash className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
                       </Button>
                       <Button variant="ghost" size="icon" onClick={() => handleDeleteKeyClick(key.id)}>
                         <Trash2 className="h-4 w-4 text-destructive" />
