@@ -175,7 +175,7 @@ export default function AdminUsers() {
                     <TableCell>
                       {admin.is_active ? (
                         <Badge variant="default" className="gap-1">
-                          <CheckCircle className="h-3 w-3" />
+                          <CheckCircle size={12} />
                           Ativo
                         </Badge>
                       ) : (
