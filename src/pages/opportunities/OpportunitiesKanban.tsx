@@ -8,10 +8,13 @@ import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, 
 import { useOrganization } from '@/hooks/useOrganization';
 import { useTranslation } from '@/lib/i18n';
 import { usePermissions } from '@/hooks/usePermissions';
+import { useTheme } from '@/contexts/ThemeContext';
 import { supabase } from '@/integrations/supabase/client';
 import { Plus, MagnifyingGlass, FunnelSimple, PencilSimple, TrashSimple } from '@phosphor-icons/react';
 import { OpportunityDialog } from '@/components/opportunities/OpportunityDialog';
 import { OpportunityCard } from '@/components/opportunities/OpportunityCard';
+import { SeialzOpportunityCard } from '@/components/opportunities/SeialzOpportunityCard';
+import { SeialzTopbar } from '@/components/seialz/SeialzTopbar';
 import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
@@ -29,6 +32,17 @@ import { BadgeWithDot } from '@/components/base/badges/badges';
 import { format } from 'date-fns';
 import { ptBR, enUS } from 'date-fns/locale';
 import type { SortDescriptor } from 'react-aria-components';
+
+// Stage color bars for Seialz theme
+const STAGE_COLORS = [
+  'hsl(153 100% 50%)',    // green
+  'hsl(220 100% 63%)',    // blue
+  'hsl(43 100% 50%)',     // yellow
+  'hsl(270 100% 70%)',    // purple
+  'hsl(350 100% 63%)',    // red
+  'hsl(180 100% 50%)',    // cyan
+  'hsl(30 100% 55%)',     // orange
+];
 
 interface PipelineStage {
   id: string;
