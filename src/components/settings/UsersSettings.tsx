@@ -508,7 +508,7 @@ export function UsersSettings() {
                 Cancelar
               </Button>
               <Button type="submit" disabled={inviteSubmitting}>
-                {inviteSubmitting && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                {inviteSubmitting && <SpinnerGap className="mr-2 h-4 w-4 animate-spin" />}
                 Enviar Convite
               </Button>
             </DialogFooter>
