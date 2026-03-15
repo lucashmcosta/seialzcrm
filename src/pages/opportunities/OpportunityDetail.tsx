@@ -271,7 +271,7 @@ export default function OpportunityDetail() {
                     : t('status.open')}
                 </Badge>
                 <div className="flex items-center gap-1 text-2xl font-bold text-foreground">
-                  <DollarSign className="h-6 w-6" />
+                  <CurrencyDollar className="h-6 w-6" />
                   {formatCurrency(opportunity.amount || 0)}
                 </div>
               </div>
