@@ -222,6 +222,9 @@ export function KommoMigrationDialog({ open, onOpenChange }: KommoMigrationDialo
               config={config}
               onConfigChange={setConfig}
               previewMutation={previewMutation}
+              selectedPipelineNames={kommoPipelines
+                .filter(p => selectedPipelineIds.includes(p.id))
+                .map(p => p.name)}
             />
           )}
 

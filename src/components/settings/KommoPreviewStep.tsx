@@ -18,6 +18,7 @@ interface KommoPreviewStepProps {
   config: MigrationConfig;
   onConfigChange: (config: MigrationConfig) => void;
   previewMutation: any;
+  selectedPipelineNames?: string[];
 }
 
 export function KommoPreviewStep({
@@ -25,12 +26,13 @@ export function KommoPreviewStep({
   config,
   onConfigChange,
   previewMutation,
+  selectedPipelineNames,
 }: KommoPreviewStepProps) {
   useEffect(() => {
-    if (credentials && !previewMutation.data && !previewMutation.isPending) {
+    if (credentials && !previewMutation.isPending) {
       previewMutation.mutate(credentials);
     }
-  }, [credentials]);
+  }, []); // Always fetch on mount
 
   if (previewMutation.isPending) {
     return (
@@ -70,9 +72,10 @@ export function KommoPreviewStep({
   const estimatedMinutes = Math.max(1, Math.ceil(selectedTotal / 100 / 60));
   const isLargeImport = selectedTotal > 5000;
 
+  const hasPipelineFilter = selectedPipelineNames && selectedPipelineNames.length > 0;
   const counters = [
-    { icon: Users, label: 'Contatos', count: contactsCount, always: true },
-    { icon: Briefcase, label: 'Oportunidades', count: leadsCount, always: true },
+    { icon: Users, label: 'Contatos', count: contactsCount, always: true, note: hasPipelineFilter ? 'Total da conta (compartilhados entre pipelines)' : undefined },
+    { icon: Briefcase, label: 'Oportunidades', count: leadsCount, always: true, note: hasPipelineFilter ? `Apenas dos pipelines selecionados` : undefined },
     { icon: Buildings, label: 'Empresas', count: companiesCount, configKey: 'import_companies' as const },
     { icon: ListChecks, label: 'Tarefas', count: tasksCount, configKey: 'import_tasks' as const },
     { icon: Note, label: 'Notas', count: notesCount, configKey: 'import_notes' as const },
@@ -82,11 +85,21 @@ export function KommoPreviewStep({
 
   return (
     <div className="space-y-6">
+      {/* Pipeline scope indicator */}
+      {selectedPipelineNames && selectedPipelineNames.length > 0 && (
+        <Alert className="border-primary/30 bg-primary/5">
+          <Briefcase className="h-4 w-4 text-primary" />
+          <AlertDescription className="text-sm">
+            Dados do pipeline: <strong className="text-foreground">{selectedPipelineNames.join(', ')}</strong>
+          </AlertDescription>
+        </Alert>
+      )}
+
       {/* Summary Cards with checkboxes */}
       <div className="space-y-3">
         <h4 className="text-sm font-medium">Dados encontrados no Kommo</h4>
         <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
-          {counters.map(({ icon: Icon, label, count, always, configKey }) => {
+          {counters.map(({ icon: Icon, label, count, always, configKey, note }) => {
             const isEnabled = always || (configKey && config[configKey]);
             return (
               <Card
@@ -99,8 +112,9 @@ export function KommoPreviewStep({
                       <Icon className="h-4 w-4 text-primary" />
                     </div>
                     <div>
-                      <p className="text-lg font-bold leading-none">{count}</p>
+                      <p className="text-lg font-bold leading-none">{count.toLocaleString('pt-BR')}</p>
                       <p className="text-xs text-muted-foreground mt-0.5">{label}</p>
+                      {note && <p className="text-[10px] text-muted-foreground/70 mt-0.5">{note}</p>}
                     </div>
                   </div>
                   {!always && configKey && (

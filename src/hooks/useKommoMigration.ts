@@ -271,7 +271,11 @@ export function useKommoMigration() {
   const previewMutation = useMutation({
     mutationFn: async (creds: KommoCredentials) => {
       const { data, error } = await supabase.functions.invoke('kommo-preview', {
-        body: { subdomain: creds.subdomain, access_token: creds.access_token },
+        body: { 
+          subdomain: creds.subdomain, 
+          access_token: creds.access_token,
+          pipeline_ids: selectedPipelineIds.length > 0 ? selectedPipelineIds : undefined,
+        },
       });
       if (error) throw error;
       return data;

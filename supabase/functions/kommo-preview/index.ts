@@ -38,14 +38,15 @@ async function fetchWithRetry(url: string, options: RequestInit, maxRetries = 3)
 }
 
 // Get exact count by paginating through all pages
-async function getExactCount(baseUrl: string, headers: Record<string, string>, endpoint: string): Promise<number> {
+async function getExactCount(baseUrl: string, headers: Record<string, string>, endpoint: string, extraParams = ''): Promise<number> {
   let total = 0;
   let page = 1;
 
   while (true) {
     try {
+      const sep = extraParams ? '&' : '';
       const response = await fetchWithRetry(
-        `${baseUrl}/${endpoint}?limit=250&page=${page}`,
+        `${baseUrl}/${endpoint}?limit=250&page=${page}${sep}${extraParams}`,
         { headers }
       );
 
@@ -68,6 +69,13 @@ async function getExactCount(baseUrl: string, headers: Record<string, string>, e
   }
 
   return total;
+}
+
+// Get exact leads count filtered by pipeline_ids
+async function getExactLeadsCountByPipelines(baseUrl: string, headers: Record<string, string>, pipelineIds: number[]): Promise<number> {
+  // Build filter query params: filter[pipeline_id][]=id1&filter[pipeline_id][]=id2
+  const filterParams = pipelineIds.map(id => `filter[pipeline_id][]=${id}`).join('&');
+  return getExactCount(baseUrl, headers, 'leads', filterParams);
 }
 
 // Get exact notes count by paginating
@@ -164,7 +172,7 @@ Deno.serve(async (req) => {
       );
     }
 
-    const { subdomain: rawSubdomain, access_token } = await req.json();
+    const { subdomain: rawSubdomain, access_token, pipeline_ids } = await req.json();
 
     if (!rawSubdomain || !access_token) {
       return new Response(
@@ -216,7 +224,9 @@ Deno.serve(async (req) => {
     ]);
 
     // Phase 2: Exact counts (paginated, slower)
-    console.log("Starting exact counts...");
+    const hasPipelineFilter = Array.isArray(pipeline_ids) && pipeline_ids.length > 0;
+    console.log("Starting exact counts...", hasPipelineFilter ? `Filtering leads by pipelines: ${pipeline_ids}` : 'All pipelines');
+    
     const [
       contactsCount,
       leadsCount,
@@ -226,7 +236,9 @@ Deno.serve(async (req) => {
       leadNotesCount,
     ] = await Promise.all([
       getExactCount(baseUrl, headers, "contacts"),
-      getExactCount(baseUrl, headers, "leads"),
+      hasPipelineFilter 
+        ? getExactLeadsCountByPipelines(baseUrl, headers, pipeline_ids)
+        : getExactCount(baseUrl, headers, "leads"),
       getExactCount(baseUrl, headers, "companies"),
       getExactCount(baseUrl, headers, "tasks"),
       getExactNotesCount(baseUrl, headers, "contacts"),
