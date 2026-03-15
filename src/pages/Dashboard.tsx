@@ -7,7 +7,7 @@ import { Card } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { supabase } from '@/integrations/supabase/client';
-import { DollarSign, TrendingUp, TrendingDown, Users, CheckCircle2 } from 'lucide-react';
+import { CurrencyDollar, TrendUp, TrendDown, UsersThree, CheckCircle } from '@phosphor-icons/react';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, LineChart, Line, Area, AreaChart } from 'recharts';
 import { Link, useNavigate } from 'react-router-dom';
 
@@ -361,7 +361,7 @@ export default function Dashboard() {
                   <p className="text-sm text-muted-foreground">{t('dashboard.openOpportunities')}</p>
                   <p className="text-2xl font-bold">{openOpportunities}</p>
                 </div>
-                <DollarSign className="w-8 h-8 text-primary" />
+                <CurrencyDollar size={32} weight="light" className="text-primary" />
               </div>
             </Card>
             
@@ -371,7 +371,7 @@ export default function Dashboard() {
                   <p className="text-sm text-muted-foreground">{t('dashboard.pipelineValue')}</p>
                   <p className="text-2xl font-bold">{formatCurrency(pipelineValue)}</p>
                 </div>
-                <TrendingUp className="w-8 h-8 text-primary" />
+                <TrendUp size={32} weight="light" className="text-primary" />
               </div>
             </Card>
             
@@ -381,7 +381,7 @@ export default function Dashboard() {
                   <p className="text-sm text-muted-foreground">{t('dashboard.wonAmount')}</p>
                   <p className="text-2xl font-bold text-green-600">{formatCurrency(wonAmount)}</p>
                 </div>
-                <CheckCircle2 className="w-8 h-8 text-green-600" />
+                <CheckCircle size={32} weight="light" className="text-green-600" />
               </div>
             </Card>
             
@@ -391,7 +391,7 @@ export default function Dashboard() {
                   <p className="text-sm text-muted-foreground">{t('dashboard.lostOpportunities')}</p>
                   <p className="text-2xl font-bold text-red-600">{lostCount}</p>
                 </div>
-                <TrendingDown className="w-8 h-8 text-red-600" />
+                <TrendDown size={32} weight="light" className="text-red-600" />
               </div>
             </Card>
             
@@ -401,7 +401,7 @@ export default function Dashboard() {
                   <p className="text-sm text-muted-foreground">{t('dashboard.newContacts')}</p>
                   <p className="text-2xl font-bold">{newContacts}</p>
                 </div>
-                <Users className="w-8 h-8 text-primary" />
+                <UsersThree size={32} weight="light" className="text-primary" />
               </div>
             </Card>
           </div>
