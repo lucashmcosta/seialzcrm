@@ -476,7 +476,7 @@ export function KnowledgeBaseSettings() {
               <Dialog open={dialogOpen} onOpenChange={handleDialogClose}>
                 <DialogTrigger asChild>
                   <Button>
-                    <MessageSquare className="mr-2 h-4 w-4" />
+                    <ChatCircle className="mr-2 h-4 w-4" />
                     Criar com IA
                   </Button>
                 </DialogTrigger>
