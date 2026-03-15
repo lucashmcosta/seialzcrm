@@ -211,6 +211,8 @@ export function KommoMigrationDialog({ open, onOpenChange }: KommoMigrationDialo
               userMappings={userMappings}
               crmUsers={crmUsers || []}
               onMappingsChange={setUserMappings}
+              organizationId={organization?.id}
+              onCrmUsersRefresh={() => refetchCrmUsers()}
             />
           )}
 
