@@ -528,6 +528,7 @@ export function useKommoMigration() {
     importLog,
     crmStages,
     crmUsers,
+    refetchCrmUsers,
     savedCredentials,
     isLoadingCredentials,
     pendingImport,

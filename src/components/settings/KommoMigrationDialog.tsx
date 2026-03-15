@@ -29,6 +29,7 @@ export function KommoMigrationDialog({ open, onOpenChange }: KommoMigrationDialo
     importLog,
     crmStages,
     crmUsers,
+    refetchCrmUsers,
     savedCredentials,
     pendingImport,
     isResuming,
@@ -47,6 +48,8 @@ export function KommoMigrationDialog({ open, onOpenChange }: KommoMigrationDialo
     startMigrationMutation,
     rollbackMutation,
   } = useKommoMigration();
+
+  const organizationId = credentials ? undefined : undefined; // Will get from hook
 
   useEffect(() => {
     if (!open) {
