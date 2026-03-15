@@ -296,7 +296,7 @@ export default function AdminOrganizationDetail() {
                               email: userOrg.users?.email,
                             })}
                           >
-                            <LogIn className="h-4 w-4 mr-1" />
+                            <SignIn size={16} className="mr-1" />
                             Entrar como
                           </Button>
                         )}
