@@ -144,7 +144,7 @@ export function SavedViewsDropdown({
                   handleDeleteView(view.id);
                 }}
               >
-                <Trash2 className="h-3 w-3" />
+                <TrashSimple className="h-3 w-3" />
               </Button>
             </DropdownMenuItem>
           ))}

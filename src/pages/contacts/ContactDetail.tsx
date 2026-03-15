@@ -444,7 +444,7 @@ export default function ContactDetail() {
                           rel="noopener noreferrer"
                           className="text-primary hover:underline inline-flex items-center gap-1 text-sm"
                         >
-                          Abrir anúncio <ExternalLink className="h-3 w-3" />
+                          Abrir anúncio <ArrowSquareOut className="h-3 w-3" />
                         </a>
                       </div>
                     )}

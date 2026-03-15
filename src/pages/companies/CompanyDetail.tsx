@@ -191,7 +191,7 @@ export default function CompanyDetail() {
           <Card>
             <CardHeader>
               <CardTitle className="flex items-center gap-2">
-                <Users className="w-5 h-5" />
+                <UsersThree className="w-5 h-5" />
                 {t('companies.linkedContacts')}
               </CardTitle>
             </CardHeader>
