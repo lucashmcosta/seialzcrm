@@ -99,6 +99,46 @@ async function getCustomFieldsCount(baseUrl: string, headers: Record<string, str
   }
 }
 
+function extractUsersFromPayload(usersData: any): any[] {
+  if (Array.isArray(usersData)) return usersData;
+  if (Array.isArray(usersData?._embedded?.users)) return usersData._embedded.users;
+  if (Array.isArray(usersData?.users)) return usersData.users;
+  return [];
+}
+
+async function fetchKommoUsers(baseUrl: string, headers: Record<string, string>): Promise<any[]> {
+  const usersUrl = `${baseUrl}/users`;
+
+  console.log("Fetching users from:", usersUrl);
+
+  try {
+    let usersResponse: Response;
+
+    try {
+      usersResponse = await fetchWithRetry(`${usersUrl}?with=role`, { headers });
+    } catch (withRoleError) {
+      console.warn("Users fetch with '?with=role' failed, retrying plain /users:", withRoleError);
+      usersResponse = await fetchWithRetry(usersUrl, { headers });
+    }
+
+    console.log("Users response status:", usersResponse.status);
+
+    const usersData = usersResponse.status === 204
+      ? { _embedded: { users: [] } }
+      : await usersResponse.json();
+
+    console.log("Users data:", JSON.stringify(usersData).substring(0, 500));
+
+    const parsedUsers = extractUsersFromPayload(usersData);
+    console.log("Users parsed count:", parsedUsers.length);
+
+    return parsedUsers;
+  } catch (error) {
+    console.error("Error fetching users list:", error);
+    return [];
+  }
+}
+
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") {
     return new Response(null, { headers: corsHeaders });
