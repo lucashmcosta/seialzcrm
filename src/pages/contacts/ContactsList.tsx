@@ -490,7 +490,7 @@ export default function ContactsList() {
                         />
                         <TableRowAction
                           label={t('common.delete')}
-                          icon={<Trash01 className="w-4 h-4" />}
+                          icon={<TrashSimple size={16} weight="light" />}
                           variant="destructive"
                           onAction={() => handleDelete(contact.id)}
                         />
