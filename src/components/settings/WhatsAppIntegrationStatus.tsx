@@ -259,7 +259,7 @@ export function WhatsAppIntegrationStatus({ onReconfigure }: WhatsAppIntegration
               className="p-0 h-auto text-amber-600 dark:text-amber-400"
               onClick={() => window.open('https://console.twilio.com/us1/develop/sms/senders/whatsapp-senders', '_blank')}
             >
-              Abrir Console Twilio <ExternalLink className="h-3 w-3 ml-1" />
+              Abrir Console Twilio <ArrowSquareOut className="h-3 w-3 ml-1" />
             </Button>
           </div>
         )}
