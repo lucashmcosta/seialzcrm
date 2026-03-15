@@ -428,7 +428,7 @@ export default function AdminOrganizationDetail() {
                 </div>
                 {org.subscriptions?.[0]?.status === 'trialing' && (
                   <Button variant="outline" onClick={() => setExtendTrialDialogOpen(true)}>
-                    <Play className="h-4 w-4 mr-2" />
+                    <Play size={16} className="mr-2" />
                     Estender Trial
                   </Button>
                 )}
