@@ -84,6 +84,16 @@ export function KommoPreviewStep({
 
   return (
     <div className="space-y-6">
+      {/* Pipeline scope indicator */}
+      {selectedPipelineNames && selectedPipelineNames.length > 0 && (
+        <Alert className="border-primary/30 bg-primary/5">
+          <Briefcase className="h-4 w-4 text-primary" />
+          <AlertDescription className="text-sm">
+            Dados do pipeline: <strong className="text-foreground">{selectedPipelineNames.join(', ')}</strong>
+          </AlertDescription>
+        </Alert>
+      )}
+
       {/* Summary Cards with checkboxes */}
       <div className="space-y-3">
         <h4 className="text-sm font-medium">Dados encontrados no Kommo</h4>
