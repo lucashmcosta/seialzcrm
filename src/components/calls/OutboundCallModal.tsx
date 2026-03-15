@@ -62,7 +62,7 @@ function DialPadToggle({
           className="h-12 w-12 rounded-full"
           onClick={onToggleMute}
         >
-          {isMuted ? <MicOff className="h-5 w-5" /> : <Mic className="h-5 w-5" />}
+          {isMuted ? <MicrophoneSlash className="h-5 w-5" /> : <Microphone className="h-5 w-5" />}
         </Button>
         <Button
           variant={showDialPad ? 'default' : 'outline'}
