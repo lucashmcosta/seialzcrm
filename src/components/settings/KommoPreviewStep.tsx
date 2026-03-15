@@ -59,18 +59,21 @@ export function KommoPreviewStep({
   const companiesCount = preview.total_companies || 0;
   const tasksCount = preview.total_tasks || 0;
   const notesCount = preview.total_notes || 0;
-  const eventsCount = 0; // Events counted during migration
+  const eventsCount = preview.total_events || 0;
   const customFieldsCount = preview.total_custom_fields || 0;
 
   const selectedTotal = contactsCount + leadsCount 
     + (config.import_companies ? companiesCount : 0)
     + (config.import_tasks ? tasksCount : 0)
     + (config.import_notes ? notesCount : 0)
-    + (config.import_events ? eventsCount : 0);
+    + (config.import_events ? Math.min(eventsCount, 5000) : 0);
 
   // Rough time estimate: ~100 records/sec
   const estimatedMinutes = Math.max(1, Math.ceil(selectedTotal / 100 / 60));
   const isLargeImport = selectedTotal > 5000;
+
+  // Bug E: warn about large event counts
+  const isLargeEvents = eventsCount > 5000;
 
   const hasPipelineFilter = selectedPipelineNames && selectedPipelineNames.length > 0;
   const counters = [
@@ -79,7 +82,8 @@ export function KommoPreviewStep({
     { icon: Buildings, label: 'Empresas', count: companiesCount, configKey: 'import_companies' as const },
     { icon: ListChecks, label: 'Tarefas', count: tasksCount, configKey: 'import_tasks' as const },
     { icon: Note, label: 'Notas', count: notesCount, configKey: 'import_notes' as const },
-    { icon: CalendarBlank, label: 'Eventos', count: eventsCount, configKey: 'import_events' as const },
+    { icon: CalendarBlank, label: 'Eventos', count: eventsCount, configKey: 'import_events' as const, 
+      note: isLargeEvents ? `⚠️ Limitado a 5.000 na importação` : undefined },
     { icon: Sliders, label: 'Campos custom.', count: customFieldsCount, configKey: 'import_custom_fields' as const },
   ];
 
@@ -132,6 +136,18 @@ export function KommoPreviewStep({
           })}
         </div>
       </div>
+
+      {/* Bug E: Events warning */}
+      {isLargeEvents && config.import_events && (
+        <Alert className="border-yellow-500/50 bg-yellow-500/5">
+          <Warning className="h-4 w-4 text-yellow-600" />
+          <AlertTitle>Muitos eventos ({eventsCount.toLocaleString('pt-BR')})</AlertTitle>
+          <AlertDescription>
+            A importação será limitada a 5.000 eventos para manter o tempo razoável.
+            Recomendado: importe sem eventos primeiro e adicione depois se necessário.
+          </AlertDescription>
+        </Alert>
+      )}
 
       {/* Time estimate */}
       <Alert className="border-muted bg-muted/30">

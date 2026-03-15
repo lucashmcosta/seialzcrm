@@ -1,0 +1,1 @@
+UPDATE import_logs SET status = 'cancelled' WHERE id = 'c52a0a5e-0d37-43cc-96f1-d56c5fb9e1dd' AND status = 'running'
