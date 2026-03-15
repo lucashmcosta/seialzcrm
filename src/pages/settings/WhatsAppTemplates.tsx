@@ -269,7 +269,7 @@ export default function WhatsAppTemplates() {
             </p>
             <div className="flex gap-2 justify-center">
               <Button variant="outline" onClick={handleSync} disabled={syncMutation.isPending}>
-                <RefreshCw className="w-4 h-4 mr-2" />
+                <ArrowsClockwise className="w-4 h-4 mr-2" />
                 Sincronizar do Twilio
               </Button>
               <Button onClick={() => navigate('/whatsapp/templates/new')}>
