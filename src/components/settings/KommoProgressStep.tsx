@@ -63,13 +63,19 @@ export function KommoProgressStep({
     (isCompleted || isFailed) &&
     !rollbackMutation.isPending;
 
-  const currentPhase: MigrationPhase | null = importLog.cursor_state?.phase || null;
+  // Parse cursor_state if it comes as string
+  const cursorState = typeof importLog.cursor_state === 'string' 
+    ? JSON.parse(importLog.cursor_state) 
+    : importLog.cursor_state;
+  const currentPhase: MigrationPhase | 'done' | null = cursorState?.phase || null;
 
   const getPhaseStatus = (phase: MigrationPhase): 'done' | 'active' | 'pending' => {
     if (!currentPhase) return 'pending';
-    const currentIdx = PHASE_ORDER.indexOf(currentPhase);
+    if (isCompleted || currentPhase === 'done') return 'done';
+    const currentIdx = PHASE_ORDER.indexOf(currentPhase as MigrationPhase);
     const phaseIdx = PHASE_ORDER.indexOf(phase);
-    if (isCompleted) return 'done';
+    // If currentPhase is not in PHASE_ORDER (e.g. 'done'), all are done
+    if (currentIdx === -1) return 'done';
     if (phaseIdx < currentIdx) return 'done';
     if (phaseIdx === currentIdx) return 'active';
     return 'pending';
