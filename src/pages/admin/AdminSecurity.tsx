@@ -163,7 +163,7 @@ export default function AdminSecurity() {
               <CardTitle className="text-sm font-medium">
                 Admins Bloqueados
               </CardTitle>
-              <Unlock className="h-4 w-4 text-destructive" />
+              <LockOpen size={16} className="text-destructive" />
             </CardHeader>
             <CardContent>
               <div className="text-2xl font-bold">{lockedAdmins.length}</div>
