@@ -144,9 +144,9 @@ const App = () => (
       <Toaster />
       <Sonner />
       <BrowserRouter>
-        <OutboundCallProvider>
         <AuthProvider>
         <OrganizationProvider>
+        <OutboundCallProvider>
         <ThemeProvider>
         <GlobalCallHandler />
         <Suspense fallback={<PageLoader />}>
