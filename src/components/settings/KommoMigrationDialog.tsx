@@ -19,6 +19,7 @@ interface KommoMigrationDialogProps {
 
 export function KommoMigrationDialog({ open, onOpenChange }: KommoMigrationDialogProps) {
   const {
+    organization,
     step,
     credentials,
     kommoPipelines,
@@ -29,6 +30,7 @@ export function KommoMigrationDialog({ open, onOpenChange }: KommoMigrationDialo
     importLog,
     crmStages,
     crmUsers,
+    refetchCrmUsers,
     savedCredentials,
     pendingImport,
     isResuming,
@@ -209,6 +211,8 @@ export function KommoMigrationDialog({ open, onOpenChange }: KommoMigrationDialo
               userMappings={userMappings}
               crmUsers={crmUsers || []}
               onMappingsChange={setUserMappings}
+              organizationId={organization?.id}
+              onCrmUsersRefresh={() => refetchCrmUsers()}
             />
           )}
 
