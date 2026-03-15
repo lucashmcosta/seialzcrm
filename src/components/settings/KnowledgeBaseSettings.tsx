@@ -509,7 +509,7 @@ export function KnowledgeBaseSettings() {
                       Criar com IA
                     </Button>
                     <Button variant="outline" onClick={() => setActiveTab('import')}>
-                      <Upload className="mr-2 h-4 w-4" />
+                      <UploadSimple className="mr-2 h-4 w-4" />
                       Importar Arquivo
                     </Button>
                   </div>
