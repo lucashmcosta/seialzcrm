@@ -51,7 +51,7 @@ export function Layout({ children }: LayoutProps) {
     navItems.splice(2, 0, { 
       label: t('nav.companies'), 
       href: '/companies', 
-      icon: Building07 
+      icon: Buildings 
     });
   }
 
