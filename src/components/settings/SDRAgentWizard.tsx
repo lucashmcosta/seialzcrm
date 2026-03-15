@@ -1973,7 +1973,7 @@ export function SDRAgentWizard({
       <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
         <DialogHeader className="flex flex-row items-center justify-between">
           <DialogTitle className="flex items-center gap-2">
-            <Sparkles className="h-5 w-5 text-primary" />
+            <Sparkle className="h-5 w-5 text-primary" />
             {isEditMode ? 'Editar Agente SDR' : 'Configurar Agente SDR'}
           </DialogTitle>
           {isEditMode && existingAgent?.id && (
