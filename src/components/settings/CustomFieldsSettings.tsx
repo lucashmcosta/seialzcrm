@@ -268,7 +268,7 @@ export function CustomFieldsSettings() {
                           setDialogOpen(true);
                         }}
                       >
-                        <Pencil className="w-4 h-4" />
+                        <PencilSimple className="w-4 h-4" />
                       </Button>
                       <Button variant="ghost" size="icon" onClick={() => handleDeleteClick(field.id)}>
                         <Trash2 className="w-4 h-4" />
