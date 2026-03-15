@@ -63,7 +63,7 @@ const contentTypeConfig: Record<string, { label: string; icon: React.ElementType
   },
   instruction: { 
     label: 'Instrução', 
-    icon: Settings2, 
+    icon: GearSix, 
     color: 'bg-accent text-accent-foreground',
     description: 'Instruções e procedimentos a seguir',
   },
