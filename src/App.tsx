@@ -41,6 +41,7 @@ import DocsModule from "./pages/docs/DocsModule";
 const ApiDocs = lazy(() => retryImport(() => import("./pages/docs/ApiDocs")));
 
 // Lazy load CRM pages with retry for chunk resilience
+const LandingPage = lazy(() => retryImport(() => import("./pages/LandingPage")));
 const Onboarding = lazy(() => retryImport(() => import("./pages/Onboarding")));
 const Dashboard = lazy(() => retryImport(() => import("./pages/Dashboard")));
 const ContactsList = lazy(() => retryImport(() => import("./pages/contacts/ContactsList")));
@@ -150,7 +151,7 @@ const App = () => (
         <GlobalCallHandler />
         <Suspense fallback={<PageLoader />}>
         <Routes>
-          <Route path="/" element={<Navigate to="/dashboard" replace />} />
+          <Route path="/" element={<LandingPage />} />
           
           {/* Public Documentation */}
           <Route path="/docs" element={<DocsIndex />} />
