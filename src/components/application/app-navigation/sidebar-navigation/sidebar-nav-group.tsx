@@ -1,7 +1,7 @@
 import { useState, useEffect } from "react";
 import { Link, useLocation } from "react-router-dom";
 import { motion, AnimatePresence } from "framer-motion";
-import { ChevronRight } from "@untitledui/icons";
+import { CaretRight } from "@phosphor-icons/react";
 import { cn } from "@/lib/utils";
 import type { NavItemType } from "../config";
 import { SidebarNavItem } from "./sidebar-nav-item";
