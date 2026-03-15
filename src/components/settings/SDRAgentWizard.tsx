@@ -1038,7 +1038,7 @@ export function SDRAgentWizard({
             <span className="hidden sm:inline">Testar</span>
           </TabsTrigger>
           <TabsTrigger value="feedback" className="gap-1 text-xs sm:text-sm">
-            <MessageSquarePlus className="h-4 w-4" />
+            <ChatCirclePlusIcon className="h-4 w-4" />
             <span className="hidden sm:inline">Feedback</span>
           </TabsTrigger>
         </TabsList>
