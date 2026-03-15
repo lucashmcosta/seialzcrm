@@ -89,7 +89,7 @@ export default function AdminDocumentation() {
                             </Badge>
                           ) : (
                             <Badge variant="outline">
-                              <EyeOff className="h-3 w-3 mr-1" />
+                              <EyeSlash size={12} className="mr-1" />
                               Interno
                             </Badge>
                           )}
