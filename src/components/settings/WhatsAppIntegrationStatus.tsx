@@ -279,7 +279,7 @@ export function WhatsAppIntegrationStatus({ onReconfigure }: WhatsAppIntegration
             onClick={handleCheckWebhooks}
             disabled={checking}
           >
-            {checking ? <RefreshCw className="h-4 w-4 mr-2 animate-spin" /> : <Search className="h-4 w-4 mr-2" />}
+            {checking ? <ArrowsClockwise className="h-4 w-4 mr-2 animate-spin" /> : <MagnifyingGlass className="h-4 w-4 mr-2" />}
             Verificar Webhooks
           </Button>
           {onReconfigure && (
