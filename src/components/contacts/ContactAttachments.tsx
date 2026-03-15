@@ -217,10 +217,10 @@ export function ContactAttachments({ contactId, entityId, entityType }: ContactA
               />
               <Button size="sm" asChild disabled={uploading}>
                 <label htmlFor="file-upload" className="cursor-pointer">
-                  {uploading ? (
-                    <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                   {uploading ? (
+                    <SpinnerGap className="w-4 h-4 mr-2 animate-spin" />
                   ) : (
-                    <Upload className="w-4 h-4 mr-2" />
+                    <UploadSimple className="w-4 h-4 mr-2" />
                   )}
                   {t('common.upload')}
                 </label>
