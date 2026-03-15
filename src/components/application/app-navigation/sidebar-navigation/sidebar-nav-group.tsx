@@ -70,7 +70,7 @@ export const SidebarNavGroup = ({ item }: SidebarNavGroupProps) => {
           animate={{ rotate: isOpen ? 90 : 0 }}
           transition={{ duration: 0.2 }}
         >
-          <ChevronRight className="h-4 w-4 text-muted-foreground" />
+          <CaretRight size={16} weight="bold" className="text-muted-foreground" />
         </motion.div>
       </button>
 
