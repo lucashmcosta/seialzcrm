@@ -197,7 +197,7 @@ export default function ContactDetail() {
                   {permissions.canEditContacts && (
                     <DropdownMenuItem asChild>
                       <Link to={`/contacts/${contact.id}/edit`}>
-                        <Edit className="h-4 w-4 mr-2" />
+                        <PencilSimple className="h-4 w-4 mr-2" />
                         {t('common.edit')}
                       </Link>
                     </DropdownMenuItem>
