@@ -5,9 +5,9 @@ import { LandingFooter } from '@/components/landing/LandingFooter';
 import { AnimatedCounter } from '@/components/motion/AnimatedCounter';
 import { toast } from '@/hooks/use-toast';
 import {
-  Target, RefreshCw, BarChart3, Phone, Brain, MessageSquare,
-  Users, LayoutDashboard, UserCheck, Search, Settings, Zap, ArrowRight,
-} from 'lucide-react';
+  Target, ArrowsClockwise, ChartLineUp, PhoneCall, Robot, ChatCircleText,
+  UsersThree, ChartBar, UserCheck, MagnifyingGlass, GearSix, Lightning, ArrowRight,
+} from '@phosphor-icons/react';
 
 /* ── Animation helpers ── */
 const fadeUp = {
@@ -151,11 +151,11 @@ export default function LandingPage() {
               <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
                 {[
                   {
-                    icon: Zap, title: 'Tecnologia',
+                    icon: Lightning, title: 'Tecnologia',
                     desc: 'Plataforma própria com IA que conecta Meta Ads, Google Ads, WhatsApp, discador, CRM e attribution num sistema só. Elimina gestor de tráfego, ferramentas avulsas e planilhas.',
                   },
                   {
-                    icon: Settings, title: 'Processo',
+                    icon: GearSix, title: 'Processo',
                     desc: 'Playbook comercial completo: scripts, rotina do time, funil estruturado, métricas. Dados de marketing informam vendas, dados de vendas informam marketing. Um loop, não dois departamentos.',
                   },
                   {
@@ -164,7 +164,7 @@ export default function LandingPage() {
                   },
                 ].map((p) => (
                   <div key={p.title} className="bg-[hsl(240,10%,7%)] border border-[hsl(150,100%,50%)]/10 rounded-2xl p-8">
-                    <p.icon className="text-[hsl(150,100%,50%)] mb-4" size={28} />
+                    <p.icon className="text-[hsl(150,100%,50%)] mb-4" size={28} weight="light" />
                     <h4 className="font-['Michroma'] text-lg mb-3">{p.title}</h4>
                     <p className="text-sm text-[hsl(0,0%,55%)] font-['Outfit'] leading-relaxed">{p.desc}</p>
                   </div>
@@ -232,17 +232,17 @@ export default function LandingPage() {
             <motion.div variants={fadeUp} className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
               {[
                 { icon: Target, title: 'AI Revenue Attribution', desc: 'Cada real de receita rastreado de volta ao anúncio exato que gerou. Não CPL. Receita.' },
-                { icon: RefreshCw, title: 'Loop Marketing ↔ Vendas', desc: 'Dados de contratos fechados voltam automaticamente pro Meta e Google pra otimizar campanhas.' },
-                { icon: BarChart3, title: 'CRM com Pipeline Integrado', desc: 'Do clique no anúncio ao contrato assinado, um pipeline único. Sem handoff, sem dado perdido.' },
-                { icon: Phone, title: 'Power Dialer com IA', desc: 'Discador inteligente que prioriza automaticamente. Liga pro lead certo na hora certa.' },
-                { icon: Brain, title: 'AI Sales Coach', desc: 'Coaching em tempo real durante ligações. Análise pós-call. Insights que melhoram conversão.' },
-                { icon: MessageSquare, title: 'Comunicação Omnichannel', desc: 'SMS, WhatsApp, ligações, email — tudo numa thread. Branded calling.' },
-                { icon: Users, title: 'Distribuição Inteligente de Leads', desc: 'Round-robin com regras. Distribui por performance, disponibilidade, tipo de lead.' },
-                { icon: LayoutDashboard, title: 'Sales Ops Dashboard', desc: 'Receita por vendedor, por campanha, por fonte. Gargalos detectados em tempo real.' },
+                { icon: ArrowsClockwise, title: 'Loop Marketing ↔ Vendas', desc: 'Dados de contratos fechados voltam automaticamente pro Meta e Google pra otimizar campanhas.' },
+                { icon: ChartLineUp, title: 'CRM com Pipeline Integrado', desc: 'Do clique no anúncio ao contrato assinado, um pipeline único. Sem handoff, sem dado perdido.' },
+                { icon: PhoneCall, title: 'Power Dialer com IA', desc: 'Discador inteligente que prioriza automaticamente. Liga pro lead certo na hora certa.' },
+                { icon: Robot, title: 'AI Sales Coach', desc: 'Coaching em tempo real durante ligações. Análise pós-call. Insights que melhoram conversão.' },
+                { icon: ChatCircleText, title: 'Comunicação Omnichannel', desc: 'SMS, WhatsApp, ligações, email — tudo numa thread. Branded calling.' },
+                { icon: UsersThree, title: 'Distribuição Inteligente de Leads', desc: 'Round-robin com regras. Distribui por performance, disponibilidade, tipo de lead.' },
+                { icon: ChartBar, title: 'Sales Ops Dashboard', desc: 'Receita por vendedor, por campanha, por fonte. Gargalos detectados em tempo real.' },
                 { icon: UserCheck, title: 'Diretor Comercial Dedicado', desc: 'Acompanhamento semanal. Coaching do time. Relatórios. Gestão de verdade.' },
               ].map((f) => (
                 <div key={f.title} className="bg-[hsl(240,10%,7%)] border border-[hsl(150,100%,50%)]/10 rounded-2xl p-6 hover:border-[hsl(150,100%,50%)]/30 transition-colors group">
-                  <f.icon className="text-[hsl(150,100%,50%)] mb-4 group-hover:scale-110 transition-transform" size={24} />
+                  <f.icon className="text-[hsl(150,100%,50%)] mb-4 group-hover:scale-110 transition-transform" size={24} weight="light" />
                   <h4 className="font-['Michroma'] text-sm mb-2">{f.title}</h4>
                   <p className="text-sm text-[hsl(0,0%,50%)] font-['Outfit'] leading-relaxed">{f.desc}</p>
                 </div>
