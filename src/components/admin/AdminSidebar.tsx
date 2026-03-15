@@ -1,6 +1,6 @@
 import { Link, useLocation } from 'react-router-dom';
 import { cn } from '@/lib/utils';
-import { LayoutDashboard, Building2, FileText, Shield, Users, Flag, UserCheck, CreditCard, Ticket, Plug, BookOpen } from 'lucide-react';
+import { SquaresFour, Buildings, FileText, Shield, Users, Flag, UserCheck, CreditCard, Ticket, Plug, BookOpen } from '@phosphor-icons/react';
 
 const menuItems = [
   { icon: LayoutDashboard, label: 'Dashboard', href: '/admin' },
