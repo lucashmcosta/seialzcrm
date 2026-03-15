@@ -150,7 +150,7 @@ export function WhatsAppIntegrationStatus({ onReconfigure }: WhatsAppIntegration
       <span className="text-sm text-muted-foreground">{label}</span>
       <div className="flex items-center gap-2">
         {success ? (
-          <CheckCircle2 className="h-4 w-4 text-green-500" />
+          <CheckCircle className="h-4 w-4 text-green-500" />
         ) : (
           <XCircle className="h-4 w-4 text-destructive" />
         )}
