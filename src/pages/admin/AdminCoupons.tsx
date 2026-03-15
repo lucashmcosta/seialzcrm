@@ -3,7 +3,7 @@ import { supabase } from '@/integrations/supabase/client';
 import { AdminLayout } from '@/components/admin/AdminLayout';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
-import { Plus, Power, PowerOff } from 'lucide-react';
+import { Plus, Power } from '@phosphor-icons/react';
 import { useToast } from '@/hooks/use-toast';
 import { CreateCouponDialog } from '@/components/admin/CreateCouponDialog';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
