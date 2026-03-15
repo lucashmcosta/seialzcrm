@@ -71,7 +71,7 @@ export function KommoCredentialsStep({ onValidated, validateMutation, savedCrede
 
         <div className="flex flex-col gap-3">
           <Button onClick={handleUseSavedCredentials} className="w-full">
-            <CheckCircle2 className="h-4 w-4 mr-2" />
+             <CheckCircle className="h-4 w-4 mr-2" />
             Continuar com estas credenciais
           </Button>
           
