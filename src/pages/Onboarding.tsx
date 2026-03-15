@@ -307,7 +307,7 @@ export default function Onboarding() {
                     }}
                   />
                   <Button type="button" onClick={handleAddEmail} color="secondary" size="md">
-                    <Mail className="w-4 h-4 mr-2" />
+                    <EnvelopeSimple className="w-4 h-4 mr-2" />
                     {t('onboarding.addEmail')}
                   </Button>
                 </div>

@@ -31,12 +31,12 @@ const statusConfig: Record<ApprovalStatus, {
   },
   not_submitted: {
     label: 'Não Submetido',
-    icon: AlertCircle,
+     icon: WarningCircle,
     className: 'bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-400 hover:bg-slate-100',
   },
   draft: {
     label: 'Rascunho',
-    icon: AlertCircle,
+    icon: WarningCircle,
     className: 'bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-400 hover:bg-slate-100',
   },
 };

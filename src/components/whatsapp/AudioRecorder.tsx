@@ -238,7 +238,7 @@ export function AudioRecorder({ onSend, disabled }: AudioRecorderProps) {
       disabled={disabled}
       title="Gravar áudio"
     >
-      <Mic className="w-4 h-4" />
+      <Microphone className="w-4 h-4" />
     </Button>
   );
 }

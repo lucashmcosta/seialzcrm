@@ -670,7 +670,7 @@ export default function ApiDocs() {
               href="/docs"
               className="text-sm text-gray-400 hover:text-gray-200 transition-colors flex items-center gap-1"
             >
-              Docs <ExternalLink className="w-3.5 h-3.5" />
+              Docs <ArrowSquareOut className="w-3.5 h-3.5" />
             </a>
           </div>
         </div>

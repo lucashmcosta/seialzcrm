@@ -110,7 +110,7 @@ export function AudioMessagePlayer({ src, className = '' }: AudioMessagePlayerPr
       </div>
 
       <div className="flex items-center gap-1 shrink-0">
-        <Volume2 className="w-3 h-3 text-muted-foreground" />
+        <SpeakerHigh className="w-3 h-3 text-muted-foreground" />
         <span className="text-xs text-muted-foreground w-10 text-right">
           {formatTime(currentTime)}/{formatTime(duration)}
         </span>

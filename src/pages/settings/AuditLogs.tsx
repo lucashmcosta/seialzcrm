@@ -186,7 +186,7 @@ export function AuditLogs() {
                 disabled={logs.length < pageSize}
               >
                 {t('common.next')}
-                <ChevronRight className="h-4 w-4 ml-2" />
+                <CaretRight className="h-4 w-4 ml-2" />
               </Button>
             </div>
           </>

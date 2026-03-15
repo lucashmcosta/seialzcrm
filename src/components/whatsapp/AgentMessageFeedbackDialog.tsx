@@ -523,7 +523,7 @@ export function AgentMessageFeedbackDialog({
               </Button>
               <Button onClick={handleClassify} disabled={isClassifying || !idealResponse.trim()}>
                 {isClassifying ? (
-                  <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                  <SpinnerGap className="h-4 w-4 mr-2 animate-spin" />
                 ) : (
                   <ArrowRight className="h-4 w-4 mr-2" />
                 )}

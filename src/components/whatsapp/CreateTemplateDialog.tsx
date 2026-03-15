@@ -295,7 +295,7 @@ export function CreateTemplateDialog({
               className="bg-green-600 hover:bg-green-700"
             >
               {createMutation.isPending ? (
-                <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                <SpinnerGap className="w-4 h-4 mr-2 animate-spin" />
               ) : null}
               Criar Template
             </Button>

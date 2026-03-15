@@ -43,7 +43,7 @@ export function WhatsAppPreview({
       case 'phone':
         return <Phone className="w-3 h-3" />;
       case 'url':
-        return <ExternalLink className="w-3 h-3" />;
+        return <ArrowSquareOut className="w-3 h-3" />;
       case 'copy_code':
         return <Copy className="w-3 h-3" />;
       default:

@@ -278,7 +278,7 @@ export default function Profile() {
             {/* Save Button */}
             <div className="flex justify-end">
               <Button onClick={handleSaveProfile} disabled={loading}>
-                {loading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                {loading && <SpinnerGap className="mr-2 h-4 w-4 animate-spin" />}
                 {t('common.save')}
               </Button>
             </div>

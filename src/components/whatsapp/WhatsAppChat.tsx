@@ -530,9 +530,9 @@ export function WhatsAppChat({ contactId, threadId: initialThreadId, onThreadCre
                 className="bg-green-600 hover:bg-green-700"
               >
                 {submitting ? (
-                  <Loader2 className="w-4 h-4 animate-spin" />
+                   <SpinnerGap className="w-4 h-4 animate-spin" />
                 ) : (
-                  <Send className="w-4 h-4" />
+                  <PaperPlaneTilt className="w-4 h-4" />
                 )}
               </Button>
             </div>

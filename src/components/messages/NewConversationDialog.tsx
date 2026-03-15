@@ -179,7 +179,7 @@ export function NewConversationDialog({
                         )}
                       </div>
                       {selecting === contact.id && (
-                        <Loader2 className="w-4 h-4 animate-spin text-muted-foreground" />
+                        <SpinnerGap className="w-4 h-4 animate-spin text-muted-foreground" />
                       )}
                     </button>
                   );

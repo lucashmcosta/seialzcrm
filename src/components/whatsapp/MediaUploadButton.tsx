@@ -80,7 +80,7 @@ export function MediaUploadButton({ onFileSelected, onTemplateClick, onNoteClick
           )}
           {onNoteClick && (
             <DropdownMenuItem onClick={onNoteClick}>
-              <StickyNote className="w-4 h-4 mr-2" />
+              <Note className="w-4 h-4 mr-2" />
               Nota
             </DropdownMenuItem>
           )}

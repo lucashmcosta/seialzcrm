@@ -210,9 +210,9 @@ export function SendTemplateModal({
             className="bg-green-600 hover:bg-green-700"
           >
             {sendMutation.isPending ? (
-              <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-            ) : (
-              <Send className="w-4 h-4 mr-2" />
+                 <SpinnerGap className="w-4 h-4 mr-2 animate-spin" />
+              ) : (
+                <PaperPlaneTilt className="w-4 h-4 mr-2" />
             )}
             Enviar
           </Button>

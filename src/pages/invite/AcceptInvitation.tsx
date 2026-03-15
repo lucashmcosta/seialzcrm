@@ -223,7 +223,7 @@ export default function AcceptInvitation() {
       <Card className="w-full max-w-md">
         <CardHeader className="text-center">
           <div className="w-12 h-12 bg-primary/10 rounded-lg flex items-center justify-center mx-auto mb-4">
-            <Building2 className="w-6 h-6 text-primary" />
+            <Buildings className="w-6 h-6 text-primary" />
           </div>
           <CardTitle>{t('invite.title')}</CardTitle>
           <CardDescription>

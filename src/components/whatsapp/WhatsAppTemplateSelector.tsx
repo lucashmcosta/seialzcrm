@@ -145,7 +145,7 @@ export function WhatsAppTemplateSelector({
                 disabled={loading}
               >
                 {loading ? (
-                  <Loader2 className="w-4 h-4 animate-spin mr-2" />
+                  <SpinnerGap className="w-4 h-4 animate-spin mr-2" />
                 ) : (
                   <Check className="w-4 h-4 mr-2" />
                 )}

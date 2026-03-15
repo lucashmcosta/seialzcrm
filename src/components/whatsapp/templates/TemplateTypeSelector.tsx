@@ -61,7 +61,7 @@ const templateTypes: {
 
 export function TemplateTypeSelector({ value, onValueChange, disabled }: TemplateTypeSelectorProps) {
   const selectedType = templateTypes.find(t => t.value === value);
-  const SelectedIcon = selectedType?.icon || MessageSquare;
+  const SelectedIcon = selectedType?.icon || ChatCircle;
 
   return (
     <Select value={value} onValueChange={onValueChange} disabled={disabled}>

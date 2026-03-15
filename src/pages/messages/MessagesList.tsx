@@ -1729,7 +1729,7 @@ export default function MessagesList() {
                               )}
                             >
                               {submitting ? (
-                                <Loader2 className="h-4 w-4 animate-spin" />
+                                <SpinnerGap className="h-4 w-4 animate-spin" />
                               ) : (
                                 <Send01 className="h-4 w-4" />
                               )}

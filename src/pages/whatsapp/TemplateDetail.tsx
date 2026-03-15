@@ -428,9 +428,9 @@ export default function TemplateDetail() {
               disabled={submitMutation.isPending}
             >
               {submitMutation.isPending ? (
-                <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+               <SpinnerGap className="w-4 h-4 mr-2 animate-spin" />
               ) : (
-                <Send className="w-4 h-4 mr-2" />
+                <PaperPlaneTilt className="w-4 h-4 mr-2" />
               )}
               Submeter
             </Button>

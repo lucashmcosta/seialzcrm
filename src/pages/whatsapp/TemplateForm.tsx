@@ -504,7 +504,7 @@ export default function TemplateForm() {
                       disabled={!isStep3Valid || isSubmitting}
                     >
                       {isSubmitting ? (
-                        <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                        <SpinnerGap className="w-4 h-4 mr-2 animate-spin" />
                       ) : (
                         <Save className="w-4 h-4 mr-2" />
                       )}
