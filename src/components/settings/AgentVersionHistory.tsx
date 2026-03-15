@@ -152,7 +152,7 @@ export function AgentVersionHistory({
                           )}
                           {version.is_rollback && (
                             <Badge variant="outline" className="text-xs">
-                              <RotateCcw className="h-3 w-3 mr-1" />
+                              <ArrowCounterClockwise className="h-3 w-3 mr-1" />
                               Rollback de v{version.rollback_from_version}
                             </Badge>
                           )}
