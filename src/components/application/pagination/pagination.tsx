@@ -116,7 +116,7 @@ export const PaginationWithPageSize = ({
           className="gap-1"
         >
           Próximo
-          <ChevronRight className="h-4 w-4" />
+          <CaretRight className="h-4 w-4" />
         </Button>
       </div>
     </div>

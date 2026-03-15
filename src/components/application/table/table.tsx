@@ -227,7 +227,7 @@ export const TableColumn = ({
                 <ArrowDown className="w-3.5 h-3.5" />
               )
             ) : (
-              <ChevronsUpDown className="w-3.5 h-3.5 opacity-50" />
+              <CaretUpDown className="w-3.5 h-3.5 opacity-50" />
             )}
           </span>
         )}
