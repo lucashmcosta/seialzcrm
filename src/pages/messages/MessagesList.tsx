@@ -208,7 +208,7 @@ const ChatListItem = ({ value, locale, className, ...otherProps }: ChatListItemP
         </div>
         {value.needs_human_attention && (
           <div className="flex items-center gap-1 text-destructive mt-0.5">
-            <AlertCircle className="h-3 w-3" />
+            <WarningCircle className="h-3 w-3" />
             <span className="text-[10px] font-medium">Atenção</span>
           </div>
         )}
