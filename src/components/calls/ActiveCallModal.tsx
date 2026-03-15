@@ -438,7 +438,7 @@ export function ActiveCallModal({
                   className="h-12 w-12 rounded-full"
                   onClick={handleToggleSpeaker}
                 >
-                  {isSpeaker ? <Volume2 className="h-5 w-5" /> : <VolumeX className="h-5 w-5" />}
+                  {isSpeaker ? <SpeakerHigh className="h-5 w-5" /> : <SpeakerSlash className="h-5 w-5" />}
                 </Button>
               </>
             )}
