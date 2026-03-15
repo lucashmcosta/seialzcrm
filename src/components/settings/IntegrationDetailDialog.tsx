@@ -490,7 +490,7 @@ export function IntegrationDetailDialog({
               <img src={integration.logo_url} alt={integration.name} className="w-10 h-10 rounded-lg object-contain bg-muted p-1" />
             ) : (
               <div className="p-2 rounded-lg bg-muted">
-                <Settings2 className="h-6 w-6 text-muted-foreground" />
+                <GearSix className="h-6 w-6 text-muted-foreground" />
               </div>
             )}
             <div>
