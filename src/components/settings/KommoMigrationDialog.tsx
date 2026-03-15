@@ -85,8 +85,10 @@ export function KommoMigrationDialog({ open, onOpenChange }: KommoMigrationDialo
   };
 
   const canProceedFromStep1 = credentials !== null;
-  const canProceedFromStep2 = kommoPipelines.length > 0 && 
-    kommoPipelines.every(p => p.stages.every(s => stageMapping[`${p.id}_${s.id}`]));
+  const canProceedFromStep2 = selectedPipelineIds.length > 0 && 
+    kommoPipelines
+      .filter(p => selectedPipelineIds.includes(p.id))
+      .every(p => p.stages.every(s => stageMapping[`${p.id}_${s.id}`]));
   const canProceedFromStep3 = true; // User mapping is optional
   const canProceedFromStep4 = previewMutation.data !== undefined;
 
