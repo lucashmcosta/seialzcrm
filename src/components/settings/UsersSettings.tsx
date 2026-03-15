@@ -351,7 +351,7 @@ export function UsersSettings() {
               <Button>
                 <UserPlus className="w-4 h-4 mr-2" />
                 Adicionar Usuário
-                <ChevronDown className="w-4 h-4 ml-2" />
+                <CaretDown className="w-4 h-4 ml-2" />
               </Button>
             </DropdownMenuTrigger>
             <DropdownMenuContent align="end" className="w-56">
