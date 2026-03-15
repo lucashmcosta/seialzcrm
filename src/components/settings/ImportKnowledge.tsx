@@ -466,7 +466,7 @@ export function ImportKnowledge({ agents, onSuccess }: ImportKnowledgeProps) {
                 </>
               ) : (
                 <>
-                  <CheckCircle2 className="mr-2 h-4 w-4" />
+                  <CheckCircle className="mr-2 h-4 w-4" />
                   Importar Arquivo
                 </>
               )}
