@@ -163,17 +163,18 @@ export function useKommoMigration() {
     enabled: !!organization,
   });
 
-  // Query para buscar usuários do CRM
+  // Query para buscar usuários do CRM via user_organizations
   const { data: crmUsers } = useQuery({
     queryKey: ['crm-users', organization?.id],
     queryFn: async () => {
       if (!organization) return [];
       const { data, error } = await supabase
-        .from('users')
-        .select('id, full_name, email')
-        .eq('organization_id', organization.id);
+        .from('user_organizations')
+        .select('user_id, users!inner(id, full_name, email)')
+        .eq('organization_id', organization.id)
+        .eq('is_active', true);
       if (error) throw error;
-      return data || [];
+      return (data || []).map((uo: any) => uo.users).filter(Boolean);
     },
     enabled: !!organization,
   });
