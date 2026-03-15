@@ -11,6 +11,7 @@ import {
   ShieldCheck,
   Question,
   ChatCircleText,
+  Phone,
 } from '@phosphor-icons/react';
 import type { Icon as PhosphorIcon } from '@phosphor-icons/react';
 import { Button } from '@/components/ui/button';
@@ -25,6 +26,8 @@ import { SidebarNavigationSimple } from '@/components/application/app-navigation
 import { FeaturedCardProgressBar } from '@/components/application/app-navigation/base-components/featured-cards';
 import type { NavItemType } from '@/components/application/app-navigation/config';
 import { useWhatsAppIntegration } from '@/hooks/useWhatsAppIntegration';
+import { useTheme } from '@/contexts/ThemeContext';
+import { SeialzSidebar, type SeialzNavGroup } from '@/components/seialz/SeialzSidebar';
 
 interface LayoutProps {
   children: ReactNode;
@@ -37,6 +40,74 @@ export function Layout({ children }: LayoutProps) {
   const { permissions } = usePermissions();
   const { t } = useTranslation(locale as 'pt-BR' | 'en-US');
   const { hasWhatsApp } = useWhatsAppIntegration();
+  const { themePreset } = useTheme();
+
+  // ═══════════════════════════════════════
+  // SEIALZ LAYOUT
+  // ═══════════════════════════════════════
+  if (themePreset === 'seialz') {
+    const groups: SeialzNavGroup[] = [
+      {
+        label: 'PRINCIPAL',
+        items: [
+          { label: t('nav.dashboard'), href: '/dashboard', icon: House },
+          { label: t('nav.opportunities'), href: '/opportunities', icon: Briefcase },
+          { label: t('nav.contacts'), href: '/contacts', icon: UsersThree },
+          { label: t('nav.tasks'), href: '/tasks', icon: CheckSquare },
+        ],
+      },
+    ];
+
+    // Add Companies if enabled
+    if (organization?.enable_companies_module) {
+      groups[0].items.splice(3, 0, {
+        label: t('nav.companies'),
+        href: '/companies',
+        icon: Buildings,
+      });
+    }
+
+    // Communication group
+    const commItems: SeialzNavGroup['items'] = [];
+    if (hasWhatsApp) {
+      commItems.push({ label: t('nav.messages'), href: '/messages', icon: ChatCircleText });
+    }
+    if (commItems.length > 0) {
+      groups.push({ label: 'COMUNICAÇÃO', items: commItems });
+    }
+
+    // System group
+    const sysItems: SeialzNavGroup['items'] = [];
+    if (permissions.canManageSettings) {
+      sysItems.push({ label: t('nav.settings'), href: '/settings', icon: GearSix });
+    }
+    if (userProfile?.is_platform_admin) {
+      sysItems.push({ label: t('nav.admin'), href: '/saas-admin', icon: ShieldCheck });
+    }
+    sysItems.push({ label: 'Central de Ajuda', href: '/docs', icon: Question });
+    groups.push({ label: 'SISTEMA', items: sysItems });
+
+    return (
+      <div className="flex h-screen bg-background overflow-hidden">
+        <ImpersonationBanner />
+        <SeialzSidebar
+          groups={groups}
+          userProfile={userProfile}
+          onSignOut={signOut}
+          locale={locale}
+        />
+        <div className="flex-1 flex flex-col overflow-hidden min-w-0">
+          <main className="flex-1 overflow-auto">
+            {children}
+          </main>
+        </div>
+      </div>
+    );
+  }
+
+  // ═══════════════════════════════════════
+  // DEFAULT LAYOUT (unchanged)
+  // ═══════════════════════════════════════
 
   // Build navigation items
   const navItems: NavItemType[] = [
