@@ -205,7 +205,7 @@ export default function TemplateDetail() {
               className="text-destructive hover:text-destructive"
               onClick={() => setDeleteConfirmOpen(true)}
             >
-              <Trash2 className="w-4 h-4 mr-2" />
+              <TrashSimple className="w-4 h-4 mr-2" />
               Excluir
             </Button>
           </div>
