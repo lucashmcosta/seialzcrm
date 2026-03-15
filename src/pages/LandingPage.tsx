@@ -5,9 +5,9 @@ import { LandingFooter } from '@/components/landing/LandingFooter';
 import { AnimatedCounter } from '@/components/motion/AnimatedCounter';
 import { toast } from '@/hooks/use-toast';
 import {
-  Target, RefreshCw, BarChart3, Phone, Brain, MessageSquare,
-  Users, LayoutDashboard, UserCheck, Search, Settings, Zap, ArrowRight,
-} from 'lucide-react';
+  Target, ArrowsClockwise, ChartLineUp, PhoneCall, Robot, ChatCircleText,
+  UsersThree, ChartBar, UserCheck, MagnifyingGlass, GearSix, Lightning, ArrowRight,
+} from '@phosphor-icons/react';
 
 /* ── Animation helpers ── */
 const fadeUp = {
