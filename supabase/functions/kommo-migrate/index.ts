@@ -162,6 +162,26 @@ Deno.serve(async (req) => {
       ec?.forEach((x: any) => { if (x.source_external_id) cMap[x.source_external_id.replace("kommo_", "")] = x.id; });
     }
 
+    // Bug fix #3: Rebuild user map from DB if empty (e.g. Users phase failed on previous run)
+    if (!Object.keys(uMap).length) {
+      const { data: mappings } = await sb.from("kommo_user_mappings").select("kommo_user_id, seialz_user_id").eq("organization_id", orgId).not("seialz_user_id", "is", null);
+      mappings?.forEach((m: any) => { uMap[String(m.kommo_user_id)] = m.seialz_user_id; });
+      c.kommo_user_id_map = uMap;
+    }
+
+    // Ensure defUser is always populated
+    if (!defUser) {
+      const { data: fallbackOrg } = await sb.from("user_organizations").select("user_id").eq("organization_id", orgId).eq("is_active", true).limit(1).single();
+      defUser = fallbackOrg?.user_id || l.created_by_user_id || "";
+      c.default_user_id = defUser;
+    }
+
+    // Helper: convert Kommo Unix timestamp to ISO string
+    function kommoDate(ts: number | undefined | null): string | undefined {
+      if (!ts) return undefined;
+      return new Date(ts * 1000).toISOString();
+    }
+
     // === USERS ===
     if (c.phase === "users" && !c.users_complete) {
       try {
