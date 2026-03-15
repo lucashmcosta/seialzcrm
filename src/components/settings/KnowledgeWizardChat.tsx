@@ -520,7 +520,7 @@ export function KnowledgeWizardChat({ agentId, onComplete, onCancel }: Knowledge
                       </>
                     ) : (
                       <>
-                        <Sparkles className="mr-2 h-4 w-4" />
+                        <Sparkle className="mr-2 h-4 w-4" />
                         Gerar Conhecimento
                       </>
                     )}
