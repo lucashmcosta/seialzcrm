@@ -290,7 +290,7 @@ export function Trash() {
                               size="sm"
                               disabled={processing}
                             >
-                              <Trash className="h-4 w-4 mr-2" />
+                              <TrashIcon className="h-4 w-4 mr-2" />
                               {t('trash.deleteForever')}
                             </Button>
                           </AlertDialogTrigger>
