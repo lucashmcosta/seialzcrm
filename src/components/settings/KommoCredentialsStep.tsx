@@ -53,7 +53,7 @@ export function KommoCredentialsStep({ onValidated, validateMutation, savedCrede
     return (
       <div className="space-y-6">
         <Alert className="border-primary/50 bg-primary/5">
-          <Link2 className="h-4 w-4 text-primary" />
+          <LinkSimple className="h-4 w-4 text-primary" />
           <AlertDescription className="text-foreground">
             <div className="space-y-1">
               <p className="font-medium">Usando credenciais da integração conectada</p>
