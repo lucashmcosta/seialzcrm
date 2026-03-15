@@ -49,7 +49,8 @@ const OutboundCallContext = createContext<OutboundCallContextType | undefined>(u
 
 export function OutboundCallProvider({ children }: { children: ReactNode }) {
   const location = useLocation();
-  const { hasVoiceIntegration, loading: voiceLoading } = useVoiceIntegration();
+  const [hasVoiceIntegration, setHasVoiceIntegration] = useState(false);
+  const [voiceLoading, setVoiceLoading] = useState(true);
   const [status, setStatus] = useState<CallStatus>('idle');
   const [callInfo, setCallInfo] = useState<CallInfo | null>(null);
   const [duration, setDuration] = useState(0);
