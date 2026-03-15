@@ -74,7 +74,7 @@ export function MediaUploadButton({ onFileSelected, onTemplateClick, onNoteClick
           </DropdownMenuItem>
           {onTemplateClick && (
             <DropdownMenuItem onClick={onTemplateClick}>
-              <FileStack className="w-4 h-4 mr-2" />
+              <Files className="w-4 h-4 mr-2" />
               Template
             </DropdownMenuItem>
           )}
