@@ -180,7 +180,7 @@ export default function AdminUsers() {
                         </Badge>
                       ) : (
                         <Badge variant="destructive" className="gap-1">
-                          <XCircle className="h-3 w-3" />
+                          <XCircle size={12} />
                           Inativo
                         </Badge>
                       )}
