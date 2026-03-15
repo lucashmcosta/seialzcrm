@@ -283,12 +283,12 @@ export function TaskDialog({ open, onOpenChange, task, onSuccess }: TaskDialogPr
 
             <div>
               <Label htmlFor="opportunity_id">{t('opportunities.title')} ({t('common.none')})</Label>
-              <Select value={formData.opportunity_id} onValueChange={(v) => setFormData({ ...formData, opportunity_id: v })}>
+              <Select value={formData.opportunity_id || 'none'} onValueChange={(v) => setFormData({ ...formData, opportunity_id: v === 'none' ? '' : v })}>
                 <SelectTrigger>
                   <SelectValue placeholder={t('common.select')} />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="">{t('common.none')}</SelectItem>
+                  <SelectItem value="none">{t('common.none')}</SelectItem>
                   {opportunities.map((opp) => (
                     <SelectItem key={opp.id} value={opp.id}>
                       {opp.title}
