@@ -174,7 +174,7 @@ export function KommoCredentialsStep({ onValidated, validateMutation, savedCrede
       >
         {validateMutation.isPending ? (
           <>
-            <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+            <SpinnerGap className="h-4 w-4 mr-2 animate-spin" />
             Validando...
           </>
         ) : isValid ? (
