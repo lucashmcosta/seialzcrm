@@ -344,7 +344,7 @@ export default function WhatsAppTemplates() {
                             onClick={() => handleDelete(template.id, template.friendly_name)}
                             className="text-destructive focus:text-destructive"
                           >
-                            <Trash2 className="w-4 h-4 mr-2" />
+                            <TrashSimple className="w-4 h-4 mr-2" />
                             Excluir
                           </DropdownMenuItem>
                         </DropdownMenuContent>
