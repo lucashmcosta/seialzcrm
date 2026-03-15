@@ -13,7 +13,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { useToast } from '@/hooks/use-toast';
-import { Loader2, Phone, PhoneIncoming, PhoneOutgoing, Calendar, Plus, User, Clock } from 'lucide-react';
+import { SpinnerGap, Phone, PhoneIncoming, PhoneOutgoing, Calendar, Plus, User, Clock } from '@phosphor-icons/react';
 import { CallStatusBadge } from '@/components/calls/CallStatusBadge';
 import { CallRecordingPlayer } from '@/components/calls/CallRecordingPlayer';
 import { ScheduleCallDialog } from '@/components/calls/ScheduleCallDialog';
@@ -176,7 +176,7 @@ export function ContactCalls({ contactId, opportunityId, contactPhone, contactNa
     return (
       <Card>
         <CardContent className="py-8 flex justify-center">
-          <Loader2 className="h-8 w-8 animate-spin" />
+          <SpinnerGap className="h-8 w-8 animate-spin" />
         </CardContent>
       </Card>
     );
@@ -271,7 +271,7 @@ export function ContactCalls({ contactId, opportunityId, contactPhone, contactNa
                   </div>
                   <DialogFooter>
                     <Button type="submit" disabled={submitting}>
-                      {submitting && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                      {submitting && <SpinnerGap className="mr-2 h-4 w-4 animate-spin" />}
                       Salvar
                     </Button>
                   </DialogFooter>

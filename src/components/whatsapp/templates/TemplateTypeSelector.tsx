@@ -6,12 +6,12 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import { 
-  MessageSquare, 
-  MousePointerClick, 
-  List, 
-  ExternalLink, 
+  ChatCircle, 
+  CursorClick, 
+  ListBullets, 
+  ArrowSquareOut, 
   Image 
-} from 'lucide-react';
+} from '@phosphor-icons/react';
 
 export type TemplateType = 'text' | 'quick-reply' | 'list-picker' | 'call-to-action' | 'media';
 

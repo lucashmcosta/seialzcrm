@@ -6,7 +6,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
 import { useToast } from '@/hooks/use-toast';
-import { Loader2, Plus, MessageSquare } from 'lucide-react';
+import { SpinnerGap, Plus, ChatCircle } from '@phosphor-icons/react';
 import { formatDistanceToNow } from 'date-fns';
 import { ptBR, enUS } from 'date-fns/locale';
 
@@ -104,7 +104,7 @@ export function ContactNotes({ contactId, opportunityId }: ContactNotesProps) {
     return (
       <Card>
         <CardContent className="py-8 flex justify-center">
-          <Loader2 className="h-8 w-8 animate-spin" />
+          <SpinnerGap className="h-8 w-8 animate-spin" />
         </CardContent>
       </Card>
     );
@@ -132,7 +132,7 @@ export function ContactNotes({ contactId, opportunityId }: ContactNotesProps) {
             />
             <div className="flex gap-2">
               <Button onClick={handleAddNote} disabled={submitting} size="sm">
-                {submitting && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                {submitting && <SpinnerGap className="mr-2 h-4 w-4 animate-spin" />}
                 {t('common.save')}
               </Button>
               <Button variant="outline" onClick={() => setShowNoteForm(false)} size="sm">
@@ -151,7 +151,7 @@ export function ContactNotes({ contactId, opportunityId }: ContactNotesProps) {
             notes.map((note) => (
               <div key={note.id} className="flex gap-4 pb-4 border-b last:border-0">
                 <div className="flex-shrink-0 w-8 h-8 rounded-full bg-primary/10 flex items-center justify-center text-primary">
-                  <MessageSquare className="w-4 h-4" />
+                  <ChatCircle className="w-4 h-4" />
                 </div>
                 <div className="flex-1 min-w-0">
                   <div className="flex items-center justify-between">

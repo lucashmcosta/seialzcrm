@@ -11,7 +11,7 @@ import { useOutboundCall } from '@/contexts/OutboundCallContext';
 import { formatPhoneDisplay } from '@/lib/phoneUtils';
 import { Card } from '@/components/ui/card';
 import { toast } from 'sonner';
-import { Mail, Phone, Building2, Edit, Trash2, MoreVertical, User, FileText, MapPin, Calendar, Megaphone, ExternalLink } from 'lucide-react';
+import { EnvelopeSimple, Phone, Buildings, PencilSimple, TrashSimple, DotsThreeVertical, User, FileText, MapPin, Calendar, Megaphone, ArrowSquareOut } from '@phosphor-icons/react';
 import { Breadcrumbs } from '@/components/application/breadcrumbs/breadcrumbs';
 import { Tabs } from '@/components/application/tabs/tabs';
 import { NativeSelect } from '@/components/base/select/select-native';
@@ -181,7 +181,7 @@ export default function ContactDetail() {
               {permissions.canEditContacts && (
                 <Button color="secondary" size="sm" asChild>
                   <Link to={`/contacts/${contact.id}/edit`}>
-                    <Edit className="h-4 w-4 mr-2" />
+                    <PencilSimple className="h-4 w-4 mr-2" />
                     {t('common.edit')}
                   </Link>
                 </Button>
@@ -190,14 +190,14 @@ export default function ContactDetail() {
               <DropdownMenu>
                 <DropdownMenuTrigger asChild>
                   <Button color="ghost" size="icon">
-                    <MoreVertical className="h-4 w-4" />
+                    <DotsThreeVertical className="h-4 w-4" />
                   </Button>
                 </DropdownMenuTrigger>
                 <DropdownMenuContent align="end">
                   {permissions.canEditContacts && (
                     <DropdownMenuItem asChild>
                       <Link to={`/contacts/${contact.id}/edit`}>
-                        <Edit className="h-4 w-4 mr-2" />
+                        <PencilSimple className="h-4 w-4 mr-2" />
                         {t('common.edit')}
                       </Link>
                     </DropdownMenuItem>
@@ -209,7 +209,7 @@ export default function ContactDetail() {
                           className="text-destructive focus:text-destructive"
                           onSelect={(e) => e.preventDefault()}
                         >
-                          <Trash2 className="h-4 w-4 mr-2" />
+                          <TrashSimple className="h-4 w-4 mr-2" />
                           {t('common.delete')}
                         </DropdownMenuItem>
                       </AlertDialogTrigger>
@@ -257,7 +257,7 @@ export default function ContactDetail() {
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   {contact.email && (
                     <div className="flex items-center gap-3">
-                      <Mail className="h-4 w-4 text-muted-foreground" />
+                      <EnvelopeSimple className="h-4 w-4 text-muted-foreground" />
                       <div>
                         <div className="text-sm text-muted-foreground">{t('contacts.email')}</div>
                         <div className="text-foreground">{contact.email}</div>
@@ -290,7 +290,7 @@ export default function ContactDetail() {
                   )}
                   {contact.company_name && (
                     <div className="flex items-center gap-3">
-                      <Building2 className="h-4 w-4 text-muted-foreground" />
+                      <Buildings className="h-4 w-4 text-muted-foreground" />
                       <div>
                         <div className="text-sm text-muted-foreground">{t('contacts.company')}</div>
                         <div className="text-foreground">{contact.company_name}</div>
@@ -444,7 +444,7 @@ export default function ContactDetail() {
                           rel="noopener noreferrer"
                           className="text-primary hover:underline inline-flex items-center gap-1 text-sm"
                         >
-                          Abrir anúncio <ExternalLink className="h-3 w-3" />
+                          Abrir anúncio <ArrowSquareOut className="h-3 w-3" />
                         </a>
                       </div>
                     )}

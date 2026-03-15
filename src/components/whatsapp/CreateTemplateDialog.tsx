@@ -23,7 +23,7 @@ import {
 } from '@/components/ui/select';
 import { Card, CardContent } from '@/components/ui/card';
 import { useToast } from '@/hooks/use-toast';
-import { Loader2, Plus, X, Eye } from 'lucide-react';
+import { SpinnerGap, Plus, X, Eye } from '@phosphor-icons/react';
 
 interface Variable {
   name: string;

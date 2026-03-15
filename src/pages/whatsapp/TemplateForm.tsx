@@ -29,10 +29,10 @@ import {
   ArrowRight, 
   Plus, 
   X, 
-  Loader2, 
-  AlertCircle,
-  Save,
-} from 'lucide-react';
+  SpinnerGap, 
+  WarningCircle,
+  FloppyDisk,
+} from '@phosphor-icons/react';
 
 interface QuickReplyButton {
   id: string;

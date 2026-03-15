@@ -1,10 +1,10 @@
 import { motion } from 'framer-motion';
-import { Zap, BarChart3, Shield } from 'lucide-react';
+import { Lightning, ChartBar, Shield } from '@phosphor-icons/react';
 import { SeialzLogo } from '@/components/SeialzLogo';
 
 const features = [
-  { icon: Zap, text: 'Automação inteligente de vendas' },
-  { icon: BarChart3, text: 'Relatórios e métricas em tempo real' },
+  { icon: Lightning, text: 'Automação inteligente de vendas' },
+  { icon: ChartBar, text: 'Relatórios e métricas em tempo real' },
   { icon: Shield, text: 'Segurança e conformidade total' },
 ];
 

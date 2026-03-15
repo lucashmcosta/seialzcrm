@@ -12,7 +12,7 @@ import { useOrganization } from '@/hooks/useOrganization';
 import { useTranslation } from '@/lib/i18n';
 import { usePermissions } from '@/hooks/usePermissions';
 import { toast } from '@/hooks/use-toast';
-import { ArrowLeft, Edit, TrendingUp, TrendingDown, DollarSign, Calendar, User, Building2 } from 'lucide-react';
+import { ArrowLeft, PencilSimple, TrendUp, TrendDown, CurrencyDollar, Calendar, User, Buildings } from '@phosphor-icons/react';
 import { ActivityTimeline } from '@/components/contacts/ActivityTimeline';
 import { ContactTasks } from '@/components/contacts/ContactTasks';
 import { ContactAttachments } from '@/components/contacts/ContactAttachments';
@@ -249,7 +249,7 @@ export default function OpportunityDetail() {
                   )}
                   {opportunity.pipeline_stages && (
                     <span className="flex items-center gap-1">
-                      <Building2 className="h-4 w-4" />
+                      <Buildings className="h-4 w-4" />
                       {opportunity.pipeline_stages.name}
                     </span>
                   )}
@@ -271,7 +271,7 @@ export default function OpportunityDetail() {
                     : t('status.open')}
                 </Badge>
                 <div className="flex items-center gap-1 text-2xl font-bold text-foreground">
-                  <DollarSign className="h-6 w-6" />
+                  <CurrencyDollar className="h-6 w-6" />
                   {formatCurrency(opportunity.amount || 0)}
                 </div>
               </div>
@@ -295,17 +295,17 @@ export default function OpportunityDetail() {
               {permissions.canEditOpportunities && (
                 <>
                   <Button onClick={() => setEditDialogOpen(true)}>
-                    <Edit className="h-4 w-4 mr-2" />
+                    <PencilSimple className="h-4 w-4 mr-2" />
                     {t('common.edit')}
                   </Button>
                   {opportunity.status === 'open' && (
                     <>
                       <Button variant="outline" onClick={handleMarkWon}>
-                        <TrendingUp className="h-4 w-4 mr-2" />
+                        <TrendUp className="h-4 w-4 mr-2" />
                         {t('opportunities.markWon')}
                       </Button>
                       <Button variant="outline" onClick={handleMarkLost}>
-                        <TrendingDown className="h-4 w-4 mr-2" />
+                        <TrendDown className="h-4 w-4 mr-2" />
                         {t('opportunities.markLost')}
                       </Button>
                     </>

@@ -1,7 +1,7 @@
 import { useState, useRef, useEffect } from 'react';
 import { Button } from '@/components/ui/button';
 import { Avatar, AvatarFallback } from '@/components/ui/avatar';
-import { PhoneOff, Mic, MicOff, Maximize2, User, GripVertical } from 'lucide-react';
+import { PhoneDisconnect, Microphone, MicrophoneSlash, ArrowsOutSimple, User, DotsSixVertical } from '@phosphor-icons/react';
 import { formatPhoneDisplay } from '@/lib/phoneUtils';
 
 interface MinimizedCallWidgetProps {
@@ -95,7 +95,7 @@ export function MinimizedCallWidget({
           className="cursor-move text-muted-foreground hover:text-foreground"
           onMouseDown={handleMouseDown}
         >
-          <GripVertical className="h-4 w-4" />
+          <DotsSixVertical className="h-4 w-4" />
         </div>
 
         {/* Avatar */}
@@ -123,7 +123,7 @@ export function MinimizedCallWidget({
             className="h-8 w-8"
             onClick={onToggleMute}
           >
-            {isMuted ? <MicOff className="h-4 w-4" /> : <Mic className="h-4 w-4" />}
+            {isMuted ? <MicrophoneSlash className="h-4 w-4" /> : <Microphone className="h-4 w-4" />}
           </Button>
           <Button
             variant="destructive"
@@ -131,7 +131,7 @@ export function MinimizedCallWidget({
             className="h-8 w-8"
             onClick={onEndCall}
           >
-            <PhoneOff className="h-4 w-4" />
+            <PhoneDisconnect className="h-4 w-4" />
           </Button>
           <Button
             variant="outline"
@@ -139,7 +139,7 @@ export function MinimizedCallWidget({
             className="h-8 w-8"
             onClick={onExpand}
           >
-            <Maximize2 className="h-4 w-4" />
+            <ArrowsOutSimple className="h-4 w-4" />
           </Button>
         </div>
       </div>

@@ -4,7 +4,7 @@ import { useTranslation } from '@/lib/i18n';
 import { supabase } from '@/integrations/supabase/client';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
-import { Loader2, MessageSquare, Phone, CheckSquare, FileText, PhoneOutgoing, PhoneIncoming, User, Clock } from 'lucide-react';
+import { SpinnerGap, ChatCircle, Phone, CheckSquare, FileText, PhoneOutgoing, PhoneIncoming, User, Clock } from '@phosphor-icons/react';
 import { formatDistanceToNow, format } from 'date-fns';
 import { ptBR, enUS } from 'date-fns/locale';
 import { formatPhoneDisplay } from '@/lib/phoneUtils';
@@ -106,10 +106,10 @@ export function ActivityTimeline({ contactId, opportunityId }: ActivityTimelineP
 
   const getActivityIcon = (type: string) => {
     switch (type) {
-      case 'note': return <MessageSquare className="w-4 h-4" />;
+      case 'note': return <ChatCircle className="w-4 h-4" />;
       case 'call': return <Phone className="w-4 h-4" />;
       case 'task': return <CheckSquare className="w-4 h-4" />;
-      case 'message': return <MessageSquare className="w-4 h-4" />;
+      case 'message': return <ChatCircle className="w-4 h-4" />;
       default: return <FileText className="w-4 h-4" />;
     }
   };
@@ -162,7 +162,7 @@ export function ActivityTimeline({ contactId, opportunityId }: ActivityTimelineP
     return (
       <Card>
         <CardContent className="py-8 flex justify-center">
-          <Loader2 className="h-8 w-8 animate-spin" />
+          <SpinnerGap className="h-8 w-8 animate-spin" />
         </CardContent>
       </Card>
     );

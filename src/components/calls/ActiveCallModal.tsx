@@ -3,7 +3,7 @@ import { Device, Call } from '@twilio/voice-sdk';
 import { Dialog, DialogContent } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { Avatar, AvatarFallback } from '@/components/ui/avatar';
-import { Phone, PhoneOff, Mic, MicOff, Volume2, VolumeX } from 'lucide-react';
+import { Phone, PhoneDisconnect, Microphone, MicrophoneSlash, SpeakerHigh, SpeakerSlash } from '@phosphor-icons/react';
 import { DialPad } from './DialPad';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
@@ -430,7 +430,7 @@ export function ActiveCallModal({
                   className="h-12 w-12 rounded-full"
                   onClick={handleToggleMute}
                 >
-                  {isMuted ? <MicOff className="h-5 w-5" /> : <Mic className="h-5 w-5" />}
+                  {isMuted ? <MicrophoneSlash className="h-5 w-5" /> : <Microphone className="h-5 w-5" />}
                 </Button>
                 <Button
                   variant={isSpeaker ? 'default' : 'outline'}
@@ -438,7 +438,7 @@ export function ActiveCallModal({
                   className="h-12 w-12 rounded-full"
                   onClick={handleToggleSpeaker}
                 >
-                  {isSpeaker ? <Volume2 className="h-5 w-5" /> : <VolumeX className="h-5 w-5" />}
+                  {isSpeaker ? <SpeakerHigh className="h-5 w-5" /> : <SpeakerSlash className="h-5 w-5" />}
                 </Button>
               </>
             )}
@@ -452,7 +452,7 @@ export function ActiveCallModal({
               className="h-14 w-14 rounded-full"
               onClick={handleEndCall}
             >
-              <PhoneOff className="h-6 w-6" />
+              <PhoneDisconnect className="h-6 w-6" />
             </Button>
           )}
 

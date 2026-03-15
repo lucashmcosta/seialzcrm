@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { Dialog, DialogContent } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { Avatar, AvatarFallback } from '@/components/ui/avatar';
-import { PhoneOff, Mic, MicOff, Minimize2, Grid3X3 } from 'lucide-react';
+import { PhoneDisconnect, Microphone, MicrophoneSlash, ArrowsInSimple, GridFour } from '@phosphor-icons/react';
 import { DialPad } from './DialPad';
 import { formatPhoneDisplay } from '@/lib/phoneUtils';
 import { CallStatus } from '@/contexts/OutboundCallContext';
@@ -62,7 +62,7 @@ function DialPadToggle({
           className="h-12 w-12 rounded-full"
           onClick={onToggleMute}
         >
-          {isMuted ? <MicOff className="h-5 w-5" /> : <Mic className="h-5 w-5" />}
+          {isMuted ? <MicrophoneSlash className="h-5 w-5" /> : <Microphone className="h-5 w-5" />}
         </Button>
         <Button
           variant={showDialPad ? 'default' : 'outline'}
@@ -70,7 +70,7 @@ function DialPadToggle({
           className="h-12 w-12 rounded-full"
           onClick={() => setShowDialPad(!showDialPad)}
         >
-          <Grid3X3 className="h-5 w-5" />
+          <GridFour className="h-5 w-5" />
         </Button>
       </div>
     </div>
@@ -163,7 +163,7 @@ export function OutboundCallModal({
               className="absolute top-4 right-12"
               onClick={onMinimize}
             >
-              <Minimize2 className="h-4 w-4" />
+              <ArrowsInSimple className="h-4 w-4" />
             </Button>
           )}
 
@@ -216,7 +216,7 @@ export function OutboundCallModal({
               className="h-14 w-14 rounded-full"
               onClick={onEndCall}
             >
-              <PhoneOff className="h-6 w-6" />
+              <PhoneDisconnect className="h-6 w-6" />
             </Button>
           )}
 

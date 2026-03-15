@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
 import { SeialzLogo } from '@/components/SeialzLogo';
-import { Menu, X } from 'lucide-react';
+import { List, X } from '@phosphor-icons/react';
 
 const navLinks = [
   { label: 'O Problema', href: '#problema' },
@@ -78,7 +78,7 @@ export function LandingNavbar() {
             className="lg:hidden text-white ml-2"
             onClick={() => setMobileOpen(!mobileOpen)}
           >
-            {mobileOpen ? <X size={22} /> : <Menu size={22} />}
+            {mobileOpen ? <X size={22} /> : <List size={22} />}
           </button>
         </div>
       </div>

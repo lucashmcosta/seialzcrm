@@ -11,7 +11,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import { Badge } from '@/components/ui/badge';
 import { useToast } from '@/hooks/use-toast';
-import { Loader2, Plus, CheckCircle2, Circle } from 'lucide-react';
+import { SpinnerGap, Plus, CheckCircle, Circle } from '@phosphor-icons/react';
 import { formatDistanceToNow } from 'date-fns';
 import { ptBR, enUS } from 'date-fns/locale';
 
@@ -144,7 +144,7 @@ export function ContactTasks({ contactId, opportunityId }: ContactTasksProps) {
     return (
       <Card>
         <CardContent className="py-8 flex justify-center">
-          <Loader2 className="h-8 w-8 animate-spin" />
+          <SpinnerGap className="h-8 w-8 animate-spin" />
         </CardContent>
       </Card>
     );
@@ -227,7 +227,7 @@ export function ContactTasks({ contactId, opportunityId }: ContactTasksProps) {
                 </div>
                 <DialogFooter>
                   <Button type="submit" disabled={submitting}>
-                    {submitting && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                    {submitting && <SpinnerGap className="mr-2 h-4 w-4 animate-spin" />}
                     {t('common.save')}
                   </Button>
                 </DialogFooter>
@@ -248,7 +248,7 @@ export function ContactTasks({ contactId, opportunityId }: ContactTasksProps) {
                   className="flex-shrink-0 mt-1"
                 >
                   {task.status === 'completed' ? (
-                    <CheckCircle2 className="w-5 h-5 text-primary" />
+                    <CheckCircle className="w-5 h-5 text-primary" />
                   ) : (
                     <Circle className="w-5 h-5 text-muted-foreground" />
                   )}

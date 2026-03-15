@@ -23,7 +23,7 @@ import {
 import { useToast } from '@/hooks/use-toast';
 import { useQuery } from '@tanstack/react-query';
 import { useAI } from '@/hooks/useAI';
-import { Loader2, Send, Clock, Check, CheckCheck, AlertCircle, Bot, Sparkles, SpellCheck, Briefcase, Smile, Target, FileText } from 'lucide-react';
+import { SpinnerGap, PaperPlaneTilt, Clock, Check, Checks, WarningCircle, Robot, Sparkle, SealCheck, Briefcase, Smiley, Target, FileText } from '@phosphor-icons/react';
 import { FaceSmile } from '@untitledui/icons';
 import { formatDistanceToNow } from 'date-fns';
 import { ptBR, enUS } from 'date-fns/locale';
@@ -510,11 +510,11 @@ export function ContactMessages({ contactId, opportunityId }: ContactMessagesPro
       case 'sent':
         return <Check className="w-3 h-3 text-muted-foreground" />;
       case 'delivered':
-        return <CheckCheck className="w-3 h-3 text-muted-foreground" />;
+        return <Checks className="w-3 h-3 text-muted-foreground" />;
       case 'read':
-        return <CheckCheck className="w-3 h-3 text-blue-500" />;
+        return <Checks className="w-3 h-3 text-blue-500" />;
       case 'failed':
-        return <AlertCircle className="w-3 h-3 text-destructive" />;
+        return <WarningCircle className="w-3 h-3 text-destructive" />;
       default:
         return null;
     }
@@ -564,7 +564,7 @@ export function ContactMessages({ contactId, opportunityId }: ContactMessagesPro
   if (loading) {
     return (
       <div className="flex items-center justify-center py-8">
-        <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
+        <SpinnerGap className="h-6 w-6 animate-spin text-muted-foreground" />
       </div>
     );
   }
@@ -606,7 +606,7 @@ export function ContactMessages({ contactId, opportunityId }: ContactMessagesPro
                     {/* Agent Badge */}
                     {isOutbound && message.sender_type === 'agent' && (
                       <div className="flex items-center gap-2 mb-2">
-                        <Badge color="purple" size="sm" icon={<Bot className="w-3 h-3" />}>
+                        <Badge color="purple" size="sm" icon={<Robot className="w-3 h-3" />}>
                           {message.sender_name || 'Agente IA'}
                         </Badge>
                       </div>
@@ -725,15 +725,15 @@ export function ContactMessages({ contactId, opportunityId }: ContactMessagesPro
                   <DropdownMenuTrigger asChild>
                     <Button variant="ghost" size="icon" className="h-9 w-9" disabled={aiImproving}>
                       {aiImproving ? (
-                        <Loader2 className="w-4 h-4 animate-spin" />
+                        <SpinnerGap className="w-4 h-4 animate-spin" />
                       ) : (
-                        <Sparkles className="w-4 h-4 text-muted-foreground" />
+                        <Sparkle className="w-4 h-4 text-muted-foreground" />
                       )}
                     </Button>
                   </DropdownMenuTrigger>
                   <DropdownMenuContent align="end">
                     <DropdownMenuItem onClick={() => handleImproveText('grammar')}>
-                      <SpellCheck className="w-4 h-4 mr-2" />
+                      <SealCheck className="w-4 h-4 mr-2" />
                       {locale === 'pt-BR' ? 'Corrigir gramática' : 'Fix grammar'}
                     </DropdownMenuItem>
                     <DropdownMenuItem onClick={() => handleImproveText('professional')}>
@@ -741,7 +741,7 @@ export function ContactMessages({ contactId, opportunityId }: ContactMessagesPro
                       {locale === 'pt-BR' ? 'Tornar profissional' : 'Make professional'}
                     </DropdownMenuItem>
                     <DropdownMenuItem onClick={() => handleImproveText('friendly')}>
-                      <Smile className="w-4 h-4 mr-2" />
+                      <Smiley className="w-4 h-4 mr-2" />
                       {locale === 'pt-BR' ? 'Tornar amigável' : 'Make friendly'}
                     </DropdownMenuItem>
                     <DropdownMenuItem onClick={() => handleImproveText('persuasive')}>
@@ -759,7 +759,7 @@ export function ContactMessages({ contactId, opportunityId }: ContactMessagesPro
                 size="icon"
                 className="h-9 w-9"
               >
-                {submitting ? <Loader2 className="w-4 h-4 animate-spin" /> : <Send className="w-4 h-4" />}
+                {submitting ? <SpinnerGap className="w-4 h-4 animate-spin" /> : <PaperPlaneTilt className="w-4 h-4" />}
               </Button>
             </div>
           </div>

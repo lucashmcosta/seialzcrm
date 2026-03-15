@@ -9,7 +9,7 @@ import { supabase } from '@/integrations/supabase/client';
 import { useOrganization } from '@/hooks/useOrganization';
 import { useTranslation } from '@/lib/i18n';
 import { toast } from '@/hooks/use-toast';
-import { Loader2 } from 'lucide-react';
+import { SpinnerGap } from '@phosphor-icons/react';
 
 interface Contact {
   id: string;
@@ -304,7 +304,7 @@ export function TaskDialog({ open, onOpenChange, task, onSuccess }: TaskDialogPr
               {t('common.cancel')}
             </Button>
             <Button type="submit" disabled={submitting}>
-              {submitting && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+              {submitting && <SpinnerGap className="mr-2 h-4 w-4 animate-spin" />}
               {t('common.save')}
             </Button>
           </div>

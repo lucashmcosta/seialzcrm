@@ -6,7 +6,7 @@ import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { Calendar } from '@/components/ui/calendar';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
-import { CalendarIcon, Loader2 } from 'lucide-react';
+import { CalendarBlank, SpinnerGap } from '@phosphor-icons/react';
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { supabase } from '@/integrations/supabase/client';
@@ -114,7 +114,7 @@ export function ScheduleCallDialog({
               <Popover>
                 <PopoverTrigger asChild>
                   <Button variant="outline" className="w-full justify-start">
-                    <CalendarIcon className="mr-2 h-4 w-4" />
+                    <CalendarBlank className="mr-2 h-4 w-4" />
                     {date ? format(date, 'PPP', { locale: ptBR }) : 'Selecione a data'}
                   </Button>
                 </PopoverTrigger>
@@ -152,7 +152,7 @@ export function ScheduleCallDialog({
               Cancelar
             </Button>
             <Button type="submit" disabled={loading || !date}>
-              {loading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+              {loading && <SpinnerGap className="mr-2 h-4 w-4 animate-spin" />}
               Agendar
             </Button>
           </DialogFooter>

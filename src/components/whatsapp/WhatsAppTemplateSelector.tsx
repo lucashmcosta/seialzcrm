@@ -6,7 +6,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { ScrollArea } from '@/components/ui/scroll-area';
-import { Loader2, ArrowLeft, Check } from 'lucide-react';
+import { SpinnerGap, ArrowLeft, Check } from '@phosphor-icons/react';
 
 interface Template {
   id: string;

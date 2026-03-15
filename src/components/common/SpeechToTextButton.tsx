@@ -1,4 +1,4 @@
-import { Mic, MicOff } from 'lucide-react';
+import { Microphone, MicrophoneSlash } from '@phosphor-icons/react';
 import { Button } from '@/components/ui/button';
 import { useSpeechToText } from '@/hooks/useSpeechToText';
 import { cn } from '@/lib/utils';
@@ -79,9 +79,9 @@ export function SpeechToTextButton({
               )}
             >
               {isListening ? (
-                <MicOff className="h-5 w-5" />
+                <MicrophoneSlash className="h-5 w-5" />
               ) : (
-                <Mic className="h-5 w-5" />
+                <Microphone className="h-5 w-5" />
               )}
             </Button>
           </TooltipTrigger>

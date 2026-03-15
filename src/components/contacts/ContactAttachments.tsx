@@ -7,7 +7,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { ConfirmDialog } from '@/components/ui/confirm-dialog';
 import { useToast } from '@/hooks/use-toast';
-import { Loader2, Upload, Download, Trash2, File, FileText, Image, FileSpreadsheet } from 'lucide-react';
+import { SpinnerGap, UploadSimple, DownloadSimple, TrashSimple, File, FileText, Image, FileXls } from '@phosphor-icons/react';
 import { formatDistanceToNow } from 'date-fns';
 import { ptBR, enUS } from 'date-fns/locale';
 
@@ -177,7 +177,7 @@ export function ContactAttachments({ contactId, entityId, entityType }: ContactA
   const getFileIcon = (mimeType: string | null) => {
     if (!mimeType) return <File className="w-5 h-5" />;
     if (mimeType.startsWith('image/')) return <Image className="w-5 h-5" />;
-    if (mimeType.includes('spreadsheet') || mimeType.includes('excel')) return <FileSpreadsheet className="w-5 h-5" />;
+    if (mimeType.includes('spreadsheet') || mimeType.includes('excel')) return <FileXls className="w-5 h-5" />;
     if (mimeType.includes('text') || mimeType.includes('document')) return <FileText className="w-5 h-5" />;
     return <File className="w-5 h-5" />;
   };
@@ -195,7 +195,7 @@ export function ContactAttachments({ contactId, entityId, entityType }: ContactA
     return (
       <Card>
         <CardContent className="py-8 flex justify-center">
-          <Loader2 className="h-8 w-8 animate-spin" />
+          <SpinnerGap className="h-8 w-8 animate-spin" />
         </CardContent>
       </Card>
     );
@@ -217,10 +217,10 @@ export function ContactAttachments({ contactId, entityId, entityType }: ContactA
               />
               <Button size="sm" asChild disabled={uploading}>
                 <label htmlFor="file-upload" className="cursor-pointer">
-                  {uploading ? (
-                    <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                   {uploading ? (
+                    <SpinnerGap className="w-4 h-4 mr-2 animate-spin" />
                   ) : (
-                    <Upload className="w-4 h-4 mr-2" />
+                    <UploadSimple className="w-4 h-4 mr-2" />
                   )}
                   {t('common.upload')}
                 </label>
@@ -248,10 +248,10 @@ export function ContactAttachments({ contactId, entityId, entityType }: ContactA
                   </div>
                   <div className="flex gap-1">
                     <Button variant="ghost" size="icon" onClick={() => handleDownload(attachment)}>
-                      <Download className="w-4 h-4" />
+                      <DownloadSimple className="w-4 h-4" />
                     </Button>
                     <Button variant="ghost" size="icon" onClick={() => handleDeleteClick(attachment)}>
-                      <Trash2 className="w-4 h-4" />
+                      <TrashSimple className="w-4 h-4" />
                     </Button>
                   </div>
                 </div>

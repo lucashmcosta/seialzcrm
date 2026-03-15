@@ -7,7 +7,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Loader2 } from 'lucide-react';
+import { SpinnerGap } from '@phosphor-icons/react';
 import { toast } from 'sonner';
 import { OwnerSelector } from '@/components/common/OwnerSelector';
 
@@ -301,7 +301,7 @@ export function OpportunityDialog({ open, onOpenChange, opportunity, stages, onS
               {t('common.cancel')}
             </Button>
             <Button type="submit" disabled={submitting}>
-              {submitting && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+              {submitting && <SpinnerGap className="mr-2 h-4 w-4 animate-spin" />}
               {t('common.save')}
             </Button>
           </DialogFooter>

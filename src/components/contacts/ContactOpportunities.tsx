@@ -6,7 +6,7 @@ import { useTranslation } from '@/lib/i18n';
 import { Card } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
-import { Plus, ExternalLink } from 'lucide-react';
+import { Plus, ArrowSquareOut } from '@phosphor-icons/react';
 import { Skeleton } from '@/components/ui/skeleton';
 import { OpportunityDialog } from '@/components/opportunities/OpportunityDialog';
 
@@ -157,7 +157,7 @@ export function ContactOpportunities({ contactId }: ContactOpportunitiesProps) {
                       <h3 className="font-medium text-foreground">
                         {opportunity.title}
                       </h3>
-                      <ExternalLink className="h-3 w-3 text-muted-foreground" />
+                      <ArrowSquareOut className="h-3 w-3 text-muted-foreground" />
                     </div>
                     <div className="text-sm text-muted-foreground">
                       {(opportunity.pipeline_stages as any)?.name || 'N/A'}

@@ -12,10 +12,10 @@ import { Label } from '@/components/ui/label';
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
 import { Progress } from '@/components/ui/progress';
 import { 
-  Loader2, Sparkles, Bot, MessageSquare, Database, 
-  SlidersHorizontal, HelpCircle, Wrench, ArrowLeft, ArrowRight,
-  Check, AlertCircle
-} from 'lucide-react';
+  SpinnerGap, Sparkle, Robot, ChatCircle, Database, 
+  SlidersHorizontal, Question, Wrench, ArrowLeft, ArrowRight,
+  Check, WarningCircle
+} from '@phosphor-icons/react';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
 import { cn } from '@/lib/utils';

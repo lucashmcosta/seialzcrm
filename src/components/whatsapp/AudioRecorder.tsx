@@ -1,7 +1,7 @@
 import { useState, useRef, useEffect } from 'react';
 import { Button } from '@/components/ui/button';
 import { useToast } from '@/hooks/use-toast';
-import { Mic, Square, Send, Trash2, Loader2 } from 'lucide-react';
+import { Microphone, Square, PaperPlaneTilt, TrashSimple, SpinnerGap } from '@phosphor-icons/react';
 import OpusMediaRecorder from 'opus-media-recorder';
 
 // Worker options for opus-media-recorder

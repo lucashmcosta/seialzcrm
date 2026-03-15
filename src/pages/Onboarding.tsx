@@ -10,7 +10,7 @@ import { useTranslation } from '@/lib/i18n';
 import { supabase } from '@/integrations/supabase/client';
 import { useToast } from '@/hooks/use-toast';
 import { NameInput } from '@/components/NameInput';
-import { Sparkles, Mail, X } from 'lucide-react';
+import { Sparkle, EnvelopeSimple, X } from '@phosphor-icons/react';
 import { Badge } from '@/components/ui/badge';
 
 export default function Onboarding() {

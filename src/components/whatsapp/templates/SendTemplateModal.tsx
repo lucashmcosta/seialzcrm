@@ -22,7 +22,7 @@ import { WhatsAppPreview } from './WhatsAppPreview';
 import { useTemplates, useSendTemplate, WhatsAppTemplate } from '@/hooks/useWhatsAppTemplates';
 import { useOrganization } from '@/hooks/useOrganization';
 import { extractVariables } from '@/lib/template-validation';
-import { Loader2, Send } from 'lucide-react';
+import { SpinnerGap, PaperPlaneTilt } from '@phosphor-icons/react';
 
 interface SendTemplateModalProps {
   open: boolean;

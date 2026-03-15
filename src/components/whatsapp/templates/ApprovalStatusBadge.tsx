@@ -1,5 +1,5 @@
 import { Badge } from '@/components/ui/badge';
-import { CheckCircle, Clock, XCircle, AlertCircle } from 'lucide-react';
+import { CheckCircle, Clock, XCircle, WarningCircle } from '@phosphor-icons/react';
 import { cn } from '@/lib/utils';
 
 export type ApprovalStatus = 'approved' | 'pending' | 'rejected' | 'not_submitted' | 'draft';

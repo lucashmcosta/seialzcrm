@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { useParams, useNavigate, Link } from 'react-router-dom';
-import { Building2, Edit, Trash2, ArrowLeft, Users, Briefcase } from 'lucide-react';
+import { Buildings, PencilSimple, TrashSimple, ArrowLeft, UsersThree, Briefcase } from '@phosphor-icons/react';
 import { Layout } from '@/components/Layout';
 import { Button } from '@/components/base/buttons/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -123,7 +123,7 @@ export default function CompanyDetail() {
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-4">
               <div className="w-12 h-12 bg-primary/10 rounded-lg flex items-center justify-center">
-                <Building2 className="w-6 h-6 text-primary" />
+                <Buildings className="w-6 h-6 text-primary" />
               </div>
               <div>
                 <h1 className="text-3xl font-bold text-foreground">{company.name}</h1>
@@ -135,14 +135,14 @@ export default function CompanyDetail() {
             <div className="flex gap-2">
               <Link to={`/companies/${id}/edit`}>
                 <Button color="secondary" size="md">
-                  <Edit className="w-4 h-4 mr-2" />
+                  <PencilSimple className="w-4 h-4 mr-2" />
                   {t('common.edit')}
                 </Button>
               </Link>
               <AlertDialog>
                 <AlertDialogTrigger asChild>
                   <Button color="destructive" size="md">
-                    <Trash2 className="w-4 h-4 mr-2" />
+                    <TrashSimple className="w-4 h-4 mr-2" />
                     {t('common.delete')}
                   </Button>
                 </AlertDialogTrigger>
@@ -191,7 +191,7 @@ export default function CompanyDetail() {
           <Card>
             <CardHeader>
               <CardTitle className="flex items-center gap-2">
-                <Users className="w-5 h-5" />
+                <UsersThree className="w-5 h-5" />
                 {t('companies.linkedContacts')}
               </CardTitle>
             </CardHeader>

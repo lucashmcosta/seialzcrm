@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { ChevronDown, ChevronRight, Copy, Check, Lock, Key, Globe, ArrowLeft, ExternalLink } from "lucide-react";
+import { CaretDown, CaretRight, Copy, Check, Lock, Key, Globe, ArrowLeft, ArrowSquareOut } from "@phosphor-icons/react";
 import { Link } from "react-router-dom";
 import seialzLogo from "@/assets/seialz-logo-green.png";
 

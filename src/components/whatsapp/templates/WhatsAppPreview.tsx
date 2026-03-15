@@ -1,5 +1,5 @@
 import { cn } from '@/lib/utils';
-import { Check, Phone, ExternalLink, Copy } from 'lucide-react';
+import { Check, Phone, ArrowSquareOut, Copy } from '@phosphor-icons/react';
 
 interface WhatsAppPreviewProps {
   body: string;

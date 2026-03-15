@@ -6,7 +6,7 @@ import { Textarea } from '@/components/ui/textarea';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { useToast } from '@/hooks/use-toast';
-import { Loader2, Send, Clock, Check, CheckCheck, AlertCircle, Image, FileText, Volume2, Video } from 'lucide-react';
+import { SpinnerGap, PaperPlaneTilt, Clock, Check, Checks, WarningCircle, Image, FileText, SpeakerHigh, VideoCamera } from '@phosphor-icons/react';
 import { formatDistanceToNow } from 'date-fns';
 import { ptBR, enUS } from 'date-fns/locale';
 import { WhatsAppTemplateSelector } from './WhatsAppTemplateSelector';

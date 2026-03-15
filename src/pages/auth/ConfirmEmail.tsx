@@ -1,7 +1,7 @@
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-import { Mail, ArrowLeft } from 'lucide-react';
+import { EnvelopeSimple, ArrowLeft } from '@phosphor-icons/react';
 
 export default function ConfirmEmail() {
   const navigate = useNavigate();
@@ -13,7 +13,7 @@ export default function ConfirmEmail() {
       <Card className="w-full max-w-md">
         <CardHeader className="text-center">
           <div className="mx-auto mb-4 w-16 h-16 bg-primary/10 rounded-full flex items-center justify-center">
-            <Mail className="w-8 h-8 text-primary" />
+            <EnvelopeSimple className="w-8 h-8 text-primary" />
           </div>
           <CardTitle className="text-2xl">Verifique seu email</CardTitle>
           <CardDescription>

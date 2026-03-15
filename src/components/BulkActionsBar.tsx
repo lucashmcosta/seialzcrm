@@ -5,7 +5,7 @@ import { ConfirmDialog } from '@/components/ui/confirm-dialog';
 import { supabase } from '@/integrations/supabase/client';
 import { useTranslation } from '@/lib/i18n';
 import { toast } from '@/hooks/use-toast';
-import { X, User, Ban, Trash2 } from 'lucide-react';
+import { X, User, Prohibit, TrashSimple } from '@phosphor-icons/react';
 
 interface User {
   id: string;
@@ -141,7 +141,7 @@ export function BulkActionsBar({
                 onClick={handleMarkDoNotContact}
                 disabled={processing}
               >
-                <Ban className="h-4 w-4 mr-2" />
+                <Prohibit className="h-4 w-4 mr-2" />
                 {t('contacts.doNotContact')}
               </Button>
             )}
@@ -153,7 +153,7 @@ export function BulkActionsBar({
                 onClick={() => setConfirmOpen(true)}
                 disabled={processing}
               >
-                <Trash2 className="h-4 w-4 mr-2" />
+                <TrashSimple className="h-4 w-4 mr-2" />
                 {t('common.delete')}
               </Button>
             )}

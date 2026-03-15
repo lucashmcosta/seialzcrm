@@ -2,7 +2,7 @@ import { useEffect, useState, useRef } from 'react';
 import { Dialog, DialogContent } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { Avatar, AvatarFallback } from '@/components/ui/avatar';
-import { Phone, PhoneOff, Mic, MicOff, User, Minimize2, Grid3X3 } from 'lucide-react';
+import { Phone, PhoneDisconnect, Microphone, MicrophoneSlash, User, ArrowsInSimple, GridFour } from '@phosphor-icons/react';
 import { Call } from '@twilio/voice-sdk';
 import { formatPhoneDisplay } from '@/lib/phoneUtils';
 import { DialPad } from './DialPad';
@@ -141,7 +141,7 @@ export function IncomingCallModal({
               className="absolute top-2 right-10"
               onClick={onMinimize}
             >
-              <Minimize2 className="h-4 w-4" />
+              <ArrowsInSimple className="h-4 w-4" />
             </Button>
           )}
 
@@ -204,7 +204,7 @@ export function IncomingCallModal({
                   className="h-14 w-14 rounded-full"
                   onClick={onReject}
                 >
-                  <PhoneOff className="h-6 w-6" />
+                  <PhoneDisconnect className="h-6 w-6" />
                 </Button>
                 <Button
                   size="lg"
@@ -222,7 +222,7 @@ export function IncomingCallModal({
                   className="h-14 w-14 rounded-full"
                   onClick={onToggleMute}
                 >
-                  {isMuted ? <MicOff className="h-6 w-6" /> : <Mic className="h-6 w-6" />}
+                  {isMuted ? <MicrophoneSlash className="h-6 w-6" /> : <Microphone className="h-6 w-6" />}
                 </Button>
                 <Button
                   variant={showDialPad ? 'default' : 'outline'}
@@ -230,7 +230,7 @@ export function IncomingCallModal({
                   className="h-14 w-14 rounded-full"
                   onClick={() => setShowDialPad(!showDialPad)}
                 >
-                  <Grid3X3 className="h-6 w-6" />
+                  <GridFour className="h-6 w-6" />
                 </Button>
                 <Button
                   variant="destructive"
@@ -238,7 +238,7 @@ export function IncomingCallModal({
                   className="h-14 w-14 rounded-full"
                   onClick={onEndCall}
                 >
-                  <PhoneOff className="h-6 w-6" />
+                  <PhoneDisconnect className="h-6 w-6" />
                 </Button>
               </>
             )}

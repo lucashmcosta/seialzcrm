@@ -1,6 +1,6 @@
 import { useState, useRef } from 'react';
 import { Button } from '@/components/ui/button';
-import { Play, Pause, Download, Volume2 } from 'lucide-react';
+import { Play, Pause, DownloadSimple, SpeakerHigh } from '@phosphor-icons/react';
 
 interface CallRecordingPlayerProps {
   recordingUrl: string;
@@ -45,7 +45,7 @@ export function CallRecordingPlayer({ recordingUrl, duration }: CallRecordingPla
         {isPlaying ? <Pause className="h-4 w-4" /> : <Play className="h-4 w-4" />}
       </Button>
       
-      <Volume2 className="h-4 w-4 text-muted-foreground" />
+      <SpeakerHigh className="h-4 w-4 text-muted-foreground" />
       
       <div className="flex-1 min-w-0">
         <div className="h-1 bg-muted rounded-full overflow-hidden">
@@ -64,7 +64,7 @@ export function CallRecordingPlayer({ recordingUrl, duration }: CallRecordingPla
       
       <Button variant="ghost" size="icon" className="h-8 w-8" asChild>
         <a href={recordingUrl} download target="_blank" rel="noopener noreferrer">
-          <Download className="h-4 w-4" />
+          <DownloadSimple className="h-4 w-4" />
         </a>
       </Button>
     </div>

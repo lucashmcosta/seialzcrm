@@ -19,7 +19,7 @@ import { supabase } from '@/integrations/supabase/client';
 import { useOrganization } from '@/hooks/useOrganization';
 import { useTranslation } from '@/lib/i18n';
 import { toast } from '@/hooks/use-toast';
-import { BookMarked, Plus, Trash2 } from 'lucide-react';
+import { BookmarkSimple, Plus, TrashSimple } from '@phosphor-icons/react';
 
 interface SavedView {
   id: string;
@@ -118,7 +118,7 @@ export function SavedViewsDropdown({
       <DropdownMenu>
         <DropdownMenuTrigger asChild>
           <Button variant="outline" size="sm">
-            <BookMarked className="h-4 w-4 mr-2" />
+            <BookmarkSimple className="h-4 w-4 mr-2" />
             {t('savedViews.save')}
           </Button>
         </DropdownMenuTrigger>
@@ -144,7 +144,7 @@ export function SavedViewsDropdown({
                   handleDeleteView(view.id);
                 }}
               >
-                <Trash2 className="h-3 w-3" />
+                <TrashSimple className="h-3 w-3" />
               </Button>
             </DropdownMenuItem>
           ))}
