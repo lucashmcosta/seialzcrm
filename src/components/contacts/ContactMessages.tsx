@@ -725,9 +725,9 @@ export function ContactMessages({ contactId, opportunityId }: ContactMessagesPro
                   <DropdownMenuTrigger asChild>
                     <Button variant="ghost" size="icon" className="h-9 w-9" disabled={aiImproving}>
                       {aiImproving ? (
-                        <Loader2 className="w-4 h-4 animate-spin" />
+                        <SpinnerGap className="w-4 h-4 animate-spin" />
                       ) : (
-                        <Sparkles className="w-4 h-4 text-muted-foreground" />
+                        <Sparkle className="w-4 h-4 text-muted-foreground" />
                       )}
                     </Button>
                   </DropdownMenuTrigger>
