@@ -295,7 +295,7 @@ export default function OpportunityDetail() {
               {permissions.canEditOpportunities && (
                 <>
                   <Button onClick={() => setEditDialogOpen(true)}>
-                    <Edit className="h-4 w-4 mr-2" />
+                    <PencilSimple className="h-4 w-4 mr-2" />
                     {t('common.edit')}
                   </Button>
                   {opportunity.status === 'open' && (
