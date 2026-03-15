@@ -15,9 +15,9 @@ import { Slider } from '@/components/ui/slider';
 import { Checkbox } from '@/components/ui/checkbox';
 import { 
   SpinnerGap, ArrowsClockwise, ArrowLeft, ArrowRight, Check, Sparkle, 
-  ChatCircle, Target, FileText, ChatCirclePlus, ClockCounterClockwise, 
+  ChatCircle, Target, FileText, ChatCircle as ChatCirclePlusIcon, ClockCounterClockwise, 
   TrashSimple, PaperPlaneTilt, Robot, User, ThumbsUp, ThumbsDown, Flask, Wrench,
-  SlidersHorizontal, CheckSquare, Database, ChatCircleWarning,
+  SlidersHorizontal, CheckSquare, Database, WarningCircle as ChatCircleWarningIcon,
   Smiley, Briefcase, Shield, WarningCircle
 } from '@phosphor-icons/react';
 import { supabase } from '@/integrations/supabase/client';
