@@ -257,7 +257,7 @@ export default function ContactDetail() {
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   {contact.email && (
                     <div className="flex items-center gap-3">
-                      <Mail className="h-4 w-4 text-muted-foreground" />
+                      <EnvelopeSimple className="h-4 w-4 text-muted-foreground" />
                       <div>
                         <div className="text-sm text-muted-foreground">{t('contacts.email')}</div>
                         <div className="text-foreground">{contact.email}</div>
