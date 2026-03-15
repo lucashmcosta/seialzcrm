@@ -127,7 +127,7 @@ export function WhatsAppIntegrationStatus({ onReconfigure }: WhatsAppIntegration
     return (
       <Card>
         <CardContent className="py-8 flex items-center justify-center">
-          <RefreshCw className="h-5 w-5 animate-spin text-muted-foreground" />
+          <ArrowsClockwise className="h-5 w-5 animate-spin text-muted-foreground" />
         </CardContent>
       </Card>
     );
