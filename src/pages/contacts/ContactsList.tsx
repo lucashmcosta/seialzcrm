@@ -485,7 +485,7 @@ export default function ContactsList() {
                       <TableRowActionsDropdown>
                         <TableRowAction
                           label={t('common.edit')}
-                          icon={<Edit01 className="w-4 h-4" />}
+                          icon={<PencilSimple size={16} weight="light" />}
                           onAction={() => navigate(`/contacts/${contact.id}/edit`)}
                         />
                         <TableRowAction
