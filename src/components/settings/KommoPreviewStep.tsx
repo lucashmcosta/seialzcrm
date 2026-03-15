@@ -26,6 +26,7 @@ export function KommoPreviewStep({
   config,
   onConfigChange,
   previewMutation,
+  selectedPipelineNames,
 }: KommoPreviewStepProps) {
   useEffect(() => {
     if (credentials && !previewMutation.data && !previewMutation.isPending) {
