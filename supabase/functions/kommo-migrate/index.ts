@@ -290,12 +290,12 @@ Deno.serve(async (req) => {
               let compId: string | null = null;
               const lc = ct._embedded?.companies?.[0];
               if (lc) compId = coMap[String(lc.id)] || null;
-              const owner = ct.responsible_user_id ? uMap[String(ct.responsible_user_id)] || null : null;
+              const owner = ct.responsible_user_id ? (uMap[String(ct.responsible_user_id)] || defUser) : defUser;
               if (ex) {
                 if (dupMode === "skip") { sc++; cMap[String(ct.id)] = ex.id; continue; }
-                if (dupMode === "update") { await sb.from("contacts").update({ full_name: ct.name, email, phone, source_external_id: `kommo_${ct.id}`, company_id: compId || undefined, owner_user_id: owner || undefined }).eq("id", ex.id); ic++; cIds.push(ex.id); cMap[String(ct.id)] = ex.id; continue; }
+                if (dupMode === "update") { await sb.from("contacts").update({ full_name: ct.name, email, phone, source_external_id: `kommo_${ct.id}`, company_id: compId || undefined, owner_user_id: owner || undefined, updated_at: kommoDate(ct.updated_at) }).eq("id", ex.id); ic++; cIds.push(ex.id); cMap[String(ct.id)] = ex.id; continue; }
               }
-              const { data: n, error: ie } = await sb.from("contacts").insert({ organization_id: orgId, full_name: ct.name || "Sem nome", email, phone, source: "kommo", source_external_id: `kommo_${ct.id}`, company_id: compId, owner_user_id: owner }).select("id").single();
+              const { data: n, error: ie } = await sb.from("contacts").insert({ organization_id: orgId, full_name: ct.name || "Sem nome", email, phone, source: "kommo", source_external_id: `kommo_${ct.id}`, company_id: compId, owner_user_id: owner || null, created_at: kommoDate(ct.created_at), updated_at: kommoDate(ct.updated_at) }).select("id").single();
               if (ie) errs.push({ type: "contact", kommo_id: ct.id, error: ie.message });
               else { ic++; cIds.push(n.id); cMap[String(ct.id)] = n.id; }
             } catch (e: any) { errs.push({ type: "contact", kommo_id: ct.id, error: e.message }); }
