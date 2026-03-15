@@ -464,7 +464,7 @@ export default function AdminOrganizationDetail() {
                   variant="destructive" 
                   className="w-full justify-start"
                 >
-                  <Trash2 className="h-4 w-4 mr-2" />
+                  <TrashSimple size={16} className="mr-2" />
                   Deletar Conta Permanentemente
                 </Button>
               </CardContent>

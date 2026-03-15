@@ -305,7 +305,7 @@ export default function AdminSecurity() {
                             size="sm"
                             onClick={() => handleUnlockAdmin(admin.id)}
                           >
-                            <Unlock className="h-4 w-4 mr-2" />
+                            <LockOpen size={16} className="mr-2" />
                             Desbloquear
                           </Button>
                         </TableCell>

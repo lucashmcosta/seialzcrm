@@ -165,9 +165,9 @@ export default function AdminCoupons() {
                         onClick={() => handleToggleActive(coupon)}
                       >
                         {coupon.is_active ? (
-                          <PowerOff className="h-4 w-4" />
+                          <Power size={16} />
                         ) : (
-                          <Power className="h-4 w-4" />
+                          <Power size={16} weight="bold" />
                         )}
                       </Button>
                     </TableCell>

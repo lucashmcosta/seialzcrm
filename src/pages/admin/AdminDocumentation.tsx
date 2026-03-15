@@ -116,7 +116,7 @@ export default function AdminDocumentation() {
                     <Button
                       onClick={() => navigate(`/admin/documentation/${module.key}`)}
                     >
-                      <Edit className="h-4 w-4 mr-2" />
+                      <PencilSimple size={16} className="mr-2" />
                       {doc ? 'Editar' : 'Criar'}
                     </Button>
                   </div>

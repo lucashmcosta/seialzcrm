@@ -101,7 +101,7 @@ export default function AdminDocumentationEdit() {
           </div>
           <div className="flex gap-2">
             <Button variant="outline" onClick={() => handleSave(false)} disabled={loading}>
-              <Save className="h-4 w-4 mr-2" />
+              <FloppyDisk size={16} className="mr-2" />
               Salvar Rascunho
             </Button>
             <Button onClick={() => handleSave(true)} disabled={loading}>

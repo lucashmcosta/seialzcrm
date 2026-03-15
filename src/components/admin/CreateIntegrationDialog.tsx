@@ -133,7 +133,7 @@ export function CreateIntegrationDialog({ open, onOpenChange }: CreateIntegratio
                     size="icon"
                     onClick={() => setFormData({ ...formData, logo_url: '' })}
                   >
-                    <Trash2 className="w-4 h-4 text-destructive" />
+                    <TrashSimple size={16} className="text-destructive" />
                   </Button>
                 )}
               </div>

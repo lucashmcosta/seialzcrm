@@ -6,7 +6,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { useToast } from '@/hooks/use-toast';
-import { Shield, Copy } from 'lucide-react';
+import { Shield, Copy } from '@phosphor-icons/react';
 
 export default function AdminMFASetup() {
   const [mfaCode, setMfaCode] = useState('');

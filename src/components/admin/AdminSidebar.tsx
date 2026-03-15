@@ -3,8 +3,8 @@ import { cn } from '@/lib/utils';
 import { SquaresFour, Buildings, FileText, Shield, Users, Flag, UserCheck, CreditCard, Ticket, Plug, BookOpen } from '@phosphor-icons/react';
 
 const menuItems = [
-  { icon: LayoutDashboard, label: 'Dashboard', href: '/admin' },
-  { icon: Building2, label: 'Contas', href: '/admin/organizations' },
+  { icon: SquaresFour, label: 'Dashboard', href: '/admin' },
+  { icon: Buildings, label: 'Contas', href: '/admin/organizations' },
   { icon: CreditCard, label: 'Planos', href: '/admin/plans' },
   { icon: Ticket, label: 'Cupons', href: '/admin/coupons' },
   { icon: Plug, label: 'Integrações', href: '/admin/integrations' },

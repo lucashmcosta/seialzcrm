@@ -195,12 +195,12 @@ export default function AdminPlans() {
                       >
                         {plan.is_active ? (
                           <>
-                            <PowerOff className="mr-2 h-3 w-3" />
+                            <Power size={12} className="mr-2" />
                             Desativar
                           </>
                         ) : (
                           <>
-                            <Power className="mr-2 h-3 w-3" />
+                            <Power size={12} className="mr-2" />
                             Ativar
                           </>
                         )}

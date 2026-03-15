@@ -291,7 +291,7 @@ export function LogoEditorDialog({
                 size="sm"
                 onClick={handleRemoveLogo}
               >
-                <Trash2 className="w-4 h-4 mr-2" />
+                <TrashSimple size={16} className="mr-2" />
                 Remover Logo
               </Button>
             </div>

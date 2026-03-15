@@ -88,7 +88,7 @@ export function IntegrationCard({ integration }: IntegrationCardProps) {
               size="icon"
               onClick={() => window.open(integration.documentation_url!, '_blank')}
             >
-              <ExternalLink className="h-4 w-4" />
+              <ArrowSquareOut size={16} />
             </Button>
           )}
         </div>

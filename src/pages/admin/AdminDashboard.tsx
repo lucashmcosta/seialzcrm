@@ -114,17 +114,17 @@ export default function AdminDashboard() {
     {
       title: 'Total de Contas',
       value: kpis.totalOrgs,
-      icon: Building2,
+      icon: Buildings,
     },
     {
       title: 'Contas Ativas',
       value: kpis.activeOrgs,
-      icon: Activity,
+      icon: Pulse,
     },
     {
       title: 'Contas Suspensas',
       value: kpis.suspendedOrgs,
-      icon: Ban,
+      icon: Prohibit,
     },
     {
       title: 'Total de Usuários',
@@ -134,7 +134,7 @@ export default function AdminDashboard() {
     {
       title: 'MRR',
       value: `R$ ${kpis.mrr.toLocaleString('pt-BR')}`,
-      icon: DollarSign,
+      icon: CurrencyDollar,
     },
   ];
 

@@ -194,7 +194,7 @@ export default function AdminUsers() {
                       <DropdownMenu>
                         <DropdownMenuTrigger asChild>
                           <Button variant="ghost" size="icon">
-                            <MoreHorizontal className="h-4 w-4" />
+                            <DotsThree size={16} />
                           </Button>
                         </DropdownMenuTrigger>
                         <DropdownMenuContent align="end">
