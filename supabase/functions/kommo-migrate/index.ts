@@ -57,6 +57,21 @@ function normPhone(p: string | undefined): string | null {
   return null;
 }
 
+// Convert user_mappings array format [{kommo_user_id, seialz_user_id}] to Record<string, string>
+function convertUserMappings(input: any): Record<string, string> {
+  if (!input) return {};
+  // Already a Record/object (not array)
+  if (!Array.isArray(input)) return input as Record<string, string>;
+  // Convert array of {kommo_user_id, seialz_user_id} to Record
+  const result: Record<string, string> = {};
+  for (const m of input) {
+    if (m.kommo_user_id && m.seialz_user_id) {
+      result[String(m.kommo_user_id)] = m.seialz_user_id;
+    }
+  }
+  return result;
+}
+
 const PHASES: Phase[] = ["users","pipelines","custom_fields","companies","contacts","leads","tasks","notes_contacts","notes_leads","events"];
 
 function nextPhase(cur: Phase, cfg: ImportConfig): Phase {
