@@ -351,12 +351,21 @@ Deno.serve(async (req) => {
               let ctId: string | null = null, opId: string | null = null;
               if (tk.entity_type === "contacts" && tk.entity_id) ctId = cMap[String(tk.entity_id)] || null;
               else if (tk.entity_type === "leads" && tk.entity_id) { const { data: o } = await sb.from("opportunities").select("id").eq("organization_id", orgId).eq("source_external_id", `kommo_${tk.entity_id}`).is("deleted_at", null).maybeSingle(); opId = o?.id || null; }
-              const auid = tk.responsible_user_id ? (uMap[String(tk.responsible_user_id)] || defUser) : defUser;
-              if (!auid) { errs.push({ type: "task", id: tk.id, error: "No fallback user" }); continue; }
+              // Bug fix #1: fallback robusto — se defUser vazio, buscar primeiro usuário ativo da org
+              let auid = tk.responsible_user_id ? (uMap[String(tk.responsible_user_id)] || defUser) : defUser;
+              if (!auid) {
+                const { data: fallbackUser } = await sb.from("user_organizations").select("user_id").eq("organization_id", orgId).eq("is_active", true).limit(1).single();
+                if (fallbackUser) { defUser = fallbackUser.user_id; auid = defUser; c.default_user_id = defUser; }
+              }
+              if (!auid) {
+                // Último recurso: usar created_by_user_id do log de importação
+                if (l.created_by_user_id) { defUser = l.created_by_user_id; auid = defUser; c.default_user_id = defUser; }
+                else { errs.push({ type: "task", kommo_id: tk.id, error: "Nenhum usuário disponível na organização" }); continue; }
+              }
               const due = tk.complete_till ? new Date(tk.complete_till * 1000).toISOString() : null;
               const { data: n, error: ie } = await sb.from("tasks").insert({ organization_id: orgId, title: tk.text || "Tarefa Kommo", description: `Importado da Kommo (ID: ${tk.id})`, status: tk.is_completed ? "completed" : "pending", due_at: due, contact_id: ctId, opportunity_id: opId, assigned_user_id: auid, created_by_user_id: auid, source_external_id: sei }).select("id").single();
-              if (!ie && n) { iT++; tIds.push(n.id); } else if (ie) errs.push({ type: "task", id: tk.id, error: ie.message });
-            } catch (e: any) { errs.push({ type: "task", id: tk.id, error: e.message }); }
+              if (!ie && n) { iT++; tIds.push(n.id); } else if (ie) errs.push({ type: "task", kommo_id: tk.id, error: ie.message });
+            } catch (e: any) { errs.push({ type: "task", kommo_id: tk.id, error: e.message }); }
           }
           if (items.length < PS) { c.tasks_complete = true; c.phase = nextPhase("tasks", cfg); }
           else c.tasks_page++;
