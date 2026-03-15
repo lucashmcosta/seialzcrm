@@ -464,7 +464,7 @@ export function KnowledgeBaseSettings() {
               </Button>
               {items.filter((i) => (i.status === 'processing' || i.status === 'error') && i.metadata?.original_content).length > 0 && (
                 <Button variant="outline" onClick={handleReprocessAll} title="Reprocessar itens pendentes">
-                  <RefreshCw className="mr-2 h-4 w-4" />
+                  <ArrowsClockwise className="mr-2 h-4 w-4" />
                   Reprocessar ({items.filter((i) => (i.status === 'processing' || i.status === 'error') && i.metadata?.original_content).length})
                 </Button>
               )}
