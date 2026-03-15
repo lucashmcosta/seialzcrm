@@ -455,7 +455,7 @@ export default function AdminOrganizationDetail() {
                 )}
                 
                 <Button onClick={handleSendEmail} variant="outline" className="w-full justify-start">
-                  <Mail className="h-4 w-4 mr-2" />
+                  <EnvelopeSimple size={16} className="mr-2" />
                   Enviar Email para Conta
                 </Button>
 
