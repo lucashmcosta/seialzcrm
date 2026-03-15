@@ -356,7 +356,7 @@ export function UsersSettings() {
             </DropdownMenuTrigger>
             <DropdownMenuContent align="end" className="w-56">
               <DropdownMenuItem onClick={() => setInviteDialogOpen(true)}>
-                <Mail className="w-4 h-4 mr-2" />
+                <EnvelopeSimple className="w-4 h-4 mr-2" />
                 Convidar por email
               </DropdownMenuItem>
               <DropdownMenuItem onClick={() => setCreateDialogOpen(true)}>
