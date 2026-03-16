@@ -60,7 +60,7 @@ export function SeialzSidebar({ groups, userProfile, onSignOut, locale = 'pt-BR'
           onClick={() => { setCollapsed(!collapsed); setTooltip(null); }}
         >
           <div className="w-[60px] h-14 flex items-center justify-center flex-shrink-0">
-            <div className="w-7 h-7 bg-background rounded-md flex items-center justify-center border border-[hsl(var(--sz-green-border))]">
+            <div className={cn("bg-background rounded-md flex items-center justify-center border border-[hsl(var(--sz-green-border))]", collapsed ? "w-8 h-8" : "w-7 h-7")}>
               <span className="font-display text-[13px] text-primary">
                 <span className="opacity-30 text-[10px]">[</span>s<span className="opacity-30 text-[10px]">]</span>
               </span>
