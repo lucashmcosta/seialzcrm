@@ -6,7 +6,7 @@ import { AnimatedCounter } from '@/components/motion/AnimatedCounter';
 import { toast } from '@/hooks/use-toast';
 import {
   Target, ArrowsClockwise, ChartLineUp, PhoneCall, Robot, ChatCircleText,
-  UsersThree, ChartBar, UserCheck, MagnifyingGlass, GearSix, Lightning, ArrowRight,
+  UsersThree, ChartBar, Lightning, GearSix, UserCheck, ArrowRight,
 } from '@phosphor-icons/react';
 
 /* ── Animation helpers ── */
@@ -53,22 +53,28 @@ export default function LandingPage() {
         <div className="max-w-5xl mx-auto px-6 text-center relative z-10">
           <motion.div initial="hidden" animate="visible" variants={stagger}>
             <motion.div variants={fadeUp}>
-              <SectionTag>// Sales as a Service</SectionTag>
+              <SectionTag>// sales ops nativo</SectionTag>
             </motion.div>
             <motion.h1
               variants={fadeUp}
               className="font-['Michroma'] text-4xl md:text-6xl lg:text-7xl leading-tight tracking-tight mb-6"
             >
-              Sua empresa vende.{' '}
-              <span className="text-[hsl(150,100%,50%)]">A gente faz vender mais.</span>
+              Marketing e vendas{' '}
+              <span className="text-[hsl(150,100%,50%)]">nunca deveriam ter sido separados.</span>
             </motion.h1>
             <motion.p
               variants={fadeUp}
-              className="text-lg md:text-xl text-[hsl(0,0%,60%)] max-w-3xl mx-auto mb-10 font-['Outfit'] leading-relaxed"
+              className="text-lg md:text-xl text-[hsl(0,0%,60%)] max-w-3xl mx-auto mb-4 font-['Outfit'] leading-relaxed"
             >
-              Marketing, vendas e operação comercial numa única plataforma com IA. Dados de marketing
-              otimizam vendas. Dados de vendas otimizam marketing.{' '}
-              <span className="text-white font-medium">Um loop que só cresce.</span>
+              O Seialz é a plataforma onde os dados de marketing e vendas nascem conectados.
+              Não integrados por API. Não colados por planilha.{' '}
+              <span className="text-white font-medium">Juntos desde o primeiro clique.</span>
+            </motion.p>
+            <motion.p
+              variants={fadeUp}
+              className="text-base text-[hsl(0,0%,50%)] max-w-2xl mx-auto mb-10 font-['Outfit'] leading-relaxed"
+            >
+              Pra empresas de serviço que vendem por atendimento direto — e querem saber exatamente quanto cada real investido retorna.
             </motion.p>
             <motion.div variants={fadeUp} className="flex flex-col sm:flex-row items-center justify-center gap-4">
               <a
@@ -79,12 +85,35 @@ export default function LandingPage() {
               </a>
             </motion.div>
             <motion.p variants={fadeUp} className="mt-4 text-sm text-[hsl(0,0%,40%)] font-['Outfit']">
-              Análise gratuita do seu funil · 30 minutos · Sem compromisso
+              Análise do seu funil · 30 min · Sem compromisso
             </motion.p>
           </motion.div>
         </div>
-        {/* Radial gradient overlay */}
         <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_center,hsl(150,100%,50%,0.06)_0%,transparent_70%)] pointer-events-none" />
+      </section>
+
+      {/* ─── BARRA DE PROVA ─── */}
+      <section className="py-16 md:py-20 bg-[hsl(240,10%,3%)] border-y border-[hsl(150,100%,50%)]/10">
+        <div className="max-w-5xl mx-auto px-6">
+          <motion.div initial="hidden" whileInView="visible" viewport={{ once: true, amount: 0.3 }} variants={stagger}>
+            <motion.div variants={fadeUp} className="grid grid-cols-2 md:grid-cols-4 gap-8">
+              {[
+                { value: '8.7x', label: 'redução de CPL\nCTWA vs Lead Form' },
+                { value: '$250k', label: 'receita mensal\ngerida na plataforma' },
+                { value: '15k+', label: 'leads reativados\npor AI agent' },
+                { value: '24', label: 'pessoas operando\nno sistema' },
+              ].map((s) => (
+                <div key={s.label} className="text-center">
+                  <span className="text-3xl md:text-4xl font-['Michroma'] text-[hsl(150,100%,50%)]">{s.value}</span>
+                  <p className="text-xs text-[hsl(0,0%,50%)] mt-3 font-['Outfit'] whitespace-pre-line">{s.label}</p>
+                </div>
+              ))}
+            </motion.div>
+            <motion.p variants={fadeUp} className="text-center text-xs text-[hsl(0,0%,35%)] font-['Outfit'] mt-8">
+              Dados reais de operação própria — não de cliente hipotético.
+            </motion.p>
+          </motion.div>
+        </div>
       </section>
 
       {/* ─── O PROBLEMA ─── */}
@@ -96,123 +125,91 @@ export default function LandingPage() {
               Marketing culpa vendas. Vendas culpa marketing.{' '}
               <span className="text-[hsl(150,100%,50%)]">Ninguém olha pro que importa: receita.</span>
             </motion.h2>
-            <motion.div variants={fadeUp} className="space-y-6 text-[hsl(0,0%,60%)] font-['Outfit'] text-lg leading-relaxed">
+            <motion.div variants={fadeUp} className="space-y-6 text-[hsl(0,0%,60%)] font-['Outfit'] text-lg leading-relaxed mb-12">
               <p>
                 Sua empresa tem um gestor de tráfego que mede CPL. Um time comercial que mede conversão.
-                E uma planilha que tenta juntar os dois. O resultado? Marketing diz que entregou 500 leads.
-                Vendas diz que os leads são ruins. E você não sabe quem tem razão — porque os dados não se conectam.
+                E uma planilha que tenta juntar os dois.
               </p>
-              <p className="text-white font-medium">
-                O problema não é falta de leads nem falta de vendedores. É falta de uma operação integrada
-                onde marketing e vendas são um sistema só.
+              <p>
+                Marketing diz que entregou 500 leads. Vendas diz que os leads são ruins. E você não sabe quem tem razão — porque os dados não se conectam.
               </p>
             </motion.div>
+
+            {/* Versus comparison */}
+            <motion.div variants={fadeUp} className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-12">
+              <div className="bg-[hsl(0,60%,5%)] border border-[hsl(0,70%,20%)] rounded-2xl p-7">
+                <span className="text-[10px] tracking-[3px] uppercase text-[hsl(0,80%,60%)] font-['JetBrains_Mono'] mb-4 block">
+                  Integrado por API
+                </span>
+                <div className="space-y-2 text-sm text-[hsl(0,0%,50%)] font-['Outfit']">
+                  <p>Meta Ads → Zapier → CRM</p>
+                  <p>Dado chega atrasado</p>
+                  <p>Atribuição quebrada</p>
+                  <p>Ninguém confia no número</p>
+                  <p>Gestor de tráfego num canto</p>
+                  <p>CRM genérico no outro</p>
+                  <p>"Integração" que sempre quebra</p>
+                </div>
+              </div>
+              <div className="bg-[hsl(150,50%,4%)] border border-[hsl(150,60%,18%)] rounded-2xl p-7">
+                <span className="text-[10px] tracking-[3px] uppercase text-[hsl(150,100%,50%)] font-['JetBrains_Mono'] mb-4 block">
+                  Nativo no Seialz
+                </span>
+                <div className="space-y-2 text-sm text-[hsl(0,0%,50%)] font-['Outfit']">
+                  <p>Um sistema desde o clique</p>
+                  <p>Dado em tempo real</p>
+                  <p>Attribution até a receita</p>
+                  <p>Número que você confia</p>
+                  <p>Marketing e vendas = mesma tela</p>
+                  <p>Uma fonte de verdade</p>
+                  <p>Zero integração pra quebrar</p>
+                </div>
+              </div>
+            </motion.div>
+
+            <motion.p variants={fadeUp} className="text-white font-medium font-['Outfit'] text-lg leading-relaxed">
+              O problema não é falta de leads nem falta de vendedores. É que marketing e vendas foram construídos como dois mundos separados. O Seialz nasceu pra ser um só.
+            </motion.p>
           </motion.div>
         </div>
       </section>
 
-      {/* ─── A SOLUÇÃO ─── */}
+      {/* ─── A SOLUÇÃO — 3 PILARES ─── */}
       <section id="solucao" className="py-24 md:py-32 auth-grid-pattern relative">
         <div className="max-w-5xl mx-auto px-6">
           <motion.div initial="hidden" whileInView="visible" viewport={{ once: true, amount: 0.2 }} variants={stagger}>
             <motion.div variants={fadeUp}><SectionTag>// A Solução</SectionTag></motion.div>
             <motion.h2 variants={fadeUp} className="font-['Michroma'] text-2xl md:text-4xl leading-tight mb-6">
-              Sales as a Service —{' '}
-              <span className="text-[hsl(150,100%,50%)]">marketing e vendas conectados por IA</span> numa assinatura.
+              Não é só software. Não é só consultoria.{' '}
+              <span className="text-[hsl(150,100%,50%)]">É a operação inteira.</span>
             </motion.h2>
             <motion.p variants={fadeUp} className="text-[hsl(0,0%,60%)] font-['Outfit'] text-lg leading-relaxed mb-12 max-w-4xl">
-              O Seialz elimina a separação entre marketing e vendas. Uma plataforma, um funil, uma fonte de verdade.
-              Os dados de vendas voltam pro marketing pra otimizar campanhas. Os dados de marketing alimentam vendas
-              com contexto completo. Sem gestor de tráfego isolado. Sem CRM desconectado. Sem planilha no meio.
+              Sales Ops de verdade precisa de tecnologia que funcione, processo que o time siga, e alguém olhando os números. O Seialz entrega os três.
             </motion.p>
 
-            {/* Loop visual */}
-            <motion.div variants={fadeUp} className="mb-16">
-              <h3 className="font-['Michroma'] text-lg text-[hsl(150,100%,50%)] mb-8 text-center">O loop que muda tudo</h3>
-              <div className="grid grid-cols-1 md:grid-cols-5 gap-4">
-                {[
-                  { step: '01', text: 'Marketing roda campanha → lead entra no Seialz automaticamente' },
-                  { step: '02', text: 'Vendas trabalha o lead → cada interação é rastreada' },
-                  { step: '03', text: 'Lead fecha (ou não) → o resultado volta pro marketing' },
-                  { step: '04', text: 'Marketing otimiza → melhores leads chegam → vendas converte mais' },
-                  { step: '05', text: 'O ciclo se repete e fica mais inteligente a cada rodada' },
-                ].map((item) => (
-                  <div key={item.step} className="relative bg-[hsl(240,10%,8%)] border border-[hsl(150,100%,50%)]/15 rounded-2xl p-5 text-center">
-                    <span className="text-[hsl(150,100%,50%)] font-['Michroma'] text-2xl block mb-3">{item.step}</span>
-                    <p className="text-sm text-[hsl(0,0%,60%)] font-['Outfit']">{item.text}</p>
-                  </div>
-                ))}
-              </div>
-            </motion.div>
-
             {/* 3 Pilares */}
-            <motion.div variants={fadeUp}>
-              <h3 className="font-['Michroma'] text-lg mb-8 text-center">3 Pilares</h3>
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-                {[
-                  {
-                    icon: Lightning, title: 'Tecnologia',
-                    desc: 'Plataforma própria com IA que conecta Meta Ads, Google Ads, WhatsApp, discador, CRM e attribution num sistema só. Elimina gestor de tráfego, ferramentas avulsas e planilhas.',
-                  },
-                  {
-                    icon: GearSix, title: 'Processo',
-                    desc: 'Playbook comercial completo: scripts, rotina do time, funil estruturado, métricas. Dados de marketing informam vendas, dados de vendas informam marketing. Um loop, não dois departamentos.',
-                  },
-                  {
-                    icon: UserCheck, title: 'Gestão',
-                    desc: 'Diretor comercial dedicado com Sales Ops alimentado por IA: sabe exatamente qual campanha gera mais receita, qual vendedor performa melhor, e onde está o gargalo — em tempo real.',
-                  },
-                ].map((p) => (
-                  <div key={p.title} className="bg-[hsl(240,10%,7%)] border border-[hsl(150,100%,50%)]/10 rounded-2xl p-8">
-                    <p.icon className="text-[hsl(150,100%,50%)] mb-4" size={28} weight="light" />
+            <motion.div variants={fadeUp} className="space-y-4">
+              {[
+                {
+                  icon: Lightning, num: 'Pilar 01 — Tecnologia', title: 'Plataforma própria com IA',
+                  desc: 'Conecta Meta Ads, Google Ads, WhatsApp, discador, CRM e attribution num sistema só. Não é Frankenstein de ferramentas coladas por Zapier. É um produto que nasceu integrado — lead entra e já está no pipeline, com origem rastreada até a receita.',
+                },
+                {
+                  icon: GearSix, num: 'Pilar 02 — Processo', title: 'Playbook comercial completo',
+                  desc: 'Scripts validados em operação real, funil estruturado, rotina do time, métricas que importam. Dados de marketing informam vendas, dados de vendas informam marketing. Um loop — não dois departamentos brigando.',
+                },
+                {
+                  icon: UserCheck, num: 'Pilar 03 — Acompanhamento', title: 'Diretor comercial dedicado + Sales Ops com IA',
+                  desc: 'Acompanhamento semanal do seu time. Coaching, relatórios, gestão de verdade. Alimentado por dados em tempo real — sabe qual campanha gera receita, qual vendedor performa, e onde está o gargalo. Não é dashboard bonito que ninguém olha. É gestão ativa.',
+                },
+              ].map((p) => (
+                <div key={p.num} className="bg-[hsl(240,10%,7%)] border border-[hsl(150,100%,50%)]/10 rounded-2xl p-8 relative overflow-hidden">
+                  <div className="absolute top-0 left-0 w-1 h-full bg-[hsl(150,100%,50%)] opacity-60" />
+                  <div className="pl-4">
+                    <span className="text-[10px] tracking-[3px] uppercase text-[hsl(150,100%,50%)] font-['JetBrains_Mono'] mb-3 block">{p.num}</span>
                     <h4 className="font-['Michroma'] text-lg mb-3">{p.title}</h4>
                     <p className="text-sm text-[hsl(0,0%,55%)] font-['Outfit'] leading-relaxed">{p.desc}</p>
                   </div>
-                ))}
-              </div>
-            </motion.div>
-          </motion.div>
-        </div>
-      </section>
-
-      {/* ─── PRA QUEM ─── */}
-      <section id="pra-quem" className="py-24 md:py-32 bg-[hsl(240,10%,3%)]">
-        <div className="max-w-5xl mx-auto px-6">
-          <motion.div initial="hidden" whileInView="visible" viewport={{ once: true, amount: 0.3 }} variants={stagger}>
-            <motion.div variants={fadeUp}><SectionTag>// Pra Quem É</SectionTag></motion.div>
-            <motion.h2 variants={fadeUp} className="font-['Michroma'] text-2xl md:text-4xl leading-tight mb-4">
-              Feito para empresas que investem em marketing e precisam de{' '}
-              <span className="text-[hsl(150,100%,50%)]">resultado previsível.</span>
-            </motion.h2>
-            <motion.p variants={fadeUp} className="text-[hsl(0,0%,60%)] font-['Outfit'] text-lg leading-relaxed mb-10 max-w-4xl">
-              Se sua empresa roda anúncios, gera leads e precisa converter em receita — o Seialz foi feito pra você.
-              Não importa o segmento. Importa que você quer saber exatamente quanto cada real investido retorna.
-            </motion.p>
-
-            {/* Segmentos */}
-            <motion.div variants={fadeUp} className="flex flex-wrap gap-3 mb-14">
-              {[
-                'Escritórios de Imigração', 'Advocacia', 'Imobiliárias', 'Seguros',
-                'Clínicas e Saúde', 'Consultoria Financeira', 'Educação e Cursos',
-                'Energia Solar', 'E-commerce', 'Consultorias', 'SaaS', 'Home Services',
-              ].map((s) => (
-                <span key={s} className="px-4 py-2 rounded-full border border-[hsl(150,100%,50%)]/20 text-sm text-[hsl(0,0%,70%)] font-['Outfit'] bg-[hsl(150,100%,50%)]/5">
-                  {s}
-                </span>
-              ))}
-            </motion.div>
-
-            {/* Stats */}
-            <motion.div variants={fadeUp} className="grid grid-cols-2 md:grid-cols-4 gap-6">
-              {[
-                { value: 'R$10K+', label: 'investimento mensal em ads' },
-                { value: '100+', label: 'leads por mês' },
-                { value: '2-50', label: 'pessoas no time comercial' },
-                { value: 'ROI', label: 'real de cada campanha' },
-              ].map((s) => (
-                <div key={s.label} className="text-center">
-                  <span className="text-2xl md:text-3xl font-['Michroma'] text-[hsl(150,100%,50%)]">{s.value}</span>
-                  <p className="text-xs text-[hsl(0,0%,50%)] mt-2 font-['Outfit']">{s.label}</p>
                 </div>
               ))}
             </motion.div>
@@ -220,26 +217,59 @@ export default function LandingPage() {
         </div>
       </section>
 
-      {/* ─── O QUE ESTÁ INCLUSO ─── */}
+      {/* ─── O LOOP ─── */}
+      <section id="loop" className="py-24 md:py-32 bg-[hsl(240,10%,3%)]">
+        <div className="max-w-4xl mx-auto px-6">
+          <motion.div initial="hidden" whileInView="visible" viewport={{ once: true, amount: 0.3 }} variants={stagger}>
+            <motion.div variants={fadeUp}><SectionTag>// O Loop</SectionTag></motion.div>
+            <motion.h2 variants={fadeUp} className="font-['Michroma'] text-2xl md:text-4xl leading-tight mb-6">
+              O ciclo que fica mais inteligente{' '}
+              <span className="text-[hsl(150,100%,50%)]">a cada venda.</span>
+            </motion.h2>
+            <motion.p variants={fadeUp} className="text-[hsl(0,0%,60%)] font-['Outfit'] text-lg leading-relaxed mb-12 max-w-4xl">
+              Quando marketing e vendas compartilham os mesmos dados nativamente, algo muda: cada venda ensina o marketing a trazer leads melhores. E cada lead melhor facilita a venda.
+            </motion.p>
+
+            <motion.div variants={fadeUp} className="space-y-0">
+              {[
+                { n: '01', t: 'Marketing roda campanha → lead entra no Seialz automaticamente com origem rastreada' },
+                { n: '02', t: 'IA distribui pro vendedor certo com base em regras e performance → cada interação é registrada' },
+                { n: '03', t: 'Lead fecha (ou não) → o resultado volta pro marketing com contexto completo: motivo de perda, ticket, tempo' },
+                { n: '04', t: 'Marketing otimiza com dados de receita real → algoritmo aprende → melhores leads chegam → vendas converte mais' },
+                { n: '05', t: 'O ciclo se repete. A cada rodada, o sistema sabe mais sobre o que funciona — e o que não funciona.' },
+              ].map((s) => (
+                <div key={s.n} className="flex items-start gap-6 py-6 border-b border-[hsl(0,0%,8%)]">
+                  <span className="font-['Michroma'] text-2xl text-[hsl(150,100%,50%)] opacity-80 flex-shrink-0 w-14">{s.n}</span>
+                  <p className="text-[hsl(0,0%,60%)] font-['Outfit'] leading-relaxed pt-1">{s.t}</p>
+                </div>
+              ))}
+            </motion.div>
+          </motion.div>
+        </div>
+      </section>
+
+      {/* ─── O QUE VOCÊ RECEBE ─── */}
       <section id="incluso" className="py-24 md:py-32 auth-grid-pattern relative">
         <div className="max-w-6xl mx-auto px-6">
           <motion.div initial="hidden" whileInView="visible" viewport={{ once: true, amount: 0.1 }} variants={stagger}>
             <motion.div variants={fadeUp}><SectionTag>// O Que Você Recebe</SectionTag></motion.div>
-            <motion.h2 variants={fadeUp} className="font-['Michroma'] text-2xl md:text-4xl leading-tight mb-12 max-w-4xl">
+            <motion.h2 variants={fadeUp} className="font-['Michroma'] text-2xl md:text-4xl leading-tight mb-4 max-w-4xl">
               Tudo que sua operação precisa.{' '}
-              <span className="text-[hsl(150,100%,50%)]">Sem contratar gestor de tráfego, sem CRM avulso, sem planilha.</span>
+              <span className="text-[hsl(150,100%,50%)]">Nada que não precisa.</span>
             </motion.h2>
+            <motion.p variants={fadeUp} className="text-[hsl(0,0%,60%)] font-['Outfit'] text-lg leading-relaxed mb-12 max-w-4xl">
+              Sem contratar gestor de tráfego avulso. Sem CRM genérico. Sem planilha de acompanhamento. Um sistema, uma assinatura.
+            </motion.p>
             <motion.div variants={fadeUp} className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
               {[
-                { icon: Target, title: 'AI Revenue Attribution', desc: 'Cada real de receita rastreado de volta ao anúncio exato que gerou. Não CPL. Receita.' },
-                { icon: ArrowsClockwise, title: 'Loop Marketing ↔ Vendas', desc: 'Dados de contratos fechados voltam automaticamente pro Meta e Google pra otimizar campanhas.' },
-                { icon: ChartLineUp, title: 'CRM com Pipeline Integrado', desc: 'Do clique no anúncio ao contrato assinado, um pipeline único. Sem handoff, sem dado perdido.' },
-                { icon: PhoneCall, title: 'Power Dialer com IA', desc: 'Discador inteligente que prioriza automaticamente. Liga pro lead certo na hora certa.' },
-                { icon: Robot, title: 'AI Sales Coach', desc: 'Coaching em tempo real durante ligações. Análise pós-call. Insights que melhoram conversão.' },
-                { icon: ChatCircleText, title: 'Comunicação Omnichannel', desc: 'SMS, WhatsApp, ligações, email — tudo numa thread. Branded calling.' },
-                { icon: UsersThree, title: 'Distribuição Inteligente de Leads', desc: 'Round-robin com regras. Distribui por performance, disponibilidade, tipo de lead.' },
-                { icon: ChartBar, title: 'Sales Ops Dashboard', desc: 'Receita por vendedor, por campanha, por fonte. Gargalos detectados em tempo real.' },
-                { icon: UserCheck, title: 'Diretor Comercial Dedicado', desc: 'Acompanhamento semanal. Coaching do time. Relatórios. Gestão de verdade.' },
+                { icon: Target, title: 'AI Revenue Attribution', desc: 'Cada real de receita rastreado de volta ao anúncio que gerou. Não CPL — receita real por campanha, por criativo, por público.' },
+                { icon: ChartLineUp, title: 'CRM com Pipeline Único', desc: 'Do clique no anúncio ao contrato assinado, um pipeline só. Sem handoff entre sistemas, sem dado perdido.' },
+                { icon: ArrowsClockwise, title: 'Loop Marketing ↔ Vendas', desc: 'Dados de contratos fechados voltam automaticamente pro Meta e Google. O algoritmo aprende o que gera receita, não clique.' },
+                { icon: PhoneCall, title: 'Power Dialer com IA', desc: 'Discador que prioriza por score. Liga pro lead certo, na hora certa, com contexto completo na tela.' },
+                { icon: UsersThree, title: 'Distribuição Inteligente de Leads', desc: 'Round-robin com regras: performance, disponibilidade, tipo de lead. Nenhum lead fica parado.' },
+                { icon: Robot, title: 'AI Sales Coach', desc: 'Coaching em tempo real durante ligações. Análise pós-call. Insights que melhoram conversão a cada semana.' },
+                { icon: ChatCircleText, title: 'Comunicação Omnichannel', desc: 'WhatsApp, SMS, ligação, email — tudo numa thread só. Branded calling pra aumentar atendimento.' },
+                { icon: ChartBar, title: 'Sales Ops Dashboard', desc: 'Receita por vendedor, campanha, fonte. Gargalos em tempo real. Comissão calculada automaticamente.' },
               ].map((f) => (
                 <div key={f.title} className="bg-[hsl(240,10%,7%)] border border-[hsl(150,100%,50%)]/10 rounded-2xl p-6 hover:border-[hsl(150,100%,50%)]/30 transition-colors group">
                   <f.icon className="text-[hsl(150,100%,50%)] mb-4 group-hover:scale-110 transition-transform" size={24} weight="light" />
@@ -252,66 +282,83 @@ export default function LandingPage() {
         </div>
       </section>
 
-      {/* ─── COMO FUNCIONA ─── */}
-      <section id="como-funciona" className="py-24 md:py-32 bg-[hsl(240,10%,3%)]">
-        <div className="max-w-4xl mx-auto px-6">
+      {/* ─── PRA QUEM ─── */}
+      <section id="pra-quem" className="py-24 md:py-32 bg-[hsl(240,10%,3%)]">
+        <div className="max-w-5xl mx-auto px-6">
           <motion.div initial="hidden" whileInView="visible" viewport={{ once: true, amount: 0.3 }} variants={stagger}>
-            <motion.div variants={fadeUp}><SectionTag>// Como Funciona</SectionTag></motion.div>
-            <motion.h2 variants={fadeUp} className="font-['Michroma'] text-2xl md:text-4xl leading-tight mb-12">
-              Em 30 dias, marketing e vendas viram{' '}
-              <span className="text-[hsl(150,100%,50%)]">uma máquina só.</span>
+            <motion.div variants={fadeUp}><SectionTag>// Pra Quem É</SectionTag></motion.div>
+            <motion.h2 variants={fadeUp} className="font-['Michroma'] text-2xl md:text-4xl leading-tight mb-4">
+              Empresas de serviço que vendem por{' '}
+              <span className="text-[hsl(150,100%,50%)]">atendimento direto.</span>
             </motion.h2>
-
-            <div className="space-y-0 relative">
-              {/* Vertical line */}
-              <div className="absolute left-6 md:left-8 top-8 bottom-8 w-px bg-gradient-to-b from-[hsl(150,100%,50%)] via-[hsl(150,100%,50%)]/30 to-transparent" />
-              {[
-                { step: '01', title: 'Diagnóstico', desc: 'Analisamos seu funil inteiro: ads, landing pages, CRM, time comercial. Identificamos onde receita está sendo perdida.' },
-                { step: '02', title: 'Implementação', desc: 'Setup da plataforma Seialz: integrações com Meta/Google Ads, WhatsApp, discador, CRM, attribution. Tudo conectado.' },
-                { step: '03', title: 'Playbook', desc: 'Scripts de vendas, rotina comercial, métricas de performance, treinamento do time. O loop marketing ↔ vendas começa a rodar.' },
-                { step: '04', title: 'Operação', desc: 'Diretor comercial assume. Dashboards ativos. Campanhas otimizadas por dados reais de vendas. Máquina funcionando.' },
-              ].map((item) => (
-                <motion.div key={item.step} variants={fadeUp} className="relative pl-16 md:pl-20 pb-12 last:pb-0">
-                  <div className="absolute left-2 md:left-4 w-8 h-8 rounded-full bg-[hsl(150,100%,50%)] flex items-center justify-center">
-                    <span className="text-xs font-bold text-[hsl(240,10%,4%)] font-['Michroma']">{item.step}</span>
-                  </div>
-                  <h4 className="font-['Michroma'] text-lg mb-2">{item.title}</h4>
-                  <p className="text-[hsl(0,0%,55%)] font-['Outfit'] leading-relaxed">{item.desc}</p>
-                </motion.div>
-              ))}
-            </div>
-            <motion.p variants={fadeUp} className="mt-10 text-sm text-[hsl(0,0%,40%)] font-['Outfit'] italic">
-              O acompanhamento é contínuo. A cada semana o loop fica mais inteligente: melhores campanhas, melhores leads, mais conversão, mais receita.
+            <motion.p variants={fadeUp} className="text-[hsl(0,0%,60%)] font-['Outfit'] text-lg leading-relaxed mb-10 max-w-4xl">
+              Se sua empresa roda anúncios, gera leads e converte por WhatsApp, telefone ou atendimento presencial — o Seialz foi construído pra essa operação. Não importa o segmento. Importa o modelo.
             </motion.p>
+
+            {/* Segmentos */}
+            <motion.div variants={fadeUp} className="grid grid-cols-1 sm:grid-cols-2 gap-3 mb-10">
+              {[
+                { name: 'Escritórios de Imigração', proof: 'CPL reduzido 8.7x · $250k/mês na plataforma' },
+                { name: 'Serviços Automotivos', proof: 'Implementação ativa — case em construção' },
+                { name: 'Serviços com Drones', proof: 'Implementação ativa — case em construção' },
+                { name: 'Advocacia & Consultoria', proof: 'High-touch · WhatsApp + ligação' },
+              ].map((s) => (
+                <div key={s.name} className="bg-[hsl(240,10%,7%)] border border-[hsl(150,100%,50%)]/10 rounded-xl p-5 hover:border-[hsl(150,100%,50%)]/25 transition-colors">
+                  <h4 className="font-['Outfit'] font-semibold text-white text-[15px] mb-1">{s.name}</h4>
+                  <p className="text-[11px] text-[hsl(150,100%,50%)] font-['JetBrains_Mono'] leading-relaxed">{s.proof}</p>
+                </div>
+              ))}
+            </motion.div>
+
+            <motion.p variants={fadeUp} className="text-[hsl(0,0%,50%)] font-['Outfit'] text-base leading-relaxed mb-10">
+              Se sua empresa depende de gerar e converter leads por atendimento direto, a gente já ajudou alguém parecido com você.
+            </motion.p>
+
+            {/* Stats */}
+            <motion.div variants={fadeUp} className="grid grid-cols-3 gap-6">
+              {[
+                { value: '2–50', label: 'pessoas no\ntime comercial' },
+                { value: 'ROI', label: 'por campanha\nnão CPL' },
+                { value: '1', label: 'sistema único\nzero Frankenstein' },
+              ].map((s) => (
+                <div key={s.label} className="text-center">
+                  <span className="text-2xl md:text-3xl font-['Michroma'] text-[hsl(150,100%,50%)]">{s.value}</span>
+                  <p className="text-xs text-[hsl(0,0%,50%)] mt-2 font-['Outfit'] whitespace-pre-line">{s.label}</p>
+                </div>
+              ))}
+            </motion.div>
           </motion.div>
         </div>
       </section>
 
-      {/* ─── RESULTADOS ─── */}
-      <section id="resultados" className="py-24 md:py-32 auth-grid-pattern relative">
-        <div className="max-w-5xl mx-auto px-6">
+      {/* ─── POR QUE "NATIVO" IMPORTA ─── */}
+      <section id="por-que-nativo" className="py-24 md:py-32 auth-grid-pattern relative">
+        <div className="max-w-4xl mx-auto px-6">
           <motion.div initial="hidden" whileInView="visible" viewport={{ once: true, amount: 0.3 }} variants={stagger}>
-            <motion.div variants={fadeUp}><SectionTag>// Resultados</SectionTag></motion.div>
-            <motion.h2 variants={fadeUp} className="font-['Michroma'] text-2xl md:text-4xl leading-tight mb-14">
-              O que muda nos primeiros{' '}
-              <span className="text-[hsl(150,100%,50%)]">90 dias.</span>
+            <motion.div variants={fadeUp}><SectionTag>// Por Que "Nativo" Importa</SectionTag></motion.div>
+            <motion.h2 variants={fadeUp} className="font-['Michroma'] text-2xl md:text-4xl leading-tight mb-8">
+              Qualquer um integra.{' '}
+              <span className="text-[hsl(150,100%,50%)]">Ninguém nasceu junto.</span>
             </motion.h2>
-            <motion.div variants={fadeUp} className="grid grid-cols-2 md:grid-cols-4 gap-8">
-              {[
-                { value: 2, suffix: 'x', label: 'velocidade de resposta aos leads' },
-                { value: 40, prefix: '+', suffix: '%', label: 'taxa de conversão' },
-                { value: 100, suffix: '%', label: 'visibilidade do ROI real' },
-                { value: 30, prefix: '-', suffix: '%', label: 'custo por aquisição' },
-              ].map((stat) => (
-                <div key={stat.label} className="text-center">
-                  <span className="text-4xl md:text-5xl font-['Michroma'] text-[hsl(150,100%,50%)]">
-                    {stat.prefix}
-                    <AnimatedCounter value={stat.value} duration={2} />
-                    {stat.suffix}
-                  </span>
-                  <p className="text-sm text-[hsl(0,0%,50%)] mt-3 font-['Outfit']">{stat.label}</p>
-                </div>
-              ))}
+            <motion.div variants={fadeUp} className="space-y-6 text-[hsl(0,0%,60%)] font-['Outfit'] text-lg leading-relaxed">
+              <p>
+                O mercado inteiro tenta resolver o problema de Sales Ops conectando ferramentas que foram construídas separadas. Meta Ads de um lado. CRM do outro. Zapier ou Make no meio tentando colar tudo.
+              </p>
+              <p>
+                O problema? Integração é frágil. API quebra. Dado atrasa. Attribution fica incompleta. E na hora que você mais precisa do número — ele não é confiável.
+              </p>
+
+              {/* Manifesto quote */}
+              <blockquote className="text-xl md:text-2xl font-semibold text-white leading-snug pl-6 border-l-2 border-[hsl(150,100%,50%)]/60 my-8">
+                O Seialz não integra marketing e vendas. Eles nunca foram separados aqui.
+              </blockquote>
+
+              <p>
+                Quando o lead clica no anúncio e entra no sistema, o dado de marketing e o dado de vendas já são o mesmo dado. Não precisa de sync. Não precisa de webhook. Não precisa rezar pra integração não quebrar no fim de semana.
+              </p>
+              <p>
+                É por isso que chamamos de Sales Ops nativo. Não é um CRM com plugin de ads. Não é uma ferramenta de marketing com CRM colado. É um produto que foi desenhado desde o dia zero pra ser as duas coisas ao mesmo tempo.
+              </p>
             </motion.div>
           </motion.div>
         </div>
@@ -321,13 +368,13 @@ export default function LandingPage() {
       <section id="cta" className="py-24 md:py-32 bg-[hsl(240,10%,3%)]">
         <div className="max-w-3xl mx-auto px-6">
           <motion.div initial="hidden" whileInView="visible" viewport={{ once: true, amount: 0.3 }} variants={stagger} className="text-center">
+            <motion.div variants={fadeUp}><SectionTag>// próximo passo</SectionTag></motion.div>
             <motion.h2 variants={fadeUp} className="font-['Michroma'] text-3xl md:text-5xl leading-tight mb-4">
-              Chega de adivinhar.{' '}
-              <span className="text-[hsl(150,100%,50%)]">Comece a saber.</span>
+              Quer saber onde sua operação está{' '}
+              <span className="text-[hsl(150,100%,50%)]">deixando dinheiro na mesa?</span>
             </motion.h2>
             <motion.p variants={fadeUp} className="text-[hsl(0,0%,55%)] font-['Outfit'] text-lg mb-12 max-w-2xl mx-auto">
-              Agende um diagnóstico gratuito. Em 30 minutos analisamos seu funil inteiro — marketing e vendas —
-              e mostramos onde você está perdendo receita.
+              Em 30 minutos, analisamos seu funil do anúncio ao fechamento e mostramos exatamente onde estão os gargalos — com dados, não opinião.
             </motion.p>
 
             <motion.form
@@ -379,6 +426,9 @@ export default function LandingPage() {
                   <>AGENDAR DIAGNÓSTICO <ArrowRight size={18} /></>
                 )}
               </button>
+              <p className="text-center text-xs text-[hsl(0,0%,40%)] font-['Outfit']">
+                30 min · Sem compromisso · Análise real do seu funil
+              </p>
             </motion.form>
           </motion.div>
         </div>

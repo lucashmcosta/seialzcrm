@@ -6,7 +6,7 @@ export function LandingFooter() {
       <div className="max-w-7xl mx-auto px-6 flex flex-col md:flex-row items-center justify-between gap-6">
         <SeialzLogo size="sm" theme="dark" animated={false} />
         <p className="text-sm text-[hsl(0,0%,40%)] font-['Outfit']">
-          © {new Date().getFullYear()} Seialz. Todos os direitos reservados.
+          Sales Ops Nativo · © {new Date().getFullYear()}
         </p>
         <div className="flex gap-6 text-sm text-[hsl(0,0%,40%)] font-['Outfit']">
           <a href="#" className="hover:text-[hsl(150,100%,50%)] transition-colors">Termos</a>
