@@ -298,7 +298,7 @@ export default function LandingPage() {
             {/* Segmentos */}
             <motion.div variants={fadeUp} className="grid grid-cols-1 sm:grid-cols-2 gap-3 mb-10">
               {[
-                { name: 'Escritórios de Imigração', proof: 'CPL reduzido 8.7x · $250k/mês na plataforma' },
+                { name: 'Escritórios de Imigração', proof: 'CPL reduzido 8.7x · R$1.5M+ gerados a mais' },
                 { name: 'Serviços Automotivos', proof: 'Implementação ativa — case em construção' },
                 { name: 'Serviços com Drones', proof: 'Implementação ativa — case em construção' },
                 { name: 'Advocacia & Consultoria', proof: 'High-touch · WhatsApp + ligação' },
