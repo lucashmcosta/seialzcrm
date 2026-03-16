@@ -99,9 +99,9 @@ export default function LandingPage() {
             <motion.div variants={fadeUp} className="grid grid-cols-2 md:grid-cols-4 gap-8">
               {[
                 { value: '8.7x', label: 'redução de CPL\nCTWA vs Lead Form' },
-                { value: '$250k', label: 'receita mensal\ngerida na plataforma' },
+                { value: 'R$1.5M+', label: 'receita gerada a mais\nque outros sistemas' },
                 { value: '15k+', label: 'leads reativados\npor AI agent' },
-                { value: '24', label: 'pessoas operando\nno sistema' },
+                { value: '250+', label: 'pessoas operando\nno sistema' },
               ].map((s) => (
                 <div key={s.label} className="text-center">
                   <span className="text-3xl md:text-4xl font-['Michroma'] text-[hsl(150,100%,50%)]">{s.value}</span>
@@ -298,7 +298,7 @@ export default function LandingPage() {
             {/* Segmentos */}
             <motion.div variants={fadeUp} className="grid grid-cols-1 sm:grid-cols-2 gap-3 mb-10">
               {[
-                { name: 'Escritórios de Imigração', proof: 'CPL reduzido 8.7x · $250k/mês na plataforma' },
+                { name: 'Escritórios de Imigração', proof: 'CPL reduzido 8.7x · R$1.5M+ gerados a mais' },
                 { name: 'Serviços Automotivos', proof: 'Implementação ativa — case em construção' },
                 { name: 'Serviços com Drones', proof: 'Implementação ativa — case em construção' },
                 { name: 'Advocacia & Consultoria', proof: 'High-touch · WhatsApp + ligação' },

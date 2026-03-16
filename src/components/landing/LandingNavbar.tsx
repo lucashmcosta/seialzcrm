@@ -48,9 +48,6 @@ export function LandingNavbar() {
       <div className="max-w-7xl mx-auto px-6 h-16 flex items-center justify-between">
         <div className="flex items-center gap-4">
           <SeialzLogo size="md" theme="dark" animated={true} />
-          <span className="hidden sm:inline-block text-[10px] tracking-[3px] uppercase text-[hsl(150,100%,50%)] font-['JetBrains_Mono'] border border-[hsl(150,100%,50%)]/20 px-2.5 py-1 rounded-full">
-            Sales Ops Nativo
-          </span>
         </div>
 
         {/* Desktop links */}
