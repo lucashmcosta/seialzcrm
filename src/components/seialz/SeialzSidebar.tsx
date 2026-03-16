@@ -146,23 +146,47 @@ export function SeialzSidebar({ groups, userProfile, onSignOut, locale = 'pt-BR'
         </nav>
 
         {/* Footer */}
-        <div className="border-t border-border h-14 flex items-center flex-shrink-0 overflow-hidden">
-          <Link to="/profile" className="w-[60px] h-14 flex items-center justify-center flex-shrink-0">
-            <div className="w-[30px] h-[30px] rounded-lg bg-gradient-to-br from-primary to-[hsl(var(--sz-green-dark))] flex items-center justify-center">
-              <span className="font-display text-[11px] text-primary-foreground font-semibold">
-                {initials}
-              </span>
-            </div>
-          </Link>
-          {!collapsed && (
-            <div className="flex-1 min-w-0 pr-3">
-              <div className="text-xs font-medium text-foreground truncate">
-                {userProfile?.full_name || 'Usuário'}
+        <div className="border-t border-border flex-shrink-0 overflow-hidden">
+          <div className="h-14 flex items-center">
+            <Link to="/profile" className="w-[60px] h-14 flex items-center justify-center flex-shrink-0">
+              <div className="w-[30px] h-[30px] rounded-lg bg-gradient-to-br from-primary to-[hsl(var(--sz-green-dark))] flex items-center justify-center">
+                <span className="font-display text-[11px] text-primary-foreground font-semibold">
+                  {initials}
+                </span>
               </div>
-              <div className="font-data text-[9px] text-[hsl(var(--sz-t3))] uppercase tracking-wider">
-                ADMIN
-              </div>
-            </div>
+            </Link>
+            {!collapsed && (
+              <>
+                <div className="flex-1 min-w-0">
+                  <div className="text-xs font-medium text-foreground truncate">
+                    {userProfile?.full_name || 'Usuário'}
+                  </div>
+                  <div className="font-data text-[9px] text-[hsl(var(--sz-t3))] uppercase tracking-wider">
+                    ADMIN
+                  </div>
+                </div>
+                <button
+                  onClick={onSignOut}
+                  className="w-10 h-10 flex items-center justify-center mr-1 rounded-md text-[hsl(var(--sz-t3))] hover:text-foreground hover:bg-[hsl(var(--sz-bg3))] transition-colors"
+                  title="Sair"
+                >
+                  <SignOut size={18} weight="light" />
+                </button>
+              </>
+            )}
+          </div>
+          {collapsed && (
+            <button
+              onClick={onSignOut}
+              className="w-[60px] h-10 flex items-center justify-center text-[hsl(var(--sz-t3))] hover:text-foreground hover:bg-[hsl(var(--sz-bg3))] transition-colors"
+              onMouseEnter={(e) => {
+                const rect = e.currentTarget.getBoundingClientRect();
+                setTooltip({ text: 'Sair', top: rect.top + rect.height / 2, left: rect.right + 12 });
+              }}
+              onMouseLeave={handleMouseLeave}
+            >
+              <SignOut size={20} weight="light" />
+            </button>
           )}
         </div>
       </aside>
