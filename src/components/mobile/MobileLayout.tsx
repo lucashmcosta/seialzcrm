@@ -88,7 +88,7 @@ export function MobileLayout({ children }: MobileLayoutProps) {
     <div className="flex flex-col h-[100dvh] bg-background overflow-hidden">
       {/* ── Header ── */}
       <header className="h-14 flex items-center justify-between px-4 border-b border-border bg-card flex-shrink-0 z-30">
-        <SeialzLogo size="sm" theme="green" animated={true} />
+        <SeialzLogo size="sm" theme="dark" animated={true} />
         <div className="flex items-center gap-2">
           <button className="p-2 text-muted-foreground hover:text-foreground transition-colors">
             <Bell size={20} weight="light" />
