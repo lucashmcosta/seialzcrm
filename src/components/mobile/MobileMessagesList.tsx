@@ -978,7 +978,7 @@ export function MobileMessagesList() {
               </ScrollArea>
 
               {/* Input Bar */}
-              <div className="border-t border-border p-2 bg-card shrink-0">
+              <div className="border-t border-border p-2 bg-card shrink-0" style={{ paddingBottom: 'calc(8px + env(safe-area-inset-bottom, 0px))' }}>
                 {!isIn24hWindow && messages.length > 0 ? (
                   <div className="flex flex-col items-center gap-2 py-3 text-center">
                     <div className="flex items-center gap-1.5 text-amber-600 dark:text-amber-400">

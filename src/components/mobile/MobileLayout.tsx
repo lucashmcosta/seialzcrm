@@ -229,7 +229,7 @@ export function MobileLayout({ children, hideBottomBar = false }: MobileLayoutPr
         </div>
 
         {/* Sign out */}
-        <div className="border-t border-border p-3">
+        <div className="border-t border-border p-3" style={{ paddingBottom: 'calc(12px + env(safe-area-inset-bottom, 0px))' }}>
           <button
             onClick={() => { signOut(); setDrawerOpen(false); }}
             className="flex items-center gap-3 w-full px-4 py-2.5 text-sm text-destructive hover:bg-destructive/10 rounded-md transition-colors"
