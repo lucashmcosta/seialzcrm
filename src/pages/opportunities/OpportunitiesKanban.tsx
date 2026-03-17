@@ -96,6 +96,7 @@ const defaultVisibleColumns = ['title', 'amount', 'pipeline_stage', 'contact', '
 
 export default function OpportunitiesKanban() {
   const navigate = useNavigate();
+  const isMobile = useIsMobile();
   const { organization, locale } = useOrganization();
   const { t } = useTranslation(locale as 'pt-BR' | 'en-US');
   const { permissions } = usePermissions();
