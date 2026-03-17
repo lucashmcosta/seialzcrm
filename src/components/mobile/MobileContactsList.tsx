@@ -135,7 +135,7 @@ export function MobileContactsList({
       <div className="flex-1 overflow-auto px-4 py-2 space-y-2 scrollbar-hide">
         {loading && contacts.length === 0 ? (
           <div className="flex items-center justify-center py-12">
-            <p className="text-sm text-muted-foreground">Carregando...</p>
+            <MobileSpinner />
           </div>
         ) : contacts.length === 0 ? (
           <div className="flex flex-col items-center justify-center py-12 gap-2">
