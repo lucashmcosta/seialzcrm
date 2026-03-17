@@ -61,6 +61,7 @@ const getLifecycleColor = (stage: string | null): "gray" | "blue" | "purple" | "
 export default function ContactDetail() {
   const { id } = useParams();
   const navigate = useNavigate();
+  const isMobile = useIsMobile();
   const { organization, locale, loading: orgLoading, userProfile } = useOrganization();
   const { t } = useTranslation(locale as any);
   const { permissions } = usePermissions();
