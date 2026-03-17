@@ -1,27 +1,38 @@
 
 
-## Criar usuário admin na Plamev
+## Abrir chat mesmo sem conversa existente
 
-Usar a Edge Function `create-user` já existente para criar o usuário com os seguintes dados:
+Quando o usuário clica em "Mensagens" no detalhe do contato e não existe thread, o sistema atual mostra um toast "Sem conversa" e volta para a lista. O correto é criar uma thread nova automaticamente e abrir o chat vazio.
 
-- **Email:** lcosta@plamev.com.br
-- **Nome:** L Costa
-- **Senha:** 123456
-- **Organização:** Plamev (`0cc6e2a4-adff-4b0d-a734-3c3422d9fb8e`)
-- **Perfil:** Admin (`26e9aa0d-53b0-469e-8459-09be80ec5052`)
+### Mudança
 
-### Problema
+**`src/components/mobile/MobileMessagesList.tsx`** — no `useEffect` que trata o `fromContactId` (linhas ~293-316):
 
-A edge function `create-user` exige um chamador autenticado com permissão `can_manage_users`. Para executar sem depender de sessão, vou criar uma **edge function temporária** (`admin-create-user-temp`) que usa `SERVICE_ROLE_KEY` diretamente, cria o usuário no auth, limpa a org auto-criada pelo trigger, e vincula à Plamev com perfil Admin. Após execução bem-sucedida, a function será removida.
+No bloco `else` (quando `match` não é encontrado), ao invés de mostrar toast e limpar o param, criar uma nova thread via insert no `message_threads` (mesmo padrão do `NewConversationDialog.handleSelect`):
 
-### Dados necessários antes de prosseguir
+```ts
+// Onde hoje tem o toast "Sem conversa":
+const { data: newThread, error } = await supabase
+  .from('message_threads')
+  .insert({
+    organization_id: organization.id,
+    contact_id: fromContactId,
+    channel: 'whatsapp',
+  })
+  .select('id')
+  .single();
 
-Preciso confirmar o **nome completo** do usuário. Vou usar "L Costa" como placeholder — me confirme o nome correto.
+if (!error && newThread) {
+  setSelectedThreadId(newThread.id);
+  refetchThreads();
+}
+```
 
-### Passos
+O `useEffect` precisará ser convertido para chamar uma função async interna. Remover o toast e o `searchParams.delete`.
 
-1. Criar `supabase/functions/admin-create-user-temp/index.ts` com SERVICE_ROLE_KEY
-2. Registrar no `config.toml` com `verify_jwt = false`
-3. Invocar a function via curl para criar o usuário
-4. Remover a function e entrada no config.toml
+### Arquivo afetado
+
+| Arquivo | Mudança |
+|---------|---------|
+| `src/components/mobile/MobileMessagesList.tsx` | Criar thread automaticamente quando contato não tem conversa |
 
