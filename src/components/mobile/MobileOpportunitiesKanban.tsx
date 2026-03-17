@@ -268,6 +268,7 @@ export function MobileOpportunitiesKanban({
         open={dialogOpen}
         onOpenChange={setDialogOpen}
         opportunity={editingOpportunity}
+        stages={stages}
         onSuccess={onRefresh}
       />
 
