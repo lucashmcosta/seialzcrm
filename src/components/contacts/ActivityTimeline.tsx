@@ -242,13 +242,13 @@ export function ActivityTimeline({ contactId, opportunityId }: ActivityTimelineP
                 // Regular activity
                 const activity = item.data as Activity;
                 return (
-                  <div key={`activity-${activity.id}`} className="flex gap-4 pb-4 border-b last:border-0">
+                  <div key={`activity-${activity.id}`} className={`flex ${isMobile ? 'gap-3' : 'gap-4'} pb-4 border-b last:border-0`}>
                     <div className="flex-shrink-0 w-8 h-8 rounded-full bg-primary/10 flex items-center justify-center text-primary">
                       {getActivityIcon(activity.activity_type)}
                     </div>
                     <div className="flex-1 min-w-0">
-                      <div className="flex items-center justify-between">
-                        <p className="font-medium text-foreground">{activity.title}</p>
+                      <div className={isMobile ? 'flex flex-col gap-0.5' : 'flex items-center justify-between'}>
+                        <p className="font-medium text-foreground text-sm">{activity.title}</p>
                         <span className="text-xs text-muted-foreground">
                           {formatDistanceToNow(new Date(activity.occurred_at), {
                             addSuffix: true,

@@ -304,9 +304,9 @@ export function ContactCalls({ contactId, opportunityId, contactPhone, contactNa
                 <div className="flex-shrink-0 w-8 h-8 rounded-full bg-primary/10 flex items-center justify-center text-primary">
                   {getCallIcon(call)}
                 </div>
-                <div className="flex-1 min-w-0 space-y-2">
-                  <div className="flex items-center justify-between">
-                    <p className="font-medium text-foreground">{getCallTitle(call)}</p>
+                  <div className="flex-1 min-w-0 space-y-2">
+                  <div className={isMobile ? 'flex flex-col gap-0.5' : 'flex items-center justify-between'}>
+                    <p className="font-medium text-foreground text-sm">{getCallTitle(call)}</p>
                     <span className="text-xs text-muted-foreground">
                       {call.scheduled_at 
                         ? `Agendada: ${formatDateWithTimezone(call.scheduled_at)}`
