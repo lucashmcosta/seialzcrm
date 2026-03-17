@@ -295,7 +295,22 @@ export function MobileMessagesList() {
       const match = threads.find(t => t.contact_id === fromContactId);
       if (match) {
         setSelectedThreadId(match.id);
-        setFilter('all_open');
+        // Set filter so the thread is visible if user goes back to list
+        if (['open', 'awaiting_client'].includes(match.status)) {
+          setFilter('all_open');
+        } else if (match.status === 'resolved') {
+          setFilter('resolved');
+        }
+      } else {
+        toast({
+          title: locale === 'pt-BR' ? 'Sem conversa' : 'No conversation',
+          description: locale === 'pt-BR' 
+            ? 'Este contato ainda não tem uma conversa de mensagens.' 
+            : 'This contact has no message conversation yet.',
+        });
+        // Clear the contact param so user sees the full list
+        searchParams.delete('contact');
+        setSearchParams(searchParams, { replace: true });
       }
     }
   }, [fromContactId, threads, selectedThreadId]);
