@@ -126,11 +126,26 @@ export default function ContactsList() {
     if (filters.search) setSearchTerm(filters.search);
   };
 
+  // Reset mobile accumulated contacts when filters change
+  useEffect(() => {
+    if (isMobile) {
+      setMobileContacts([]);
+      setCurrentPage(1);
+    }
+  }, [searchTerm, ownerFilter, stageFilter]);
+
   useEffect(() => {
     if (!organization) return;
     fetchContacts();
     fetchUsers();
   }, [organization, currentPage, itemsPerPage, searchTerm, ownerFilter, stageFilter]);
+
+  const mobileHasMore = mobileContacts.length < totalCount;
+
+  const handleMobileLoadMore = () => {
+    if (mobileLoadingMore || !mobileHasMore) return;
+    setCurrentPage(prev => prev + 1);
+  };
 
   const fetchUsers = async () => {
     if (!organization) return;
