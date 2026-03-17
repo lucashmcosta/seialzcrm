@@ -2,6 +2,9 @@ import { useState, useEffect, useMemo, useRef, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { DragDropContext, Droppable, Draggable, DropResult } from '@hello-pangea/dnd';
 import { Layout } from '@/components/Layout';
+import { useIsMobile } from '@/hooks/use-mobile';
+import { MobileLayout } from '@/components/mobile/MobileLayout';
+import { MobileOpportunitiesKanban } from '@/components/mobile/MobileOpportunitiesKanban';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from '@/components/ui/alert-dialog';
@@ -93,6 +96,7 @@ const defaultVisibleColumns = ['title', 'amount', 'pipeline_stage', 'contact', '
 
 export default function OpportunitiesKanban() {
   const navigate = useNavigate();
+  const isMobile = useIsMobile();
   const { organization, locale } = useOrganization();
   const { t } = useTranslation(locale as 'pt-BR' | 'en-US');
   const { permissions } = usePermissions();
@@ -642,6 +646,32 @@ export default function OpportunitiesKanban() {
           <p className="text-muted-foreground">{t('common.loading')}</p>
         </div>
       </Layout>
+    );
+  }
+
+  // Mobile layout
+  if (isMobile) {
+    return (
+      <MobileLayout>
+        <MobileOpportunitiesKanban
+          stages={stages}
+          stageCounts={stageCounts}
+          opportunitiesByStage={opportunitiesByStage}
+          hasMoreByStage={hasMoreByStage}
+          searchTerm={searchTerm}
+          onSearchChange={setSearchTerm}
+          searchResults={searchResults}
+          tagsByOpportunity={tagsByOpportunity}
+          locale={locale}
+          formatCurrency={formatCurrency}
+          onRefresh={fetchData}
+          organizationId={organization?.id || ''}
+          loadMoreForStage={loadMoreForStage}
+          loadingMoreStage={loadingMoreStage}
+          filterOwner={filterOwner}
+          filterTag={filterTag}
+        />
+      </MobileLayout>
     );
   }
 
