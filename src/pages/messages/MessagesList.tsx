@@ -1498,7 +1498,11 @@ function DesktopMessagesList() {
                                       <div className="space-y-2">
                                         {message.media_urls.map((url, i) => {
                                           if (message.media_type === 'audio' || url.match(/\.(ogg|mp3|wav|m4a)$/i)) {
-                                            return <AudioMessagePlayer key={i} src={url} />;
+                                            const isAudioOnly = message.media_type === 'audio' && !message.content;
+                                            return <AudioMessagePlayer key={i} src={url} 
+                                              timestamp={isAudioOnly ? `${new Date(message.sent_at).toLocaleTimeString(locale, { hour: '2-digit', minute: '2-digit', hour12: false })}` : undefined}
+                                              statusIcon={isAudioOnly && isOutbound ? renderStatusIcon(message.whatsapp_status) : undefined}
+                                            />;
                                           }
                                           if (message.media_type === 'image' || url.match(/\.(jpg|jpeg|png|gif|webp)$/i)) {
                                             return (
