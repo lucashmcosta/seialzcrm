@@ -10,6 +10,7 @@ import { AuthProvider, useAuthContext } from "@/contexts/AuthContext";
 import { OrganizationProvider } from "@/contexts/OrganizationContext";
 import { BrowserRouter, Routes, Route, Navigate, useLocation } from "react-router-dom";
 import { PageLoader } from "./components/common/PageLoader";
+import { PWAUpdatePrompt } from "./components/mobile/PWAUpdatePrompt";
 // Retry wrapper for dynamic imports (handles stale chunks after deployments)
 function retryImport<T>(fn: () => Promise<T>, retries = 2): Promise<T> {
   return fn().catch((err) => {
@@ -158,6 +159,7 @@ const App = () => (
         <OrganizationProvider>
         <OutboundCallProvider>
         <ThemeProvider>
+        <PWAUpdatePrompt />
         <GlobalCallHandler />
         <Suspense fallback={<PageLoader />}>
         <Routes>
