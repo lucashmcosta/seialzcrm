@@ -28,6 +28,11 @@ import {
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
 import {
+  Drawer,
+  DrawerContent,
+  DrawerTrigger,
+} from '@/components/ui/drawer';
+import {
   AlertDialog,
   AlertDialogAction,
   AlertDialogCancel,
