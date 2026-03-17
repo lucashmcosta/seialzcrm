@@ -289,10 +289,19 @@ export default function ContactDetail() {
                 {contact.lifecycle_stage}
               </Badge>
             )}
-            <div className="flex items-center gap-3 text-xs text-muted-foreground">
-              {contact.email && <span className="truncate max-w-[140px]">{contact.email}</span>}
-              {contact.email && contact.phone && <span>·</span>}
-              {contact.phone && <span>{formatPhoneDisplay(contact.phone)}</span>}
+            <div className="flex flex-col items-center gap-1 text-xs text-muted-foreground mt-1">
+              {contact.email && (
+                <span className="flex items-center gap-1.5">
+                  <EnvelopeSimple className="h-3.5 w-3.5 flex-shrink-0" />
+                  <span className="truncate max-w-[220px]">{contact.email}</span>
+                </span>
+              )}
+              {contact.phone && (
+                <span className="flex items-center gap-1.5">
+                  <Phone className="h-3.5 w-3.5 flex-shrink-0" />
+                  {formatPhoneDisplay(contact.phone)}
+                </span>
+              )}
             </div>
           </div>
 

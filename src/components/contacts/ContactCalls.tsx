@@ -3,6 +3,7 @@ import { useOrganization } from '@/hooks/useOrganization';
 import { useVoiceIntegration } from '@/hooks/useVoiceIntegration';
 import { useOutboundCall } from '@/contexts/OutboundCallContext';
 import { useTranslation } from '@/lib/i18n';
+import { useIsMobile } from '@/hooks/use-mobile';
 import { supabase } from '@/integrations/supabase/client';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -46,6 +47,7 @@ export function ContactCalls({ contactId, opportunityId, contactPhone, contactNa
   const { startCall } = useOutboundCall();
   const { t } = useTranslation(locale as any);
   const { toast } = useToast();
+  const isMobile = useIsMobile();
   const [calls, setCalls] = useState<Call[]>([]);
   const [loading, setLoading] = useState(true);
   const [dialogOpen, setDialogOpen] = useState(false);
@@ -184,13 +186,13 @@ export function ContactCalls({ contactId, opportunityId, contactPhone, contactNa
 
   return (
     <Card>
-      <CardHeader>
-        <div className="flex items-center justify-between">
-          <CardTitle className="flex items-center gap-2">
+      <CardHeader className={isMobile ? 'px-3 py-3' : undefined}>
+        <div className={isMobile ? 'flex flex-col gap-3' : 'flex items-center justify-between'}>
+          <CardTitle className="flex items-center gap-2 text-base">
             <Phone className="h-5 w-5" />
             Chamadas
           </CardTitle>
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-2 flex-wrap">
             {contactPhone && hasVoiceIntegration && (
               <>
                 <Button size="sm" onClick={() => startCall({ 
@@ -199,11 +201,11 @@ export function ContactCalls({ contactId, opportunityId, contactPhone, contactNa
                   contactId, 
                   opportunityId 
                 })}>
-                  <Phone className="w-4 h-4 mr-2" />
+                  <Phone className="w-4 h-4 mr-1" />
                   Ligar
                 </Button>
                 <Button size="sm" variant="outline" onClick={() => setScheduleDialogOpen(true)}>
-                  <Calendar className="w-4 h-4 mr-2" />
+                  <Calendar className="w-4 h-4 mr-1" />
                   Agendar
                 </Button>
               </>
@@ -211,7 +213,7 @@ export function ContactCalls({ contactId, opportunityId, contactPhone, contactNa
             <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
               <DialogTrigger asChild>
                 <Button size="sm" variant="outline">
-                  <Plus className="w-4 h-4 mr-2" />
+                  <Plus className="w-4 h-4 mr-1" />
                   Registrar
                 </Button>
               </DialogTrigger>
@@ -281,14 +283,16 @@ export function ContactCalls({ contactId, opportunityId, contactPhone, contactNa
           </div>
         </div>
         
-        <Tabs value={filter} onValueChange={(v) => setFilter(v as any)} className="mt-2">
-          <TabsList>
-            <TabsTrigger value="all">Todas</TabsTrigger>
-            <TabsTrigger value="made">Feitas</TabsTrigger>
-            <TabsTrigger value="received">Recebidas</TabsTrigger>
-            <TabsTrigger value="scheduled">Agendadas</TabsTrigger>
-          </TabsList>
-        </Tabs>
+        <div className={`mt-2 ${isMobile ? 'overflow-x-auto -mx-3 px-3' : ''}`}>
+          <Tabs value={filter} onValueChange={(v) => setFilter(v as any)}>
+            <TabsList className={isMobile ? 'w-max' : ''}>
+              <TabsTrigger value="all">Todas</TabsTrigger>
+              <TabsTrigger value="made">Feitas</TabsTrigger>
+              <TabsTrigger value="received">Recebidas</TabsTrigger>
+              <TabsTrigger value="scheduled">Agendadas</TabsTrigger>
+            </TabsList>
+          </Tabs>
+        </div>
       </CardHeader>
       <CardContent>
         <div className="space-y-3">
@@ -300,9 +304,9 @@ export function ContactCalls({ contactId, opportunityId, contactPhone, contactNa
                 <div className="flex-shrink-0 w-8 h-8 rounded-full bg-primary/10 flex items-center justify-center text-primary">
                   {getCallIcon(call)}
                 </div>
-                <div className="flex-1 min-w-0 space-y-2">
-                  <div className="flex items-center justify-between">
-                    <p className="font-medium text-foreground">{getCallTitle(call)}</p>
+                  <div className="flex-1 min-w-0 space-y-2">
+                  <div className={isMobile ? 'flex flex-col gap-0.5' : 'flex items-center justify-between'}>
+                    <p className="font-medium text-foreground text-sm">{getCallTitle(call)}</p>
                     <span className="text-xs text-muted-foreground">
                       {call.scheduled_at 
                         ? `Agendada: ${formatDateWithTimezone(call.scheduled_at)}`

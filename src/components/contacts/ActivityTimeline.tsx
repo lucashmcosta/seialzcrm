@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { useOrganization } from '@/hooks/useOrganization';
 import { useTranslation } from '@/lib/i18n';
+import { useIsMobile } from '@/hooks/use-mobile';
 import { supabase } from '@/integrations/supabase/client';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
@@ -37,6 +38,7 @@ interface ActivityTimelineProps {
 export function ActivityTimeline({ contactId, opportunityId }: ActivityTimelineProps) {
   const { organization, locale } = useOrganization();
   const { t } = useTranslation(locale as any);
+  const isMobile = useIsMobile();
   const [activities, setActivities] = useState<Activity[]>([]);
   const [calls, setCalls] = useState<CallDetails[]>([]);
   const [loading, setLoading] = useState(true);
@@ -187,14 +189,14 @@ export function ActivityTimeline({ contactId, opportunityId }: ActivityTimelineP
                   const phoneNumber = isOutgoing ? call.to_number : call.from_number;
 
                   return (
-                    <div key={`call-${call.id}`} className="flex gap-4 pb-4 border-b last:border-0">
+                    <div key={`call-${call.id}`} className={`flex ${isMobile ? 'gap-3' : 'gap-4'} pb-4 border-b last:border-0`}>
                       <div className="flex-shrink-0 w-8 h-8 rounded-full flex items-center justify-center bg-orange-500/10 text-orange-600">
                         {isOutgoing ? <PhoneOutgoing className="w-4 h-4" /> : <PhoneIncoming className="w-4 h-4" />}
                       </div>
                       <div className="flex-1 min-w-0">
-                        <div className="flex items-center justify-between gap-2">
+                        <div className={isMobile ? 'flex flex-col gap-1' : 'flex items-center justify-between gap-2'}>
                           <div className="flex items-center gap-2 flex-wrap">
-                            <p className="font-medium text-foreground">
+                            <p className="font-medium text-foreground text-sm">
                               {isOutgoing ? 'Ligação realizada' : 'Ligação recebida'}
                             </p>
                             {getCallStatusBadge(call.status)}
@@ -240,13 +242,13 @@ export function ActivityTimeline({ contactId, opportunityId }: ActivityTimelineP
                 // Regular activity
                 const activity = item.data as Activity;
                 return (
-                  <div key={`activity-${activity.id}`} className="flex gap-4 pb-4 border-b last:border-0">
+                  <div key={`activity-${activity.id}`} className={`flex ${isMobile ? 'gap-3' : 'gap-4'} pb-4 border-b last:border-0`}>
                     <div className="flex-shrink-0 w-8 h-8 rounded-full bg-primary/10 flex items-center justify-center text-primary">
                       {getActivityIcon(activity.activity_type)}
                     </div>
                     <div className="flex-1 min-w-0">
-                      <div className="flex items-center justify-between">
-                        <p className="font-medium text-foreground">{activity.title}</p>
+                      <div className={isMobile ? 'flex flex-col gap-0.5' : 'flex items-center justify-between'}>
+                        <p className="font-medium text-foreground text-sm">{activity.title}</p>
                         <span className="text-xs text-muted-foreground">
                           {formatDistanceToNow(new Date(activity.occurred_at), {
                             addSuffix: true,
