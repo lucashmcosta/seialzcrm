@@ -113,7 +113,10 @@ export function MobileLayout({ children, hideBottomBar = false }: MobileLayoutPr
 
       {/* ── Bottom Tab Bar ── */}
       {!hideBottomBar && (
-        <nav className="h-14 flex items-center border-t border-border bg-card flex-shrink-0 z-30">
+        <nav
+          className="flex items-center border-t border-border bg-card flex-shrink-0 z-30"
+          style={{ minHeight: '56px', paddingBottom: 'env(safe-area-inset-bottom, 0px)' }}
+        >
           {tabs.map((tab) => {
             const active = isActive(tab.href);
             return (
