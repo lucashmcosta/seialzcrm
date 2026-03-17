@@ -912,7 +912,8 @@ export function MobileMessagesList() {
                           >
                             <div
                               className={cn(
-                                'max-w-[85%] rounded-lg p-2.5 min-w-[60px]',
+                'max-w-[85%] rounded-lg min-w-[60px]',
+                message.media_type === 'audio' && !message.content ? 'p-1' : 'p-2.5',
                                 isOutbound
                                   ? 'bg-[#054D3E] text-white'
                                   : 'bg-muted'
