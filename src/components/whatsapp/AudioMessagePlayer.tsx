@@ -108,12 +108,12 @@ export function AudioMessagePlayer({ src, className = '' }: AudioMessagePlayerPr
         }}
       >
         {isPlaying ? (
-          <svg width="20" height="20" viewBox="0 0 20 20" fill="none">
+          <svg width="16" height="16" viewBox="0 0 20 20" fill="none">
             <rect x="5" y="3" width="3.5" height="14" rx="1" fill="#E9EDEF" />
             <rect x="11.5" y="3" width="3.5" height="14" rx="1" fill="#E9EDEF" />
           </svg>
         ) : (
-          <svg width="20" height="20" viewBox="0 0 20 20" fill="none">
+          <svg width="16" height="16" viewBox="0 0 20 20" fill="none">
             <path d="M5 3.5V16.5C5 17.1 5.6 17.4 6.1 17.1L17 10.5C17.5 10.2 17.5 9.5 17 9.2L6.1 2.9C5.6 2.6 5 2.9 5 3.5Z" fill="#E9EDEF" />
           </svg>
         )}
