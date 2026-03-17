@@ -289,6 +289,17 @@ export function MobileMessagesList() {
     }
   }, [threads?.length, userProfile?.id]);
 
+  // Auto-select thread from contact query param
+  useEffect(() => {
+    if (fromContactId && threads && threads.length > 0 && !selectedThreadId) {
+      const match = threads.find(t => t.contact_id === fromContactId);
+      if (match) {
+        setSelectedThreadId(match.id);
+        setFilter('all_open');
+      }
+    }
+  }, [fromContactId, threads, selectedThreadId]);
+
   // Fetch messages when thread selected
   useEffect(() => {
     if (selectedThreadId) fetchMessages(selectedThreadId);
