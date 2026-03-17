@@ -1551,7 +1551,7 @@ function DesktopMessagesList() {
                                     {/* Footer - Name + Time + Status (hidden for audio-only, rendered inside player) */}
                                     {!(message.media_type === 'audio' && !message.content) && (
                                     <div className="mt-1 flex items-center justify-end gap-1">
-                                      <span className="text-[10px] text-muted-foreground/70 whitespace-nowrap">
+                                      <span className="text-[11px] leading-[14px] text-muted-foreground/70 whitespace-nowrap">
                                         {isOutbound 
                                           ? (message.sender_name ? `${message.sender_name} - ` : '')
                                           : (selectedThread?.contact_name ? `${selectedThread.contact_name} - ` : '')
