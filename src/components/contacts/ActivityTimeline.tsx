@@ -189,14 +189,14 @@ export function ActivityTimeline({ contactId, opportunityId }: ActivityTimelineP
                   const phoneNumber = isOutgoing ? call.to_number : call.from_number;
 
                   return (
-                    <div key={`call-${call.id}`} className="flex gap-4 pb-4 border-b last:border-0">
+                    <div key={`call-${call.id}`} className={`flex ${isMobile ? 'gap-3' : 'gap-4'} pb-4 border-b last:border-0`}>
                       <div className="flex-shrink-0 w-8 h-8 rounded-full flex items-center justify-center bg-orange-500/10 text-orange-600">
                         {isOutgoing ? <PhoneOutgoing className="w-4 h-4" /> : <PhoneIncoming className="w-4 h-4" />}
                       </div>
                       <div className="flex-1 min-w-0">
-                        <div className="flex items-center justify-between gap-2">
+                        <div className={isMobile ? 'flex flex-col gap-1' : 'flex items-center justify-between gap-2'}>
                           <div className="flex items-center gap-2 flex-wrap">
-                            <p className="font-medium text-foreground">
+                            <p className="font-medium text-foreground text-sm">
                               {isOutgoing ? 'Ligação realizada' : 'Ligação recebida'}
                             </p>
                             {getCallStatusBadge(call.status)}
