@@ -914,7 +914,7 @@ export function MobileMessagesList() {
                               className={cn(
                                 'max-w-[85%] rounded-lg p-2.5 min-w-[60px]',
                                 isOutbound
-                                  ? 'bg-green-100 dark:bg-green-900/40 text-green-900 dark:text-green-100'
+                                  ? 'bg-[#054D3E] text-white'
                                   : 'bg-muted'
                               )}
                               onDoubleClick={() => setReplyingTo(message)}
