@@ -363,7 +363,7 @@ export default function ContactDetail() {
           </div>
 
           {/* Tab content */}
-          <div className="flex-1 overflow-auto px-4 pb-4">
+          <div className="flex-1 overflow-auto px-4 pb-4 [&::-webkit-scrollbar]:hidden [-ms-overflow-style:none] [scrollbar-width:none]">
             {renderTabContent()}
           </div>
         </div>
