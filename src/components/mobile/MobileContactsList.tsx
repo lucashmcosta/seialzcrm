@@ -2,6 +2,7 @@ import { useRef, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Plus, MagnifyingGlass, Envelope, Phone } from '@phosphor-icons/react';
 import { Avatar } from '@/components/base/avatar/avatar';
+import { MobileSpinner } from '@/components/mobile/MobileSpinner';
 import { BadgeWithDot } from '@/components/base/badges/badges';
 import type { BadgeColor } from '@/components/base/badges/badge-types';
 import { Input } from '@/components/ui/input';
