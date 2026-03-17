@@ -10,6 +10,9 @@ import { supabase } from '@/integrations/supabase/client';
 import { CurrencyDollar, TrendUp, TrendDown, UsersThree, CheckCircle } from '@phosphor-icons/react';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, LineChart, Line, Area, AreaChart } from 'recharts';
 import { Link, useNavigate } from 'react-router-dom';
+import { useIsMobile } from '@/hooks/use-mobile';
+import { MobileLayout } from '@/components/mobile/MobileLayout';
+import { MobileDashboard } from '@/components/mobile/MobileDashboard';
 
 interface Task {
   id: string;
@@ -34,6 +37,7 @@ export default function Dashboard() {
   const { user, signOut } = useAuth();
   const { t } = useTranslation(locale as 'pt-BR' | 'en-US');
   const navigate = useNavigate();
+  const isMobile = useIsMobile();
 
   // Local UI state (MUST be declared before any early return)
   const [period, setPeriod] = useState('30');
@@ -68,6 +72,29 @@ export default function Dashboard() {
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [organization?.id, userProfile?.id, period, ownerId]);
+
+  // Mobile layout
+  if (isMobile) {
+    if (orgLoading) {
+      return (
+        <MobileLayout>
+          <div className="p-4 space-y-3">
+            {[...Array(5)].map((_, i) => (
+              <div key={i} className="h-20 bg-muted rounded-md animate-pulse" />
+            ))}
+          </div>
+        </MobileLayout>
+      );
+    }
+
+    if (!user) return null;
+
+    return (
+      <MobileLayout>
+        <MobileDashboard />
+      </MobileLayout>
+    );
+  }
 
   // Show skeleton ONLY while loading
   if (orgLoading) {
