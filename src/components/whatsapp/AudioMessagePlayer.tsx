@@ -85,7 +85,7 @@ export function AudioMessagePlayer({ src, className = '' }: AudioMessagePlayerPr
   };
 
   return (
-    <div className={className} style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '2px 2px' }}>
+    <div className={className} style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '2px 2px', maxWidth: 240, minWidth: 200 }}>
       <audio ref={audioRef} src={src} preload="metadata" />
 
       {/* Play/Pause */}
@@ -109,12 +109,12 @@ export function AudioMessagePlayer({ src, className = '' }: AudioMessagePlayerPr
       >
         {isPlaying ? (
           <svg width="16" height="16" viewBox="0 0 20 20" fill="none">
-            <rect x="5" y="3" width="3.5" height="14" rx="1" fill="#E9EDEF" />
-            <rect x="11.5" y="3" width="3.5" height="14" rx="1" fill="#E9EDEF" />
+            <rect x="5" y="3" width="3.5" height="14" rx="1" fill="rgba(255,255,255,0.9)" />
+            <rect x="11.5" y="3" width="3.5" height="14" rx="1" fill="rgba(255,255,255,0.9)" />
           </svg>
         ) : (
           <svg width="16" height="16" viewBox="0 0 20 20" fill="none">
-            <path d="M5 3.5V16.5C5 17.1 5.6 17.4 6.1 17.1L17 10.5C17.5 10.2 17.5 9.5 17 9.2L6.1 2.9C5.6 2.6 5 2.9 5 3.5Z" fill="#E9EDEF" />
+            <path d="M5 3.5V16.5C5 17.1 5.6 17.4 6.1 17.1L17 10.5C17.5 10.2 17.5 9.5 17 9.2L6.1 2.9C5.6 2.6 5 2.9 5 3.5Z" fill="rgba(255,255,255,0.9)" />
           </svg>
         )}
       </button>
@@ -144,7 +144,7 @@ export function AudioMessagePlayer({ src, className = '' }: AudioMessagePlayerPr
                   height: `${h * 100}%`,
                   minWidth: 2,
                   borderRadius: 1,
-                  background: isActive ? '#00A884' : '#3B5249',
+                  background: isActive ? 'rgba(255,255,255,0.9)' : 'rgba(255,255,255,0.35)',
                   transition: 'background 0.1s',
                 }}
               />
@@ -160,7 +160,7 @@ export function AudioMessagePlayer({ src, className = '' }: AudioMessagePlayerPr
               width: 10,
               height: 10,
               borderRadius: '50%',
-              background: '#E9EDEF',
+              background: '#FFFFFF',
               boxShadow: '0 1px 3px rgba(0,0,0,0.3)',
               transition: 'left 0.05s linear',
               pointerEvents: 'none',
@@ -169,7 +169,7 @@ export function AudioMessagePlayer({ src, className = '' }: AudioMessagePlayerPr
         </div>
 
         <div style={{ display: 'flex', justifyContent: 'flex-start', marginTop: 2 }}>
-          <span style={{ fontSize: 11, color: '#8696A0', fontVariantNumeric: 'tabular-nums' }}>
+          <span style={{ fontSize: 11, color: 'rgba(255,255,255,0.6)', fontVariantNumeric: 'tabular-nums' }}>
             {isPlaying || currentTime > 0 ? formatTime(currentTime) : formatTime(duration)}
           </span>
         </div>
