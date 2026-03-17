@@ -283,12 +283,14 @@ export default function ContactDetail() {
           {/* Avatar + Name header */}
           <div className="flex flex-col items-center px-4 pt-2 pb-4 gap-2">
             <Avatar fallbackText={contact.full_name} size="xl" />
-            <h1 className="text-lg font-semibold text-foreground text-center">{contact.full_name}</h1>
-            {contact.lifecycle_stage && (
-              <Badge color={getLifecycleColor(contact.lifecycle_stage)} size="sm">
-                {contact.lifecycle_stage}
-              </Badge>
-            )}
+            <div className="flex items-center gap-2 flex-wrap justify-center">
+              <h1 className="text-lg font-semibold text-foreground">{contact.full_name}</h1>
+              {contact.lifecycle_stage && (
+                <Badge color={getLifecycleColor(contact.lifecycle_stage)} size="sm">
+                  {contact.lifecycle_stage}
+                </Badge>
+              )}
+            </div>
             <div className="flex flex-col items-center gap-1 text-xs text-muted-foreground mt-1">
               {contact.email && (
                 <span className="flex items-center gap-1.5">
@@ -306,15 +308,7 @@ export default function ContactDetail() {
           </div>
 
           {/* Action buttons */}
-          <div className="flex items-center justify-center gap-2 px-4 pb-4">
-            {permissions.canEditContacts && (
-              <Button color="secondary" size="sm" asChild>
-                <Link to={`/contacts/${contact.id}/edit`}>
-                  <PencilSimple className="h-4 w-4 mr-1" />
-                  {t('common.edit')}
-                </Link>
-              </Button>
-            )}
+          <div className="flex items-center justify-center px-4 pb-4">
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
                 <Button color="ghost" size="icon">
@@ -322,6 +316,14 @@ export default function ContactDetail() {
                 </Button>
               </DropdownMenuTrigger>
               <DropdownMenuContent align="end">
+                {permissions.canEditContacts && (
+                  <DropdownMenuItem asChild>
+                    <Link to={`/contacts/${contact.id}/edit`}>
+                      <PencilSimple className="h-4 w-4 mr-2" />
+                      {t('common.edit')}
+                    </Link>
+                  </DropdownMenuItem>
+                )}
                 {permissions.canDeleteContacts && (
                   <AlertDialog>
                     <AlertDialogTrigger asChild>
