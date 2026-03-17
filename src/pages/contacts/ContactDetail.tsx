@@ -291,28 +291,32 @@ export default function ContactDetail() {
                 </Badge>
               )}
             </div>
-            <div className="flex flex-col items-center gap-1 text-xs text-muted-foreground mt-1">
-              {contact.email && (
-                <span className="flex items-center gap-1.5">
-                  <EnvelopeSimple className="h-3.5 w-3.5 flex-shrink-0" />
-                  <span className="truncate max-w-[220px]">{contact.email}</span>
-                </span>
-              )}
-              {contact.phone && (
-                <span className="flex items-center gap-1.5">
-                  <Phone className="h-3.5 w-3.5 flex-shrink-0" />
-                  {formatPhoneDisplay(contact.phone)}
-                </span>
-              )}
-            </div>
           </div>
 
           {/* Action buttons */}
-          <div className="flex items-center justify-center px-4 pb-4">
+          <div className="flex items-center justify-center gap-2 px-4 pb-4">
+            <Button color="secondary" size="sm" onClick={() => navigate(`/messages?contact=${contact.id}`)}>
+              <ChatCircle className="h-4 w-4 mr-1.5" />
+              Mensagens
+            </Button>
+            {hasVoiceIntegration && contact.phone && (
+              <Button color="secondary" size="sm" onClick={() => startCall(contact.phone, contact.id, contact.full_name)}>
+                <Phone className="h-4 w-4 mr-1.5" />
+                Ligar
+              </Button>
+            )}
+            {contact.email && (
+              <Button color="secondary" size="sm" asChild>
+                <a href={`mailto:${contact.email}`}>
+                  <EnvelopeSimple className="h-4 w-4 mr-1.5" />
+                  Email
+                </a>
+              </Button>
+            )}
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
-                <Button color="ghost" size="icon">
-                  <DotsThreeVertical className="h-4 w-4" />
+                <Button color="secondary" size="sm">
+                  <DotsThree className="h-4 w-4" />
                 </Button>
               </DropdownMenuTrigger>
               <DropdownMenuContent align="end">
@@ -351,15 +355,21 @@ export default function ContactDetail() {
             </DropdownMenu>
           </div>
 
-          {/* Tabs via native select */}
-          <div className="px-4 pb-3">
-            <NativeSelect
-              aria-label="Tabs"
-              value={selectedTab as string}
-              onChange={(e) => setSelectedTab(e.target.value)}
-              options={tabs.map((tab) => ({ label: tab.label, value: tab.id }))}
-              className="w-full"
-            />
+          {/* Horizontal scrollable tabs */}
+          <div className="flex overflow-x-auto border-b border-border px-4 [&::-webkit-scrollbar]:hidden [-ms-overflow-style:none] [scrollbar-width:none]">
+            {tabs.map((tab) => (
+              <button
+                key={tab.id}
+                onClick={() => setSelectedTab(tab.id)}
+                className={`px-3.5 py-2.5 text-[13px] whitespace-nowrap border-b-2 transition-colors ${
+                  selectedTab === tab.id
+                    ? 'text-primary border-primary font-medium'
+                    : 'text-muted-foreground border-transparent hover:text-foreground'
+                }`}
+              >
+                {tab.label}
+              </button>
+            ))}
           </div>
 
           {/* Tab content */}
