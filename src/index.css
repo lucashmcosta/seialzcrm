@@ -473,8 +473,8 @@
   height: 3.5rem;
   padding: 0 1rem;
   border-radius: 1rem;
-  border: 1px solid hsl(240 8% 12%);
-  background: hsl(240 10% 5%);
+  border: 1px solid hsl(0 0% 15%);
+  background: hsl(0 0% 0%);
   color: hsl(0 0% 92%);
   font-size: 1rem;
   font-family: 'Outfit', sans-serif;

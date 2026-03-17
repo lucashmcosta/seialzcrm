@@ -1,19 +1,27 @@
 
 
-## Ajustes na tela de Login Mobile
+## Criar usuário admin na Plamev
 
-### 1. Inputs com fundo preto
-Mudar `.mobile-input` em `src/index.css`: `background: hsl(0 0% 0%)` (preto puro) e `border: 1px solid hsl(0 0% 15%)` (borda cinza sutil).
+Usar a Edge Function `create-user` já existente para criar o usuário com os seguintes dados:
 
-### 2. Remover tagline "SALES OPS NATIVO"
-Em `MobileSignIn.tsx`, remover o bloco `<motion.p>` da tagline (linhas 140-148).
+- **Email:** lcosta@plamev.com.br
+- **Nome:** L Costa
+- **Senha:** 123456
+- **Organização:** Plamev (`0cc6e2a4-adff-4b0d-a734-3c3422d9fb8e`)
+- **Perfil:** Admin (`26e9aa0d-53b0-469e-8459-09be80ec5052`)
 
-### 3. Cifrões mais espalhados, menores, mais suaves
-Expandir o array `currencySymbols` de 10 para ~18 símbolos com:
-- Tamanhos menores (predominantemente `text-xs`, `text-sm`, `text-base`, poucos `text-lg`)
-- Opacidades mais baixas (0.03-0.07)
-- Posições mais distribuídas cobrindo toda a tela
-- Incluir símbolos descendo: animação `y: [0, 8, 0]` para metade e `y: [0, -8, 0]` para outra metade (alguns sobem, outros descem)
-- Duração mais longa (7-10s) para movimento mais suave
-- Delays mais variados (0-5s)
+### Problema
+
+A edge function `create-user` exige um chamador autenticado com permissão `can_manage_users`. Para executar sem depender de sessão, vou criar uma **edge function temporária** (`admin-create-user-temp`) que usa `SERVICE_ROLE_KEY` diretamente, cria o usuário no auth, limpa a org auto-criada pelo trigger, e vincula à Plamev com perfil Admin. Após execução bem-sucedida, a function será removida.
+
+### Dados necessários antes de prosseguir
+
+Preciso confirmar o **nome completo** do usuário. Vou usar "L Costa" como placeholder — me confirme o nome correto.
+
+### Passos
+
+1. Criar `supabase/functions/admin-create-user-temp/index.ts` com SERVICE_ROLE_KEY
+2. Registrar no `config.toml` com `verify_jwt = false`
+3. Invocar a function via curl para criar o usuário
+4. Remover a function e entrada no config.toml
 
