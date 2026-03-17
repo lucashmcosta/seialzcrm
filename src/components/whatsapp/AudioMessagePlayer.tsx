@@ -114,7 +114,7 @@ export function AudioMessagePlayer({ src, className = '' }: AudioMessagePlayerPr
           </svg>
         ) : (
           <svg width="16" height="16" viewBox="0 0 20 20" fill="none">
-            <path d="M5 3.5V16.5C5 17.1 5.6 17.4 6.1 17.1L17 10.5C17.5 10.2 17.5 9.5 17 9.2L6.1 2.9C5.6 2.6 5 2.9 5 3.5Z" fill="#E9EDEF" />
+            <path d="M5 3.5V16.5C5 17.1 5.6 17.4 6.1 17.1L17 10.5C17.5 10.2 17.5 9.5 17 9.2L6.1 2.9C5.6 2.6 5 2.9 5 3.5Z" fill="rgba(255,255,255,0.9)" />
           </svg>
         )}
       </button>
