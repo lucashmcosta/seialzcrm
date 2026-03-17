@@ -182,7 +182,7 @@ async function persistMedia(
 serve(async (req) => {
   const url = new URL(req.url)
   const path = url.pathname.split('/').pop()
-  const orgId = url.searchParams.get('orgId')
+  let orgId = url.searchParams.get('orgId')
 
   // Enhanced logging for debugging
   console.log(`=== WhatsApp Webhook Request ===`)
