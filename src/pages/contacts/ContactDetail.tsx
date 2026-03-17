@@ -86,7 +86,7 @@ export default function ContactDetail() {
     { id: "tasks", label: t('contacts.tasksTab') },
     { id: "notes", label: t('contacts.notesTab') },
     { id: "calls", label: t('contacts.callsTab') },
-    { id: "messages", label: t('contacts.messagesTab') },
+    ...(!isMobile ? [{ id: "messages", label: t('contacts.messagesTab') }] : []),
     { id: "attachments", label: t('contacts.attachmentsTab') },
   ];
 
