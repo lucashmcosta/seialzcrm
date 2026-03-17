@@ -170,7 +170,7 @@ const App = () => (
           
           {/* Auth routes */}
           <Route path="/auth/signup" element={<SignUp />} />
-          <Route path="/auth/signin" element={<SignIn />} />
+          <Route path="/auth/signin" element={<ResponsiveSignIn />} />
           <Route path="/auth/confirm-email" element={<ConfirmEmail />} />
           <Route path="/invite/:token" element={<AcceptInvitation />} />
           
