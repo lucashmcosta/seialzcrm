@@ -219,7 +219,7 @@ export function MobileOpportunitiesKanban({
       </div>
 
       {/* Card list */}
-      <div className="flex-1 overflow-auto px-4 py-3 space-y-2.5">
+      <div className="flex-1 overflow-auto px-4 py-3 space-y-2.5 scrollbar-hide">
         {activeOpportunities.length === 0 ? (
           <div className="flex items-center justify-center py-16">
             <p className="text-sm text-muted-foreground">Nenhuma oportunidade nesta etapa</p>
