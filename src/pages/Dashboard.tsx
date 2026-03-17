@@ -10,6 +10,9 @@ import { supabase } from '@/integrations/supabase/client';
 import { CurrencyDollar, TrendUp, TrendDown, UsersThree, CheckCircle } from '@phosphor-icons/react';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, LineChart, Line, Area, AreaChart } from 'recharts';
 import { Link, useNavigate } from 'react-router-dom';
+import { useIsMobile } from '@/hooks/use-mobile';
+import { MobileLayout } from '@/components/mobile/MobileLayout';
+import { MobileDashboard } from '@/components/mobile/MobileDashboard';
 
 interface Task {
   id: string;
