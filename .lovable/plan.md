@@ -1,27 +1,28 @@
 
 
-## Criar usuário admin na Plamev
+## Fix: Flash de layout desktop antes do mobile carregar
 
-Usar a Edge Function `create-user` já existente para criar o usuário com os seguintes dados:
+### Causa raiz
 
-- **Email:** lcosta@plamev.com.br
-- **Nome:** L Costa
-- **Senha:** 123456
-- **Organização:** Plamev (`0cc6e2a4-adff-4b0d-a734-3c3422d9fb8e`)
-- **Perfil:** Admin (`26e9aa0d-53b0-469e-8459-09be80ec5052`)
+O hook `useIsMobile()` inicializa com `useState<boolean | undefined>(undefined)`. No primeiro render, `!!undefined === false`, então **todas as páginas renderizam a versão desktop por 1 frame** até o `useEffect` rodar e detectar que é mobile.
 
-### Problema
+### Correção
 
-A edge function `create-user` exige um chamador autenticado com permissão `can_manage_users`. Para executar sem depender de sessão, vou criar uma **edge function temporária** (`admin-create-user-temp`) que usa `SERVICE_ROLE_KEY` diretamente, cria o usuário no auth, limpa a org auto-criada pelo trigger, e vincula à Plamev com perfil Admin. Após execução bem-sucedida, a function será removida.
+**Arquivo: `src/hooks/use-mobile.tsx`**
 
-### Dados necessários antes de prosseguir
+Duas mudanças:
 
-Preciso confirmar o **nome completo** do usuário. Vou usar "L Costa" como placeholder — me confirme o nome correto.
+1. **Inicializar com valor síncrono** — usar `window.innerWidth` direto no `useState` (disponível no cliente, sem SSR neste projeto):
+```typescript
+const [isMobile, setIsMobile] = React.useState<boolean>(
+  () => window.innerWidth < MOBILE_BREAKPOINT
+);
+```
 
-### Passos
+2. **Remover a coerção `!!`** — já é boolean direto, retornar `isMobile` sem cast.
 
-1. Criar `supabase/functions/admin-create-user-temp/index.ts` com SERVICE_ROLE_KEY
-2. Registrar no `config.toml` com `verify_jwt = false`
-3. Invocar a function via curl para criar o usuário
-4. Remover a function e entrada no config.toml
+Isso elimina o frame onde `isMobile = false` no mobile, prevenindo o flash do layout desktop em `/messages`, `/dashboard` e qualquer outra página que use a bifurcação mobile/desktop.
+
+### Arquivos afetados
+- `src/hooks/use-mobile.tsx` — única mudança necessária
 
