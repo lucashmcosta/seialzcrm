@@ -38,6 +38,7 @@ interface ActivityTimelineProps {
 export function ActivityTimeline({ contactId, opportunityId }: ActivityTimelineProps) {
   const { organization, locale } = useOrganization();
   const { t } = useTranslation(locale as any);
+  const isMobile = useIsMobile();
   const [activities, setActivities] = useState<Activity[]>([]);
   const [calls, setCalls] = useState<CallDetails[]>([]);
   const [loading, setLoading] = useState(true);
