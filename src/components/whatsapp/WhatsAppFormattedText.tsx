@@ -19,7 +19,7 @@ export function WhatsAppFormattedText({ content, className = '' }: WhatsAppForma
     // 3. Links: https://... → <a href="...">...</a>
     formatted = formatted.replace(
       /(https?:\/\/[^\s<]+)/g, 
-      '<a href="$1" target="_blank" rel="noopener noreferrer" class="text-blue-500 underline hover:text-blue-600">$1</a>'
+      '<a href="$1" target="_blank" rel="noopener noreferrer" class="text-blue-400 underline hover:text-blue-300">$1</a>'
     );
     
     // 4. Negrito: *texto* → <strong>texto</strong>

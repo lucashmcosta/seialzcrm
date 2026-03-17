@@ -914,7 +914,7 @@ export function MobileMessagesList() {
                               className={cn(
                                 'max-w-[85%] rounded-lg p-2.5 min-w-[60px]',
                                 isOutbound
-                                  ? 'bg-green-100 dark:bg-green-900/40 text-green-900 dark:text-green-100'
+                                  ? 'bg-[#054D3E] text-white'
                                   : 'bg-muted'
                               )}
                               onDoubleClick={() => setReplyingTo(message)}
@@ -962,7 +962,7 @@ export function MobileMessagesList() {
 
                               {/* Footer */}
                               <div className="mt-0.5 flex items-center justify-end gap-1">
-                                <span className="text-[9px] text-muted-foreground/70">
+                                <span className={cn('text-[9px]', isOutbound ? 'text-white/60' : 'text-muted-foreground/70')}>
                                   {new Date(message.sent_at).toLocaleTimeString(locale, { hour: '2-digit', minute: '2-digit', hour12: false })}
                                 </span>
                                 {isOutbound && renderStatusIcon(message.whatsapp_status)}

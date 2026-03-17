@@ -450,7 +450,7 @@ export function WhatsAppChat({ contactId, threadId: initialThreadId, onThreadCre
                   <div
                     className={`max-w-[70%] rounded-lg p-3 ${
                       isOutbound
-                        ? 'bg-green-100 dark:bg-green-900/40 text-green-900 dark:text-green-100'
+                        ? 'bg-[#054D3E] text-white'
                         : 'bg-muted'
                     }`}
                   >
@@ -470,7 +470,7 @@ export function WhatsAppChat({ contactId, threadId: initialThreadId, onThreadCre
                     {/* Footer */}
                     <div className="flex items-center justify-end gap-1 mt-1">
                       {message.media_type && getMediaTypeIcon(message.media_type)}
-                      <span className="text-xs text-muted-foreground">
+                      <span className={`text-xs ${isOutbound ? 'text-white/60' : 'text-muted-foreground'}`}>
                         {formatDistanceToNow(new Date(message.sent_at), {
                           addSuffix: true,
                           locale: dateLocale,
