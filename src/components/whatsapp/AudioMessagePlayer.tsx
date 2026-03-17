@@ -144,7 +144,7 @@ export function AudioMessagePlayer({ src, className = '' }: AudioMessagePlayerPr
                   height: `${h * 100}%`,
                   minWidth: 2,
                   borderRadius: 1,
-                  background: isActive ? '#00A884' : '#3B5249',
+                  background: isActive ? 'rgba(255,255,255,0.9)' : 'rgba(255,255,255,0.35)',
                   transition: 'background 0.1s',
                 }}
               />
