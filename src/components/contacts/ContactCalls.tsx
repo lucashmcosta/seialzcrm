@@ -3,6 +3,7 @@ import { useOrganization } from '@/hooks/useOrganization';
 import { useVoiceIntegration } from '@/hooks/useVoiceIntegration';
 import { useOutboundCall } from '@/contexts/OutboundCallContext';
 import { useTranslation } from '@/lib/i18n';
+import { useIsMobile } from '@/hooks/use-mobile';
 import { supabase } from '@/integrations/supabase/client';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
