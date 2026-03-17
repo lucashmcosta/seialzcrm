@@ -164,10 +164,12 @@ export default function ContactsList() {
     }
   };
 
-  const fetchContacts = async (appendForMobile = false) => {
+  const fetchContacts = async () => {
     if (!organization) return;
 
-    if (appendForMobile) {
+    const isAppending = isMobile && currentPage > 1;
+
+    if (isAppending) {
       setMobileLoadingMore(true);
     } else {
       setLoading(true);
@@ -199,13 +201,9 @@ export default function ContactsList() {
     const { data, error, count } = await query;
 
     if (!error && data) {
-      if (appendForMobile) {
-        setMobileContacts(prev => [...prev, ...data]);
-      } else {
-        setContacts(data);
-        if (isMobile) {
-          setMobileContacts(currentPage === 1 ? data : prev => [...prev, ...data]);
-        }
+      setContacts(data);
+      if (isMobile) {
+        setMobileContacts(prev => isAppending ? [...prev, ...data] : data);
       }
       setTotalCount(count || 0);
     }
