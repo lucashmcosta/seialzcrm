@@ -93,8 +93,8 @@ export function AudioMessagePlayer({ src, className = '' }: AudioMessagePlayerPr
         onClick={togglePlay}
         disabled={isLoading}
         style={{
-          width: 36,
-          height: 36,
+          width: 30,
+          height: 30,
           borderRadius: '50%',
           border: 'none',
           background: 'transparent',
