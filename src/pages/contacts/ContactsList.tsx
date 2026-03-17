@@ -149,10 +149,14 @@ export default function ContactsList() {
     }
   };
 
-  const fetchContacts = async () => {
+  const fetchContacts = async (appendForMobile = false) => {
     if (!organization) return;
 
-    setLoading(true);
+    if (appendForMobile) {
+      setMobileLoadingMore(true);
+    } else {
+      setLoading(true);
+    }
     
     // Build query with filters
     let query = supabase
@@ -180,10 +184,18 @@ export default function ContactsList() {
     const { data, error, count } = await query;
 
     if (!error && data) {
-      setContacts(data);
+      if (appendForMobile) {
+        setMobileContacts(prev => [...prev, ...data]);
+      } else {
+        setContacts(data);
+        if (isMobile) {
+          setMobileContacts(currentPage === 1 ? data : prev => [...prev, ...data]);
+        }
+      }
       setTotalCount(count || 0);
     }
     setLoading(false);
+    setMobileLoadingMore(false);
   };
 
   // Sort contacts client-side
