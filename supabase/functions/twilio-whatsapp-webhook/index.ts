@@ -182,7 +182,7 @@ async function persistMedia(
 serve(async (req) => {
   const url = new URL(req.url)
   const path = url.pathname.split('/').pop()
-  const orgId = url.searchParams.get('orgId')
+  let orgId = url.searchParams.get('orgId')
 
   // Enhanced logging for debugging
   console.log(`=== WhatsApp Webhook Request ===`)
@@ -308,18 +308,48 @@ serve(async (req) => {
         twilioAccountSid = config.account_sid || ''
         twilioAuthToken = config.auth_token || ''
 
-        // CRITICAL: Validate that the To number matches this org's configured number
-        // This prevents cross-org message leaks when multiple orgs share a Twilio account
+        // Validate that the To number matches this org's configured number
+        // If not, dynamically lookup the correct org by the To number
         const configuredNumber = config.whatsapp_number
         if (configuredNumber && to) {
           const toNormalized = to.replace('+', '').replace(/\D/g, '')
           const configNormalized = configuredNumber.replace('+', '').replace(/\D/g, '')
           if (toNormalized !== configNormalized) {
-            console.warn(`[SECURITY] Message To ${to} does NOT match org ${orgId} configured number ${configuredNumber}. Rejecting to prevent cross-org leak.`)
-            return new Response('<?xml version="1.0" encoding="UTF-8"?><Response></Response>', { 
-              status: 200, 
-              headers: { ...corsHeaders, 'Content-Type': 'text/xml' } 
+            console.warn(`[CROSS-ORG] Message To ${to} does NOT match org ${orgId} configured number ${configuredNumber}. Looking up correct org...`)
+            
+            // Fetch ALL enabled whatsapp integrations and find the one matching the To number
+            const { data: allIntegrations, error: lookupError } = await supabase
+              .from('organization_integrations')
+              .select('organization_id, config_values, whatsapp_inbound_settings, admin_integrations!inner(slug)')
+              .eq('admin_integrations.slug', 'twilio-whatsapp')
+              .eq('is_enabled', true)
+            
+            if (lookupError) {
+              console.error('[CROSS-ORG] Lookup error:', lookupError.message)
+            }
+            
+            const correctOrg = allIntegrations?.find((int: any) => {
+              const intNumber = int.config_values?.whatsapp_number
+              if (!intNumber) return false
+              const intNormalized = intNumber.replace('+', '').replace(/\D/g, '')
+              return intNormalized === toNormalized
             })
+            
+            if (correctOrg) {
+              console.log(`[CROSS-ORG] Found correct org ${correctOrg.organization_id} for number ${to}. Redirecting message.`)
+              // Override orgId and integration data with the correct org
+              orgId = correctOrg.organization_id
+              twilioAccountSid = (correctOrg.config_values as any)?.account_sid || twilioAccountSid
+              twilioAuthToken = (correctOrg.config_values as any)?.auth_token || twilioAuthToken
+              // Override inbound settings below (we reassign after this block)
+              ;(integration as any).whatsapp_inbound_settings = correctOrg.whatsapp_inbound_settings
+            } else {
+              console.warn(`[SECURITY] To number ${to} not found in ANY org. Rejecting.`)
+              return new Response('<?xml version="1.0" encoding="UTF-8"?><Response></Response>', { 
+                status: 200, 
+                headers: { ...corsHeaders, 'Content-Type': 'text/xml' } 
+              })
+            }
           }
         }
       }
