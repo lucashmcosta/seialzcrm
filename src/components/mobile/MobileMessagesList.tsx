@@ -962,7 +962,7 @@ export function MobileMessagesList() {
 
                               {/* Footer */}
                               <div className="mt-0.5 flex items-center justify-end gap-1">
-                                <span className="text-[9px] text-muted-foreground/70">
+                                <span className={cn('text-[9px]', isOutbound ? 'text-white/60' : 'text-muted-foreground/70')}>
                                   {new Date(message.sent_at).toLocaleTimeString(locale, { hour: '2-digit', minute: '2-digit', hour12: false })}
                                 </span>
                                 {isOutbound && renderStatusIcon(message.whatsapp_status)}
