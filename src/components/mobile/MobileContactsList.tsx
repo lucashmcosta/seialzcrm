@@ -2,6 +2,7 @@ import { useRef, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Plus, MagnifyingGlass, Envelope, Phone } from '@phosphor-icons/react';
 import { Avatar } from '@/components/base/avatar/avatar';
+import { MobileSpinner } from '@/components/mobile/MobileSpinner';
 import { BadgeWithDot } from '@/components/base/badges/badges';
 import type { BadgeColor } from '@/components/base/badges/badge-types';
 import { Input } from '@/components/ui/input';
@@ -134,7 +135,7 @@ export function MobileContactsList({
       <div className="flex-1 overflow-auto px-4 py-2 space-y-2 scrollbar-hide">
         {loading && contacts.length === 0 ? (
           <div className="flex items-center justify-center py-12">
-            <p className="text-sm text-muted-foreground">Carregando...</p>
+            <MobileSpinner />
           </div>
         ) : contacts.length === 0 ? (
           <div className="flex flex-col items-center justify-center py-12 gap-2">
@@ -187,7 +188,7 @@ export function MobileContactsList({
 
             {loadingMore && (
               <div className="flex items-center justify-center py-3">
-                <p className="text-xs text-muted-foreground">Carregando mais...</p>
+                <MobileSpinner size="sm" />
               </div>
             )}
           </>

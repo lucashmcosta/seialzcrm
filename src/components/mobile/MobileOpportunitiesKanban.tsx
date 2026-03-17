@@ -1,4 +1,5 @@
 import { useState, useRef, useEffect, useCallback } from 'react';
+import { MobileSpinner } from '@/components/mobile/MobileSpinner';
 import { useNavigate } from 'react-router-dom';
 import { Plus, MagnifyingGlass } from '@phosphor-icons/react';
 import { SeialzOpportunityCard } from '@/components/opportunities/SeialzOpportunityCard';
@@ -249,7 +250,7 @@ export function MobileOpportunitiesKanban({
         {activeStageId && hasMoreByStage[activeStageId] && (
           <div ref={sentinelRef} className="h-8 flex items-center justify-center">
             {loadingMoreStage === activeStageId && (
-              <span className="font-data text-[10px] text-muted-foreground">Carregando...</span>
+              <MobileSpinner size="sm" />
             )}
           </div>
         )}
