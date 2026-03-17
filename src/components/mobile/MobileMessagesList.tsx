@@ -966,13 +966,15 @@ export function MobileMessagesList() {
                                 <p className="text-[10px] text-destructive mt-0.5">{message.error_message}</p>
                               )}
 
-                              {/* Footer */}
-                              <div className={cn("mt-0.5 flex items-center justify-end gap-1", message.media_type === 'audio' && !message.content && 'ml-[34px]')}>
-                                <span className={cn(isOutbound ? 'text-white/60' : 'text-muted-foreground/70', message.media_type === 'audio' && !message.content ? 'text-[11px] leading-[14px]' : 'text-[9px]')}>
+                              {/* Footer (hidden for audio-only, rendered inside player) */}
+                              {!(message.media_type === 'audio' && !message.content) && (
+                              <div className="mt-0.5 flex items-center justify-end gap-1">
+                                <span className={cn('text-[9px]', isOutbound ? 'text-white/60' : 'text-muted-foreground/70')}>
                                   {new Date(message.sent_at).toLocaleTimeString(locale, { hour: '2-digit', minute: '2-digit', hour12: false })}
                                 </span>
                                 {isOutbound && renderStatusIcon(message.whatsapp_status)}
                               </div>
+                              )}
                             </div>
                           </div>
                         );

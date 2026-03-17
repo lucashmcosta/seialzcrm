@@ -1,11 +1,13 @@
-import { useState, useRef, useEffect, useCallback } from 'react';
+import { useState, useRef, useEffect, useCallback, ReactNode } from 'react';
 
 interface AudioMessagePlayerProps {
   src: string;
   className?: string;
+  timestamp?: string;
+  statusIcon?: ReactNode;
 }
 
-export function AudioMessagePlayer({ src, className = '' }: AudioMessagePlayerProps) {
+export function AudioMessagePlayer({ src, className = '', timestamp, statusIcon }: AudioMessagePlayerProps) {
   const audioRef = useRef<HTMLAudioElement>(null);
   const animFrameRef = useRef<number>(0);
   const [isPlaying, setIsPlaying] = useState(false);
@@ -170,10 +172,16 @@ export function AudioMessagePlayer({ src, className = '' }: AudioMessagePlayerPr
       </div>
 
       {/* Row 2: Duration + Timestamp */}
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', padding: 0, margin: 0, marginLeft: 34 }}>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: 0, marginLeft: 34, marginTop: 0, marginBottom: 0, marginRight: 0 }}>
         <span style={{ fontSize: 11, lineHeight: '14px', color: 'rgba(255,255,255,0.6)', fontVariantNumeric: 'tabular-nums' }}>
           {isPlaying || currentTime > 0 ? formatTime(currentTime) : formatTime(duration)}
         </span>
+        {timestamp && (
+          <span style={{ display: 'flex', alignItems: 'center', gap: 3, fontSize: 11, lineHeight: '14px', color: 'rgba(255,255,255,0.6)' }}>
+            {timestamp}
+            {statusIcon}
+          </span>
+        )}
       </div>
     </div>
   );
