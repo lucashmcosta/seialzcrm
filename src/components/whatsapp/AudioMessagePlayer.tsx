@@ -142,8 +142,8 @@ export function AudioMessagePlayer({ src, className = '' }: AudioMessagePlayerPr
                 style={{
                   flex: 1,
                   height: `${h * 100}%`,
-                  minWidth: 2.5,
-                  borderRadius: 2,
+                  minWidth: 2,
+                  borderRadius: 1,
                   background: isActive ? '#00A884' : '#3B5249',
                   transition: 'background 0.1s',
                 }}
