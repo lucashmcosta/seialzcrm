@@ -120,7 +120,7 @@ export function AudioMessagePlayer({ src, className = '' }: AudioMessagePlayerPr
       </button>
 
       {/* Waveform + time */}
-      <div style={{ flex: 1, minWidth: 0, position: 'relative', paddingBottom: 14 }}>
+      <div style={{ flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column', gap: 1 }}>
         <div
           onClick={handleSeek}
           onTouchStart={handleSeek}
@@ -168,7 +168,7 @@ export function AudioMessagePlayer({ src, className = '' }: AudioMessagePlayerPr
           />
         </div>
 
-        <div style={{ position: 'absolute', left: 0, top: 20, display: 'flex', justifyContent: 'flex-start' }}>
+        <div style={{ display: 'flex', justifyContent: 'flex-start', lineHeight: 1 }}>
           <span style={{ fontSize: 11, color: 'rgba(255,255,255,0.6)', fontVariantNumeric: 'tabular-nums' }}>
             {isPlaying || currentTime > 0 ? formatTime(currentTime) : formatTime(duration)}
           </span>
