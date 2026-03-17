@@ -2,6 +2,9 @@ import { useEffect, useState } from 'react';
 import { useParams, useNavigate, Link } from 'react-router-dom';
 import type { Key } from 'react-aria-components';
 import { Layout } from '@/components/Layout';
+import { MobileLayout } from '@/components/mobile/MobileLayout';
+import { MobileSpinner } from '@/components/mobile/MobileSpinner';
+import { useIsMobile } from '@/hooks/use-mobile';
 import { supabase } from '@/integrations/supabase/client';
 import { useOrganization } from '@/hooks/useOrganization';
 import { useTranslation } from '@/lib/i18n';
@@ -11,7 +14,7 @@ import { useOutboundCall } from '@/contexts/OutboundCallContext';
 import { formatPhoneDisplay } from '@/lib/phoneUtils';
 import { Card } from '@/components/ui/card';
 import { toast } from 'sonner';
-import { EnvelopeSimple, Phone, Buildings, PencilSimple, TrashSimple, DotsThreeVertical, User, FileText, MapPin, Calendar, Megaphone, ArrowSquareOut } from '@phosphor-icons/react';
+import { EnvelopeSimple, Phone, Buildings, PencilSimple, TrashSimple, DotsThreeVertical, User, FileText, MapPin, Calendar, Megaphone, ArrowSquareOut, CaretLeft } from '@phosphor-icons/react';
 import { Breadcrumbs } from '@/components/application/breadcrumbs/breadcrumbs';
 import { Tabs } from '@/components/application/tabs/tabs';
 import { NativeSelect } from '@/components/base/select/select-native';
@@ -58,6 +61,7 @@ const getLifecycleColor = (stage: string | null): "gray" | "blue" | "purple" | "
 export default function ContactDetail() {
   const { id } = useParams();
   const navigate = useNavigate();
+  const isMobile = useIsMobile();
   const { organization, locale, loading: orgLoading, userProfile } = useOrganization();
   const { t } = useTranslation(locale as any);
   const { permissions } = usePermissions();
@@ -138,6 +142,225 @@ export default function ContactDetail() {
     navigate('/contacts');
   };
 
+  // ── Mobile tab content renderer ──
+  const renderTabContent = () => {
+    switch (selectedTab) {
+      case 'details':
+        return (
+          <div className="space-y-4">
+            <Card className="p-4">
+              <h2 className="text-base font-semibold mb-3 text-foreground">{t('contacts.details')}</h2>
+              <div className="grid grid-cols-1 gap-3">
+                {contact?.email && (
+                  <div className="flex items-center gap-3">
+                    <EnvelopeSimple className="h-4 w-4 text-muted-foreground flex-shrink-0" />
+                    <div className="min-w-0">
+                      <div className="text-xs text-muted-foreground">{t('contacts.email')}</div>
+                      <div className="text-sm text-foreground truncate">{contact.email}</div>
+                    </div>
+                  </div>
+                )}
+                {contact?.phone && (
+                  <div className="flex items-center gap-3">
+                    <Phone className="h-4 w-4 text-muted-foreground flex-shrink-0" />
+                    <div className="min-w-0">
+                      <div className="text-xs text-muted-foreground">{t('contacts.phone')}</div>
+                      <div className="text-sm text-foreground">{formatPhoneDisplay(contact.phone)}</div>
+                    </div>
+                  </div>
+                )}
+                {contact?.company_name && (
+                  <div className="flex items-center gap-3">
+                    <Buildings className="h-4 w-4 text-muted-foreground flex-shrink-0" />
+                    <div className="min-w-0">
+                      <div className="text-xs text-muted-foreground">{t('contacts.company')}</div>
+                      <div className="text-sm text-foreground">{contact.company_name}</div>
+                    </div>
+                  </div>
+                )}
+                <div className="flex items-center gap-3">
+                  <User className="h-4 w-4 text-muted-foreground flex-shrink-0" />
+                  <div className="flex-1 min-w-0">
+                    <div className="text-xs text-muted-foreground">{t('contacts.owner') || 'Responsável'}</div>
+                    <OwnerSelector
+                      value={contact?.owner_user_id}
+                      onChange={async (userId) => {
+                        const { error } = await supabase
+                          .from('contacts')
+                          .update({ owner_user_id: userId, updated_by: userProfile?.id || null } as any)
+                          .eq('id', contact.id);
+                        if (error) {
+                          toast.error(t('common.error'));
+                        } else {
+                          setContact({ ...contact, owner_user_id: userId });
+                          toast.success(t('contacts.updated'));
+                        }
+                      }}
+                      size="sm"
+                    />
+                  </div>
+                </div>
+              </div>
+            </Card>
+            {/* Documents */}
+            <Card className="p-4">
+              <h2 className="text-base font-semibold mb-3 text-foreground">Documentos</h2>
+              <div className="grid grid-cols-1 gap-3">
+                <div className="flex items-center gap-3">
+                  <FileText className="h-4 w-4 text-muted-foreground flex-shrink-0" />
+                  <div><div className="text-xs text-muted-foreground">CPF</div><div className="text-sm text-foreground">{contact?.cpf || '—'}</div></div>
+                </div>
+                <div className="flex items-center gap-3">
+                  <FileText className="h-4 w-4 text-muted-foreground flex-shrink-0" />
+                  <div><div className="text-xs text-muted-foreground">RG</div><div className="text-sm text-foreground">{contact?.rg ? `${contact.rg}${contact.rg_issuer ? ` - ${contact.rg_issuer}` : ''}` : '—'}</div></div>
+                </div>
+              </div>
+            </Card>
+            {/* Address */}
+            <Card className="p-4">
+              <h2 className="text-base font-semibold mb-3 text-foreground">Endereço</h2>
+              <div className="flex items-start gap-3">
+                <MapPin className="h-4 w-4 text-muted-foreground mt-0.5 flex-shrink-0" />
+                <div className="text-sm text-foreground">
+                  {contact?.address_street || contact?.address_city ? (
+                    <>
+                      {contact.address_street && <div>{contact.address_street}</div>}
+                      {contact.address_neighborhood && <div>{contact.address_neighborhood}</div>}
+                      <div>
+                        {[contact.address_city, contact.address_state].filter(Boolean).join(' - ')}
+                        {contact.address_zip && ` · CEP ${contact.address_zip}`}
+                      </div>
+                    </>
+                  ) : '—'}
+                </div>
+              </div>
+            </Card>
+          </div>
+        );
+      case 'timeline': return <ActivityTimeline contactId={contact!.id} />;
+      case 'opportunities': return <ContactOpportunities contactId={contact!.id} />;
+      case 'tasks': return <ContactTasks contactId={contact!.id} />;
+      case 'notes': return <ContactNotes contactId={contact!.id} />;
+      case 'calls': return <ContactCalls contactId={contact!.id} contactPhone={contact?.phone} contactName={contact?.full_name} />;
+      case 'messages': return <ContactMessages contactId={contact!.id} />;
+      case 'attachments': return <ContactAttachments contactId={contact!.id} />;
+      default: return null;
+    }
+  };
+
+  // ── Mobile ──
+  if (isMobile) {
+    if (orgLoading || loading) {
+      return (
+        <MobileLayout>
+          <div className="flex items-center justify-center h-full">
+            <MobileSpinner />
+          </div>
+        </MobileLayout>
+      );
+    }
+    if (!contact) {
+      return (
+        <MobileLayout>
+          <div className="p-4 text-center text-muted-foreground">{t('common.noResults')}</div>
+        </MobileLayout>
+      );
+    }
+    return (
+      <MobileLayout>
+        <div className="flex flex-col h-full">
+          {/* Back button */}
+          <div className="px-4 pt-3 pb-1">
+            <button
+              onClick={() => navigate('/contacts')}
+              className="flex items-center gap-1 text-sm text-muted-foreground hover:text-foreground transition-colors"
+            >
+              <CaretLeft size={16} weight="bold" />
+              {t('contacts.title')}
+            </button>
+          </div>
+
+          {/* Avatar + Name header */}
+          <div className="flex flex-col items-center px-4 pt-2 pb-4 gap-2">
+            <Avatar fallbackText={contact.full_name} size="xl" />
+            <h1 className="text-lg font-semibold text-foreground text-center">{contact.full_name}</h1>
+            {contact.lifecycle_stage && (
+              <Badge color={getLifecycleColor(contact.lifecycle_stage)} size="sm">
+                {contact.lifecycle_stage}
+              </Badge>
+            )}
+            <div className="flex items-center gap-3 text-xs text-muted-foreground">
+              {contact.email && <span className="truncate max-w-[140px]">{contact.email}</span>}
+              {contact.email && contact.phone && <span>·</span>}
+              {contact.phone && <span>{formatPhoneDisplay(contact.phone)}</span>}
+            </div>
+          </div>
+
+          {/* Action buttons */}
+          <div className="flex items-center justify-center gap-2 px-4 pb-4">
+            {permissions.canEditContacts && (
+              <Button color="secondary" size="sm" asChild>
+                <Link to={`/contacts/${contact.id}/edit`}>
+                  <PencilSimple className="h-4 w-4 mr-1" />
+                  {t('common.edit')}
+                </Link>
+              </Button>
+            )}
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button color="ghost" size="icon">
+                  <DotsThreeVertical className="h-4 w-4" />
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end">
+                {permissions.canDeleteContacts && (
+                  <AlertDialog>
+                    <AlertDialogTrigger asChild>
+                      <DropdownMenuItem
+                        className="text-destructive focus:text-destructive"
+                        onSelect={(e) => e.preventDefault()}
+                      >
+                        <TrashSimple className="h-4 w-4 mr-2" />
+                        {t('common.delete')}
+                      </DropdownMenuItem>
+                    </AlertDialogTrigger>
+                    <AlertDialogContent>
+                      <AlertDialogHeader>
+                        <AlertDialogTitle>{t('contacts.deleteConfirm')}</AlertDialogTitle>
+                        <AlertDialogDescription>{contact.full_name}</AlertDialogDescription>
+                      </AlertDialogHeader>
+                      <AlertDialogFooter>
+                        <AlertDialogCancel>{t('common.cancel')}</AlertDialogCancel>
+                        <AlertDialogAction onClick={handleDelete}>{t('common.delete')}</AlertDialogAction>
+                      </AlertDialogFooter>
+                    </AlertDialogContent>
+                  </AlertDialog>
+                )}
+              </DropdownMenuContent>
+            </DropdownMenu>
+          </div>
+
+          {/* Tabs via native select */}
+          <div className="px-4 pb-3">
+            <NativeSelect
+              aria-label="Tabs"
+              value={selectedTab as string}
+              onChange={(e) => setSelectedTab(e.target.value)}
+              options={tabs.map((tab) => ({ label: tab.label, value: tab.id }))}
+              className="w-full"
+            />
+          </div>
+
+          {/* Tab content */}
+          <div className="flex-1 overflow-auto px-4 pb-4">
+            {renderTabContent()}
+          </div>
+        </div>
+      </MobileLayout>
+    );
+  }
+
+  // ── Desktop ──
   if (orgLoading || loading) return <Layout><div className="p-6">{t('common.loading')}</div></Layout>;
   if (!contact) return <Layout><div className="p-6">{t('common.noResults')}</div></Layout>;
 

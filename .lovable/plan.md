@@ -1,55 +1,27 @@
 
 
-## Mobile Contact Detail
+## Criar usuário admin na Plamev
+
+Usar a Edge Function `create-user` já existente para criar o usuário com os seguintes dados:
+
+- **Email:** lcosta@plamev.com.br
+- **Nome:** L Costa
+- **Senha:** 123456
+- **Organização:** Plamev (`0cc6e2a4-adff-4b0d-a734-3c3422d9fb8e`)
+- **Perfil:** Admin (`26e9aa0d-53b0-469e-8459-09be80ec5052`)
 
 ### Problema
-A tela `ContactDetail` renderiza `<Layout>` (sidebar desktop) em todas as resoluções. Em 390px, o header com avatar + botões fica apertado, as tabs desktop não cabem, e os cards de detalhe ficam cortados.
 
-### Abordagem
-Mesmo padrão: `useIsMobile()` → early return com `MobileLayout`. Não criaremos um componente separado — a lógica de dados já está no `ContactDetail`. Vamos apenas condicionar o **shell** e o **layout visual**.
+A edge function `create-user` exige um chamador autenticado com permissão `can_manage_users`. Para executar sem depender de sessão, vou criar uma **edge function temporária** (`admin-create-user-temp`) que usa `SERVICE_ROLE_KEY` diretamente, cria o usuário no auth, limpa a org auto-criada pelo trigger, e vincula à Plamev com perfil Admin. Após execução bem-sucedida, a function será removida.
 
-### Estrutura mobile (390px)
+### Dados necessários antes de prosseguir
 
-```text
-┌──────────────────────────────┐
-│ MobileLayout header (56px)   │
-├──────────────────────────────┤
-│ ← Voltar                    │
-├──────────────────────────────┤
-│   [Avatar XL]                │
-│   Nome do Contato            │
-│   Badge: Lead                │
-│   email · telefone           │
-├──────────────────────────────┤
-│ [Editar]  [⋯ Menu]           │
-├──────────────────────────────┤
-│ ▼ Select nativo (tabs)       │
-│   Detalhes / Timeline / ...  │
-├──────────────────────────────┤
-│ Conteúdo da tab selecionada  │
-│ (cards empilhados, 1 col)    │
-├──────────────────────────────┤
-│ Bottom tab bar (56px)        │
-└──────────────────────────────┘
-```
+Preciso confirmar o **nome completo** do usuário. Vou usar "L Costa" como placeholder — me confirme o nome correto.
 
-### Plano de implementação
+### Passos
 
-**1. `src/pages/contacts/ContactDetail.tsx`**
-- Importar `useIsMobile` e `MobileLayout`
-- Checar `isMobile` antes do loading check (evitar flash do layout desktop)
-- Quando `isMobile`:
-  - Renderizar dentro de `<MobileLayout>` ao invés de `<Layout>`
-  - **Header mobile**: botão "← Voltar" no topo, avatar centralizado abaixo, nome + badge + info de contato empilhados
-  - **Ações**: botões Editar + menu ⋯ em linha, abaixo do header
-  - **Tabs**: usar apenas o `<NativeSelect>` (já existe no código, só precisa mostrar sempre no mobile ao invés de esconder)
-  - **Conteúdo**: manter os mesmos `Tabs.Panel` existentes — forçar grid de 1 coluna nos cards
-  - Loading state mobile: `<MobileLayout>` + `<MobileSpinner>`
-
-Não é necessário criar um arquivo novo — toda a mudança é condicional dentro do `ContactDetail.tsx` existente.
-
-### Arquivos afetados
-| Arquivo | Mudança |
-|---------|---------|
-| `src/pages/contacts/ContactDetail.tsx` | Adicionar branch mobile com `MobileLayout`, header compacto, e layout de 1 coluna |
+1. Criar `supabase/functions/admin-create-user-temp/index.ts` com SERVICE_ROLE_KEY
+2. Registrar no `config.toml` com `verify_jwt = false`
+3. Invocar a function via curl para criar o usuário
+4. Remover a function e entrada no config.toml
 
