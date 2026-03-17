@@ -88,7 +88,10 @@ export function MobileLayout({ children, hideBottomBar = false }: MobileLayoutPr
   return (
     <div className="flex flex-col h-[100dvh] bg-background overflow-hidden">
       {/* ── Header ── */}
-      <header className="h-14 flex items-center justify-between px-4 border-b border-border bg-card flex-shrink-0 z-30">
+      <header
+        className="flex items-center justify-between px-4 border-b border-border bg-card flex-shrink-0 z-30"
+        style={{ paddingTop: 'env(safe-area-inset-top, 0px)', minHeight: 'calc(56px + env(safe-area-inset-top, 0px))' }}
+      >
         <SeialzLogo size="sm" theme="dark" animated={true} />
         <div className="flex items-center gap-2">
           <button className="p-2 text-muted-foreground hover:text-foreground transition-colors">
@@ -110,7 +113,10 @@ export function MobileLayout({ children, hideBottomBar = false }: MobileLayoutPr
 
       {/* ── Bottom Tab Bar ── */}
       {!hideBottomBar && (
-        <nav className="h-14 flex items-center border-t border-border bg-card flex-shrink-0 z-30">
+        <nav
+          className="flex items-center border-t border-border bg-card flex-shrink-0 z-30"
+          style={{ minHeight: '56px', paddingBottom: 'env(safe-area-inset-bottom, 0px)' }}
+        >
           {tabs.map((tab) => {
             const active = isActive(tab.href);
             return (
@@ -223,7 +229,7 @@ export function MobileLayout({ children, hideBottomBar = false }: MobileLayoutPr
         </div>
 
         {/* Sign out */}
-        <div className="border-t border-border p-3">
+        <div className="border-t border-border p-3" style={{ paddingBottom: 'calc(12px + env(safe-area-inset-bottom, 0px))' }}>
           <button
             onClick={() => { signOut(); setDrawerOpen(false); }}
             className="flex items-center gap-3 w-full px-4 py-2.5 text-sm text-destructive hover:bg-destructive/10 rounded-md transition-colors"
