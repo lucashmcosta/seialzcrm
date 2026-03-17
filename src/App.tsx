@@ -35,6 +35,9 @@ import SignIn from "./pages/auth/SignIn";
 import ConfirmEmail from "./pages/auth/ConfirmEmail";
 import AcceptInvitation from "./pages/invite/AcceptInvitation";
 
+// Mobile pages
+const MobileSignIn = lazy(() => retryImport(() => import("./components/mobile/auth/MobileSignIn")));
+
 // Public docs - load immediately
 import DocsIndex from "./pages/docs/DocsIndex";
 import DocsModule from "./pages/docs/DocsModule";
