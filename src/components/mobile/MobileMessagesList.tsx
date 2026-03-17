@@ -938,8 +938,13 @@ export function MobileMessagesList() {
                               {message.media_urls && message.media_urls.length > 0 && (
                                 <div className="space-y-1 mb-1">
                                   {message.media_urls.map((url, i) => {
-                                    if (message.media_type === 'audio' || url.match(/\.(ogg|mp3|wav|m4a)$/i))
-                                      return <AudioMessagePlayer key={i} src={url} />;
+                                    if (message.media_type === 'audio' || url.match(/\.(ogg|mp3|wav|m4a)$/i)) {
+                                      const isAudioOnly = message.media_type === 'audio' && !message.content;
+                                      return <AudioMessagePlayer key={i} src={url}
+                                        timestamp={isAudioOnly ? new Date(message.sent_at).toLocaleTimeString(locale, { hour: '2-digit', minute: '2-digit', hour12: false }) : undefined}
+                                        statusIcon={isAudioOnly && isOutbound ? renderStatusIcon(message.whatsapp_status) : undefined}
+                                      />;
+                                    }
                                     if (message.media_type === 'image' || url.match(/\.(jpg|jpeg|png|gif|webp)$/i))
                                       return <img key={i} src={url} alt="" className="max-w-full max-h-[200px] rounded cursor-pointer object-cover" onClick={() => setPreviewImageUrl(url)} />;
                                     return (
