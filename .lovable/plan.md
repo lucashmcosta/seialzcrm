@@ -1,27 +1,63 @@
 
 
-## Criar usuário admin na Plamev
+## Mobile Layout para Contatos
 
-Usar a Edge Function `create-user` já existente para criar o usuário com os seguintes dados:
+### Estado atual
+- `ContactsList` usa `Layout` (desktop sidebar) em todos os tamanhos de tela — sem detecção mobile
+- Tela desktop: tabela com colunas, checkboxes, sorting, pagination, filtros (owner, stage), column selector
+- Tabela não funciona em 390px — colunas ficam cortadas
 
-- **Email:** lcosta@plamev.com.br
-- **Nome:** L Costa
-- **Senha:** 123456
-- **Organização:** Plamev (`0cc6e2a4-adff-4b0d-a734-3c3422d9fb8e`)
-- **Perfil:** Admin (`26e9aa0d-53b0-469e-8459-09be80ec5052`)
+### Abordagem
+Mesmo padrão usado no Dashboard e Oportunidades: `useIsMobile()` → early return com `MobileLayout` + componente mobile dedicado.
 
-### Problema
+### Componente mobile: estrutura
 
-A edge function `create-user` exige um chamador autenticado com permissão `can_manage_users`. Para executar sem depender de sessão, vou criar uma **edge function temporária** (`admin-create-user-temp`) que usa `SERVICE_ROLE_KEY` diretamente, cria o usuário no auth, limpa a org auto-criada pelo trigger, e vincula à Plamev com perfil Admin. Após execução bem-sucedida, a function será removida.
+```text
+┌─────────────────────────────┐
+│ MobileLayout header (56px)  │
+├─────────────────────────────┤
+│ 🔍 Search                   │
+│ 128 contatos                │
+├─────────────────────────────┤
+│ [Todos] [Lead] [Cliente] [Inativo]  ← scroll horizontal
+├─────────────────────────────┤
+│ ┌───────────────────────┐   │
+│ │ Avatar  Nome          │   │
+│ │         email · phone │   │
+│ │         Badge: Lead   │   │
+│ └───────────────────────┘   │
+│ ┌───────────────────────┐   │
+│ │ Contact Card          │   │
+│ └───────────────────────┘   │
+│ ...scroll + load more...    │
+├─────────────────────────────┤
+│ [+] FAB (novo contato)      │
+├─────────────────────────────┤
+│ Bottom tab bar (56px)       │
+└─────────────────────────────┘
+```
 
-### Dados necessários antes de prosseguir
+### Plano
 
-Preciso confirmar o **nome completo** do usuário. Vou usar "L Costa" como placeholder — me confirme o nome correto.
+**1. Criar `src/components/mobile/MobileContactsList.tsx`**
+- Search bar no topo
+- Contagem total de contatos (font-data)
+- Chips horizontais para filtro de lifecycle stage (Todos, Lead, Cliente, Inativo)
+- Lista vertical de cards de contato: avatar + nome + email/phone + badge de stage
+- Tap no card → navega para `/contacts/:id`
+- Infinite scroll com IntersectionObserver (carregar mais ao chegar no fim)
+- FAB fixo para criar novo contato (`/contacts/new`)
+- scrollbar-hide na lista
 
-### Passos
+**2. Atualizar `src/pages/contacts/ContactsList.tsx`**
+- Importar `useIsMobile` e `MobileLayout`
+- Early return quando `isMobile === true` renderizando `MobileLayout` + `MobileContactsList`
+- Passar dados necessários via props (contacts, loading, searchTerm, filters, handlers, totalCount)
+- Manter toda a lógica de fetching no componente pai
 
-1. Criar `supabase/functions/admin-create-user-temp/index.ts` com SERVICE_ROLE_KEY
-2. Registrar no `config.toml` com `verify_jwt = false`
-3. Invocar a function via curl para criar o usuário
-4. Remover a function e entrada no config.toml
+### Arquivos afetados
+| Arquivo | Mudança |
+|---------|---------|
+| `src/components/mobile/MobileContactsList.tsx` | **Novo** — lista mobile de contatos |
+| `src/pages/contacts/ContactsList.tsx` | Adicionar detecção mobile + early return |
 
