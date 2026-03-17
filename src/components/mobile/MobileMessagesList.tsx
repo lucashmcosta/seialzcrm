@@ -805,7 +805,13 @@ export function MobileMessagesList() {
           {/* Chat Header */}
           <div className="h-14 flex items-center gap-2 px-2 border-b border-border bg-card shrink-0">
             <button
-              onClick={() => { setSelectedThreadId(null); setMessages([]); setInlineNotes([]); }}
+              onClick={() => {
+                if (fromContactId) {
+                  navigate(`/contacts/${fromContactId}`);
+                } else {
+                  setSelectedThreadId(null); setMessages([]); setInlineNotes([]);
+                }
+              }}
               className="p-2 text-muted-foreground hover:text-foreground"
             >
               <CaretLeft size={20} weight="bold" />
