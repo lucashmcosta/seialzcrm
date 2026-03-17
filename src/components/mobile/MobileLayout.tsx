@@ -25,6 +25,7 @@ import {
 
 interface MobileLayoutProps {
   children: ReactNode;
+  hideBottomBar?: boolean;
 }
 
 interface MobileTab {
