@@ -649,6 +649,32 @@ export default function OpportunitiesKanban() {
     );
   }
 
+  // Mobile layout
+  if (isMobile) {
+    return (
+      <MobileLayout>
+        <MobileOpportunitiesKanban
+          stages={stages}
+          stageCounts={stageCounts}
+          opportunitiesByStage={opportunitiesByStage}
+          hasMoreByStage={hasMoreByStage}
+          searchTerm={searchTerm}
+          onSearchChange={setSearchTerm}
+          searchResults={searchResults}
+          tagsByOpportunity={tagsByOpportunity}
+          locale={locale}
+          formatCurrency={formatCurrency}
+          onRefresh={fetchData}
+          organizationId={organization?.id || ''}
+          loadMoreForStage={loadMoreForStage}
+          loadingMoreStage={loadingMoreStage}
+          filterOwner={filterOwner}
+          filterTag={filterTag}
+        />
+      </MobileLayout>
+    );
+  }
+
   const filterPanel = (
     <Popover open={showFilters} onOpenChange={setShowFilters}>
       <PopoverTrigger asChild>
