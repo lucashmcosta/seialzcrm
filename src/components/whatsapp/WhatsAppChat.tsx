@@ -468,9 +468,9 @@ export function WhatsAppChat({ contactId, threadId: initialThreadId, onThreadCre
                     )}
 
                     {/* Footer */}
-                    <div className="flex items-center justify-end gap-1 mt-1">
+                    <div className={`flex items-center justify-end gap-1 mt-1 ${message.media_type === 'audio' && !message.content ? 'ml-[34px]' : ''}`}>
                       {message.media_type && getMediaTypeIcon(message.media_type)}
-                      <span className={`text-xs ${isOutbound ? 'text-white/60' : 'text-muted-foreground'}`}>
+                      <span className={`${message.media_type === 'audio' && !message.content ? 'text-[11px] leading-[14px]' : 'text-xs'} ${isOutbound ? 'text-white/60' : 'text-muted-foreground'}`}>
                         {formatDistanceToNow(new Date(message.sent_at), {
                           addSuffix: true,
                           locale: dateLocale,

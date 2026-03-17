@@ -1545,8 +1545,8 @@ function DesktopMessagesList() {
                                     )}
 
                                     {/* Footer - Name + Time + Status */}
-                                    <div className="mt-1 flex items-center justify-end gap-1">
-                                      <span className="text-[10px] text-muted-foreground/70 whitespace-nowrap">
+                                    <div className={cn("mt-1 flex items-center justify-end gap-1", message.media_type === 'audio' && !message.content && 'ml-[34px]')}>
+                                      <span className={cn("text-muted-foreground/70 whitespace-nowrap", message.media_type === 'audio' && !message.content ? 'text-[11px] leading-[14px]' : 'text-[10px]')}>
                                         {isOutbound 
                                           ? (message.sender_name ? `${message.sender_name} - ` : '')
                                           : (selectedThread?.contact_name ? `${selectedThread.contact_name} - ` : '')
