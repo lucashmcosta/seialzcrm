@@ -99,7 +99,7 @@ export default function MobileSignIn() {
         animate={{ opacity: 1, y: 0 }}
         transition={{ duration: 0.5 }}
       >
-        <SeialzLogo size="xl" theme="green" />
+        <SeialzLogo size="xl" theme="dark" />
         <motion.p
           className="mt-4 text-sm tracking-widest uppercase mobile-signin-tagline"
           initial={{ opacity: 0 }}
@@ -107,7 +107,7 @@ export default function MobileSignIn() {
           transition={{ delay: 0.3, duration: 0.5 }}
           style={{ fontFamily: "'Outfit', sans-serif" }}
         >
-          Do clique ao contrato
+          SALES OPS NATIVO
         </motion.p>
       </motion.div>
 
