@@ -99,23 +99,23 @@ const statusConfig: Record<string, { label: string; labelEn: string; dotColor: s
 };
 
 const formatRelativeTime = (timestamp: string, locale: 'pt-BR' | 'en-US'): string => {
-  const date = new Date(timestamp);
-  const diffMin = Math.floor((Date.now() - date.getTime()) / 60000);
-  const diffH = Math.floor(diffMin / 60);
-  const diffD = Math.floor(diffH / 24);
+  const d = new Date(timestamp);
+  const now = new Date();
+  const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+  const target = new Date(d.getFullYear(), d.getMonth(), d.getDate());
+  const diffDays = Math.floor((today.getTime() - target.getTime()) / (1000 * 60 * 60 * 24));
 
-  if (locale === 'pt-BR') {
-    if (diffMin < 1) return 'Agora';
-    if (diffMin < 60) return `${diffMin}min`;
-    if (diffH < 24) return `${diffH}h`;
-    if (diffD === 1) return 'Ontem';
-    return `${diffD}d`;
+  if (diffDays === 0) {
+    return d.toLocaleTimeString(locale, { hour: '2-digit', minute: '2-digit' });
   }
-  if (diffMin < 1) return 'Now';
-  if (diffMin < 60) return `${diffMin}m`;
-  if (diffH < 24) return `${diffH}h`;
-  if (diffD === 1) return 'Yesterday';
-  return `${diffD}d`;
+  if (diffDays === 1) {
+    return locale === 'pt-BR' ? 'Ontem' : 'Yesterday';
+  }
+  if (diffDays < 7) {
+    const day = d.toLocaleDateString(locale, { weekday: 'long' });
+    return day.charAt(0).toUpperCase() + day.slice(1);
+  }
+  return d.toLocaleDateString(locale, { day: '2-digit', month: '2-digit', year: '2-digit' });
 };
 
 const getLastInboundTime = (
@@ -768,7 +768,7 @@ export function MobileMessagesList() {
                           )}
                         </div>
                         {thread.last_message && (
-                          <p className="text-xs text-muted-foreground truncate mt-0.5">
+                          <p className="text-xs text-muted-foreground line-clamp-2 mt-0.5">
                             {thread.last_message_direction === 'outbound' && (
                               <span className="text-muted-foreground/60">Você: </span>
                             )}
