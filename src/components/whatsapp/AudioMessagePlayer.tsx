@@ -109,8 +109,8 @@ export function AudioMessagePlayer({ src, className = '' }: AudioMessagePlayerPr
       >
         {isPlaying ? (
           <svg width="16" height="16" viewBox="0 0 20 20" fill="none">
-            <rect x="5" y="3" width="3.5" height="14" rx="1" fill="#E9EDEF" />
-            <rect x="11.5" y="3" width="3.5" height="14" rx="1" fill="#E9EDEF" />
+            <rect x="5" y="3" width="3.5" height="14" rx="1" fill="rgba(255,255,255,0.9)" />
+            <rect x="11.5" y="3" width="3.5" height="14" rx="1" fill="rgba(255,255,255,0.9)" />
           </svg>
         ) : (
           <svg width="16" height="16" viewBox="0 0 20 20" fill="none">
