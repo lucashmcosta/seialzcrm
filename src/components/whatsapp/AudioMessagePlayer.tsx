@@ -169,8 +169,8 @@ export function AudioMessagePlayer({ src, className = '' }: AudioMessagePlayerPr
         </div>
       </div>
 
-      {/* Row 2: Duration */}
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: 0, margin: 0 }}>
+      {/* Row 2: Duration + Timestamp */}
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', padding: 0, margin: 0, marginLeft: 34 }}>
         <span style={{ fontSize: 11, lineHeight: '14px', color: 'rgba(255,255,255,0.6)', fontVariantNumeric: 'tabular-nums' }}>
           {isPlaying || currentTime > 0 ? formatTime(currentTime) : formatTime(duration)}
         </span>
