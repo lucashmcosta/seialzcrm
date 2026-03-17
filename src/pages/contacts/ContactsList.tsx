@@ -65,6 +65,7 @@ const lifecycleColors: Record<string, BadgeColor> = {
 
 export default function ContactsList() {
   const navigate = useNavigate();
+  const isMobile = useIsMobile();
   const { organization, userProfile, locale } = useOrganization();
   const { t } = useTranslation(locale as 'pt-BR' | 'en-US');
   const { permissions } = usePermissions();
