@@ -448,7 +448,7 @@ export function WhatsAppChat({ contactId, threadId: initialThreadId, onThreadCre
                   className={`flex ${isOutbound ? 'justify-end' : 'justify-start'}`}
                 >
                   <div
-                    className={`max-w-[70%] rounded-lg ${msg.media_type === 'audio' && !msg.content ? 'p-1' : 'p-3'} ${
+                    className={`max-w-[70%] rounded-lg ${message.media_type === 'audio' && !message.content ? 'p-1' : 'p-3'} ${
                       isOutbound
                         ? 'bg-[#054D3E] text-white'
                         : 'bg-muted'
