@@ -122,6 +122,12 @@ function ProtectedRoute({ children }: { children: React.ReactNode }) {
   return <>{children}</>;
 }
 
+// Renders mobile or desktop auth component based on viewport
+function ResponsiveSignIn() {
+  const isMobile = useIsMobile();
+  return isMobile ? <MobileSignIn /> : <SignIn />;
+}
+
 // Global call handler - persists across all route changes
 // SECURITY: Never initialize Twilio Device in admin portal - admins should NOT receive customer calls
 function GlobalCallHandler() {
