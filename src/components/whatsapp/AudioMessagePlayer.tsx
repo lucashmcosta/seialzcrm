@@ -127,8 +127,8 @@ export function AudioMessagePlayer({ src, className = '' }: AudioMessagePlayerPr
           style={{
             display: 'flex',
             alignItems: 'center',
-            gap: 1.5,
-            height: 30,
+            gap: 1,
+            height: 20,
             cursor: 'pointer',
             position: 'relative',
           }}
