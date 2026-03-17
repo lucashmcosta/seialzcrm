@@ -349,7 +349,6 @@ export function WhatsAppChat({ contactId, threadId: initialThreadId, onThreadCre
               statusIcon={isAudioOnly && msgIsOutbound ? renderStatusIcon(message.whatsapp_status) : undefined}
             />;
           }
-          }
 
           // Check if it's video
           if (mediaType === 'video' || url.match(/\.(mp4|mov|webm|avi)$/i)) {
