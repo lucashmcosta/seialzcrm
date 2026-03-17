@@ -188,7 +188,7 @@ export function MobileContactsList({
 
             {loadingMore && (
               <div className="flex items-center justify-center py-3">
-                <p className="text-xs text-muted-foreground">Carregando mais...</p>
+                <MobileSpinner size="sm" />
               </div>
             )}
           </>

@@ -249,7 +249,7 @@ export function MobileOpportunitiesKanban({
         {activeStageId && hasMoreByStage[activeStageId] && (
           <div ref={sentinelRef} className="h-8 flex items-center justify-center">
             {loadingMoreStage === activeStageId && (
-              <span className="font-data text-[10px] text-muted-foreground">Carregando...</span>
+              <MobileSpinner size="sm" />
             )}
           </div>
         )}

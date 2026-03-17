@@ -645,7 +645,7 @@ export default function OpportunitiesKanban() {
       return (
         <MobileLayout>
           <div className="flex items-center justify-center h-full">
-            <p className="text-sm text-muted-foreground">{t('common.loading')}</p>
+            <MobileSpinner />
           </div>
         </MobileLayout>
       );
