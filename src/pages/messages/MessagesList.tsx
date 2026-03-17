@@ -1458,7 +1458,8 @@ function DesktopMessagesList() {
                                   
                                   <div
                                     className={cn(
-                                      'relative max-w-[70%] rounded-lg p-3 min-w-[80px] overflow-hidden',
+                                      'relative max-w-[70%] rounded-lg min-w-[80px] overflow-hidden',
+                                      message.media_type === 'audio' && !message.content ? 'p-1' : 'p-3',
                                       isOutbound
                                         ? 'bg-green-100 dark:bg-green-900/40 text-green-900 dark:text-green-100'
                                         : 'bg-muted'

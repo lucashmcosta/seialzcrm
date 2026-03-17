@@ -85,7 +85,7 @@ export function AudioMessagePlayer({ src, className = '' }: AudioMessagePlayerPr
   };
 
   return (
-    <div className={className} style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '2px 2px', maxWidth: 240, minWidth: 200 }}>
+    <div className={className} style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '0px 2px', maxWidth: 240, minWidth: 200 }}>
       <audio ref={audioRef} src={src} preload="metadata" />
 
       {/* Play/Pause */}
@@ -168,7 +168,7 @@ export function AudioMessagePlayer({ src, className = '' }: AudioMessagePlayerPr
           />
         </div>
 
-        <div style={{ display: 'flex', justifyContent: 'flex-start', marginTop: 2 }}>
+        <div style={{ display: 'flex', justifyContent: 'flex-start', marginTop: 0 }}>
           <span style={{ fontSize: 11, color: 'rgba(255,255,255,0.6)', fontVariantNumeric: 'tabular-nums' }}>
             {isPlaying || currentTime > 0 ? formatTime(currentTime) : formatTime(duration)}
           </span>
