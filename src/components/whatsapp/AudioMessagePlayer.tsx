@@ -85,7 +85,7 @@ export function AudioMessagePlayer({ src, className = '' }: AudioMessagePlayerPr
   };
 
   return (
-    <div className={className} style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '2px 2px' }}>
+    <div className={className} style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '2px 2px', maxWidth: 240, minWidth: 200 }}>
       <audio ref={audioRef} src={src} preload="metadata" />
 
       {/* Play/Pause */}
