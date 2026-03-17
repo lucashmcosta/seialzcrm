@@ -1,27 +1,27 @@
 
 
-## Criar usuário admin na Plamev
+## Fix: Audio Message Bubble Too Tall
 
-Usar a Edge Function `create-user` já existente para criar o usuário com os seguintes dados:
+The bubble's vertical padding comes from `p-2.5` (10px all sides) on the parent bubble `div` at line 915 of `MobileMessagesList.tsx`. The audio player itself already has tight padding (`2px 2px`). The fix is to reduce the bubble padding specifically when the message is audio-only.
 
-- **Email:** lcosta@plamev.com.br
-- **Nome:** L Costa
-- **Senha:** 123456
-- **Organização:** Plamev (`0cc6e2a4-adff-4b0d-a734-3c3422d9fb8e`)
-- **Perfil:** Admin (`26e9aa0d-53b0-469e-8459-09be80ec5052`)
+### Changes
 
-### Problema
+#### 1. `src/components/mobile/MobileMessagesList.tsx` (~line 915)
+The bubble container uses `p-2.5` universally. For audio-only messages (no text content, media_type is audio), reduce padding to `p-1` or `px-1.5 py-1`. 
 
-A edge function `create-user` exige um chamador autenticado com permissão `can_manage_users`. Para executar sem depender de sessão, vou criar uma **edge function temporária** (`admin-create-user-temp`) que usa `SERVICE_ROLE_KEY` diretamente, cria o usuário no auth, limpa a org auto-criada pelo trigger, e vincula à Plamev com perfil Admin. Após execução bem-sucedida, a function será removida.
+Approach: Add a conditional class — if the message has audio media and no text content, use `p-1` instead of `p-2.5`.
 
-### Dados necessários antes de prosseguir
+#### 2. Same change in `src/components/whatsapp/WhatsAppChat.tsx` and `src/pages/messages/MessagesList.tsx`
+Apply the same conditional padding reduction for audio messages in the desktop chat views for consistency.
 
-Preciso confirmar o **nome completo** do usuário. Vou usar "L Costa" como placeholder — me confirme o nome correto.
+#### 3. `src/components/whatsapp/AudioMessagePlayer.tsx` (line 88)
+Reduce the container padding from `padding: '2px 2px'` to `padding: '0px 2px'` and reduce the gap from `8` to `6` to tighten the player internally.
 
-### Passos
+Also reduce `marginTop: 2` on the duration text div (line 171) to `marginTop: 0`.
 
-1. Criar `supabase/functions/admin-create-user-temp/index.ts` com SERVICE_ROLE_KEY
-2. Registrar no `config.toml` com `verify_jwt = false`
-3. Invocar a function via curl para criar o usuário
-4. Remover a function e entrada no config.toml
+### Files affected
+- `src/components/mobile/MobileMessagesList.tsx`
+- `src/components/whatsapp/WhatsAppChat.tsx`
+- `src/pages/messages/MessagesList.tsx`
+- `src/components/whatsapp/AudioMessagePlayer.tsx`
 
