@@ -1,4 +1,5 @@
 import { Suspense, lazy } from "react";
+import { useIsMobile } from "@/hooks/use-mobile";
 import { Toaster } from "@/components/ui/toaster";
 import { Toaster as Sonner } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
@@ -34,6 +35,9 @@ import SignUp from "./pages/auth/SignUp";
 import SignIn from "./pages/auth/SignIn";
 import ConfirmEmail from "./pages/auth/ConfirmEmail";
 import AcceptInvitation from "./pages/invite/AcceptInvitation";
+
+// Mobile pages
+const MobileSignIn = lazy(() => retryImport(() => import("./components/mobile/auth/MobileSignIn")));
 
 // Public docs - load immediately
 import DocsIndex from "./pages/docs/DocsIndex";
@@ -118,6 +122,12 @@ function ProtectedRoute({ children }: { children: React.ReactNode }) {
   return <>{children}</>;
 }
 
+// Renders mobile or desktop auth component based on viewport
+function ResponsiveSignIn() {
+  const isMobile = useIsMobile();
+  return isMobile ? <MobileSignIn /> : <SignIn />;
+}
+
 // Global call handler - persists across all route changes
 // SECURITY: Never initialize Twilio Device in admin portal - admins should NOT receive customer calls
 function GlobalCallHandler() {
@@ -160,7 +170,7 @@ const App = () => (
           
           {/* Auth routes */}
           <Route path="/auth/signup" element={<SignUp />} />
-          <Route path="/auth/signin" element={<SignIn />} />
+          <Route path="/auth/signin" element={<ResponsiveSignIn />} />
           <Route path="/auth/confirm-email" element={<ConfirmEmail />} />
           <Route path="/invite/:token" element={<AcceptInvitation />} />
           
