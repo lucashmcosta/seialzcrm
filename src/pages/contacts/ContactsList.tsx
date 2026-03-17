@@ -316,9 +316,12 @@ export default function ContactsList() {
     return (
       <MobileLayout>
         <MobileContactsList
-          contacts={sortedContacts}
+          contacts={mobileContacts}
           loading={loading}
+          loadingMore={mobileLoadingMore}
           totalCount={totalCount}
+          hasMore={mobileHasMore}
+          onLoadMore={handleMobileLoadMore}
           searchTerm={searchTerm}
           onSearchChange={setSearchTerm}
           stageFilter={stageFilter}

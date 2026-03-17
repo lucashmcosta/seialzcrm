@@ -1,4 +1,4 @@
-import { useRef, useEffect, useCallback } from 'react';
+import { useRef, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Plus, MagnifyingGlass, Envelope, Phone } from '@phosphor-icons/react';
 import { Avatar } from '@/components/base/avatar/avatar';
@@ -22,7 +22,10 @@ interface Contact {
 interface MobileContactsListProps {
   contacts: Contact[];
   loading: boolean;
+  loadingMore: boolean;
   totalCount: number;
+  hasMore: boolean;
+  onLoadMore: () => void;
   searchTerm: string;
   onSearchChange: (value: string) => void;
   stageFilter: string;
@@ -59,7 +62,10 @@ const stageChips = [
 export function MobileContactsList({
   contacts,
   loading,
+  loadingMore,
   totalCount,
+  hasMore,
+  onLoadMore,
   searchTerm,
   onSearchChange,
   stageFilter,
@@ -67,6 +73,25 @@ export function MobileContactsList({
   canCreate,
 }: MobileContactsListProps) {
   const navigate = useNavigate();
+  const sentinelRef = useRef<HTMLDivElement>(null);
+
+  // Infinite scroll via IntersectionObserver
+  useEffect(() => {
+    const sentinel = sentinelRef.current;
+    if (!sentinel) return;
+
+    const observer = new IntersectionObserver(
+      (entries) => {
+        if (entries[0].isIntersecting && hasMore && !loadingMore && !loading) {
+          onLoadMore();
+        }
+      },
+      { threshold: 0.1 }
+    );
+
+    observer.observe(sentinel);
+    return () => observer.disconnect();
+  }, [hasMore, loadingMore, loading, onLoadMore]);
 
   return (
     <div className="flex flex-col h-full bg-background">
@@ -107,7 +132,7 @@ export function MobileContactsList({
 
       {/* Contact list */}
       <div className="flex-1 overflow-auto px-4 py-2 space-y-2 scrollbar-hide">
-        {loading ? (
+        {loading && contacts.length === 0 ? (
           <div className="flex items-center justify-center py-12">
             <p className="text-sm text-muted-foreground">Carregando...</p>
           </div>
@@ -116,45 +141,56 @@ export function MobileContactsList({
             <p className="text-sm text-muted-foreground">Nenhum contato encontrado</p>
           </div>
         ) : (
-          contacts.map((contact) => (
-            <button
-              key={contact.id}
-              onClick={() => navigate(`/contacts/${contact.id}`)}
-              className="w-full text-left bg-card border border-border rounded-md p-3 flex items-start gap-3 active:bg-muted/50 transition-colors"
-            >
-              <Avatar fallbackText={contact.full_name} size="sm" />
-              <div className="flex-1 min-w-0">
-                <p className="text-sm font-medium text-foreground truncate">
-                  {contact.full_name}
-                </p>
-                <div className="flex items-center gap-2 mt-0.5">
-                  {contact.phone && (
-                    <span className="text-xs text-muted-foreground flex items-center gap-1 truncate">
-                      <Phone size={12} weight="light" />
-                      {formatPhoneDisplay(contact.phone)}
-                    </span>
-                  )}
-                  {contact.email && (
-                    <span className="text-xs text-muted-foreground flex items-center gap-1 truncate">
-                      <Envelope size={12} weight="light" />
-                      {contact.email}
-                    </span>
+          <>
+            {contacts.map((contact) => (
+              <button
+                key={contact.id}
+                onClick={() => navigate(`/contacts/${contact.id}`)}
+                className="w-full text-left bg-card border border-border rounded-md p-3 flex items-start gap-3 active:bg-muted/50 transition-colors"
+              >
+                <Avatar fallbackText={contact.full_name} size="sm" />
+                <div className="flex-1 min-w-0">
+                  <p className="text-sm font-medium text-foreground truncate">
+                    {contact.full_name}
+                  </p>
+                  <div className="flex items-center gap-2 mt-0.5">
+                    {contact.phone && (
+                      <span className="text-xs text-muted-foreground flex items-center gap-1 truncate">
+                        <Phone size={12} weight="light" />
+                        {formatPhoneDisplay(contact.phone)}
+                      </span>
+                    )}
+                    {contact.email && (
+                      <span className="text-xs text-muted-foreground flex items-center gap-1 truncate">
+                        <Envelope size={12} weight="light" />
+                        {contact.email}
+                      </span>
+                    )}
+                  </div>
+                  {contact.company_name && (
+                    <p className="text-xs text-muted-foreground mt-0.5 truncate">
+                      {contact.company_name}
+                    </p>
                   )}
                 </div>
-                {contact.company_name && (
-                  <p className="text-xs text-muted-foreground mt-0.5 truncate">
-                    {contact.company_name}
-                  </p>
-                )}
+                <BadgeWithDot
+                  color={lifecycleColors[contact.lifecycle_stage] || 'gray'}
+                  size="sm"
+                >
+                  {lifecycleLabels[contact.lifecycle_stage] || contact.lifecycle_stage || 'Lead'}
+                </BadgeWithDot>
+              </button>
+            ))}
+
+            {/* Infinite scroll sentinel */}
+            <div ref={sentinelRef} className="h-4" />
+
+            {loadingMore && (
+              <div className="flex items-center justify-center py-3">
+                <p className="text-xs text-muted-foreground">Carregando mais...</p>
               </div>
-              <BadgeWithDot
-                color={lifecycleColors[contact.lifecycle_stage] || 'gray'}
-                size="sm"
-              >
-                {lifecycleLabels[contact.lifecycle_stage] || contact.lifecycle_stage || 'Lead'}
-              </BadgeWithDot>
-            </button>
-          ))
+            )}
+          </>
         )}
       </div>
 
