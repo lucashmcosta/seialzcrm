@@ -283,14 +283,16 @@ export function ContactCalls({ contactId, opportunityId, contactPhone, contactNa
           </div>
         </div>
         
-        <Tabs value={filter} onValueChange={(v) => setFilter(v as any)} className="mt-2">
-          <TabsList>
-            <TabsTrigger value="all">Todas</TabsTrigger>
-            <TabsTrigger value="made">Feitas</TabsTrigger>
-            <TabsTrigger value="received">Recebidas</TabsTrigger>
-            <TabsTrigger value="scheduled">Agendadas</TabsTrigger>
-          </TabsList>
-        </Tabs>
+        <div className={`mt-2 ${isMobile ? 'overflow-x-auto -mx-3 px-3' : ''}`}>
+          <Tabs value={filter} onValueChange={(v) => setFilter(v as any)}>
+            <TabsList className={isMobile ? 'w-max' : ''}>
+              <TabsTrigger value="all">Todas</TabsTrigger>
+              <TabsTrigger value="made">Feitas</TabsTrigger>
+              <TabsTrigger value="received">Recebidas</TabsTrigger>
+              <TabsTrigger value="scheduled">Agendadas</TabsTrigger>
+            </TabsList>
+          </Tabs>
+        </div>
       </CardHeader>
       <CardContent>
         <div className="space-y-3">
