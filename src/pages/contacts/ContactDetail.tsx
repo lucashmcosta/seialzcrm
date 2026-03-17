@@ -153,81 +153,88 @@ export default function ContactDetail() {
     switch (selectedTab) {
       case 'details':
         return (
-          <div className="space-y-4">
-            <Card className="p-4">
-              <h2 className="text-base font-semibold mb-3 text-foreground">{t('contacts.details')}</h2>
-              <div className="grid grid-cols-1 gap-3">
+          <div className="space-y-5 pt-4">
+            {/* Contato */}
+            <div className="bg-white/[0.04] rounded-[10px] p-4">
+              <div className="text-[12px] font-medium text-muted-foreground/50 uppercase tracking-wider mb-3">Contato</div>
+              <div className="space-y-3">
                 {contact?.email && (
                   <div className="flex items-center gap-3">
-                    <EnvelopeSimple className="h-4 w-4 text-muted-foreground flex-shrink-0" />
-                    <div className="min-w-0">
-                      <div className="text-xs text-muted-foreground">{t('contacts.email')}</div>
-                      <div className="text-sm text-foreground truncate">{contact.email}</div>
+                    <EnvelopeSimple className="w-4 h-4 text-muted-foreground/40 flex-shrink-0" />
+                    <div>
+                      <div className="text-[11px] text-muted-foreground/35">{t('contacts.email')}</div>
+                      <a href={`mailto:${contact.email}`} className="text-[14px] text-primary">{contact.email}</a>
                     </div>
                   </div>
                 )}
                 {contact?.phone && (
                   <div className="flex items-center gap-3">
-                    <Phone className="h-4 w-4 text-muted-foreground flex-shrink-0" />
-                    <div className="min-w-0">
-                      <div className="text-xs text-muted-foreground">{t('contacts.phone')}</div>
-                      <div className="text-sm text-foreground">{formatPhoneDisplay(contact.phone)}</div>
+                    <Phone className="w-4 h-4 text-muted-foreground/40 flex-shrink-0" />
+                    <div>
+                      <div className="text-[11px] text-muted-foreground/35">{t('contacts.phone')}</div>
+                      <div className="text-[14px]">{formatPhoneDisplay(contact.phone)}</div>
                     </div>
                   </div>
                 )}
                 {contact?.company_name && (
                   <div className="flex items-center gap-3">
-                    <Buildings className="h-4 w-4 text-muted-foreground flex-shrink-0" />
-                    <div className="min-w-0">
-                      <div className="text-xs text-muted-foreground">{t('contacts.company')}</div>
-                      <div className="text-sm text-foreground">{contact.company_name}</div>
+                    <Buildings className="w-4 h-4 text-muted-foreground/40 flex-shrink-0" />
+                    <div>
+                      <div className="text-[11px] text-muted-foreground/35">{t('contacts.company')}</div>
+                      <div className="text-[14px]">{contact.company_name}</div>
                     </div>
                   </div>
                 )}
                 <div className="flex items-center gap-3">
-                  <User className="h-4 w-4 text-muted-foreground flex-shrink-0" />
+                  <User className="w-4 h-4 text-muted-foreground/40 flex-shrink-0" />
                   <div className="flex-1 min-w-0">
-                    <div className="text-xs text-muted-foreground">{t('contacts.owner') || 'Responsável'}</div>
-                    <OwnerSelector
-                      value={contact?.owner_user_id}
-                      onChange={async (userId) => {
-                        const { error } = await supabase
-                          .from('contacts')
-                          .update({ owner_user_id: userId, updated_by: userProfile?.id || null } as any)
-                          .eq('id', contact.id);
-                        if (error) {
-                          toast.error(t('common.error'));
-                        } else {
-                          setContact({ ...contact, owner_user_id: userId });
-                          toast.success(t('contacts.updated'));
-                        }
-                      }}
-                      size="sm"
-                    />
+                    <div className="text-[11px] text-muted-foreground/35">{t('contacts.owner') || 'Responsável'}</div>
+                    {contact?.owner_user_id ? (
+                      <OwnerSelector
+                        value={contact?.owner_user_id}
+                        onChange={async (userId) => {
+                          const { error } = await supabase
+                            .from('contacts')
+                            .update({ owner_user_id: userId, updated_by: userProfile?.id || null } as any)
+                            .eq('id', contact.id);
+                          if (error) {
+                            toast.error(t('common.error'));
+                          } else {
+                            setContact({ ...contact, owner_user_id: userId });
+                            toast.success(t('contacts.updated'));
+                          }
+                        }}
+                        size="sm"
+                      />
+                    ) : (
+                      <div className="text-[14px] text-muted-foreground/50">Sem responsável</div>
+                    )}
                   </div>
                 </div>
               </div>
-            </Card>
-            {/* Documents */}
-            <Card className="p-4">
-              <h2 className="text-base font-semibold mb-3 text-foreground">Documentos</h2>
-              <div className="grid grid-cols-1 gap-3">
-                <div className="flex items-center gap-3">
-                  <FileText className="h-4 w-4 text-muted-foreground flex-shrink-0" />
-                  <div><div className="text-xs text-muted-foreground">CPF</div><div className="text-sm text-foreground">{contact?.cpf || '—'}</div></div>
+            </div>
+
+            {/* Documentos */}
+            <div className="bg-white/[0.04] rounded-[10px] p-4">
+              <div className="text-[12px] font-medium text-muted-foreground/50 uppercase tracking-wider mb-3">Documentos</div>
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <div className="text-[11px] text-muted-foreground/40">CPF</div>
+                  <div className="text-[14px]">{contact?.cpf || '—'}</div>
                 </div>
-                <div className="flex items-center gap-3">
-                  <FileText className="h-4 w-4 text-muted-foreground flex-shrink-0" />
-                  <div><div className="text-xs text-muted-foreground">RG</div><div className="text-sm text-foreground">{contact?.rg ? `${contact.rg}${contact.rg_issuer ? ` - ${contact.rg_issuer}` : ''}` : '—'}</div></div>
+                <div>
+                  <div className="text-[11px] text-muted-foreground/40">RG</div>
+                  <div className="text-[14px]">{contact?.rg ? `${contact.rg}${contact.rg_issuer ? ` - ${contact.rg_issuer}` : ''}` : '—'}</div>
                 </div>
               </div>
-            </Card>
-            {/* Address */}
-            <Card className="p-4">
-              <h2 className="text-base font-semibold mb-3 text-foreground">Endereço</h2>
+            </div>
+
+            {/* Endereço */}
+            <div className="bg-white/[0.04] rounded-[10px] p-4">
+              <div className="text-[12px] font-medium text-muted-foreground/50 uppercase tracking-wider mb-3">Endereço</div>
               <div className="flex items-start gap-3">
-                <MapPin className="h-4 w-4 text-muted-foreground mt-0.5 flex-shrink-0" />
-                <div className="text-sm text-foreground">
+                <MapPin className="w-4 h-4 text-muted-foreground/40 mt-0.5 flex-shrink-0" />
+                <div className="text-[14px]">
                   {contact?.address_street || contact?.address_city ? (
                     <>
                       {contact.address_street && <div>{contact.address_street}</div>}
@@ -240,7 +247,7 @@ export default function ContactDetail() {
                   ) : '—'}
                 </div>
               </div>
-            </Card>
+            </div>
           </div>
         );
       case 'timeline': return <ActivityTimeline contactId={contact!.id} />;
