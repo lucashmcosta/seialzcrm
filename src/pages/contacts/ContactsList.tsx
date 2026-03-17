@@ -83,6 +83,10 @@ export default function ContactsList() {
   const [currentPage, setCurrentPage] = useState(1);
   const [totalCount, setTotalCount] = useState(0);
   const [itemsPerPage, setItemsPerPage] = useState(DEFAULT_ITEMS_PER_PAGE);
+
+  // Mobile infinite scroll state
+  const [mobileContacts, setMobileContacts] = useState<Contact[]>([]);
+  const [mobileLoadingMore, setMobileLoadingMore] = useState(false);
   
   // Select all mode
   const [selectAllMode, setSelectAllMode] = useState<'page' | 'all' | 'none'>('none');
