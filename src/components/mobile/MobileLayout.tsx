@@ -34,7 +34,7 @@ interface MobileTab {
   icon: typeof House;
 }
 
-export function MobileLayout({ children }: MobileLayoutProps) {
+export function MobileLayout({ children, hideBottomBar = false }: MobileLayoutProps) {
   const [drawerOpen, setDrawerOpen] = useState(false);
   const location = useLocation();
   const { signOut } = useAuth();
