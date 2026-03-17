@@ -3,6 +3,9 @@ import { Link, useNavigate } from 'react-router-dom';
 import type { SortDescriptor } from 'react-aria-components';
 import { PencilSimple, TrashSimple } from '@phosphor-icons/react';
 import { Layout } from '@/components/Layout';
+import { MobileLayout } from '@/components/mobile/MobileLayout';
+import { MobileContactsList } from '@/components/mobile/MobileContactsList';
+import { useIsMobile } from '@/hooks/use-mobile';
 import { Button } from '@/components/base/buttons/button';
 import { Input } from '@/components/ui/input';
 import { Card, CardContent } from '@/components/ui/card';
@@ -62,6 +65,7 @@ const lifecycleColors: Record<string, BadgeColor> = {
 
 export default function ContactsList() {
   const navigate = useNavigate();
+  const isMobile = useIsMobile();
   const { organization, userProfile, locale } = useOrganization();
   const { t } = useTranslation(locale as 'pt-BR' | 'en-US');
   const { permissions } = usePermissions();
@@ -276,6 +280,23 @@ export default function ContactsList() {
     if (!stage) return 'Lead';
     return t(`lifecycle.${stage}`) || stage;
   };
+
+  if (isMobile) {
+    return (
+      <MobileLayout>
+        <MobileContactsList
+          contacts={sortedContacts}
+          loading={loading}
+          totalCount={totalCount}
+          searchTerm={searchTerm}
+          onSearchChange={setSearchTerm}
+          stageFilter={stageFilter}
+          onStageFilterChange={setStageFilter}
+          canCreate={permissions.canEditContacts}
+        />
+      </MobileLayout>
+    );
+  }
 
   return (
     <Layout>
