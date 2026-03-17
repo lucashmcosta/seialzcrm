@@ -5,6 +5,7 @@ import { Layout } from '@/components/Layout';
 import { useIsMobile } from '@/hooks/use-mobile';
 import { MobileLayout } from '@/components/mobile/MobileLayout';
 import { MobileOpportunitiesKanban } from '@/components/mobile/MobileOpportunitiesKanban';
+import { MobileSpinner } from '@/components/mobile/MobileSpinner';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from '@/components/ui/alert-dialog';

@@ -1,4 +1,5 @@
 import { useState, useRef, useEffect, useCallback } from 'react';
+import { MobileSpinner } from '@/components/mobile/MobileSpinner';
 import { useNavigate } from 'react-router-dom';
 import { Plus, MagnifyingGlass } from '@phosphor-icons/react';
 import { SeialzOpportunityCard } from '@/components/opportunities/SeialzOpportunityCard';
