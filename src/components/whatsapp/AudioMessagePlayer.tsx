@@ -13,7 +13,7 @@ export function AudioMessagePlayer({ src, className = '' }: AudioMessagePlayerPr
   const [duration, setDuration] = useState(0);
   const [isLoading, setIsLoading] = useState(true);
   const [waveformData] = useState(() =>
-    Array.from({ length: 40 }, () => Math.random() * 0.8 + 0.2)
+    Array.from({ length: 45 }, () => Math.random() * 0.5 + 0.2)
   );
 
   const progress = duration > 0 ? currentTime / duration : 0;
