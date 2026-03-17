@@ -289,31 +289,62 @@ export function MobileMessagesList() {
     }
   }, [threads?.length, userProfile?.id]);
 
-  // Auto-select thread from contact query param
+  // Auto-select thread from contact query param (or create one if missing)
   useEffect(() => {
-    if (fromContactId && threads && threads.length > 0 && !selectedThreadId) {
-      const match = threads.find(t => t.contact_id === fromContactId);
+    if (!fromContactId || !organization?.id || selectedThreadId) return;
+
+    const handleContactThread = async () => {
+      // First check if thread already exists in loaded threads
+      const match = threads?.find(t => t.contact_id === fromContactId);
       if (match) {
         setSelectedThreadId(match.id);
-        // Set filter so the thread is visible if user goes back to list
         if (['open', 'awaiting_client'].includes(match.status)) {
           setFilter('all_open');
         } else if (match.status === 'resolved') {
           setFilter('resolved');
         }
-      } else {
-        toast({
-          title: locale === 'pt-BR' ? 'Sem conversa' : 'No conversation',
-          description: locale === 'pt-BR' 
-            ? 'Este contato ainda não tem uma conversa de mensagens.' 
-            : 'This contact has no message conversation yet.',
-        });
-        // Clear the contact param so user sees the full list
-        searchParams.delete('contact');
-        setSearchParams(searchParams, { replace: true });
+        return;
       }
-    }
-  }, [fromContactId, threads, selectedThreadId]);
+
+      // If threads loaded but no match, check DB or create
+      if (threads) {
+        // Check for existing thread not in current list (e.g. resolved and filtered out)
+        const { data: existingThread } = await supabase
+          .from('message_threads')
+          .select('id')
+          .eq('organization_id', organization.id)
+          .eq('contact_id', fromContactId)
+          .eq('channel', 'whatsapp')
+          .maybeSingle();
+
+        if (existingThread) {
+          setSelectedThreadId(existingThread.id);
+          setFilter('all_open');
+          refetchThreads();
+          return;
+        }
+
+        // No thread exists — create one
+        const { data: newThread, error } = await supabase
+          .from('message_threads')
+          .insert({
+            organization_id: organization.id,
+            contact_id: fromContactId,
+            channel: 'whatsapp',
+          })
+          .select('id')
+          .single();
+
+        if (!error && newThread) {
+          setSelectedThreadId(newThread.id);
+          setFilter('all_open');
+          refetchThreads();
+        }
+      }
+    };
+
+    handleContactThread();
+  }, [fromContactId, threads, selectedThreadId, organization?.id]);
 
   // Fetch messages when thread selected
   useEffect(() => {
