@@ -326,46 +326,73 @@ export default function ContactDetail() {
                 </a>
               </Button>
             )}
-            <DropdownMenu>
-              <DropdownMenuTrigger asChild>
+            <Drawer open={maisOpen} onOpenChange={setMaisOpen}>
+              <DrawerTrigger asChild>
                 <Button color="secondary" size="sm">
                   <DotsThree className="h-4 w-4" />
                 </Button>
-              </DropdownMenuTrigger>
-              <DropdownMenuContent align="end">
-                {permissions.canEditContacts && (
-                  <DropdownMenuItem asChild>
-                    <Link to={`/contacts/${contact.id}/edit`}>
-                      <PencilSimple className="h-4 w-4 mr-2" />
-                      {t('common.edit')}
-                    </Link>
-                  </DropdownMenuItem>
-                )}
-                {permissions.canDeleteContacts && (
-                  <AlertDialog>
-                    <AlertDialogTrigger asChild>
-                      <DropdownMenuItem
-                        className="text-destructive focus:text-destructive"
-                        onSelect={(e) => e.preventDefault()}
+              </DrawerTrigger>
+              <DrawerContent className="pb-8">
+                <div className="pt-3 pb-2">
+                  <div className="w-9 h-1 rounded-full bg-muted-foreground/20 mx-auto mb-4" />
+                  <div className="flex flex-col">
+                    {permissions.canEditContacts && (
+                      <button
+                        onClick={() => { setMaisOpen(false); navigate(`/contacts/${contact.id}/edit`); }}
+                        className="flex items-center gap-3.5 px-5 py-3.5 text-[15px] text-foreground active:bg-white/[0.04]"
                       >
-                        <TrashSimple className="h-4 w-4 mr-2" />
-                        {t('common.delete')}
-                      </DropdownMenuItem>
-                    </AlertDialogTrigger>
-                    <AlertDialogContent>
-                      <AlertDialogHeader>
-                        <AlertDialogTitle>{t('contacts.deleteConfirm')}</AlertDialogTitle>
-                        <AlertDialogDescription>{contact.full_name}</AlertDialogDescription>
-                      </AlertDialogHeader>
-                      <AlertDialogFooter>
-                        <AlertDialogCancel>{t('common.cancel')}</AlertDialogCancel>
-                        <AlertDialogAction onClick={handleDelete}>{t('common.delete')}</AlertDialogAction>
-                      </AlertDialogFooter>
-                    </AlertDialogContent>
-                  </AlertDialog>
-                )}
-              </DropdownMenuContent>
-            </DropdownMenu>
+                        <PencilSimple className="w-5 h-5 text-muted-foreground/50" />
+                        Editar contato
+                      </button>
+                    )}
+                    <button
+                      onClick={() => { setMaisOpen(false); }}
+                      className="flex items-center gap-3.5 px-5 py-3.5 text-[15px] text-foreground active:bg-white/[0.04]"
+                    >
+                      <UserPlus className="w-5 h-5 text-muted-foreground/50" />
+                      Atribuir responsável
+                    </button>
+                    <button
+                      onClick={() => { setMaisOpen(false); }}
+                      className="flex items-center gap-3.5 px-5 py-3.5 text-[15px] text-foreground active:bg-white/[0.04]"
+                    >
+                      <ArrowsLeftRight className="w-5 h-5 text-muted-foreground/50" />
+                      Mover para cliente
+                    </button>
+                    <button
+                      onClick={() => { setMaisOpen(false); }}
+                      className="flex items-center gap-3.5 px-5 py-3.5 text-[15px] text-foreground active:bg-white/[0.04]"
+                    >
+                      <Archive className="w-5 h-5 text-muted-foreground/50" />
+                      Arquivar contato
+                    </button>
+
+                    <div className="border-t border-white/[0.08] my-1" />
+
+                    {permissions.canDeleteContacts && (
+                      <AlertDialog>
+                        <AlertDialogTrigger asChild>
+                          <button className="flex items-center gap-3.5 px-5 py-3.5 text-[15px] text-destructive active:bg-white/[0.04]">
+                            <TrashSimple className="w-5 h-5" />
+                            Excluir contato
+                          </button>
+                        </AlertDialogTrigger>
+                        <AlertDialogContent>
+                          <AlertDialogHeader>
+                            <AlertDialogTitle>{t('contacts.deleteConfirm')}</AlertDialogTitle>
+                            <AlertDialogDescription>{contact.full_name}</AlertDialogDescription>
+                          </AlertDialogHeader>
+                          <AlertDialogFooter>
+                            <AlertDialogCancel>{t('common.cancel')}</AlertDialogCancel>
+                            <AlertDialogAction onClick={() => { setMaisOpen(false); handleDelete(); }}>{t('common.delete')}</AlertDialogAction>
+                          </AlertDialogFooter>
+                        </AlertDialogContent>
+                      </AlertDialog>
+                    )}
+                  </div>
+                </div>
+              </DrawerContent>
+            </Drawer>
           </div>
 
           {/* Horizontal scrollable tabs */}
