@@ -159,6 +159,7 @@ const App = () => (
         <OrganizationProvider>
         <OutboundCallProvider>
         <ThemeProvider>
+        <PWAUpdatePrompt />
         <GlobalCallHandler />
         <Suspense fallback={<PageLoader />}>
         <Routes>
