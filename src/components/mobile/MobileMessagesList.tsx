@@ -768,7 +768,7 @@ export function MobileMessagesList() {
                           )}
                         </div>
                         {thread.last_message && (
-                          <p className="text-xs text-muted-foreground truncate mt-0.5">
+                          <p className="text-xs text-muted-foreground line-clamp-2 mt-0.5">
                             {thread.last_message_direction === 'outbound' && (
                               <span className="text-muted-foreground/60">Você: </span>
                             )}
