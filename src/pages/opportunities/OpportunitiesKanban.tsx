@@ -639,18 +639,17 @@ export default function OpportunitiesKanban() {
   const totalDeals = useMemo(() => Object.values(stageCounts).reduce((sum, s) => sum + s.count, 0), [stageCounts]);
   const totalPipelineAmount = useMemo(() => Object.values(stageCounts).reduce((sum, s) => sum + s.amount, 0), [stageCounts]);
 
-  if (loading) {
-    return (
-      <Layout>
-        <div className="p-8">
-          <p className="text-muted-foreground">{t('common.loading')}</p>
-        </div>
-      </Layout>
-    );
-  }
-
-  // Mobile layout
+  // Mobile layout — check BEFORE loading to avoid flashing desktop Layout
   if (isMobile) {
+    if (loading) {
+      return (
+        <MobileLayout>
+          <div className="flex items-center justify-center h-full">
+            <p className="text-sm text-muted-foreground">{t('common.loading')}</p>
+          </div>
+        </MobileLayout>
+      );
+    }
     return (
       <MobileLayout>
         <MobileOpportunitiesKanban
@@ -672,6 +671,16 @@ export default function OpportunitiesKanban() {
           filterTag={filterTag}
         />
       </MobileLayout>
+    );
+  }
+
+  if (loading) {
+    return (
+      <Layout>
+        <div className="p-8">
+          <p className="text-muted-foreground">{t('common.loading')}</p>
+        </div>
+      </Layout>
     );
   }
 
