@@ -300,7 +300,7 @@ export default function ContactDetail() {
               Mensagens
             </Button>
             {hasVoiceIntegration && contact.phone && (
-              <Button color="secondary" size="sm" onClick={() => startCall(contact.phone, contact.id, contact.full_name)}>
+              <Button color="secondary" size="sm" onClick={() => startCall({ phoneNumber: contact.phone, contactId: contact.id, contactName: contact.full_name })}>
                 <Phone className="h-4 w-4 mr-1.5" />
                 Ligar
               </Button>
