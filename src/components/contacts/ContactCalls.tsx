@@ -186,13 +186,13 @@ export function ContactCalls({ contactId, opportunityId, contactPhone, contactNa
 
   return (
     <Card>
-      <CardHeader>
-        <div className="flex items-center justify-between">
-          <CardTitle className="flex items-center gap-2">
+      <CardHeader className={isMobile ? 'px-3 py-3' : undefined}>
+        <div className={isMobile ? 'flex flex-col gap-3' : 'flex items-center justify-between'}>
+          <CardTitle className="flex items-center gap-2 text-base">
             <Phone className="h-5 w-5" />
             Chamadas
           </CardTitle>
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-2 flex-wrap">
             {contactPhone && hasVoiceIntegration && (
               <>
                 <Button size="sm" onClick={() => startCall({ 
@@ -201,11 +201,11 @@ export function ContactCalls({ contactId, opportunityId, contactPhone, contactNa
                   contactId, 
                   opportunityId 
                 })}>
-                  <Phone className="w-4 h-4 mr-2" />
+                  <Phone className="w-4 h-4 mr-1" />
                   Ligar
                 </Button>
                 <Button size="sm" variant="outline" onClick={() => setScheduleDialogOpen(true)}>
-                  <Calendar className="w-4 h-4 mr-2" />
+                  <Calendar className="w-4 h-4 mr-1" />
                   Agendar
                 </Button>
               </>
@@ -213,7 +213,7 @@ export function ContactCalls({ contactId, opportunityId, contactPhone, contactNa
             <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
               <DialogTrigger asChild>
                 <Button size="sm" variant="outline">
-                  <Plus className="w-4 h-4 mr-2" />
+                  <Plus className="w-4 h-4 mr-1" />
                   Registrar
                 </Button>
               </DialogTrigger>
