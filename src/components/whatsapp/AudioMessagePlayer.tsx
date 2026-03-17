@@ -85,50 +85,51 @@ export function AudioMessagePlayer({ src, className = '' }: AudioMessagePlayerPr
   };
 
   return (
-    <div className={className} style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '0px 2px', maxWidth: 240, minWidth: 200 }}>
+    <div className={className} style={{ display: 'flex', flexDirection: 'column', gap: 1, padding: 2, maxWidth: 240, minWidth: 200 }}>
       <audio ref={audioRef} src={src} preload="metadata" />
 
-      {/* Play/Pause */}
-      <button
-        onClick={togglePlay}
-        disabled={isLoading}
-        style={{
-          width: 30,
-          height: 30,
-          borderRadius: '50%',
-          border: 'none',
-          background: 'transparent',
-          cursor: isLoading ? 'default' : 'pointer',
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'center',
-          padding: 0,
-          flexShrink: 0,
-          opacity: isLoading ? 0.4 : 1,
-        }}
-      >
-        {isPlaying ? (
-          <svg width="16" height="16" viewBox="0 0 20 20" fill="none">
-            <rect x="5" y="3" width="3.5" height="14" rx="1" fill="rgba(255,255,255,0.9)" />
-            <rect x="11.5" y="3" width="3.5" height="14" rx="1" fill="rgba(255,255,255,0.9)" />
-          </svg>
-        ) : (
-          <svg width="16" height="16" viewBox="0 0 20 20" fill="none">
-            <path d="M5 3.5V16.5C5 17.1 5.6 17.4 6.1 17.1L17 10.5C17.5 10.2 17.5 9.5 17 9.2L6.1 2.9C5.6 2.6 5 2.9 5 3.5Z" fill="rgba(255,255,255,0.9)" />
-          </svg>
-        )}
-      </button>
+      {/* Row 1: Play + Waveform */}
+      <div style={{ display: 'flex', alignItems: 'center', gap: 6, height: 24 }}>
+        <button
+          onClick={togglePlay}
+          disabled={isLoading}
+          style={{
+            width: 28,
+            height: 28,
+            borderRadius: '50%',
+            border: 'none',
+            background: 'transparent',
+            cursor: isLoading ? 'default' : 'pointer',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            padding: 0,
+            margin: 0,
+            flexShrink: 0,
+            opacity: isLoading ? 0.4 : 1,
+          }}
+        >
+          {isPlaying ? (
+            <svg width="14" height="14" viewBox="0 0 20 20" fill="none">
+              <rect x="5" y="3" width="3.5" height="14" rx="1" fill="rgba(255,255,255,0.9)" />
+              <rect x="11.5" y="3" width="3.5" height="14" rx="1" fill="rgba(255,255,255,0.9)" />
+            </svg>
+          ) : (
+            <svg width="14" height="14" viewBox="0 0 20 20" fill="none">
+              <path d="M5 3.5V16.5C5 17.1 5.6 17.4 6.1 17.1L17 10.5C17.5 10.2 17.5 9.5 17 9.2L6.1 2.9C5.6 2.6 5 2.9 5 3.5Z" fill="rgba(255,255,255,0.9)" />
+            </svg>
+          )}
+        </button>
 
-      {/* Waveform + time */}
-      <div style={{ flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column', gap: 1 }}>
         <div
           onClick={handleSeek}
           onTouchStart={handleSeek}
           style={{
+            flex: 1,
+            height: 24,
             display: 'flex',
             alignItems: 'center',
-            gap: 1,
-            height: 20,
+            gap: 1.5,
             cursor: 'pointer',
             position: 'relative',
           }}
@@ -150,7 +151,6 @@ export function AudioMessagePlayer({ src, className = '' }: AudioMessagePlayerPr
               />
             );
           })}
-          {/* Seek dot */}
           <div
             style={{
               position: 'absolute',
@@ -167,12 +167,13 @@ export function AudioMessagePlayer({ src, className = '' }: AudioMessagePlayerPr
             }}
           />
         </div>
+      </div>
 
-        <div style={{ display: 'flex', justifyContent: 'flex-start', lineHeight: 1 }}>
-          <span style={{ fontSize: 11, color: 'rgba(255,255,255,0.6)', fontVariantNumeric: 'tabular-nums' }}>
-            {isPlaying || currentTime > 0 ? formatTime(currentTime) : formatTime(duration)}
-          </span>
-        </div>
+      {/* Row 2: Duration */}
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: 0, margin: 0 }}>
+        <span style={{ fontSize: 11, lineHeight: '14px', color: 'rgba(255,255,255,0.6)', fontVariantNumeric: 'tabular-nums' }}>
+          {isPlaying || currentTime > 0 ? formatTime(currentTime) : formatTime(duration)}
+        </span>
       </div>
     </div>
   );
