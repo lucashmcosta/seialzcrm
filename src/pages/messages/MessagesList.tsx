@@ -235,6 +235,12 @@ const getLastInboundTime = (
 };
 
 export default function MessagesList() {
+  const isMobile = useIsMobile();
+  
+  if (isMobile) {
+    return <MobileMessagesList />;
+  }
+
   const { organization, locale, userProfile } = useOrganization();
   const { t } = useTranslation(locale as 'pt-BR' | 'en-US');
   const { toast } = useToast();
