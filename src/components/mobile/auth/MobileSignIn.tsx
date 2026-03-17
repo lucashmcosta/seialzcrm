@@ -90,8 +90,45 @@ export default function MobileSignIn() {
     }
   };
 
+  const currencySymbols = [
+    { symbol: 'R$', top: '8%', left: '10%', size: 'text-2xl', opacity: 0.08, delay: 0 },
+    { symbol: '$', top: '15%', left: '75%', size: 'text-4xl', opacity: 0.06, delay: 1.2 },
+    { symbol: '€', top: '30%', left: '85%', size: 'text-xl', opacity: 0.1, delay: 0.5 },
+    { symbol: '£', top: '45%', left: '5%', size: 'text-3xl', opacity: 0.07, delay: 2 },
+    { symbol: '¥', top: '55%', left: '70%', size: 'text-2xl', opacity: 0.09, delay: 0.8 },
+    { symbol: '₹', top: '20%', left: '45%', size: 'text-xl', opacity: 0.06, delay: 1.5 },
+    { symbol: '₿', top: '70%', left: '15%', size: 'text-xl', opacity: 0.08, delay: 2.5 },
+    { symbol: '$', top: '65%', left: '55%', size: 'text-3xl', opacity: 0.05, delay: 0.3 },
+    { symbol: 'R$', top: '40%', left: '30%', size: 'text-lg', opacity: 0.07, delay: 1.8 },
+    { symbol: '€', top: '80%', left: '80%', size: 'text-2xl', opacity: 0.06, delay: 1 },
+  ];
+
   return (
-    <div className="min-h-[100dvh] flex flex-col mobile-signin-bg">
+    <div className="min-h-[100dvh] flex flex-col mobile-signin-bg relative overflow-hidden">
+      {/* Floating currency symbols */}
+      <div className="absolute inset-0 pointer-events-none">
+        {currencySymbols.map((item, i) => (
+          <motion.span
+            key={i}
+            className={`absolute ${item.size} font-light select-none`}
+            style={{
+              top: item.top,
+              left: item.left,
+              opacity: item.opacity,
+              color: 'hsl(153, 100%, 50%)',
+            }}
+            animate={{ y: [0, -12, 0] }}
+            transition={{
+              duration: 5,
+              repeat: Infinity,
+              ease: 'easeInOut',
+              delay: item.delay,
+            }}
+          >
+            {item.symbol}
+          </motion.span>
+        ))}
+      </div>
       {/* Top section with logo */}
       <motion.div
         className="flex-1 flex flex-col items-center justify-center px-6 pt-16 pb-8"

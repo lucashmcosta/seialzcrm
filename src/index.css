@@ -444,7 +444,10 @@
 
 .mobile-signin-bg {
   background: hsl(240 20% 3%);
-  background-image: radial-gradient(ellipse at 50% 0%, hsla(153, 100%, 50%, 0.06) 0%, transparent 60%);
+  background-image:
+    linear-gradient(hsla(153, 100%, 50%, 0.045) 1px, transparent 1px),
+    linear-gradient(90deg, hsla(153, 100%, 50%, 0.045) 1px, transparent 1px);
+  background-size: 40px 40px;
 }
 
 .mobile-signin-tagline {
