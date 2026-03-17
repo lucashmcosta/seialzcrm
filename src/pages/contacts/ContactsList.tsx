@@ -83,6 +83,10 @@ export default function ContactsList() {
   const [currentPage, setCurrentPage] = useState(1);
   const [totalCount, setTotalCount] = useState(0);
   const [itemsPerPage, setItemsPerPage] = useState(DEFAULT_ITEMS_PER_PAGE);
+
+  // Mobile infinite scroll state
+  const [mobileContacts, setMobileContacts] = useState<Contact[]>([]);
+  const [mobileLoadingMore, setMobileLoadingMore] = useState(false);
   
   // Select all mode
   const [selectAllMode, setSelectAllMode] = useState<'page' | 'all' | 'none'>('none');
@@ -122,11 +126,26 @@ export default function ContactsList() {
     if (filters.search) setSearchTerm(filters.search);
   };
 
+  // Reset mobile accumulated contacts when filters change
+  useEffect(() => {
+    if (isMobile) {
+      setMobileContacts([]);
+      setCurrentPage(1);
+    }
+  }, [searchTerm, ownerFilter, stageFilter]);
+
   useEffect(() => {
     if (!organization) return;
     fetchContacts();
     fetchUsers();
   }, [organization, currentPage, itemsPerPage, searchTerm, ownerFilter, stageFilter]);
+
+  const mobileHasMore = mobileContacts.length < totalCount;
+
+  const handleMobileLoadMore = () => {
+    if (mobileLoadingMore || !mobileHasMore) return;
+    setCurrentPage(prev => prev + 1);
+  };
 
   const fetchUsers = async () => {
     if (!organization) return;
@@ -148,7 +167,13 @@ export default function ContactsList() {
   const fetchContacts = async () => {
     if (!organization) return;
 
-    setLoading(true);
+    const isAppending = isMobile && currentPage > 1;
+
+    if (isAppending) {
+      setMobileLoadingMore(true);
+    } else {
+      setLoading(true);
+    }
     
     // Build query with filters
     let query = supabase
@@ -177,9 +202,13 @@ export default function ContactsList() {
 
     if (!error && data) {
       setContacts(data);
+      if (isMobile) {
+        setMobileContacts(prev => isAppending ? [...prev, ...data] : data);
+      }
       setTotalCount(count || 0);
     }
     setLoading(false);
+    setMobileLoadingMore(false);
   };
 
   // Sort contacts client-side
@@ -285,9 +314,12 @@ export default function ContactsList() {
     return (
       <MobileLayout>
         <MobileContactsList
-          contacts={sortedContacts}
+          contacts={mobileContacts}
           loading={loading}
+          loadingMore={mobileLoadingMore}
           totalCount={totalCount}
+          hasMore={mobileHasMore}
+          onLoadMore={handleMobileLoadMore}
           searchTerm={searchTerm}
           onSearchChange={setSearchTerm}
           stageFilter={stageFilter}
