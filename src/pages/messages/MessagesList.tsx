@@ -1498,7 +1498,11 @@ function DesktopMessagesList() {
                                       <div className="space-y-2">
                                         {message.media_urls.map((url, i) => {
                                           if (message.media_type === 'audio' || url.match(/\.(ogg|mp3|wav|m4a)$/i)) {
-                                            return <AudioMessagePlayer key={i} src={url} />;
+                                            const isAudioOnly = message.media_type === 'audio' && !message.content;
+                                            return <AudioMessagePlayer key={i} src={url} 
+                                              timestamp={isAudioOnly ? `${new Date(message.sent_at).toLocaleTimeString(locale, { hour: '2-digit', minute: '2-digit', hour12: false })}` : undefined}
+                                              statusIcon={isAudioOnly && isOutbound ? renderStatusIcon(message.whatsapp_status) : undefined}
+                                            />;
                                           }
                                           if (message.media_type === 'image' || url.match(/\.(jpg|jpeg|png|gif|webp)$/i)) {
                                             return (
@@ -1544,9 +1548,10 @@ function DesktopMessagesList() {
                                       </p>
                                     )}
 
-                                    {/* Footer - Name + Time + Status */}
-                                    <div className={cn("mt-1 flex items-center justify-end gap-1", message.media_type === 'audio' && !message.content && 'ml-[34px]')}>
-                                      <span className={cn("text-muted-foreground/70 whitespace-nowrap", message.media_type === 'audio' && !message.content ? 'text-[11px] leading-[14px]' : 'text-[10px]')}>
+                                    {/* Footer - Name + Time + Status (hidden for audio-only, rendered inside player) */}
+                                    {!(message.media_type === 'audio' && !message.content) && (
+                                    <div className="mt-1 flex items-center justify-end gap-1">
+                                      <span className="text-[10px] text-muted-foreground/70 whitespace-nowrap">
                                         {isOutbound 
                                           ? (message.sender_name ? `${message.sender_name} - ` : '')
                                           : (selectedThread?.contact_name ? `${selectedThread.contact_name} - ` : '')
@@ -1563,6 +1568,7 @@ function DesktopMessagesList() {
                                       </span>
                                       {isOutbound && renderStatusIcon(message.whatsapp_status)}
                                     </div>
+                                    )}
                                   </div>
                                   
                                   {/* Reply button - right side for outbound */}

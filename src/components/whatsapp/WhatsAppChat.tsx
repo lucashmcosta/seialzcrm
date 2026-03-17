@@ -336,13 +336,18 @@ export function WhatsAppChat({ contactId, threadId: initialThreadId, onThreadCre
     if (!message.media_urls || message.media_urls.length === 0) return null;
 
     const mediaType = message.media_type;
+    const msgIsOutbound = message.direction === 'outbound';
+    const isAudioOnly = mediaType === 'audio' && !message.content;
 
     return (
       <div className="mb-2 space-y-2">
         {message.media_urls.map((url, i) => {
           // Check if it's audio
           if (mediaType === 'audio' || url.match(/\.(ogg|mp3|wav|m4a)$/i)) {
-            return <AudioMessagePlayer key={i} src={url} />;
+            return <AudioMessagePlayer key={i} src={url}
+              timestamp={isAudioOnly ? formatDistanceToNow(new Date(message.sent_at), { addSuffix: true, locale: dateLocale }) : undefined}
+              statusIcon={isAudioOnly && msgIsOutbound ? renderStatusIcon(message.whatsapp_status) : undefined}
+            />;
           }
 
           // Check if it's video
@@ -468,9 +473,11 @@ export function WhatsAppChat({ contactId, threadId: initialThreadId, onThreadCre
                     )}
 
                     {/* Footer */}
-                    <div className={`flex items-center justify-end gap-1 mt-1 ${message.media_type === 'audio' && !message.content ? 'ml-[34px]' : ''}`}>
+                    {/* Footer (hidden for audio-only, rendered inside player) */}
+                    {!(message.media_type === 'audio' && !message.content) && (
+                    <div className="flex items-center justify-end gap-1 mt-1">
                       {message.media_type && getMediaTypeIcon(message.media_type)}
-                      <span className={`${message.media_type === 'audio' && !message.content ? 'text-[11px] leading-[14px]' : 'text-xs'} ${isOutbound ? 'text-white/60' : 'text-muted-foreground'}`}>
+                      <span className={`text-xs ${isOutbound ? 'text-white/60' : 'text-muted-foreground'}`}>
                         {formatDistanceToNow(new Date(message.sent_at), {
                           addSuffix: true,
                           locale: dateLocale,
@@ -478,6 +485,7 @@ export function WhatsAppChat({ contactId, threadId: initialThreadId, onThreadCre
                       </span>
                       {isOutbound && renderStatusIcon(message.whatsapp_status)}
                     </div>
+                    )}
                   </div>
                 </div>
               );

@@ -938,8 +938,13 @@ export function MobileMessagesList() {
                               {message.media_urls && message.media_urls.length > 0 && (
                                 <div className="space-y-1 mb-1">
                                   {message.media_urls.map((url, i) => {
-                                    if (message.media_type === 'audio' || url.match(/\.(ogg|mp3|wav|m4a)$/i))
-                                      return <AudioMessagePlayer key={i} src={url} />;
+                                    if (message.media_type === 'audio' || url.match(/\.(ogg|mp3|wav|m4a)$/i)) {
+                                      const isAudioOnly = message.media_type === 'audio' && !message.content;
+                                      return <AudioMessagePlayer key={i} src={url}
+                                        timestamp={isAudioOnly ? new Date(message.sent_at).toLocaleTimeString(locale, { hour: '2-digit', minute: '2-digit', hour12: false }) : undefined}
+                                        statusIcon={isAudioOnly && isOutbound ? renderStatusIcon(message.whatsapp_status) : undefined}
+                                      />;
+                                    }
                                     if (message.media_type === 'image' || url.match(/\.(jpg|jpeg|png|gif|webp)$/i))
                                       return <img key={i} src={url} alt="" className="max-w-full max-h-[200px] rounded cursor-pointer object-cover" onClick={() => setPreviewImageUrl(url)} />;
                                     return (
@@ -961,13 +966,15 @@ export function MobileMessagesList() {
                                 <p className="text-[10px] text-destructive mt-0.5">{message.error_message}</p>
                               )}
 
-                              {/* Footer */}
-                              <div className={cn("mt-0.5 flex items-center justify-end gap-1", message.media_type === 'audio' && !message.content && 'ml-[34px]')}>
-                                <span className={cn(isOutbound ? 'text-white/60' : 'text-muted-foreground/70', message.media_type === 'audio' && !message.content ? 'text-[11px] leading-[14px]' : 'text-[9px]')}>
+                              {/* Footer (hidden for audio-only, rendered inside player) */}
+                              {!(message.media_type === 'audio' && !message.content) && (
+                              <div className="mt-0.5 flex items-center justify-end gap-1">
+                                <span className={cn('text-[9px]', isOutbound ? 'text-white/60' : 'text-muted-foreground/70')}>
                                   {new Date(message.sent_at).toLocaleTimeString(locale, { hour: '2-digit', minute: '2-digit', hour12: false })}
                                 </span>
                                 {isOutbound && renderStatusIcon(message.whatsapp_status)}
                               </div>
+                              )}
                             </div>
                           </div>
                         );
