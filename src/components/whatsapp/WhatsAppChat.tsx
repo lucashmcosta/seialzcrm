@@ -336,13 +336,19 @@ export function WhatsAppChat({ contactId, threadId: initialThreadId, onThreadCre
     if (!message.media_urls || message.media_urls.length === 0) return null;
 
     const mediaType = message.media_type;
+    const msgIsOutbound = message.direction === 'outbound';
+    const isAudioOnly = mediaType === 'audio' && !message.content;
 
     return (
       <div className="mb-2 space-y-2">
         {message.media_urls.map((url, i) => {
           // Check if it's audio
           if (mediaType === 'audio' || url.match(/\.(ogg|mp3|wav|m4a)$/i)) {
-            return <AudioMessagePlayer key={i} src={url} />;
+            return <AudioMessagePlayer key={i} src={url}
+              timestamp={isAudioOnly ? formatDistanceToNow(new Date(message.sent_at), { addSuffix: true, locale: dateLocale }) : undefined}
+              statusIcon={isAudioOnly && msgIsOutbound ? renderStatusIcon(message.whatsapp_status) : undefined}
+            />;
+          }
           }
 
           // Check if it's video
