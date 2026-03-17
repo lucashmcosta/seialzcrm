@@ -234,13 +234,7 @@ const getLastInboundTime = (
   return null;
 };
 
-export default function MessagesList() {
-  const isMobile = useIsMobile();
-  
-  if (isMobile) {
-    return <MobileMessagesList />;
-  }
-
+function DesktopMessagesList() {
   const { organization, locale, userProfile } = useOrganization();
   const { t } = useTranslation(locale as 'pt-BR' | 'en-US');
   const { toast } = useToast();
