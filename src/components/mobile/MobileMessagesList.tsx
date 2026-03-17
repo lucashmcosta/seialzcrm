@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef, Fragment } from 'react';
-import { Link } from 'react-router-dom';
+import { Link, useSearchParams, useNavigate } from 'react-router-dom';
 import { MobileLayout } from './MobileLayout';
 import { Avatar } from '@/components/base/avatar/avatar';
 import { Badge, BadgeWithDot } from '@/components/base/badges/badges';
