@@ -37,6 +37,7 @@ export default function Dashboard() {
   const { user, signOut } = useAuth();
   const { t } = useTranslation(locale as 'pt-BR' | 'en-US');
   const navigate = useNavigate();
+  const isMobile = useIsMobile();
 
   // Local UI state (MUST be declared before any early return)
   const [period, setPeriod] = useState('30');
