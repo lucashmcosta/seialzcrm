@@ -125,9 +125,9 @@ export default function MobileSignIn() {
               opacity: item.opacity,
               color: 'hsl(153, 100%, 50%)',
             }}
-            animate={{ y: [0, -12, 0] }}
+            animate={{ y: [0, 8 * item.dir, 0] }}
             transition={{
-              duration: 5,
+              duration: 8 + item.delay % 3,
               repeat: Infinity,
               ease: 'easeInOut',
               delay: item.delay,
