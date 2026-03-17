@@ -168,7 +168,7 @@ export function AudioMessagePlayer({ src, className = '' }: AudioMessagePlayerPr
           />
         </div>
 
-        <div style={{ display: 'flex', justifyContent: 'flex-start', marginTop: 0 }}>
+        <div style={{ position: 'absolute', left: 0, top: 20, display: 'flex', justifyContent: 'flex-start' }}>
           <span style={{ fontSize: 11, color: 'rgba(255,255,255,0.6)', fontVariantNumeric: 'tabular-nums' }}>
             {isPlaying || currentTime > 0 ? formatTime(currentTime) : formatTime(duration)}
           </span>
