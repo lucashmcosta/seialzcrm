@@ -120,7 +120,7 @@ export function AudioMessagePlayer({ src, className = '' }: AudioMessagePlayerPr
       </button>
 
       {/* Waveform + time */}
-      <div style={{ flex: 1, minWidth: 0 }}>
+      <div style={{ flex: 1, minWidth: 0, position: 'relative', paddingBottom: 14 }}>
         <div
           onClick={handleSeek}
           onTouchStart={handleSeek}
