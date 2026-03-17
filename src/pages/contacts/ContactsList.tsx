@@ -281,6 +281,23 @@ export default function ContactsList() {
     return t(`lifecycle.${stage}`) || stage;
   };
 
+  if (isMobile) {
+    return (
+      <MobileLayout>
+        <MobileContactsList
+          contacts={sortedContacts}
+          loading={loading}
+          totalCount={totalCount}
+          searchTerm={searchTerm}
+          onSearchChange={setSearchTerm}
+          stageFilter={stageFilter}
+          onStageFilterChange={setStageFilter}
+          canCreate={permissions.canEditContacts}
+        />
+      </MobileLayout>
+    );
+  }
+
   return (
     <Layout>
       <div className="p-8">
