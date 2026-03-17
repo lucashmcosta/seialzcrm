@@ -1832,3 +1832,9 @@ function DesktopMessagesList() {
     </Layout>
   );
 }
+
+export default function MessagesList() {
+  const isMobile = useIsMobile();
+  if (isMobile) return <MobileMessagesList />;
+  return <DesktopMessagesList />;
+}
