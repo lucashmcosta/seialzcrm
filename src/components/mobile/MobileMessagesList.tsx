@@ -138,6 +138,9 @@ export function MobileMessagesList() {
   const { toast } = useToast();
   const scrollRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
+  const navigate = useNavigate();
+  const [searchParams, setSearchParams] = useSearchParams();
+  const fromContactId = searchParams.get('contact');
 
   // View state
   const [selectedThreadId, setSelectedThreadId] = useState<string | null>(null);
