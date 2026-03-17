@@ -88,7 +88,10 @@ export function MobileLayout({ children, hideBottomBar = false }: MobileLayoutPr
   return (
     <div className="flex flex-col h-[100dvh] bg-background overflow-hidden">
       {/* ── Header ── */}
-      <header className="h-14 flex items-center justify-between px-4 border-b border-border bg-card flex-shrink-0 z-30">
+      <header
+        className="flex items-center justify-between px-4 border-b border-border bg-card flex-shrink-0 z-30"
+        style={{ paddingTop: 'env(safe-area-inset-top, 0px)', minHeight: 'calc(56px + env(safe-area-inset-top, 0px))' }}
+      >
         <SeialzLogo size="sm" theme="dark" animated={true} />
         <div className="flex items-center gap-2">
           <button className="p-2 text-muted-foreground hover:text-foreground transition-colors">
