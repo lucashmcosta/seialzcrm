@@ -160,7 +160,7 @@ export function AudioMessagePlayer({ src, className = '' }: AudioMessagePlayerPr
               width: 10,
               height: 10,
               borderRadius: '50%',
-              background: '#E9EDEF',
+              background: '#FFFFFF',
               boxShadow: '0 1px 3px rgba(0,0,0,0.3)',
               transition: 'left 0.05s linear',
               pointerEvents: 'none',
