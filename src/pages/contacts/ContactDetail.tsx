@@ -77,6 +77,7 @@ export default function ContactDetail() {
   const [selectedTab, setSelectedTab] = useState<Key>("details");
   const [createdByName, setCreatedByName] = useState<string | null>(null);
   const [updatedByName, setUpdatedByName] = useState<string | null>(null);
+  const [maisOpen, setMaisOpen] = useState(false);
 
   const tabs = [
     { id: "details", label: t('contacts.details') },
