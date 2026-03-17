@@ -80,7 +80,7 @@ export default function ContactDetail() {
   const [maisOpen, setMaisOpen] = useState(false);
 
   const tabs = [
-    { id: "details", label: t('contacts.details') },
+    { id: "details", label: isMobile ? 'Resumo' : t('contacts.details') },
     { id: "timeline", label: t('contacts.timeline') },
     { id: "opportunities", label: t('contacts.opportunitiesTab') },
     { id: "tasks", label: t('contacts.tasksTab') },
