@@ -91,16 +91,24 @@ export default function MobileSignIn() {
   };
 
   const currencySymbols = [
-    { symbol: 'R$', top: '8%', left: '10%', size: 'text-2xl', opacity: 0.08, delay: 0 },
-    { symbol: '$', top: '15%', left: '75%', size: 'text-4xl', opacity: 0.06, delay: 1.2 },
-    { symbol: '€', top: '30%', left: '85%', size: 'text-xl', opacity: 0.1, delay: 0.5 },
-    { symbol: '£', top: '45%', left: '5%', size: 'text-3xl', opacity: 0.07, delay: 2 },
-    { symbol: '¥', top: '55%', left: '70%', size: 'text-2xl', opacity: 0.09, delay: 0.8 },
-    { symbol: '₹', top: '20%', left: '45%', size: 'text-xl', opacity: 0.06, delay: 1.5 },
-    { symbol: '₿', top: '70%', left: '15%', size: 'text-xl', opacity: 0.08, delay: 2.5 },
-    { symbol: '$', top: '65%', left: '55%', size: 'text-3xl', opacity: 0.05, delay: 0.3 },
-    { symbol: 'R$', top: '40%', left: '30%', size: 'text-lg', opacity: 0.07, delay: 1.8 },
-    { symbol: '€', top: '80%', left: '80%', size: 'text-2xl', opacity: 0.06, delay: 1 },
+    { symbol: 'R$', top: '3%', left: '8%', size: 'text-xs', opacity: 0.04, delay: 0, dir: -1 },
+    { symbol: '$', top: '7%', left: '72%', size: 'text-sm', opacity: 0.05, delay: 2.1, dir: 1 },
+    { symbol: '€', top: '12%', left: '40%', size: 'text-xs', opacity: 0.03, delay: 4.2, dir: -1 },
+    { symbol: '£', top: '18%', left: '88%', size: 'text-base', opacity: 0.04, delay: 1.5, dir: 1 },
+    { symbol: '¥', top: '24%', left: '20%', size: 'text-sm', opacity: 0.06, delay: 3.0, dir: -1 },
+    { symbol: '₹', top: '30%', left: '60%', size: 'text-xs', opacity: 0.04, delay: 0.8, dir: 1 },
+    { symbol: '₿', top: '35%', left: '5%', size: 'text-sm', opacity: 0.05, delay: 4.8, dir: -1 },
+    { symbol: '$', top: '40%', left: '78%', size: 'text-xs', opacity: 0.03, delay: 2.5, dir: 1 },
+    { symbol: 'R$', top: '46%', left: '35%', size: 'text-base', opacity: 0.05, delay: 1.0, dir: -1 },
+    { symbol: '€', top: '52%', left: '92%', size: 'text-xs', opacity: 0.04, delay: 3.7, dir: 1 },
+    { symbol: '£', top: '56%', left: '15%', size: 'text-sm', opacity: 0.06, delay: 0.3, dir: -1 },
+    { symbol: '¥', top: '62%', left: '55%', size: 'text-xs', opacity: 0.03, delay: 4.5, dir: 1 },
+    { symbol: '$', top: '68%', left: '82%', size: 'text-sm', opacity: 0.05, delay: 1.8, dir: -1 },
+    { symbol: '₹', top: '73%', left: '28%', size: 'text-xs', opacity: 0.04, delay: 3.2, dir: 1 },
+    { symbol: 'R$', top: '78%', left: '65%', size: 'text-base', opacity: 0.05, delay: 0.5, dir: -1 },
+    { symbol: '₿', top: '84%', left: '10%', size: 'text-xs', opacity: 0.03, delay: 2.8, dir: 1 },
+    { symbol: '€', top: '88%', left: '48%', size: 'text-sm', opacity: 0.04, delay: 4.0, dir: -1 },
+    { symbol: '$', top: '93%', left: '85%', size: 'text-xs', opacity: 0.05, delay: 1.3, dir: 1 },
   ];
 
   return (
