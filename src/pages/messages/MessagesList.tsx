@@ -1,5 +1,7 @@
 import { useState, useEffect, useRef, Fragment } from 'react';
 import { Link } from 'react-router-dom';
+import { useIsMobile } from '@/hooks/use-mobile';
+import { MobileMessagesList } from '@/components/mobile/MobileMessagesList';
 import {
   DotsHorizontal,
   FaceSmile,
