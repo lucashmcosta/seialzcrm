@@ -47,6 +47,7 @@ export function ContactCalls({ contactId, opportunityId, contactPhone, contactNa
   const { startCall } = useOutboundCall();
   const { t } = useTranslation(locale as any);
   const { toast } = useToast();
+  const isMobile = useIsMobile();
   const [calls, setCalls] = useState<Call[]>([]);
   const [loading, setLoading] = useState(true);
   const [dialogOpen, setDialogOpen] = useState(false);
