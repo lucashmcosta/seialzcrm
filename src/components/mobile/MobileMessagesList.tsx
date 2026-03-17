@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef, Fragment } from 'react';
-import { Link } from 'react-router-dom';
+import { Link, useSearchParams, useNavigate } from 'react-router-dom';
 import { MobileLayout } from './MobileLayout';
 import { Avatar } from '@/components/base/avatar/avatar';
 import { Badge, BadgeWithDot } from '@/components/base/badges/badges';
@@ -138,6 +138,9 @@ export function MobileMessagesList() {
   const { toast } = useToast();
   const scrollRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
+  const navigate = useNavigate();
+  const [searchParams, setSearchParams] = useSearchParams();
+  const fromContactId = searchParams.get('contact');
 
   // View state
   const [selectedThreadId, setSelectedThreadId] = useState<string | null>(null);
@@ -285,6 +288,17 @@ export function MobileMessagesList() {
       setFilter(hasMine ? 'mine' : 'unassigned');
     }
   }, [threads?.length, userProfile?.id]);
+
+  // Auto-select thread from contact query param
+  useEffect(() => {
+    if (fromContactId && threads && threads.length > 0 && !selectedThreadId) {
+      const match = threads.find(t => t.contact_id === fromContactId);
+      if (match) {
+        setSelectedThreadId(match.id);
+        setFilter('all_open');
+      }
+    }
+  }, [fromContactId, threads, selectedThreadId]);
 
   // Fetch messages when thread selected
   useEffect(() => {
@@ -791,7 +805,13 @@ export function MobileMessagesList() {
           {/* Chat Header */}
           <div className="h-14 flex items-center gap-2 px-2 border-b border-border bg-card shrink-0">
             <button
-              onClick={() => { setSelectedThreadId(null); setMessages([]); setInlineNotes([]); }}
+              onClick={() => {
+                if (fromContactId) {
+                  navigate(`/contacts/${fromContactId}`);
+                } else {
+                  setSelectedThreadId(null); setMessages([]); setInlineNotes([]);
+                }
+              }}
               className="p-2 text-muted-foreground hover:text-foreground"
             >
               <CaretLeft size={20} weight="bold" />
