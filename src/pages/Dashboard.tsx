@@ -73,6 +73,29 @@ export default function Dashboard() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [organization?.id, userProfile?.id, period, ownerId]);
 
+  // Mobile layout
+  if (isMobile) {
+    if (orgLoading) {
+      return (
+        <MobileLayout>
+          <div className="p-4 space-y-3">
+            {[...Array(5)].map((_, i) => (
+              <div key={i} className="h-20 bg-muted rounded-md animate-pulse" />
+            ))}
+          </div>
+        </MobileLayout>
+      );
+    }
+
+    if (!user) return null;
+
+    return (
+      <MobileLayout>
+        <MobileDashboard />
+      </MobileLayout>
+    );
+  }
+
   // Show skeleton ONLY while loading
   if (orgLoading) {
     return (
