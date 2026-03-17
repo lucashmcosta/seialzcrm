@@ -450,7 +450,7 @@ export function WhatsAppChat({ contactId, threadId: initialThreadId, onThreadCre
                   <div
                     className={`max-w-[70%] rounded-lg p-3 ${
                       isOutbound
-                        ? 'bg-green-100 dark:bg-green-900/40 text-green-900 dark:text-green-100'
+                        ? 'bg-[#054D3E] text-white'
                         : 'bg-muted'
                     }`}
                   >
