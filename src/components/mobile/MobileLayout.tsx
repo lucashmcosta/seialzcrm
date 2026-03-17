@@ -25,6 +25,7 @@ import {
 
 interface MobileLayoutProps {
   children: ReactNode;
+  hideBottomBar?: boolean;
 }
 
 interface MobileTab {
@@ -33,7 +34,7 @@ interface MobileTab {
   icon: typeof House;
 }
 
-export function MobileLayout({ children }: MobileLayoutProps) {
+export function MobileLayout({ children, hideBottomBar = false }: MobileLayoutProps) {
   const [drawerOpen, setDrawerOpen] = useState(false);
   const location = useLocation();
   const { signOut } = useAuth();
@@ -108,24 +109,26 @@ export function MobileLayout({ children }: MobileLayoutProps) {
       </main>
 
       {/* ── Bottom Tab Bar ── */}
-      <nav className="h-14 flex items-center border-t border-border bg-card flex-shrink-0 z-30">
-        {tabs.map((tab) => {
-          const active = isActive(tab.href);
-          return (
-            <Link
-              key={tab.href}
-              to={tab.href}
-              className={cn(
-                'flex-1 flex flex-col items-center justify-center gap-0.5 transition-colors',
-                active ? 'text-primary' : 'text-muted-foreground'
-              )}
-            >
-              <tab.icon size={20} weight={active ? 'fill' : 'light'} />
-              <span className="text-[10px] font-medium leading-none">{tab.label}</span>
-            </Link>
-          );
-        })}
-      </nav>
+      {!hideBottomBar && (
+        <nav className="h-14 flex items-center border-t border-border bg-card flex-shrink-0 z-30">
+          {tabs.map((tab) => {
+            const active = isActive(tab.href);
+            return (
+              <Link
+                key={tab.href}
+                to={tab.href}
+                className={cn(
+                  'flex-1 flex flex-col items-center justify-center gap-0.5 transition-colors',
+                  active ? 'text-primary' : 'text-muted-foreground'
+                )}
+              >
+                <tab.icon size={20} weight={active ? 'fill' : 'light'} />
+                <span className="text-[10px] font-medium leading-none">{tab.label}</span>
+              </Link>
+            );
+          })}
+        </nav>
+      )}
 
       {/* ── Drawer Overlay ── */}
       {drawerOpen && (

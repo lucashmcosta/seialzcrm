@@ -1,5 +1,7 @@
 import { useState, useEffect, useRef, Fragment } from 'react';
 import { Link } from 'react-router-dom';
+import { useIsMobile } from '@/hooks/use-mobile';
+import { MobileMessagesList } from '@/components/mobile/MobileMessagesList';
 import {
   DotsHorizontal,
   FaceSmile,
@@ -232,7 +234,7 @@ const getLastInboundTime = (
   return null;
 };
 
-export default function MessagesList() {
+function DesktopMessagesList() {
   const { organization, locale, userProfile } = useOrganization();
   const { t } = useTranslation(locale as 'pt-BR' | 'en-US');
   const { toast } = useToast();
@@ -1829,4 +1831,10 @@ export default function MessagesList() {
       />
     </Layout>
   );
+}
+
+export default function MessagesList() {
+  const isMobile = useIsMobile();
+  if (isMobile) return <MobileMessagesList />;
+  return <DesktopMessagesList />;
 }
