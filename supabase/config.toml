@@ -113,6 +113,3 @@ verify_jwt = true
 
 [functions.kommo-fix-owners]
 verify_jwt = false
-
-[functions.admin-create-user-temp]
-verify_jwt = false
