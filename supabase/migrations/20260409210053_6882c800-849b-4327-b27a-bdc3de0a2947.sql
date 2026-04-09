@@ -1,0 +1,1 @@
+UPDATE contacts SET phone = '+5511912381272', updated_at = now() WHERE id = '58b9c4a2-68c3-4351-b3bb-d1dc77c9ecea';
