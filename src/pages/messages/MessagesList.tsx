@@ -489,7 +489,7 @@ function DesktopMessagesList() {
   };
 
   // Fetch threads via RPC (replaces N+1 query)
-  const { threads, loading: threadsLoading, refetchThreads } = useMessageThreads({ channels: ['whatsapp'] });
+  const { threads, loading: threadsLoading, refetchThreads, loadMore, hasMore, loadingMore, markThreadRead } = useMessageThreads({ channels: ['whatsapp'] });
 
   const selectedThread = threads?.find((t) => t.id === selectedThreadId);
 
@@ -1110,20 +1110,38 @@ function DesktopMessagesList() {
                   </p>
                 </div>
               ) : (
-                <ListBox
-                  aria-label="Conversations"
-                  selectionMode="single"
-                  selectedKeys={selectedThreadId ? new Set([selectedThreadId]) : new Set()}
-                  onSelectionChange={(keys) => {
-                    const keysArray = Array.from(keys);
-                    const key = keysArray[0] as string;
-                    setSelectedThreadId(key || null);
-                  }}
-                >
-                  {(filteredThreads || []).map((thread) => (
-                    <ChatListItem key={thread.id} value={thread} locale={locale as 'pt-BR' | 'en-US'} />
-                  ))}
-                </ListBox>
+                <>
+                  <ListBox
+                    aria-label="Conversations"
+                    selectionMode="single"
+                    selectedKeys={selectedThreadId ? new Set([selectedThreadId]) : new Set()}
+                    onSelectionChange={(keys) => {
+                      const keysArray = Array.from(keys);
+                      const key = keysArray[0] as string;
+                      setSelectedThreadId(key || null);
+                      if (key) markThreadRead(key);
+                    }}
+                  >
+                    {(filteredThreads || []).map((thread) => (
+                      <ChatListItem key={thread.id} value={thread} locale={locale as 'pt-BR' | 'en-US'} />
+                    ))}
+                  </ListBox>
+                  {hasMore && (
+                    <div className="p-3 text-center">
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        onClick={loadMore}
+                        disabled={loadingMore}
+                        className="text-xs text-muted-foreground"
+                      >
+                        {loadingMore
+                          ? (locale === 'pt-BR' ? 'Carregando...' : 'Loading...')
+                          : (locale === 'pt-BR' ? 'Carregar mais' : 'Load more')}
+                      </Button>
+                    </div>
+                  )}
+                </>
               )}
             </ScrollArea>
           </div>

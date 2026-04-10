@@ -1,7 +1,6 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { useOrganization } from '@/hooks/useOrganization';
-import { useToast } from '@/hooks/use-toast';
 
 export interface ChatThread {
   id: string;
@@ -69,24 +68,25 @@ interface UseMessageThreadsOptions {
 }
 
 export function useMessageThreads(options: UseMessageThreadsOptions = {}) {
-  const { channels = ['whatsapp'], limit = 200 } = options;
+  const { channels = ['whatsapp'], limit = 50 } = options;
   const { organization, userProfile } = useOrganization();
-  const { toast } = useToast();
 
   const [threads, setThreads] = useState<ChatThread[]>([]);
   const [loading, setLoading] = useState(true);
+  const [loadingMore, setLoadingMore] = useState(false);
+  const [hasMore, setHasMore] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
-  // Refs to avoid stale closures
-  const threadsRef = useRef<ChatThread[]>([]);
-  threadsRef.current = threads;
   const debounceTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const lastFetchRef = useRef<number>(0);
 
   const orgId = organization?.id;
   const userId = userProfile?.id;
 
-  // Core fetch function — calls the RPC
+  // Stable channel key to avoid re-renders
+  const channelKey = channels.join(',');
+
+  // Core fetch — initial load (no cursor)
   const fetchThreads = useCallback(async () => {
     if (!orgId) return;
 
@@ -98,7 +98,6 @@ export function useMessageThreads(options: UseMessageThreadsOptions = {}) {
       });
 
       if (rpcError) {
-        // Handle ACCESS_DENIED (ERRCODE P0002)
         if (rpcError.message?.includes('ACCESS_DENIED') || rpcError.code === 'P0002') {
           setError('ACCESS_DENIED');
           setThreads([]);
@@ -107,8 +106,10 @@ export function useMessageThreads(options: UseMessageThreadsOptions = {}) {
         throw rpcError;
       }
 
-      const mapped = ((data as RpcThreadRow[]) || []).map(mapRpcToChatThread);
+      const rows = (data as RpcThreadRow[]) || [];
+      const mapped = rows.map(mapRpcToChatThread);
       setThreads(mapped);
+      setHasMore(rows.length >= limit);
       setError(null);
       lastFetchRef.current = Date.now();
     } catch (err: any) {
@@ -117,9 +118,38 @@ export function useMessageThreads(options: UseMessageThreadsOptions = {}) {
     } finally {
       setLoading(false);
     }
-  }, [orgId, channels.join(','), limit]);
+  }, [orgId, channelKey, limit]);
 
-  // Debounced refetch — coalesces rapid realtime events
+  // Load more — cursor-based pagination
+  const loadMore = useCallback(async () => {
+    if (!orgId || !hasMore || loadingMore) return;
+    const lastThread = threads[threads.length - 1];
+    if (!lastThread) return;
+
+    setLoadingMore(true);
+    try {
+      const { data, error: rpcError } = await supabase.rpc('rpc_list_message_threads', {
+        p_organization_id: orgId,
+        p_channels: channels,
+        p_limit: limit,
+        p_cursor_updated_at: lastThread.updated_at,
+        p_cursor_id: lastThread.id,
+      });
+
+      if (rpcError) throw rpcError;
+
+      const rows = (data as RpcThreadRow[]) || [];
+      const mapped = rows.map(mapRpcToChatThread);
+      setThreads((prev) => [...prev, ...mapped]);
+      setHasMore(rows.length >= limit);
+    } catch (err: any) {
+      console.error('Error loading more threads:', err);
+    } finally {
+      setLoadingMore(false);
+    }
+  }, [orgId, channelKey, limit, hasMore, loadingMore, threads]);
+
+  // Debounced refetch
   const debouncedRefetch = useCallback(() => {
     if (debounceTimerRef.current) clearTimeout(debounceTimerRef.current);
     debounceTimerRef.current = setTimeout(() => {
@@ -138,7 +168,7 @@ export function useMessageThreads(options: UseMessageThreadsOptions = {}) {
     fetchThreads();
   }, [orgId, userId, fetchThreads]);
 
-  // Realtime: UPDATE on message_threads — local setState, move thread to top
+  // Realtime: UPDATE on message_threads
   useEffect(() => {
     if (!orgId) return;
 
@@ -154,24 +184,31 @@ export function useMessageThreads(options: UseMessageThreadsOptions = {}) {
         setThreads((prev) => {
           const idx = prev.findIndex((t) => t.id === updated.id);
           if (idx === -1) {
-            // New thread appeared (e.g. channel filter change) — debounce full refetch
             debouncedRefetch();
             return prev;
           }
-          // Merge realtime fields into existing thread
+          const existing = prev[idx];
           const merged: ChatThread = {
-            ...prev[idx],
-            status: updated.status || prev[idx].status,
-            needs_human_attention: updated.needs_human_attention ?? prev[idx].needs_human_attention,
-            assigned_user_id: updated.assigned_user_id ?? prev[idx].assigned_user_id,
-            updated_at: updated.updated_at || prev[idx].updated_at,
-            last_message_direction: updated.last_message_direction ?? prev[idx].last_message_direction,
+            ...existing,
+            status: updated.status || existing.status,
+            needs_human_attention: updated.needs_human_attention ?? existing.needs_human_attention,
+            assigned_user_id: updated.assigned_user_id ?? existing.assigned_user_id,
+            updated_at: updated.updated_at || existing.updated_at,
+            last_message_direction: updated.last_message_direction ?? existing.last_message_direction,
+            last_inbound_at: updated.last_inbound_at ?? existing.last_inbound_at,
+            whatsapp_last_inbound_at: updated.whatsapp_last_inbound_at ?? existing.whatsapp_last_inbound_at,
           };
           // Update last_message_content if trigger populated it
           if (updated.last_message_content !== undefined) {
             merged.last_message = updated.last_message_content || '...';
           }
-          // Move to top and update
+          // Recalculate unread locally: mark as unread when new inbound message arrives
+          // and we don't have a reliable last_read_at here — conservative approach:
+          // if direction changed to inbound, mark unread; RPC will reconcile on next full fetch
+          if (updated.last_message_direction === 'inbound') {
+            merged.unread = true;
+          }
+          // Move to top
           const newList = [merged, ...prev.filter((_, i) => i !== idx)];
           return newList;
         });
@@ -182,7 +219,6 @@ export function useMessageThreads(options: UseMessageThreadsOptions = {}) {
         table: 'message_threads',
         filter: `organization_id=eq.${orgId}`,
       }, () => {
-        // New thread created — debounced full refetch to get all joined data
         debouncedRefetch();
       })
       .subscribe();
@@ -196,7 +232,6 @@ export function useMessageThreads(options: UseMessageThreadsOptions = {}) {
   useEffect(() => {
     const handleVisibilityChange = () => {
       if (document.visibilityState === 'visible') {
-        // Only refetch if last fetch was > 5s ago
         if (Date.now() - lastFetchRef.current > 5000) {
           fetchThreads();
         }
@@ -213,7 +248,13 @@ export function useMessageThreads(options: UseMessageThreadsOptions = {}) {
     };
   }, []);
 
-  // Explicit refetch (for use after mutations like send, assign, etc.)
+  // Mark a thread as read locally (call after opening a thread)
+  const markThreadRead = useCallback((threadId: string) => {
+    setThreads((prev) =>
+      prev.map((t) => (t.id === threadId ? { ...t, unread: false } : t))
+    );
+  }, []);
+
   const refetchThreads = useCallback(() => {
     return fetchThreads();
   }, [fetchThreads]);
@@ -221,7 +262,11 @@ export function useMessageThreads(options: UseMessageThreadsOptions = {}) {
   return {
     threads,
     loading,
+    loadingMore,
+    hasMore,
     error,
     refetchThreads,
+    loadMore,
+    markThreadRead,
   };
 }

@@ -193,7 +193,7 @@ export function MobileMessagesList() {
   });
 
   // Fetch threads via RPC (replaces N+1 query)
-  const { threads, loading: threadsLoading, refetchThreads } = useMessageThreads({ channels: ['whatsapp'] });
+  const { threads, loading: threadsLoading, refetchThreads, loadMore, hasMore, loadingMore, markThreadRead } = useMessageThreads({ channels: ['whatsapp'] });
 
   const selectedThread = threads?.find((t) => t.id === selectedThreadId);
 
@@ -699,7 +699,7 @@ export function MobileMessagesList() {
                   return (
                     <button
                       key={thread.id}
-                      onClick={() => setSelectedThreadId(thread.id)}
+                      onClick={() => { setSelectedThreadId(thread.id); markThreadRead(thread.id); }}
                       className="w-full flex items-center gap-3 px-3 py-3 text-left hover:bg-accent/50 transition-colors"
                     >
                       <Avatar fallbackText={thread.contact_name} size="md" />
@@ -743,6 +743,21 @@ export function MobileMessagesList() {
                     </button>
                   );
                 })}
+                {hasMore && (
+                  <div className="p-3 text-center">
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      onClick={loadMore}
+                      disabled={loadingMore}
+                      className="text-xs text-muted-foreground"
+                    >
+                      {loadingMore
+                        ? (locale === 'pt-BR' ? 'Carregando...' : 'Loading...')
+                        : (locale === 'pt-BR' ? 'Carregar mais' : 'Load more')}
+                    </Button>
+                  </div>
+                )}
               </div>
             )}
           </ScrollArea>
