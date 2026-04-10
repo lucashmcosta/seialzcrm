@@ -512,7 +512,8 @@ function DesktopMessagesList() {
     }
   }, [selectedThreadId]);
 
-  // Real-time subscription for ALL new messages (updates thread list)
+  // Real-time subscription for messages in the active chat only
+  // Thread list realtime is handled by useMessageThreads hook
   useEffect(() => {
     if (!organization?.id) return;
 
@@ -526,16 +527,10 @@ function DesktopMessagesList() {
       }, (payload) => {
         const newMessage = payload.new as Message & { thread_id: string };
         
-        // Refetch threads to update list order and last message
-        refetchThreads();
-        
-        // If this message belongs to the selected thread, add it to messages
         if (newMessage.thread_id === selectedThreadId) {
-          // Resolve reply context since Realtime doesn't include joins
           const enrichMessage = async () => {
             let enriched = newMessage as Message;
             if (newMessage.reply_to_message_id && !newMessage.reply_to_message) {
-              // Try local lookup first
               const localOriginal = messages.find(m => m.id === newMessage.reply_to_message_id);
               if (localOriginal) {
                 enriched = {
@@ -546,24 +541,18 @@ function DesktopMessagesList() {
                   },
                 } as Message;
               } else {
-                // Fallback: query the database
                 const { data } = await supabase
                   .from('messages')
                   .select('content, direction')
                   .eq('id', newMessage.reply_to_message_id)
                   .single();
                 if (data) {
-                  enriched = {
-                    ...newMessage,
-                    reply_to_message: data,
-                  } as Message;
+                  enriched = { ...newMessage, reply_to_message: data } as Message;
                 }
               }
             }
             setMessages((prev) => {
-              const filtered = prev.filter(
-                (m) => !m.id.startsWith('temp-') && m.id !== enriched.id
-              );
+              const filtered = prev.filter((m) => !m.id.startsWith('temp-') && m.id !== enriched.id);
               return [...filtered, enriched];
             });
             scrollToBottom();
@@ -578,57 +567,19 @@ function DesktopMessagesList() {
         filter: `organization_id=eq.${organization.id}`,
       }, (payload) => {
         const updatedMessage = payload.new as Message & { thread_id: string };
-        
-        // Update message if it's in the selected thread, preserving reply context
         if (updatedMessage.thread_id === selectedThreadId) {
           setMessages((prev) =>
-            prev.map((m) => {
-              if (m.id === updatedMessage.id) {
-                return {
-                  ...updatedMessage,
-                  reply_to_message: updatedMessage.reply_to_message || m.reply_to_message,
-                } as Message;
-              }
-              return m;
-            })
+            prev.map((m) => m.id === updatedMessage.id
+              ? { ...updatedMessage, reply_to_message: updatedMessage.reply_to_message || m.reply_to_message } as Message
+              : m
+            )
           );
         }
       })
       .subscribe();
 
-    return () => {
-      supabase.removeChannel(channel);
-    };
-  }, [organization?.id, selectedThreadId, refetchThreads]);
-
-  // Real-time subscription for thread UPDATES (status, assignment changes)
-  useEffect(() => {
-    if (!organization?.id) return;
-
-    const channel = supabase
-      .channel(`org-thread-updates-${organization.id}`)
-      .on('postgres_changes', {
-        event: 'UPDATE',
-        schema: 'public',
-        table: 'message_threads',
-        filter: `organization_id=eq.${organization.id}`,
-      }, () => {
-        refetchThreads();
-      })
-      .on('postgres_changes', {
-        event: 'INSERT',
-        schema: 'public',
-        table: 'message_threads',
-        filter: `organization_id=eq.${organization.id}`,
-      }, () => {
-        refetchThreads();
-      })
-      .subscribe();
-
-    return () => {
-      supabase.removeChannel(channel);
-    };
-  }, [organization?.id, refetchThreads]);
+    return () => { supabase.removeChannel(channel); };
+  }, [organization?.id, selectedThreadId]);
 
   // 60s timer to recalculate 24h window
   useEffect(() => {
