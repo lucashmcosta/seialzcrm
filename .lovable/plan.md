@@ -1,110 +1,178 @@
 
 
-## Plano de Execução — Otimização de Mensagens
+## Migration 4 — SQL Final
 
-### Entregas
+Uma única migration com:
 
-**Via Lovable (execução imediata):**
-- **Migration 1** — 3 índices com `CREATE INDEX CONCURRENTLY`
-- **Migration 2** — 4 colunas denormalizadas + trigger (fast path INSERT / slow path UPDATE/DELETE)
-- **Migration 4** — Reescrita RLS (`ANY((SELECT current_user_org_ids()))`) + RPC `rpc_list_message_threads` com SECURITY DEFINER + GRANT/REVOKE
+1. **DROP** das 2 policies existentes (nomes exatos confirmados via `pg_policies`)
+2. **CREATE** de 4 policies granulares (SELECT/INSERT/UPDATE/DELETE) para `messages` e `message_threads` usando `organization_id = ANY(current_user_org_ids())`
+3. **CREATE FUNCTION** `rpc_list_message_threads` em `LANGUAGE plpgsql`, `SECURITY DEFINER`, sem `SET row_security = 'off'`, com `RAISE EXCEPTION 'ACCESS_DENIED'` e `is_unread` usando COALESCE conforme aprovado
+4. **GRANT/REVOKE** com assinatura completa
 
-**Via chat (SQL para copiar):**
-- **Migration 3** — Backfill batched com LOOP + FOR UPDATE SKIP LOCKED + GET DIAGNOSTICS
-
-**Após confirmação do backfill:**
-- **Frontend** — Refactor de `MessagesList.tsx` (linhas 506-596, 620-735) e `MobileMessagesList.tsx` (linhas 210-277, 354-395) para usar RPC, eliminar N+1, realtime local sem refetch
-
----
-
-### Migration 1 — Índices
+### SQL exato a ser aplicado
 
 ```sql
-CREATE INDEX CONCURRENTLY IF NOT EXISTS idx_messages_thread_sent 
-ON messages(thread_id, sent_at DESC) WHERE deleted_at IS NULL;
+-- ==========================================
+-- 1. DROP existing ALL policies
+-- ==========================================
+DROP POLICY IF EXISTS "Users can manage messages in their org" ON messages;
+DROP POLICY IF EXISTS "Users can manage message threads in their org" ON message_threads;
 
-CREATE INDEX CONCURRENTLY IF NOT EXISTS idx_threads_org_channel_updated 
-ON message_threads(organization_id, channel, updated_at DESC, id);
+-- ==========================================
+-- 2. CREATE granular RLS policies - messages
+-- ==========================================
+CREATE POLICY "messages_select" ON messages FOR SELECT TO authenticated
+  USING (organization_id = ANY(current_user_org_ids()));
 
-CREATE INDEX CONCURRENTLY IF NOT EXISTS idx_threads_unassigned 
-ON message_threads(organization_id, updated_at DESC) WHERE assigned_user_id IS NULL;
+CREATE POLICY "messages_insert" ON messages FOR INSERT TO authenticated
+  WITH CHECK (organization_id = ANY(current_user_org_ids()));
+
+CREATE POLICY "messages_update" ON messages FOR UPDATE TO authenticated
+  USING (organization_id = ANY(current_user_org_ids()))
+  WITH CHECK (organization_id = ANY(current_user_org_ids()));
+
+CREATE POLICY "messages_delete" ON messages FOR DELETE TO authenticated
+  USING (organization_id = ANY(current_user_org_ids()));
+
+-- ==========================================
+-- 3. CREATE granular RLS policies - message_threads
+-- ==========================================
+CREATE POLICY "message_threads_select" ON message_threads FOR SELECT TO authenticated
+  USING (organization_id = ANY(current_user_org_ids()));
+
+CREATE POLICY "message_threads_insert" ON message_threads FOR INSERT TO authenticated
+  WITH CHECK (organization_id = ANY(current_user_org_ids()));
+
+CREATE POLICY "message_threads_update" ON message_threads FOR UPDATE TO authenticated
+  USING (organization_id = ANY(current_user_org_ids()))
+  WITH CHECK (organization_id = ANY(current_user_org_ids()));
+
+CREATE POLICY "message_threads_delete" ON message_threads FOR DELETE TO authenticated
+  USING (organization_id = ANY(current_user_org_ids()));
+
+-- ==========================================
+-- 4. CREATE RPC function
+-- ==========================================
+CREATE OR REPLACE FUNCTION rpc_list_message_threads(
+  p_organization_id uuid,
+  p_status text DEFAULT NULL,
+  p_channels text[] DEFAULT NULL,
+  p_assigned_user_id uuid DEFAULT NULL,
+  p_unassigned_only boolean DEFAULT false,
+  p_cursor_updated_at timestamptz DEFAULT NULL,
+  p_cursor_id uuid DEFAULT NULL,
+  p_limit integer DEFAULT 50
+)
+RETURNS TABLE (
+  id uuid,
+  contact_id uuid,
+  contact_name text,
+  contact_phone text,
+  channel text,
+  subject text,
+  status text,
+  last_message_id uuid,
+  last_message_content text,
+  last_message_direction text,
+  last_message_at timestamptz,
+  last_inbound_at timestamptz,
+  whatsapp_last_inbound_at timestamptz,
+  needs_human_attention boolean,
+  agent_typing boolean,
+  awaiting_button_response boolean,
+  assigned_user_id uuid,
+  assigned_user_name text,
+  updated_at timestamptz,
+  created_at timestamptz,
+  is_unread boolean
+)
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = 'public'
+AS $$
+BEGIN
+  -- Explicit access check
+  IF NOT EXISTS (
+    SELECT 1 FROM user_organizations uo
+    WHERE uo.organization_id = p_organization_id
+      AND uo.user_id = current_user_id()
+      AND uo.is_active = true
+  ) THEN
+    RAISE EXCEPTION 'ACCESS_DENIED' USING ERRCODE = 'P0002';
+  END IF;
+
+  RETURN QUERY
+  SELECT
+    mt.id,
+    mt.contact_id,
+    c.full_name AS contact_name,
+    c.phone AS contact_phone,
+    mt.channel,
+    mt.subject,
+    mt.status,
+    mt.last_message_id,
+    mt.last_message_content,
+    mt.last_message_direction,
+    mt.last_message_at,
+    mt.last_inbound_at,
+    mt.whatsapp_last_inbound_at,
+    mt.needs_human_attention,
+    mt.agent_typing,
+    mt.awaiting_button_response,
+    mt.assigned_user_id,
+    u.full_name AS assigned_user_name,
+    mt.updated_at,
+    mt.created_at,
+    CASE
+      WHEN mt.last_message_direction = 'inbound'
+        AND COALESCE(mt.last_inbound_at, mt.whatsapp_last_inbound_at) IS NOT NULL
+        AND (
+          mtr.last_read_at IS NULL
+          OR COALESCE(mt.last_inbound_at, mt.whatsapp_last_inbound_at) > mtr.last_read_at
+        )
+      THEN true
+      ELSE false
+    END AS is_unread
+  FROM message_threads mt
+  INNER JOIN contacts c
+    ON c.id = mt.contact_id
+    AND c.organization_id = mt.organization_id
+    AND c.deleted_at IS NULL
+  LEFT JOIN users u ON u.id = mt.assigned_user_id
+  LEFT JOIN message_thread_reads mtr
+    ON mtr.thread_id = mt.id
+    AND mtr.user_id = current_user_id()
+  WHERE mt.organization_id = p_organization_id
+    AND (p_status IS NULL OR mt.status = p_status)
+    AND (p_channels IS NULL OR mt.channel = ANY(p_channels))
+    AND (NOT p_unassigned_only OR mt.assigned_user_id IS NULL)
+    AND (p_assigned_user_id IS NULL OR mt.assigned_user_id = p_assigned_user_id)
+    AND (p_cursor_updated_at IS NULL
+         OR (mt.updated_at, mt.id) < (p_cursor_updated_at, p_cursor_id))
+  ORDER BY mt.updated_at DESC, mt.id DESC
+  LIMIT p_limit;
+END;
+$$;
+
+-- ==========================================
+-- 5. GRANT/REVOKE with full signature
+-- ==========================================
+GRANT EXECUTE ON FUNCTION rpc_list_message_threads(
+  uuid, text, text[], uuid, boolean, timestamptz, uuid, integer
+) TO authenticated;
+
+REVOKE EXECUTE ON FUNCTION rpc_list_message_threads(
+  uuid, text, text[], uuid, boolean, timestamptz, uuid, integer
+) FROM anon, public;
 ```
-
-### Migration 2 — Colunas + Trigger
-
-- ADD COLUMN: `last_message_id uuid`, `last_message_at timestamptz`, `last_message_content text`, `last_message_direction text`
-- Trigger `trg_update_thread_last_message` com:
-  - **Fast path (INSERT)**: UPDATE direto comparando `NEW.sent_at >= last_message_at`, sem SELECT
-  - **Slow path (UPDATE/DELETE)**: Recalcula via SELECT no messages, respeita `deleted_at IS NULL`
 
 ### Migration 3 — Backfill (SQL manual, entregue no chat)
 
-```sql
-DO $$
-DECLARE
-  v_rows_affected integer;
-BEGIN
-  LOOP
-    UPDATE message_threads mt SET
-      last_message_id = sub.id,
-      last_message_at = sub.sent_at,
-      last_message_content = LEFT(sub.content, 200),
-      last_message_direction = sub.direction
-    FROM (
-      SELECT DISTINCT ON (m.thread_id) m.thread_id, m.id, m.sent_at, m.content, m.direction
-      FROM messages m
-      INNER JOIN (
-        SELECT id FROM message_threads
-        WHERE last_message_at IS NULL
-        LIMIT 500
-        FOR UPDATE SKIP LOCKED
-      ) batch ON batch.id = m.thread_id
-      WHERE m.deleted_at IS NULL
-      ORDER BY m.thread_id, m.sent_at DESC
-    ) sub
-    WHERE mt.id = sub.thread_id;
+Será entregue como texto logo após aplicação da Migration 4.
 
-    GET DIAGNOSTICS v_rows_affected = ROW_COUNT;
-    RAISE NOTICE 'Batch updated: % rows', v_rows_affected;
-    EXIT WHEN v_rows_affected = 0;
-  END LOOP;
-  RAISE NOTICE 'Backfill complete';
-END;
-$$;
-```
-
-Query de validação:
-```sql
-SELECT count(*) AS missing FROM message_threads 
-WHERE last_message_at IS NULL 
-AND EXISTS (SELECT 1 FROM messages WHERE thread_id = message_threads.id AND deleted_at IS NULL);
-```
-
-### Migration 4 — RLS + RPC + GRANT
-
-- DROP + CREATE policies em `messages` e `message_threads` usando `organization_id = ANY((SELECT current_user_org_ids()))`
-- CREATE FUNCTION `rpc_list_message_threads` com SECURITY DEFINER, cursor pagination `(updated_at, id)`, multi-tenant hardening nos JOINs
-- GRANT EXECUTE TO authenticated / REVOKE FROM anon, public
-
-### Frontend (após backfill confirmado)
-
-**`MessagesList.tsx`**:
-- Linhas 506-596: Substituir query + N+1 Promise.all por `supabase.rpc('rpc_list_message_threads', {...})`
-- Linhas 620-735: Realtime — remover `refetchThreads()` dos listeners, substituir por setState local que atualiza thread in-place e move para topo
-- Adicionar cursor state `{ updated_at, id }` para "carregar mais"
-
-**`MobileMessagesList.tsx`**:
-- Linhas 210-277: Mesma substituição por RPC
-- Linhas 354-395: Mesma otimização de realtime
-
-### Arquivos afetados
+### Arquivo afetado
 
 | Arquivo | Mudança |
-|---------|---------|
-| Migration SQL #1 | 3 índices CONCURRENTLY |
-| Migration SQL #2 | 4 colunas + trigger |
-| Migration SQL #3 | Backfill (manual) |
-| Migration SQL #4 | RLS + RPC + GRANT |
-| `src/pages/messages/MessagesList.tsx` | RPC + cursor + realtime local |
-| `src/components/mobile/MobileMessagesList.tsx` | Mesmas mudanças |
+|---------|--------|
+| Nova migration SQL | RLS rewrite + RPC + GRANT/REVOKE |
 
