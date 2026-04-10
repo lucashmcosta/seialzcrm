@@ -2255,6 +2255,10 @@ export type Database = {
           first_human_response_at: string | null
           id: string
           last_inbound_at: string | null
+          last_message_at: string | null
+          last_message_content: string | null
+          last_message_direction: string | null
+          last_message_id: string | null
           needs_human_attention: boolean | null
           opportunity_id: string | null
           organization_id: string
@@ -2278,6 +2282,10 @@ export type Database = {
           first_human_response_at?: string | null
           id?: string
           last_inbound_at?: string | null
+          last_message_at?: string | null
+          last_message_content?: string | null
+          last_message_direction?: string | null
+          last_message_id?: string | null
           needs_human_attention?: boolean | null
           opportunity_id?: string | null
           organization_id: string
@@ -2301,6 +2309,10 @@ export type Database = {
           first_human_response_at?: string | null
           id?: string
           last_inbound_at?: string | null
+          last_message_at?: string | null
+          last_message_content?: string | null
+          last_message_direction?: string | null
+          last_message_id?: string | null
           needs_human_attention?: boolean | null
           opportunity_id?: string | null
           organization_id?: string
