@@ -52,6 +52,7 @@ import { OwnerSelector } from '@/components/common/OwnerSelector';
 import EmojiPicker, { EmojiClickData, Theme } from 'emoji-picker-react';
 import { cn } from '@/lib/utils';
 import { useAI } from '@/hooks/useAI';
+import { useMessageThreads, type ChatThread } from '@/hooks/useMessageThreads';
 
 // Helper function for formatting relative time in human-readable format
 const formatRelativeTime = (timestamp: string, locale: 'pt-BR' | 'en-US'): string => {
@@ -98,23 +99,7 @@ const formatRelativeTime = (timestamp: string, locale: 'pt-BR' | 'en-US'): strin
   }
 };
 
-interface ChatThread {
-  id: string;
-  contact_id: string;
-  contact_name: string;
-  contact_phone: string | null;
-  last_message: string | null;
-  last_message_direction: string | null;
-  updated_at: string;
-  whatsapp_last_inbound_at: string | null;
-  last_inbound_at: string | null;
-  last_read_at: string | null;
-  unread: boolean;
-  needs_human_attention: boolean;
-  status: string;
-  assigned_user_id: string | null;
-  assigned_user_name: string | null;
-}
+// ChatThread is imported from useMessageThreads
 
 interface Message {
   id: string;
@@ -157,6 +142,7 @@ const statusConfig: Record<string, { label: string; labelEn: string; color: stri
 interface ChatListItemProps extends ListBoxItemProps<ChatThread> {
   value: ChatThread;
   locale: 'pt-BR' | 'en-US';
+  showLastMessage?: boolean;
 }
 
 const ChatListItem = ({ value, locale, className, ...otherProps }: ChatListItemProps) => {
@@ -185,7 +171,7 @@ const ChatListItem = ({ value, locale, className, ...otherProps }: ChatListItemP
             <span className="font-semibold text-sm text-foreground truncate">
               {value.contact_name}
             </span>
-            {(value.unread || value.last_message_direction === 'inbound') && (
+            {(value.unread) && (
               <span className="h-2 w-2 shrink-0 rounded-full bg-primary" />
             )}
           </div>
@@ -502,98 +488,8 @@ function DesktopMessagesList() {
       .eq('id', threadId);
   };
 
-  // Fetch threads
-  const { data: threads, isLoading: threadsLoading, refetch: refetchThreads } = useQuery({
-    queryKey: ['whatsapp-threads', organization?.id, userProfile?.id],
-    queryFn: async () => {
-      if (!organization?.id || !userProfile?.id) return [];
-
-      const { data, error } = await supabase
-        .from('message_threads')
-        .select(`
-          id,
-          contact_id,
-          updated_at,
-          whatsapp_last_inbound_at,
-          last_inbound_at,
-          needs_human_attention,
-          status,
-          assigned_user_id,
-          assigned_at,
-          contacts!inner(full_name, phone),
-          assigned_user:users!message_threads_assigned_user_id_fkey(full_name)
-        `)
-        .eq('organization_id', organization.id)
-        .eq('channel', 'whatsapp')
-        .order('updated_at', { ascending: false });
-
-      if (error) throw error;
-
-      // Get last message for each thread
-      const threadIds = (data || []).map(t => t.id);
-      
-      // Fetch read timestamps for current user
-      let readMap: Record<string, string> = {};
-      if (threadIds.length > 0) {
-        const { data: reads } = await supabase
-          .from('message_thread_reads')
-          .select('thread_id, last_read_at')
-          .eq('user_id', userProfile.id)
-          .in('thread_id', threadIds);
-        
-        if (reads) {
-          for (const r of reads) {
-            readMap[r.thread_id] = r.last_read_at;
-          }
-        }
-      }
-
-      const threadsWithMessages = await Promise.all(
-        (data || []).map(async (thread) => {
-          const { data: lastMsg } = await supabase
-            .from('messages')
-            .select('content, direction')
-            .eq('thread_id', thread.id)
-            .is('deleted_at', null)
-            .order('sent_at', { ascending: false })
-            .limit(1)
-            .maybeSingle();
-
-          const contact = thread.contacts as any;
-          const assignedUser = (thread as any).assigned_user as any;
-          const lastReadAt = readMap[thread.id] || null;
-          const lastInboundAt = (thread as any).last_inbound_at || thread.whatsapp_last_inbound_at || null;
-          
-          // Calculate unread: inbound message exists after last_read_at
-          const isUnread = lastMsg?.direction === 'inbound' && (
-            !lastReadAt || 
-            (lastInboundAt && new Date(lastInboundAt) > new Date(lastReadAt))
-          );
-
-          return {
-            id: thread.id,
-            contact_id: thread.contact_id,
-            contact_name: contact?.full_name || 'Desconhecido',
-            contact_phone: contact?.phone,
-            last_message: lastMsg?.content || null,
-            last_message_direction: lastMsg?.direction || null,
-            updated_at: thread.updated_at,
-            whatsapp_last_inbound_at: thread.whatsapp_last_inbound_at,
-            last_inbound_at: lastInboundAt,
-            last_read_at: lastReadAt,
-            unread: !!isUnread,
-            needs_human_attention: (thread as any).needs_human_attention || false,
-            status: (thread as any).status || 'open',
-            assigned_user_id: (thread as any).assigned_user_id || null,
-            assigned_user_name: assignedUser?.full_name || null,
-          } as ChatThread;
-        })
-      );
-
-      return threadsWithMessages;
-    },
-    enabled: !!organization?.id && !!userProfile?.id,
-  });
+  // Fetch threads via RPC (replaces N+1 query)
+  const { threads, loading: threadsLoading, refetchThreads } = useMessageThreads({ channels: ['whatsapp'] });
 
   const selectedThread = threads?.find((t) => t.id === selectedThreadId);
 
@@ -616,7 +512,8 @@ function DesktopMessagesList() {
     }
   }, [selectedThreadId]);
 
-  // Real-time subscription for ALL new messages (updates thread list)
+  // Real-time subscription for messages in the active chat only
+  // Thread list realtime is handled by useMessageThreads hook
   useEffect(() => {
     if (!organization?.id) return;
 
@@ -630,16 +527,10 @@ function DesktopMessagesList() {
       }, (payload) => {
         const newMessage = payload.new as Message & { thread_id: string };
         
-        // Refetch threads to update list order and last message
-        refetchThreads();
-        
-        // If this message belongs to the selected thread, add it to messages
         if (newMessage.thread_id === selectedThreadId) {
-          // Resolve reply context since Realtime doesn't include joins
           const enrichMessage = async () => {
             let enriched = newMessage as Message;
             if (newMessage.reply_to_message_id && !newMessage.reply_to_message) {
-              // Try local lookup first
               const localOriginal = messages.find(m => m.id === newMessage.reply_to_message_id);
               if (localOriginal) {
                 enriched = {
@@ -650,24 +541,18 @@ function DesktopMessagesList() {
                   },
                 } as Message;
               } else {
-                // Fallback: query the database
                 const { data } = await supabase
                   .from('messages')
                   .select('content, direction')
                   .eq('id', newMessage.reply_to_message_id)
                   .single();
                 if (data) {
-                  enriched = {
-                    ...newMessage,
-                    reply_to_message: data,
-                  } as Message;
+                  enriched = { ...newMessage, reply_to_message: data } as Message;
                 }
               }
             }
             setMessages((prev) => {
-              const filtered = prev.filter(
-                (m) => !m.id.startsWith('temp-') && m.id !== enriched.id
-              );
+              const filtered = prev.filter((m) => !m.id.startsWith('temp-') && m.id !== enriched.id);
               return [...filtered, enriched];
             });
             scrollToBottom();
@@ -682,57 +567,19 @@ function DesktopMessagesList() {
         filter: `organization_id=eq.${organization.id}`,
       }, (payload) => {
         const updatedMessage = payload.new as Message & { thread_id: string };
-        
-        // Update message if it's in the selected thread, preserving reply context
         if (updatedMessage.thread_id === selectedThreadId) {
           setMessages((prev) =>
-            prev.map((m) => {
-              if (m.id === updatedMessage.id) {
-                return {
-                  ...updatedMessage,
-                  reply_to_message: updatedMessage.reply_to_message || m.reply_to_message,
-                } as Message;
-              }
-              return m;
-            })
+            prev.map((m) => m.id === updatedMessage.id
+              ? { ...updatedMessage, reply_to_message: updatedMessage.reply_to_message || m.reply_to_message } as Message
+              : m
+            )
           );
         }
       })
       .subscribe();
 
-    return () => {
-      supabase.removeChannel(channel);
-    };
-  }, [organization?.id, selectedThreadId, refetchThreads]);
-
-  // Real-time subscription for thread UPDATES (status, assignment changes)
-  useEffect(() => {
-    if (!organization?.id) return;
-
-    const channel = supabase
-      .channel(`org-thread-updates-${organization.id}`)
-      .on('postgres_changes', {
-        event: 'UPDATE',
-        schema: 'public',
-        table: 'message_threads',
-        filter: `organization_id=eq.${organization.id}`,
-      }, () => {
-        refetchThreads();
-      })
-      .on('postgres_changes', {
-        event: 'INSERT',
-        schema: 'public',
-        table: 'message_threads',
-        filter: `organization_id=eq.${organization.id}`,
-      }, () => {
-        refetchThreads();
-      })
-      .subscribe();
-
-    return () => {
-      supabase.removeChannel(channel);
-    };
-  }, [organization?.id, refetchThreads]);
+    return () => { supabase.removeChannel(channel); };
+  }, [organization?.id, selectedThreadId]);
 
   // 60s timer to recalculate 24h window
   useEffect(() => {
