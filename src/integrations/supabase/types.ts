@@ -3922,6 +3922,41 @@ export type Database = {
         Args: { p_admin_id: string }
         Returns: undefined
       }
+      rpc_list_message_threads: {
+        Args: {
+          p_assigned_user_id?: string
+          p_channels?: string[]
+          p_cursor_id?: string
+          p_cursor_updated_at?: string
+          p_limit?: number
+          p_organization_id: string
+          p_status?: string
+          p_unassigned_only?: boolean
+        }
+        Returns: {
+          agent_typing: boolean
+          assigned_user_id: string
+          assigned_user_name: string
+          awaiting_button_response: boolean
+          channel: string
+          contact_id: string
+          contact_name: string
+          contact_phone: string
+          created_at: string
+          id: string
+          is_unread: boolean
+          last_inbound_at: string
+          last_message_at: string
+          last_message_content: string
+          last_message_direction: string
+          last_message_id: string
+          needs_human_attention: boolean
+          status: string
+          subject: string
+          updated_at: string
+          whatsapp_last_inbound_at: string
+        }[]
+      }
       search_knowledge: {
         Args: {
           agent_id_filter?: string
