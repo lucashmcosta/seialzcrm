@@ -99,23 +99,7 @@ const formatRelativeTime = (timestamp: string, locale: 'pt-BR' | 'en-US'): strin
   }
 };
 
-interface ChatThread {
-  id: string;
-  contact_id: string;
-  contact_name: string;
-  contact_phone: string | null;
-  last_message: string | null;
-  last_message_direction: string | null;
-  updated_at: string;
-  whatsapp_last_inbound_at: string | null;
-  last_inbound_at: string | null;
-  last_read_at: string | null;
-  unread: boolean;
-  needs_human_attention: boolean;
-  status: string;
-  assigned_user_id: string | null;
-  assigned_user_name: string | null;
-}
+// ChatThread is imported from useMessageThreads
 
 interface Message {
   id: string;
@@ -158,6 +142,7 @@ const statusConfig: Record<string, { label: string; labelEn: string; color: stri
 interface ChatListItemProps extends ListBoxItemProps<ChatThread> {
   value: ChatThread;
   locale: 'pt-BR' | 'en-US';
+  showLastMessage?: boolean;
 }
 
 const ChatListItem = ({ value, locale, className, ...otherProps }: ChatListItemProps) => {
@@ -186,7 +171,7 @@ const ChatListItem = ({ value, locale, className, ...otherProps }: ChatListItemP
             <span className="font-semibold text-sm text-foreground truncate">
               {value.contact_name}
             </span>
-            {(value.unread || value.last_message_direction === 'inbound') && (
+            {(value.unread) && (
               <span className="h-2 w-2 shrink-0 rounded-full bg-primary" />
             )}
           </div>
@@ -503,98 +488,8 @@ function DesktopMessagesList() {
       .eq('id', threadId);
   };
 
-  // Fetch threads
-  const { data: threads, isLoading: threadsLoading, refetch: refetchThreads } = useQuery({
-    queryKey: ['whatsapp-threads', organization?.id, userProfile?.id],
-    queryFn: async () => {
-      if (!organization?.id || !userProfile?.id) return [];
-
-      const { data, error } = await supabase
-        .from('message_threads')
-        .select(`
-          id,
-          contact_id,
-          updated_at,
-          whatsapp_last_inbound_at,
-          last_inbound_at,
-          needs_human_attention,
-          status,
-          assigned_user_id,
-          assigned_at,
-          contacts!inner(full_name, phone),
-          assigned_user:users!message_threads_assigned_user_id_fkey(full_name)
-        `)
-        .eq('organization_id', organization.id)
-        .eq('channel', 'whatsapp')
-        .order('updated_at', { ascending: false });
-
-      if (error) throw error;
-
-      // Get last message for each thread
-      const threadIds = (data || []).map(t => t.id);
-      
-      // Fetch read timestamps for current user
-      let readMap: Record<string, string> = {};
-      if (threadIds.length > 0) {
-        const { data: reads } = await supabase
-          .from('message_thread_reads')
-          .select('thread_id, last_read_at')
-          .eq('user_id', userProfile.id)
-          .in('thread_id', threadIds);
-        
-        if (reads) {
-          for (const r of reads) {
-            readMap[r.thread_id] = r.last_read_at;
-          }
-        }
-      }
-
-      const threadsWithMessages = await Promise.all(
-        (data || []).map(async (thread) => {
-          const { data: lastMsg } = await supabase
-            .from('messages')
-            .select('content, direction')
-            .eq('thread_id', thread.id)
-            .is('deleted_at', null)
-            .order('sent_at', { ascending: false })
-            .limit(1)
-            .maybeSingle();
-
-          const contact = thread.contacts as any;
-          const assignedUser = (thread as any).assigned_user as any;
-          const lastReadAt = readMap[thread.id] || null;
-          const lastInboundAt = (thread as any).last_inbound_at || thread.whatsapp_last_inbound_at || null;
-          
-          // Calculate unread: inbound message exists after last_read_at
-          const isUnread = lastMsg?.direction === 'inbound' && (
-            !lastReadAt || 
-            (lastInboundAt && new Date(lastInboundAt) > new Date(lastReadAt))
-          );
-
-          return {
-            id: thread.id,
-            contact_id: thread.contact_id,
-            contact_name: contact?.full_name || 'Desconhecido',
-            contact_phone: contact?.phone,
-            last_message: lastMsg?.content || null,
-            last_message_direction: lastMsg?.direction || null,
-            updated_at: thread.updated_at,
-            whatsapp_last_inbound_at: thread.whatsapp_last_inbound_at,
-            last_inbound_at: lastInboundAt,
-            last_read_at: lastReadAt,
-            unread: !!isUnread,
-            needs_human_attention: (thread as any).needs_human_attention || false,
-            status: (thread as any).status || 'open',
-            assigned_user_id: (thread as any).assigned_user_id || null,
-            assigned_user_name: assignedUser?.full_name || null,
-          } as ChatThread;
-        })
-      );
-
-      return threadsWithMessages;
-    },
-    enabled: !!organization?.id && !!userProfile?.id,
-  });
+  // Fetch threads via RPC (replaces N+1 query)
+  const { threads, loading: threadsLoading, refetchThreads } = useMessageThreads({ channels: ['whatsapp'] });
 
   const selectedThread = threads?.find((t) => t.id === selectedThreadId);
 
