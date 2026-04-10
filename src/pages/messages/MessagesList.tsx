@@ -52,6 +52,7 @@ import { OwnerSelector } from '@/components/common/OwnerSelector';
 import EmojiPicker, { EmojiClickData, Theme } from 'emoji-picker-react';
 import { cn } from '@/lib/utils';
 import { useAI } from '@/hooks/useAI';
+import { useMessageThreads, type ChatThread } from '@/hooks/useMessageThreads';
 
 // Helper function for formatting relative time in human-readable format
 const formatRelativeTime = (timestamp: string, locale: 'pt-BR' | 'en-US'): string => {
