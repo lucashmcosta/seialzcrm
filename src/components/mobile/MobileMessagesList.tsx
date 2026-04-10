@@ -40,6 +40,7 @@ import { NewConversationDialog } from '@/components/messages/NewConversationDial
 import { OwnerSelector } from '@/components/common/OwnerSelector';
 import { cn } from '@/lib/utils';
 import { useAI } from '@/hooks/useAI';
+import { useMessageThreads, type ChatThread } from '@/hooks/useMessageThreads';
 
 // ─── Types ───────────────────────────────────────────────────────
 interface ChatThread {
