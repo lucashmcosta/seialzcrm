@@ -267,7 +267,7 @@ export function MobileMessagesList() {
     if (selectedThreadId) fetchMessages(selectedThreadId);
   }, [selectedThreadId]);
 
-  // Realtime: new messages
+  // Realtime: messages in active chat only (thread realtime handled by useMessageThreads hook)
   useEffect(() => {
     if (!organization?.id) return;
     const channel = supabase
@@ -277,7 +277,6 @@ export function MobileMessagesList() {
         filter: `organization_id=eq.${organization.id}`,
       }, (payload) => {
         const newMsg = payload.new as Message & { thread_id: string };
-        refetchThreads();
         if (newMsg.thread_id === selectedThreadId) {
           setMessages((prev) => {
             const filtered = prev.filter(m => !m.id.startsWith('temp-') && m.id !== newMsg.id);
@@ -297,18 +296,7 @@ export function MobileMessagesList() {
       })
       .subscribe();
     return () => { supabase.removeChannel(channel); };
-  }, [organization?.id, selectedThreadId, refetchThreads]);
-
-  // Realtime: thread updates
-  useEffect(() => {
-    if (!organization?.id) return;
-    const channel = supabase
-      .channel(`mob-thread-updates-${organization.id}`)
-      .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'message_threads', filter: `organization_id=eq.${organization.id}` }, () => refetchThreads())
-      .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'message_threads', filter: `organization_id=eq.${organization.id}` }, () => refetchThreads())
-      .subscribe();
-    return () => { supabase.removeChannel(channel); };
-  }, [organization?.id, refetchThreads]);
+  }, [organization?.id, selectedThreadId]);
 
   // 24h window recalc
   useEffect(() => {
