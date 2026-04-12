@@ -191,142 +191,43 @@ export default function Dashboard() {
 
   async function fetchStats() {
     if (!organization || !userProfile) return;
-    
+
     setLoading(true);
-    
+
     try {
       const daysAgo = parseInt(period);
-      const dateFilter = new Date();
-      dateFilter.setDate(dateFilter.getDate() - daysAgo);
-      
-      // Build owner filter
-      let ownerFilter = {};
-      if (ownerId !== 'all') {
-        ownerFilter = { owner_user_id: ownerId };
+      const ownerParam = ownerId !== 'all' ? ownerId : null;
+
+      // Single RPC call replaces 8+ separate queries
+      const { data, error: rpcError } = await supabase
+        .rpc('get_dashboard_stats', {
+          p_organization_id: organization.id,
+          p_days_ago: daysAgo,
+          p_owner_user_id: ownerParam,
+        });
+
+      if (rpcError) {
+        console.error('Error fetching dashboard stats:', rpcError);
+        return;
       }
-      
-      // Open opportunities
-      const { count: openCount, data: openOpps } = await supabase
-        .from('opportunities')
-        .select('amount', { count: 'exact' })
-        .eq('organization_id', organization.id)
-        .eq('status', 'open')
-        .is('deleted_at', null)
-        .match(ownerFilter);
-      
-      setOpenOpportunities(openCount || 0);
-      const totalValue = (openOpps || []).reduce((sum, opp) => sum + (opp.amount || 0), 0);
-      setPipelineValue(totalValue);
-      
-      // Won opportunities
-      const { data: wonOpps } = await supabase
-        .from('opportunities')
-        .select('amount, updated_at')
-        .eq('organization_id', organization.id)
-        .eq('status', 'won')
-        .gte('updated_at', dateFilter.toISOString())
-        .is('deleted_at', null)
-        .match(ownerFilter);
-      
-      const wonTotal = (wonOpps || []).reduce((sum, opp) => sum + (opp.amount || 0), 0);
-      setWonAmount(wonTotal);
-      
-      // Lost opportunities
-      const { count: lostCount } = await supabase
-        .from('opportunities')
-        .select('*', { count: 'exact', head: true })
-        .eq('organization_id', organization.id)
-        .eq('status', 'lost')
-        .gte('updated_at', dateFilter.toISOString())
-        .is('deleted_at', null)
-        .match(ownerFilter);
-      
-      setLostCount(lostCount || 0);
-      
-      // New contacts
-      const { count: contactsCount } = await supabase
-        .from('contacts')
-        .select('*', { count: 'exact', head: true })
-        .eq('organization_id', organization.id)
-        .gte('created_at', dateFilter.toISOString())
-        .is('deleted_at', null)
-        .match(ownerFilter);
-      
-      setNewContacts(contactsCount || 0);
-      
-      // Chart data - opportunities by stage
-      const { data: stages } = await supabase
-        .from('pipeline_stages')
-        .select('id, name')
-        .eq('organization_id', organization.id)
-        .eq('type', 'custom')
-        .order('order_index');
-      
-      if (stages) {
-        const stageStats = await Promise.all(
-          stages.map(async (stage) => {
-            const { data: opps } = await supabase
-              .from('opportunities')
-              .select('amount')
-              .eq('organization_id', organization.id)
-              .eq('pipeline_stage_id', stage.id)
-              .eq('status', 'open')
-              .is('deleted_at', null)
-              .match(ownerFilter);
-            
-            const total = (opps || []).reduce((sum, opp) => sum + (opp.amount || 0), 0);
-            return { name: stage.name, value: total };
-          })
-        );
-        
-        setStageData(stageStats);
-      }
-      
-      // Trend data - won amount over time
-      if (wonOpps) {
-        const grouped = wonOpps.reduce((acc: any, opp) => {
-          const date = new Date(opp.updated_at).toLocaleDateString(locale);
-          if (!acc[date]) acc[date] = 0;
-          acc[date] += opp.amount || 0;
-          return acc;
-        }, {});
-        
-        const trend = Object.entries(grouped).map(([date, amount]) => ({
-          date,
-          amount
+
+      if (data) {
+        setOpenOpportunities(data.open_count || 0);
+        setPipelineValue(data.pipeline_value || 0);
+        setWonAmount(data.won_amount || 0);
+        setLostCount(data.lost_count || 0);
+        setNewContacts(data.new_contacts || 0);
+        setStageData(data.stage_data || []);
+        setMyTasks(data.tasks || []);
+        setRecentActivities(data.activities || []);
+
+        // Format won trend dates for display
+        const trend = (data.won_trend || []).map((w: { date: string; amount: number }) => ({
+          date: new Date(w.date).toLocaleDateString(locale),
+          amount: w.amount,
         }));
-        
         setTrendData(trend);
       }
-      
-      // My tasks today
-      const today = new Date();
-      today.setHours(23, 59, 59, 999);
-      
-      const { data: tasks } = await supabase
-        .from('tasks')
-        .select('id, title, due_at, priority, contact_id, contacts(full_name)')
-        .eq('organization_id', organization.id)
-        .eq('assigned_user_id', userProfile.id)
-        .eq('status', 'open')
-        .lte('due_at', today.toISOString())
-        .is('deleted_at', null)
-        .order('due_at', { ascending: true })
-        .limit(5);
-      
-      setMyTasks(tasks || []);
-      
-      // Recent activities
-      const { data: activities } = await supabase
-        .from('activities')
-        .select('id, title, activity_type, occurred_at, contact_id, contacts(full_name)')
-        .eq('organization_id', organization.id)
-        .is('deleted_at', null)
-        .order('occurred_at', { ascending: false })
-        .limit(10);
-      
-      setRecentActivities(activities || []);
-      
     } catch (error) {
       console.error('Error fetching dashboard stats:', error);
     } finally {

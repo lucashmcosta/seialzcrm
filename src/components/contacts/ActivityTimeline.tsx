@@ -54,7 +54,7 @@ export function ActivityTimeline({ contactId, opportunityId }: ActivityTimelineP
       // Fetch activities
       let activityQuery = supabase
         .from('activities')
-        .select('*')
+        .select('id, activity_type, title, body, occurred_at, created_at')
         .eq('organization_id', organization.id)
         .is('deleted_at', null)
         .neq('activity_type', 'call'); // Exclude call activities, we'll fetch from calls table

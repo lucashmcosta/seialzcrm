@@ -164,7 +164,7 @@ export default function OpportunitiesKanban() {
       // Query 1: Search by opportunity title
       const { data: byTitle } = await supabase
         .from('opportunities')
-        .select(`*, contacts(full_name), users(full_name)`)
+        .select('id, title, amount, currency, pipeline_stage_id, contact_id, close_date, owner_user_id, contacts(full_name), users(full_name)')
         .eq('organization_id', organization.id)
         .is('deleted_at', null)
         .ilike('title', `%${searchTerm}%`)
@@ -184,7 +184,7 @@ export default function OpportunitiesKanban() {
         const contactIds = matchingContacts.map(c => c.id);
         const { data } = await supabase
           .from('opportunities')
-          .select(`*, contacts(full_name), users(full_name)`)
+          .select('id, title, amount, currency, pipeline_stage_id, contact_id, close_date, owner_user_id, contacts(full_name), users(full_name)')
           .eq('organization_id', organization.id)
           .is('deleted_at', null)
           .in('contact_id', contactIds)
@@ -210,93 +210,20 @@ export default function OpportunitiesKanban() {
 
   const fetchData = async () => {
     if (!organization?.id) return;
-    
+
     setLoading(true);
 
-    // Fetch pipeline stages
-    const { data: stagesData } = await supabase
-      .from('pipeline_stages')
-      .select('*')
-      .eq('organization_id', organization.id)
-      .order('order_index');
-
-    if (stagesData) {
-      setStages(stagesData);
-    }
-
-    // Fetch REAL counts from RPC (no 1000 limit)
-    const { data: countsData } = await supabase
-      .rpc('get_opportunity_stage_counts', { org_id: organization.id });
-
-    if (countsData) {
-      const countsMap: Record<string, { count: number; amount: number }> = {};
-      countsData.forEach((item: { stage_id: string; opportunity_count: number; total_amount: number }) => {
-        countsMap[item.stage_id] = {
-          count: Number(item.opportunity_count),
-          amount: Number(item.total_amount)
-        };
-      });
-      setStageCounts(countsMap);
-    }
-
-    // Fetch first batch of opportunities per stage (for Kanban)
-    if (stagesData) {
-      const oppsByStage: Record<string, Opportunity[]> = {};
-      const hasMore: Record<string, boolean> = {};
-      
-      await Promise.all(stagesData.map(async (stage) => {
-        const statusFilter = stage.type === 'won' ? 'won' : stage.type === 'lost' ? 'lost' : 'open';
-        const { data } = await supabase
-          .from('opportunities')
-          .select(`
-            *,
-            contacts (
-              full_name
-            ),
-            users (
-              full_name
-            )
-          `)
-          .eq('organization_id', organization.id)
-          .eq('pipeline_stage_id', stage.id)
-          .eq('status', statusFilter)
-          .is('deleted_at', null)
-          .order('created_at', { ascending: false })
-          .limit(CARDS_PER_STAGE);
-        
-        oppsByStage[stage.id] = data || [];
-        hasMore[stage.id] = (data?.length || 0) === CARDS_PER_STAGE;
-      }));
-      
-      setOpportunitiesByStage(oppsByStage);
-      setHasMoreByStage(hasMore);
-      
-      // Also set flat opportunities array for table view
-      const allOpps = Object.values(oppsByStage).flat();
-      setOpportunities(allOpps);
-    }
-
-    // Fetch users for filter
-    const { data: usersData } = await supabase
-      .from('user_organizations')
-      .select(`
-        users (
-          id,
-          full_name
-        )
-      `)
-      .eq('organization_id', organization.id)
-      .eq('is_active', true);
-
-    if (usersData) {
-      const usersList = usersData
-        .map((uo: any) => uo.users)
-        .filter((u: any) => u !== null);
-      setUsers(usersList);
-    }
-
-    // Fetch tags and assignments
-    const [tagsRes, assignmentsRes] = await Promise.all([
+    // Single RPC replaces: stages query + counts RPC + N per-stage opportunity queries
+    const [stageResult, usersResult, tagsRes, assignmentsRes] = await Promise.all([
+      supabase.rpc('get_opportunities_by_stage', {
+        p_organization_id: organization.id,
+        p_limit_per_stage: CARDS_PER_STAGE,
+      }),
+      supabase
+        .from('user_organizations')
+        .select('users(id, full_name)')
+        .eq('organization_id', organization.id)
+        .eq('is_active', true),
       supabase
         .from('tags')
         .select('id, name, color')
@@ -309,6 +236,44 @@ export default function OpportunitiesKanban() {
         .eq('organization_id', organization.id),
     ]);
 
+    // Process stages + opportunities from single RPC
+    if (stageResult.data) {
+      const stagesFromRpc: PipelineStage[] = [];
+      const oppsByStage: Record<string, Opportunity[]> = {};
+      const hasMore: Record<string, boolean> = {};
+      const countsMap: Record<string, { count: number; amount: number }> = {};
+
+      (stageResult.data as any[]).forEach((stage: any) => {
+        stagesFromRpc.push({
+          id: stage.stage_id,
+          name: stage.stage_name,
+          order_index: stage.order_index,
+          type: stage.stage_type,
+        });
+        countsMap[stage.stage_id] = {
+          count: Number(stage.total_count),
+          amount: Number(stage.total_amount),
+        };
+        oppsByStage[stage.stage_id] = stage.opportunities || [];
+        hasMore[stage.stage_id] = (stage.opportunities?.length || 0) === CARDS_PER_STAGE;
+      });
+
+      setStages(stagesFromRpc);
+      setStageCounts(countsMap);
+      setOpportunitiesByStage(oppsByStage);
+      setHasMoreByStage(hasMore);
+      setOpportunities(Object.values(oppsByStage).flat());
+    }
+
+    // Process users
+    if (usersResult.data) {
+      const usersList = usersResult.data
+        .map((uo: any) => uo.users)
+        .filter((u: any) => u !== null);
+      setUsers(usersList);
+    }
+
+    // Process tags
     if (tagsRes.data) setAllTags(tagsRes.data);
     if (assignmentsRes.data && tagsRes.data) {
       const tagsMap: Record<string, Tag[]> = {};
@@ -363,15 +328,7 @@ export default function OpportunitiesKanban() {
     
     const { data } = await supabase
       .from('opportunities')
-      .select(`
-        *,
-        contacts (
-          full_name
-        ),
-        users (
-          full_name
-        )
-      `)
+      .select('id, title, amount, currency, pipeline_stage_id, contact_id, close_date, owner_user_id, contacts(full_name), users(full_name)')
       .eq('organization_id', organization.id)
       .eq('pipeline_stage_id', stageId)
       .eq('status', (() => {

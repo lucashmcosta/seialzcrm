@@ -178,7 +178,7 @@ export default function ContactsList() {
     // Build query with filters
     let query = supabase
       .from('contacts')
-      .select('*', { count: 'exact' })
+      .select('id, full_name, email, phone, company_name, lifecycle_stage, owner_user_id, created_at', { count: 'exact' })
       .eq('organization_id', organization.id)
       .is('deleted_at', null);
     

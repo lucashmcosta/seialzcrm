@@ -157,7 +157,7 @@ export function WhatsAppChat({ contactId, threadId: initialThreadId, onThreadCre
     try {
       const { data, error } = await supabase
         .from('messages')
-        .select('*')
+        .select('id, thread_id, sender_user_id, sender_type, sender_name, sender_agent_id, direction, content, sent_at, reply_to_message_id, whatsapp_message_sid, whatsapp_status, template_id, media_urls, media_type, error_code, error_message, metadata, created_at')
         .eq('thread_id', thread)
         .is('deleted_at', null)
         .order('sent_at', { ascending: true });

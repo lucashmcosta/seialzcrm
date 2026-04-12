@@ -64,7 +64,7 @@ export function OrganizationProvider({ children }: { children: React.ReactNode }
       // Step 1: Fetch user profile
       const { data: profileData, error: profileError } = await supabase
         .from('users')
-        .select('*')
+        .select('id, auth_user_id, full_name, first_name, last_name, email, avatar_url, locale, timezone, is_platform_admin, created_at, updated_at')
         .eq('auth_user_id', user.id)
         .maybeSingle();
 

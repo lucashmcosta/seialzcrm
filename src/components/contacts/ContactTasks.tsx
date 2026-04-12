@@ -57,7 +57,7 @@ export function ContactTasks({ contactId, opportunityId }: ContactTasksProps) {
     try {
       let query = supabase
         .from('tasks')
-        .select('*')
+        .select('id, title, description, status, priority, due_at, completed_at, assigned_user_id, contact_id, opportunity_id, created_at')
         .eq('organization_id', organization.id)
         .is('deleted_at', null);
 
