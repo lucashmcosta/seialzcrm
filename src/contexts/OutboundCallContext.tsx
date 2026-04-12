@@ -72,8 +72,32 @@ export function OutboundCallProvider({ children }: { children: ReactNode }) {
   const tokenCacheRef = useRef<TokenCache | null>(null);
   const userDataCacheRef = useRef<{ userId: string; orgId: string } | null>(null);
   const isInitializingRef = useRef(false);
+  const stateTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const isOnCall = status !== 'idle' && status !== 'failed' && status !== 'ended';
+
+  // Clear any pending state timeout
+  const clearStateTimeout = useCallback(() => {
+    if (stateTimeoutRef.current) {
+      clearTimeout(stateTimeoutRef.current);
+      stateTimeoutRef.current = null;
+    }
+  }, []);
+
+  // Set a timeout that forces cleanup if a state hangs
+  const setStateTimeout = useCallback((timeoutMs: number, failMessage: string) => {
+    clearStateTimeout();
+    stateTimeoutRef.current = setTimeout(() => {
+      console.warn(`[OutboundCall] State timeout: ${failMessage}`);
+      if (activeCallRef.current) {
+        try { activeCallRef.current.disconnect(); } catch {}
+        activeCallRef.current = null;
+      }
+      setErrorMessage(failMessage);
+      setStatus('failed');
+      updateCallRecord('failed', new Date());
+    }, timeoutMs);
+  }, [clearStateTimeout]);
 
   // Get cached token or fetch new one
   const getToken = useCallback(async (): Promise<string> => {
@@ -135,8 +159,9 @@ export function OutboundCallProvider({ children }: { children: ReactNode }) {
 
   // Cleanup call state only (keep device)
   const cleanupCall = useCallback(() => {
+    clearStateTimeout();
     if (activeCallRef.current) {
-      activeCallRef.current.disconnect();
+      try { activeCallRef.current.disconnect(); } catch {}
       activeCallRef.current = null;
     }
     if (timerRef.current) {
@@ -153,16 +178,17 @@ export function OutboundCallProvider({ children }: { children: ReactNode }) {
     callIdRef.current = null;
     callStartTimeRef.current = null;
     pendingCallRef.current = null;
-  }, [isDeviceReady]);
+  }, [isDeviceReady, clearStateTimeout]);
 
   // Full cleanup (including device)
   const fullCleanup = useCallback(() => {
+    clearStateTimeout();
     if (activeCallRef.current) {
-      activeCallRef.current.disconnect();
+      try { activeCallRef.current.disconnect(); } catch {}
       activeCallRef.current = null;
     }
     if (deviceRef.current) {
-      deviceRef.current.destroy();
+      try { deviceRef.current.destroy(); } catch {}
       deviceRef.current = null;
     }
     if (timerRef.current) {
@@ -251,6 +277,9 @@ export function OutboundCallProvider({ children }: { children: ReactNode }) {
       setStatus('connecting');
       console.log('Connecting call to:', phoneNumber);
 
+      // Timeout: if not ringing within 15s, something is wrong
+      setStateTimeout(15000, 'Tempo esgotado ao conectar chamada');
+
       // Start call record creation in PARALLEL (non-blocking)
       createCallRecordAsync(phoneNumber, contactId, opportunityId);
 
@@ -266,12 +295,16 @@ export function OutboundCallProvider({ children }: { children: ReactNode }) {
       // Call events
       call.on('ringing', () => {
         console.log('Call ringing');
+        clearStateTimeout();
         setStatus('ringing');
         updateCallRecord('ringing');
+        // Timeout: if not answered within 60s, fail gracefully
+        setStateTimeout(60000, 'Chamada não atendida');
       });
 
       call.on('accept', () => {
         console.log('Call accepted/connected');
+        clearStateTimeout();
         setStatus('connected');
         updateCallRecord('in-progress');
         toast.success('Chamada conectada');
@@ -279,18 +312,21 @@ export function OutboundCallProvider({ children }: { children: ReactNode }) {
 
       call.on('disconnect', () => {
         console.log('Call disconnected');
+        clearStateTimeout();
         setStatus('ended');
         updateCallRecord('completed', new Date());
       });
 
       call.on('cancel', () => {
         console.log('Call cancelled');
+        clearStateTimeout();
         setStatus('ended');
         updateCallRecord('canceled', new Date());
       });
 
       call.on('reject', () => {
         console.log('Call rejected');
+        clearStateTimeout();
         setStatus('failed');
         setErrorMessage('Chamada rejeitada');
         updateCallRecord('busy', new Date());
@@ -298,6 +334,7 @@ export function OutboundCallProvider({ children }: { children: ReactNode }) {
 
       call.on('error', (error) => {
         console.error('Call error:', error);
+        clearStateTimeout();
         setErrorMessage(error.message || 'Erro na chamada');
         setStatus('failed');
         updateCallRecord('failed', new Date());
@@ -305,6 +342,7 @@ export function OutboundCallProvider({ children }: { children: ReactNode }) {
 
     } catch (error: any) {
       console.error('Call connection error:', error);
+      clearStateTimeout();
       setErrorMessage(error.message || 'Erro ao conectar chamada');
       setStatus('failed');
     }
@@ -370,6 +408,21 @@ export function OutboundCallProvider({ children }: { children: ReactNode }) {
         } catch (error) {
           console.error('Error refreshing token:', error);
         }
+      });
+
+      // Timeout: if device doesn't register within 10s, fail
+      const initTimeout = setTimeout(() => {
+        if (isInitializingRef.current) {
+          console.warn('[OutboundCall] Device registration timeout');
+          isInitializingRef.current = false;
+          setStatus('failed');
+          setErrorMessage('Tempo esgotado ao inicializar dispositivo de áudio');
+          setIsDeviceReady(false);
+        }
+      }, 10000);
+
+      device.on('registered', () => {
+        clearTimeout(initTimeout);
       });
 
       await device.register();
@@ -510,16 +563,24 @@ export function OutboundCallProvider({ children }: { children: ReactNode }) {
 
   // End the current call
   const endCall = useCallback(() => {
+    clearStateTimeout();
+
     if (activeCallRef.current) {
-      activeCallRef.current.disconnect();
+      try {
+        activeCallRef.current.disconnect();
+      } catch (e) {
+        console.warn('[OutboundCall] Error disconnecting call:', e);
+      }
     }
     setStatus('ended');
-    
-    // Cleanup after a short delay to show "ended" state
+    updateCallRecord('completed', new Date());
+
+    // Force cleanup after short delay — don't wait for disconnect event
     setTimeout(() => {
+      activeCallRef.current = null;
       cleanupCall();
     }, 1500);
-  }, [cleanupCall]);
+  }, [cleanupCall, clearStateTimeout, updateCallRecord]);
 
   // Toggle mute
   const toggleMute = useCallback(() => {

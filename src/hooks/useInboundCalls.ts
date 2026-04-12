@@ -217,14 +217,18 @@ export function useInboundCalls(): UseInboundCallsReturn {
     }
   }, [incomingCall]);
 
-  // End active call
+  // End active call - force cleanup even if disconnect event doesn't fire
   const endCall = useCallback(() => {
     if (activeCall) {
-      activeCall.disconnect();
+      try { activeCall.disconnect(); } catch {}
+    }
+    // Force cleanup immediately — don't wait for disconnect event
+    setTimeout(() => {
       setActiveCall(null);
       setActiveCallInfo(null);
       setIsMuted(false);
-    }
+      setIncomingCall(null);
+    }, 500);
   }, [activeCall]);
 
   // Toggle mute
