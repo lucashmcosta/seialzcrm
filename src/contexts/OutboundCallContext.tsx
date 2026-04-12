@@ -73,6 +73,9 @@ export function OutboundCallProvider({ children }: { children: ReactNode }) {
   const userDataCacheRef = useRef<{ userId: string; orgId: string } | null>(null);
   const isInitializingRef = useRef(false);
   const stateTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const realtimeChannelRef = useRef<ReturnType<typeof supabase.channel> | null>(null);
+  // Track which status source arrived first to avoid duplicates
+  const lastProcessedStatusRef = useRef<string | null>(null);
 
   const isOnCall = status !== 'idle' && status !== 'failed' && status !== 'ended';
 
@@ -98,6 +101,101 @@ export function OutboundCallProvider({ children }: { children: ReactNode }) {
       updateCallRecord('failed', new Date());
     }, timeoutMs);
   }, [clearStateTimeout]);
+
+  // Map server status (from webhook) to frontend CallStatus
+  const mapServerStatus = useCallback((serverStatus: string): CallStatus | null => {
+    switch (serverStatus) {
+      case 'queued': return 'connecting';
+      case 'ringing': return 'ringing';
+      case 'in-progress': return 'connected';
+      case 'completed':
+      case 'canceled':
+      case 'no-answer': return 'ended';
+      case 'busy':
+      case 'failed': return 'failed';
+      default: return null;
+    }
+  }, []);
+
+  // Subscribe to call status changes via Supabase Realtime
+  const subscribeToCallStatus = useCallback((callId: string) => {
+    // Cleanup previous subscription
+    if (realtimeChannelRef.current) {
+      supabase.removeChannel(realtimeChannelRef.current);
+      realtimeChannelRef.current = null;
+    }
+
+    const channel = supabase
+      .channel(`call-status-${callId}`)
+      .on(
+        'postgres_changes',
+        {
+          event: 'UPDATE',
+          schema: 'public',
+          table: 'calls',
+          filter: `id=eq.${callId}`,
+        },
+        (payload) => {
+          const newRecord = payload.new as Record<string, any>;
+          const serverStatus = newRecord.status;
+
+          console.log(`[Realtime] Call status from server: ${serverStatus}`);
+
+          // Skip if we already processed this status from SDK events
+          if (lastProcessedStatusRef.current === serverStatus) {
+            return;
+          }
+          lastProcessedStatusRef.current = serverStatus;
+
+          const mappedStatus = mapServerStatus(serverStatus);
+          if (!mappedStatus) return;
+
+          // Server says call ended/failed — trust it and force cleanup
+          if (mappedStatus === 'ended' || mappedStatus === 'failed') {
+            clearStateTimeout();
+            setStatus(mappedStatus);
+            if (mappedStatus === 'failed' && serverStatus === 'busy') {
+              setErrorMessage('Linha ocupada');
+            } else if (mappedStatus === 'failed' && serverStatus === 'no-answer') {
+              setErrorMessage('Chamada não atendida');
+            }
+            // Auto-cleanup after showing final state
+            setTimeout(() => {
+              if (activeCallRef.current) {
+                try { activeCallRef.current.disconnect(); } catch {}
+                activeCallRef.current = null;
+              }
+              cleanupCall();
+            }, 2000);
+            return;
+          }
+
+          // Server says connected — update if we haven't already
+          if (mappedStatus === 'connected') {
+            clearStateTimeout();
+            setStatus('connected');
+            toast.success('Chamada conectada');
+          } else if (mappedStatus === 'ringing') {
+            clearStateTimeout();
+            setStatus('ringing');
+            // Extend timeout for ringing
+            setStateTimeout(60000, 'Chamada não atendida');
+          }
+        }
+      )
+      .subscribe();
+
+    realtimeChannelRef.current = channel;
+  }, [mapServerStatus, clearStateTimeout, setStateTimeout, cleanupCall]);
+
+  // Unsubscribe from Realtime
+  const unsubscribeFromCallStatus = useCallback(() => {
+    if (realtimeChannelRef.current) {
+      supabase.removeChannel(realtimeChannelRef.current);
+      realtimeChannelRef.current = null;
+    }
+    lastProcessedStatusRef.current = null;
+  }, []);
 
   // Get cached token or fetch new one
   const getToken = useCallback(async (): Promise<string> => {
@@ -160,6 +258,7 @@ export function OutboundCallProvider({ children }: { children: ReactNode }) {
   // Cleanup call state only (keep device)
   const cleanupCall = useCallback(() => {
     clearStateTimeout();
+    unsubscribeFromCallStatus();
     if (activeCallRef.current) {
       try { activeCallRef.current.disconnect(); } catch {}
       activeCallRef.current = null;
@@ -178,11 +277,12 @@ export function OutboundCallProvider({ children }: { children: ReactNode }) {
     callIdRef.current = null;
     callStartTimeRef.current = null;
     pendingCallRef.current = null;
-  }, [isDeviceReady, clearStateTimeout]);
+  }, [isDeviceReady, clearStateTimeout, unsubscribeFromCallStatus]);
 
   // Full cleanup (including device)
   const fullCleanup = useCallback(() => {
     clearStateTimeout();
+    unsubscribeFromCallStatus();
     if (activeCallRef.current) {
       try { activeCallRef.current.disconnect(); } catch {}
       activeCallRef.current = null;
@@ -258,6 +358,8 @@ export function OutboundCallProvider({ children }: { children: ReactNode }) {
       if (newCall) {
         callIdRef.current = newCall.id;
         console.log('Call record created with ID:', newCall.id);
+        // Subscribe to server-side status updates (dual-path sync)
+        subscribeToCallStatus(newCall.id);
       }
     } catch (dbError) {
       console.error('Error recording call:', dbError);
@@ -294,16 +396,17 @@ export function OutboundCallProvider({ children }: { children: ReactNode }) {
 
       // Call events
       call.on('ringing', () => {
-        console.log('Call ringing');
+        console.log('[SDK] Call ringing');
+        lastProcessedStatusRef.current = 'ringing';
         clearStateTimeout();
         setStatus('ringing');
         updateCallRecord('ringing');
-        // Timeout: if not answered within 60s, fail gracefully
         setStateTimeout(60000, 'Chamada não atendida');
       });
 
       call.on('accept', () => {
-        console.log('Call accepted/connected');
+        console.log('[SDK] Call accepted/connected');
+        lastProcessedStatusRef.current = 'in-progress';
         clearStateTimeout();
         setStatus('connected');
         updateCallRecord('in-progress');
@@ -311,21 +414,24 @@ export function OutboundCallProvider({ children }: { children: ReactNode }) {
       });
 
       call.on('disconnect', () => {
-        console.log('Call disconnected');
+        console.log('[SDK] Call disconnected');
+        lastProcessedStatusRef.current = 'completed';
         clearStateTimeout();
         setStatus('ended');
         updateCallRecord('completed', new Date());
       });
 
       call.on('cancel', () => {
-        console.log('Call cancelled');
+        console.log('[SDK] Call cancelled');
+        lastProcessedStatusRef.current = 'canceled';
         clearStateTimeout();
         setStatus('ended');
         updateCallRecord('canceled', new Date());
       });
 
       call.on('reject', () => {
-        console.log('Call rejected');
+        console.log('[SDK] Call rejected');
+        lastProcessedStatusRef.current = 'busy';
         clearStateTimeout();
         setStatus('failed');
         setErrorMessage('Chamada rejeitada');
@@ -333,7 +439,8 @@ export function OutboundCallProvider({ children }: { children: ReactNode }) {
       });
 
       call.on('error', (error) => {
-        console.error('Call error:', error);
+        console.error('[SDK] Call error:', error);
+        lastProcessedStatusRef.current = 'failed';
         clearStateTimeout();
         setErrorMessage(error.message || 'Erro na chamada');
         setStatus('failed');
