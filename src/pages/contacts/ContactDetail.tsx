@@ -3,6 +3,7 @@ import { useParams, useNavigate, Link } from 'react-router-dom';
 import type { Key } from 'react-aria-components';
 import { Layout } from '@/components/Layout';
 import { MobileLayout } from '@/components/mobile/MobileLayout';
+import { Skeleton } from '@/components/ui/skeleton';
 import { MobileSpinner } from '@/components/mobile/MobileSpinner';
 import { useIsMobile } from '@/hooks/use-mobile';
 import { supabase } from '@/integrations/supabase/client';
@@ -422,7 +423,32 @@ export default function ContactDetail() {
   }
 
   // ── Desktop ──
-  if (orgLoading || loading) return <Layout><div className="p-6">{t('common.loading')}</div></Layout>;
+  if (orgLoading || loading) return (
+    <Layout>
+      <div className="p-6 space-y-6">
+        <div className="flex items-center gap-4">
+          <Skeleton className="h-16 w-16 rounded-full" />
+          <div className="space-y-2">
+            <Skeleton className="h-6 w-48" />
+            <Skeleton className="h-4 w-32" />
+          </div>
+        </div>
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+          <div className="lg:col-span-1 space-y-4">
+            {[...Array(5)].map((_, i) => (
+              <div key={i} className="flex justify-between">
+                <Skeleton className="h-4 w-24" />
+                <Skeleton className="h-4 w-36" />
+              </div>
+            ))}
+          </div>
+          <div className="lg:col-span-2">
+            <Skeleton className="h-64 w-full rounded-lg" />
+          </div>
+        </div>
+      </div>
+    </Layout>
+  );
   if (!contact) return <Layout><div className="p-6">{t('common.noResults')}</div></Layout>;
 
   return (

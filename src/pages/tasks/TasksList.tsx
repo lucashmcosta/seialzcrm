@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
 import { Layout } from '@/components/Layout';
+import { Skeleton } from '@/components/ui/skeleton';
 import { useOrganization } from '@/hooks/useOrganization';
 import { useAuth } from '@/hooks/useAuth';
 import { useTranslation } from '@/lib/i18n';
@@ -256,7 +257,17 @@ export default function TasksList() {
             
             <TabsContent value={statusFilter} className="mt-6">
               {loading ? (
-                <p className="text-muted-foreground">{t('common.loading')}</p>
+                <div className="space-y-3">
+                  {[...Array(5)].map((_, i) => (
+                    <div key={i} className="p-4 border rounded-lg space-y-2">
+                      <div className="flex items-center justify-between">
+                        <Skeleton className="h-4 w-48" />
+                        <Skeleton className="h-5 w-16 rounded-full" />
+                      </div>
+                      <Skeleton className="h-3 w-32" />
+                    </div>
+                  ))}
+                </div>
               ) : tasks.length === 0 ? (
                 <Card className="p-6">
                   <p className="text-muted-foreground text-center">{t('tasks.noTasks')}</p>

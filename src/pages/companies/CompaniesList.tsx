@@ -3,6 +3,7 @@ import { Link } from 'react-router-dom';
 import { Buildings, Plus, MagnifyingGlass } from '@phosphor-icons/react';
 import { Layout } from '@/components/Layout';
 import { Button } from '@/components/base/buttons/button';
+import { Skeleton } from '@/components/ui/skeleton';
 import { Input } from '@/components/ui/input';
 import { Card } from '@/components/ui/card';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
@@ -112,7 +113,17 @@ export default function CompaniesList() {
           </div>
 
           {loading ? (
-            <div className="text-center py-12 text-muted-foreground">{t('common.loading')}</div>
+            <div className="space-y-3 py-4">
+              {[...Array(6)].map((_, i) => (
+                <div key={i} className="flex items-center gap-4 px-4 py-3 border rounded-lg">
+                  <Skeleton className="h-9 w-9 rounded-md" />
+                  <div className="flex-1 space-y-2">
+                    <Skeleton className="h-4 w-36" />
+                    <Skeleton className="h-3 w-48" />
+                  </div>
+                </div>
+              ))}
+            </div>
           ) : filteredCompanies.length === 0 ? (
             <div className="text-center py-12">
               <Buildings size={48} weight="light" className="text-muted-foreground mx-auto mb-4" />

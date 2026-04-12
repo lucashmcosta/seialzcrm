@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import { useParams, useNavigate, Link } from 'react-router-dom';
 import type { Key } from 'react-aria-components';
 import { Layout } from '@/components/Layout';
+import { Skeleton } from '@/components/ui/skeleton';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
@@ -195,8 +196,25 @@ export default function OpportunityDetail() {
   if (loading) {
     return (
       <Layout>
-        <div className="flex items-center justify-center h-full">
-          <p className="text-muted-foreground">{t('common.loading')}</p>
+        <div className="p-6 space-y-6">
+          <div className="flex items-center gap-4">
+            <Skeleton className="h-8 w-8 rounded" />
+            <Skeleton className="h-7 w-56" />
+          </div>
+          <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+            <div className="lg:col-span-2 space-y-4">
+              <Skeleton className="h-24 w-full rounded-lg" />
+              <Skeleton className="h-48 w-full rounded-lg" />
+            </div>
+            <div className="space-y-4">
+              {[...Array(6)].map((_, i) => (
+                <div key={i} className="flex justify-between">
+                  <Skeleton className="h-4 w-20" />
+                  <Skeleton className="h-4 w-32" />
+                </div>
+              ))}
+            </div>
+          </div>
         </div>
       </Layout>
     );

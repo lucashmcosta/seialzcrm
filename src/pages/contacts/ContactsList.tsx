@@ -3,6 +3,7 @@ import { Link, useNavigate } from 'react-router-dom';
 import type { SortDescriptor } from 'react-aria-components';
 import { PencilSimple, TrashSimple } from '@phosphor-icons/react';
 import { Layout } from '@/components/Layout';
+import { Skeleton } from '@/components/ui/skeleton';
 import { MobileLayout } from '@/components/mobile/MobileLayout';
 import { MobileContactsList } from '@/components/mobile/MobileContactsList';
 import { useIsMobile } from '@/hooks/use-mobile';
@@ -406,8 +407,17 @@ export default function ContactsList() {
         </div>
 
         {loading ? (
-          <div className="text-center py-12">
-            <p className="text-muted-foreground">{t('common.loading')}</p>
+          <div className="space-y-3 py-4">
+            {[...Array(8)].map((_, i) => (
+              <div key={i} className="flex items-center gap-4 px-4 py-3 border rounded-lg">
+                <Skeleton className="h-9 w-9 rounded-full" />
+                <div className="flex-1 space-y-2">
+                  <Skeleton className="h-4 w-40" />
+                  <Skeleton className="h-3 w-56" />
+                </div>
+                <Skeleton className="h-5 w-16 rounded-full" />
+              </div>
+            ))}
           </div>
         ) : sortedContacts.length === 0 ? (
           <Card>
