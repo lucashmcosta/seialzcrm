@@ -15,6 +15,7 @@ import { usePermissions } from '@/hooks/usePermissions';
 import { useTheme } from '@/contexts/ThemeContext';
 import { supabase } from '@/integrations/supabase/client';
 import { Plus, MagnifyingGlass, FunnelSimple, PencilSimple, TrashSimple } from '@phosphor-icons/react';
+import { Skeleton } from '@/components/ui/skeleton';
 import { OpportunityDialog } from '@/components/opportunities/OpportunityDialog';
 import { OpportunityCard } from '@/components/opportunities/OpportunityCard';
 import { SeialzOpportunityCard } from '@/components/opportunities/SeialzOpportunityCard';
@@ -635,8 +636,51 @@ export default function OpportunitiesKanban() {
   if (loading) {
     return (
       <Layout>
-        <div className="p-8">
-          <p className="text-muted-foreground">{t('common.loading')}</p>
+        <div className="flex flex-col h-full">
+          {/* Topbar skeleton */}
+          <div className="border-b bg-background/95 backdrop-blur px-6 py-3 flex items-center justify-between">
+            <div className="flex items-center gap-3">
+              <Skeleton className="h-6 w-20" />
+              <Skeleton className="h-5 w-36" />
+            </div>
+            <div className="flex items-center gap-2">
+              <Skeleton className="h-8 w-48 rounded-md" />
+              <Skeleton className="h-8 w-8 rounded-md" />
+              <Skeleton className="h-8 w-8 rounded-md" />
+              <Skeleton className="h-8 w-24 rounded-md" />
+            </div>
+          </div>
+
+          {/* Kanban columns skeleton */}
+          <div className="flex gap-3 overflow-hidden px-6 pt-4 flex-1">
+            {[0, 1, 2, 3, 4].map((col) => (
+              <div key={col} className="flex-shrink-0 w-[272px] flex flex-col">
+                {/* Stage header */}
+                <div className="mb-3">
+                  <Skeleton className="h-[2px] w-full rounded-full mb-3" />
+                  <div className="flex items-center justify-between">
+                    <Skeleton className="h-4 w-24" />
+                    <Skeleton className="h-5 w-8 rounded" />
+                  </div>
+                  <Skeleton className="h-3 w-20 mt-1" />
+                </div>
+
+                {/* Card skeletons */}
+                <div className="space-y-2">
+                  {[0, 1, 2].map((card) => (
+                    <div key={card} className="rounded-lg border bg-card p-3 space-y-2">
+                      <Skeleton className="h-4 w-3/4" />
+                      <Skeleton className="h-5 w-24" />
+                      <div className="flex items-center gap-2">
+                        <Skeleton className="h-3 w-3 rounded-full" />
+                        <Skeleton className="h-3 w-28" />
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            ))}
+          </div>
         </div>
       </Layout>
     );

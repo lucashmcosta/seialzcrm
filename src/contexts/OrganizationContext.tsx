@@ -61,47 +61,47 @@ export function OrganizationProvider({ children }: { children: React.ReactNode }
     setError(null);
     
     try {
-      // Step 1: Fetch user profile
-      const { data: profileData, error: profileError } = await supabase
-        .from('users')
-        .select('id, auth_user_id, full_name, first_name, last_name, email, avatar_url, locale, timezone, is_platform_admin, created_at, updated_at')
-        .eq('auth_user_id', user.id)
-        .maybeSingle();
+      // Fetch profile and org membership in parallel
+      const [profileResult, membershipResult] = await Promise.all([
+        supabase
+          .from('users')
+          .select('id, auth_user_id, full_name, first_name, last_name, email, avatar_url, locale, timezone, is_platform_admin, created_at, updated_at')
+          .eq('auth_user_id', user.id)
+          .maybeSingle(),
+        supabase
+          .from('user_organizations')
+          .select('user_id, organization:organizations(id, name, slug, logo_url, logo_size, default_currency, default_locale, timezone, enable_companies_module, onboarding_step, onboarding_completed_at, duplicate_check_mode, duplicate_enforce_block, theme_primary_color, theme_sidebar_color, theme_dark_mode)')
+          .eq('is_active', true)
+          .limit(1)
+          .maybeSingle(),
+      ]);
 
-      if (profileError) {
-        console.error('Error fetching user profile:', profileError);
+      if (profileResult.error) {
+        console.error('Error fetching user profile:', profileResult.error);
         setError('PROFILE_FETCH_ERROR');
         setLoading(false);
         return;
       }
 
-      if (!profileData) {
+      if (!profileResult.data) {
         console.warn('User profile not found for auth_user_id:', user.id);
         setError('PROFILE_NOT_FOUND');
         setLoading(false);
         return;
       }
 
-      setUserProfile(profileData as UserProfile);
+      setUserProfile(profileResult.data as UserProfile);
 
-      // Step 2: Fetch active organization membership
-      const { data: membershipData, error: membershipError } = await supabase
-        .from('user_organizations')
-        .select('organization:organizations(*)')
-        .eq('user_id', profileData.id)
-        .eq('is_active', true)
-        .maybeSingle();
-
-      if (membershipError) {
-        console.error('Error fetching organization membership:', membershipError);
+      if (membershipResult.error) {
+        console.error('Error fetching organization membership:', membershipResult.error);
         setLoading(false);
         return;
       }
 
-      if (membershipData?.organization) {
-        setOrganization(membershipData.organization as Organization);
+      if (membershipResult.data?.organization) {
+        setOrganization(membershipResult.data.organization as Organization);
       } else {
-        console.warn('No active organization found for user:', profileData.id);
+        console.warn('No active organization found for user:', profileResult.data.id);
       }
     } catch (err) {
       console.error('Error in OrganizationContext:', err);
