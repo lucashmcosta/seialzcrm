@@ -76,6 +76,10 @@ export function OutboundCallProvider({ children }: { children: ReactNode }) {
   const realtimeChannelRef = useRef<ReturnType<typeof supabase.channel> | null>(null);
   // Track which status source arrived first to avoid duplicates
   const lastProcessedStatusRef = useRef<string | null>(null);
+  // Track if call has reached a final state to reject stale events
+  const callFinalizedRef = useRef(false);
+  const initTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const realtimeCleanupTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const isOnCall = status !== 'idle' && status !== 'failed' && status !== 'ended';
 
@@ -152,15 +156,17 @@ export function OutboundCallProvider({ children }: { children: ReactNode }) {
 
           // Server says call ended/failed — trust it and force cleanup
           if (mappedStatus === 'ended' || mappedStatus === 'failed') {
+            callFinalizedRef.current = true;
             clearStateTimeout();
             setStatus(mappedStatus);
-            if (mappedStatus === 'failed' && serverStatus === 'busy') {
+            if (serverStatus === 'busy') {
               setErrorMessage('Linha ocupada');
-            } else if (mappedStatus === 'failed' && serverStatus === 'no-answer') {
+            } else if (serverStatus === 'no-answer') {
               setErrorMessage('Chamada não atendida');
             }
-            // Auto-cleanup after showing final state
-            setTimeout(() => {
+            // Auto-cleanup after showing final state (tracked timeout)
+            if (realtimeCleanupTimeoutRef.current) clearTimeout(realtimeCleanupTimeoutRef.current);
+            realtimeCleanupTimeoutRef.current = setTimeout(() => {
               if (activeCallRef.current) {
                 try { activeCallRef.current.disconnect(); } catch {}
                 activeCallRef.current = null;
@@ -259,6 +265,10 @@ export function OutboundCallProvider({ children }: { children: ReactNode }) {
   const cleanupCall = useCallback(() => {
     clearStateTimeout();
     unsubscribeFromCallStatus();
+    if (realtimeCleanupTimeoutRef.current) {
+      clearTimeout(realtimeCleanupTimeoutRef.current);
+      realtimeCleanupTimeoutRef.current = null;
+    }
     if (activeCallRef.current) {
       try { activeCallRef.current.disconnect(); } catch {}
       activeCallRef.current = null;
@@ -277,6 +287,8 @@ export function OutboundCallProvider({ children }: { children: ReactNode }) {
     callIdRef.current = null;
     callStartTimeRef.current = null;
     pendingCallRef.current = null;
+    callFinalizedRef.current = false;
+    lastProcessedStatusRef.current = null;
   }, [isDeviceReady, clearStateTimeout, unsubscribeFromCallStatus]);
 
   // Full cleanup (including device)
@@ -303,12 +315,22 @@ export function OutboundCallProvider({ children }: { children: ReactNode }) {
     setCallInfo(null);
     setIsMinimized(false);
     setIsDeviceReady(false);
+    if (initTimeoutRef.current) {
+      clearTimeout(initTimeoutRef.current);
+      initTimeoutRef.current = null;
+    }
+    if (realtimeCleanupTimeoutRef.current) {
+      clearTimeout(realtimeCleanupTimeoutRef.current);
+      realtimeCleanupTimeoutRef.current = null;
+    }
     callIdRef.current = null;
     callStartTimeRef.current = null;
     pendingCallRef.current = null;
     tokenCacheRef.current = null;
     userDataCacheRef.current = null;
     isInitializingRef.current = false;
+    callFinalizedRef.current = false;
+    lastProcessedStatusRef.current = null;
   }, []);
 
   // Update call record in database
@@ -396,6 +418,7 @@ export function OutboundCallProvider({ children }: { children: ReactNode }) {
 
       // Call events
       call.on('ringing', () => {
+        if (callFinalizedRef.current) return;
         console.log('[SDK] Call ringing');
         lastProcessedStatusRef.current = 'ringing';
         clearStateTimeout();
@@ -405,6 +428,7 @@ export function OutboundCallProvider({ children }: { children: ReactNode }) {
       });
 
       call.on('accept', () => {
+        if (callFinalizedRef.current) return;
         console.log('[SDK] Call accepted/connected');
         lastProcessedStatusRef.current = 'in-progress';
         clearStateTimeout();
@@ -415,6 +439,7 @@ export function OutboundCallProvider({ children }: { children: ReactNode }) {
 
       call.on('disconnect', () => {
         console.log('[SDK] Call disconnected');
+        callFinalizedRef.current = true;
         lastProcessedStatusRef.current = 'completed';
         clearStateTimeout();
         setStatus('ended');
@@ -423,6 +448,7 @@ export function OutboundCallProvider({ children }: { children: ReactNode }) {
 
       call.on('cancel', () => {
         console.log('[SDK] Call cancelled');
+        callFinalizedRef.current = true;
         lastProcessedStatusRef.current = 'canceled';
         clearStateTimeout();
         setStatus('ended');
@@ -431,6 +457,7 @@ export function OutboundCallProvider({ children }: { children: ReactNode }) {
 
       call.on('reject', () => {
         console.log('[SDK] Call rejected');
+        callFinalizedRef.current = true;
         lastProcessedStatusRef.current = 'busy';
         clearStateTimeout();
         setStatus('failed');
@@ -440,6 +467,7 @@ export function OutboundCallProvider({ children }: { children: ReactNode }) {
 
       call.on('error', (error) => {
         console.error('[SDK] Call error:', error);
+        callFinalizedRef.current = true;
         lastProcessedStatusRef.current = 'failed';
         clearStateTimeout();
         setErrorMessage(error.message || 'Erro na chamada');
@@ -517,8 +545,9 @@ export function OutboundCallProvider({ children }: { children: ReactNode }) {
         }
       });
 
-      // Timeout: if device doesn't register within 10s, fail
-      const initTimeout = setTimeout(() => {
+      // Timeout: if device doesn't register within 10s, fail (tracked ref)
+      if (initTimeoutRef.current) clearTimeout(initTimeoutRef.current);
+      initTimeoutRef.current = setTimeout(() => {
         if (isInitializingRef.current) {
           console.warn('[OutboundCall] Device registration timeout');
           isInitializingRef.current = false;
@@ -529,7 +558,10 @@ export function OutboundCallProvider({ children }: { children: ReactNode }) {
       }, 10000);
 
       device.on('registered', () => {
-        clearTimeout(initTimeout);
+        if (initTimeoutRef.current) {
+          clearTimeout(initTimeoutRef.current);
+          initTimeoutRef.current = null;
+        }
       });
 
       await device.register();
