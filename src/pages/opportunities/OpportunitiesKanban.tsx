@@ -214,12 +214,16 @@ export default function OpportunitiesKanban() {
 
     setLoading(true);
 
-    // Single RPC replaces: stages query + counts RPC + N per-stage opportunity queries
-    const [stageResult, usersResult, tagsRes, assignmentsRes] = await Promise.all([
-      supabase.rpc('get_opportunities_by_stage', {
-        p_organization_id: organization.id,
-        p_limit_per_stage: CARDS_PER_STAGE,
-      }),
+    // Try new RPC first, fall back to direct queries if not available
+    const stageResult = await supabase.rpc('get_opportunities_by_stage', {
+      p_organization_id: organization.id,
+      p_limit_per_stage: CARDS_PER_STAGE,
+    });
+
+    const useRpc = !stageResult.error && stageResult.data;
+
+    // Fetch users and tags in parallel regardless of RPC path
+    const [usersResult, tagsRes, assignmentsRes] = await Promise.all([
       supabase
         .from('user_organizations')
         .select('users(id, full_name)')
@@ -237,8 +241,8 @@ export default function OpportunitiesKanban() {
         .eq('organization_id', organization.id),
     ]);
 
-    // Process stages + opportunities from single RPC
-    if (stageResult.data) {
+    if (useRpc) {
+      // RPC path: single call returned stages + counts + opportunities
       const stagesFromRpc: PipelineStage[] = [];
       const oppsByStage: Record<string, Opportunity[]> = {};
       const hasMore: Record<string, boolean> = {};
@@ -264,6 +268,56 @@ export default function OpportunitiesKanban() {
       setOpportunitiesByStage(oppsByStage);
       setHasMoreByStage(hasMore);
       setOpportunities(Object.values(oppsByStage).flat());
+    } else {
+      // Fallback: direct queries (until migration is applied)
+      const { data: stagesData } = await supabase
+        .from('pipeline_stages')
+        .select('*')
+        .eq('organization_id', organization.id)
+        .order('order_index');
+
+      if (stagesData) {
+        setStages(stagesData);
+      }
+
+      const { data: countsData } = await supabase
+        .rpc('get_opportunity_stage_counts', { org_id: organization.id });
+
+      if (countsData) {
+        const countsMap: Record<string, { count: number; amount: number }> = {};
+        countsData.forEach((item: { stage_id: string; opportunity_count: number; total_amount: number }) => {
+          countsMap[item.stage_id] = {
+            count: Number(item.opportunity_count),
+            amount: Number(item.total_amount)
+          };
+        });
+        setStageCounts(countsMap);
+      }
+
+      if (stagesData) {
+        const oppsByStage: Record<string, Opportunity[]> = {};
+        const hasMore: Record<string, boolean> = {};
+
+        await Promise.all(stagesData.map(async (stage) => {
+          const statusFilter = stage.type === 'won' ? 'won' : stage.type === 'lost' ? 'lost' : 'open';
+          const { data } = await supabase
+            .from('opportunities')
+            .select('id, title, amount, currency, pipeline_stage_id, contact_id, close_date, owner_user_id, contacts(full_name), users(full_name)')
+            .eq('organization_id', organization.id)
+            .eq('pipeline_stage_id', stage.id)
+            .eq('status', statusFilter)
+            .is('deleted_at', null)
+            .order('created_at', { ascending: false })
+            .limit(CARDS_PER_STAGE);
+
+          oppsByStage[stage.id] = data || [];
+          hasMore[stage.id] = (data?.length || 0) === CARDS_PER_STAGE;
+        }));
+
+        setOpportunitiesByStage(oppsByStage);
+        setHasMoreByStage(hasMore);
+        setOpportunities(Object.values(oppsByStage).flat());
+      }
     }
 
     // Process users
