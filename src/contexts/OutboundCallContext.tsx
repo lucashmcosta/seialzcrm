@@ -80,6 +80,7 @@ export function OutboundCallProvider({ children }: { children: ReactNode }) {
   const callFinalizedRef = useRef(false);
   const initTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const realtimeCleanupTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const cleanupCallRef = useRef<(() => void) | null>(null);
 
   const isOnCall = status !== 'idle' && status !== 'failed' && status !== 'ended';
 
@@ -192,7 +193,7 @@ export function OutboundCallProvider({ children }: { children: ReactNode }) {
       .subscribe();
 
     realtimeChannelRef.current = channel;
-  }, [mapServerStatus, clearStateTimeout, setStateTimeout, cleanupCall]);
+  }, [mapServerStatus, clearStateTimeout, setStateTimeout]);
 
   // Unsubscribe from Realtime
   const unsubscribeFromCallStatus = useCallback(() => {
