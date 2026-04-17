@@ -540,6 +540,7 @@ export type Database = {
           agent_type: string
           ai_model: string | null
           ai_provider: string | null
+          api_key: string | null
           compliance_rules: Json | null
           created_at: string | null
           current_version: number | null
@@ -554,9 +555,11 @@ export type Database = {
           id: string
           is_enabled: boolean
           max_messages_per_conversation: number | null
+          model: string | null
           name: string
           organization_id: string
           out_of_hours_message: string | null
+          provider: string | null
           tone: string
           tool_settings: Json | null
           tool_triggers: Json | null
@@ -569,6 +572,7 @@ export type Database = {
           agent_type?: string
           ai_model?: string | null
           ai_provider?: string | null
+          api_key?: string | null
           compliance_rules?: Json | null
           created_at?: string | null
           current_version?: number | null
@@ -583,9 +587,11 @@ export type Database = {
           id?: string
           is_enabled?: boolean
           max_messages_per_conversation?: number | null
+          model?: string | null
           name?: string
           organization_id: string
           out_of_hours_message?: string | null
+          provider?: string | null
           tone?: string
           tool_settings?: Json | null
           tool_triggers?: Json | null
@@ -598,6 +604,7 @@ export type Database = {
           agent_type?: string
           ai_model?: string | null
           ai_provider?: string | null
+          api_key?: string | null
           compliance_rules?: Json | null
           created_at?: string | null
           current_version?: number | null
@@ -612,9 +619,11 @@ export type Database = {
           id?: string
           is_enabled?: boolean
           max_messages_per_conversation?: number | null
+          model?: string | null
           name?: string
           organization_id?: string
           out_of_hours_message?: string | null
+          provider?: string | null
           tone?: string
           tool_settings?: Json | null
           tool_triggers?: Json | null
@@ -628,6 +637,130 @@ export type Database = {
             columns: ["organization_id"]
             isOneToOne: false
             referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      ai_interaction_logs: {
+        Row: {
+          contact_id: string | null
+          created_at: string | null
+          detected_intent: string | null
+          estimated_cost_usd: number | null
+          final_response: string | null
+          generation_latency_ms: number | null
+          generation_model: string | null
+          guard_input_tokens: number | null
+          guard_model: string | null
+          guard_output_tokens: number | null
+          id: string
+          input_guard_latency_ms: number | null
+          input_guard_result: Json | null
+          input_tokens: number | null
+          organization_id: string | null
+          output_guard_latency_ms: number | null
+          output_guard_result: Json | null
+          output_tokens: number | null
+          provider: string | null
+          rag_chunks_used: Json | null
+          rag_latency_ms: number | null
+          rag_products_detected: string[] | null
+          rag_query: string | null
+          raw_response: string | null
+          system_prompt_hash: string | null
+          thread_id: string | null
+          tool_iterations: number | null
+          tools_used: Json | null
+          total_latency_ms: number | null
+          user_message: string
+          was_rewritten: boolean | null
+        }
+        Insert: {
+          contact_id?: string | null
+          created_at?: string | null
+          detected_intent?: string | null
+          estimated_cost_usd?: number | null
+          final_response?: string | null
+          generation_latency_ms?: number | null
+          generation_model?: string | null
+          guard_input_tokens?: number | null
+          guard_model?: string | null
+          guard_output_tokens?: number | null
+          id?: string
+          input_guard_latency_ms?: number | null
+          input_guard_result?: Json | null
+          input_tokens?: number | null
+          organization_id?: string | null
+          output_guard_latency_ms?: number | null
+          output_guard_result?: Json | null
+          output_tokens?: number | null
+          provider?: string | null
+          rag_chunks_used?: Json | null
+          rag_latency_ms?: number | null
+          rag_products_detected?: string[] | null
+          rag_query?: string | null
+          raw_response?: string | null
+          system_prompt_hash?: string | null
+          thread_id?: string | null
+          tool_iterations?: number | null
+          tools_used?: Json | null
+          total_latency_ms?: number | null
+          user_message: string
+          was_rewritten?: boolean | null
+        }
+        Update: {
+          contact_id?: string | null
+          created_at?: string | null
+          detected_intent?: string | null
+          estimated_cost_usd?: number | null
+          final_response?: string | null
+          generation_latency_ms?: number | null
+          generation_model?: string | null
+          guard_input_tokens?: number | null
+          guard_model?: string | null
+          guard_output_tokens?: number | null
+          id?: string
+          input_guard_latency_ms?: number | null
+          input_guard_result?: Json | null
+          input_tokens?: number | null
+          organization_id?: string | null
+          output_guard_latency_ms?: number | null
+          output_guard_result?: Json | null
+          output_tokens?: number | null
+          provider?: string | null
+          rag_chunks_used?: Json | null
+          rag_latency_ms?: number | null
+          rag_products_detected?: string[] | null
+          rag_query?: string | null
+          raw_response?: string | null
+          system_prompt_hash?: string | null
+          thread_id?: string | null
+          tool_iterations?: number | null
+          tools_used?: Json | null
+          total_latency_ms?: number | null
+          user_message?: string
+          was_rewritten?: boolean | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "ai_interaction_logs_contact_id_fkey"
+            columns: ["contact_id"]
+            isOneToOne: false
+            referencedRelation: "contacts"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "ai_interaction_logs_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "ai_interaction_logs_thread_id_fkey"
+            columns: ["thread_id"]
+            isOneToOne: false
+            referencedRelation: "message_threads"
             referencedColumns: ["id"]
           },
         ]
@@ -3895,6 +4028,18 @@ export type Database = {
       current_user_id: { Args: never; Returns: string }
       current_user_managed_org_ids: { Args: never; Returns: string[] }
       current_user_org_ids: { Args: never; Returns: string[] }
+      get_dashboard_stats: {
+        Args: {
+          p_days_ago?: number
+          p_organization_id: string
+          p_owner_user_id?: string
+        }
+        Returns: Json
+      }
+      get_opportunities_by_stage: {
+        Args: { p_limit_per_stage?: number; p_organization_id: string }
+        Returns: Json
+      }
       get_opportunity_stage_counts: {
         Args: { org_id: string }
         Returns: {
