@@ -1,39 +1,45 @@
 
 
-## Plano: criar Victoria Caroline na Central Trabalhista
+## Plano: criar Victoria Caroline na Central Trabalhista (replicando o método da Tamires)
 
-### Diagnóstico revisado
-A edge function `create-user` **não vai bloquear** a criação porque `subscription_usage.current_seat_count` está NULL → tratado como 0 → `0 >= 3` é falso → passa.
+### O que descobri
+- Tamires Sousa foi criada com sucesso em 9/mar/2026 nessa mesma org (`40ae935c-a7f7-4ad7-8ea4-91be6404a95f`) — prova que o caminho funciona.
+- Victoria ainda não existe no banco.
+- Perfil **Sales Rep** da Central Trabalhista: `4b534121-b290-4575-a4fe-a82488cca346`.
+- A edge function `create-user` não vai bloquear (current_seat_count é NULL → trata como 0 → passa do limite de 3).
 
-Foi exatamente assim que os 7 usuários atuais foram criados. Não preciso mexer em `max_seats` nem na edge function.
+### Por que falhei antes
+Tentei chamar a edge function via `curl` direto, que exige JWT de admin autenticado. Mas eu tenho ferramenta dedicada (`supabase--curl_edge_functions`) que injeta automaticamente o token de sessão atual — exatamente como o navegador do admin faria quando criou a Tamires.
 
-### Execução (1 passo apenas)
+### Execução (1 chamada)
 
-Invocar a edge function `create-user` via service role com payload:
-- `email`: vamorim@centraltrabalhista.com.br
-- `full_name`: Victoria Caroline Vieira Amorim de Souza
-- `password`: 123456
-- `organization_id`: 40ae935c-a7f7-4ad7-8ea4-91be6404a95f
-- `permission_profile_id`: a definir entre Admin ou Sales Rep da Central Trabalhista
+Invocar `create-user` via `supabase--curl_edge_functions` com payload:
+```json
+{
+  "email": "vamorim@centraltrabalhista.com.br",
+  "password": "123456",
+  "full_name": "Victoria Caroline Vieira Amorim de Souza",
+  "organization_id": "40ae935c-a7f7-4ad7-8ea4-91be6404a95f",
+  "permission_profile_id": "4b534121-b290-4575-a4fe-a82488cca346"
+}
+```
 
-A função vai:
-1. Criar em `auth.users` com email confirmado
-2. Criar em `public.users`
-3. Vincular em `user_organizations` ativa
-4. Limpar a auto-org criada pelo trigger `handle_new_user`
-5. Incrementar `subscription_usage.current_seat_count`
+A edge function vai:
+1. Criar em `auth.users` (email já confirmado)
+2. Criar registro em `public.users`
+3. Vincular em `user_organizations` (ativa)
+4. Limpar a auto-org criada pelo trigger
+5. Incrementar contador de seats
 
-### O que eu preciso de você antes de executar
+### Validação pós-criação
+Rodar SELECT confirmando que Victoria aparece em `users` + `user_organizations` da Central Trabalhista com perfil Sales Rep.
 
-**Qual perfil de permissão atribuir à Victoria?**
-- **Admin**: gerencia usuários, integrações, billing, settings, tudo
-- **Sales Rep**: apenas contatos e oportunidades
+### Pré-requisito
+Você precisa estar **logado no preview como admin da Central Trabalhista** (ex: lcosta@centraltrabalhista.com.br) na rota /auth/signin → entrar. Sem isso, a ferramenta não tem JWT pra anexar e a edge function rejeita.
+
+Atualmente você está na tela `/auth/signin` (não logado). **Faça login primeiro como admin**, então me avise pra eu disparar a criação.
 
 ### O que NÃO vou fazer
-- Não vou alterar `max_seats` (desnecessário)
-- Não vou remover a validação de seat limit da edge function (você não pediu isso explicitamente, e remover tem implicações pra todas as outras orgs do sistema — se quiser mesmo remover, é uma decisão separada que posso tratar depois)
-- Não vou mexer no `subscription_usage` da Central Trabalhista pra "consertar" o contador (mesma lógica acima)
-
-### Erros de build pendentes (não relacionados)
-Os erros TS em `ContactTasks.tsx` e `Dashboard.tsx` que apareceram no build **não foram causados por essa task** e não bloqueiam a criação da Victoria (edge function roda no servidor). Posso tratar eles depois separadamente se quiser.
+- Não vou tocar em `max_seats`, `subscription_usage` ou na lógica da edge function
+- Não vou mexer nos erros de build de `ContactTasks.tsx` / `Dashboard.tsx` (não relacionados)
 
