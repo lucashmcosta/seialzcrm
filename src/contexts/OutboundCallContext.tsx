@@ -80,6 +80,7 @@ export function OutboundCallProvider({ children }: { children: ReactNode }) {
   const callFinalizedRef = useRef(false);
   const initTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const realtimeCleanupTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const cleanupCallRef = useRef<(() => void) | null>(null);
 
   const isOnCall = status !== 'idle' && status !== 'failed' && status !== 'ended';
 
@@ -171,7 +172,7 @@ export function OutboundCallProvider({ children }: { children: ReactNode }) {
                 try { activeCallRef.current.disconnect(); } catch {}
                 activeCallRef.current = null;
               }
-              cleanupCall();
+              cleanupCallRef.current?.();
             }, 2000);
             return;
           }
@@ -192,7 +193,7 @@ export function OutboundCallProvider({ children }: { children: ReactNode }) {
       .subscribe();
 
     realtimeChannelRef.current = channel;
-  }, [mapServerStatus, clearStateTimeout, setStateTimeout, cleanupCall]);
+  }, [mapServerStatus, clearStateTimeout, setStateTimeout]);
 
   // Unsubscribe from Realtime
   const unsubscribeFromCallStatus = useCallback(() => {
@@ -290,6 +291,9 @@ export function OutboundCallProvider({ children }: { children: ReactNode }) {
     callFinalizedRef.current = false;
     lastProcessedStatusRef.current = null;
   }, [isDeviceReady, clearStateTimeout, unsubscribeFromCallStatus]);
+
+  // Keep ref in sync so realtime subscription can call cleanupCall without a circular dep
+  cleanupCallRef.current = cleanupCall;
 
   // Full cleanup (including device)
   const fullCleanup = useCallback(() => {
