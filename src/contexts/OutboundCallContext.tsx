@@ -292,6 +292,9 @@ export function OutboundCallProvider({ children }: { children: ReactNode }) {
     lastProcessedStatusRef.current = null;
   }, [isDeviceReady, clearStateTimeout, unsubscribeFromCallStatus]);
 
+  // Keep ref in sync so realtime subscription can call cleanupCall without a circular dep
+  cleanupCallRef.current = cleanupCall;
+
   // Full cleanup (including device)
   const fullCleanup = useCallback(() => {
     clearStateTimeout();
