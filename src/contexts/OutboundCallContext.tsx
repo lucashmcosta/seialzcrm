@@ -171,7 +171,7 @@ export function OutboundCallProvider({ children }: { children: ReactNode }) {
                 try { activeCallRef.current.disconnect(); } catch {}
                 activeCallRef.current = null;
               }
-              cleanupCall();
+              cleanupCallRef.current?.();
             }, 2000);
             return;
           }
