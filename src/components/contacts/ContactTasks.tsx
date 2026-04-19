@@ -71,7 +71,7 @@ export function ContactTasks({ contactId, opportunityId }: ContactTasksProps) {
       const { data, error } = await query.order('due_at', { ascending: true, nullsFirst: false });
 
       if (error) throw error;
-      setTasks(data || []);
+      setTasks((data || []) as any);
     } catch (error) {
       console.error('Error fetching tasks:', error);
     } finally {
