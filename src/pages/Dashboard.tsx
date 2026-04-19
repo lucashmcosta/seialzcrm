@@ -207,16 +207,17 @@ export default function Dashboard() {
         });
 
       if (!rpcError && rpcData) {
-        setOpenOpportunities(rpcData.open_count || 0);
-        setPipelineValue(rpcData.pipeline_value || 0);
-        setWonAmount(rpcData.won_amount || 0);
-        setLostCount(rpcData.lost_count || 0);
-        setNewContacts(rpcData.new_contacts || 0);
-        setStageData(rpcData.stage_data || []);
-        setMyTasks(rpcData.tasks || []);
-        setRecentActivities(rpcData.activities || []);
+        const d = rpcData as any;
+        setOpenOpportunities(d.open_count || 0);
+        setPipelineValue(d.pipeline_value || 0);
+        setWonAmount(d.won_amount || 0);
+        setLostCount(d.lost_count || 0);
+        setNewContacts(d.new_contacts || 0);
+        setStageData(d.stage_data || []);
+        setMyTasks(d.tasks || []);
+        setRecentActivities(d.activities || []);
 
-        const trend = (rpcData.won_trend || []).map((w: { date: string; amount: number }) => ({
+        const trend = (d.won_trend || []).map((w: { date: string; amount: number }) => ({
           date: new Date(w.date).toLocaleDateString(locale),
           amount: w.amount,
         }));
