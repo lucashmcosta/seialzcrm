@@ -223,6 +223,7 @@ const getLastInboundTime = (
 function DesktopMessagesList() {
   const { organization, locale, userProfile } = useOrganization();
   const { t } = useTranslation(locale as 'pt-BR' | 'en-US');
+  const { permissions } = usePermissions();
   const { toast } = useToast();
   const scrollRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
