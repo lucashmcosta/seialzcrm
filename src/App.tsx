@@ -149,6 +149,16 @@ function GlobalCallHandler() {
   );
 }
 
+const disablePwaInPreview = (() => {
+  if (typeof window === 'undefined') return false;
+
+  try {
+    return window.self !== window.top || window.location.hostname.includes('id-preview--');
+  } catch {
+    return true;
+  }
+})();
+
 const App = () => (
   <QueryClientProvider client={queryClient}>
     <TooltipProvider>
@@ -159,7 +169,7 @@ const App = () => (
         <OrganizationProvider>
         <OutboundCallProvider>
         <ThemeProvider>
-        <PWAUpdatePrompt />
+        {!disablePwaInPreview && <PWAUpdatePrompt />}
         <GlobalCallHandler />
         <Suspense fallback={<PageLoader />}>
         <Routes>
