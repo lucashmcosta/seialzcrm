@@ -2395,6 +2395,7 @@ export type Database = {
           needs_human_attention: boolean | null
           opportunity_id: string | null
           organization_id: string
+          original_owner_user_id: string | null
           resolved_at: string | null
           status: string
           subject: string | null
@@ -2422,6 +2423,7 @@ export type Database = {
           needs_human_attention?: boolean | null
           opportunity_id?: string | null
           organization_id: string
+          original_owner_user_id?: string | null
           resolved_at?: string | null
           status?: string
           subject?: string | null
@@ -2449,6 +2451,7 @@ export type Database = {
           needs_human_attention?: boolean | null
           opportunity_id?: string | null
           organization_id?: string
+          original_owner_user_id?: string | null
           resolved_at?: string | null
           status?: string
           subject?: string | null
@@ -2482,6 +2485,13 @@ export type Database = {
             columns: ["organization_id"]
             isOneToOne: false
             referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "message_threads_original_owner_user_id_fkey"
+            columns: ["original_owner_user_id"]
+            isOneToOne: false
+            referencedRelation: "users"
             referencedColumns: ["id"]
           },
         ]
@@ -3010,6 +3020,9 @@ export type Database = {
           name: string
           onboarding_completed_at: string | null
           onboarding_step: Database["public"]["Enums"]["onboarding_step"] | null
+          private_records_enabled: boolean
+          round_robin_enabled: boolean
+          round_robin_scope: string
           slug: string
           suspended_at: string | null
           suspended_by_admin_id: string | null
@@ -3038,6 +3051,9 @@ export type Database = {
           onboarding_step?:
             | Database["public"]["Enums"]["onboarding_step"]
             | null
+          private_records_enabled?: boolean
+          round_robin_enabled?: boolean
+          round_robin_scope?: string
           slug: string
           suspended_at?: string | null
           suspended_by_admin_id?: string | null
@@ -3066,6 +3082,9 @@ export type Database = {
           onboarding_step?:
             | Database["public"]["Enums"]["onboarding_step"]
             | null
+          private_records_enabled?: boolean
+          round_robin_enabled?: boolean
+          round_robin_scope?: string
           slug?: string
           suspended_at?: string | null
           suspended_by_admin_id?: string | null
@@ -3708,8 +3727,10 @@ export type Database = {
           created_at: string | null
           id: string
           is_active: boolean | null
+          last_assigned_at: string | null
           organization_id: string
           permission_profile_id: string
+          round_robin_active: boolean
           updated_at: string | null
           user_id: string
         }
@@ -3717,8 +3738,10 @@ export type Database = {
           created_at?: string | null
           id?: string
           is_active?: boolean | null
+          last_assigned_at?: string | null
           organization_id: string
           permission_profile_id: string
+          round_robin_active?: boolean
           updated_at?: string | null
           user_id: string
         }
@@ -3726,8 +3749,10 @@ export type Database = {
           created_at?: string | null
           id?: string
           is_active?: boolean | null
+          last_assigned_at?: string | null
           organization_id?: string
           permission_profile_id?: string
+          round_robin_active?: boolean
           updated_at?: string | null
           user_id?: string
         }
@@ -4025,6 +4050,7 @@ export type Database = {
       }
     }
     Functions: {
+      assign_round_robin: { Args: { _org_id: string }; Returns: string }
       current_user_id: { Args: never; Returns: string }
       current_user_managed_org_ids: { Args: never; Returns: string[] }
       current_user_org_ids: { Args: never; Returns: string[] }
@@ -4194,6 +4220,10 @@ export type Database = {
       update_organization_usage_metrics: {
         Args: { org_id: string }
         Returns: undefined
+      }
+      user_can_view_all: {
+        Args: { _entity: string; _org_id: string }
+        Returns: boolean
       }
       user_has_org_access: { Args: { org_id: string }; Returns: boolean }
     }
