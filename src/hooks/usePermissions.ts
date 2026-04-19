@@ -14,6 +14,12 @@ export interface Permissions {
   canManageUsers: boolean;
   canManageBilling: boolean;
   canManageIntegrations: boolean;
+  // Round-Robin / Privacy
+  viewAllContacts: boolean;
+  viewAllOpportunities: boolean;
+  viewAllThreads: boolean;
+  manageAssignments: boolean;
+  roundRobinRecipient: boolean;
 }
 
 const defaultPermissions: Permissions = {
@@ -27,6 +33,11 @@ const defaultPermissions: Permissions = {
   canManageUsers: false,
   canManageBilling: false,
   canManageIntegrations: false,
+  viewAllContacts: false,
+  viewAllOpportunities: false,
+  viewAllThreads: false,
+  manageAssignments: false,
+  roundRobinRecipient: false,
 };
 
 export function usePermissions() {
@@ -43,7 +54,6 @@ export function usePermissions() {
 
     const fetchPermissions = async () => {
       try {
-        // Get user's organization membership
         const { data: membership } = await supabase
           .from('user_organizations')
           .select('permission_profile_id')
@@ -57,7 +67,6 @@ export function usePermissions() {
           return;
         }
 
-        // Get permission profile
         const { data: profile } = await supabase
           .from('permission_profiles')
           .select('permissions')
@@ -77,6 +86,11 @@ export function usePermissions() {
             canManageUsers: perms.can_manage_users || false,
             canManageBilling: perms.can_manage_billing || false,
             canManageIntegrations: perms.can_manage_integrations || false,
+            viewAllContacts: perms.view_all_contacts || false,
+            viewAllOpportunities: perms.view_all_opportunities || false,
+            viewAllThreads: perms.view_all_threads || false,
+            manageAssignments: perms.manage_assignments || false,
+            roundRobinRecipient: perms.round_robin_recipient || false,
           });
         }
       } catch (error) {

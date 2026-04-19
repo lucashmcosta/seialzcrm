@@ -19,6 +19,7 @@ import {
   Clock,
   TrashSimple,
   MagnifyingGlass,
+  ShuffleAngular,
 } from '@phosphor-icons/react';
 import { usePermissions } from '@/hooks/usePermissions';
 import { useWhatsAppIntegration } from '@/hooks/useWhatsAppIntegration';
@@ -62,6 +63,7 @@ const settingsGroups: SettingsGroup[] = [
     items: [
       { icon: UsersThree, label: 'Usuários & Permissões', description: 'Adicione membros e gerencie acessos', to: 'users', permission: 'canManageUsers' },
       { icon: Shield, label: 'Perfis de Permissão', description: 'Defina níveis de acesso personalizados', to: 'permissions', permission: 'canManageSettings' },
+      { icon: ShuffleAngular, label: 'Atribuição automática', description: 'Round-robin de leads e privacidade de registros', to: 'round-robin', permission: 'manageAssignments' },
       { icon: Copy, label: 'Duplicatas', description: 'Regras para detecção de contatos duplicados', to: 'duplicates', permission: 'canManageSettings' },
     ],
   },

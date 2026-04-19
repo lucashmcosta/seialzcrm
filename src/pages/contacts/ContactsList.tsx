@@ -372,19 +372,24 @@ export default function ContactsList() {
             />
           </div>
           
-          <Select value={ownerFilter} onValueChange={setOwnerFilter}>
-            <SelectTrigger className="w-48">
-              <SelectValue placeholder={t('contacts.owner')} />
-            </SelectTrigger>
-            <SelectContent className="bg-popover z-50">
-              <SelectItem value="all">{t('contacts.allOwners')}</SelectItem>
-              {users.map(user => (
-                <SelectItem key={user.id} value={user.id}>
-                  {user.full_name}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
+          {permissions.viewAllContacts && (
+            <Select value={ownerFilter} onValueChange={setOwnerFilter}>
+              <SelectTrigger className="w-48">
+                <SelectValue placeholder={t('contacts.owner')} />
+              </SelectTrigger>
+              <SelectContent className="bg-popover z-50">
+                <SelectItem value="all">{t('contacts.allOwners')}</SelectItem>
+                {userProfile?.id && (
+                  <SelectItem value={userProfile.id}>Meus</SelectItem>
+                )}
+                {users.filter(u => u.id !== userProfile?.id).map(user => (
+                  <SelectItem key={user.id} value={user.id}>
+                    {user.full_name}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          )}
           
           <Select value={stageFilter} onValueChange={setStageFilter}>
             <SelectTrigger className="w-48">

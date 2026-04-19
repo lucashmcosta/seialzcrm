@@ -25,6 +25,7 @@ const tabToRoute: Record<string, string> = {
   integrations: 'integrations',
   products: 'products',
   trash: 'trash',
+  roundRobin: 'round-robin',
 };
 
 // Routes that require feature flags

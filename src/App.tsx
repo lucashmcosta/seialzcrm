@@ -75,6 +75,7 @@ const KnowledgeEditChat = lazy(() => import("./components/settings/KnowledgeEdit
 const ProductsSettings = lazy(() => import("./components/settings/ProductsSettings").then(m => ({ default: m.ProductsSettings })));
 const WhatsAppTemplatesPage = lazy(() => import("./pages/settings/WhatsAppTemplates"));
 const AuditLogs = lazy(() => import("./pages/settings/AuditLogs").then(m => ({ default: m.AuditLogs })));
+const RoundRobinSettings = lazy(() => import("./components/settings/RoundRobinSettings").then(m => ({ default: m.RoundRobinSettings })));
 const Trash = lazy(() => import("./pages/settings/Trash").then(m => ({ default: m.Trash })));
 const Profile = lazy(() => import("./pages/Profile"));
 const NotFound = lazy(() => import("./pages/NotFound"));
@@ -348,6 +349,7 @@ const App = () => (
             <Route path="knowledge-base" element={<KnowledgeBaseSettings />} />
             <Route path="edit-kb" element={<KnowledgeEditChat />} />
             <Route path="audit-logs" element={<AuditLogs />} />
+            <Route path="round-robin" element={<RoundRobinSettings />} />
             <Route path="trash" element={<Trash />} />
             <Route path="*" element={<Navigate to="/settings" replace />} />
           </Route>

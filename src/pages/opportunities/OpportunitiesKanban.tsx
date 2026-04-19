@@ -99,7 +99,7 @@ const defaultVisibleColumns = ['title', 'amount', 'pipeline_stage', 'contact', '
 export default function OpportunitiesKanban() {
   const navigate = useNavigate();
   const isMobile = useIsMobile();
-  const { organization, locale } = useOrganization();
+  const { organization, locale, userProfile } = useOrganization();
   const { t } = useTranslation(locale as 'pt-BR' | 'en-US');
   const { permissions } = usePermissions();
   const { themePreset } = useTheme();
@@ -764,22 +764,27 @@ export default function OpportunitiesKanban() {
             )}
           </div>
 
-          <div className="space-y-2">
-            <label className="text-sm font-medium">Responsável</label>
-            <Select value={filterOwner} onValueChange={setFilterOwner}>
-              <SelectTrigger>
-                <SelectValue placeholder="Todos" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all">Todos</SelectItem>
-                {users.map((user) => (
-                  <SelectItem key={user.id} value={user.id}>
-                    {user.full_name}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </div>
+          {permissions.viewAllOpportunities && (
+            <div className="space-y-2">
+              <label className="text-sm font-medium">Responsável</label>
+              <Select value={filterOwner} onValueChange={setFilterOwner}>
+                <SelectTrigger>
+                  <SelectValue placeholder="Todos" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">Todos</SelectItem>
+                  {userProfile?.id && (
+                    <SelectItem value={userProfile.id}>Meus</SelectItem>
+                  )}
+                  {users.filter((u) => u.id !== userProfile?.id).map((user) => (
+                    <SelectItem key={user.id} value={user.id}>
+                      {user.full_name}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+          )}
 
           <div className="space-y-2">
             <label className="text-sm font-medium">Valor</label>

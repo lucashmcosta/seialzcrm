@@ -32,6 +32,7 @@ import {
 } from '@/components/ui/dropdown-menu';
 import { ResizablePanelGroup, ResizablePanel, ResizableHandle } from '@/components/ui/resizable';
 import { useOrganization } from '@/hooks/useOrganization';
+import { usePermissions } from '@/hooks/usePermissions';
 import { useTranslation } from '@/lib/i18n';
 import { supabase } from '@/integrations/supabase/client';
 import { useQuery } from '@tanstack/react-query';
@@ -223,6 +224,7 @@ const getLastInboundTime = (
 function DesktopMessagesList() {
   const { organization, locale, userProfile } = useOrganization();
   const { t } = useTranslation(locale as 'pt-BR' | 'en-US');
+  const { permissions } = usePermissions();
   const { toast } = useToast();
   const scrollRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
@@ -1016,12 +1018,21 @@ function DesktopMessagesList() {
     }
   });
 
-  const filterOptions: { key: ThreadFilter; label: string }[] = [
+  const allFilterOptions: { key: ThreadFilter; label: string; requiresViewAll?: boolean }[] = [
     { key: 'mine', label: locale === 'pt-BR' ? 'Minhas' : 'Mine' },
-    { key: 'unassigned', label: locale === 'pt-BR' ? 'Não atribuídas' : 'Unassigned' },
-    { key: 'all_open', label: locale === 'pt-BR' ? 'Todas abertas' : 'All Open' },
-    { key: 'resolved', label: locale === 'pt-BR' ? 'Resolvidas' : 'Resolved' },
+    { key: 'unassigned', label: locale === 'pt-BR' ? 'Não atribuídas' : 'Unassigned', requiresViewAll: true },
+    { key: 'all_open', label: locale === 'pt-BR' ? 'Todas abertas' : 'All Open', requiresViewAll: true },
+    { key: 'resolved', label: locale === 'pt-BR' ? 'Resolvidas' : 'Resolved', requiresViewAll: true },
   ];
+  const filterOptions = allFilterOptions.filter(o => !o.requiresViewAll || permissions.viewAllThreads);
+
+  // Force "mine" for users without view-all
+  useEffect(() => {
+    if (!permissions.viewAllThreads && filter !== 'mine') {
+      setFilter('mine');
+    }
+  }, [permissions.viewAllThreads, filter]);
+
 
   return (
     <Layout>
