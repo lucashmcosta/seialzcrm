@@ -101,6 +101,7 @@ export function AudioMessagePlayer({ src, className = '', timestamp, statusIcon 
             borderRadius: '50%',
             border: 'none',
             background: 'transparent',
+            color: 'currentColor',
             cursor: isLoading ? 'default' : 'pointer',
             display: 'flex',
             alignItems: 'center',
