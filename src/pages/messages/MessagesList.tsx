@@ -1153,14 +1153,10 @@ function DesktopMessagesList() {
                 </>
               )}
             </ScrollArea>
-          </div>
-        </ResizablePanel>
-
-        <ResizableHandle withHandle />
+        </div>
 
         {/* Right Panel - Chat */}
-        <ResizablePanel defaultSize={75}>
-          <div className="flex flex-col bg-background h-full overflow-hidden">
+        <div className="flex-1 flex flex-col bg-background h-full overflow-hidden">
             {selectedThread ? (
               <>
                 {/* Chat Header */}
