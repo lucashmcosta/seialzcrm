@@ -54,22 +54,31 @@ export function SendToSignatureButton({ contactId, opportunityId, size = 'sm' }:
         return;
       }
 
-      // Validate required fields
-      const firstName = contact.first_name || contact.full_name?.split(' ')[0] || '';
+      // Resolve name with robust fallback (handles extra spaces, empty strings, webhook imports)
+      const fullName = (contact.full_name || '').trim();
+      const firstNameRaw = (contact.first_name || '').trim();
+      const lastNameRaw = (contact.last_name || '').trim();
+      const nameParts = fullName.split(/\s+/).filter(Boolean);
+      const resolvedFirstName = firstNameRaw || nameParts[0] || '';
+      const resolvedLastName =
+        lastNameRaw || (nameParts.length > 1 ? nameParts.slice(1).join(' ') : '');
+
+      // Trim helper for validation
+      const v = (s: string | null | undefined) => (s || '').trim();
       const missingFields: string[] = [];
 
-      if (!firstName) missingFields.push('Nome');
-      if (!contact.email) missingFields.push('Email');
-      if (!contact.phone) missingFields.push('Telefone');
-      if (!contact.cpf) missingFields.push('CPF');
-      if (!contact.rg) missingFields.push('RG');
-      if (!contact.rg_issuer) missingFields.push('Órgão Emissor do RG');
-      if (!contact.nationality) missingFields.push('Nacionalidade');
-      if (!contact.address_street) missingFields.push('Endereço');
-      if (!contact.address_neighborhood) missingFields.push('Bairro');
-      if (!contact.address_city) missingFields.push('Cidade');
-      if (!contact.address_state) missingFields.push('Estado');
-      if (!contact.address_zip) missingFields.push('CEP');
+      if (!resolvedFirstName) missingFields.push('Nome');
+      if (!v(contact.email)) missingFields.push('Email');
+      if (!v(contact.phone)) missingFields.push('Telefone');
+      if (!v(contact.cpf)) missingFields.push('CPF');
+      if (!v(contact.rg)) missingFields.push('RG');
+      if (!v(contact.rg_issuer)) missingFields.push('Órgão Emissor do RG');
+      if (!v(contact.nationality)) missingFields.push('Nacionalidade');
+      if (!v(contact.address_street)) missingFields.push('Endereço');
+      if (!v(contact.address_neighborhood)) missingFields.push('Bairro');
+      if (!v(contact.address_city)) missingFields.push('Cidade');
+      if (!v(contact.address_state)) missingFields.push('Estado');
+      if (!v(contact.address_zip)) missingFields.push('CEP');
 
       if (missingFields.length > 0) {
         toast.error(`Campos obrigatórios não preenchidos: ${missingFields.join(', ')}`);
@@ -78,10 +87,10 @@ export function SendToSignatureButton({ contactId, opportunityId, size = 'sm' }:
 
       const payload: any = {
         client: {
-          firstName: contact.first_name || contact.full_name?.split(' ')[0] || '',
-          lastName: contact.last_name || contact.full_name?.split(' ').slice(1).join(' ') || '',
-          email: contact.email || '',
-          phone: contact.phone || '',
+          firstName: resolvedFirstName,
+          lastName: resolvedLastName,
+          email: v(contact.email),
+          phone: v(contact.phone),
         },
         custom: {
           contact_id: contactId,
