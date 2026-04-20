@@ -85,13 +85,13 @@ export function RoundRobinSettings() {
       const list: QueueMember[] = uoData.map((u: any) => {
         const perms = u.permission_profiles?.permissions || {};
         const c = counts.get(u.user_id) || { today: 0, week: 0 };
-        const isRecipient = !!perms.round_robin_recipient;
         return {
           uo_id: u.id,
           user_id: u.user_id,
           full_name: u.users?.full_name || '—',
           email: u.users?.email || '',
-          receives_leads: isRecipient && u.round_robin_active,
+          // Persistência por usuário (não compartilhada via permission_profile)
+          receives_leads: !!u.round_robin_active,
           last_assigned_at: u.last_assigned_at,
           count_today: c.today,
           count_week: c.week,
