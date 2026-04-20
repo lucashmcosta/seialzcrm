@@ -85,13 +85,13 @@ export function RoundRobinSettings() {
       const list: QueueMember[] = uoData.map((u: any) => {
         const perms = u.permission_profiles?.permissions || {};
         const c = counts.get(u.user_id) || { today: 0, week: 0 };
-        const isRecipient = !!perms.round_robin_recipient;
         return {
           uo_id: u.id,
           user_id: u.user_id,
           full_name: u.users?.full_name || '—',
           email: u.users?.email || '',
-          receives_leads: isRecipient && u.round_robin_active,
+          // Persistência por usuário (não compartilhada via permission_profile)
+          receives_leads: !!u.round_robin_active,
           last_assigned_at: u.last_assigned_at,
           count_today: c.today,
           count_week: c.week,
@@ -139,34 +139,31 @@ export function RoundRobinSettings() {
     setMembers((prev) => prev.map((m) => (m.uo_id === member.uo_id ? { ...m, receives_leads: value } : m)));
 
     try {
-      // 1) Ensure profile has round_robin_recipient flag matching the toggle
-      const currentPerms = member.profile_permissions || {};
-      if (!!currentPerms.round_robin_recipient !== value) {
-        const newPerms = { ...currentPerms, round_robin_recipient: value };
-        const { error: profErr } = await supabase
-          .from('permission_profiles')
-          .update({ permissions: newPerms })
-          .eq('id', member.profile_id);
-        if (profErr) throw profErr;
-      }
-
-      // 2) Toggle queue active state
+      // Persist apenas no user_organizations (por usuário, não compartilhado)
       const { error: uoErr } = await supabase
         .from('user_organizations')
         .update({ round_robin_active: value })
         .eq('id', member.uo_id);
       if (uoErr) throw uoErr;
 
-      // Update local profile_permissions cache
-      setMembers((prev) =>
-        prev.map((m) =>
-          m.uo_id === member.uo_id
-            ? { ...m, profile_permissions: { ...m.profile_permissions, round_robin_recipient: value } }
-            : m
-        )
-      );
+      // Garantir que o perfil tem round_robin_recipient=true (gate da função assign_round_robin).
+      // Só LIGAMOS no perfil — nunca desligamos, pois é compartilhado entre usuários.
+      if (value && !member.profile_permissions?.round_robin_recipient) {
+        const newPerms = { ...member.profile_permissions, round_robin_recipient: true };
+        await supabase
+          .from('permission_profiles')
+          .update({ permissions: newPerms })
+          .eq('id', member.profile_id);
+
+        setMembers((prev) =>
+          prev.map((m) =>
+            m.profile_id === member.profile_id
+              ? { ...m, profile_permissions: { ...m.profile_permissions, round_robin_recipient: true } }
+              : m
+          )
+        );
+      }
     } catch (e: any) {
-      // Revert
       setMembers((prev) => prev.map((m) => (m.uo_id === member.uo_id ? { ...m, receives_leads: !value } : m)));
       toast({ title: 'Erro', description: e.message, variant: 'destructive' });
     }
