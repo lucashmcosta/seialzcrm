@@ -148,7 +148,8 @@ export function AudioMessagePlayer({ src, className = '', timestamp, statusIcon 
                   height: `${h * 100}%`,
                   minWidth: 2,
                   borderRadius: 1,
-                  background: isActive ? 'rgba(255,255,255,0.9)' : 'rgba(255,255,255,0.35)',
+                  background: isActive ? 'currentColor' : 'currentColor',
+                  opacity: isActive ? 0.85 : 0.3,
                   transition: 'background 0.1s',
                 }}
               />
