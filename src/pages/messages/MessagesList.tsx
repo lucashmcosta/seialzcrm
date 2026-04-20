@@ -1332,7 +1332,7 @@ function DesktopMessagesList() {
                                       message.media_type === 'audio' && !message.content ? 'p-1' : 'p-3',
                                       isOutbound
                                         ? 'bg-green-100 dark:bg-green-900/40 text-green-900 dark:text-green-100'
-                                        : 'bg-muted'
+                                        : 'bg-card border border-border text-foreground shadow-sm'
                                     )}
                                   >
                                     {/* Agent Badge + Feedback Button for agent messages */}
