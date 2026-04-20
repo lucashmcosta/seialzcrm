@@ -175,11 +175,11 @@ export function AudioMessagePlayer({ src, className = '', timestamp, statusIcon 
 
       {/* Row 2: Duration + Timestamp */}
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: 0, marginLeft: 34, marginTop: 0, marginBottom: 0, marginRight: 0 }}>
-        <span style={{ fontSize: 11, lineHeight: '14px', color: 'rgba(255,255,255,0.6)', fontVariantNumeric: 'tabular-nums' }}>
+        <span style={{ fontSize: 11, lineHeight: '14px', color: 'currentColor', opacity: 0.7, fontVariantNumeric: 'tabular-nums' }}>
           {isPlaying || currentTime > 0 ? formatTime(currentTime) : formatTime(duration)}
         </span>
         {timestamp && (
-          <span style={{ display: 'flex', alignItems: 'center', gap: 3, fontSize: 11, lineHeight: '14px', color: 'rgba(255,255,255,0.6)' }}>
+          <span style={{ display: 'flex', alignItems: 'center', gap: 3, fontSize: 11, lineHeight: '14px', color: 'currentColor', opacity: 0.7 }}>
             {timestamp}
             {statusIcon}
           </span>
