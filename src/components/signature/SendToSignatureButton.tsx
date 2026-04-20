@@ -87,10 +87,10 @@ export function SendToSignatureButton({ contactId, opportunityId, size = 'sm' }:
 
       const payload: any = {
         client: {
-          firstName: contact.first_name || contact.full_name?.split(' ')[0] || '',
-          lastName: contact.last_name || contact.full_name?.split(' ').slice(1).join(' ') || '',
-          email: contact.email || '',
-          phone: contact.phone || '',
+          firstName: resolvedFirstName,
+          lastName: resolvedLastName,
+          email: v(contact.email),
+          phone: v(contact.phone),
         },
         custom: {
           contact_id: contactId,
