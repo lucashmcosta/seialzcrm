@@ -1640,9 +1640,8 @@ function DesktopMessagesList() {
               </div>
             )}
           </div>
-        </ResizablePanel>
-      </ResizablePanelGroup>
       </div>
+
 
       {/* Media Preview Dialog */}
       <MediaPreviewDialog
