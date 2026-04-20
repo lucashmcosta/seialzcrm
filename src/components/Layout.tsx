@@ -236,17 +236,6 @@ export function Layout({ children }: LayoutProps) {
           footerItems={footerItems}
           logo={logoSection}
           userSection={userSection}
-          featureCard={
-            <FeaturedCardProgressBar
-              title="Complete seu perfil"
-              description="Adicione mais informações para melhorar sua experiência"
-              confirmLabel="Completar"
-              progress={65}
-              className="hidden lg:flex"
-              onDismiss={() => {}}
-              onConfirm={() => navigate('/profile')}
-            />
-          }
         />
       </div>
 
