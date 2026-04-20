@@ -101,6 +101,7 @@ export function AudioMessagePlayer({ src, className = '', timestamp, statusIcon 
             borderRadius: '50%',
             border: 'none',
             background: 'transparent',
+            color: 'currentColor',
             cursor: isLoading ? 'default' : 'pointer',
             display: 'flex',
             alignItems: 'center',
@@ -113,12 +114,12 @@ export function AudioMessagePlayer({ src, className = '', timestamp, statusIcon 
         >
           {isPlaying ? (
             <svg width="14" height="14" viewBox="0 0 20 20" fill="none">
-              <rect x="5" y="3" width="3.5" height="14" rx="1" fill="rgba(255,255,255,0.9)" />
-              <rect x="11.5" y="3" width="3.5" height="14" rx="1" fill="rgba(255,255,255,0.9)" />
+              <rect x="5" y="3" width="3.5" height="14" rx="1" fill="currentColor" />
+              <rect x="11.5" y="3" width="3.5" height="14" rx="1" fill="currentColor" />
             </svg>
           ) : (
             <svg width="14" height="14" viewBox="0 0 20 20" fill="none">
-              <path d="M5 3.5V16.5C5 17.1 5.6 17.4 6.1 17.1L17 10.5C17.5 10.2 17.5 9.5 17 9.2L6.1 2.9C5.6 2.6 5 2.9 5 3.5Z" fill="rgba(255,255,255,0.9)" />
+              <path d="M5 3.5V16.5C5 17.1 5.6 17.4 6.1 17.1L17 10.5C17.5 10.2 17.5 9.5 17 9.2L6.1 2.9C5.6 2.6 5 2.9 5 3.5Z" fill="currentColor" />
             </svg>
           )}
         </button>
@@ -147,7 +148,8 @@ export function AudioMessagePlayer({ src, className = '', timestamp, statusIcon 
                   height: `${h * 100}%`,
                   minWidth: 2,
                   borderRadius: 1,
-                  background: isActive ? 'rgba(255,255,255,0.9)' : 'rgba(255,255,255,0.35)',
+                  background: isActive ? 'currentColor' : 'currentColor',
+                  opacity: isActive ? 0.85 : 0.3,
                   transition: 'background 0.1s',
                 }}
               />
@@ -162,8 +164,8 @@ export function AudioMessagePlayer({ src, className = '', timestamp, statusIcon 
               width: 10,
               height: 10,
               borderRadius: '50%',
-              background: '#FFFFFF',
-              boxShadow: '0 1px 3px rgba(0,0,0,0.3)',
+              background: 'currentColor',
+              boxShadow: '0 1px 3px rgba(0,0,0,0.25)',
               transition: 'left 0.05s linear',
               pointerEvents: 'none',
             }}
@@ -173,11 +175,11 @@ export function AudioMessagePlayer({ src, className = '', timestamp, statusIcon 
 
       {/* Row 2: Duration + Timestamp */}
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: 0, marginLeft: 34, marginTop: 0, marginBottom: 0, marginRight: 0 }}>
-        <span style={{ fontSize: 11, lineHeight: '14px', color: 'rgba(255,255,255,0.6)', fontVariantNumeric: 'tabular-nums' }}>
+        <span style={{ fontSize: 11, lineHeight: '14px', color: 'currentColor', opacity: 0.7, fontVariantNumeric: 'tabular-nums' }}>
           {isPlaying || currentTime > 0 ? formatTime(currentTime) : formatTime(duration)}
         </span>
         {timestamp && (
-          <span style={{ display: 'flex', alignItems: 'center', gap: 3, fontSize: 11, lineHeight: '14px', color: 'rgba(255,255,255,0.6)' }}>
+          <span style={{ display: 'flex', alignItems: 'center', gap: 3, fontSize: 11, lineHeight: '14px', color: 'currentColor', opacity: 0.7 }}>
             {timestamp}
             {statusIcon}
           </span>
