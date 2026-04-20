@@ -1036,11 +1036,9 @@ function DesktopMessagesList() {
 
   return (
     <Layout>
-      <div className="h-screen overflow-hidden">
-      <ResizablePanelGroup direction="horizontal" className="h-full">
-        {/* Left Panel - Chat List */}
-        <ResizablePanel defaultSize={25} minSize={15} maxSize={40}>
-          <div className="border-r border-border flex flex-col bg-card h-full overflow-hidden">
+      <div className="h-screen overflow-hidden flex">
+        {/* Left Panel - Chat List (fixed width) */}
+        <div className="w-[360px] flex-shrink-0 border-r border-border flex flex-col bg-card h-full overflow-hidden">
             {/* Header */}
             <div className="p-4 border-b border-border">
               <div className="flex items-center justify-between mb-4">
@@ -1155,14 +1153,10 @@ function DesktopMessagesList() {
                 </>
               )}
             </ScrollArea>
-          </div>
-        </ResizablePanel>
-
-        <ResizableHandle withHandle />
+        </div>
 
         {/* Right Panel - Chat */}
-        <ResizablePanel defaultSize={75}>
-          <div className="flex flex-col bg-background h-full overflow-hidden">
+        <div className="flex-1 flex flex-col bg-background h-full overflow-hidden">
             {selectedThread ? (
               <>
                 {/* Chat Header */}
@@ -1646,9 +1640,8 @@ function DesktopMessagesList() {
               </div>
             )}
           </div>
-        </ResizablePanel>
-      </ResizablePanelGroup>
       </div>
+
 
       {/* Media Preview Dialog */}
       <MediaPreviewDialog
