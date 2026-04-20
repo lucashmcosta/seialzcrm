@@ -107,7 +107,18 @@ const AdminDocumentation = lazy(() => import("./pages/admin/AdminDocumentation")
 const AdminDocumentationEdit = lazy(() => import("./pages/admin/AdminDocumentationEdit"));
 const AdminProtectedRoute = lazy(() => import("./components/admin/AdminProtectedRoute").then(m => ({ default: m.AdminProtectedRoute })));
 
-const queryClient = new QueryClient();
+const queryClient = new QueryClient({
+  defaultOptions: {
+    queries: {
+      // Avoid refetching on every page navigation/focus
+      staleTime: 1000 * 60 * 5, // 5 minutes
+      gcTime: 1000 * 60 * 30, // 30 minutes in cache
+      refetchOnWindowFocus: false,
+      refetchOnMount: false,
+      retry: 1,
+    },
+  },
+});
 
 function ProtectedRoute({ children }: { children: React.ReactNode }) {
   const { isAuthenticated, loading } = useAuthContext();

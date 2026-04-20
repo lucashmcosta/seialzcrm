@@ -43,6 +43,8 @@ export function useWhatsAppIntegration() {
       return data;
     },
     enabled: !!organization?.id,
+    staleTime: 1000 * 60 * 10, // 10 minutes — integration config rarely changes
+    gcTime: 1000 * 60 * 30,
   });
 
   const config = data?.config_values as unknown as WhatsAppConfig | null;

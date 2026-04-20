@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from './useAuth';
 import { useOrganization } from './useOrganization';
@@ -43,68 +43,51 @@ const defaultPermissions: Permissions = {
 export function usePermissions() {
   const { user } = useAuth();
   const { organization, userProfile } = useOrganization();
-  const [permissions, setPermissions] = useState<Permissions>(defaultPermissions);
-  const [loading, setLoading] = useState(true);
 
-  useEffect(() => {
-    if (!user || !organization || !userProfile) {
-      setLoading(false);
-      return;
-    }
+  const { data: permissions = defaultPermissions, isLoading: loading } = useQuery({
+    queryKey: ['permissions', userProfile?.id, organization?.id],
+    enabled: !!user && !!organization?.id && !!userProfile?.id,
+    staleTime: 1000 * 60 * 10, // 10 minutes — permissions rarely change
+    gcTime: 1000 * 60 * 30,
+    queryFn: async (): Promise<Permissions> => {
+      const { data: membership } = await supabase
+        .from('user_organizations')
+        .select('permission_profile_id')
+        .eq('user_id', userProfile!.id)
+        .eq('organization_id', organization!.id)
+        .eq('is_active', true)
+        .single();
 
-    const fetchPermissions = async () => {
-      try {
-        const { data: membership } = await supabase
-          .from('user_organizations')
-          .select('permission_profile_id')
-          .eq('user_id', userProfile.id)
-          .eq('organization_id', organization.id)
-          .eq('is_active', true)
-          .single();
+      if (!membership) return defaultPermissions;
 
-        if (!membership) {
-          setLoading(false);
-          return;
-        }
+      const { data: profile } = await supabase
+        .from('permission_profiles')
+        .select('permissions')
+        .eq('id', membership.permission_profile_id)
+        .single();
 
-        const { data: profile } = await supabase
-          .from('permission_profiles')
-          .select('permissions')
-          .eq('id', membership.permission_profile_id)
-          .single();
+      if (!profile?.permissions) return defaultPermissions;
 
-        if (profile?.permissions) {
-          const perms = profile.permissions as any;
-          setPermissions({
-            canViewContacts: perms.can_view_contacts || false,
-            canEditContacts: perms.can_edit_contacts || false,
-            canDeleteContacts: perms.can_delete_contacts || false,
-            canViewOpportunities: perms.can_view_opportunities || false,
-            canEditOpportunities: perms.can_edit_opportunities || false,
-            canDeleteOpportunities: perms.can_delete_opportunities || false,
-            canManageSettings: perms.can_manage_settings || false,
-            canManageUsers: perms.can_manage_users || false,
-            canManageBilling: perms.can_manage_billing || false,
-            canManageIntegrations: perms.can_manage_integrations || false,
-            viewAllContacts: perms.view_all_contacts || false,
-            viewAllOpportunities: perms.view_all_opportunities || false,
-            viewAllThreads: perms.view_all_threads || false,
-            manageAssignments: perms.manage_assignments || false,
-            roundRobinRecipient: perms.round_robin_recipient || false,
-          });
-        }
-      } catch (error) {
-        console.error('Error fetching permissions:', error);
-      } finally {
-        setLoading(false);
-      }
-    };
+      const perms = profile.permissions as any;
+      return {
+        canViewContacts: perms.can_view_contacts || false,
+        canEditContacts: perms.can_edit_contacts || false,
+        canDeleteContacts: perms.can_delete_contacts || false,
+        canViewOpportunities: perms.can_view_opportunities || false,
+        canEditOpportunities: perms.can_edit_opportunities || false,
+        canDeleteOpportunities: perms.can_delete_opportunities || false,
+        canManageSettings: perms.can_manage_settings || false,
+        canManageUsers: perms.can_manage_users || false,
+        canManageBilling: perms.can_manage_billing || false,
+        canManageIntegrations: perms.can_manage_integrations || false,
+        viewAllContacts: perms.view_all_contacts || false,
+        viewAllOpportunities: perms.view_all_opportunities || false,
+        viewAllThreads: perms.view_all_threads || false,
+        manageAssignments: perms.manage_assignments || false,
+        roundRobinRecipient: perms.round_robin_recipient || false,
+      };
+    },
+  });
 
-    fetchPermissions();
-  }, [user, organization, userProfile]);
-
-  return {
-    permissions,
-    loading,
-  };
+  return { permissions, loading };
 }
