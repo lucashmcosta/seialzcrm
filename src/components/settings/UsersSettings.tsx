@@ -15,6 +15,7 @@ import { useToast } from '@/hooks/use-toast';
 import { SpinnerGap, UserPlus, CaretDown, EnvelopeSimple, UserCirclePlus, Clock, X } from '@phosphor-icons/react';
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
+import { EditUserDialog, EditableUser } from './EditUserDialog';
 
 interface UserMembership {
   id: string;
@@ -24,6 +25,9 @@ interface UserMembership {
   users: {
     full_name: string;
     email: string;
+    first_name?: string | null;
+    last_name?: string | null;
+    avatar_url?: string | null;
   };
   permission_profiles?: {
     name: string;
