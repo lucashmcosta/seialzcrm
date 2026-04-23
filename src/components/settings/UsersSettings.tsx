@@ -77,6 +77,10 @@ export function UsersSettings() {
   const [createProfileId, setCreateProfileId] = useState<string>('');
   const [createSubmitting, setCreateSubmitting] = useState(false);
 
+  // Edit user dialog state
+  const [editingUser, setEditingUser] = useState<EditableUser | null>(null);
+  const [editDialogOpen, setEditDialogOpen] = useState(false);
+
   useEffect(() => {
     if (organization?.id) {
       fetchMemberships();
