@@ -1,29 +1,34 @@
 
-## Plano: Corrigir validação de "Nome" no envio para assinatura
 
-### Problema
-Ao clicar em "Enviar para Assinatura", aparece o erro dizendo que o campo "Nome" está vazio — mesmo quando o contato tem nome preenchido (ex: "Marcelo Esteves De Jesus" aparece no topo).
+## Criar usuária Luana Moreira na Blueviza
 
-### Causa
-No arquivo `src/components/signature/SendToSignatureButton.tsx`, a lógica que extrai o primeiro nome quebra em alguns casos:
-- Quando `first_name` está vazio mas `full_name` tem espaços extras no início
-- Quando os dados vieram de um webhook (Kommo, formulário) e ficaram com espaços ou strings vazias
-- O `split(' ')[0]` retorna string vazia se o nome começar com espaço
+### Dados confirmados
+- **Nome**: Luana Moreira
+- **Email**: lmoreira@blueviza.com
+- **Senha**: 1235456
+- **Organização**: Blueviza (`f677a500-6067-436e-aeda-300f7adc26ab`)
+- **Perfil**: Sales Rep (vê apenas os contatos/oportunidades atribuídos a ela)
 
-### Solução
-Tornar a extração do nome mais robusta:
+### Passos de execução
 
-1. **Limpar espaços** de todos os campos do contato antes de validar (usar `.trim()`)
-2. **Dividir o nome corretamente** usando expressão que ignora múltiplos espaços
-3. **Cascata de fallback** para o primeiro nome:
-   - Tenta `first_name`
-   - Se vazio, pega a primeira palavra de `full_name`
-   - Se ainda vazio, aí sim mostra erro
-4. **Reaproveitar o nome resolvido** no payload enviado ao SuvSign (hoje a validação e o envio usam lógicas diferentes)
-5. Aplicar o mesmo `.trim()` nos demais campos obrigatórios (CPF, RG, endereço, etc.) para evitar que valores com só espaços passem como "preenchidos" ou sejam marcados como vazios incorretamente
+1. **Aumentar limite de assentos da Blueviza**
+   - Hoje: `max_seats = 3` com 4 membros ativos (já estourado)
+   - Migração: `UPDATE subscriptions SET max_seats = 5 WHERE organization_id = 'f677a500-6067-436e-aeda-300f7adc26ab'`
+   - Atualizar `subscription_usage.current_seat_count` para refletir o estado real (5 após criar Luana)
 
-### Arquivo alterado
-- `src/components/signature/SendToSignatureButton.tsx` (apenas a função `handleSendToSignature`, ~15 linhas)
+2. **Localizar o `permission_profile_id` do perfil "Sales Rep" da Blueviza**
+   - Query em `permission_profiles` filtrando pela org_id da Blueviza e nome `Sales Rep`
 
-### Resultado esperado
-O botão "Enviar para Assinatura" vai abrir o SuvSign normalmente para contatos que têm nome preenchido, mesmo se os dados vieram com espaços extras ou apenas no campo `full_name`.
+3. **Criar a conta da Luana via edge function `create-user`**
+   - Payload: email, password, full_name, organization_id, permission_profile_id
+   - A função já valida permissões, cria o usuário no `auth.users`, no `users`, e cria o vínculo em `user_organizations`
+   - Como sou platform admin, posso invocar essa função diretamente
+
+4. **Validação pós-criação**
+   - Confirmar registro em `users` (auth_user_id ↔ users.id)
+   - Confirmar vínculo ativo em `user_organizations` com o profile correto
+   - Confirmar `subscription_usage.current_seat_count = 5`
+
+### Nota de segurança
+A senha `1235456` é fraca (6 dígitos sequenciais). Recomendo orientar a Luana a trocá-la no primeiro acesso pelo Profile.
+
