@@ -151,13 +151,13 @@ export function EditUserDialog({ open, onOpenChange, user, permissionProfiles, o
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-lg">
+      <DialogContent className="max-w-lg flex flex-col max-h-[90vh]">
         <DialogHeader>
           <DialogTitle>Editar usuário</DialogTitle>
           <DialogDescription>Atualize dados pessoais, perfil e status.</DialogDescription>
         </DialogHeader>
 
-        <div className="space-y-6 py-2">
+        <div className="space-y-6 py-2 flex-1 overflow-y-auto -mx-1 px-1">
           {/* Avatar */}
           <div className="flex items-center gap-4">
             <Avatar className="h-16 w-16">
