@@ -470,10 +470,27 @@ export function UsersSettings() {
             </TableHeader>
             <TableBody>
               {memberships.filter(m => m.users).map((membership) => (
-                <TableRow key={membership.id}>
+                <TableRow
+                  key={membership.id}
+                  className="cursor-pointer hover:bg-muted/50"
+                  onClick={() => {
+                    setEditingUser({
+                      membership_id: membership.id,
+                      user_id: membership.user_id,
+                      full_name: membership.users.full_name,
+                      email: membership.users.email,
+                      first_name: membership.users.first_name,
+                      last_name: membership.users.last_name,
+                      avatar_url: membership.users.avatar_url,
+                      is_active: membership.is_active,
+                      permission_profile_id: membership.permission_profile_id,
+                    });
+                    setEditDialogOpen(true);
+                  }}
+                >
                   <TableCell className="font-medium">{membership.users?.full_name}</TableCell>
                   <TableCell>{membership.users?.email}</TableCell>
-                  <TableCell>
+                  <TableCell onClick={(e) => e.stopPropagation()}>
                     {membership.user_id === userProfile?.id ? (
                       <Badge variant="outline">
                         {membership.permission_profiles?.name || 'Sem perfil'}
@@ -502,7 +519,7 @@ export function UsersSettings() {
                       {membership.is_active ? t('settings.active') : t('settings.inactive')}
                     </Badge>
                   </TableCell>
-                  <TableCell className="text-right">
+                  <TableCell className="text-right" onClick={(e) => e.stopPropagation()}>
                     <Button
                       variant="outline"
                       size="sm"
