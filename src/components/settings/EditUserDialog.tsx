@@ -129,23 +129,6 @@ export function EditUserDialog({ open, onOpenChange, user, permissionProfiles, o
       setSaving(false);
     }
   };
-
-  const handleResetPassword = async () => {
-    setResetting(true);
-    try {
-      const { error } = await supabase.auth.resetPasswordForEmail(user.email, {
-        redirectTo: `${window.location.origin}/auth/sign-in`,
-      });
-      if (error) throw error;
-      toast({ description: `Email de reset enviado para ${user.email}` });
-    } catch (err: any) {
-      console.error(err);
-      toast({ variant: 'destructive', description: err.message || 'Erro ao enviar reset' });
-    } finally {
-      setResetting(false);
-    }
-  };
-
   const initials = (fullName || user.email).split(' ').map(s => s[0]).slice(0, 2).join('').toUpperCase();
 
   return (
