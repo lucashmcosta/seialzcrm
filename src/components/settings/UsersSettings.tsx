@@ -16,6 +16,7 @@ import { SpinnerGap, UserPlus, CaretDown, EnvelopeSimple, UserCirclePlus, Clock,
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { EditUserDialog, EditableUser } from './EditUserDialog';
+import { TabGroup } from '@/components/common/TabGroup';
 
 interface UserMembership {
   id: string;
