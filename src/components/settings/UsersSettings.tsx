@@ -15,6 +15,7 @@ import { useToast } from '@/hooks/use-toast';
 import { SpinnerGap, UserPlus, CaretDown, EnvelopeSimple, UserCirclePlus, Clock, X } from '@phosphor-icons/react';
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
+import { EditUserDialog, EditableUser } from './EditUserDialog';
 
 interface UserMembership {
   id: string;
@@ -24,6 +25,9 @@ interface UserMembership {
   users: {
     full_name: string;
     email: string;
+    first_name?: string | null;
+    last_name?: string | null;
+    avatar_url?: string | null;
   };
   permission_profiles?: {
     name: string;
@@ -73,6 +77,10 @@ export function UsersSettings() {
   const [createProfileId, setCreateProfileId] = useState<string>('');
   const [createSubmitting, setCreateSubmitting] = useState(false);
 
+  // Edit user dialog state
+  const [editingUser, setEditingUser] = useState<EditableUser | null>(null);
+  const [editDialogOpen, setEditDialogOpen] = useState(false);
+
   useEffect(() => {
     if (organization?.id) {
       fetchMemberships();
@@ -87,7 +95,7 @@ export function UsersSettings() {
     try {
       const { data, error } = await supabase
         .from('user_organizations')
-        .select('id, user_id, is_active, permission_profile_id, users(full_name, email), permission_profiles(name)')
+        .select('id, user_id, is_active, permission_profile_id, users(full_name, email, first_name, last_name, avatar_url), permission_profiles(name)')
         .eq('organization_id', organization.id);
 
       if (error) throw error;
@@ -462,10 +470,27 @@ export function UsersSettings() {
             </TableHeader>
             <TableBody>
               {memberships.filter(m => m.users).map((membership) => (
-                <TableRow key={membership.id}>
+                <TableRow
+                  key={membership.id}
+                  className="cursor-pointer hover:bg-muted/50"
+                  onClick={() => {
+                    setEditingUser({
+                      membership_id: membership.id,
+                      user_id: membership.user_id,
+                      full_name: membership.users.full_name,
+                      email: membership.users.email,
+                      first_name: membership.users.first_name,
+                      last_name: membership.users.last_name,
+                      avatar_url: membership.users.avatar_url,
+                      is_active: membership.is_active,
+                      permission_profile_id: membership.permission_profile_id,
+                    });
+                    setEditDialogOpen(true);
+                  }}
+                >
                   <TableCell className="font-medium">{membership.users?.full_name}</TableCell>
                   <TableCell>{membership.users?.email}</TableCell>
-                  <TableCell>
+                  <TableCell onClick={(e) => e.stopPropagation()}>
                     {membership.user_id === userProfile?.id ? (
                       <Badge variant="outline">
                         {membership.permission_profiles?.name || 'Sem perfil'}
@@ -494,7 +519,7 @@ export function UsersSettings() {
                       {membership.is_active ? t('settings.active') : t('settings.inactive')}
                     </Badge>
                   </TableCell>
-                  <TableCell className="text-right">
+                  <TableCell className="text-right" onClick={(e) => e.stopPropagation()}>
                     <Button
                       variant="outline"
                       size="sm"
@@ -640,6 +665,15 @@ export function UsersSettings() {
           </form>
         </DialogContent>
       </Dialog>
+
+      {/* Edit User Dialog */}
+      <EditUserDialog
+        open={editDialogOpen}
+        onOpenChange={setEditDialogOpen}
+        user={editingUser}
+        permissionProfiles={permissionProfiles}
+        onSaved={fetchMemberships}
+      />
     </Card>
   );
 }
