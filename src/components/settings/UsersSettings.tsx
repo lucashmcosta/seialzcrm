@@ -60,6 +60,9 @@ export function UsersSettings() {
   const [inviteProfileId, setInviteProfileId] = useState<string>('');
   const [inviteSubmitting, setInviteSubmitting] = useState(false);
   
+  // Profile update state
+  const [updatingProfileId, setUpdatingProfileId] = useState<string | null>(null);
+
   // Create user dialog state
   const [createDialogOpen, setCreateDialogOpen] = useState(false);
   const [createForm, setCreateForm] = useState({
@@ -245,6 +248,32 @@ export function UsersSettings() {
       });
     } finally {
       setCreateSubmitting(false);
+    }
+  };
+
+  const updatePermissionProfile = async (membershipId: string, newProfileId: string) => {
+    setUpdatingProfileId(membershipId);
+    try {
+      const { data, error } = await supabase
+        .from('user_organizations')
+        .update({ permission_profile_id: newProfileId })
+        .eq('id', membershipId)
+        .select('id')
+        .single();
+
+      if (error) throw error;
+      if (!data) throw new Error('Sem permissão para atualizar este usuário');
+
+      toast({ description: 'Perfil atualizado' });
+      fetchMemberships();
+    } catch (error: any) {
+      console.error('Error updating permission profile:', error);
+      toast({
+        variant: 'destructive',
+        description: error.message || t('common.error'),
+      });
+    } finally {
+      setUpdatingProfileId(null);
     }
   };
 
@@ -437,9 +466,28 @@ export function UsersSettings() {
                   <TableCell className="font-medium">{membership.users?.full_name}</TableCell>
                   <TableCell>{membership.users?.email}</TableCell>
                   <TableCell>
-                    <Badge variant="outline">
-                      {membership.permission_profiles?.name || 'Sem perfil'}
-                    </Badge>
+                    {membership.user_id === userProfile?.id ? (
+                      <Badge variant="outline">
+                        {membership.permission_profiles?.name || 'Sem perfil'}
+                      </Badge>
+                    ) : (
+                      <Select
+                        value={membership.permission_profile_id ?? ''}
+                        onValueChange={(v) => updatePermissionProfile(membership.id, v)}
+                        disabled={updatingProfileId === membership.id}
+                      >
+                        <SelectTrigger className="h-8 w-[160px]">
+                          <SelectValue placeholder="Sem perfil" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {permissionProfiles.map((profile) => (
+                            <SelectItem key={profile.id} value={profile.id}>
+                              {profile.name}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    )}
                   </TableCell>
                   <TableCell>
                     <Badge variant={membership.is_active ? 'default' : 'secondary'}>
