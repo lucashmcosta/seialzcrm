@@ -466,9 +466,28 @@ export function UsersSettings() {
                   <TableCell className="font-medium">{membership.users?.full_name}</TableCell>
                   <TableCell>{membership.users?.email}</TableCell>
                   <TableCell>
-                    <Badge variant="outline">
-                      {membership.permission_profiles?.name || 'Sem perfil'}
-                    </Badge>
+                    {membership.user_id === userProfile?.id ? (
+                      <Badge variant="outline">
+                        {membership.permission_profiles?.name || 'Sem perfil'}
+                      </Badge>
+                    ) : (
+                      <Select
+                        value={membership.permission_profile_id ?? ''}
+                        onValueChange={(v) => updatePermissionProfile(membership.id, v)}
+                        disabled={updatingProfileId === membership.id}
+                      >
+                        <SelectTrigger className="h-8 w-[160px]">
+                          <SelectValue placeholder="Sem perfil" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {permissionProfiles.map((profile) => (
+                            <SelectItem key={profile.id} value={profile.id}>
+                              {profile.name}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    )}
                   </TableCell>
                   <TableCell>
                     <Badge variant={membership.is_active ? 'default' : 'secondary'}>
