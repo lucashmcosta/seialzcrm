@@ -665,6 +665,15 @@ export function UsersSettings() {
           </form>
         </DialogContent>
       </Dialog>
+
+      {/* Edit User Dialog */}
+      <EditUserDialog
+        open={editDialogOpen}
+        onOpenChange={setEditDialogOpen}
+        user={editingUser}
+        permissionProfiles={permissionProfiles}
+        onSaved={fetchMemberships}
+      />
     </Card>
   );
 }
