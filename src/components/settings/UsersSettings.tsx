@@ -82,6 +82,9 @@ export function UsersSettings() {
   const [editingUser, setEditingUser] = useState<EditableUser | null>(null);
   const [editDialogOpen, setEditDialogOpen] = useState(false);
 
+  // Status filter
+  const [statusFilter, setStatusFilter] = useState<'all' | 'active' | 'inactive'>('all');
+
   useEffect(() => {
     if (organization?.id) {
       fetchMemberships();
