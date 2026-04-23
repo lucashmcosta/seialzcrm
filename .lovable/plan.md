@@ -1,42 +1,46 @@
 
 
-## Permitir editar o perfil de permissão de usuários ativos
+## Editar usuários + reativar 3 contas da Central Trabalhista
 
-### Problema
-Na tela **Configurações → Usuários & Permissões**, a coluna "Perfil" mostra o cargo do usuário apenas como uma badge estática (`Admin`, `Sales Rep`). Não existe nenhum controle para alterá-lo. A única ação disponível por linha é **Desativar/Ativar**.
+### Parte 1 — Diagnóstico das contas "deletadas"
 
-Resultado: pra trocar o Allan de "Sales Rep" para "Admin" hoje seria preciso mexer direto no banco — o que não é aceitável.
+Os 3 usuários **não foram deletados** — estão apenas **desativados** (`is_active = false`) na organização Central Trabalhista. Basta reativá-los:
 
-### Solução
-Transformar a célula "Perfil" da tabela de usuários ativos em um **`Select` editável**, populado com os perfis existentes da organização (já carregados via `permissionProfiles`). Ao trocar a opção, faz `UPDATE user_organizations SET permission_profile_id = ... WHERE id = membership.id`.
+| Nome | Email | Status atual |
+|---|---|---|
+| Laura Flandoli | lflandoli@centraltrabalhista.com.br | Desativado (Sales Rep) |
+| Lucas Kim | lkim@centraltrabalhista.com.br | Desativado (Sales Rep) — *obs: existe outro "Lucas Kim" ATIVO com email `kim@centraltrabalhista.com.br` (Admin); são contas distintas* |
+| Camila Silva | csilva@centraltrabalhista.com.br | Desativado (Sales Rep) |
 
-### Mudanças
+**Capacidade de assentos**: a Central Trabalhista tem hoje 5 ativos. Vou validar `max_seats` da subscription antes de reativar — se não couber, aumento o limite via migração.
 
-**Arquivo único:** `src/components/settings/UsersSettings.tsx`
+### Parte 2 — Editar usuário ao clicar (UI)
 
-1. **Nova função `updatePermissionProfile(membershipId, newProfileId)`**
-   - `supabase.from('user_organizations').update({ permission_profile_id }).eq('id', membershipId).select().single()`
-   - Toast de sucesso ("Perfil atualizado") ou erro ("Sem permissão para atualizar este usuário" se RLS bloquear)
-   - `fetchMemberships()` ao final para refrescar a UI
-   - Estado local `updatingProfileId` para mostrar spinner inline enquanto salva
+Hoje a tabela de Usuários & Permissões só permite trocar perfil (Select inline) e ativar/desativar. Não dá pra editar dados pessoais (nome, email visual, etc.).
 
-2. **Substituir a `<Badge>` da coluna "Perfil"** (na tabela de usuários ativos) por um `<Select>`:
-   - `value={membership.permission_profile_id ?? ''}`
-   - `onValueChange={(v) => updatePermissionProfile(membership.id, v)}`
-   - Opções vindas de `permissionProfiles` (já carregadas)
-   - Trigger compacto (`h-8 w-[140px]`) pra não inflar a linha
-   - Desabilitado enquanto `updatingProfileId === membership.id`
+**Mudança em `src/components/settings/UsersSettings.tsx`:**
 
-3. **Proteção do próprio usuário (segurança UX):**
-   - Se `membership.user_id === userProfile.id`, manter como `<Badge>` somente leitura — evita o admin se rebaixar acidentalmente e ficar trancado fora.
+1. **Linha clicável**: cada `<TableRow>` de usuário ativo passa a ser clicável (`cursor-pointer hover:bg-muted/50`). Clique em qualquer área que **não seja** o `Select` de perfil ou o botão "Desativar" abre um diálogo de edição.
 
-4. **Pendentes (convites)**: continuam com `<Badge>` — convite é imutável; pra mudar, basta cancelar e reenviar. Sem mudança aqui.
+2. **Novo componente `EditUserDialog.tsx`** em `src/components/settings/`:
+   - Campos editáveis: `full_name`, `first_name`, `last_name`, `avatar_url` (upload simples reutilizando o padrão do Profile)
+   - Campos somente leitura: `email` (mudança de email exige fluxo de auth próprio — fora do escopo)
+   - Seções: **Dados pessoais** (acima), **Permissão e status** (Select de perfil + toggle Ativo/Inativo, espelhando o que já existe inline)
+   - Botão **"Resetar senha"** que envia email de reset via `supabase.auth.resetPasswordForEmail(email)` — útil pra admin destravar usuário
+   - Salva via `UPDATE users SET ... WHERE id = membership.user_id`
+   - Proteção: o admin logado pode editar dados próprios mas NÃO consegue se rebaixar/desativar (mesma regra que já aplicamos no Select inline)
 
-### Pré-requisito de permissão
-A RLS de `user_organizations` já permite `UPDATE` para admins da org (a função `toggleStatus` existente faz exatamente isso e funciona). Reaproveitamos a mesma rota.
+3. **RLS**: a tabela `users` já permite update pra admins da mesma org via `current_user_managed_org_ids()`. Não precisa migração.
+
+### Parte 3 — Reativar as 3 contas
+
+**Migração SQL** (uma só):
+1. Conferir `subscriptions.max_seats` da Central Trabalhista. Se `< 8` (5 atuais + 3), subir pra `8`.
+2. `UPDATE user_organizations SET is_active = true WHERE user_id IN (...) AND organization_id = '40ae935c-...'`
+3. Recalcular `subscription_usage.current_seat_count` pra refletir os 8 ativos.
 
 ### Fora do escopo
-- Edição em massa de perfis (não pediu).
-- Editar perfil de convites pendentes (irrelevante — basta recriar).
-- Mudanças no `PermissionProfilesSettings` (lá já dá pra editar os perfis em si).
+- Mudar email do usuário (requer fluxo de confirmação no Auth)
+- Editar usuários **pendentes** (convites) — basta cancelar e reenviar
+- Mexer em senha direto (apenas botão de reset via email)
 
