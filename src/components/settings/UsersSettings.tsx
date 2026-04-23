@@ -251,6 +251,32 @@ export function UsersSettings() {
     }
   };
 
+  const updatePermissionProfile = async (membershipId: string, newProfileId: string) => {
+    setUpdatingProfileId(membershipId);
+    try {
+      const { data, error } = await supabase
+        .from('user_organizations')
+        .update({ permission_profile_id: newProfileId })
+        .eq('id', membershipId)
+        .select('id')
+        .single();
+
+      if (error) throw error;
+      if (!data) throw new Error('Sem permissão para atualizar este usuário');
+
+      toast({ description: 'Perfil atualizado' });
+      fetchMemberships();
+    } catch (error: any) {
+      console.error('Error updating permission profile:', error);
+      toast({
+        variant: 'destructive',
+        description: error.message || t('common.error'),
+      });
+    } finally {
+      setUpdatingProfileId(null);
+    }
+  };
+
   const toggleStatus = async (membershipId: string, currentStatus: boolean) => {
     if (!organization?.id) return;
 
