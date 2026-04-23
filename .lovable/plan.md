@@ -1,19 +1,21 @@
 
 
-## Adicionar scroll no `EditUserDialog`
+## Remover opção de reset de senha do `EditUserDialog`
 
-### Problema
-O modal de edição de usuário ultrapassa a altura da viewport (1060×808 atual) e o botão "Salvar" fica cortado na parte de baixo. O `DialogContent` não tem limite de altura nem scroll interno.
+### Mudança
+Em **`src/components/settings/EditUserDialog.tsx`**, remover toda a seção "Resetar senha":
 
-### Solução
-Mudança mínima em **`src/components/settings/EditUserDialog.tsx`**, no `<DialogContent>`:
+- Bloco JSX da seção (incluindo o `<Separator />` que a antecede e o botão "Enviar reset")
+- Handler `handleResetPassword`
+- Estado `resetting` (`useState`)
+- Imports não usados após a remoção: `KeyReturn` (de `@phosphor-icons/react`)
 
-1. Limitar altura: `max-h-[90vh]`
-2. Tornar o container flex coluna: `flex flex-col`
-3. Envolver o bloco do meio (entre `DialogHeader` e `DialogFooter`) com `overflow-y-auto` + `flex-1` + um pouco de padding lateral pra não colar a scrollbar nos campos
+O `SpinnerGap` e `Upload` continuam em uso pelo upload de avatar e pelo botão Salvar.
 
-Resultado: header e footer (com Cancelar/Salvar) ficam fixos; só o miolo do formulário rola. Funciona em qualquer altura de tela, inclusive mobile.
+### Resultado
+Modal fica com apenas duas seções: **Dados pessoais** e **Permissão e status**. Sem fluxo de reset de senha por enquanto.
 
 ### Fora do escopo
-Nenhum ajuste de design system, cores ou layout — apenas comportamento de overflow do modal.
+- Criar página `/reset-password` ou edge function de geração de link (descartado)
+- Qualquer alteração no fluxo de auth existente
 
