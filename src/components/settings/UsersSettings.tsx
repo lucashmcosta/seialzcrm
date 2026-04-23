@@ -16,6 +16,7 @@ import { SpinnerGap, UserPlus, CaretDown, EnvelopeSimple, UserCirclePlus, Clock,
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { EditUserDialog, EditableUser } from './EditUserDialog';
+import { TabGroup } from '@/components/common/TabGroup';
 
 interface UserMembership {
   id: string;
@@ -80,6 +81,9 @@ export function UsersSettings() {
   // Edit user dialog state
   const [editingUser, setEditingUser] = useState<EditableUser | null>(null);
   const [editDialogOpen, setEditDialogOpen] = useState(false);
+
+  // Status filter
+  const [statusFilter, setStatusFilter] = useState<'all' | 'active' | 'inactive'>('all');
 
   useEffect(() => {
     if (organization?.id) {
@@ -453,85 +457,125 @@ export function UsersSettings() {
 
         {/* Active Users */}
         <div>
-          {invitations.length > 0 && (
-            <h4 className="text-sm font-medium mb-3">
-              Usuários Ativos ({memberships.filter(m => m.users).length})
-            </h4>
-          )}
-          <Table>
-            <TableHeader>
-              <TableRow>
-                <TableHead>Nome</TableHead>
-                <TableHead>Email</TableHead>
-                <TableHead>Perfil</TableHead>
-                <TableHead>{t('settings.status')}</TableHead>
-                <TableHead className="text-right">{t('common.actions')}</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {memberships.filter(m => m.users).map((membership) => (
-                <TableRow
-                  key={membership.id}
-                  className="cursor-pointer hover:bg-muted/50"
-                  onClick={() => {
-                    setEditingUser({
-                      membership_id: membership.id,
-                      user_id: membership.user_id,
-                      full_name: membership.users.full_name,
-                      email: membership.users.email,
-                      first_name: membership.users.first_name,
-                      last_name: membership.users.last_name,
-                      avatar_url: membership.users.avatar_url,
-                      is_active: membership.is_active,
-                      permission_profile_id: membership.permission_profile_id,
-                    });
-                    setEditDialogOpen(true);
-                  }}
-                >
-                  <TableCell className="font-medium">{membership.users?.full_name}</TableCell>
-                  <TableCell>{membership.users?.email}</TableCell>
-                  <TableCell onClick={(e) => e.stopPropagation()}>
-                    {membership.user_id === userProfile?.id ? (
-                      <Badge variant="outline">
-                        {membership.permission_profiles?.name || 'Sem perfil'}
-                      </Badge>
+          {(() => {
+            const validMembers = memberships.filter(m => m.users);
+            const filteredMembers = validMembers.filter(m => {
+              if (statusFilter === 'active') return m.is_active;
+              if (statusFilter === 'inactive') return !m.is_active;
+              return true;
+            });
+            const totalCount = validMembers.length;
+            const filteredCount = filteredMembers.length;
+            const countLabel =
+              statusFilter === 'all'
+                ? `${totalCount}`
+                : `${filteredCount} de ${totalCount}`;
+
+            return (
+              <>
+                <div className="flex items-center justify-between gap-3 mb-3 flex-wrap">
+                  <h4 className="text-sm font-medium">
+                    Membros ({countLabel})
+                  </h4>
+                  <TabGroup
+                    tabs={[
+                      { id: 'all', label: 'Todos' },
+                      { id: 'active', label: 'Ativos' },
+                      { id: 'inactive', label: 'Inativos' },
+                    ]}
+                    activeTab={statusFilter}
+                    onTabChange={(id) => setStatusFilter(id as 'all' | 'active' | 'inactive')}
+                  />
+                </div>
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead>Nome</TableHead>
+                      <TableHead>Email</TableHead>
+                      <TableHead>Perfil</TableHead>
+                      <TableHead>{t('settings.status')}</TableHead>
+                      <TableHead className="text-right">{t('common.actions')}</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {filteredMembers.length === 0 ? (
+                      <TableRow>
+                        <TableCell colSpan={5} className="text-center text-muted-foreground py-8">
+                          {statusFilter === 'inactive'
+                            ? 'Nenhum usuário inativo'
+                            : statusFilter === 'active'
+                              ? 'Nenhum usuário ativo'
+                              : 'Nenhum usuário'}
+                        </TableCell>
+                      </TableRow>
                     ) : (
-                      <Select
-                        value={membership.permission_profile_id ?? ''}
-                        onValueChange={(v) => updatePermissionProfile(membership.id, v)}
-                        disabled={updatingProfileId === membership.id}
-                      >
-                        <SelectTrigger className="h-8 w-[160px]">
-                          <SelectValue placeholder="Sem perfil" />
-                        </SelectTrigger>
-                        <SelectContent>
-                          {permissionProfiles.map((profile) => (
-                            <SelectItem key={profile.id} value={profile.id}>
-                              {profile.name}
-                            </SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
+                      filteredMembers.map((membership) => (
+                        <TableRow
+                          key={membership.id}
+                          className="cursor-pointer hover:bg-muted/50"
+                          onClick={() => {
+                            setEditingUser({
+                              membership_id: membership.id,
+                              user_id: membership.user_id,
+                              full_name: membership.users.full_name,
+                              email: membership.users.email,
+                              first_name: membership.users.first_name,
+                              last_name: membership.users.last_name,
+                              avatar_url: membership.users.avatar_url,
+                              is_active: membership.is_active,
+                              permission_profile_id: membership.permission_profile_id,
+                            });
+                            setEditDialogOpen(true);
+                          }}
+                        >
+                          <TableCell className="font-medium">{membership.users?.full_name}</TableCell>
+                          <TableCell>{membership.users?.email}</TableCell>
+                          <TableCell onClick={(e) => e.stopPropagation()}>
+                            {membership.user_id === userProfile?.id ? (
+                              <Badge variant="outline">
+                                {membership.permission_profiles?.name || 'Sem perfil'}
+                              </Badge>
+                            ) : (
+                              <Select
+                                value={membership.permission_profile_id ?? ''}
+                                onValueChange={(v) => updatePermissionProfile(membership.id, v)}
+                                disabled={updatingProfileId === membership.id}
+                              >
+                                <SelectTrigger className="h-8 w-[160px]">
+                                  <SelectValue placeholder="Sem perfil" />
+                                </SelectTrigger>
+                                <SelectContent>
+                                  {permissionProfiles.map((profile) => (
+                                    <SelectItem key={profile.id} value={profile.id}>
+                                      {profile.name}
+                                    </SelectItem>
+                                  ))}
+                                </SelectContent>
+                              </Select>
+                            )}
+                          </TableCell>
+                          <TableCell>
+                            <Badge variant={membership.is_active ? 'default' : 'secondary'}>
+                              {membership.is_active ? t('settings.active') : t('settings.inactive')}
+                            </Badge>
+                          </TableCell>
+                          <TableCell className="text-right" onClick={(e) => e.stopPropagation()}>
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              onClick={() => toggleStatus(membership.id, membership.is_active)}
+                            >
+                              {membership.is_active ? 'Desativar' : 'Ativar'}
+                            </Button>
+                          </TableCell>
+                        </TableRow>
+                      ))
                     )}
-                  </TableCell>
-                  <TableCell>
-                    <Badge variant={membership.is_active ? 'default' : 'secondary'}>
-                      {membership.is_active ? t('settings.active') : t('settings.inactive')}
-                    </Badge>
-                  </TableCell>
-                  <TableCell className="text-right" onClick={(e) => e.stopPropagation()}>
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      onClick={() => toggleStatus(membership.id, membership.is_active)}
-                    >
-                      {membership.is_active ? 'Desativar' : 'Ativar'}
-                    </Button>
-                  </TableCell>
-                </TableRow>
-              ))}
-            </TableBody>
-          </Table>
+                  </TableBody>
+                </Table>
+              </>
+            );
+          })()}
         </div>
       </CardContent>
 
