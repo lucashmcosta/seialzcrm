@@ -1,41 +1,42 @@
 
 
-## Criar usuária Luana Moreira na Blueviza (senha corrigida)
+## Permitir editar o perfil de permissão de usuários ativos
 
-### Dados confirmados
-- **Nome**: Luana Moreira
-- **Email**: lmoreira@blueviza.com
-- **Senha**: `123456` ✅ (corrigida)
-- **Organização**: Blueviza (`f677a500-6067-436e-aeda-300f7adc26ab`)
-- **Perfil**: Sales Rep (`ebcc223d-1ad1-4bbb-9d93-dd64fc2287b2`)
+### Problema
+Na tela **Configurações → Usuários & Permissões**, a coluna "Perfil" mostra o cargo do usuário apenas como uma badge estática (`Admin`, `Sales Rep`). Não existe nenhum controle para alterá-lo. A única ação disponível por linha é **Desativar/Ativar**.
 
-### Estado atual validado
-- Luana **ainda não existe** em `users` — execução anterior foi cancelada antes de criar
-- Subscription tem `max_seats = 3`, com 4 membros ativos (já estourado), `current_seat_count` está nulo
-- Perfil "Sales Rep" localizado e pronto pra usar
+Resultado: pra trocar o Allan de "Sales Rep" para "Admin" hoje seria preciso mexer direto no banco — o que não é aceitável.
 
-### Passos de execução
+### Solução
+Transformar a célula "Perfil" da tabela de usuários ativos em um **`Select` editável**, populado com os perfis existentes da organização (já carregados via `permissionProfiles`). Ao trocar a opção, faz `UPDATE user_organizations SET permission_profile_id = ... WHERE id = membership.id`.
 
-1. **Migração: aumentar limite de assentos**
-   ```sql
-   UPDATE subscriptions 
-   SET max_seats = 5 
-   WHERE organization_id = 'f677a500-6067-436e-aeda-300f7adc26ab';
-   ```
-   E garantir que `subscription_usage` exista com contagem real (será 5 após criar Luana).
+### Mudanças
 
-2. **Invocar edge function `create-user`** com payload:
-   - `email`: `lmoreira@blueviza.com`
-   - `password`: `123456`
-   - `full_name`: `Luana Moreira`
-   - `organization_id`: `f677a500-6067-436e-aeda-300f7adc26ab`
-   - `permission_profile_id`: `ebcc223d-1ad1-4bbb-9d93-dd64fc2287b2`
+**Arquivo único:** `src/components/settings/UsersSettings.tsx`
 
-3. **Validação pós-criação**
-   - Confirmar registro em `users` (auth_user_id ↔ users.id)
-   - Confirmar vínculo ativo em `user_organizations` com profile Sales Rep
-   - Confirmar `subscription_usage.current_seat_count = 5`
+1. **Nova função `updatePermissionProfile(membershipId, newProfileId)`**
+   - `supabase.from('user_organizations').update({ permission_profile_id }).eq('id', membershipId).select().single()`
+   - Toast de sucesso ("Perfil atualizado") ou erro ("Sem permissão para atualizar este usuário" se RLS bloquear)
+   - `fetchMemberships()` ao final para refrescar a UI
+   - Estado local `updatingProfileId` para mostrar spinner inline enquanto salva
 
-### Nota de segurança
-A senha `123456` continua sendo extremamente fraca. Recomendo fortemente orientar a Luana a trocá-la no primeiro acesso pelo Profile.
+2. **Substituir a `<Badge>` da coluna "Perfil"** (na tabela de usuários ativos) por um `<Select>`:
+   - `value={membership.permission_profile_id ?? ''}`
+   - `onValueChange={(v) => updatePermissionProfile(membership.id, v)}`
+   - Opções vindas de `permissionProfiles` (já carregadas)
+   - Trigger compacto (`h-8 w-[140px]`) pra não inflar a linha
+   - Desabilitado enquanto `updatingProfileId === membership.id`
+
+3. **Proteção do próprio usuário (segurança UX):**
+   - Se `membership.user_id === userProfile.id`, manter como `<Badge>` somente leitura — evita o admin se rebaixar acidentalmente e ficar trancado fora.
+
+4. **Pendentes (convites)**: continuam com `<Badge>` — convite é imutável; pra mudar, basta cancelar e reenviar. Sem mudança aqui.
+
+### Pré-requisito de permissão
+A RLS de `user_organizations` já permite `UPDATE` para admins da org (a função `toggleStatus` existente faz exatamente isso e funciona). Reaproveitamos a mesma rota.
+
+### Fora do escopo
+- Edição em massa de perfis (não pediu).
+- Editar perfil de convites pendentes (irrelevante — basta recriar).
+- Mudanças no `PermissionProfilesSettings` (lá já dá pra editar os perfis em si).
 
