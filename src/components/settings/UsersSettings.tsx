@@ -95,7 +95,7 @@ export function UsersSettings() {
     try {
       const { data, error } = await supabase
         .from('user_organizations')
-        .select('id, user_id, is_active, permission_profile_id, users(full_name, email), permission_profiles(name)')
+        .select('id, user_id, is_active, permission_profile_id, users(full_name, email, first_name, last_name, avatar_url), permission_profiles(name)')
         .eq('organization_id', organization.id);
 
       if (error) throw error;
