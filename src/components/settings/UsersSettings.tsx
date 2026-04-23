@@ -60,6 +60,9 @@ export function UsersSettings() {
   const [inviteProfileId, setInviteProfileId] = useState<string>('');
   const [inviteSubmitting, setInviteSubmitting] = useState(false);
   
+  // Profile update state
+  const [updatingProfileId, setUpdatingProfileId] = useState<string | null>(null);
+
   // Create user dialog state
   const [createDialogOpen, setCreateDialogOpen] = useState(false);
   const [createForm, setCreateForm] = useState({
