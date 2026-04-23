@@ -10,7 +10,7 @@ import { Switch } from '@/components/ui/switch';
 import { Separator } from '@/components/ui/separator';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { useToast } from '@/hooks/use-toast';
-import { SpinnerGap, KeyReturn, Upload } from '@phosphor-icons/react';
+import { SpinnerGap, Upload } from '@phosphor-icons/react';
 
 interface PermissionProfile {
   id: string;
@@ -41,7 +41,6 @@ export function EditUserDialog({ open, onOpenChange, user, permissionProfiles, o
   const { userProfile } = useOrganization();
   const { toast } = useToast();
   const [saving, setSaving] = useState(false);
-  const [resetting, setResetting] = useState(false);
   const [uploading, setUploading] = useState(false);
 
   const [fullName, setFullName] = useState('');
@@ -130,23 +129,6 @@ export function EditUserDialog({ open, onOpenChange, user, permissionProfiles, o
       setSaving(false);
     }
   };
-
-  const handleResetPassword = async () => {
-    setResetting(true);
-    try {
-      const { error } = await supabase.auth.resetPasswordForEmail(user.email, {
-        redirectTo: `${window.location.origin}/auth/sign-in`,
-      });
-      if (error) throw error;
-      toast({ description: `Email de reset enviado para ${user.email}` });
-    } catch (err: any) {
-      console.error(err);
-      toast({ variant: 'destructive', description: err.message || 'Erro ao enviar reset' });
-    } finally {
-      setResetting(false);
-    }
-  };
-
   const initials = (fullName || user.email).split(' ').map(s => s[0]).slice(0, 2).join('').toUpperCase();
 
   return (
@@ -234,19 +216,6 @@ export function EditUserDialog({ open, onOpenChange, user, permissionProfiles, o
             </div>
           </div>
 
-          <Separator />
-
-          {/* Reset password */}
-          <div className="flex items-center justify-between">
-            <div>
-              <p className="text-sm font-medium">Resetar senha</p>
-              <p className="text-xs text-muted-foreground">Envia um email com link para nova senha.</p>
-            </div>
-            <Button variant="outline" size="sm" onClick={handleResetPassword} disabled={resetting}>
-              {resetting ? <SpinnerGap className="w-4 h-4 animate-spin mr-2" /> : <KeyReturn className="w-4 h-4 mr-2" />}
-              Enviar reset
-            </Button>
-          </div>
         </div>
 
         <DialogFooter>
