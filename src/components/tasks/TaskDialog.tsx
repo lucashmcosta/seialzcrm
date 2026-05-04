@@ -118,7 +118,7 @@ export function TaskDialog({ open, onOpenChange, task, onSuccess, readOnly = fal
   const [formData, setFormData] = useState({
     title: '',
     description: '',
-    task_type: 'general',
+    task_type: 'initial',
     priority: 'medium',
     due_at: '',
     assigned_user_id: '',
@@ -131,7 +131,7 @@ export function TaskDialog({ open, onOpenChange, task, onSuccess, readOnly = fal
       setFormData({
         title: task.title,
         description: task.description || '',
-        task_type: task.task_type || 'general',
+        task_type: task.task_type || 'initial',
         priority: task.priority || 'medium',
         due_at: task.due_at ? task.due_at.split('T')[0] : '',
         assigned_user_id: task.assigned_user_id,
@@ -142,7 +142,7 @@ export function TaskDialog({ open, onOpenChange, task, onSuccess, readOnly = fal
       setFormData({
         title: '',
         description: '',
-        task_type: 'general',
+        task_type: 'initial',
         priority: 'medium',
         due_at: '',
         assigned_user_id: userProfile?.id || '',
