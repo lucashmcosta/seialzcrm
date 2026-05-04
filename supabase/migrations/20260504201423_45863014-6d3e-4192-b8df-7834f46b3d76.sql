@@ -1,0 +1,1 @@
+UPDATE public.tasks SET task_type = 'initial' WHERE task_type IN ('general', 'whatsapp');
