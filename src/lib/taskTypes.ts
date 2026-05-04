@@ -2,7 +2,6 @@ import {
   CheckSquare,
   Phone,
   ChatCircle,
-  WhatsappLogo,
   Bell,
   ArrowsClockwise,
 } from '@phosphor-icons/react';
@@ -18,7 +17,6 @@ export const TASK_TYPES: TaskTypeConfig[] = [
   { id: 'general', labelKey: 'tasks.typeGeneral', icon: CheckSquare },
   { id: 'call', labelKey: 'tasks.typeCall', icon: Phone },
   { id: 'message', labelKey: 'tasks.typeMessage', icon: ChatCircle },
-  { id: 'whatsapp', labelKey: 'tasks.typeWhatsapp', icon: WhatsappLogo },
   { id: 'reminder', labelKey: 'tasks.typeReminder', icon: Bell },
   { id: 'follow_up', labelKey: 'tasks.typeFollowUp', icon: ArrowsClockwise },
 ];
