@@ -208,10 +208,38 @@ export default function TasksList() {
         <div className="border-b bg-background/95 backdrop-blur">
           <div className="flex items-center justify-between px-6 py-4">
             <h1 className="text-2xl font-bold text-foreground">{t('tasks.title')}</h1>
-            <Button onClick={() => { setSelectedTask(null); setIsDialogOpen(true); }}>
-              <Plus className="h-4 w-4 mr-2" />
-              {t('tasks.newTask')}
-            </Button>
+            <div className="flex items-center gap-2">
+              <div className="inline-flex items-center rounded-md border border-border bg-muted/40 p-0.5">
+                <button
+                  type="button"
+                  onClick={() => setViewMode('list')}
+                  className={cn(
+                    'flex items-center gap-1.5 px-3 py-1.5 rounded text-sm transition-colors',
+                    viewMode === 'list' ? 'bg-background text-foreground shadow-sm' : 'text-muted-foreground hover:text-foreground'
+                  )}
+                  title={t('tasks.viewList' as any)}
+                >
+                  <ListIcon size={16} weight={viewMode === 'list' ? 'bold' : 'light'} />
+                  <span className="hidden sm:inline">{t('tasks.viewList' as any)}</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setViewMode('kanban')}
+                  className={cn(
+                    'flex items-center gap-1.5 px-3 py-1.5 rounded text-sm transition-colors',
+                    viewMode === 'kanban' ? 'bg-background text-foreground shadow-sm' : 'text-muted-foreground hover:text-foreground'
+                  )}
+                  title={t('tasks.viewKanban' as any)}
+                >
+                  <SquaresFour size={16} weight={viewMode === 'kanban' ? 'bold' : 'light'} />
+                  <span className="hidden sm:inline">{t('tasks.viewKanban' as any)}</span>
+                </button>
+              </div>
+              <Button onClick={() => { setSelectedTask(null); setIsDialogOpen(true); }}>
+                <Plus className="h-4 w-4 mr-2" />
+                {t('tasks.newTask')}
+              </Button>
+            </div>
           </div>
           
           {/* Filters */}
