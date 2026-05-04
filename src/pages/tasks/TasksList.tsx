@@ -9,10 +9,12 @@ import { Card } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { Plus, MagnifyingGlass, CheckCircle, Clock, WarningCircle } from '@phosphor-icons/react';
+import { Plus, MagnifyingGlass, CheckCircle, Clock, WarningCircle, SquaresFour, List as ListIcon } from '@phosphor-icons/react';
 import { supabase } from '@/integrations/supabase/client';
 import { TaskDialog } from '@/components/tasks/TaskDialog';
+import { TasksKanban } from '@/components/tasks/TasksKanban';
 import { useToast } from '@/hooks/use-toast';
+import { cn } from '@/lib/utils';
 
 interface Task {
   id: string;
@@ -46,6 +48,13 @@ export default function TasksList() {
   const [users, setUsers] = useState<{ id: string; full_name: string }[]>([]);
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [selectedTask, setSelectedTask] = useState<Task | null>(null);
+  const [viewMode, setViewMode] = useState<'list' | 'kanban'>(
+    () => (localStorage.getItem('tasks_view_mode') as 'list' | 'kanban') || 'kanban'
+  );
+
+  useEffect(() => {
+    localStorage.setItem('tasks_view_mode', viewMode);
+  }, [viewMode]);
   
   // Pagination state
   const [currentPage, setCurrentPage] = useState(1);
