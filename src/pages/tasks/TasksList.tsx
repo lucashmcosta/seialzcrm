@@ -285,6 +285,14 @@ export default function TasksList() {
         </div>
 
         <div className="flex-1 overflow-auto p-6">
+          {viewMode === 'kanban' ? (
+            <TasksKanban
+              tasks={tasks as any}
+              loading={loading}
+              onEdit={(task) => { setSelectedTask(task as any); setIsDialogOpen(true); }}
+              onComplete={handleCompleteTask}
+            />
+          ) : (
           <Tabs defaultValue="all" onValueChange={(value) => setStatusFilter(value)}>
             <TabsList>
               <TabsTrigger value="all">{t('tasks.allTasks')}</TabsTrigger>
