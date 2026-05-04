@@ -59,14 +59,14 @@ export default function TasksList() {
   // Pagination state
   const [currentPage, setCurrentPage] = useState(1);
   const [totalCount, setTotalCount] = useState(0);
-  const pageSize = 20;
+  const pageSize = viewMode === 'kanban' ? 500 : 20;
 
   useEffect(() => {
     if (organization) {
       fetchUsers();
       fetchTasks();
     }
-  }, [organization, currentPage, searchTerm, statusFilter, priorityFilter, assignedFilter]);
+  }, [organization, currentPage, searchTerm, statusFilter, priorityFilter, assignedFilter, viewMode]);
 
   const fetchUsers = async () => {
     if (!organization) return;
