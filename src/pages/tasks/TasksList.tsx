@@ -279,8 +279,8 @@ export default function TasksList() {
               <SelectTrigger className="w-48"><SelectValue placeholder={t('tasks.assignedTo')} /></SelectTrigger>
               <SelectContent>
                 <SelectItem value="all">{t('tasks.allUsers')}</SelectItem>
-                {users.map(user => (
-                  <SelectItem key={user.id} value={user.id}>{user.full_name}</SelectItem>
+                {users.map(u => (
+                  <SelectItem key={u.id} value={u.id}>{u.full_name}</SelectItem>
                 ))}
               </SelectContent>
             </Select>
