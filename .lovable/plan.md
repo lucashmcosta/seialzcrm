@@ -1,17 +1,48 @@
-## Remover tipo "Whatsapp" das tarefas
+## Atualizar tipos de tarefa
 
-O tipo "Whatsapp" é redundante com "Mensagem". Vou removê-lo de todas as referências.
+Remover "Geral" e adicionar 4 novos tipos. Manter Ligação, Mensagem, Lembrete e Follow-up.
 
-### Mudanças
+### Lista final de tipos
+1. Criação de pasta (`folder_creation`)
+2. Inicial (`initial`)
+3. Correção (`correction`)
+4. Distribuição (`distribution`)
+5. Ligação (`call`)
+6. Mensagem (`message`)
+7. Lembrete (`reminder`)
+8. Follow-up (`follow_up`)
 
-1. **`src/lib/taskTypes.ts`** — Remover a entrada `{ id: 'whatsapp', ... }` de `TASK_TYPES`. O fallback existente em `getTaskTypeConfig` (`?? TASK_TYPES[0]`) garante que tarefas antigas salvas como `whatsapp` no banco continuem renderizando como "Geral" sem quebrar.
+### Mudanças técnicas
 
-2. **`src/components/contacts/ContactTasks.tsx`** — Remover o `<SelectItem value="whatsapp">` do select de tipo (linha 201).
+**1. `src/lib/taskTypes.ts`**
+- Remover `{ id: 'general', ... }`.
+- Adicionar 4 novas entradas com ícones Lucide/Phosphor:
+  - `folder_creation` → `FolderPlus`
+  - `initial` → `Flag`
+  - `correction` → `PencilSimple`
+  - `distribution` → `Share` (ou `ShareNetwork`)
+- Ajustar `getTaskTypeConfig` para usar `'initial'` como fallback (em vez do primeiro item, para manter robusto se a ordem mudar).
 
-3. **`src/lib/i18n.ts`** — Remover as chaves `'tasks.typeWhatsapp'` em PT (linha 204) e EN (linha 672).
+**2. `src/lib/i18n.ts`**
+- Remover chaves `tasks.typeGeneral` (PT/EN).
+- Adicionar:
+  - `tasks.typeFolderCreation`: "Criação de pasta" / "Folder creation"
+  - `tasks.typeInitial`: "Inicial" / "Initial"
+  - `tasks.typeCorrection`: "Correção" / "Correction"
+  - `tasks.typeDistribution`: "Distribuição" / "Distribution"
 
-### Sobre dados existentes
-Tarefas já salvas com `task_type = 'whatsapp'` continuam no banco (não há migração destrutiva). Elas serão exibidas com o ícone/label "Geral" via fallback. Se o usuário editar e salvar, passará a ser do tipo escolhido. Não recomendo migração SQL para reescrever para `'message'` sem confirmação, mas posso fazer se quiser.
+**3. `src/components/tasks/TaskDialog.tsx`**
+- Trocar default `task_type: 'general'` → `'initial'` (em ambos os `setFormData` — novo e fallback de edição).
+
+**4. `src/components/contacts/ContactTasks.tsx`**
+- Trocar `<SelectItem value="general">` por items dos 4 novos tipos.
+- Atualizar default usado ao criar tarefa pra `'initial'`.
+
+**5. Migração SQL (data update)**
+```sql
+UPDATE tasks SET task_type = 'initial' WHERE task_type IN ('general', 'whatsapp');
+```
+Inclui também `'whatsapp'` (tipo removido anteriormente que ainda pode ter registros) para limpar de vez. `task_type` é `text` livre — sem enum a alterar.
 
 ### Fora de escopo
-Os usos de `'whatsapp'` em outros módulos (mensagens, canais, threads) **não** são alterados — referem-se ao canal de comunicação, não ao tipo de tarefa.
+Outros usos de `'general'` no código (canais de mensagem, categorias, etc.) **não** são alterados — referem-se a contextos diferentes.
