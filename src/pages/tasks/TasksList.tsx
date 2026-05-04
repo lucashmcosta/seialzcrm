@@ -232,7 +232,7 @@ export default function TasksList() {
                     viewMode === 'list' ? 'bg-background text-foreground shadow-sm' : 'text-muted-foreground hover:text-foreground'
                   )}
                 >
-                  <ListIcon size={16} size={16} weight={viewMode === 'list' ? 'bold' : 'light'} />
+                  <ListIcon size={16} weight={viewMode === 'list' ? 'bold' : 'light'} />
                   <span className="hidden sm:inline">{t('tasks.viewList' as any)}</span>
                 </button>
                 <button
@@ -372,7 +372,7 @@ export default function TasksList() {
                             ) : (
                               <>
                                 <Button size="sm" variant="outline" onClick={() => openCompleteFlow(task)}>
-                                  <CheckCircle size={16} size={16} weight="light" className="mr-1" />
+                                  <CheckCircle size={16} weight="light" className="mr-1" />
                                   {t('tasks.complete')}
                                 </Button>
                                 <Button size="sm" variant="outline" onClick={() => openEditFlow(task)}>
