@@ -138,7 +138,7 @@ export function TaskDialog({ open, onOpenChange, task, onSuccess }: TaskDialogPr
       const taskData = {
         title: formData.title,
         description: formData.description || null,
-        task_type: formData.task_type as 'general' | 'call' | 'message',
+        task_type: formData.task_type as any,
         priority: formData.priority as 'low' | 'medium' | 'high',
         due_at: formData.due_at ? new Date(formData.due_at).toISOString() : null,
         assigned_user_id: formData.assigned_user_id,
