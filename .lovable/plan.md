@@ -1,39 +1,80 @@
+## Objetivo
 
+Expandir as **funcionalidades** do módulo de Tarefas da Seialz, mantendo o visual atual (design system Seialz: tokens semânticos, Outfit, bordas 6px, sem hardcoded). Duas adições:
 
-## Filtro de Ativos / Inativos na lista de Usuários
+1. Mais **categorias** (tipos) de tarefa
+2. Nova **visão Kanban** ao lado da Lista atual
 
-### Onde
-`src/components/settings/UsersSettings.tsx` — aba "Usuários" (a mesma onde já existe a tabela com avatar/email/perfil/status).
+Nada de redesign da tela. Os componentes existentes (`Card`, `Button`, `Select`, `Tabs`, `Dialog`) continuam como estão.
 
-### Comportamento
-Adicionar um controle de filtro no topo da lista (ao lado do botão "Adicionar usuário"/"Convidar"), com 3 opções:
+---
 
-- **Todos** (padrão)
-- **Ativos**
-- **Inativos**
+## 1. Novas categorias de tarefa
 
-UI: usar o `TabGroup` que já existe em `src/components/common/TabGroup.tsx` (mesmo padrão visual usado em outras telas — Tarefas, Contatos), ou um `<Select>` compacto se o espaço estiver apertado. Decisão final: **TabGroup horizontal** acima da tabela, alinhado à esquerda; mantém o "Adicionar usuário" alinhado à direita.
+Hoje `task_type` aceita: `general`, `call`, `message`. Vamos adicionar **3 novas** opções (string livre na coluna, sem migration):
 
-### Lógica
-- Novo state local `statusFilter: 'all' | 'active' | 'inactive'` (default `'all'`)
-- A lista de membros já vem com `is_active` no objeto. Filtrar **no client** antes do `.map()` da tabela:
-  - `all` → mostra todos
-  - `active` → `members.filter(m => m.is_active)`
-  - `inactive` → `members.filter(m => !m.is_active)`
-- Sem mudança de query no Supabase (volume de membros por org é pequeno, filtro client-side é mais responsivo).
-- Contador no título do card: "Membros (X)" passa a refletir o total filtrado, com o total geral entre parênteses se diferente. Ex: `Membros (3 de 8)`.
+- `whatsapp` — Whatsapp
+- `reminder` — Lembrete
+- `follow_up` — Follow-up
 
-### Convites pendentes
-A seção de convites pendentes (que aparece logo abaixo, se existir) **não é afetada** pelo filtro — é um bloco separado e o filtro é só pra usuários ativos/inativos da org.
+Total final no select: **Geral · Ligação · Mensagem · Whatsapp · Lembrete · Follow-up**
 
-### Estado vazio
-Se o filtro retornar 0 resultados, mostrar dentro do card uma linha discreta tipo "Nenhum usuário inativo" / "Nenhum usuário ativo" (mesmo estilo do empty state já existente quando não há membros).
+Aplicado em:
+- `src/components/tasks/TaskDialog.tsx` — adicionar `<SelectItem>` para cada
+- `src/components/contacts/ContactTasks.tsx` — mesmo select interno
+- `src/lib/i18n.ts` — chaves `tasks.typeWhatsapp`, `tasks.typeReminder`, `tasks.typeFollowUp` (PT/EN)
 
-### Persistência
-Não persistir entre sessões — filtro é volátil (state local). Se o usuário sair e voltar, volta pra "Todos".
+Cada tipo recebe um ícone (Phosphor) usado em listagens e cards Kanban:
+- `general` → `CheckSquare`
+- `call` → `Phone`
+- `message` → `ChatCircle`
+- `whatsapp` → `WhatsappLogo`
+- `reminder` → `Bell`
+- `follow_up` → `ArrowsClockwise`
 
-### Fora do escopo
-- Filtros adicionais (por perfil de permissão, por data de criação) — não pediu
-- Busca por nome/email — não pediu
-- Mudar query backend — desnecessário pro volume atual
+Helper único `src/lib/taskTypes.ts` exporta `TASK_TYPES` (id, label key, icon) — usado no dialog e nos cards para evitar duplicação.
 
+## 2. Visão Kanban
+
+Adicionar um toggle Lista / Kanban no header da página `TasksList` (componente `Tabs` ou `ToggleGroup` já existentes do shadcn — mesma estética usada em outras telas). Persistir escolha em `localStorage` (`tasks_view_mode`).
+
+Novo componente `src/components/tasks/TasksKanban.tsx` com **3 colunas fixas** (mesma lógica de status que já existe nos filtros):
+
+- **Atrasadas** — `status='open' AND due_at < now()`
+- **Hoje** — `status='open' AND due_at` no dia local
+- **Futuras** — `status='open' AND due_at > endOfToday OR due_at IS NULL`
+
+Cada coluna:
+- Header com label + contador (mesmo padrão `Badge` da Seialz)
+- Cards usando o componente `Card` existente
+- Card mostra: ícone do tipo, título, prioridade (cor já existente em `getPriorityIcon`), contato/oportunidade se houver, hora se `due_at` tiver horário
+- Click no card abre `TaskDialog` em modo edição (reutilizando o dialog atual)
+- Checkbox para concluir inline (reusa `handleCompleteTask`)
+- Estado vazio: "Nenhuma tarefa nesta coluna"
+
+Layout responsivo com `grid-cols-1 md:grid-cols-3`, scroll interno por coluna. Tudo em tokens Seialz (`bg-card`, `border-border`, `text-foreground`, `text-muted-foreground`).
+
+No modo Kanban as Tabs de status (Todas/Atrasadas/Hoje/Open/Completed) ficam ocultas — já estão representadas como colunas. Filtros de busca/prioridade/responsável continuam visíveis e aplicam-se às colunas.
+
+Sem drag-and-drop nesta entrega.
+
+---
+
+## Arquivos afetados
+
+- ✏️ `src/components/tasks/TaskDialog.tsx` — adicionar 3 novos `SelectItem` no select de Tipo
+- ✏️ `src/components/contacts/ContactTasks.tsx` — mesmos 3 itens no select inline
+- 🆕 `src/lib/taskTypes.ts` — config central (ids, labels, ícones)
+- 🆕 `src/components/tasks/TasksKanban.tsx` — visão Kanban
+- ✏️ `src/pages/tasks/TasksList.tsx` — toggle Lista/Kanban + render condicional
+- ✏️ `src/lib/i18n.ts` — 3 novas chaves PT/EN
+
+## Banco
+
+Nenhuma migration. `task_type` é `string` livre na tabela `tasks` — só estamos passando novos valores.
+
+## Fora de escopo
+
+- Drag-and-drop entre colunas
+- Visão Calendário
+- Categorias customizáveis pelo usuário (admin) — pode vir depois se precisar

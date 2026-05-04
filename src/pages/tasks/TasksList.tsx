@@ -9,10 +9,12 @@ import { Card } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { Plus, MagnifyingGlass, CheckCircle, Clock, WarningCircle } from '@phosphor-icons/react';
+import { Plus, MagnifyingGlass, CheckCircle, Clock, WarningCircle, SquaresFour, List as ListIcon } from '@phosphor-icons/react';
 import { supabase } from '@/integrations/supabase/client';
 import { TaskDialog } from '@/components/tasks/TaskDialog';
+import { TasksKanban } from '@/components/tasks/TasksKanban';
 import { useToast } from '@/hooks/use-toast';
+import { cn } from '@/lib/utils';
 
 interface Task {
   id: string;
@@ -46,18 +48,25 @@ export default function TasksList() {
   const [users, setUsers] = useState<{ id: string; full_name: string }[]>([]);
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [selectedTask, setSelectedTask] = useState<Task | null>(null);
+  const [viewMode, setViewMode] = useState<'list' | 'kanban'>(
+    () => (localStorage.getItem('tasks_view_mode') as 'list' | 'kanban') || 'kanban'
+  );
+
+  useEffect(() => {
+    localStorage.setItem('tasks_view_mode', viewMode);
+  }, [viewMode]);
   
   // Pagination state
   const [currentPage, setCurrentPage] = useState(1);
   const [totalCount, setTotalCount] = useState(0);
-  const pageSize = 20;
+  const pageSize = viewMode === 'kanban' ? 500 : 20;
 
   useEffect(() => {
     if (organization) {
       fetchUsers();
       fetchTasks();
     }
-  }, [organization, currentPage, searchTerm, statusFilter, priorityFilter, assignedFilter]);
+  }, [organization, currentPage, searchTerm, statusFilter, priorityFilter, assignedFilter, viewMode]);
 
   const fetchUsers = async () => {
     if (!organization) return;
@@ -96,7 +105,9 @@ export default function TasksList() {
     if (searchTerm) {
       query = query.ilike('title', `%${searchTerm}%`);
     }
-    if (statusFilter === 'overdue') {
+    if (viewMode === 'kanban') {
+      query = query.eq('status', 'open');
+    } else if (statusFilter === 'overdue') {
       query = query.lt('due_at', new Date().toISOString()).eq('status', 'open');
     } else if (statusFilter === 'today') {
       const today = new Date();
@@ -199,10 +210,38 @@ export default function TasksList() {
         <div className="border-b bg-background/95 backdrop-blur">
           <div className="flex items-center justify-between px-6 py-4">
             <h1 className="text-2xl font-bold text-foreground">{t('tasks.title')}</h1>
-            <Button onClick={() => { setSelectedTask(null); setIsDialogOpen(true); }}>
-              <Plus className="h-4 w-4 mr-2" />
-              {t('tasks.newTask')}
-            </Button>
+            <div className="flex items-center gap-2">
+              <div className="inline-flex items-center rounded-md border border-border bg-muted/40 p-0.5">
+                <button
+                  type="button"
+                  onClick={() => setViewMode('list')}
+                  className={cn(
+                    'flex items-center gap-1.5 px-3 py-1.5 rounded text-sm transition-colors',
+                    viewMode === 'list' ? 'bg-background text-foreground shadow-sm' : 'text-muted-foreground hover:text-foreground'
+                  )}
+                  title={t('tasks.viewList' as any)}
+                >
+                  <ListIcon size={16} weight={viewMode === 'list' ? 'bold' : 'light'} />
+                  <span className="hidden sm:inline">{t('tasks.viewList' as any)}</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setViewMode('kanban')}
+                  className={cn(
+                    'flex items-center gap-1.5 px-3 py-1.5 rounded text-sm transition-colors',
+                    viewMode === 'kanban' ? 'bg-background text-foreground shadow-sm' : 'text-muted-foreground hover:text-foreground'
+                  )}
+                  title={t('tasks.viewKanban' as any)}
+                >
+                  <SquaresFour size={16} weight={viewMode === 'kanban' ? 'bold' : 'light'} />
+                  <span className="hidden sm:inline">{t('tasks.viewKanban' as any)}</span>
+                </button>
+              </div>
+              <Button onClick={() => { setSelectedTask(null); setIsDialogOpen(true); }}>
+                <Plus className="h-4 w-4 mr-2" />
+                {t('tasks.newTask')}
+              </Button>
+            </div>
           </div>
           
           {/* Filters */}
@@ -246,6 +285,14 @@ export default function TasksList() {
         </div>
 
         <div className="flex-1 overflow-auto p-6">
+          {viewMode === 'kanban' ? (
+            <TasksKanban
+              tasks={tasks as any}
+              loading={loading}
+              onEdit={(task) => { setSelectedTask(task as any); setIsDialogOpen(true); }}
+              onComplete={handleCompleteTask}
+            />
+          ) : (
           <Tabs defaultValue="all" onValueChange={(value) => setStatusFilter(value)}>
             <TabsList>
               <TabsTrigger value="all">{t('tasks.allTasks')}</TabsTrigger>
@@ -377,6 +424,7 @@ export default function TasksList() {
               )}
             </TabsContent>
           </Tabs>
+          )}
         </div>
       </div>
 

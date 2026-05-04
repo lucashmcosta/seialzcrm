@@ -198,6 +198,9 @@ export function ContactTasks({ contactId, opportunityId }: ContactTasksProps) {
                           <SelectItem value="general">{t('tasks.typeGeneral')}</SelectItem>
                           <SelectItem value="call">{t('tasks.typeCall')}</SelectItem>
                           <SelectItem value="message">{t('tasks.typeMessage')}</SelectItem>
+                          <SelectItem value="whatsapp">{t('tasks.typeWhatsapp' as any)}</SelectItem>
+                          <SelectItem value="reminder">{t('tasks.typeReminder' as any)}</SelectItem>
+                          <SelectItem value="follow_up">{t('tasks.typeFollowUp' as any)}</SelectItem>
                         </SelectContent>
                       </Select>
                     </div>
