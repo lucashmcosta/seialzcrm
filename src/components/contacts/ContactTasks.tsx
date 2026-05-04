@@ -42,7 +42,7 @@ export function ContactTasks({ contactId, opportunityId }: ContactTasksProps) {
   const [formData, setFormData] = useState({
     title: '',
     description: '',
-    task_type: 'general',
+    task_type: 'initial',
     priority: 'medium' as 'low' | 'medium' | 'high',
     due_at: '',
   });
@@ -100,7 +100,7 @@ export function ContactTasks({ contactId, opportunityId }: ContactTasksProps) {
 
       toast({ description: t('tasks.created') });
       setDialogOpen(false);
-      setFormData({ title: '', description: '', task_type: 'general', priority: 'medium', due_at: '' });
+      setFormData({ title: '', description: '', task_type: 'initial', priority: 'medium', due_at: '' });
       fetchTasks();
     } catch (error) {
       console.error('Error creating task:', error);
@@ -195,7 +195,10 @@ export function ContactTasks({ contactId, opportunityId }: ContactTasksProps) {
                           <SelectValue />
                         </SelectTrigger>
                         <SelectContent>
-                          <SelectItem value="general">{t('tasks.typeGeneral')}</SelectItem>
+                          <SelectItem value="folder_creation">{t('tasks.typeFolderCreation' as any)}</SelectItem>
+                          <SelectItem value="initial">{t('tasks.typeInitial' as any)}</SelectItem>
+                          <SelectItem value="correction">{t('tasks.typeCorrection' as any)}</SelectItem>
+                          <SelectItem value="distribution">{t('tasks.typeDistribution' as any)}</SelectItem>
                           <SelectItem value="call">{t('tasks.typeCall')}</SelectItem>
                           <SelectItem value="message">{t('tasks.typeMessage')}</SelectItem>
                           <SelectItem value="reminder">{t('tasks.typeReminder' as any)}</SelectItem>
