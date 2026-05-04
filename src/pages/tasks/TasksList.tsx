@@ -9,10 +9,13 @@ import { Card } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { Switch } from '@/components/ui/switch';
+import { Label } from '@/components/ui/label';
 import { Plus, MagnifyingGlass, CheckCircle, Clock, WarningCircle, SquaresFour, List as ListIcon } from '@phosphor-icons/react';
 import { supabase } from '@/integrations/supabase/client';
 import { TaskDialog } from '@/components/tasks/TaskDialog';
 import { TasksKanban } from '@/components/tasks/TasksKanban';
+import { CompleteTaskDialog } from '@/components/tasks/CompleteTaskDialog';
 import { useToast } from '@/hooks/use-toast';
 import { cn } from '@/lib/utils';
 
@@ -28,6 +31,8 @@ interface Task {
   contact_id: string | null;
   opportunity_id: string | null;
   created_at: string;
+  completed_at?: string | null;
+  completion_notes?: string | null;
   contacts?: { full_name: string };
   opportunities?: { title: string };
   assigned_user?: { full_name: string };
@@ -46,17 +51,29 @@ export default function TasksList() {
   const [priorityFilter, setPriorityFilter] = useState('all');
   const [assignedFilter, setAssignedFilter] = useState('all');
   const [users, setUsers] = useState<{ id: string; full_name: string }[]>([]);
-  const [isDialogOpen, setIsDialogOpen] = useState(false);
-  const [selectedTask, setSelectedTask] = useState<Task | null>(null);
+
+  // Dialogs
+  const [editDialogOpen, setEditDialogOpen] = useState(false);
+  const [editingTask, setEditingTask] = useState<Task | null>(null);
+  const [editReadOnly, setEditReadOnly] = useState(false);
+  const [completeDialogOpen, setCompleteDialogOpen] = useState(false);
+  const [completingTask, setCompletingTask] = useState<Task | null>(null);
+
   const [viewMode, setViewMode] = useState<'list' | 'kanban'>(
     () => (localStorage.getItem('tasks_view_mode') as 'list' | 'kanban') || 'kanban'
+  );
+  const [showCompletedKanban, setShowCompletedKanban] = useState<boolean>(
+    () => localStorage.getItem('tasks_kanban_show_completed') === '1'
   );
 
   useEffect(() => {
     localStorage.setItem('tasks_view_mode', viewMode);
   }, [viewMode]);
+
+  useEffect(() => {
+    localStorage.setItem('tasks_kanban_show_completed', showCompletedKanban ? '1' : '0');
+  }, [showCompletedKanban]);
   
-  // Pagination state
   const [currentPage, setCurrentPage] = useState(1);
   const [totalCount, setTotalCount] = useState(0);
   const pageSize = viewMode === 'kanban' ? 500 : 20;
@@ -66,17 +83,15 @@ export default function TasksList() {
       fetchUsers();
       fetchTasks();
     }
-  }, [organization, currentPage, searchTerm, statusFilter, priorityFilter, assignedFilter, viewMode]);
+  }, [organization, currentPage, searchTerm, statusFilter, priorityFilter, assignedFilter, viewMode, showCompletedKanban]);
 
   const fetchUsers = async () => {
     if (!organization) return;
-    
     const { data } = await supabase
       .from('user_organizations')
       .select('user_id, users(id, full_name)')
       .eq('organization_id', organization.id)
       .eq('is_active', true);
-    
     if (data) {
       const usersList = data
         .filter(u => u.users)
@@ -87,7 +102,6 @@ export default function TasksList() {
 
   const fetchTasks = async () => {
     if (!organization) return;
-    
     setLoading(true);
     
     let query = supabase
@@ -101,12 +115,14 @@ export default function TasksList() {
       .eq('organization_id', organization.id)
       .is('deleted_at', null);
     
-    // Apply filters
-    if (searchTerm) {
-      query = query.ilike('title', `%${searchTerm}%`);
-    }
+    if (searchTerm) query = query.ilike('title', `%${searchTerm}%`);
+
     if (viewMode === 'kanban') {
-      query = query.eq('status', 'open');
+      if (showCompletedKanban) {
+        query = query.in('status', ['open', 'completed']);
+      } else {
+        query = query.eq('status', 'open');
+      }
     } else if (statusFilter === 'overdue') {
       query = query.lt('due_at', new Date().toISOString()).eq('status', 'open');
     } else if (statusFilter === 'today') {
@@ -117,14 +133,9 @@ export default function TasksList() {
     } else if (statusFilter !== 'all') {
       query = query.eq('status', statusFilter as 'open' | 'completed' | 'canceled');
     }
-    if (priorityFilter !== 'all') {
-      query = query.eq('priority', priorityFilter as 'low' | 'medium' | 'high');
-    }
-    if (assignedFilter !== 'all') {
-      query = query.eq('assigned_user_id', assignedFilter);
-    }
+    if (priorityFilter !== 'all') query = query.eq('priority', priorityFilter as 'low' | 'medium' | 'high');
+    if (assignedFilter !== 'all') query = query.eq('assigned_user_id', assignedFilter);
     
-    // Apply pagination
     const from = (currentPage - 1) * pageSize;
     const to = from + pageSize - 1;
     query = query.range(from, to).order('due_at', { ascending: true, nullsFirst: false });
@@ -133,42 +144,19 @@ export default function TasksList() {
     
     if (error) {
       console.error('Error fetching tasks:', error);
-      toast({
-        title: t('common.error'),
-        description: t('tasks.errorFetching'),
-        variant: 'destructive',
-      });
+      toast({ title: t('common.error'), description: t('tasks.errorFetching'), variant: 'destructive' });
     } else {
       setTasks(data || []);
       setTotalCount(count || 0);
     }
-    
     setLoading(false);
   };
 
-  const handleCompleteTask = async (taskId: string) => {
-    const { error } = await supabase
-      .from('tasks')
-      .update({
-        status: 'completed',
-        completed_at: new Date().toISOString(),
-      })
-      .eq('id', taskId);
-    
-    if (error) {
-      console.error('Error completing task:', error);
-      toast({
-        title: t('common.error'),
-        description: t('tasks.errorCompleting'),
-        variant: 'destructive',
-      });
-    } else {
-      toast({
-        title: t('common.success'),
-        description: t('tasks.completedSuccess'),
-      });
-      fetchTasks();
-    }
+  const handleQuickComplete = async (taskId: string) => {
+    // Quick-complete (from kanban "round" icon) — keep simple: marks as completed without notes
+    // But per the new flow, we should open the complete dialog instead.
+    const task = tasks.find((tt) => tt.id === taskId);
+    if (task) openCompleteFlow(task);
   };
 
   const handleDeleteTask = async (taskId: string) => {
@@ -176,21 +164,33 @@ export default function TasksList() {
       .from('tasks')
       .update({ deleted_at: new Date().toISOString() })
       .eq('id', taskId);
-    
     if (error) {
-      console.error('Error deleting task:', error);
-      toast({
-        title: t('common.error'),
-        description: t('tasks.errorDeleting'),
-        variant: 'destructive',
-      });
+      toast({ title: t('common.error'), description: t('tasks.errorDeleting'), variant: 'destructive' });
     } else {
-      toast({
-        title: t('common.success'),
-        description: t('tasks.deletedSuccess'),
-      });
+      toast({ title: t('common.success'), description: t('tasks.deletedSuccess') });
       fetchTasks();
     }
+  };
+
+  const openTask = (task: Task) => {
+    if (task.status === 'completed' || task.status === 'canceled') {
+      setEditingTask(task);
+      setEditReadOnly(true);
+      setEditDialogOpen(true);
+    } else {
+      openCompleteFlow(task);
+    }
+  };
+
+  const openCompleteFlow = (task: Task) => {
+    setCompletingTask(task);
+    setCompleteDialogOpen(true);
+  };
+
+  const openEditFlow = (task: Task | null) => {
+    setEditingTask(task);
+    setEditReadOnly(false);
+    setEditDialogOpen(true);
   };
 
   const getPriorityIcon = (priority: string) => {
@@ -210,7 +210,19 @@ export default function TasksList() {
         <div className="border-b bg-background/95 backdrop-blur">
           <div className="flex items-center justify-between px-6 py-4">
             <h1 className="text-2xl font-bold text-foreground">{t('tasks.title')}</h1>
-            <div className="flex items-center gap-2">
+            <div className="flex items-center gap-3">
+              {viewMode === 'kanban' && (
+                <div className="flex items-center gap-2">
+                  <Switch
+                    id="show-completed"
+                    checked={showCompletedKanban}
+                    onCheckedChange={setShowCompletedKanban}
+                  />
+                  <Label htmlFor="show-completed" className="text-sm text-muted-foreground cursor-pointer">
+                    {t('tasks.showCompleted' as any)}
+                  </Label>
+                </div>
+              )}
               <div className="inline-flex items-center rounded-md border border-border bg-muted/40 p-0.5">
                 <button
                   type="button"
@@ -219,9 +231,8 @@ export default function TasksList() {
                     'flex items-center gap-1.5 px-3 py-1.5 rounded text-sm transition-colors',
                     viewMode === 'list' ? 'bg-background text-foreground shadow-sm' : 'text-muted-foreground hover:text-foreground'
                   )}
-                  title={t('tasks.viewList' as any)}
                 >
-                  <ListIcon size={16} weight={viewMode === 'list' ? 'bold' : 'light'} />
+                  <ListIcon size={16} size={16} weight={viewMode === 'list' ? 'bold' : 'light'} />
                   <span className="hidden sm:inline">{t('tasks.viewList' as any)}</span>
                 </button>
                 <button
@@ -231,20 +242,18 @@ export default function TasksList() {
                     'flex items-center gap-1.5 px-3 py-1.5 rounded text-sm transition-colors',
                     viewMode === 'kanban' ? 'bg-background text-foreground shadow-sm' : 'text-muted-foreground hover:text-foreground'
                   )}
-                  title={t('tasks.viewKanban' as any)}
                 >
                   <SquaresFour size={16} weight={viewMode === 'kanban' ? 'bold' : 'light'} />
                   <span className="hidden sm:inline">{t('tasks.viewKanban' as any)}</span>
                 </button>
               </div>
-              <Button onClick={() => { setSelectedTask(null); setIsDialogOpen(true); }}>
+              <Button onClick={() => openEditFlow(null)}>
                 <Plus className="h-4 w-4 mr-2" />
                 {t('tasks.newTask')}
               </Button>
             </div>
           </div>
           
-          {/* Filters */}
           <div className="px-6 pb-4 flex flex-wrap gap-3">
             <div className="relative flex-1 min-w-[200px]">
               <MagnifyingGlass size={16} weight="light" className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" />
@@ -257,9 +266,7 @@ export default function TasksList() {
             </div>
             
             <Select value={priorityFilter} onValueChange={setPriorityFilter}>
-              <SelectTrigger className="w-40">
-                <SelectValue placeholder={t('tasks.priority')} />
-              </SelectTrigger>
+              <SelectTrigger className="w-40"><SelectValue placeholder={t('tasks.priority')} /></SelectTrigger>
               <SelectContent>
                 <SelectItem value="all">{t('tasks.allPriorities')}</SelectItem>
                 <SelectItem value="high">{t('tasks.highPriority')}</SelectItem>
@@ -269,15 +276,11 @@ export default function TasksList() {
             </Select>
             
             <Select value={assignedFilter} onValueChange={setAssignedFilter}>
-              <SelectTrigger className="w-48">
-                <SelectValue placeholder={t('tasks.assignedTo')} />
-              </SelectTrigger>
+              <SelectTrigger className="w-48"><SelectValue placeholder={t('tasks.assignedTo')} /></SelectTrigger>
               <SelectContent>
                 <SelectItem value="all">{t('tasks.allUsers')}</SelectItem>
                 {users.map(user => (
-                  <SelectItem key={user.id} value={user.id}>
-                    {user.full_name}
-                  </SelectItem>
+                  <SelectItem key={user.id} value={user.id}>{user.full_name}</SelectItem>
                 ))}
               </SelectContent>
             </Select>
@@ -289,8 +292,9 @@ export default function TasksList() {
             <TasksKanban
               tasks={tasks as any}
               loading={loading}
-              onEdit={(task) => { setSelectedTask(task as any); setIsDialogOpen(true); }}
-              onComplete={handleCompleteTask}
+              showCompleted={showCompletedKanban}
+              onCardClick={(task) => openTask(task as any)}
+              onComplete={handleQuickComplete}
             />
           ) : (
           <Tabs defaultValue="all" onValueChange={(value) => setStatusFilter(value)}>
@@ -316,22 +320,29 @@ export default function TasksList() {
                   ))}
                 </div>
               ) : tasks.length === 0 ? (
-                <Card className="p-6">
-                  <p className="text-muted-foreground text-center">{t('tasks.noTasks')}</p>
-                </Card>
+                <Card className="p-6"><p className="text-muted-foreground text-center">{t('tasks.noTasks')}</p></Card>
               ) : (
                 <>
                   <div className="grid gap-4">
-                    {tasks.map(task => (
+                    {tasks.map(task => {
+                      const completed = task.status === 'completed' || task.status === 'canceled';
+                      return (
                       <Card
                         key={task.id}
-                        className={`p-4 ${isOverdue(task) ? 'border-red-500' : ''}`}
+                        className={cn(
+                          'p-4 cursor-pointer hover:border-primary/40 transition-colors',
+                          isOverdue(task) && 'border-red-500',
+                          completed && 'opacity-80'
+                        )}
+                        onClick={() => openTask(task)}
                       >
                         <div className="flex items-start gap-4">
                           <div className="flex-1">
                             <div className="flex items-center gap-2 mb-2">
-                              {getPriorityIcon(task.priority)}
-                              <h3 className="font-semibold">{task.title}</h3>
+                              {completed
+                                ? <CheckCircle size={16} weight="fill" className="text-primary" />
+                                : getPriorityIcon(task.priority)}
+                              <h3 className={cn('font-semibold', completed && 'line-through text-muted-foreground')}>{task.title}</h3>
                               {isOverdue(task) && (
                                 <span className="text-xs px-2 py-1 bg-red-100 text-red-700 rounded">
                                   {t('tasks.overdue')}
@@ -340,81 +351,55 @@ export default function TasksList() {
                             </div>
                             
                             {task.description && (
-                              <p className="text-sm text-muted-foreground mb-2">
-                                {task.description}
-                              </p>
+                              <p className="text-sm text-muted-foreground mb-2">{task.description}</p>
                             )}
                             
                             <div className="flex flex-wrap gap-3 text-sm text-muted-foreground">
-                              {task.assigned_user && (
-                                <span>{t('tasks.assignedTo')}: {task.assigned_user.full_name}</span>
-                              )}
-                              {task.contacts && (
-                                <span>{t('tasks.contact')}: {task.contacts.full_name}</span>
-                              )}
-                              {task.opportunities && (
-                                <span>{t('tasks.opportunity')}: {task.opportunities.title}</span>
-                              )}
+                              {task.assigned_user && <span>{t('tasks.assignedTo')}: {task.assigned_user.full_name}</span>}
+                              {task.contacts && <span>{t('tasks.contact')}: {task.contacts.full_name}</span>}
+                              {task.opportunities && <span>{t('tasks.opportunity')}: {task.opportunities.title}</span>}
                               {task.due_at && (
-                                <span>
-                                  {t('tasks.dueDate')}: {new Date(task.due_at).toLocaleDateString(locale)}
-                                </span>
+                                <span>{t('tasks.dueDate')}: {new Date(task.due_at).toLocaleDateString(locale)}</span>
                               )}
                             </div>
                           </div>
                           
-                          <div className="flex gap-2">
-                            {task.status === 'open' && (
-                              <Button
-                                size="sm"
-                                variant="outline"
-                                onClick={() => handleCompleteTask(task.id)}
-                              >
-                                <CheckCircle size={16} weight="light" className="mr-1" />
-                                {t('tasks.complete')}
+                          <div className="flex gap-2" onClick={(e) => e.stopPropagation()}>
+                            {completed ? (
+                              <Button size="sm" variant="outline" onClick={() => { setEditingTask(task); setEditReadOnly(true); setEditDialogOpen(true); }}>
+                                {t('tasks.viewDetails' as any)}
                               </Button>
+                            ) : (
+                              <>
+                                <Button size="sm" variant="outline" onClick={() => openCompleteFlow(task)}>
+                                  <CheckCircle size={16} size={16} weight="light" className="mr-1" />
+                                  {t('tasks.complete')}
+                                </Button>
+                                <Button size="sm" variant="outline" onClick={() => openEditFlow(task)}>
+                                  {t('common.edit')}
+                                </Button>
+                                <Button size="sm" variant="destructive" onClick={() => handleDeleteTask(task.id)}>
+                                  {t('common.delete')}
+                                </Button>
+                              </>
                             )}
-                            <Button
-                              size="sm"
-                              variant="outline"
-                              onClick={() => { setSelectedTask(task); setIsDialogOpen(true); }}
-                            >
-                              {t('common.edit')}
-                            </Button>
-                            <Button
-                              size="sm"
-                              variant="destructive"
-                              onClick={() => handleDeleteTask(task.id)}
-                            >
-                              {t('common.delete')}
-                            </Button>
                           </div>
                         </div>
                       </Card>
-                    ))}
+                      );
+                    })}
                   </div>
                   
-                  {/* Pagination */}
                   {totalCount > pageSize && (
                     <div className="mt-6 flex items-center justify-between">
                       <p className="text-sm text-muted-foreground">
                         {t('common.showing')} {(currentPage - 1) * pageSize + 1} - {Math.min(currentPage * pageSize, totalCount)} {t('common.of')} {totalCount}
                       </p>
                       <div className="flex gap-2">
-                        <Button
-                          variant="outline"
-                          size="sm"
-                          onClick={() => setCurrentPage(p => Math.max(1, p - 1))}
-                          disabled={currentPage === 1}
-                        >
+                        <Button variant="outline" size="sm" onClick={() => setCurrentPage(p => Math.max(1, p - 1))} disabled={currentPage === 1}>
                           {t('common.previous')}
                         </Button>
-                        <Button
-                          variant="outline"
-                          size="sm"
-                          onClick={() => setCurrentPage(p => Math.min(Math.ceil(totalCount / pageSize), p + 1))}
-                          disabled={currentPage >= Math.ceil(totalCount / pageSize)}
-                        >
+                        <Button variant="outline" size="sm" onClick={() => setCurrentPage(p => Math.min(Math.ceil(totalCount / pageSize), p + 1))} disabled={currentPage >= Math.ceil(totalCount / pageSize)}>
                           {t('common.next')}
                         </Button>
                       </div>
@@ -429,10 +414,19 @@ export default function TasksList() {
       </div>
 
       <TaskDialog
-        open={isDialogOpen}
-        onOpenChange={setIsDialogOpen}
-        task={selectedTask}
+        open={editDialogOpen}
+        onOpenChange={setEditDialogOpen}
+        task={editingTask}
+        readOnly={editReadOnly}
         onSuccess={fetchTasks}
+      />
+
+      <CompleteTaskDialog
+        open={completeDialogOpen}
+        onOpenChange={setCompleteDialogOpen}
+        task={completingTask as any}
+        onSuccess={fetchTasks}
+        onRequestEdit={(task) => openEditFlow(task as any)}
       />
     </Layout>
   );
