@@ -43,6 +43,7 @@ const MobileSignIn = lazy(() => retryImport(() => import("./components/mobile/au
 import DocsIndex from "./pages/docs/DocsIndex";
 import DocsModule from "./pages/docs/DocsModule";
 const ApiDocs = lazy(() => retryImport(() => import("./pages/docs/ApiDocs")));
+import Index from "./pages/Index";
 
 // Lazy load CRM pages with retry for chunk resilience
 const LandingPage = lazy(() => retryImport(() => import("./pages/LandingPage")));
