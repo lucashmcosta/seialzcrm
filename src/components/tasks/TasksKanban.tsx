@@ -1,6 +1,5 @@
 import { Card } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
-import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
 import { CheckCircle, WarningCircle, Clock } from '@phosphor-icons/react';
 import { getTaskTypeConfig } from '@/lib/taskTypes';
@@ -16,6 +15,7 @@ interface Task {
   priority: string;
   task_type: string;
   due_at: string | null;
+  completed_at?: string | null;
   contacts?: { full_name: string } | null;
   opportunities?: { title: string } | null;
   assigned_user?: { full_name: string } | null;
@@ -24,11 +24,12 @@ interface Task {
 interface TasksKanbanProps {
   tasks: Task[];
   loading: boolean;
-  onEdit: (task: Task) => void;
+  showCompleted: boolean;
+  onCardClick: (task: Task) => void;
   onComplete: (taskId: string) => void;
 }
 
-type ColumnId = 'overdue' | 'today' | 'upcoming';
+type ColumnId = 'overdue' | 'today' | 'upcoming' | 'completed';
 
 const priorityDot = (priority: string) => {
   if (priority === 'high') return 'bg-destructive';
@@ -36,7 +37,7 @@ const priorityDot = (priority: string) => {
   return 'bg-primary';
 };
 
-export function TasksKanban({ tasks, loading, onEdit, onComplete }: TasksKanbanProps) {
+export function TasksKanban({ tasks, loading, showCompleted, onCardClick, onComplete }: TasksKanbanProps) {
   const { locale } = useOrganization();
   const { t } = useTranslation(locale as any);
 
@@ -46,9 +47,13 @@ export function TasksKanban({ tasks, loading, onEdit, onComplete }: TasksKanbanP
   const endOfToday = new Date(now);
   endOfToday.setHours(23, 59, 59, 999);
 
-  const buckets: Record<ColumnId, Task[]> = { overdue: [], today: [], upcoming: [] };
+  const buckets: Record<ColumnId, Task[]> = { overdue: [], today: [], upcoming: [], completed: [] };
 
   for (const task of tasks) {
+    if (task.status === 'completed') {
+      buckets.completed.push(task);
+      continue;
+    }
     if (task.status !== 'open') continue;
     if (!task.due_at) {
       buckets.upcoming.push(task);
@@ -60,14 +65,17 @@ export function TasksKanban({ tasks, loading, onEdit, onComplete }: TasksKanbanP
     else buckets.upcoming.push(task);
   }
 
-  const columns: { id: ColumnId; label: string; accent: string }[] = [
+  const baseColumns: { id: ColumnId; label: string; accent: string }[] = [
     { id: 'overdue', label: t('tasks.columnOverdue' as any), accent: 'text-destructive' },
     { id: 'today', label: t('tasks.columnToday' as any), accent: 'text-primary' },
     { id: 'upcoming', label: t('tasks.columnUpcoming' as any), accent: 'text-foreground' },
   ];
+  const columns = showCompleted
+    ? [...baseColumns, { id: 'completed' as ColumnId, label: t('tasks.columnCompleted' as any), accent: 'text-muted-foreground' }]
+    : baseColumns;
 
   return (
-    <div className="grid grid-cols-1 md:grid-cols-3 gap-4 h-full">
+    <div className={cn('grid grid-cols-1 gap-4 h-full', showCompleted ? 'md:grid-cols-4' : 'md:grid-cols-3')}>
       {columns.map((col) => (
         <div
           key={col.id}
@@ -77,6 +85,7 @@ export function TasksKanban({ tasks, loading, onEdit, onComplete }: TasksKanbanP
             <div className="flex items-center gap-2">
               {col.id === 'overdue' && <WarningCircle size={16} weight="bold" className="text-destructive" />}
               {col.id === 'today' && <Clock size={16} weight="bold" className="text-primary" />}
+              {col.id === 'completed' && <CheckCircle size={16} weight="bold" className="text-muted-foreground" />}
               <span className={cn('text-sm font-semibold', col.accent)}>{col.label}</span>
             </div>
             <Badge variant="secondary" className="font-data text-[11px]">
@@ -95,26 +104,34 @@ export function TasksKanban({ tasks, loading, onEdit, onComplete }: TasksKanbanP
               buckets[col.id].map((task) => {
                 const typeConfig = getTaskTypeConfig(task.task_type);
                 const Icon = typeConfig.icon;
-                const dueDate = task.due_at ? new Date(task.due_at) : null;
-                const hasTime = dueDate && (dueDate.getHours() !== 0 || dueDate.getMinutes() !== 0);
+                const isCompleted = task.status === 'completed';
+                const refDate = isCompleted && task.completed_at ? new Date(task.completed_at) : (task.due_at ? new Date(task.due_at) : null);
+                const hasTime = refDate && (refDate.getHours() !== 0 || refDate.getMinutes() !== 0);
 
                 return (
                   <Card
                     key={task.id}
-                    onClick={() => onEdit(task)}
-                    className="p-3 cursor-pointer hover:border-primary/40 transition-colors group"
+                    onClick={() => onCardClick(task)}
+                    className={cn(
+                      'p-3 cursor-pointer hover:border-primary/40 transition-colors group',
+                      isCompleted && 'opacity-70'
+                    )}
                   >
                     <div className="flex items-start gap-2">
-                      <button
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          onComplete(task.id);
-                        }}
-                        className="mt-0.5 text-muted-foreground hover:text-primary transition-colors"
-                        title={t('tasks.complete')}
-                      >
-                        <CheckCircle size={18} weight="light" />
-                      </button>
+                      {isCompleted ? (
+                        <CheckCircle size={18} weight="fill" className="mt-0.5 text-primary shrink-0" />
+                      ) : (
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            onComplete(task.id);
+                          }}
+                          className="mt-0.5 text-muted-foreground hover:text-primary transition-colors"
+                          title={t('tasks.complete')}
+                        >
+                          <CheckCircle size={18} weight="light" />
+                        </button>
+                      )}
 
                       <div className="flex-1 min-w-0">
                         <div className="flex items-center gap-1.5 mb-1">
@@ -125,7 +142,9 @@ export function TasksKanban({ tasks, loading, onEdit, onComplete }: TasksKanbanP
                           </span>
                         </div>
 
-                        <p className="text-sm font-medium text-foreground line-clamp-2">{task.title}</p>
+                        <p className={cn('text-sm font-medium text-foreground line-clamp-2', isCompleted && 'line-through')}>
+                          {task.title}
+                        </p>
 
                         {(task.contacts?.full_name || task.opportunities?.title) && (
                           <p className="text-xs text-muted-foreground mt-1 truncate">
@@ -133,10 +152,10 @@ export function TasksKanban({ tasks, loading, onEdit, onComplete }: TasksKanbanP
                           </p>
                         )}
 
-                        {dueDate && (
+                        {refDate && (
                           <p className="text-[11px] font-data text-muted-foreground mt-1">
-                            {dueDate.toLocaleDateString(locale)}
-                            {hasTime && ` · ${dueDate.toLocaleTimeString(locale, { hour: '2-digit', minute: '2-digit' })}`}
+                            {refDate.toLocaleDateString(locale)}
+                            {hasTime && ` · ${refDate.toLocaleTimeString(locale, { hour: '2-digit', minute: '2-digit' })}`}
                           </p>
                         )}
                       </div>
