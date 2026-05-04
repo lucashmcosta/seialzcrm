@@ -424,6 +424,7 @@ export default function TasksList() {
               )}
             </TabsContent>
           </Tabs>
+          )}
         </div>
       </div>
 
