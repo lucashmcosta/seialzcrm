@@ -173,7 +173,7 @@ const App = () => (
         <GlobalCallHandler />
         <Suspense fallback={<PageLoader />}>
         <Routes>
-          <Route path="/" element={<LandingPage />} />
+          <Route path="/" element={<Index />} />
           
           {/* Public Documentation */}
           <Route path="/docs" element={<DocsIndex />} />
