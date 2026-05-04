@@ -105,7 +105,9 @@ export default function TasksList() {
     if (searchTerm) {
       query = query.ilike('title', `%${searchTerm}%`);
     }
-    if (statusFilter === 'overdue') {
+    if (viewMode === 'kanban') {
+      query = query.eq('status', 'open');
+    } else if (statusFilter === 'overdue') {
       query = query.lt('due_at', new Date().toISOString()).eq('status', 'open');
     } else if (statusFilter === 'today') {
       const today = new Date();
