@@ -10,6 +10,7 @@ import { useOrganization } from '@/hooks/useOrganization';
 import { useTranslation } from '@/lib/i18n';
 import { toast } from '@/hooks/use-toast';
 import { SpinnerGap } from '@phosphor-icons/react';
+import { TASK_TYPES } from '@/lib/taskTypes';
 
 interface Contact {
   id: string;
@@ -213,9 +214,11 @@ export function TaskDialog({ open, onOpenChange, task, onSuccess }: TaskDialogPr
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="general">{t('tasks.typeGeneral')}</SelectItem>
-                  <SelectItem value="call">{t('tasks.typeCall')}</SelectItem>
-                  <SelectItem value="message">{t('tasks.typeMessage')}</SelectItem>
+                  {TASK_TYPES.map((tt) => (
+                    <SelectItem key={tt.id} value={tt.id}>
+                      {t(tt.labelKey as any)}
+                    </SelectItem>
+                  ))}
                 </SelectContent>
               </Select>
             </div>
