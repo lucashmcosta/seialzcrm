@@ -3896,6 +3896,7 @@ export type Database = {
         Row: {
           assigned_user_id: string
           completed_at: string | null
+          completion_notes: string | null
           contact_id: string | null
           created_at: string | null
           created_by_user_id: string | null
@@ -3906,6 +3907,7 @@ export type Database = {
           is_sample: boolean | null
           opportunity_id: string | null
           organization_id: string
+          postpone_reason: string | null
           priority: Database["public"]["Enums"]["task_priority"] | null
           source_external_id: string | null
           status: Database["public"]["Enums"]["task_status"] | null
@@ -3916,6 +3918,7 @@ export type Database = {
         Insert: {
           assigned_user_id: string
           completed_at?: string | null
+          completion_notes?: string | null
           contact_id?: string | null
           created_at?: string | null
           created_by_user_id?: string | null
@@ -3926,6 +3929,7 @@ export type Database = {
           is_sample?: boolean | null
           opportunity_id?: string | null
           organization_id: string
+          postpone_reason?: string | null
           priority?: Database["public"]["Enums"]["task_priority"] | null
           source_external_id?: string | null
           status?: Database["public"]["Enums"]["task_status"] | null
@@ -3936,6 +3940,7 @@ export type Database = {
         Update: {
           assigned_user_id?: string
           completed_at?: string | null
+          completion_notes?: string | null
           contact_id?: string | null
           created_at?: string | null
           created_by_user_id?: string | null
@@ -3946,6 +3951,7 @@ export type Database = {
           is_sample?: boolean | null
           opportunity_id?: string | null
           organization_id?: string
+          postpone_reason?: string | null
           priority?: Database["public"]["Enums"]["task_priority"] | null
           source_external_id?: string | null
           status?: Database["public"]["Enums"]["task_status"] | null
