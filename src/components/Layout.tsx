@@ -12,6 +12,7 @@ import {
   Question,
   ChatCircleText,
   Phone,
+  ChartLineUp,
 } from '@phosphor-icons/react';
 import type { Icon as PhosphorIcon } from '@phosphor-icons/react';
 import { Button } from '@/components/ui/button';
@@ -46,21 +47,26 @@ export function Layout({ children }: LayoutProps) {
   // SEIALZ LAYOUT
   // ═══════════════════════════════════════
   if (themePreset === 'seialz') {
+    const principalItems: SeialzNavGroup['items'] = [
+      { label: t('nav.dashboard'), href: '/dashboard', icon: House },
+    ];
+    if (permissions.canManageSettings) {
+      principalItems.push({ label: t('nav.reports'), href: '/reports', icon: ChartLineUp });
+    }
+    principalItems.push(
+      { label: t('nav.opportunities'), href: '/opportunities', icon: Briefcase },
+      { label: t('nav.contacts'), href: '/contacts', icon: UsersThree },
+      { label: t('nav.tasks'), href: '/tasks', icon: CheckSquare },
+    );
     const groups: SeialzNavGroup[] = [
-      {
-        label: 'PRINCIPAL',
-        items: [
-          { label: t('nav.dashboard'), href: '/dashboard', icon: House },
-          { label: t('nav.opportunities'), href: '/opportunities', icon: Briefcase },
-          { label: t('nav.contacts'), href: '/contacts', icon: UsersThree },
-          { label: t('nav.tasks'), href: '/tasks', icon: CheckSquare },
-        ],
-      },
+      { label: 'PRINCIPAL', items: principalItems },
     ];
 
-    // Add Companies if enabled
+    // Add Companies if enabled (insert before Tasks)
     if (organization?.enable_companies_module) {
-      groups[0].items.splice(3, 0, {
+      const tasksIdx = groups[0].items.findIndex((i) => i.href === '/tasks');
+      const insertAt = tasksIdx >= 0 ? tasksIdx : groups[0].items.length;
+      groups[0].items.splice(insertAt, 0, {
         label: t('nav.companies'),
         href: '/companies',
         icon: Buildings,
@@ -112,17 +118,24 @@ export function Layout({ children }: LayoutProps) {
   // Build navigation items
   const navItems: NavItemType[] = [
     { label: t('nav.dashboard'), href: '/dashboard', icon: House },
+  ];
+  if (permissions.canManageSettings) {
+    navItems.push({ label: t('nav.reports'), href: '/reports', icon: ChartLineUp });
+  }
+  navItems.push(
     { label: t('nav.contacts'), href: '/contacts', icon: UsersThree },
     { label: t('nav.opportunities'), href: '/opportunities', icon: Briefcase },
     { label: t('nav.tasks'), href: '/tasks', icon: CheckSquare },
-  ];
+  );
 
-  // Add Companies menu if module is enabled
+  // Add Companies menu if module is enabled (insert before Opportunities)
   if (organization?.enable_companies_module) {
-    navItems.splice(2, 0, { 
-      label: t('nav.companies'), 
-      href: '/companies', 
-      icon: Buildings 
+    const oppIdx = navItems.findIndex((i) => i.href === '/opportunities');
+    const insertAt = oppIdx >= 0 ? oppIdx : navItems.length;
+    navItems.splice(insertAt, 0, {
+      label: t('nav.companies'),
+      href: '/companies',
+      icon: Buildings,
     });
   }
 

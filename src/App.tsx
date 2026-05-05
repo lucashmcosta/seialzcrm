@@ -56,6 +56,7 @@ const OpportunitiesKanban = lazy(() => retryImport(() => import("./pages/opportu
 const OpportunityDetail = lazy(() => retryImport(() => import("./pages/opportunities/OpportunityDetail")));
 const TasksList = lazy(() => retryImport(() => import("./pages/tasks/TasksList")));
 const MessagesList = lazy(() => retryImport(() => import("./pages/messages/MessagesList")));
+const ReportsPage = lazy(() => retryImport(() => import("./pages/reports/ReportsPage")));
 // Settings layout + grid (replaces old Settings page)
 const SettingsLayout = lazy(() => import("./components/settings/SettingsLayout").then(m => ({ default: m.SettingsLayout })));
 const SettingsGrid = lazy(() => import("./components/settings/SettingsGrid").then(m => ({ default: m.SettingsGrid })));
@@ -339,6 +340,14 @@ const App = () => (
             element={
               <ProtectedRoute>
                 <MessagesList />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/reports"
+            element={
+              <ProtectedRoute>
+                <ReportsPage />
               </ProtectedRoute>
             }
           />
