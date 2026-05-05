@@ -66,11 +66,6 @@ export default function ReportsPage() {
   const [openOpps, setOpenOpps] = useState<Opp[]>([]);
   const [loading, setLoading] = useState(true);
 
-  // Permission gate
-  if (!permsLoading && !permissions.canManageSettings) {
-    return <Navigate to="/dashboard" replace />;
-  }
-
   useEffect(() => {
     if (!organization) return;
     fetchUsersAndStages();
@@ -363,6 +358,11 @@ export default function ReportsPage() {
       (r) => r.open > 0 || r.won > 0 || r.lost > 0,
     );
   }, [openOpps, currentOpps, users, period]);
+
+  // Permission gate (after hooks to satisfy Rules of Hooks)
+  if (!permsLoading && !permissions.canManageSettings) {
+    return <Navigate to="/dashboard" replace />;
+  }
 
   return (
     <Layout>
