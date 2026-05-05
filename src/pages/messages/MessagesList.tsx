@@ -1270,7 +1270,41 @@ function DesktopMessagesList() {
                               return new Date(dateA).getTime() - new Date(dateB).getTime();
                             });
 
+                            const formatDateSeparator = (dateStr: string) => {
+                              const d = new Date(dateStr);
+                              const today = new Date();
+                              const yesterday = new Date();
+                              yesterday.setDate(today.getDate() - 1);
+                              const sameDay = (a: Date, b: Date) =>
+                                a.getFullYear() === b.getFullYear() &&
+                                a.getMonth() === b.getMonth() &&
+                                a.getDate() === b.getDate();
+                              if (sameDay(d, today)) return locale === 'pt-BR' ? 'HOJE' : 'TODAY';
+                              if (sameDay(d, yesterday)) return locale === 'pt-BR' ? 'ONTEM' : 'YESTERDAY';
+                              const diffDays = Math.floor((today.getTime() - d.getTime()) / 86400000);
+                              if (diffDays < 7 && diffDays >= 0) {
+                                return d.toLocaleDateString(locale, { weekday: 'long' }).toUpperCase();
+                              }
+                              return d.toLocaleDateString(locale, { day: '2-digit', month: 'long', year: 'numeric' }).toUpperCase();
+                            };
+
+                            let lastDateKey: string | null = null;
+
                             return chatItems.map((item) => {
+                              const itemDate = item._type === 'message' ? item.data.sent_at : item.data.occurred_at;
+                              const dateKey = new Date(itemDate).toDateString();
+                              const showSeparator = dateKey !== lastDateKey;
+                              lastDateKey = dateKey;
+
+                              const separator = showSeparator ? (
+                                <div key={`sep-${dateKey}`} className="flex justify-center my-3">
+                                  <div className="px-3 py-1 rounded-full bg-muted/70 text-muted-foreground text-[11px] font-medium tracking-wide shadow-sm">
+                                    {formatDateSeparator(itemDate)}
+                                  </div>
+                                </div>
+                              ) : null;
+
+                              const renderItem = (() => {
                               if (item._type === 'note') {
                                 const note = item.data;
                                 return (
@@ -1285,11 +1319,7 @@ function DesktopMessagesList() {
                                       </p>
                                       <div className="mt-1 flex items-center justify-end gap-1">
                                         <span className="text-[10px] text-yellow-600/70 dark:text-yellow-400/70 whitespace-nowrap">
-                                          {note.author_name ? `${note.author_name} - ` : ''}
-                                          {new Date(note.occurred_at).toLocaleDateString(locale, {
-                                            day: '2-digit',
-                                            month: '2-digit',
-                                          })}{' - '}
+                                          {note.author_name ? `${note.author_name} · ` : ''}
                                           {new Date(note.occurred_at).toLocaleTimeString(locale, {
                                             hour: '2-digit',
                                             minute: '2-digit',
@@ -1370,11 +1400,10 @@ function DesktopMessagesList() {
                                           if (message.media_type === 'audio' || url.match(/\.(ogg|mp3|wav|m4a)$/i)) {
                                             const isAudioOnly = message.media_type === 'audio' && !message.content;
                                             const senderLabel = isOutbound
-                                              ? (message.sender_name ? `${message.sender_name} - ` : '')
-                                              : (selectedThread?.contact_name ? `${selectedThread.contact_name} - ` : '');
-                                            const dateStr = new Date(message.sent_at).toLocaleDateString(locale, { day: '2-digit', month: '2-digit' });
+                                              ? (message.sender_name ? `${message.sender_name} · ` : '')
+                                              : (selectedThread?.contact_name ? `${selectedThread.contact_name} · ` : '');
                                             const timeStr = new Date(message.sent_at).toLocaleTimeString(locale, { hour: '2-digit', minute: '2-digit', hour12: false });
-                                            const audioTimestamp = `${senderLabel}${dateStr} - ${timeStr}`;
+                                            const audioTimestamp = `${senderLabel}${timeStr}`;
                                             return <AudioMessagePlayer key={i} src={url}
                                               timestamp={isAudioOnly ? audioTimestamp : undefined}
                                               statusIcon={isAudioOnly && isOutbound ? renderStatusIcon(message.whatsapp_status) : undefined}
@@ -1429,13 +1458,9 @@ function DesktopMessagesList() {
                                     <div className="mt-1 flex items-center justify-end gap-1">
                                       <span className="text-[11px] leading-[14px] text-muted-foreground/70 whitespace-nowrap">
                                         {isOutbound 
-                                          ? (message.sender_name ? `${message.sender_name} - ` : '')
-                                          : (selectedThread?.contact_name ? `${selectedThread.contact_name} - ` : '')
+                                          ? (message.sender_name ? `${message.sender_name} · ` : '')
+                                          : (selectedThread?.contact_name ? `${selectedThread.contact_name} · ` : '')
                                         }
-                                        {new Date(message.sent_at).toLocaleDateString(locale, {
-                                          day: '2-digit',
-                                          month: '2-digit',
-                                        })}{' - '}
                                         {new Date(message.sent_at).toLocaleTimeString(locale, {
                                           hour: '2-digit',
                                           minute: '2-digit',
@@ -1460,6 +1485,14 @@ function DesktopMessagesList() {
                                     </Button>
                                   )}
                                 </div>
+                              );
+                              })();
+
+                              return (
+                                <Fragment key={item._type === 'message' ? `m-${item.data.id}` : `n-${item.data.id}`}>
+                                  {separator}
+                                  {renderItem}
+                                </Fragment>
                               );
                             });
                           })()}
