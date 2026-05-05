@@ -118,10 +118,15 @@ export function Layout({ children }: LayoutProps) {
   // Build navigation items
   const navItems: NavItemType[] = [
     { label: t('nav.dashboard'), href: '/dashboard', icon: House },
+  ];
+  if (permissions.canManageSettings) {
+    navItems.push({ label: t('nav.reports'), href: '/reports', icon: ChartLineUp });
+  }
+  navItems.push(
     { label: t('nav.contacts'), href: '/contacts', icon: UsersThree },
     { label: t('nav.opportunities'), href: '/opportunities', icon: Briefcase },
     { label: t('nav.tasks'), href: '/tasks', icon: CheckSquare },
-  ];
+  );
 
   // Add Companies menu if module is enabled
   if (organization?.enable_companies_module) {
