@@ -47,16 +47,19 @@ export function Layout({ children }: LayoutProps) {
   // SEIALZ LAYOUT
   // ═══════════════════════════════════════
   if (themePreset === 'seialz') {
+    const principalItems: SeialzNavGroup['items'] = [
+      { label: t('nav.dashboard'), href: '/dashboard', icon: House },
+    ];
+    if (permissions.canManageSettings) {
+      principalItems.push({ label: t('nav.reports'), href: '/reports', icon: ChartLineUp });
+    }
+    principalItems.push(
+      { label: t('nav.opportunities'), href: '/opportunities', icon: Briefcase },
+      { label: t('nav.contacts'), href: '/contacts', icon: UsersThree },
+      { label: t('nav.tasks'), href: '/tasks', icon: CheckSquare },
+    );
     const groups: SeialzNavGroup[] = [
-      {
-        label: 'PRINCIPAL',
-        items: [
-          { label: t('nav.dashboard'), href: '/dashboard', icon: House },
-          { label: t('nav.opportunities'), href: '/opportunities', icon: Briefcase },
-          { label: t('nav.contacts'), href: '/contacts', icon: UsersThree },
-          { label: t('nav.tasks'), href: '/tasks', icon: CheckSquare },
-        ],
-      },
+      { label: 'PRINCIPAL', items: principalItems },
     ];
 
     // Add Companies if enabled
