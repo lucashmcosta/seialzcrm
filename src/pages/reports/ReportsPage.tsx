@@ -359,6 +359,11 @@ export default function ReportsPage() {
     );
   }, [openOpps, currentOpps, users, period]);
 
+  // Permission gate (after hooks to satisfy Rules of Hooks)
+  if (!permsLoading && !permissions.canManageSettings) {
+    return <Navigate to="/dashboard" replace />;
+  }
+
   return (
     <Layout>
       <div className="flex flex-col h-full">
