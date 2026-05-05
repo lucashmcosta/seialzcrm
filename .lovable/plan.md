@@ -1,29 +1,40 @@
-# Corrigir página inicial de produção (seialz.com)
-
 ## Problema
-Em produção (`seialz.com`), a rota raiz `/` está renderizando o componente placeholder `src/pages/Index.tsx` ("Welcome to Your Blank App") em vez do conteúdo real do Seialz.
 
-Isto acontece porque em `src/App.tsx` (linha 177) a rota `/` aponta para `<Index />`, e não para a `LandingPage` (que já existe em `src/pages/LandingPage.tsx` mas só era usada anteriormente).
+Mensagens de áudio mostram apenas o horário (ex: `12:23`) no rodapé, enquanto mensagens de texto mostram o padrão completo: `Nome - DD/MM - HH:MM` seguido do ícone de status (ex: `Ketlyn Vieira - 05/05 - 11:52 ✓✓`).
 
-## Solução proposta
+Isso acontece porque em `src/pages/messages/MessagesList.tsx` (linhas 1372-1374), passamos para o `AudioMessagePlayer` apenas `toLocaleTimeString` como `timestamp`, sem o nome do remetente nem a data.
 
-Alterar `src/App.tsx`:
+## Solução
 
-1. **Remover** a importação do placeholder `Index` (linha 46).
-2. **Trocar** a rota `/` para renderizar `<LandingPage />` (já está lazy-loaded na linha 49).
+### 1. `src/pages/messages/MessagesList.tsx` (linha ~1372)
 
-```tsx
-// Antes
-<Route path="/" element={<Index />} />
+Construir a string de timestamp do áudio com o mesmo formato usado no rodapé das mensagens de texto (linhas 1421-1440):
 
-// Depois
-<Route path="/" element={<LandingPage />} />
+```
+{isOutbound 
+  ? (message.sender_name ? `${message.sender_name} - ` : '')
+  : (selectedThread?.contact_name ? `${selectedThread.contact_name} - ` : '')
+}DD/MM - HH:MM
 ```
 
-3. **Opcional**: deletar `src/pages/Index.tsx` para evitar uso futuro acidental.
+Passar essa string como `timestamp` para o `AudioMessagePlayer`. Aplicar o mesmo timestamp tanto para áudio inbound (recebido) quanto outbound (enviado) — hoje só passamos quando é "audio-only" (sem texto), manter esse comportamento.
 
-## Após aprovação
-Como a mudança envolve a página pública, o usuário precisará clicar em **Publish → Update** em Lovable para que `seialz.com` reflita a alteração (mudanças de frontend não são deployadas automaticamente).
+### 2. `src/components/whatsapp/AudioMessagePlayer.tsx`
 
-## Confirmação necessária
-A rota `/` deve mostrar a **LandingPage** pública (com hero, features, etc.), correto? Ou prefere que `/` redirecione direto para `/auth/signin` / `/dashboard` se logado?
+O rodapé já renderiza `timestamp` + `statusIcon`. Apenas garantir que o container do timestamp permita o texto mais longo (`whiteSpace: 'nowrap'` ou ajustar `maxWidth` do bubble para 260-280px se necessário, para não quebrar em duas linhas em mobile).
+
+### 3. Replicar nos outros locais que usam `AudioMessagePlayer`
+
+Verificar e aplicar o mesmo padrão de label completa em:
+- `src/components/whatsapp/WhatsAppChat.tsx`
+- `src/components/contacts/ContactMessages.tsx`
+- `src/components/mobile/MobileMessagesList.tsx`
+
+(Em mobile, manter formato compacto se o componente já omite o nome em texto também — vou confirmar caso a caso ao implementar.)
+
+## Resultado esperado
+
+Áudio enviado mostrará no rodapé do player: `Ketlyn Vieira - 05/05 - 11:52 ✓✓`
+Áudio recebido mostrará: `edvaldo da silva santos - 05/05 - 12:23`
+
+Idêntico ao padrão das bolhas de texto.
