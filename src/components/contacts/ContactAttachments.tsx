@@ -80,7 +80,7 @@ export function ContactAttachments({ contactId, entityId, entityType }: ContactA
     setUploading(true);
     try {
       const fileExt = file.name.split('.').pop();
-      const fileName = `${finalEntityId}/${Date.now()}.${fileExt}`;
+      const fileName = `${organization.id}/${finalEntityType}/${finalEntityId}/${Date.now()}.${fileExt}`;
 
       // Upload to storage
       const { error: uploadError } = await supabase.storage

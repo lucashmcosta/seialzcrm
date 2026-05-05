@@ -1,34 +1,49 @@
 ## Problema
 
-Quando um novo usuário é adicionado à organização, ele já entra automaticamente no rodízio (round-robin) e começa a receber leads/contatos/oportunidades — o que não deveria acontecer. O admin precisa habilitar manualmente.
-
-## Causa Raiz
-
-Na migração `20260419204912_...sql`, a coluna `user_organizations.round_robin_active` foi definida com:
+O upload de arquivos na aba **Anexos** falha (toast vermelho "Erro") porque a política RLS do bucket `attachments` exige que **a primeira pasta do caminho do arquivo seja o ID da organização**:
 
 ```sql
-ADD COLUMN IF NOT EXISTS round_robin_active boolean NOT NULL DEFAULT true
+-- Política INSERT em storage.objects
+((storage.foldername(name))[1])::uuid = ANY (current_user_org_ids())
 ```
 
-Como o default é `true`, todo novo membro entra opt-in no rodízio. Basta o perfil de permissão dele ter `round_robin_recipient=true` (ou ser ativado depois) para começar a receber leads imediatamente.
+Hoje, o componente `ContactAttachments.tsx` faz upload com o caminho:
+```
+{entityId}/{timestamp}.{ext}   ← entityId é o id da oportunidade/contato
+```
+
+Como o primeiro segmento não é um `organization_id` válido, a RLS bloqueia o upload e o usuário vê "Erro".
+
+## Causa raiz
+
+`src/components/contacts/ContactAttachments.tsx` (linha do upload) usa `entityId` em vez de `organization.id` como pasta raiz no storage.
 
 ## Correção
 
-### 1. Migração de schema
-Alterar o default da coluna para `false`:
+Atualizar o caminho de upload no `ContactAttachments.tsx` para incluir o `organization.id` como primeira pasta, mantendo o `entityId` como subpasta para organização lógica:
 
-```sql
-ALTER TABLE public.user_organizations
-  ALTER COLUMN round_robin_active SET DEFAULT false;
+```ts
+// Antes
+const fileName = `${finalEntityId}/${Date.now()}.${fileExt}`;
+
+// Depois
+const fileName = `${organization.id}/${finalEntityType}/${finalEntityId}/${Date.now()}.${fileExt}`;
 ```
 
-Não vou tocar nos registros existentes (usuários já configurados continuam como estão). Apenas novos membros entrarão como opt-out.
+Isso:
+- Satisfaz a política RLS (primeira pasta = `organization_id`)
+- Mantém isolamento por organização no storage
+- Continua agrupando arquivos por entidade
 
-### 2. UI (`src/components/settings/RoundRobinSettings.tsx`)
-Nenhuma mudança necessária — a tela já permite ativar/desativar manualmente o "recebe leads" por usuário. Apenas o estado inicial passa a ser desligado.
+## Escopo
 
-## Resultado
+Apenas 1 arquivo alterado:
+- `src/components/contacts/ContactAttachments.tsx` — ajustar a construção do `fileName` no `handleFileUpload`
 
-- Novos usuários adicionados à organização entram com `round_robin_active = false` → não recebem leads automaticamente.
-- O admin precisa entrar em **Configurações → Round-Robin** e ativar o toggle para cada usuário que deve receber.
-- Usuários existentes não são afetados.
+Sem alterações em banco de dados, RLS, edge functions ou outros componentes. Arquivos antigos já enviados (ex.: PDFs assinados pelo SuvSign) continuam acessíveis pois o registro em `attachments.storage_path` é a fonte da verdade.
+
+## Validação após implementar
+
+1. Abrir uma oportunidade → aba **Anexos** → clicar **Enviar** → escolher um PDF.
+2. Confirmar toast de sucesso e o arquivo listado.
+3. Testar download e exclusão do arquivo recém-enviado.
