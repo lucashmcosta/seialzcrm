@@ -62,9 +62,11 @@ export function Layout({ children }: LayoutProps) {
       { label: 'PRINCIPAL', items: principalItems },
     ];
 
-    // Add Companies if enabled
+    // Add Companies if enabled (insert before Tasks)
     if (organization?.enable_companies_module) {
-      groups[0].items.splice(3, 0, {
+      const tasksIdx = groups[0].items.findIndex((i) => i.href === '/tasks');
+      const insertAt = tasksIdx >= 0 ? tasksIdx : groups[0].items.length;
+      groups[0].items.splice(insertAt, 0, {
         label: t('nav.companies'),
         href: '/companies',
         icon: Buildings,
