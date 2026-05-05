@@ -1463,13 +1463,9 @@ function DesktopMessagesList() {
                                     <div className="mt-1 flex items-center justify-end gap-1">
                                       <span className="text-[11px] leading-[14px] text-muted-foreground/70 whitespace-nowrap">
                                         {isOutbound 
-                                          ? (message.sender_name ? `${message.sender_name} - ` : '')
-                                          : (selectedThread?.contact_name ? `${selectedThread.contact_name} - ` : '')
+                                          ? (message.sender_name ? `${message.sender_name} · ` : '')
+                                          : (selectedThread?.contact_name ? `${selectedThread.contact_name} · ` : '')
                                         }
-                                        {new Date(message.sent_at).toLocaleDateString(locale, {
-                                          day: '2-digit',
-                                          month: '2-digit',
-                                        })}{' - '}
                                         {new Date(message.sent_at).toLocaleTimeString(locale, {
                                           hour: '2-digit',
                                           minute: '2-digit',
