@@ -128,12 +128,14 @@ export function Layout({ children }: LayoutProps) {
     { label: t('nav.tasks'), href: '/tasks', icon: CheckSquare },
   );
 
-  // Add Companies menu if module is enabled
+  // Add Companies menu if module is enabled (insert before Opportunities)
   if (organization?.enable_companies_module) {
-    navItems.splice(2, 0, { 
-      label: t('nav.companies'), 
-      href: '/companies', 
-      icon: Buildings 
+    const oppIdx = navItems.findIndex((i) => i.href === '/opportunities');
+    const insertAt = oppIdx >= 0 ? oppIdx : navItems.length;
+    navItems.splice(insertAt, 0, {
+      label: t('nav.companies'),
+      href: '/companies',
+      icon: Buildings,
     });
   }
 
