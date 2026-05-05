@@ -1495,6 +1495,14 @@ function DesktopMessagesList() {
                                   )}
                                 </div>
                               );
+                              })();
+
+                              return (
+                                <Fragment key={item._type === 'message' ? `m-${item.data.id}` : `n-${item.data.id}`}>
+                                  {separator}
+                                  {renderItem}
+                                </Fragment>
+                              );
                             });
                           })()}
                           <div ref={scrollRef} />
