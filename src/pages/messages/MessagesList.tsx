@@ -1369,8 +1369,14 @@ function DesktopMessagesList() {
                                         {message.media_urls.map((url, i) => {
                                           if (message.media_type === 'audio' || url.match(/\.(ogg|mp3|wav|m4a)$/i)) {
                                             const isAudioOnly = message.media_type === 'audio' && !message.content;
-                                            return <AudioMessagePlayer key={i} src={url} 
-                                              timestamp={isAudioOnly ? `${new Date(message.sent_at).toLocaleTimeString(locale, { hour: '2-digit', minute: '2-digit', hour12: false })}` : undefined}
+                                            const senderLabel = isOutbound
+                                              ? (message.sender_name ? `${message.sender_name} - ` : '')
+                                              : (selectedThread?.contact_name ? `${selectedThread.contact_name} - ` : '');
+                                            const dateStr = new Date(message.sent_at).toLocaleDateString(locale, { day: '2-digit', month: '2-digit' });
+                                            const timeStr = new Date(message.sent_at).toLocaleTimeString(locale, { hour: '2-digit', minute: '2-digit', hour12: false });
+                                            const audioTimestamp = `${senderLabel}${dateStr} - ${timeStr}`;
+                                            return <AudioMessagePlayer key={i} src={url}
+                                              timestamp={isAudioOnly ? audioTimestamp : undefined}
                                               statusIcon={isAudioOnly && isOutbound ? renderStatusIcon(message.whatsapp_status) : undefined}
                                             />;
                                           }
