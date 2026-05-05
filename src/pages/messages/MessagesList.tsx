@@ -1270,7 +1270,41 @@ function DesktopMessagesList() {
                               return new Date(dateA).getTime() - new Date(dateB).getTime();
                             });
 
+                            const formatDateSeparator = (dateStr: string) => {
+                              const d = new Date(dateStr);
+                              const today = new Date();
+                              const yesterday = new Date();
+                              yesterday.setDate(today.getDate() - 1);
+                              const sameDay = (a: Date, b: Date) =>
+                                a.getFullYear() === b.getFullYear() &&
+                                a.getMonth() === b.getMonth() &&
+                                a.getDate() === b.getDate();
+                              if (sameDay(d, today)) return locale === 'pt-BR' ? 'HOJE' : 'TODAY';
+                              if (sameDay(d, yesterday)) return locale === 'pt-BR' ? 'ONTEM' : 'YESTERDAY';
+                              const diffDays = Math.floor((today.getTime() - d.getTime()) / 86400000);
+                              if (diffDays < 7 && diffDays >= 0) {
+                                return d.toLocaleDateString(locale, { weekday: 'long' }).toUpperCase();
+                              }
+                              return d.toLocaleDateString(locale, { day: '2-digit', month: 'long', year: 'numeric' }).toUpperCase();
+                            };
+
+                            let lastDateKey: string | null = null;
+
                             return chatItems.map((item) => {
+                              const itemDate = item._type === 'message' ? item.data.sent_at : item.data.occurred_at;
+                              const dateKey = new Date(itemDate).toDateString();
+                              const showSeparator = dateKey !== lastDateKey;
+                              lastDateKey = dateKey;
+
+                              const separator = showSeparator ? (
+                                <div key={`sep-${dateKey}`} className="flex justify-center my-3">
+                                  <div className="px-3 py-1 rounded-full bg-muted/70 text-muted-foreground text-[11px] font-medium tracking-wide shadow-sm">
+                                    {formatDateSeparator(itemDate)}
+                                  </div>
+                                </div>
+                              ) : null;
+
+                              const renderItem = (() => {
                               if (item._type === 'note') {
                                 const note = item.data;
                                 return (
