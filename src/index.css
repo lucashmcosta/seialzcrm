@@ -76,8 +76,8 @@ button, nav, [role="tablist"], [role="tab"] {
     --destructive-foreground: 0 0% 100%;
 
     /* Cores Success */
-    --success: 142 76% 89%;
-    --success-foreground: 162 90% 24%;
+    --success: 142 71% 36%;
+    --success-foreground: 0 0% 100%;
 
     /* Cores Warning */
     --warning: 45 93% 47%;
