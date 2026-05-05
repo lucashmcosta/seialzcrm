@@ -12,6 +12,7 @@ import {
   Question,
   ChatCircleText,
   Phone,
+  ChartLineUp,
 } from '@phosphor-icons/react';
 import type { Icon as PhosphorIcon } from '@phosphor-icons/react';
 import { Button } from '@/components/ui/button';
