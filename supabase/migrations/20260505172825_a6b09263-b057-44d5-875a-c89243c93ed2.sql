@@ -1,0 +1,1 @@
+ALTER TABLE public.user_organizations ALTER COLUMN round_robin_active SET DEFAULT false;
