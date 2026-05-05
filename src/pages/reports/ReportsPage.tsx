@@ -66,11 +66,6 @@ export default function ReportsPage() {
   const [openOpps, setOpenOpps] = useState<Opp[]>([]);
   const [loading, setLoading] = useState(true);
 
-  // Permission gate
-  if (!permsLoading && !permissions.canManageSettings) {
-    return <Navigate to="/dashboard" replace />;
-  }
-
   useEffect(() => {
     if (!organization) return;
     fetchUsersAndStages();
