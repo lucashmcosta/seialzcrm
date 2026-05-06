@@ -1162,7 +1162,7 @@ function DesktopMessagesList() {
                     </div>
                   ))}
                 </div>
-              ) : filteredThreads?.length === 0 ? (
+              ) : visibleThreads?.length === 0 ? (
                 <div className="flex flex-col items-center justify-center p-8 text-muted-foreground">
                   <p className="text-sm">
                     {locale === 'pt-BR' ? 'Nenhuma conversa' : 'No conversations'}
@@ -1181,8 +1181,8 @@ function DesktopMessagesList() {
                       if (key) markThreadRead(key);
                     }}
                   >
-                    {(filteredThreads || []).map((thread) => (
-                      <ChatListItem key={thread.id} value={thread} locale={locale as 'pt-BR' | 'en-US'} />
+                    {(visibleThreads || []).map((thread) => (
+                      <ChatListItem key={thread.id} value={thread} locale={locale as 'pt-BR' | 'en-US'} onHide={handleHideThread} />
                     ))}
                   </ListBox>
                   {hasMore && (
