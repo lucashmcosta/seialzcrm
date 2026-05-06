@@ -16,8 +16,17 @@ import {
   computeRange,
   type PeriodPreset,
 } from '@/components/reports/ReportFilters';
+import { DashboardTrendChart } from '@/components/reports/DashboardTrendChart';
+import { DashboardStatusDonut } from '@/components/reports/DashboardStatusDonut';
 import type { DateRange } from 'react-day-picker';
 import { cn } from '@/lib/utils';
+
+interface OppRow {
+  id: string;
+  status: string;
+  created_at: string;
+  updated_at: string;
+}
 
 export default function Dashboard() {
   const { organization, userProfile, locale, loading: orgLoading, error } = useOrganization();
