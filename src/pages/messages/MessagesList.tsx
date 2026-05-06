@@ -146,9 +146,10 @@ interface ChatListItemProps extends ListBoxItemProps<ChatThread> {
   value: ChatThread;
   locale: 'pt-BR' | 'en-US';
   showLastMessage?: boolean;
+  onHide?: (threadId: string) => void;
 }
 
-const ChatListItem = ({ value, locale, className, ...otherProps }: ChatListItemProps) => {
+const ChatListItem = ({ value, locale, className, onHide, ...otherProps }: ChatListItemProps) => {
   if (!value) return null;
 
   const status = statusConfig[value.status] || statusConfig.open;
@@ -160,7 +161,7 @@ const ChatListItem = ({ value, locale, className, ...otherProps }: ChatListItemP
       textValue={value.contact_name}
       className={(state) =>
         cn(
-          'relative flex items-center gap-3 border-b border-border py-3 pr-4 pl-3 select-none cursor-pointer',
+          'group relative flex items-center gap-3 border-b border-border py-3 pr-4 pl-3 select-none cursor-pointer',
           state.isFocused && 'outline-2 -outline-offset-2 outline-ring',
           state.isSelected && 'bg-accent',
           typeof className === 'function' ? className(state) : className
@@ -178,9 +179,27 @@ const ChatListItem = ({ value, locale, className, ...otherProps }: ChatListItemP
               <span className="h-2 w-2 shrink-0 rounded-full bg-primary" />
             )}
           </div>
-          <span className="text-xs text-muted-foreground shrink-0">
-            {formatRelativeTime(value.updated_at, locale)}
-          </span>
+          <div className="flex items-center gap-1 shrink-0">
+            {onHide && (
+              <button
+                type="button"
+                aria-label={locale === 'pt-BR' ? 'Ocultar conversa' : 'Hide conversation'}
+                title={locale === 'pt-BR' ? 'Ocultar conversa' : 'Hide conversation'}
+                onClick={(e) => {
+                  e.stopPropagation();
+                  e.preventDefault();
+                  onHide(value.id);
+                }}
+                onPointerDown={(e) => e.stopPropagation()}
+                className="opacity-0 group-hover:opacity-100 focus:opacity-100 p-1 rounded hover:bg-muted text-muted-foreground hover:text-foreground transition-opacity"
+              >
+                <EyeSlash className="h-3.5 w-3.5" />
+              </button>
+            )}
+            <span className="text-xs text-muted-foreground">
+              {formatRelativeTime(value.updated_at, locale)}
+            </span>
+          </div>
         </div>
         <div className="flex items-center gap-1.5 mt-0.5">
           {/* Status dot */}
