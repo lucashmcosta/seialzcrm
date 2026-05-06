@@ -406,8 +406,10 @@ export default function ReportsPage() {
           <div className="space-y-6 p-6">
             {/* Filters */}
             <ReportFilters
-              period={period}
-              onPeriodChange={setPeriod}
+              preset={preset}
+              onPresetChange={setPreset}
+              customRange={customRange}
+              onCustomRangeChange={setCustomRange}
               ownerId={ownerId}
               onOwnerChange={setOwnerId}
               users={users}
