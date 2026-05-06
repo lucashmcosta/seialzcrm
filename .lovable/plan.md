@@ -1,43 +1,45 @@
-# Ocultar Conversa com Desfazer (5s)
+## Objetivo
 
-Adicionar a possibilidade de **ocultar uma conversa** da lista de Mensagens, com um botão visível e um período de **5 segundos para desfazer**, caso o clique tenha sido por engano.
+Permitir marcar uma oportunidade como **Ganho** (e Perdido) diretamente do header da conversa em `/messages`, sem precisar abrir a tela da oportunidade.
 
 ## Comportamento
 
-- Cada item da lista de conversas (painel esquerdo em `/messages`) ganha um ícone "Ocultar" (olho riscado) que aparece no hover.
-- Ao clicar:
-  1. A conversa some imediatamente da lista (otimista).
-  2. Um toast aparece: "Conversa ocultada — Desfazer" com contagem regressiva de 5 segundos.
-  3. Se o usuário clicar em "Desfazer" antes dos 5s, a conversa volta para a lista no mesmo lugar.
-  4. Se passarem 5s sem ação, a ocultação é confirmada localmente (persistida).
-- A ocultação é **somente local ao usuário** (não afeta outros membros da organização) e **não exclui mensagens** — apenas remove da listagem.
-- Quando uma nova mensagem inbound chegar em uma conversa ocultada, ela **reaparece automaticamente** na lista (regra: mensagem nova > ocultação anterior).
+1. Quando uma conversa é selecionada, buscar a(s) oportunidade(s) **abertas** (`status = 'open'`) do `contact_id` daquela thread.
+2. Mostrar um botão verde **"Marcar como Ganho"** no header da conversa (ao lado de "Resolver"), com ícone `TrendUp`. Junto, um menu/secundário **"Marcar como Perdido"** (ícone `TrendDown`) para manter paridade.
+3. Regras de exibição:
+   - Se o contato tem **1 oportunidade aberta** → clicar no botão abre um `ConfirmDialog` ("Marcar oportunidade *Título* como ganha?") e executa a ação.
+   - Se tem **2+ oportunidades abertas** → o botão abre um pequeno popover/select listando as oportunidades; ao escolher uma, confirma e marca.
+   - Se tem **0 oportunidades abertas** → não exibir o botão (mantém a UI limpa).
+4. Após sucesso: toast de confirmação, refetch da lista de oportunidades do contato e (opcional) sugerir resolver a conversa.
 
-## Onde fica o botão
+## Implementação técnica
 
-- No `ChatListItem` da lista esquerda em `src/pages/messages/MessagesList.tsx` (renderizado dentro do `ListBox`, linha ~1134), aparece à direita um pequeno ícone (olho riscado) ao passar o mouse.
-- Também adicionado um item "Ocultar conversa" no menu de ações do header da conversa aberta (painel direito), para acesso via teclado/touch.
+**Arquivo:** `src/pages/messages/MessagesList.tsx`
 
-## Detalhes técnicos
-
-- **Persistência**: lista de IDs de threads ocultadas guardada em `localStorage` por usuário (chave `hidden_threads_{userId}`), junto com o timestamp da ocultação. Persistência local é suficiente para "ocultar da minha visão" e evita migração de banco; pode evoluir depois para tabela `user_hidden_threads` se necessário.
-- **Hook novo**: `src/hooks/useHiddenThreads.ts` — expõe `hiddenIds: Set<string>`, `hideThread(id, hiddenAt)`, `unhideThread(id)`, e `isHidden(id, lastInboundAt)` (retorna `false` se chegou nova mensagem após `hiddenAt`, fazendo a conversa reaparecer).
-- **Filtragem**: em `MessagesList.tsx`, dentro do `filteredThreads` (linha ~1001), excluir threads cujo `isHidden(thread.id, thread.last_inbound_at)` seja `true`.
-- **Undo timer**: ao chamar `hideThread`, agendar `setTimeout(commit, 5000)`. Estado intermediário "pendingHide" mantém o id em memória; se "Desfazer" for clicado, `clearTimeout` + remover do Set. O toast usa o `useToast` existente (`src/hooks/use-toast.ts`) com `action` customizado mostrando "Desfazer".
-- **Acessibilidade**: botão tem `aria-label="Ocultar conversa"`, `e.stopPropagation()` para não selecionar o thread ao clicar.
-- **i18n**: textos em `pt-BR` e `en-US` seguindo o padrão já usado no arquivo (`locale === 'pt-BR' ? '...' : '...'`).
-
-## Arquivos a alterar/criar
-
-- Criar `src/hooks/useHiddenThreads.ts`
-- Editar `src/pages/messages/MessagesList.tsx`:
-  - Importar e usar `useHiddenThreads`
-  - Filtrar `filteredThreads` removendo ocultadas
-  - Passar `onHide` ao `ChatListItem` e renderizar botão de ocultar com hover
-  - Toast com ação "Desfazer"
-- (Opcional) Adicionar item "Ocultar conversa" no menu do header da conversa aberta.
+- Novo estado: `contactOpportunities: Array<{id, title, status, pipeline_stage_id}>` e `wonDialogOpen`, `lostDialogOpen`, `selectedOppId`.
+- Novo `useEffect` disparado por `selectedThread?.contact_id` que faz:
+  ```ts
+  supabase.from('opportunities')
+    .select('id, title, status, pipeline_stage_id')
+    .eq('contact_id', selectedThread.contact_id)
+    .eq('organization_id', orgId)
+    .eq('status', 'open')
+    .is('deleted_at', null)
+  ```
+- Buscar `pipeline_stages` (uma vez, cacheado) para localizar o stage com `type = 'won'` / `type = 'lost'` — mesma lógica já usada em `OpportunityDetail.tsx` (linhas 148-194), que será replicada aqui em duas funções: `handleMarkOppWon(oppId)` e `handleMarkOppLost(oppId)`.
+- Update na tabela `opportunities` com `{ status, pipeline_stage_id, updated_by: userProfile.id }`.
+- Botões adicionados no bloco de ações do header (entre "Resolver" e "Devolver ao AI", linhas ~1252-1264):
+  - Botão "Marcar como Ganho" — `variant="outline"` com classe verde (`text-green-600 border-green-600/30 hover:bg-green-50`).
+  - Botão "Marcar como Perdido" — `variant="outline"` discreto.
+- Reusar `ConfirmDialog` de `src/components/ui/confirm-dialog.tsx` para a confirmação.
+- Caso múltiplas oportunidades: usar um `DropdownMenu` simples com a lista para escolher qual marcar.
 
 ## Fora do escopo
 
-- Sincronização entre dispositivos/usuários (ocultação fica local por enquanto).
-- Tela de "Conversas ocultadas" para revisão — pode ser tema de uma próxima iteração se desejado.
+- Não alterar a tela `OpportunityDetail` (já tem essa ação).
+- Não criar nova oportunidade automaticamente quando não houver — apenas oculta os botões.
+- Não automatizar resolver a conversa após ganhar (pode ser uma melhoria futura).
+
+## Arquivos modificados
+
+- `src/pages/messages/MessagesList.tsx` (único arquivo).
