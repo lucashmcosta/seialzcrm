@@ -1334,8 +1334,65 @@ function DesktopMessagesList() {
                           {locale === 'pt-BR' ? 'Resolver' : 'Resolve'}
                         </Button>
                       )}
-                      
-                      {selectedThread.needs_human_attention && hasAIAgent && (
+
+                      {/* Mark opportunity as Won/Lost from chat */}
+                      {contactOpportunities.length > 0 && (
+                        contactOpportunities.length === 1 ? (
+                          <>
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              className="text-green-600 border-green-600/30 hover:bg-green-50 hover:text-green-700 dark:hover:bg-green-950/40"
+                              onClick={() => setConfirmAction({ kind: 'won', opp: contactOpportunities[0] })}
+                            >
+                              <TrendUp className="w-4 h-4 mr-1" />
+                              {locale === 'pt-BR' ? 'Marcar Ganho' : 'Mark Won'}
+                            </Button>
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              className="text-red-600 border-red-600/30 hover:bg-red-50 hover:text-red-700 dark:hover:bg-red-950/40"
+                              onClick={() => setConfirmAction({ kind: 'lost', opp: contactOpportunities[0] })}
+                            >
+                              <TrendDown className="w-4 h-4 mr-1" />
+                              {locale === 'pt-BR' ? 'Perdido' : 'Lost'}
+                            </Button>
+                          </>
+                        ) : (
+                          <DropdownMenu>
+                            <DropdownMenuTrigger asChild>
+                              <Button
+                                variant="outline"
+                                size="sm"
+                                className="text-green-600 border-green-600/30 hover:bg-green-50 hover:text-green-700 dark:hover:bg-green-950/40"
+                              >
+                                <TrendUp className="w-4 h-4 mr-1" />
+                                {locale === 'pt-BR' ? 'Ganho/Perdido' : 'Won/Lost'}
+                              </Button>
+                            </DropdownMenuTrigger>
+                            <DropdownMenuContent align="end" className="w-72">
+                              {contactOpportunities.map((opp) => (
+                                <Fragment key={opp.id}>
+                                  <DropdownMenuItem onClick={() => setConfirmAction({ kind: 'won', opp })}>
+                                    <TrendUp className="w-4 h-4 mr-2 text-green-600" />
+                                    <span className="truncate">
+                                      {locale === 'pt-BR' ? 'Ganho:' : 'Won:'} {opp.title}
+                                    </span>
+                                  </DropdownMenuItem>
+                                  <DropdownMenuItem onClick={() => setConfirmAction({ kind: 'lost', opp })}>
+                                    <TrendDown className="w-4 h-4 mr-2 text-red-600" />
+                                    <span className="truncate">
+                                      {locale === 'pt-BR' ? 'Perdido:' : 'Lost:'} {opp.title}
+                                    </span>
+                                  </DropdownMenuItem>
+                                </Fragment>
+                              ))}
+                            </DropdownMenuContent>
+                          </DropdownMenu>
+                        )
+                      )}
+
+
                         <Button variant="outline" size="sm" onClick={() => handleReturnToAI(selectedThread.id)}>
                           <Robot className="w-4 h-4 mr-1" />
                           {locale === 'pt-BR' ? 'Devolver ao AI' : 'Return to AI'}
