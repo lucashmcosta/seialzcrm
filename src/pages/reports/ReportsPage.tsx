@@ -117,12 +117,12 @@ export default function ReportsPage() {
     if (!organization) return;
     setLoading(true);
 
-    const days = parseInt(period);
-    const now = new Date();
-    const fromDate = new Date(now);
-    fromDate.setDate(fromDate.getDate() - days);
+    const fromDate = range.from;
+    const toDate = range.to;
+    const days = Math.max(1, Math.round((toDate.getTime() - fromDate.getTime()) / 86400000));
     const prevFrom = new Date(fromDate);
     prevFrom.setDate(prevFrom.getDate() - days);
+    const prevTo = new Date(fromDate);
 
     try {
       // Build base queries
@@ -137,7 +137,7 @@ export default function ReportsPage() {
         .eq('organization_id', organization.id)
         .is('deleted_at', null)
         .or(
-          `created_at.gte.${fromDate.toISOString()},and(status.in.(won,lost),updated_at.gte.${fromDate.toISOString()})`,
+          `and(created_at.gte.${fromDate.toISOString()},created_at.lte.${toDate.toISOString()}),and(status.in.(won,lost),updated_at.gte.${fromDate.toISOString()},updated_at.lte.${toDate.toISOString()})`,
         );
       if (ownerEq) q1 = q1.eq('owner_user_id', ownerEq);
 
@@ -148,7 +148,7 @@ export default function ReportsPage() {
         .eq('organization_id', organization.id)
         .is('deleted_at', null)
         .or(
-          `and(created_at.gte.${prevFrom.toISOString()},created_at.lt.${fromDate.toISOString()}),and(status.in.(won,lost),updated_at.gte.${prevFrom.toISOString()},updated_at.lt.${fromDate.toISOString()})`,
+          `and(created_at.gte.${prevFrom.toISOString()},created_at.lt.${prevTo.toISOString()}),and(status.in.(won,lost),updated_at.gte.${prevFrom.toISOString()},updated_at.lt.${prevTo.toISOString()})`,
         );
       if (ownerEq) q2 = q2.eq('owner_user_id', ownerEq);
 
