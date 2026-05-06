@@ -40,6 +40,7 @@ export default function Dashboard() {
 
   const [enteredCount, setEnteredCount] = useState(0);
   const [closedCount, setClosedCount] = useState(0);
+  const [opps, setOpps] = useState<OppRow[]>([]);
   const [loading, setLoading] = useState(true);
 
   const { from, to } = computeRange(preset, customRange);
