@@ -238,6 +238,15 @@ export default function Dashboard() {
               </Card>
             ))}
           </div>
+
+          <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
+            <div className="lg:col-span-2">
+              <DashboardTrendChart data={opps} from={from} to={to} loading={loading} />
+            </div>
+            <div className="lg:col-span-1">
+              <DashboardStatusDonut data={opps} from={from} to={to} loading={loading} />
+            </div>
+          </div>
         </div>
       </div>
     </Layout>
