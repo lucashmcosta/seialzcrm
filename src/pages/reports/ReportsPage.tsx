@@ -339,10 +339,8 @@ export default function ReportsPage() {
   // Per-user stats
   const userStats: UserStats[] = useMemo(() => {
     const map = new Map<string, UserStats>();
-    const days = parseInt(period);
-    const now = new Date();
-    const fromDate = new Date(now);
-    fromDate.setDate(fromDate.getDate() - days);
+    const fromDate = range.from;
+    const toDate = range.to;
 
     const ensure = (uid: string) => {
       if (!map.has(uid)) {
