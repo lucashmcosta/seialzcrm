@@ -1116,7 +1116,7 @@ function DesktopMessagesList() {
                     <ChatCircleDots className="w-4 h-4" />
                   </Button>
                   <Badge color="gray" size="md">
-                    {filteredThreads?.length || 0}
+                    {visibleThreads?.length || 0}
                   </Badge>
                 </div>
               </div>
