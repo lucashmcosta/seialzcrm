@@ -282,24 +282,31 @@ export default function ReportsPage() {
 
   // Trend
   const trend: TrendPoint[] = useMemo(() => {
-    const days = parseInt(period);
-    const now = new Date();
-    const buckets = days <= 1 ? 1 : days <= 7 ? days : days <= 30 ? 30 : days <= 90 ? 90 : 12;
+    const fromDate = range.from;
+    const toDate = range.to;
+    const days = Math.max(1, Math.round((toDate.getTime() - fromDate.getTime()) / 86400000) + 1);
     const isMonthly = days > 90;
     const points: TrendPoint[] = [];
 
-    for (let i = buckets - 1; i >= 0; i--) {
-      const d = new Date(now);
-      if (isMonthly) {
-        d.setMonth(d.getMonth() - i);
-        d.setDate(1);
-      } else {
-        d.setDate(d.getDate() - i);
+    if (isMonthly) {
+      const startMonth = new Date(fromDate.getFullYear(), fromDate.getMonth(), 1);
+      const endMonth = new Date(toDate.getFullYear(), toDate.getMonth(), 1);
+      const cursor = new Date(startMonth);
+      while (cursor <= endMonth) {
+        const key = cursor.toLocaleDateString(locale, { month: 'short', year: '2-digit' });
+        points.push({ date: key, created: 0, won: 0, wonValue: 0 });
+        cursor.setMonth(cursor.getMonth() + 1);
       }
-      const key = isMonthly
-        ? d.toLocaleDateString(locale, { month: 'short', year: '2-digit' })
-        : d.toLocaleDateString(locale, { day: '2-digit', month: '2-digit' });
-      points.push({ date: key, created: 0, won: 0, wonValue: 0 });
+    } else {
+      const cursor = new Date(fromDate);
+      cursor.setHours(0, 0, 0, 0);
+      const end = new Date(toDate);
+      end.setHours(0, 0, 0, 0);
+      while (cursor <= end) {
+        const key = cursor.toLocaleDateString(locale, { day: '2-digit', month: '2-digit' });
+        points.push({ date: key, created: 0, won: 0, wonValue: 0 });
+        cursor.setDate(cursor.getDate() + 1);
+      }
     }
 
     const matchKey = (date: Date) =>
@@ -309,21 +316,25 @@ export default function ReportsPage() {
 
     currentOpps.forEach((o) => {
       const created = new Date(o.created_at);
-      const idx = points.findIndex((p) => p.date === matchKey(created));
-      if (idx >= 0) points[idx].created += 1;
+      if (created >= fromDate && created <= toDate) {
+        const idx = points.findIndex((p) => p.date === matchKey(created));
+        if (idx >= 0) points[idx].created += 1;
+      }
 
       if (o.status === 'won') {
         const closed = new Date(o.updated_at);
-        const i = points.findIndex((p) => p.date === matchKey(closed));
-        if (i >= 0) {
-          points[i].won += 1;
-          points[i].wonValue += Number(o.amount) || 0;
+        if (closed >= fromDate && closed <= toDate) {
+          const i = points.findIndex((p) => p.date === matchKey(closed));
+          if (i >= 0) {
+            points[i].won += 1;
+            points[i].wonValue += Number(o.amount) || 0;
+          }
         }
       }
     });
 
     return points;
-  }, [currentOpps, period, locale]);
+  }, [currentOpps, rangeKey, locale]);
 
   // Per-user stats
   const userStats: UserStats[] = useMemo(() => {
