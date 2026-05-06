@@ -29,7 +29,12 @@ import {
   UserLeaderboard,
   type UserStats,
 } from '@/components/reports/UserLeaderboard';
-import { ReportFilters } from '@/components/reports/ReportFilters';
+import {
+  ReportFilters,
+  computeRange,
+  type PeriodPreset,
+} from '@/components/reports/ReportFilters';
+import type { DateRange } from 'react-day-picker';
 
 interface Opp {
   id: string;
@@ -56,8 +61,12 @@ export default function ReportsPage() {
   const { organization, locale } = useOrganization();
   const { permissions, loading: permsLoading } = usePermissions();
 
-  const [period, setPeriod] = useState('30');
+  const [preset, setPreset] = useState<PeriodPreset>('last_30');
+  const [customRange, setCustomRange] = useState<DateRange | undefined>();
   const [ownerId, setOwnerId] = useState('all');
+
+  const range = useMemo(() => computeRange(preset, customRange), [preset, customRange]);
+  const rangeKey = `${range.from.toISOString()}_${range.to.toISOString()}`;
 
   const [users, setUsers] = useState<UserRow[]>([]);
   const [stages, setStages] = useState<Stage[]>([]);
@@ -76,7 +85,7 @@ export default function ReportsPage() {
     if (!organization) return;
     fetchData();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [organization?.id, period, ownerId]);
+  }, [organization?.id, rangeKey, ownerId]);
 
   async function fetchUsersAndStages() {
     if (!organization) return;
@@ -108,12 +117,12 @@ export default function ReportsPage() {
     if (!organization) return;
     setLoading(true);
 
-    const days = parseInt(period);
-    const now = new Date();
-    const fromDate = new Date(now);
-    fromDate.setDate(fromDate.getDate() - days);
+    const fromDate = range.from;
+    const toDate = range.to;
+    const days = Math.max(1, Math.round((toDate.getTime() - fromDate.getTime()) / 86400000));
     const prevFrom = new Date(fromDate);
     prevFrom.setDate(prevFrom.getDate() - days);
+    const prevTo = new Date(fromDate);
 
     try {
       // Build base queries
@@ -128,7 +137,7 @@ export default function ReportsPage() {
         .eq('organization_id', organization.id)
         .is('deleted_at', null)
         .or(
-          `created_at.gte.${fromDate.toISOString()},and(status.in.(won,lost),updated_at.gte.${fromDate.toISOString()})`,
+          `and(created_at.gte.${fromDate.toISOString()},created_at.lte.${toDate.toISOString()}),and(status.in.(won,lost),updated_at.gte.${fromDate.toISOString()},updated_at.lte.${toDate.toISOString()})`,
         );
       if (ownerEq) q1 = q1.eq('owner_user_id', ownerEq);
 
@@ -139,7 +148,7 @@ export default function ReportsPage() {
         .eq('organization_id', organization.id)
         .is('deleted_at', null)
         .or(
-          `and(created_at.gte.${prevFrom.toISOString()},created_at.lt.${fromDate.toISOString()}),and(status.in.(won,lost),updated_at.gte.${prevFrom.toISOString()},updated_at.lt.${fromDate.toISOString()})`,
+          `and(created_at.gte.${prevFrom.toISOString()},created_at.lt.${prevTo.toISOString()}),and(status.in.(won,lost),updated_at.gte.${prevFrom.toISOString()},updated_at.lt.${prevTo.toISOString()})`,
         );
       if (ownerEq) q2 = q2.eq('owner_user_id', ownerEq);
 
@@ -175,15 +184,18 @@ export default function ReportsPage() {
   // Compute KPIs
   // ─────────────────────────────────────────
   const stats = useMemo(() => {
-    const days = parseInt(period);
-    const now = new Date();
-    const fromDate = new Date(now);
-    fromDate.setDate(fromDate.getDate() - days);
+    const fromDate = range.from;
+    const toDate = range.to;
+    const days = Math.max(1, Math.round((toDate.getTime() - fromDate.getTime()) / 86400000));
 
-    const inPeriodCreated = (o: Opp) => new Date(o.created_at) >= fromDate;
-    const inPeriodClosed = (o: Opp) =>
-      (o.status === 'won' || o.status === 'lost') &&
-      new Date(o.updated_at) >= fromDate;
+    const inPeriodCreated = (o: Opp) => {
+      const t = new Date(o.created_at);
+      return t >= fromDate && t <= toDate;
+    };
+    const inPeriodClosed = (o: Opp) => {
+      const t = new Date(o.updated_at);
+      return (o.status === 'won' || o.status === 'lost') && t >= fromDate && t <= toDate;
+    };
 
     const created = currentOpps.filter(inPeriodCreated);
     const won = currentOpps.filter((o) => o.status === 'won' && inPeriodClosed(o));
@@ -197,7 +209,6 @@ export default function ReportsPage() {
         : 0;
     const avgTicket = won.length > 0 ? wonValue / won.length : 0;
 
-    // Avg sales cycle (days)
     const cycleDaysList = won
       .map((o) => {
         const c = new Date(o.created_at).getTime();
@@ -211,16 +222,17 @@ export default function ReportsPage() {
         : 0;
 
     // Previous period
-    const prevDate = new Date(fromDate);
-    prevDate.setDate(prevDate.getDate() - days);
+    const prevFrom = new Date(fromDate);
+    prevFrom.setDate(prevFrom.getDate() - days);
+    const prevTo = new Date(fromDate);
     const inPrevCreated = (o: Opp) => {
       const t = new Date(o.created_at);
-      return t >= prevDate && t < fromDate;
+      return t >= prevFrom && t < prevTo;
     };
     const inPrevClosed = (o: Opp) => {
       const t = new Date(o.updated_at);
       return (
-        (o.status === 'won' || o.status === 'lost') && t >= prevDate && t < fromDate
+        (o.status === 'won' || o.status === 'lost') && t >= prevFrom && t < prevTo
       );
     };
     const prevCreated = previousOpps.filter(inPrevCreated);
@@ -254,7 +266,7 @@ export default function ReportsPage() {
       avgTicket,
       avgCycle,
     };
-  }, [currentOpps, previousOpps, period]);
+  }, [currentOpps, previousOpps, rangeKey]);
 
   // Funnel & distribution
   const funnel: FunnelStage[] = useMemo(() => {
@@ -270,24 +282,31 @@ export default function ReportsPage() {
 
   // Trend
   const trend: TrendPoint[] = useMemo(() => {
-    const days = parseInt(period);
-    const now = new Date();
-    const buckets = days <= 1 ? 1 : days <= 7 ? days : days <= 30 ? 30 : days <= 90 ? 90 : 12;
+    const fromDate = range.from;
+    const toDate = range.to;
+    const days = Math.max(1, Math.round((toDate.getTime() - fromDate.getTime()) / 86400000) + 1);
     const isMonthly = days > 90;
     const points: TrendPoint[] = [];
 
-    for (let i = buckets - 1; i >= 0; i--) {
-      const d = new Date(now);
-      if (isMonthly) {
-        d.setMonth(d.getMonth() - i);
-        d.setDate(1);
-      } else {
-        d.setDate(d.getDate() - i);
+    if (isMonthly) {
+      const startMonth = new Date(fromDate.getFullYear(), fromDate.getMonth(), 1);
+      const endMonth = new Date(toDate.getFullYear(), toDate.getMonth(), 1);
+      const cursor = new Date(startMonth);
+      while (cursor <= endMonth) {
+        const key = cursor.toLocaleDateString(locale, { month: 'short', year: '2-digit' });
+        points.push({ date: key, created: 0, won: 0, wonValue: 0 });
+        cursor.setMonth(cursor.getMonth() + 1);
       }
-      const key = isMonthly
-        ? d.toLocaleDateString(locale, { month: 'short', year: '2-digit' })
-        : d.toLocaleDateString(locale, { day: '2-digit', month: '2-digit' });
-      points.push({ date: key, created: 0, won: 0, wonValue: 0 });
+    } else {
+      const cursor = new Date(fromDate);
+      cursor.setHours(0, 0, 0, 0);
+      const end = new Date(toDate);
+      end.setHours(0, 0, 0, 0);
+      while (cursor <= end) {
+        const key = cursor.toLocaleDateString(locale, { day: '2-digit', month: '2-digit' });
+        points.push({ date: key, created: 0, won: 0, wonValue: 0 });
+        cursor.setDate(cursor.getDate() + 1);
+      }
     }
 
     const matchKey = (date: Date) =>
@@ -297,29 +316,31 @@ export default function ReportsPage() {
 
     currentOpps.forEach((o) => {
       const created = new Date(o.created_at);
-      const idx = points.findIndex((p) => p.date === matchKey(created));
-      if (idx >= 0) points[idx].created += 1;
+      if (created >= fromDate && created <= toDate) {
+        const idx = points.findIndex((p) => p.date === matchKey(created));
+        if (idx >= 0) points[idx].created += 1;
+      }
 
       if (o.status === 'won') {
         const closed = new Date(o.updated_at);
-        const i = points.findIndex((p) => p.date === matchKey(closed));
-        if (i >= 0) {
-          points[i].won += 1;
-          points[i].wonValue += Number(o.amount) || 0;
+        if (closed >= fromDate && closed <= toDate) {
+          const i = points.findIndex((p) => p.date === matchKey(closed));
+          if (i >= 0) {
+            points[i].won += 1;
+            points[i].wonValue += Number(o.amount) || 0;
+          }
         }
       }
     });
 
     return points;
-  }, [currentOpps, period, locale]);
+  }, [currentOpps, rangeKey, locale]);
 
   // Per-user stats
   const userStats: UserStats[] = useMemo(() => {
     const map = new Map<string, UserStats>();
-    const days = parseInt(period);
-    const now = new Date();
-    const fromDate = new Date(now);
-    fromDate.setDate(fromDate.getDate() - days);
+    const fromDate = range.from;
+    const toDate = range.to;
 
     const ensure = (uid: string) => {
       if (!map.has(uid)) {
@@ -342,7 +363,8 @@ export default function ReportsPage() {
     });
 
     currentOpps.forEach((o) => {
-      if ((o.status === 'won' || o.status === 'lost') && new Date(o.updated_at) >= fromDate) {
+      const t = new Date(o.updated_at);
+      if ((o.status === 'won' || o.status === 'lost') && t >= fromDate && t <= toDate) {
         const uid = o.owner_user_id || 'unassigned';
         const row = ensure(uid);
         if (o.status === 'won') {
@@ -357,7 +379,7 @@ export default function ReportsPage() {
     return Array.from(map.values()).filter(
       (r) => r.open > 0 || r.won > 0 || r.lost > 0,
     );
-  }, [openOpps, currentOpps, users, period]);
+  }, [openOpps, currentOpps, users, rangeKey]);
 
   // Permission gate (after hooks to satisfy Rules of Hooks)
   if (!permsLoading && !permissions.canManageSettings) {
@@ -384,8 +406,10 @@ export default function ReportsPage() {
           <div className="space-y-6 p-6">
             {/* Filters */}
             <ReportFilters
-              period={period}
-              onPeriodChange={setPeriod}
+              preset={preset}
+              onPresetChange={setPreset}
+              customRange={customRange}
+              onCustomRangeChange={setCustomRange}
               ownerId={ownerId}
               onOwnerChange={setOwnerId}
               users={users}
