@@ -93,6 +93,9 @@ export const translations = {
     'dashboard.wonOverTime': 'Ganhos ao Longo do Tempo',
     'dashboard.noTasks': 'Nenhuma tarefa para hoje',
     'dashboard.noActivities': 'Nenhuma atividade recente',
+    'dashboard.entered': 'Oportunidades que entraram',
+    'dashboard.closed': 'Oportunidades fechadas',
+    'dashboard.conversion': 'Conversão',
     
     // Contacts
     'contacts.title': 'Contatos',
