@@ -1,5 +1,3 @@
-import { ResponsiveContainer, RadialBarChart, RadialBar, PolarAngleAxis } from 'recharts';
-
 interface WinRateGaugeProps {
   rate: number; // 0-100
   wonCount: number;
@@ -8,7 +6,11 @@ interface WinRateGaugeProps {
 }
 
 export function WinRateGauge({ rate, wonCount, lostCount, loading }: WinRateGaugeProps) {
-  const data = [{ name: 'win', value: Math.max(0, Math.min(100, rate)) }];
+  const safeRate = Math.max(0, Math.min(100, rate));
+  const radius = 84;
+  const strokeWidth = 16;
+  const circumference = Math.PI * radius;
+  const dashOffset = circumference * (1 - safeRate / 100);
 
   return (
     <div className="rounded-md border border-border bg-card p-5">
@@ -21,32 +23,35 @@ export function WinRateGauge({ rate, wonCount, lostCount, loading }: WinRateGaug
             <div className="h-32 w-32 animate-pulse rounded-full bg-muted" />
           </div>
         ) : (
-          <>
-            <ResponsiveContainer width="100%" height="100%">
-              <RadialBarChart
-                innerRadius="75%"
-                outerRadius="100%"
-                data={data}
-                startAngle={180}
-                endAngle={0}
-                cy="80%"
-              >
-                <PolarAngleAxis type="number" domain={[0, 100]} tick={false} />
-                <RadialBar
-                  dataKey="value"
-                  cornerRadius={6}
-                  fill="hsl(var(--primary))"
-                  background={{ fill: 'hsl(var(--muted))' }}
+          <div className="flex h-full items-center justify-center">
+            <div className="relative h-44 w-full max-w-[260px]">
+              <svg viewBox="0 0 220 140" className="h-full w-full overflow-visible">
+                <path
+                  d="M 26 110 A 84 84 0 0 1 194 110"
+                  fill="none"
+                  stroke="hsl(var(--muted))"
+                  strokeWidth={strokeWidth}
+                  strokeLinecap="round"
                 />
-              </RadialBarChart>
-            </ResponsiveContainer>
-            <div className="pointer-events-none absolute inset-x-0 bottom-6 flex flex-col items-center">
-              <div className="font-mono text-4xl font-semibold text-foreground">
-                {rate.toFixed(1)}
-                <span className="text-xl text-muted-foreground">%</span>
+                <path
+                  d="M 26 110 A 84 84 0 0 1 194 110"
+                  fill="none"
+                  stroke="hsl(var(--primary))"
+                  strokeWidth={strokeWidth}
+                  strokeLinecap="round"
+                  strokeDasharray={circumference}
+                  strokeDashoffset={dashOffset}
+                />
+              </svg>
+
+              <div className="pointer-events-none absolute inset-x-0 bottom-5 flex flex-col items-center">
+                <div className="font-mono text-4xl font-semibold text-foreground">
+                  {safeRate.toFixed(1)}
+                  <span className="text-xl text-muted-foreground">%</span>
+                </div>
               </div>
             </div>
-          </>
+          </div>
         )}
       </div>
 
