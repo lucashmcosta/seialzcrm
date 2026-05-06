@@ -64,6 +64,13 @@ export default function ReportsPage() {
   const [period, setPeriod] = useState('30');
   const [ownerId, setOwnerId] = useState('all');
 
+  const [preset, setPreset] = useState<PeriodPreset>('last_30');
+  const [customRange, setCustomRange] = useState<DateRange | undefined>();
+  const [ownerId, setOwnerId] = useState('all');
+
+  const range = useMemo(() => computeRange(preset, customRange), [preset, customRange]);
+  const rangeKey = `${range.from.toISOString()}_${range.to.toISOString()}`;
+
   const [users, setUsers] = useState<UserRow[]>([]);
   const [stages, setStages] = useState<Stage[]>([]);
   const [currentOpps, setCurrentOpps] = useState<Opp[]>([]);
@@ -81,7 +88,7 @@ export default function ReportsPage() {
     if (!organization) return;
     fetchData();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [organization?.id, period, ownerId]);
+  }, [organization?.id, rangeKey, ownerId]);
 
   async function fetchUsersAndStages() {
     if (!organization) return;
