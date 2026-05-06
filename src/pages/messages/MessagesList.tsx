@@ -1930,6 +1930,29 @@ function DesktopMessagesList() {
           refetchThreads();
         }}
       />
+
+      {/* Confirm Mark Won/Lost */}
+      <ConfirmDialog
+        open={!!confirmAction}
+        onOpenChange={(o) => !o && setConfirmAction(null)}
+        title={
+          confirmAction?.kind === 'won'
+            ? (locale === 'pt-BR' ? 'Marcar como Ganho' : 'Mark as Won')
+            : (locale === 'pt-BR' ? 'Marcar como Perdido' : 'Mark as Lost')
+        }
+        description={
+          confirmAction
+            ? (locale === 'pt-BR'
+                ? `Deseja marcar a oportunidade "${confirmAction.opp.title}" como ${confirmAction.kind === 'won' ? 'ganha' : 'perdida'}?`
+                : `Mark opportunity "${confirmAction.opp.title}" as ${confirmAction.kind}?`)
+            : ''
+        }
+        confirmText={locale === 'pt-BR' ? 'Confirmar' : 'Confirm'}
+        cancelText={locale === 'pt-BR' ? 'Cancelar' : 'Cancel'}
+        variant={confirmAction?.kind === 'lost' ? 'destructive' : 'default'}
+        loading={markingOpp}
+        onConfirm={() => confirmAction && handleMarkOpportunity(confirmAction.kind, confirmAction.opp)}
+      />
     </Layout>
   );
 }
