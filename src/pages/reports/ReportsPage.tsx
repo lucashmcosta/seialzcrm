@@ -61,9 +61,6 @@ export default function ReportsPage() {
   const { organization, locale } = useOrganization();
   const { permissions, loading: permsLoading } = usePermissions();
 
-  const [period, setPeriod] = useState('30');
-  const [ownerId, setOwnerId] = useState('all');
-
   const [preset, setPreset] = useState<PeriodPreset>('last_30');
   const [customRange, setCustomRange] = useState<DateRange | undefined>();
   const [ownerId, setOwnerId] = useState('all');
