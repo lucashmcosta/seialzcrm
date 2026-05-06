@@ -1392,7 +1392,7 @@ function DesktopMessagesList() {
                         )
                       )}
 
-
+                      {selectedThread.needs_human_attention && hasAIAgent && (
                         <Button variant="outline" size="sm" onClick={() => handleReturnToAI(selectedThread.id)}>
                           <Robot className="w-4 h-4 mr-1" />
                           {locale === 'pt-BR' ? 'Devolver ao AI' : 'Return to AI'}
