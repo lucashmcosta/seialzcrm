@@ -544,6 +544,77 @@ function DesktopMessagesList() {
     }
   }, [selectedThreadId]);
 
+  // Fetch pipeline stages once per org (for won/lost mapping)
+  useEffect(() => {
+    if (!organization?.id) return;
+    (async () => {
+      const { data } = await supabase
+        .from('pipeline_stages')
+        .select('id, type')
+        .eq('organization_id', organization.id);
+      if (data) setPipelineStages(data as any);
+    })();
+  }, [organization?.id]);
+
+  // Fetch open opportunities for the selected thread's contact
+  useEffect(() => {
+    const contactId = selectedThread?.contact_id;
+    if (!organization?.id || !contactId) {
+      setContactOpportunities([]);
+      return;
+    }
+    (async () => {
+      const { data } = await supabase
+        .from('opportunities')
+        .select('id, title, pipeline_stage_id')
+        .eq('organization_id', organization.id)
+        .eq('contact_id', contactId)
+        .eq('status', 'open')
+        .is('deleted_at', null);
+      setContactOpportunities((data as ChatOpp[]) || []);
+    })();
+  }, [organization?.id, selectedThread?.contact_id]);
+
+  const handleMarkOpportunity = async (kind: 'won' | 'lost', opp: ChatOpp) => {
+    if (!organization?.id) return;
+    const targetStage = pipelineStages.find((s) => s.type === kind);
+    if (!targetStage) {
+      toast({
+        title: locale === 'pt-BR' ? 'Estágio não encontrado' : 'Stage not found',
+        description: locale === 'pt-BR'
+          ? `Configure um estágio do tipo "${kind === 'won' ? 'Ganho' : 'Perdido'}" no pipeline.`
+          : `Configure a "${kind}" stage in your pipeline.`,
+        variant: 'destructive',
+      });
+      return;
+    }
+    setMarkingOpp(true);
+    try {
+      const { error } = await supabase
+        .from('opportunities')
+        .update({
+          status: kind,
+          pipeline_stage_id: targetStage.id,
+          updated_by: userProfile?.id || null,
+        } as any)
+        .eq('id', opp.id);
+      if (error) throw error;
+      toast({
+        title: kind === 'won'
+          ? (locale === 'pt-BR' ? 'Oportunidade marcada como ganha' : 'Opportunity marked as won')
+          : (locale === 'pt-BR' ? 'Oportunidade marcada como perdida' : 'Opportunity marked as lost'),
+      });
+      setContactOpportunities((prev) => prev.filter((o) => o.id !== opp.id));
+      setConfirmAction(null);
+    } catch (err) {
+      console.error('Error marking opportunity:', err);
+      toast({ title: locale === 'pt-BR' ? 'Erro ao atualizar' : 'Error updating', variant: 'destructive' });
+    } finally {
+      setMarkingOpp(false);
+    }
+  };
+
+
   // Real-time subscription for messages in the active chat only
   // Thread list realtime is handled by useMessageThreads hook
   useEffect(() => {
