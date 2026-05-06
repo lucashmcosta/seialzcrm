@@ -192,19 +192,21 @@ export function ReportFilters({
         </Popover>
       )}
 
-      <Select value={ownerId} onValueChange={onOwnerChange}>
-        <SelectTrigger className="w-52 rounded-md">
-          <SelectValue />
-        </SelectTrigger>
-        <SelectContent>
-          <SelectItem value="all">Todos os vendedores</SelectItem>
-          {users.map((u) => (
-            <SelectItem key={u.id} value={u.id}>
-              {u.full_name}
-            </SelectItem>
-          ))}
-        </SelectContent>
-      </Select>
+      {showOwner && (
+        <Select value={ownerId} onValueChange={onOwnerChange}>
+          <SelectTrigger className="w-52 rounded-md">
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="all">Todos os vendedores</SelectItem>
+            {users.map((u) => (
+              <SelectItem key={u.id} value={u.id}>
+                {u.full_name}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+      )}
     </div>
   );
 }
