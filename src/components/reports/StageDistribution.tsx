@@ -1,5 +1,3 @@
-import { ResponsiveContainer, PieChart, Pie, Cell, Tooltip, Legend } from 'recharts';
-
 export interface StageSlice {
   name: string;
   value: number;
@@ -11,18 +9,11 @@ interface Props {
   loading?: boolean;
 }
 
-const PALETTE = [
-  'hsl(var(--primary))',
-  'hsl(var(--success))',
-  'hsl(var(--warning))',
-  'hsl(var(--destructive))',
-  'hsl(var(--accent))',
-  'hsl(var(--secondary))',
-];
+const TOKEN_COLORS = ['bg-primary', 'bg-success', 'bg-warning', 'bg-destructive', 'bg-accent', 'bg-secondary'];
 
 export function StageDistribution({ data, formatCurrency, loading }: Props) {
-  const filtered = data.filter((d) => d.value > 0);
-  const total = filtered.reduce((s, d) => s + d.value, 0);
+  const filtered = data.filter((item) => item.value > 0);
+  const total = filtered.reduce((sum, item) => sum + item.value, 0);
 
   return (
     <div className="rounded-md border border-border bg-card p-5">
@@ -38,44 +29,51 @@ export function StageDistribution({ data, formatCurrency, loading }: Props) {
           Sem oportunidades abertas
         </div>
       ) : (
-        <div className="relative">
-          <ResponsiveContainer width="100%" height={240}>
-            <PieChart>
-              <Pie
-                data={filtered}
-                innerRadius={60}
-                outerRadius={90}
-                paddingAngle={2}
-                dataKey="value"
-                stroke="hsl(var(--background))"
-                strokeWidth={2}
-              >
-                {filtered.map((_, i) => (
-                  <Cell key={i} fill={PALETTE[i % PALETTE.length]} />
-                ))}
-              </Pie>
-              <Tooltip
-                contentStyle={{
-                  background: 'hsl(var(--card))',
-                  border: '1px solid hsl(var(--border))',
-                  borderRadius: 6,
-                  fontSize: 12,
-                }}
-                formatter={(v: number) => formatCurrency(v)}
-              />
-              <Legend
-                wrapperStyle={{ fontSize: 11 }}
-                iconType="circle"
-              />
-            </PieChart>
-          </ResponsiveContainer>
-          <div className="pointer-events-none absolute inset-0 flex flex-col items-center justify-center pb-10">
-            <span className="text-[10px] uppercase tracking-wider text-muted-foreground">
-              Total
-            </span>
-            <span className="font-mono text-sm font-semibold text-foreground">
-              {formatCurrency(total)}
-            </span>
+        <div className="space-y-4">
+          <div className="overflow-hidden rounded-full bg-muted/60">
+            <div className="flex h-5 w-full">
+              {filtered.map((item, index) => {
+                const width = total === 0 ? 0 : (item.value / total) * 100;
+                return (
+                  <div
+                    key={item.name}
+                    className={TOKEN_COLORS[index % TOKEN_COLORS.length]}
+                    style={{ width: `${width}%` }}
+                    aria-hidden="true"
+                  />
+                );
+              })}
+            </div>
+          </div>
+
+          <div className="rounded-md border border-border/60 bg-background/40 p-4">
+            <div className="mb-3 flex items-baseline justify-between gap-3">
+              <span className="text-xs uppercase tracking-wider text-muted-foreground">Total</span>
+              <span className="font-mono text-lg font-semibold text-foreground">
+                {formatCurrency(total)}
+              </span>
+            </div>
+
+            <div className="space-y-3">
+              {filtered.map((item, index) => {
+                const percentage = total === 0 ? 0 : (item.value / total) * 100;
+                return (
+                  <div key={item.name} className="space-y-1.5">
+                    <div className="flex items-center justify-between gap-3 text-xs">
+                      <div className="flex min-w-0 items-center gap-2">
+                        <span className={`h-2.5 w-2.5 flex-shrink-0 rounded-full ${TOKEN_COLORS[index % TOKEN_COLORS.length]}`} />
+                        <span className="truncate text-foreground">{item.name}</span>
+                      </div>
+                      <span className="font-mono text-muted-foreground">{percentage.toFixed(1)}%</span>
+                    </div>
+                    <div className="flex items-center justify-between gap-3 text-xs text-muted-foreground">
+                      <span>{formatCurrency(item.value)}</span>
+                      <span>{item.value.toLocaleString('pt-BR')}</span>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
           </div>
         </div>
       )}
