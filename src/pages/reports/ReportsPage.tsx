@@ -184,15 +184,18 @@ export default function ReportsPage() {
   // Compute KPIs
   // ─────────────────────────────────────────
   const stats = useMemo(() => {
-    const days = parseInt(period);
-    const now = new Date();
-    const fromDate = new Date(now);
-    fromDate.setDate(fromDate.getDate() - days);
+    const fromDate = range.from;
+    const toDate = range.to;
+    const days = Math.max(1, Math.round((toDate.getTime() - fromDate.getTime()) / 86400000));
 
-    const inPeriodCreated = (o: Opp) => new Date(o.created_at) >= fromDate;
-    const inPeriodClosed = (o: Opp) =>
-      (o.status === 'won' || o.status === 'lost') &&
-      new Date(o.updated_at) >= fromDate;
+    const inPeriodCreated = (o: Opp) => {
+      const t = new Date(o.created_at);
+      return t >= fromDate && t <= toDate;
+    };
+    const inPeriodClosed = (o: Opp) => {
+      const t = new Date(o.updated_at);
+      return (o.status === 'won' || o.status === 'lost') && t >= fromDate && t <= toDate;
+    };
 
     const created = currentOpps.filter(inPeriodCreated);
     const won = currentOpps.filter((o) => o.status === 'won' && inPeriodClosed(o));
@@ -206,7 +209,6 @@ export default function ReportsPage() {
         : 0;
     const avgTicket = won.length > 0 ? wonValue / won.length : 0;
 
-    // Avg sales cycle (days)
     const cycleDaysList = won
       .map((o) => {
         const c = new Date(o.created_at).getTime();
@@ -220,16 +222,17 @@ export default function ReportsPage() {
         : 0;
 
     // Previous period
-    const prevDate = new Date(fromDate);
-    prevDate.setDate(prevDate.getDate() - days);
+    const prevFrom = new Date(fromDate);
+    prevFrom.setDate(prevFrom.getDate() - days);
+    const prevTo = new Date(fromDate);
     const inPrevCreated = (o: Opp) => {
       const t = new Date(o.created_at);
-      return t >= prevDate && t < fromDate;
+      return t >= prevFrom && t < prevTo;
     };
     const inPrevClosed = (o: Opp) => {
       const t = new Date(o.updated_at);
       return (
-        (o.status === 'won' || o.status === 'lost') && t >= prevDate && t < fromDate
+        (o.status === 'won' || o.status === 'lost') && t >= prevFrom && t < prevTo
       );
     };
     const prevCreated = previousOpps.filter(inPrevCreated);
@@ -263,7 +266,7 @@ export default function ReportsPage() {
       avgTicket,
       avgCycle,
     };
-  }, [currentOpps, previousOpps, period]);
+  }, [currentOpps, previousOpps, rangeKey]);
 
   // Funnel & distribution
   const funnel: FunnelStage[] = useMemo(() => {
