@@ -363,7 +363,8 @@ export default function ReportsPage() {
     });
 
     currentOpps.forEach((o) => {
-      if ((o.status === 'won' || o.status === 'lost') && new Date(o.updated_at) >= fromDate) {
+      const t = new Date(o.updated_at);
+      if ((o.status === 'won' || o.status === 'lost') && t >= fromDate && t <= toDate) {
         const uid = o.owner_user_id || 'unassigned';
         const row = ensure(uid);
         if (o.status === 'won') {
@@ -378,7 +379,7 @@ export default function ReportsPage() {
     return Array.from(map.values()).filter(
       (r) => r.open > 0 || r.won > 0 || r.lost > 0,
     );
-  }, [openOpps, currentOpps, users, period]);
+  }, [openOpps, currentOpps, users, rangeKey]);
 
   // Permission gate (after hooks to satisfy Rules of Hooks)
   if (!permsLoading && !permissions.canManageSettings) {
