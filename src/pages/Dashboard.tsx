@@ -144,28 +144,37 @@ export default function Dashboard() {
       const fromIso = from.toISOString();
       const toIso = to.toISOString();
 
-      const [enteredRes, closedRes] = await Promise.all([
-        supabase
-          .from('opportunities')
-          .select('*', { count: 'exact', head: true })
-          .eq('organization_id', organization.id)
-          .eq('owner_user_id', userProfile.id)
-          .is('deleted_at', null)
-          .gte('created_at', fromIso)
-          .lte('created_at', toIso),
-        supabase
-          .from('opportunities')
-          .select('*', { count: 'exact', head: true })
-          .eq('organization_id', organization.id)
-          .eq('owner_user_id', userProfile.id)
-          .eq('status', 'won')
-          .is('deleted_at', null)
-          .gte('updated_at', fromIso)
-          .lte('updated_at', toIso),
-      ]);
+      // Single query: rows created in period OR won-and-closed in period
+      const { data, error } = await supabase
+        .from('opportunities')
+        .select('id, status, created_at, updated_at')
+        .eq('organization_id', organization.id)
+        .eq('owner_user_id', userProfile.id)
+        .is('deleted_at', null)
+        .or(
+          `and(created_at.gte.${fromIso},created_at.lte.${toIso}),and(status.eq.won,updated_at.gte.${fromIso},updated_at.lte.${toIso})`,
+        )
+        .limit(5000);
 
-      setEnteredCount(enteredRes.count || 0);
-      setClosedCount(closedRes.count || 0);
+      if (error) throw error;
+      const rows = (data || []) as OppRow[];
+
+      const fromMs = from.getTime();
+      const toMs = to.getTime();
+      let entered = 0;
+      let closed = 0;
+      for (const r of rows) {
+        const c = new Date(r.created_at).getTime();
+        if (c >= fromMs && c <= toMs) entered += 1;
+        if (r.status === 'won' && r.updated_at) {
+          const u = new Date(r.updated_at).getTime();
+          if (u >= fromMs && u <= toMs) closed += 1;
+        }
+      }
+
+      setEnteredCount(entered);
+      setClosedCount(closed);
+      setOpps(rows);
     } catch (e) {
       console.error('Dashboard fetch error:', e);
     } finally {
