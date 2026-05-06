@@ -1058,13 +1058,12 @@ function DesktopMessagesList() {
       description: name,
       duration: 5000,
       action: (
-        <button
-          type="button"
+        <ToastAction
+          altText={locale === 'pt-BR' ? 'Desfazer' : 'Undo'}
           onClick={() => unhideThread(threadId)}
-          className="inline-flex items-center justify-center rounded-md border border-border bg-background px-3 py-1.5 text-xs font-medium hover:bg-muted transition-colors"
         >
           {locale === 'pt-BR' ? 'Desfazer' : 'Undo'}
-        </button>
+        </ToastAction>
       ),
     });
   };
