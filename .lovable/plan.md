@@ -1,45 +1,56 @@
 ## Objetivo
 
-Permitir marcar uma oportunidade como **Ganho** (e Perdido) diretamente do header da conversa em `/messages`, sem precisar abrir a tela da oportunidade.
+Redesenhar o header da conversa em `/messages` para:
+- Evitar que o nome do contato quebre/comprime quando há muitos botões.
+- Reduzir o ruído visual encapsulando ações secundárias em um menu "Mais".
+- Manter as ações mais usadas visíveis com hierarquia clara.
 
-## Comportamento
+## Layout proposto
 
-1. Quando uma conversa é selecionada, buscar a(s) oportunidade(s) **abertas** (`status = 'open'`) do `contact_id` daquela thread.
-2. Mostrar um botão verde **"Marcar como Ganho"** no header da conversa (ao lado de "Resolver"), com ícone `TrendUp`. Junto, um menu/secundário **"Marcar como Perdido"** (ícone `TrendDown`) para manter paridade.
-3. Regras de exibição:
-   - Se o contato tem **1 oportunidade aberta** → clicar no botão abre um `ConfirmDialog` ("Marcar oportunidade *Título* como ganha?") e executa a ação.
-   - Se tem **2+ oportunidades abertas** → o botão abre um pequeno popover/select listando as oportunidades; ao escolher uma, confirma e marca.
-   - Se tem **0 oportunidades abertas** → não exibir o botão (mantém a UI limpa).
-4. Após sucesso: toast de confirmação, refetch da lista de oportunidades do contato e (opcional) sugerir resolver a conversa.
+```text
+[Avatar] Nome do Contato (truncate)  [status badge]   |  [Assumir] [Resolver] [Marcar Ganho ▾]  [⋯ Mais]
+         +55 11 9999-9999 · Atribuída a Tamires        
+```
+
+- Lado esquerdo (`min-w-0 flex-1`) com `truncate` no nome → nunca mais quebra/comprime.
+- Lado direito (`shrink-0`): só **3 ações primárias** + **1 menu "⋯ Mais"** com o restante.
+- Ícone-only em telas estreitas (`< xl`), texto+ícone em telas largas (`xl:`).
+
+## Hierarquia das ações
+
+**Primárias (sempre visíveis no header):**
+1. **Assumir** — quando não atribuída ao usuário atual e thread não resolvida.
+2. **Resolver** — quando thread `open`/`awaiting_client`.
+3. **Marcar Ganho/Perdido** — único botão verde com seta. Se há 1 oportunidade aberta, abre dropdown com as duas opções (Ganho/Perdido). Se há várias, lista todas com Ganho/Perdido por oportunidade. Some quando não houver oportunidade aberta.
+
+**Secundárias (dentro do menu "⋯ Mais"):**
+- Reabrir conversa (quando `resolved`).
+- Devolver ao AI (quando `needs_human_attention` e há agente).
+- Atribuir a... (submenu/itens com a lista de owners — mantém a função do `OwnerSelector` atual).
+- Ver perfil do contato (link para `/contacts/:id`).
+- Ocultar conversa (já existente em `ChatListItem` — útil ter aqui também).
 
 ## Implementação técnica
 
-**Arquivo:** `src/pages/messages/MessagesList.tsx`
+**Arquivo:** `src/pages/messages/MessagesList.tsx` (apenas o bloco do `Chat Header`, linhas ~1290-1425).
 
-- Novo estado: `contactOpportunities: Array<{id, title, status, pipeline_stage_id}>` e `wonDialogOpen`, `lostDialogOpen`, `selectedOppId`.
-- Novo `useEffect` disparado por `selectedThread?.contact_id` que faz:
-  ```ts
-  supabase.from('opportunities')
-    .select('id, title, status, pipeline_stage_id')
-    .eq('contact_id', selectedThread.contact_id)
-    .eq('organization_id', orgId)
-    .eq('status', 'open')
-    .is('deleted_at', null)
-  ```
-- Buscar `pipeline_stages` (uma vez, cacheado) para localizar o stage com `type = 'won'` / `type = 'lost'` — mesma lógica já usada em `OpportunityDetail.tsx` (linhas 148-194), que será replicada aqui em duas funções: `handleMarkOppWon(oppId)` e `handleMarkOppLost(oppId)`.
-- Update na tabela `opportunities` com `{ status, pipeline_stage_id, updated_by: userProfile.id }`.
-- Botões adicionados no bloco de ações do header (entre "Resolver" e "Devolver ao AI", linhas ~1252-1264):
-  - Botão "Marcar como Ganho" — `variant="outline"` com classe verde (`text-green-600 border-green-600/30 hover:bg-green-50`).
-  - Botão "Marcar como Perdido" — `variant="outline"` discreto.
-- Reusar `ConfirmDialog` de `src/components/ui/confirm-dialog.tsx` para a confirmação.
-- Caso múltiplas oportunidades: usar um `DropdownMenu` simples com a lista para escolher qual marcar.
+- Container externo: `flex items-center justify-between gap-4`.
+- Bloco do contato: `flex items-center gap-3 min-w-0 flex-1` — o `min-w-0` é o que destrava o `truncate`.
+  - Linha do nome: `<span className="font-semibold text-foreground truncate block">`.
+  - Linha de subtítulo: `text-xs text-muted-foreground truncate`.
+  - Badges (`Online`, status) ficam ao lado do nome com `shrink-0`.
+- Bloco de ações: `flex items-center gap-2 shrink-0`.
+  - Botões primários usam `size="sm"` com `<span className="hidden xl:inline">` no texto (ícone sempre visível, texto colapsa em telas menores).
+  - "Marcar Ganho/Perdido" sempre vira `DropdownMenu` (mesmo com 1 oportunidade) para manter o header consistente — header do menu mostra título da oportunidade.
+  - Menu "⋯ Mais" agrupa Reabrir, Devolver ao AI, Atribuir (com submenu de owners), Ver perfil, Ocultar conversa. Usa `DropdownMenuLabel` + `DropdownMenuSeparator` para organizar.
+- O `OwnerSelector` atual sai do header e seu valor/onChange é usado dentro do menu "Atribuir a".
 
 ## Fora do escopo
 
-- Não alterar a tela `OpportunityDetail` (já tem essa ação).
-- Não criar nova oportunidade automaticamente quando não houver — apenas oculta os botões.
-- Não automatizar resolver a conversa após ganhar (pode ser uma melhoria futura).
+- Não muda o layout da lista de conversas, nem o corpo do chat.
+- Não altera mobile (`MobileMessagesList`).
+- Sem mudanças em hooks ou queries — puramente reorganização do header.
 
 ## Arquivos modificados
 
-- `src/pages/messages/MessagesList.tsx` (único arquivo).
+- `src/pages/messages/MessagesList.tsx` (somente JSX do Chat Header e import de `DropdownMenuLabel` / `DropdownMenuSeparator`).

@@ -28,6 +28,8 @@ import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
+  DropdownMenuLabel,
+  DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
 import { ResizablePanelGroup, ResizablePanel, ResizableHandle } from '@/components/ui/resizable';
@@ -1290,27 +1292,27 @@ function DesktopMessagesList() {
               <>
                 {/* Chat Header */}
                 <div className="border-b border-border px-6 py-3">
-                  <div className="flex items-center justify-between">
-                    <div className="flex items-center gap-3">
+                  <div className="flex items-center justify-between gap-4">
+                    {/* Contact info — flex-1 with min-w-0 so name truncates instead of wrapping */}
+                    <div className="flex items-center gap-3 min-w-0 flex-1">
                       <Avatar fallbackText={selectedThread.contact_name} size="md" />
-                      <div>
-                        <div className="flex items-center gap-2">
-                          <span className="font-semibold text-foreground">
+                      <div className="min-w-0 flex-1">
+                        <div className="flex items-center gap-2 min-w-0">
+                          <span className="font-semibold text-foreground truncate">
                             {selectedThread.contact_name}
                           </span>
                           {isIn24hWindow && (
-                            <BadgeWithDot color="success" size="sm">
+                            <BadgeWithDot color="success" size="sm" className="shrink-0">
                               {locale === 'pt-BR' ? 'Online' : 'Online'}
                             </BadgeWithDot>
                           )}
-                          {/* Thread status badge */}
                           {selectedThread.status && statusConfig[selectedThread.status] && (
-                            <span className={cn('text-xs font-medium', statusConfig[selectedThread.status].color)}>
+                            <span className={cn('text-xs font-medium shrink-0', statusConfig[selectedThread.status].color)}>
                               {locale === 'pt-BR' ? statusConfig[selectedThread.status].label : statusConfig[selectedThread.status].labelEn}
                             </span>
                           )}
                         </div>
-                        <p className="text-xs text-muted-foreground">
+                        <p className="text-xs text-muted-foreground truncate">
                           {selectedThread.contact_phone}
                           {selectedThread.assigned_user_name && (
                             <span> · {locale === 'pt-BR' ? 'Atribuída a' : 'Assigned to'} {selectedThread.assigned_user_name}</span>
@@ -1319,94 +1321,70 @@ function DesktopMessagesList() {
                       </div>
                     </div>
 
-                    <div className="flex items-center gap-2">
-                      {/* Action buttons */}
+                    {/* Actions — primary buttons + "More" menu */}
+                    <div className="flex items-center gap-2 shrink-0">
+                      {/* Assumir */}
                       {(!selectedThread.assigned_user_id || selectedThread.assigned_user_id !== userProfile?.id) && selectedThread.status !== 'resolved' && (
-                        <Button variant="outline" size="sm" onClick={() => handleTakeOver(selectedThread.id)}>
-                          <UserCheck className="w-4 h-4 mr-1" />
-                          {locale === 'pt-BR' ? 'Assumir' : 'Take Over'}
-                        </Button>
-                      )}
-                      
-                      {['open', 'awaiting_client'].includes(selectedThread.status) && (
-                        <Button variant="outline" size="sm" onClick={() => handleResolve(selectedThread.id)}>
-                          <CheckCircle className="w-4 h-4 mr-1" />
-                          {locale === 'pt-BR' ? 'Resolver' : 'Resolve'}
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={() => handleTakeOver(selectedThread.id)}
+                          title={locale === 'pt-BR' ? 'Assumir conversa' : 'Take over'}
+                        >
+                          <UserCheck className="w-4 h-4 xl:mr-1" />
+                          <span className="hidden xl:inline">{locale === 'pt-BR' ? 'Assumir' : 'Take Over'}</span>
                         </Button>
                       )}
 
-                      {/* Mark opportunity as Won/Lost from chat */}
+                      {/* Resolver */}
+                      {['open', 'awaiting_client'].includes(selectedThread.status) && (
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={() => handleResolve(selectedThread.id)}
+                          title={locale === 'pt-BR' ? 'Resolver conversa' : 'Resolve'}
+                        >
+                          <CheckCircle className="w-4 h-4 xl:mr-1" />
+                          <span className="hidden xl:inline">{locale === 'pt-BR' ? 'Resolver' : 'Resolve'}</span>
+                        </Button>
+                      )}
+
+                      {/* Marcar Ganho/Perdido — single dropdown */}
                       {contactOpportunities.length > 0 && (
-                        contactOpportunities.length === 1 ? (
-                          <>
+                        <DropdownMenu>
+                          <DropdownMenuTrigger asChild>
                             <Button
                               variant="outline"
                               size="sm"
                               className="text-green-600 border-green-600/30 hover:bg-green-50 hover:text-green-700 dark:hover:bg-green-950/40"
-                              onClick={() => setConfirmAction({ kind: 'won', opp: contactOpportunities[0] })}
+                              title={locale === 'pt-BR' ? 'Marcar oportunidade' : 'Mark opportunity'}
                             >
-                              <TrendUp className="w-4 h-4 mr-1" />
-                              {locale === 'pt-BR' ? 'Marcar Ganho' : 'Mark Won'}
+                              <TrendUp className="w-4 h-4 xl:mr-1" />
+                              <span className="hidden xl:inline">{locale === 'pt-BR' ? 'Marcar' : 'Mark'}</span>
                             </Button>
-                            <Button
-                              variant="outline"
-                              size="sm"
-                              className="text-red-600 border-red-600/30 hover:bg-red-50 hover:text-red-700 dark:hover:bg-red-950/40"
-                              onClick={() => setConfirmAction({ kind: 'lost', opp: contactOpportunities[0] })}
-                            >
-                              <TrendDown className="w-4 h-4 mr-1" />
-                              {locale === 'pt-BR' ? 'Perdido' : 'Lost'}
-                            </Button>
-                          </>
-                        ) : (
-                          <DropdownMenu>
-                            <DropdownMenuTrigger asChild>
-                              <Button
-                                variant="outline"
-                                size="sm"
-                                className="text-green-600 border-green-600/30 hover:bg-green-50 hover:text-green-700 dark:hover:bg-green-950/40"
-                              >
-                                <TrendUp className="w-4 h-4 mr-1" />
-                                {locale === 'pt-BR' ? 'Ganho/Perdido' : 'Won/Lost'}
-                              </Button>
-                            </DropdownMenuTrigger>
-                            <DropdownMenuContent align="end" className="w-72">
-                              {contactOpportunities.map((opp) => (
-                                <Fragment key={opp.id}>
-                                  <DropdownMenuItem onClick={() => setConfirmAction({ kind: 'won', opp })}>
-                                    <TrendUp className="w-4 h-4 mr-2 text-green-600" />
-                                    <span className="truncate">
-                                      {locale === 'pt-BR' ? 'Ganho:' : 'Won:'} {opp.title}
-                                    </span>
-                                  </DropdownMenuItem>
-                                  <DropdownMenuItem onClick={() => setConfirmAction({ kind: 'lost', opp })}>
-                                    <TrendDown className="w-4 h-4 mr-2 text-red-600" />
-                                    <span className="truncate">
-                                      {locale === 'pt-BR' ? 'Perdido:' : 'Lost:'} {opp.title}
-                                    </span>
-                                  </DropdownMenuItem>
-                                </Fragment>
-                              ))}
-                            </DropdownMenuContent>
-                          </DropdownMenu>
-                        )
+                          </DropdownMenuTrigger>
+                          <DropdownMenuContent align="end" className="w-72">
+                            {contactOpportunities.map((opp, idx) => (
+                              <Fragment key={opp.id}>
+                                {idx > 0 && <DropdownMenuSeparator />}
+                                <DropdownMenuLabel className="truncate text-xs text-muted-foreground font-normal">
+                                  {opp.title}
+                                </DropdownMenuLabel>
+                                <DropdownMenuItem onClick={() => setConfirmAction({ kind: 'won', opp })}>
+                                  <TrendUp className="w-4 h-4 mr-2 text-green-600" />
+                                  {locale === 'pt-BR' ? 'Marcar como Ganho' : 'Mark as Won'}
+                                </DropdownMenuItem>
+                                <DropdownMenuItem onClick={() => setConfirmAction({ kind: 'lost', opp })}>
+                                  <TrendDown className="w-4 h-4 mr-2 text-red-600" />
+                                  {locale === 'pt-BR' ? 'Marcar como Perdido' : 'Mark as Lost'}
+                                </DropdownMenuItem>
+                              </Fragment>
+                            ))}
+                          </DropdownMenuContent>
+                        </DropdownMenu>
                       )}
 
-                      {selectedThread.needs_human_attention && hasAIAgent && (
-                        <Button variant="outline" size="sm" onClick={() => handleReturnToAI(selectedThread.id)}>
-                          <Robot className="w-4 h-4 mr-1" />
-                          {locale === 'pt-BR' ? 'Devolver ao AI' : 'Return to AI'}
-                        </Button>
-                      )}
-                      
-                      {selectedThread.status === 'resolved' && (
-                        <Button variant="outline" size="sm" onClick={() => handleReopen(selectedThread.id)}>
-                          <ArrowCounterClockwise className="w-4 h-4 mr-1" />
-                          {locale === 'pt-BR' ? 'Reabrir' : 'Reopen'}
-                        </Button>
-                      )}
-
-                      {/* Manual assignment dropdown */}
+                      {/* Owner selector — kept visible (compact) */}
                       <OwnerSelector
                         value={selectedThread.assigned_user_id}
                         onChange={(userId) => handleAssign(selectedThread.id, userId)}
@@ -1414,15 +1392,46 @@ function DesktopMessagesList() {
                         placeholder={locale === 'pt-BR' ? 'Atribuir' : 'Assign'}
                       />
 
-                      <Button variant="outline" size="sm" asChild>
-                        <Link to={`/contacts/${selectedThread.contact_id}`}>
-                          <User01 className="w-4 h-4 mr-2" />
-                          {locale === 'pt-BR' ? 'Ver perfil' : 'View profile'}
-                        </Link>
-                      </Button>
+                      {/* More menu — secondary actions */}
+                      <DropdownMenu>
+                        <DropdownMenuTrigger asChild>
+                          <Button variant="outline" size="sm" title={locale === 'pt-BR' ? 'Mais ações' : 'More actions'}>
+                            <DotsHorizontal className="w-4 h-4" />
+                          </Button>
+                        </DropdownMenuTrigger>
+                        <DropdownMenuContent align="end" className="w-56">
+                          <DropdownMenuItem asChild>
+                            <Link to={`/contacts/${selectedThread.contact_id}`}>
+                              <User01 className="w-4 h-4 mr-2" />
+                              {locale === 'pt-BR' ? 'Ver perfil' : 'View profile'}
+                            </Link>
+                          </DropdownMenuItem>
+
+                          {selectedThread.needs_human_attention && hasAIAgent && (
+                            <DropdownMenuItem onClick={() => handleReturnToAI(selectedThread.id)}>
+                              <Robot className="w-4 h-4 mr-2" />
+                              {locale === 'pt-BR' ? 'Devolver ao AI' : 'Return to AI'}
+                            </DropdownMenuItem>
+                          )}
+
+                          {selectedThread.status === 'resolved' && (
+                            <DropdownMenuItem onClick={() => handleReopen(selectedThread.id)}>
+                              <ArrowCounterClockwise className="w-4 h-4 mr-2" />
+                              {locale === 'pt-BR' ? 'Reabrir conversa' : 'Reopen'}
+                            </DropdownMenuItem>
+                          )}
+
+                          <DropdownMenuSeparator />
+                          <DropdownMenuItem onClick={() => handleHideThread(selectedThread.id)}>
+                            <EyeSlash className="w-4 h-4 mr-2" />
+                            {locale === 'pt-BR' ? 'Ocultar conversa' : 'Hide conversation'}
+                          </DropdownMenuItem>
+                        </DropdownMenuContent>
+                      </DropdownMenu>
                     </div>
                   </div>
                 </div>
+
 
                 {/* Messages Area */}
                 {showTemplates ? (
