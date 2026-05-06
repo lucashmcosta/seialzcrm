@@ -297,6 +297,13 @@ function DesktopMessagesList() {
   // Export state
   const [isExporting, setIsExporting] = useState(false);
 
+  // Opportunities for current contact (mark as won/lost from chat)
+  type ChatOpp = { id: string; title: string; pipeline_stage_id: string };
+  const [contactOpportunities, setContactOpportunities] = useState<ChatOpp[]>([]);
+  const [pipelineStages, setPipelineStages] = useState<Array<{ id: string; type: string | null }>>([]);
+  const [confirmAction, setConfirmAction] = useState<{ kind: 'won' | 'lost'; opp: ChatOpp } | null>(null);
+  const [markingOpp, setMarkingOpp] = useState(false);
+
   const handleExportConversations = async () => {
     if (!organization?.id) return;
     setIsExporting(true);
