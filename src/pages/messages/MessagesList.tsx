@@ -56,6 +56,7 @@ import { useAI } from '@/hooks/useAI';
 import { useMessageThreads, type ChatThread } from '@/hooks/useMessageThreads';
 import { useHiddenThreads } from '@/hooks/useHiddenThreads';
 import { EyeSlash } from '@phosphor-icons/react';
+import { ToastAction } from '@/components/ui/toast';
 
 // Helper function for formatting relative time in human-readable format
 const formatRelativeTime = (timestamp: string, locale: 'pt-BR' | 'en-US'): string => {
