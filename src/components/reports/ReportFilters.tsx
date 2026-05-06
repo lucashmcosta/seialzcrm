@@ -122,9 +122,10 @@ interface Props {
   onPresetChange: (p: PeriodPreset) => void;
   customRange?: DateRange;
   onCustomRangeChange: (r: DateRange | undefined) => void;
-  ownerId: string;
-  onOwnerChange: (v: string) => void;
-  users: { id: string; full_name: string }[];
+  ownerId?: string;
+  onOwnerChange?: (v: string) => void;
+  users?: { id: string; full_name: string }[];
+  showOwner?: boolean;
 }
 
 export function ReportFilters({
@@ -132,9 +133,10 @@ export function ReportFilters({
   onPresetChange,
   customRange,
   onCustomRangeChange,
-  ownerId,
+  ownerId = 'all',
   onOwnerChange,
-  users,
+  users = [],
+  showOwner = true,
 }: Props) {
   const [open, setOpen] = useState(false);
 
@@ -190,19 +192,21 @@ export function ReportFilters({
         </Popover>
       )}
 
-      <Select value={ownerId} onValueChange={onOwnerChange}>
-        <SelectTrigger className="w-52 rounded-md">
-          <SelectValue />
-        </SelectTrigger>
-        <SelectContent>
-          <SelectItem value="all">Todos os vendedores</SelectItem>
-          {users.map((u) => (
-            <SelectItem key={u.id} value={u.id}>
-              {u.full_name}
-            </SelectItem>
-          ))}
-        </SelectContent>
-      </Select>
+      {showOwner && (
+        <Select value={ownerId} onValueChange={onOwnerChange}>
+          <SelectTrigger className="w-52 rounded-md">
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="all">Todos os vendedores</SelectItem>
+            {users.map((u) => (
+              <SelectItem key={u.id} value={u.id}>
+                {u.full_name}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+      )}
     </div>
   );
 }
