@@ -29,7 +29,12 @@ import {
   UserLeaderboard,
   type UserStats,
 } from '@/components/reports/UserLeaderboard';
-import { ReportFilters } from '@/components/reports/ReportFilters';
+import {
+  ReportFilters,
+  computeRange,
+  type PeriodPreset,
+} from '@/components/reports/ReportFilters';
+import type { DateRange } from 'react-day-picker';
 
 interface Opp {
   id: string;
