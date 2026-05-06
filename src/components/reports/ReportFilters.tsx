@@ -122,9 +122,10 @@ interface Props {
   onPresetChange: (p: PeriodPreset) => void;
   customRange?: DateRange;
   onCustomRangeChange: (r: DateRange | undefined) => void;
-  ownerId: string;
-  onOwnerChange: (v: string) => void;
-  users: { id: string; full_name: string }[];
+  ownerId?: string;
+  onOwnerChange?: (v: string) => void;
+  users?: { id: string; full_name: string }[];
+  showOwner?: boolean;
 }
 
 export function ReportFilters({
@@ -132,9 +133,10 @@ export function ReportFilters({
   onPresetChange,
   customRange,
   onCustomRangeChange,
-  ownerId,
+  ownerId = 'all',
   onOwnerChange,
-  users,
+  users = [],
+  showOwner = true,
 }: Props) {
   const [open, setOpen] = useState(false);
 
