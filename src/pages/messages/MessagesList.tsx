@@ -39,7 +39,8 @@ import { useQuery } from '@tanstack/react-query';
 import { formatDistanceToNow } from 'date-fns';
 import { ptBR, enUS } from 'date-fns/locale';
 import { useToast } from '@/hooks/use-toast';
-import { SpinnerGap, Check, Checks, Clock, WarningCircle, Sparkle, Briefcase, Smiley, Robot, ChatCircleDots, FileText, Target, UserCheck, CheckCircle, ArrowCounterClockwise, ArrowsLeftRight, Note, DownloadSimple, NotePencil, TextAa } from '@phosphor-icons/react';
+import { SpinnerGap, Check, Checks, Clock, WarningCircle, Sparkle, Briefcase, Smiley, Robot, ChatCircleDots, FileText, Target, UserCheck, CheckCircle, ArrowCounterClockwise, ArrowsLeftRight, Note, DownloadSimple, NotePencil, TextAa, TrendUp, TrendDown } from '@phosphor-icons/react';
+import { ConfirmDialog } from '@/components/ui/confirm-dialog';
 import { AgentMessageFeedbackDialog } from '@/components/whatsapp/AgentMessageFeedbackDialog';
 import { NewConversationDialog } from '@/components/messages/NewConversationDialog';
 import { WhatsAppTemplateSelector } from '@/components/whatsapp/WhatsAppTemplateSelector';
@@ -296,6 +297,13 @@ function DesktopMessagesList() {
   // Export state
   const [isExporting, setIsExporting] = useState(false);
 
+  // Opportunities for current contact (mark as won/lost from chat)
+  type ChatOpp = { id: string; title: string; pipeline_stage_id: string };
+  const [contactOpportunities, setContactOpportunities] = useState<ChatOpp[]>([]);
+  const [pipelineStages, setPipelineStages] = useState<Array<{ id: string; type: string | null }>>([]);
+  const [confirmAction, setConfirmAction] = useState<{ kind: 'won' | 'lost'; opp: ChatOpp } | null>(null);
+  const [markingOpp, setMarkingOpp] = useState(false);
+
   const handleExportConversations = async () => {
     if (!organization?.id) return;
     setIsExporting(true);
@@ -535,6 +543,77 @@ function DesktopMessagesList() {
       fetchMessages(selectedThreadId);
     }
   }, [selectedThreadId]);
+
+  // Fetch pipeline stages once per org (for won/lost mapping)
+  useEffect(() => {
+    if (!organization?.id) return;
+    (async () => {
+      const { data } = await supabase
+        .from('pipeline_stages')
+        .select('id, type')
+        .eq('organization_id', organization.id);
+      if (data) setPipelineStages(data as any);
+    })();
+  }, [organization?.id]);
+
+  // Fetch open opportunities for the selected thread's contact
+  useEffect(() => {
+    const contactId = selectedThread?.contact_id;
+    if (!organization?.id || !contactId) {
+      setContactOpportunities([]);
+      return;
+    }
+    (async () => {
+      const { data } = await supabase
+        .from('opportunities')
+        .select('id, title, pipeline_stage_id')
+        .eq('organization_id', organization.id)
+        .eq('contact_id', contactId)
+        .eq('status', 'open')
+        .is('deleted_at', null);
+      setContactOpportunities((data as ChatOpp[]) || []);
+    })();
+  }, [organization?.id, selectedThread?.contact_id]);
+
+  const handleMarkOpportunity = async (kind: 'won' | 'lost', opp: ChatOpp) => {
+    if (!organization?.id) return;
+    const targetStage = pipelineStages.find((s) => s.type === kind);
+    if (!targetStage) {
+      toast({
+        title: locale === 'pt-BR' ? 'Estágio não encontrado' : 'Stage not found',
+        description: locale === 'pt-BR'
+          ? `Configure um estágio do tipo "${kind === 'won' ? 'Ganho' : 'Perdido'}" no pipeline.`
+          : `Configure a "${kind}" stage in your pipeline.`,
+        variant: 'destructive',
+      });
+      return;
+    }
+    setMarkingOpp(true);
+    try {
+      const { error } = await supabase
+        .from('opportunities')
+        .update({
+          status: kind,
+          pipeline_stage_id: targetStage.id,
+          updated_by: userProfile?.id || null,
+        } as any)
+        .eq('id', opp.id);
+      if (error) throw error;
+      toast({
+        title: kind === 'won'
+          ? (locale === 'pt-BR' ? 'Oportunidade marcada como ganha' : 'Opportunity marked as won')
+          : (locale === 'pt-BR' ? 'Oportunidade marcada como perdida' : 'Opportunity marked as lost'),
+      });
+      setContactOpportunities((prev) => prev.filter((o) => o.id !== opp.id));
+      setConfirmAction(null);
+    } catch (err) {
+      console.error('Error marking opportunity:', err);
+      toast({ title: locale === 'pt-BR' ? 'Erro ao atualizar' : 'Error updating', variant: 'destructive' });
+    } finally {
+      setMarkingOpp(false);
+    }
+  };
+
 
   // Real-time subscription for messages in the active chat only
   // Thread list realtime is handled by useMessageThreads hook
@@ -1255,7 +1334,64 @@ function DesktopMessagesList() {
                           {locale === 'pt-BR' ? 'Resolver' : 'Resolve'}
                         </Button>
                       )}
-                      
+
+                      {/* Mark opportunity as Won/Lost from chat */}
+                      {contactOpportunities.length > 0 && (
+                        contactOpportunities.length === 1 ? (
+                          <>
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              className="text-green-600 border-green-600/30 hover:bg-green-50 hover:text-green-700 dark:hover:bg-green-950/40"
+                              onClick={() => setConfirmAction({ kind: 'won', opp: contactOpportunities[0] })}
+                            >
+                              <TrendUp className="w-4 h-4 mr-1" />
+                              {locale === 'pt-BR' ? 'Marcar Ganho' : 'Mark Won'}
+                            </Button>
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              className="text-red-600 border-red-600/30 hover:bg-red-50 hover:text-red-700 dark:hover:bg-red-950/40"
+                              onClick={() => setConfirmAction({ kind: 'lost', opp: contactOpportunities[0] })}
+                            >
+                              <TrendDown className="w-4 h-4 mr-1" />
+                              {locale === 'pt-BR' ? 'Perdido' : 'Lost'}
+                            </Button>
+                          </>
+                        ) : (
+                          <DropdownMenu>
+                            <DropdownMenuTrigger asChild>
+                              <Button
+                                variant="outline"
+                                size="sm"
+                                className="text-green-600 border-green-600/30 hover:bg-green-50 hover:text-green-700 dark:hover:bg-green-950/40"
+                              >
+                                <TrendUp className="w-4 h-4 mr-1" />
+                                {locale === 'pt-BR' ? 'Ganho/Perdido' : 'Won/Lost'}
+                              </Button>
+                            </DropdownMenuTrigger>
+                            <DropdownMenuContent align="end" className="w-72">
+                              {contactOpportunities.map((opp) => (
+                                <Fragment key={opp.id}>
+                                  <DropdownMenuItem onClick={() => setConfirmAction({ kind: 'won', opp })}>
+                                    <TrendUp className="w-4 h-4 mr-2 text-green-600" />
+                                    <span className="truncate">
+                                      {locale === 'pt-BR' ? 'Ganho:' : 'Won:'} {opp.title}
+                                    </span>
+                                  </DropdownMenuItem>
+                                  <DropdownMenuItem onClick={() => setConfirmAction({ kind: 'lost', opp })}>
+                                    <TrendDown className="w-4 h-4 mr-2 text-red-600" />
+                                    <span className="truncate">
+                                      {locale === 'pt-BR' ? 'Perdido:' : 'Lost:'} {opp.title}
+                                    </span>
+                                  </DropdownMenuItem>
+                                </Fragment>
+                              ))}
+                            </DropdownMenuContent>
+                          </DropdownMenu>
+                        )
+                      )}
+
                       {selectedThread.needs_human_attention && hasAIAgent && (
                         <Button variant="outline" size="sm" onClick={() => handleReturnToAI(selectedThread.id)}>
                           <Robot className="w-4 h-4 mr-1" />
@@ -1793,6 +1929,29 @@ function DesktopMessagesList() {
           setSelectedThreadId(threadId);
           refetchThreads();
         }}
+      />
+
+      {/* Confirm Mark Won/Lost */}
+      <ConfirmDialog
+        open={!!confirmAction}
+        onOpenChange={(o) => !o && setConfirmAction(null)}
+        title={
+          confirmAction?.kind === 'won'
+            ? (locale === 'pt-BR' ? 'Marcar como Ganho' : 'Mark as Won')
+            : (locale === 'pt-BR' ? 'Marcar como Perdido' : 'Mark as Lost')
+        }
+        description={
+          confirmAction
+            ? (locale === 'pt-BR'
+                ? `Deseja marcar a oportunidade "${confirmAction.opp.title}" como ${confirmAction.kind === 'won' ? 'ganha' : 'perdida'}?`
+                : `Mark opportunity "${confirmAction.opp.title}" as ${confirmAction.kind}?`)
+            : ''
+        }
+        confirmText={locale === 'pt-BR' ? 'Confirmar' : 'Confirm'}
+        cancelText={locale === 'pt-BR' ? 'Cancelar' : 'Cancel'}
+        variant={confirmAction?.kind === 'lost' ? 'destructive' : 'default'}
+        loading={markingOpp}
+        onConfirm={() => confirmAction && handleMarkOpportunity(confirmAction.kind, confirmAction.opp)}
       />
     </Layout>
   );
