@@ -1298,9 +1298,13 @@ function DesktopMessagesList() {
                       <Avatar fallbackText={selectedThread.contact_name} size="md" />
                       <div className="min-w-0 flex-1">
                         <div className="flex items-center gap-2 min-w-0">
-                          <span className="font-semibold text-foreground truncate">
+                          <Link
+                            to={`/contacts/${selectedThread.contact_id}`}
+                            className="font-semibold text-foreground truncate hover:text-primary hover:underline transition-colors"
+                            title={locale === 'pt-BR' ? 'Ver perfil do contato' : 'View contact profile'}
+                          >
                             {selectedThread.contact_name}
-                          </span>
+                          </Link>
                           {isIn24hWindow && (
                             <BadgeWithDot color="success" size="sm" className="shrink-0">
                               {locale === 'pt-BR' ? 'Online' : 'Online'}
