@@ -1039,6 +1039,35 @@ function DesktopMessagesList() {
     }
   });
 
+  // Hidden threads (per-user, with 5s undo)
+  const { hideThread, unhideThread, isHidden } = useHiddenThreads(userProfile?.id);
+  const visibleThreads = filteredThreads?.filter(
+    (t) => !isHidden(t.id, t.last_inbound_at || t.whatsapp_last_inbound_at)
+  );
+
+  const handleHideThread = (threadId: string) => {
+    const thread = threads?.find((t) => t.id === threadId);
+    const name = thread?.contact_name || (locale === 'pt-BR' ? 'Conversa' : 'Conversation');
+    hideThread(threadId);
+    if (selectedThreadId === threadId) {
+      setSelectedThreadId(null);
+    }
+    toast({
+      title: locale === 'pt-BR' ? 'Conversa ocultada' : 'Conversation hidden',
+      description: name,
+      duration: 5000,
+      action: (
+        <button
+          type="button"
+          onClick={() => unhideThread(threadId)}
+          className="inline-flex items-center justify-center rounded-md border border-border bg-background px-3 py-1.5 text-xs font-medium hover:bg-muted transition-colors"
+        >
+          {locale === 'pt-BR' ? 'Desfazer' : 'Undo'}
+        </button>
+      ),
+    });
+  };
+
   const allFilterOptions: { key: ThreadFilter; label: string; requiresViewAll?: boolean }[] = [
     { key: 'mine', label: locale === 'pt-BR' ? 'Minhas' : 'Mine' },
     { key: 'unassigned', label: locale === 'pt-BR' ? 'Não atribuídas' : 'Unassigned', requiresViewAll: true },
