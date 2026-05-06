@@ -54,6 +54,9 @@ import EmojiPicker, { EmojiClickData, Theme } from 'emoji-picker-react';
 import { cn } from '@/lib/utils';
 import { useAI } from '@/hooks/useAI';
 import { useMessageThreads, type ChatThread } from '@/hooks/useMessageThreads';
+import { useHiddenThreads } from '@/hooks/useHiddenThreads';
+import { EyeSlash } from '@phosphor-icons/react';
+import { ToastAction } from '@/components/ui/toast';
 
 // Helper function for formatting relative time in human-readable format
 const formatRelativeTime = (timestamp: string, locale: 'pt-BR' | 'en-US'): string => {
@@ -144,9 +147,10 @@ interface ChatListItemProps extends ListBoxItemProps<ChatThread> {
   value: ChatThread;
   locale: 'pt-BR' | 'en-US';
   showLastMessage?: boolean;
+  onHide?: (threadId: string) => void;
 }
 
-const ChatListItem = ({ value, locale, className, ...otherProps }: ChatListItemProps) => {
+const ChatListItem = ({ value, locale, className, onHide, ...otherProps }: ChatListItemProps) => {
   if (!value) return null;
 
   const status = statusConfig[value.status] || statusConfig.open;
@@ -158,7 +162,7 @@ const ChatListItem = ({ value, locale, className, ...otherProps }: ChatListItemP
       textValue={value.contact_name}
       className={(state) =>
         cn(
-          'relative flex items-center gap-3 border-b border-border py-3 pr-4 pl-3 select-none cursor-pointer',
+          'group relative flex items-center gap-3 border-b border-border py-3 pr-4 pl-3 select-none cursor-pointer',
           state.isFocused && 'outline-2 -outline-offset-2 outline-ring',
           state.isSelected && 'bg-accent',
           typeof className === 'function' ? className(state) : className
@@ -176,9 +180,27 @@ const ChatListItem = ({ value, locale, className, ...otherProps }: ChatListItemP
               <span className="h-2 w-2 shrink-0 rounded-full bg-primary" />
             )}
           </div>
-          <span className="text-xs text-muted-foreground shrink-0">
-            {formatRelativeTime(value.updated_at, locale)}
-          </span>
+          <div className="flex items-center gap-1 shrink-0">
+            {onHide && (
+              <button
+                type="button"
+                aria-label={locale === 'pt-BR' ? 'Ocultar conversa' : 'Hide conversation'}
+                title={locale === 'pt-BR' ? 'Ocultar conversa' : 'Hide conversation'}
+                onClick={(e) => {
+                  e.stopPropagation();
+                  e.preventDefault();
+                  onHide(value.id);
+                }}
+                onPointerDown={(e) => e.stopPropagation()}
+                className="opacity-0 group-hover:opacity-100 focus:opacity-100 p-1 rounded hover:bg-muted text-muted-foreground hover:text-foreground transition-opacity"
+              >
+                <EyeSlash className="h-3.5 w-3.5" />
+              </button>
+            )}
+            <span className="text-xs text-muted-foreground">
+              {formatRelativeTime(value.updated_at, locale)}
+            </span>
+          </div>
         </div>
         <div className="flex items-center gap-1.5 mt-0.5">
           {/* Status dot */}
@@ -1018,6 +1040,34 @@ function DesktopMessagesList() {
     }
   });
 
+  // Hidden threads (per-user, with 5s undo)
+  const { hideThread, unhideThread, isHidden } = useHiddenThreads(userProfile?.id);
+  const visibleThreads = filteredThreads?.filter(
+    (t) => !isHidden(t.id, t.last_inbound_at || t.whatsapp_last_inbound_at)
+  );
+
+  const handleHideThread = (threadId: string) => {
+    const thread = threads?.find((t) => t.id === threadId);
+    const name = thread?.contact_name || (locale === 'pt-BR' ? 'Conversa' : 'Conversation');
+    hideThread(threadId);
+    if (selectedThreadId === threadId) {
+      setSelectedThreadId(null);
+    }
+    toast({
+      title: locale === 'pt-BR' ? 'Conversa ocultada' : 'Conversation hidden',
+      description: name,
+      duration: 5000,
+      action: (
+        <ToastAction
+          altText={locale === 'pt-BR' ? 'Desfazer' : 'Undo'}
+          onClick={() => unhideThread(threadId)}
+        >
+          {locale === 'pt-BR' ? 'Desfazer' : 'Undo'}
+        </ToastAction>
+      ),
+    });
+  };
+
   const allFilterOptions: { key: ThreadFilter; label: string; requiresViewAll?: boolean }[] = [
     { key: 'mine', label: locale === 'pt-BR' ? 'Minhas' : 'Mine' },
     { key: 'unassigned', label: locale === 'pt-BR' ? 'Não atribuídas' : 'Unassigned', requiresViewAll: true },
@@ -1066,7 +1116,7 @@ function DesktopMessagesList() {
                     <ChatCircleDots className="w-4 h-4" />
                   </Button>
                   <Badge color="gray" size="md">
-                    {filteredThreads?.length || 0}
+                    {visibleThreads?.length || 0}
                   </Badge>
                 </div>
               </div>
@@ -1112,7 +1162,7 @@ function DesktopMessagesList() {
                     </div>
                   ))}
                 </div>
-              ) : filteredThreads?.length === 0 ? (
+              ) : visibleThreads?.length === 0 ? (
                 <div className="flex flex-col items-center justify-center p-8 text-muted-foreground">
                   <p className="text-sm">
                     {locale === 'pt-BR' ? 'Nenhuma conversa' : 'No conversations'}
@@ -1131,8 +1181,8 @@ function DesktopMessagesList() {
                       if (key) markThreadRead(key);
                     }}
                   >
-                    {(filteredThreads || []).map((thread) => (
-                      <ChatListItem key={thread.id} value={thread} locale={locale as 'pt-BR' | 'en-US'} />
+                    {(visibleThreads || []).map((thread) => (
+                      <ChatListItem key={thread.id} value={thread} locale={locale as 'pt-BR' | 'en-US'} onHide={handleHideThread} />
                     ))}
                   </ListBox>
                   {hasMore && (
