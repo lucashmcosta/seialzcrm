@@ -589,6 +589,9 @@ export const translations = {
     'dashboard.wonOverTime': 'Won Over Time',
     'dashboard.noTasks': 'No tasks for today',
     'dashboard.noActivities': 'No recent activities',
+    'dashboard.entered': 'Opportunities entered',
+    'dashboard.closed': 'Opportunities closed',
+    'dashboard.conversion': 'Conversion',
     
     // Contacts
     'contacts.title': 'Contacts',
