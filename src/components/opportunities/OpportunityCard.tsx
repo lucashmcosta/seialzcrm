@@ -3,6 +3,7 @@ import { Button } from '@/components/ui/button';
 import { PencilSimple, TrashSimple, User, Calendar } from '@phosphor-icons/react';
 import { format } from 'date-fns';
 import { ptBR, enUS } from 'date-fns/locale';
+import { parseDateOnly } from '@/lib/utils';
 
 interface TagInfo {
   id: string;
@@ -68,7 +69,7 @@ export function OpportunityCard({
         {closeDate && (
           <div className="flex items-center gap-2 text-xs text-muted-foreground">
             <Calendar className="h-3 w-3" />
-            <span>{format(new Date(closeDate), 'dd MMM yyyy', { locale: dateLocale })}</span>
+            <span>{format(parseDateOnly(closeDate) ?? new Date(closeDate), 'dd MMM yyyy', { locale: dateLocale })}</span>
           </div>
         )}
 

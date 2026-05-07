@@ -1,6 +1,7 @@
 import { User, Calendar, PencilSimple, TrashSimple } from '@phosphor-icons/react';
 import { format } from 'date-fns';
 import { ptBR, enUS } from 'date-fns/locale';
+import { parseDateOnly } from '@/lib/utils';
 
 interface TagInfo {
   id: string;
@@ -133,7 +134,7 @@ export function SeialzOpportunityCard({
             )}
             {closeDate && (
               <span className="font-data text-[10px] text-[hsl(var(--sz-t3))]">
-                {format(new Date(closeDate), 'dd MMM yyyy', { locale: dateLocale })}
+                {format(parseDateOnly(closeDate) ?? new Date(closeDate), 'dd MMM yyyy', { locale: dateLocale })}
               </span>
             )}
           </div>

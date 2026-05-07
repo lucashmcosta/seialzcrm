@@ -9,6 +9,7 @@ import { Button } from '@/components/ui/button';
 import { Plus, ArrowSquareOut } from '@phosphor-icons/react';
 import { Skeleton } from '@/components/ui/skeleton';
 import { OpportunityDialog } from '@/components/opportunities/OpportunityDialog';
+import { formatDateOnly } from '@/lib/utils';
 
 interface Opportunity {
   id: string;
@@ -172,7 +173,7 @@ export function ContactOpportunities({ contactId }: ContactOpportunitiesProps) {
                 </div>
                 {opportunity.close_date && (
                   <div className="text-xs text-muted-foreground mt-2">
-                    Data de fechamento: {new Date(opportunity.close_date).toLocaleDateString(locale)}
+                    Data de fechamento: {formatDateOnly(opportunity.close_date, locale)}
                   </div>
                 )}
               </div>

@@ -14,6 +14,7 @@ import { useTranslation } from '@/lib/i18n';
 import { usePermissions } from '@/hooks/usePermissions';
 import { toast } from '@/hooks/use-toast';
 import { ArrowLeft, PencilSimple, TrendUp, TrendDown, CurrencyDollar, Calendar, User, Buildings } from '@phosphor-icons/react';
+import { formatDateOnly } from '@/lib/utils';
 import { ActivityTimeline } from '@/components/contacts/ActivityTimeline';
 import { ContactTasks } from '@/components/contacts/ContactTasks';
 import { ContactAttachments } from '@/components/contacts/ContactAttachments';
@@ -274,7 +275,7 @@ export default function OpportunityDetail() {
                   {opportunity.close_date && (
                     <span className="flex items-center gap-1">
                       <Calendar className="h-4 w-4" />
-                      {new Date(opportunity.close_date).toLocaleDateString(locale)}
+                      {formatDateOnly(opportunity.close_date, locale)}
                     </span>
                   )}
                 </div>
@@ -367,7 +368,7 @@ export default function OpportunityDetail() {
                         <p className="text-sm text-muted-foreground">{t('opportunities.closeDate')}</p>
                         <p className="text-lg font-semibold">
                           {opportunity.close_date 
-                            ? new Date(opportunity.close_date).toLocaleDateString(locale)
+                            ? formatDateOnly(opportunity.close_date, locale)
                             : '-'}
                         </p>
                       </div>
