@@ -646,7 +646,9 @@ export default function OpportunitiesKanban() {
   // Format date helper
   const formatDate = (date: string | null) => {
     if (!date) return '-';
-    return format(new Date(date), 'dd MMM yyyy', { locale: locale === 'en-US' ? enUS : ptBR });
+    const d = parseDateOnly(date);
+    if (!d) return '-';
+    return format(d, 'dd MMM yyyy', { locale: locale === 'en-US' ? enUS : ptBR });
   };
 
   // Total pipeline stats for Seialz topbar
