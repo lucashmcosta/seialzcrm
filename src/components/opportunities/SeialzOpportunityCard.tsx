@@ -134,7 +134,7 @@ export function SeialzOpportunityCard({
             )}
             {closeDate && (
               <span className="font-data text-[10px] text-[hsl(var(--sz-t3))]">
-                {format(new Date(closeDate), 'dd MMM yyyy', { locale: dateLocale })}
+                {format(parseDateOnly(closeDate) ?? new Date(closeDate), 'dd MMM yyyy', { locale: dateLocale })}
               </span>
             )}
           </div>
