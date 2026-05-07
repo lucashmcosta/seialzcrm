@@ -10,6 +10,13 @@ const MAX_PAGES = 5;
 
 serve(async (req) => {
   if (req.method === "OPTIONS") return new Response(null, { headers: corsHeaders });
+
+  const authHeader = req.headers.get("authorization");
+  const expected = `Bearer ${Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")}`;
+  if (authHeader !== expected) {
+    return json({ error: "Unauthorized" }, 401);
+  }
+
   try {
     const admin = createClient(
       Deno.env.get("SUPABASE_URL")!,
@@ -85,7 +92,8 @@ serve(async (req) => {
             filtering: JSON.stringify([
               { field: "time_created", operator: "GREATER_THAN", value: sinceUnix },
             ]),
-            fields: "id,created_time,field_data,ad_id,adset_id,campaign_id,form_id",
+            fields:
+              "id,created_time,field_data,ad_id,ad_name,adset_id,adset_name,campaign_id,campaign_name,form_id,platform,is_organic",
           };
           if (cursor) params.after = cursor;
 
