@@ -2343,6 +2343,205 @@ export type Database = {
           },
         ]
       }
+      lead_form_questions: {
+        Row: {
+          configured_at: string | null
+          configured_by_user_id: string | null
+          created_at: string
+          custom_field_definition_id: string | null
+          field_key: string
+          field_label: string
+          field_options: Json | null
+          field_order: number
+          field_type: string
+          fixed_tag_id: string | null
+          id: string
+          is_configured: boolean
+          lead_form_id: string
+          mapped_to_contact_field: string | null
+          mapping_strategy: string
+          organization_id: string
+          tag_color: string | null
+          tag_prefix: string | null
+          tag_strategy: string | null
+          updated_at: string
+        }
+        Insert: {
+          configured_at?: string | null
+          configured_by_user_id?: string | null
+          created_at?: string
+          custom_field_definition_id?: string | null
+          field_key: string
+          field_label: string
+          field_options?: Json | null
+          field_order?: number
+          field_type: string
+          fixed_tag_id?: string | null
+          id?: string
+          is_configured?: boolean
+          lead_form_id: string
+          mapped_to_contact_field?: string | null
+          mapping_strategy?: string
+          organization_id: string
+          tag_color?: string | null
+          tag_prefix?: string | null
+          tag_strategy?: string | null
+          updated_at?: string
+        }
+        Update: {
+          configured_at?: string | null
+          configured_by_user_id?: string | null
+          created_at?: string
+          custom_field_definition_id?: string | null
+          field_key?: string
+          field_label?: string
+          field_options?: Json | null
+          field_order?: number
+          field_type?: string
+          fixed_tag_id?: string | null
+          id?: string
+          is_configured?: boolean
+          lead_form_id?: string
+          mapped_to_contact_field?: string | null
+          mapping_strategy?: string
+          organization_id?: string
+          tag_color?: string | null
+          tag_prefix?: string | null
+          tag_strategy?: string | null
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "lead_form_questions_configured_by_user_id_fkey"
+            columns: ["configured_by_user_id"]
+            isOneToOne: false
+            referencedRelation: "users"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "lead_form_questions_custom_field_definition_id_fkey"
+            columns: ["custom_field_definition_id"]
+            isOneToOne: false
+            referencedRelation: "custom_field_definitions"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "lead_form_questions_fixed_tag_id_fkey"
+            columns: ["fixed_tag_id"]
+            isOneToOne: false
+            referencedRelation: "tags"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "lead_form_questions_lead_form_id_fkey"
+            columns: ["lead_form_id"]
+            isOneToOne: false
+            referencedRelation: "lead_forms"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "lead_form_questions_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      lead_forms: {
+        Row: {
+          consecutive_errors: number
+          created_at: string
+          discovered_at: string
+          id: string
+          is_mapping_configured: boolean
+          is_monitored: boolean
+          last_sync_error: string | null
+          last_sync_status: string | null
+          last_synced_at: string | null
+          last_synced_lead_created_time: string | null
+          last_synced_lead_id: string | null
+          meta_lead_page_id: string | null
+          organization_id: string
+          organization_integration_id: string | null
+          provider: string
+          provider_form_id: string
+          provider_form_name: string
+          provider_metadata: Json
+          questions_synced_at: string | null
+          total_synced_leads: number
+          updated_at: string
+        }
+        Insert: {
+          consecutive_errors?: number
+          created_at?: string
+          discovered_at?: string
+          id?: string
+          is_mapping_configured?: boolean
+          is_monitored?: boolean
+          last_sync_error?: string | null
+          last_sync_status?: string | null
+          last_synced_at?: string | null
+          last_synced_lead_created_time?: string | null
+          last_synced_lead_id?: string | null
+          meta_lead_page_id?: string | null
+          organization_id: string
+          organization_integration_id?: string | null
+          provider: string
+          provider_form_id: string
+          provider_form_name: string
+          provider_metadata?: Json
+          questions_synced_at?: string | null
+          total_synced_leads?: number
+          updated_at?: string
+        }
+        Update: {
+          consecutive_errors?: number
+          created_at?: string
+          discovered_at?: string
+          id?: string
+          is_mapping_configured?: boolean
+          is_monitored?: boolean
+          last_sync_error?: string | null
+          last_sync_status?: string | null
+          last_synced_at?: string | null
+          last_synced_lead_created_time?: string | null
+          last_synced_lead_id?: string | null
+          meta_lead_page_id?: string | null
+          organization_id?: string
+          organization_integration_id?: string | null
+          provider?: string
+          provider_form_id?: string
+          provider_form_name?: string
+          provider_metadata?: Json
+          questions_synced_at?: string | null
+          total_synced_leads?: number
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "lead_forms_meta_lead_page_id_fkey"
+            columns: ["meta_lead_page_id"]
+            isOneToOne: false
+            referencedRelation: "meta_lead_pages"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "lead_forms_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "lead_forms_organization_integration_id_fkey"
+            columns: ["organization_integration_id"]
+            isOneToOne: false
+            referencedRelation: "organization_integrations"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       message_thread_reads: {
         Row: {
           last_read_at: string
@@ -2616,6 +2815,75 @@ export type Database = {
             columns: ["thread_id"]
             isOneToOne: false
             referencedRelation: "message_threads"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      meta_lead_pages: {
+        Row: {
+          created_at: string
+          discovered_at: string
+          id: string
+          is_active: boolean
+          last_health_check_at: string | null
+          last_health_check_error: string | null
+          last_health_check_status: string | null
+          meta_business_id: string | null
+          meta_page_category: string | null
+          meta_page_id: string
+          meta_page_name: string
+          organization_id: string
+          organization_integration_id: string
+          page_access_token_encrypted: string
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          discovered_at?: string
+          id?: string
+          is_active?: boolean
+          last_health_check_at?: string | null
+          last_health_check_error?: string | null
+          last_health_check_status?: string | null
+          meta_business_id?: string | null
+          meta_page_category?: string | null
+          meta_page_id: string
+          meta_page_name: string
+          organization_id: string
+          organization_integration_id: string
+          page_access_token_encrypted: string
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          discovered_at?: string
+          id?: string
+          is_active?: boolean
+          last_health_check_at?: string | null
+          last_health_check_error?: string | null
+          last_health_check_status?: string | null
+          meta_business_id?: string | null
+          meta_page_category?: string | null
+          meta_page_id?: string
+          meta_page_name?: string
+          organization_id?: string
+          organization_integration_id?: string
+          page_access_token_encrypted?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "meta_lead_pages_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "meta_lead_pages_organization_integration_id_fkey"
+            columns: ["organization_integration_id"]
+            isOneToOne: false
+            referencedRelation: "organization_integrations"
             referencedColumns: ["id"]
           },
         ]
@@ -4060,6 +4328,10 @@ export type Database = {
     }
     Functions: {
       assign_round_robin: { Args: { _org_id: string }; Returns: string }
+      count_custom_fields_for_org: {
+        Args: { p_module?: string; p_organization_id: string }
+        Returns: number
+      }
       current_user_id: { Args: never; Returns: string }
       current_user_managed_org_ids: { Args: never; Returns: string[] }
       current_user_org_ids: { Args: never; Returns: string[] }
@@ -4225,6 +4497,10 @@ export type Database = {
           similarity: number
           title: string
         }[]
+      }
+      try_lead_form_polling_lock: {
+        Args: { p_lead_form_id: string }
+        Returns: boolean
       }
       update_organization_usage_metrics: {
         Args: { org_id: string }
