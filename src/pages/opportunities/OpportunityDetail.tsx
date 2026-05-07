@@ -275,7 +275,7 @@ export default function OpportunityDetail() {
                   {opportunity.close_date && (
                     <span className="flex items-center gap-1">
                       <Calendar className="h-4 w-4" />
-                      {new Date(opportunity.close_date).toLocaleDateString(locale)}
+                      {formatDateOnly(opportunity.close_date, locale)}
                     </span>
                   )}
                 </div>
