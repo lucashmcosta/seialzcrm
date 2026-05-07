@@ -184,22 +184,6 @@ const ChatListItem = ({ value, locale, className, onHide, ...otherProps }: ChatL
             )}
           </div>
           <div className="flex items-center gap-1 shrink-0">
-            {onHide && (
-              <button
-                type="button"
-                aria-label={locale === 'pt-BR' ? 'Ocultar conversa' : 'Hide conversation'}
-                title={locale === 'pt-BR' ? 'Ocultar conversa' : 'Hide conversation'}
-                onClick={(e) => {
-                  e.stopPropagation();
-                  e.preventDefault();
-                  onHide(value.id);
-                }}
-                onPointerDown={(e) => e.stopPropagation()}
-                className="opacity-0 group-hover:opacity-100 focus:opacity-100 p-1 rounded hover:bg-muted text-muted-foreground hover:text-foreground transition-opacity"
-              >
-                <EyeSlash className="h-3.5 w-3.5" />
-              </button>
-            )}
             <span className="text-xs text-muted-foreground">
               {formatRelativeTime(value.updated_at, locale)}
             </span>
