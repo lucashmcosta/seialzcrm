@@ -91,7 +91,7 @@ export function SettingsCard({ orgIntegration, onUpdated }: Props) {
           <Switch checked={s.set_name_confirmed} onCheckedChange={(v) => setS({ ...s, set_name_confirmed: v })} />
         </Row>
 
-        <Row label="Criar oportunidade automaticamente" hint="Cria uma oportunidade no pipeline escolhido.">
+        <Row label="Sempre criar oportunidade" hint="Fallback: cria uma oportunidade vazia mesmo quando nenhuma pergunta do form foi mapeada para a oportunidade. Quando você mapeia perguntas para “Oportunidade”, ela já é criada automaticamente — esse switch é só para garantir que todo lead vire pipeline.">
           <Switch
             checked={s.auto_create_opportunity}
             onCheckedChange={(v) => setS({ ...s, auto_create_opportunity: v })}
