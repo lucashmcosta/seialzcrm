@@ -20,6 +20,7 @@ import { IntegrationConnectDialog } from './IntegrationConnectDialog';
 import { IntegrationDetailDialog } from './IntegrationDetailDialog';
 import { PhoneNumberSettings } from './PhoneNumberSettings';
 import { KommoMigrationDialog } from './KommoMigrationDialog';
+import { MetaLeadAdsDialog } from '@/components/integrations/meta-lead-ads/MetaLeadAdsDialog';
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 
@@ -444,13 +445,7 @@ export function IntegrationsSettings() {
                     </div>
                     <Switch
                       checked={isConnected}
-                      onCheckedChange={(checked) => {
-                        if (integration.slug === 'meta-lead-ads') {
-                          navigate('/integrations/meta-lead-ads');
-                          return;
-                        }
-                        handleToggle(integration, connection, checked);
-                      }}
+                      onCheckedChange={(checked) => handleToggle(integration, connection, checked)}
                       disabled={toggleMutation.isPending}
                     />
                   </div>
@@ -460,10 +455,6 @@ export function IntegrationsSettings() {
                       size="sm"
                       className="h-auto p-0 text-primary"
                       onClick={() => {
-                        if (integration.slug === 'meta-lead-ads') {
-                          navigate('/integrations/meta-lead-ads');
-                          return;
-                        }
                         if (connection) {
                           handleConfigure(integration, connection);
                         } else {
@@ -490,7 +481,7 @@ export function IntegrationsSettings() {
         )}
       </div>
 
-      {selectedIntegration && (
+      {selectedIntegration && selectedIntegration.slug !== 'meta-lead-ads' && (
         <IntegrationConnectDialog
           open={connectDialogOpen}
           onOpenChange={setConnectDialogOpen}
@@ -498,7 +489,7 @@ export function IntegrationsSettings() {
         />
       )}
 
-      {selectedIntegration && selectedOrgIntegration && (
+      {selectedIntegration && selectedOrgIntegration && selectedIntegration.slug !== 'meta-lead-ads' && (
         <IntegrationDetailDialog
           open={detailDialogOpen}
           onOpenChange={setDetailDialogOpen}
@@ -511,6 +502,20 @@ export function IntegrationsSettings() {
             setDetailDialogOpen(false);
             setKommoMigrationOpen(true);
           } : undefined}
+        />
+      )}
+
+      {selectedIntegration?.slug === 'meta-lead-ads' && (
+        <MetaLeadAdsDialog
+          open={detailDialogOpen || connectDialogOpen}
+          onOpenChange={(o) => {
+            if (!o) {
+              setDetailDialogOpen(false);
+              setConnectDialogOpen(false);
+            }
+          }}
+          integration={selectedIntegration}
+          orgIntegration={selectedOrgIntegration}
         />
       )}
 
