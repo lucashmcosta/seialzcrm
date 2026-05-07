@@ -3,6 +3,7 @@ import { Button } from '@/components/ui/button';
 import { PencilSimple, TrashSimple, User, Calendar } from '@phosphor-icons/react';
 import { format } from 'date-fns';
 import { ptBR, enUS } from 'date-fns/locale';
+import { parseDateOnly } from '@/lib/utils';
 
 interface TagInfo {
   id: string;
