@@ -4346,6 +4346,7 @@ export type Database = {
         }
         Returns: Json
       }
+      get_internal_function_auth_token: { Args: never; Returns: string }
       get_opportunities_by_stage: {
         Args: { p_limit_per_stage?: number; p_organization_id: string }
         Returns: Json
