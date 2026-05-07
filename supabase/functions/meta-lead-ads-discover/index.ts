@@ -116,7 +116,7 @@ serve(async (req) => {
                 organization_integration_id,
                 discovered_at: new Date().toISOString(),
               },
-              { onConflict: "organization_integration_id,provider_form_id" },
+              { onConflict: "organization_id,provider,provider_form_id" },
             )
             .select("id, questions_synced_at")
             .single();
