@@ -3,6 +3,7 @@ import { createClient } from "jsr:@supabase/supabase-js@2";
 import { corsHeaders } from "../_shared/cors.ts";
 import { decryptSecret } from "../_shared/crypto.ts";
 import { isTokenError, metaGraphGet } from "../_shared/meta-graph.ts";
+import { notifyOrgUsers } from "../_shared/notify.ts";
 
 const PAGE_SIZE = 50;
 const MAX_PAGES = 5;
@@ -166,8 +167,7 @@ serve(async (req) => {
               last_health_check_at: new Date().toISOString(),
             })
             .eq("id", page.id);
-          await admin.from("notifications").insert({
-            organization_id: form.organization_id,
+          await notifyOrgUsers(admin, form.organization_id, {
             type: "warning",
             title: "Token Meta Lead Ads expirado",
             body: `O formulário "${form.provider_form_name}" não pôde ser sincronizado: token expirado.`,

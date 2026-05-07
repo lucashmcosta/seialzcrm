@@ -3,6 +3,7 @@ import { createClient } from "jsr:@supabase/supabase-js@2";
 import { corsHeaders } from "../_shared/cors.ts";
 import { decryptSecret } from "../_shared/crypto.ts";
 import { isTokenError, metaGraphGet } from "../_shared/meta-graph.ts";
+import { notifyOrgUsers } from "../_shared/notify.ts";
 
 serve(async (req) => {
   if (req.method === "OPTIONS") return new Response(null, { headers: corsHeaders });
@@ -62,8 +63,7 @@ serve(async (req) => {
             },
           })
           .eq("id", oi.id);
-        await admin.from("notifications").insert({
-          organization_id: oi.organization_id,
+        await notifyOrgUsers(admin, oi.organization_id, {
           type: expired ? "error" : "warning",
           title: expired ? "Token Meta Lead Ads expirado" : "Erro ao validar Meta Lead Ads",
           body: e.message,

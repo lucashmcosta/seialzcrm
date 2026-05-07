@@ -1,6 +1,7 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "jsr:@supabase/supabase-js@2";
 import { corsHeaders } from "../_shared/cors.ts";
+import { notifyOrgUsers } from "../_shared/notify.ts";
 
 function normalizePhoneToE164(phone: string): string {
   if (!phone) return "";
@@ -283,8 +284,7 @@ serve(async (req) => {
         .from("lead_forms")
         .update({ is_mapping_configured: false })
         .eq("id", lead_form_id);
-      await admin.from("notifications").insert({
-        organization_id,
+      await notifyOrgUsers(admin, organization_id, {
         type: "info",
         title: "Novas perguntas em formulário Meta",
         body: `O formulário "${lead_form_name}" possui novas perguntas que precisam ser mapeadas.`,

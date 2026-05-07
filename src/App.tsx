@@ -81,6 +81,7 @@ const RoundRobinSettings = lazy(() => import("./components/settings/RoundRobinSe
 const Trash = lazy(() => import("./pages/settings/Trash").then(m => ({ default: m.Trash })));
 const Profile = lazy(() => import("./pages/Profile"));
 const NotFound = lazy(() => import("./pages/NotFound"));
+const MetaLeadAdsPage = lazy(() => retryImport(() => import("./pages/integrations/MetaLeadAdsPage")));
 const CompaniesList = lazy(() => import("./pages/companies/CompaniesList"));
 const CompanyDetail = lazy(() => import("./pages/companies/CompanyDetail"));
 const CompanyForm = lazy(() => import("./pages/companies/CompanyForm"));
@@ -348,6 +349,14 @@ const App = () => (
             element={
               <ProtectedRoute>
                 <ReportsPage />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/integrations/meta-lead-ads"
+            element={
+              <ProtectedRoute>
+                <MetaLeadAdsPage />
               </ProtectedRoute>
             }
           />

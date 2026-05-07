@@ -1,4 +1,5 @@
 import { useState, useMemo } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { Card } from '@/components/ui/card';
@@ -53,6 +54,7 @@ const categories = [
 
 export function IntegrationsSettings() {
   const { locale, organization } = useOrganization();
+  const navigate = useNavigate();
   const { t } = useTranslation(locale as any);
   const queryClient = useQueryClient();
   const [selectedIntegration, setSelectedIntegration] = useState<any>(null);
@@ -442,7 +444,13 @@ export function IntegrationsSettings() {
                     </div>
                     <Switch
                       checked={isConnected}
-                      onCheckedChange={(checked) => handleToggle(integration, connection, checked)}
+                      onCheckedChange={(checked) => {
+                        if (integration.slug === 'meta-lead-ads') {
+                          navigate('/integrations/meta-lead-ads');
+                          return;
+                        }
+                        handleToggle(integration, connection, checked);
+                      }}
                       disabled={toggleMutation.isPending}
                     />
                   </div>
@@ -452,6 +460,10 @@ export function IntegrationsSettings() {
                       size="sm"
                       className="h-auto p-0 text-primary"
                       onClick={() => {
+                        if (integration.slug === 'meta-lead-ads') {
+                          navigate('/integrations/meta-lead-ads');
+                          return;
+                        }
                         if (connection) {
                           handleConfigure(integration, connection);
                         } else {
