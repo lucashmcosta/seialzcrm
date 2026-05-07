@@ -1,6 +1,7 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "jsr:@supabase/supabase-js@2";
 import { corsHeaders } from "../_shared/cors.ts";
+import { notifyOrgUsers } from "../_shared/notify.ts";
 
 function normalizePhoneToE164(phone: string): string {
   if (!phone) return "";

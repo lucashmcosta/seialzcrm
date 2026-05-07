@@ -3,6 +3,7 @@ import { createClient } from "jsr:@supabase/supabase-js@2";
 import { corsHeaders } from "../_shared/cors.ts";
 import { decryptSecret } from "../_shared/crypto.ts";
 import { isTokenError, metaGraphGet } from "../_shared/meta-graph.ts";
+import { notifyOrgUsers } from "../_shared/notify.ts";
 
 const PAGE_SIZE = 50;
 const MAX_PAGES = 5;
