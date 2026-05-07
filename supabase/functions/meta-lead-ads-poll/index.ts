@@ -64,10 +64,12 @@ serve(async (req) => {
       const settings = (orgIntegration.config_values as any)?.meta_lead_ads_settings || {};
 
       let pageToken: string;
-      let appSecret: string;
+      let appSecret: string | undefined;
       try {
         pageToken = await decryptSecret(page.page_access_token_encrypted);
-        appSecret = await decryptSecret(ca.app_secret_encrypted);
+        appSecret = ca.app_secret_encrypted
+          ? await decryptSecret(ca.app_secret_encrypted)
+          : undefined;
       } catch (e: any) {
         console.error("Failed to decrypt tokens for form", form.id, e.message);
         continue;
