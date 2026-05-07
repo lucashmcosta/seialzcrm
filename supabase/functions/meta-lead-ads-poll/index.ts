@@ -131,21 +131,8 @@ serve(async (req) => {
             last_sync_error: null,
             consecutive_errors: 0,
             ...(lastLeadTime ? { last_synced_lead_created_time: lastLeadTime } : {}),
-            total_synced_leads: undefined,
           })
           .eq("id", form.id);
-
-        if (formLeads > 0) {
-          await admin.rpc("noop").catch(() => {});
-          // Increment counter
-          await admin
-            .from("lead_forms")
-            .update({})
-            .eq("id", form.id);
-          await admin
-            .rpc("noop")
-            .catch(() => {});
-        }
       } catch (e: any) {
         formError = e.message || String(e);
         tokenExpired = isTokenError(e);
