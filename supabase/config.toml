@@ -113,3 +113,18 @@ verify_jwt = true
 
 [functions.kommo-fix-owners]
 verify_jwt = false
+
+[functions.meta-lead-ads-connect]
+verify_jwt = true
+
+[functions.meta-lead-ads-discover]
+verify_jwt = true
+
+[functions.meta-lead-ads-poll]
+verify_jwt = false
+
+[functions.meta-lead-ads-process-lead]
+verify_jwt = false
+
+[functions.meta-lead-ads-token-health]
+verify_jwt = false
