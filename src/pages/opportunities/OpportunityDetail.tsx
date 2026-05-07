@@ -368,7 +368,7 @@ export default function OpportunityDetail() {
                         <p className="text-sm text-muted-foreground">{t('opportunities.closeDate')}</p>
                         <p className="text-lg font-semibold">
                           {opportunity.close_date 
-                            ? new Date(opportunity.close_date).toLocaleDateString(locale)
+                            ? formatDateOnly(opportunity.close_date, locale)
                             : '-'}
                         </p>
                       </div>
