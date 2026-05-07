@@ -24,6 +24,15 @@ serve(async (req) => {
       Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!,
     );
 
+    // Fetch service_role key from Vault (env var may diverge after key rotation)
+    const { data: internalAuthToken, error: tokenErr } = await admin.rpc(
+      "get_internal_function_auth_token",
+    );
+    if (tokenErr || !internalAuthToken) {
+      console.error("Failed to fetch internal auth token from Vault:", tokenErr);
+      return json({ error: "Internal auth token not available" }, 500);
+    }
+
     // Find candidate forms
     const { data: forms } = await admin
       .from("lead_forms")
