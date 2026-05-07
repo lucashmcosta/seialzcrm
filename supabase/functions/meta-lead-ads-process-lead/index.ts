@@ -2,6 +2,7 @@ import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "jsr:@supabase/supabase-js@2";
 import { corsHeaders } from "../_shared/cors.ts";
 import { notifyOrgUsers } from "../_shared/notify.ts";
+import { validateServiceRoleAuth } from "../_shared/auth.ts";
 
 function normalizePhoneToE164(phone: string): string {
   if (!phone) return "";
@@ -17,11 +18,10 @@ function normalizePhoneToE164(phone: string): string {
 serve(async (req) => {
   if (req.method === "OPTIONS") return new Response(null, { headers: corsHeaders });
 
-  // Manual auth: require service role key
-  const authHeader = req.headers.get("authorization");
-  const expected = `Bearer ${Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")}`;
-  if (authHeader !== expected) {
-    return json({ error: "Unauthorized" }, 401);
+  const auth = validateServiceRoleAuth(req);
+  if (!auth.ok) {
+    console.warn("Auth failed:", auth.error);
+    return json({ error: "Unauthorized", details: auth.error }, 401);
   }
 
   try {
