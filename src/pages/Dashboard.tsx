@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, lazy, Suspense } from 'react';
 import { Layout } from '@/components/Layout';
 import { useOrganization } from '@/hooks/useOrganization';
 import { useAuth } from '@/hooks/useAuth';
@@ -16,8 +16,13 @@ import {
   computeRange,
   type PeriodPreset,
 } from '@/components/reports/ReportFilters';
-import { DashboardTrendChart } from '@/components/reports/DashboardTrendChart';
-import { DashboardStatusDonut } from '@/components/reports/DashboardStatusDonut';
+const DashboardTrendChart = lazy(() =>
+  import('@/components/reports/DashboardTrendChart').then((m) => ({ default: m.DashboardTrendChart })),
+);
+const DashboardStatusDonut = lazy(() =>
+  import('@/components/reports/DashboardStatusDonut').then((m) => ({ default: m.DashboardStatusDonut })),
+);
+const ChartFallback = () => <div className="h-72 animate-pulse rounded-md bg-muted/50" />;
 import type { DateRange } from 'react-day-picker';
 import { cn } from '@/lib/utils';
 
@@ -241,10 +246,14 @@ export default function Dashboard() {
 
           <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
             <div className="lg:col-span-2">
-              <DashboardTrendChart data={opps} from={from} to={to} loading={loading} />
+              <Suspense fallback={<ChartFallback />}>
+                <DashboardTrendChart data={opps} from={from} to={to} loading={loading} />
+              </Suspense>
             </div>
             <div className="lg:col-span-1">
-              <DashboardStatusDonut data={opps} from={from} to={to} loading={loading} />
+              <Suspense fallback={<ChartFallback />}>
+                <DashboardStatusDonut data={opps} from={from} to={to} loading={loading} />
+              </Suspense>
             </div>
           </div>
         </div>
