@@ -54,7 +54,9 @@ serve(async (req) => {
 
     const ca: any = orgIntegration.connected_account || {};
     const accessToken = await decryptSecret(ca.system_user_token_encrypted);
-    const appSecret = await decryptSecret(ca.app_secret_encrypted);
+    const appSecret = ca.app_secret_encrypted
+      ? await decryptSecret(ca.app_secret_encrypted)
+      : undefined;
 
     // 1) List pages
     const pagesResp = await metaGraphGet("/me/accounts", {

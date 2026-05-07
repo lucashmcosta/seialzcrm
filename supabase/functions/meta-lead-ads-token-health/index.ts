@@ -42,7 +42,9 @@ serve(async (req) => {
       if (!ca.system_user_token_encrypted) continue;
       try {
         const accessToken = await decryptSecret(ca.system_user_token_encrypted);
-        const appSecret = await decryptSecret(ca.app_secret_encrypted);
+        const appSecret = ca.app_secret_encrypted
+          ? await decryptSecret(ca.app_secret_encrypted)
+          : undefined;
         await metaGraphGet("/me", { fields: "id" }, { accessToken, appSecret });
 
         await admin

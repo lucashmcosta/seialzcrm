@@ -48,7 +48,7 @@ export async function metaGraphGet(
 ): Promise<any> {
   const search = new URLSearchParams();
   search.set("access_token", opts.accessToken);
-  if (opts.appSecret) {
+  if (opts.appSecret && opts.appSecret.length > 0) {
     search.set(
       "appsecret_proof",
       await hmacSha256Hex(opts.appSecret, opts.accessToken),

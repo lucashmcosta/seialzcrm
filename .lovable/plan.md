@@ -1,106 +1,90 @@
-## Code Review Fixes — Meta Lead Ads (3 functions)
+## Ajuste 1 — Credenciais simplificadas (só System User Token obrigatório)
 
-Aplicar 6 correções, na ordem abaixo. Sem migrations, sem novos secrets, sem mudanças de frontend ou helpers compartilhados. Após o deploy, retorno para revisão final.
+### Backend
 
-Nota: `lead.ad_id` e `lead.ad_name` são propriedades planas do objeto retornado pela Graph API, sem URL — apenas artefato de markdown na conversa.
+**`supabase/functions/meta-lead-ads-connect/index.ts`**
+- Validação: exigir só `organization_id` e `system_user_token`. `app_id`/`app_secret` opcionais.
+- Validar token chamando `metaGraphGet("/me", ...)` passando `appSecret: app_secret || undefined`.
+- Encriptar secret só se vier: `enc_secret = app_secret ? await encryptSecret(app_secret) : null`.
+- `connected_account.app_id = app_id || null`, `app_secret_encrypted = enc_secret`.
 
----
+**`supabase/functions/_shared/meta-graph.ts`**
+- Em `metaGraphGet`, só adicionar `appsecret_proof` quando `opts.appSecret` for truthy (string não vazia). Já é o caso (`if (opts.appSecret)`), mas reforçar com `if (opts.appSecret && opts.appSecret.length > 0)` para evitar string vazia gerar proof inválido.
 
-### Arquivo 1 — `supabase/functions/meta-lead-ads-poll/index.ts`
+**`meta-lead-ads-discover` / `poll` / `process-lead` / `token-health`**
+- Auditar: substituir
+  ```ts
+  const appSecret = await decryptSecret(ca.app_secret_encrypted);
+  ```
+  por
+  ```ts
+  const appSecret = ca.app_secret_encrypted
+    ? await decryptSecret(ca.app_secret_encrypted)
+    : undefined;
+  ```
+- Em todas as chamadas `metaGraphGet(..., { accessToken, appSecret })`, manter como está — `appSecret` será `undefined` quando não houver, e o helper passa a ignorar.
 
-**Fix 1A — Auth check (logo após OPTIONS, antes do `try`):**
-```ts
-const authHeader = req.headers.get("authorization");
-const expected = `Bearer ${Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")}`;
-if (authHeader !== expected) {
-  return json({ error: "Unauthorized" }, 401);
+### Banco (migration)
+
+Atualizar `admin_integrations.config_schema` para `slug = 'meta-lead-ads'`:
+```json
+{
+  "fields": [
+    {"key":"system_user_token","label":"System User Token","type":"password","required":true,
+     "help":"Token gerado em Business Manager → System Users → Generate Token"},
+    {"key":"business_id","label":"Business ID (opcional)","type":"text","required":false},
+    {"key":"app_id","label":"App ID (avançado)","type":"text","required":false,
+     "help":"Só preencha se o app exigir appsecret_proof"},
+    {"key":"app_secret","label":"App Secret (avançado)","type":"password","required":false}
+  ]
 }
 ```
 
-**Fix 3 — Fields completos no fetch de leads (linha 88):**
-```ts
-fields:
-  "id,created_time,field_data,ad_id,ad_name,adset_id,adset_name,campaign_id,campaign_name,form_id,platform,is_organic",
-```
+### Frontend — `ConnectionForm.tsx`
+- Apenas `system_user_token` obrigatório.
+- Renderizar campos `business_id` no topo, e agrupar `app_id` + `app_secret` numa seção "Avançado (opcional)" colapsável (usar `<Collapsible>` do Radix), fechada por padrão.
+- Texto: "Para a maioria dos casos, basta o System User Token. App ID e Secret só são necessários se o seu app do Meta exigir appsecret_proof."
+- Ao chamar `meta-lead-ads-connect`, enviar `app_id`/`app_secret` apenas se preenchidos.
 
 ---
 
-### Arquivo 2 — `supabase/functions/meta-lead-ads-token-health/index.ts`
+## Ajuste 2 — UX: Dialog largo no lugar de página dedicada
 
-**Fix 1B — Auth check (mesmo bloco, após OPTIONS).**
+### Criar `src/components/integrations/meta-lead-ads/MetaLeadAdsDialog.tsx`
+- Props: `{ open, onOpenChange, integration, orgIntegration }`.
+- `<Dialog>` com `<DialogContent className="max-w-4xl max-h-[85vh] overflow-y-auto">`.
+- Header: nome + status badge (Conectado/Desconectado/Token expirando).
+- Tabs internas (componente `Tabs` do `@/components/ui/tabs`):
+  1. **Conexão** → `<ConnectionForm existing={orgIntegration} onSuccess={refetch} />`
+  2. **Formulários e Mapeamento** → `<PagesAndFormsList orgIntegrationId={orgIntegration.id} />` (clicar "Mapear" abre `MappingDrawer` por cima — Sheet aninhado é OK).
+  3. **Configurações** → `<SettingsCard orgIntegration={orgIntegration} />`
+  4. **Status** → `<StatusDashboard orgIntegrationId={orgIntegration.id} />`
+- Se ainda não conectado, abrir já na aba "Conexão" e desabilitar visualmente as outras (com tooltip "Conecte primeiro").
 
----
+### `IntegrationsSettings.tsx`
+- Remover os 2 early-returns que fazem `navigate('/integrations/meta-lead-ads')` (linhas 448 e 463) — tratar como qualquer outra integração.
+- Adicionar render condicional no final do JSX:
+  ```tsx
+  {selectedIntegration?.slug === 'meta-lead-ads' && (
+    <MetaLeadAdsDialog
+      open={detailDialogOpen || connectDialogOpen}
+      onOpenChange={(o) => { setDetailDialogOpen(o); setConnectDialogOpen(o); }}
+      integration={selectedIntegration}
+      orgIntegration={selectedOrgIntegration}
+    />
+  )}
+  ```
+- Os componentes `IntegrationConnectDialog` e `IntegrationDetailDialog` genéricos só renderizam quando `slug !== 'meta-lead-ads'` — adicionar guards.
 
-### Arquivo 3 — `supabase/functions/meta-lead-ads-process-lead/index.ts`
-
-**Fix 6 — `option_as_tag` no switch de tags (substitui o `case "tag"` atual, linhas 85-96):**
-```ts
-case "tag": {
-  const strat = q.tag_strategy || "value_as_tag";
-  if (strat === "fixed_tag" && q.fixed_tag_id) {
-    tagOps.push({ tag_id: q.fixed_tag_id });
-  } else if (strat === "option_as_tag") {
-    const opts = String(value).split(",").map((s) => s.trim()).filter(Boolean);
-    for (const opt of opts) {
-      tagOps.push({
-        name: q.tag_prefix ? `${q.tag_prefix}${opt}` : opt,
-        color: q.tag_color,
-      });
-    }
-  } else if (strat === "value_with_prefix") {
-    tagOps.push({ name: `${q.tag_prefix || ""}${value}`, color: q.tag_color });
-  } else {
-    tagOps.push({ name: value, color: q.tag_color });
-  }
-  noteLines.push(`${q.field_label}: ${value}`);
-  break;
-}
-```
-
-**Fix 4 — UTM + atribuição com timestamp real no INSERT do contato (linhas 204-206):**
-```ts
-utm_source: "facebook",
-utm_medium: "paid_social",
-utm_campaign: lead.campaign_name || null,
-ad_referral_source_id: lead.ad_id || null,
-ad_referral_source_type: "lead_form",
-ad_referral_captured_at: lead.created_time || new Date().toISOString(),
-```
-
-**Fix 5 — Activity body com nomes legíveis e `occurred_at` real (linhas 270-277):**
-```ts
-body:
-  `=== Atribuição ===\n` +
-  (lead.campaign_name ? `Campanha: ${lead.campaign_name}\n` : "") +
-  (lead.adset_name ? `Conjunto: ${lead.adset_name}\n` : "") +
-  (lead.ad_name ? `Anúncio: ${lead.ad_name}\n` : "") +
-  (lead.platform
-    ? `Plataforma: ${lead.platform === "fb" ? "Facebook" : "Instagram"}\n`
-    : "") +
-  `\n=== Respostas ===\n${noteLines.join("\n") || "(sem respostas)"}` +
-  (unmappedFields.length
-    ? `\n\nCampos não mapeados: ${unmappedFields.join(", ")}`
-    : ""),
-occurred_at: lead.created_time || new Date().toISOString(),
-```
-
-**Fix 2 — Remover `facts: {}` do upsert de `contact_memories` (linhas 298-308):**
-```ts
-await admin.from("contact_memories").upsert(
-  {
-    organization_id,
-    contact_id: contactId,
-    name_confirmed: true,
-    name_confirmed_at: new Date().toISOString(),
-    name_asked: true,
-  },
-  { onConflict: "contact_id" },
-);
-```
-Sem `facts`, sem `.select()`. INSERT usa default `'[]'::jsonb`; UPDATE preserva facts existentes.
+### Remoções
+- Apagar `src/pages/integrations/MetaLeadAdsPage.tsx`.
+- Em `src/App.tsx`: remover import de `MetaLeadAdsPage` e a `<Route path="/integrations/meta-lead-ads" ...>` (linhas 355–362).
 
 ---
 
-### Deploy & verificação
+## Ordem de execução
+1. Migration para `admin_integrations.config_schema`.
+2. Edge functions: `connect`, `meta-graph` helper, depois `discover`/`poll`/`process-lead`/`token-health` (decryptSecret condicional). Deploy as 5.
+3. Frontend: criar `MetaLeadAdsDialog`, atualizar `ConnectionForm` (collapsible + opcionalidade), refatorar `IntegrationsSettings`, remover rota e página.
 
-Após os edits, deploy das 3 functions: `meta-lead-ads-poll`, `meta-lead-ads-token-health`, `meta-lead-ads-process-lead`. Retorno confirmando para revisão final.
+Sem novos secrets. Sem novas tabelas. Após aplicar, pronto pra revisão final.
