@@ -36,6 +36,7 @@ import { ColumnSelector, type ColumnConfig } from '@/components/application/tabl
 import { BadgeWithDot } from '@/components/base/badges/badges';
 import { format } from 'date-fns';
 import { ptBR, enUS } from 'date-fns/locale';
+import { parseDateOnly } from '@/lib/utils';
 import type { SortDescriptor } from 'react-aria-components';
 
 // Stage color bars for Seialz theme
