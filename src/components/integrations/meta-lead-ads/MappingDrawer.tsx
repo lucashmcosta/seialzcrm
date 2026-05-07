@@ -96,6 +96,7 @@ export function MappingDrawer({ leadFormId, organizationId, open, onClose }: Pro
         const { error } = await supabase
           .from("lead_form_questions")
           .update({
+            target_entity: q.target_entity || "contact",
             mapping_strategy: q.mapping_strategy,
             mapped_to_contact_field: q.mapped_to_contact_field,
             custom_field_definition_id: q.custom_field_definition_id,
