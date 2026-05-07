@@ -7,6 +7,13 @@ import { notifyOrgUsers } from "../_shared/notify.ts";
 
 serve(async (req) => {
   if (req.method === "OPTIONS") return new Response(null, { headers: corsHeaders });
+
+  const authHeader = req.headers.get("authorization");
+  const expected = `Bearer ${Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")}`;
+  if (authHeader !== expected) {
+    return json({ error: "Unauthorized" }, 401);
+  }
+
   try {
     const admin = createClient(
       Deno.env.get("SUPABASE_URL")!,

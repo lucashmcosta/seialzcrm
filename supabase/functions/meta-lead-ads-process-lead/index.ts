@@ -86,6 +86,14 @@ serve(async (req) => {
           const strat = q.tag_strategy || "value_as_tag";
           if (strat === "fixed_tag" && q.fixed_tag_id) {
             tagOps.push({ tag_id: q.fixed_tag_id });
+          } else if (strat === "option_as_tag") {
+            const opts = String(value).split(",").map((s) => s.trim()).filter(Boolean);
+            for (const opt of opts) {
+              tagOps.push({
+                name: q.tag_prefix ? `${q.tag_prefix}${opt}` : opt,
+                color: q.tag_color,
+              });
+            }
           } else if (strat === "value_with_prefix") {
             tagOps.push({ name: `${q.tag_prefix || ""}${value}`, color: q.tag_color });
           } else {
@@ -201,9 +209,12 @@ serve(async (req) => {
           source_external_id: lead.id,
           lifecycle_stage: settings?.default_lifecycle_stage || "lead",
           owner_user_id: ownerId,
+          utm_source: "facebook",
+          utm_medium: "paid_social",
+          utm_campaign: lead.campaign_name || null,
           ad_referral_source_id: lead.ad_id || null,
-          ad_referral_source_type: "meta_lead_ads",
-          ad_referral_captured_at: new Date().toISOString(),
+          ad_referral_source_type: "lead_form",
+          ad_referral_captured_at: lead.created_time || new Date().toISOString(),
         })
         .select("id")
         .single();
@@ -269,12 +280,18 @@ serve(async (req) => {
       activity_type: "system",
       title: `Lead recebido via Meta — ${lead_form_name || "Formulário"}`,
       body:
-        `Atribuição: ${ownerId ? "automática" : "sem dono"}\n\n` +
-        `Respostas:\n${noteLines.join("\n") || "(sem respostas)"}` +
+        `=== Atribuição ===\n` +
+        (lead.campaign_name ? `Campanha: ${lead.campaign_name}\n` : "") +
+        (lead.adset_name ? `Conjunto: ${lead.adset_name}\n` : "") +
+        (lead.ad_name ? `Anúncio: ${lead.ad_name}\n` : "") +
+        (lead.platform
+          ? `Plataforma: ${lead.platform === "fb" ? "Facebook" : "Instagram"}\n`
+          : "") +
+        `\n=== Respostas ===\n${noteLines.join("\n") || "(sem respostas)"}` +
         (unmappedFields.length
           ? `\n\nCampos não mapeados: ${unmappedFields.join(", ")}`
           : ""),
-      occurred_at: new Date().toISOString(),
+      occurred_at: lead.created_time || new Date().toISOString(),
       source_external_id: lead.id,
     });
 
@@ -299,13 +316,12 @@ serve(async (req) => {
         {
           organization_id,
           contact_id: contactId,
-          facts: {},
           name_confirmed: true,
           name_confirmed_at: new Date().toISOString(),
           name_asked: true,
         },
         { onConflict: "contact_id" },
-      ).select().maybeSingle();
+      );
     }
 
     // Auto opportunity
