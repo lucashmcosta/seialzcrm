@@ -444,7 +444,13 @@ export function IntegrationsSettings() {
                     </div>
                     <Switch
                       checked={isConnected}
-                      onCheckedChange={(checked) => handleToggle(integration, connection, checked)}
+                      onCheckedChange={(checked) => {
+                        if (integration.slug === 'meta-lead-ads') {
+                          navigate('/integrations/meta-lead-ads');
+                          return;
+                        }
+                        handleToggle(integration, connection, checked);
+                      }}
                       disabled={toggleMutation.isPending}
                     />
                   </div>
