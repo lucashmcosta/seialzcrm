@@ -68,7 +68,7 @@ export function OpportunityCard({
         {closeDate && (
           <div className="flex items-center gap-2 text-xs text-muted-foreground">
             <Calendar className="h-3 w-3" />
-            <span>{format(new Date(closeDate), 'dd MMM yyyy', { locale: dateLocale })}</span>
+            <span>{format(parseDateOnly(closeDate) ?? new Date(closeDate), 'dd MMM yyyy', { locale: dateLocale })}</span>
           </div>
         )}
 
