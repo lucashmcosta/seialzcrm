@@ -32,7 +32,7 @@ export function MappingDrawer({ leadFormId, organizationId, open, onClose }: Pro
     },
   });
 
-  const { data: customFields } = useQuery({
+  const { data: customFieldsContacts } = useQuery({
     queryKey: ["custom-fields", organizationId, "contacts"],
     enabled: !!organizationId && open,
     queryFn: async () => {
@@ -41,6 +41,24 @@ export function MappingDrawer({ leadFormId, organizationId, open, onClose }: Pro
         .select("id, label, name, field_type")
         .eq("organization_id", organizationId!)
         .eq("module", "contacts")
+        .order("label");
+      return (data || []).map((d: any) => ({
+        id: d.id,
+        field_label: d.label,
+        field_key: d.name,
+      }));
+    },
+  });
+
+  const { data: customFieldsOpps } = useQuery({
+    queryKey: ["custom-fields", organizationId, "opportunities"],
+    enabled: !!organizationId && open,
+    queryFn: async () => {
+      const { data } = await supabase
+        .from("custom_field_definitions")
+        .select("id, label, name, field_type")
+        .eq("organization_id", organizationId!)
+        .eq("module", "opportunities")
         .order("label");
       return (data || []).map((d: any) => ({
         id: d.id,
