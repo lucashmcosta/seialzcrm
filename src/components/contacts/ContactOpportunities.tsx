@@ -9,6 +9,7 @@ import { Button } from '@/components/ui/button';
 import { Plus, ArrowSquareOut } from '@phosphor-icons/react';
 import { Skeleton } from '@/components/ui/skeleton';
 import { OpportunityDialog } from '@/components/opportunities/OpportunityDialog';
+import { formatDateOnly } from '@/lib/utils';
 
 interface Opportunity {
   id: string;
