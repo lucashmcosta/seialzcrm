@@ -38,11 +38,15 @@ export function MappingDrawer({ leadFormId, organizationId, open, onClose }: Pro
     queryFn: async () => {
       const { data } = await supabase
         .from("custom_field_definitions")
-        .select("id, field_label, field_key, field_type")
+        .select("id, label, name, field_type")
         .eq("organization_id", organizationId!)
         .eq("module", "contacts")
-        .order("field_label");
-      return data || [];
+        .order("label");
+      return (data || []).map((d: any) => ({
+        id: d.id,
+        field_label: d.label,
+        field_key: d.name,
+      }));
     },
   });
 
