@@ -4,6 +4,7 @@ import { corsHeaders } from "../_shared/cors.ts";
 import { decryptSecret } from "../_shared/crypto.ts";
 import { isTokenError, metaGraphGet } from "../_shared/meta-graph.ts";
 import { notifyOrgUsers } from "../_shared/notify.ts";
+import { validateServiceRoleAuth } from "../_shared/auth.ts";
 
 const PAGE_SIZE = 50;
 const MAX_PAGES = 5;
@@ -11,10 +12,10 @@ const MAX_PAGES = 5;
 serve(async (req) => {
   if (req.method === "OPTIONS") return new Response(null, { headers: corsHeaders });
 
-  const authHeader = req.headers.get("authorization");
-  const expected = `Bearer ${Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")}`;
-  if (authHeader !== expected) {
-    return json({ error: "Unauthorized" }, 401);
+  const auth = validateServiceRoleAuth(req);
+  if (!auth.ok) {
+    console.warn("Auth failed:", auth.error);
+    return json({ error: "Unauthorized", details: auth.error }, 401);
   }
 
   try {
