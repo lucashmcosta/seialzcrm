@@ -6,7 +6,8 @@ export function cn(...inputs: ClassValue[]) {
 }
 
 /**
- * Parse a DATE-only string ("YYYY-MM-DD") as UTC, avoiding timezone shifts.
+ * Parse a DATE-only string ("YYYY-MM-DD") as LOCAL midnight, avoiding
+ * timezone shifts that occur with `new Date("YYYY-MM-DD")` (parsed as UTC).
  * Use for Postgres DATE columns.
  */
 export function parseDateOnly(value?: string | null): Date | null {
@@ -16,7 +17,7 @@ export function parseDateOnly(value?: string | null): Date | null {
     const d = new Date(value);
     return isNaN(d.getTime()) ? null : d;
   }
-  return new Date(Date.UTC(+m[1], +m[2] - 1, +m[3]));
+  return new Date(+m[1], +m[2] - 1, +m[3]);
 }
 
 /**
@@ -29,5 +30,5 @@ export function formatDateOnly(
 ): string {
   const d = parseDateOnly(value);
   if (!d) return '';
-  return d.toLocaleDateString(locale, { timeZone: 'UTC', ...options });
+  return d.toLocaleDateString(locale, options);
 }
