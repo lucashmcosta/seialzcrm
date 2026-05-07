@@ -140,17 +140,22 @@ export function MappingDrawer({ leadFormId, organizationId, open, onClose }: Pro
               Nenhuma pergunta sincronizada. Re-sincronize a integração.
             </p>
           ) : (
-            questions.map((q) => (
-              <QuestionMappingCard
-                key={q.id}
-                question={drafts[q.id] || q}
-                customFields={customFields || []}
-                tags={tags || []}
-                onChange={(patch) =>
-                  setDrafts((d) => ({ ...d, [q.id]: { ...(d[q.id] || q), ...patch } }))
-                }
-              />
-            ))
+            questions.map((q) => {
+              const draft = drafts[q.id] || q;
+              const target = draft.target_entity || "contact";
+              const cfList = target === "opportunity" ? (customFieldsOpps || []) : (customFieldsContacts || []);
+              return (
+                <QuestionMappingCard
+                  key={q.id}
+                  question={draft}
+                  customFields={cfList}
+                  tags={tags || []}
+                  onChange={(patch) =>
+                    setDrafts((d) => ({ ...d, [q.id]: { ...(d[q.id] || q), ...patch } }))
+                  }
+                />
+              );
+            })
           )}
         </div>
 
