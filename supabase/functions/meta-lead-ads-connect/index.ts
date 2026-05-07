@@ -34,7 +34,7 @@ serve(async (req) => {
 
     const body = await req.json();
     const { organization_id, app_id, app_secret, system_user_token, business_id } = body;
-    if (!organization_id || !app_id || !app_secret || !system_user_token) {
+    if (!organization_id || !system_user_token) {
       return json({ error: "Missing required fields" }, 400);
     }
 
@@ -43,7 +43,7 @@ serve(async (req) => {
     try {
       me = await metaGraphGet("/me", { fields: "id,name" }, {
         accessToken: system_user_token,
-        appSecret: app_secret,
+        appSecret: app_secret || undefined,
       });
     } catch (e: any) {
       return json({ error: "Invalid Meta credentials", details: e.message }, 400);
@@ -70,10 +70,10 @@ serve(async (req) => {
       .maybeSingle();
 
     const enc_token = await encryptSecret(system_user_token);
-    const enc_secret = await encryptSecret(app_secret);
+    const enc_secret = app_secret ? await encryptSecret(app_secret) : null;
 
     const connected_account = {
-      app_id,
+      app_id: app_id || null,
       app_secret_encrypted: enc_secret,
       system_user_token_encrypted: enc_token,
       business_id: business_id || null,
