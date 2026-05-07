@@ -220,7 +220,7 @@ serve(async (req) => {
           field_definition_id: op.definition_id,
           value: { text: op.value },
         },
-        { onConflict: "module,record_id,field_definition_id" },
+        { onConflict: "record_id,field_definition_id" },
       );
     }
 
@@ -304,7 +304,7 @@ serve(async (req) => {
           name_confirmed_at: new Date().toISOString(),
           name_asked: true,
         },
-        { onConflict: "organization_id,contact_id" },
+        { onConflict: "contact_id" },
       ).select().maybeSingle();
     }
 
