@@ -10,15 +10,15 @@ export async function notifyOrgUsers(
     entity_id?: string;
   },
 ) {
-  const { data: users } = await admin
-    .from("users")
-    .select("id")
+  const { data: rels } = await admin
+    .from("user_organizations")
+    .select("user_id")
     .eq("organization_id", organization_id)
     .eq("is_active", true);
-  if (!users || users.length === 0) return;
-  const rows = users.map((u: any) => ({
+  if (!rels || rels.length === 0) return;
+  const rows = rels.map((u: any) => ({
     organization_id,
-    user_id: u.id,
+    user_id: u.user_id,
     ...payload,
   }));
   await admin.from("notifications").insert(rows);
