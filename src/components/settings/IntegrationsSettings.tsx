@@ -54,6 +54,7 @@ const categories = [
 
 export function IntegrationsSettings() {
   const { locale, organization } = useOrganization();
+  const navigate = useNavigate();
   const { t } = useTranslation(locale as any);
   const queryClient = useQueryClient();
   const [selectedIntegration, setSelectedIntegration] = useState<any>(null);
@@ -453,6 +454,10 @@ export function IntegrationsSettings() {
                       size="sm"
                       className="h-auto p-0 text-primary"
                       onClick={() => {
+                        if (integration.slug === 'meta-lead-ads') {
+                          navigate('/integrations/meta-lead-ads');
+                          return;
+                        }
                         if (connection) {
                           handleConfigure(integration, connection);
                         } else {
