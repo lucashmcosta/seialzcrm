@@ -39,9 +39,9 @@ export function SettingsCard({ orgIntegration, onUpdated }: Props) {
     queryFn: async () => {
       const { data } = await supabase
         .from("pipeline_stages")
-        .select("id, name, pipeline:pipelines(name)")
+        .select("id, name")
         .eq("organization_id", orgIntegration.organization_id)
-        .order("position");
+        .order("order_index");
       return data || [];
     },
   });
@@ -109,7 +109,7 @@ export function SettingsCard({ orgIntegration, onUpdated }: Props) {
               <SelectContent>
                 {stages?.map((st: any) => (
                   <SelectItem key={st.id} value={st.id}>
-                    {st.pipeline?.name} — {st.name}
+                    {st.name}
                   </SelectItem>
                 ))}
               </SelectContent>
