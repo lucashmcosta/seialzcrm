@@ -32,7 +32,7 @@ export function MappingDrawer({ leadFormId, organizationId, open, onClose }: Pro
     },
   });
 
-  const { data: customFields } = useQuery({
+  const { data: customFieldsContacts } = useQuery({
     queryKey: ["custom-fields", organizationId, "contacts"],
     enabled: !!organizationId && open,
     queryFn: async () => {
@@ -41,6 +41,24 @@ export function MappingDrawer({ leadFormId, organizationId, open, onClose }: Pro
         .select("id, label, name, field_type")
         .eq("organization_id", organizationId!)
         .eq("module", "contacts")
+        .order("label");
+      return (data || []).map((d: any) => ({
+        id: d.id,
+        field_label: d.label,
+        field_key: d.name,
+      }));
+    },
+  });
+
+  const { data: customFieldsOpps } = useQuery({
+    queryKey: ["custom-fields", organizationId, "opportunities"],
+    enabled: !!organizationId && open,
+    queryFn: async () => {
+      const { data } = await supabase
+        .from("custom_field_definitions")
+        .select("id, label, name, field_type")
+        .eq("organization_id", organizationId!)
+        .eq("module", "opportunities")
         .order("label");
       return (data || []).map((d: any) => ({
         id: d.id,
@@ -78,6 +96,7 @@ export function MappingDrawer({ leadFormId, organizationId, open, onClose }: Pro
         const { error } = await supabase
           .from("lead_form_questions")
           .update({
+            target_entity: q.target_entity || "contact",
             mapping_strategy: q.mapping_strategy,
             mapped_to_contact_field: q.mapped_to_contact_field,
             custom_field_definition_id: q.custom_field_definition_id,
@@ -121,17 +140,22 @@ export function MappingDrawer({ leadFormId, organizationId, open, onClose }: Pro
               Nenhuma pergunta sincronizada. Re-sincronize a integração.
             </p>
           ) : (
-            questions.map((q) => (
-              <QuestionMappingCard
-                key={q.id}
-                question={drafts[q.id] || q}
-                customFields={customFields || []}
-                tags={tags || []}
-                onChange={(patch) =>
-                  setDrafts((d) => ({ ...d, [q.id]: { ...(d[q.id] || q), ...patch } }))
-                }
-              />
-            ))
+            questions.map((q) => {
+              const draft = drafts[q.id] || q;
+              const target = draft.target_entity || "contact";
+              const cfList = target === "opportunity" ? (customFieldsOpps || []) : (customFieldsContacts || []);
+              return (
+                <QuestionMappingCard
+                  key={q.id}
+                  question={draft}
+                  customFields={cfList}
+                  tags={tags || []}
+                  onChange={(patch) =>
+                    setDrafts((d) => ({ ...d, [q.id]: { ...(d[q.id] || q), ...patch } }))
+                  }
+                />
+              );
+            })
           )}
         </div>
 

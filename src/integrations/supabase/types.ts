@@ -2364,6 +2364,7 @@ export type Database = {
           tag_color: string | null
           tag_prefix: string | null
           tag_strategy: string | null
+          target_entity: string
           updated_at: string
         }
         Insert: {
@@ -2386,6 +2387,7 @@ export type Database = {
           tag_color?: string | null
           tag_prefix?: string | null
           tag_strategy?: string | null
+          target_entity?: string
           updated_at?: string
         }
         Update: {
@@ -2408,6 +2410,7 @@ export type Database = {
           tag_color?: string | null
           tag_prefix?: string | null
           tag_strategy?: string | null
+          target_entity?: string
           updated_at?: string
         }
         Relationships: [

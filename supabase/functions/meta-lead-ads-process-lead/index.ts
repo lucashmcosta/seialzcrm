@@ -59,9 +59,13 @@ serve(async (req) => {
       .select("*")
       .eq("lead_form_id", lead_form_id);
 
-    const standardUpdates: Record<string, any> = {};
-    const customFieldOps: Array<{ definition_id: string; value: string }> = [];
-    const tagOps: Array<{ name?: string; tag_id?: string; color?: string }> = [];
+    // === Buckets per entity ===
+    const contactStandard: Record<string, any> = {};
+    const oppStandard: Record<string, any> = {};
+    const contactCustomFields: Array<{ definition_id: string; value: string }> = [];
+    const oppCustomFields: Array<{ definition_id: string; value: string }> = [];
+    const contactTags: Array<{ name?: string; tag_id?: string; color?: string }> = [];
+    const oppTags: Array<{ name?: string; tag_id?: string; color?: string }> = [];
     const noteLines: string[] = [];
     const unmappedFields: string[] = [];
     const handled = new Set<string>();
@@ -71,33 +75,38 @@ serve(async (req) => {
       handled.add(q.field_key);
       if (value === undefined || value === "") continue;
 
+      const isOpp = (q.target_entity || "contact") === "opportunity";
+
       switch (q.mapping_strategy) {
         case "standard_field":
           if (q.mapped_to_contact_field) {
-            standardUpdates[q.mapped_to_contact_field] = value;
+            if (isOpp) oppStandard[q.mapped_to_contact_field] = value;
+            else contactStandard[q.mapped_to_contact_field] = value;
           }
           break;
         case "custom_field":
           if (q.custom_field_definition_id) {
-            customFieldOps.push({ definition_id: q.custom_field_definition_id, value });
+            const bucket = isOpp ? oppCustomFields : contactCustomFields;
+            bucket.push({ definition_id: q.custom_field_definition_id, value });
           }
           break;
         case "tag": {
           const strat = q.tag_strategy || "value_as_tag";
+          const bucket = isOpp ? oppTags : contactTags;
           if (strat === "fixed_tag" && q.fixed_tag_id) {
-            tagOps.push({ tag_id: q.fixed_tag_id });
+            bucket.push({ tag_id: q.fixed_tag_id });
           } else if (strat === "option_as_tag") {
             const opts = String(value).split(",").map((s) => s.trim()).filter(Boolean);
             for (const opt of opts) {
-              tagOps.push({
+              bucket.push({
                 name: q.tag_prefix ? `${q.tag_prefix}${opt}` : opt,
                 color: q.tag_color,
               });
             }
           } else if (strat === "value_with_prefix") {
-            tagOps.push({ name: `${q.tag_prefix || ""}${value}`, color: q.tag_color });
+            bucket.push({ name: `${q.tag_prefix || ""}${value}`, color: q.tag_color });
           } else {
-            tagOps.push({ name: value, color: q.tag_color });
+            bucket.push({ name: value, color: q.tag_color });
           }
           noteLines.push(`${q.field_label}: ${value}`);
           break;
@@ -118,17 +127,17 @@ serve(async (req) => {
       }
     }
 
-    // Normalize
+    // Normalize (contact only)
     const fullName =
-      standardUpdates.full_name ||
-      [standardUpdates.first_name, standardUpdates.last_name].filter(Boolean).join(" ").trim() ||
+      contactStandard.full_name ||
+      [contactStandard.first_name, contactStandard.last_name].filter(Boolean).join(" ").trim() ||
       "Lead Meta";
-    const firstName = standardUpdates.first_name || fullName.split(" ")[0];
+    const firstName = contactStandard.first_name || fullName.split(" ")[0];
     const lastName =
-      standardUpdates.last_name ||
+      contactStandard.last_name ||
       (fullName.split(" ").length > 1 ? fullName.split(" ").slice(1).join(" ") : null);
-    const email = standardUpdates.email ? String(standardUpdates.email).trim().toLowerCase() : null;
-    const phone = standardUpdates.phone ? normalizePhoneToE164(String(standardUpdates.phone)) : null;
+    const email = contactStandard.email ? String(contactStandard.email).trim().toLowerCase() : null;
+    const phone = contactStandard.phone ? normalizePhoneToE164(String(contactStandard.phone)) : null;
 
     // Dedup by org settings
     const { data: org } = await admin
@@ -222,8 +231,8 @@ serve(async (req) => {
       contactId = ins.id;
     }
 
-    // Custom field values
-    for (const op of customFieldOps) {
+    // Contact custom field values
+    for (const op of contactCustomFields) {
       await admin.from("custom_field_values").upsert(
         {
           organization_id,
@@ -236,8 +245,8 @@ serve(async (req) => {
       );
     }
 
-    // Tags
-    for (const op of tagOps) {
+    // Contact tags
+    for (const op of contactTags) {
       let tagId = op.tag_id;
       if (!tagId && op.name) {
         const { data: existingTag } = await admin
@@ -273,10 +282,106 @@ serve(async (req) => {
       }
     }
 
-    // Activity log
+    // === Opportunity (conditional) ===
+    const hasOppMappings =
+      Object.keys(oppStandard).length > 0 ||
+      oppCustomFields.length > 0 ||
+      oppTags.length > 0;
+
+    const shouldCreateOpp = hasOppMappings || settings?.auto_create_opportunity === true;
+
+    let opportunityId: string | null = null;
+
+    if (shouldCreateOpp) {
+      if (!settings?.default_pipeline_stage_id) {
+        console.warn(
+          "Cannot create opportunity: default_pipeline_stage_id not configured",
+        );
+      } else {
+        const oppTitle =
+          oppStandard.title || `${fullName} — ${lead_form_name || "Meta Lead"}`;
+
+        const { data: opp, error: oppErr } = await admin
+          .from("opportunities")
+          .insert({
+            organization_id,
+            contact_id: contactId,
+            pipeline_stage_id: settings.default_pipeline_stage_id,
+            title: oppTitle,
+            amount: oppStandard.amount ? Number(oppStandard.amount) : 0,
+            close_date: oppStandard.close_date || null,
+            status: "open",
+            owner_user_id: ownerId,
+            source: "meta_lead_ads",
+            source_external_id: lead.id,
+          })
+          .select("id")
+          .single();
+
+        if (oppErr) {
+          console.error("Failed to create opportunity:", oppErr);
+        } else {
+          opportunityId = opp.id;
+
+          // Opportunity custom fields
+          for (const op of oppCustomFields) {
+            await admin.from("custom_field_values").upsert(
+              {
+                organization_id,
+                module: "opportunities",
+                record_id: opportunityId,
+                field_definition_id: op.definition_id,
+                value: { text: op.value },
+              },
+              { onConflict: "record_id,field_definition_id" },
+            );
+          }
+
+          // Opportunity tags
+          for (const op of oppTags) {
+            let tagId = op.tag_id;
+            if (!tagId && op.name) {
+              const { data: existingTag } = await admin
+                .from("tags")
+                .select("id")
+                .eq("organization_id", organization_id)
+                .eq("name", op.name)
+                .maybeSingle();
+              if (existingTag) tagId = existingTag.id;
+              else {
+                const { data: newTag } = await admin
+                  .from("tags")
+                  .insert({
+                    organization_id,
+                    name: op.name,
+                    color: op.color || "#3b82f6",
+                  })
+                  .select("id")
+                  .single();
+                tagId = newTag?.id;
+              }
+            }
+            if (tagId) {
+              await admin.from("tag_assignments").upsert(
+                {
+                  organization_id,
+                  tag_id: tagId,
+                  entity_type: "opportunity",
+                  entity_id: opportunityId,
+                },
+                { onConflict: "tag_id,entity_type,entity_id" },
+              );
+            }
+          }
+        }
+      }
+    }
+
+    // Activity log (single row on contact, linked to opp when applicable)
     await admin.from("activities").insert({
       organization_id,
       contact_id: contactId,
+      opportunity_id: opportunityId,
       activity_type: "system",
       title: `Lead recebido via Meta — ${lead_form_name || "Formulário"}`,
       body:
@@ -322,26 +427,6 @@ serve(async (req) => {
         },
         { onConflict: "contact_id" },
       );
-    }
-
-    // Auto opportunity
-    let opportunityId: string | null = null;
-    if (settings?.auto_create_opportunity && settings?.default_pipeline_stage_id) {
-      const { data: opp } = await admin
-        .from("opportunities")
-        .insert({
-          organization_id,
-          contact_id: contactId,
-          pipeline_stage_id: settings.default_pipeline_stage_id,
-          title: `Lead Meta: ${fullName}`,
-          status: "open",
-          source: "meta_lead_ads",
-          source_external_id: lead.id,
-          owner_user_id: ownerId,
-        })
-        .select("id")
-        .maybeSingle();
-      opportunityId = opp?.id || null;
     }
 
     return json({

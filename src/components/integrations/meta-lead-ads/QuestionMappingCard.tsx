@@ -2,8 +2,9 @@ import { Card } from "@/components/ui/card";
 import { Label } from "@/components/ui/label";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 
-const STANDARD_FIELDS = [
+const CONTACT_STANDARD_FIELDS = [
   { value: "full_name", label: "Nome completo" },
   { value: "first_name", label: "Primeiro nome" },
   { value: "last_name", label: "Sobrenome" },
@@ -16,6 +17,12 @@ const STANDARD_FIELDS = [
   { value: "address_zip", label: "CEP" },
 ];
 
+const OPPORTUNITY_STANDARD_FIELDS = [
+  { value: "title", label: "Título" },
+  { value: "amount", label: "Valor estimado" },
+  { value: "close_date", label: "Data esperada de fechamento" },
+];
+
 interface Props {
   question: any;
   customFields: Array<{ id: string; field_label: string; field_key: string }>;
@@ -25,6 +32,9 @@ interface Props {
 
 export function QuestionMappingCard({ question, customFields, tags, onChange }: Props) {
   const strategy = question.mapping_strategy || "note";
+  const targetEntity = question.target_entity || "contact";
+  const isOpp = targetEntity === "opportunity";
+  const standardFields = isOpp ? OPPORTUNITY_STANDARD_FIELDS : CONTACT_STANDARD_FIELDS;
 
   return (
     <Card className="p-4 space-y-3">
@@ -35,13 +45,47 @@ export function QuestionMappingCard({ question, customFields, tags, onChange }: 
         </p>
       </div>
 
+      {/* Target entity selector */}
+      <div className="bg-muted/30 rounded-md p-3 border">
+        <Label className="text-xs font-medium mb-2 block">Onde gravar essa resposta?</Label>
+        <RadioGroup
+          value={targetEntity}
+          onValueChange={(v) =>
+            onChange({
+              target_entity: v,
+              mapped_to_contact_field: null,
+              custom_field_definition_id: null,
+              fixed_tag_id: null,
+            })
+          }
+          className="flex flex-col gap-2"
+        >
+          <div className="flex items-center space-x-2">
+            <RadioGroupItem value="contact" id={`${question.id}-contact`} />
+            <Label htmlFor={`${question.id}-contact`} className="font-normal cursor-pointer text-sm">
+              <span className="font-medium">Contato</span>
+              <span className="text-xs text-muted-foreground ml-2">— dados pessoais (nome, email, telefone)</span>
+            </Label>
+          </div>
+          <div className="flex items-center space-x-2">
+            <RadioGroupItem value="opportunity" id={`${question.id}-opp`} />
+            <Label htmlFor={`${question.id}-opp`} className="font-normal cursor-pointer text-sm">
+              <span className="font-medium">Oportunidade</span>
+              <span className="text-xs text-muted-foreground ml-2">— do caso específico (tipo, valor, prazo)</span>
+            </Label>
+          </div>
+        </RadioGroup>
+      </div>
+
       <div className="grid gap-3 sm:grid-cols-2">
         <div className="space-y-1.5">
           <Label className="text-xs">Estratégia</Label>
           <Select value={strategy} onValueChange={(v) => onChange({ mapping_strategy: v })}>
             <SelectTrigger><SelectValue /></SelectTrigger>
             <SelectContent>
-              <SelectItem value="standard_field">Campo padrão do contato</SelectItem>
+              <SelectItem value="standard_field">
+                {isOpp ? "Campo padrão da oportunidade" : "Campo padrão do contato"}
+              </SelectItem>
               <SelectItem value="custom_field">Campo personalizado</SelectItem>
               <SelectItem value="tag">Tag</SelectItem>
               <SelectItem value="note">Apenas nota</SelectItem>
@@ -52,14 +96,16 @@ export function QuestionMappingCard({ question, customFields, tags, onChange }: 
 
         {strategy === "standard_field" && (
           <div className="space-y-1.5">
-            <Label className="text-xs">Campo do contato</Label>
+            <Label className="text-xs">
+              Campo {isOpp ? "da oportunidade" : "do contato"}
+            </Label>
             <Select
               value={question.mapped_to_contact_field || ""}
               onValueChange={(v) => onChange({ mapped_to_contact_field: v })}
             >
               <SelectTrigger><SelectValue placeholder="Selecione" /></SelectTrigger>
               <SelectContent>
-                {STANDARD_FIELDS.map((f) => (
+                {standardFields.map((f) => (
                   <SelectItem key={f.value} value={f.value}>{f.label}</SelectItem>
                 ))}
               </SelectContent>
