@@ -1,6 +1,7 @@
 import { User, Calendar, PencilSimple, TrashSimple } from '@phosphor-icons/react';
 import { format } from 'date-fns';
 import { ptBR, enUS } from 'date-fns/locale';
+import { parseDateOnly } from '@/lib/utils';
 
 interface TagInfo {
   id: string;
