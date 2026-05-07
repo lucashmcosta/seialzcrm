@@ -283,8 +283,7 @@ serve(async (req) => {
         .from("lead_forms")
         .update({ is_mapping_configured: false })
         .eq("id", lead_form_id);
-      await admin.from("notifications").insert({
-        organization_id,
+      await notifyOrgUsers(admin, organization_id, {
         type: "info",
         title: "Novas perguntas em formulário Meta",
         body: `O formulário "${lead_form_name}" possui novas perguntas que precisam ser mapeadas.`,

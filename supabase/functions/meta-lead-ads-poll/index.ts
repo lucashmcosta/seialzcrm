@@ -166,8 +166,7 @@ serve(async (req) => {
               last_health_check_at: new Date().toISOString(),
             })
             .eq("id", page.id);
-          await admin.from("notifications").insert({
-            organization_id: form.organization_id,
+          await notifyOrgUsers(admin, form.organization_id, {
             type: "warning",
             title: "Token Meta Lead Ads expirado",
             body: `O formulário "${form.provider_form_name}" não pôde ser sincronizado: token expirado.`,

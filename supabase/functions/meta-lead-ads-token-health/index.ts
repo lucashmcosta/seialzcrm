@@ -62,8 +62,7 @@ serve(async (req) => {
             },
           })
           .eq("id", oi.id);
-        await admin.from("notifications").insert({
-          organization_id: oi.organization_id,
+        await notifyOrgUsers(admin, oi.organization_id, {
           type: expired ? "error" : "warning",
           title: expired ? "Token Meta Lead Ads expirado" : "Erro ao validar Meta Lead Ads",
           body: e.message,
