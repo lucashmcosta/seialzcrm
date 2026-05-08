@@ -112,7 +112,8 @@ async function getExternalId(
     .eq("id", internalId)
     .maybeSingle();
   if (row?.source === "kommo" && row?.source_external_id) {
-    return String(row.source_external_id);
+    // Importer legado salva como "kommo_<id>"; Kommo API espera só "<id>".
+    return String(row.source_external_id).replace(/^kommo_/i, "");
   }
   return undefined;
 }
