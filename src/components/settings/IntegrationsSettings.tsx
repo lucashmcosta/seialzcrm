@@ -21,6 +21,7 @@ import { IntegrationDetailDialog } from './IntegrationDetailDialog';
 import { PhoneNumberSettings } from './PhoneNumberSettings';
 import { KommoMigrationDialog } from './KommoMigrationDialog';
 import { MetaLeadAdsDialog } from '@/components/integrations/meta-lead-ads/MetaLeadAdsDialog';
+import { MetaCapiDialog } from '@/components/integrations/meta-capi/MetaCapiDialog';
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 
