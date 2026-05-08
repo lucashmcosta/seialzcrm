@@ -422,7 +422,7 @@ export function IntegrationsSettings() {
                         <div className="flex items-center gap-2 flex-wrap">
                           <h3 className="font-medium text-foreground truncate">{integration.name}</h3>
                           {isConnected && (
-                            connection?.connected_account?.test_event_code ? (
+                            (connection?.connected_account as any)?.test_event_code ? (
                               <Badge className="text-[10px] bg-amber-500 text-white">Modo teste</Badge>
                             ) : (
                               <Badge className="text-[10px] bg-green-600 text-white">Conectado</Badge>
