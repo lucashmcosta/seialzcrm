@@ -11,11 +11,8 @@ import { useNavigate } from 'react-router-dom';
 import { useIsMobile } from '@/hooks/use-mobile';
 import { MobileLayout } from '@/components/mobile/MobileLayout';
 import { MobileDashboard } from '@/components/mobile/MobileDashboard';
-import {
-  ReportFilters,
-  computeRange,
-  type PeriodPreset,
-} from '@/components/reports/ReportFilters';
+import { ReportFilters } from '@/components/reports/ReportFilters';
+import { computeRange, type PeriodPreset, type CustomRange } from '@/lib/report-period';
 const DashboardTrendChart = lazy(() =>
   import('@/components/reports/DashboardTrendChart').then((m) => ({ default: m.DashboardTrendChart })),
 );
@@ -23,7 +20,7 @@ const DashboardStatusDonut = lazy(() =>
   import('@/components/reports/DashboardStatusDonut').then((m) => ({ default: m.DashboardStatusDonut })),
 );
 const ChartFallback = () => <div className="h-72 animate-pulse rounded-md bg-muted/50" />;
-import type { DateRange } from 'react-day-picker';
+
 import { cn } from '@/lib/utils';
 
 interface OppRow {
@@ -41,7 +38,7 @@ export default function Dashboard() {
   const isMobile = useIsMobile();
 
   const [preset, setPreset] = useState<PeriodPreset>('last_30');
-  const [customRange, setCustomRange] = useState<DateRange | undefined>();
+  const [customRange, setCustomRange] = useState<CustomRange | undefined>();
 
   const [enteredCount, setEnteredCount] = useState(0);
   const [closedCount, setClosedCount] = useState(0);

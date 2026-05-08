@@ -17,12 +17,8 @@ import {
 import type { TrendPoint } from '@/components/reports/SalesTrendChart';
 import type { FunnelStage } from '@/components/reports/PipelineFunnel';
 import type { UserStats } from '@/components/reports/UserLeaderboard';
-import {
-  ReportFilters,
-  computeRange,
-  type PeriodPreset,
-} from '@/components/reports/ReportFilters';
-import type { DateRange } from 'react-day-picker';
+import { ReportFilters } from '@/components/reports/ReportFilters';
+import { computeRange, type PeriodPreset, type CustomRange } from '@/lib/report-period';
 
 // Lazy load heavy chart/UI components to avoid TDZ issues from circular
 // chunking with recharts and other large vendor modules in production.
@@ -87,7 +83,7 @@ export default function ReportsPage() {
   const { permissions, loading: permsLoading } = usePermissions();
 
   const [preset, setPreset] = useState<PeriodPreset>('last_30');
-  const [customRange, setCustomRange] = useState<DateRange | undefined>();
+  const [customRange, setCustomRange] = useState<CustomRange | undefined>();
   const [ownerId, setOwnerId] = useState('all');
 
   const range = useMemo(() => computeRange(preset, customRange), [preset, customRange]);
