@@ -62,6 +62,22 @@ export function MetaCapiDialog({ open, onOpenChange, integration, orgIntegration
   const [testEventCode, setTestEventCode] = useState("");
   const [submitting, setSubmitting] = useState(false);
   const [errors, setErrors] = useState<{ pixel_id?: string; access_token?: string }>({});
+  const [mode, setMode] = useState<"reuse" | "manual">("manual");
+
+  const { data: hasMetaLeadAds } = useQuery({
+    queryKey: ["has-meta-lead-ads", organization?.id],
+    enabled: !!organization?.id && open,
+    queryFn: async () => {
+      const { data } = await supabase
+        .from("organization_integrations")
+        .select("id, admin_integrations!inner(slug)")
+        .eq("organization_id", organization!.id)
+        .eq("admin_integrations.slug", "meta-lead-ads")
+        .eq("is_enabled", true)
+        .maybeSingle();
+      return !!data;
+    },
+  });
 
   const { data: orgIntegration } = useQuery({
     queryKey: ["org-integration", "meta-capi", organization?.id],
