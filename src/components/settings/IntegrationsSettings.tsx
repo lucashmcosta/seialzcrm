@@ -489,7 +489,7 @@ export function IntegrationsSettings() {
         )}
       </div>
 
-      {selectedIntegration && selectedIntegration.slug !== 'meta-lead-ads' && (
+      {selectedIntegration && !['meta-lead-ads', 'meta-capi'].includes(selectedIntegration.slug) && (
         <IntegrationConnectDialog
           open={connectDialogOpen}
           onOpenChange={setConnectDialogOpen}
@@ -497,7 +497,7 @@ export function IntegrationsSettings() {
         />
       )}
 
-      {selectedIntegration && selectedOrgIntegration && selectedIntegration.slug !== 'meta-lead-ads' && (
+      {selectedIntegration && selectedOrgIntegration && !['meta-lead-ads', 'meta-capi'].includes(selectedIntegration.slug) && (
         <IntegrationDetailDialog
           open={detailDialogOpen}
           onOpenChange={setDetailDialogOpen}
@@ -515,6 +515,20 @@ export function IntegrationsSettings() {
 
       {selectedIntegration?.slug === 'meta-lead-ads' && (
         <MetaLeadAdsDialog
+          open={detailDialogOpen || connectDialogOpen}
+          onOpenChange={(o) => {
+            if (!o) {
+              setDetailDialogOpen(false);
+              setConnectDialogOpen(false);
+            }
+          }}
+          integration={selectedIntegration}
+          orgIntegration={selectedOrgIntegration}
+        />
+      )}
+
+      {selectedIntegration?.slug === 'meta-capi' && (
+        <MetaCapiDialog
           open={detailDialogOpen || connectDialogOpen}
           onOpenChange={(o) => {
             if (!o) {
