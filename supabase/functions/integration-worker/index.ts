@@ -201,16 +201,20 @@ async function persistResult(
   const { error: auditErr } = await supabase.from("integration_audit_logs").insert({
     organization_id: job.organization_id,
     job_id: job.id,
-    subscription_id: job.subscription_id,
     event_id: job.event_id,
     integration_slug: job.integration_slug,
-    target_action: job.target_action,
-    classification: result.classification,
-    http_status: result.httpStatus ?? null,
-    duration_ms: result.durationMs ?? totalDurationMs,
-    attempt_number: job.attempts,
-    error: result.error ?? null,
-    external_response: result.externalPayload ?? null,
+    action: `worker.${result.classification}`,
+    actor: "integration-worker",
+    details: {
+      subscription_id: job.subscription_id,
+      target_action: job.target_action,
+      classification: result.classification,
+      http_status: result.httpStatus ?? null,
+      duration_ms: result.durationMs ?? totalDurationMs,
+      attempt_number: job.attempts,
+      error: result.error ?? null,
+      external_id: result.externalId ?? null,
+    },
   });
   if (auditErr) console.warn("[integration-worker] audit log insert failed", job.id, auditErr.message);
 }
