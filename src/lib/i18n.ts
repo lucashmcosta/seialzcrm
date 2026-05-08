@@ -667,6 +667,7 @@ export const translations = {
     'tasks.priority': 'Priority',
     'tasks.dueDate': 'Due date',
     'tasks.assignedTo': 'Assigned to',
+    'tasks.createdBy': 'Created by',
     'tasks.status': 'Status',
     'tasks.complete': 'Complete',
     'tasks.reopen': 'Reopen',
