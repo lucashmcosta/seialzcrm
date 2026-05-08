@@ -11,7 +11,8 @@ import { Badge } from "@/components/ui/badge";
 import { Card } from "@/components/ui/card";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { ConfirmDialog } from "@/components/ui/confirm-dialog";
-import { CheckCircle, Plug, Warning, Eye, EyeSlash, ArrowsClockwise } from "@phosphor-icons/react";
+import { CheckCircle, Plug, Warning, Eye, EyeSlash, ArrowsClockwise, LinkSimple } from "@phosphor-icons/react";
+import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { toast } from "sonner";
 import { format } from "date-fns";
 import { ptBR } from "date-fns/locale";
@@ -61,6 +62,22 @@ export function MetaCapiDialog({ open, onOpenChange, integration, orgIntegration
   const [testEventCode, setTestEventCode] = useState("");
   const [submitting, setSubmitting] = useState(false);
   const [errors, setErrors] = useState<{ pixel_id?: string; access_token?: string }>({});
+  const [mode, setMode] = useState<"reuse" | "manual">("manual");
+
+  const { data: hasMetaLeadAds } = useQuery({
+    queryKey: ["has-meta-lead-ads", organization?.id],
+    enabled: !!organization?.id && open,
+    queryFn: async () => {
+      const { data } = await supabase
+        .from("organization_integrations")
+        .select("id, admin_integrations!inner(slug)")
+        .eq("organization_id", organization!.id)
+        .eq("admin_integrations.slug", "meta-lead-ads")
+        .eq("is_enabled", true)
+        .maybeSingle();
+      return !!data;
+    },
+  });
 
   const { data: orgIntegration } = useQuery({
     queryKey: ["org-integration", "meta-capi", organization?.id],
@@ -91,6 +108,12 @@ export function MetaCapiDialog({ open, onOpenChange, integration, orgIntegration
       setErrors({});
     }
   }, [open, isConnected]);
+
+  useEffect(() => {
+    if (open && !isConnected) {
+      setMode(hasMetaLeadAds ? "reuse" : "manual");
+    }
+  }, [open, isConnected, hasMetaLeadAds]);
 
   const { data: events, isLoading: loadingEvents, refetch: refetchEvents } = useQuery({
     queryKey: ["capi_event_log", organization?.id, filter],
@@ -134,7 +157,9 @@ export function MetaCapiDialog({ open, onOpenChange, integration, orgIntegration
   const validate = () => {
     const e: any = {};
     if (!/^\d+$/.test(pixelId.trim())) e.pixel_id = "Pixel ID deve conter apenas dígitos.";
-    if (accessToken.trim().length < 20) e.access_token = "Token muito curto. Confira se copiou completo.";
+    if (mode === "manual" && accessToken.trim().length < 20) {
+      e.access_token = "Token muito curto. Confira se copiou completo.";
+    }
     setErrors(e);
     return Object.keys(e).length === 0;
   };
@@ -144,23 +169,25 @@ export function MetaCapiDialog({ open, onOpenChange, integration, orgIntegration
     if (!validate()) return;
     setSubmitting(true);
     try {
-      const { data, error } = await supabase.functions.invoke("meta-capi-connect", {
-        body: {
-          organization_id: organization.id,
-          pixel_id: pixelId.trim(),
-          access_token: accessToken.trim(),
-          test_event_code: testEventCode.trim() || undefined,
-        },
-      });
+      const useReuse = mode === "reuse" && !isConnected;
+      const fnName = useReuse ? "meta-capi-connect-from-existing" : "meta-capi-connect";
+      const body: any = {
+        organization_id: organization.id,
+        pixel_id: pixelId.trim(),
+        test_event_code: testEventCode.trim() || undefined,
+      };
+      if (!useReuse) body.access_token = accessToken.trim();
+
+      const { data, error } = await supabase.functions.invoke(fnName, { body });
       if (error) {
         toast.error(error.message || "Falha ao conectar");
         return;
       }
       if (data?.error) {
         const code = data.meta_error_code;
-        if (code === 190) toast.error("Token inválido ou expirado. Gere um novo no Events Manager.");
-        else if (code === 100) toast.error("Pixel ID não encontrado. Confira o ID.");
-        else toast.error(`Meta rejeitou: ${data.error}`);
+        if (code === 190) toast.error("Token inválido ou expirado. Reconecte Meta Lead Ads ou gere um novo no Events Manager.");
+        else if (code === 100) toast.error(data.error || "Pixel ID não encontrado. Confira o ID.");
+        else toast.error(data.error || "Meta rejeitou a conexão.");
         return;
       }
       toast.success("Meta CAPI conectado e validado!");
@@ -174,7 +201,6 @@ export function MetaCapiDialog({ open, onOpenChange, integration, orgIntegration
       setSubmitting(false);
     }
   };
-
   const disconnect = useMutation({
     mutationFn: async () => {
       if (!orgIntegration?.id) return;
@@ -290,6 +316,20 @@ export function MetaCapiDialog({ open, onOpenChange, integration, orgIntegration
                     <Label className="text-xs text-muted-foreground">Access Token</Label>
                     <p className="font-mono text-sm">{tokenMasked}</p>
                   </div>
+                  {ca.token_source === "meta-lead-ads" && (
+                    <Badge variant="outline" className="gap-1 w-fit">
+                      <LinkSimple className="h-3 w-3" />
+                      Reutilizando token de Meta Lead Ads
+                    </Badge>
+                  )}
+                  {ca.token_source === "meta-lead-ads" && hasMetaLeadAds === false && (
+                    <Alert variant="destructive">
+                      <Warning className="h-4 w-4" />
+                      <AlertDescription className="text-xs">
+                        Meta Lead Ads foi desconectado. Este Meta CAPI usa o token de lá e parou de funcionar. Use "Reconectar" com token manual.
+                      </AlertDescription>
+                    </Alert>
+                  )}
                   {ca.test_event_code && (
                     <div>
                       <Label className="text-xs text-muted-foreground">Test Event Code</Label>
@@ -311,6 +351,37 @@ export function MetaCapiDialog({ open, onOpenChange, integration, orgIntegration
                 </Card>
               ) : (
                 <Card className="p-4 space-y-4">
+                  {!isConnected && hasMetaLeadAds && (
+                    <div className="space-y-2">
+                      <Label className="text-xs text-muted-foreground">Modo de conexão</Label>
+                      <RadioGroup value={mode} onValueChange={(v) => setMode(v as "reuse" | "manual")} className="gap-2">
+                        <div className="flex items-start gap-2 p-3 border rounded-md">
+                          <RadioGroupItem value="reuse" id="mode-reuse" className="mt-0.5" />
+                          <div className="flex-1">
+                            <Label htmlFor="mode-reuse" className="flex items-center gap-2 cursor-pointer">
+                              Reusar token Meta Lead Ads
+                              <Badge variant="secondary" className="text-[10px]">Recomendado</Badge>
+                            </Label>
+                            <p className="text-xs text-muted-foreground mt-1">
+                              💡 Reusa o System User Token já conectado em Meta Lead Ads. Mais rápido e sem precisar gerar token novo.
+                            </p>
+                          </div>
+                        </div>
+                        <div className="flex items-start gap-2 p-3 border rounded-md">
+                          <RadioGroupItem value="manual" id="mode-manual" className="mt-0.5" />
+                          <div className="flex-1">
+                            <Label htmlFor="mode-manual" className="cursor-pointer">
+                              Token CAPI manual (avançado)
+                            </Label>
+                            <p className="text-xs text-muted-foreground mt-1">
+                              Cole um access token gerado no Events Manager.
+                            </p>
+                          </div>
+                        </div>
+                      </RadioGroup>
+                    </div>
+                  )}
+
                   <div className="space-y-1.5">
                     <Label htmlFor="pixel_id">Pixel ID *</Label>
                     <Input
@@ -326,6 +397,7 @@ export function MetaCapiDialog({ open, onOpenChange, integration, orgIntegration
                     {errors.pixel_id && <p className="text-xs text-destructive">{errors.pixel_id}</p>}
                   </div>
 
+                  {(reconnectMode || mode === "manual" || isConnected) && (
                   <div className="space-y-1.5">
                     <Label htmlFor="access_token">Access Token (CAPI) *</Label>
                     <div className="relative">
@@ -351,6 +423,7 @@ export function MetaCapiDialog({ open, onOpenChange, integration, orgIntegration
                     </p>
                     {errors.access_token && <p className="text-xs text-destructive">{errors.access_token}</p>}
                   </div>
+                  )}
 
                   <div className="space-y-1.5">
                     <Label htmlFor="test_event_code">Test Event Code (opcional)</Label>
