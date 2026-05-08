@@ -21,16 +21,24 @@ serve(async (req) => {
       )
     }
 
+    // Auth client (anon) — used to verify caller JWT via getClaims
+    const supabaseAuth = createClient(
+      Deno.env.get('SUPABASE_URL') ?? '',
+      Deno.env.get('SUPABASE_ANON_KEY') ?? ''
+    )
+
+    // Service-role client — used for privileged DB reads/writes below
     const supabase = createClient(
       Deno.env.get('SUPABASE_URL') ?? '',
       Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''
     )
 
-    // Verify the user token
+    // Verify the user token (signing-keys compatible)
     const token = authHeader.replace('Bearer ', '')
-    const { data: { user }, error: authError } = await supabase.auth.getUser(token)
+    const { data: claimsData, error: authError } = await supabaseAuth.auth.getClaims(token)
+    const authUserId = claimsData?.claims?.sub
 
-    if (authError || !user) {
+    if (authError || !authUserId) {
       return new Response(
         JSON.stringify({ error: 'Invalid token' }),
         { status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
@@ -41,7 +49,7 @@ serve(async (req) => {
     const { data: userProfile } = await supabase
       .from('users')
       .select('id')
-      .eq('auth_user_id', user.id)
+      .eq('auth_user_id', authUserId)
       .single()
 
     if (!userProfile) {
