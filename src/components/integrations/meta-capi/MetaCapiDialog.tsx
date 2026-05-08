@@ -397,6 +397,7 @@ export function MetaCapiDialog({ open, onOpenChange, integration, orgIntegration
                     {errors.pixel_id && <p className="text-xs text-destructive">{errors.pixel_id}</p>}
                   </div>
 
+                  {(reconnectMode || mode === "manual" || isConnected) && (
                   <div className="space-y-1.5">
                     <Label htmlFor="access_token">Access Token (CAPI) *</Label>
                     <div className="relative">
@@ -422,6 +423,7 @@ export function MetaCapiDialog({ open, onOpenChange, integration, orgIntegration
                     </p>
                     {errors.access_token && <p className="text-xs text-destructive">{errors.access_token}</p>}
                   </div>
+                  )}
 
                   <div className="space-y-1.5">
                     <Label htmlFor="test_event_code">Test Event Code (opcional)</Label>
