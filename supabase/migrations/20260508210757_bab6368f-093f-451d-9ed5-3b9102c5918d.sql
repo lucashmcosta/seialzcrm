@@ -1,0 +1,1 @@
+UPDATE opportunities SET title='Lead #18531182 [sync test 1]', updated_at=now() WHERE id='9a326570-c2e9-482d-9487-f5f3fcd5ef71';
