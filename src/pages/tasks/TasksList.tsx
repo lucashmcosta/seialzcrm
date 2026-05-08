@@ -111,7 +111,8 @@ export default function TasksList() {
         *,
         contacts(full_name),
         opportunities(title),
-        assigned_user:users!tasks_assigned_user_id_fkey(full_name)
+        assigned_user:users!tasks_assigned_user_id_fkey(full_name),
+        created_by_user:users!tasks_created_by_user_id_fkey(full_name)
       `, { count: 'exact' })
       .eq('organization_id', organization.id)
       .is('deleted_at', null);
