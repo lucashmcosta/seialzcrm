@@ -18,3 +18,4 @@ export function resolve(slug: string, action: string): Handler | undefined {
 
 // Defaults
 register("webhook", "dispatch", webhookDispatchHandler);
+register("kommo", "upsert", kommoUpsertHandler);
