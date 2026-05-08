@@ -159,6 +159,12 @@ export function TasksKanban({ tasks, loading, showCompleted, onCardClick, onComp
                             {hasTime && ` · ${refDate.toLocaleTimeString(locale, { hour: '2-digit', minute: '2-digit' })}`}
                           </p>
                         )}
+
+                        {task.created_by_user?.full_name && task.created_by_user.full_name !== task.assigned_user?.full_name && (
+                          <p className="text-[11px] text-muted-foreground mt-1 truncate">
+                            {t('tasks.createdBy' as any)}: {task.created_by_user.full_name}
+                          </p>
+                        )}
                       </div>
                     </div>
                   </Card>
