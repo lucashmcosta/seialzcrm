@@ -36,6 +36,7 @@ interface Task {
   contacts?: { full_name: string };
   opportunities?: { title: string };
   assigned_user?: { full_name: string };
+  created_by_user?: { full_name: string } | null;
 }
 
 export default function TasksList() {
@@ -110,7 +111,8 @@ export default function TasksList() {
         *,
         contacts(full_name),
         opportunities(title),
-        assigned_user:users!tasks_assigned_user_id_fkey(full_name)
+        assigned_user:users!tasks_assigned_user_id_fkey(full_name),
+        created_by_user:users!tasks_created_by_user_id_fkey(full_name)
       `, { count: 'exact' })
       .eq('organization_id', organization.id)
       .is('deleted_at', null);
@@ -356,6 +358,9 @@ export default function TasksList() {
                             
                             <div className="flex flex-wrap gap-3 text-sm text-muted-foreground">
                               {task.assigned_user && <span>{t('tasks.assignedTo')}: {task.assigned_user.full_name}</span>}
+                              {task.created_by_user?.full_name && task.created_by_user.full_name !== task.assigned_user?.full_name && (
+                                <span>{t('tasks.createdBy' as any)}: {task.created_by_user.full_name}</span>
+                              )}
                               {task.contacts && <span>{t('tasks.contact')}: {task.contacts.full_name}</span>}
                               {task.opportunities && <span>{t('tasks.opportunity')}: {task.opportunities.title}</span>}
                               {task.due_at && (

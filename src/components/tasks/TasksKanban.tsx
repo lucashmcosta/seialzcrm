@@ -19,6 +19,7 @@ interface Task {
   contacts?: { full_name: string } | null;
   opportunities?: { title: string } | null;
   assigned_user?: { full_name: string } | null;
+  created_by_user?: { full_name: string } | null;
 }
 
 interface TasksKanbanProps {
@@ -156,6 +157,12 @@ export function TasksKanban({ tasks, loading, showCompleted, onCardClick, onComp
                           <p className="text-[11px] font-data text-muted-foreground mt-1">
                             {refDate.toLocaleDateString(locale)}
                             {hasTime && ` · ${refDate.toLocaleTimeString(locale, { hour: '2-digit', minute: '2-digit' })}`}
+                          </p>
+                        )}
+
+                        {task.created_by_user?.full_name && task.created_by_user.full_name !== task.assigned_user?.full_name && (
+                          <p className="text-[11px] text-muted-foreground mt-1 truncate">
+                            {t('tasks.createdBy' as any)}: {task.created_by_user.full_name}
                           </p>
                         )}
                       </div>
