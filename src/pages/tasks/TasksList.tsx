@@ -36,6 +36,7 @@ interface Task {
   contacts?: { full_name: string };
   opportunities?: { title: string };
   assigned_user?: { full_name: string };
+  created_by_user?: { full_name: string } | null;
 }
 
 export default function TasksList() {
