@@ -21,6 +21,7 @@ import { IntegrationDetailDialog } from './IntegrationDetailDialog';
 import { PhoneNumberSettings } from './PhoneNumberSettings';
 import { KommoMigrationDialog } from './KommoMigrationDialog';
 import { MetaLeadAdsDialog } from '@/components/integrations/meta-lead-ads/MetaLeadAdsDialog';
+import { MetaCapiDialog } from '@/components/integrations/meta-capi/MetaCapiDialog';
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 
@@ -420,6 +421,13 @@ export function IntegrationsSettings() {
                       <div className="min-w-0">
                         <div className="flex items-center gap-2 flex-wrap">
                           <h3 className="font-medium text-foreground truncate">{integration.name}</h3>
+                          {isConnected && (
+                            (connection?.connected_account as any)?.test_event_code ? (
+                              <Badge className="text-[10px] bg-amber-500 text-white">Modo teste</Badge>
+                            ) : (
+                              <Badge className="text-[10px] bg-green-600 text-white">Conectado</Badge>
+                            )
+                          )}
                           {isBeta && (
                             <TooltipProvider>
                               <Tooltip>
@@ -481,7 +489,7 @@ export function IntegrationsSettings() {
         )}
       </div>
 
-      {selectedIntegration && selectedIntegration.slug !== 'meta-lead-ads' && (
+      {selectedIntegration && !['meta-lead-ads', 'meta-capi'].includes(selectedIntegration.slug) && (
         <IntegrationConnectDialog
           open={connectDialogOpen}
           onOpenChange={setConnectDialogOpen}
@@ -489,7 +497,7 @@ export function IntegrationsSettings() {
         />
       )}
 
-      {selectedIntegration && selectedOrgIntegration && selectedIntegration.slug !== 'meta-lead-ads' && (
+      {selectedIntegration && selectedOrgIntegration && !['meta-lead-ads', 'meta-capi'].includes(selectedIntegration.slug) && (
         <IntegrationDetailDialog
           open={detailDialogOpen}
           onOpenChange={setDetailDialogOpen}
@@ -507,6 +515,20 @@ export function IntegrationsSettings() {
 
       {selectedIntegration?.slug === 'meta-lead-ads' && (
         <MetaLeadAdsDialog
+          open={detailDialogOpen || connectDialogOpen}
+          onOpenChange={(o) => {
+            if (!o) {
+              setDetailDialogOpen(false);
+              setConnectDialogOpen(false);
+            }
+          }}
+          integration={selectedIntegration}
+          orgIntegration={selectedOrgIntegration}
+        />
+      )}
+
+      {selectedIntegration?.slug === 'meta-capi' && (
+        <MetaCapiDialog
           open={detailDialogOpen || connectDialogOpen}
           onOpenChange={(o) => {
             if (!o) {
