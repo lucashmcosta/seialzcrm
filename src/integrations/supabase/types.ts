@@ -1747,6 +1747,59 @@ export type Database = {
           },
         ]
       }
+      external_mappings: {
+        Row: {
+          created_at: string
+          entity_type: string
+          external_id: string
+          external_metadata: Json
+          id: string
+          integration_slug: string
+          internal_id: string
+          last_synced_at: string | null
+          organization_id: string
+          sync_error: string | null
+          sync_status: string
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          entity_type: string
+          external_id: string
+          external_metadata?: Json
+          id?: string
+          integration_slug: string
+          internal_id: string
+          last_synced_at?: string | null
+          organization_id: string
+          sync_error?: string | null
+          sync_status?: string
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          entity_type?: string
+          external_id?: string
+          external_metadata?: Json
+          id?: string
+          integration_slug?: string
+          internal_id?: string
+          last_synced_at?: string | null
+          organization_id?: string
+          sync_error?: string | null
+          sync_status?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "external_mappings_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       feature_flags: {
         Row: {
           created_at: string | null
@@ -1974,6 +2027,240 @@ export type Database = {
           },
           {
             foreignKeyName: "import_logs_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      integration_audit_logs: {
+        Row: {
+          action: string
+          actor: string
+          created_at: string
+          details: Json
+          event_id: string | null
+          id: string
+          integration_slug: string | null
+          job_id: string | null
+          organization_id: string
+        }
+        Insert: {
+          action: string
+          actor: string
+          created_at?: string
+          details?: Json
+          event_id?: string | null
+          id?: string
+          integration_slug?: string | null
+          job_id?: string | null
+          organization_id: string
+        }
+        Update: {
+          action?: string
+          actor?: string
+          created_at?: string
+          details?: Json
+          event_id?: string | null
+          id?: string
+          integration_slug?: string | null
+          job_id?: string | null
+          organization_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "integration_audit_logs_event_id_fkey"
+            columns: ["event_id"]
+            isOneToOne: false
+            referencedRelation: "integration_events"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "integration_audit_logs_job_id_fkey"
+            columns: ["job_id"]
+            isOneToOne: false
+            referencedRelation: "integration_jobs"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "integration_audit_logs_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      integration_events: {
+        Row: {
+          aggregate_id: string
+          aggregate_type: string
+          event_type: string
+          id: string
+          idempotency_key: string
+          occurred_at: string
+          organization_id: string
+          payload: Json
+          published_at: string | null
+          status: string
+        }
+        Insert: {
+          aggregate_id: string
+          aggregate_type: string
+          event_type: string
+          id?: string
+          idempotency_key: string
+          occurred_at?: string
+          organization_id: string
+          payload: Json
+          published_at?: string | null
+          status?: string
+        }
+        Update: {
+          aggregate_id?: string
+          aggregate_type?: string
+          event_type?: string
+          id?: string
+          idempotency_key?: string
+          occurred_at?: string
+          organization_id?: string
+          payload?: Json
+          published_at?: string | null
+          status?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "integration_events_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      integration_jobs: {
+        Row: {
+          attempts: number
+          completed_at: string | null
+          created_at: string
+          event_id: string
+          external_response: Json | null
+          id: string
+          idempotency_key: string
+          integration_slug: string
+          last_error: string | null
+          last_error_at: string | null
+          max_attempts: number
+          next_run_at: string
+          organization_id: string
+          payload: Json
+          started_at: string | null
+          status: string
+          subscription_id: string
+          target_action: string
+        }
+        Insert: {
+          attempts?: number
+          completed_at?: string | null
+          created_at?: string
+          event_id: string
+          external_response?: Json | null
+          id?: string
+          idempotency_key: string
+          integration_slug: string
+          last_error?: string | null
+          last_error_at?: string | null
+          max_attempts?: number
+          next_run_at?: string
+          organization_id: string
+          payload: Json
+          started_at?: string | null
+          status?: string
+          subscription_id: string
+          target_action: string
+        }
+        Update: {
+          attempts?: number
+          completed_at?: string | null
+          created_at?: string
+          event_id?: string
+          external_response?: Json | null
+          id?: string
+          idempotency_key?: string
+          integration_slug?: string
+          last_error?: string | null
+          last_error_at?: string | null
+          max_attempts?: number
+          next_run_at?: string
+          organization_id?: string
+          payload?: Json
+          started_at?: string | null
+          status?: string
+          subscription_id?: string
+          target_action?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "integration_jobs_event_id_fkey"
+            columns: ["event_id"]
+            isOneToOne: false
+            referencedRelation: "integration_events"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "integration_jobs_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "integration_jobs_subscription_id_fkey"
+            columns: ["subscription_id"]
+            isOneToOne: false
+            referencedRelation: "integration_subscriptions"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      integration_subscriptions: {
+        Row: {
+          config: Json
+          created_at: string
+          event_type: string
+          id: string
+          integration_slug: string
+          is_active: boolean
+          organization_id: string
+          paused_until: string | null
+          target_action: string
+        }
+        Insert: {
+          config?: Json
+          created_at?: string
+          event_type: string
+          id?: string
+          integration_slug: string
+          is_active?: boolean
+          organization_id: string
+          paused_until?: string | null
+          target_action: string
+        }
+        Update: {
+          config?: Json
+          created_at?: string
+          event_type?: string
+          id?: string
+          integration_slug?: string
+          is_active?: boolean
+          organization_id?: string
+          paused_until?: string | null
+          target_action?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "integration_subscriptions_organization_id_fkey"
             columns: ["organization_id"]
             isOneToOne: false
             referencedRelation: "organizations"
@@ -4654,9 +4941,31 @@ export type Database = {
           },
         ]
       }
+      v_entity_sync_status: {
+        Row: {
+          entity_type: string | null
+          internal_id: string | null
+          last_synced_at: string | null
+          organization_id: string | null
+          worst_status: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "external_mappings_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
     }
     Functions: {
       assign_round_robin: { Args: { _org_id: string }; Returns: string }
+      can_manage_integrations_in_org: {
+        Args: { _org_id: string }
+        Returns: boolean
+      }
       count_custom_fields_for_org: {
         Args: { p_module?: string; p_organization_id: string }
         Returns: number
@@ -4671,6 +4980,10 @@ export type Database = {
           p_opportunity_id?: string
           p_organization_id: string
         }
+        Returns: undefined
+      }
+      fn_schedule_retry: {
+        Args: { p_error: string; p_job_id: string }
         Returns: undefined
       }
       get_dashboard_stats: {
@@ -4713,6 +5026,10 @@ export type Database = {
         Args: { p_admin_id: string }
         Returns: undefined
       }
+      rpc_dismiss_integration_job: {
+        Args: { p_job_id: string }
+        Returns: undefined
+      }
       rpc_list_message_threads: {
         Args: {
           p_assigned_user_id?: string
@@ -4747,6 +5064,18 @@ export type Database = {
           updated_at: string
           whatsapp_last_inbound_at: string
         }[]
+      }
+      rpc_resolve_integration_job_manually: {
+        Args: { p_job_id: string; p_note: string }
+        Returns: undefined
+      }
+      rpc_retry_integration_job: {
+        Args: { p_job_id: string }
+        Returns: undefined
+      }
+      rpc_update_integration_job_payload: {
+        Args: { p_job_id: string; p_payload: Json }
+        Returns: undefined
       }
       search_knowledge: {
         Args: {
