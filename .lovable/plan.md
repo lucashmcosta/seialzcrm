@@ -1,75 +1,52 @@
-# Plano: target_entity em Lead Form Questions
+## Diagnóstico
 
-Permite mapear cada pergunta do formulário Meta Lead Ads para o **contato** ou para uma **oportunidade**, evitando duplicação de contatos quando a mesma pessoa volta com novo caso.
+O erro `Cannot access 'Lt' before initialization` é um clássico **TDZ (Temporal Dead Zone)** do JavaScript minificado, causado por **dependência circular** entre módulos no bundle de produção (`index-BEYhe6zT.js`). Não é um bug de cache do navegador — o bundle publicado realmente contém a referência inválida.
 
-## 1. Migration — `lead_form_questions.target_entity`
+O que aciona:
 
-```sql
-ALTER TABLE lead_form_questions
-  ADD COLUMN target_entity text NOT NULL DEFAULT 'contact'
-  CHECK (target_entity IN ('contact', 'opportunity'));
+- `/reports` (ReportsPage) importa **eagerly** 7 componentes do diretório `src/components/reports/` (KpiCard, WinRateGauge, SalesTrendChart, PipelineFunnel, StageDistribution, UserLeaderboard, ReportFilters).
+- `/dashboard` também importa `ReportFilters` do mesmo diretório.
+- O Vite/Rollup junta tudo num único chunk grande. Quando esse chunk roda, há uma referência hoisted antes da inicialização (provavelmente o `recharts` puxado por `DashboardTrendChart`/`DashboardStatusDonut`, que estão no mesmo diretório e podem ser arrastados para o mesmo chunk em certas condições de tree-shaking).
+- Em build de produção a ordem de execução muda e o `Lt` (variável minificada do recharts/chart helper) é referenciado antes de ser inicializado → **blank screen**.
 
-CREATE INDEX idx_lead_form_questions_target_entity
-  ON lead_form_questions (lead_form_id, target_entity);
+## Solução profissional
+
+1. **Code-split de todo o módulo de reports** (não só Dashboard). Cada página carrega seus próprios componentes via `lazy()` + `Suspense`, eliminando o chunk monolítico que dispara a TDZ.
+
+2. **Manter `ReportFilters` como import síncrono** (é leve e usado por ambas as páginas) num arquivo isolado, sem reexports cruzados.
+
+3. **Adicionar `manualChunks` no `vite.config.ts`** para garantir que `recharts` e os componentes de chart fiquem em chunks separados de UI/contextos. Isso previne TDZ e também melhora performance (recharts é ~150KB).
+
+4. **Forçar rebuild limpo** após as mudanças para invalidar o hash `BEYhe6zT` do CDN.
+
+## Arquivos a modificar
+
+```text
+src/pages/reports/ReportsPage.tsx
+  - Converter KpiCard, WinRateGauge, SalesTrendChart, PipelineFunnel,
+    StageDistribution, UserLeaderboard para lazy() com retryImport
+  - Envolver área de conteúdo em <Suspense fallback={<ChartFallback/>}>
+  - Manter ReportFilters como import síncrono
+
+src/pages/Dashboard.tsx
+  - Já lazy-loada DashboardTrendChart/Donut (OK, não mexer)
+  - Manter ReportFilters síncrono (OK)
+
+vite.config.ts
+  - Adicionar build.rollupOptions.output.manualChunks:
+      recharts → 'charts'
+      @radix-ui/* → 'radix'
+      react-day-picker + date-fns → 'datepicker'
 ```
 
-Default `'contact'` mantém compatibilidade com mapeamentos existentes.
+## Por que isto resolve
 
-## 2. Edge function `meta-lead-ads-process-lead`
+- **TDZ desaparece**: cada componente vira seu próprio módulo carregado sob demanda; não há mais hoisting cruzado entre `recharts` e o resto do app no chunk principal.
+- **Robusto a futuras edições**: mesmo que alguém adicione novo componente em `components/reports/`, ele entra em chunk próprio.
+- **Sem mudança de UX**: `<Suspense>` mostra um skeleton idêntico ao `loading=true` que os componentes já têm.
 
-Refatorar a seção de mapeamento para rodar em **dois passes** (contato + oportunidade):
+## Validação após deploy
 
-- Buckets separados: `contactStandard` / `oppStandard`, `contactCustomFields` / `oppCustomFields`, `contactTags` / `oppTags`.
-- Loop sobre `questions` decide bucket via `q.target_entity` (fallback `'contact'`).
-- Estratégias `standard_field`, `custom_field`, `tag`, `note`, `ignore` preservadas — só muda o bucket de destino.
-- Pós-loop:
-  1. **Contato**: usa `contactStandard` para nome/email/phone, dedup, insert/update, custom fields (`module='contacts'`), tags (`entity_type='contact'`) — lógica atual mantida, só renomeando referências.
-  2. **Oportunidade (condicional)**: criar se `hasOppMappings` OU `settings.auto_create_opportunity === true`.
-     - Skip com warning se faltar `default_pipeline_stage_id` (não falha o lead).
-     - Title: `oppStandard.title` ou fallback `"{fullName} — {lead_form_name}"`.
-     - Insert em `opportunities` com `source='meta_lead_ads'` e `source_external_id=lead.id`.
-     - Custom fields com `module='opportunities'`, tags com `entity_type='opportunity'`.
-- **Activity**: uma única row no contato, com `opportunity_id` linkado quando opp foi criada.
-- Idempotência preservada via `source_external_id` (skip de lead já processado retorna antes).
-
-## 3. Frontend — `QuestionMappingCard.tsx`
-
-Adicionar **RadioGroup "Onde gravar essa resposta?"** acima do select de estratégia, com opções:
-- **Contato** — dados pessoais (nome, email, telefone)
-- **Oportunidade** — do caso específico (tipo, valor, prazo)
-
-Ao trocar `target_entity`, resetar `mapped_to_contact_field`, `custom_field_definition_id`, `fixed_tag_id` (a `mapping_strategy` é agnóstica).
-
-Sub-form condicional para `standard_field`:
-- `target_entity='opportunity'` → opções: `title`, `amount`, `close_date`.
-- `target_entity='contact'` → opções atuais (`full_name`, `first_name`, `last_name`, `email`, `phone`, `company_name`).
-
-`custom_field` usa a lista vinda como prop (filtrada pelo MappingDrawer). Demais estratégias inalteradas.
-
-## 4. Frontend — `MappingDrawer.tsx`
-
-Substituir a query única de `custom_field_definitions` por **duas queries**: `module='contacts'` e `module='opportunities'`. Passar a lista correta para `<QuestionMappingCard customFields={...}>` baseado em `drafts[q.id]?.target_entity`.
-
-Incluir `target_entity` no `update` da mutation `save`.
-
-## 5. Frontend — `SettingsCard.tsx`
-
-Atualizar texto de ajuda do switch "Sempre criar oportunidade" deixando claro que ele agora é **fallback** — se houver perguntas mapeadas para Oportunidade, a opp já é criada automaticamente.
-
-## Fora de escopo
-
-- `meta-lead-ads-discover` não muda (auto-mapping detecta apenas campos de contato, default `'contact'` está correto).
-- `connect`, `poll`, `token-health` inalterados.
-- Sem novos secrets.
-
-## Validação pós-deploy
-
-1. Question existente (default `contact`) continua processando como antes.
-2. Question com `target_entity='opportunity'` + `standard_field='title'` → opp criada com esse título.
-3. `target_entity='opportunity'` + `tag` → tag em `tag_assignments` com `entity_type='opportunity'`.
-4. `target_entity='opportunity'` + `custom_field` → valor em `custom_field_values` com `module='opportunities'`.
-5. Sem mapping de opp + `auto_create_opportunity=false` → não cria opp.
-6. Sem mapping de opp + `auto_create_opportunity=true` → cria opp com title fallback.
-7. `activities.opportunity_id` preenchido quando opp foi criada, `null` caso contrário.
-8. Reprocessar mesmo `lead.id` → dedup, sem duplicar contato nem opp.
-9. UI: trocar `target_entity` reseta os 3 campos específicos.
+1. Hard reload em `/reports` → página renderiza sem erro.
+2. DevTools → Network: vários chunks pequenos no lugar do bundle único.
+3. Console limpo de `ReferenceError`.
