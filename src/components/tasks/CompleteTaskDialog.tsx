@@ -31,6 +31,7 @@ interface Task {
   contacts?: { full_name: string } | null;
   opportunities?: { title: string } | null;
   assigned_user?: { full_name: string } | null;
+  created_by_user?: { full_name: string } | null;
 }
 
 interface CompleteTaskDialogProps {
