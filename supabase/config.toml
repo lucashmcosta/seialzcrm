@@ -128,3 +128,6 @@ verify_jwt = false
 
 [functions.meta-lead-ads-token-health]
 verify_jwt = false
+
+[functions.integration-worker]
+verify_jwt = false

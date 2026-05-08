@@ -5075,6 +5075,35 @@ export type Database = {
         Args: { p_admin_id: string }
         Returns: undefined
       }
+      rpc_claim_integration_jobs: {
+        Args: { p_limit?: number }
+        Returns: {
+          attempts: number
+          completed_at: string | null
+          created_at: string
+          event_id: string
+          external_response: Json | null
+          id: string
+          idempotency_key: string
+          integration_slug: string
+          last_error: string | null
+          last_error_at: string | null
+          max_attempts: number
+          next_run_at: string
+          organization_id: string
+          payload: Json
+          started_at: string | null
+          status: string
+          subscription_id: string
+          target_action: string
+        }[]
+        SetofOptions: {
+          from: "*"
+          to: "integration_jobs"
+          isOneToOne: false
+          isSetofReturn: true
+        }
+      }
       rpc_dismiss_integration_job: {
         Args: { p_job_id: string }
         Returns: undefined
