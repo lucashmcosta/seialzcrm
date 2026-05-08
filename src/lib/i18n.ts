@@ -192,6 +192,7 @@ export const translations = {
     'tasks.priority': 'Prioridade',
     'tasks.dueDate': 'Vencimento',
     'tasks.assignedTo': 'Atribuída a',
+    'tasks.createdBy': 'Criada por',
     'tasks.status': 'Status',
     'tasks.complete': 'Concluir',
     'tasks.reopen': 'Reabrir',
