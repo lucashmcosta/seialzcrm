@@ -358,6 +358,9 @@ export default function TasksList() {
                             
                             <div className="flex flex-wrap gap-3 text-sm text-muted-foreground">
                               {task.assigned_user && <span>{t('tasks.assignedTo')}: {task.assigned_user.full_name}</span>}
+                              {task.created_by_user?.full_name && task.created_by_user.full_name !== task.assigned_user?.full_name && (
+                                <span>{t('tasks.createdBy' as any)}: {task.created_by_user.full_name}</span>
+                              )}
                               {task.contacts && <span>{t('tasks.contact')}: {task.contacts.full_name}</span>}
                               {task.opportunities && <span>{t('tasks.opportunity')}: {task.opportunities.title}</span>}
                               {task.due_at && (
