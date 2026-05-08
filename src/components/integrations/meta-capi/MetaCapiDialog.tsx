@@ -351,6 +351,37 @@ export function MetaCapiDialog({ open, onOpenChange, integration, orgIntegration
                 </Card>
               ) : (
                 <Card className="p-4 space-y-4">
+                  {!isConnected && hasMetaLeadAds && (
+                    <div className="space-y-2">
+                      <Label className="text-xs text-muted-foreground">Modo de conexão</Label>
+                      <RadioGroup value={mode} onValueChange={(v) => setMode(v as "reuse" | "manual")} className="gap-2">
+                        <div className="flex items-start gap-2 p-3 border rounded-md">
+                          <RadioGroupItem value="reuse" id="mode-reuse" className="mt-0.5" />
+                          <div className="flex-1">
+                            <Label htmlFor="mode-reuse" className="flex items-center gap-2 cursor-pointer">
+                              Reusar token Meta Lead Ads
+                              <Badge variant="secondary" className="text-[10px]">Recomendado</Badge>
+                            </Label>
+                            <p className="text-xs text-muted-foreground mt-1">
+                              💡 Reusa o System User Token já conectado em Meta Lead Ads. Mais rápido e sem precisar gerar token novo.
+                            </p>
+                          </div>
+                        </div>
+                        <div className="flex items-start gap-2 p-3 border rounded-md">
+                          <RadioGroupItem value="manual" id="mode-manual" className="mt-0.5" />
+                          <div className="flex-1">
+                            <Label htmlFor="mode-manual" className="cursor-pointer">
+                              Token CAPI manual (avançado)
+                            </Label>
+                            <p className="text-xs text-muted-foreground mt-1">
+                              Cole um access token gerado no Events Manager.
+                            </p>
+                          </div>
+                        </div>
+                      </RadioGroup>
+                    </div>
+                  )}
+
                   <div className="space-y-1.5">
                     <Label htmlFor="pixel_id">Pixel ID *</Label>
                     <Input
