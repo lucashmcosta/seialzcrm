@@ -219,6 +219,10 @@ export function MetaCapiDialog({ open, onOpenChange, integration, orgIntegration
     if (reconnectMode && tok.length > 0 && tok.length < 20) {
       e.access_token = "Token muito curto. Confira se copiou completo.";
     }
+    // Atualizando integração já conectada sem token novo e sem fallback de Lead Ads
+    if (isConnected && !reconnectMode && tok.length === 0 && !hasMetaLeadAds) {
+      e.access_token = "Informe o access token para atualizar (ou ative Meta Lead Ads para reusar).";
+    }
 
     const waba = (formValues.whatsapp_business_account_id || "").trim();
     if (waba && !/^\d+$/.test(waba)) e.whatsapp_business_account_id = "WABA ID deve conter apenas dígitos.";
