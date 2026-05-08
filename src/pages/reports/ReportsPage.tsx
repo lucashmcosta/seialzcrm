@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useState, lazy, Suspense } from 'react';
 import { Navigate } from 'react-router-dom';
 import { Layout } from '@/components/Layout';
 import { useOrganization } from '@/hooks/useOrganization';
@@ -14,27 +14,52 @@ import {
   Clock,
   Target,
 } from '@phosphor-icons/react';
-import { KpiCard } from '@/components/reports/KpiCard';
-import { WinRateGauge } from '@/components/reports/WinRateGauge';
-import {
-  SalesTrendChart,
-  type TrendPoint,
-} from '@/components/reports/SalesTrendChart';
-import {
-  PipelineFunnel,
-  type FunnelStage,
-} from '@/components/reports/PipelineFunnel';
-import { StageDistribution } from '@/components/reports/StageDistribution';
-import {
-  UserLeaderboard,
-  type UserStats,
-} from '@/components/reports/UserLeaderboard';
+import type { TrendPoint } from '@/components/reports/SalesTrendChart';
+import type { FunnelStage } from '@/components/reports/PipelineFunnel';
+import type { UserStats } from '@/components/reports/UserLeaderboard';
 import {
   ReportFilters,
   computeRange,
   type PeriodPreset,
 } from '@/components/reports/ReportFilters';
 import type { DateRange } from 'react-day-picker';
+
+// Lazy load heavy chart/UI components to avoid TDZ issues from circular
+// chunking with recharts and other large vendor modules in production.
+function retryImport<T>(fn: () => Promise<T>, retries = 2): Promise<T> {
+  return fn().catch((err) => {
+    if (retries > 0) {
+      return new Promise<T>((resolve) =>
+        setTimeout(() => resolve(retryImport(fn, retries - 1)), 1000),
+      );
+    }
+    window.location.reload();
+    throw err;
+  });
+}
+
+const KpiCard = lazy(() =>
+  retryImport(() => import('@/components/reports/KpiCard')).then((m) => ({ default: m.KpiCard })),
+);
+const WinRateGauge = lazy(() =>
+  retryImport(() => import('@/components/reports/WinRateGauge')).then((m) => ({ default: m.WinRateGauge })),
+);
+const SalesTrendChart = lazy(() =>
+  retryImport(() => import('@/components/reports/SalesTrendChart')).then((m) => ({ default: m.SalesTrendChart })),
+);
+const PipelineFunnel = lazy(() =>
+  retryImport(() => import('@/components/reports/PipelineFunnel')).then((m) => ({ default: m.PipelineFunnel })),
+);
+const StageDistribution = lazy(() =>
+  retryImport(() => import('@/components/reports/StageDistribution')).then((m) => ({ default: m.StageDistribution })),
+);
+const UserLeaderboard = lazy(() =>
+  retryImport(() => import('@/components/reports/UserLeaderboard')).then((m) => ({ default: m.UserLeaderboard })),
+);
+
+const BlockFallback = ({ className = 'h-32' }: { className?: string }) => (
+  <div className={`animate-pulse rounded-md bg-muted/50 ${className}`} />
+);
 
 interface Opp {
   id: string;
@@ -416,111 +441,121 @@ export default function ReportsPage() {
             />
 
             {/* KPI row */}
-            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
-              <KpiCard
-                label="Oportunidades criadas"
-                value={stats.createdCount}
-                delta={stats.createdDelta}
-                icon={Briefcase}
-                accent="primary"
-                loading={loading}
-              />
-              <KpiCard
-                label="Ganhas"
-                value={stats.wonCount}
-                sublabel={formatCurrency(stats.wonValue)}
-                delta={stats.wonValueDelta}
-                icon={CheckCircle}
-                accent="success"
-                loading={loading}
-              />
-              <KpiCard
-                label="Perdidas"
-                value={stats.lostCount}
-                sublabel={formatCurrency(stats.lostValue)}
-                icon={XCircle}
-                accent="destructive"
-                loading={loading}
-              />
-              <KpiCard
-                label="Win Rate"
-                value={`${stats.winRate.toFixed(1)}%`}
-                delta={stats.winRateDelta}
-                icon={Target}
-                accent="warning"
-                loading={loading}
-                mono
-              />
-            </div>
-
-            {/* Win rate gauge + secondary KPIs */}
-            <div className="grid grid-cols-1 gap-6 lg:grid-cols-3">
-              <WinRateGauge
-                rate={stats.winRate}
-                wonCount={stats.wonCount}
-                lostCount={stats.lostCount}
-                loading={loading}
-              />
-              <div className="lg:col-span-2 grid grid-cols-1 gap-4 sm:grid-cols-2">
+            <Suspense fallback={<BlockFallback className="h-32" />}>
+              <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
                 <KpiCard
-                  label="Ticket médio (ganhas)"
-                  value={formatCurrency(stats.avgTicket)}
-                  icon={CurrencyDollar}
-                  accent="success"
-                  loading={loading}
-                  mono
-                />
-                <KpiCard
-                  label="Ciclo médio de venda"
-                  value={`${stats.avgCycle.toFixed(0)} dias`}
-                  icon={Clock}
-                  accent="primary"
-                  loading={loading}
-                  mono
-                />
-                <KpiCard
-                  label="Pipeline aberto (qtd)"
-                  value={openOpps.length}
+                  label="Oportunidades criadas"
+                  value={stats.createdCount}
+                  delta={stats.createdDelta}
                   icon={Briefcase}
                   accent="primary"
                   loading={loading}
                 />
                 <KpiCard
-                  label="Pipeline aberto (valor)"
-                  value={formatCurrency(
-                    openOpps.reduce((s, o) => s + (Number(o.amount) || 0), 0),
-                  )}
-                  icon={Trophy}
+                  label="Ganhas"
+                  value={stats.wonCount}
+                  sublabel={formatCurrency(stats.wonValue)}
+                  delta={stats.wonValueDelta}
+                  icon={CheckCircle}
+                  accent="success"
+                  loading={loading}
+                />
+                <KpiCard
+                  label="Perdidas"
+                  value={stats.lostCount}
+                  sublabel={formatCurrency(stats.lostValue)}
+                  icon={XCircle}
+                  accent="destructive"
+                  loading={loading}
+                />
+                <KpiCard
+                  label="Win Rate"
+                  value={`${stats.winRate.toFixed(1)}%`}
+                  delta={stats.winRateDelta}
+                  icon={Target}
                   accent="warning"
                   loading={loading}
                   mono
                 />
               </div>
-            </div>
+            </Suspense>
+
+            {/* Win rate gauge + secondary KPIs */}
+            <Suspense fallback={<BlockFallback className="h-64" />}>
+              <div className="grid grid-cols-1 gap-6 lg:grid-cols-3">
+                <WinRateGauge
+                  rate={stats.winRate}
+                  wonCount={stats.wonCount}
+                  lostCount={stats.lostCount}
+                  loading={loading}
+                />
+                <div className="lg:col-span-2 grid grid-cols-1 gap-4 sm:grid-cols-2">
+                  <KpiCard
+                    label="Ticket médio (ganhas)"
+                    value={formatCurrency(stats.avgTicket)}
+                    icon={CurrencyDollar}
+                    accent="success"
+                    loading={loading}
+                    mono
+                  />
+                  <KpiCard
+                    label="Ciclo médio de venda"
+                    value={`${stats.avgCycle.toFixed(0)} dias`}
+                    icon={Clock}
+                    accent="primary"
+                    loading={loading}
+                    mono
+                  />
+                  <KpiCard
+                    label="Pipeline aberto (qtd)"
+                    value={openOpps.length}
+                    icon={Briefcase}
+                    accent="primary"
+                    loading={loading}
+                  />
+                  <KpiCard
+                    label="Pipeline aberto (valor)"
+                    value={formatCurrency(
+                      openOpps.reduce((s, o) => s + (Number(o.amount) || 0), 0),
+                    )}
+                    icon={Trophy}
+                    accent="warning"
+                    loading={loading}
+                    mono
+                  />
+                </div>
+              </div>
+            </Suspense>
 
             {/* Trend chart */}
-            <SalesTrendChart data={trend} formatCurrency={formatCurrency} loading={loading} />
+            <Suspense fallback={<BlockFallback className="h-72" />}>
+              <SalesTrendChart data={trend} formatCurrency={formatCurrency} loading={loading} />
+            </Suspense>
 
             {/* Funnel + Distribution */}
-            <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
-              <PipelineFunnel
-                stages={funnel}
-                formatCurrency={formatCurrency}
-                loading={loading}
-              />
-              <StageDistribution
-                data={funnel.map((f) => ({ name: f.name, value: f.value }))}
-                formatCurrency={formatCurrency}
-                loading={loading}
-              />
-            </div>
+            <Suspense fallback={<BlockFallback className="h-64" />}>
+              <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
+                <PipelineFunnel
+                  stages={funnel}
+                  formatCurrency={formatCurrency}
+                  loading={loading}
+                />
+                <StageDistribution
+                  data={funnel.map((f) => ({ name: f.name, value: f.value }))}
+                  formatCurrency={formatCurrency}
+                  loading={loading}
+                />
+              </div>
+            </Suspense>
 
             {/* Leaderboard */}
-            <UserLeaderboard
-              rows={userStats}
-              formatCurrency={formatCurrency}
-              loading={loading}
-            />
+            <Suspense fallback={<BlockFallback className="h-64" />}>
+              <UserLeaderboard
+                rows={userStats}
+                formatCurrency={formatCurrency}
+                loading={loading}
+              />
+            </Suspense>
           </div>
         </div>
       </div>

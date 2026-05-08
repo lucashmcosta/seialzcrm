@@ -4140,6 +4140,51 @@ export type Database = {
         }
         Relationships: []
       }
+      webhook_debug_logs: {
+        Row: {
+          body_preview: string | null
+          created_at: string | null
+          from_number: string | null
+          has_ctwa_clid: boolean | null
+          has_referral: boolean | null
+          id: string
+          message_sid: string | null
+          org_id_from_url: string | null
+          raw_headers: Json | null
+          raw_params: Json
+          to_number: string | null
+          webhook_path: string | null
+        }
+        Insert: {
+          body_preview?: string | null
+          created_at?: string | null
+          from_number?: string | null
+          has_ctwa_clid?: boolean | null
+          has_referral?: boolean | null
+          id?: string
+          message_sid?: string | null
+          org_id_from_url?: string | null
+          raw_headers?: Json | null
+          raw_params: Json
+          to_number?: string | null
+          webhook_path?: string | null
+        }
+        Update: {
+          body_preview?: string | null
+          created_at?: string | null
+          from_number?: string | null
+          has_ctwa_clid?: boolean | null
+          has_referral?: boolean | null
+          id?: string
+          message_sid?: string | null
+          org_id_from_url?: string | null
+          raw_headers?: Json | null
+          raw_params?: Json
+          to_number?: string | null
+          webhook_path?: string | null
+        }
+        Relationships: []
+      }
       webhook_field_mappings: {
         Row: {
           created_at: string | null
