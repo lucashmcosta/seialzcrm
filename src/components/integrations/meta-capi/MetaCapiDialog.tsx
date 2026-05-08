@@ -157,7 +157,9 @@ export function MetaCapiDialog({ open, onOpenChange, integration, orgIntegration
   const validate = () => {
     const e: any = {};
     if (!/^\d+$/.test(pixelId.trim())) e.pixel_id = "Pixel ID deve conter apenas dígitos.";
-    if (accessToken.trim().length < 20) e.access_token = "Token muito curto. Confira se copiou completo.";
+    if (mode === "manual" && accessToken.trim().length < 20) {
+      e.access_token = "Token muito curto. Confira se copiou completo.";
+    }
     setErrors(e);
     return Object.keys(e).length === 0;
   };
@@ -167,23 +169,25 @@ export function MetaCapiDialog({ open, onOpenChange, integration, orgIntegration
     if (!validate()) return;
     setSubmitting(true);
     try {
-      const { data, error } = await supabase.functions.invoke("meta-capi-connect", {
-        body: {
-          organization_id: organization.id,
-          pixel_id: pixelId.trim(),
-          access_token: accessToken.trim(),
-          test_event_code: testEventCode.trim() || undefined,
-        },
-      });
+      const useReuse = mode === "reuse" && !isConnected;
+      const fnName = useReuse ? "meta-capi-connect-from-existing" : "meta-capi-connect";
+      const body: any = {
+        organization_id: organization.id,
+        pixel_id: pixelId.trim(),
+        test_event_code: testEventCode.trim() || undefined,
+      };
+      if (!useReuse) body.access_token = accessToken.trim();
+
+      const { data, error } = await supabase.functions.invoke(fnName, { body });
       if (error) {
         toast.error(error.message || "Falha ao conectar");
         return;
       }
       if (data?.error) {
         const code = data.meta_error_code;
-        if (code === 190) toast.error("Token inválido ou expirado. Gere um novo no Events Manager.");
-        else if (code === 100) toast.error("Pixel ID não encontrado. Confira o ID.");
-        else toast.error(`Meta rejeitou: ${data.error}`);
+        if (code === 190) toast.error("Token inválido ou expirado. Reconecte Meta Lead Ads ou gere um novo no Events Manager.");
+        else if (code === 100) toast.error(data.error || "Pixel ID não encontrado. Confira o ID.");
+        else toast.error(data.error || "Meta rejeitou a conexão.");
         return;
       }
       toast.success("Meta CAPI conectado e validado!");
@@ -197,7 +201,6 @@ export function MetaCapiDialog({ open, onOpenChange, integration, orgIntegration
       setSubmitting(false);
     }
   };
-
   const disconnect = useMutation({
     mutationFn: async () => {
       if (!orgIntegration?.id) return;
