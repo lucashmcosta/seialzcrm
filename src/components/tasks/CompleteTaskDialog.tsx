@@ -141,6 +141,9 @@ export function CompleteTaskDialog({ open, onOpenChange, task, onSuccess, onRequ
             {task.opportunities?.title && <span>{t('tasks.opportunity')}: {task.opportunities.title}</span>}
             {task.due_at && <span>{t('tasks.dueDate')}: {new Date(task.due_at).toLocaleString(locale)}</span>}
             {task.assigned_user?.full_name && <span>{t('tasks.assignedTo')}: {task.assigned_user.full_name}</span>}
+            {task.created_by_user?.full_name && task.created_by_user.full_name !== task.assigned_user?.full_name && (
+              <span>{t('tasks.createdBy' as any)}: {task.created_by_user.full_name}</span>
+            )}
           </div>
         </div>
 
