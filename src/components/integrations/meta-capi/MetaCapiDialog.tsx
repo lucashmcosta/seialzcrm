@@ -316,6 +316,20 @@ export function MetaCapiDialog({ open, onOpenChange, integration, orgIntegration
                     <Label className="text-xs text-muted-foreground">Access Token</Label>
                     <p className="font-mono text-sm">{tokenMasked}</p>
                   </div>
+                  {ca.token_source === "meta-lead-ads" && (
+                    <Badge variant="outline" className="gap-1 w-fit">
+                      <LinkSimple className="h-3 w-3" />
+                      Reutilizando token de Meta Lead Ads
+                    </Badge>
+                  )}
+                  {ca.token_source === "meta-lead-ads" && hasMetaLeadAds === false && (
+                    <Alert variant="destructive">
+                      <Warning className="h-4 w-4" />
+                      <AlertDescription className="text-xs">
+                        Meta Lead Ads foi desconectado. Este Meta CAPI usa o token de lá e parou de funcionar. Use "Reconectar" com token manual.
+                      </AlertDescription>
+                    </Alert>
+                  )}
                   {ca.test_event_code && (
                     <div>
                       <Label className="text-xs text-muted-foreground">Test Event Code</Label>
