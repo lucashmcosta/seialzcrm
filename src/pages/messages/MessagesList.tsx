@@ -1091,15 +1091,19 @@ function DesktopMessagesList() {
       return false;
     }
     // Status filter
+    // Treat resolved threads with no client reply yet as still "pending" — they
+    // were likely auto-resolved or marked too early and the client never replied.
+    const isPendingFirstReply = thread.status === 'resolved' && !thread.last_inbound_at && !thread.whatsapp_last_inbound_at;
+    const isOpenLike = ['open', 'awaiting_client'].includes(thread.status) || isPendingFirstReply;
     switch (filter) {
       case 'mine':
-        return thread.assigned_user_id === userProfile?.id && ['open', 'awaiting_client'].includes(thread.status);
+        return thread.assigned_user_id === userProfile?.id && isOpenLike;
       case 'unassigned':
-        return !thread.assigned_user_id && thread.status === 'open';
+        return !thread.assigned_user_id && (thread.status === 'open' || isPendingFirstReply);
       case 'all_open':
-        return ['open', 'awaiting_client'].includes(thread.status);
+        return isOpenLike;
       case 'resolved':
-        return thread.status === 'resolved';
+        return thread.status === 'resolved' && (thread.last_inbound_at || thread.whatsapp_last_inbound_at);
       default:
         return true;
     }

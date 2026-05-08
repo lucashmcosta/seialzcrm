@@ -608,11 +608,13 @@ export function MobileMessagesList() {
   // ─── Filters ──────────────────────────────────────────────────
   const filteredThreads = threads?.filter((thread) => {
     if (searchQuery && !thread.contact_name.toLowerCase().includes(searchQuery.toLowerCase())) return false;
+    const isPendingFirstReply = thread.status === 'resolved' && !thread.last_inbound_at && !(thread as any).whatsapp_last_inbound_at;
+    const isOpenLike = ['open', 'awaiting_client'].includes(thread.status) || isPendingFirstReply;
     switch (filter) {
-      case 'mine': return thread.assigned_user_id === userProfile?.id && ['open', 'awaiting_client'].includes(thread.status);
-      case 'unassigned': return !thread.assigned_user_id && thread.status === 'open';
-      case 'all_open': return ['open', 'awaiting_client'].includes(thread.status);
-      case 'resolved': return thread.status === 'resolved';
+      case 'mine': return thread.assigned_user_id === userProfile?.id && isOpenLike;
+      case 'unassigned': return !thread.assigned_user_id && (thread.status === 'open' || isPendingFirstReply);
+      case 'all_open': return isOpenLike;
+      case 'resolved': return thread.status === 'resolved' && (thread.last_inbound_at || (thread as any).whatsapp_last_inbound_at);
       default: return true;
     }
   });
