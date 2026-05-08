@@ -4,6 +4,7 @@
 
 import type { Handler } from "./types.ts";
 import { webhookDispatchHandler } from "./webhook.ts";
+import { kommoUpsertHandler } from "./kommo.ts";
 
 const registry = new Map<string, Handler>();
 
