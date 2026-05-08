@@ -1,52 +1,74 @@
 ## Diagnóstico
+Você tem razão: o erro **não foi resolvido**. O que confirmei é:
 
-O erro `Cannot access 'Lt' before initialization` é um clássico **TDZ (Temporal Dead Zone)** do JavaScript minificado, causado por **dependência circular** entre módulos no bundle de produção (`index-BEYhe6zT.js`). Não é um bug de cache do navegador — o bundle publicado realmente contém a referência inválida.
+- o navegador do usuário continua quebrando no **mesmo bundle deployado**: `index-BEYhe6zT.js`
+- no código atual, `/reports` **já não depende mais diretamente de Recharts** para render inicial, então o primeiro diagnóstico ficou incompleto
+- o caminho síncrono que ainda sobra em `/reports` é principalmente:
+  `ReportsPage -> ReportFilters -> Calendar -> buttonVariants -> Button -> framer-motion / react-day-picker / radix`
+- além disso, o `vite.config.ts` está com **manualChunks muito agressivo**, e isso é um padrão conhecido de Vite/Rollup para gerar erro de TDZ (`Cannot access 'X' before initialization`) em produção
 
-O que aciona:
+## Do I know what the issue is?
+**Sim.** O problema agora é um **TDZ de produção causado por ordem de inicialização entre chunks/módulos**, concentrado no stack de filtros/calendário compartilhado e amplificado pela estratégia atual de `manualChunks`.
 
-- `/reports` (ReportsPage) importa **eagerly** 7 componentes do diretório `src/components/reports/` (KpiCard, WinRateGauge, SalesTrendChart, PipelineFunnel, StageDistribution, UserLeaderboard, ReportFilters).
-- `/dashboard` também importa `ReportFilters` do mesmo diretório.
-- O Vite/Rollup junta tudo num único chunk grande. Quando esse chunk roda, há uma referência hoisted antes da inicialização (provavelmente o `recharts` puxado por `DashboardTrendChart`/`DashboardStatusDonut`, que estão no mesmo diretório e podem ser arrastados para o mesmo chunk em certas condições de tree-shaking).
-- Em build de produção a ordem de execução muda e o `Lt` (variável minificada do recharts/chart helper) é referenciado antes de ser inicializado → **blank screen**.
+O fix anterior atacou um hotspot provável, mas **não removeu a cadeia real que ainda entra primeiro no `/reports`**.
 
-## Solução profissional
+## Plano de correção
 
-1. **Code-split de todo o módulo de reports** (não só Dashboard). Cada página carrega seus próprios componentes via `lazy()` + `Suspense`, eliminando o chunk monolítico que dispara a TDZ.
+### 1. Desacoplar a lógica de período da UI pesada
+Vou extrair `computeRange` e os tipos de período para um util leve, por exemplo `src/lib/report-period.ts`, para que:
+- `ReportsPage.tsx`
+- `Dashboard.tsx`
 
-2. **Manter `ReportFilters` como import síncrono** (é leve e usado por ambas as páginas) num arquivo isolado, sem reexports cruzados.
+possam compartilhar a lógica sem importar junto `react-day-picker`, `Calendar`, `Popover` e `Button`.
 
-3. **Adicionar `manualChunks` no `vite.config.ts`** para garantir que `recharts` e os componentes de chart fiquem em chunks separados de UI/contextos. Isso previne TDZ e também melhora performance (recharts é ~150KB).
+### 2. Simplificar o filtro de relatórios para eliminar o caminho frágil
+Vou refatorar `src/components/reports/ReportFilters.tsx` para não puxar a cadeia mais sensível na renderização inicial.
 
-4. **Forçar rebuild limpo** após as mudanças para invalidar o hash `BEYhe6zT` do CDN.
+Direção do patch:
+- manter o `Select` de presets
+- substituir o calendário popover por uma versão mais segura para produção, com inputs de data leves ou carregamento isolado do seletor customizado
+- preservar o comportamento funcional do filtro, mas reduzir o acoplamento com `calendar.tsx` e `button.tsx` no primeiro render
 
-## Arquivos a modificar
+Isso também será aplicado ao `Dashboard`, porque ele reutiliza o mesmo filtro.
 
-```text
-src/pages/reports/ReportsPage.tsx
-  - Converter KpiCard, WinRateGauge, SalesTrendChart, PipelineFunnel,
-    StageDistribution, UserLeaderboard para lazy() com retryImport
-  - Envolver área de conteúdo em <Suspense fallback={<ChartFallback/>}>
-  - Manter ReportFilters como import síncrono
+### 3. Corrigir a estratégia de chunking do Vite
+Vou ajustar `vite.config.ts` para remover a divisão excessiva de vendor chunks.
 
-src/pages/Dashboard.tsx
-  - Já lazy-loada DashboardTrendChart/Donut (OK, não mexer)
-  - Manter ReportFilters síncrono (OK)
+Em vez de separar vários grupos (`radix`, `datepicker`, `icons`, `supabase`, `tanstack` etc.), vou:
+- deixar o Vite decidir automaticamente, **ou**
+- manter no máximo uma divisão bem coarse, como `charts`
 
-vite.config.ts
-  - Adicionar build.rollupOptions.output.manualChunks:
-      recharts → 'charts'
-      @radix-ui/* → 'radix'
-      react-day-picker + date-fns → 'datepicker'
-```
+Objetivo: impedir que módulos interdependentes sejam inicializados fora de ordem no bundle de produção.
 
-## Por que isto resolve
+### 4. Adicionar diagnóstico temporário para eliminar adivinhação
+Se ainda restar qualquer crash depois disso, vou adicionar logs temporários em pontos estratégicos de inicialização:
+- entrada de `ReportsPage`
+- carga do filtro
+- carga dos blocos lazy
 
-- **TDZ desaparece**: cada componente vira seu próprio módulo carregado sob demanda; não há mais hoisting cruzado entre `recharts` e o resto do app no chunk principal.
-- **Robusto a futuras edições**: mesmo que alguém adicione novo componente em `components/reports/`, ele entra em chunk próprio.
-- **Sem mudança de UX**: `<Suspense>` mostra um skeleton idêntico ao `loading=true` que os componentes já têm.
+Assim, o próximo erro deixa de ser apenas `Lt` minificado e passa a apontar o módulo real.
 
-## Validação após deploy
+### 5. Validação final
+Depois do patch, vou validar que:
+- o hash do asset muda e **deixa de ser `BEYhe6zT`**
+- `/reports` abre sem tela branca
+- `Dashboard` continua funcionando com os filtros
+- presets e intervalo customizado continuam corretos
 
-1. Hard reload em `/reports` → página renderiza sem erro.
-2. DevTools → Network: vários chunks pequenos no lugar do bundle único.
-3. Console limpo de `ReferenceError`.
+## Arquivos que vou mexer
+- `src/pages/reports/ReportsPage.tsx`
+- `src/pages/Dashboard.tsx`
+- `src/components/reports/ReportFilters.tsx`
+- `vite.config.ts`
+- possivelmente um novo util, como `src/lib/report-period.ts`
+
+## Resultado esperado
+Remover a causa real do TDZ em produção, parar a tela branca em `/reports`, e deixar o bundle menos frágil para próximos deploys.
+
+<lov-actions>
+  <lov-open-history>View History</lov-open-history>
+</lov-actions>
+
+<lov-actions>
+<lov-link url="https://docs.lovable.dev/tips-tricks/troubleshooting">Troubleshooting docs</lov-link>
+</lov-actions>

@@ -19,23 +19,9 @@ export default defineConfig(({ mode }) => ({
     },
     dedupe: ["react", "react-dom", "react/jsx-runtime"],
   },
-  build: {
-    rollupOptions: {
-      output: {
-        // Isolate heavy vendor libs in their own chunks to avoid
-        // cross-module TDZ ("Cannot access 'X' before initialization")
-        // crashes from circular dependency hoisting in production.
-        manualChunks(id) {
-          if (!id.includes("node_modules")) return undefined;
-          if (id.includes("recharts") || id.includes("d3-")) return "charts";
-          if (id.includes("@radix-ui")) return "radix";
-          if (id.includes("react-day-picker") || id.includes("date-fns")) return "datepicker";
-          if (id.includes("@phosphor-icons")) return "icons";
-          if (id.includes("@supabase")) return "supabase";
-          if (id.includes("@tanstack")) return "tanstack";
-          return undefined;
-        },
-      },
-    },
-  },
+  // Note: previously we had aggressive `manualChunks` here that split
+  // radix/datepicker/icons/supabase/tanstack into separate chunks.
+  // That triggered a production-only TDZ ("Cannot access 'X' before
+  // initialization") because Rollup hoisted module init across chunks.
+  // Letting Vite/Rollup decide chunking automatically is the safe default.
 }));
