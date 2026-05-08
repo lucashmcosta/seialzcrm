@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { useOrganization } from "@/hooks/useOrganization";
@@ -24,6 +24,22 @@ interface Props {
   orgIntegration: any;
 }
 
+type ConfigField = {
+  key: string;
+  type: "text" | "password" | "url";
+  label: string;
+  help?: string;
+  required?: boolean;
+  group: string;
+  placeholder?: string;
+};
+
+type ConfigGroup = {
+  key: string;
+  label: string;
+  description?: string;
+};
+
 type EventRow = {
   id: string;
   event_name: string;
@@ -35,6 +51,20 @@ type EventRow = {
   attempt_count: number;
   created_at: string;
 };
+
+const DEFAULT_FIELDS: ConfigField[] = [
+  { key: "pixel_id", type: "text", label: "Pixel ID", required: true, group: "connection", placeholder: "123456789012345", help: "Events Manager → Configurações do dataset → ID do dataset" },
+  { key: "access_token", type: "password", label: "Access Token (CAPI)", required: true, group: "connection", placeholder: "EAAB...", help: "Events Manager → Configurações → Conversions API → Generate access token. Recomendado: System User token (não expira)." },
+  { key: "test_event_code", type: "text", label: "Test Event Code", required: false, group: "connection", placeholder: "TEST12345", help: "Use durante testes. Deixe vazio em produção." },
+  { key: "whatsapp_business_account_id", type: "text", label: "WhatsApp Business Account ID", required: false, group: "advanced", placeholder: "1234567890123456", help: "Necessário para CTWA (Click-to-WhatsApp Ads). business.facebook.com/wa/manage/home" },
+  { key: "page_id", type: "text", label: "Facebook Page ID", required: false, group: "advanced", placeholder: "1234567890123456", help: "Business Settings → Pages. Melhora atribuição de eventos vindos de Page Inbox." },
+  { key: "default_event_source_url", type: "url", label: "URL padrão da Landing Page", required: false, group: "advanced", placeholder: "https://lp.exemplo.com.br/", help: "Usada como fallback no event_source_url quando não vier do contato." },
+];
+
+const DEFAULT_GROUPS: ConfigGroup[] = [
+  { key: "connection", label: "Conexão", description: "Credenciais obrigatórias para enviar eventos." },
+  { key: "advanced", label: "Avançado", description: "Campos opcionais para CTWA e melhor atribuição." },
+];
 
 const statusBadge = (s: string) => {
   const map: Record<string, { label: string; cls: string }> = {
@@ -52,17 +82,26 @@ export function MetaCapiDialog({ open, onOpenChange, integration, orgIntegration
   const { organization } = useOrganization();
   const qc = useQueryClient();
   const [tab, setTab] = useState("connection");
+  const [innerTab, setInnerTab] = useState("connection");
   const [filter, setFilter] = useState<string>("all");
   const [showToken, setShowToken] = useState(false);
   const [disconnectOpen, setDisconnectOpen] = useState(false);
   const [reconnectMode, setReconnectMode] = useState(false);
 
-  const [pixelId, setPixelId] = useState("");
-  const [accessToken, setAccessToken] = useState("");
-  const [testEventCode, setTestEventCode] = useState("");
+  const [formValues, setFormValues] = useState<Record<string, string>>({});
   const [submitting, setSubmitting] = useState(false);
-  const [errors, setErrors] = useState<{ pixel_id?: string; access_token?: string }>({});
+  const [errors, setErrors] = useState<Record<string, string>>({});
   const [mode, setMode] = useState<"reuse" | "manual">("manual");
+
+  const fields: ConfigField[] = useMemo(() => {
+    const f = integration?.config_schema?.fields;
+    return Array.isArray(f) && f.length > 0 ? (f as ConfigField[]) : DEFAULT_FIELDS;
+  }, [integration]);
+
+  const groups: ConfigGroup[] = useMemo(() => {
+    const g = integration?.config_schema?.groups;
+    return Array.isArray(g) && g.length > 0 ? (g as ConfigGroup[]) : DEFAULT_GROUPS;
+  }, [integration]);
 
   const { data: hasMetaLeadAds } = useQuery({
     queryKey: ["has-meta-lead-ads", organization?.id],
@@ -101,12 +140,24 @@ export function MetaCapiDialog({ open, onOpenChange, integration, orgIntegration
   useEffect(() => {
     if (open) {
       setTab(isConnected ? "events" : "connection");
+      setInnerTab("connection");
       setReconnectMode(false);
-      setPixelId(ca.pixel_id || "");
-      setAccessToken("");
-      setTestEventCode(ca.test_event_code || "");
       setErrors({});
+      setShowToken(false);
+      if (isConnected) {
+        setFormValues({
+          pixel_id: ca.pixel_id || "",
+          access_token: "",
+          test_event_code: ca.test_event_code || "",
+          whatsapp_business_account_id: ca.whatsapp_business_account_id || "",
+          page_id: ca.page_id || "",
+          default_event_source_url: ca.default_event_source_url || "",
+        });
+      } else {
+        setFormValues({});
+      }
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open, isConnected]);
 
   useEffect(() => {
@@ -132,7 +183,6 @@ export function MetaCapiDialog({ open, onOpenChange, integration, orgIntegration
     },
   });
 
-  // Stats últimos 7 dias
   const { data: stats } = useQuery({
     queryKey: ["capi_event_stats", organization?.id],
     enabled: !!organization?.id && open && isConnected && tab === "events",
@@ -154,12 +204,31 @@ export function MetaCapiDialog({ open, onOpenChange, integration, orgIntegration
     },
   });
 
+  const setField = (key: string, value: string) =>
+    setFormValues((prev) => ({ ...prev, [key]: value }));
+
   const validate = () => {
-    const e: any = {};
-    if (!/^\d+$/.test(pixelId.trim())) e.pixel_id = "Pixel ID deve conter apenas dígitos.";
-    if (mode === "manual" && accessToken.trim().length < 20) {
+    const e: Record<string, string> = {};
+    const pid = (formValues.pixel_id || "").trim();
+    if (!pid || !/^\d+$/.test(pid)) e.pixel_id = "Pixel ID deve conter apenas dígitos.";
+
+    const tok = (formValues.access_token || "").trim();
+    if (mode === "manual" && !isConnected && tok.length < 20) {
       e.access_token = "Token muito curto. Confira se copiou completo.";
     }
+    if (reconnectMode && tok.length > 0 && tok.length < 20) {
+      e.access_token = "Token muito curto. Confira se copiou completo.";
+    }
+
+    const waba = (formValues.whatsapp_business_account_id || "").trim();
+    if (waba && !/^\d+$/.test(waba)) e.whatsapp_business_account_id = "WABA ID deve conter apenas dígitos.";
+
+    const pageId = (formValues.page_id || "").trim();
+    if (pageId && !/^\d+$/.test(pageId)) e.page_id = "Page ID deve conter apenas dígitos.";
+
+    const url = (formValues.default_event_source_url || "").trim();
+    if (url && !/^https?:\/\//.test(url)) e.default_event_source_url = "URL deve começar com http:// ou https://.";
+
     setErrors(e);
     return Object.keys(e).length === 0;
   };
@@ -173,10 +242,16 @@ export function MetaCapiDialog({ open, onOpenChange, integration, orgIntegration
       const fnName = useReuse ? "meta-capi-connect-from-existing" : "meta-capi-connect";
       const body: any = {
         organization_id: organization.id,
-        pixel_id: pixelId.trim(),
-        test_event_code: testEventCode.trim() || undefined,
+        pixel_id: (formValues.pixel_id || "").trim(),
+        test_event_code: (formValues.test_event_code || "").trim() || undefined,
+        whatsapp_business_account_id: (formValues.whatsapp_business_account_id || "").trim() || undefined,
+        page_id: (formValues.page_id || "").trim() || undefined,
+        default_event_source_url: (formValues.default_event_source_url || "").trim() || undefined,
       };
-      if (!useReuse) body.access_token = accessToken.trim();
+      if (!useReuse) {
+        const tok = (formValues.access_token || "").trim();
+        if (tok) body.access_token = tok;
+      }
 
       const { data, error } = await supabase.functions.invoke(fnName, { body });
       if (error) {
@@ -190,7 +265,7 @@ export function MetaCapiDialog({ open, onOpenChange, integration, orgIntegration
         else toast.error(data.error || "Meta rejeitou a conexão.");
         return;
       }
-      toast.success("Meta CAPI conectado e validado!");
+      toast.success(isConnected ? "Meta CAPI atualizado!" : "Meta CAPI conectado e validado!");
       qc.invalidateQueries({ queryKey: ["org-integration", "meta-capi"] });
       qc.invalidateQueries({ queryKey: ["organization-integrations"] });
       setReconnectMode(false);
@@ -201,6 +276,7 @@ export function MetaCapiDialog({ open, onOpenChange, integration, orgIntegration
       setSubmitting(false);
     }
   };
+
   const disconnect = useMutation({
     mutationFn: async () => {
       if (!orgIntegration?.id) return;
@@ -247,6 +323,62 @@ export function MetaCapiDialog({ open, onOpenChange, integration, orgIntegration
 
   const tokenMasked = ca.access_token_last4 ? `••••••••${ca.access_token_last4}` : "••••••••";
 
+  const configQuality = useMemo(() => {
+    const hasCtwaSupport = !!ca.whatsapp_business_account_id || !!ca.page_id;
+    const hasUrl = !!ca.default_event_source_url;
+    if (hasCtwaSupport && hasUrl) return { label: "Cobertura completa", variant: "default" as const };
+    if (hasCtwaSupport || hasUrl) return { label: "Cobertura parcial", variant: "secondary" as const };
+    return { label: "Apenas Lead Ads form", variant: "outline" as const };
+  }, [ca.whatsapp_business_account_id, ca.page_id, ca.default_event_source_url]);
+
+  const renderField = (field: ConfigField) => {
+    const value = formValues[field.key] || "";
+    const err = errors[field.key];
+    const isPassword = field.type === "password";
+    const isManualToken = field.key === "access_token";
+
+    // Em modo reuse (não conectado), esconder access_token
+    if (isManualToken && !isConnected && mode === "reuse" && !reconnectMode) return null;
+
+    const requiredLabel = field.required && !(isManualToken && isConnected && !reconnectMode);
+
+    return (
+      <div key={field.key} className="space-y-1.5">
+        <Label htmlFor={field.key}>
+          {field.label} {requiredLabel && "*"}
+        </Label>
+        <div className="relative">
+          <Input
+            id={field.key}
+            type={isPassword && !showToken ? "password" : "text"}
+            value={value}
+            onChange={(e) => setField(field.key, e.target.value)}
+            placeholder={
+              field.placeholder ||
+              (isManualToken && isConnected && !reconnectMode ? "Deixe vazio para manter o token atual" : "")
+            }
+            inputMode={field.type === "text" && /^\d+$/.test(field.placeholder || "") ? "numeric" : undefined}
+            className={isPassword ? "pr-10" : undefined}
+          />
+          {isPassword && (
+            <button
+              type="button"
+              onClick={() => setShowToken((v) => !v)}
+              className="absolute right-2 top-1/2 -translate-y-1/2 text-muted-foreground"
+            >
+              {showToken ? <EyeSlash className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+            </button>
+          )}
+        </div>
+        {field.help && <p className="text-xs text-muted-foreground">{field.help}</p>}
+        {err && <p className="text-xs text-destructive">{err}</p>}
+        {field.key === "test_event_code" && (formValues.test_event_code || "").trim() && (
+          <Badge className="bg-amber-500 text-white text-[10px]">Modo teste — eventos não contam</Badge>
+        )}
+      </div>
+    );
+  };
+
   return (
     <>
       <Dialog open={open} onOpenChange={onOpenChange}>
@@ -267,7 +399,7 @@ export function MetaCapiDialog({ open, onOpenChange, integration, orgIntegration
                 )}
                 <div>
                   <DialogTitle className="text-xl">Meta Conversions API</DialogTitle>
-                  <div className="flex items-center gap-2 mt-1">
+                  <div className="flex items-center gap-2 mt-1 flex-wrap">
                     {isConnected ? (
                       <Badge variant="outline" className="gap-1">
                         <CheckCircle className="h-3 w-3 text-green-500" />
@@ -279,6 +411,11 @@ export function MetaCapiDialog({ open, onOpenChange, integration, orgIntegration
                     {isTestMode && (
                       <Badge className="bg-amber-500 text-white text-[10px]">
                         Modo teste — eventos não contam
+                      </Badge>
+                    )}
+                    {isConnected && (
+                      <Badge variant={configQuality.variant} className="text-[10px]">
+                        {configQuality.label}
                       </Badge>
                     )}
                   </div>
@@ -336,6 +473,24 @@ export function MetaCapiDialog({ open, onOpenChange, integration, orgIntegration
                       <p className="font-mono text-sm">{ca.test_event_code}</p>
                     </div>
                   )}
+                  {ca.whatsapp_business_account_id && (
+                    <div>
+                      <Label className="text-xs text-muted-foreground">WhatsApp Business Account ID</Label>
+                      <p className="font-mono text-sm">{ca.whatsapp_business_account_id}</p>
+                    </div>
+                  )}
+                  {ca.page_id && (
+                    <div>
+                      <Label className="text-xs text-muted-foreground">Facebook Page ID</Label>
+                      <p className="font-mono text-sm">{ca.page_id}</p>
+                    </div>
+                  )}
+                  {ca.default_event_source_url && (
+                    <div>
+                      <Label className="text-xs text-muted-foreground">URL padrão da Landing Page</Label>
+                      <p className="font-mono text-sm break-all">{ca.default_event_source_url}</p>
+                    </div>
+                  )}
                   {ca.validated_at && (
                     <p className="text-xs text-muted-foreground">
                       Validado em{" "}
@@ -343,9 +498,17 @@ export function MetaCapiDialog({ open, onOpenChange, integration, orgIntegration
                     </p>
                   )}
                   <div className="pt-2">
-                    <Button variant="outline" size="sm" onClick={() => { setReconnectMode(true); setAccessToken(""); }}>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => {
+                        setReconnectMode(true);
+                        setInnerTab("connection");
+                        setFormValues((prev) => ({ ...prev, access_token: "" }));
+                      }}
+                    >
                       <ArrowsClockwise className="h-4 w-4 mr-1" />
-                      Reconectar
+                      Reconectar / Editar
                     </Button>
                   </div>
                 </Card>
@@ -382,67 +545,24 @@ export function MetaCapiDialog({ open, onOpenChange, integration, orgIntegration
                     </div>
                   )}
 
-                  <div className="space-y-1.5">
-                    <Label htmlFor="pixel_id">Pixel ID *</Label>
-                    <Input
-                      id="pixel_id"
-                      value={pixelId}
-                      onChange={(e) => setPixelId(e.target.value)}
-                      placeholder="123456789012345"
-                      inputMode="numeric"
-                    />
-                    <p className="text-xs text-muted-foreground">
-                      Encontre em Events Manager → Configurações do dataset → ID do dataset
-                    </p>
-                    {errors.pixel_id && <p className="text-xs text-destructive">{errors.pixel_id}</p>}
-                  </div>
+                  <Tabs value={innerTab} onValueChange={setInnerTab}>
+                    <TabsList className="grid w-full" style={{ gridTemplateColumns: `repeat(${groups.length}, minmax(0, 1fr))` }}>
+                      {groups.map((g) => (
+                        <TabsTrigger key={g.key} value={g.key}>
+                          {g.label}
+                        </TabsTrigger>
+                      ))}
+                    </TabsList>
 
-                  {(reconnectMode || mode === "manual" || isConnected) && (
-                  <div className="space-y-1.5">
-                    <Label htmlFor="access_token">Access Token (CAPI) *</Label>
-                    <div className="relative">
-                      <Input
-                        id="access_token"
-                        type={showToken ? "text" : "password"}
-                        value={accessToken}
-                        onChange={(e) => setAccessToken(e.target.value)}
-                        placeholder="EAAB..."
-                        className="pr-10"
-                      />
-                      <button
-                        type="button"
-                        onClick={() => setShowToken((v) => !v)}
-                        className="absolute right-2 top-1/2 -translate-y-1/2 text-muted-foreground"
-                      >
-                        {showToken ? <EyeSlash className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
-                      </button>
-                    </div>
-                    <p className="text-xs text-muted-foreground">
-                      Gere em Events Manager → Configurações → Conversions API → Generate access token.
-                      Recomendado: System User token (não expira).
-                    </p>
-                    {errors.access_token && <p className="text-xs text-destructive">{errors.access_token}</p>}
-                  </div>
-                  )}
-
-                  <div className="space-y-1.5">
-                    <Label htmlFor="test_event_code">Test Event Code (opcional)</Label>
-                    <Input
-                      id="test_event_code"
-                      value={testEventCode}
-                      onChange={(e) => setTestEventCode(e.target.value)}
-                      placeholder="TEST12345"
-                    />
-                    <p className="text-xs text-muted-foreground">
-                      Use durante testes pra ver eventos na aba Test events sem afetar atribuição.
-                      Deixe vazio em produção.
-                    </p>
-                    {testEventCode.trim() && (
-                      <Badge className="bg-amber-500 text-white text-[10px]">
-                        Modo teste — eventos não contam
-                      </Badge>
-                    )}
-                  </div>
+                    {groups.map((g) => (
+                      <TabsContent key={g.key} value={g.key} className="mt-4 space-y-4">
+                        {g.description && (
+                          <p className="text-xs text-muted-foreground">{g.description}</p>
+                        )}
+                        {fields.filter((f) => f.group === g.key).map(renderField)}
+                      </TabsContent>
+                    ))}
+                  </Tabs>
 
                   <Alert>
                     <Warning className="h-4 w-4" />
@@ -458,7 +578,7 @@ export function MetaCapiDialog({ open, onOpenChange, integration, orgIntegration
                       </Button>
                     )}
                     <Button onClick={handleSubmit} disabled={submitting}>
-                      {submitting ? "Validando..." : isConnected ? "Reconectar" : "Conectar"}
+                      {submitting ? "Validando..." : isConnected ? "Salvar alterações" : "Conectar"}
                     </Button>
                   </div>
                 </Card>
@@ -466,7 +586,6 @@ export function MetaCapiDialog({ open, onOpenChange, integration, orgIntegration
             </TabsContent>
 
             <TabsContent value="events" className="mt-4 space-y-4">
-              {/* Stats */}
               <div className="grid grid-cols-4 gap-3">
                 <Card className="p-3">
                   <p className="text-xs text-muted-foreground">Total (7d)</p>
@@ -486,7 +605,6 @@ export function MetaCapiDialog({ open, onOpenChange, integration, orgIntegration
                 </Card>
               </div>
 
-              {/* Filtro */}
               <div className="flex items-center gap-2">
                 <Label className="text-xs text-muted-foreground">Filtrar:</Label>
                 {["all", "Lead", "Purchase"].map((f) => (
@@ -504,7 +622,6 @@ export function MetaCapiDialog({ open, onOpenChange, integration, orgIntegration
                 </Button>
               </div>
 
-              {/* Tabela */}
               <Card>
                 {loadingEvents ? (
                   <div className="p-6 text-center text-sm text-muted-foreground">Carregando...</div>
