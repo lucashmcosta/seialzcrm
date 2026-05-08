@@ -315,6 +315,7 @@ serve(async (req) => {
             owner_user_id: ownerId,
             source: "meta_lead_ads",
             source_external_id: lead.id,
+            created_at: lead.created_time || new Date().toISOString(),
           })
           .select("id")
           .single();
