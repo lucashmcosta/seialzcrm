@@ -219,6 +219,10 @@ export function MetaCapiDialog({ open, onOpenChange, integration, orgIntegration
     if (reconnectMode && tok.length > 0 && tok.length < 20) {
       e.access_token = "Token muito curto. Confira se copiou completo.";
     }
+    // Atualizando integração já conectada sem token novo e sem fallback de Lead Ads
+    if (isConnected && !reconnectMode && tok.length === 0 && !hasMetaLeadAds) {
+      e.access_token = "Informe o access token para atualizar (ou ative Meta Lead Ads para reusar).";
+    }
 
     const waba = (formValues.whatsapp_business_account_id || "").trim();
     if (waba && !/^\d+$/.test(waba)) e.whatsapp_business_account_id = "WABA ID deve conter apenas dígitos.";
@@ -238,7 +242,12 @@ export function MetaCapiDialog({ open, onOpenChange, integration, orgIntegration
     if (!validate()) return;
     setSubmitting(true);
     try {
-      const useReuse = mode === "reuse" && !isConnected;
+      const manualToken = (formValues.access_token || "").trim();
+      // Usa from-existing quando: (a) novo connect em modo reuse, OU
+      // (b) update sem token novo mas com Meta Lead Ads disponível
+      const useReuse =
+        (mode === "reuse" && !isConnected) ||
+        (isConnected && !reconnectMode && manualToken.length === 0 && !!hasMetaLeadAds);
       const fnName = useReuse ? "meta-capi-connect-from-existing" : "meta-capi-connect";
       const body: any = {
         organization_id: organization.id,
@@ -248,9 +257,8 @@ export function MetaCapiDialog({ open, onOpenChange, integration, orgIntegration
         page_id: (formValues.page_id || "").trim() || undefined,
         default_event_source_url: (formValues.default_event_source_url || "").trim() || undefined,
       };
-      if (!useReuse) {
-        const tok = (formValues.access_token || "").trim();
-        if (tok) body.access_token = tok;
+      if (!useReuse && manualToken) {
+        body.access_token = manualToken;
       }
 
       const { data, error } = await supabase.functions.invoke(fnName, { body });
