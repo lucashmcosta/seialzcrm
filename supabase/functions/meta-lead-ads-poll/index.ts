@@ -138,6 +138,9 @@ serve(async (req) => {
             if (!lastLeadTime || lead.created_time > lastLeadTime) {
               lastLeadTime = lead.created_time;
             }
+
+            // Throttle to prevent Deno runtime from dropping fire-and-forget fetches in backfills
+            await new Promise((resolve) => setTimeout(resolve, 50));
           }
 
           cursor = resp.paging?.cursors?.after;
