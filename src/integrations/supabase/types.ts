@@ -1088,6 +1088,91 @@ export type Database = {
           },
         ]
       }
+      capi_event_log: {
+        Row: {
+          attempt_count: number
+          contact_id: string | null
+          created_at: string
+          event_id: string
+          event_name: string
+          event_source_url: string | null
+          event_time: string
+          id: string
+          last_attempt_at: string | null
+          meta_error: string | null
+          meta_response: Json | null
+          next_retry_at: string | null
+          opportunity_id: string | null
+          organization_id: string
+          payload: Json
+          status: string
+          test_event_code: string | null
+          updated_at: string
+        }
+        Insert: {
+          attempt_count?: number
+          contact_id?: string | null
+          created_at?: string
+          event_id: string
+          event_name: string
+          event_source_url?: string | null
+          event_time: string
+          id?: string
+          last_attempt_at?: string | null
+          meta_error?: string | null
+          meta_response?: Json | null
+          next_retry_at?: string | null
+          opportunity_id?: string | null
+          organization_id: string
+          payload: Json
+          status?: string
+          test_event_code?: string | null
+          updated_at?: string
+        }
+        Update: {
+          attempt_count?: number
+          contact_id?: string | null
+          created_at?: string
+          event_id?: string
+          event_name?: string
+          event_source_url?: string | null
+          event_time?: string
+          id?: string
+          last_attempt_at?: string | null
+          meta_error?: string | null
+          meta_response?: Json | null
+          next_retry_at?: string | null
+          opportunity_id?: string | null
+          organization_id?: string
+          payload?: Json
+          status?: string
+          test_event_code?: string | null
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "capi_event_log_contact_id_fkey"
+            columns: ["contact_id"]
+            isOneToOne: false
+            referencedRelation: "contacts"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "capi_event_log_opportunity_id_fkey"
+            columns: ["opportunity_id"]
+            isOneToOne: false
+            referencedRelation: "opportunities"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "capi_event_log_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       companies: {
         Row: {
           address: string | null
@@ -1222,6 +1307,8 @@ export type Database = {
           address_state: string | null
           address_street: string | null
           address_zip: string | null
+          client_ip_address: unknown
+          client_user_agent: string | null
           company_id: string | null
           company_name: string | null
           cpf: string | null
@@ -1230,16 +1317,21 @@ export type Database = {
           deleted_at: string | null
           do_not_contact: boolean | null
           email: string | null
+          fbclid: string | null
           first_name: string | null
           full_name: string
+          gclid: string | null
           id: string
           is_sample: boolean | null
+          landing_url: string | null
           last_name: string | null
           lifecycle_stage: Database["public"]["Enums"]["lifecycle_stage"] | null
+          marketing_campaign_id: string | null
           nationality: string | null
           organization_id: string
           owner_user_id: string | null
           phone: string | null
+          referrer_url: string | null
           rg: string | null
           rg_issuer: string | null
           source: string | null
@@ -1247,8 +1339,10 @@ export type Database = {
           updated_at: string | null
           updated_by: string | null
           utm_campaign: string | null
+          utm_content: string | null
           utm_medium: string | null
           utm_source: string | null
+          utm_term: string | null
         }
         Insert: {
           ad_referral_body?: string | null
@@ -1264,6 +1358,8 @@ export type Database = {
           address_state?: string | null
           address_street?: string | null
           address_zip?: string | null
+          client_ip_address?: unknown
+          client_user_agent?: string | null
           company_id?: string | null
           company_name?: string | null
           cpf?: string | null
@@ -1272,18 +1368,23 @@ export type Database = {
           deleted_at?: string | null
           do_not_contact?: boolean | null
           email?: string | null
+          fbclid?: string | null
           first_name?: string | null
           full_name: string
+          gclid?: string | null
           id?: string
           is_sample?: boolean | null
+          landing_url?: string | null
           last_name?: string | null
           lifecycle_stage?:
             | Database["public"]["Enums"]["lifecycle_stage"]
             | null
+          marketing_campaign_id?: string | null
           nationality?: string | null
           organization_id: string
           owner_user_id?: string | null
           phone?: string | null
+          referrer_url?: string | null
           rg?: string | null
           rg_issuer?: string | null
           source?: string | null
@@ -1291,8 +1392,10 @@ export type Database = {
           updated_at?: string | null
           updated_by?: string | null
           utm_campaign?: string | null
+          utm_content?: string | null
           utm_medium?: string | null
           utm_source?: string | null
+          utm_term?: string | null
         }
         Update: {
           ad_referral_body?: string | null
@@ -1308,6 +1411,8 @@ export type Database = {
           address_state?: string | null
           address_street?: string | null
           address_zip?: string | null
+          client_ip_address?: unknown
+          client_user_agent?: string | null
           company_id?: string | null
           company_name?: string | null
           cpf?: string | null
@@ -1316,18 +1421,23 @@ export type Database = {
           deleted_at?: string | null
           do_not_contact?: boolean | null
           email?: string | null
+          fbclid?: string | null
           first_name?: string | null
           full_name?: string
+          gclid?: string | null
           id?: string
           is_sample?: boolean | null
+          landing_url?: string | null
           last_name?: string | null
           lifecycle_stage?:
             | Database["public"]["Enums"]["lifecycle_stage"]
             | null
+          marketing_campaign_id?: string | null
           nationality?: string | null
           organization_id?: string
           owner_user_id?: string | null
           phone?: string | null
+          referrer_url?: string | null
           rg?: string | null
           rg_issuer?: string | null
           source?: string | null
@@ -1335,8 +1445,10 @@ export type Database = {
           updated_at?: string | null
           updated_by?: string | null
           utm_campaign?: string | null
+          utm_content?: string | null
           utm_medium?: string | null
           utm_source?: string | null
+          utm_term?: string | null
         }
         Relationships: [
           {
@@ -1344,6 +1456,13 @@ export type Database = {
             columns: ["company_id"]
             isOneToOne: false
             referencedRelation: "companies"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "contacts_marketing_campaign_id_fkey"
+            columns: ["marketing_campaign_id"]
+            isOneToOne: false
+            referencedRelation: "marketing_campaigns"
             referencedColumns: ["id"]
           },
           {
@@ -2545,6 +2664,182 @@ export type Database = {
           },
         ]
       }
+      marketing_campaign_spend_history: {
+        Row: {
+          clicks: number | null
+          created_at: string
+          id: string
+          impressions: number | null
+          leads_attributed: number | null
+          marketing_campaign_id: string
+          organization_id: string
+          spend_cents: number
+          spend_currency: string
+          synced_at: string
+          updated_at: string
+          year_month: string
+        }
+        Insert: {
+          clicks?: number | null
+          created_at?: string
+          id?: string
+          impressions?: number | null
+          leads_attributed?: number | null
+          marketing_campaign_id: string
+          organization_id: string
+          spend_cents?: number
+          spend_currency?: string
+          synced_at?: string
+          updated_at?: string
+          year_month: string
+        }
+        Update: {
+          clicks?: number | null
+          created_at?: string
+          id?: string
+          impressions?: number | null
+          leads_attributed?: number | null
+          marketing_campaign_id?: string
+          organization_id?: string
+          spend_cents?: number
+          spend_currency?: string
+          synced_at?: string
+          updated_at?: string
+          year_month?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "marketing_campaign_spend_history_marketing_campaign_id_fkey"
+            columns: ["marketing_campaign_id"]
+            isOneToOne: false
+            referencedRelation: "marketing_campaigns"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "marketing_campaign_spend_history_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      marketing_campaigns: {
+        Row: {
+          ad_id: string | null
+          ad_name: string | null
+          adset_id: string | null
+          adset_name: string | null
+          campaign_id: string | null
+          campaign_name: string | null
+          campaign_objective: string | null
+          channel: string
+          clicks: number | null
+          created_at: string
+          creative_body: string | null
+          creative_headline: string | null
+          creative_id: string | null
+          creative_name: string | null
+          creative_thumbnail_url: string | null
+          deleted_at: string | null
+          destination_url: string | null
+          display_hierarchy: string | null
+          display_name: string | null
+          external_id: string
+          id: string
+          impressions: number | null
+          last_synced_at: string | null
+          metrics_synced_at: string | null
+          organization_id: string
+          platform: string
+          platform_data: Json | null
+          spend_currency: string | null
+          spend_total_cents: number | null
+          status: string | null
+          sync_error: string | null
+          sync_status: string | null
+          updated_at: string
+        }
+        Insert: {
+          ad_id?: string | null
+          ad_name?: string | null
+          adset_id?: string | null
+          adset_name?: string | null
+          campaign_id?: string | null
+          campaign_name?: string | null
+          campaign_objective?: string | null
+          channel: string
+          clicks?: number | null
+          created_at?: string
+          creative_body?: string | null
+          creative_headline?: string | null
+          creative_id?: string | null
+          creative_name?: string | null
+          creative_thumbnail_url?: string | null
+          deleted_at?: string | null
+          destination_url?: string | null
+          display_hierarchy?: string | null
+          display_name?: string | null
+          external_id: string
+          id?: string
+          impressions?: number | null
+          last_synced_at?: string | null
+          metrics_synced_at?: string | null
+          organization_id: string
+          platform: string
+          platform_data?: Json | null
+          spend_currency?: string | null
+          spend_total_cents?: number | null
+          status?: string | null
+          sync_error?: string | null
+          sync_status?: string | null
+          updated_at?: string
+        }
+        Update: {
+          ad_id?: string | null
+          ad_name?: string | null
+          adset_id?: string | null
+          adset_name?: string | null
+          campaign_id?: string | null
+          campaign_name?: string | null
+          campaign_objective?: string | null
+          channel?: string
+          clicks?: number | null
+          created_at?: string
+          creative_body?: string | null
+          creative_headline?: string | null
+          creative_id?: string | null
+          creative_name?: string | null
+          creative_thumbnail_url?: string | null
+          deleted_at?: string | null
+          destination_url?: string | null
+          display_hierarchy?: string | null
+          display_name?: string | null
+          external_id?: string
+          id?: string
+          impressions?: number | null
+          last_synced_at?: string | null
+          metrics_synced_at?: string | null
+          organization_id?: string
+          platform?: string
+          platform_data?: Json | null
+          spend_currency?: string | null
+          spend_total_cents?: number | null
+          status?: string | null
+          sync_error?: string | null
+          sync_status?: string | null
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "marketing_campaigns_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       message_thread_reads: {
         Row: {
           last_read_at: string
@@ -2948,6 +3243,8 @@ export type Database = {
       opportunities: {
         Row: {
           amount: number | null
+          attribution_data: Json | null
+          attribution_locked_at: string | null
           close_date: string | null
           company_id: string | null
           contact_id: string | null
@@ -2957,6 +3254,7 @@ export type Database = {
           deleted_at: string | null
           id: string
           is_sample: boolean | null
+          marketing_campaign_id: string | null
           organization_id: string
           owner_user_id: string | null
           pipeline_stage_id: string
@@ -2966,9 +3264,16 @@ export type Database = {
           title: string
           updated_at: string | null
           updated_by: string | null
+          utm_campaign: string | null
+          utm_content: string | null
+          utm_medium: string | null
+          utm_source: string | null
+          utm_term: string | null
         }
         Insert: {
           amount?: number | null
+          attribution_data?: Json | null
+          attribution_locked_at?: string | null
           close_date?: string | null
           company_id?: string | null
           contact_id?: string | null
@@ -2978,6 +3283,7 @@ export type Database = {
           deleted_at?: string | null
           id?: string
           is_sample?: boolean | null
+          marketing_campaign_id?: string | null
           organization_id: string
           owner_user_id?: string | null
           pipeline_stage_id: string
@@ -2987,9 +3293,16 @@ export type Database = {
           title: string
           updated_at?: string | null
           updated_by?: string | null
+          utm_campaign?: string | null
+          utm_content?: string | null
+          utm_medium?: string | null
+          utm_source?: string | null
+          utm_term?: string | null
         }
         Update: {
           amount?: number | null
+          attribution_data?: Json | null
+          attribution_locked_at?: string | null
           close_date?: string | null
           company_id?: string | null
           contact_id?: string | null
@@ -2999,6 +3312,7 @@ export type Database = {
           deleted_at?: string | null
           id?: string
           is_sample?: boolean | null
+          marketing_campaign_id?: string | null
           organization_id?: string
           owner_user_id?: string | null
           pipeline_stage_id?: string
@@ -3008,6 +3322,11 @@ export type Database = {
           title?: string
           updated_at?: string | null
           updated_by?: string | null
+          utm_campaign?: string | null
+          utm_content?: string | null
+          utm_medium?: string | null
+          utm_source?: string | null
+          utm_term?: string | null
         }
         Relationships: [
           {
@@ -3022,6 +3341,13 @@ export type Database = {
             columns: ["contact_id"]
             isOneToOne: false
             referencedRelation: "contacts"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "opportunities_marketing_campaign_id_fkey"
+            columns: ["marketing_campaign_id"]
+            isOneToOne: false
+            referencedRelation: "marketing_campaigns"
             referencedColumns: ["id"]
           },
           {
@@ -4140,51 +4466,6 @@ export type Database = {
         }
         Relationships: []
       }
-      webhook_debug_logs: {
-        Row: {
-          body_preview: string | null
-          created_at: string | null
-          from_number: string | null
-          has_ctwa_clid: boolean | null
-          has_referral: boolean | null
-          id: string
-          message_sid: string | null
-          org_id_from_url: string | null
-          raw_headers: Json | null
-          raw_params: Json
-          to_number: string | null
-          webhook_path: string | null
-        }
-        Insert: {
-          body_preview?: string | null
-          created_at?: string | null
-          from_number?: string | null
-          has_ctwa_clid?: boolean | null
-          has_referral?: boolean | null
-          id?: string
-          message_sid?: string | null
-          org_id_from_url?: string | null
-          raw_headers?: Json | null
-          raw_params: Json
-          to_number?: string | null
-          webhook_path?: string | null
-        }
-        Update: {
-          body_preview?: string | null
-          created_at?: string | null
-          from_number?: string | null
-          has_ctwa_clid?: boolean | null
-          has_referral?: boolean | null
-          id?: string
-          message_sid?: string | null
-          org_id_from_url?: string | null
-          raw_headers?: Json | null
-          raw_params?: Json
-          to_number?: string | null
-          webhook_path?: string | null
-        }
-        Relationships: []
-      }
       webhook_field_mappings: {
         Row: {
           created_at: string | null
@@ -4383,6 +4664,15 @@ export type Database = {
       current_user_id: { Args: never; Returns: string }
       current_user_managed_org_ids: { Args: never; Returns: string[] }
       current_user_org_ids: { Args: never; Returns: string[] }
+      fn_capi_dispatch_event: {
+        Args: {
+          p_contact_id?: string
+          p_event_name: string
+          p_opportunity_id?: string
+          p_organization_id: string
+        }
+        Returns: undefined
+      }
       get_dashboard_stats: {
         Args: {
           p_days_ago?: number
