@@ -1331,6 +1331,7 @@ export type Database = {
           organization_id: string
           owner_user_id: string | null
           phone: string | null
+          phone_normalized: string | null
           referrer_url: string | null
           rg: string | null
           rg_issuer: string | null
@@ -1384,6 +1385,7 @@ export type Database = {
           organization_id: string
           owner_user_id?: string | null
           phone?: string | null
+          phone_normalized?: string | null
           referrer_url?: string | null
           rg?: string | null
           rg_issuer?: string | null
@@ -1437,6 +1439,7 @@ export type Database = {
           organization_id?: string
           owner_user_id?: string | null
           phone?: string | null
+          phone_normalized?: string | null
           referrer_url?: string | null
           rg?: string | null
           rg_issuer?: string | null
@@ -1480,6 +1483,51 @@ export type Database = {
             referencedColumns: ["id"]
           },
         ]
+      }
+      contacts_merge_log: {
+        Row: {
+          id: string
+          keeper_email_before: string | null
+          keeper_full_name_before: string | null
+          keeper_id: string
+          keeper_phone_before: string | null
+          loser_email: string | null
+          loser_full_name: string | null
+          loser_id: string
+          loser_phone_before: string | null
+          merged_at: string
+          organization_id: string
+          phone_canonical: string
+        }
+        Insert: {
+          id?: string
+          keeper_email_before?: string | null
+          keeper_full_name_before?: string | null
+          keeper_id: string
+          keeper_phone_before?: string | null
+          loser_email?: string | null
+          loser_full_name?: string | null
+          loser_id: string
+          loser_phone_before?: string | null
+          merged_at?: string
+          organization_id: string
+          phone_canonical: string
+        }
+        Update: {
+          id?: string
+          keeper_email_before?: string | null
+          keeper_full_name_before?: string | null
+          keeper_id?: string
+          keeper_phone_before?: string | null
+          loser_email?: string | null
+          loser_full_name?: string | null
+          loser_id?: string
+          loser_phone_before?: string | null
+          merged_at?: string
+          organization_id?: string
+          phone_canonical?: string
+        }
+        Relationships: []
       }
       coupon_redemptions: {
         Row: {
@@ -5018,6 +5066,7 @@ export type Database = {
         Returns: Json
       }
       is_admin_user: { Args: never; Returns: boolean }
+      normalize_phone_br: { Args: { phone_input: string }; Returns: string }
       record_failed_admin_login: {
         Args: { p_email: string; p_ip: string }
         Returns: undefined
