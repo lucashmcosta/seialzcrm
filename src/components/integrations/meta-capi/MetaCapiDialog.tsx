@@ -109,6 +109,12 @@ export function MetaCapiDialog({ open, onOpenChange, integration, orgIntegration
     }
   }, [open, isConnected]);
 
+  useEffect(() => {
+    if (open && !isConnected) {
+      setMode(hasMetaLeadAds ? "reuse" : "manual");
+    }
+  }, [open, isConnected, hasMetaLeadAds]);
+
   const { data: events, isLoading: loadingEvents, refetch: refetchEvents } = useQuery({
     queryKey: ["capi_event_log", organization?.id, filter],
     enabled: !!organization?.id && open && isConnected && tab === "events",
