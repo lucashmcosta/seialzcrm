@@ -241,6 +241,87 @@ export function KommoOutboundTab({ integrationId, integrationSlug }: Props) {
 
       <Card>
         <CardHeader>
+          <CardTitle>Mapeamento de Estagios</CardTitle>
+          <CardDescription>
+            Vincule cada estagio do Seialz a um status no Kommo. Sem mapeamento, mudancas de estagio nao sao replicadas.
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          {!subdomain || !accessToken ? (
+            <p className="text-sm text-muted-foreground">
+              Configure subdomain e access_token na aba Geral antes de mapear estagios.
+            </p>
+          ) : loadingKommo ? (
+            <p className="text-sm text-muted-foreground">Carregando pipelines do Kommo...</p>
+          ) : !kommoPipelines || kommoPipelines.length === 0 ? (
+            <div className="space-y-2">
+              <p className="text-sm text-muted-foreground">Nao foi possivel carregar pipelines do Kommo.</p>
+              <Button variant="outline" size="sm" onClick={() => refetchKommo()}>Tentar novamente</Button>
+            </div>
+          ) : (
+            <>
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>Estagio Seialz</TableHead>
+                    <TableHead>Tipo</TableHead>
+                    <TableHead>Pipeline + Status no Kommo</TableHead>
+                    <TableHead>Status</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {(internalStages || []).map((s: any) => {
+                    const value = mappingDraft[s.id] || '';
+                    return (
+                      <TableRow key={s.id}>
+                        <TableCell className="font-medium">{s.name}</TableCell>
+                        <TableCell className="text-sm text-muted-foreground">{s.type}</TableCell>
+                        <TableCell>
+                          <Select
+                            value={value}
+                            onValueChange={(v) => setMappingDraft((prev) => ({ ...prev, [s.id]: v }))}
+                          >
+                            <SelectTrigger className="w-80">
+                              <SelectValue placeholder="Selecione..." />
+                            </SelectTrigger>
+                            <SelectContent>
+                              {kommoPipelines.map((p) => (
+                                <div key={p.id}>
+                                  <div className="px-2 py-1 text-xs font-semibold text-muted-foreground">{p.name}</div>
+                                  {p.stages.map((st) => (
+                                    <SelectItem key={`${p.id}:${st.id}`} value={`${p.id}:${st.id}`}>
+                                      {st.name}
+                                    </SelectItem>
+                                  ))}
+                                </div>
+                              ))}
+                            </SelectContent>
+                          </Select>
+                        </TableCell>
+                        <TableCell>
+                          {value ? (
+                            <Badge variant="default">Mapeado</Badge>
+                          ) : (
+                            <Badge variant="outline">Nao mapeado</Badge>
+                          )}
+                        </TableCell>
+                      </TableRow>
+                    );
+                  })}
+                </TableBody>
+              </Table>
+              <div className="flex justify-end">
+                <Button onClick={handleSaveMapping} disabled={savingMapping}>
+                  {savingMapping ? 'Salvando...' : 'Salvar mapeamento'}
+                </Button>
+              </div>
+            </>
+          )}
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader>
           <CardTitle>Ultimos 20 jobs</CardTitle>
           <CardDescription>Atualiza automaticamente a cada 10 segundos.</CardDescription>
         </CardHeader>
