@@ -1,39 +1,56 @@
-## Phase 4 — Loop-guard + UI admin (pulando re-teste no Kommo)
+## Phase 5 — Wizard de `stage_mapping` + Validação de `opportunity.stage_changed`
 
-Status: backend E2E já validado internamente (event → job → handler → PATCH Kommo). Falha foi 400 "Not enough rights" do lado da Kommo, fora do nosso escopo. Seguimos.
+### Objetivo
+Permitir mapear visualmente os estágios do CRM ↔ status do Kommo e validar que mover um card no kanban dispara PATCH correto no Kommo.
 
-### 1. Loop-guard no `kommo-migrate`
+---
 
-Problema: importer faz INSERT/UPDATE em massa de contatos/oportunidades. Cada linha dispara o trigger `fn_publish_integration_event` → cria evento outbound → worker tenta empurrar de volta pra Kommo → loop infinito de milhares de jobs.
+### Parte 1 — Wizard de Stage Mapping (UI)
 
-Solução: criar 2 RPCs `SECURITY DEFINER` que rodam dentro de uma transação com `SET LOCAL app.skip_event_emit = 'true'` e fazem o upsert em lote:
-- `rpc_kommo_bulk_upsert_contacts(p_org uuid, p_rows jsonb)`
-- `rpc_kommo_bulk_upsert_opportunities(p_org uuid, p_rows jsonb)`
+**Onde:** nova sub-aba "Mapeamento de Estágios" dentro de `KommoOutboundTab.tsx` (já criado na Phase 4), abaixo do toggle de outbound.
 
-O trigger `fn_publish_integration_event` já checa `current_setting('app.skip_event_emit', true)` — só precisamos garantir que o flag esteja setado durante o import.
+**Comportamento:**
+1. Buscar `pipeline_stages` da org (internos do CRM) agrupados por `pipeline_id`.
+2. Buscar pipelines/statuses do Kommo via nova edge function `kommo-list-pipelines` (GET `/api/v4/leads/pipelines` usando o `access_token` armazenado em `config_values`).
+3. Renderizar tabela: cada linha = stage interno; coluna direita = `<Select>` com os statuses do Kommo (filtrados pelo pipeline correspondente).
+4. Botão "Salvar" persiste em `integrations.config_values.stage_mapping` no formato:
+   ```json
+   { "stage_mapping": { "<internal_stage_id>": { "kommo_pipeline_id": 123, "kommo_status_id": 456 } } }
+   ```
+5. Indicador visual de stages ainda não mapeados (badge "Não mapeado").
 
-Refatorar `kommo-migrate/index.ts` pra chamar essas RPCs em vez do `.upsert()` direto do supabase-js.
+**Backend:**
+- Nova edge function `kommo-list-pipelines` (read-only, usa `subdomain` + `access_token` da integração da org selecionada).
+- Reutilizar o handler existente de Kommo para PATCH (já lê `config_values.stage_mapping` no `kommo.ts`).
 
-### 2. UI admin: aba "Outbound" no detalhe da integração Kommo
+---
 
-Em `src/pages/admin/AdminIntegrationDetail.tsx`, adicionar aba "Outbound" (visível só pro slug `kommo`) com:
+### Parte 2 — Validação `opportunity.stage_changed` end-to-end
 
-- **Toggle "Sincronizar alterações pra Kommo"** — persiste em `organization_integrations.config_values.outbound_enabled`. Worker já checa essa flag antes de processar.
-- **Lista dos últimos 20 jobs** (`integration_jobs` filtrado por org + slug=`kommo`), com colunas: timestamp, evento, entidade, status (success/transient/permanent), HTTP status, duração, botão "Ver payload" (abre dialog com `request_payload` + `response_payload`).
-- **Botão "Reprocessar"** em jobs com status `permanent` ou `transient` esgotado — reseta `attempts=0` e `next_attempt_at=now()`.
+**Pré-requisito:** Phase 1-4 já em produção (trigger emite evento, worker processa, loop-guard ativo).
 
-Sem mudar layout global — usa `AdminLayout` que já está lá, sem `p-8` extra, header só com título.
+**Roteiro de teste manual (Blueviza):**
+1. Configurar `stage_mapping` via wizard pra pelo menos 2 stages.
+2. Mover 1 card no kanban do CRM de stage A → stage B.
+3. Verificar:
+   - `integration_jobs` recebeu nova linha `event='opportunity.stage_changed'`, `status='pending'`.
+   - Worker processou (`status='success'`, `last_http_status=200`).
+   - Card no Kommo mudou de status (verificação manual no Kommo).
+4. Caso falhe: usar a aba Outbound (Phase 4) pra inspecionar payload + response e reprocessar.
 
-### 3. O que NÃO faço nesta fase
-- Não re-testo PATCH na Kommo (token Blueviza sem permissão de escrita — bloqueio externo)
-- Não configuro `stage_mapping` (próxima fase, junto com wizard)
-- Não mexo na Campoar ainda
+**Sem código novo nessa parte** — só execução do teste e correções pontuais se aparecerem.
+
+---
 
 ### Detalhes técnicos
-- RPCs ficam em `public` schema, `SECURITY DEFINER`, `SET search_path = public`, com check `has_role(auth.uid(), 'admin')` ou validação de service_role
-- Aba Outbound só renderiza se `integration.slug === 'kommo'`
-- Query dos jobs com `react-query`, refetch a cada 10s
-- Reprocessar usa um RPC simples `rpc_retry_integration_job(p_job_id uuid)` que valida org via RLS
 
-### Próxima fase (5)
-Wizard pra configurar `stage_mapping` + replicar setup pra Campoar + validar `opportunity.stage_changed`.
+- **Edge function `kommo-list-pipelines`**: aceita `{ organization_id }`, valida que o usuário é admin da org via `current_user_id()`, faz GET no Kommo, retorna `[{ id, name, statuses: [{id, name, color}] }]`.
+- **Persistência do mapping**: usar `update integrations set config_values = config_values || jsonb_build_object('stage_mapping', ...) where id = $1` (não destrói outras chaves).
+- **Migration**: nenhuma necessária (`config_values` já é jsonb).
+
+---
+
+### Fora de escopo
+- Replicar pra outras orgs (Campoar etc.) — só Blueviza.
+- Mapeamento reverso (Kommo → CRM) — fluxo é unidirecional.
+- Wizard pra mapear pipelines inteiros — só stages dentro de um pipeline já configurado.
