@@ -1,56 +1,72 @@
-## Phase 5 — Wizard de `stage_mapping` + Validação de `opportunity.stage_changed`
+## Problema
 
-### Objetivo
-Permitir mapear visualmente os estágios do CRM ↔ status do Kommo e validar que mover um card no kanban dispara PATCH correto no Kommo.
+Na aba **Outbound** de `/admin/integrations/:id` (Kommo), a tabela "Mapeamento de Estágios" aparece vazia para qualquer org que o super-admin não seja membro. Causa: o componente faz `supabase.from('pipeline_stages').select(...).eq('organization_id', selectedOrgId)` direto do client, e a RLS de `pipeline_stages` exige que o usuário pertença à org (`user_has_org_access`). O super-admin Seialz não pertence à Blueviza, então retorna 0 linhas mesmo havendo 5 estágios.
 
----
+A consulta do Kommo (pipelines/statuses) já funciona porque é feita via edge function autenticada pelo `access_token` da org, sem passar por RLS.
 
-### Parte 1 — Wizard de Stage Mapping (UI)
+## Solução
 
-**Onde:** nova sub-aba "Mapeamento de Estágios" dentro de `KommoOutboundTab.tsx` (já criado na Phase 4), abaixo do toggle de outbound.
+Criar um RPC `security definer` que retorne os estágios de qualquer org, restrito a super-admins, e trocar a query do client por esse RPC.
 
-**Comportamento:**
-1. Buscar `pipeline_stages` da org (internos do CRM) agrupados por `pipeline_id`.
-2. Buscar pipelines/statuses do Kommo via nova edge function `kommo-list-pipelines` (GET `/api/v4/leads/pipelines` usando o `access_token` armazenado em `config_values`).
-3. Renderizar tabela: cada linha = stage interno; coluna direita = `<Select>` com os statuses do Kommo (filtrados pelo pipeline correspondente).
-4. Botão "Salvar" persiste em `integrations.config_values.stage_mapping` no formato:
-   ```json
-   { "stage_mapping": { "<internal_stage_id>": { "kommo_pipeline_id": 123, "kommo_status_id": 456 } } }
-   ```
-5. Indicador visual de stages ainda não mapeados (badge "Não mapeado").
+### 1. Migration: novo RPC
 
-**Backend:**
-- Nova edge function `kommo-list-pipelines` (read-only, usa `subdomain` + `access_token` da integração da org selecionada).
-- Reutilizar o handler existente de Kommo para PATCH (já lê `config_values.stage_mapping` no `kommo.ts`).
+```sql
+create or replace function public.admin_list_pipeline_stages(p_org_id uuid)
+returns table (
+  id uuid,
+  name text,
+  order_index int,
+  type text
+)
+language plpgsql
+stable
+security definer
+set search_path = public
+as $$
+begin
+  if not public.is_super_admin(public.current_user_id()) then
+    raise exception 'forbidden';
+  end if;
 
----
+  return query
+    select ps.id, ps.name, ps.order_index, ps.type::text
+    from public.pipeline_stages ps
+    where ps.organization_id = p_org_id
+    order by ps.order_index;
+end;
+$$;
 
-### Parte 2 — Validação `opportunity.stage_changed` end-to-end
+revoke all on function public.admin_list_pipeline_stages(uuid) from public;
+grant execute on function public.admin_list_pipeline_stages(uuid) to authenticated;
+```
 
-**Pré-requisito:** Phase 1-4 já em produção (trigger emite evento, worker processa, loop-guard ativo).
+(Se o nome da função de checagem de super-admin for diferente — `is_admin`, `has_role(..., 'super_admin')` etc. — uso a que já existir no projeto. Verifico antes de escrever.)
 
-**Roteiro de teste manual (Blueviza):**
-1. Configurar `stage_mapping` via wizard pra pelo menos 2 stages.
-2. Mover 1 card no kanban do CRM de stage A → stage B.
-3. Verificar:
-   - `integration_jobs` recebeu nova linha `event='opportunity.stage_changed'`, `status='pending'`.
-   - Worker processou (`status='success'`, `last_http_status=200`).
-   - Card no Kommo mudou de status (verificação manual no Kommo).
-4. Caso falhe: usar a aba Outbound (Phase 4) pra inspecionar payload + response e reprocessar.
+### 2. Frontend: `src/components/admin/KommoOutboundTab.tsx`
 
-**Sem código novo nessa parte** — só execução do teste e correções pontuais se aparecerem.
+Trocar o `useQuery` `internal-stages` para chamar o RPC:
 
----
+```ts
+const { data: internalStages } = useQuery({
+  queryKey: ['admin-internal-stages', selectedOrgId],
+  queryFn: async () => {
+    const { data, error } = await supabase.rpc('admin_list_pipeline_stages', {
+      p_org_id: selectedOrgId,
+    });
+    if (error) throw error;
+    return data || [];
+  },
+  enabled: !!selectedOrgId,
+});
+```
 
-### Detalhes técnicos
+### 3. Validação
 
-- **Edge function `kommo-list-pipelines`**: aceita `{ organization_id }`, valida que o usuário é admin da org via `current_user_id()`, faz GET no Kommo, retorna `[{ id, name, statuses: [{id, name, color}] }]`.
-- **Persistência do mapping**: usar `update integrations set config_values = config_values || jsonb_build_object('stage_mapping', ...) where id = $1` (não destrói outras chaves).
-- **Migration**: nenhuma necessária (`config_values` já é jsonb).
+- Verifico no banco qual função existente identifica super-admin (provavelmente `is_super_admin` ou `has_role`).
+- Após a migration, abrir `/admin/integrations/:kommo/Outbound` com a Blueviza selecionada e confirmar que os 5 estágios aparecem com seus selects de mapeamento.
+- Sanity check: usuário comum não consegue chamar o RPC (retorna `forbidden`).
 
----
+## Fora do escopo
 
-### Fora de escopo
-- Replicar pra outras orgs (Campoar etc.) — só Blueviza.
-- Mapeamento reverso (Kommo → CRM) — fluxo é unidirecional.
-- Wizard pra mapear pipelines inteiros — só stages dentro de um pipeline já configurado.
+- Mapeamento de owners e responsáveis (já é Step 3 separado).
+- Mudar a forma como o Kommo é consultado (continua via edge function).
