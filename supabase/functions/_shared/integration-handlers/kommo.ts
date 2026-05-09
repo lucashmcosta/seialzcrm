@@ -205,6 +205,14 @@ export const kommoUpsertHandler: Handler = async (ctx): Promise<HandlerResult> =
     };
   }
 
+  // Outbound disabled na config da org? Marca como permanente pra nao retentar em loop.
+  if (cfg.outbound_enabled === false) {
+    return {
+      classification: Classification.Permanent,
+      error: "Outbound sync disabled for this organization",
+    };
+  }
+
   const baseUrl = kommoBaseUrl(cfg.subdomain);
   const headers = authHeaders(cfg.access_token);
   const entityType = aggregateType as "contact" | "opportunity";
