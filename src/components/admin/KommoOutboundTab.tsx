@@ -104,13 +104,11 @@ export function KommoOutboundTab({ integrationId, integrationSlug }: Props) {
   const accessToken = cfg.access_token as string | undefined;
 
   const { data: internalStages } = useQuery({
-    queryKey: ['internal-stages', selectedOrgId],
+    queryKey: ['admin-internal-stages', selectedOrgId],
     queryFn: async () => {
-      const { data, error } = await supabase
-        .from('pipeline_stages')
-        .select('id, name, order_index, type')
-        .eq('organization_id', selectedOrgId)
-        .order('order_index');
+      const { data, error } = await supabase.rpc('admin_list_pipeline_stages', {
+        p_org_id: selectedOrgId,
+      });
       if (error) throw error;
       return data || [];
     },

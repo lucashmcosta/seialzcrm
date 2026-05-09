@@ -5009,6 +5009,15 @@ export type Database = {
       }
     }
     Functions: {
+      admin_list_pipeline_stages: {
+        Args: { p_org_id: string }
+        Returns: {
+          id: string
+          name: string
+          order_index: number
+          type: string
+        }[]
+      }
       assign_round_robin: { Args: { _org_id: string }; Returns: string }
       can_manage_integrations_in_org: {
         Args: { _org_id: string }
