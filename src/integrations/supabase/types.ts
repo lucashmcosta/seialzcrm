@@ -5108,6 +5108,14 @@ export type Database = {
         Args: { p_job_id: string }
         Returns: undefined
       }
+      rpc_kommo_upsert_contact: {
+        Args: { p_data: Json; p_existing_id: string }
+        Returns: string
+      }
+      rpc_kommo_upsert_opportunity: {
+        Args: { p_data: Json; p_existing_id: string }
+        Returns: string
+      }
       rpc_list_message_threads: {
         Args: {
           p_assigned_user_id?: string
