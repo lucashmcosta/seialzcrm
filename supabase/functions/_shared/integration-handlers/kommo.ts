@@ -15,6 +15,9 @@ interface KommoConfig {
   stage_mapping?: Record<string, string | { pipeline_id: number; status_id: number }>;
   // Pipeline default quando o mapping vier no formato legado simples
   default_pipeline_id?: number;
+  // Toggle por org pra desligar a sincronizacao outbound sem desativar a integracao toda.
+  // Default: true (se nao setado, considera ligado).
+  outbound_enabled?: boolean;
 }
 
 function sanitizeSubdomain(raw: string): string {
@@ -199,6 +202,14 @@ export const kommoUpsertHandler: Handler = async (ctx): Promise<HandlerResult> =
     return {
       classification: Classification.Permanent,
       error: "Kommo integration not configured or disabled for this organization",
+    };
+  }
+
+  // Outbound disabled na config da org? Marca como permanente pra nao retentar em loop.
+  if (cfg.outbound_enabled === false) {
+    return {
+      classification: Classification.Permanent,
+      error: "Outbound sync disabled for this organization",
     };
   }
 

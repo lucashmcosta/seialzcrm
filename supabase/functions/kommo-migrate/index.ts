@@ -340,11 +340,23 @@ Deno.serve(async (req) => {
               
               if (ex) {
                 if (dupMode === "skip") { sc++; cMap[String(ct.id)] = ex.id; continue; }
-                if (dupMode === "update") { await sb.from("contacts").update({ full_name: ct.name, email, phone, source_external_id: `kommo_${ct.id}`, company_id: compId || undefined, owner_user_id: owner || undefined, updated_at: updatedAt }).eq("id", ex.id); ic++; cIds.push(ex.id); cMap[String(ct.id)] = ex.id; continue; }
+                if (dupMode === "update") {
+                  // Loop-guard RPC: suprime trigger de outbound durante import
+                  const { error: ue } = await sb.rpc("rpc_kommo_upsert_contact", {
+                    p_existing_id: ex.id,
+                    p_data: { full_name: ct.name, email, phone, source_external_id: `kommo_${ct.id}`, company_id: compId, owner_user_id: owner || null, updated_at: updatedAt },
+                  });
+                  if (ue) errs.push({ type: "contact", kommo_id: ct.id, error: ue.message });
+                  else { ic++; cIds.push(ex.id); cMap[String(ct.id)] = ex.id; }
+                  continue;
+                }
               }
-              const { data: n, error: ie } = await sb.from("contacts").insert({ organization_id: orgId, full_name: ct.name || "Sem nome", email, phone, source: "kommo", source_external_id: `kommo_${ct.id}`, company_id: compId, owner_user_id: owner || null, created_at: createdAt, updated_at: updatedAt }).select("id").single();
+              const { data: nId, error: ie } = await sb.rpc("rpc_kommo_upsert_contact", {
+                p_existing_id: null,
+                p_data: { organization_id: orgId, full_name: ct.name || "Sem nome", email, phone, source_external_id: `kommo_${ct.id}`, company_id: compId, owner_user_id: owner || null, created_at: createdAt, updated_at: updatedAt },
+              });
               if (ie) errs.push({ type: "contact", kommo_id: ct.id, error: ie.message });
-              else { ic++; cIds.push(n.id); cMap[String(ct.id)] = n.id; }
+              else { ic++; cIds.push(nId as string); cMap[String(ct.id)] = nId as string; }
             } catch (e: any) { errs.push({ type: "contact", kommo_id: ct.id, error: e.message }); }
           }
           if (items.length < PS) { c.contacts_complete = true; c.phase = nextPhase("contacts", cfg); }
@@ -391,11 +403,22 @@ Deno.serve(async (req) => {
               
               if (ex) {
                 if (dupMode === "skip") { so++; continue; }
-                if (dupMode === "update") { await sb.from("opportunities").update({ title: ld.name, amount: ld.price || 0, pipeline_stage_id: stageId, contact_id: contactId, owner_user_id: owner || undefined, updated_at: updatedAt }).eq("id", ex.id); io++; oIds.push(ex.id); continue; }
+                if (dupMode === "update") {
+                  const { error: ue } = await sb.rpc("rpc_kommo_upsert_opportunity", {
+                    p_existing_id: ex.id,
+                    p_data: { title: ld.name, amount: ld.price || 0, pipeline_stage_id: stageId, contact_id: contactId, owner_user_id: owner || null, updated_at: updatedAt },
+                  });
+                  if (ue) errs.push({ type: "opportunity", kommo_id: ld.id, error: ue.message });
+                  else { io++; oIds.push(ex.id); }
+                  continue;
+                }
               }
-              const { data: n, error: oe } = await sb.from("opportunities").insert({ organization_id: orgId, contact_id: contactId, title: ld.name || "Lead sem título", amount: ld.price || 0, pipeline_stage_id: stageId, source: "kommo", source_external_id: `kommo_${ld.id}`, owner_user_id: owner || null, created_at: createdAt, updated_at: updatedAt }).select("id").single();
+              const { data: nId, error: oe } = await sb.rpc("rpc_kommo_upsert_opportunity", {
+                p_existing_id: null,
+                p_data: { organization_id: orgId, contact_id: contactId, title: ld.name || "Lead sem título", amount: ld.price || 0, pipeline_stage_id: stageId, source_external_id: `kommo_${ld.id}`, owner_user_id: owner || null, created_at: createdAt, updated_at: updatedAt },
+              });
               if (oe) errs.push({ type: "opportunity", kommo_id: ld.id, error: oe.message });
-              else { io++; oIds.push(n.id); }
+              else { io++; oIds.push(nId as string); }
             } catch (e: any) { errs.push({ type: "opportunity", kommo_id: ld.id, error: e.message }); }
           }
           if (items.length < PS) { c.leads_complete = true; c.phase = nextPhase("leads", cfg); }
