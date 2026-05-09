@@ -15,6 +15,9 @@ interface KommoConfig {
   stage_mapping?: Record<string, string | { pipeline_id: number; status_id: number }>;
   // Pipeline default quando o mapping vier no formato legado simples
   default_pipeline_id?: number;
+  // Toggle por org pra desligar a sincronizacao outbound sem desativar a integracao toda.
+  // Default: true (se nao setado, considera ligado).
+  outbound_enabled?: boolean;
 }
 
 function sanitizeSubdomain(raw: string): string {
