@@ -98,6 +98,80 @@ export function KommoOutboundTab({ integrationId, integrationSlug }: Props) {
     }
   };
 
+  // ---------- Stage Mapping ----------
+  const cfg = (currentOrg?.config_values as any) || {};
+  const subdomain = cfg.subdomain as string | undefined;
+  const accessToken = cfg.access_token as string | undefined;
+
+  const { data: internalStages } = useQuery({
+    queryKey: ['internal-stages', selectedOrgId],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from('pipeline_stages')
+        .select('id, name, order_index, type')
+        .eq('organization_id', selectedOrgId)
+        .order('order_index');
+      if (error) throw error;
+      return data || [];
+    },
+    enabled: !!selectedOrgId,
+  });
+
+  const { data: kommoPipelines, isLoading: loadingKommo, refetch: refetchKommo } = useQuery({
+    queryKey: ['kommo-pipelines', selectedOrgId, subdomain],
+    queryFn: async () => {
+      if (!subdomain || !accessToken) return [];
+      const { data, error } = await supabase.functions.invoke('kommo-fetch-pipelines', {
+        body: { subdomain, access_token: accessToken },
+      });
+      if (error) throw error;
+      return (data?.pipelines || []) as Array<{ id: number; name: string; stages: Array<{ id: number; name: string }> }>;
+    },
+    enabled: !!selectedOrgId && !!subdomain && !!accessToken,
+  });
+
+  const [mappingDraft, setMappingDraft] = useState<Record<string, string>>({});
+  const [savingMapping, setSavingMapping] = useState(false);
+
+  useEffect(() => {
+    const existing = (cfg.stage_mapping || {}) as Record<string, any>;
+    const draft: Record<string, string> = {};
+    for (const [k, v] of Object.entries(existing)) {
+      if (v && typeof v === 'object' && v.pipeline_id && v.status_id) {
+        draft[k] = `${v.pipeline_id}:${v.status_id}`;
+      } else if (typeof v === 'string' || typeof v === 'number') {
+        draft[k] = `${cfg.default_pipeline_id || ''}:${v}`;
+      }
+    }
+    setMappingDraft(draft);
+  }, [selectedOrgId, currentOrg?.id]);
+
+  const handleSaveMapping = async () => {
+    if (!currentOrg) return;
+    setSavingMapping(true);
+    try {
+      const stage_mapping: Record<string, { pipeline_id: number; status_id: number }> = {};
+      for (const [stageId, combo] of Object.entries(mappingDraft)) {
+        if (!combo) continue;
+        const [p, s] = combo.split(':');
+        if (!p || !s) continue;
+        stage_mapping[stageId] = { pipeline_id: Number(p), status_id: Number(s) };
+      }
+      const newConfig = { ...(currentOrg.config_values as any || {}), stage_mapping };
+      const { error } = await supabase
+        .from('organization_integrations')
+        .update({ config_values: newConfig })
+        .eq('id', currentOrg.id);
+      if (error) throw error;
+      toast.success('Mapeamento salvo');
+      queryClient.invalidateQueries({ queryKey: ['admin-integration-orgs', integrationId] });
+    } catch (e: any) {
+      toast.error('Erro ao salvar mapeamento: ' + e.message);
+    } finally {
+      setSavingMapping(false);
+    }
+  };
+
   const handleRetry = async (jobId: string) => {
     setRetryingId(jobId);
     try {
