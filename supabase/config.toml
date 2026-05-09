@@ -129,5 +129,14 @@ verify_jwt = false
 [functions.meta-lead-ads-token-health]
 verify_jwt = false
 
+[functions.meta-capi-connect]
+verify_jwt = true
+
+[functions.meta-capi-connect-from-existing]
+verify_jwt = true
+
+[functions.meta-capi-send-event]
+verify_jwt = false
+
 [functions.integration-worker]
 verify_jwt = false
