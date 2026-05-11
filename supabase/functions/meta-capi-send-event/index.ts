@@ -264,8 +264,26 @@ serve(async (req) => {
       actionSource = "website";
     }
 
+    // Meta business_messaging usa taxonomy diferente do web pixel.
+    // Doc: https://developers.facebook.com/docs/marketing-api/conversions-api/business-messaging-events
+    const translateEventNameForActionSource = (
+      logicalName: string,
+      actSource: string,
+    ): string => {
+      if (actSource === "business_messaging") {
+        const businessMessagingMap: Record<string, string> = {
+          Lead: "LeadSubmitted",
+          CompleteRegistration: "Subscribe",
+          // Purchase, InitiateCheckout, AddToCart permanecem iguais
+        };
+        return businessMessagingMap[logicalName] || logicalName;
+      }
+      return logicalName;
+    };
+    const finalEventName = translateEventNameForActionSource(event_name, actionSource);
+
     const eventPayload: Record<string, unknown> = {
-      event_name,
+      event_name: finalEventName,
       event_time: eventTime,
       event_id: eventId,
       action_source: actionSource,
