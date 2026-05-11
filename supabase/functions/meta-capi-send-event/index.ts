@@ -187,7 +187,7 @@ serve(async (req) => {
       const { data } = await admin
         .from("contacts")
         .select(
-          "id, first_name, last_name, full_name, email, phone, address_city, address_state, address_zip, ad_referral_ctwa_clid, fbclid, ad_referral_source_type"
+          "id, first_name, last_name, full_name, email, phone, address_city, address_state, address_zip, ad_referral_ctwa_clid, fbclid, ad_referral_source_type, source"
         )
         .eq("id", contact_id)
         .maybeSingle();
