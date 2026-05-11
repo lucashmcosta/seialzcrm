@@ -140,3 +140,6 @@ verify_jwt = false
 
 [functions.integration-worker]
 verify_jwt = false
+
+[functions.meta-capi-retry-cron]
+verify_jwt = false
