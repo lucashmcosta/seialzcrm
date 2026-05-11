@@ -149,3 +149,6 @@ verify_jwt = false
 
 [functions.marketing-insights-sync-daily]
 verify_jwt = false
+
+[functions.meta-discover-ads-cron]
+verify_jwt = false
