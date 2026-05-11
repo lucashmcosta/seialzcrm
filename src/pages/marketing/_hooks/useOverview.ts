@@ -68,14 +68,14 @@ async function fetchKPIs(orgId: string, from: Date, to: Date): Promise<OverviewK
     // Chunk if needed (here <= some hundred)
     const { data: opps } = await supabase
       .from('opportunities')
-      .select('status, value')
+      .select('status, amount')
       .in('contact_id', ids)
       .is('deleted_at', null);
     for (const o of opps || []) {
       if (o.status === 'open') opps_open++;
       else if (o.status === 'won') {
         wins++;
-        revenue += Number(o.value || 0);
+        revenue += Number(o.amount || 0);
       }
     }
   }
