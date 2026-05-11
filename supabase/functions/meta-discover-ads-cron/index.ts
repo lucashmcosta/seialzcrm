@@ -208,7 +208,7 @@ async function processOrg(
   let adsArchived = 0;
   const stale: string[] = [];
   for (const [extId, row] of existingByExt) {
-    if (!seen.has(extId) && row.status !== "ARCHIVED" && row.status !== "DELETED") {
+    if (!seen.has(extId) && row.status !== "archived" && row.status !== "deleted") {
       stale.push(row.id);
     }
   }
