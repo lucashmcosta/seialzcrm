@@ -1,3 +1,4 @@
+// force rebuild 2026-05-11T05:00 - raw inbound logging
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "npm:@supabase/supabase-js@2";
 
