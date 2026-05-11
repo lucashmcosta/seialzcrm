@@ -185,7 +185,7 @@ async function processOrg(
       destination_url: dest,
       display_name: ad.name ?? null,
       display_hierarchy: [ad.campaign?.name, ad.adset?.name, ad.name].filter(Boolean).join(" › "),
-      status: ad.effective_status ?? ad.status ?? null,
+      status: mapStatus(ad.effective_status ?? ad.status),
       sync_status: "success",
       sync_error: null,
       last_synced_at: new Date().toISOString(),
