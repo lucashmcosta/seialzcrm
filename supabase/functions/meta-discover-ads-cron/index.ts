@@ -91,6 +91,16 @@ async function fetchAllAds(
   return { ok: true, ads };
 }
 
+function mapStatus(s?: string | null): string {
+  if (!s) return "unknown";
+  const u = s.toUpperCase();
+  if (u === "ACTIVE") return "active";
+  if (u === "PAUSED" || u === "CAMPAIGN_PAUSED" || u === "ADSET_PAUSED") return "paused";
+  if (u === "ARCHIVED") return "archived";
+  if (u === "DELETED") return "deleted";
+  return "unknown";
+}
+
 function extractDestinationUrl(creative: any): string | null {
   const oss = creative?.object_story_spec;
   if (!oss) return null;
@@ -175,7 +185,7 @@ async function processOrg(
       destination_url: dest,
       display_name: ad.name ?? null,
       display_hierarchy: [ad.campaign?.name, ad.adset?.name, ad.name].filter(Boolean).join(" › "),
-      status: ad.effective_status ?? ad.status ?? null,
+      status: mapStatus(ad.effective_status ?? ad.status),
       sync_status: "success",
       sync_error: null,
       last_synced_at: new Date().toISOString(),
@@ -198,14 +208,14 @@ async function processOrg(
   let adsArchived = 0;
   const stale: string[] = [];
   for (const [extId, row] of existingByExt) {
-    if (!seen.has(extId) && row.status !== "ARCHIVED" && row.status !== "DELETED") {
+    if (!seen.has(extId) && row.status !== "archived" && row.status !== "deleted") {
       stale.push(row.id);
     }
   }
   if (stale.length > 0) {
     const { error: archErr } = await admin
       .from("marketing_campaigns")
-      .update({ status: "ARCHIVED", updated_at: new Date().toISOString() })
+      .update({ status: "archived", updated_at: new Date().toISOString() })
       .in("id", stale);
     if (!archErr) adsArchived = stale.length;
   }
