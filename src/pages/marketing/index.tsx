@@ -32,6 +32,7 @@ export default function MarketingOverview() {
 
   return (
     <MarketingLayout>
+      <SyncStatusCard orgId={orgId} />
       <PeriodFilter preset={preset} setPreset={setPreset} custom={custom} setCustom={setCustom} />
 
       {/* KPI grid 3x2 */}
