@@ -1,4 +1,4 @@
-// force rebuild 2026-05-11T05:00 - raw inbound logging
+// force rebuild 2026-05-11T05:30 - referral flat-notation parser fix
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "npm:@supabase/supabase-js@2";
 
@@ -311,22 +311,34 @@ serve(async (req) => {
       const numMedia = parseInt(params.NumMedia || '0')
       const originalRepliedMessageSid = params.OriginalRepliedMessageSid || null
 
-      // Extract CTWA (Click-to-WhatsApp Ads) Referral data
-      const referralSourceUrl = params['Referral.SourceUrl'] || null
-      const referralHeadline = params['Referral.Headline'] || null
-      const referralBody = params['Referral.Body'] || null
-      const referralMediaUrl = params['Referral.MediaUrl'] || null
-      const referralSourceId = params['Referral.SourceId'] || null
-      const referralSourceType = params['Referral.SourceType'] || null
-      const referralCtwaClid = params['Referral.CtwaClid'] || params['ReferralCtwaClid'] || null
-      const hasReferral = !!(referralSourceUrl || referralSourceId || referralCtwaClid)
+      // CTWA Referral extraction — Twilio envia notation FLAT (ReferralX),
+      // mas mantemos fallback para Referral.X caso o formato volte um dia.
+      const referralSourceUrl  = params['Referral.SourceUrl']  || params['ReferralSourceUrl']  || null
+      const referralHeadline   = params['Referral.Headline']   || params['ReferralHeadline']   || null
+      const referralBody       = params['Referral.Body']       || params['ReferralBody']       || null
+      const referralMediaUrl   = params['Referral.MediaUrl']   || params['ReferralMediaUrl']   || null
+      const referralSourceId   = params['Referral.SourceId']   || params['ReferralSourceId']   || null
+      const referralSourceType = params['Referral.SourceType'] || params['ReferralSourceType'] || null
+      const referralCtwaClid   = params['Referral.CtwaClid']   || params['ReferralCtwaClid']   || null
+      // hasReferral considera múltiplos sinais — alguns ads (posts orgânicos promovidos)
+      // mandam só headline+body sem source_id
+      const hasReferral = !!(
+        referralSourceUrl || referralSourceId || referralCtwaClid ||
+        referralHeadline || referralBody
+      )
 
-      if (hasReferral) {
-        console.log('CTWA Referral detected:', JSON.stringify({
-          referralSourceUrl, referralHeadline, referralSourceId, referralSourceType
-        }))
-      }
-      
+      console.log('[referral-parsing]', JSON.stringify({
+        hasReferral,
+        has_sourceUrl: !!referralSourceUrl,
+        has_sourceId: !!referralSourceId,
+        has_ctwaClid: !!referralCtwaClid,
+        has_headline: !!referralHeadline,
+        has_body: !!referralBody,
+        referral_keys_present: Object.keys(params).filter(k =>
+          k.toLowerCase().startsWith('referral')
+        ),
+      }))
+
       // Collect media URLs and content types
       const rawMediaUrls: string[] = []
       const contentTypes: string[] = []
