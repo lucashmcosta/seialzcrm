@@ -1630,7 +1630,7 @@ function DesktopMessagesList() {
                                       <span className="text-[11px] leading-[14px] text-muted-foreground/70 whitespace-nowrap">
                                         {isOutbound 
                                           ? (message.sender_name ? `${message.sender_name} · ` : '')
-                                          : (selectedThread?.contact_name ? `${selectedThread.contact_name} · ` : '')
+                                          : ''
                                         }
                                         {new Date(message.sent_at).toLocaleTimeString(locale, {
                                           hour: '2-digit',
