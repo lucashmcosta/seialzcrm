@@ -1469,6 +1469,20 @@ export type Database = {
             referencedColumns: ["id"]
           },
           {
+            foreignKeyName: "contacts_marketing_campaign_id_fkey"
+            columns: ["marketing_campaign_id"]
+            isOneToOne: false
+            referencedRelation: "vw_marketing_ad_performance"
+            referencedColumns: ["marketing_campaign_id"]
+          },
+          {
+            foreignKeyName: "contacts_marketing_campaign_id_fkey"
+            columns: ["marketing_campaign_id"]
+            isOneToOne: false
+            referencedRelation: "vw_marketing_funnel"
+            referencedColumns: ["marketing_campaign_id"]
+          },
+          {
             foreignKeyName: "contacts_organization_id_fkey"
             columns: ["organization_id"]
             isOneToOne: false
@@ -3103,6 +3117,101 @@ export type Database = {
           },
         ]
       }
+      marketing_campaign_insights_daily: {
+        Row: {
+          clicks: number
+          conversations_started: number
+          cpc_cents: number | null
+          cpm_cents: number | null
+          created_at: string
+          ctr_basis_points: number | null
+          date: string
+          id: string
+          impressions: number
+          inline_link_clicks: number
+          leads_attributed: number
+          marketing_campaign_id: string
+          organization_id: string
+          reach: number
+          source_data: Json | null
+          spend_cents: number
+          spend_currency: string
+          synced_at: string
+          updated_at: string
+        }
+        Insert: {
+          clicks?: number
+          conversations_started?: number
+          cpc_cents?: number | null
+          cpm_cents?: number | null
+          created_at?: string
+          ctr_basis_points?: number | null
+          date: string
+          id?: string
+          impressions?: number
+          inline_link_clicks?: number
+          leads_attributed?: number
+          marketing_campaign_id: string
+          organization_id: string
+          reach?: number
+          source_data?: Json | null
+          spend_cents?: number
+          spend_currency?: string
+          synced_at?: string
+          updated_at?: string
+        }
+        Update: {
+          clicks?: number
+          conversations_started?: number
+          cpc_cents?: number | null
+          cpm_cents?: number | null
+          created_at?: string
+          ctr_basis_points?: number | null
+          date?: string
+          id?: string
+          impressions?: number
+          inline_link_clicks?: number
+          leads_attributed?: number
+          marketing_campaign_id?: string
+          organization_id?: string
+          reach?: number
+          source_data?: Json | null
+          spend_cents?: number
+          spend_currency?: string
+          synced_at?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "marketing_campaign_insights_daily_marketing_campaign_id_fkey"
+            columns: ["marketing_campaign_id"]
+            isOneToOne: false
+            referencedRelation: "marketing_campaigns"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "marketing_campaign_insights_daily_marketing_campaign_id_fkey"
+            columns: ["marketing_campaign_id"]
+            isOneToOne: false
+            referencedRelation: "vw_marketing_ad_performance"
+            referencedColumns: ["marketing_campaign_id"]
+          },
+          {
+            foreignKeyName: "marketing_campaign_insights_daily_marketing_campaign_id_fkey"
+            columns: ["marketing_campaign_id"]
+            isOneToOne: false
+            referencedRelation: "vw_marketing_funnel"
+            referencedColumns: ["marketing_campaign_id"]
+          },
+          {
+            foreignKeyName: "marketing_campaign_insights_daily_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       marketing_campaign_spend_history: {
         Row: {
           clicks: number | null
@@ -3153,6 +3262,20 @@ export type Database = {
             isOneToOne: false
             referencedRelation: "marketing_campaigns"
             referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "marketing_campaign_spend_history_marketing_campaign_id_fkey"
+            columns: ["marketing_campaign_id"]
+            isOneToOne: false
+            referencedRelation: "vw_marketing_ad_performance"
+            referencedColumns: ["marketing_campaign_id"]
+          },
+          {
+            foreignKeyName: "marketing_campaign_spend_history_marketing_campaign_id_fkey"
+            columns: ["marketing_campaign_id"]
+            isOneToOne: false
+            referencedRelation: "vw_marketing_funnel"
+            referencedColumns: ["marketing_campaign_id"]
           },
           {
             foreignKeyName: "marketing_campaign_spend_history_organization_id_fkey"
@@ -3788,6 +3911,20 @@ export type Database = {
             isOneToOne: false
             referencedRelation: "marketing_campaigns"
             referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "opportunities_marketing_campaign_id_fkey"
+            columns: ["marketing_campaign_id"]
+            isOneToOne: false
+            referencedRelation: "vw_marketing_ad_performance"
+            referencedColumns: ["marketing_campaign_id"]
+          },
+          {
+            foreignKeyName: "opportunities_marketing_campaign_id_fkey"
+            columns: ["marketing_campaign_id"]
+            isOneToOne: false
+            referencedRelation: "vw_marketing_funnel"
+            referencedColumns: ["marketing_campaign_id"]
           },
           {
             foreignKeyName: "opportunities_organization_id_fkey"
@@ -5111,6 +5248,131 @@ export type Database = {
           },
         ]
       }
+      vw_marketing_ad_performance: {
+        Row: {
+          ad_id: string | null
+          ad_name: string | null
+          ad_status: string | null
+          adset_id: string | null
+          adset_name: string | null
+          cac_brl: number | null
+          campaign_id: string | null
+          campaign_name: string | null
+          campaign_objective: string | null
+          channel: string | null
+          clicks: number | null
+          conversations_started: number | null
+          cpc_brl: number | null
+          cpl_real_brl: number | null
+          cpm_brl: number | null
+          created_at: string | null
+          creative_body: string | null
+          creative_headline: string | null
+          creative_thumbnail_url: string | null
+          ctr_basis_points: number | null
+          destination_url: string | null
+          first_lead_at: string | null
+          impressions: number | null
+          last_insight_date: string | null
+          last_lead_at: string | null
+          lead_to_opp_pct: number | null
+          leads_total: number | null
+          leads_with_email: number | null
+          marketing_campaign_id: string | null
+          metrics_synced_at: string | null
+          opp_to_won_pct: number | null
+          opps_lost: number | null
+          opps_open: number | null
+          opps_total: number | null
+          opps_won: number | null
+          organization_id: string | null
+          pipeline_value_brl: number | null
+          platform: string | null
+          revenue_won_brl: number | null
+          roas: number | null
+          spend_brl: number | null
+          spend_cents: number | null
+          sync_status: string | null
+          updated_at: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "marketing_campaigns_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      vw_marketing_campaign_summary: {
+        Row: {
+          ads_active: number | null
+          ads_count: number | null
+          cac_brl: number | null
+          campaign_id: string | null
+          campaign_name: string | null
+          campaign_objective: string | null
+          clicks: number | null
+          conversations_started: number | null
+          cpc_brl: number | null
+          cpl_real_brl: number | null
+          ctr_basis_points: number | null
+          impressions: number | null
+          leads_total: number | null
+          opps_lost: number | null
+          opps_open: number | null
+          opps_total: number | null
+          opps_won: number | null
+          organization_id: string | null
+          pipeline_value_brl: number | null
+          platform: string | null
+          revenue_won_brl: number | null
+          roas: number | null
+          spend_brl: number | null
+          spend_cents: number | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "marketing_campaigns_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      vw_marketing_funnel: {
+        Row: {
+          ad_id: string | null
+          ad_name: string | null
+          adset_name: string | null
+          campaign_name: string | null
+          cvr_click_to_conv_bps: number | null
+          cvr_click_to_lead_overall_bps: number | null
+          cvr_conv_to_lead_bps: number | null
+          cvr_imp_to_click_bps: number | null
+          cvr_lead_to_opp_bps: number | null
+          cvr_opp_to_won_bps: number | null
+          marketing_campaign_id: string | null
+          organization_id: string | null
+          stage_1_impressions: number | null
+          stage_2_clicks: number | null
+          stage_3_conversations: number | null
+          stage_4_leads: number | null
+          stage_5_opps: number | null
+          stage_6_won: number | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "marketing_campaigns_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
     }
     Functions: {
       admin_list_pipeline_stages: {
@@ -5156,6 +5418,30 @@ export type Database = {
         Returns: Json
       }
       get_internal_function_auth_token: { Args: never; Returns: string }
+      get_meta_credentials: {
+        Args: { p_org_id: string }
+        Returns: {
+          ad_account_id: string
+          business_id: string
+          feature_ads_manager_sync: boolean
+          feature_capi_send_events: boolean
+          feature_lead_ads_sync: boolean
+          is_connected: boolean
+          last_token_check_at: string
+          last_token_check_error: string
+          meta_user_id: string
+          meta_user_name: string
+          page_id: string
+          pixel_id: string
+          raw_config_values: Json
+          raw_connected_account: Json
+          send_lead_events: boolean
+          send_purchase_events: boolean
+          source: string
+          system_user_token_encrypted: string
+          whatsapp_business_account_id: string
+        }[]
+      }
       get_opportunities_by_stage: {
         Args: { p_limit_per_stage?: number; p_organization_id: string }
         Returns: Json
