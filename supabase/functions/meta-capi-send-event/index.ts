@@ -1,4 +1,4 @@
-// force rebuild 2026-05-11T06:30 - translate event_name for business_messaging (Lead -> LeadSubmitted)
+// force rebuild 2026-05-11T07:00 - rollback to system_generated per CAPI v25.0 doc
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "jsr:@supabase/supabase-js@2";
 import { corsHeaders } from "../_shared/cors.ts";
