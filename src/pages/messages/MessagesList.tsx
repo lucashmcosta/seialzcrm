@@ -1572,7 +1572,7 @@ function DesktopMessagesList() {
                                             const isAudioOnly = message.media_type === 'audio' && !message.content;
                                             const senderLabel = isOutbound
                                               ? (message.sender_name ? `${message.sender_name} · ` : '')
-                                              : (selectedThread?.contact_name ? `${selectedThread.contact_name} · ` : '');
+                                              : '';
                                             const timeStr = new Date(message.sent_at).toLocaleTimeString(locale, { hour: '2-digit', minute: '2-digit', hour12: false });
                                             const audioTimestamp = `${senderLabel}${timeStr}`;
                                             return <AudioMessagePlayer key={i} src={url}

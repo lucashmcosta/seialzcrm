@@ -1,72 +1,39 @@
-## Problema
+## Mudanças
 
-Na aba **Outbound** de `/admin/integrations/:id` (Kommo), a tabela "Mapeamento de Estágios" aparece vazia para qualquer org que o super-admin não seja membro. Causa: o componente faz `supabase.from('pipeline_stages').select(...).eq('organization_id', selectedOrgId)` direto do client, e a RLS de `pipeline_stages` exige que o usuário pertença à org (`user_has_org_access`). O super-admin Seialz não pertence à Blueviza, então retorna 0 linhas mesmo havendo 5 estágios.
+### 1. Remover nome do contato nas mensagens recebidas (inbound)
 
-A consulta do Kommo (pipelines/statuses) já funciona porque é feita via edge function autenticada pelo `access_token` da org, sem passar por RLS.
+Hoje as bolhas mostram `nome · hora` tanto nas mensagens enviadas pelos usuários do CRM (outbound) quanto nas recebidas do cliente (inbound). Vamos manter o nome **só no outbound** — no inbound mostramos apenas a hora.
 
-## Solução
+Arquivos afetados (mesma lógica em todos):
 
-Criar um RPC `security definer` que retorne os estágios de qualquer org, restrito a super-admins, e trocar a query do client por esse RPC.
+- `src/pages/messages/MessagesList.tsx`
+  - Footer do balão (linhas ~1630-1640): remover o ramo `selectedThread?.contact_name ? ... : ''` no caso `!isOutbound`.
+  - Timestamp do player de áudio (linhas ~1573-1577): mesma remoção no `senderLabel` quando `!isOutbound`.
+- `src/components/contacts/ContactMessages.tsx` (linha ~632): mesma alteração.
+- `src/components/mobile/MobileMessagesList.tsx`: aplicar a mesma regra no footer/áudio (se houver render equivalente).
 
-### 1. Migration: novo RPC
+Comportamento final:
+- Outbound (usuário ou agente IA): `Tamires Sousa · 14:04 ✓✓`
+- Inbound (cliente): `14:03` apenas.
 
-```sql
-create or replace function public.admin_list_pipeline_stages(p_org_id uuid)
-returns table (
-  id uuid,
-  name text,
-  order_index int,
-  type text
-)
-language plpgsql
-stable
-security definer
-set search_path = public
-as $$
-begin
-  if not public.is_super_admin(public.current_user_id()) then
-    raise exception 'forbidden';
-  end if;
+Badge "Agente IA" no topo das mensagens do agente continua igual.
 
-  return query
-    select ps.id, ps.name, ps.order_index, ps.type::text
-    from public.pipeline_stages ps
-    where ps.organization_id = p_org_id
-    order by ps.order_index;
-end;
-$$;
+### 2. Controle de velocidade no player de áudio (1x / 1.5x / 2x)
 
-revoke all on function public.admin_list_pipeline_stages(uuid) from public;
-grant execute on function public.admin_list_pipeline_stages(uuid) to authenticated;
-```
+Em `src/components/whatsapp/AudioMessagePlayer.tsx`:
 
-(Se o nome da função de checagem de super-admin for diferente — `is_admin`, `has_role(..., 'super_admin')` etc. — uso a que já existir no projeto. Verifico antes de escrever.)
+- Adicionar `playbackRate` no estado (default `1`).
+- Ciclar entre `1 → 1.5 → 2 → 1` ao clicar.
+- Aplicar via `audioRef.current.playbackRate = playbackRate` em um `useEffect` e ao iniciar o `play()`.
+- Renderizar um botão pequeno à direita do waveform (substituindo nada, apenas adicionado), no estilo WhatsApp: pill compacto com texto `1x` / `1.5x` / `2x`, mesma cor `currentColor`, sem background quando `1x` e levemente destacado quando acelerado.
+- Posicionar entre o waveform e a margem direita, mantendo a altura de 24px da Row 1.
+- Esconder o botão enquanto `isLoading`.
 
-### 2. Frontend: `src/components/admin/KommoOutboundTab.tsx`
+Sem mudanças em backend, banco ou edge functions.
 
-Trocar o `useQuery` `internal-stages` para chamar o RPC:
+## Validação
 
-```ts
-const { data: internalStages } = useQuery({
-  queryKey: ['admin-internal-stages', selectedOrgId],
-  queryFn: async () => {
-    const { data, error } = await supabase.rpc('admin_list_pipeline_stages', {
-      p_org_id: selectedOrgId,
-    });
-    if (error) throw error;
-    return data || [];
-  },
-  enabled: !!selectedOrgId,
-});
-```
-
-### 3. Validação
-
-- Verifico no banco qual função existente identifica super-admin (provavelmente `is_super_admin` ou `has_role`).
-- Após a migration, abrir `/admin/integrations/:kommo/Outbound` com a Blueviza selecionada e confirmar que os 5 estágios aparecem com seus selects de mapeamento.
-- Sanity check: usuário comum não consegue chamar o RPC (retorna `forbidden`).
-
-## Fora do escopo
-
-- Mapeamento de owners e responsáveis (já é Step 3 separado).
-- Mudar a forma como o Kommo é consultado (continua via edge function).
+- Abrir uma conversa com mensagens de áudio em ambos sentidos.
+- Conferir: bolha do cliente sem nome, bolha do usuário com nome.
+- Tocar um áudio, clicar no botão de velocidade e confirmar a aceleração audível e o label atualizado.
+- Repetir no mobile (`MobileMessagesList`) e na aba de mensagens do contato (`ContactMessages`).
