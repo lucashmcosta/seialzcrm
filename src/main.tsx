@@ -3,20 +3,27 @@ import { createRoot } from "react-dom/client";
 import App from "./App.tsx";
 import "./index.css";
 
-// Defensive cleanup: unregister ANY previously installed Service Worker on every load.
-// Earlier versions of this app shipped vite-plugin-pwa, whose SW intercepts navigation
-// inside the Lovable preview iframe and serves stale chunks → white screen.
-// Running this synchronously, before mounting React, guarantees the next reload is clean.
-if (typeof navigator !== "undefined" && "serviceWorker" in navigator) {
-  navigator.serviceWorker.getRegistrations().then((registrations) => {
-    registrations.forEach((registration) => registration.unregister());
-  }).catch(() => {});
+// Defensive cleanup: unregister any legacy Service Worker and force a single hard refresh.
+// Older app versions shipped vite-plugin-pwa and could keep serving stale JS chunks,
+// making the UI run old code even after the source file changed.
+if (typeof window !== "undefined" && typeof navigator !== "undefined" && "serviceWorker" in navigator) {
+  const swResetKey = "__lovable_sw_reset_done";
 
-  if ("caches" in window) {
-    caches.keys().then((keys) => {
-      keys.forEach((key) => caches.delete(key));
-    }).catch(() => {});
-  }
+  navigator.serviceWorker.getRegistrations().then(async (registrations) => {
+    if (registrations.length === 0) return;
+
+    await Promise.allSettled(registrations.map((registration) => registration.unregister()));
+
+    if ("caches" in window) {
+      const keys = await caches.keys();
+      await Promise.allSettled(keys.map((key) => caches.delete(key)));
+    }
+
+    if (window.sessionStorage.getItem(swResetKey) !== "1") {
+      window.sessionStorage.setItem(swResetKey, "1");
+      window.location.reload();
+    }
+  }).catch(() => {});
 }
 
 createRoot(document.getElementById("root")!).render(
