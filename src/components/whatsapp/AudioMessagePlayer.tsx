@@ -14,9 +14,20 @@ export function AudioMessagePlayer({ src, className = '', timestamp, statusIcon 
   const [currentTime, setCurrentTime] = useState(0);
   const [duration, setDuration] = useState(0);
   const [isLoading, setIsLoading] = useState(true);
+  const [playbackRate, setPlaybackRate] = useState(1);
   const [waveformData] = useState(() =>
     Array.from({ length: 45 }, () => Math.random() * 0.5 + 0.2)
   );
+
+  const cycleRate = () => {
+    const next = playbackRate === 1 ? 1.5 : playbackRate === 1.5 ? 2 : 1;
+    setPlaybackRate(next);
+    if (audioRef.current) audioRef.current.playbackRate = next;
+  };
+
+  useEffect(() => {
+    if (audioRef.current) audioRef.current.playbackRate = playbackRate;
+  }, [playbackRate]);
 
   const progress = duration > 0 ? currentTime / duration : 0;
 
@@ -171,6 +182,30 @@ export function AudioMessagePlayer({ src, className = '', timestamp, statusIcon 
             }}
           />
         </div>
+
+        {!isLoading && (
+          <button
+            onClick={cycleRate}
+            style={{
+              fontSize: 10,
+              fontWeight: 600,
+              lineHeight: 1,
+              padding: '3px 6px',
+              borderRadius: 9999,
+              border: '1px solid currentColor',
+              cursor: 'pointer',
+              background: 'transparent',
+              color: 'currentColor',
+              opacity: playbackRate === 1 ? 0.5 : 0.95,
+              flexShrink: 0,
+              minWidth: 30,
+              fontVariantNumeric: 'tabular-nums',
+            }}
+            aria-label={`Velocidade ${playbackRate}x`}
+          >
+            {playbackRate === 1 ? '1x' : playbackRate === 1.5 ? '1.5x' : '2x'}
+          </button>
+        )}
       </div>
 
       {/* Row 2: Duration + Timestamp */}
