@@ -1,0 +1,92 @@
+import { useQuery } from '@tanstack/react-query';
+import { supabase } from '@/integrations/supabase/client';
+
+export interface AdLead {
+  id: string;
+  full_name: string | null;
+  phone: string | null;
+  email: string | null;
+  first_contact_at: string;
+  lifecycle_status: 'lead' | 'open' | 'won' | 'lost';
+}
+
+export function useAdLeads(adId: string | undefined, opts: { status?: string; search?: string; limit?: number } = {}) {
+  return useQuery({
+    queryKey: ['marketing', 'ad-leads', adId, opts.status, opts.search, opts.limit],
+    enabled: !!adId,
+    staleTime: 1000 * 60 * 2,
+    queryFn: async (): Promise<AdLead[]> => {
+      let q = supabase
+        .from('contacts')
+        .select('id, full_name, phone, email, created_at')
+        .eq('marketing_campaign_id', adId!)
+        .is('deleted_at', null)
+        .order('created_at', { ascending: false })
+        .limit(opts.limit || 100);
+      if (opts.search) q = q.ilike('full_name', `%${opts.search}%`);
+      const { data: contacts, error } = await q;
+      if (error) throw error;
+
+      const ids = (contacts || []).map(c => c.id);
+      if (ids.length === 0) return [];
+
+      const { data: opps } = await supabase
+        .from('opportunities')
+        .select('contact_id, status')
+        .in('contact_id', ids)
+        .is('deleted_at', null);
+
+      const byContact = new Map<string, AdLead['lifecycle_status']>();
+      for (const o of opps || []) {
+        const cur = byContact.get(o.contact_id);
+        // priority: won > open > lost
+        const next = (o.status === 'won') ? 'won'
+                  : (o.status === 'open') ? 'open'
+                  : (o.status === 'lost') ? 'lost' : null;
+        if (!next) continue;
+        if (!cur || (next === 'won') || (next === 'open' && cur === 'lost')) byContact.set(o.contact_id, next);
+      }
+
+      let rows: AdLead[] = (contacts || []).map(c => ({
+        id: c.id,
+        full_name: c.full_name,
+        phone: c.phone,
+        email: c.email,
+        first_contact_at: c.created_at,
+        lifecycle_status: byContact.get(c.id) || 'lead',
+      }));
+
+      if (opts.status && opts.status !== 'all') {
+        rows = rows.filter(r => r.lifecycle_status === opts.status);
+      }
+      return rows;
+    },
+  });
+}
+
+export function useAdDailyInsights(adId: string | undefined, days = 30) {
+  return useQuery({
+    queryKey: ['marketing', 'ad-daily', adId, days],
+    enabled: !!adId,
+    staleTime: 1000 * 60 * 5,
+    queryFn: async () => {
+      const start = new Date();
+      start.setDate(start.getDate() - days);
+      const startISO = start.toISOString().slice(0, 10);
+      const { data, error } = await supabase
+        .from('marketing_campaign_insights_daily')
+        .select('date, spend_cents, leads_attributed, impressions, clicks')
+        .eq('marketing_campaign_id', adId!)
+        .gte('date', startISO)
+        .order('date', { ascending: true });
+      if (error) throw error;
+      return (data || []).map(r => ({
+        date: r.date as string,
+        spend: Number(r.spend_cents || 0) / 100,
+        leads: Number(r.leads_attributed || 0),
+        impressions: Number(r.impressions || 0),
+        clicks: Number(r.clicks || 0),
+      }));
+    },
+  });
+}
