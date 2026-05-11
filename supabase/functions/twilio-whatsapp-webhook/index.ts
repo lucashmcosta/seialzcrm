@@ -269,7 +269,8 @@ serve(async (req) => {
       const referralMediaUrl = params['Referral.MediaUrl'] || null
       const referralSourceId = params['Referral.SourceId'] || null
       const referralSourceType = params['Referral.SourceType'] || null
-      const hasReferral = !!(referralSourceUrl || referralSourceId)
+      const referralCtwaClid = params['Referral.CtwaClid'] || params['ReferralCtwaClid'] || null
+      const hasReferral = !!(referralSourceUrl || referralSourceId || referralCtwaClid)
 
       if (hasReferral) {
         console.log('CTWA Referral detected:', JSON.stringify({
@@ -504,6 +505,7 @@ serve(async (req) => {
           ad_referral_media_url: referralMediaUrl,
           ad_referral_source_id: referralSourceId,
           ad_referral_source_type: referralSourceType,
+          ad_referral_ctwa_clid: referralCtwaClid,
           ad_referral_captured_at: new Date().toISOString(),
           source: 'ctwa',
           utm_source: 'meta_ads',
