@@ -189,7 +189,7 @@ async function processOrg(
     for (const ad of result.ads) if (!existingByExt.has(ad.id)) adsCreated++;
     const { error: upErr } = await admin
       .from("marketing_campaigns")
-      .upsert(rows, { onConflict: "organization_id,external_id" });
+      .upsert(rows, { onConflict: "organization_id,platform,external_id" });
     if (upErr) {
       return { org_id: orgId, status: "failed", ads_discovered: result.ads.length, ads_created: 0, ads_archived: 0, error: `upsert: ${upErr.message}` };
     }
