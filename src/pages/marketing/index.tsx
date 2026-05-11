@@ -5,6 +5,7 @@ import { PeriodFilter } from './_components/PeriodFilter';
 import { MetricCard } from './_components/MetricCard';
 import { EmptyState } from './_components/EmptyState';
 import { ChartSkeleton, TableSkeleton } from './_components/Skeletons';
+import { SyncStatusCard } from './_components/SyncStatusCard';
 import { useMarketingPeriod } from './_hooks/useMarketingPeriod';
 import { useOverviewWithCompare, useTimeSeries } from './_hooks/useOverview';
 import { useAdPerformance } from './_hooks/useAdPerformance';
