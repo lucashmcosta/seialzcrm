@@ -91,7 +91,16 @@ async function fetchAllAds(
   return { ok: true, ads };
 }
 
-function extractDestinationUrl(creative: any): string | null {
+function mapStatus(s?: string | null): string {
+  if (!s) return "unknown";
+  const u = s.toUpperCase();
+  if (u === "ACTIVE") return "active";
+  if (u === "PAUSED" || u === "CAMPAIGN_PAUSED" || u === "ADSET_PAUSED") return "paused";
+  if (u === "ARCHIVED") return "archived";
+  if (u === "DELETED") return "deleted";
+  return "unknown";
+}
+
   const oss = creative?.object_story_spec;
   if (!oss) return null;
   return (
