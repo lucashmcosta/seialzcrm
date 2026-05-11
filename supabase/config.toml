@@ -143,3 +143,6 @@ verify_jwt = false
 
 [functions.meta-capi-retry-cron]
 verify_jwt = false
+
+[functions.meta-discover-ad-accounts]
+verify_jwt = false
