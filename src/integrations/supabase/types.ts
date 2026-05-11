@@ -2187,6 +2187,110 @@ export type Database = {
           },
         ]
       }
+      integration_inbound_events: {
+        Row: {
+          expires_at: string
+          external_id: string | null
+          http_method: string | null
+          id: string
+          idempotency_key: string | null
+          integration_slug: string
+          last_attempt_at: string | null
+          organization_id: string | null
+          parse_attempts: number
+          parser_function: string | null
+          parser_version: number | null
+          process_error: string | null
+          process_status: string
+          processed_at: string | null
+          raw_headers: Json | null
+          raw_payload: Json
+          received_at: string
+          request_path: string | null
+          resulting_contact_id: string | null
+          resulting_message_id: string | null
+          resulting_opportunity_id: string | null
+          source_event: string
+        }
+        Insert: {
+          expires_at?: string
+          external_id?: string | null
+          http_method?: string | null
+          id?: string
+          idempotency_key?: string | null
+          integration_slug: string
+          last_attempt_at?: string | null
+          organization_id?: string | null
+          parse_attempts?: number
+          parser_function?: string | null
+          parser_version?: number | null
+          process_error?: string | null
+          process_status?: string
+          processed_at?: string | null
+          raw_headers?: Json | null
+          raw_payload: Json
+          received_at?: string
+          request_path?: string | null
+          resulting_contact_id?: string | null
+          resulting_message_id?: string | null
+          resulting_opportunity_id?: string | null
+          source_event: string
+        }
+        Update: {
+          expires_at?: string
+          external_id?: string | null
+          http_method?: string | null
+          id?: string
+          idempotency_key?: string | null
+          integration_slug?: string
+          last_attempt_at?: string | null
+          organization_id?: string | null
+          parse_attempts?: number
+          parser_function?: string | null
+          parser_version?: number | null
+          process_error?: string | null
+          process_status?: string
+          processed_at?: string | null
+          raw_headers?: Json | null
+          raw_payload?: Json
+          received_at?: string
+          request_path?: string | null
+          resulting_contact_id?: string | null
+          resulting_message_id?: string | null
+          resulting_opportunity_id?: string | null
+          source_event?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "integration_inbound_events_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "integration_inbound_events_resulting_contact_id_fkey"
+            columns: ["resulting_contact_id"]
+            isOneToOne: false
+            referencedRelation: "contacts"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "integration_inbound_events_resulting_message_id_fkey"
+            columns: ["resulting_message_id"]
+            isOneToOne: false
+            referencedRelation: "messages"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "integration_inbound_events_resulting_opportunity_id_fkey"
+            columns: ["resulting_opportunity_id"]
+            isOneToOne: false
+            referencedRelation: "opportunities"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       integration_jobs: {
         Row: {
           attempts: number
