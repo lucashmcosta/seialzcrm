@@ -13,6 +13,7 @@ import {
   ChatCircleText,
   Phone,
   ChartLineUp,
+  ChartBar,
 } from '@phosphor-icons/react';
 import type { Icon as PhosphorIcon } from '@phosphor-icons/react';
 import { Button } from '@/components/ui/button';
@@ -52,6 +53,7 @@ export function Layout({ children }: LayoutProps) {
     ];
     if (permissions.canManageSettings) {
       principalItems.push({ label: t('nav.reports'), href: '/reports', icon: ChartLineUp });
+      principalItems.push({ label: 'Marketing', href: '/marketing', icon: ChartBar });
     }
     principalItems.push(
       { label: t('nav.opportunities'), href: '/opportunities', icon: Briefcase },
@@ -121,6 +123,7 @@ export function Layout({ children }: LayoutProps) {
   ];
   if (permissions.canManageSettings) {
     navItems.push({ label: t('nav.reports'), href: '/reports', icon: ChartLineUp });
+    navItems.push({ label: 'Marketing', href: '/marketing', icon: ChartBar });
   }
   navItems.push(
     { label: t('nav.contacts'), href: '/contacts', icon: UsersThree },
