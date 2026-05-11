@@ -1,11 +1,11 @@
 import { useState } from 'react';
 import { useOrganization } from '@/hooks/useOrganization';
-import { MarketingLayout } from '../_components/MarketingLayout';
-import { ChartSkeleton } from '../_components/Skeletons';
-import { EmptyState } from '../_components/EmptyState';
-import { useFunnel } from '../_hooks/useFunnel';
-import { useAdPerformance } from '../_hooks/useAdPerformance';
-import { fmtInt, fmtPct } from '../_lib/format';
+import { MarketingLayout } from './_components/MarketingLayout';
+import { ChartSkeleton } from './_components/Skeletons';
+import { EmptyState } from './_components/EmptyState';
+import { useFunnel } from './_hooks/useFunnel';
+import { useAdPerformance } from './_hooks/useAdPerformance';
+import { fmtInt, fmtPct } from './_lib/format';
 import {
   Select, SelectTrigger, SelectValue, SelectContent, SelectItem,
 } from '@/components/ui/select';

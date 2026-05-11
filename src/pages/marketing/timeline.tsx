@@ -1,13 +1,13 @@
 import { useMemo, useState } from 'react';
 import { useOrganization } from '@/hooks/useOrganization';
-import { MarketingLayout } from '../_components/MarketingLayout';
-import { PeriodFilter } from '../_components/PeriodFilter';
-import { ChartSkeleton, TableSkeleton } from '../_components/Skeletons';
-import { EmptyState } from '../_components/EmptyState';
-import { useMarketingPeriod } from '../_hooks/useMarketingPeriod';
-import { useTimeSeries } from '../_hooks/useOverview';
-import { useAdPerformance } from '../_hooks/useAdPerformance';
-import { fmtBRL, fmtInt, fmtDateBR } from '../_lib/format';
+import { MarketingLayout } from './_components/MarketingLayout';
+import { PeriodFilter } from './_components/PeriodFilter';
+import { ChartSkeleton, TableSkeleton } from './_components/Skeletons';
+import { EmptyState } from './_components/EmptyState';
+import { useMarketingPeriod } from './_hooks/useMarketingPeriod';
+import { useTimeSeries } from './_hooks/useOverview';
+import { useAdPerformance } from './_hooks/useAdPerformance';
+import { fmtBRL, fmtInt, fmtDateBR } from './_lib/format';
 import {
   Select, SelectTrigger, SelectValue, SelectContent, SelectItem,
 } from '@/components/ui/select';
