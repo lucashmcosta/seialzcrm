@@ -101,6 +101,7 @@ function mapStatus(s?: string | null): string {
   return "unknown";
 }
 
+function extractDestinationUrl(creative: any): string | null {
   const oss = creative?.object_story_spec;
   if (!oss) return null;
   return (
