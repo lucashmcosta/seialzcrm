@@ -785,12 +785,32 @@ export default function OpportunitiesKanban() {
                 </SelectTrigger>
                 <SelectContent>
                   <SelectItem value="all">Todos</SelectItem>
+                  <SelectItem value="none">Sem responsável</SelectItem>
                   {userProfile?.id && (
                     <SelectItem value={userProfile.id}>Meus</SelectItem>
                   )}
                   {users.filter((u) => u.id !== userProfile?.id).map((user) => (
                     <SelectItem key={user.id} value={user.id}>
                       {user.full_name}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+          )}
+
+          {stages.length > 0 && (
+            <div className="space-y-2">
+              <label className="text-sm font-medium">Etapa</label>
+              <Select value={filterStage} onValueChange={setFilterStage}>
+                <SelectTrigger>
+                  <SelectValue placeholder="Todas" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">Todas</SelectItem>
+                  {stages.map((stage) => (
+                    <SelectItem key={stage.id} value={stage.id}>
+                      {stage.name}
                     </SelectItem>
                   ))}
                 </SelectContent>
