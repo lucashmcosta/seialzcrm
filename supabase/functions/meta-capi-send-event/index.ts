@@ -3,7 +3,7 @@ import { createClient } from "jsr:@supabase/supabase-js@2";
 import { corsHeaders } from "../_shared/cors.ts";
 import { decryptSecret } from "../_shared/crypto.ts";
 
-const META_API_VERSION = Deno.env.get("META_GRAPH_API_VERSION") || "v23.0";
+const META_API_VERSION = Deno.env.get("META_GRAPH_API_VERSION") || "v25.0";
 
 function json(body: unknown, status = 200) {
   return new Response(JSON.stringify(body), {
@@ -18,28 +18,90 @@ async function sha256Hex(input: string): Promise<string> {
 }
 
 function normEmail(s?: string | null) {
-  return s ? s.trim().toLowerCase() : null;
+  return s ? s.trim().toLowerCase().replace(/\s+/g, "") : null;
 }
 function normPhone(s?: string | null) {
+  if (!s) return null;
+  let d = s.replace(/\D+/g, "");
+  if (!d.length) return null;
+  // Garante prefixo de país (BR default 55) — telefones BR têm 10 ou 11 dígitos
+  if (d.length === 10 || d.length === 11) d = "55" + d;
+  return d;
+}
+function normText(s?: string | null) {
+  return s ? s.trim().toLowerCase() : null;
+}
+function normZip(s?: string | null) {
   if (!s) return null;
   const d = s.replace(/\D+/g, "");
   return d.length ? d : null;
 }
-function normName(s?: string | null) {
-  return s ? s.trim().toLowerCase() : null;
+function normCountry(s?: string | null) {
+  if (!s) return null;
+  const c = s.trim().toLowerCase();
+  // Aceita "Brasil"/"Brazil"/"BR" → "br"
+  if (c === "brasil" || c === "brazil") return "br";
+  return c.length === 2 ? c : c.slice(0, 2);
+}
+
+function splitName(full?: string | null): { fn?: string | null; ln?: string | null } {
+  if (!full) return {};
+  const parts = full.trim().split(/\s+/);
+  if (parts.length === 1) return { fn: parts[0] };
+  return { fn: parts[0], ln: parts.slice(1).join(" ") };
 }
 
 async function buildUserData(contact: any | null) {
-  const ud: Record<string, string[]> = {};
+  const ud: Record<string, unknown> = {};
   if (!contact) return ud;
+
   const email = normEmail(contact.email);
   const phone = normPhone(contact.phone);
-  const fn = normName(contact.first_name);
-  const ln = normName(contact.last_name);
+
+  // Nome: prefere first/last; se faltar, faz split do full_name
+  let fnRaw = contact.first_name as string | null | undefined;
+  let lnRaw = contact.last_name as string | null | undefined;
+  if ((!fnRaw || !lnRaw) && contact.full_name) {
+    const split = splitName(contact.full_name);
+    if (!fnRaw) fnRaw = split.fn ?? null;
+    if (!lnRaw) lnRaw = split.ln ?? null;
+  }
+  const fn = normText(fnRaw);
+  const ln = normText(lnRaw);
+  const ct = normText(contact.address_city);
+  const st = normText(contact.address_state);
+  const zp = normZip(contact.address_zip);
+  const country = normCountry(contact.address_country) || "br";
+
   if (email) ud.em = [await sha256Hex(email)];
   if (phone) ud.ph = [await sha256Hex(phone)];
   if (fn) ud.fn = [await sha256Hex(fn)];
   if (ln) ud.ln = [await sha256Hex(ln)];
+  if (ct) ud.ct = [await sha256Hex(ct)];
+  if (st) ud.st = [await sha256Hex(st)];
+  if (zp) ud.zp = [await sha256Hex(zp)];
+  if (country) ud.country = [await sha256Hex(country)];
+
+  // CTWA Click ID — NÃO hashear
+  if (contact.ad_referral_ctwa_clid) {
+    ud.ctwa_clid = contact.ad_referral_ctwa_clid;
+  }
+  // Reconstrói fbc a partir de fbclid
+  if (contact.fbclid) {
+    const ts = contact.fbclid_captured_at
+      ? Math.floor(new Date(contact.fbclid_captured_at).getTime() / 1000)
+      : Math.floor(Date.now() / 1000);
+    ud.fbc = `fb.1.${ts}.${contact.fbclid}`;
+  }
+  // External ID estável (id interno do contato)
+  if (contact.id) {
+    ud.external_id = [await sha256Hex(String(contact.id))];
+  }
+  // lead_id (Meta Lead Ads)
+  if (contact.meta_lead_id) {
+    ud.lead_id = String(contact.meta_lead_id);
+  }
+
   return ud;
 }
 
@@ -66,7 +128,6 @@ serve(async (req) => {
   if (req.method === "OPTIONS") return new Response(null, { headers: corsHeaders });
 
   try {
-    // Accept any Bearer (user JWT or service-role from pg_net)
     const authHeader = req.headers.get("Authorization");
     if (!authHeader?.startsWith("Bearer ")) return json({ error: "Invalid auth" }, 401);
 
@@ -85,7 +146,6 @@ serve(async (req) => {
       test,
     } = body || {};
 
-    // Reprocess from existing log row
     let logRow: any = null;
     if (capi_event_log_id) {
       const { data } = await admin
@@ -105,7 +165,6 @@ serve(async (req) => {
       return json({ error: "organization_id e event_name são obrigatórios" }, 400);
     }
 
-    // Load CAPI integration
     const { data: oi } = await admin
       .from("organization_integrations")
       .select("id, connected_account, admin_integrations!inner(slug)")
@@ -122,18 +181,19 @@ serve(async (req) => {
     const accessToken = await getAccessToken(admin, organization_id, ca);
     if (!accessToken) return json({ error: "Access token não disponível" }, 400);
 
-    // Load contact
+    // Carrega contato com TODOS os campos relevantes para EMQ + CTWA
     let contact: any = null;
     if (contact_id) {
       const { data } = await admin
         .from("contacts")
-        .select("id, first_name, last_name, full_name, email, phone")
+        .select(
+          "id, first_name, last_name, full_name, email, phone, address_city, address_state, address_zip, address_country, ad_referral_ctwa_clid, fbclid, fbclid_captured_at, ad_referral_source_type, meta_lead_id"
+        )
         .eq("id", contact_id)
         .maybeSingle();
       contact = data;
     }
 
-    // Load opportunity
     let opportunity: any = null;
     if (opportunity_id) {
       const { data } = await admin
@@ -148,16 +208,14 @@ serve(async (req) => {
     const eventId = logRow?.event_id ||
       `${organization_id}:${event_name}:${contact_id || "x"}:${opportunity_id || "x"}:${eventTime}`;
     const sourceUrl = ca.default_event_source_url || undefined;
-    const userData: Record<string, unknown> = await buildUserData(contact);
+    const userData = await buildUserData(contact);
 
-    // Fallback matching params (Meta requires at least one) — use request headers
     const clientUa = req.headers.get("user-agent") || undefined;
     const xff = req.headers.get("x-forwarded-for") || "";
     const clientIp = xff.split(",")[0]?.trim() || undefined;
     if (clientUa) userData.client_user_agent = clientUa;
     if (clientIp) userData.client_ip_address = clientIp;
-    // Ensure at least one matching key for manual tests without contact
-    const hasMatchKey = (userData as any).em || (userData as any).ph || (userData as any).fn || (userData as any).ln;
+    const hasMatchKey = (userData as any).em || (userData as any).ph || (userData as any).fn || (userData as any).ln || (userData as any).external_id;
     if (!hasMatchKey) {
       userData.external_id = [await sha256Hex(`org:${organization_id}`)];
     }
@@ -166,10 +224,20 @@ serve(async (req) => {
     if (opportunity?.amount) customData.value = Number(opportunity.amount);
     if (opportunity?.currency) customData.currency = opportunity.currency;
     if (opportunity?.title) customData.content_name = opportunity.title;
-    // Purchase requires value + currency — fallback defaults
+
     if (event_name === "Purchase") {
       if (customData.value === undefined) customData.value = 0;
       if (!customData.currency) customData.currency = "BRL";
+      if (opportunity_id) customData.order_id = opportunity_id;
+    }
+
+    if (event_name === "Lead") {
+      if (customData.value === undefined) customData.value = 0;
+      if (!customData.currency) customData.currency = "BRL";
+      // CTWA flag
+      if (contact?.ad_referral_ctwa_clid || contact?.ad_referral_source_type) {
+        customData.lead_event_source = "CTWA_WhatsApp";
+      }
     }
 
     const eventPayload: Record<string, unknown> = {
@@ -182,14 +250,15 @@ serve(async (req) => {
     if (sourceUrl) eventPayload.event_source_url = sourceUrl;
     if (Object.keys(customData).length > 0) eventPayload.custom_data = customData;
 
-    const requestBody: Record<string, unknown> = { data: [eventPayload] };
-    if (test && !ca.test_event_code) {
-      // Manual test without configured test code — still send, just mark
-    }
+    const requestBody: Record<string, unknown> = {
+      data: [eventPayload],
+      access_token: accessToken,
+    };
     if (ca.test_event_code) requestBody.test_event_code = ca.test_event_code;
 
-    // Insert/update log row (status=pending) BEFORE sending
     let logId = logRow?.id as string | undefined;
+    // Payload persistido SEM access_token
+    const persistedPayload = { ...requestBody, access_token: "***" };
     const baseLog = {
       organization_id,
       event_id: eventId,
@@ -198,7 +267,7 @@ serve(async (req) => {
       event_source_url: sourceUrl || null,
       contact_id: contact_id || null,
       opportunity_id: opportunity_id || null,
-      payload: requestBody,
+      payload: persistedPayload,
       test_event_code: ca.test_event_code || null,
     };
 
@@ -226,8 +295,7 @@ serve(async (req) => {
       logId = ins.id;
     }
 
-    // POST to Meta
-    const url = `https://graph.facebook.com/${META_API_VERSION}/${pixelId}/events?access_token=${encodeURIComponent(accessToken)}`;
+    const url = `https://graph.facebook.com/${META_API_VERSION}/${pixelId}/events`;
     const res = await fetch(url, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -236,16 +304,36 @@ serve(async (req) => {
     const respJson = await res.json().catch(() => ({}));
 
     if (!res.ok || respJson.error) {
-      const errMsg = respJson?.error?.message || `HTTP ${res.status}`;
-      const errCode = respJson?.error?.code;
+      const err = respJson?.error || {};
+      const errMsg = err.message || `HTTP ${res.status}`;
+      const errCode = err.code;
+      const errSubcode = err.error_subcode;
+      // 100 = invalid params (geralmente permanente), 190 = token inválido, 17 = rate limit (transitório)
       const isPermanent = errCode === 100 || errCode === 190;
+      const isRateLimit = errCode === 17 || errCode === 4 || errCode === 32;
+      const attempts = (logRow?.attempt_count || 0) + 1;
+      const giveUp = isPermanent || attempts >= 5;
+
+      const enrichedError = {
+        message: errMsg,
+        code: errCode,
+        error_subcode: errSubcode,
+        error_user_title: err.error_user_title,
+        error_user_msg: err.error_user_msg,
+        fbtrace_id: respJson?.fbtrace_id,
+      };
+
+      // Backoff exponencial: 5min, 15min, 45min, 2h, 6h
+      const backoffMs = isRateLimit ? 60 * 60 * 1000 : Math.min(5 * 60 * 1000 * Math.pow(3, attempts - 1), 6 * 60 * 60 * 1000);
+
       await admin.from("capi_event_log").update({
-        status: isPermanent ? "permanent_failure" : "failed",
+        status: giveUp ? "permanent_failure" : "failed",
         meta_response: respJson,
-        meta_error: errMsg,
-        next_retry_at: isPermanent ? null : new Date(Date.now() + 5 * 60 * 1000).toISOString(),
+        meta_error: JSON.stringify(enrichedError),
+        next_retry_at: giveUp ? null : new Date(Date.now() + backoffMs).toISOString(),
       }).eq("id", logId!);
-      return json({ error: errMsg, meta_error_code: errCode, capi_event_log_id: logId }, 200);
+
+      return json({ error: errMsg, meta_error_code: errCode, meta_error_subcode: errSubcode, fbtrace_id: respJson?.fbtrace_id, capi_event_log_id: logId }, 200);
     }
 
     await admin.from("capi_event_log").update({
