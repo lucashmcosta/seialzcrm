@@ -537,6 +537,7 @@ export default function OpportunitiesKanban() {
     setFilterDateFrom('');
     setFilterDateTo('');
     setFilterTag('all');
+    setFilterStage('all');
   };
 
   const activeFiltersCount = [
@@ -546,25 +547,29 @@ export default function OpportunitiesKanban() {
     filterDateFrom,
     filterDateTo,
     filterTag !== 'all',
+    filterStage !== 'all',
   ].filter(Boolean).length;
 
   // Filtered opportunities for table view (applies all filters except stage)
   const filteredOpportunities = useMemo(() => {
     const baseData = searchResults !== null ? searchResults : opportunities;
     return baseData.filter((opp) => {
-      const matchesOwner = filterOwner === 'all' || opp.owner_user_id === filterOwner;
-      
+      const matchesOwner =
+        filterOwner === 'all' ||
+        (filterOwner === 'none' ? !opp.owner_user_id : opp.owner_user_id === filterOwner);
+
       const matchesMinAmount = !filterMinAmount || (opp.amount && Number(opp.amount) >= Number(filterMinAmount));
       const matchesMaxAmount = !filterMaxAmount || (opp.amount && Number(opp.amount) <= Number(filterMaxAmount));
-      
+
       const matchesDateFrom = !filterDateFrom || !opp.close_date || opp.close_date >= filterDateFrom;
       const matchesDateTo = !filterDateTo || !opp.close_date || opp.close_date <= filterDateTo;
 
       const matchesTag = filterTag === 'all' || (tagsByOpportunity[opp.id]?.some(t => t.id === filterTag));
-      
-      return matchesOwner && matchesMinAmount && matchesMaxAmount && matchesDateFrom && matchesDateTo && matchesTag;
+      const matchesStage = filterStage === 'all' || opp.pipeline_stage_id === filterStage;
+
+      return matchesOwner && matchesMinAmount && matchesMaxAmount && matchesDateFrom && matchesDateTo && matchesTag && matchesStage;
     });
-  }, [opportunities, searchResults, filterOwner, filterMinAmount, filterMaxAmount, filterDateFrom, filterDateTo, filterTag, tagsByOpportunity]);
+  }, [opportunities, searchResults, filterOwner, filterMinAmount, filterMaxAmount, filterDateFrom, filterDateTo, filterTag, filterStage, tagsByOpportunity]);
 
   // Sorted opportunities for table view
   const sortedOpportunities = useMemo(() => {
