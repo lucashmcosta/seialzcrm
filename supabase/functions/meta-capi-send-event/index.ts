@@ -148,7 +148,19 @@ serve(async (req) => {
     const eventId = logRow?.event_id ||
       `${organization_id}:${event_name}:${contact_id || "x"}:${opportunity_id || "x"}:${eventTime}`;
     const sourceUrl = ca.default_event_source_url || undefined;
-    const userData = await buildUserData(contact);
+    const userData: Record<string, unknown> = await buildUserData(contact);
+
+    // Fallback matching params (Meta requires at least one) — use request headers
+    const clientUa = req.headers.get("user-agent") || undefined;
+    const xff = req.headers.get("x-forwarded-for") || "";
+    const clientIp = xff.split(",")[0]?.trim() || undefined;
+    if (clientUa) userData.client_user_agent = clientUa;
+    if (clientIp) userData.client_ip_address = clientIp;
+    // Ensure at least one matching key for manual tests without contact
+    const hasMatchKey = (userData as any).em || (userData as any).ph || (userData as any).fn || (userData as any).ln;
+    if (!hasMatchKey) {
+      userData.external_id = [await sha256Hex(`org:${organization_id}`)];
+    }
 
     const customData: Record<string, unknown> = {};
     if (opportunity?.amount) customData.value = Number(opportunity.amount);
