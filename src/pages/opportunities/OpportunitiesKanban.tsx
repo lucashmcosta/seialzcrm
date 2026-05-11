@@ -120,6 +120,7 @@ export default function OpportunitiesKanban() {
   const [filterDateFrom, setFilterDateFrom] = useState<string>('');
   const [filterDateTo, setFilterDateTo] = useState<string>('');
   const [filterTag, setFilterTag] = useState<string>('all');
+  const [filterStage, setFilterStage] = useState<string>('all');
   const [showFilters, setShowFilters] = useState(false);
   
   // Tags state
