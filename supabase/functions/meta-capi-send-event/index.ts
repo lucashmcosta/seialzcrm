@@ -1,3 +1,4 @@
+// force rebuild 2026-05-11T06:00 - capi action_source + messaging_channel + drop server IP/UA
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "jsr:@supabase/supabase-js@2";
 import { corsHeaders } from "../_shared/cors.ts";
