@@ -360,17 +360,20 @@ export default function OpportunitiesKanban() {
       ? searchResults.filter(opp => opp.pipeline_stage_id === stageId)
       : (opportunitiesByStage[stageId] || []);
     return stageOpps.filter((opp) => {
-      const matchesOwner = filterOwner === 'all' || opp.owner_user_id === filterOwner;
-      
+      const matchesOwner =
+        filterOwner === 'all' ||
+        (filterOwner === 'none' ? !opp.owner_user_id : opp.owner_user_id === filterOwner);
+
       const matchesMinAmount = !filterMinAmount || (opp.amount && Number(opp.amount) >= Number(filterMinAmount));
       const matchesMaxAmount = !filterMaxAmount || (opp.amount && Number(opp.amount) <= Number(filterMaxAmount));
-      
+
       const matchesDateFrom = !filterDateFrom || !opp.close_date || opp.close_date >= filterDateFrom;
       const matchesDateTo = !filterDateTo || !opp.close_date || opp.close_date <= filterDateTo;
 
       const matchesTag = filterTag === 'all' || (tagsByOpportunity[opp.id]?.some(t => t.id === filterTag));
-      
-      return matchesOwner && matchesMinAmount && matchesMaxAmount && matchesDateFrom && matchesDateTo && matchesTag;
+      const matchesStage = filterStage === 'all' || opp.pipeline_stage_id === filterStage;
+
+      return matchesOwner && matchesMinAmount && matchesMaxAmount && matchesDateFrom && matchesDateTo && matchesTag && matchesStage;
     });
   };
 
