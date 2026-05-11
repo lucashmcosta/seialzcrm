@@ -1,3 +1,4 @@
+// force rebuild 2026-05-11T06:00 - capi action_source + messaging_channel + drop server IP/UA
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "jsr:@supabase/supabase-js@2";
 import { corsHeaders } from "../_shared/cors.ts";
@@ -187,7 +188,7 @@ serve(async (req) => {
       const { data } = await admin
         .from("contacts")
         .select(
-          "id, first_name, last_name, full_name, email, phone, address_city, address_state, address_zip, ad_referral_ctwa_clid, fbclid, ad_referral_source_type"
+          "id, first_name, last_name, full_name, email, phone, address_city, address_state, address_zip, ad_referral_ctwa_clid, fbclid, ad_referral_source_type, source"
         )
         .eq("id", contact_id)
         .maybeSingle();
@@ -210,11 +211,16 @@ serve(async (req) => {
     const sourceUrl = ca.default_event_source_url || undefined;
     const userData = await buildUserData(contact);
 
-    const clientUa = req.headers.get("user-agent") || undefined;
+    // NÃO injetar IP/UA do servidor (pg_net / Supabase). Esses campos só fazem sentido
+    // quando vêm do navegador real do usuário. Webhooks do WhatsApp/Twilio não fornecem
+    // esses dados — Meta tolera ausência e usa outros sinais (ctwa_clid, ph, fn, external_id).
+    const fwdUa = req.headers.get("user-agent") || "";
     const xff = req.headers.get("x-forwarded-for") || "";
-    const clientIp = xff.split(",")[0]?.trim() || undefined;
-    if (clientUa) userData.client_user_agent = clientUa;
-    if (clientIp) userData.client_ip_address = clientIp;
+    const fwdIp = xff.split(",")[0]?.trim() || "";
+    const isServerSideUa = !fwdUa || /pg_net|supabase|deno|node-fetch|curl|axios/i.test(fwdUa);
+    if (!isServerSideUa) userData.client_user_agent = fwdUa;
+    if (fwdIp && !isServerSideUa) userData.client_ip_address = fwdIp;
+
     const hasMatchKey = (userData as any).em || (userData as any).ph || (userData as any).fn || (userData as any).ln || (userData as any).external_id;
     if (!hasMatchKey) {
       userData.external_id = [await sha256Hex(`org:${organization_id}`)];
@@ -240,13 +246,32 @@ serve(async (req) => {
       }
     }
 
+    // action_source dinâmico baseado em contact.source
+    const contactSource: string = (contact?.source || "").toLowerCase();
+    let actionSource = "system_generated";
+    let messagingChannel: string | null = null;
+    if (
+      contactSource === "ctwa" ||
+      contactSource === "meta_ctwa" ||
+      contactSource === "whatsapp" ||
+      contact?.ad_referral_ctwa_clid
+    ) {
+      actionSource = "business_messaging";
+      messagingChannel = "whatsapp";
+    } else if (contactSource === "meta_lead_ads") {
+      actionSource = "system_generated";
+    } else if (contactSource.startsWith("landing_page")) {
+      actionSource = "website";
+    }
+
     const eventPayload: Record<string, unknown> = {
       event_name,
       event_time: eventTime,
       event_id: eventId,
-      action_source: "system_generated",
+      action_source: actionSource,
       user_data: userData,
     };
+    if (messagingChannel) eventPayload.messaging_channel = messagingChannel;
     if (sourceUrl) eventPayload.event_source_url = sourceUrl;
     if (Object.keys(customData).length > 0) eventPayload.custom_data = customData;
 
