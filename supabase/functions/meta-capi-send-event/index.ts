@@ -210,11 +210,16 @@ serve(async (req) => {
     const sourceUrl = ca.default_event_source_url || undefined;
     const userData = await buildUserData(contact);
 
-    const clientUa = req.headers.get("user-agent") || undefined;
+    // NÃO injetar IP/UA do servidor (pg_net / Supabase). Esses campos só fazem sentido
+    // quando vêm do navegador real do usuário. Webhooks do WhatsApp/Twilio não fornecem
+    // esses dados — Meta tolera ausência e usa outros sinais (ctwa_clid, ph, fn, external_id).
+    const fwdUa = req.headers.get("user-agent") || "";
     const xff = req.headers.get("x-forwarded-for") || "";
-    const clientIp = xff.split(",")[0]?.trim() || undefined;
-    if (clientUa) userData.client_user_agent = clientUa;
-    if (clientIp) userData.client_ip_address = clientIp;
+    const fwdIp = xff.split(",")[0]?.trim() || "";
+    const isServerSideUa = !fwdUa || /pg_net|supabase|deno|node-fetch|curl|axios/i.test(fwdUa);
+    if (!isServerSideUa) userData.client_user_agent = fwdUa;
+    if (fwdIp && !isServerSideUa) userData.client_ip_address = fwdIp;
+
     const hasMatchKey = (userData as any).em || (userData as any).ph || (userData as any).fn || (userData as any).ln || (userData as any).external_id;
     if (!hasMatchKey) {
       userData.external_id = [await sha256Hex(`org:${organization_id}`)];
