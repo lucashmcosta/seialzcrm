@@ -57,6 +57,11 @@ const OpportunityDetail = lazy(() => retryImport(() => import("./pages/opportuni
 const TasksList = lazy(() => retryImport(() => import("./pages/tasks/TasksList")));
 const MessagesList = lazy(() => retryImport(() => import("./pages/messages/MessagesList")));
 const ReportsPage = lazy(() => retryImport(() => import("./pages/reports/ReportsPage")));
+const MarketingOverview = lazy(() => retryImport(() => import("./pages/marketing/index")));
+const MarketingAds = lazy(() => retryImport(() => import("./pages/marketing/ads/index")));
+const MarketingAdDetail = lazy(() => retryImport(() => import("./pages/marketing/ads/[id]")));
+const MarketingFunnel = lazy(() => retryImport(() => import("./pages/marketing/funnel")));
+const MarketingTimeline = lazy(() => retryImport(() => import("./pages/marketing/timeline")));
 // Settings layout + grid (replaces old Settings page)
 const SettingsLayout = lazy(() => import("./components/settings/SettingsLayout").then(m => ({ default: m.SettingsLayout })));
 const SettingsGrid = lazy(() => import("./components/settings/SettingsGrid").then(m => ({ default: m.SettingsGrid })));
@@ -352,6 +357,11 @@ const App = () => (
               </ProtectedRoute>
             }
           />
+          <Route path="/marketing" element={<ProtectedRoute><MarketingOverview /></ProtectedRoute>} />
+          <Route path="/marketing/ads" element={<ProtectedRoute><MarketingAds /></ProtectedRoute>} />
+          <Route path="/marketing/ads/:id" element={<ProtectedRoute><MarketingAdDetail /></ProtectedRoute>} />
+          <Route path="/marketing/funnel" element={<ProtectedRoute><MarketingFunnel /></ProtectedRoute>} />
+          <Route path="/marketing/timeline" element={<ProtectedRoute><MarketingTimeline /></ProtectedRoute>} />
           <Route path="/settings" element={<ProtectedRoute><SettingsLayout /></ProtectedRoute>}>
             <Route index element={<SettingsGrid />} />
             <Route path="general" element={<GeneralSettings />} />
