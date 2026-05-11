@@ -166,6 +166,11 @@ serve(async (req) => {
     if (opportunity?.amount) customData.value = Number(opportunity.amount);
     if (opportunity?.currency) customData.currency = opportunity.currency;
     if (opportunity?.title) customData.content_name = opportunity.title;
+    // Purchase requires value + currency — fallback defaults
+    if (event_name === "Purchase") {
+      if (customData.value === undefined) customData.value = 0;
+      if (!customData.currency) customData.currency = "BRL";
+    }
 
     const eventPayload: Record<string, unknown> = {
       event_name,
