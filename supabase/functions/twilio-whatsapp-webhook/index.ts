@@ -251,6 +251,54 @@ serve(async (req) => {
 
     console.log(`WhatsApp Webhook ${path} params:`, JSON.stringify(params, null, 2))
 
+    // =====================================================================
+    // Persistência do payload bruto — fonte da verdade pra replay/forensics.
+    // DEVE rodar antes de qualquer parsing. Falha NUNCA pode quebrar o webhook.
+    // =====================================================================
+    const rawMessageSid = params['MessageSid'] || params['SmsSid'] || null
+    const rawSourceEvent = params['MessageStatus'] ? 'status_callback' : 'inbound_message'
+    const rawIdempotencyKey = rawMessageSid
+      ? `twilio-whatsapp:${rawMessageSid}:${rawSourceEvent}`
+      : null
+
+    const rawHeaders = Object.fromEntries(
+      Array.from(req.headers.entries()).filter(([k]) => {
+        const lower = k.toLowerCase()
+        return lower !== 'authorization' && lower !== 'cookie'
+      })
+    )
+
+    try {
+      const { error: rawInsertError } = await supabase
+        .from('integration_inbound_events')
+        .insert({
+          integration_slug: 'twilio-whatsapp',
+          source_event: rawSourceEvent,
+          external_id: rawMessageSid,
+          idempotency_key: rawIdempotencyKey,
+          raw_payload: params,
+          raw_headers: rawHeaders,
+          http_method: req.method,
+          request_path: new URL(req.url).pathname,
+          parser_function: 'twilio-whatsapp-webhook',
+          // organization_id e parser_version ficam null por enquanto — Step 3 vai popular
+        })
+
+      if (rawInsertError) {
+        // Duplicate (idempotency_key collision) é Twilio retry — ignorar silenciosamente.
+        // 23505 = unique_violation
+        if (rawInsertError.code !== '23505') {
+          console.error('[integration_inbound_events] insert failed:', rawInsertError)
+        }
+      }
+    } catch (rawErr) {
+      // NUNCA propaga — raw logging não pode quebrar processamento de lead.
+      console.error('[integration_inbound_events] exception:', rawErr)
+    }
+    // =====================================================================
+    // Fim do raw logging — daqui pra baixo é o código existente, intocado.
+    // =====================================================================
+
     // ========== ROUTE: /inbound - Receive incoming WhatsApp messages ==========
     if (path === 'inbound') {
       const messageSid = params.MessageSid
