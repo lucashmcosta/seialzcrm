@@ -14,9 +14,20 @@ export function AudioMessagePlayer({ src, className = '', timestamp, statusIcon 
   const [currentTime, setCurrentTime] = useState(0);
   const [duration, setDuration] = useState(0);
   const [isLoading, setIsLoading] = useState(true);
+  const [playbackRate, setPlaybackRate] = useState(1);
   const [waveformData] = useState(() =>
     Array.from({ length: 45 }, () => Math.random() * 0.5 + 0.2)
   );
+
+  const cycleRate = () => {
+    const next = playbackRate === 1 ? 1.5 : playbackRate === 1.5 ? 2 : 1;
+    setPlaybackRate(next);
+    if (audioRef.current) audioRef.current.playbackRate = next;
+  };
+
+  useEffect(() => {
+    if (audioRef.current) audioRef.current.playbackRate = playbackRate;
+  }, [playbackRate]);
 
   const progress = duration > 0 ? currentTime / duration : 0;
 
