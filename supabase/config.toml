@@ -146,3 +146,6 @@ verify_jwt = false
 
 [functions.meta-discover-ad-accounts]
 verify_jwt = false
+
+[functions.marketing-insights-sync-daily]
+verify_jwt = false
