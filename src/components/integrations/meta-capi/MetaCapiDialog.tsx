@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo } from "react";
+import { Fragment, useState, useEffect, useMemo } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { useOrganization } from "@/hooks/useOrganization";
@@ -11,7 +11,7 @@ import { Badge } from "@/components/ui/badge";
 import { Card } from "@/components/ui/card";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { ConfirmDialog } from "@/components/ui/confirm-dialog";
-import { CheckCircle, Plug, Warning, Eye, EyeSlash, ArrowsClockwise, LinkSimple } from "@phosphor-icons/react";
+import { CheckCircle, Plug, Warning, Eye, EyeSlash, ArrowsClockwise, LinkSimple, CaretDown, CaretUp } from "@phosphor-icons/react";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { toast } from "sonner";
 import { format } from "date-fns";
@@ -50,6 +50,15 @@ type EventRow = {
   meta_error: string | null;
   attempt_count: number;
   created_at: string;
+  payload?: Record<string, unknown> | null;
+  meta_response?: Record<string, unknown> | null;
+};
+
+type TestResult = {
+  event_name: string;
+  ok: boolean;
+  message: string | null;
+  capi_event_log_id?: string;
 };
 
 const DEFAULT_FIELDS: ConfigField[] = [
@@ -87,6 +96,8 @@ export function MetaCapiDialog({ open, onOpenChange, integration, orgIntegration
   const [showToken, setShowToken] = useState(false);
   const [disconnectOpen, setDisconnectOpen] = useState(false);
   const [reconnectMode, setReconnectMode] = useState(false);
+  const [expandedEventId, setExpandedEventId] = useState<string | null>(null);
+  const [testResults, setTestResults] = useState<TestResult[]>([]);
 
   const [formValues, setFormValues] = useState<Record<string, string>>({});
   const [submitting, setSubmitting] = useState(false);
@@ -144,6 +155,7 @@ export function MetaCapiDialog({ open, onOpenChange, integration, orgIntegration
       setReconnectMode(false);
       setErrors({});
       setShowToken(false);
+      setExpandedEventId(null);
       if (isConnected) {
         setFormValues({
           pixel_id: ca.pixel_id || "",
@@ -172,7 +184,7 @@ export function MetaCapiDialog({ open, onOpenChange, integration, orgIntegration
     queryFn: async () => {
       let q: any = supabase
         .from("capi_event_log" as any)
-        .select("id, event_name, event_time, status, contact_id, opportunity_id, meta_error, attempt_count, created_at")
+        .select("id, event_name, event_time, status, contact_id, opportunity_id, meta_error, attempt_count, created_at, payload, meta_response")
         .eq("organization_id", organization!.id)
         .order("created_at", { ascending: false })
         .limit(20);
@@ -330,12 +342,24 @@ export function MetaCapiDialog({ open, onOpenChange, integration, orgIntegration
           }
 
           if (data?.error) {
-            return { event_name, ok: false, message: data.error as string };
+            return {
+              event_name,
+              ok: false,
+              message: data.error as string,
+              capi_event_log_id: data.capi_event_log_id as string | undefined,
+            };
           }
 
-          return { event_name, ok: true, message: null };
+          return {
+            event_name,
+            ok: true,
+            message: null,
+            capi_event_log_id: data?.capi_event_log_id as string | undefined,
+          };
         }),
       );
+
+      setTestResults(results);
 
       const failed = results.filter((result) => !result.ok);
 
@@ -351,9 +375,12 @@ export function MetaCapiDialog({ open, onOpenChange, integration, orgIntegration
 
       refetchEvents();
     } catch (e: any) {
+      setTestResults([]);
       toast.error(e.message || "Falha no teste");
     }
   };
+
+  const prettyJson = (value: unknown) => JSON.stringify(value ?? {}, null, 2);
 
   const tokenMasked = ca.access_token_last4 ? `••••••••${ca.access_token_last4}` : "••••••••";
 
@@ -620,6 +647,38 @@ export function MetaCapiDialog({ open, onOpenChange, integration, orgIntegration
             </TabsContent>
 
             <TabsContent value="events" className="mt-4 space-y-4">
+              {testResults.length > 0 && (
+                <Card className="p-3 space-y-3">
+                  <div className="flex items-center justify-between gap-3">
+                    <div>
+                      <p className="text-sm font-medium">Último teste manual</p>
+                      <p className="text-xs text-muted-foreground">Aqui você vê exatamente quais eventos foram disparados agora.</p>
+                    </div>
+                    <Button variant="ghost" size="sm" onClick={() => setTestResults([])}>
+                      Fechar
+                    </Button>
+                  </div>
+                  <div className="grid gap-2 md:grid-cols-3">
+                    {testResults.map((result) => (
+                      <div key={result.event_name} className="rounded-md border border-border bg-card p-3 text-sm">
+                        <div className="flex items-center justify-between gap-2">
+                          <span className="font-medium">{result.event_name}</span>
+                          {result.ok ? statusBadge("sent") : statusBadge("failed")}
+                        </div>
+                        <p className="mt-2 text-xs text-muted-foreground break-all">
+                          {result.message || "Enviado com sucesso."}
+                        </p>
+                        {result.capi_event_log_id && (
+                          <p className="mt-2 text-[10px] text-muted-foreground break-all">
+                            Log: {result.capi_event_log_id}
+                          </p>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                </Card>
+              )}
+
               <div className="grid grid-cols-4 gap-3">
                 <Card className="p-3">
                   <p className="text-xs text-muted-foreground">Total (7d)</p>
@@ -666,32 +725,73 @@ export function MetaCapiDialog({ open, onOpenChange, integration, orgIntegration
                 ) : (
                   <div className="divide-y">
                     {events.map((ev) => (
-                      <div key={ev.id} className="p-3 flex items-center gap-3 text-sm">
-                        <div className="flex-1 min-w-0">
-                          <div className="flex items-center gap-2">
-                            <span className="font-medium">{ev.event_name}</span>
-                            {statusBadge(ev.status)}
-                            {ev.attempt_count > 1 && (
-                              <span className="text-[10px] text-muted-foreground">
-                                tentativa {ev.attempt_count}
-                              </span>
-                            )}
+                      <Fragment key={ev.id}>
+                        <button
+                          type="button"
+                          className="w-full p-3 text-left text-sm hover:bg-muted/50 transition-colors"
+                          onClick={() => setExpandedEventId((current) => (current === ev.id ? null : ev.id))}
+                        >
+                          <div className="flex items-center gap-3">
+                            <div className="flex-1 min-w-0">
+                              <div className="flex items-center gap-2 flex-wrap">
+                                <span className="font-medium">{ev.event_name}</span>
+                                {statusBadge(ev.status)}
+                                {ev.attempt_count > 1 && (
+                                  <span className="text-[10px] text-muted-foreground">
+                                    tentativa {ev.attempt_count}
+                                  </span>
+                                )}
+                              </div>
+                              <p className="text-xs text-muted-foreground">
+                                {format(new Date(ev.event_time || ev.created_at), "dd/MM/yyyy HH:mm:ss", { locale: ptBR })}
+                              </p>
+                              {ev.meta_error && (
+                                <p className="text-xs text-destructive mt-1 truncate" title={ev.meta_error}>
+                                  {ev.meta_error}
+                                </p>
+                              )}
+                            </div>
+                            <div className="flex items-center gap-2 shrink-0">
+                              {(ev.status === "failed" || ev.status === "retrying") && (
+                                <Button
+                                  variant="outline"
+                                  size="sm"
+                                  onClick={(event) => {
+                                    event.stopPropagation();
+                                    reprocess(ev.id);
+                                  }}
+                                >
+                                  Reprocessar
+                                </Button>
+                              )}
+                              {expandedEventId === ev.id ? (
+                                <CaretUp className="h-4 w-4 text-muted-foreground" />
+                              ) : (
+                                <CaretDown className="h-4 w-4 text-muted-foreground" />
+                              )}
+                            </div>
                           </div>
-                          <p className="text-xs text-muted-foreground">
-                            {format(new Date(ev.event_time || ev.created_at), "dd/MM/yyyy HH:mm:ss", { locale: ptBR })}
-                          </p>
-                          {ev.meta_error && (
-                            <p className="text-xs text-destructive mt-1 truncate" title={ev.meta_error}>
-                              {ev.meta_error}
-                            </p>
-                          )}
-                        </div>
-                        {(ev.status === "failed" || ev.status === "retrying") && (
-                          <Button variant="outline" size="sm" onClick={() => reprocess(ev.id)}>
-                            Reprocessar
-                          </Button>
+                        </button>
+
+                        {expandedEventId === ev.id && (
+                          <div className="border-t border-border bg-muted/20 p-3 space-y-3">
+                            <div className="grid gap-3 lg:grid-cols-2">
+                              <div className="space-y-2 min-w-0">
+                                <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Payload enviado</p>
+                                <pre className="max-h-72 overflow-auto rounded-md border border-border bg-card p-3 text-[11px] leading-5 text-foreground whitespace-pre-wrap break-all">
+                                  {prettyJson(ev.payload)}
+                                </pre>
+                              </div>
+                              <div className="space-y-2 min-w-0">
+                                <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Resposta da Meta</p>
+                                <pre className="max-h-72 overflow-auto rounded-md border border-border bg-card p-3 text-[11px] leading-5 text-foreground whitespace-pre-wrap break-all">
+                                  {prettyJson(ev.meta_response)}
+                                </pre>
+                              </div>
+                            </div>
+                          </div>
                         )}
-                      </div>
+                      </Fragment>
                     ))}
                   </div>
                 )}
