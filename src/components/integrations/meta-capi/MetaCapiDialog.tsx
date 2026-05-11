@@ -318,11 +318,37 @@ export function MetaCapiDialog({ open, onOpenChange, integration, orgIntegration
 
   const sendTest = async () => {
     try {
-      const { error } = await supabase.functions.invoke("meta-capi-send-event", {
-        body: { organization_id: organization?.id, test: true, event_name: "PageView" },
-      });
-      if (error) throw error;
-      toast.success("Evento de teste enviado. Verifique 'Test events' no Events Manager.");
+      const eventNames = ["PageView", "Lead", "Purchase"] as const;
+      const results = await Promise.all(
+        eventNames.map(async (event_name) => {
+          const { data, error } = await supabase.functions.invoke("meta-capi-send-event", {
+            body: { organization_id: organization?.id, test: true, event_name },
+          });
+
+          if (error) {
+            return { event_name, ok: false, message: error.message || "Falha ao enviar" };
+          }
+
+          if (data?.error) {
+            return { event_name, ok: false, message: data.error as string };
+          }
+
+          return { event_name, ok: true, message: null };
+        }),
+      );
+
+      const failed = results.filter((result) => !result.ok);
+
+      if (failed.length === eventNames.length) {
+        throw new Error(failed.map((result) => `${result.event_name}: ${result.message}`).join(" • "));
+      }
+
+      if (failed.length > 0) {
+        toast.warning(`Teste parcial: ${failed.map((result) => result.event_name).join(", ")} falharam.`);
+      } else {
+        toast.success("3 eventos de teste enviados. Verifique 'Test events' no Events Manager.");
+      }
+
       refetchEvents();
     } catch (e: any) {
       toast.error(e.message || "Falha no teste");
