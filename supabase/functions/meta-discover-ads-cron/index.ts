@@ -215,7 +215,7 @@ async function processOrg(
   if (stale.length > 0) {
     const { error: archErr } = await admin
       .from("marketing_campaigns")
-      .update({ status: "ARCHIVED", updated_at: new Date().toISOString() })
+      .update({ status: "archived", updated_at: new Date().toISOString() })
       .in("id", stale);
     if (!archErr) adsArchived = stale.length;
   }
