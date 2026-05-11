@@ -245,13 +245,32 @@ serve(async (req) => {
       }
     }
 
+    // action_source dinâmico baseado em contact.source
+    const contactSource: string = (contact?.source || "").toLowerCase();
+    let actionSource = "system_generated";
+    let messagingChannel: string | null = null;
+    if (
+      contactSource === "ctwa" ||
+      contactSource === "meta_ctwa" ||
+      contactSource === "whatsapp" ||
+      contact?.ad_referral_ctwa_clid
+    ) {
+      actionSource = "business_messaging";
+      messagingChannel = "whatsapp";
+    } else if (contactSource === "meta_lead_ads") {
+      actionSource = "system_generated";
+    } else if (contactSource.startsWith("landing_page")) {
+      actionSource = "website";
+    }
+
     const eventPayload: Record<string, unknown> = {
       event_name,
       event_time: eventTime,
       event_id: eventId,
-      action_source: "system_generated",
+      action_source: actionSource,
       user_data: userData,
     };
+    if (messagingChannel) eventPayload.messaging_channel = messagingChannel;
     if (sourceUrl) eventPayload.event_source_url = sourceUrl;
     if (Object.keys(customData).length > 0) eventPayload.custom_data = customData;
 
