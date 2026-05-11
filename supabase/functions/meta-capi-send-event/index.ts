@@ -246,50 +246,19 @@ serve(async (req) => {
       }
     }
 
-    // action_source dinâmico baseado em contact.source
+    // action_source — doc oficial CAPI v25.0 (seções 5.1 e 7.1) recomenda
+    // 'system_generated' para Lead/Purchase originados de WhatsApp/CTWA/lead_ads.
+    // Apenas landing pages (evento veio de browser real) usam 'website'.
     const contactSource: string = (contact?.source || "").toLowerCase();
-    let actionSource = "system_generated";
-    let messagingChannel: string | null = null;
-    if (
-      contactSource === "ctwa" ||
-      contactSource === "meta_ctwa" ||
-      contactSource === "whatsapp" ||
-      contact?.ad_referral_ctwa_clid
-    ) {
-      actionSource = "business_messaging";
-      messagingChannel = "whatsapp";
-    } else if (contactSource === "meta_lead_ads") {
-      actionSource = "system_generated";
-    } else if (contactSource.startsWith("landing_page")) {
-      actionSource = "website";
-    }
-
-    // Meta business_messaging usa taxonomy diferente do web pixel.
-    // Doc: https://developers.facebook.com/docs/marketing-api/conversions-api/business-messaging-events
-    const translateEventNameForActionSource = (
-      logicalName: string,
-      actSource: string,
-    ): string => {
-      if (actSource === "business_messaging") {
-        const businessMessagingMap: Record<string, string> = {
-          Lead: "LeadSubmitted",
-          CompleteRegistration: "Subscribe",
-          // Purchase, InitiateCheckout, AddToCart permanecem iguais
-        };
-        return businessMessagingMap[logicalName] || logicalName;
-      }
-      return logicalName;
-    };
-    const finalEventName = translateEventNameForActionSource(event_name, actionSource);
+    const actionSource = contactSource.startsWith("landing_page") ? "website" : "system_generated";
 
     const eventPayload: Record<string, unknown> = {
-      event_name: finalEventName,
+      event_name,
       event_time: eventTime,
       event_id: eventId,
       action_source: actionSource,
       user_data: userData,
     };
-    if (messagingChannel) eventPayload.messaging_channel = messagingChannel;
     if (sourceUrl) eventPayload.event_source_url = sourceUrl;
     if (Object.keys(customData).length > 0) eventPayload.custom_data = customData;
 
