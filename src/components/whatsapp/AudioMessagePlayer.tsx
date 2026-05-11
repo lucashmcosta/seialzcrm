@@ -182,6 +182,30 @@ export function AudioMessagePlayer({ src, className = '', timestamp, statusIcon 
             }}
           />
         </div>
+
+        {!isLoading && (
+          <button
+            onClick={cycleRate}
+            style={{
+              fontSize: 10,
+              fontWeight: 600,
+              lineHeight: 1,
+              padding: '3px 6px',
+              borderRadius: 9999,
+              border: '1px solid currentColor',
+              cursor: 'pointer',
+              background: 'transparent',
+              color: 'currentColor',
+              opacity: playbackRate === 1 ? 0.5 : 0.95,
+              flexShrink: 0,
+              minWidth: 30,
+              fontVariantNumeric: 'tabular-nums',
+            }}
+            aria-label={`Velocidade ${playbackRate}x`}
+          >
+            {playbackRate === 1 ? '1x' : playbackRate === 1.5 ? '1.5x' : '2x'}
+          </button>
+        )}
       </div>
 
       {/* Row 2: Duration + Timestamp */}
