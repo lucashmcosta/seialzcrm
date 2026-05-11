@@ -11,7 +11,14 @@ export const fmtRoas = (v: number | null | undefined) =>
   v == null ? '—' : `${Number(v).toFixed(2)}x`;
 
 export const fmtDateBR = (d: string | Date) => {
-  const date = typeof d === 'string' ? new Date(d) : d;
+  let date: Date;
+  if (typeof d === 'string') {
+    // Parse YYYY-MM-DD as local date to avoid UTC shift in BRT
+    const m = d.match(/^(\d{4})-(\d{2})-(\d{2})/);
+    date = m ? new Date(Number(m[1]), Number(m[2]) - 1, Number(m[3])) : new Date(d);
+  } else {
+    date = d;
+  }
   return date.toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit', year: '2-digit' });
 };
 
