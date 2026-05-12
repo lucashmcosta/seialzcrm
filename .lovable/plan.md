@@ -1,56 +1,52 @@
 ## Objetivo
 
-Corrigir o contador das colunas em Oportunidades para que, **quando houver filtro/busca por nome**, ele mostre a quantidade **filtrada**, e não o total bruto da etapa.
+No `Ranking de vendedores` em `/reports`, ao clicar numa linha de vendedor, abrir um modal com os detalhes do vendedor e as oportunidades dele no período/filtros aplicados — sem pesar a tela.
 
-## Problema atual
+## Como funciona hoje
 
-Hoje o header da coluna usa `stageCounts[stage.id].count`, que vem do total agregado do banco.
-Isso ignora o resultado de `searchResults` e por isso, ao filtrar por `Victoria`, a coluna continua mostrando algo como `189` mesmo sem existir 189 cards da Victoria naquela etapa.
+- `ReportsPage.tsx` já carrega `currentOpps` (criadas/fechadas no período) e `openOpps` (todas em aberto da org), considerando o filtro de owner.
+- `UserLeaderboard` renderiza cada linha com `userId` mas sem `onClick`.
 
-## O que vai mudar
+## O que será feito
 
-### 1. Ajustar o contador das colunas no desktop
-Arquivo: `src/pages/opportunities/OpportunitiesKanban.tsx`
+### 1. Novo componente `UserDetailDialog`
+Arquivo: `src/components/reports/UserDetailDialog.tsx`
 
-- Nos dois renders do Kanban (Seialz e legado), alterar a lógica do número exibido no header da coluna.
-- Regra nova:
-  - **se houver busca/filtro ativo**, mostrar `stageOpportunities.length`
-  - **se não houver busca/filtro**, manter `stageCounts[stage.id]?.count`
-- Aplicar a mesma regra ao valor monetário da coluna:
-  - filtrado: soma dos cards filtrados
-  - sem filtro: total agregado já existente
+- Modal usando `Dialog` do shadcn (já usado no projeto).
+- Lazy-loaded em `ReportsPage` via `lazy(() => import(...))` para não pesar o bundle inicial.
+- Props: `userId`, `userName`, `range`, `organizationId`, `onClose`, `formatCurrency`, `stagesById` (para nome da etapa).
+- **Busca sob demanda** (só quando abre): uma única query a `opportunities` filtrando por `owner_user_id = userId`, `organization_id`, `deleted_at is null`, e o mesmo OR de período usado em `fetchData` (criadas no período OU fechadas como won/lost no período). Limite de ~500 + ordenação por `updated_at desc`.
+- Conteúdo do modal:
+  - Header: avatar + nome
+  - Bloco de KPIs do vendedor (reaproveita os números já calculados em `userStats`: abertas, ganhas, perdidas, win rate, valor ganho)
+  - Tabs: "Abertas", "Ganhas", "Perdidas"
+  - Lista compacta (rolável, `max-h-[60vh]`) com: título, etapa, valor, data, status. Cada item navega para `/opportunities/:id` ao clicar.
+  - Estado vazio por aba.
+- Loading skeleton enquanto busca.
 
-### 2. Definir claramente quando a tela está “filtrada”
-Ainda em `src/pages/opportunities/OpportunitiesKanban.tsx`
+### 2. Tornar as linhas clicáveis em `UserLeaderboard`
+Arquivo: `src/components/reports/UserLeaderboard.tsx`
 
-Criar uma condição centralizada, algo como:
-- busca ativa (`searchResults !== null`)
-- ou qualquer filtro ativo (`activeFiltersCount > 0`)
+- Adicionar prop opcional `onRowClick?: (row: UserStats) => void`.
+- Quando definida, aplicar `cursor-pointer hover:bg-muted/50` na linha e chamar `onRowClick(r)`.
 
-Essa condição será usada para decidir se o header mostra:
-- total filtrado/visível
-- ou total geral da etapa
+### 3. Wire-up em `ReportsPage`
+Arquivo: `src/pages/reports/ReportsPage.tsx`
 
-### 3. Manter comportamento atual sem filtro
-Sem busca e sem filtros:
-- o contador continua mostrando o total real da etapa no banco
-- o scroll infinito continua igual
-- nenhum ajuste de banco ou RPC será feito
+- State: `selectedUser: UserStats | null`.
+- Passar `onRowClick={setSelectedUser}` para `UserLeaderboard`.
+- Renderizar `<UserDetailDialog />` (dentro de `Suspense`) só quando `selectedUser` existir, passando `range`, `organizationId`, `formatCurrency`, e o `stagesById` derivado de `stages`.
+- Fechar via `onOpenChange` -> `setSelectedUser(null)`.
 
-## Resultado esperado
+## Cuidados de performance
 
-Ao buscar por `Victoria`:
-- cada coluna passa a exibir a quantidade real de cards da Victoria naquela etapa
-- o valor da etapa também acompanha apenas os cards filtrados
-- ao limpar a busca, os totais gerais voltam a aparecer
+- Componente carregado via `React.lazy` — não entra no bundle inicial da `/reports`.
+- A query roda só quando o modal abre, com limite e select enxuto (`id, title, amount, status, pipeline_stage_id, close_date, updated_at, contacts(full_name)`).
+- Reaproveita `userStats` para os KPIs do header (sem refetch).
+- Sem realtime, sem polling.
 
-## Escopo
+## Fora do escopo
 
-Incluído:
-- correção do contador da coluna quando há filtro/busca
-- correção do valor da coluna quando há filtro/busca
-
-Fora do escopo:
-- mudanças em banco, RPC ou migrations
-- alteração da lógica de paginação/infinite scroll
-- mudanças na página `/reports`, exceto se ela reutilizar exatamente esse mesmo componente
+- Não muda contadores existentes nem a lógica de KPIs.
+- Sem mudanças de banco/RPC.
+- Sem alterações na versão mobile do leaderboard (caso exista, fica para depois).
