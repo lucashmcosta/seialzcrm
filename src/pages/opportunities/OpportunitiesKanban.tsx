@@ -376,13 +376,14 @@ export default function OpportunitiesKanban() {
       const matchesMinAmount = !filterMinAmount || (opp.amount && Number(opp.amount) >= Number(filterMinAmount));
       const matchesMaxAmount = !filterMaxAmount || (opp.amount && Number(opp.amount) <= Number(filterMaxAmount));
 
-      const matchesDateFrom = !filterDateFrom || !opp.close_date || opp.close_date >= filterDateFrom;
-      const matchesDateTo = !filterDateTo || !opp.close_date || opp.close_date <= filterDateTo;
+      const matchesNoCloseDate = !filterNoCloseDate || opp.close_date == null;
+      const matchesDateFrom = filterNoCloseDate || !filterDateFrom || (opp.close_date && opp.close_date >= filterDateFrom);
+      const matchesDateTo = filterNoCloseDate || !filterDateTo || (opp.close_date && opp.close_date <= filterDateTo);
 
       const matchesTag = filterTag === 'all' || (tagsByOpportunity[opp.id]?.some(t => t.id === filterTag));
       const matchesStage = filterStage === 'all' || opp.pipeline_stage_id === filterStage;
 
-      return matchesOwner && matchesMinAmount && matchesMaxAmount && matchesDateFrom && matchesDateTo && matchesTag && matchesStage;
+      return matchesOwner && matchesMinAmount && matchesMaxAmount && matchesNoCloseDate && matchesDateFrom && matchesDateTo && matchesTag && matchesStage;
     });
   };
 
