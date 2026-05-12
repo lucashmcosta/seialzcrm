@@ -935,6 +935,22 @@ export default function OpportunitiesKanban() {
             </div>
           </div>
 
+          <div className="space-y-2">
+            <label className="text-sm font-medium">Data de Criação</label>
+            <div className="flex gap-2">
+              <Input
+                type="date"
+                value={filterCreatedFrom}
+                onChange={(e) => setFilterCreatedFrom(e.target.value)}
+              />
+              <Input
+                type="date"
+                value={filterCreatedTo}
+                onChange={(e) => setFilterCreatedTo(e.target.value)}
+              />
+            </div>
+          </div>
+
           {allTags.length > 0 && (
             <div className="space-y-2">
               <label className="text-sm font-medium">Etiqueta</label>
