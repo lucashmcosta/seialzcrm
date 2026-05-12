@@ -387,7 +387,7 @@ export default function ContactsList() {
         </div>
 
         {/* Filters */}
-        <div className="mb-6 flex flex-wrap gap-3">
+        <div className="mb-6 flex flex-wrap gap-3 items-center">
           <div className="relative flex-1 min-w-[250px] max-w-sm">
             <MagnifyingGlass size={16} weight="light" className="absolute left-3 top-1/2 transform -translate-y-1/2 text-muted-foreground" />
             <Input
@@ -397,55 +397,85 @@ export default function ContactsList() {
               className="pl-10"
             />
           </div>
-          
-          {permissions.viewAllContacts && (
-            <Select value={ownerFilter} onValueChange={setOwnerFilter}>
-              <SelectTrigger className="w-48">
-                <SelectValue placeholder={t('contacts.owner')} />
-              </SelectTrigger>
-              <SelectContent className="bg-popover z-50">
-                <SelectItem value="all">{t('contacts.allOwners')}</SelectItem>
-                {userProfile?.id && (
-                  <SelectItem value={userProfile.id}>Meus</SelectItem>
-                )}
-                {users.filter(u => u.id !== userProfile?.id).map(user => (
-                  <SelectItem key={user.id} value={user.id}>
-                    {user.full_name}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          )}
-          
-          <Select value={stageFilter} onValueChange={setStageFilter}>
-            <SelectTrigger className="w-48">
-              <SelectValue placeholder={t('contacts.lifecycleStage')} />
-            </SelectTrigger>
-            <SelectContent className="bg-popover z-50">
-              <SelectItem value="all">{t('contacts.allStages')}</SelectItem>
-              <SelectItem value="lead">{t('lifecycle.lead')}</SelectItem>
-              <SelectItem value="customer">{t('lifecycle.customer')}</SelectItem>
-              <SelectItem value="inactive">{t('lifecycle.inactive')}</SelectItem>
-            </SelectContent>
-          </Select>
 
-          <div className="flex items-center gap-2">
-            <Input
-              type="date"
-              value={createdFromFilter}
-              onChange={(e) => setCreatedFromFilter(e.target.value)}
-              className="w-[150px]"
-              title="Criado de"
-            />
-            <span className="text-sm text-muted-foreground">até</span>
-            <Input
-              type="date"
-              value={createdToFilter}
-              onChange={(e) => setCreatedToFilter(e.target.value)}
-              className="w-[150px]"
-              title="Criado até"
-            />
-          </div>
+          <Popover open={showFilters} onOpenChange={setShowFilters}>
+            <PopoverTrigger asChild>
+              <ShadButton variant="outline" className="relative">
+                <FunnelSimple size={16} weight="light" className="mr-2" />
+                Filtros
+                {activeFiltersCount > 0 && (
+                  <Badge variant="secondary" className="ml-2 h-4 w-4 p-0 flex items-center justify-center rounded-full text-[10px]">
+                    {activeFiltersCount}
+                  </Badge>
+                )}
+              </ShadButton>
+            </PopoverTrigger>
+            <PopoverContent className="w-80" align="end">
+              <div className="space-y-4">
+                <div className="flex items-center justify-between">
+                  <h4 className="font-medium text-sm">Filtros Avançados</h4>
+                  {activeFiltersCount > 0 && (
+                    <ShadButton variant="ghost" size="sm" onClick={clearFilters}>
+                      Limpar
+                    </ShadButton>
+                  )}
+                </div>
+
+                {permissions.viewAllContacts && (
+                  <div className="space-y-2">
+                    <label className="text-sm font-medium">{t('contacts.owner')}</label>
+                    <Select value={ownerFilter} onValueChange={setOwnerFilter}>
+                      <SelectTrigger>
+                        <SelectValue placeholder={t('contacts.allOwners')} />
+                      </SelectTrigger>
+                      <SelectContent className="bg-popover z-50">
+                        <SelectItem value="all">{t('contacts.allOwners')}</SelectItem>
+                        {userProfile?.id && (
+                          <SelectItem value={userProfile.id}>Meus</SelectItem>
+                        )}
+                        {users.filter(u => u.id !== userProfile?.id).map(user => (
+                          <SelectItem key={user.id} value={user.id}>
+                            {user.full_name}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                )}
+
+                <div className="space-y-2">
+                  <label className="text-sm font-medium">{t('contacts.lifecycleStage')}</label>
+                  <Select value={stageFilter} onValueChange={setStageFilter}>
+                    <SelectTrigger>
+                      <SelectValue placeholder={t('contacts.allStages')} />
+                    </SelectTrigger>
+                    <SelectContent className="bg-popover z-50">
+                      <SelectItem value="all">{t('contacts.allStages')}</SelectItem>
+                      <SelectItem value="lead">{t('lifecycle.lead')}</SelectItem>
+                      <SelectItem value="customer">{t('lifecycle.customer')}</SelectItem>
+                      <SelectItem value="inactive">{t('lifecycle.inactive')}</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+
+                <div className="space-y-2">
+                  <label className="text-sm font-medium">Data de Criação</label>
+                  <div className="flex gap-2">
+                    <Input
+                      type="date"
+                      value={createdFromFilter}
+                      onChange={(e) => setCreatedFromFilter(e.target.value)}
+                    />
+                    <Input
+                      type="date"
+                      value={createdToFilter}
+                      onChange={(e) => setCreatedToFilter(e.target.value)}
+                    />
+                  </div>
+                </div>
+              </div>
+            </PopoverContent>
+          </Popover>
 
           <ColumnSelector
             columns={availableColumns}
