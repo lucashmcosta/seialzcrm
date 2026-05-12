@@ -762,8 +762,8 @@ export default function OpportunitiesKanban() {
           organizationId={organization?.id || ''}
           loadMoreForStage={loadMoreForStage}
           loadingMoreStage={loadingMoreStage}
-          filterOwner={filterOwner}
-          filterTag={filterTag}
+          filterOwner={filterOwners.length === 1 ? filterOwners[0] : 'all'}
+          filterTag={filterTags.length === 1 ? filterTags[0] : 'all'}
         />
       </MobileLayout>
     );
