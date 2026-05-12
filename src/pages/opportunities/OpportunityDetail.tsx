@@ -60,6 +60,7 @@ export default function OpportunityDetail() {
   const [selectedTab, setSelectedTab] = useState<Key>('overview');
   const [createdByName, setCreatedByName] = useState<string | null>(null);
   const [updatedByName, setUpdatedByName] = useState<string | null>(null);
+  const [pendingStatus, setPendingStatus] = useState<'won' | 'lost' | null>(null);
   const { userProfile } = useOrganization();
 
   const tabs = [
