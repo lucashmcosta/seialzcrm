@@ -411,6 +411,24 @@ export default function ContactsList() {
             </SelectContent>
           </Select>
 
+          <div className="flex items-center gap-2">
+            <Input
+              type="date"
+              value={createdFromFilter}
+              onChange={(e) => setCreatedFromFilter(e.target.value)}
+              className="w-[150px]"
+              title="Criado de"
+            />
+            <span className="text-sm text-muted-foreground">até</span>
+            <Input
+              type="date"
+              value={createdToFilter}
+              onChange={(e) => setCreatedToFilter(e.target.value)}
+              className="w-[150px]"
+              title="Criado até"
+            />
+          </div>
+
           <ColumnSelector
             columns={availableColumns}
             visibleColumns={visibleColumns}
