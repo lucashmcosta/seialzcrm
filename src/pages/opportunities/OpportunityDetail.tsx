@@ -498,6 +498,13 @@ export default function OpportunityDetail() {
         stages={stages}
         onSuccess={fetchOpportunity}
       />
+
+      <CloseDatePromptDialog
+        open={pendingStatus !== null}
+        onOpenChange={(o) => !o && setPendingStatus(null)}
+        title={pendingStatus === 'won' ? 'Marcar como Ganho' : 'Marcar como Perdido'}
+        onConfirm={(date) => pendingStatus && applyStatusChange(pendingStatus, date)}
+      />
     </Layout>
   );
 }
