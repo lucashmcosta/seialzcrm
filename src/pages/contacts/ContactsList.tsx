@@ -84,6 +84,21 @@ export default function ContactsList() {
   const [stageFilter, setStageFilter] = useState('all');
   const [createdFromFilter, setCreatedFromFilter] = useState('');
   const [createdToFilter, setCreatedToFilter] = useState('');
+  const [showFilters, setShowFilters] = useState(false);
+
+  const activeFiltersCount = [
+    ownerFilter !== 'all',
+    stageFilter !== 'all',
+    createdFromFilter,
+    createdToFilter,
+  ].filter(Boolean).length;
+
+  const clearFilters = () => {
+    setOwnerFilter('all');
+    setStageFilter('all');
+    setCreatedFromFilter('');
+    setCreatedToFilter('');
+  };
   
   // Pagination state
   const [currentPage, setCurrentPage] = useState(1);
