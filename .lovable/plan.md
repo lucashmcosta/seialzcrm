@@ -1,25 +1,38 @@
-## Aplicar regra de Data de Fechamento obrigatória no menu de Mensagens
+## Filtro: oportunidades sem Data de Fechamento
 
-Hoje, no menu **Ações → Oportunidades → Marcar como Ganho/Perdido** dentro de `/messages`, a oportunidade é atualizada direto via `ConfirmDialog`, sem exigir `close_date`. Vamos alinhar com o comportamento já implementado no detalhe e no Kanban.
+Adicionar uma opção no painel de **Filtros Avançados** do Kanban/Tabela de Oportunidades para listar apenas oportunidades com `close_date` vazio.
 
 ### Arquivo
 
-- `src/pages/messages/MessagesList.tsx`
+- `src/pages/opportunities/OpportunitiesKanban.tsx`
 
-### Mudanças
+### UX
 
-1. **Tipo `ChatOpp`** (linha 287): incluir `close_date: string | null`.
-2. **Query de oportunidades do contato** (próxima ao `setContactOpportunities`, ~linha 560): adicionar `close_date` ao `select`.
-3. **`handleMarkOpportunity`** (linhas 564–601):
-   - Se `opp.close_date` já existir → comportamento atual (segue direto).
-   - Se estiver vazio → não fazer o update; em vez disso, abrir o `CloseDatePromptDialog` já criado em `src/components/opportunities/CloseDatePromptDialog.tsx`.
-4. **Estado novo**: `pendingCloseDate: { kind: 'won' | 'lost'; opp: ChatOpp } | null` para guardar a ação enquanto o usuário escolhe a data.
-5. **Fluxo do Confirm atual**:
-   - Quando o usuário confirmar no `ConfirmDialog`, chamar `handleMarkOpportunity`. Se faltar `close_date`, fechar o `ConfirmDialog`, abrir o `CloseDatePromptDialog`. Ao confirmar a data, executar o update com `{ status, pipeline_stage_id, close_date, updated_by }` e atualizar a lista local.
-6. **Render**: adicionar `<CloseDatePromptDialog>` próximo ao `ConfirmDialog` existente (~linha 1920), com título "Marcar como Ganho/Perdido" conforme `kind`.
+- Logo abaixo dos dois inputs `dd/mm/aaaa` da seção **Data de Fechamento**, adicionar um `Checkbox` (shadcn) com o label **"Apenas sem data de fechamento"**.
+- Quando ativo:
+  - Os inputs de data inicial/final ficam desabilitados (e visualmente esmaecidos), pois são mutuamente exclusivos.
+  - O filtro de listagem passa a exibir somente oportunidades com `close_date == null`.
+- Quando inativo: comportamento atual (range opcional).
+- O contador `activeFiltersCount` (badge no botão "Filtros") incrementa em +1 quando o checkbox estiver ativo.
+- O botão **Limpar filtros** já existente reseta também esse novo filtro.
+
+### Implementação
+
+1. **Estado novo**: `const [filterNoCloseDate, setFilterNoCloseDate] = useState<boolean>(false);`
+2. **Lógica de filtro** (duas ocorrências, linhas ~377 e ~611):
+   - Substituir `matchesDateFrom`/`matchesDateTo` por:
+     ```ts
+     const matchesNoCloseDate = !filterNoCloseDate || opp.close_date == null;
+     const matchesDateFrom = filterNoCloseDate || !filterDateFrom || (opp.close_date && opp.close_date >= filterDateFrom);
+     const matchesDateTo   = filterNoCloseDate || !filterDateTo   || (opp.close_date && opp.close_date <= filterDateTo);
+     ```
+   - Incluir `matchesNoCloseDate` no `&&` final.
+   - Adicionar `filterNoCloseDate` no array de dependências do `useMemo` (linha 619).
+3. **`clearFilters`** (~linha 540): adicionar `setFilterNoCloseDate(false);`
+4. **`activeFiltersCount`** (~linhas 549-557): adicionar `filterNoCloseDate` ao array `.filter(Boolean)`.
+5. **UI** (após linha 899, dentro do bloco "Data de Fechamento"): renderizar o `<Checkbox>` controlado por `filterNoCloseDate`. Aplicar `disabled={filterNoCloseDate}` nos dois `<Input type="date">` acima.
 
 ### Não muda
 
-- Versão mobile (`MobileMessagesList`) não tem essa ação — sem alterações.
-- Banco, RLS, edge functions e relatórios permanecem iguais.
-- Oportunidades que já tinham `close_date` continuam sendo marcadas direto, sem prompt extra.
+- Schema do banco, RLS, edge functions e relatórios permanecem iguais.
+- Demais filtros (responsável, etapa, valor, etiqueta) continuam intactos.
