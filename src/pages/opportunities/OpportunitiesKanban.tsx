@@ -586,6 +586,7 @@ export default function OpportunitiesKanban() {
     setFilterMaxAmount('');
     setFilterDateFrom('');
     setFilterDateTo('');
+    setFilterNoCloseDate(false);
     setFilterTag('all');
     setFilterStage('all');
   };
@@ -596,6 +597,7 @@ export default function OpportunitiesKanban() {
     filterMaxAmount,
     filterDateFrom,
     filterDateTo,
+    filterNoCloseDate,
     filterTag !== 'all',
     filterStage !== 'all',
   ].filter(Boolean).length;
