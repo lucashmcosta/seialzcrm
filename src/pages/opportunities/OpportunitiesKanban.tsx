@@ -17,6 +17,7 @@ import { supabase } from '@/integrations/supabase/client';
 import { Plus, MagnifyingGlass, FunnelSimple, PencilSimple, TrashSimple } from '@phosphor-icons/react';
 import { Skeleton } from '@/components/ui/skeleton';
 import { OpportunityDialog } from '@/components/opportunities/OpportunityDialog';
+import { CloseDatePromptDialog } from '@/components/opportunities/CloseDatePromptDialog';
 import { OpportunityCard } from '@/components/opportunities/OpportunityCard';
 import { SeialzOpportunityCard } from '@/components/opportunities/SeialzOpportunityCard';
 import { SeialzTopbar } from '@/components/seialz/SeialzTopbar';
