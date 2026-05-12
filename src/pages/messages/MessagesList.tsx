@@ -562,7 +562,7 @@ function DesktopMessagesList() {
     })();
   }, [organization?.id, selectedThread?.contact_id]);
 
-  const handleMarkOpportunity = async (kind: 'won' | 'lost', opp: ChatOpp) => {
+  const handleMarkOpportunity = async (kind: 'won' | 'lost', opp: ChatOpp, closeDateOverride?: string) => {
     if (!organization?.id) return;
     const targetStage = pipelineStages.find((s) => s.type === kind);
     if (!targetStage) {
@@ -575,6 +575,15 @@ function DesktopMessagesList() {
       });
       return;
     }
+
+    const closeDate = closeDateOverride || opp.close_date;
+    if (!closeDate) {
+      // Need to ask user for the close date
+      setConfirmAction(null);
+      setPendingCloseDate({ kind, opp });
+      return;
+    }
+
     setMarkingOpp(true);
     try {
       const { error } = await supabase
@@ -582,6 +591,7 @@ function DesktopMessagesList() {
         .update({
           status: kind,
           pipeline_stage_id: targetStage.id,
+          close_date: closeDate,
           updated_by: userProfile?.id || null,
         } as any)
         .eq('id', opp.id);
@@ -593,6 +603,7 @@ function DesktopMessagesList() {
       });
       setContactOpportunities((prev) => prev.filter((o) => o.id !== opp.id));
       setConfirmAction(null);
+      setPendingCloseDate(null);
     } catch (err) {
       console.error('Error marking opportunity:', err);
       toast({ title: locale === 'pt-BR' ? 'Erro ao atualizar' : 'Error updating', variant: 'destructive' });
