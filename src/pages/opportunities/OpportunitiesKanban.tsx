@@ -127,6 +127,7 @@ export default function OpportunitiesKanban() {
   const [filterMaxAmount, setFilterMaxAmount] = useState<string>('');
   const [filterDateFrom, setFilterDateFrom] = useState<string>('');
   const [filterDateTo, setFilterDateTo] = useState<string>('');
+  const [filterNoCloseDate, setFilterNoCloseDate] = useState<boolean>(false);
   const [filterTag, setFilterTag] = useState<string>('all');
   const [filterStage, setFilterStage] = useState<string>('all');
   const [showFilters, setShowFilters] = useState(false);
