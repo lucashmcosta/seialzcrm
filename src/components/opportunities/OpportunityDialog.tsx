@@ -19,6 +19,7 @@ interface Contact {
 interface PipelineStage {
   id: string;
   name: string;
+  type?: string;
 }
 
 interface Opportunity {
