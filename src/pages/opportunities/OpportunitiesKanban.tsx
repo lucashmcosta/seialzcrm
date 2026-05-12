@@ -111,6 +111,12 @@ export default function OpportunitiesKanban() {
   const [dialogOpen, setDialogOpen] = useState(false);
   const [editingOpportunity, setEditingOpportunity] = useState<Opportunity | null>(null);
   const [deleteId, setDeleteId] = useState<string | null>(null);
+  const [pendingMove, setPendingMove] = useState<{
+    opportunityId: string;
+    oldStageId: string;
+    newStageId: string;
+    newStatus: 'won' | 'lost';
+  } | null>(null);
   const [searchTerm, setSearchTerm] = useState('');
   const [searchResults, setSearchResults] = useState<Opportunity[] | null>(null);
   const [users, setUsers] = useState<User[]>([]);
