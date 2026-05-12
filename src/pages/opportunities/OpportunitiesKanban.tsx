@@ -889,13 +889,18 @@ export default function OpportunitiesKanban() {
       <div className="flex gap-3 overflow-x-auto pb-4 px-6 pt-4 flex-1">
         {stages.map((stage, stageIndex) => {
           const stageOpportunities = getOpportunitiesForStage(stage.id);
-          const realCount = stageCounts[stage.id]?.count ?? stageOpportunities.length;
-          const realAmount = stageCounts[stage.id]?.amount ?? stageOpportunities.reduce(
-            (sum, opp) => sum + (Number(opp.amount) || 0),
-            0
-          );
+          const isFiltered = searchResults !== null || activeFiltersCount > 0;
+          const realCount = isFiltered
+            ? stageOpportunities.length
+            : (stageCounts[stage.id]?.count ?? stageOpportunities.length);
+          const realAmount = isFiltered
+            ? stageOpportunities.reduce((sum, opp) => sum + (Number(opp.amount) || 0), 0)
+            : (stageCounts[stage.id]?.amount ?? stageOpportunities.reduce(
+                (sum, opp) => sum + (Number(opp.amount) || 0),
+                0
+              ));
           const loadedCount = stageOpportunities.length;
-          const hasMore = hasMoreByStage[stage.id] && loadedCount < realCount;
+          const hasMore = !isFiltered && hasMoreByStage[stage.id] && loadedCount < realCount;
           const stageColor = STAGE_COLORS[stageIndex % STAGE_COLORS.length];
 
           return (
@@ -1175,13 +1180,18 @@ export default function OpportunitiesKanban() {
             <div className="flex gap-4 overflow-x-auto pb-4">
               {stages.map((stage) => {
                 const stageOpportunities = getOpportunitiesForStage(stage.id);
-                const realCount = stageCounts[stage.id]?.count ?? stageOpportunities.length;
-                const realAmount = stageCounts[stage.id]?.amount ?? stageOpportunities.reduce(
-                  (sum, opp) => sum + (Number(opp.amount) || 0),
-                  0
-                );
+                const isFiltered = searchResults !== null || activeFiltersCount > 0;
+                const realCount = isFiltered
+                  ? stageOpportunities.length
+                  : (stageCounts[stage.id]?.count ?? stageOpportunities.length);
+                const realAmount = isFiltered
+                  ? stageOpportunities.reduce((sum, opp) => sum + (Number(opp.amount) || 0), 0)
+                  : (stageCounts[stage.id]?.amount ?? stageOpportunities.reduce(
+                      (sum, opp) => sum + (Number(opp.amount) || 0),
+                      0
+                    ));
                 const loadedCount = stageOpportunities.length;
-                const hasMore = hasMoreByStage[stage.id] && loadedCount < realCount;
+                const hasMore = !isFiltered && hasMoreByStage[stage.id] && loadedCount < realCount;
 
                 return (
                   <div key={stage.id} className="flex-shrink-0 w-80">
