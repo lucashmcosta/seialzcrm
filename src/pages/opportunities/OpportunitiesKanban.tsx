@@ -628,12 +628,16 @@ export default function OpportunitiesKanban() {
       const matchesDateFrom = filterNoCloseDate || !filterDateFrom || (opp.close_date && opp.close_date >= filterDateFrom);
       const matchesDateTo = filterNoCloseDate || !filterDateTo || (opp.close_date && opp.close_date <= filterDateTo);
 
+      const oppCreatedDate = opp.created_at ? opp.created_at.slice(0, 10) : '';
+      const matchesCreatedFrom = !filterCreatedFrom || (oppCreatedDate && oppCreatedDate >= filterCreatedFrom);
+      const matchesCreatedTo = !filterCreatedTo || (oppCreatedDate && oppCreatedDate <= filterCreatedTo);
+
       const matchesTag = filterTag === 'all' || (tagsByOpportunity[opp.id]?.some(t => t.id === filterTag));
       const matchesStage = filterStage === 'all' || opp.pipeline_stage_id === filterStage;
 
-      return matchesOwner && matchesMinAmount && matchesMaxAmount && matchesNoCloseDate && matchesDateFrom && matchesDateTo && matchesTag && matchesStage;
+      return matchesOwner && matchesMinAmount && matchesMaxAmount && matchesNoCloseDate && matchesDateFrom && matchesDateTo && matchesCreatedFrom && matchesCreatedTo && matchesTag && matchesStage;
     });
-  }, [opportunities, searchResults, filterOwner, filterMinAmount, filterMaxAmount, filterDateFrom, filterDateTo, filterNoCloseDate, filterTag, filterStage, tagsByOpportunity]);
+  }, [opportunities, searchResults, filterOwner, filterMinAmount, filterMaxAmount, filterDateFrom, filterDateTo, filterNoCloseDate, filterCreatedFrom, filterCreatedTo, filterTag, filterStage, tagsByOpportunity]);
 
   // Sorted opportunities for table view
   const sortedOpportunities = useMemo(() => {
