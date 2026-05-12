@@ -383,10 +383,14 @@ export default function OpportunitiesKanban() {
       const matchesDateFrom = filterNoCloseDate || !filterDateFrom || (opp.close_date && opp.close_date >= filterDateFrom);
       const matchesDateTo = filterNoCloseDate || !filterDateTo || (opp.close_date && opp.close_date <= filterDateTo);
 
+      const oppCreatedDate = opp.created_at ? opp.created_at.slice(0, 10) : '';
+      const matchesCreatedFrom = !filterCreatedFrom || (oppCreatedDate && oppCreatedDate >= filterCreatedFrom);
+      const matchesCreatedTo = !filterCreatedTo || (oppCreatedDate && oppCreatedDate <= filterCreatedTo);
+
       const matchesTag = filterTag === 'all' || (tagsByOpportunity[opp.id]?.some(t => t.id === filterTag));
       const matchesStage = filterStage === 'all' || opp.pipeline_stage_id === filterStage;
 
-      return matchesOwner && matchesMinAmount && matchesMaxAmount && matchesNoCloseDate && matchesDateFrom && matchesDateTo && matchesTag && matchesStage;
+      return matchesOwner && matchesMinAmount && matchesMaxAmount && matchesNoCloseDate && matchesDateFrom && matchesDateTo && matchesCreatedFrom && matchesCreatedTo && matchesTag && matchesStage;
     });
   };
 
@@ -590,6 +594,8 @@ export default function OpportunitiesKanban() {
     setFilterDateFrom('');
     setFilterDateTo('');
     setFilterNoCloseDate(false);
+    setFilterCreatedFrom('');
+    setFilterCreatedTo('');
     setFilterTag('all');
     setFilterStage('all');
   };
@@ -601,6 +607,8 @@ export default function OpportunitiesKanban() {
     filterDateFrom,
     filterDateTo,
     filterNoCloseDate,
+    filterCreatedFrom,
+    filterCreatedTo,
     filterTag !== 'all',
     filterStage !== 'all',
   ].filter(Boolean).length;
