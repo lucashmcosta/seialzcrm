@@ -179,7 +179,7 @@ export default function OpportunitiesKanban() {
       // Query 1: Search by opportunity title
       const { data: byTitle } = await supabase
         .from('opportunities')
-        .select('id, title, amount, currency, pipeline_stage_id, contact_id, close_date, owner_user_id, contacts(full_name), users(full_name)')
+        .select('id, title, amount, currency, pipeline_stage_id, contact_id, close_date, created_at, owner_user_id, contacts(full_name), users(full_name)')
         .eq('organization_id', organization.id)
         .is('deleted_at', null)
         .ilike('title', `%${searchTerm}%`)
@@ -199,7 +199,7 @@ export default function OpportunitiesKanban() {
         const contactIds = matchingContacts.map(c => c.id);
         const { data } = await supabase
           .from('opportunities')
-          .select('id, title, amount, currency, pipeline_stage_id, contact_id, close_date, owner_user_id, contacts(full_name), users(full_name)')
+          .select('id, title, amount, currency, pipeline_stage_id, contact_id, close_date, created_at, owner_user_id, contacts(full_name), users(full_name)')
           .eq('organization_id', organization.id)
           .is('deleted_at', null)
           .in('contact_id', contactIds)
@@ -316,7 +316,7 @@ export default function OpportunitiesKanban() {
           const statusFilter = stage.type === 'won' ? 'won' : stage.type === 'lost' ? 'lost' : 'open';
           const { data } = await supabase
             .from('opportunities')
-            .select('id, title, amount, currency, pipeline_stage_id, contact_id, close_date, owner_user_id, contacts(full_name), users(full_name)')
+            .select('id, title, amount, currency, pipeline_stage_id, contact_id, close_date, created_at, owner_user_id, contacts(full_name), users(full_name)')
             .eq('organization_id', organization.id)
             .eq('pipeline_stage_id', stage.id)
             .eq('status', statusFilter)
@@ -401,7 +401,7 @@ export default function OpportunitiesKanban() {
     
     const { data } = await supabase
       .from('opportunities')
-      .select('id, title, amount, currency, pipeline_stage_id, contact_id, close_date, owner_user_id, contacts(full_name), users(full_name)')
+      .select('id, title, amount, currency, pipeline_stage_id, contact_id, close_date, created_at, owner_user_id, contacts(full_name), users(full_name)')
       .eq('organization_id', organization.id)
       .eq('pipeline_stage_id', stageId)
       .eq('status', (() => {
