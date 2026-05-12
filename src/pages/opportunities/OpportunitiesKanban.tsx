@@ -67,6 +67,7 @@ interface Opportunity {
   pipeline_stage_id: string;
   contact_id: string | null;
   close_date: string | null;
+  created_at?: string | null;
   owner_user_id: string | null;
   contacts?: {
     full_name: string;
@@ -128,6 +129,8 @@ export default function OpportunitiesKanban() {
   const [filterDateFrom, setFilterDateFrom] = useState<string>('');
   const [filterDateTo, setFilterDateTo] = useState<string>('');
   const [filterNoCloseDate, setFilterNoCloseDate] = useState<boolean>(false);
+  const [filterCreatedFrom, setFilterCreatedFrom] = useState<string>('');
+  const [filterCreatedTo, setFilterCreatedTo] = useState<string>('');
   const [filterTag, setFilterTag] = useState<string>('all');
   const [filterStage, setFilterStage] = useState<string>('all');
   const [showFilters, setShowFilters] = useState(false);
