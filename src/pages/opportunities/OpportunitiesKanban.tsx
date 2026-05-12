@@ -36,6 +36,7 @@ import {
 import { PaginationWithPageSize } from '@/components/application/pagination/pagination';
 import { ColumnSelector, type ColumnConfig } from '@/components/application/table/column-selector';
 import { BadgeWithDot } from '@/components/base/badges/badges';
+import { MultiSelectFilter, type MultiSelectOption } from '@/components/opportunities/MultiSelectFilter';
 import { format } from 'date-fns';
 import { ptBR, enUS } from 'date-fns/locale';
 import { parseDateOnly } from '@/lib/utils';
