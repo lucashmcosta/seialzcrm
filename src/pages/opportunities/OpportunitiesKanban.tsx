@@ -850,42 +850,32 @@ export default function OpportunitiesKanban() {
           {permissions.viewAllOpportunities && (
             <div className="space-y-2">
               <label className="text-sm font-medium">Responsável</label>
-              <Select value={filterOwner} onValueChange={setFilterOwner}>
-                <SelectTrigger>
-                  <SelectValue placeholder="Todos" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="all">Todos</SelectItem>
-                  <SelectItem value="none">Sem responsável</SelectItem>
-                  {userProfile?.id && (
-                    <SelectItem value={userProfile.id}>Meus</SelectItem>
-                  )}
-                  {users.filter((u) => u.id !== userProfile?.id).map((user) => (
-                    <SelectItem key={user.id} value={user.id}>
-                      {user.full_name}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
+              <MultiSelectFilter
+                placeholder="Todos"
+                selected={filterOwners}
+                onChange={setFilterOwners}
+                options={[
+                  { value: 'none', label: 'Sem responsável' },
+                  ...(userProfile?.id
+                    ? [{ value: userProfile.id, label: 'Meus' } as MultiSelectOption]
+                    : []),
+                  ...users
+                    .filter((u) => u.id !== userProfile?.id)
+                    .map<MultiSelectOption>((u) => ({ value: u.id, label: u.full_name })),
+                ]}
+              />
             </div>
           )}
 
           {stages.length > 0 && (
             <div className="space-y-2">
               <label className="text-sm font-medium">Etapa</label>
-              <Select value={filterStage} onValueChange={setFilterStage}>
-                <SelectTrigger>
-                  <SelectValue placeholder="Todas" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="all">Todas</SelectItem>
-                  {stages.map((stage) => (
-                    <SelectItem key={stage.id} value={stage.id}>
-                      {stage.name}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
+              <MultiSelectFilter
+                placeholder="Todas"
+                selected={filterStages}
+                onChange={setFilterStages}
+                options={stages.map<MultiSelectOption>((s) => ({ value: s.id, label: s.name }))}
+              />
             </div>
           )}
 
