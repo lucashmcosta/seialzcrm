@@ -296,12 +296,16 @@ export function OpportunityDialog({ open, onOpenChange, opportunity, stages, onS
               />
             </div>
             <div className="space-y-2">
-              <Label htmlFor="close_date">{t('opportunities.closeDate')}</Label>
+              <Label htmlFor="close_date">
+                {t('opportunities.closeDate')}
+                {closeDateRequired && <span className="text-destructive ml-1">*</span>}
+              </Label>
               <Input
                 id="close_date"
                 type="date"
                 value={formData.close_date || ''}
                 onChange={(e) => setFormData({ ...formData, close_date: e.target.value || null })}
+                required={closeDateRequired}
               />
             </div>
           </div>
