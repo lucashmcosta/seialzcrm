@@ -123,7 +123,7 @@ export default function OpportunitiesKanban() {
   const [searchTerm, setSearchTerm] = useState('');
   const [searchResults, setSearchResults] = useState<Opportunity[] | null>(null);
   const [users, setUsers] = useState<User[]>([]);
-  const [filterOwner, setFilterOwner] = useState<string>('all');
+  const [filterOwners, setFilterOwners] = useState<string[]>([]);
   const [filterMinAmount, setFilterMinAmount] = useState<string>('');
   const [filterMaxAmount, setFilterMaxAmount] = useState<string>('');
   const [filterDateFrom, setFilterDateFrom] = useState<string>('');
@@ -131,8 +131,8 @@ export default function OpportunitiesKanban() {
   const [filterNoCloseDate, setFilterNoCloseDate] = useState<boolean>(false);
   const [filterCreatedFrom, setFilterCreatedFrom] = useState<string>('');
   const [filterCreatedTo, setFilterCreatedTo] = useState<string>('');
-  const [filterTag, setFilterTag] = useState<string>('all');
-  const [filterStage, setFilterStage] = useState<string>('all');
+  const [filterTags, setFilterTags] = useState<string[]>([]);
+  const [filterStages, setFilterStages] = useState<string[]>([]);
   const [showFilters, setShowFilters] = useState(false);
   
   // Tags state
