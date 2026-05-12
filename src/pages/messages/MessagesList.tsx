@@ -553,7 +553,7 @@ function DesktopMessagesList() {
     (async () => {
       const { data } = await supabase
         .from('opportunities')
-        .select('id, title, pipeline_stage_id')
+        .select('id, title, pipeline_stage_id, close_date')
         .eq('organization_id', organization.id)
         .eq('contact_id', contactId)
         .eq('status', 'open')
