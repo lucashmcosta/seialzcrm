@@ -52,6 +52,9 @@ const StageDistribution = lazy(() =>
 const UserLeaderboard = lazy(() =>
   retryImport(() => import('@/components/reports/UserLeaderboard')).then((m) => ({ default: m.UserLeaderboard })),
 );
+const UserDetailDialog = lazy(() =>
+  retryImport(() => import('@/components/reports/UserDetailDialog')),
+);
 
 const BlockFallback = ({ className = 'h-32' }: { className?: string }) => (
   <div className={`animate-pulse rounded-md bg-muted/50 ${className}`} />
@@ -95,6 +98,7 @@ export default function ReportsPage() {
   const [previousOpps, setPreviousOpps] = useState<Opp[]>([]);
   const [openOpps, setOpenOpps] = useState<Opp[]>([]);
   const [loading, setLoading] = useState(true);
+  const [selectedUser, setSelectedUser] = useState<UserStats | null>(null);
 
   useEffect(() => {
     if (!organization) return;
@@ -550,8 +554,25 @@ export default function ReportsPage() {
                 rows={userStats}
                 formatCurrency={formatCurrency}
                 loading={loading}
+                onRowClick={(r) => {
+                  if (r.userId !== 'unassigned') setSelectedUser(r);
+                }}
               />
             </Suspense>
+
+            {selectedUser && organization && (
+              <Suspense fallback={null}>
+                <UserDetailDialog
+                  open={!!selectedUser}
+                  onOpenChange={(o) => !o && setSelectedUser(null)}
+                  user={selectedUser}
+                  organizationId={organization.id}
+                  range={range}
+                  formatCurrency={formatCurrency}
+                  stagesById={Object.fromEntries(stages.map((s) => [s.id, s.name]))}
+                />
+              </Suspense>
+            )}
           </div>
         </div>
       </div>
