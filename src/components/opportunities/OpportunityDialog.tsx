@@ -19,6 +19,7 @@ interface Contact {
 interface PipelineStage {
   id: string;
   name: string;
+  type?: string;
 }
 
 interface Opportunity {
@@ -111,9 +112,17 @@ export function OpportunityDialog({ open, onOpenChange, opportunity, stages, onS
     }
   };
 
+  const selectedStage = stages.find((s) => s.id === formData.pipeline_stage_id);
+  const closeDateRequired = selectedStage?.type === 'won' || selectedStage?.type === 'lost';
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!organization?.id || !userProfile?.id) return;
+
+    if (closeDateRequired && !formData.close_date) {
+      toast.error('Informe a data de fechamento para estágios de Ganho ou Perdido');
+      return;
+    }
 
     setSubmitting(true);
     try {
@@ -287,12 +296,16 @@ export function OpportunityDialog({ open, onOpenChange, opportunity, stages, onS
               />
             </div>
             <div className="space-y-2">
-              <Label htmlFor="close_date">{t('opportunities.closeDate')}</Label>
+              <Label htmlFor="close_date">
+                {t('opportunities.closeDate')}
+                {closeDateRequired && <span className="text-destructive ml-1">*</span>}
+              </Label>
               <Input
                 id="close_date"
                 type="date"
                 value={formData.close_date || ''}
                 onChange={(e) => setFormData({ ...formData, close_date: e.target.value || null })}
+                required={closeDateRequired}
               />
             </div>
           </div>

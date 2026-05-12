@@ -17,6 +17,7 @@ import { supabase } from '@/integrations/supabase/client';
 import { Plus, MagnifyingGlass, FunnelSimple, PencilSimple, TrashSimple } from '@phosphor-icons/react';
 import { Skeleton } from '@/components/ui/skeleton';
 import { OpportunityDialog } from '@/components/opportunities/OpportunityDialog';
+import { CloseDatePromptDialog } from '@/components/opportunities/CloseDatePromptDialog';
 import { OpportunityCard } from '@/components/opportunities/OpportunityCard';
 import { SeialzOpportunityCard } from '@/components/opportunities/SeialzOpportunityCard';
 import { SeialzTopbar } from '@/components/seialz/SeialzTopbar';
@@ -111,6 +112,12 @@ export default function OpportunitiesKanban() {
   const [dialogOpen, setDialogOpen] = useState(false);
   const [editingOpportunity, setEditingOpportunity] = useState<Opportunity | null>(null);
   const [deleteId, setDeleteId] = useState<string | null>(null);
+  const [pendingMove, setPendingMove] = useState<{
+    opportunityId: string;
+    oldStageId: string;
+    newStageId: string;
+    newStatus: 'won' | 'lost';
+  } | null>(null);
   const [searchTerm, setSearchTerm] = useState('');
   const [searchResults, setSearchResults] = useState<Opportunity[] | null>(null);
   const [users, setUsers] = useState<User[]>([]);
@@ -442,23 +449,16 @@ export default function OpportunitiesKanban() {
     return () => observers.forEach(obs => obs.disconnect());
   }, [stages, hasMoreByStage, viewMode, loadMoreForStage]);
 
-  const handleDragEnd = async (result: DropResult) => {
-    const { destination, source, draggableId } = result;
-
-    if (!destination) return;
-    if (destination.droppableId === source.droppableId && destination.index === source.index) return;
-
-    const opportunityId = draggableId;
-    const newStageId = destination.droppableId;
-    const oldStageId = source.droppableId;
-
-    // Find the opportunity being moved
-    const movedOpp = opportunitiesByStage[oldStageId]?.find(o => o.id === opportunityId);
-    if (!movedOpp) return;
-
-    // Optimistically update UI - move between stages
+  const persistMove = async (
+    opportunityId: string,
+    oldStageId: string,
+    newStageId: string,
+    movedOpp: Opportunity,
+    extra: Record<string, any> = {},
+  ) => {
+    // Optimistically update UI
     setOpportunitiesByStage(prev => {
-      const updatedOpp = { ...movedOpp, pipeline_stage_id: newStageId };
+      const updatedOpp = { ...movedOpp, pipeline_stage_id: newStageId, ...extra };
       return {
         ...prev,
         [oldStageId]: prev[oldStageId]?.filter(o => o.id !== opportunityId) || [],
@@ -466,7 +466,6 @@ export default function OpportunitiesKanban() {
       };
     });
 
-    // Update counts optimistically
     setStageCounts(prev => ({
       ...prev,
       [oldStageId]: {
@@ -479,28 +478,76 @@ export default function OpportunitiesKanban() {
       }
     }));
 
-    // Also update flat array for table view
     setOpportunities(prev =>
       prev.map(opp =>
         opp.id === opportunityId
-          ? { ...opp, pipeline_stage_id: newStageId }
+          ? { ...opp, pipeline_stage_id: newStageId, ...extra }
           : opp
       )
     );
 
-    // Update in database
     const { error } = await supabase
       .from('opportunities')
-      .update({ pipeline_stage_id: newStageId })
+      .update({ pipeline_stage_id: newStageId, ...extra })
       .eq('id', opportunityId);
 
     if (error) {
       console.error('Error updating opportunity:', error);
       toast.error(t('common.error'));
-      fetchData(); // Revert on error
+      fetchData();
     } else {
       toast.success('Oportunidade movida com sucesso');
     }
+  };
+
+  const handleDragEnd = async (result: DropResult) => {
+    const { destination, source, draggableId } = result;
+
+    if (!destination) return;
+    if (destination.droppableId === source.droppableId && destination.index === source.index) return;
+
+    const opportunityId = draggableId;
+    const newStageId = destination.droppableId;
+    const oldStageId = source.droppableId;
+
+    const movedOpp = opportunitiesByStage[oldStageId]?.find(o => o.id === opportunityId);
+    if (!movedOpp) return;
+
+    const destStage = stages.find(s => s.id === newStageId);
+    const destType = destStage?.type;
+
+    // Require close_date when moving to won/lost
+    if ((destType === 'won' || destType === 'lost') && !movedOpp.close_date) {
+      setPendingMove({
+        opportunityId,
+        oldStageId,
+        newStageId,
+        newStatus: destType,
+      });
+      return;
+    }
+
+    const extra: Record<string, any> = {};
+    if (destType === 'won') extra.status = 'won';
+    else if (destType === 'lost') extra.status = 'lost';
+    else if (destType === 'open') extra.status = 'open';
+
+    await persistMove(opportunityId, oldStageId, newStageId, movedOpp, extra);
+  };
+
+  const handleConfirmPendingMove = async (closeDate: string) => {
+    if (!pendingMove) return;
+    const { opportunityId, oldStageId, newStageId, newStatus } = pendingMove;
+    const movedOpp = opportunitiesByStage[oldStageId]?.find(o => o.id === opportunityId);
+    if (!movedOpp) {
+      setPendingMove(null);
+      return;
+    }
+    await persistMove(opportunityId, oldStageId, newStageId, movedOpp, {
+      status: newStatus,
+      close_date: closeDate,
+    });
+    setPendingMove(null);
   };
 
   const handleEdit = (opportunity: Opportunity) => {
@@ -1112,6 +1159,13 @@ export default function OpportunitiesKanban() {
           onSuccess={fetchData}
         />
 
+        <CloseDatePromptDialog
+          open={pendingMove !== null}
+          onOpenChange={(o) => !o && setPendingMove(null)}
+          title={pendingMove?.newStatus === 'won' ? 'Marcar como Ganho' : 'Marcar como Perdido'}
+          onConfirm={handleConfirmPendingMove}
+        />
+
         <AlertDialog open={!!deleteId} onOpenChange={(open) => !open && setDeleteId(null)}>
           <AlertDialogContent>
             <AlertDialogHeader>
@@ -1397,6 +1451,13 @@ export default function OpportunitiesKanban() {
         opportunity={editingOpportunity}
         stages={stages}
         onSuccess={fetchData}
+      />
+
+      <CloseDatePromptDialog
+        open={pendingMove !== null}
+        onOpenChange={(o) => !o && setPendingMove(null)}
+        title={pendingMove?.newStatus === 'won' ? 'Marcar como Ganho' : 'Marcar como Perdido'}
+        onConfirm={handleConfirmPendingMove}
       />
 
       <AlertDialog open={!!deleteId} onOpenChange={(open) => !open && setDeleteId(null)}>

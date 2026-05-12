@@ -22,6 +22,7 @@ import { ContactCalls } from '@/components/contacts/ContactCalls';
 import { ContactMessages } from '@/components/contacts/ContactMessages';
 import { ContactNotes } from '@/components/contacts/ContactNotes';
 import { OpportunityDialog } from '@/components/opportunities/OpportunityDialog';
+import { CloseDatePromptDialog } from '@/components/opportunities/CloseDatePromptDialog';
 import { ClickToCallButton } from '@/components/calls/ClickToCallButton';
 import { OwnerSelector } from '@/components/common/OwnerSelector';
 import { SendToSignatureButton } from '@/components/signature/SendToSignatureButton';
@@ -60,6 +61,7 @@ export default function OpportunityDetail() {
   const [selectedTab, setSelectedTab] = useState<Key>('overview');
   const [createdByName, setCreatedByName] = useState<string | null>(null);
   const [updatedByName, setUpdatedByName] = useState<string | null>(null);
+  const [pendingStatus, setPendingStatus] = useState<'won' | 'lost' | null>(null);
   const { userProfile } = useOrganization();
 
   const tabs = [
@@ -146,51 +148,48 @@ export default function OpportunityDetail() {
     }).format(value);
   };
 
-  const handleMarkWon = async () => {
+  const applyStatusChange = async (newStatus: 'won' | 'lost', closeDate: string) => {
     if (!opportunity || !organization) return;
-    const wonStage = stages.find((s) => s.type === 'won');
-    if (!wonStage) return;
+    const targetStage = stages.find((s) => s.type === newStatus);
+    if (!targetStage) return;
 
     try {
       const { error } = await supabase
         .from('opportunities')
         .update({
-          status: 'won',
-          pipeline_stage_id: wonStage.id,
-        })
+          status: newStatus,
+          pipeline_stage_id: targetStage.id,
+          close_date: closeDate,
+          updated_by: userProfile?.id || null,
+        } as any)
         .eq('id', opportunity.id);
 
       if (error) throw error;
 
       toast({ title: t('opportunities.updated') });
+      setPendingStatus(null);
       fetchOpportunity();
     } catch (error) {
-      console.error('Error marking as won:', error);
+      console.error(`Error marking as ${newStatus}:`, error);
       toast({ title: t('common.error'), variant: 'destructive' });
     }
   };
 
+  const handleMarkWon = async () => {
+    if (!opportunity) return;
+    if (opportunity.close_date) {
+      await applyStatusChange('won', opportunity.close_date);
+    } else {
+      setPendingStatus('won');
+    }
+  };
+
   const handleMarkLost = async () => {
-    if (!opportunity || !organization) return;
-    const lostStage = stages.find((s) => s.type === 'lost');
-    if (!lostStage) return;
-
-    try {
-      const { error } = await supabase
-        .from('opportunities')
-        .update({
-          status: 'lost',
-          pipeline_stage_id: lostStage.id,
-        })
-        .eq('id', opportunity.id);
-
-      if (error) throw error;
-
-      toast({ title: t('opportunities.updated') });
-      fetchOpportunity();
-    } catch (error) {
-      console.error('Error marking as lost:', error);
-      toast({ title: t('common.error'), variant: 'destructive' });
+    if (!opportunity) return;
+    if (opportunity.close_date) {
+      await applyStatusChange('lost', opportunity.close_date);
+    } else {
+      setPendingStatus('lost');
     }
   };
 
@@ -499,6 +498,13 @@ export default function OpportunityDetail() {
         opportunity={opportunity}
         stages={stages}
         onSuccess={fetchOpportunity}
+      />
+
+      <CloseDatePromptDialog
+        open={pendingStatus !== null}
+        onOpenChange={(o) => !o && setPendingStatus(null)}
+        title={pendingStatus === 'won' ? 'Marcar como Ganho' : 'Marcar como Perdido'}
+        onConfirm={(date) => pendingStatus && applyStatusChange(pendingStatus, date)}
       />
     </Layout>
   );
