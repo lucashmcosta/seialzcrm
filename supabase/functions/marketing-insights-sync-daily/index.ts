@@ -273,7 +273,7 @@ serve(async (req) => {
     body = {};
   }
 
-  const daysBack = Math.max(1, Math.min(30, body.days_back ?? 3));
+  const daysBack = Math.max(1, Math.min(30, body.days_back ?? 7));
   const limit = Math.max(1, Math.min(500, body.limit ?? 100));
   const filterOrgId = body.organization_id;
 
