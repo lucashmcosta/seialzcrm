@@ -43,6 +43,7 @@ import { ptBR, enUS } from 'date-fns/locale';
 import { useToast } from '@/hooks/use-toast';
 import { SpinnerGap, Check, Checks, Clock, WarningCircle, Sparkle, Briefcase, Smiley, Robot, ChatCircleDots, FileText, Target, UserCheck, CheckCircle, ArrowCounterClockwise, ArrowsLeftRight, Note, DownloadSimple, NotePencil, TextAa, TrendUp, TrendDown } from '@phosphor-icons/react';
 import { ConfirmDialog } from '@/components/ui/confirm-dialog';
+import { CloseDatePromptDialog } from '@/components/opportunities/CloseDatePromptDialog';
 import { AgentMessageFeedbackDialog } from '@/components/whatsapp/AgentMessageFeedbackDialog';
 import { NewConversationDialog } from '@/components/messages/NewConversationDialog';
 import { WhatsAppTemplateSelector } from '@/components/whatsapp/WhatsAppTemplateSelector';
@@ -284,10 +285,11 @@ function DesktopMessagesList() {
   const [isExporting, setIsExporting] = useState(false);
 
   // Opportunities for current contact (mark as won/lost from chat)
-  type ChatOpp = { id: string; title: string; pipeline_stage_id: string };
+  type ChatOpp = { id: string; title: string; pipeline_stage_id: string; close_date: string | null };
   const [contactOpportunities, setContactOpportunities] = useState<ChatOpp[]>([]);
   const [pipelineStages, setPipelineStages] = useState<Array<{ id: string; type: string | null }>>([]);
   const [confirmAction, setConfirmAction] = useState<{ kind: 'won' | 'lost'; opp: ChatOpp } | null>(null);
+  const [pendingCloseDate, setPendingCloseDate] = useState<{ kind: 'won' | 'lost'; opp: ChatOpp } | null>(null);
   const [markingOpp, setMarkingOpp] = useState(false);
 
   const handleExportConversations = async () => {
@@ -552,7 +554,7 @@ function DesktopMessagesList() {
     (async () => {
       const { data } = await supabase
         .from('opportunities')
-        .select('id, title, pipeline_stage_id')
+        .select('id, title, pipeline_stage_id, close_date')
         .eq('organization_id', organization.id)
         .eq('contact_id', contactId)
         .eq('status', 'open')
@@ -561,7 +563,7 @@ function DesktopMessagesList() {
     })();
   }, [organization?.id, selectedThread?.contact_id]);
 
-  const handleMarkOpportunity = async (kind: 'won' | 'lost', opp: ChatOpp) => {
+  const handleMarkOpportunity = async (kind: 'won' | 'lost', opp: ChatOpp, closeDateOverride?: string) => {
     if (!organization?.id) return;
     const targetStage = pipelineStages.find((s) => s.type === kind);
     if (!targetStage) {
@@ -574,6 +576,15 @@ function DesktopMessagesList() {
       });
       return;
     }
+
+    const closeDate = closeDateOverride || opp.close_date;
+    if (!closeDate) {
+      // Need to ask user for the close date
+      setConfirmAction(null);
+      setPendingCloseDate({ kind, opp });
+      return;
+    }
+
     setMarkingOpp(true);
     try {
       const { error } = await supabase
@@ -581,6 +592,7 @@ function DesktopMessagesList() {
         .update({
           status: kind,
           pipeline_stage_id: targetStage.id,
+          close_date: closeDate,
           updated_by: userProfile?.id || null,
         } as any)
         .eq('id', opp.id);
@@ -592,6 +604,7 @@ function DesktopMessagesList() {
       });
       setContactOpportunities((prev) => prev.filter((o) => o.id !== opp.id));
       setConfirmAction(null);
+      setPendingCloseDate(null);
     } catch (err) {
       console.error('Error marking opportunity:', err);
       toast({ title: locale === 'pt-BR' ? 'Erro ao atualizar' : 'Error updating', variant: 'destructive' });
@@ -1937,6 +1950,18 @@ function DesktopMessagesList() {
         variant={confirmAction?.kind === 'lost' ? 'destructive' : 'default'}
         loading={markingOpp}
         onConfirm={() => confirmAction && handleMarkOpportunity(confirmAction.kind, confirmAction.opp)}
+      />
+
+      <CloseDatePromptDialog
+        open={!!pendingCloseDate}
+        onOpenChange={(o) => !o && setPendingCloseDate(null)}
+        title={
+          pendingCloseDate?.kind === 'won'
+            ? (locale === 'pt-BR' ? 'Marcar como Ganho' : 'Mark as Won')
+            : (locale === 'pt-BR' ? 'Marcar como Perdido' : 'Mark as Lost')
+        }
+        loading={markingOpp}
+        onConfirm={(date) => pendingCloseDate && handleMarkOpportunity(pendingCloseDate.kind, pendingCloseDate.opp, date)}
       />
     </Layout>
   );
