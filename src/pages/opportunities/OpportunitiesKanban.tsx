@@ -67,6 +67,7 @@ interface Opportunity {
   pipeline_stage_id: string;
   contact_id: string | null;
   close_date: string | null;
+  created_at?: string | null;
   owner_user_id: string | null;
   contacts?: {
     full_name: string;
@@ -128,6 +129,8 @@ export default function OpportunitiesKanban() {
   const [filterDateFrom, setFilterDateFrom] = useState<string>('');
   const [filterDateTo, setFilterDateTo] = useState<string>('');
   const [filterNoCloseDate, setFilterNoCloseDate] = useState<boolean>(false);
+  const [filterCreatedFrom, setFilterCreatedFrom] = useState<string>('');
+  const [filterCreatedTo, setFilterCreatedTo] = useState<string>('');
   const [filterTag, setFilterTag] = useState<string>('all');
   const [filterStage, setFilterStage] = useState<string>('all');
   const [showFilters, setShowFilters] = useState(false);
@@ -176,7 +179,7 @@ export default function OpportunitiesKanban() {
       // Query 1: Search by opportunity title
       const { data: byTitle } = await supabase
         .from('opportunities')
-        .select('id, title, amount, currency, pipeline_stage_id, contact_id, close_date, owner_user_id, contacts(full_name), users(full_name)')
+        .select('id, title, amount, currency, pipeline_stage_id, contact_id, close_date, created_at, owner_user_id, contacts(full_name), users(full_name)')
         .eq('organization_id', organization.id)
         .is('deleted_at', null)
         .ilike('title', `%${searchTerm}%`)
@@ -196,7 +199,7 @@ export default function OpportunitiesKanban() {
         const contactIds = matchingContacts.map(c => c.id);
         const { data } = await supabase
           .from('opportunities')
-          .select('id, title, amount, currency, pipeline_stage_id, contact_id, close_date, owner_user_id, contacts(full_name), users(full_name)')
+          .select('id, title, amount, currency, pipeline_stage_id, contact_id, close_date, created_at, owner_user_id, contacts(full_name), users(full_name)')
           .eq('organization_id', organization.id)
           .is('deleted_at', null)
           .in('contact_id', contactIds)
@@ -313,7 +316,7 @@ export default function OpportunitiesKanban() {
           const statusFilter = stage.type === 'won' ? 'won' : stage.type === 'lost' ? 'lost' : 'open';
           const { data } = await supabase
             .from('opportunities')
-            .select('id, title, amount, currency, pipeline_stage_id, contact_id, close_date, owner_user_id, contacts(full_name), users(full_name)')
+            .select('id, title, amount, currency, pipeline_stage_id, contact_id, close_date, created_at, owner_user_id, contacts(full_name), users(full_name)')
             .eq('organization_id', organization.id)
             .eq('pipeline_stage_id', stage.id)
             .eq('status', statusFilter)
@@ -380,10 +383,14 @@ export default function OpportunitiesKanban() {
       const matchesDateFrom = filterNoCloseDate || !filterDateFrom || (opp.close_date && opp.close_date >= filterDateFrom);
       const matchesDateTo = filterNoCloseDate || !filterDateTo || (opp.close_date && opp.close_date <= filterDateTo);
 
+      const oppCreatedDate = opp.created_at ? opp.created_at.slice(0, 10) : '';
+      const matchesCreatedFrom = !filterCreatedFrom || (oppCreatedDate && oppCreatedDate >= filterCreatedFrom);
+      const matchesCreatedTo = !filterCreatedTo || (oppCreatedDate && oppCreatedDate <= filterCreatedTo);
+
       const matchesTag = filterTag === 'all' || (tagsByOpportunity[opp.id]?.some(t => t.id === filterTag));
       const matchesStage = filterStage === 'all' || opp.pipeline_stage_id === filterStage;
 
-      return matchesOwner && matchesMinAmount && matchesMaxAmount && matchesNoCloseDate && matchesDateFrom && matchesDateTo && matchesTag && matchesStage;
+      return matchesOwner && matchesMinAmount && matchesMaxAmount && matchesNoCloseDate && matchesDateFrom && matchesDateTo && matchesCreatedFrom && matchesCreatedTo && matchesTag && matchesStage;
     });
   };
 
@@ -398,7 +405,7 @@ export default function OpportunitiesKanban() {
     
     const { data } = await supabase
       .from('opportunities')
-      .select('id, title, amount, currency, pipeline_stage_id, contact_id, close_date, owner_user_id, contacts(full_name), users(full_name)')
+      .select('id, title, amount, currency, pipeline_stage_id, contact_id, close_date, created_at, owner_user_id, contacts(full_name), users(full_name)')
       .eq('organization_id', organization.id)
       .eq('pipeline_stage_id', stageId)
       .eq('status', (() => {
@@ -587,6 +594,8 @@ export default function OpportunitiesKanban() {
     setFilterDateFrom('');
     setFilterDateTo('');
     setFilterNoCloseDate(false);
+    setFilterCreatedFrom('');
+    setFilterCreatedTo('');
     setFilterTag('all');
     setFilterStage('all');
   };
@@ -598,6 +607,8 @@ export default function OpportunitiesKanban() {
     filterDateFrom,
     filterDateTo,
     filterNoCloseDate,
+    filterCreatedFrom,
+    filterCreatedTo,
     filterTag !== 'all',
     filterStage !== 'all',
   ].filter(Boolean).length;
@@ -617,12 +628,16 @@ export default function OpportunitiesKanban() {
       const matchesDateFrom = filterNoCloseDate || !filterDateFrom || (opp.close_date && opp.close_date >= filterDateFrom);
       const matchesDateTo = filterNoCloseDate || !filterDateTo || (opp.close_date && opp.close_date <= filterDateTo);
 
+      const oppCreatedDate = opp.created_at ? opp.created_at.slice(0, 10) : '';
+      const matchesCreatedFrom = !filterCreatedFrom || (oppCreatedDate && oppCreatedDate >= filterCreatedFrom);
+      const matchesCreatedTo = !filterCreatedTo || (oppCreatedDate && oppCreatedDate <= filterCreatedTo);
+
       const matchesTag = filterTag === 'all' || (tagsByOpportunity[opp.id]?.some(t => t.id === filterTag));
       const matchesStage = filterStage === 'all' || opp.pipeline_stage_id === filterStage;
 
-      return matchesOwner && matchesMinAmount && matchesMaxAmount && matchesNoCloseDate && matchesDateFrom && matchesDateTo && matchesTag && matchesStage;
+      return matchesOwner && matchesMinAmount && matchesMaxAmount && matchesNoCloseDate && matchesDateFrom && matchesDateTo && matchesCreatedFrom && matchesCreatedTo && matchesTag && matchesStage;
     });
-  }, [opportunities, searchResults, filterOwner, filterMinAmount, filterMaxAmount, filterDateFrom, filterDateTo, filterNoCloseDate, filterTag, filterStage, tagsByOpportunity]);
+  }, [opportunities, searchResults, filterOwner, filterMinAmount, filterMaxAmount, filterDateFrom, filterDateTo, filterNoCloseDate, filterCreatedFrom, filterCreatedTo, filterTag, filterStage, tagsByOpportunity]);
 
   // Sorted opportunities for table view
   const sortedOpportunities = useMemo(() => {
@@ -917,6 +932,22 @@ export default function OpportunitiesKanban() {
               >
                 Apenas sem data de fechamento
               </label>
+            </div>
+          </div>
+
+          <div className="space-y-2">
+            <label className="text-sm font-medium">Data de Criação</label>
+            <div className="flex gap-2">
+              <Input
+                type="date"
+                value={filterCreatedFrom}
+                onChange={(e) => setFilterCreatedFrom(e.target.value)}
+              />
+              <Input
+                type="date"
+                value={filterCreatedTo}
+                onChange={(e) => setFilterCreatedTo(e.target.value)}
+              />
             </div>
           </div>
 

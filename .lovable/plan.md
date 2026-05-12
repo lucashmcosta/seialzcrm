@@ -1,38 +1,61 @@
-## Filtro: oportunidades sem Data de Fechamento
+## Filtro: Data de Criação em Oportunidades e Contatos
 
-Adicionar uma opção no painel de **Filtros Avançados** do Kanban/Tabela de Oportunidades para listar apenas oportunidades com `close_date` vazio.
+Adicionar novo filtro de intervalo por **Data de Criação** (`created_at`) nas telas de Oportunidades (Kanban/Tabela) e Contatos.
 
-### Arquivo
+---
 
-- `src/pages/opportunities/OpportunitiesKanban.tsx`
+### 1) `src/pages/opportunities/OpportunitiesKanban.tsx`
 
-### UX
+No painel de **Filtros Avançados** (Sheet), logo abaixo da seção "Data de Fechamento", adicionar uma nova seção **"Data de Criação"** com dois inputs `dd/mm/aaaa` (de / até).
 
-- Logo abaixo dos dois inputs `dd/mm/aaaa` da seção **Data de Fechamento**, adicionar um `Checkbox` (shadcn) com o label **"Apenas sem data de fechamento"**.
-- Quando ativo:
-  - Os inputs de data inicial/final ficam desabilitados (e visualmente esmaecidos), pois são mutuamente exclusivos.
-  - O filtro de listagem passa a exibir somente oportunidades com `close_date == null`.
-- Quando inativo: comportamento atual (range opcional).
-- O contador `activeFiltersCount` (badge no botão "Filtros") incrementa em +1 quando o checkbox estiver ativo.
-- O botão **Limpar filtros** já existente reseta também esse novo filtro.
+- **Estado novo**:
+  ```ts
+  const [filterCreatedFrom, setFilterCreatedFrom] = useState<string>('');
+  const [filterCreatedTo, setFilterCreatedTo] = useState<string>('');
+  ```
+- **Garantir** que `created_at` está sendo selecionado na query de oportunidades (verificar `select(...)`; incluir caso esteja faltando) e adicionar `created_at` na interface/tipo `Opportunity`.
+- **Lógica de filtro** (duas ocorrências, ~linhas 377 e ~617): adicionar:
+  ```ts
+  const oppCreatedDate = opp.created_at ? opp.created_at.slice(0, 10) : '';
+  const matchesCreatedFrom = !filterCreatedFrom || oppCreatedDate >= filterCreatedFrom;
+  const matchesCreatedTo   = !filterCreatedTo   || oppCreatedDate <= filterCreatedTo;
+  ```
+  Incluir ambos no `&&` final do filtro.
+- **`useMemo` deps** (linha 625): adicionar `filterCreatedFrom`, `filterCreatedTo`.
+- **`clearFilters`**: resetar ambos para `''`.
+- **`activeFiltersCount`** (~linhas 594-600): incluir `filterCreatedFrom` e `filterCreatedTo`.
+- **UI**: novo bloco igual ao de "Data de Fechamento", sem o checkbox "sem data" (toda oportunidade tem `created_at`).
 
-### Implementação
+---
 
-1. **Estado novo**: `const [filterNoCloseDate, setFilterNoCloseDate] = useState<boolean>(false);`
-2. **Lógica de filtro** (duas ocorrências, linhas ~377 e ~611):
-   - Substituir `matchesDateFrom`/`matchesDateTo` por:
-     ```ts
-     const matchesNoCloseDate = !filterNoCloseDate || opp.close_date == null;
-     const matchesDateFrom = filterNoCloseDate || !filterDateFrom || (opp.close_date && opp.close_date >= filterDateFrom);
-     const matchesDateTo   = filterNoCloseDate || !filterDateTo   || (opp.close_date && opp.close_date <= filterDateTo);
-     ```
-   - Incluir `matchesNoCloseDate` no `&&` final.
-   - Adicionar `filterNoCloseDate` no array de dependências do `useMemo` (linha 619).
-3. **`clearFilters`** (~linha 540): adicionar `setFilterNoCloseDate(false);`
-4. **`activeFiltersCount`** (~linhas 549-557): adicionar `filterNoCloseDate` ao array `.filter(Boolean)`.
-5. **UI** (após linha 899, dentro do bloco "Data de Fechamento"): renderizar o `<Checkbox>` controlado por `filterNoCloseDate`. Aplicar `disabled={filterNoCloseDate}` nos dois `<Input type="date">` acima.
+### 2) `src/pages/contacts/ContactsList.tsx`
+
+A tela de Contatos hoje só tem filtros inline (busca, responsável, etapa, colunas). Adicionar dois inputs `<Input type="date">` inline com label discreto **"Criado de / até"**.
+
+- **Estado novo**:
+  ```ts
+  const [createdFromFilter, setCreatedFromFilter] = useState<string>('');
+  const [createdToFilter, setCreatedToFilter]   = useState<string>('');
+  ```
+- **Query** em `fetchContacts` (~linha 195): aplicar via Supabase:
+  ```ts
+  if (createdFromFilter) query = query.gte('created_at', createdFromFilter);
+  if (createdToFilter)   query = query.lte('created_at', createdToFilter + 'T23:59:59.999Z');
+  ```
+- **`useEffect` que dispara `fetchContacts`**: incluir os dois novos estados nas dependências (e no reset de paginação mobile).
+- **UI**: dentro do `<div className="mb-6 flex flex-wrap gap-3">` (linha 364), após o select de etapa, renderizar:
+  ```tsx
+  <div className="flex items-center gap-2">
+    <Input type="date" value={createdFromFilter} onChange={e => setCreatedFromFilter(e.target.value)} className="w-[150px]" />
+    <span className="text-sm text-muted-foreground">até</span>
+    <Input type="date" value={createdToFilter} onChange={e => setCreatedToFilter(e.target.value)} className="w-[150px]" />
+  </div>
+  ```
+
+---
 
 ### Não muda
 
-- Schema do banco, RLS, edge functions e relatórios permanecem iguais.
-- Demais filtros (responsável, etapa, valor, etiqueta) continuam intactos.
+- Schema do banco, RLS, edge functions e relatórios.
+- Componentes mobile (Kanban/Contacts mobile) — fora do escopo desta solicitação. Posso estender depois se desejado.
+- Demais filtros existentes permanecem intactos.

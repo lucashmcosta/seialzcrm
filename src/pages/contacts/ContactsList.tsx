@@ -79,6 +79,8 @@ export default function ContactsList() {
   // Filters state
   const [ownerFilter, setOwnerFilter] = useState('all');
   const [stageFilter, setStageFilter] = useState('all');
+  const [createdFromFilter, setCreatedFromFilter] = useState('');
+  const [createdToFilter, setCreatedToFilter] = useState('');
   
   // Pagination state
   const [currentPage, setCurrentPage] = useState(1);
@@ -133,13 +135,13 @@ export default function ContactsList() {
       setMobileContacts([]);
       setCurrentPage(1);
     }
-  }, [searchTerm, ownerFilter, stageFilter]);
+  }, [searchTerm, ownerFilter, stageFilter, createdFromFilter, createdToFilter]);
 
   useEffect(() => {
     if (!organization) return;
     fetchContacts();
     fetchUsers();
-  }, [organization, currentPage, itemsPerPage, searchTerm, ownerFilter, stageFilter]);
+  }, [organization, currentPage, itemsPerPage, searchTerm, ownerFilter, stageFilter, createdFromFilter, createdToFilter]);
 
   const mobileHasMore = mobileContacts.length < totalCount;
 
@@ -192,6 +194,12 @@ export default function ContactsList() {
     }
     if (stageFilter !== 'all') {
       query = query.eq('lifecycle_stage', stageFilter as 'lead' | 'customer' | 'inactive');
+    }
+    if (createdFromFilter) {
+      query = query.gte('created_at', createdFromFilter);
+    }
+    if (createdToFilter) {
+      query = query.lte('created_at', createdToFilter + 'T23:59:59.999Z');
     }
     
     // Apply pagination
@@ -402,6 +410,24 @@ export default function ContactsList() {
               <SelectItem value="inactive">{t('lifecycle.inactive')}</SelectItem>
             </SelectContent>
           </Select>
+
+          <div className="flex items-center gap-2">
+            <Input
+              type="date"
+              value={createdFromFilter}
+              onChange={(e) => setCreatedFromFilter(e.target.value)}
+              className="w-[150px]"
+              title="Criado de"
+            />
+            <span className="text-sm text-muted-foreground">até</span>
+            <Input
+              type="date"
+              value={createdToFilter}
+              onChange={(e) => setCreatedToFilter(e.target.value)}
+              className="w-[150px]"
+              title="Criado até"
+            />
+          </div>
 
           <ColumnSelector
             columns={availableColumns}
