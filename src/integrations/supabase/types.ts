@@ -3949,6 +3949,33 @@ export type Database = {
           },
         ]
       }
+      opportunities_status_backup_20260512: {
+        Row: {
+          backed_up_at: string | null
+          close_date: string | null
+          id: string | null
+          organization_id: string | null
+          pipeline_stage_id: string | null
+          status: Database["public"]["Enums"]["opportunity_status"] | null
+        }
+        Insert: {
+          backed_up_at?: string | null
+          close_date?: string | null
+          id?: string | null
+          organization_id?: string | null
+          pipeline_stage_id?: string | null
+          status?: Database["public"]["Enums"]["opportunity_status"] | null
+        }
+        Update: {
+          backed_up_at?: string | null
+          close_date?: string | null
+          id?: string | null
+          organization_id?: string | null
+          pipeline_stage_id?: string | null
+          status?: Database["public"]["Enums"]["opportunity_status"] | null
+        }
+        Relationships: []
+      }
       organization_api_keys: {
         Row: {
           api_key: string
