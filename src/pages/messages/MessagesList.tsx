@@ -1951,6 +1951,18 @@ function DesktopMessagesList() {
         loading={markingOpp}
         onConfirm={() => confirmAction && handleMarkOpportunity(confirmAction.kind, confirmAction.opp)}
       />
+
+      <CloseDatePromptDialog
+        open={!!pendingCloseDate}
+        onOpenChange={(o) => !o && setPendingCloseDate(null)}
+        title={
+          pendingCloseDate?.kind === 'won'
+            ? (locale === 'pt-BR' ? 'Marcar como Ganho' : 'Mark as Won')
+            : (locale === 'pt-BR' ? 'Marcar como Perdido' : 'Mark as Lost')
+        }
+        loading={markingOpp}
+        onConfirm={(date) => pendingCloseDate && handleMarkOpportunity(pendingCloseDate.kind, pendingCloseDate.opp, date)}
+      />
     </Layout>
   );
 }
