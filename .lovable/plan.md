@@ -1,61 +1,33 @@
-## Filtro: Data de Criação em Oportunidades e Contatos
+## Padronizar Filtros da Tela de Contatos
 
-Adicionar novo filtro de intervalo por **Data de Criação** (`created_at`) nas telas de Oportunidades (Kanban/Tabela) e Contatos.
+Replicar o padrão usado em **Oportunidades**: substituir os filtros soltos (responsável, etapa, datas) por um único botão **"Filtros"** com Popover, badge contador, e botão **"Limpar"**.
 
----
+### Arquivo
+- `src/pages/contacts/ContactsList.tsx`
 
-### 1) `src/pages/opportunities/OpportunitiesKanban.tsx`
+### O que permanece inline (na barra superior)
+- Campo de **Pesquisa** (full width / flex-1)
+- Botão **Filtros** (com badge `activeFiltersCount`)
+- **ColumnSelector** (Colunas)
 
-No painel de **Filtros Avançados** (Sheet), logo abaixo da seção "Data de Fechamento", adicionar uma nova seção **"Data de Criação"** com dois inputs `dd/mm/aaaa` (de / até).
+### O que vai para dentro do Popover "Filtros Avançados"
+- **Responsável** (apenas se `permissions.viewAllContacts`) — Select
+- **Etapa do ciclo de vida** — Select (Lead, Qualificado, Cliente, Inativo, etc.)
+- **Data de Criação** — dois inputs `dd/mm/aaaa` (de / até)
 
-- **Estado novo**:
-  ```ts
-  const [filterCreatedFrom, setFilterCreatedFrom] = useState<string>('');
-  const [filterCreatedTo, setFilterCreatedTo] = useState<string>('');
-  ```
-- **Garantir** que `created_at` está sendo selecionado na query de oportunidades (verificar `select(...)`; incluir caso esteja faltando) e adicionar `created_at` na interface/tipo `Opportunity`.
-- **Lógica de filtro** (duas ocorrências, ~linhas 377 e ~617): adicionar:
-  ```ts
-  const oppCreatedDate = opp.created_at ? opp.created_at.slice(0, 10) : '';
-  const matchesCreatedFrom = !filterCreatedFrom || oppCreatedDate >= filterCreatedFrom;
-  const matchesCreatedTo   = !filterCreatedTo   || oppCreatedDate <= filterCreatedTo;
-  ```
-  Incluir ambos no `&&` final do filtro.
-- **`useMemo` deps** (linha 625): adicionar `filterCreatedFrom`, `filterCreatedTo`.
-- **`clearFilters`**: resetar ambos para `''`.
-- **`activeFiltersCount`** (~linhas 594-600): incluir `filterCreatedFrom` e `filterCreatedTo`.
-- **UI**: novo bloco igual ao de "Data de Fechamento", sem o checkbox "sem data" (toda oportunidade tem `created_at`).
-
----
-
-### 2) `src/pages/contacts/ContactsList.tsx`
-
-A tela de Contatos hoje só tem filtros inline (busca, responsável, etapa, colunas). Adicionar dois inputs `<Input type="date">` inline com label discreto **"Criado de / até"**.
-
-- **Estado novo**:
-  ```ts
-  const [createdFromFilter, setCreatedFromFilter] = useState<string>('');
-  const [createdToFilter, setCreatedToFilter]   = useState<string>('');
-  ```
-- **Query** em `fetchContacts` (~linha 195): aplicar via Supabase:
-  ```ts
-  if (createdFromFilter) query = query.gte('created_at', createdFromFilter);
-  if (createdToFilter)   query = query.lte('created_at', createdToFilter + 'T23:59:59.999Z');
-  ```
-- **`useEffect` que dispara `fetchContacts`**: incluir os dois novos estados nas dependências (e no reset de paginação mobile).
-- **UI**: dentro do `<div className="mb-6 flex flex-wrap gap-3">` (linha 364), após o select de etapa, renderizar:
-  ```tsx
-  <div className="flex items-center gap-2">
-    <Input type="date" value={createdFromFilter} onChange={e => setCreatedFromFilter(e.target.value)} className="w-[150px]" />
-    <span className="text-sm text-muted-foreground">até</span>
-    <Input type="date" value={createdToFilter} onChange={e => setCreatedToFilter(e.target.value)} className="w-[150px]" />
-  </div>
-  ```
-
----
+### Implementação
+1. **Imports novos**: `Popover, PopoverTrigger, PopoverContent`, `Badge`, `FunnelSimple` (phosphor).
+2. **Estado novo**: `const [showFilters, setShowFilters] = useState(false);`
+3. **`activeFiltersCount`**: contar `ownerFilter !== 'all'`, `stageFilter !== 'all'`, `createdFromFilter`, `createdToFilter`.
+4. **`clearFilters()`**: resetar os 4 filtros para os valores padrão.
+5. **UI**: substituir o bloco atual de filtros (linhas ~363-420) por:
+   - `<div className="mb-6 flex flex-wrap gap-3 items-center">` contendo:
+     - Input de busca (flex-1)
+     - `<Popover>` com `<Button variant="outline">` (ícone + "Filtros" + badge)
+     - `<ColumnSelector>` no fim
+   - PopoverContent (`w-80`, `align="end"`) replicando o layout de Oportunidades: header "Filtros Avançados" + "Limpar", e as 3 seções acima.
 
 ### Não muda
-
-- Schema do banco, RLS, edge functions e relatórios.
-- Componentes mobile (Kanban/Contacts mobile) — fora do escopo desta solicitação. Posso estender depois se desejado.
-- Demais filtros existentes permanecem intactos.
+- Lógica de query Supabase (já lê os mesmos estados).
+- Componente mobile (`MobileContactsList`) — já tem chips/busca próprios, fora do escopo.
+- Demais páginas.
