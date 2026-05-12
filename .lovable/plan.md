@@ -1,44 +1,56 @@
 ## Objetivo
-Sincronizar `opportunities.status` com o `pipeline_stages.type` para a organização inteira, eliminando a inconsistência que hoje esconde 697 oportunidades do Kanban (278 da Victoria) e infla os números de "abertas" nos relatórios.
 
-## O que vai acontecer
+Corrigir o contador das colunas em Oportunidades para que, **quando houver filtro/busca por nome**, ele mostre a quantidade **filtrada**, e não o total bruto da etapa.
 
-### 1. Migração de dados (one-shot UPDATE)
-Para a org `40ae935c-a7f7-4ad7-8ea4-91be6404a95f`:
+## Problema atual
 
-- Toda opp em estágio com `type = 'lost'` → `status = 'lost'`
-- Toda opp em estágio com `type = 'won'` → `status = 'won'`
-- Toda opp em estágio com `type = 'open'` (custom) → `status = 'open'`
-- Preencher `close_date = COALESCE(close_date, updated_at, now())` para as que viraram won/lost e ainda não tinham data de fechamento (necessário para relatórios de tempo de ciclo).
-- Não mexer em `deleted_at`, owner, valor, estágio nem em qualquer outro campo.
+Hoje o header da coluna usa `stageCounts[stage.id].count`, que vem do total agregado do banco.
+Isso ignora o resultado de `searchResults` e por isso, ao filtrar por `Victoria`, a coluna continua mostrando algo como `189` mesmo sem existir 189 cards da Victoria naquela etapa.
 
-Impacto esperado:
-- ~697 opps da org passam de `open` → `lost`/`won` (a maioria lost).
-- Victoria: cai de 336 "abertas" para ~58 abertas reais (34 em "Em negociação" + 24 que estavam em estágio "Ganho" mas agora viram won, então **34 abertas + 24 won + 278 lost** = 336 totais, batendo com o SELECT dela).
-- Kanban e Relatórios passam a mostrar os MESMOS números.
+## O que vai mudar
 
-### 2. Trigger de proteção (evita o problema voltar)
-Criar trigger `BEFORE INSERT OR UPDATE` em `opportunities` que:
-- Quando `pipeline_stage_id` muda, força `status` a refletir o `type` do novo estágio.
-- Quando `status` é alterado manualmente para `won`/`lost`, mantém (não sobrescreve estágio — é só guard-rail no sentido stage→status, que é o fluxo que quebrou).
+### 1. Ajustar o contador das colunas no desktop
+Arquivo: `src/pages/opportunities/OpportunitiesKanban.tsx`
 
-Isso garante que mover um card no Kanban para "Perdido" sempre marca a opp como `lost`, mesmo se o código frontend esquecer de atualizar o status (que é a causa raiz suspeita do drift histórico, provavelmente vindo do import do Kommo + drags antigos).
+- Nos dois renders do Kanban (Seialz e legado), alterar a lógica do número exibido no header da coluna.
+- Regra nova:
+  - **se houver busca/filtro ativo**, mostrar `stageOpportunities.length`
+  - **se não houver busca/filtro**, manter `stageCounts[stage.id]?.count`
+- Aplicar a mesma regra ao valor monetário da coluna:
+  - filtrado: soma dos cards filtrados
+  - sem filtro: total agregado já existente
 
-### 3. Verificação pós-migração
-Rodar 3 SELECTs de sanidade e te mostrar o resultado:
-- Contagem por `status` da Victoria (esperado: bate com os 336 totais dela).
-- Contagem por `(stage.type, status)` da org (esperado: zero linhas em diagonal divergente).
-- Total de cards visíveis no Kanban por estágio (esperado: bate com o relatório).
+### 2. Definir claramente quando a tela está “filtrada”
+Ainda em `src/pages/opportunities/OpportunitiesKanban.tsx`
 
-## Por que não mexer só na UI
-Criar uma "coluna fantasma" no Kanban mascararia o problema e os relatórios continuariam mentindo. Como você confirmou a regra de negócio ("perdido = lost, ganho = won"), o caminho correto é arrumar o dado e travar com trigger.
+Criar uma condição centralizada, algo como:
+- busca ativa (`searchResults !== null`)
+- ou qualquer filtro ativo (`activeFiltersCount > 0`)
+
+Essa condição será usada para decidir se o header mostra:
+- total filtrado/visível
+- ou total geral da etapa
+
+### 3. Manter comportamento atual sem filtro
+Sem busca e sem filtros:
+- o contador continua mostrando o total real da etapa no banco
+- o scroll infinito continua igual
+- nenhum ajuste de banco ou RPC será feito
+
+## Resultado esperado
+
+Ao buscar por `Victoria`:
+- cada coluna passa a exibir a quantidade real de cards da Victoria naquela etapa
+- o valor da etapa também acompanha apenas os cards filtrados
+- ao limpar a busca, os totais gerais voltam a aparecer
 
 ## Escopo
-- **Só** a org da Seialz (`40ae935c-...`). Não toca em outras orgs.
-- **Sem** mudanças no frontend nesta etapa — Kanban e Relatórios já leem `status` corretamente, só estão recebendo dado sujo.
-- Reversível: antes do UPDATE, dump dos `(id, status, close_date)` atuais numa tabela `opportunities_status_backup_20260512` para rollback se algo der errado.
 
-## Detalhes técnicos
-- 1 migração SQL com: backup table + UPDATE em batch + função+trigger de sync.
-- Trigger usa `SECURITY DEFINER` com `search_path = public`, segue o padrão das outras funções da org.
-- Sem alteração de RLS, sem alteração de schema das tabelas existentes (só adiciona a tabela de backup).
+Incluído:
+- correção do contador da coluna quando há filtro/busca
+- correção do valor da coluna quando há filtro/busca
+
+Fora do escopo:
+- mudanças em banco, RPC ou migrations
+- alteração da lógica de paginação/infinite scroll
+- mudanças na página `/reports`, exceto se ela reutilizar exatamente esse mesmo componente
