@@ -947,25 +947,16 @@ export default function OpportunitiesKanban() {
           {allTags.length > 0 && (
             <div className="space-y-2">
               <label className="text-sm font-medium">Etiqueta</label>
-              <Select value={filterTag} onValueChange={setFilterTag}>
-                <SelectTrigger>
-                  <SelectValue placeholder="Todas" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="all">Todas</SelectItem>
-                  {allTags.map((tag) => (
-                    <SelectItem key={tag.id} value={tag.id}>
-                      <div className="flex items-center gap-2">
-                        <span
-                          className="h-2.5 w-2.5 rounded-full shrink-0"
-                          style={{ backgroundColor: tag.color || 'hsl(var(--muted-foreground))' }}
-                        />
-                        {tag.name}
-                      </div>
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
+              <MultiSelectFilter
+                placeholder="Todas"
+                selected={filterTags}
+                onChange={setFilterTags}
+                options={allTags.map<MultiSelectOption>((tag) => ({
+                  value: tag.id,
+                  label: tag.name,
+                  color: tag.color,
+                }))}
+              />
             </div>
           )}
         </div>
