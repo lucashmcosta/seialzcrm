@@ -22,6 +22,7 @@ import { OpportunityCard } from '@/components/opportunities/OpportunityCard';
 import { SeialzOpportunityCard } from '@/components/opportunities/SeialzOpportunityCard';
 import { SeialzTopbar } from '@/components/seialz/SeialzTopbar';
 import { Input } from '@/components/ui/input';
+import { Checkbox } from '@/components/ui/checkbox';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { Badge } from '@/components/ui/badge';
@@ -126,6 +127,7 @@ export default function OpportunitiesKanban() {
   const [filterMaxAmount, setFilterMaxAmount] = useState<string>('');
   const [filterDateFrom, setFilterDateFrom] = useState<string>('');
   const [filterDateTo, setFilterDateTo] = useState<string>('');
+  const [filterNoCloseDate, setFilterNoCloseDate] = useState<boolean>(false);
   const [filterTag, setFilterTag] = useState<string>('all');
   const [filterStage, setFilterStage] = useState<string>('all');
   const [showFilters, setShowFilters] = useState(false);
@@ -374,13 +376,14 @@ export default function OpportunitiesKanban() {
       const matchesMinAmount = !filterMinAmount || (opp.amount && Number(opp.amount) >= Number(filterMinAmount));
       const matchesMaxAmount = !filterMaxAmount || (opp.amount && Number(opp.amount) <= Number(filterMaxAmount));
 
-      const matchesDateFrom = !filterDateFrom || !opp.close_date || opp.close_date >= filterDateFrom;
-      const matchesDateTo = !filterDateTo || !opp.close_date || opp.close_date <= filterDateTo;
+      const matchesNoCloseDate = !filterNoCloseDate || opp.close_date == null;
+      const matchesDateFrom = filterNoCloseDate || !filterDateFrom || (opp.close_date && opp.close_date >= filterDateFrom);
+      const matchesDateTo = filterNoCloseDate || !filterDateTo || (opp.close_date && opp.close_date <= filterDateTo);
 
       const matchesTag = filterTag === 'all' || (tagsByOpportunity[opp.id]?.some(t => t.id === filterTag));
       const matchesStage = filterStage === 'all' || opp.pipeline_stage_id === filterStage;
 
-      return matchesOwner && matchesMinAmount && matchesMaxAmount && matchesDateFrom && matchesDateTo && matchesTag && matchesStage;
+      return matchesOwner && matchesMinAmount && matchesMaxAmount && matchesNoCloseDate && matchesDateFrom && matchesDateTo && matchesTag && matchesStage;
     });
   };
 
@@ -583,6 +586,7 @@ export default function OpportunitiesKanban() {
     setFilterMaxAmount('');
     setFilterDateFrom('');
     setFilterDateTo('');
+    setFilterNoCloseDate(false);
     setFilterTag('all');
     setFilterStage('all');
   };
@@ -593,6 +597,7 @@ export default function OpportunitiesKanban() {
     filterMaxAmount,
     filterDateFrom,
     filterDateTo,
+    filterNoCloseDate,
     filterTag !== 'all',
     filterStage !== 'all',
   ].filter(Boolean).length;
@@ -608,15 +613,16 @@ export default function OpportunitiesKanban() {
       const matchesMinAmount = !filterMinAmount || (opp.amount && Number(opp.amount) >= Number(filterMinAmount));
       const matchesMaxAmount = !filterMaxAmount || (opp.amount && Number(opp.amount) <= Number(filterMaxAmount));
 
-      const matchesDateFrom = !filterDateFrom || !opp.close_date || opp.close_date >= filterDateFrom;
-      const matchesDateTo = !filterDateTo || !opp.close_date || opp.close_date <= filterDateTo;
+      const matchesNoCloseDate = !filterNoCloseDate || opp.close_date == null;
+      const matchesDateFrom = filterNoCloseDate || !filterDateFrom || (opp.close_date && opp.close_date >= filterDateFrom);
+      const matchesDateTo = filterNoCloseDate || !filterDateTo || (opp.close_date && opp.close_date <= filterDateTo);
 
       const matchesTag = filterTag === 'all' || (tagsByOpportunity[opp.id]?.some(t => t.id === filterTag));
       const matchesStage = filterStage === 'all' || opp.pipeline_stage_id === filterStage;
 
-      return matchesOwner && matchesMinAmount && matchesMaxAmount && matchesDateFrom && matchesDateTo && matchesTag && matchesStage;
+      return matchesOwner && matchesMinAmount && matchesMaxAmount && matchesNoCloseDate && matchesDateFrom && matchesDateTo && matchesTag && matchesStage;
     });
-  }, [opportunities, searchResults, filterOwner, filterMinAmount, filterMaxAmount, filterDateFrom, filterDateTo, filterTag, filterStage, tagsByOpportunity]);
+  }, [opportunities, searchResults, filterOwner, filterMinAmount, filterMaxAmount, filterDateFrom, filterDateTo, filterNoCloseDate, filterTag, filterStage, tagsByOpportunity]);
 
   // Sorted opportunities for table view
   const sortedOpportunities = useMemo(() => {
@@ -890,12 +896,27 @@ export default function OpportunitiesKanban() {
                 type="date"
                 value={filterDateFrom}
                 onChange={(e) => setFilterDateFrom(e.target.value)}
+                disabled={filterNoCloseDate}
               />
               <Input
                 type="date"
                 value={filterDateTo}
                 onChange={(e) => setFilterDateTo(e.target.value)}
+                disabled={filterNoCloseDate}
               />
+            </div>
+            <div className="flex items-center gap-2 pt-1">
+              <Checkbox
+                id="filter-no-close-date"
+                checked={filterNoCloseDate}
+                onCheckedChange={(checked) => setFilterNoCloseDate(checked === true)}
+              />
+              <label
+                htmlFor="filter-no-close-date"
+                className="text-sm cursor-pointer select-none"
+              >
+                Apenas sem data de fechamento
+              </label>
             </div>
           </div>
 
