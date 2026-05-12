@@ -112,9 +112,17 @@ export function OpportunityDialog({ open, onOpenChange, opportunity, stages, onS
     }
   };
 
+  const selectedStage = stages.find((s) => s.id === formData.pipeline_stage_id);
+  const closeDateRequired = selectedStage?.type === 'won' || selectedStage?.type === 'lost';
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!organization?.id || !userProfile?.id) return;
+
+    if (closeDateRequired && !formData.close_date) {
+      toast.error('Informe a data de fechamento para estágios de Ganho ou Perdido');
+      return;
+    }
 
     setSubmitting(true);
     try {
