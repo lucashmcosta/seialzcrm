@@ -373,8 +373,8 @@ export default function OpportunitiesKanban() {
       : (opportunitiesByStage[stageId] || []);
     return stageOpps.filter((opp) => {
       const matchesOwner =
-        filterOwner === 'all' ||
-        (filterOwner === 'none' ? !opp.owner_user_id : opp.owner_user_id === filterOwner);
+        filterOwners.length === 0 ||
+        filterOwners.includes(opp.owner_user_id ?? 'none');
 
       const matchesMinAmount = !filterMinAmount || (opp.amount && Number(opp.amount) >= Number(filterMinAmount));
       const matchesMaxAmount = !filterMaxAmount || (opp.amount && Number(opp.amount) <= Number(filterMaxAmount));
@@ -387,8 +387,9 @@ export default function OpportunitiesKanban() {
       const matchesCreatedFrom = !filterCreatedFrom || (oppCreatedDate && oppCreatedDate >= filterCreatedFrom);
       const matchesCreatedTo = !filterCreatedTo || (oppCreatedDate && oppCreatedDate <= filterCreatedTo);
 
-      const matchesTag = filterTag === 'all' || (tagsByOpportunity[opp.id]?.some(t => t.id === filterTag));
-      const matchesStage = filterStage === 'all' || opp.pipeline_stage_id === filterStage;
+      const oppTagIds = (tagsByOpportunity[opp.id] || []).map(t => t.id);
+      const matchesTag = filterTags.length === 0 || filterTags.some(t => oppTagIds.includes(t));
+      const matchesStage = filterStages.length === 0 || filterStages.includes(opp.pipeline_stage_id);
 
       return matchesOwner && matchesMinAmount && matchesMaxAmount && matchesNoCloseDate && matchesDateFrom && matchesDateTo && matchesCreatedFrom && matchesCreatedTo && matchesTag && matchesStage;
     });
@@ -588,7 +589,7 @@ export default function OpportunitiesKanban() {
   };
 
   const clearFilters = () => {
-    setFilterOwner('all');
+    setFilterOwners([]);
     setFilterMinAmount('');
     setFilterMaxAmount('');
     setFilterDateFrom('');
@@ -596,12 +597,12 @@ export default function OpportunitiesKanban() {
     setFilterNoCloseDate(false);
     setFilterCreatedFrom('');
     setFilterCreatedTo('');
-    setFilterTag('all');
-    setFilterStage('all');
+    setFilterTags([]);
+    setFilterStages([]);
   };
 
   const activeFiltersCount = [
-    filterOwner !== 'all',
+    filterOwners.length > 0,
     filterMinAmount,
     filterMaxAmount,
     filterDateFrom,
@@ -609,8 +610,8 @@ export default function OpportunitiesKanban() {
     filterNoCloseDate,
     filterCreatedFrom,
     filterCreatedTo,
-    filterTag !== 'all',
-    filterStage !== 'all',
+    filterTags.length > 0,
+    filterStages.length > 0,
   ].filter(Boolean).length;
 
   // Filtered opportunities for table view (applies all filters except stage)
@@ -618,8 +619,8 @@ export default function OpportunitiesKanban() {
     const baseData = searchResults !== null ? searchResults : opportunities;
     return baseData.filter((opp) => {
       const matchesOwner =
-        filterOwner === 'all' ||
-        (filterOwner === 'none' ? !opp.owner_user_id : opp.owner_user_id === filterOwner);
+        filterOwners.length === 0 ||
+        filterOwners.includes(opp.owner_user_id ?? 'none');
 
       const matchesMinAmount = !filterMinAmount || (opp.amount && Number(opp.amount) >= Number(filterMinAmount));
       const matchesMaxAmount = !filterMaxAmount || (opp.amount && Number(opp.amount) <= Number(filterMaxAmount));
@@ -632,12 +633,13 @@ export default function OpportunitiesKanban() {
       const matchesCreatedFrom = !filterCreatedFrom || (oppCreatedDate && oppCreatedDate >= filterCreatedFrom);
       const matchesCreatedTo = !filterCreatedTo || (oppCreatedDate && oppCreatedDate <= filterCreatedTo);
 
-      const matchesTag = filterTag === 'all' || (tagsByOpportunity[opp.id]?.some(t => t.id === filterTag));
-      const matchesStage = filterStage === 'all' || opp.pipeline_stage_id === filterStage;
+      const oppTagIds = (tagsByOpportunity[opp.id] || []).map(t => t.id);
+      const matchesTag = filterTags.length === 0 || filterTags.some(t => oppTagIds.includes(t));
+      const matchesStage = filterStages.length === 0 || filterStages.includes(opp.pipeline_stage_id);
 
       return matchesOwner && matchesMinAmount && matchesMaxAmount && matchesNoCloseDate && matchesDateFrom && matchesDateTo && matchesCreatedFrom && matchesCreatedTo && matchesTag && matchesStage;
     });
-  }, [opportunities, searchResults, filterOwner, filterMinAmount, filterMaxAmount, filterDateFrom, filterDateTo, filterNoCloseDate, filterCreatedFrom, filterCreatedTo, filterTag, filterStage, tagsByOpportunity]);
+  }, [opportunities, searchResults, filterOwners, filterMinAmount, filterMaxAmount, filterDateFrom, filterDateTo, filterNoCloseDate, filterCreatedFrom, filterCreatedTo, filterTags, filterStages, tagsByOpportunity]);
 
   // Sorted opportunities for table view
   const sortedOpportunities = useMemo(() => {
