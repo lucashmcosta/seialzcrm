@@ -1159,6 +1159,13 @@ export default function OpportunitiesKanban() {
           onSuccess={fetchData}
         />
 
+        <CloseDatePromptDialog
+          open={pendingMove !== null}
+          onOpenChange={(o) => !o && setPendingMove(null)}
+          title={pendingMove?.newStatus === 'won' ? 'Marcar como Ganho' : 'Marcar como Perdido'}
+          onConfirm={handleConfirmPendingMove}
+        />
+
         <AlertDialog open={!!deleteId} onOpenChange={(open) => !open && setDeleteId(null)}>
           <AlertDialogContent>
             <AlertDialogHeader>
