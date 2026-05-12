@@ -896,12 +896,27 @@ export default function OpportunitiesKanban() {
                 type="date"
                 value={filterDateFrom}
                 onChange={(e) => setFilterDateFrom(e.target.value)}
+                disabled={filterNoCloseDate}
               />
               <Input
                 type="date"
                 value={filterDateTo}
                 onChange={(e) => setFilterDateTo(e.target.value)}
+                disabled={filterNoCloseDate}
               />
+            </div>
+            <div className="flex items-center gap-2 pt-1">
+              <Checkbox
+                id="filter-no-close-date"
+                checked={filterNoCloseDate}
+                onCheckedChange={(checked) => setFilterNoCloseDate(checked === true)}
+              />
+              <label
+                htmlFor="filter-no-close-date"
+                className="text-sm cursor-pointer select-none"
+              >
+                Apenas sem data de fechamento
+              </label>
             </div>
           </div>
 
