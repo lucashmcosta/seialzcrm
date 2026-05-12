@@ -1,52 +1,45 @@
-## Objetivo
+## Tornar "Data de Fechamento" obrigatória ao Ganhar/Perder
 
-No `Ranking de vendedores` em `/reports`, ao clicar numa linha de vendedor, abrir um modal com os detalhes do vendedor e as oportunidades dele no período/filtros aplicados — sem pesar a tela.
+Hoje a data de fechamento (`close_date`) é opcional em qualquer situação. Vamos exigi-la sempre que a oportunidade for marcada como **Ganho** ou **Perdido**, em todos os caminhos do app.
 
-## Como funciona hoje
+### Pontos de entrada cobertos
 
-- `ReportsPage.tsx` já carrega `currentOpps` (criadas/fechadas no período) e `openOpps` (todas em aberto da org), considerando o filtro de owner.
-- `UserLeaderboard` renderiza cada linha com `userId` mas sem `onClick`.
+1. **Detalhe da oportunidade** (`src/pages/opportunities/OpportunityDetail.tsx`)
+   - Botões "Marcar como Ganho" e "Marcar como Perdido".
+2. **Kanban de oportunidades** (`src/pages/opportunities/OpportunitiesKanban.tsx`)
+   - Drag-and-drop de um card para uma coluna do tipo `won` ou `lost`.
+3. **Kanban mobile** (`src/components/mobile/MobileOpportunitiesKanban.tsx`)
+   - Mesmo fluxo de mudança de estágio para won/lost.
+4. **Dialog de edição/criação** (`src/components/opportunities/OpportunityDialog.tsx`)
+   - Quando o usuário escolhe um estágio do tipo won/lost no formulário, `close_date` passa a ser obrigatório no submit.
 
-## O que será feito
+### UX proposta
 
-### 1. Novo componente `UserDetailDialog`
-Arquivo: `src/components/reports/UserDetailDialog.tsx`
+- **Em todos os 4 fluxos**, se a oportunidade ainda não tiver `close_date`, abrir um dialog leve "Informe a data de fechamento" com um único campo `<input type="date">` (default = hoje), botões Cancelar / Confirmar.
+- Só após confirmar a data é que a transição para `won`/`lost` é persistida (status + stage + close_date no mesmo update).
+- Se já existir `close_date`, segue direto sem perguntar (mantém comportamento atual).
+- No `OpportunityDialog`, se estágio for won/lost e `close_date` estiver vazio: bloquear submit com toast "Informe a data de fechamento" e destacar o campo.
 
-- Modal usando `Dialog` do shadcn (já usado no projeto).
-- Lazy-loaded em `ReportsPage` via `lazy(() => import(...))` para não pesar o bundle inicial.
-- Props: `userId`, `userName`, `range`, `organizationId`, `onClose`, `formatCurrency`, `stagesById` (para nome da etapa).
-- **Busca sob demanda** (só quando abre): uma única query a `opportunities` filtrando por `owner_user_id = userId`, `organization_id`, `deleted_at is null`, e o mesmo OR de período usado em `fetchData` (criadas no período OU fechadas como won/lost no período). Limite de ~500 + ordenação por `updated_at desc`.
-- Conteúdo do modal:
-  - Header: avatar + nome
-  - Bloco de KPIs do vendedor (reaproveita os números já calculados em `userStats`: abertas, ganhas, perdidas, win rate, valor ganho)
-  - Tabs: "Abertas", "Ganhas", "Perdidas"
-  - Lista compacta (rolável, `max-h-[60vh]`) com: título, etapa, valor, data, status. Cada item navega para `/opportunities/:id` ao clicar.
-  - Estado vazio por aba.
-- Loading skeleton enquanto busca.
+### Implementação
 
-### 2. Tornar as linhas clicáveis em `UserLeaderboard`
-Arquivo: `src/components/reports/UserLeaderboard.tsx`
+- Criar componente reutilizável `src/components/opportunities/CloseDatePromptDialog.tsx`:
+  - Props: `open`, `onOpenChange`, `title`, `onConfirm(date: string)`, `loading`.
+  - Usa `Dialog` do shadcn, `Label` + `Input type="date"` (default = hoje em `YYYY-MM-DD`), botão Confirmar desabilitado quando vazio.
+- `OpportunityDetail.tsx`:
+  - Substituir `handleMarkWon`/`handleMarkLost` para abrir o dialog (estado `pendingStatus: 'won'|'lost'|null`) quando `opportunity.close_date` for nulo; no `onConfirm`, fazer o update com `{ status, pipeline_stage_id, close_date }`.
+- `OpportunitiesKanban.tsx`:
+  - No `handleDragEnd`, antes do update, identificar `destStage.type`. Se for `won`/`lost` e `movedOpp.close_date` for nulo, abrir o dialog (guardar `pendingMove`), reverter UI até confirmação, e no confirm enviar update com `close_date` (e também `status` para manter consistência com o detalhe).
+- `MobileOpportunitiesKanban.tsx`: mesma lógica do Kanban desktop.
+- `OpportunityDialog.tsx`:
+  - No `handleSubmit`, se a stage selecionada tiver `type === 'won' || 'lost'` e `formData.close_date` vazio → toast de erro e `return`.
+  - Adicionar asterisco visual no `<Label>` quando o estágio selecionado for won/lost.
 
-- Adicionar prop opcional `onRowClick?: (row: UserStats) => void`.
-- Quando definida, aplicar `cursor-pointer hover:bg-muted/50` na linha e chamar `onRowClick(r)`.
+### Não muda
 
-### 3. Wire-up em `ReportsPage`
-Arquivo: `src/pages/reports/ReportsPage.tsx`
+- Comportamento para estágios `open` continua igual (close_date opcional).
+- Schema do banco, RLS e relatórios não são alterados.
+- Oportunidades já `won`/`lost` sem data permanecem como estão (não há backfill).
 
-- State: `selectedUser: UserStats | null`.
-- Passar `onRowClick={setSelectedUser}` para `UserLeaderboard`.
-- Renderizar `<UserDetailDialog />` (dentro de `Suspense`) só quando `selectedUser` existir, passando `range`, `organizationId`, `formatCurrency`, e o `stagesById` derivado de `stages`.
-- Fechar via `onOpenChange` -> `setSelectedUser(null)`.
+### Performance
 
-## Cuidados de performance
-
-- Componente carregado via `React.lazy` — não entra no bundle inicial da `/reports`.
-- A query roda só quando o modal abre, com limite e select enxuto (`id, title, amount, status, pipeline_stage_id, close_date, updated_at, contacts(full_name)`).
-- Reaproveita `userStats` para os KPIs do header (sem refetch).
-- Sem realtime, sem polling.
-
-## Fora do escopo
-
-- Não muda contadores existentes nem a lógica de KPIs.
-- Sem mudanças de banco/RPC.
-- Sem alterações na versão mobile do leaderboard (caso exista, fica para depois).
+Apenas 1 dialog leve adicional + 1 estado por tela. Sem novas queries.
