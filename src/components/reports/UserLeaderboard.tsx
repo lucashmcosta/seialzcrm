@@ -17,6 +17,7 @@ interface Props {
   rows: UserStats[];
   formatCurrency: (n: number) => string;
   loading?: boolean;
+  onRowClick?: (row: UserStats) => void;
 }
 
 function initials(name: string) {
@@ -30,7 +31,7 @@ function initials(name: string) {
   );
 }
 
-export function UserLeaderboard({ rows, formatCurrency, loading }: Props) {
+export function UserLeaderboard({ rows, formatCurrency, loading, onRowClick }: Props) {
   const [sort, setSort] = useState<{ key: SortKey; dir: 'asc' | 'desc' }>({
     key: 'wonValue',
     dir: 'desc',
@@ -125,7 +126,11 @@ export function UserLeaderboard({ rows, formatCurrency, loading }: Props) {
                 return (
                   <tr
                     key={r.userId}
-                    className="group border-b border-border last:border-0 transition-colors hover:bg-muted/40"
+                    onClick={onRowClick ? () => onRowClick(r) : undefined}
+                    className={cn(
+                      'group border-b border-border last:border-0 transition-colors hover:bg-muted/40',
+                      onRowClick && 'cursor-pointer'
+                    )}
                   >
                     <td className="px-3 py-3">
                       <div className="flex items-center justify-center">
