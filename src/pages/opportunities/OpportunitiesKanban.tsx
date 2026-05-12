@@ -36,6 +36,7 @@ import {
 import { PaginationWithPageSize } from '@/components/application/pagination/pagination';
 import { ColumnSelector, type ColumnConfig } from '@/components/application/table/column-selector';
 import { BadgeWithDot } from '@/components/base/badges/badges';
+import { MultiSelectFilter, type MultiSelectOption } from '@/components/opportunities/MultiSelectFilter';
 import { format } from 'date-fns';
 import { ptBR, enUS } from 'date-fns/locale';
 import { parseDateOnly } from '@/lib/utils';
@@ -123,7 +124,7 @@ export default function OpportunitiesKanban() {
   const [searchTerm, setSearchTerm] = useState('');
   const [searchResults, setSearchResults] = useState<Opportunity[] | null>(null);
   const [users, setUsers] = useState<User[]>([]);
-  const [filterOwner, setFilterOwner] = useState<string>('all');
+  const [filterOwners, setFilterOwners] = useState<string[]>([]);
   const [filterMinAmount, setFilterMinAmount] = useState<string>('');
   const [filterMaxAmount, setFilterMaxAmount] = useState<string>('');
   const [filterDateFrom, setFilterDateFrom] = useState<string>('');
@@ -131,8 +132,8 @@ export default function OpportunitiesKanban() {
   const [filterNoCloseDate, setFilterNoCloseDate] = useState<boolean>(false);
   const [filterCreatedFrom, setFilterCreatedFrom] = useState<string>('');
   const [filterCreatedTo, setFilterCreatedTo] = useState<string>('');
-  const [filterTag, setFilterTag] = useState<string>('all');
-  const [filterStage, setFilterStage] = useState<string>('all');
+  const [filterTags, setFilterTags] = useState<string[]>([]);
+  const [filterStages, setFilterStages] = useState<string[]>([]);
   const [showFilters, setShowFilters] = useState(false);
   
   // Tags state
@@ -373,8 +374,8 @@ export default function OpportunitiesKanban() {
       : (opportunitiesByStage[stageId] || []);
     return stageOpps.filter((opp) => {
       const matchesOwner =
-        filterOwner === 'all' ||
-        (filterOwner === 'none' ? !opp.owner_user_id : opp.owner_user_id === filterOwner);
+        filterOwners.length === 0 ||
+        filterOwners.includes(opp.owner_user_id ?? 'none');
 
       const matchesMinAmount = !filterMinAmount || (opp.amount && Number(opp.amount) >= Number(filterMinAmount));
       const matchesMaxAmount = !filterMaxAmount || (opp.amount && Number(opp.amount) <= Number(filterMaxAmount));
@@ -387,8 +388,9 @@ export default function OpportunitiesKanban() {
       const matchesCreatedFrom = !filterCreatedFrom || (oppCreatedDate && oppCreatedDate >= filterCreatedFrom);
       const matchesCreatedTo = !filterCreatedTo || (oppCreatedDate && oppCreatedDate <= filterCreatedTo);
 
-      const matchesTag = filterTag === 'all' || (tagsByOpportunity[opp.id]?.some(t => t.id === filterTag));
-      const matchesStage = filterStage === 'all' || opp.pipeline_stage_id === filterStage;
+      const oppTagIds = (tagsByOpportunity[opp.id] || []).map(t => t.id);
+      const matchesTag = filterTags.length === 0 || filterTags.some(t => oppTagIds.includes(t));
+      const matchesStage = filterStages.length === 0 || filterStages.includes(opp.pipeline_stage_id);
 
       return matchesOwner && matchesMinAmount && matchesMaxAmount && matchesNoCloseDate && matchesDateFrom && matchesDateTo && matchesCreatedFrom && matchesCreatedTo && matchesTag && matchesStage;
     });
@@ -588,7 +590,7 @@ export default function OpportunitiesKanban() {
   };
 
   const clearFilters = () => {
-    setFilterOwner('all');
+    setFilterOwners([]);
     setFilterMinAmount('');
     setFilterMaxAmount('');
     setFilterDateFrom('');
@@ -596,12 +598,12 @@ export default function OpportunitiesKanban() {
     setFilterNoCloseDate(false);
     setFilterCreatedFrom('');
     setFilterCreatedTo('');
-    setFilterTag('all');
-    setFilterStage('all');
+    setFilterTags([]);
+    setFilterStages([]);
   };
 
   const activeFiltersCount = [
-    filterOwner !== 'all',
+    filterOwners.length > 0,
     filterMinAmount,
     filterMaxAmount,
     filterDateFrom,
@@ -609,8 +611,8 @@ export default function OpportunitiesKanban() {
     filterNoCloseDate,
     filterCreatedFrom,
     filterCreatedTo,
-    filterTag !== 'all',
-    filterStage !== 'all',
+    filterTags.length > 0,
+    filterStages.length > 0,
   ].filter(Boolean).length;
 
   // Filtered opportunities for table view (applies all filters except stage)
@@ -618,8 +620,8 @@ export default function OpportunitiesKanban() {
     const baseData = searchResults !== null ? searchResults : opportunities;
     return baseData.filter((opp) => {
       const matchesOwner =
-        filterOwner === 'all' ||
-        (filterOwner === 'none' ? !opp.owner_user_id : opp.owner_user_id === filterOwner);
+        filterOwners.length === 0 ||
+        filterOwners.includes(opp.owner_user_id ?? 'none');
 
       const matchesMinAmount = !filterMinAmount || (opp.amount && Number(opp.amount) >= Number(filterMinAmount));
       const matchesMaxAmount = !filterMaxAmount || (opp.amount && Number(opp.amount) <= Number(filterMaxAmount));
@@ -632,12 +634,13 @@ export default function OpportunitiesKanban() {
       const matchesCreatedFrom = !filterCreatedFrom || (oppCreatedDate && oppCreatedDate >= filterCreatedFrom);
       const matchesCreatedTo = !filterCreatedTo || (oppCreatedDate && oppCreatedDate <= filterCreatedTo);
 
-      const matchesTag = filterTag === 'all' || (tagsByOpportunity[opp.id]?.some(t => t.id === filterTag));
-      const matchesStage = filterStage === 'all' || opp.pipeline_stage_id === filterStage;
+      const oppTagIds = (tagsByOpportunity[opp.id] || []).map(t => t.id);
+      const matchesTag = filterTags.length === 0 || filterTags.some(t => oppTagIds.includes(t));
+      const matchesStage = filterStages.length === 0 || filterStages.includes(opp.pipeline_stage_id);
 
       return matchesOwner && matchesMinAmount && matchesMaxAmount && matchesNoCloseDate && matchesDateFrom && matchesDateTo && matchesCreatedFrom && matchesCreatedTo && matchesTag && matchesStage;
     });
-  }, [opportunities, searchResults, filterOwner, filterMinAmount, filterMaxAmount, filterDateFrom, filterDateTo, filterNoCloseDate, filterCreatedFrom, filterCreatedTo, filterTag, filterStage, tagsByOpportunity]);
+  }, [opportunities, searchResults, filterOwners, filterMinAmount, filterMaxAmount, filterDateFrom, filterDateTo, filterNoCloseDate, filterCreatedFrom, filterCreatedTo, filterTags, filterStages, tagsByOpportunity]);
 
   // Sorted opportunities for table view
   const sortedOpportunities = useMemo(() => {
@@ -760,8 +763,8 @@ export default function OpportunitiesKanban() {
           organizationId={organization?.id || ''}
           loadMoreForStage={loadMoreForStage}
           loadingMoreStage={loadingMoreStage}
-          filterOwner={filterOwner}
-          filterTag={filterTag}
+          filterOwner={filterOwners.length === 1 ? filterOwners[0] : 'all'}
+          filterTag={filterTags.length === 1 ? filterTags[0] : 'all'}
         />
       </MobileLayout>
     );
@@ -847,42 +850,32 @@ export default function OpportunitiesKanban() {
           {permissions.viewAllOpportunities && (
             <div className="space-y-2">
               <label className="text-sm font-medium">Responsável</label>
-              <Select value={filterOwner} onValueChange={setFilterOwner}>
-                <SelectTrigger>
-                  <SelectValue placeholder="Todos" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="all">Todos</SelectItem>
-                  <SelectItem value="none">Sem responsável</SelectItem>
-                  {userProfile?.id && (
-                    <SelectItem value={userProfile.id}>Meus</SelectItem>
-                  )}
-                  {users.filter((u) => u.id !== userProfile?.id).map((user) => (
-                    <SelectItem key={user.id} value={user.id}>
-                      {user.full_name}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
+              <MultiSelectFilter
+                placeholder="Todos"
+                selected={filterOwners}
+                onChange={setFilterOwners}
+                options={[
+                  { value: 'none', label: 'Sem responsável' },
+                  ...(userProfile?.id
+                    ? [{ value: userProfile.id, label: 'Meus' } as MultiSelectOption]
+                    : []),
+                  ...users
+                    .filter((u) => u.id !== userProfile?.id)
+                    .map<MultiSelectOption>((u) => ({ value: u.id, label: u.full_name })),
+                ]}
+              />
             </div>
           )}
 
           {stages.length > 0 && (
             <div className="space-y-2">
               <label className="text-sm font-medium">Etapa</label>
-              <Select value={filterStage} onValueChange={setFilterStage}>
-                <SelectTrigger>
-                  <SelectValue placeholder="Todas" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="all">Todas</SelectItem>
-                  {stages.map((stage) => (
-                    <SelectItem key={stage.id} value={stage.id}>
-                      {stage.name}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
+              <MultiSelectFilter
+                placeholder="Todas"
+                selected={filterStages}
+                onChange={setFilterStages}
+                options={stages.map<MultiSelectOption>((s) => ({ value: s.id, label: s.name }))}
+              />
             </div>
           )}
 
@@ -954,25 +947,16 @@ export default function OpportunitiesKanban() {
           {allTags.length > 0 && (
             <div className="space-y-2">
               <label className="text-sm font-medium">Etiqueta</label>
-              <Select value={filterTag} onValueChange={setFilterTag}>
-                <SelectTrigger>
-                  <SelectValue placeholder="Todas" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="all">Todas</SelectItem>
-                  {allTags.map((tag) => (
-                    <SelectItem key={tag.id} value={tag.id}>
-                      <div className="flex items-center gap-2">
-                        <span
-                          className="h-2.5 w-2.5 rounded-full shrink-0"
-                          style={{ backgroundColor: tag.color || 'hsl(var(--muted-foreground))' }}
-                        />
-                        {tag.name}
-                      </div>
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
+              <MultiSelectFilter
+                placeholder="Todas"
+                selected={filterTags}
+                onChange={setFilterTags}
+                options={allTags.map<MultiSelectOption>((tag) => ({
+                  value: tag.id,
+                  label: tag.name,
+                  color: tag.color,
+                }))}
+              />
             </div>
           )}
         </div>
