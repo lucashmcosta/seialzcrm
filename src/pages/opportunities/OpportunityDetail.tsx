@@ -13,7 +13,8 @@ import { useOrganization } from '@/hooks/useOrganization';
 import { useTranslation } from '@/lib/i18n';
 import { usePermissions } from '@/hooks/usePermissions';
 import { toast } from '@/hooks/use-toast';
-import { ArrowLeft, PencilSimple, TrendUp, TrendDown, CurrencyDollar, Calendar, User, Buildings } from '@phosphor-icons/react';
+import { ArrowLeft, PencilSimple, TrendUp, TrendDown, DotsThreeVertical, Phone } from '@phosphor-icons/react';
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
 import { formatDateOnly } from '@/lib/utils';
 import { ActivityTimeline } from '@/components/contacts/ActivityTimeline';
 import { ContactTasks } from '@/components/contacts/ContactTasks';
@@ -246,43 +247,102 @@ export default function OpportunityDetail() {
     <Layout>
       <div className="flex flex-col h-full">
         <div className="border-b bg-background/95 backdrop-blur">
-          <div className="px-6 py-4 space-y-4">
-            <div className="flex items-center gap-2">
-              <Button variant="ghost" size="sm" onClick={() => navigate('/opportunities')}>
-                <ArrowLeft className="h-4 w-4 mr-2" />
+          <div className="px-6 py-3 space-y-3">
+            {/* Linha 1: Voltar + Ações */}
+            <div className="flex items-center justify-between">
+              <Button
+                variant="ghost"
+                size="sm"
+                className="-ml-2 h-7 px-2 text-muted-foreground hover:text-foreground"
+                onClick={() => navigate('/opportunities')}
+              >
+                <ArrowLeft className="h-3.5 w-3.5 mr-1.5" />
                 {t('common.back')}
               </Button>
+
+              <div className="flex items-center gap-1.5">
+                {permissions.canEditOpportunities && (
+                  <Button size="sm" onClick={() => setEditDialogOpen(true)}>
+                    <PencilSimple className="h-3.5 w-3.5 mr-1.5" />
+                    {t('common.edit')}
+                  </Button>
+                )}
+                <DropdownMenu>
+                  <DropdownMenuTrigger asChild>
+                    <Button variant="outline" size="sm" className="h-8 w-8 p-0">
+                      <DotsThreeVertical className="h-4 w-4" />
+                    </Button>
+                  </DropdownMenuTrigger>
+                  <DropdownMenuContent align="end" className="w-56">
+                    {contactPhone && (
+                      <DropdownMenuItem asChild>
+                        <div className="p-0">
+                          <ClickToCallButton
+                            phoneNumber={contactPhone}
+                            contactId={opportunity.contact_id || undefined}
+                            opportunityId={opportunity.id}
+                            size="sm"
+                            variant="ghost"
+                            className="w-full justify-start font-normal"
+                          />
+                        </div>
+                      </DropdownMenuItem>
+                    )}
+                    {opportunity.contact_id && (
+                      <DropdownMenuItem asChild>
+                        <div className="p-0">
+                          <SendToSignatureButton
+                            contactId={opportunity.contact_id}
+                            opportunityId={opportunity.id}
+                            variant="ghost"
+                            className="w-full justify-start font-normal"
+                          />
+                        </div>
+                      </DropdownMenuItem>
+                    )}
+                    {permissions.canEditOpportunities && opportunity.status === 'open' && (
+                      <>
+                        {(contactPhone || opportunity.contact_id) && <DropdownMenuSeparator />}
+                        <DropdownMenuItem onClick={handleMarkWon}>
+                          <TrendUp className="h-4 w-4 mr-2" />
+                          {t('opportunities.markWon')}
+                        </DropdownMenuItem>
+                        <DropdownMenuItem onClick={handleMarkLost}>
+                          <TrendDown className="h-4 w-4 mr-2" />
+                          {t('opportunities.markLost')}
+                        </DropdownMenuItem>
+                      </>
+                    )}
+                  </DropdownMenuContent>
+                </DropdownMenu>
+              </div>
             </div>
 
-            <div className="flex items-start justify-between">
-              <div className="space-y-2">
-                <h1 className="text-3xl font-bold text-foreground">{opportunity.title}</h1>
-                <div className="flex items-center gap-4 text-sm text-muted-foreground">
+            {/* Linha 2: Título + Status/Valor */}
+            <div className="flex items-start justify-between gap-4">
+              <div className="min-w-0 flex-1 space-y-1">
+                <h1 className="text-xl font-semibold text-foreground truncate">{opportunity.title}</h1>
+                <div className="flex items-center gap-2 text-xs text-muted-foreground flex-wrap">
                   {opportunity.contacts && (
                     <Link
                       to={`/contacts/${opportunity.contact_id}`}
-                      className="flex items-center gap-1 hover:text-foreground"
+                      className="hover:text-foreground transition-colors"
                     >
-                      <User className="h-4 w-4" />
                       {opportunity.contacts.full_name}
                     </Link>
                   )}
+                  {opportunity.contacts && opportunity.pipeline_stages && <span>·</span>}
                   {opportunity.pipeline_stages && (
-                    <span className="flex items-center gap-1">
-                      <Buildings className="h-4 w-4" />
-                      {opportunity.pipeline_stages.name}
-                    </span>
+                    <span>{opportunity.pipeline_stages.name}</span>
                   )}
+                  {opportunity.pipeline_stages && opportunity.close_date && <span>·</span>}
                   {opportunity.close_date && (
-                    <span className="flex items-center gap-1">
-                      <Calendar className="h-4 w-4" />
-                      {formatDateOnly(opportunity.close_date, locale)}
-                    </span>
+                    <span>{formatDateOnly(opportunity.close_date, locale)}</span>
                   )}
                 </div>
               </div>
 
-              <div className="flex items-center gap-2">
+              <div className="flex items-center gap-3 shrink-0">
                 <Badge className={statusColor}>
                   {opportunity.status === 'won'
                     ? t('status.won')
@@ -290,48 +350,10 @@ export default function OpportunityDetail() {
                     ? t('status.lost')
                     : t('status.open')}
                 </Badge>
-                <div className="flex items-center gap-1 text-2xl font-bold text-foreground">
-                  <CurrencyDollar className="h-6 w-6" />
+                <div className="text-lg font-semibold text-foreground tabular-nums">
                   {formatCurrency(opportunity.amount || 0)}
                 </div>
               </div>
-            </div>
-
-            <div className="flex items-center gap-2">
-              {contactPhone && (
-                <ClickToCallButton
-                  phoneNumber={contactPhone}
-                  contactId={opportunity.contact_id || undefined}
-                  opportunityId={opportunity.id}
-                  size="sm"
-                />
-              )}
-              {opportunity.contact_id && (
-                <SendToSignatureButton
-                  contactId={opportunity.contact_id}
-                  opportunityId={opportunity.id}
-                />
-              )}
-              {permissions.canEditOpportunities && (
-                <>
-                  <Button onClick={() => setEditDialogOpen(true)}>
-                    <PencilSimple className="h-4 w-4 mr-2" />
-                    {t('common.edit')}
-                  </Button>
-                  {opportunity.status === 'open' && (
-                    <>
-                      <Button variant="outline" onClick={handleMarkWon}>
-                        <TrendUp className="h-4 w-4 mr-2" />
-                        {t('opportunities.markWon')}
-                      </Button>
-                      <Button variant="outline" onClick={handleMarkLost}>
-                        <TrendDown className="h-4 w-4 mr-2" />
-                        {t('opportunities.markLost')}
-                      </Button>
-                    </>
-                  )}
-                </>
-              )}
             </div>
           </div>
         </div>
