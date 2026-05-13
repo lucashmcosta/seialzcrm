@@ -1289,7 +1289,7 @@ export default function OpportunitiesKanban() {
                     <Card>
                       <CardHeader className="px-3 pt-3 pb-2">
                         <div className="flex justify-between items-center">
-                          <CardTitle className="text-base font-medium">{stage.name}</CardTitle>
+                          <CardTitle className="text-sm font-medium">{stage.name}</CardTitle>
                           <span className="text-sm text-muted-foreground">
                             {realCount.toLocaleString()}
                           </span>
