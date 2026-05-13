@@ -409,7 +409,7 @@ export default function ReportsPage() {
 
   return (
     <Layout>
-      <div className="min-h-full">
+      <div className="h-full overflow-y-auto overflow-x-hidden">
         {/* Header */}
         <div className="border-b border-border bg-background/95 backdrop-blur sticky top-0 z-10">
           <div className="px-6 py-4">
