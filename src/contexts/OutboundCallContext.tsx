@@ -214,10 +214,16 @@ export function OutboundCallProvider({ children }: { children: ReactNode }) {
       return tokenCacheRef.current.token;
     }
 
+    // Ensure session is fresh (auto-refreshes expired JWT) before invoking
+    const { data: sess } = await supabase.auth.getSession();
+    if (!sess?.session?.access_token) {
+      throw new Error('Não autenticado');
+    }
+
     const { data: tokenData, error: tokenError } = await supabase.functions.invoke('twilio-token');
 
     if (tokenError || !tokenData?.token) {
-      console.error('Token error:', tokenError);
+      console.warn('Token error:', tokenError?.message || tokenError);
       throw new Error('Erro ao obter token de acesso');
     }
 

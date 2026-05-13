@@ -110,6 +110,12 @@ export function useInboundCalls(): UseInboundCallsReturn {
         return;
       }
 
+      // Ensure session is fresh (auto-refreshes expired JWT) before invoking
+      const { data: sess } = await supabase.auth.getSession();
+      if (!sess?.session?.access_token) {
+        return; // Not authenticated yet — caller will retry on next auth state change
+      }
+
       // Get access token
       const { data, error } = await supabase.functions.invoke('twilio-token', {
         body: { 
@@ -119,7 +125,7 @@ export function useInboundCalls(): UseInboundCallsReturn {
       });
 
       if (error || !data?.token) {
-        console.error('[InboundCalls] Failed to get Twilio token:', error);
+        console.warn('[InboundCalls] Failed to get Twilio token:', error?.message || error);
         return;
       }
 
