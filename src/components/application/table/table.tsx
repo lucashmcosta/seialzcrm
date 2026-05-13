@@ -172,10 +172,9 @@ export const TableCheckboxHeader = ({
   return (
     <Column isRowHeader className="w-12">
       <Checkbox
+        aria-label="Selecionar todos"
         checked={isIndeterminate ? "indeterminate" : isSelected}
         onCheckedChange={onChange}
-        onClick={(e) => e.stopPropagation()}
-        onPointerDown={(e) => e.stopPropagation()}
       />
     </Column>
   );
@@ -193,10 +192,9 @@ export const TableCheckboxCell = ({
   return (
     <Cell className="w-12">
       <Checkbox
+        aria-label="Selecionar linha"
         checked={isSelected}
         onCheckedChange={onChange}
-        onClick={(e) => e.stopPropagation()}
-        onPointerDown={(e) => e.stopPropagation()}
       />
     </Cell>
   );

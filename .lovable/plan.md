@@ -1,24 +1,32 @@
-## Problema
+## Diagnóstico
 
-Na página de Contatos, ao clicar nos checkboxes (bolinhas) das linhas ou no checkbox do cabeçalho, a navegação para `ContactDetail` é disparada, porque o clique propaga para o `TableRow` que tem `onAction` configurado para navegar.
+A lógica de seleção já está correta no código:
+- Clicar na bolinha do cabeçalho → seleciona todos os contatos da página atual.
+- Clicar na bolinha de um contato → seleciona só aquele.
+- Clicar de novo no cabeçalho → desmarca tudo.
 
-A lógica de seleção múltipla e "selecionar todos" já existe no código (`handleSelectAll`, `handleSelectOne`, `BulkActionsBar`), mas é inutilizada por esse bug de propagação de clique.
+O que está atrapalhando é a aparência:
+1. As bolinhas são quase invisíveis (`border` muito sutil), parecem ícone de status, não checkbox.
+2. A barra inferior mostra "1 Selecionar" — texto errado, deveria ser "1 selecionado".
+3. Quando só 1 contato está marcado e o cabeçalho fica "—" (parcial), não fica claro que clicar nele vai marcar todos.
 
-## Solução
+## Solução simples
 
-Ajustar o componente `src/components/application/table/table.tsx` para que `TableCheckboxCell` e `TableCheckboxHeader` parem a propagação do clique e do pointer-down, evitando o disparo do `onAction` da linha.
+**1. `src/components/BulkActionsBar.tsx`** — corrigir o label:
+- Trocar `{N} Selecionar` por `{N} selecionado` / `{N} selecionados` (singular/plural).
 
-Mudanças:
+**2. `src/pages/contacts/ContactsList.tsx`** — melhorar a UX da seleção em massa:
+- Adicionar `title="Selecionar todos desta página"` no checkbox do cabeçalho.
+- Garantir que clicar no cabeçalho quando está "—" (parcial) seleciona todos (já é o comportamento padrão do Radix).
 
-1. Em `TableCheckboxCell`: envolver o `Checkbox` em um `<div>` com `onClick={e => e.stopPropagation()}` e `onPointerDown={e => e.stopPropagation()}`.
-2. Em `TableCheckboxHeader`: mesmo tratamento (boa prática, e mantém consistência).
-3. Nenhuma alteração de lógica de negócio, hooks ou rotas — apenas frontend/apresentação.
+**3. `src/components/ui/checkbox.tsx`** — deixar a bolinha mais visível:
+- Aumentar contraste da borda (`border-2 border-muted-foreground/40`) para parecer um checkbox real, não um ícone decorativo.
+- Manter o tamanho atual (`h-4 w-4`).
 
-Resultado:
-- Clicar no checkbox da linha apenas marca/desmarca aquele contato (mostra a `BulkActionsBar`).
-- Clicar no checkbox do cabeçalho marca/desmarca todos da página atual (com opção "Selecionar todos os N contatos" já existente).
-- Clicar em qualquer outro lugar da linha continua navegando para `ContactDetail` como antes.
+Nenhuma mudança em backend, dados ou rotas.
 
 ## Arquivos afetados
 
-- `src/components/application/table/table.tsx` (única edição)
+- `src/components/BulkActionsBar.tsx`
+- `src/components/ui/checkbox.tsx`
+- `src/pages/contacts/ContactsList.tsx` (apenas atributo `title` no header checkbox)
