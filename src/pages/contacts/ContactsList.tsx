@@ -398,8 +398,8 @@ export default function ContactsList() {
             />
           </div>
 
-          <Popover open={showFilters} onOpenChange={setShowFilters}>
-            <PopoverTrigger asChild>
+          <Dialog open={showFilters} onOpenChange={setShowFilters}>
+            <DialogTrigger asChild>
               <ShadButton variant="outline" className="relative">
                 <FunnelSimple size={16} weight="light" className="mr-2" />
                 Filtros
@@ -409,18 +409,13 @@ export default function ContactsList() {
                   </Badge>
                 )}
               </ShadButton>
-            </PopoverTrigger>
-            <PopoverContent className="w-80" align="end">
-              <div className="space-y-4">
-                <div className="flex items-center justify-between">
-                  <h4 className="font-medium text-sm">Filtros Avançados</h4>
-                  {activeFiltersCount > 0 && (
-                    <ShadButton variant="ghost" size="sm" onClick={clearFilters}>
-                      Limpar
-                    </ShadButton>
-                  )}
-                </div>
+            </DialogTrigger>
+            <DialogContent size="md" className="p-0 max-h-[85vh] flex flex-col gap-0">
+              <div className="px-6 py-4 border-b">
+                <DialogTitle>Filtros</DialogTitle>
+              </div>
 
+              <div className="flex-1 overflow-y-auto px-6 py-5 space-y-5">
                 {permissions.viewAllContacts && (
                   <div className="space-y-2">
                     <label className="text-sm font-medium">{t('contacts.owner')}</label>
@@ -474,8 +469,21 @@ export default function ContactsList() {
                   </div>
                 </div>
               </div>
-            </PopoverContent>
-          </Popover>
+
+              <div className="px-6 py-3 border-t flex items-center justify-between gap-2">
+                <ShadButton
+                  variant="ghost"
+                  onClick={clearFilters}
+                  disabled={activeFiltersCount === 0}
+                >
+                  Limpar
+                </ShadButton>
+                <ShadButton onClick={() => setShowFilters(false)}>
+                  Aplicar
+                </ShadButton>
+              </div>
+            </DialogContent>
+          </Dialog>
 
           <ColumnSelector
             columns={availableColumns}
