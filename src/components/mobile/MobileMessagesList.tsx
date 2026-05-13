@@ -916,6 +916,13 @@ export function MobileMessagesList() {
                                 </div>
                               )}
 
+                              {/* Human sender name */}
+                              {isOutbound && message.sender_type === 'user' && message.sender_name && (
+                                <div className="text-[10px] font-semibold text-white/70 mb-1">
+                                  {message.sender_name}
+                                </div>
+                              )}
+
                               {/* Quoted */}
                               {message.reply_to_message && (
                                 <QuotedMessage content={message.reply_to_message.content} direction={message.reply_to_message.direction} />

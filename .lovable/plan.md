@@ -1,67 +1,20 @@
-## Multi-select para filtros de Oportunidades
+## Problema
 
-Tornar os filtros **Responsável**, **Etapa** e **Etiqueta** do Popover de Filtros Avançados em **multi-select** — usuário poderá escolher vários valores simultaneamente.
+Na versão mobile (`MobileMessagesList.tsx`), as mensagens enviadas (outbound) não mostram **quem da equipe enviou**. Hoje só aparece um badge quando o remetente é o agente de IA (`sender_type === 'agent'`). Mensagens enviadas por usuários humanos da equipe aparecem sem identificação — o que confunde quando vários atendentes usam a mesma conversa.
 
-### Arquivo
-- `src/pages/opportunities/OpportunitiesKanban.tsx`
+## Solução
 
-### Abordagem de UI
-Em vez de adicionar uma biblioteca, reaproveitar o padrão já existente no projeto: um botão "Trigger" que abre um sub-Popover contendo lista de `<Checkbox>` (uma por opção) com busca opcional. Visual coerente com o resto do CRM (Seialz v1).
+Adicionar uma pequena linha com o nome do remetente no topo das mensagens **outbound enviadas por usuários humanos** (`sender_type === 'user'` e `sender_name` presente).
 
-Cada filtro vira um botão com:
-- Texto "Todos" se nenhum selecionado
-- "Nome único" se 1 selecionado
-- "N selecionados" se 2+
-- Contador de selecionados ao lado
+### Detalhes visuais
 
-### Mudanças de estado
+- Texto pequeno (`text-[10px]`), peso `font-semibold`, cor sutil (ex.: `text-white/70` dentro da bolha verde escura), `mb-1`.
+- Mostrar apenas em mensagens outbound do tipo `user` quando `sender_name` existir.
+- Mensagens do agente continuam usando o badge roxo atual (sem mudanças).
+- Mensagens inbound (do contato) não recebem nome — o nome do contato já está no header da conversa.
 
-```ts
-// antes
-const [filterOwner, setFilterOwner] = useState<string>('all');
-const [filterStage, setFilterStage] = useState<string>('all');
-const [filterTag, setFilterTag] = useState<string>('all');
+### Arquivo afetado
 
-// depois
-const [filterOwners, setFilterOwners] = useState<string[]>([]); // [] = todos. 'none' = sem responsável
-const [filterStages, setFilterStages] = useState<string[]>([]);
-const [filterTags, setFilterTags] = useState<string[]>([]);
-```
+- `src/components/mobile/MobileMessagesList.tsx` — adicionar bloco condicional logo acima do badge do agente (linha ~911), renderizando o nome do usuário humano.
 
-### Lógica de filtragem (substitui as duas ocorrências)
-
-```ts
-const matchesOwner =
-  filterOwners.length === 0 ||
-  filterOwners.includes(opp.owner_user_id ?? 'none');
-
-const matchesStage =
-  filterStages.length === 0 || filterStages.includes(opp.pipeline_stage_id);
-
-const oppTagIds = (tagsByOpportunity[opp.id] || []).map(t => t.id);
-const matchesTag =
-  filterTags.length === 0 || filterTags.some(t => oppTagIds.includes(t));
-```
-
-### Demais ajustes
-- `clearFilters`: setar os 3 arrays para `[]`.
-- `activeFiltersCount`: usar `filterOwners.length > 0`, `filterStages.length > 0`, `filterTags.length > 0`.
-- `useMemo` deps: trocar referências para os novos arrays.
-- Remover SavedViews dependências dessas chaves (se houver) ou mapear o array como antes (verificar; manter compatível).
-
-### UI dos 3 filtros (dentro do PopoverContent)
-
-Componente inline reutilizável `MultiSelectFilter`:
-- Trigger: `<Button variant="outline" className="w-full justify-between">{label}</Button>`
-- Popover lateral com `Command` (já existe em `components/ui/command.tsx`) ou simples lista de Checkbox.
-
-Para simplicidade e zero novas dependências: lista vertical de `<Checkbox>` com label, dentro de um `<div className="max-h-48 overflow-auto">` no PopoverContent secundário.
-
-### Não muda
-- Schema do banco, RLS, queries.
-- Filtros de Valor, Data de Fechamento, Data de Criação.
-- Página de Contatos (somente Oportunidades, conforme escopo do pedido — Contatos não tem Etiqueta e usa lifecycle como categoria).
-- Componente mobile.
-
-### Pergunta
-Confirma que é **só** na tela de Oportunidades? Em Contatos os campos equivalentes seriam Responsável e Etapa (ciclo de vida) — se desejar, faço também.
+Sem mudanças em backend, hooks de dados ou layout. É puramente apresentação.
