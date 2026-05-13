@@ -1333,7 +1333,6 @@ export default function OpportunitiesKanban() {
                                         amount={Number(opp.amount)}
                                         currency={opp.currency}
                                         contactName={opp.contacts?.full_name}
-                                        contactName={opp.contacts?.full_name}
                                         ownerName={opp.users?.full_name}
                                         closeDate={opp.close_date}
                                         createdAt={opp.created_at}
