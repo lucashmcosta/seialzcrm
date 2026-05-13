@@ -1,4 +1,4 @@
-import { User, Calendar, PencilSimple, TrashSimple } from '@phosphor-icons/react';
+import { User, Calendar, PencilSimple } from '@phosphor-icons/react';
 import { format } from 'date-fns';
 import { ptBR, enUS } from 'date-fns/locale';
 import { parseDateOnly } from '@/lib/utils';
@@ -77,12 +77,6 @@ export function SeialzOpportunityCard({
               onClick={(e) => { e.stopPropagation(); onEdit(); }}
             >
               <PencilSimple size={12} weight="light" />
-            </button>
-            <button
-              className="p-1 rounded hover:bg-[hsl(var(--sz-bg4))] text-muted-foreground hover:text-destructive transition-colors"
-              onClick={(e) => { e.stopPropagation(); onDelete(); }}
-            >
-              <TrashSimple size={12} weight="light" />
             </button>
           </div>
         </div>
