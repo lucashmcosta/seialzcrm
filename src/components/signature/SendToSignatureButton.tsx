@@ -157,8 +157,8 @@ export function SendToSignatureButton({ contactId, opportunityId, size = 'sm' }:
 
   return (
     <Button variant="outline" size={size} onClick={handleSendToSignature}>
-      <PenNib className="h-4 w-4 mr-2" />
-      Enviar para Assinatura
+      <PenNib className={size === 'icon' ? 'h-4 w-4' : 'h-4 w-4 mr-2'} />
+      {size !== 'icon' && 'Enviar para Assinatura'}
     </Button>
   );
 }
