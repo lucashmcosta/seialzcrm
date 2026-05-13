@@ -362,7 +362,7 @@ export default function TemplateForm() {
                         <Alert>
                            <WarningCircle className="w-4 h-4" />
                           <AlertDescription>
-                            Títulos dos botões são fixos após aprovação pelo WhatsApp.
+                            Títulos dos botões são fixos após aprovação pelo WhatsApp. Não são permitidos emojis, quebras de linha, variáveis ou caracteres de formatação (* _ ~ `).
                           </AlertDescription>
                         </Alert>
                         {buttons.map((button, index) => (
