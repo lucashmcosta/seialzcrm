@@ -204,114 +204,118 @@ export function OpportunityDialog({ open, onOpenChange, opportunity, stages, onS
                 placeholder="Ex: Venda de software"
               />
             </div>
-            <div className="grid grid-cols-2 gap-4">
-              <div className="space-y-2">
-                <Label htmlFor="amount">{t('opportunities.amount')}</Label>
-                <Input
-                  id="amount"
-                  type="number"
-                  step="0.01"
-                  min="0"
-                  value={formData.amount}
-                  onChange={(e) => setFormData({ ...formData, amount: parseFloat(e.target.value) || 0 })}
-                  required
-                />
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="currency">{t('opportunities.currency')}</Label>
-                <Select
-                  value={formData.currency}
-                  onValueChange={(value) => setFormData({ ...formData, currency: value })}
-                >
-                  <SelectTrigger id="currency">
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="BRL">BRL</SelectItem>
-                    <SelectItem value="USD">USD</SelectItem>
-                    <SelectItem value="EUR">EUR</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
-            </div>
-            <div className="space-y-2">
-              <Label htmlFor="stage">{t('opportunities.stage')}</Label>
-              <Select
-                value={formData.pipeline_stage_id}
-                onValueChange={(value) => setFormData({ ...formData, pipeline_stage_id: value })}
-              >
-                <SelectTrigger id="stage">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  {stages.map((stage) => (
-                    <SelectItem key={stage.id} value={stage.id}>
-                      {stage.name}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-            {organization?.enable_companies_module && (
-              <div className="space-y-2">
-                <Label htmlFor="company">{t('opportunities.company')}</Label>
-                <Select
-                  value={formData.company_id || 'none'}
-                  onValueChange={(value) => setFormData({ ...formData, company_id: value === 'none' ? null : value })}
-                >
-                  <SelectTrigger id="company">
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="none">Sem empresa</SelectItem>
-                    {companies.map((company) => (
-                      <SelectItem key={company.id} value={company.id}>
-                        {company.name}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
+            {!titleOnly && (
+              <>
+                <div className="grid grid-cols-2 gap-4">
+                  <div className="space-y-2">
+                    <Label htmlFor="amount">{t('opportunities.amount')}</Label>
+                    <Input
+                      id="amount"
+                      type="number"
+                      step="0.01"
+                      min="0"
+                      value={formData.amount}
+                      onChange={(e) => setFormData({ ...formData, amount: parseFloat(e.target.value) || 0 })}
+                      required
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="currency">{t('opportunities.currency')}</Label>
+                    <Select
+                      value={formData.currency}
+                      onValueChange={(value) => setFormData({ ...formData, currency: value })}
+                    >
+                      <SelectTrigger id="currency">
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="BRL">BRL</SelectItem>
+                        <SelectItem value="USD">USD</SelectItem>
+                        <SelectItem value="EUR">EUR</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="stage">{t('opportunities.stage')}</Label>
+                  <Select
+                    value={formData.pipeline_stage_id}
+                    onValueChange={(value) => setFormData({ ...formData, pipeline_stage_id: value })}
+                  >
+                    <SelectTrigger id="stage">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {stages.map((stage) => (
+                        <SelectItem key={stage.id} value={stage.id}>
+                          {stage.name}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+                {organization?.enable_companies_module && (
+                  <div className="space-y-2">
+                    <Label htmlFor="company">{t('opportunities.company')}</Label>
+                    <Select
+                      value={formData.company_id || 'none'}
+                      onValueChange={(value) => setFormData({ ...formData, company_id: value === 'none' ? null : value })}
+                    >
+                      <SelectTrigger id="company">
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="none">Sem empresa</SelectItem>
+                        {companies.map((company) => (
+                          <SelectItem key={company.id} value={company.id}>
+                            {company.name}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                )}
+                <div className="space-y-2">
+                  <Label htmlFor="contact">{t('opportunities.contact')}</Label>
+                  <Select
+                    value={formData.contact_id || 'none'}
+                    onValueChange={(value) => setFormData({ ...formData, contact_id: value === 'none' ? null : value })}
+                  >
+                    <SelectTrigger id="contact">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="none">Sem contato</SelectItem>
+                      {contacts.map((contact) => (
+                        <SelectItem key={contact.id} value={contact.id}>
+                          {contact.full_name}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div className="space-y-2">
+                  <Label>{t('opportunities.owner') || 'Responsável'}</Label>
+                  <OwnerSelector
+                    value={formData.owner_user_id || null}
+                    onChange={(userId) => setFormData({ ...formData, owner_user_id: userId })}
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="close_date">
+                    {t('opportunities.closeDate')}
+                    {closeDateRequired && <span className="text-destructive ml-1">*</span>}
+                  </Label>
+                  <Input
+                    id="close_date"
+                    type="date"
+                    value={formData.close_date || ''}
+                    onChange={(e) => setFormData({ ...formData, close_date: e.target.value || null })}
+                    required={closeDateRequired}
+                  />
+                </div>
+              </>
             )}
-            <div className="space-y-2">
-              <Label htmlFor="contact">{t('opportunities.contact')}</Label>
-              <Select
-                value={formData.contact_id || 'none'}
-                onValueChange={(value) => setFormData({ ...formData, contact_id: value === 'none' ? null : value })}
-              >
-                <SelectTrigger id="contact">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="none">Sem contato</SelectItem>
-                  {contacts.map((contact) => (
-                    <SelectItem key={contact.id} value={contact.id}>
-                      {contact.full_name}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-            <div className="space-y-2">
-              <Label>{t('opportunities.owner') || 'Responsável'}</Label>
-              <OwnerSelector
-                value={formData.owner_user_id || null}
-                onChange={(userId) => setFormData({ ...formData, owner_user_id: userId })}
-              />
-            </div>
-            <div className="space-y-2">
-              <Label htmlFor="close_date">
-                {t('opportunities.closeDate')}
-                {closeDateRequired && <span className="text-destructive ml-1">*</span>}
-              </Label>
-              <Input
-                id="close_date"
-                type="date"
-                value={formData.close_date || ''}
-                onChange={(e) => setFormData({ ...formData, close_date: e.target.value || null })}
-                required={closeDateRequired}
-              />
-            </div>
           </div>
           <DialogFooter>
             <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>
