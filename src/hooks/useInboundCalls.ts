@@ -4,6 +4,7 @@ import { Device, Call } from '@twilio/voice-sdk';
 import { supabase } from '@/integrations/supabase/client';
 import { useOrganization } from './useOrganization';
 import { useVoiceIntegration } from './useVoiceIntegration';
+import { getTwilioAccessToken } from '@/lib/authSession';
 
 interface InboundCallInfo {
   call: Call;
@@ -110,27 +111,18 @@ export function useInboundCalls(): UseInboundCallsReturn {
         return;
       }
 
-      // Ensure session is fresh (auto-refreshes expired JWT) before invoking
-      const { data: sess } = await supabase.auth.getSession();
-      if (!sess?.session?.access_token) {
-        return; // Not authenticated yet — caller will retry on next auth state change
-      }
-
-      // Get access token
-      const { data, error } = await supabase.functions.invoke('twilio-token', {
-        body: { 
-          organizationId: organization.id,
-          identity: userProfile.id
-        }
+      const token = await getTwilioAccessToken({
+        organizationId: organization.id,
+        identity: userProfile.id,
       });
 
-      if (error || !data?.token) {
-        console.warn('[InboundCalls] Failed to get Twilio token:', error?.message || error);
+      if (!token) {
+        console.warn('[InboundCalls] Skipping Twilio init because there is no valid authenticated session');
         return;
       }
 
       // Create and register device
-      const device = new Device(data.token, {
+      const device = new Device(token, {
         logLevel: 1,
         codecPreferences: [Call.Codec.Opus, Call.Codec.PCMU],
       });
