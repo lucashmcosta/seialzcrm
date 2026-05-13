@@ -8,7 +8,16 @@ function isStandaloneMode() {
 }
 
 function syncAppHeight() {
-  const height = isStandaloneMode() ? window.screen.height : window.innerHeight;
+  const standalone = isStandaloneMode();
+  const viewportHeight = window.visualViewport?.height ?? 0;
+  const screenHeight = window.screen.height;
+  const height = standalone
+    ? viewportHeight > 0 && viewportHeight < screenHeight - 80
+      ? viewportHeight
+      : screenHeight
+    : window.innerHeight;
+
+  document.documentElement.dataset.standalone = standalone ? 'true' : 'false';
   document.documentElement.style.setProperty('--app-height', `${height}px`);
 }
 
