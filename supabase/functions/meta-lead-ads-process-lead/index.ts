@@ -417,6 +417,56 @@ serve(async (req) => {
       });
     }
 
+    // Auto-send WhatsApp template (only on first contact creation, when phone is present)
+    if (
+      !existingId &&
+      phone &&
+      settings?.auto_send_whatsapp === true &&
+      settings?.whatsapp_template_id
+    ) {
+      try {
+        const tokens: Record<string, string> = {
+          first_name: firstName || "",
+          full_name: fullName || "",
+          form_name: lead_form_name || "",
+          campaign_name: lead.campaign_name || "",
+          ad_name: lead.ad_name || "",
+        };
+        const replaceTokens = (str: string) =>
+          str.replace(/\{(\w+)\}/g, (_m, key) =>
+            tokens[key] !== undefined ? tokens[key] : `{${key}}`,
+          );
+        const rawVars = (settings.whatsapp_template_variables || {}) as Record<string, string>;
+        const templateVariables: Record<string, string> = {};
+        for (const [k, v] of Object.entries(rawVars)) {
+          templateVariables[k] = replaceTokens(String(v ?? ""));
+        }
+
+        const sendUrl = `${Deno.env.get("SUPABASE_URL")}/functions/v1/twilio-whatsapp-send`;
+        const sendRes = await fetch(sendUrl, {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")}`,
+          },
+          body: JSON.stringify({
+            organizationId: organization_id,
+            contactId,
+            templateId: settings.whatsapp_template_id,
+            templateVariables,
+            isAgentMessage: false,
+            senderName: "Meta Lead Ads (auto)",
+          }),
+        });
+        if (!sendRes.ok) {
+          const errBody = await sendRes.text();
+          console.warn("auto WhatsApp send failed", sendRes.status, errBody);
+        }
+      } catch (waErr) {
+        console.warn("auto WhatsApp send error", waErr);
+      }
+    }
+
     // Name confirmation memory
     if (settings?.set_name_confirmed && fullName !== "Lead Meta") {
       await admin.from("contact_memories").upsert(
