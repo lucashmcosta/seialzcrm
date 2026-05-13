@@ -120,7 +120,7 @@ export function OpportunityDialog({ open, onOpenChange, opportunity, stages, onS
     e.preventDefault();
     if (!organization?.id || !userProfile?.id) return;
 
-    if (closeDateRequired && !formData.close_date) {
+    if (!titleOnly && closeDateRequired && !formData.close_date) {
       toast.error('Informe a data de fechamento para estágios de Ganho ou Perdido');
       return;
     }
@@ -129,19 +129,22 @@ export function OpportunityDialog({ open, onOpenChange, opportunity, stages, onS
     try {
       if (opportunity?.id) {
         // Update existing opportunity
+        const updatePayload = titleOnly
+          ? { title: formData.title, updated_by: userProfile?.id || null }
+          : {
+              title: formData.title,
+              amount: formData.amount,
+              currency: formData.currency,
+              contact_id: formData.contact_id,
+              company_id: formData.company_id,
+              pipeline_stage_id: formData.pipeline_stage_id,
+              close_date: formData.close_date,
+              owner_user_id: formData.owner_user_id,
+              updated_by: userProfile?.id || null,
+            };
         const { error } = await supabase
           .from('opportunities')
-          .update({
-            title: formData.title,
-            amount: formData.amount,
-            currency: formData.currency,
-            contact_id: formData.contact_id,
-            company_id: formData.company_id,
-            pipeline_stage_id: formData.pipeline_stage_id,
-            close_date: formData.close_date,
-            owner_user_id: formData.owner_user_id,
-            updated_by: userProfile?.id || null,
-          } as any)
+          .update(updatePayload as any)
           .eq('id', opportunity.id);
 
         if (error) throw error;
