@@ -33,6 +33,7 @@ import { AudioRecorder } from '@/components/whatsapp/AudioRecorder';
 import { MediaUploadButton } from '@/components/whatsapp/MediaUploadButton';
 import { MediaPreviewDialog } from '@/components/whatsapp/MediaPreviewDialog';
 import { AudioMessagePlayer } from '@/components/whatsapp/AudioMessagePlayer';
+import { getProxiedMediaUrl } from '@/lib/mediaProxy';
 import { QuotedMessage } from '@/components/whatsapp/QuotedMessage';
 import { ReplyPreview } from '@/components/whatsapp/ReplyPreview';
 import { AgentMessageFeedbackDialog } from '@/components/whatsapp/AgentMessageFeedbackDialog';
@@ -156,6 +157,12 @@ export function MobileMessagesList() {
   // Feedback
   const [feedbackMessage, setFeedbackMessage] = useState<Message | null>(null);
   const [showFeedbackDialog, setShowFeedbackDialog] = useState(false);
+
+  // Auth token for Twilio media proxy
+  const [accessToken, setAccessToken] = useState<string | undefined>(undefined);
+  useEffect(() => {
+    supabase.auth.getSession().then(({ data }) => setAccessToken(data.session?.access_token));
+  }, []);
 
   // New conversation
   const [showNewConversation, setShowNewConversation] = useState(false);
@@ -931,15 +938,16 @@ export function MobileMessagesList() {
                               {/* Media */}
                               {message.media_urls && message.media_urls.length > 0 && (
                                 <div className="space-y-1 mb-1">
-                                  {message.media_urls.map((url, i) => {
-                                    if (message.media_type === 'audio' || url.match(/\.(ogg|mp3|wav|m4a)$/i)) {
+                                  {message.media_urls.map((rawUrl, i) => {
+                                    const url = getProxiedMediaUrl(rawUrl, organization?.id, accessToken);
+                                    if (message.media_type === 'audio' || rawUrl.match(/\.(ogg|mp3|wav|m4a)$/i)) {
                                       const isAudioOnly = message.media_type === 'audio' && !message.content;
                                       return <AudioMessagePlayer key={i} src={url}
                                         timestamp={isAudioOnly ? new Date(message.sent_at).toLocaleTimeString(locale, { hour: '2-digit', minute: '2-digit', hour12: false }) : undefined}
                                         statusIcon={isAudioOnly && isOutbound ? renderStatusIcon(message.whatsapp_status) : undefined}
                                       />;
                                     }
-                                    if (message.media_type === 'image' || url.match(/\.(jpg|jpeg|png|gif|webp)$/i))
+                                    if (message.media_type === 'image' || rawUrl.match(/\.(jpg|jpeg|png|gif|webp)$/i))
                                       return <img key={i} src={url} alt="" className="max-w-full max-h-[200px] rounded cursor-pointer object-cover" onClick={() => setPreviewImageUrl(url)} />;
                                     return (
                                       <a key={i} href={url} target="_blank" rel="noopener noreferrer" className="flex items-center gap-1.5 p-1.5 rounded bg-background/50">

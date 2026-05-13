@@ -30,6 +30,7 @@ import { ptBR, enUS } from 'date-fns/locale';
 import { WhatsAppTemplateSelector } from '@/components/whatsapp/WhatsAppTemplateSelector';
 import { AudioRecorder } from '@/components/whatsapp/AudioRecorder';
 import { AudioMessagePlayer } from '@/components/whatsapp/AudioMessagePlayer';
+import { getProxiedMediaUrl } from '@/lib/mediaProxy';
 import { MediaUploadButton } from '@/components/whatsapp/MediaUploadButton';
 import { WhatsAppFormattedText } from '@/components/whatsapp/WhatsAppFormattedText';
 import EmojiPicker, { EmojiClickData, Theme } from 'emoji-picker-react';
@@ -84,6 +85,10 @@ export function ContactMessages({ contactId, opportunityId }: ContactMessagesPro
   const [showEmojiPicker, setShowEmojiPicker] = useState(false);
   const [aiImproving, setAiImproving] = useState(false);
   const [textareaOverflow, setTextareaOverflow] = useState(false);
+  const [accessToken, setAccessToken] = useState<string | undefined>(undefined);
+  useEffect(() => {
+    supabase.auth.getSession().then(({ data }) => setAccessToken(data.session?.access_token));
+  }, []);
 
   const { generate: generateAI } = useAI();
   const dateLocale = locale === 'pt-BR' ? ptBR : enUS;
@@ -525,16 +530,17 @@ export function ContactMessages({ contactId, opportunityId }: ContactMessagesPro
 
     return (
       <div className="mb-2 space-y-2">
-        {message.media_urls.map((url, i) => {
-          if (message.media_type === 'audio' || url.match(/\.(ogg|mp3|wav|m4a)$/i)) {
+        {message.media_urls.map((rawUrl, i) => {
+          const url = getProxiedMediaUrl(rawUrl, organization?.id, accessToken);
+          if (message.media_type === 'audio' || rawUrl.match(/\.(ogg|mp3|wav|m4a)$/i)) {
             return <AudioMessagePlayer key={i} src={url} />;
           }
-          if (message.media_type === 'video' || url.match(/\.(mp4|mov|webm|avi)$/i)) {
+          if (message.media_type === 'video' || rawUrl.match(/\.(mp4|mov|webm|avi)$/i)) {
             return (
               <video key={i} src={url} controls className="max-w-full rounded" preload="metadata" />
             );
           }
-          if (message.media_type === 'image' || url.match(/\.(jpg|jpeg|png|gif|webp)$/i)) {
+          if (message.media_type === 'image' || rawUrl.match(/\.(jpg|jpeg|png|gif|webp)$/i)) {
             return (
               <img
                 key={i}
