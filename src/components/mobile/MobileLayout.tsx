@@ -151,15 +151,16 @@ export function MobileLayout({ children, hideBottomBar = false }: MobileLayoutPr
       {/* ── Drawer ── */}
       <aside
         className={cn(
-          'fixed top-0 right-0 h-full w-[280px] bg-card border-l border-border z-50',
+          'fixed top-0 right-0 h-full w-[280px] bg-card border-l border-border z-50 flex flex-col',
           'transition-transform duration-300 ease-out',
           drawerOpen ? 'translate-x-0' : 'translate-x-full'
         )}
+        style={{ paddingTop: 'env(safe-area-inset-top, 0px)' }}
       >
         {/* Drawer header */}
-        <div className="h-14 flex items-center justify-between px-4 border-b border-border">
-          <div className="flex items-center gap-3">
-            <div className="w-8 h-8 rounded-full bg-primary/20 text-primary flex items-center justify-center text-xs font-semibold">
+        <div className="h-14 flex items-center justify-between px-4 border-b border-border flex-shrink-0">
+          <div className="flex items-center gap-3 min-w-0">
+            <div className="w-8 h-8 rounded-full bg-primary/20 text-primary flex items-center justify-center text-xs font-semibold flex-shrink-0">
               {initials}
             </div>
             <div className="min-w-0">
@@ -172,7 +173,7 @@ export function MobileLayout({ children, hideBottomBar = false }: MobileLayoutPr
             </div>
           </div>
           <button
-            className="p-2 text-muted-foreground hover:text-foreground"
+            className="p-2 text-muted-foreground hover:text-foreground flex-shrink-0"
             onClick={() => setDrawerOpen(false)}
           >
             <X size={20} weight="bold" />
