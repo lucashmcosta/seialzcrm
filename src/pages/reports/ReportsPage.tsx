@@ -415,6 +415,30 @@ export default function ReportsPage() {
     return <Navigate to="/dashboard" replace />;
   }
 
+  if (isMobile) {
+    return (
+      <MobileLayout>
+        <MobileReports
+          preset={preset}
+          onPresetChange={setPreset}
+          customRange={customRange}
+          onCustomRangeChange={setCustomRange}
+          ownerId={ownerId}
+          onOwnerChange={setOwnerId}
+          users={users}
+          loading={loading}
+          stats={stats}
+          openCount={openOpps.length}
+          openValue={openOpps.reduce((s, o) => s + (Number(o.amount) || 0), 0)}
+          trend={trend}
+          funnel={funnel}
+          userStats={userStats}
+          formatCurrency={formatCurrency}
+        />
+      </MobileLayout>
+    );
+  }
+
   return (
     <Layout>
       <div className="flex flex-col h-full">
