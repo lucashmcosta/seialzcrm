@@ -2,8 +2,9 @@ import { createClient } from "npm:@supabase/supabase-js@2";
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
-  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
-  'Access-Control-Allow-Methods': 'GET, OPTIONS',
+  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type, range',
+  'Access-Control-Allow-Methods': 'GET, HEAD, OPTIONS',
+  'Access-Control-Expose-Headers': 'content-length, content-range, accept-ranges, content-type',
 };
 
 Deno.serve(async (req) => {
@@ -120,13 +121,19 @@ Deno.serve(async (req) => {
 
     const basic = btoa(`${accountSid}:${authToken}`);
 
+    // Forward Range header for audio/video seeking support
+    const upstreamHeaders: Record<string, string> = { Authorization: `Basic ${basic}` };
+    const range = req.headers.get('Range');
+    if (range) upstreamHeaders['Range'] = range;
+
     // Twilio returns 307 to the actual CDN; follow redirect (no auth needed on CDN)
     const upstream = await fetch(target.toString(), {
-      headers: { Authorization: `Basic ${basic}` },
+      method: req.method === 'HEAD' ? 'HEAD' : 'GET',
+      headers: upstreamHeaders,
       redirect: 'follow',
     });
 
-    if (!upstream.ok || !upstream.body) {
+    if (!upstream.ok && upstream.status !== 206) {
       const text = await upstream.text().catch(() => '');
       return new Response(JSON.stringify({ error: 'Upstream error', status: upstream.status, body: text.slice(0, 500) }), {
         status: 502,
@@ -135,14 +142,15 @@ Deno.serve(async (req) => {
     }
 
     const headers = new Headers(corsHeaders);
-    const contentType = upstream.headers.get('Content-Type');
-    if (contentType) headers.set('Content-Type', contentType);
-    const contentLength = upstream.headers.get('Content-Length');
-    if (contentLength) headers.set('Content-Length', contentLength);
+    const passthrough = ['content-type', 'content-length', 'content-range', 'accept-ranges', 'last-modified', 'etag'];
+    for (const h of passthrough) {
+      const v = upstream.headers.get(h);
+      if (v) headers.set(h, v);
+    }
+    if (!headers.has('Accept-Ranges')) headers.set('Accept-Ranges', 'bytes');
     headers.set('Cache-Control', 'private, max-age=3600');
-    headers.set('Accept-Ranges', 'bytes');
 
-    return new Response(upstream.body, { status: 200, headers });
+    return new Response(upstream.body, { status: upstream.status, headers });
   } catch (e) {
     console.error('twilio-media-proxy error', e);
     return new Response(JSON.stringify({ error: 'Internal error', detail: (e as Error).message }), {
