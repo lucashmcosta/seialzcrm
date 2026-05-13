@@ -3,6 +3,7 @@ import { useLocation } from 'react-router-dom';
 import { Device, Call } from '@twilio/voice-sdk';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
+import { getTwilioAccessToken, getVerifiedSession } from '@/lib/authSession';
 
 
 export type CallStatus = 'idle' | 'initializing' | 'ready' | 'connecting' | 'ringing' | 'connected' | 'ended' | 'failed';
@@ -214,27 +215,20 @@ export function OutboundCallProvider({ children }: { children: ReactNode }) {
       return tokenCacheRef.current.token;
     }
 
-    // Ensure session is fresh (auto-refreshes expired JWT) before invoking
-    const { data: sess } = await supabase.auth.getSession();
-    if (!sess?.session?.access_token) {
-      throw new Error('Não autenticado');
-    }
+    const token = await getTwilioAccessToken();
 
-    const { data: tokenData, error: tokenError } = await supabase.functions.invoke('twilio-token');
-
-    if (tokenError || !tokenData?.token) {
-      console.warn('Token error:', tokenError?.message || tokenError);
-      throw new Error('Erro ao obter token de acesso');
+    if (!token) {
+      throw new Error('Sessão expirada. Faça login novamente.');
     }
 
     // Cache token for 1 hour
     tokenCacheRef.current = {
-      token: tokenData.token,
+      token,
       expires: now + 3600000, // 1 hour
     };
 
     console.log('Token fetched and cached');
-    return tokenData.token;
+    return token;
   }, []);
 
   // Get cached user data or fetch it
@@ -506,8 +500,8 @@ export function OutboundCallProvider({ children }: { children: ReactNode }) {
       setStatus('initializing');
       setErrorMessage(null);
 
-      const { data: session } = await supabase.auth.getSession();
-      if (!session?.session?.access_token) {
+      const session = await getVerifiedSession();
+      if (!session?.access_token) {
         console.log('Not authenticated, skipping device initialization');
         isInitializingRef.current = false;
         setStatus('idle');
@@ -597,8 +591,8 @@ export function OutboundCallProvider({ children }: { children: ReactNode }) {
     let cancelled = false;
     const check = async () => {
       try {
-        const { data: session } = await supabase.auth.getSession();
-        if (!session?.session?.access_token || cancelled) {
+        const session = await getVerifiedSession();
+        if (!session?.access_token || cancelled) {
           setVoiceLoading(false);
           return;
         }
@@ -606,7 +600,7 @@ export function OutboundCallProvider({ children }: { children: ReactNode }) {
         const { data: userData } = await supabase
           .from('users')
           .select('id')
-          .eq('auth_user_id', session.session.user.id)
+          .eq('auth_user_id', session.user.id)
           .maybeSingle();
         if (!userData || cancelled) { setVoiceLoading(false); return; }
         
@@ -659,8 +653,8 @@ export function OutboundCallProvider({ children }: { children: ReactNode }) {
     // Check auth before initializing
     const checkAuthAndInitialize = async () => {
       try {
-        const { data: session } = await supabase.auth.getSession();
-        if (!session?.session?.access_token) {
+        const session = await getVerifiedSession();
+        if (!session?.access_token) {
           console.log('[OutboundCall] Not authenticated, skipping device initialization');
           return;
         }
