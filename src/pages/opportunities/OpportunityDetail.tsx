@@ -388,22 +388,26 @@ export default function OpportunityDetail() {
                       </div>
                       <div>
                         <p className="text-sm text-muted-foreground">{t('opportunities.owner')}</p>
-                        <OwnerSelector
-                          value={(opportunity as any).owner_user_id || null}
-                          onChange={async (userId) => {
-                            const { error } = await supabase
-                              .from('opportunities')
-                              .update({ owner_user_id: userId, updated_by: userProfile?.id || null } as any)
-                              .eq('id', opportunity.id);
-                            if (error) {
-                              toast({ title: t('common.error'), variant: 'destructive' });
-                            } else {
-                              fetchOpportunity();
-                              toast({ title: t('opportunities.updated') });
-                            }
-                          }}
-                          size="sm"
-                        />
+                        {isClosed ? (
+                          <p className="text-lg font-semibold">{opportunity.users?.full_name || '-'}</p>
+                        ) : (
+                          <OwnerSelector
+                            value={(opportunity as any).owner_user_id || null}
+                            onChange={async (userId) => {
+                              const { error } = await supabase
+                                .from('opportunities')
+                                .update({ owner_user_id: userId, updated_by: userProfile?.id || null } as any)
+                                .eq('id', opportunity.id);
+                              if (error) {
+                                toast({ title: t('common.error'), variant: 'destructive' });
+                              } else {
+                                fetchOpportunity();
+                                toast({ title: t('opportunities.updated') });
+                              }
+                            }}
+                            size="sm"
+                          />
+                        )}
                       </div>
                       <div>
                         <p className="text-sm text-muted-foreground">{t('common.status')}</p>
@@ -439,7 +443,7 @@ export default function OpportunityDetail() {
                         <p className="text-sm text-muted-foreground">Atualizado por</p>
                         <p className="text-lg font-semibold">{updatedByName || 'Sistema'}</p>
                       </div>
-                      {organization && (
+                      {organization && !isClosed && (
                         <TagSelector
                           entityType="opportunity"
                           entityId={opportunity.id}
