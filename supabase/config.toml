@@ -33,6 +33,9 @@ verify_jwt = false
 [functions.twilio-whatsapp-send]
 verify_jwt = true
 
+[functions.twilio-media-proxy]
+verify_jwt = false
+
 [functions.twilio-whatsapp-templates]
 verify_jwt = true
 
