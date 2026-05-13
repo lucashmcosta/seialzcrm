@@ -1268,7 +1268,7 @@ export default function OpportunitiesKanban() {
 
         {viewMode === 'kanban' ? (
           <DragDropContext onDragEnd={permissions.canEditOpportunities ? handleDragEnd : () => {}}>
-            <div className="flex gap-4 overflow-x-auto pb-4">
+            <div className="flex gap-3 overflow-x-auto pb-4">
               {stages.map((stage) => {
                 const stageOpportunities = getOpportunitiesForStage(stage.id);
                 const isFiltered = searchResults !== null || activeFiltersCount > 0;
@@ -1287,7 +1287,7 @@ export default function OpportunitiesKanban() {
                 return (
                   <div key={stage.id} className="flex-shrink-0 w-[240px]">
                     <Card>
-                      <CardHeader className="pb-3">
+                      <CardHeader className="px-3 pt-3 pb-2">
                         <div className="flex justify-between items-center">
                           <CardTitle className="text-base font-medium">{stage.name}</CardTitle>
                           <span className="text-sm text-muted-foreground">
@@ -1303,7 +1303,7 @@ export default function OpportunitiesKanban() {
                           <CardContent
                             ref={provided.innerRef}
                             {...provided.droppableProps}
-                            className={`space-y-3 min-h-[200px] max-h-[calc(100vh-280px)] overflow-y-auto scrollbar-hide transition-colors ${
+                            className={`px-3 pb-3 space-y-2 min-h-[200px] max-h-[calc(100vh-280px)] overflow-y-auto scrollbar-hide transition-colors ${
                               snapshot.isDraggingOver ? 'bg-muted/50' : ''
                             }`}
                           >
