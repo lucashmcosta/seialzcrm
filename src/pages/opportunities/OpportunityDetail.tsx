@@ -17,6 +17,7 @@ import { ArrowLeft, PencilSimple, TrendUp, TrendDown, DotsThreeVertical, Phone, 
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import { formatDateOnly } from '@/lib/utils';
+import { formatPhoneDisplay } from '@/lib/phoneUtils';
 import { ActivityTimeline } from '@/components/contacts/ActivityTimeline';
 import { ContactTasks } from '@/components/contacts/ContactTasks';
 import { ContactAttachments } from '@/components/contacts/ContactAttachments';
@@ -307,7 +308,7 @@ export default function OpportunityDetail() {
                       {contactPhone && (
                         <span className="inline-flex items-center gap-1">
                           <Phone className="h-3 w-3" />
-                          {contactPhone}
+                          {formatPhoneDisplay(contactPhone)}
                         </span>
                       )}
                       {opportunity.close_date && (
