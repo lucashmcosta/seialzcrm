@@ -1,4 +1,5 @@
 import { lazy, Suspense } from 'react';
+import { cn } from '@/lib/utils';
 import {
   Briefcase,
   CheckCircle,
@@ -233,37 +234,105 @@ export function MobileReports(props: MobileReportsProps) {
         </Suspense>
       </div>
 
-      {/* Leaderboard (compact list) */}
+      {/* Leaderboard */}
       <div className="px-4 py-2 pb-6">
         <div className="rounded-lg border border-border bg-card overflow-hidden">
-          <div className="px-3 py-2 border-b border-border">
+          <div className="px-3 py-2.5 border-b border-border flex items-center justify-between">
             <h3 className="text-sm font-semibold text-foreground">Ranking de vendedores</h3>
+            <Trophy size={14} weight="duotone" className="text-amber-500" />
           </div>
           {loading ? (
             <div className="p-3 space-y-2">
-              {[...Array(3)].map((_, i) => <div key={i} className="h-10 bg-muted/50 rounded animate-pulse" />)}
+              {[...Array(3)].map((_, i) => <div key={i} className="h-14 bg-muted/50 rounded animate-pulse" />)}
             </div>
           ) : userStats.length === 0 ? (
             <div className="p-4 text-center text-xs text-muted-foreground">Sem dados no período</div>
           ) : (
-            <ul className="divide-y divide-border">
-              {[...userStats]
-                .sort((a, b) => b.wonValue - a.wonValue)
-                .map((u, idx) => (
-                  <li key={u.userId} className="flex items-center gap-3 px-3 py-2.5">
-                    <span className="w-5 text-xs font-mono text-muted-foreground">{idx + 1}</span>
-                    <div className="flex-1 min-w-0">
-                      <p className="text-sm font-medium text-foreground truncate">{u.fullName}</p>
-                      <p className="text-[11px] text-muted-foreground">
-                        {u.won} ganhas · {u.lost} perdidas · {u.open} abertas
-                      </p>
-                    </div>
-                    <div className="text-right">
-                      <p className="text-sm font-semibold text-foreground">{formatCurrency(u.wonValue)}</p>
-                    </div>
-                  </li>
-                ))}
-            </ul>
+            (() => {
+              const sorted = [...userStats].sort((a, b) => {
+                if (b.wonValue !== a.wonValue) return b.wonValue - a.wonValue;
+                if (b.won !== a.won) return b.won - a.won;
+                return (b.won + b.lost + b.open) - (a.won + a.lost + a.open);
+              });
+              const maxScore = Math.max(
+                1,
+                ...sorted.map((u) => (u.wonValue > 0 ? u.wonValue : u.won)),
+              );
+              const useValue = sorted.some((u) => u.wonValue > 0);
+
+              const medalColor = (idx: number) => {
+                if (idx === 0) return 'bg-amber-500/15 text-amber-500 border-amber-500/30';
+                if (idx === 1) return 'bg-slate-400/15 text-slate-400 border-slate-400/30';
+                if (idx === 2) return 'bg-orange-500/15 text-orange-500 border-orange-500/30';
+                return 'bg-muted text-muted-foreground border-border';
+              };
+
+              return (
+                <ul className="divide-y divide-border">
+                  {sorted.map((u, idx) => {
+                    const initials = u.fullName
+                      .split(' ')
+                      .map((w) => w[0])
+                      .join('')
+                      .slice(0, 2)
+                      .toUpperCase();
+                    const closed = u.won + u.lost;
+                    const winRate = closed > 0 ? (u.won / closed) * 100 : 0;
+                    const score = useValue ? u.wonValue : u.won;
+                    const pct = Math.max(2, Math.min(100, (score / maxScore) * 100));
+
+                    return (
+                      <li key={u.userId} className="px-3 py-3">
+                        <div className="flex items-center gap-3">
+                          <div
+                            className={cn(
+                              'h-7 w-7 rounded-full border flex items-center justify-center text-[11px] font-semibold shrink-0',
+                              medalColor(idx),
+                            )}
+                          >
+                            {idx + 1}
+                          </div>
+                          <div className="h-9 w-9 rounded-full bg-primary/15 text-primary flex items-center justify-center text-xs font-semibold shrink-0">
+                            {initials}
+                          </div>
+                          <div className="flex-1 min-w-0">
+                            <p className="text-sm font-medium text-foreground truncate">{u.fullName}</p>
+                            <div className="flex items-center gap-1.5 mt-0.5 text-[10px]">
+                              <span className="px-1.5 py-0.5 rounded bg-emerald-500/10 text-emerald-500 font-medium">
+                                {u.won}G
+                              </span>
+                              <span className="px-1.5 py-0.5 rounded bg-destructive/10 text-destructive font-medium">
+                                {u.lost}P
+                              </span>
+                              <span className="px-1.5 py-0.5 rounded bg-muted text-muted-foreground font-medium">
+                                {u.open}A
+                              </span>
+                            </div>
+                          </div>
+                          <div className="text-right shrink-0">
+                            <p className="text-sm font-semibold text-foreground tabular-nums">
+                              {formatCurrency(u.wonValue)}
+                            </p>
+                            <p className="text-[10px] text-muted-foreground tabular-nums">
+                              {winRate.toFixed(0)}% win
+                            </p>
+                          </div>
+                        </div>
+                        <div className="mt-2 h-1 rounded-full bg-muted overflow-hidden">
+                          <div
+                            className={cn(
+                              'h-full rounded-full',
+                              idx === 0 ? 'bg-amber-500' : idx === 1 ? 'bg-slate-400' : idx === 2 ? 'bg-orange-500' : 'bg-primary/60',
+                            )}
+                            style={{ width: `${pct}%` }}
+                          />
+                        </div>
+                      </li>
+                    );
+                  })}
+                </ul>
+              );
+            })()
           )}
         </div>
       </div>
