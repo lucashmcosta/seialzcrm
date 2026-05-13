@@ -504,6 +504,7 @@ export default function OpportunityDetail() {
         opportunity={opportunity}
         stages={stages}
         onSuccess={fetchOpportunity}
+        titleOnly={isClosed}
       />
 
       <CloseDatePromptDialog
