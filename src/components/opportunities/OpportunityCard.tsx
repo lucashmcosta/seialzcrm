@@ -17,7 +17,9 @@ interface OpportunityCardProps {
   amount: number;
   currency: string;
   contactName?: string;
+  ownerName?: string;
   closeDate?: string | null;
+  createdAt?: string | null;
   locale: string;
   tags?: TagInfo[];
   onEdit: () => void;
