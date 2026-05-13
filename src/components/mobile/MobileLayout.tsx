@@ -21,6 +21,7 @@ import {
   Buildings,
   ShieldCheck,
   Question,
+  ChartLineUp,
 } from '@phosphor-icons/react';
 
 interface MobileLayoutProps {
