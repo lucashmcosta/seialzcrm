@@ -151,7 +151,8 @@ export default function TemplateForm() {
 
   const handleActionChange = (index: number, field: keyof CTAAction, value: string) => {
     const updated = [...actions];
-    updated[index] = { ...updated[index], [field]: value };
+    const sanitized = field === 'title' ? sanitizeButtonTitle(value) : value;
+    updated[index] = { ...updated[index], [field]: sanitized };
     setActions(updated);
   };
 
