@@ -230,6 +230,8 @@ export default function OpportunityDetail() {
     );
   }
 
+  const isClosed = opportunity.status === 'won' || opportunity.status === 'lost';
+
   const statusColor =
     opportunity.status === 'won'
       ? 'bg-green-500'
