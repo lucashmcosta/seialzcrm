@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState, lazy, Suspense } from 'react';
+import { useEffect, useMemo, useState, Suspense } from 'react';
 import { Navigate } from 'react-router-dom';
 import { Layout } from '@/components/Layout';
 import { useOrganization } from '@/hooks/useOrganization';
@@ -14,50 +14,18 @@ import {
   Clock,
   Target,
 } from '@phosphor-icons/react';
-import type { TrendPoint } from '@/components/reports/SalesTrendChart';
-import type { FunnelStage } from '@/components/reports/PipelineFunnel';
-import type { UserStats } from '@/components/reports/UserLeaderboard';
+import { SalesTrendChart, type TrendPoint } from '@/components/reports/SalesTrendChart';
+import { PipelineFunnel, type FunnelStage } from '@/components/reports/PipelineFunnel';
+import { UserLeaderboard, type UserStats } from '@/components/reports/UserLeaderboard';
+import { KpiCard } from '@/components/reports/KpiCard';
+import { WinRateGauge } from '@/components/reports/WinRateGauge';
+import { StageDistribution } from '@/components/reports/StageDistribution';
+import UserDetailDialog from '@/components/reports/UserDetailDialog';
 import { ReportFilters } from '@/components/reports/ReportFilters';
 import { computeRange, type PeriodPreset, type CustomRange } from '@/lib/report-period';
 import { useIsMobile } from '@/hooks/use-mobile';
 import { MobileLayout } from '@/components/mobile/MobileLayout';
 import { MobileReports } from '@/components/mobile/MobileReports';
-
-// Lazy load heavy chart/UI components to avoid TDZ issues from circular
-// chunking with recharts and other large vendor modules in production.
-function retryImport<T>(fn: () => Promise<T>, retries = 2): Promise<T> {
-  return fn().catch((err) => {
-    if (retries > 0) {
-      return new Promise<T>((resolve) =>
-        setTimeout(() => resolve(retryImport(fn, retries - 1)), 1000),
-      );
-    }
-    window.location.reload();
-    throw err;
-  });
-}
-
-const KpiCard = lazy(() =>
-  retryImport(() => import('@/components/reports/KpiCard')).then((m) => ({ default: m.KpiCard })),
-);
-const WinRateGauge = lazy(() =>
-  retryImport(() => import('@/components/reports/WinRateGauge')).then((m) => ({ default: m.WinRateGauge })),
-);
-const SalesTrendChart = lazy(() =>
-  retryImport(() => import('@/components/reports/SalesTrendChart')).then((m) => ({ default: m.SalesTrendChart })),
-);
-const PipelineFunnel = lazy(() =>
-  retryImport(() => import('@/components/reports/PipelineFunnel')).then((m) => ({ default: m.PipelineFunnel })),
-);
-const StageDistribution = lazy(() =>
-  retryImport(() => import('@/components/reports/StageDistribution')).then((m) => ({ default: m.StageDistribution })),
-);
-const UserLeaderboard = lazy(() =>
-  retryImport(() => import('@/components/reports/UserLeaderboard')).then((m) => ({ default: m.UserLeaderboard })),
-);
-const UserDetailDialog = lazy(() =>
-  retryImport(() => import('@/components/reports/UserDetailDialog')),
-);
 
 const BlockFallback = ({ className = 'h-32' }: { className?: string }) => (
   <div className={`animate-pulse rounded-md bg-muted/50 ${className}`} />
