@@ -32,8 +32,15 @@ export default function MarketingAds() {
   const [campaign, setCampaign] = useState('all');
   const [search, setSearch] = useState('');
   const [sort, setSort] = useState<{ key: SortKey; dir: 'asc' | 'desc' }>({ key: 'spend_brl', dir: 'desc' });
+  const period = useMarketingPeriod('last_30');
 
-  const ads = useAdPerformance(orgId, { status, campaignId: campaign, search });
+  const ads = useAdPerformance(orgId, {
+    status,
+    campaignId: campaign,
+    search,
+    from: period.range.from,
+    to: period.range.to,
+  });
   const campaigns = useCampaignsList(orgId);
 
   const rows = useMemo(() => {
