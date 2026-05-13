@@ -11,6 +11,7 @@ import { OrganizationProvider } from "@/contexts/OrganizationContext";
 import { BrowserRouter, Routes, Route, Navigate, useLocation } from "react-router-dom";
 import { PageLoader } from "./components/common/PageLoader";
 import { hardRefreshApp, useVersionCheck } from "@/hooks/useVersionCheck";
+import { UpdateBanner } from "@/components/UpdateBanner";
 
 function VersionWatcher() {
   useVersionCheck();
@@ -180,6 +181,7 @@ const App = () => (
       <Toaster />
       <Sonner />
       <VersionWatcher />
+      <UpdateBanner />
       <BrowserRouter>
         <AuthProvider>
         <OrganizationProvider>
