@@ -1,32 +1,38 @@
-## Diagnóstico
+## Objetivo
 
-A lógica de seleção já está correta no código:
-- Clicar na bolinha do cabeçalho → seleciona todos os contatos da página atual.
-- Clicar na bolinha de um contato → seleciona só aquele.
-- Clicar de novo no cabeçalho → desmarca tudo.
+Quando uma oportunidade estiver com status `won` (Ganho) ou `lost` (Perdido), a tela de detalhe (`/opportunities/:id`) deve bloquear toda edição **exceto o nome (título)** da oportunidade.
 
-O que está atrapalhando é a aparência:
-1. As bolinhas são quase invisíveis (`border` muito sutil), parecem ícone de status, não checkbox.
-2. A barra inferior mostra "1 Selecionar" — texto errado, deveria ser "1 selecionado".
-3. Quando só 1 contato está marcado e o cabeçalho fica "—" (parcial), não fica claro que clicar nele vai marcar todos.
+## Escopo
 
-## Solução simples
+Arquivos afetados:
+- `src/pages/opportunities/OpportunityDetail.tsx`
+- `src/components/opportunities/OpportunityDialog.tsx`
 
-**1. `src/components/BulkActionsBar.tsx`** — corrigir o label:
-- Trocar `{N} Selecionar` por `{N} selecionado` / `{N} selecionados` (singular/plural).
+## Comportamento
 
-**2. `src/pages/contacts/ContactsList.tsx`** — melhorar a UX da seleção em massa:
-- Adicionar `title="Selecionar todos desta página"` no checkbox do cabeçalho.
-- Garantir que clicar no cabeçalho quando está "—" (parcial) seleciona todos (já é o comportamento padrão do Radix).
+Definir `isClosed = opportunity.status === 'won' || opportunity.status === 'lost'`.
 
-**3. `src/components/ui/checkbox.tsx`** — deixar a bolinha mais visível:
-- Aumentar contraste da borda (`border-2 border-muted-foreground/40`) para parecer um checkbox real, não um ícone decorativo.
-- Manter o tamanho atual (`h-4 w-4`).
+### Na página de detalhe (`OpportunityDetail.tsx`)
 
-Nenhuma mudança em backend, dados ou rotas.
+Quando `isClosed === true`:
+- **Botão "Editar"**: continua visível e abre o `OpportunityDialog`, mas em modo restrito (só edita o título).
+- **Botões "Marcar Ganho" / "Marcar Perdido"**: já só aparecem em `status === 'open'`, mantém.
+- **`OwnerSelector`** (Responsável): renderizar como texto somente-leitura (nome do owner atual) em vez do seletor.
+- **`TagSelector`**: ocultar ou renderizar em modo somente-leitura (mostrar tags atuais sem permitir adicionar/remover).
+- Demais campos da aba Visão Geral já são apenas display — sem mudança.
+- Abas de Atividade, Chamadas, Mensagens, Tarefas, Anexos e Notas continuam funcionando normalmente (são interações com o contato, não edição da oportunidade).
 
-## Arquivos afetados
+### No diálogo de edição (`OpportunityDialog.tsx`)
 
-- `src/components/BulkActionsBar.tsx`
-- `src/components/ui/checkbox.tsx`
-- `src/pages/contacts/ContactsList.tsx` (apenas atributo `title` no header checkbox)
+Adicionar prop `titleOnly?: boolean`. Quando `true`:
+- Manter apenas o campo "Título" editável.
+- Desabilitar (`disabled`) ou ocultar: contato, valor, moeda, etapa, data de fechamento, status, responsável e demais campos.
+- O `submit` envia somente `{ title, updated_by }` no `update`.
+
+A página passa `titleOnly={isClosed}` ao abrir o dialog.
+
+## Notas técnicas
+
+- Não alterar RLS nem regras no backend; é trava puramente de UI/UX (já existem `permissions.canEditOpportunities` para gating geral).
+- Usar tokens semânticos do design system; nenhuma cor direta.
+- Não introduzir botão "Reabrir oportunidade" (fora do escopo pedido).
