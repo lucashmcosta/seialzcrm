@@ -824,8 +824,8 @@ export default function OpportunitiesKanban() {
   }
 
   const filterPanel = (
-    <Popover open={showFilters} onOpenChange={setShowFilters}>
-      <PopoverTrigger asChild>
+    <Sheet open={showFilters} onOpenChange={setShowFilters}>
+      <SheetTrigger asChild>
         <Button variant={isSeialz ? 'ghost' : 'outline'} size={isSeialz ? 'sm' : 'default'} className={isSeialz ? 'text-muted-foreground hover:text-foreground' : 'relative'}>
           <FunnelSimple size={16} weight="light" className={isSeialz ? '' : 'mr-2'} />
           {!isSeialz && 'Filtros'}
@@ -835,18 +835,15 @@ export default function OpportunitiesKanban() {
             </Badge>
           )}
         </Button>
-      </PopoverTrigger>
-      <PopoverContent className="w-80" align="end">
-        <div className="space-y-4">
+      </SheetTrigger>
+      <SheetContent side="right" className="w-full sm:max-w-md p-0 flex flex-col gap-0">
+        <SheetHeader className="px-6 py-4 border-b space-y-0">
           <div className="flex items-center justify-between">
-            <h4 className="font-medium text-sm">Filtros Avançados</h4>
-            {activeFiltersCount > 0 && (
-              <Button variant="ghost" size="sm" onClick={clearFilters}>
-                Limpar
-              </Button>
-            )}
+            <SheetTitle>Filtros</SheetTitle>
           </div>
+        </SheetHeader>
 
+        <div className="flex-1 overflow-y-auto px-6 py-5 space-y-5">
           {permissions.viewAllOpportunities && (
             <div className="space-y-2">
               <label className="text-sm font-medium">Responsável</label>
@@ -960,8 +957,21 @@ export default function OpportunitiesKanban() {
             </div>
           )}
         </div>
-      </PopoverContent>
-    </Popover>
+
+        <SheetFooter className="px-6 py-3 border-t flex-row sm:justify-between gap-2">
+          <Button
+            variant="ghost"
+            onClick={clearFilters}
+            disabled={activeFiltersCount === 0}
+          >
+            Limpar
+          </Button>
+          <Button onClick={() => setShowFilters(false)}>
+            Aplicar
+          </Button>
+        </SheetFooter>
+      </SheetContent>
+    </Sheet>
   );
 
   // ═══════════════════════════════════════
