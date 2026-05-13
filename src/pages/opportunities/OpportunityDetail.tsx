@@ -275,30 +275,22 @@ export default function OpportunityDetail() {
                   </DropdownMenuTrigger>
                   <DropdownMenuContent align="end" className="w-56">
                     {contactPhone && (
-                      <DropdownMenuItem asChild>
-                        <div className="p-0">
-                          <ClickToCallButton
-                            phoneNumber={contactPhone}
-                            contactId={opportunity.contact_id || undefined}
-                            opportunityId={opportunity.id}
-                            size="sm"
-                            variant="ghost"
-                            className="w-full justify-start font-normal"
-                          />
-                        </div>
-                      </DropdownMenuItem>
+                      <div className="px-1 py-0.5 [&_button]:w-full [&_button]:justify-start">
+                        <ClickToCallButton
+                          phoneNumber={contactPhone}
+                          contactId={opportunity.contact_id || undefined}
+                          opportunityId={opportunity.id}
+                          size="sm"
+                        />
+                      </div>
                     )}
                     {opportunity.contact_id && (
-                      <DropdownMenuItem asChild>
-                        <div className="p-0">
-                          <SendToSignatureButton
-                            contactId={opportunity.contact_id}
-                            opportunityId={opportunity.id}
-                            variant="ghost"
-                            className="w-full justify-start font-normal"
-                          />
-                        </div>
-                      </DropdownMenuItem>
+                      <div className="px-1 py-0.5 [&_button]:w-full [&_button]:justify-start">
+                        <SendToSignatureButton
+                          contactId={opportunity.contact_id}
+                          opportunityId={opportunity.id}
+                        />
+                      </div>
                     )}
                     {permissions.canEditOpportunities && opportunity.status === 'open' && (
                       <>
