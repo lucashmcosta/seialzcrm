@@ -75,7 +75,10 @@ export function MobileLayout({ children, hideBottomBar = false }: MobileLayoutPr
     drawerItems.push({ label: t('nav.messages'), href: '/messages', icon: ChatCircleText });
   }
 
-  const systemItems = [];
+  const systemItems: { label: string; href: string; icon: typeof House }[] = [];
+  if (permissions.canManageSettings) {
+    systemItems.push({ label: 'Relatórios', href: '/reports', icon: ChartLineUp });
+  }
   if (permissions.canManageSettings) {
     systemItems.push({ label: t('nav.settings'), href: '/settings', icon: GearSix });
   }
