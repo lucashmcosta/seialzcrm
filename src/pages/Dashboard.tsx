@@ -1,4 +1,4 @@
-import { useState, useEffect, lazy, Suspense } from 'react';
+import { useState, useEffect } from 'react';
 import { Layout } from '@/components/Layout';
 import { useOrganization } from '@/hooks/useOrganization';
 import { useAuth } from '@/hooks/useAuth';
@@ -13,13 +13,8 @@ import { MobileLayout } from '@/components/mobile/MobileLayout';
 import { MobileDashboard } from '@/components/mobile/MobileDashboard';
 import { ReportFilters } from '@/components/reports/ReportFilters';
 import { computeRange, type PeriodPreset, type CustomRange } from '@/lib/report-period';
-const DashboardTrendChart = lazy(() =>
-  import('@/components/reports/DashboardTrendChart').then((m) => ({ default: m.DashboardTrendChart })),
-);
-const DashboardStatusDonut = lazy(() =>
-  import('@/components/reports/DashboardStatusDonut').then((m) => ({ default: m.DashboardStatusDonut })),
-);
-const ChartFallback = () => <div className="h-72 animate-pulse rounded-md bg-muted/50" />;
+import { DashboardTrendChart } from '@/components/reports/DashboardTrendChart';
+import { DashboardStatusDonut } from '@/components/reports/DashboardStatusDonut';
 
 import { cn } from '@/lib/utils';
 
@@ -243,14 +238,10 @@ export default function Dashboard() {
 
           <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
             <div className="lg:col-span-2">
-              <Suspense fallback={<ChartFallback />}>
-                <DashboardTrendChart data={opps} from={from} to={to} loading={loading} />
-              </Suspense>
+              <DashboardTrendChart data={opps} from={from} to={to} loading={loading} />
             </div>
             <div className="lg:col-span-1">
-              <Suspense fallback={<ChartFallback />}>
-                <DashboardStatusDonut data={opps} from={from} to={to} loading={loading} />
-              </Suspense>
+              <DashboardStatusDonut data={opps} from={from} to={to} loading={loading} />
             </div>
           </div>
         </div>
