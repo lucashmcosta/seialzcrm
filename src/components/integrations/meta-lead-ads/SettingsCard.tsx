@@ -1,9 +1,10 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
 import { useMutation, useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { Card } from "@/components/ui/card";
 import { Switch } from "@/components/ui/switch";
 import { Label } from "@/components/ui/label";
+import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { toast } from "sonner";
@@ -22,8 +23,18 @@ const DEFAULTS = {
   use_round_robin: true,
   set_name_confirmed: true,
   auto_send_whatsapp: false,
+  whatsapp_template_id: null as string | null,
+  whatsapp_template_variables: {} as Record<string, string>,
   process_unmapped_forms: false,
 };
+
+const AVAILABLE_TOKENS = [
+  "{first_name}",
+  "{full_name}",
+  "{form_name}",
+  "{campaign_name}",
+  "{ad_name}",
+];
 
 export function SettingsCard({ orgIntegration, onUpdated }: Props) {
   const initial = { ...DEFAULTS, ...((orgIntegration?.config_values as any)?.meta_lead_ads_settings || {}) };
@@ -46,8 +57,37 @@ export function SettingsCard({ orgIntegration, onUpdated }: Props) {
     },
   });
 
+  const { data: templates } = useQuery({
+    queryKey: ["wa-templates-approved", orgIntegration?.organization_id],
+    enabled: !!orgIntegration?.organization_id && s.auto_send_whatsapp,
+    queryFn: async () => {
+      const { data } = await supabase
+        .from("whatsapp_templates")
+        .select("id, friendly_name, body, status, is_active")
+        .eq("organization_id", orgIntegration.organization_id)
+        .eq("status", "approved")
+        .eq("is_active", true)
+        .order("friendly_name");
+      return data || [];
+    },
+  });
+
+  const selectedTemplate = useMemo(
+    () => templates?.find((t: any) => t.id === s.whatsapp_template_id),
+    [templates, s.whatsapp_template_id]
+  );
+
+  const templateVars = useMemo(() => {
+    if (!selectedTemplate?.body) return [] as string[];
+    const matches = selectedTemplate.body.match(/\{\{(\d+)\}\}/g) || [];
+    return [...new Set(matches.map((m: string) => m.replace(/[{}]/g, "")))] as string[];
+  }, [selectedTemplate]);
+
   const save = useMutation({
     mutationFn: async () => {
+      if (s.auto_send_whatsapp && !s.whatsapp_template_id) {
+        throw new Error("Selecione um template para o disparo automático.");
+      }
       const config_values = {
         ...(orgIntegration.config_values || {}),
         meta_lead_ads_settings: s,
@@ -91,7 +131,7 @@ export function SettingsCard({ orgIntegration, onUpdated }: Props) {
           <Switch checked={s.set_name_confirmed} onCheckedChange={(v) => setS({ ...s, set_name_confirmed: v })} />
         </Row>
 
-        <Row label="Sempre criar oportunidade" hint="Fallback: cria uma oportunidade vazia mesmo quando nenhuma pergunta do form foi mapeada para a oportunidade. Quando você mapeia perguntas para “Oportunidade”, ela já é criada automaticamente — esse switch é só para garantir que todo lead vire pipeline.">
+        <Row label="Sempre criar oportunidade" hint="Fallback: cria uma oportunidade vazia mesmo quando nenhuma pergunta do form foi mapeada para a oportunidade.">
           <Switch
             checked={s.auto_create_opportunity}
             onCheckedChange={(v) => setS({ ...s, auto_create_opportunity: v })}
@@ -117,13 +157,74 @@ export function SettingsCard({ orgIntegration, onUpdated }: Props) {
           </div>
         )}
 
-        <Row label="Enviar WhatsApp automático" hint="Em breve — disparo via agente de IA.">
+        <Row label="Enviar WhatsApp automático" hint="Dispara um template aprovado para o lead assim que ele chegar.">
           <Switch
             checked={s.auto_send_whatsapp}
-            disabled
-            onCheckedChange={(v) => setS({ ...s, auto_send_whatsapp: v })}
+            onCheckedChange={(v) => setS({ ...s, auto_send_whatsapp: v, whatsapp_template_id: v ? s.whatsapp_template_id : null })}
           />
         </Row>
+
+        {s.auto_send_whatsapp && (
+          <div className="py-3 space-y-3">
+            <div className="space-y-1.5">
+              <Label className="text-xs">Template aprovado</Label>
+              <Select
+                value={s.whatsapp_template_id || ""}
+                onValueChange={(v) => setS({ ...s, whatsapp_template_id: v, whatsapp_template_variables: {} })}
+              >
+                <SelectTrigger>
+                  <SelectValue placeholder={templates?.length ? "Selecione um template" : "Nenhum template aprovado"} />
+                </SelectTrigger>
+                <SelectContent>
+                  {templates?.map((t: any) => (
+                    <SelectItem key={t.id} value={t.id}>
+                      {t.friendly_name}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              {(!templates || templates.length === 0) && (
+                <p className="text-xs text-muted-foreground">
+                  Crie e aprove um template em Configurações → WhatsApp Templates.
+                </p>
+              )}
+            </div>
+
+            {selectedTemplate && (
+              <div className="rounded-md border p-3 bg-muted/30 space-y-2">
+                <p className="text-xs text-muted-foreground">Prévia do template:</p>
+                <p className="text-sm whitespace-pre-wrap">{selectedTemplate.body}</p>
+              </div>
+            )}
+
+            {templateVars.length > 0 && (
+              <div className="space-y-3">
+                <p className="text-xs text-muted-foreground">
+                  Preencha cada variável. Você pode usar tokens dinâmicos:{" "}
+                  <span className="font-mono">{AVAILABLE_TOKENS.join(" ")}</span>
+                </p>
+                {templateVars.map((v) => (
+                  <div key={v} className="space-y-1">
+                    <Label className="text-xs">Variável {`{{${v}}}`}</Label>
+                    <Input
+                      value={s.whatsapp_template_variables?.[v] || ""}
+                      placeholder="Ex: Olá {first_name}!"
+                      onChange={(e) =>
+                        setS({
+                          ...s,
+                          whatsapp_template_variables: {
+                            ...(s.whatsapp_template_variables || {}),
+                            [v]: e.target.value,
+                          },
+                        })
+                      }
+                    />
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        )}
       </div>
 
       <div className="flex justify-end mt-4">
