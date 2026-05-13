@@ -441,9 +441,9 @@ export default function ReportsPage() {
 
   return (
     <Layout>
-      <div className="flex flex-col h-full">
+      <div>
         {/* Header */}
-        <div className="border-b border-border bg-background/95 backdrop-blur">
+        <div className="border-b border-border bg-background/95 backdrop-blur sticky top-0 z-10">
           <div className="px-6 py-4">
             <div className="flex items-center gap-3">
               <div className="flex h-10 w-10 items-center justify-center rounded-md bg-primary/10">
@@ -455,7 +455,7 @@ export default function ReportsPage() {
         </div>
 
         {/* Content */}
-        <div className="flex-1 overflow-auto">
+        <div>
           <div className="space-y-6 p-6">
             {/* Filters */}
             <ReportFilters
