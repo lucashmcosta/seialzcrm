@@ -1,18 +1,27 @@
-# Modal de filtros centralizado em Contatos
+## Rebalancear colunas da aba "Visão Geral"
 
-Aplicar o mesmo padrão usado em Oportunidades em `src/pages/contacts/ContactsList.tsx`.
+Hoje a coluna esquerda tem 3 itens e a direita tem 8+, ficando totalmente desigual. Vou redistribuir para que as duas colunas fiquem com peso parecido.
 
-## Mudanças
+### Nova distribuição (4 + 4)
 
-1. Substituir `import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'` por `import { Dialog, DialogContent, DialogTitle, DialogTrigger } from '@/components/ui/dialog'`. Remover import do popover se não for usado em outro lugar do arquivo.
-2. Trocar o bloco `Popover` (linhas 401–478) por um `Dialog` controlado por `showFilters`/`setShowFilters`:
-   - `DialogTrigger asChild` envolve o mesmo botão "Filtros" com badge.
-   - `DialogContent size="md" className="p-0 max-h-[85vh] flex flex-col gap-0"`:
-     - Header `px-6 py-4 border-b` com `DialogTitle` "Filtros".
-     - Corpo rolável `flex-1 overflow-y-auto px-6 py-5 space-y-5` mantendo os mesmos campos: Responsável (se `viewAllContacts`), Estágio, Data de Criação.
-     - Footer `px-6 py-3 border-t flex items-center justify-between`: "Limpar" (ghost, desabilitado quando `activeFiltersCount === 0`) e "Aplicar" (primary, fecha o modal).
-3. Não alterar nenhum estado, `clearFilters`, lógica de filtros ou colunas.
+**Coluna esquerda:**
+1. Valor
+2. Estágio
+3. Data de fechamento
+4. Status
+5. Etiquetas
 
-## Resultado
+**Coluna direita:**
+1. Contato
+2. Responsável
+3. Criado em
+4. Atualizado em
+5. Criado por
+6. Atualizado por
 
-Filtros de Contatos abrem como modal centralizado com overlay escuro, igual ao de Oportunidades.
+### Mudanças no `OpportunityDetail.tsx` (linhas 372–470)
+
+- Mover **Status** (atualmente direita) para a coluna esquerda, logo após "Data de fechamento"
+- Mover **Etiquetas** (`TagSelector`, hoje na direita no fim) para o final da coluna esquerda
+- Manter Contato, Responsável, Criado em, Atualizado em, Criado por, Atualizado por na coluna direita
+- Nenhuma mudança de estilo, fontes, lógica de fetch ou comportamento — só reordenação dos blocos `<div>` entre as duas `<div className="space-y-4">`
