@@ -51,12 +51,14 @@ function showUpdatePrompt() {
     action: {
       label: 'Atualizar',
       onClick: () => {
+        const reload = () => window.location.reload();
         // Best-effort cache cleanup before reload (helps PWA installs)
-        if ('caches' in window) {
-          caches.keys().then((keys) => Promise.all(keys.map((k) => caches.delete(k))))
-            .finally(() => window.location.reload());
+        if (typeof caches !== 'undefined') {
+          caches.keys()
+            .then((keys) => Promise.all(keys.map((k) => caches.delete(k))))
+            .finally(reload);
         } else {
-          window.location.reload();
+          reload();
         }
       },
     },
