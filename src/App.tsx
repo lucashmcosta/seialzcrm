@@ -10,6 +10,12 @@ import { AuthProvider, useAuthContext } from "@/contexts/AuthContext";
 import { OrganizationProvider } from "@/contexts/OrganizationContext";
 import { BrowserRouter, Routes, Route, Navigate, useLocation } from "react-router-dom";
 import { PageLoader } from "./components/common/PageLoader";
+import { useVersionCheck } from "@/hooks/useVersionCheck";
+
+function VersionWatcher() {
+  useVersionCheck();
+  return null;
+}
 // Retry wrapper for dynamic imports (handles stale chunks after deployments)
 function retryImport<T>(fn: () => Promise<T>, retries = 2): Promise<T> {
   return fn().catch((err) => {
