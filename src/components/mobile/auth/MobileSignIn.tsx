@@ -112,7 +112,7 @@ export default function MobileSignIn() {
   ];
 
   return (
-    <div className="min-h-[100dvh] flex flex-col mobile-signin-bg relative overflow-hidden">
+    <div className="flex flex-col mobile-signin-bg relative overflow-hidden" style={{ minHeight: 'var(--app-height, 100dvh)' }}>
       {/* Floating currency symbols */}
       <div className="absolute inset-0 pointer-events-none">
         {currencySymbols.map((item, i) => (
