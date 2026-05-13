@@ -104,8 +104,8 @@ export function Layout({ children }: LayoutProps) {
           onSignOut={signOut}
           locale={locale}
         />
-        <div className="flex-1 flex flex-col overflow-hidden min-w-0">
-          <main className="flex-1 overflow-auto">
+        <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden">
+          <main className="min-h-0 flex-1 overflow-y-auto overflow-x-hidden">
             {children}
           </main>
         </div>
