@@ -47,8 +47,13 @@ export function WhatsAppChat({ contactId, threadId: initialThreadId, onThreadCre
   const [submitting, setSubmitting] = useState(false);
   const [isIn24hWindow, setIsIn24hWindow] = useState(false);
   const [showTemplates, setShowTemplates] = useState(false);
+  const [accessToken, setAccessToken] = useState<string | undefined>(undefined);
 
   const dateLocale = locale === 'pt-BR' ? ptBR : enUS;
+
+  useEffect(() => {
+    supabase.auth.getSession().then(({ data }) => setAccessToken(data.session?.access_token));
+  }, []);
 
   useEffect(() => {
     fetchThread();
