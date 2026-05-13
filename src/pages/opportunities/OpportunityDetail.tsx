@@ -387,6 +387,23 @@ export default function OpportunityDetail() {
                             : '-'}
                         </p>
                       </div>
+                      <div>
+                        <p className="text-sm text-muted-foreground">{t('common.status')}</p>
+                        <Badge className={statusColor}>
+                          {opportunity.status === 'won'
+                            ? t('status.won')
+                            : opportunity.status === 'lost'
+                            ? t('status.lost')
+                            : t('status.open')}
+                        </Badge>
+                      </div>
+                      {organization && !isClosed && (
+                        <TagSelector
+                          entityType="opportunity"
+                          entityId={opportunity.id}
+                          organizationId={organization.id}
+                        />
+                      )}
                     </div>
                     <div className="space-y-4">
                       <div>
@@ -425,16 +442,6 @@ export default function OpportunityDetail() {
                           />
                         )}
                       </div>
-                      <div>
-                        <p className="text-sm text-muted-foreground">{t('common.status')}</p>
-                        <Badge className={statusColor}>
-                          {opportunity.status === 'won'
-                            ? t('status.won')
-                            : opportunity.status === 'lost'
-                            ? t('status.lost')
-                            : t('status.open')}
-                        </Badge>
-                      </div>
                       {(opportunity as any).created_at && (
                         <div>
                           <p className="text-sm text-muted-foreground">Criado em</p>
@@ -459,13 +466,6 @@ export default function OpportunityDetail() {
                         <p className="text-sm text-muted-foreground">Atualizado por</p>
                         <p className="text-lg font-semibold">{updatedByName || 'Sistema'}</p>
                       </div>
-                      {organization && !isClosed && (
-                        <TagSelector
-                          entityType="opportunity"
-                          entityId={opportunity.id}
-                          organizationId={organization.id}
-                        />
-                      )}
                     </div>
                   </div>
                 </CardContent>
