@@ -10,7 +10,7 @@ import { AuthProvider, useAuthContext } from "@/contexts/AuthContext";
 import { OrganizationProvider } from "@/contexts/OrganizationContext";
 import { BrowserRouter, Routes, Route, Navigate, useLocation } from "react-router-dom";
 import { PageLoader } from "./components/common/PageLoader";
-import { useVersionCheck } from "@/hooks/useVersionCheck";
+import { hardRefreshApp, useVersionCheck } from "@/hooks/useVersionCheck";
 
 function VersionWatcher() {
   useVersionCheck();
@@ -23,7 +23,7 @@ function retryImport<T>(fn: () => Promise<T>, retries = 2): Promise<T> {
       return new Promise<T>((resolve) => setTimeout(() => resolve(retryImport(fn, retries - 1)), 1000));
     }
     // Force full reload on persistent chunk failures
-    window.location.reload();
+    void hardRefreshApp();
     throw err;
   });
 }
