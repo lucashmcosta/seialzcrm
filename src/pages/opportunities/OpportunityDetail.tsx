@@ -15,6 +15,7 @@ import { usePermissions } from '@/hooks/usePermissions';
 import { toast } from '@/hooks/use-toast';
 import { ArrowLeft, PencilSimple, TrendUp, TrendDown, DotsThreeVertical, Phone, User } from '@phosphor-icons/react';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import { formatDateOnly } from '@/lib/utils';
 import { ActivityTimeline } from '@/components/contacts/ActivityTimeline';
 import { ContactTasks } from '@/components/contacts/ContactTasks';
@@ -267,34 +268,95 @@ export default function OpportunityDetail() {
                     {t('common.edit')}
                   </Button>
                 )}
-                <DropdownMenu>
-                  <DropdownMenuTrigger asChild>
-                    <Button variant="outline" size="sm" className="h-8 w-8 p-0">
-                      <DotsThreeVertical className="h-4 w-4" />
-                    </Button>
-                  </DropdownMenuTrigger>
-                  <DropdownMenuContent align="end" className="w-56">
-                    {contactPhone && (
-                      <div className="px-1 py-0.5 [&_button]:w-full [&_button]:justify-start">
-                        <ClickToCallButton
-                          phoneNumber={contactPhone}
-                          contactId={opportunity.contact_id || undefined}
-                          opportunityId={opportunity.id}
-                          size="sm"
-                        />
-                      </div>
-                    )}
-                    {opportunity.contact_id && (
-                      <div className="px-1 py-0.5 [&_button]:w-full [&_button]:justify-start">
-                        <SendToSignatureButton
-                          contactId={opportunity.contact_id}
-                          opportunityId={opportunity.id}
-                        />
-                      </div>
-                    )}
-                    {permissions.canEditOpportunities && opportunity.status === 'open' && (
-                      <>
-                        {(contactPhone || opportunity.contact_id) && <DropdownMenuSeparator />}
+              </div>
+            </div>
+
+            {/* Card horizontal estilo Divus */}
+            <TooltipProvider delayDuration={200}>
+              <div className="flex items-center justify-between gap-4 rounded-lg border border-border bg-card p-4">
+                <div className="flex items-center gap-3 min-w-0 flex-1">
+                  {/* Avatar */}
+                  <div className="h-12 w-12 rounded-full bg-primary/10 text-primary flex items-center justify-center shrink-0 text-sm font-semibold">
+                    {contactName ? contactName.charAt(0).toUpperCase() : <User className="h-5 w-5" />}
+                  </div>
+
+                  <div className="min-w-0 flex-1 space-y-1">
+                    {/* Linha 1: nome · título · stage */}
+                    <div className="flex items-center gap-2 flex-wrap min-w-0">
+                      {opportunity.contacts && (
+                        <Link
+                          to={`/contacts/${opportunity.contact_id}`}
+                          className="font-semibold text-foreground hover:text-primary transition-colors truncate"
+                        >
+                          {opportunity.contacts.full_name}
+                        </Link>
+                      )}
+                      {opportunity.contacts && opportunity.title && (
+                        <span className="text-muted-foreground">·</span>
+                      )}
+                      <span className="text-sm text-foreground truncate">{opportunity.title}</span>
+                      {opportunity.pipeline_stages && (
+                        <Badge variant="secondary" className="ml-1 text-[11px] font-medium">
+                          {opportunity.pipeline_stages.name}
+                        </Badge>
+                      )}
+                    </div>
+
+                    {/* Linha 2: telefone · data */}
+                    <div className="flex items-center gap-3 text-xs text-muted-foreground flex-wrap">
+                      {contactPhone && (
+                        <span className="inline-flex items-center gap-1">
+                          <Phone className="h-3 w-3" />
+                          {contactPhone}
+                        </span>
+                      )}
+                      {opportunity.close_date && (
+                        <span>{formatDateOnly(opportunity.close_date, locale)}</span>
+                      )}
+                    </div>
+                  </div>
+                </div>
+
+                {/* Direita: ações + valor + status */}
+                <div className="flex items-center gap-2 shrink-0">
+                  {contactPhone && (
+                    <Tooltip>
+                      <TooltipTrigger asChild>
+                        <span>
+                          <ClickToCallButton
+                            phoneNumber={contactPhone}
+                            contactId={opportunity.contact_id || undefined}
+                            opportunityId={opportunity.id}
+                            variant="ghost"
+                            size="icon"
+                          />
+                        </span>
+                      </TooltipTrigger>
+                      <TooltipContent>Ligar</TooltipContent>
+                    </Tooltip>
+                  )}
+                  {opportunity.contact_id && (
+                    <Tooltip>
+                      <TooltipTrigger asChild>
+                        <span>
+                          <SendToSignatureButton
+                            contactId={opportunity.contact_id}
+                            opportunityId={opportunity.id}
+                            size="icon"
+                          />
+                        </span>
+                      </TooltipTrigger>
+                      <TooltipContent>Enviar para Assinatura</TooltipContent>
+                    </Tooltip>
+                  )}
+                  {permissions.canEditOpportunities && opportunity.status === 'open' && (
+                    <DropdownMenu>
+                      <DropdownMenuTrigger asChild>
+                        <Button variant="ghost" size="icon" className="h-9 w-9">
+                          <DotsThreeVertical className="h-4 w-4" />
+                        </Button>
+                      </DropdownMenuTrigger>
+                      <DropdownMenuContent align="end" className="w-48">
                         <DropdownMenuItem onClick={handleMarkWon}>
                           <TrendUp className="h-4 w-4 mr-2" />
                           {t('opportunities.markWon')}
@@ -303,72 +365,25 @@ export default function OpportunityDetail() {
                           <TrendDown className="h-4 w-4 mr-2" />
                           {t('opportunities.markLost')}
                         </DropdownMenuItem>
-                      </>
-                    )}
-                  </DropdownMenuContent>
-                </DropdownMenu>
-              </div>
-            </div>
+                      </DropdownMenuContent>
+                    </DropdownMenu>
+                  )}
 
-            {/* Card horizontal estilo Divus */}
-            <div className="flex items-center justify-between gap-4 rounded-lg border border-border bg-card p-4">
-              <div className="flex items-center gap-3 min-w-0 flex-1">
-                {/* Avatar */}
-                <div className="h-12 w-12 rounded-full bg-primary/10 text-primary flex items-center justify-center shrink-0 text-sm font-semibold">
-                  {contactName ? contactName.charAt(0).toUpperCase() : <User className="h-5 w-5" />}
-                </div>
+                  <div className="h-6 w-px bg-border mx-1" />
 
-                <div className="min-w-0 flex-1 space-y-1">
-                  {/* Linha 1: nome · título · stage */}
-                  <div className="flex items-center gap-2 flex-wrap min-w-0">
-                    {opportunity.contacts && (
-                      <Link
-                        to={`/contacts/${opportunity.contact_id}`}
-                        className="font-semibold text-foreground hover:text-primary transition-colors truncate"
-                      >
-                        {opportunity.contacts.full_name}
-                      </Link>
-                    )}
-                    {opportunity.contacts && opportunity.title && (
-                      <span className="text-muted-foreground">·</span>
-                    )}
-                    <span className="text-sm text-foreground truncate">{opportunity.title}</span>
-                    {opportunity.pipeline_stages && (
-                      <Badge variant="secondary" className="ml-1 text-[11px] font-medium">
-                        {opportunity.pipeline_stages.name}
-                      </Badge>
-                    )}
-                  </div>
-
-                  {/* Linha 2: telefone · data */}
-                  <div className="flex items-center gap-3 text-xs text-muted-foreground flex-wrap">
-                    {contactPhone && (
-                      <span className="inline-flex items-center gap-1">
-                        <Phone className="h-3 w-3" />
-                        {contactPhone}
-                      </span>
-                    )}
-                    {opportunity.close_date && (
-                      <span>{formatDateOnly(opportunity.close_date, locale)}</span>
-                    )}
+                  <Badge className={statusColor}>
+                    {opportunity.status === 'won'
+                      ? t('status.won')
+                      : opportunity.status === 'lost'
+                      ? t('status.lost')
+                      : t('status.open')}
+                  </Badge>
+                  <div className="text-xl font-semibold text-foreground tabular-nums">
+                    {formatCurrency(opportunity.amount || 0)}
                   </div>
                 </div>
               </div>
-
-              {/* Direita: valor + status */}
-              <div className="flex items-center gap-3 shrink-0">
-                <Badge className={statusColor}>
-                  {opportunity.status === 'won'
-                    ? t('status.won')
-                    : opportunity.status === 'lost'
-                    ? t('status.lost')
-                    : t('status.open')}
-                </Badge>
-                <div className="text-xl font-semibold text-foreground tabular-nums">
-                  {formatCurrency(opportunity.amount || 0)}
-                </div>
-              </div>
-            </div>
+            </TooltipProvider>
           </div>
         </div>
 
