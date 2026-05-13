@@ -8,6 +8,7 @@ import { DialPad } from './DialPad';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
 import { formatPhoneDisplay } from '@/lib/phoneUtils';
+import { getTwilioAccessToken } from '@/lib/authSession';
 
 export type CallStatus = 'initializing' | 'ready' | 'connecting' | 'ringing' | 'connected' | 'ended' | 'failed';
 
@@ -49,23 +50,16 @@ export function ActiveCallModal({
       setStatus('initializing');
       setErrorMessage(null);
 
-      // Get access token from our Edge Function
-      const { data: session } = await supabase.auth.getSession();
-      if (!session?.session?.access_token) {
-        throw new Error('Não autenticado');
-      }
+      const token = await getTwilioAccessToken();
 
-      const { data: tokenData, error: tokenError } = await supabase.functions.invoke('twilio-token');
-
-      if (tokenError || !tokenData?.token) {
-        console.error('Token error:', tokenError);
-        throw new Error('Erro ao obter token de acesso');
+      if (!token) {
+        throw new Error('Sessão expirada. Faça login novamente.');
       }
 
       console.log('Got access token, initializing device...');
 
       // Create and register the Device
-      const device = new Device(tokenData.token, {
+      const device = new Device(token, {
         codecPreferences: [Call.Codec.PCMU, Call.Codec.Opus],
         allowIncomingWhileBusy: false,
       });
