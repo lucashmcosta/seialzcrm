@@ -1,6 +1,6 @@
 import { Card } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
-import { PencilSimple, TrashSimple, User, Calendar } from '@phosphor-icons/react';
+import { PencilSimple, User, Calendar } from '@phosphor-icons/react';
 import { format } from 'date-fns';
 import { ptBR, enUS } from 'date-fns/locale';
 import { parseDateOnly } from '@/lib/utils';
@@ -58,9 +58,6 @@ export function OpportunityCard({
           <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
             <Button variant="ghost" size="icon" className="h-7 w-7" onClick={(e) => { e.stopPropagation(); onEdit(); }}>
               <PencilSimple className="h-3 w-3" />
-            </Button>
-            <Button variant="ghost" size="icon" className="h-7 w-7" onClick={(e) => { e.stopPropagation(); onDelete(); }}>
-              <TrashSimple className="h-3 w-3 text-destructive" />
             </Button>
           </div>
         </div>
