@@ -1,7 +1,7 @@
-## Remover ícone de lixeira do card de oportunidade
+## Remover lixeira do OpportunityCard (variante restante)
 
-**Arquivo:** `src/components/opportunities/SeialzOpportunityCard.tsx`
+O card visível no kanban também usa `src/components/opportunities/OpportunityCard.tsx`, que ainda tem o botão de lixeira.
 
-1. Remover o botão com `<TrashSimple />` (linha ~85) do card.
-2. Remover `TrashSimple` do import do `@phosphor-icons/react` (linha 1).
-3. Manter o ícone de edição (PencilSimple). A exclusão continuará possível pela tela de detalhes da oportunidade.
+**Arquivo:** `src/components/opportunities/OpportunityCard.tsx`
+1. Remover o botão `<TrashSimple />` (linha ~63) e seu wrapper.
+2. Remover `TrashSimple` do import (linha 3).
