@@ -19,6 +19,9 @@ import type { FunnelStage } from '@/components/reports/PipelineFunnel';
 import type { UserStats } from '@/components/reports/UserLeaderboard';
 import { ReportFilters } from '@/components/reports/ReportFilters';
 import { computeRange, type PeriodPreset, type CustomRange } from '@/lib/report-period';
+import { useIsMobile } from '@/hooks/use-mobile';
+import { MobileLayout } from '@/components/mobile/MobileLayout';
+import { MobileReports } from '@/components/mobile/MobileReports';
 
 // Lazy load heavy chart/UI components to avoid TDZ issues from circular
 // chunking with recharts and other large vendor modules in production.
