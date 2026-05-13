@@ -38,24 +38,27 @@ interface UseAdPerfOpts {
   status?: string;       // 'all' | 'active' | 'paused' | ...
   campaignId?: string;   // 'all' or campaign id (text)
   search?: string;
+  from?: Date;           // filter leads/opps/spend by creation date >= from
+  to?: Date;             // filter leads/opps/spend by creation date < to
 }
 
 export function useAdPerformance(orgId: string | undefined, opts: UseAdPerfOpts = {}) {
+  const fromIso = opts.from?.toISOString() ?? null;
+  const toIso = opts.to?.toISOString() ?? null;
   return useQuery({
-    queryKey: ['marketing', 'ads', orgId, opts.status, opts.campaignId, opts.search],
+    queryKey: ['marketing', 'ads', orgId, opts.status, opts.campaignId, opts.search, fromIso, toIso],
     enabled: !!orgId,
     staleTime: 1000 * 60 * 5,
     queryFn: async (): Promise<AdPerfRow[]> => {
-      let q = supabase
-        .from('vw_marketing_ad_performance' as any)
-        .select('*')
-        .eq('organization_id', orgId!)
-        .order('spend_brl', { ascending: false, nullsFirst: false })
-        .limit(200);
-      if (opts.status && opts.status !== 'all') q = q.eq('ad_status', opts.status);
-      if (opts.campaignId && opts.campaignId !== 'all') q = q.eq('campaign_id', opts.campaignId);
-      if (opts.search) q = q.ilike('ad_name', `%${opts.search}%`);
-      const { data, error } = await q;
+      const { data, error } = await supabase.rpc('get_marketing_ad_performance' as any, {
+        p_organization_id: orgId!,
+        p_from: fromIso,
+        p_to: toIso,
+        p_status: opts.status && opts.status !== 'all' ? opts.status : null,
+        p_campaign_id: opts.campaignId && opts.campaignId !== 'all' ? opts.campaignId : null,
+        p_search: opts.search || null,
+        p_limit: 200,
+      });
       if (error) throw error;
       return (data || []) as unknown as AdPerfRow[];
     },
