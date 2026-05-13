@@ -308,7 +308,7 @@ export default function OpportunityDetail() {
                       {contactPhone && (
                         <span className="inline-flex items-center gap-1">
                           <Phone className="h-3 w-3" />
-                          {contactPhone}
+                          {formatPhoneDisplay(contactPhone)}
                         </span>
                       )}
                       {opportunity.close_date && (
