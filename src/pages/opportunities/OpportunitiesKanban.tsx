@@ -977,7 +977,7 @@ export default function OpportunitiesKanban() {
   // ═══════════════════════════════════════
   const renderSeialzKanban = () => (
     <DragDropContext onDragEnd={permissions.canEditOpportunities ? handleDragEnd : () => {}}>
-      <div className="flex gap-3 overflow-x-auto pb-4 px-6 pt-4 flex-1">
+      <div className="flex gap-3 overflow-x-auto pb-1 px-6 pt-4 flex-1">
         {stages.map((stage, stageIndex) => {
           const stageOpportunities = getOpportunitiesForStage(stage.id);
           const isFiltered = searchResults !== null || activeFiltersCount > 0;
@@ -1016,7 +1016,7 @@ export default function OpportunitiesKanban() {
                   <div
                     ref={provided.innerRef}
                     {...provided.droppableProps}
-                    className={`space-y-2 flex-1 min-h-[200px] max-h-[calc(100vh-220px)] overflow-y-auto scrollbar-hide rounded-md transition-colors ${
+                    className={`space-y-2 flex-1 min-h-[200px] max-h-[calc(100vh-150px)] overflow-y-auto scrollbar-hide rounded-md transition-colors ${
                       snapshot.isDraggingOver ? 'bg-[hsl(var(--sz-green-dim))]' : ''
                     }`}
                   >
