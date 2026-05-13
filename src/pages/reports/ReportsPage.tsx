@@ -19,6 +19,9 @@ import type { FunnelStage } from '@/components/reports/PipelineFunnel';
 import type { UserStats } from '@/components/reports/UserLeaderboard';
 import { ReportFilters } from '@/components/reports/ReportFilters';
 import { computeRange, type PeriodPreset, type CustomRange } from '@/lib/report-period';
+import { useIsMobile } from '@/hooks/use-mobile';
+import { MobileLayout } from '@/components/mobile/MobileLayout';
+import { MobileReports } from '@/components/mobile/MobileReports';
 
 // Lazy load heavy chart/UI components to avoid TDZ issues from circular
 // chunking with recharts and other large vendor modules in production.
@@ -84,6 +87,7 @@ interface UserRow {
 export default function ReportsPage() {
   const { organization, locale } = useOrganization();
   const { permissions, loading: permsLoading } = usePermissions();
+  const isMobile = useIsMobile();
 
   const [preset, setPreset] = useState<PeriodPreset>('last_30');
   const [customRange, setCustomRange] = useState<CustomRange | undefined>();
@@ -409,6 +413,30 @@ export default function ReportsPage() {
   // Permission gate (after hooks to satisfy Rules of Hooks)
   if (!permsLoading && !permissions.canManageSettings) {
     return <Navigate to="/dashboard" replace />;
+  }
+
+  if (isMobile) {
+    return (
+      <MobileLayout>
+        <MobileReports
+          preset={preset}
+          onPresetChange={setPreset}
+          customRange={customRange}
+          onCustomRangeChange={setCustomRange}
+          ownerId={ownerId}
+          onOwnerChange={setOwnerId}
+          users={users}
+          loading={loading}
+          stats={stats}
+          openCount={openOpps.length}
+          openValue={openOpps.reduce((s, o) => s + (Number(o.amount) || 0), 0)}
+          trend={trend}
+          funnel={funnel}
+          userStats={userStats}
+          formatCurrency={formatCurrency}
+        />
+      </MobileLayout>
+    );
   }
 
   return (
