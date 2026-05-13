@@ -977,7 +977,7 @@ export default function OpportunitiesKanban() {
   // ═══════════════════════════════════════
   const renderSeialzKanban = () => (
     <DragDropContext onDragEnd={permissions.canEditOpportunities ? handleDragEnd : () => {}}>
-      <div className="flex gap-3 overflow-x-auto pb-4 px-6 pt-4 flex-1">
+      <div className="flex gap-3 overflow-x-auto pb-1 px-6 pt-4 flex-1">
         {stages.map((stage, stageIndex) => {
           const stageOpportunities = getOpportunitiesForStage(stage.id);
           const isFiltered = searchResults !== null || activeFiltersCount > 0;
