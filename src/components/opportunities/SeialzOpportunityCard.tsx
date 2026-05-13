@@ -32,6 +32,7 @@ export function SeialzOpportunityCard({
   currency,
   contactName,
   closeDate,
+  createdAt,
   ownerName,
   locale,
   tags,
