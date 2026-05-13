@@ -46,6 +46,10 @@ import SignUp from "./pages/auth/SignUp";
 import SignIn from "./pages/auth/SignIn";
 import ConfirmEmail from "./pages/auth/ConfirmEmail";
 import AcceptInvitation from "./pages/invite/AcceptInvitation";
+import LandingPage from "./pages/LandingPage";
+import Onboarding from "./pages/Onboarding";
+import Dashboard from "./pages/Dashboard";
+import ReportsPage from "./pages/reports/ReportsPage";
 
 // Mobile pages
 const MobileSignIn = lazy(() => retryImport(() => import("./components/mobile/auth/MobileSignIn")));
@@ -56,10 +60,7 @@ import DocsModule from "./pages/docs/DocsModule";
 const ApiDocs = lazy(() => retryImport(() => import("./pages/docs/ApiDocs")));
 
 
-// Lazy load CRM pages with retry for chunk resilience
-const LandingPage = lazy(() => retryImport(() => import("./pages/LandingPage")));
-const Onboarding = lazy(() => retryImport(() => import("./pages/Onboarding")));
-const Dashboard = lazy(() => retryImport(() => import("./pages/Dashboard")));
+// Lazy load secondary CRM pages with retry for chunk resilience
 const ContactsList = lazy(() => retryImport(() => import("./pages/contacts/ContactsList")));
 const ContactDetail = lazy(() => retryImport(() => import("./pages/contacts/ContactDetail")));
 const ContactForm = lazy(() => retryImport(() => import("./pages/contacts/ContactForm")));
@@ -67,7 +68,6 @@ const OpportunitiesKanban = lazy(() => retryImport(() => import("./pages/opportu
 const OpportunityDetail = lazy(() => retryImport(() => import("./pages/opportunities/OpportunityDetail")));
 const TasksList = lazy(() => retryImport(() => import("./pages/tasks/TasksList")));
 const MessagesList = lazy(() => retryImport(() => import("./pages/messages/MessagesList")));
-const ReportsPage = lazy(() => retryImport(() => import("./pages/reports/ReportsPage")));
 const MarketingOverview = lazy(() => retryImport(() => import("./pages/marketing/index")));
 const MarketingAds = lazy(() => retryImport(() => import("./pages/marketing/ads/index")));
 const MarketingAdDetail = lazy(() => retryImport(() => import("./pages/marketing/ads/[id]")));
