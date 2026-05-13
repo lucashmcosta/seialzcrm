@@ -1,41 +1,38 @@
-Redesign minimalista do header da tela de detalhe de oportunidade — agrupar informações sem remover nada e refinar a hierarquia visual.
+# Corrigir modal de Filtros das Oportunidades
 
-## Mudanças em `src/pages/opportunities/OpportunityDetail.tsx` (linhas 245-337)
+## Problema
 
-### 1. Título mais discreto
-- `text-3xl font-bold` → `text-xl font-semibold`
-- Mantém destaque sem dominar a tela.
+Hoje o painel de filtros é um `Popover` ancorado no botão "Filtros". Como o conteúdo é alto (Responsável, Etapa, Valor, Datas, Etiqueta), ele:
+- Vaza por cima das colunas do Kanban (parece "fora do modal").
+- Não tem overlay escurecendo o fundo.
+- Em telas menores fica desalinhado e cortado.
 
-### 2. Header compacto em 2 linhas (em vez das 4 atuais)
+## Solução
 
-**Linha 1 — Breadcrumb minimalista:**
-- Botão "Voltar" como link discreto (ghost, sem fundo, ícone menor) à esquerda.
-- Ações principais agrupadas à direita em um único bloco compacto:
-  - `Editar` como botão primário pequeno (`size="sm"`).
-  - `Ligar`, `Enviar para Assinatura`, `Marcar como Ganho`, `Marcar como Perdido` colapsados num menu **"Mais ações"** (DropdownMenu com ícone `DotsThreeVertical`).
-  - Nada é removido — apenas reagrupado.
+Trocar o `Popover` por um `Sheet` lateral (drawer à direita) do design system, que já vem com overlay escuro, animação e foco bloqueado — comportamento profissional e consistente com o resto do app.
 
-**Linha 2 — Título + meta unificada:**
-- Título à esquerda (`text-xl`).
-- À direita, badge de status + valor (`text-lg` em vez de `text-2xl`) alinhados verticalmente ao título.
-- Abaixo do título, uma única linha de meta com separadores `·` (em vez de ícones repetidos): `Contato · Estágio · Data fechamento`. Ícones removidos da meta para reduzir ruído visual; texto continua clicável onde aplicável.
+### Mudanças (apenas UI, sem alterar lógica de filtros)
 
-### 3. Ajustes de espaçamento
-- `px-6 py-4 space-y-4` → `px-6 py-3 space-y-2` para densidade.
-- Remover o bloco separado de ações (linha 300-335) — fundido na linha 1.
+Arquivo: `src/pages/opportunities/OpportunitiesKanban.tsx`
 
-## Resultado visual esperado
+1. Remover imports de `Popover/PopoverTrigger/PopoverContent` deste bloco e adicionar `Sheet, SheetTrigger, SheetContent, SheetHeader, SheetTitle, SheetFooter` de `@/components/ui/sheet`.
+2. Substituir o `filterPanel` (linhas ~826–965):
+   - `Sheet` controlado por `showFilters` / `setShowFilters`.
+   - `SheetTrigger asChild` envolve o mesmo `Button` atual (mantém badge de contagem).
+   - `SheetContent side="right" className="w-full sm:max-w-md p-0 flex flex-col"`:
+     - `SheetHeader` fixo no topo com `SheetTitle` "Filtros" + botão "Limpar" (quando `activeFiltersCount > 0`), com `border-b` e padding `px-6 py-4`.
+     - Corpo rolável: `<div className="flex-1 overflow-y-auto px-6 py-4 space-y-5">` contendo exatamente os mesmos blocos (Responsável, Etapa, Valor, Data de Fechamento + checkbox, Data de Criação, Etiqueta) — sem alterar nenhum estado, prop ou condicional.
+     - `SheetFooter` fixo no rodapé com `border-t px-6 py-3`, contendo dois botões: "Limpar" (ghost, desabilitado se sem filtros) e "Aplicar" (primary, fecha o sheet via `setShowFilters(false)`).
+3. Garantir que cada campo ocupe largura total (`w-full`) dentro do sheet — os `Input` de data/valor já são responsivos, só vão respirar melhor com a largura maior.
+4. Não alterar o `MultiSelectFilter`, nem a lógica de `clearFilters`, nem o estado dos filtros.
 
-```text
-←  Voltar                                          [ Editar ] [ ⋯ ]
-─────────────────────────────────────────────────────────────────
-EMESON PINHEIRO DA SILVA                       [Aberto]  R$ 0,00
-EMESON PINHEIRO DA SILVA · Novo · 13/05/2026
-```
+### Resultado visual
 
-Tudo continua acessível, apenas mais limpo, com ações secundárias agrupadas no menu "⋯".
+- Clicar em "Filtros" abre um painel lateral à direita, com overlay escuro sobre o Kanban.
+- Header fixo com título e ações; corpo com scroll quando necessário; footer fixo com Aplicar/Limpar.
+- Nenhum elemento "vaza" sobre as colunas, e o foco fica preso no painel até fechar.
 
-## Detalhes técnicos
-- Usar `DropdownMenu` de `@/components/ui/dropdown-menu` (já no projeto).
-- Tokens semânticos mantidos (`text-foreground`, `text-muted-foreground`, `border-b`).
-- Sem alterações na lógica de negócio nem nas tabs/conteúdo abaixo do header.
+## Fora de escopo
+
+- Não mexer em estilos de cards/colunas do Kanban.
+- Não alterar comportamento dos filtros nem queries.
