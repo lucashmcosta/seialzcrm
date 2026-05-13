@@ -1,40 +1,42 @@
-# Corrigir prompt de login do Twilio em /messages
+## Objetivo
+Eliminar de vez a janela de login do Twilio nas telas de mensagens e fazer os áudios voltarem a tocar corretamente, inclusive para conversas antigas e views secundárias.
 
-## Problema
+## O que vou implementar
+1. **Unificar o uso do proxy de mídia do Twilio em todas as telas ativas**
+   - Aplicar `getProxiedMediaUrl(...)` não só no `WhatsAppChat`, mas também em:
+     - `src/pages/messages/MessagesList.tsx`
+     - `src/components/mobile/MobileMessagesList.tsx`
+     - `src/components/contacts/ContactMessages.tsx`
+   - Isso cobre a rota `/messages`, mobile e abas de mensagens dentro de contato/oportunidade, que hoje ainda usam a URL original do Twilio em alguns pontos.
 
-O navegador está abrindo um popup "Fazer login — https://api.twilio.com" ao abrir a página de mensagens. Isso acontece porque algumas mensagens de áudio têm `media_urls` apontando direto para `https://api.twilio.com/.../Media/...`. O elemento `<audio src=...>` faz a requisição direto, a Twilio responde `401 WWW-Authenticate: Basic`, e o Chrome mostra o diálogo de credenciais.
+2. **Tornar o proxy mais robusto para áudio do navegador**
+   - Ajustar o edge function `twilio-media-proxy` para responder melhor a players nativos de `<audio>`:
+     - preservar headers importantes de mídia
+     - suportar requisições parciais/range quando necessário
+     - manter CORS consistente em respostas de sucesso e erro
+   - Revisar o formato da URL proxied para evitar casos em que o browser ainda tente abrir `api.twilio.com` diretamente.
 
-Não há referência a `api.twilio.com` no código frontend — as URLs vêm do banco (`messages.media_urls`), provavelmente populadas pelo webhook do Twilio antes de termos um proxy/download.
+3. **Melhorar o comportamento do player quando a mídia falhar**
+   - Atualizar `AudioMessagePlayer` para lidar melhor com erro de carregamento, evitando estado “travado” após cancelar o popup.
+   - Garantir feedback visual simples quando um áudio específico não puder ser carregado.
 
-## Solução
+4. **Validar o fluxo completo**
+   - Conferir a rota `/messages` (desktop/mobile) e as views embutidas de mensagens em contato/oportunidade.
+   - Validar que clicar em play não dispara mais autenticação do Twilio e que os áudios problemáticos passam a tocar via proxy.
 
-Criar uma edge function que faz proxy da mídia do Twilio (autenticando server-side com as credenciais da organização) e usar essa URL no player.
+## Diagnóstico encontrado
+- O chat principal `WhatsAppChat` já usa proxy.
+- Outras telas ainda renderizam `message.media_urls` diretamente no `AudioMessagePlayer`.
+- Isso explica por que o problema continua “em alguns clientes” e não em todos os lugares.
+- O edge function `twilio-media-proxy` não mostrou logs recentes, então a maior suspeita agora é cobertura incompleta no frontend, com reforço pontual no proxy para compatibilidade de streaming.
 
-### 1. Edge function `twilio-media-proxy`
-- Recebe: `?messageSid=...&mediaSid=...&orgId=...` (ou um caminho codificado)
-- Valida sessão do usuário e que ele pertence à `orgId`
-- Busca credenciais Twilio (Account SID + Auth Token) da `organization_integrations` da org
-- Faz `fetch` em `https://api.twilio.com/2010-04-01/Accounts/{SID}/Messages/{messageSid}/Media/{mediaSid}` com `Authorization: Basic ...`
-- Twilio responde com redirect 307 para a URL real do CDN — seguir o redirect e fazer streaming do `Body`/`Content-Type` de volta
-- Adicionar `Cache-Control: private, max-age=3600`
-
-### 2. Helper frontend `getProxiedMediaUrl(url, orgId)`
-- Se a URL contém `api.twilio.com`, extrair `messageSid`/`mediaSid` via regex e retornar a URL da edge function
-- Caso contrário, retornar a URL original (mídias já hospedadas em outro lugar continuam funcionando)
-
-### 3. Aplicar no `WhatsAppChat.tsx` (linha ~344)
-- Mapear cada `url` em `message.media_urls` por `getProxiedMediaUrl(url, organization.id)` antes de passar para `AudioMessagePlayer` / `<img>` / `<video>`
-
-## Arquivos afetados
-
-- `supabase/functions/twilio-media-proxy/index.ts` (novo)
-- `supabase/config.toml` (registrar a function como pública)
-- `src/lib/mediaProxy.ts` (novo helper)
-- `src/components/whatsapp/WhatsAppChat.tsx` (usar o helper ao renderizar mídia)
-
-## O que NÃO muda
-
-- Schema do banco — `media_urls` continua armazenando a URL original da Twilio
-- Webhook de inbound do Twilio
-- Lógica de envio de mensagens
-- Outros componentes/players que não estejam consumindo `media_urls` do Twilio
+## Detalhes técnicos
+- Arquivos-alvo principais:
+  - `src/lib/mediaProxy.ts`
+  - `supabase/functions/twilio-media-proxy/index.ts`
+  - `src/pages/messages/MessagesList.tsx`
+  - `src/components/mobile/MobileMessagesList.tsx`
+  - `src/components/contacts/ContactMessages.tsx`
+  - `src/components/whatsapp/AudioMessagePlayer.tsx`
+- Não vou alterar regra de negócio de mensagens nem estrutura de banco.
+- O foco é só corrigir carregamento/reprodução de mídia Twilio no frontend + proxy.
