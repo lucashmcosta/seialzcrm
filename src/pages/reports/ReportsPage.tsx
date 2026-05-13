@@ -441,7 +441,7 @@ export default function ReportsPage() {
 
   return (
     <Layout>
-      <div>
+      <div className="min-h-full">
         {/* Header */}
         <div className="border-b border-border bg-background/95 backdrop-blur sticky top-0 z-10">
           <div className="px-6 py-4">
@@ -455,8 +455,7 @@ export default function ReportsPage() {
         </div>
 
         {/* Content */}
-        <div>
-          <div className="space-y-6 p-6">
+        <div className="space-y-6 p-6 pb-10">
             {/* Filters */}
             <ReportFilters
               preset={preset}
@@ -601,7 +600,6 @@ export default function ReportsPage() {
                 />
               </Suspense>
             )}
-          </div>
         </div>
       </div>
     </Layout>
