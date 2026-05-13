@@ -13,7 +13,7 @@ import { useOrganization } from '@/hooks/useOrganization';
 import { useTranslation } from '@/lib/i18n';
 import { usePermissions } from '@/hooks/usePermissions';
 import { toast } from '@/hooks/use-toast';
-import { ArrowLeft, PencilSimple, TrendUp, TrendDown, DotsThreeVertical, Phone } from '@phosphor-icons/react';
+import { ArrowLeft, PencilSimple, TrendUp, TrendDown, DotsThreeVertical, Phone, User } from '@phosphor-icons/react';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
 import { formatDateOnly } from '@/lib/utils';
 import { ActivityTimeline } from '@/components/contacts/ActivityTimeline';
@@ -310,30 +310,52 @@ export default function OpportunityDetail() {
               </div>
             </div>
 
-            {/* Linha 2: Título + Status/Valor */}
-            <div className="flex items-start justify-between gap-4">
-              <div className="min-w-0 flex-1 space-y-1">
-                <h1 className="text-xl font-semibold text-foreground truncate">{opportunity.title}</h1>
-                <div className="flex items-center gap-2 text-xs text-muted-foreground flex-wrap">
-                  {opportunity.contacts && (
-                    <Link
-                      to={`/contacts/${opportunity.contact_id}`}
-                      className="hover:text-foreground transition-colors"
-                    >
-                      {opportunity.contacts.full_name}
-                    </Link>
-                  )}
-                  {opportunity.contacts && opportunity.pipeline_stages && <span>·</span>}
-                  {opportunity.pipeline_stages && (
-                    <span>{opportunity.pipeline_stages.name}</span>
-                  )}
-                  {opportunity.pipeline_stages && opportunity.close_date && <span>·</span>}
-                  {opportunity.close_date && (
-                    <span>{formatDateOnly(opportunity.close_date, locale)}</span>
-                  )}
+            {/* Card horizontal estilo Divus */}
+            <div className="flex items-center justify-between gap-4 rounded-lg border border-border bg-card p-4">
+              <div className="flex items-center gap-3 min-w-0 flex-1">
+                {/* Avatar */}
+                <div className="h-12 w-12 rounded-full bg-primary/10 text-primary flex items-center justify-center shrink-0 text-sm font-semibold">
+                  {contactName ? contactName.charAt(0).toUpperCase() : <User className="h-5 w-5" />}
+                </div>
+
+                <div className="min-w-0 flex-1 space-y-1">
+                  {/* Linha 1: nome · título · stage */}
+                  <div className="flex items-center gap-2 flex-wrap min-w-0">
+                    {opportunity.contacts && (
+                      <Link
+                        to={`/contacts/${opportunity.contact_id}`}
+                        className="font-semibold text-foreground hover:text-primary transition-colors truncate"
+                      >
+                        {opportunity.contacts.full_name}
+                      </Link>
+                    )}
+                    {opportunity.contacts && opportunity.title && (
+                      <span className="text-muted-foreground">·</span>
+                    )}
+                    <span className="text-sm text-foreground truncate">{opportunity.title}</span>
+                    {opportunity.pipeline_stages && (
+                      <Badge variant="secondary" className="ml-1 text-[11px] font-medium">
+                        {opportunity.pipeline_stages.name}
+                      </Badge>
+                    )}
+                  </div>
+
+                  {/* Linha 2: telefone · data */}
+                  <div className="flex items-center gap-3 text-xs text-muted-foreground flex-wrap">
+                    {contactPhone && (
+                      <span className="inline-flex items-center gap-1">
+                        <Phone className="h-3 w-3" />
+                        {contactPhone}
+                      </span>
+                    )}
+                    {opportunity.close_date && (
+                      <span>{formatDateOnly(opportunity.close_date, locale)}</span>
+                    )}
+                  </div>
                 </div>
               </div>
 
+              {/* Direita: valor + status */}
               <div className="flex items-center gap-3 shrink-0">
                 <Badge className={statusColor}>
                   {opportunity.status === 'won'
@@ -342,7 +364,7 @@ export default function OpportunityDetail() {
                     ? t('status.lost')
                     : t('status.open')}
                 </Badge>
-                <div className="text-lg font-semibold text-foreground tabular-nums">
+                <div className="text-xl font-semibold text-foreground tabular-nums">
                   {formatCurrency(opportunity.amount || 0)}
                 </div>
               </div>
