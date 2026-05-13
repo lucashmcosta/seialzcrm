@@ -16,6 +16,7 @@ interface SeialzOpportunityCardProps {
   currency: string;
   contactName?: string;
   closeDate?: string | null;
+  createdAt?: string | null;
   ownerName?: string;
   locale: string;
   tags?: TagInfo[];
@@ -31,6 +32,7 @@ export function SeialzOpportunityCard({
   currency,
   contactName,
   closeDate,
+  createdAt,
   ownerName,
   locale,
   tags,
@@ -121,9 +123,9 @@ export function SeialzOpportunityCard({
         )}
 
         {/* Footer: consultant + date */}
-        {(consultantShort || closeDate) && (
+        {(consultantShort || createdAt) && (
           <div className="flex items-center justify-between pt-1.5 border-t border-[hsl(var(--sz-border))]">
-            {consultantShort && (
+            {consultantShort ? (
               <div className="flex items-center gap-1.5">
                 <span
                   className="w-1.5 h-1.5 rounded-full flex-shrink-0"
@@ -131,10 +133,10 @@ export function SeialzOpportunityCard({
                 />
                 <span className="font-data text-[10px] text-muted-foreground">{consultantShort}</span>
               </div>
-            )}
-            {closeDate && (
+            ) : <span />}
+            {createdAt && (
               <span className="font-data text-[10px] text-[hsl(var(--sz-t3))]">
-                {format(parseDateOnly(closeDate) ?? new Date(closeDate), 'dd MMM yyyy', { locale: dateLocale })}
+                {format(new Date(createdAt), 'dd MMM yyyy', { locale: dateLocale })}
               </span>
             )}
           </div>

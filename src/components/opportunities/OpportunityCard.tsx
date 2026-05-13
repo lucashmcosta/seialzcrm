@@ -17,7 +17,9 @@ interface OpportunityCardProps {
   amount: number;
   currency: string;
   contactName?: string;
+  ownerName?: string;
   closeDate?: string | null;
+  createdAt?: string | null;
   locale: string;
   tags?: TagInfo[];
   onEdit: () => void;
@@ -32,6 +34,8 @@ export function OpportunityCard({
   currency,
   contactName,
   closeDate,
+  ownerName,
+  createdAt,
   locale,
   tags,
   onEdit,
@@ -66,10 +70,21 @@ export function OpportunityCard({
           </div>
         )}
 
-        {closeDate && (
+        {ownerName && (
+          <div className="flex items-center gap-2 text-xs text-muted-foreground">
+            <User className="h-3 w-3" />
+            <span>Resp.: {ownerName}</span>
+          </div>
+        )}
+
+        {(closeDate || createdAt) && (
           <div className="flex items-center gap-2 text-xs text-muted-foreground">
             <Calendar className="h-3 w-3" />
-            <span>{format(parseDateOnly(closeDate) ?? new Date(closeDate), 'dd MMM yyyy', { locale: dateLocale })}</span>
+            <span>
+              {closeDate
+                ? format(parseDateOnly(closeDate) ?? new Date(closeDate), 'dd MMM yyyy', { locale: dateLocale })
+                : format(new Date(createdAt!), 'dd MMM yyyy', { locale: dateLocale })}
+            </span>
           </div>
         )}
 
