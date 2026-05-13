@@ -38,9 +38,10 @@ interface OpportunityDialogProps {
   opportunity?: Opportunity | null;
   stages: PipelineStage[];
   onSuccess: () => void;
+  titleOnly?: boolean;
 }
 
-export function OpportunityDialog({ open, onOpenChange, opportunity, stages, onSuccess }: OpportunityDialogProps) {
+export function OpportunityDialog({ open, onOpenChange, opportunity, stages, onSuccess, titleOnly = false }: OpportunityDialogProps) {
   const { organization, locale, userProfile } = useOrganization();
   const { t } = useTranslation(locale as any);
   const [contacts, setContacts] = useState<Contact[]>([]);
