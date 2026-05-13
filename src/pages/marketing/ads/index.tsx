@@ -5,6 +5,8 @@ import { MarketingLayout } from '../_components/MarketingLayout';
 import { TableSkeleton } from '../_components/Skeletons';
 import { EmptyState } from '../_components/EmptyState';
 import { useAdPerformance, useCampaignsList, type AdPerfRow } from '../_hooks/useAdPerformance';
+import { useMarketingPeriod } from '../_hooks/useMarketingPeriod';
+import { PeriodFilter } from '../_components/PeriodFilter';
 import { fmtBRL, fmtInt, fmtPct, fmtRoas } from '../_lib/format';
 import { Input } from '@/components/ui/input';
 import {
