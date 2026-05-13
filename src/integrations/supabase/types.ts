@@ -5445,6 +5445,51 @@ export type Database = {
         Returns: Json
       }
       get_internal_function_auth_token: { Args: never; Returns: string }
+      get_marketing_ad_performance: {
+        Args: {
+          p_campaign_id?: string
+          p_from?: string
+          p_limit?: number
+          p_organization_id: string
+          p_search?: string
+          p_status?: string
+          p_to?: string
+        }
+        Returns: {
+          ad_id: string
+          ad_name: string
+          ad_status: string
+          adset_name: string
+          cac_brl: number
+          campaign_id: string
+          campaign_name: string
+          clicks: number
+          conversations_started: number
+          cpl_real_brl: number
+          creative_body: string
+          creative_headline: string
+          creative_thumbnail_url: string
+          ctr_basis_points: number
+          destination_url: string
+          first_lead_at: string
+          impressions: number
+          last_insight_date: string
+          last_lead_at: string
+          lead_to_opp_pct: number
+          leads_total: number
+          marketing_campaign_id: string
+          opp_to_won_pct: number
+          opps_lost: number
+          opps_open: number
+          opps_total: number
+          opps_won: number
+          organization_id: string
+          pipeline_value_brl: number
+          revenue_won_brl: number
+          roas: number
+          spend_brl: number
+        }[]
+      }
       get_meta_credentials: {
         Args: { p_org_id: string }
         Returns: {

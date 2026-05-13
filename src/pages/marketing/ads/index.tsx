@@ -5,6 +5,8 @@ import { MarketingLayout } from '../_components/MarketingLayout';
 import { TableSkeleton } from '../_components/Skeletons';
 import { EmptyState } from '../_components/EmptyState';
 import { useAdPerformance, useCampaignsList, type AdPerfRow } from '../_hooks/useAdPerformance';
+import { useMarketingPeriod } from '../_hooks/useMarketingPeriod';
+import { PeriodFilter } from '../_components/PeriodFilter';
 import { fmtBRL, fmtInt, fmtPct, fmtRoas } from '../_lib/format';
 import { Input } from '@/components/ui/input';
 import {
@@ -30,8 +32,15 @@ export default function MarketingAds() {
   const [campaign, setCampaign] = useState('all');
   const [search, setSearch] = useState('');
   const [sort, setSort] = useState<{ key: SortKey; dir: 'asc' | 'desc' }>({ key: 'spend_brl', dir: 'desc' });
+  const period = useMarketingPeriod('last_30');
 
-  const ads = useAdPerformance(orgId, { status, campaignId: campaign, search });
+  const ads = useAdPerformance(orgId, {
+    status,
+    campaignId: campaign,
+    search,
+    from: period.range.from,
+    to: period.range.to,
+  });
   const campaigns = useCampaignsList(orgId);
 
   const rows = useMemo(() => {
@@ -60,6 +69,12 @@ export default function MarketingAds() {
   return (
     <MarketingLayout title="Performance por Ad">
       <div className="flex flex-wrap items-center gap-3">
+        <PeriodFilter
+          preset={period.preset}
+          setPreset={period.setPreset}
+          custom={period.custom}
+          setCustom={period.setCustom}
+        />
         <Select value={status} onValueChange={setStatus}>
           <SelectTrigger className="w-40"><SelectValue /></SelectTrigger>
           <SelectContent>
