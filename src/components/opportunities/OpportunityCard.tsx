@@ -49,8 +49,8 @@ export function OpportunityCard({
   const overflowCount = (tags?.length || 0) - MAX_VISIBLE_TAGS;
 
   return (
-    <Card className="p-4 bg-background hover:shadow-md transition-all cursor-pointer group" onClick={onClick}>
-      <div className="space-y-3">
+    <Card className="p-3 bg-background hover:shadow-md transition-all cursor-pointer group" onClick={onClick}>
+      <div className="space-y-2">
         <div className="flex justify-between items-start gap-2">
           <div className="flex-1 min-w-0">
             <h4 className="font-medium text-sm text-foreground line-clamp-2 break-words" title={title}>{title}</h4>
