@@ -262,14 +262,6 @@ export default function OpportunityDetail() {
                 {t('common.back')}
               </Button>
 
-              <div className="flex items-center gap-1.5">
-                {permissions.canEditOpportunities && (
-                  <Button size="sm" onClick={() => setEditDialogOpen(true)}>
-                    <PencilSimple className="h-3.5 w-3.5 mr-1.5" />
-                    {t('common.edit')}
-                  </Button>
-                )}
-              </div>
             </div>
 
             {/* Card horizontal estilo Divus */}
@@ -350,7 +342,7 @@ export default function OpportunityDetail() {
                       <TooltipContent>Enviar para Assinatura</TooltipContent>
                     </Tooltip>
                   )}
-                  {permissions.canEditOpportunities && opportunity.status === 'open' && (
+                  {permissions.canEditOpportunities && (
                     <DropdownMenu>
                       <DropdownMenuTrigger asChild>
                         <Button variant="ghost" size="icon" className="h-9 w-9">
@@ -358,14 +350,23 @@ export default function OpportunityDetail() {
                         </Button>
                       </DropdownMenuTrigger>
                       <DropdownMenuContent align="end" className="w-48">
-                        <DropdownMenuItem onClick={handleMarkWon}>
-                          <TrendUp className="h-4 w-4 mr-2" />
-                          {t('opportunities.markWon')}
+                        <DropdownMenuItem onClick={() => setEditDialogOpen(true)}>
+                          <PencilSimple className="h-4 w-4 mr-2" />
+                          {t('common.edit')}
                         </DropdownMenuItem>
-                        <DropdownMenuItem onClick={handleMarkLost}>
-                          <TrendDown className="h-4 w-4 mr-2" />
-                          {t('opportunities.markLost')}
-                        </DropdownMenuItem>
+                        {opportunity.status === 'open' && (
+                          <>
+                            <DropdownMenuSeparator />
+                            <DropdownMenuItem onClick={handleMarkWon}>
+                              <TrendUp className="h-4 w-4 mr-2" />
+                              {t('opportunities.markWon')}
+                            </DropdownMenuItem>
+                            <DropdownMenuItem onClick={handleMarkLost}>
+                              <TrendDown className="h-4 w-4 mr-2" />
+                              {t('opportunities.markLost')}
+                            </DropdownMenuItem>
+                          </>
+                        )}
                       </DropdownMenuContent>
                     </DropdownMenu>
                   )}
