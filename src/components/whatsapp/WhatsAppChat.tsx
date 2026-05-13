@@ -14,6 +14,7 @@ import { AudioRecorder } from './AudioRecorder';
 import { AudioMessagePlayer } from './AudioMessagePlayer';
 import { MediaUploadButton } from './MediaUploadButton';
 import { WhatsAppFormattedText } from './WhatsAppFormattedText';
+import { getProxiedMediaUrl } from '@/lib/mediaProxy';
 
 interface Message {
   id: string;
