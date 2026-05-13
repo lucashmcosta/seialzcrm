@@ -1,33 +1,37 @@
-## Investigação
+## Diagnóstico
 
-As alterações foram salvas no arquivo (`w-[232px]` e `line-clamp-2` confirmados via leitura), mas o screenshot mostra colunas ainda largas e título "Mário Do Nascimento Felix..." em 4 linhas. Possíveis causas:
+O usuário NÃO está no preset Seialz — está no kanban legado. Sinais no screenshot: header "Oportunidades" grande (Seialz usaria SeialzTopbar com "Pipeline"), botão "Nova oportunidade" verde grande, busca/filtros em barra separada. Esse caminho usa `OpportunityCard` (não `SeialzOpportunityCard`) e colunas `w-80` (320px).
 
-1. **HMR não atualizou** o preview do Vite após o reload anterior.
-2. **`line-clamp-2` perdendo efeito** dentro do `<h4>` que é `flex-1`. O `display:-webkit-box` do line-clamp pode ser sobrescrito pelo contexto flex do pai. Solução: aplicar o clamp num wrapper, não no elemento flex.
-3. **Largura percebida**: 232px ainda parece larga pq o card é renderizado em viewport ampla. Reduzir mais (ex: 210px) deixa visivelmente mais finas.
+Minhas edições anteriores foram no caminho Seialz, por isso nada mudou pro usuário.
 
-## Mudanças propostas
+## Mudanças
 
-### 1. `src/components/opportunities/SeialzOpportunityCard.tsx`
+### 1. `src/pages/opportunities/OpportunitiesKanban.tsx` linha 1288
 
-Reestruturar o título para garantir clamp:
+- De: `<div key={stage.id} className="flex-shrink-0 w-80">`
+- Para: `<div key={stage.id} className="flex-shrink-0 w-[240px]">`
 
-- Remover `flex-1` do `<h4>`.
-- Envolver o `<h4>` num `<div className="flex-1 min-w-0 pr-2">`.
-- Aplicar `line-clamp-2` + `title={title}` no `<h4>` (sem `flex-1` nele).
+(`w-80` = 320px → 240px = colunas mais finas)
 
-Isso garante que o `<h4>` seja um bloco normal, com `display:-webkit-box` funcionando, e o wrapper flex cuida da largura. `min-w-0` é essencial pra clamp funcionar dentro de flex.
+### 2. `src/components/opportunities/OpportunityCard.tsx` linhas 54-55
 
-### 2. `src/pages/opportunities/OpportunitiesKanban.tsx`
+Aplicar a mesma estrutura que funcionou no Seialz: wrapper `flex-1 min-w-0` e `line-clamp-2` + `title` no `<h4>` (sem `flex-1` direto no h4).
 
-Reduzir colunas Seialz de `w-[232px]` para `w-[210px]` (linhas 794 e 990) — diferença visível.
+```tsx
+<div className="flex justify-between items-start gap-2">
+  <div className="flex-1 min-w-0">
+    <h4 className="font-medium text-sm text-foreground line-clamp-2 break-words" title={title}>{title}</h4>
+  </div>
+  <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+    ...
+```
 
-### 3. Forçar restart do dev server
+### 3. Manter as edições anteriores (Seialz path)
 
-Após as edições, chamar `restart_dev_server` pra garantir que o preview recarregue limpo, eliminando cache de HMR.
+Já feitas, ficam pra quando o usuário trocar pro tema Seialz.
 
 ## Notas
 
-- Sem mudança de lógica, só CSS/markup.
-- Mantém tokens semânticos do design system Seialz.
-- Não toca no kanban legado (não-Seialz) nem no mobile.
+- Sem mudança de lógica.
+- Tokens semânticos preservados.
+- Não toca mobile.

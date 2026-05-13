@@ -1285,7 +1285,7 @@ export default function OpportunitiesKanban() {
                 const hasMore = !isFiltered && hasMoreByStage[stage.id] && loadedCount < realCount;
 
                 return (
-                  <div key={stage.id} className="flex-shrink-0 w-80">
+                  <div key={stage.id} className="flex-shrink-0 w-[240px]">
                     <Card>
                       <CardHeader className="pb-3">
                         <div className="flex justify-between items-center">

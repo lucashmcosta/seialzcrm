@@ -51,8 +51,10 @@ export function OpportunityCard({
   return (
     <Card className="p-4 bg-background hover:shadow-md transition-all cursor-pointer group" onClick={onClick}>
       <div className="space-y-3">
-        <div className="flex justify-between items-start">
-          <h4 className="font-medium text-sm flex-1 pr-2 text-foreground">{title}</h4>
+        <div className="flex justify-between items-start gap-2">
+          <div className="flex-1 min-w-0">
+            <h4 className="font-medium text-sm text-foreground line-clamp-2 break-words" title={title}>{title}</h4>
+          </div>
           <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
             <Button variant="ghost" size="icon" className="h-7 w-7" onClick={(e) => { e.stopPropagation(); onEdit(); }}>
               <PencilSimple className="h-3 w-3" />
