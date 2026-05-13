@@ -347,9 +347,10 @@ export function WhatsAppChat({ contactId, threadId: initialThreadId, onThreadCre
 
     return (
       <div className="mb-2 space-y-2">
-        {message.media_urls.map((url, i) => {
+        {message.media_urls.map((rawUrl, i) => {
+          const url = getProxiedMediaUrl(rawUrl, organization?.id, accessToken);
           // Check if it's audio
-          if (mediaType === 'audio' || url.match(/\.(ogg|mp3|wav|m4a)$/i)) {
+          if (mediaType === 'audio' || rawUrl.match(/\.(ogg|mp3|wav|m4a)$/i)) {
             return <AudioMessagePlayer key={i} src={url}
               timestamp={isAudioOnly ? formatDistanceToNow(new Date(message.sent_at), { addSuffix: true, locale: dateLocale }) : undefined}
               statusIcon={isAudioOnly && msgIsOutbound ? renderStatusIcon(message.whatsapp_status) : undefined}
@@ -357,7 +358,7 @@ export function WhatsAppChat({ contactId, threadId: initialThreadId, onThreadCre
           }
 
           // Check if it's video
-          if (mediaType === 'video' || url.match(/\.(mp4|mov|webm|avi)$/i)) {
+          if (mediaType === 'video' || rawUrl.match(/\.(mp4|mov|webm|avi)$/i)) {
             return (
               <video
                 key={i}
@@ -370,7 +371,7 @@ export function WhatsAppChat({ contactId, threadId: initialThreadId, onThreadCre
           }
 
           // Check if it's an image
-          if (mediaType === 'image' || url.match(/\.(jpg|jpeg|png|gif|webp)$/i)) {
+          if (mediaType === 'image' || rawUrl.match(/\.(jpg|jpeg|png|gif|webp)$/i)) {
             return (
               <img
                 key={i}
