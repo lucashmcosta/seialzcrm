@@ -45,6 +45,7 @@ import { SpinnerGap, Check, Checks, Clock, WarningCircle, Sparkle, Briefcase, Sm
 import { ConfirmDialog } from '@/components/ui/confirm-dialog';
 import { CloseDatePromptDialog } from '@/components/opportunities/CloseDatePromptDialog';
 import { AgentMessageFeedbackDialog } from '@/components/whatsapp/AgentMessageFeedbackDialog';
+import { getProxiedMediaUrl } from '@/lib/mediaProxy';
 import { NewConversationDialog } from '@/components/messages/NewConversationDialog';
 import { WhatsAppTemplateSelector } from '@/components/whatsapp/WhatsAppTemplateSelector';
 import { AudioRecorder } from '@/components/whatsapp/AudioRecorder';
@@ -276,6 +277,12 @@ function DesktopMessagesList() {
   
   // New conversation dialog state
   const [showNewConversation, setShowNewConversation] = useState(false);
+
+  // Auth token for Twilio media proxy
+  const [accessToken, setAccessToken] = useState<string | undefined>(undefined);
+  useEffect(() => {
+    supabase.auth.getSession().then(({ data }) => setAccessToken(data.session?.access_token));
+  }, []);
   
   // Note mode state
   const [isNoteMode, setIsNoteMode] = useState(false);
@@ -1580,8 +1587,9 @@ function DesktopMessagesList() {
                                     {/* Media */}
                                     {message.media_urls && message.media_urls.length > 0 && (
                                       <div className="space-y-2">
-                                        {message.media_urls.map((url, i) => {
-                                          if (message.media_type === 'audio' || url.match(/\.(ogg|mp3|wav|m4a)$/i)) {
+                                        {message.media_urls.map((rawUrl, i) => {
+                                          const url = getProxiedMediaUrl(rawUrl, organization?.id, accessToken);
+                                          if (message.media_type === 'audio' || rawUrl.match(/\.(ogg|mp3|wav|m4a)$/i)) {
                                             const isAudioOnly = message.media_type === 'audio' && !message.content;
                                             const senderLabel = isOutbound
                                               ? (message.sender_name ? `${message.sender_name} · ` : '')
@@ -1593,7 +1601,7 @@ function DesktopMessagesList() {
                                               statusIcon={isAudioOnly && isOutbound ? renderStatusIcon(message.whatsapp_status) : undefined}
                                             />;
                                           }
-                                          if (message.media_type === 'image' || url.match(/\.(jpg|jpeg|png|gif|webp)$/i)) {
+                                          if (message.media_type === 'image' || rawUrl.match(/\.(jpg|jpeg|png|gif|webp)$/i)) {
                                             return (
                                               <img
                                                 key={i}

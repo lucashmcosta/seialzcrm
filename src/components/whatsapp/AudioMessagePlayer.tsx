@@ -14,6 +14,7 @@ export function AudioMessagePlayer({ src, className = '', timestamp, statusIcon 
   const [currentTime, setCurrentTime] = useState(0);
   const [duration, setDuration] = useState(0);
   const [isLoading, setIsLoading] = useState(true);
+  const [hasError, setHasError] = useState(false);
   const [playbackRate, setPlaybackRate] = useState(1);
   const [waveformData] = useState(() =>
     Array.from({ length: 45 }, () => Math.random() * 0.5 + 0.2)
@@ -53,6 +54,7 @@ export function AudioMessagePlayer({ src, className = '', timestamp, statusIcon 
     };
     const onError = () => {
       setIsLoading(false);
+      setHasError(true);
     };
 
     audio.addEventListener('loadedmetadata', onLoaded);
@@ -100,6 +102,11 @@ export function AudioMessagePlayer({ src, className = '', timestamp, statusIcon 
   return (
     <div className={className} style={{ display: 'flex', flexDirection: 'column', gap: 1, padding: 2, maxWidth: 240, minWidth: 200 }}>
       <audio ref={audioRef} src={src} preload="metadata" />
+      {hasError && (
+        <div style={{ fontSize: 11, opacity: 0.7, padding: '4px 6px' }}>
+          Não foi possível carregar este áudio.
+        </div>
+      )}
 
       {/* Row 1: Play + Waveform */}
       <div style={{ display: 'flex', alignItems: 'center', gap: 6, height: 24 }}>
