@@ -90,7 +90,7 @@ export function MobileLayout({ children, hideBottomBar = false }: MobileLayoutPr
   const isActive = (href: string) => location.pathname === href || location.pathname.startsWith(href + '/');
 
   return (
-    <div className="flex flex-col h-[100dvh] bg-background overflow-hidden">
+    <div className="flex flex-col bg-background overflow-hidden" style={{ height: 'var(--app-height, 100dvh)' }}>
       {/* ── Header ── */}
       <header
         className="flex items-center justify-between px-4 border-b border-border bg-card flex-shrink-0 z-30"

@@ -1,0 +1,30 @@
+{
+  "name": "Seialz CRM",
+  "short_name": "Seialz",
+  "description": "CRM multi-tenant focado em B2C",
+  "start_url": "/auth/signin",
+  "scope": "/",
+  "display": "standalone",
+  "orientation": "portrait",
+  "background_color": "#07070A",
+  "theme_color": "#07070A",
+  "lang": "pt-BR",
+  "icons": [
+    {
+      "src": "/pwa-icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png"
+    },
+    {
+      "src": "/pwa-icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png"
+    },
+    {
+      "src": "/pwa-icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "maskable"
+    }
+  ]
+}
