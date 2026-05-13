@@ -87,6 +87,7 @@ interface UserRow {
 export default function ReportsPage() {
   const { organization, locale } = useOrganization();
   const { permissions, loading: permsLoading } = usePermissions();
+  const isMobile = useIsMobile();
 
   const [preset, setPreset] = useState<PeriodPreset>('last_30');
   const [customRange, setCustomRange] = useState<CustomRange | undefined>();
