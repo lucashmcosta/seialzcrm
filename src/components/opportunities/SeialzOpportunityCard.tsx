@@ -16,6 +16,7 @@ interface SeialzOpportunityCardProps {
   currency: string;
   contactName?: string;
   closeDate?: string | null;
+  createdAt?: string | null;
   ownerName?: string;
   locale: string;
   tags?: TagInfo[];
