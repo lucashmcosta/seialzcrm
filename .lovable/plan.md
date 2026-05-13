@@ -1,27 +1,33 @@
-## Ajustes no Kanban de Oportunidades
+## Investigação
 
-Apenas mudanças de UI/CSS, sem alterar lógica.
+As alterações foram salvas no arquivo (`w-[232px]` e `line-clamp-2` confirmados via leitura), mas o screenshot mostra colunas ainda largas e título "Mário Do Nascimento Felix..." em 4 linhas. Possíveis causas:
 
-### 1. Colunas mais finas
+1. **HMR não atualizou** o preview do Vite após o reload anterior.
+2. **`line-clamp-2` perdendo efeito** dentro do `<h4>` que é `flex-1`. O `display:-webkit-box` do line-clamp pode ser sobrescrito pelo contexto flex do pai. Solução: aplicar o clamp num wrapper, não no elemento flex.
+3. **Largura percebida**: 232px ainda parece larga pq o card é renderizado em viewport ampla. Reduzir mais (ex: 210px) deixa visivelmente mais finas.
 
-Em `src/pages/opportunities/OpportunitiesKanban.tsx` (linhas 794 e 990), trocar a largura das colunas:
+## Mudanças propostas
 
-- De: `w-[272px]`
-- Para: `w-[232px]`
+### 1. `src/components/opportunities/SeialzOpportunityCard.tsx`
 
-Isso reduz ~40px por coluna, permitindo ver mais colunas simultaneamente sem prejudicar a legibilidade dos cards.
+Reestruturar o título para garantir clamp:
 
-### 2. Título do card limitado a 2 linhas com tooltip
+- Remover `flex-1` do `<h4>`.
+- Envolver o `<h4>` num `<div className="flex-1 min-w-0 pr-2">`.
+- Aplicar `line-clamp-2` + `title={title}` no `<h4>` (sem `flex-1` nele).
 
-Em `src/components/opportunities/SeialzOpportunityCard.tsx` (linha 71):
+Isso garante que o `<h4>` seja um bloco normal, com `display:-webkit-box` funcionando, e o wrapper flex cuida da largura. `min-w-0` é essencial pra clamp funcionar dentro de flex.
 
-- Adicionar `line-clamp-2` no `<h4>` para limitar a 2 linhas com reticências automáticas (Tailwind já oferece essa classe).
-- Adicionar atributo `title={title}` no `<h4>` para tooltip nativo do navegador com o texto completo no hover.
+### 2. `src/pages/opportunities/OpportunitiesKanban.tsx`
 
-Resultado: títulos longos como "Mário Do Nascimento Felix Nascimento Felix — CT FORM REVISAO CALCULO v1" são truncados em 2 linhas, e o texto completo aparece ao passar o mouse.
+Reduzir colunas Seialz de `w-[232px]` para `w-[210px]` (linhas 794 e 990) — diferença visível.
 
-### Notas
+### 3. Forçar restart do dev server
 
-- Mantém todos os tokens semânticos do design system Seialz.
-- Não toca no card mobile (`MobileOpportunitiesKanban.tsx`), apenas no desktop.
-- Sem mudanças de espaçamento interno do card — o ganho de espaço vem da redução da coluna.
+Após as edições, chamar `restart_dev_server` pra garantir que o preview recarregue limpo, eliminando cache de HMR.
+
+## Notas
+
+- Sem mudança de lógica, só CSS/markup.
+- Mantém tokens semânticos do design system Seialz.
+- Não toca no kanban legado (não-Seialz) nem no mobile.

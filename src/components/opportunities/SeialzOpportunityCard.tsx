@@ -67,8 +67,10 @@ export function SeialzOpportunityCard({
     >
       <div className="space-y-2.5">
         {/* Title + actions */}
-        <div className="flex justify-between items-start">
-          <h4 className="font-medium text-[13px] leading-snug text-foreground flex-1 pr-2 line-clamp-2" title={title}>{title}</h4>
+        <div className="flex justify-between items-start gap-2">
+          <div className="flex-1 min-w-0">
+            <h4 className="font-medium text-[13px] leading-snug text-foreground line-clamp-2 break-words" title={title}>{title}</h4>
+          </div>
           <div className="flex gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity">
             <button
               className="p-1 rounded hover:bg-[hsl(var(--sz-bg4))] text-muted-foreground hover:text-foreground transition-colors"
