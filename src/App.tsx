@@ -10,21 +10,25 @@ import { AuthProvider, useAuthContext } from "@/contexts/AuthContext";
 import { OrganizationProvider } from "@/contexts/OrganizationContext";
 import { BrowserRouter, Routes, Route, Navigate, useLocation } from "react-router-dom";
 import { PageLoader } from "./components/common/PageLoader";
-import { hardRefreshApp, useVersionCheck } from "@/hooks/useVersionCheck";
-import { UpdateBanner } from "@/components/UpdateBanner";
+function reloadForChunkRecovery() {
+  if (typeof window === "undefined") return;
 
-function VersionWatcher() {
-  useVersionCheck();
-  return null;
+  const reloadKey = "__seialz_chunk_recovery_at";
+  const lastReloadAt = Number(window.sessionStorage.getItem(reloadKey) ?? "0");
+
+  if (Date.now() - lastReloadAt < 10_000) return;
+
+  window.sessionStorage.setItem(reloadKey, Date.now().toString());
+  window.location.reload();
 }
+
 // Retry wrapper for dynamic imports (handles stale chunks after deployments)
 function retryImport<T>(fn: () => Promise<T>, retries = 2): Promise<T> {
   return fn().catch((err) => {
     if (retries > 0) {
       return new Promise<T>((resolve) => setTimeout(() => resolve(retryImport(fn, retries - 1)), 1000));
     }
-    // Force full reload on persistent chunk failures
-    void hardRefreshApp();
+    reloadForChunkRecovery();
     throw err;
   });
 }
@@ -180,8 +184,6 @@ const App = () => (
     <TooltipProvider>
       <Toaster />
       <Sonner />
-      <VersionWatcher />
-      <UpdateBanner />
       <BrowserRouter>
         <AuthProvider>
         <OrganizationProvider>
