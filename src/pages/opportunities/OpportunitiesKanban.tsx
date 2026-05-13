@@ -1040,6 +1040,7 @@ export default function OpportunitiesKanban() {
                                 contactName={opp.contacts?.full_name}
                                 ownerName={opp.users?.full_name}
                                 closeDate={opp.close_date}
+                                createdAt={opp.created_at}
                                 locale={locale}
                                 onEdit={() => handleEdit(opp)}
                                 onDelete={() => setDeleteId(opp.id)}
