@@ -1,38 +1,27 @@
-## Objetivo
+## Ajustes no Kanban de Oportunidades
 
-Quando uma oportunidade estiver com status `won` (Ganho) ou `lost` (Perdido), a tela de detalhe (`/opportunities/:id`) deve bloquear toda edição **exceto o nome (título)** da oportunidade.
+Apenas mudanças de UI/CSS, sem alterar lógica.
 
-## Escopo
+### 1. Colunas mais finas
 
-Arquivos afetados:
-- `src/pages/opportunities/OpportunityDetail.tsx`
-- `src/components/opportunities/OpportunityDialog.tsx`
+Em `src/pages/opportunities/OpportunitiesKanban.tsx` (linhas 794 e 990), trocar a largura das colunas:
 
-## Comportamento
+- De: `w-[272px]`
+- Para: `w-[232px]`
 
-Definir `isClosed = opportunity.status === 'won' || opportunity.status === 'lost'`.
+Isso reduz ~40px por coluna, permitindo ver mais colunas simultaneamente sem prejudicar a legibilidade dos cards.
 
-### Na página de detalhe (`OpportunityDetail.tsx`)
+### 2. Título do card limitado a 2 linhas com tooltip
 
-Quando `isClosed === true`:
-- **Botão "Editar"**: continua visível e abre o `OpportunityDialog`, mas em modo restrito (só edita o título).
-- **Botões "Marcar Ganho" / "Marcar Perdido"**: já só aparecem em `status === 'open'`, mantém.
-- **`OwnerSelector`** (Responsável): renderizar como texto somente-leitura (nome do owner atual) em vez do seletor.
-- **`TagSelector`**: ocultar ou renderizar em modo somente-leitura (mostrar tags atuais sem permitir adicionar/remover).
-- Demais campos da aba Visão Geral já são apenas display — sem mudança.
-- Abas de Atividade, Chamadas, Mensagens, Tarefas, Anexos e Notas continuam funcionando normalmente (são interações com o contato, não edição da oportunidade).
+Em `src/components/opportunities/SeialzOpportunityCard.tsx` (linha 71):
 
-### No diálogo de edição (`OpportunityDialog.tsx`)
+- Adicionar `line-clamp-2` no `<h4>` para limitar a 2 linhas com reticências automáticas (Tailwind já oferece essa classe).
+- Adicionar atributo `title={title}` no `<h4>` para tooltip nativo do navegador com o texto completo no hover.
 
-Adicionar prop `titleOnly?: boolean`. Quando `true`:
-- Manter apenas o campo "Título" editável.
-- Desabilitar (`disabled`) ou ocultar: contato, valor, moeda, etapa, data de fechamento, status, responsável e demais campos.
-- O `submit` envia somente `{ title, updated_by }` no `update`.
+Resultado: títulos longos como "Mário Do Nascimento Felix Nascimento Felix — CT FORM REVISAO CALCULO v1" são truncados em 2 linhas, e o texto completo aparece ao passar o mouse.
 
-A página passa `titleOnly={isClosed}` ao abrir o dialog.
+### Notas
 
-## Notas técnicas
-
-- Não alterar RLS nem regras no backend; é trava puramente de UI/UX (já existem `permissions.canEditOpportunities` para gating geral).
-- Usar tokens semânticos do design system; nenhuma cor direta.
-- Não introduzir botão "Reabrir oportunidade" (fora do escopo pedido).
+- Mantém todos os tokens semânticos do design system Seialz.
+- Não toca no card mobile (`MobileOpportunitiesKanban.tsx`), apenas no desktop.
+- Sem mudanças de espaçamento interno do card — o ganho de espaço vem da redução da coluna.
