@@ -1,20 +1,24 @@
 ## Problema
 
-Na versão mobile (`MobileMessagesList.tsx`), as mensagens enviadas (outbound) não mostram **quem da equipe enviou**. Hoje só aparece um badge quando o remetente é o agente de IA (`sender_type === 'agent'`). Mensagens enviadas por usuários humanos da equipe aparecem sem identificação — o que confunde quando vários atendentes usam a mesma conversa.
+Na página de Contatos, ao clicar nos checkboxes (bolinhas) das linhas ou no checkbox do cabeçalho, a navegação para `ContactDetail` é disparada, porque o clique propaga para o `TableRow` que tem `onAction` configurado para navegar.
+
+A lógica de seleção múltipla e "selecionar todos" já existe no código (`handleSelectAll`, `handleSelectOne`, `BulkActionsBar`), mas é inutilizada por esse bug de propagação de clique.
 
 ## Solução
 
-Adicionar uma pequena linha com o nome do remetente no topo das mensagens **outbound enviadas por usuários humanos** (`sender_type === 'user'` e `sender_name` presente).
+Ajustar o componente `src/components/application/table/table.tsx` para que `TableCheckboxCell` e `TableCheckboxHeader` parem a propagação do clique e do pointer-down, evitando o disparo do `onAction` da linha.
 
-### Detalhes visuais
+Mudanças:
 
-- Texto pequeno (`text-[10px]`), peso `font-semibold`, cor sutil (ex.: `text-white/70` dentro da bolha verde escura), `mb-1`.
-- Mostrar apenas em mensagens outbound do tipo `user` quando `sender_name` existir.
-- Mensagens do agente continuam usando o badge roxo atual (sem mudanças).
-- Mensagens inbound (do contato) não recebem nome — o nome do contato já está no header da conversa.
+1. Em `TableCheckboxCell`: envolver o `Checkbox` em um `<div>` com `onClick={e => e.stopPropagation()}` e `onPointerDown={e => e.stopPropagation()}`.
+2. Em `TableCheckboxHeader`: mesmo tratamento (boa prática, e mantém consistência).
+3. Nenhuma alteração de lógica de negócio, hooks ou rotas — apenas frontend/apresentação.
 
-### Arquivo afetado
+Resultado:
+- Clicar no checkbox da linha apenas marca/desmarca aquele contato (mostra a `BulkActionsBar`).
+- Clicar no checkbox do cabeçalho marca/desmarca todos da página atual (com opção "Selecionar todos os N contatos" já existente).
+- Clicar em qualquer outro lugar da linha continua navegando para `ContactDetail` como antes.
 
-- `src/components/mobile/MobileMessagesList.tsx` — adicionar bloco condicional logo acima do badge do agente (linha ~911), renderizando o nome do usuário humano.
+## Arquivos afetados
 
-Sem mudanças em backend, hooks de dados ou layout. É puramente apresentação.
+- `src/components/application/table/table.tsx` (única edição)
