@@ -114,7 +114,7 @@ export function BulkActionsBar({
       <div className="fixed bottom-6 left-1/2 -translate-x-1/2 z-50">
         <div className="bg-primary text-primary-foreground rounded-lg shadow-lg p-4 flex items-center gap-4">
           <span className="font-medium">
-            {selectedIds.length} {t('common.select')}
+            {selectedIds.length} {selectedIds.length === 1 ? 'selecionado' : 'selecionados'}
           </span>
 
           <div className="flex items-center gap-2">
