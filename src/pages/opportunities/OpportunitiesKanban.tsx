@@ -791,7 +791,7 @@ export default function OpportunitiesKanban() {
           {/* Kanban columns skeleton */}
           <div className="flex gap-3 overflow-hidden px-6 pt-4 flex-1">
             {[0, 1, 2, 3, 4].map((col) => (
-              <div key={col} className="flex-shrink-0 w-[272px] flex flex-col">
+              <div key={col} className="flex-shrink-0 w-[232px] flex flex-col">
                 {/* Stage header */}
                 <div className="mb-3">
                   <Skeleton className="h-[2px] w-full rounded-full mb-3" />
@@ -987,7 +987,7 @@ export default function OpportunitiesKanban() {
           const stageColor = STAGE_COLORS[stageIndex % STAGE_COLORS.length];
 
           return (
-            <div key={stage.id} className="flex-shrink-0 w-[272px] flex flex-col">
+            <div key={stage.id} className="flex-shrink-0 w-[232px] flex flex-col">
               {/* Stage header with color bar */}
               <div className="mb-3">
                 <div className="h-[2px] rounded-full mb-3" style={{ backgroundColor: stageColor }} />
