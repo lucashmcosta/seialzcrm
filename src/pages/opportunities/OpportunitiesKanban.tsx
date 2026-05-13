@@ -1016,7 +1016,7 @@ export default function OpportunitiesKanban() {
                   <div
                     ref={provided.innerRef}
                     {...provided.droppableProps}
-                    className={`space-y-2 flex-1 min-h-[200px] max-h-[calc(100vh-150px)] overflow-y-auto scrollbar-hide rounded-md transition-colors ${
+                    className={`space-y-2 flex-1 min-h-[200px] max-h-[calc(100vh-90px)] overflow-y-auto scrollbar-hide rounded-md transition-colors ${
                       snapshot.isDraggingOver ? 'bg-[hsl(var(--sz-green-dim))]' : ''
                     }`}
                   >
