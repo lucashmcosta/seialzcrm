@@ -107,6 +107,22 @@ export default function TemplateForm() {
     setBody(prev => prev + `{{${nextVarNum}}}`);
   };
 
+  // Sanitize button titles: WhatsApp não aceita emojis, quebras de linha,
+  // variáveis ou caracteres de formatação em títulos de botões.
+  const sanitizeButtonTitle = (value: string): string => {
+    return value
+      // remove quebras de linha e tabs
+      .replace(/[\r\n\t]+/g, ' ')
+      // remove emojis e símbolos pictográficos
+      .replace(/\p{Extended_Pictographic}/gu, '')
+      // remove variable markers {{ }}
+      .replace(/[{}]/g, '')
+      // remove caracteres de formatação WhatsApp (* _ ~ `)
+      .replace(/[*_~`]/g, '')
+      // colapsa espaços
+      .replace(/\s{2,}/g, ' ');
+  };
+
   // Quick Reply buttons
   const handleAddButton = () => {
     if (buttons.length >= 10) return;
@@ -119,7 +135,7 @@ export default function TemplateForm() {
 
   const handleButtonChange = (index: number, title: string) => {
     const updated = [...buttons];
-    updated[index] = { ...updated[index], title };
+    updated[index] = { ...updated[index], title: sanitizeButtonTitle(title) };
     setButtons(updated);
   };
 
