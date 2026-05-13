@@ -34,6 +34,8 @@ export function OpportunityCard({
   currency,
   contactName,
   closeDate,
+  ownerName,
+  createdAt,
   locale,
   tags,
   onEdit,
