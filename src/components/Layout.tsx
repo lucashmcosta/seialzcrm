@@ -242,7 +242,7 @@ export function Layout({ children }: LayoutProps) {
   );
 
   return (
-    <div className="min-h-screen flex w-full bg-background">
+    <div className="flex h-screen w-full overflow-hidden bg-background">
       <ImpersonationBanner />
       
       {/* Sidebar */}
@@ -256,8 +256,8 @@ export function Layout({ children }: LayoutProps) {
       </div>
 
       {/* Main content */}
-      <div className="pl-64 flex-1 min-w-0 overflow-x-hidden">
-        <main className="min-h-screen">
+      <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden pl-64">
+        <main className="min-h-0 flex-1 overflow-y-auto overflow-x-hidden">
           {children}
         </main>
       </div>
