@@ -40,9 +40,11 @@ Deno.serve(async (req) => {
       });
     }
 
-    // Verify caller session
+    // Verify caller session — accept token in header OR query (audio elements can't set headers)
     const authHeader = req.headers.get('Authorization');
-    if (!authHeader) {
+    const queryToken = url.searchParams.get('access_token');
+    const token = authHeader ? authHeader.replace('Bearer ', '') : queryToken;
+    if (!token) {
       return new Response(JSON.stringify({ error: 'Unauthorized' }), {
         status: 401,
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },
@@ -54,7 +56,6 @@ Deno.serve(async (req) => {
       Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''
     );
 
-    const token = authHeader.replace('Bearer ', '');
     const { data: userData, error: userErr } = await supabase.auth.getUser(token);
     if (userErr || !userData?.user) {
       return new Response(JSON.stringify({ error: 'Unauthorized' }), {
