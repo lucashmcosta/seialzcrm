@@ -3,8 +3,8 @@ import { computeRange, type PeriodPreset, type CustomRange } from '@/lib/report-
 import { usePersistedFilters } from '@/hooks/usePersistedFilters';
 
 export function useMarketingPeriod(initial: PeriodPreset = 'last_30', scope = 'marketing') {
-  const [preset, setPreset] = usePersistedFilters<PeriodPreset>(`${scope}.preset`, initial);
-  const [custom, setCustom] = usePersistedFilters<CustomRange | undefined>(
+  const [preset, setPreset, , presetHydrated] = usePersistedFilters<PeriodPreset>(`${scope}.preset`, initial);
+  const [custom, setCustom, , customHydrated] = usePersistedFilters<CustomRange | undefined>(
     `${scope}.custom`,
     undefined,
     (raw) => {
@@ -17,6 +17,7 @@ export function useMarketingPeriod(initial: PeriodPreset = 'last_30', scope = 'm
   );
 
   const range = useMemo(() => computeRange(preset, custom), [preset, custom]);
+  const hydrated = presetHydrated && customHydrated;
 
-  return { preset, setPreset, custom, setCustom, range };
+  return { preset, setPreset, custom, setCustom, range, hydrated };
 }

@@ -58,8 +58,8 @@ export default function ReportsPage() {
   const { permissions, loading: permsLoading } = usePermissions();
   const isMobile = useIsMobile();
 
-  const [preset, setPreset] = usePersistedFilters<PeriodPreset>('reports.preset', 'last_30');
-  const [customRange, setCustomRange] = usePersistedFilters<CustomRange | undefined>(
+  const [preset, setPreset, , presetHydrated] = usePersistedFilters<PeriodPreset>('reports.preset', 'last_30');
+  const [customRange, setCustomRange, , customHydrated] = usePersistedFilters<CustomRange | undefined>(
     'reports.customRange',
     undefined,
     (raw) => {
@@ -70,7 +70,8 @@ export default function ReportsPage() {
       };
     },
   );
-  const [ownerId, setOwnerId] = usePersistedFilters<string>('reports.ownerId', 'all');
+  const [ownerId, setOwnerId, , ownerHydrated] = usePersistedFilters<string>('reports.ownerId', 'all');
+  const filtersHydrated = presetHydrated && customHydrated && ownerHydrated;
 
   const range = useMemo(() => computeRange(preset, customRange), [preset, customRange]);
   const rangeKey = `${range.from.toISOString()}_${range.to.toISOString()}`;
@@ -90,10 +91,10 @@ export default function ReportsPage() {
   }, [organization?.id]);
 
   useEffect(() => {
-    if (!organization) return;
+    if (!organization || !filtersHydrated) return;
     fetchData();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [organization?.id, rangeKey, ownerId]);
+  }, [organization?.id, filtersHydrated, rangeKey, ownerId]);
 
   async function fetchUsersAndStages() {
     if (!organization) return;
