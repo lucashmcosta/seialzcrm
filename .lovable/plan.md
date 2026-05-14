@@ -1,17 +1,28 @@
-## Corrigir checkbox da tabela que não seleciona
+# Corrigir seleção individual dos contatos
 
-**Problema:** Na lista de contatos, clicar no checkbox da linha não seleciona — em vez disso, navega para o detalhe do contato. A `TableRow` (react-aria-components) tem `onAction={() => navigate(...)}`, então o clique no checkbox borbulha até a linha e dispara a navegação antes que o estado do checkbox seja atualizado.
+## Problema identificado
+Quando você clica no checkbox de um contato específico, o estado de seleção é atualizado, mas o feedback visual fica errado: o checkbox do cabeçalho entra em estado misto e a bolinha da linha clicada não pinta corretamente.
 
-### Mudanças
+## O que vou ajustar
+1. **Isolar o checkbox da linha no componente de tabela**
+   - Revisar `src/components/application/table/table.tsx` para impedir que foco, press e click do checkbox da linha interfiram no comportamento da `TableRow` do React Aria.
+   - Garantir que o clique na bolinha da linha afete apenas aquele checkbox.
 
-**Arquivo:** `src/components/application/table/table.tsx`
+2. **Corrigir a atualização visual da linha selecionada**
+   - Ajustar o `TableCheckboxCell` para refletir imediatamente o estado `isSelected` da linha clicada.
+   - Manter o checkbox do cabeçalho apenas como reflexo agregado da seleção (`selecionado`, `indeterminado`, `vazio`).
 
-1. Em `TableCheckboxCell`: envolver o `<Checkbox>` em um `<div>` com `onPointerDown`, `onPointerUp` e `onClick` chamando `e.stopPropagation()`, para impedir que o clique acione `onAction` da linha (navegação). Manter o `Cell` como container.
-2. Em `TableCheckboxHeader`: aplicar o mesmo wrapper por consistência (evita acionar sort/header behavior).
-3. Manter o componente `Checkbox` (Radix) como está — o problema é apenas a propagação do evento até a `Row` do react-aria.
+3. **Validar a integração na lista de contatos**
+   - Conferir `src/pages/contacts/ContactsList.tsx` para manter a seleção individual via `handleSelectOne` sem impactar navegação da linha.
+   - Validar também que o “selecionar todos” continua funcionando como antes.
 
-### Resultado esperado
+4. **Evitar regressão em outras tabelas**
+   - Verificar o uso do mesmo componente em oportunidades para garantir que a correção no componente compartilhado não quebre a seleção lá.
 
-- Clicar no checkbox da linha apenas marca/desmarca, sem navegar.
-- Clicar em qualquer outra parte da linha continua navegando para o detalhe.
-- Checkbox do header (selecionar todos) funciona normalmente.
+## Arquivos envolvidos
+- `src/components/application/table/table.tsx`
+- `src/pages/contacts/ContactsList.tsx`
+- Validação em `src/pages/opportunities/OpportunitiesKanban.tsx`
+
+## Detalhe técnico
+A tabela usa seleção manual por estado (`selectedIds`) e não a seleção nativa do React Aria. O problema está na interação entre `Row onAction` e o checkbox Radix embutido dentro da célula. A correção será feita no componente compartilhado de checkbox da tabela, preservando o design system atual e sem mudar a lógica de negócio da lista.
