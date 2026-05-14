@@ -82,7 +82,7 @@ export function usePersistedFilters<T>(
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [storageKey]);
 
-  return [value, setValue, reset];
+  return [value, setValue, reset, hydrated];
 }
 
 /**
