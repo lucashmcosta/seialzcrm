@@ -1171,7 +1171,7 @@ export default function OpportunitiesKanban() {
                     )}
                     <TableColumn id="actions" className="w-12">Ações</TableColumn>
                   </TableHeader>
-                  <TableBody items={paginatedOpportunities}>
+                  <TableBody items={paginatedOpportunities} dependencies={[selectedIds]}>
                     {(opp) => (
                       <TableRow key={opp.id} className="cursor-pointer" onAction={() => navigate(`/opportunities/${opp.id}`)}>
                         <TableCheckboxCell isSelected={selectedIds.includes(opp.id)} onChange={(checked) => handleSelectOne(opp.id, checked)} />
@@ -1418,7 +1418,7 @@ export default function OpportunitiesKanban() {
                 )}
                 <TableColumn id="actions" className="w-12">Ações</TableColumn>
               </TableHeader>
-              <TableBody items={paginatedOpportunities}>
+              <TableBody items={paginatedOpportunities} dependencies={[selectedIds]}>
                 {(opp) => (
                   <TableRow
                     key={opp.id}
