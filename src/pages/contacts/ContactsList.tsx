@@ -531,38 +531,38 @@ export default function ContactsList() {
               />
             }
           >
+            {/* Select All Banner */}
+            {allSelected && totalCount > sortedContacts.length && (
+              <div className="px-4 py-2 bg-muted/50 border-b text-sm flex items-center justify-center gap-2">
+                {selectAllMode === 'all' ? (
+                  <>
+                    <span>Todos os {totalCount} contatos selecionados.</span>
+                    <button
+                      className="text-primary font-medium hover:underline"
+                      onClick={handleClearSelection}
+                    >
+                      Limpar seleção
+                    </button>
+                  </>
+                ) : (
+                  <>
+                    <span>{sortedContacts.length} contatos desta página selecionados.</span>
+                    <button
+                      className="text-primary font-medium hover:underline"
+                      onClick={handleSelectAllContacts}
+                    >
+                      Selecionar todos os {totalCount} contatos
+                    </button>
+                  </>
+                )}
+              </div>
+            )}
+
             <Table
               aria-label="Lista de contatos"
               sortDescriptor={sortDescriptor}
               onSortChange={setSortDescriptor}
             >
-              {/* Select All Banner */}
-              {allSelected && totalCount > sortedContacts.length && (
-                <div className="px-4 py-2 bg-muted/50 border-b text-sm flex items-center justify-center gap-2">
-                  {selectAllMode === 'all' ? (
-                    <>
-                      <span>Todos os {totalCount} contatos selecionados.</span>
-                      <button
-                        className="text-primary font-medium hover:underline"
-                        onClick={handleClearSelection}
-                      >
-                        Limpar seleção
-                      </button>
-                    </>
-                  ) : (
-                    <>
-                      <span>{sortedContacts.length} contatos desta página selecionados.</span>
-                      <button
-                        className="text-primary font-medium hover:underline"
-                        onClick={handleSelectAllContacts}
-                      >
-                        Selecionar todos os {totalCount} contatos
-                      </button>
-                    </>
-                  )}
-                </div>
-              )}
-
               <TableHeader>
                 <TableCheckboxHeader
                   isSelected={allSelected}

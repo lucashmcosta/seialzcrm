@@ -1,29 +1,15 @@
-# Corrigir feedback visual da seleção na lista de contatos
+## Problema
 
-## Problema identificado
-A seleção está funcionando no estado: o replay mostra o contador de selecionados subindo quando você clica na linha. O erro é visual: a bolinha da linha não deixa claro que aquele contato foi selecionado.
+Quando o usuário clica na bolinha do cabeçalho (selecionar todos), `allSelected` vira `true` e o React renderiza um `<div>` (banner "Todos os X contatos selecionados") como filho direto do componente `<Table>` do react-aria-components. O `AriaTable` só aceita `TableHeader` e `TableBody` como filhos — ao tentar reconciliar esse `<div>` dentro da coleção virtual, o React chama `createTextNode` em um container falso e quebra com:
 
-## O que vou ajustar
-1. **Corrigir o componente visual da bolinha da linha**
-   - Revisar `src/components/application/table/table.tsx`, no `TableSelectionControl` e `TableCheckboxCell`.
-   - Garantir que a seleção da linha tenha um estado visual explícito e forte: preenchimento verde real e/ou indicador interno visível.
-   - Remover qualquer aparência nativa de botão que possa estar deixando o centro branco ou apagando o fundo selecionado.
+`TypeError: getOwnerDocumentFromRootContainer(...).createTextNode is not a function`
 
-2. **Separar visual do cabeçalho e da linha**
-   - Manter o cabeçalho com estado `indeterminate` como está.
-   - Dar à linha selecionada um estado próprio e inequívoco, para ficar óbvio qual contato foi marcado.
+## Correção
 
-3. **Validar a ligação com o estado de seleção**
-   - Confirmar em `src/pages/contacts/ContactsList.tsx` que `selectedIds.includes(contact.id)` continua sendo a fonte da verdade.
-   - Garantir que o visual da bolinha reflita exatamente esse estado sem depender do contador inferior.
+Em `src/pages/contacts/ContactsList.tsx`:
 
-4. **Checar regressão no componente compartilhado**
-   - Validar o uso do mesmo componente em outras tabelas para não quebrar seleção em oportunidades.
+1. Mover o bloco do banner (`{allSelected && totalCount > sortedContacts.length && (...)}` linhas 540–564) para FORA do `<Table>`, posicionando-o logo acima do `<Table>` (ainda dentro do `TableCard`/wrapper). 
+2. Manter exatamente a mesma lógica de visibilidade e estilos (apenas mudando o local de renderização).
+3. Verificar no preview que: clicar no checkbox do header não dispara erro, o banner aparece corretamente acima da tabela quando todos da página estão selecionados, e a seleção continua refletindo nas bolinhas verdes.
 
-## Arquivos envolvidos
-- `src/components/application/table/table.tsx`
-- `src/pages/contacts/ContactsList.tsx`
-- Validação em `src/pages/opportunities/OpportunitiesKanban.tsx`
-
-## Detalhe técnico
-Hoje o sintoma indica que o clique entra no estado, mas o controle visual da célula não está representando corretamente `checked=true`. A correção vai focar no componente compartilhado da tabela, reforçando o estado selecionado da linha com renderização visual consistente.
+Nenhum outro arquivo precisa ser alterado.
