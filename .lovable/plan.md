@@ -1,47 +1,35 @@
-## Objetivo
+## Problema
 
-Cada usuário deve reabrir as telas com os mesmos filtros que aplicou da última vez (estágio, dono, tags, status, período, etc.). Apenas o texto da pesquisa NÃO é lembrado — sempre começa vazio. A persistência fica no navegador (localStorage), por usuário logado.
+Os filtros (Contatos, Oportunidades, Tarefas, Mensagens, Relatórios, Marketing) somem ao sair e voltar para a tela, mesmo com o `usePersistedFilters` em vigor.
 
-## Como vai funcionar
+## Causa raiz
 
-- Quando o usuário muda um filtro, o valor é salvo automaticamente no localStorage.
-- Ao reabrir a tela (ou recarregar a página), os filtros são restaurados antes da primeira busca — não há "flash" de dados sem filtro.
-- Cada usuário tem seu próprio conjunto salvo (chave inclui o ID do usuário), então trocar de conta no mesmo navegador não mistura filtros.
-- Trocar de organização também isola os filtros (chave inclui org_id) para evitar mostrar dono/estágio que não existe na outra org.
-- Botão "Limpar filtros" (onde já existe) também apaga o registro salvo.
-- A pesquisa por texto continua sempre vazia ao entrar na tela.
+No hook `src/hooks/usePersistedFilters.ts`, dois `useEffect` dependem de `[storageKey, ready]`:
 
-## Telas cobertas
+1. **Hidratação**: lê `localStorage` e chama `setValue(valorSalvo)`.
+2. **Persistência**: grava `JSON.stringify(value)` em `localStorage`.
 
-1. **Contatos** (`/contacts`) — estágio, dono, tags, ordenação, page size.
-2. **Oportunidades / Kanban** (`/opportunities`) — pipeline, estágios selecionados, dono, tags, status (ganho/perdido/aberto).
-3. **Tarefas** (`/tasks`) — status, tipo, dono, prioridade, data.
-4. **Mensagens** (`/messages`) — caixa (atribuído a mim, não atribuído, todos), status, canal.
-5. **Relatórios** (`/reports`) — período (preset + range customizado), vendedor.
-6. **Marketing** (`/marketing` e subpáginas) — período, conta/conjunto/anúncio, status.
+Quando a organização termina de carregar (`ready` passa de `false` para `true`), os dois efeitos rodam no mesmo commit. O `setValue` do efeito 1 é assíncrono — só vale no próximo render. Então o efeito 2 roda com `value` ainda igual ao default (`'all'`, `''`, etc.) e sobrescreve a chave do localStorage com o default, apagando o que o usuário tinha salvo. Por isso o filtro "Lucas Costa" some ao reabrir Contatos.
 
-## Detalhes técnicos
+## Correção
 
-- Criar hook `usePersistedFilters<T>(key, defaultValue)` em `src/hooks/usePersistedFilters.ts`:
-  - Lê `localStorage` na inicialização (lazy initializer do `useState`) para evitar flash.
-  - Faz `JSON.parse` com try/catch — se corrompido, usa default.
-  - `useEffect` salva em `localStorage` quando o valor muda (debounce 200ms para sliders/inputs numéricos).
-  - Chave final: `seialz:filters:v1:{userId}:{orgId}:{scope}` (ex: `seialz:filters:v1:abc:xyz:contacts`).
-  - Pega `userId`/`orgId` via `useOrganization()`. Se ainda não carregou, retorna `defaultValue` e não persiste (evita escrever lixo).
-- Refatorar cada página listada para trocar `useState` dos filtros pelo hook — exceto `searchTerm`, que continua `useState` puro.
-- Para Relatórios, datas custom serializam como ISO strings; reidratar como `Date` no `parse`.
-- Versão `v1` na chave permite invalidar tudo no futuro se o formato mudar.
-- Sem mudanças de banco, sem RLS, sem edge functions.
+Adicionar um `skipNextSaveRef` no hook que sinaliza ao efeito de persistência para ignorar o primeiro disparo logo após a hidratação:
 
-## Fora do escopo
+- Na hidratação: marca `skipNextSaveRef.current = true` antes do `setValue`.
+- Na persistência: se `skipNextSaveRef.current` estiver `true`, limpa a flag e sai sem gravar. Nos disparos seguintes (quando o `value` muda de fato), grava normalmente.
 
-- Sincronização entre dispositivos (não foi pedido; usaria `saved_views` se um dia for necessário).
-- Persistir o texto da pesquisa.
-- Persistir colunas visíveis ou ordem do Kanban (somente filtros).
+Também tratar troca de organização: ao mudar `storageKey`, re-hidratar e re-armar a flag (mesma lógica, já coberta pela checagem `hydratedKeyRef.current !== storageKey`).
+
+## Arquivos alterados
+
+- `src/hooks/usePersistedFilters.ts` — adicionar `skipNextSaveRef` e proteger o efeito de persistência.
+
+Nenhuma página precisa mudar — o fix é local ao hook e cobre todas as 6 telas (Contatos, Oportunidades, Tarefas, Mensagens, Relatórios, Marketing).
 
 ## Verificação
 
-- Aplicar filtros em cada tela → recarregar (F5) → filtros voltam, pesquisa vazia.
-- Sair e entrar com outro usuário no mesmo navegador → filtros do outro usuário não aparecem.
-- Trocar de organização → filtros isolados.
-- Clicar em "Limpar filtros" → estado e localStorage zerados.
+1. Abrir `/contacts`, selecionar dono "Lucas Costa", sair para `/opportunities`, voltar para `/contacts` → filtro continua "Lucas Costa".
+2. Recarregar (F5) → filtro permanece.
+3. Clicar "Limpar filtros" → estado e localStorage zerados.
+4. Repetir nas outras telas (Oportunidades/Kanban, Tarefas, Mensagens, Relatórios, Marketing).
+5. Inspecionar `localStorage` no DevTools: chaves `seialz:filters:v1:{userId}:{orgId}:{scope}` mantêm o último valor escolhido entre navegações.

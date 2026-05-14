@@ -29,12 +29,16 @@ export function usePersistedFilters<T>(
 
   const [value, setValue] = useState<T>(defaultValue);
   const hydratedKeyRef = useRef<string>('');
+  const skipNextSaveRef = useRef<boolean>(false);
 
   // Hidrata quando user/org ficam disponíveis (ou mudam).
   useEffect(() => {
     if (!ready) return;
     if (hydratedKeyRef.current === storageKey) return;
     hydratedKeyRef.current = storageKey;
+    // Evita que o efeito de persistência (que roda no MESMO commit com o
+    // value ainda no default) sobrescreva a chave salva no localStorage.
+    skipNextSaveRef.current = true;
     try {
       const raw = localStorage.getItem(storageKey);
       if (raw == null) {
@@ -53,6 +57,10 @@ export function usePersistedFilters<T>(
   useEffect(() => {
     if (!ready) return;
     if (hydratedKeyRef.current !== storageKey) return;
+    if (skipNextSaveRef.current) {
+      skipNextSaveRef.current = false;
+      return;
+    }
     try {
       localStorage.setItem(storageKey, JSON.stringify(value));
     } catch {
