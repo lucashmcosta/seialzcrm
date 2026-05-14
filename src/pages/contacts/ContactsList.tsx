@@ -323,8 +323,8 @@ export default function ContactsList() {
       .eq('organization_id', organization.id)
       .is('deleted_at', null);
     
-    if (searchTerm) {
-      query = query.or(`full_name.ilike.%${searchTerm}%,email.ilike.%${searchTerm}%,phone.ilike.%${searchTerm}%`);
+    if (debouncedSearch) {
+      query = applySearchFilters(query, debouncedSearch);
     }
     if (ownerFilter !== 'all') {
       query = query.eq('owner_user_id', ownerFilter);
