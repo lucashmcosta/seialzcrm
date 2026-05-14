@@ -1,9 +1,20 @@
-import { useMemo, useState } from 'react';
+import { useMemo } from 'react';
 import { computeRange, type PeriodPreset, type CustomRange } from '@/lib/report-period';
+import { usePersistedFilters } from '@/hooks/usePersistedFilters';
 
-export function useMarketingPeriod(initial: PeriodPreset = 'last_30') {
-  const [preset, setPreset] = useState<PeriodPreset>(initial);
-  const [custom, setCustom] = useState<CustomRange | undefined>();
+export function useMarketingPeriod(initial: PeriodPreset = 'last_30', scope = 'marketing') {
+  const [preset, setPreset] = usePersistedFilters<PeriodPreset>(`${scope}.preset`, initial);
+  const [custom, setCustom] = usePersistedFilters<CustomRange | undefined>(
+    `${scope}.custom`,
+    undefined,
+    (raw) => {
+      if (!raw || typeof raw !== 'object') return undefined;
+      return {
+        from: raw.from ? new Date(raw.from) : undefined,
+        to: raw.to ? new Date(raw.to) : undefined,
+      };
+    },
+  );
 
   const range = useMemo(() => computeRange(preset, custom), [preset, custom]);
 
