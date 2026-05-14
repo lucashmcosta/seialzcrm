@@ -8,7 +8,7 @@ import {
   TableHeader as AriaTableHeader,
   type SortDescriptor,
 } from "react-aria-components";
-import { DotsThreeVertical, ArrowUp, ArrowDown, CaretUpDown } from "@phosphor-icons/react";
+import { DotsThreeVertical, ArrowUp, ArrowDown, CaretUpDown, Minus } from "@phosphor-icons/react";
 import { cn } from "@/lib/utils";
 import { Card } from "@/components/ui/card";
 import { Checkbox } from "@/components/ui/checkbox";
@@ -164,6 +164,66 @@ interface TableCheckboxHeaderProps {
   onChange: (checked: boolean) => void;
 }
 
+interface TableSelectionControlProps {
+  ariaLabel: string;
+  checked: boolean;
+  indeterminate?: boolean;
+  onChange: (checked: boolean) => void;
+  showIndicator?: boolean;
+}
+
+const stopSelectionPropagation = (event: {
+  preventDefault?: () => void;
+  stopPropagation: () => void;
+}) => {
+  event.stopPropagation();
+};
+
+const TableSelectionControl = ({
+  ariaLabel,
+  checked,
+  indeterminate = false,
+  onChange,
+  showIndicator = false,
+}: TableSelectionControlProps) => {
+  const isActive = checked || indeterminate;
+
+  return (
+    <button
+      type="button"
+      role="checkbox"
+      aria-label={ariaLabel}
+      aria-checked={indeterminate ? "mixed" : checked}
+      onPointerDown={stopSelectionPropagation}
+      onPointerUp={stopSelectionPropagation}
+      onClick={(event) => {
+        stopSelectionPropagation(event);
+        onChange(!checked);
+      }}
+      onKeyDown={(event) => {
+        if (event.key === " " || event.key === "Enter") {
+          event.preventDefault();
+          stopSelectionPropagation(event);
+          onChange(!checked);
+        }
+      }}
+      className={cn(
+        "inline-flex h-5 w-5 items-center justify-center rounded-full border-2 transition-colors",
+        "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 ring-offset-background",
+        isActive
+          ? "border-primary bg-primary text-primary-foreground"
+          : "border-muted-foreground/40 bg-background hover:border-primary/60"
+      )}
+    >
+      {indeterminate ? (
+        <Minus className="h-3 w-3" weight="bold" />
+      ) : checked && showIndicator ? (
+        <span className="h-2 w-2 rounded-full bg-primary-foreground" />
+      ) : null}
+    </button>
+  );
+};
+
 export const TableCheckboxHeader = ({
   isSelected,
   isIndeterminate,
@@ -171,16 +231,13 @@ export const TableCheckboxHeader = ({
 }: TableCheckboxHeaderProps) => {
   return (
     <Column isRowHeader className="w-12">
-      <div
-        onPointerDown={(e) => e.stopPropagation()}
-        onPointerUp={(e) => e.stopPropagation()}
-        onClick={(e) => e.stopPropagation()}
-        className="inline-flex"
-      >
-        <Checkbox
-          aria-label="Selecionar todos"
-          checked={isIndeterminate ? "indeterminate" : isSelected}
-          onCheckedChange={onChange}
+      <div className="inline-flex">
+        <TableSelectionControl
+          ariaLabel="Selecionar todos"
+          checked={isSelected}
+          indeterminate={isIndeterminate}
+          onChange={onChange}
+          showIndicator
         />
       </div>
     </Column>
@@ -198,16 +255,11 @@ export const TableCheckboxCell = ({
 }: TableCheckboxCellProps) => {
   return (
     <Cell className="w-12">
-      <div
-        onPointerDown={(e) => e.stopPropagation()}
-        onPointerUp={(e) => e.stopPropagation()}
-        onClick={(e) => e.stopPropagation()}
-        className="inline-flex"
-      >
-        <Checkbox
-          aria-label="Selecionar linha"
+      <div className="inline-flex">
+        <TableSelectionControl
+          ariaLabel="Selecionar linha"
           checked={isSelected}
-          onCheckedChange={onChange}
+          onChange={onChange}
         />
       </div>
     </Cell>
