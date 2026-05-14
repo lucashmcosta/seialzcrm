@@ -82,11 +82,11 @@ export default function TasksList() {
   const pageSize = viewMode === 'kanban' ? 500 : 20;
 
   useEffect(() => {
-    if (organization) {
+    if (organization && filtersHydrated) {
       fetchUsers();
       fetchTasks();
     }
-  }, [organization, currentPage, searchTerm, statusFilter, priorityFilter, assignedFilter, viewMode, showCompletedKanban]);
+  }, [organization, filtersHydrated, currentPage, searchTerm, statusFilter, priorityFilter, assignedFilter, viewMode, showCompletedKanban]);
 
   const fetchUsers = async () => {
     if (!organization) return;
