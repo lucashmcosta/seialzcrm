@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState, Suspense } from 'react';
+import { usePersistedFilters } from '@/hooks/usePersistedFilters';
 import { Navigate } from 'react-router-dom';
 import { Layout } from '@/components/Layout';
 import { useOrganization } from '@/hooks/useOrganization';
@@ -57,9 +58,19 @@ export default function ReportsPage() {
   const { permissions, loading: permsLoading } = usePermissions();
   const isMobile = useIsMobile();
 
-  const [preset, setPreset] = useState<PeriodPreset>('last_30');
-  const [customRange, setCustomRange] = useState<CustomRange | undefined>();
-  const [ownerId, setOwnerId] = useState('all');
+  const [preset, setPreset] = usePersistedFilters<PeriodPreset>('reports.preset', 'last_30');
+  const [customRange, setCustomRange] = usePersistedFilters<CustomRange | undefined>(
+    'reports.customRange',
+    undefined,
+    (raw) => {
+      if (!raw || typeof raw !== 'object') return undefined;
+      return {
+        from: raw.from ? new Date(raw.from) : undefined,
+        to: raw.to ? new Date(raw.to) : undefined,
+      };
+    },
+  );
+  const [ownerId, setOwnerId] = usePersistedFilters<string>('reports.ownerId', 'all');
 
   const range = useMemo(() => computeRange(preset, customRange), [preset, customRange]);
   const rangeKey = `${range.from.toISOString()}_${range.to.toISOString()}`;
