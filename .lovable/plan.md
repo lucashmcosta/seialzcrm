@@ -1,23 +1,24 @@
-# Corrigir seleção individual dos contatos
+# Corrigir feedback visual da seleção na lista de contatos
 
 ## Problema identificado
-Quando você clica no checkbox de um contato específico, o estado de seleção é atualizado, mas o feedback visual fica errado: o checkbox do cabeçalho entra em estado misto e a bolinha da linha clicada não pinta corretamente.
+A seleção está funcionando no estado: o replay mostra o contador de selecionados subindo quando você clica na linha. O erro é visual: a bolinha da linha não deixa claro que aquele contato foi selecionado.
 
 ## O que vou ajustar
-1. **Isolar o checkbox da linha no componente de tabela**
-   - Revisar `src/components/application/table/table.tsx` para impedir que foco, press e click do checkbox da linha interfiram no comportamento da `TableRow` do React Aria.
-   - Garantir que o clique na bolinha da linha afete apenas aquele checkbox.
+1. **Corrigir o componente visual da bolinha da linha**
+   - Revisar `src/components/application/table/table.tsx`, no `TableSelectionControl` e `TableCheckboxCell`.
+   - Garantir que a seleção da linha tenha um estado visual explícito e forte: preenchimento verde real e/ou indicador interno visível.
+   - Remover qualquer aparência nativa de botão que possa estar deixando o centro branco ou apagando o fundo selecionado.
 
-2. **Corrigir a atualização visual da linha selecionada**
-   - Ajustar o `TableCheckboxCell` para refletir imediatamente o estado `isSelected` da linha clicada.
-   - Manter o checkbox do cabeçalho apenas como reflexo agregado da seleção (`selecionado`, `indeterminado`, `vazio`).
+2. **Separar visual do cabeçalho e da linha**
+   - Manter o cabeçalho com estado `indeterminate` como está.
+   - Dar à linha selecionada um estado próprio e inequívoco, para ficar óbvio qual contato foi marcado.
 
-3. **Validar a integração na lista de contatos**
-   - Conferir `src/pages/contacts/ContactsList.tsx` para manter a seleção individual via `handleSelectOne` sem impactar navegação da linha.
-   - Validar também que o “selecionar todos” continua funcionando como antes.
+3. **Validar a ligação com o estado de seleção**
+   - Confirmar em `src/pages/contacts/ContactsList.tsx` que `selectedIds.includes(contact.id)` continua sendo a fonte da verdade.
+   - Garantir que o visual da bolinha reflita exatamente esse estado sem depender do contador inferior.
 
-4. **Evitar regressão em outras tabelas**
-   - Verificar o uso do mesmo componente em oportunidades para garantir que a correção no componente compartilhado não quebre a seleção lá.
+4. **Checar regressão no componente compartilhado**
+   - Validar o uso do mesmo componente em outras tabelas para não quebrar seleção em oportunidades.
 
 ## Arquivos envolvidos
 - `src/components/application/table/table.tsx`
@@ -25,4 +26,4 @@ Quando você clica no checkbox de um contato específico, o estado de seleção 
 - Validação em `src/pages/opportunities/OpportunitiesKanban.tsx`
 
 ## Detalhe técnico
-A tabela usa seleção manual por estado (`selectedIds`) e não a seleção nativa do React Aria. O problema está na interação entre `Row onAction` e o checkbox Radix embutido dentro da célula. A correção será feita no componente compartilhado de checkbox da tabela, preservando o design system atual e sem mudar a lógica de negócio da lista.
+Hoje o sintoma indica que o clique entra no estado, mas o controle visual da célula não está representando corretamente `checked=true`. A correção vai focar no componente compartilhado da tabela, reforçando o estado selecionado da linha com renderização visual consistente.

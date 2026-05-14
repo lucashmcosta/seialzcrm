@@ -89,16 +89,23 @@ interface TableBodyProps<T> {
   items: T[];
   children: (item: T) => ReactNode;
   className?: string;
+  /**
+   * Values that, when changed, force the row collection to re-render.
+   * Required when row content depends on external state (e.g. selectedIds).
+   */
+  dependencies?: ReadonlyArray<unknown>;
 }
 
 export const TableBody = <T extends { id: string }>({
   items,
   children,
   className,
+  dependencies,
 }: TableBodyProps<T>) => {
   return (
     <AriaTableBody
       items={items}
+      dependencies={dependencies as unknown[]}
       className={cn(
         "[&_tr]:border-b [&_tr]:border-border [&_tr:last-child]:border-0",
         "[&_tr]:transition-colors [&_tr:hover]:bg-muted/50",
