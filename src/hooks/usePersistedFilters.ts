@@ -73,3 +73,18 @@ export function usePersistedFilters<T>(
 
   return [value, setValue, reset];
 }
+
+/**
+ * Cria um setter para um campo específico de um objeto controlado por
+ * usePersistedFilters. Aceita valor direto ou updater functional.
+ */
+export function fieldSetter<T, K extends keyof T>(
+  setAll: React.Dispatch<React.SetStateAction<T>>,
+  key: K,
+) {
+  return (v: T[K] | ((prev: T[K]) => T[K])) =>
+    setAll((prev) => ({
+      ...prev,
+      [key]: typeof v === 'function' ? (v as any)(prev[key]) : v,
+    }));
+}
