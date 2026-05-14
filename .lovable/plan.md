@@ -1,15 +1,23 @@
-## Problema
+## Problemas
 
-Quando o usuário clica na bolinha do cabeçalho (selecionar todos), `allSelected` vira `true` e o React renderiza um `<div>` (banner "Todos os X contatos selecionados") como filho direto do componente `<Table>` do react-aria-components. O `AriaTable` só aceita `TableHeader` e `TableBody` como filhos — ao tentar reconciliar esse `<div>` dentro da coleção virtual, o React chama `createTextNode` em um container falso e quebra com:
+1. **Lenta**: a cada tecla digitada no campo de busca, dispara uma query no Supabase imediatamente (sem debounce). Digitar "Lucas Costa" = 11 requisições.
+2. **Imprecisa**:
+   - A busca usa `full_name.ilike.%Lucas Costa%` — só acha se o nome contiver exatamente a string "Lucas Costa" naquela ordem. Não acha "Costa, Lucas", "Lucas Henrique Costa" se houver variação, "lucas  costa" (2 espaços), etc.
+   - Busca por telefone usa o termo cru — digitar "(11) 99999" não bate com `+5511999990000` no banco.
+   - Não reseta a página para 1 quando o usuário troca o termo, podendo cair numa página vazia.
 
-`TypeError: getOwnerDocumentFromRootContainer(...).createTextNode is not a function`
+## Correção (apenas em `src/pages/contacts/ContactsList.tsx`)
 
-## Correção
+1. **Debounce de 300ms** no `searchTerm` antes de disparar `fetchContacts`. Criar um estado `debouncedSearch` via `useEffect` + `setTimeout`/`clearTimeout`, e usar ele na query e nas dependências do effect.
 
-Em `src/pages/contacts/ContactsList.tsx`:
+2. **Tokenizar a busca**:
+   - Trim + split por espaços (`/\s+/`), filtrar vazios.
+   - Para cada token, montar um grupo `or(full_name.ilike.%token%, email.ilike.%token%, phone.ilike.%digitsOnly%)`.
+   - Combinar os grupos com `.and(...)` para que TODOS os tokens precisem bater (em qualquer campo). Resultado: "Lucas Costa" acha "Costa Silva Lucas", "Lucas Henrique Costa", etc.
+   - Para o token de telefone, extrair só dígitos (`token.replace(/\D/g, '')`); se vazio, omitir o predicado de phone daquele token.
 
-1. Mover o bloco do banner (`{allSelected && totalCount > sortedContacts.length && (...)}` linhas 540–564) para FORA do `<Table>`, posicionando-o logo acima do `<Table>` (ainda dentro do `TableCard`/wrapper). 
-2. Manter exatamente a mesma lógica de visibilidade e estilos (apenas mudando o local de renderização).
-3. Verificar no preview que: clicar no checkbox do header não dispara erro, o banner aparece corretamente acima da tabela quando todos da página estão selecionados, e a seleção continua refletindo nas bolinhas verdes.
+3. **Reset de página**: quando `debouncedSearch` mudar, setar `currentPage = 1`. Aplicar a mesma lógica em `handleSelectAllContacts` (usar `debouncedSearch` em vez de `searchTerm`).
 
-Nenhum outro arquivo precisa ser alterado.
+4. **Verificação**: digitar nomes parciais e fora de ordem ("costa lucas", "lucas") deve retornar resultados; latência percebida deve cair (uma única query 300ms após parar de digitar).
+
+Nenhuma mudança de schema, RLS, ou outros arquivos.

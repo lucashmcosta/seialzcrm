@@ -76,7 +76,42 @@ export default function ContactsList() {
   const [contacts, setContacts] = useState<Contact[]>([]);
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
+  const [debouncedSearch, setDebouncedSearch] = useState('');
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
+
+  // Debounce search input (300ms)
+  useEffect(() => {
+    const t = setTimeout(() => setDebouncedSearch(searchTerm.trim()), 300);
+    return () => clearTimeout(t);
+  }, [searchTerm]);
+
+  // Reset to page 1 when search changes
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [debouncedSearch]);
+
+  // Build tokenized search filters: each whitespace-separated token must
+  // match in at least one of (full_name, email, phone). Multiple tokens
+  // are ANDed together by chaining .or() calls.
+  const applySearchFilters = <T extends { or: (q: string) => T }>(query: T, term: string): T => {
+    const tokens = term.split(/\s+/).filter(Boolean);
+    let q = query;
+    for (const token of tokens) {
+      const safe = token.replace(/[,()]/g, ' ').trim();
+      if (!safe) continue;
+      const digits = safe.replace(/\D/g, '');
+      const parts = [
+        `full_name.ilike.%${safe}%`,
+        `email.ilike.%${safe}%`,
+        `phone.ilike.%${safe}%`,
+      ];
+      if (digits && digits !== safe) {
+        parts.push(`phone.ilike.%${digits}%`);
+      }
+      q = q.or(parts.join(','));
+    }
+    return q;
+  };
   const [users, setUsers] = useState<{ id: string; full_name: string }[]>([]);
   
   // Filters state
@@ -153,13 +188,13 @@ export default function ContactsList() {
       setMobileContacts([]);
       setCurrentPage(1);
     }
-  }, [searchTerm, ownerFilter, stageFilter, createdFromFilter, createdToFilter]);
+  }, [debouncedSearch, ownerFilter, stageFilter, createdFromFilter, createdToFilter]);
 
   useEffect(() => {
     if (!organization) return;
     fetchContacts();
     fetchUsers();
-  }, [organization, currentPage, itemsPerPage, searchTerm, ownerFilter, stageFilter, createdFromFilter, createdToFilter]);
+  }, [organization, currentPage, itemsPerPage, debouncedSearch, ownerFilter, stageFilter, createdFromFilter, createdToFilter]);
 
   const mobileHasMore = mobileContacts.length < totalCount;
 
@@ -204,8 +239,8 @@ export default function ContactsList() {
       .is('deleted_at', null);
     
     // Apply filters
-    if (searchTerm) {
-      query = query.or(`full_name.ilike.%${searchTerm}%,email.ilike.%${searchTerm}%,phone.ilike.%${searchTerm}%`);
+    if (debouncedSearch) {
+      query = applySearchFilters(query, debouncedSearch);
     }
     if (ownerFilter !== 'all') {
       query = query.eq('owner_user_id', ownerFilter);
@@ -288,8 +323,8 @@ export default function ContactsList() {
       .eq('organization_id', organization.id)
       .is('deleted_at', null);
     
-    if (searchTerm) {
-      query = query.or(`full_name.ilike.%${searchTerm}%,email.ilike.%${searchTerm}%,phone.ilike.%${searchTerm}%`);
+    if (debouncedSearch) {
+      query = applySearchFilters(query, debouncedSearch);
     }
     if (ownerFilter !== 'all') {
       query = query.eq('owner_user_id', ownerFilter);
