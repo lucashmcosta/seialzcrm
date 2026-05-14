@@ -49,9 +49,10 @@ export default function TasksList() {
   const [tasks, setTasks] = useState<Task[]>([]);
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
-  const [statusFilter, setStatusFilter] = usePersistedFilters<string>('tasks.statusFilter', 'all');
-  const [priorityFilter, setPriorityFilter] = usePersistedFilters<string>('tasks.priorityFilter', 'all');
-  const [assignedFilter, setAssignedFilter] = usePersistedFilters<string>('tasks.assignedFilter', 'all');
+  const [statusFilter, setStatusFilter, , statusHydrated] = usePersistedFilters<string>('tasks.statusFilter', 'all');
+  const [priorityFilter, setPriorityFilter, , priorityHydrated] = usePersistedFilters<string>('tasks.priorityFilter', 'all');
+  const [assignedFilter, setAssignedFilter, , assignedHydrated] = usePersistedFilters<string>('tasks.assignedFilter', 'all');
+  const filtersHydrated = statusHydrated && priorityHydrated && assignedHydrated;
   const [users, setUsers] = useState<{ id: string; full_name: string }[]>([]);
 
   // Dialogs
