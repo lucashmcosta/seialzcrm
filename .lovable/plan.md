@@ -1,23 +1,47 @@
-## Problemas
+## Objetivo
 
-1. **Lenta**: a cada tecla digitada no campo de busca, dispara uma query no Supabase imediatamente (sem debounce). Digitar "Lucas Costa" = 11 requisições.
-2. **Imprecisa**:
-   - A busca usa `full_name.ilike.%Lucas Costa%` — só acha se o nome contiver exatamente a string "Lucas Costa" naquela ordem. Não acha "Costa, Lucas", "Lucas Henrique Costa" se houver variação, "lucas  costa" (2 espaços), etc.
-   - Busca por telefone usa o termo cru — digitar "(11) 99999" não bate com `+5511999990000` no banco.
-   - Não reseta a página para 1 quando o usuário troca o termo, podendo cair numa página vazia.
+Cada usuário deve reabrir as telas com os mesmos filtros que aplicou da última vez (estágio, dono, tags, status, período, etc.). Apenas o texto da pesquisa NÃO é lembrado — sempre começa vazio. A persistência fica no navegador (localStorage), por usuário logado.
 
-## Correção (apenas em `src/pages/contacts/ContactsList.tsx`)
+## Como vai funcionar
 
-1. **Debounce de 300ms** no `searchTerm` antes de disparar `fetchContacts`. Criar um estado `debouncedSearch` via `useEffect` + `setTimeout`/`clearTimeout`, e usar ele na query e nas dependências do effect.
+- Quando o usuário muda um filtro, o valor é salvo automaticamente no localStorage.
+- Ao reabrir a tela (ou recarregar a página), os filtros são restaurados antes da primeira busca — não há "flash" de dados sem filtro.
+- Cada usuário tem seu próprio conjunto salvo (chave inclui o ID do usuário), então trocar de conta no mesmo navegador não mistura filtros.
+- Trocar de organização também isola os filtros (chave inclui org_id) para evitar mostrar dono/estágio que não existe na outra org.
+- Botão "Limpar filtros" (onde já existe) também apaga o registro salvo.
+- A pesquisa por texto continua sempre vazia ao entrar na tela.
 
-2. **Tokenizar a busca**:
-   - Trim + split por espaços (`/\s+/`), filtrar vazios.
-   - Para cada token, montar um grupo `or(full_name.ilike.%token%, email.ilike.%token%, phone.ilike.%digitsOnly%)`.
-   - Combinar os grupos com `.and(...)` para que TODOS os tokens precisem bater (em qualquer campo). Resultado: "Lucas Costa" acha "Costa Silva Lucas", "Lucas Henrique Costa", etc.
-   - Para o token de telefone, extrair só dígitos (`token.replace(/\D/g, '')`); se vazio, omitir o predicado de phone daquele token.
+## Telas cobertas
 
-3. **Reset de página**: quando `debouncedSearch` mudar, setar `currentPage = 1`. Aplicar a mesma lógica em `handleSelectAllContacts` (usar `debouncedSearch` em vez de `searchTerm`).
+1. **Contatos** (`/contacts`) — estágio, dono, tags, ordenação, page size.
+2. **Oportunidades / Kanban** (`/opportunities`) — pipeline, estágios selecionados, dono, tags, status (ganho/perdido/aberto).
+3. **Tarefas** (`/tasks`) — status, tipo, dono, prioridade, data.
+4. **Mensagens** (`/messages`) — caixa (atribuído a mim, não atribuído, todos), status, canal.
+5. **Relatórios** (`/reports`) — período (preset + range customizado), vendedor.
+6. **Marketing** (`/marketing` e subpáginas) — período, conta/conjunto/anúncio, status.
 
-4. **Verificação**: digitar nomes parciais e fora de ordem ("costa lucas", "lucas") deve retornar resultados; latência percebida deve cair (uma única query 300ms após parar de digitar).
+## Detalhes técnicos
 
-Nenhuma mudança de schema, RLS, ou outros arquivos.
+- Criar hook `usePersistedFilters<T>(key, defaultValue)` em `src/hooks/usePersistedFilters.ts`:
+  - Lê `localStorage` na inicialização (lazy initializer do `useState`) para evitar flash.
+  - Faz `JSON.parse` com try/catch — se corrompido, usa default.
+  - `useEffect` salva em `localStorage` quando o valor muda (debounce 200ms para sliders/inputs numéricos).
+  - Chave final: `seialz:filters:v1:{userId}:{orgId}:{scope}` (ex: `seialz:filters:v1:abc:xyz:contacts`).
+  - Pega `userId`/`orgId` via `useOrganization()`. Se ainda não carregou, retorna `defaultValue` e não persiste (evita escrever lixo).
+- Refatorar cada página listada para trocar `useState` dos filtros pelo hook — exceto `searchTerm`, que continua `useState` puro.
+- Para Relatórios, datas custom serializam como ISO strings; reidratar como `Date` no `parse`.
+- Versão `v1` na chave permite invalidar tudo no futuro se o formato mudar.
+- Sem mudanças de banco, sem RLS, sem edge functions.
+
+## Fora do escopo
+
+- Sincronização entre dispositivos (não foi pedido; usaria `saved_views` se um dia for necessário).
+- Persistir o texto da pesquisa.
+- Persistir colunas visíveis ou ordem do Kanban (somente filtros).
+
+## Verificação
+
+- Aplicar filtros em cada tela → recarregar (F5) → filtros voltam, pesquisa vazia.
+- Sair e entrar com outro usuário no mesmo navegador → filtros do outro usuário não aparecem.
+- Trocar de organização → filtros isolados.
+- Clicar em "Limpar filtros" → estado e localStorage zerados.
