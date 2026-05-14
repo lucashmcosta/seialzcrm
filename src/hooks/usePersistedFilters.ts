@@ -20,7 +20,7 @@ export function usePersistedFilters<T>(
   scope: string,
   defaultValue: T,
   reviver?: (raw: any) => T,
-): [T, Dispatch<SetStateAction<T>>, () => void] {
+): [T, Dispatch<SetStateAction<T>>, () => void, boolean] {
   const { userProfile, organization } = useOrganization();
   const userId = userProfile?.id ?? '';
   const orgId = organization?.id ?? '';
@@ -28,6 +28,7 @@ export function usePersistedFilters<T>(
   const storageKey = ready ? buildKey(userId, orgId, scope) : '';
 
   const [value, setValue] = useState<T>(defaultValue);
+  const [hydrated, setHydrated] = useState<boolean>(false);
   const hydratedKeyRef = useRef<string>('');
   const skipNextSaveRef = useRef<boolean>(false);
 
@@ -50,6 +51,7 @@ export function usePersistedFilters<T>(
     } catch {
       setValue(defaultValue);
     }
+    setHydrated(true);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [storageKey, ready]);
 
