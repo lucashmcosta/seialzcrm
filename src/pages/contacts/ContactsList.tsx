@@ -583,7 +583,7 @@ export default function ContactsList() {
                   <span className="sr-only">Ações</span>
                 </TableColumn>
               </TableHeader>
-              <TableBody items={sortedContacts}>
+              <TableBody items={sortedContacts} dependencies={[selectedIds]}>
                 {(contact) => (
                   <TableRow
                     key={contact.id}
