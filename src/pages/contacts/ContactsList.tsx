@@ -312,9 +312,9 @@ export default function ContactsList() {
 
   const handleSelectOne = (id: string, checked: boolean) => {
     if (checked) {
-      setSelectedIds([...selectedIds, id]);
+      setSelectedIds((current) => (current.includes(id) ? current : [...current, id]));
     } else {
-      setSelectedIds(selectedIds.filter(i => i !== id));
+      setSelectedIds((current) => current.filter(i => i !== id));
     }
   };
 
