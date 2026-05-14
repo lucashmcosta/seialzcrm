@@ -1,3 +1,4 @@
+import type { Dispatch, SetStateAction } from 'react';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { useOrganization } from '@/hooks/useOrganization';
 
@@ -19,7 +20,7 @@ export function usePersistedFilters<T>(
   scope: string,
   defaultValue: T,
   reviver?: (raw: any) => T,
-): [T, React.Dispatch<React.SetStateAction<T>>, () => void] {
+): [T, Dispatch<SetStateAction<T>>, () => void] {
   const { userProfile, organization } = useOrganization();
   const userId = userProfile?.id ?? '';
   const orgId = organization?.id ?? '';
