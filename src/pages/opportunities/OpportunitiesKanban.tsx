@@ -1,4 +1,5 @@
 import { useState, useEffect, useMemo, useRef, useCallback } from 'react';
+import { usePersistedFilters } from '@/hooks/usePersistedFilters';
 import { useNavigate } from 'react-router-dom';
 import { DragDropContext, Droppable, Draggable, DropResult } from '@hello-pangea/dnd';
 import { Layout } from '@/components/Layout';
@@ -124,16 +125,16 @@ export default function OpportunitiesKanban() {
   const [searchTerm, setSearchTerm] = useState('');
   const [searchResults, setSearchResults] = useState<Opportunity[] | null>(null);
   const [users, setUsers] = useState<User[]>([]);
-  const [filterOwners, setFilterOwners] = useState<string[]>([]);
-  const [filterMinAmount, setFilterMinAmount] = useState<string>('');
-  const [filterMaxAmount, setFilterMaxAmount] = useState<string>('');
-  const [filterDateFrom, setFilterDateFrom] = useState<string>('');
-  const [filterDateTo, setFilterDateTo] = useState<string>('');
-  const [filterNoCloseDate, setFilterNoCloseDate] = useState<boolean>(false);
-  const [filterCreatedFrom, setFilterCreatedFrom] = useState<string>('');
-  const [filterCreatedTo, setFilterCreatedTo] = useState<string>('');
-  const [filterTags, setFilterTags] = useState<string[]>([]);
-  const [filterStages, setFilterStages] = useState<string[]>([]);
+  const [filterOwners, setFilterOwners] = usePersistedFilters<string[]>('opportunities.filterOwners', []);
+  const [filterMinAmount, setFilterMinAmount] = usePersistedFilters<string>('opportunities.filterMinAmount', '');
+  const [filterMaxAmount, setFilterMaxAmount] = usePersistedFilters<string>('opportunities.filterMaxAmount', '');
+  const [filterDateFrom, setFilterDateFrom] = usePersistedFilters<string>('opportunities.filterDateFrom', '');
+  const [filterDateTo, setFilterDateTo] = usePersistedFilters<string>('opportunities.filterDateTo', '');
+  const [filterNoCloseDate, setFilterNoCloseDate] = usePersistedFilters<boolean>('opportunities.filterNoCloseDate', false);
+  const [filterCreatedFrom, setFilterCreatedFrom] = usePersistedFilters<string>('opportunities.filterCreatedFrom', '');
+  const [filterCreatedTo, setFilterCreatedTo] = usePersistedFilters<string>('opportunities.filterCreatedTo', '');
+  const [filterTags, setFilterTags] = usePersistedFilters<string[]>('opportunities.filterTags', []);
+  const [filterStages, setFilterStages] = usePersistedFilters<string[]>('opportunities.filterStages', []);
   const [showFilters, setShowFilters] = useState(false);
   
   // Tags state
@@ -141,7 +142,7 @@ export default function OpportunitiesKanban() {
   const [tagsByOpportunity, setTagsByOpportunity] = useState<Record<string, Tag[]>>({});
   
   // View mode state
-  const [viewMode, setViewMode] = useState<'kanban' | 'list'>('kanban');
+  const [viewMode, setViewMode] = usePersistedFilters<'kanban' | 'list'>('opportunities.viewMode', 'kanban');
   
   // Kanban pagination states
   const CARDS_PER_STAGE = 50;
