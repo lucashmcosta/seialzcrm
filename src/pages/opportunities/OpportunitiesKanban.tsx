@@ -159,10 +159,10 @@ export default function OpportunitiesKanban() {
   const [currentPage, setCurrentPage] = useState(1);
   const [itemsPerPage, setItemsPerPage] = usePersistedFilters<number>('opportunities.itemsPerPage', 25);
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
-  const [sortDescriptor, setSortDescriptor] = useState<SortDescriptor>({
-    column: 'title',
-    direction: 'ascending',
-  });
+  const [sortDescriptor, setSortDescriptor] = usePersistedFilters<SortDescriptor>(
+    'opportunities.sort',
+    { column: 'title', direction: 'ascending' },
+  );
   const [visibleColumns, setVisibleColumns] = useState<string[]>(defaultVisibleColumns);
 
   useEffect(() => {
