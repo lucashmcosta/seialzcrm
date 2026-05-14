@@ -171,11 +171,18 @@ export const TableCheckboxHeader = ({
 }: TableCheckboxHeaderProps) => {
   return (
     <Column isRowHeader className="w-12">
-      <Checkbox
-        aria-label="Selecionar todos"
-        checked={isIndeterminate ? "indeterminate" : isSelected}
-        onCheckedChange={onChange}
-      />
+      <div
+        onPointerDown={(e) => e.stopPropagation()}
+        onPointerUp={(e) => e.stopPropagation()}
+        onClick={(e) => e.stopPropagation()}
+        className="inline-flex"
+      >
+        <Checkbox
+          aria-label="Selecionar todos"
+          checked={isIndeterminate ? "indeterminate" : isSelected}
+          onCheckedChange={onChange}
+        />
+      </div>
     </Column>
   );
 };
@@ -191,11 +198,18 @@ export const TableCheckboxCell = ({
 }: TableCheckboxCellProps) => {
   return (
     <Cell className="w-12">
-      <Checkbox
-        aria-label="Selecionar linha"
-        checked={isSelected}
-        onCheckedChange={onChange}
-      />
+      <div
+        onPointerDown={(e) => e.stopPropagation()}
+        onPointerUp={(e) => e.stopPropagation()}
+        onClick={(e) => e.stopPropagation()}
+        className="inline-flex"
+      >
+        <Checkbox
+          aria-label="Selecionar linha"
+          checked={isSelected}
+          onCheckedChange={onChange}
+        />
+      </div>
     </Cell>
   );
 };
