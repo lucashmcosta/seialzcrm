@@ -116,11 +116,13 @@ export default function ContactsList() {
   const [users, setUsers] = useState<{ id: string; full_name: string }[]>([]);
   
   // Filters state (persisted per user/org)
-  const [ownerFilter, setOwnerFilter] = usePersistedFilters<string>('contacts.ownerFilter', 'all');
-  const [stageFilter, setStageFilter] = usePersistedFilters<string>('contacts.stageFilter', 'all');
-  const [createdFromFilter, setCreatedFromFilter] = usePersistedFilters<string>('contacts.createdFromFilter', '');
-  const [createdToFilter, setCreatedToFilter] = usePersistedFilters<string>('contacts.createdToFilter', '');
+  const [ownerFilter, setOwnerFilter, , ownerHydrated] = usePersistedFilters<string>('contacts.ownerFilter', 'all');
+  const [stageFilter, setStageFilter, , stageHydrated] = usePersistedFilters<string>('contacts.stageFilter', 'all');
+  const [createdFromFilter, setCreatedFromFilter, , fromHydrated] = usePersistedFilters<string>('contacts.createdFromFilter', '');
+  const [createdToFilter, setCreatedToFilter, , toHydrated] = usePersistedFilters<string>('contacts.createdToFilter', '');
   const [showFilters, setShowFilters] = useState(false);
+
+  const filtersHydrated = ownerHydrated && stageHydrated && fromHydrated && toHydrated;
 
   const activeFiltersCount = [
     ownerFilter !== 'all',
@@ -139,7 +141,7 @@ export default function ContactsList() {
   // Pagination state
   const [currentPage, setCurrentPage] = useState(1);
   const [totalCount, setTotalCount] = useState(0);
-  const [itemsPerPage, setItemsPerPage] = usePersistedFilters<number>('contacts.itemsPerPage', DEFAULT_ITEMS_PER_PAGE);
+  const [itemsPerPage, setItemsPerPage, , itemsPerPageHydrated] = usePersistedFilters<number>('contacts.itemsPerPage', DEFAULT_ITEMS_PER_PAGE);
 
   // Mobile infinite scroll state
   const [mobileContacts, setMobileContacts] = useState<Contact[]>([]);
@@ -149,7 +151,7 @@ export default function ContactsList() {
   const [selectAllMode, setSelectAllMode] = useState<'page' | 'all' | 'none'>('none');
   
   // Sorting state (persisted)
-  const [sortDescriptor, setSortDescriptor] = usePersistedFilters<SortDescriptor>(
+  const [sortDescriptor, setSortDescriptor, , sortHydrated] = usePersistedFilters<SortDescriptor>(
     'contacts.sort',
     { column: 'created_at', direction: 'descending' },
   );
