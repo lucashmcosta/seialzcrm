@@ -80,7 +80,7 @@ export function usePersistedFilters<T>(
  * usePersistedFilters. Aceita valor direto ou updater functional.
  */
 export function fieldSetter<T, K extends keyof T>(
-  setAll: React.Dispatch<React.SetStateAction<T>>,
+  setAll: Dispatch<SetStateAction<T>>,
   key: K,
 ) {
   return (v: T[K] | ((prev: T[K]) => T[K])) =>
