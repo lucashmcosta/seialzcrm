@@ -11,7 +11,6 @@ import {
 import { DotsThreeVertical, ArrowUp, ArrowDown, CaretUpDown, Minus } from "@phosphor-icons/react";
 import { cn } from "@/lib/utils";
 import { Card } from "@/components/ui/card";
-import { Checkbox } from "@/components/ui/checkbox";
 import {
   DropdownMenu,
   DropdownMenuContent,
