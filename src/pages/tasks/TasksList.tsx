@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react';
+import { usePersistedFilters } from '@/hooks/usePersistedFilters';
 import { Layout } from '@/components/Layout';
 import { Skeleton } from '@/components/ui/skeleton';
 import { useOrganization } from '@/hooks/useOrganization';
@@ -48,9 +49,9 @@ export default function TasksList() {
   const [tasks, setTasks] = useState<Task[]>([]);
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
-  const [statusFilter, setStatusFilter] = useState('all');
-  const [priorityFilter, setPriorityFilter] = useState('all');
-  const [assignedFilter, setAssignedFilter] = useState('all');
+  const [statusFilter, setStatusFilter] = usePersistedFilters<string>('tasks.statusFilter', 'all');
+  const [priorityFilter, setPriorityFilter] = usePersistedFilters<string>('tasks.priorityFilter', 'all');
+  const [assignedFilter, setAssignedFilter] = usePersistedFilters<string>('tasks.assignedFilter', 'all');
   const [users, setUsers] = useState<{ id: string; full_name: string }[]>([]);
 
   // Dialogs
