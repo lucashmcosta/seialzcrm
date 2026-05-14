@@ -188,13 +188,13 @@ export default function ContactsList() {
       setMobileContacts([]);
       setCurrentPage(1);
     }
-  }, [searchTerm, ownerFilter, stageFilter, createdFromFilter, createdToFilter]);
+  }, [debouncedSearch, ownerFilter, stageFilter, createdFromFilter, createdToFilter]);
 
   useEffect(() => {
     if (!organization) return;
     fetchContacts();
     fetchUsers();
-  }, [organization, currentPage, itemsPerPage, searchTerm, ownerFilter, stageFilter, createdFromFilter, createdToFilter]);
+  }, [organization, currentPage, itemsPerPage, debouncedSearch, ownerFilter, stageFilter, createdFromFilter, createdToFilter]);
 
   const mobileHasMore = mobileContacts.length < totalCount;
 
