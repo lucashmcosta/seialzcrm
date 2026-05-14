@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef, Fragment } from 'react';
+import { usePersistedFilters } from '@/hooks/usePersistedFilters';
 import { Link } from 'react-router-dom';
 import { useIsMobile } from '@/hooks/use-mobile';
 import { MobileMessagesList } from '@/components/mobile/MobileMessagesList';
@@ -250,7 +251,7 @@ function DesktopMessagesList() {
   const [isIn24hWindow, setIsIn24hWindow] = useState(false);
   const [showTemplates, setShowTemplates] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
-  const [filter, setFilter] = useState<ThreadFilter>('all_open');
+  const [filter, setFilter] = usePersistedFilters<ThreadFilter>('messages.filter', 'all_open');
   
   // Media preview state
   const [previewFile, setPreviewFile] = useState<File | null>(null);
