@@ -91,10 +91,10 @@ export default function ReportsPage() {
   }, [organization?.id]);
 
   useEffect(() => {
-    if (!organization) return;
+    if (!organization || !filtersHydrated) return;
     fetchData();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [organization?.id, rangeKey, ownerId]);
+  }, [organization?.id, filtersHydrated, rangeKey, ownerId]);
 
   async function fetchUsersAndStages() {
     if (!organization) return;
