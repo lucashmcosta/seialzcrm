@@ -1,35 +1,70 @@
 ## Problema
 
-Os filtros (Contatos, Oportunidades, Tarefas, Mensagens, Relatórios, Marketing) somem ao sair e voltar para a tela, mesmo com o `usePersistedFilters` em vigor.
+O badge "Filtros 1" persiste corretamente (o `ownerFilter = Lucas Costa` foi restaurado), mas a lista mostra TODOS os contatos em vez de só o 1 do Lucas.
 
-## Causa raiz
+## Causa raiz: race condition entre hidratação e fetch
 
-No hook `src/hooks/usePersistedFilters.ts`, dois `useEffect` dependem de `[storageKey, ready]`:
+Quando a tela monta e a organização termina de carregar (`ready` passa a `true`), no MESMO commit:
 
-1. **Hidratação**: lê `localStorage` e chama `setValue(valorSalvo)`.
-2. **Persistência**: grava `JSON.stringify(value)` em `localStorage`.
+1. `usePersistedFilters` (hidratação) chama `setOwnerFilter('lucas-id')` — mas `setState` só vale no próximo render.
+2. O `useEffect` de `fetchContacts` também dispara (deps incluem `organization`), executando a query com `ownerFilter='all'` (valor atual do render). Resultado: busca TODOS os contatos.
+3. Re-render com `ownerFilter='lucas-id'` → o `useEffect` de fetch refaz a query com o filtro correto.
 
-Quando a organização termina de carregar (`ready` passa de `false` para `true`), os dois efeitos rodam no mesmo commit. O `setValue` do efeito 1 é assíncrono — só vale no próximo render. Então o efeito 2 roda com `value` ainda igual ao default (`'all'`, `''`, etc.) e sobrescreve a chave do localStorage com o default, apagando o que o usuário tinha salvo. Por isso o filtro "Lucas Costa" some ao reabrir Contatos.
+Os dois fetches ficam em flight. Como nenhum tem cancelamento/sequência, o resultado do **primeiro** fetch (lista completa, mais dados, demora mais) chega depois do segundo e sobrescreve via `setContacts(...)`. UI fica com todos os contatos, badge mostra 1 — exatamente o que o usuário viu.
 
 ## Correção
 
-Adicionar um `skipNextSaveRef` no hook que sinaliza ao efeito de persistência para ignorar o primeiro disparo logo após a hidratação:
+Resolver o race no nível certo: garantir que o `fetchContacts` só rode depois que os filtros estiverem hidratados. Duas peças:
 
-- Na hidratação: marca `skipNextSaveRef.current = true` antes do `setValue`.
-- Na persistência: se `skipNextSaveRef.current` estiver `true`, limpa a flag e sai sem gravar. Nos disparos seguintes (quando o `value` muda de fato), grava normalmente.
+### 1. `usePersistedFilters` expõe estado de hidratação
 
-Também tratar troca de organização: ao mudar `storageKey`, re-hidratar e re-armar a flag (mesma lógica, já coberta pela checagem `hydratedKeyRef.current !== storageKey`).
+Adicionar um terceiro retorno `hydrated: boolean` (ou retornar via tupla estendida) que vira `true` somente após o `setValue` da hidratação ter sido aplicado no render.
+
+```ts
+const [value, setValue, reset, hydrated] = usePersistedFilters(...)
+```
+
+Implementação: usar `useState<boolean>(!ready)` para `hydrated` e setar `true` no MESMO `setValue` da hidratação (ou no efeito após). Quando `ready=false` ainda, `hydrated=false`. Isso evita quebrar consumidores existentes — quem não usar o 4º item continua funcionando.
+
+### 2. Páginas com fetch dependente esperam a hidratação
+
+Em `ContactsList.tsx` (e demais telas que disparam fetch baseado em filtros persistidos), criar um único flag agregado:
+
+```ts
+const filtersHydrated = ownerHydrated && stageHydrated && createdFromHydrated && createdToHydrated;
+useEffect(() => {
+  if (!organization || !filtersHydrated) return;
+  fetchContacts();
+}, [organization, filtersHydrated, currentPage, itemsPerPage, debouncedSearch, ownerFilter, stageFilter, createdFromFilter, createdToFilter]);
+```
+
+Aplicar o mesmo padrão (`!filtersHydrated → return`) nas demais telas que carregam dados via filtros persistidos:
+
+- `src/pages/opportunities/OpportunitiesKanban.tsx`
+- `src/pages/tasks/TasksList.tsx`
+- `src/pages/messages/MessagesList.tsx`
+- `src/pages/reports/ReportsPage.tsx`
+- `src/pages/marketing/*` (via `useMarketingPeriod` — exportar `hydrated` do hook também)
+
+## Por que não resolver só com `await` ou debounce
+
+- Debounce mascara o problema mas não elimina (em rede lenta, o "all" ainda pode ganhar).
+- Cancelamento de request via `AbortController` funcionaria mas exige mexer em todos os fetches; o flag de hidratação é mais simples e cobre o caso real.
 
 ## Arquivos alterados
 
-- `src/hooks/usePersistedFilters.ts` — adicionar `skipNextSaveRef` e proteger o efeito de persistência.
-
-Nenhuma página precisa mudar — o fix é local ao hook e cobre todas as 6 telas (Contatos, Oportunidades, Tarefas, Mensagens, Relatórios, Marketing).
+- `src/hooks/usePersistedFilters.ts` — retornar `hydrated` como 4º item da tupla.
+- `src/pages/marketing/_hooks/useMarketingPeriod.ts` — propagar `hydrated`.
+- `src/pages/contacts/ContactsList.tsx` — gate em `filtersHydrated` no `useEffect` de fetch.
+- `src/pages/opportunities/OpportunitiesKanban.tsx` — idem.
+- `src/pages/tasks/TasksList.tsx` — idem.
+- `src/pages/messages/MessagesList.tsx` — idem.
+- `src/pages/reports/ReportsPage.tsx` — idem.
+- `src/pages/marketing/index.tsx`, `ads/index.tsx`, `funnel.tsx`, `timeline.tsx` — gate nos hooks de dados que dependem de período.
 
 ## Verificação
 
-1. Abrir `/contacts`, selecionar dono "Lucas Costa", sair para `/opportunities`, voltar para `/contacts` → filtro continua "Lucas Costa".
-2. Recarregar (F5) → filtro permanece.
-3. Clicar "Limpar filtros" → estado e localStorage zerados.
-4. Repetir nas outras telas (Oportunidades/Kanban, Tarefas, Mensagens, Relatórios, Marketing).
-5. Inspecionar `localStorage` no DevTools: chaves `seialz:filters:v1:{userId}:{orgId}:{scope}` mantêm o último valor escolhido entre navegações.
+1. Aplicar filtro "Lucas Costa" em `/contacts`, sair, voltar → badge mostra 1 E a lista mostra apenas o cliente do Lucas (1 linha).
+2. F5 com filtro aplicado → mesmo resultado, sem flash de "todos os contatos".
+3. Abrir DevTools → Network: ao voltar para a tela, deve haver exatamente UMA request de contatos (não duas).
+4. Repetir cenário em Oportunidades, Tarefas, Mensagens, Relatórios, Marketing.
