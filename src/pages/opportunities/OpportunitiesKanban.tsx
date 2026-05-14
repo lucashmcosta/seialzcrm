@@ -157,7 +157,7 @@ export default function OpportunitiesKanban() {
 
   // Table view states
   const [currentPage, setCurrentPage] = useState(1);
-  const [itemsPerPage, setItemsPerPage] = useState(25);
+  const [itemsPerPage, setItemsPerPage] = usePersistedFilters<number>('opportunities.itemsPerPage', 25);
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
   const [sortDescriptor, setSortDescriptor] = useState<SortDescriptor>({
     column: 'title',
