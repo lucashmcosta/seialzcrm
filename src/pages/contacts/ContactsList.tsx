@@ -239,8 +239,8 @@ export default function ContactsList() {
       .is('deleted_at', null);
     
     // Apply filters
-    if (searchTerm) {
-      query = query.or(`full_name.ilike.%${searchTerm}%,email.ilike.%${searchTerm}%,phone.ilike.%${searchTerm}%`);
+    if (debouncedSearch) {
+      query = applySearchFilters(query, debouncedSearch);
     }
     if (ownerFilter !== 'all') {
       query = query.eq('owner_user_id', ownerFilter);
