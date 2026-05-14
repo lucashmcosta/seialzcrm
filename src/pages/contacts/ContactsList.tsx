@@ -195,9 +195,10 @@ export default function ContactsList() {
 
   useEffect(() => {
     if (!organization) return;
+    if (!filtersHydrated || !itemsPerPageHydrated || !sortHydrated) return;
     fetchContacts();
     fetchUsers();
-  }, [organization, currentPage, itemsPerPage, debouncedSearch, ownerFilter, stageFilter, createdFromFilter, createdToFilter]);
+  }, [organization, filtersHydrated, itemsPerPageHydrated, sortHydrated, currentPage, itemsPerPage, debouncedSearch, ownerFilter, stageFilter, createdFromFilter, createdToFilter]);
 
   const mobileHasMore = mobileContacts.length < totalCount;
 
