@@ -479,12 +479,20 @@ serve(async (req) => {
           templateVariables[k] = replaceTokens(String(v ?? ""));
         }
 
+        // Fetch service_role JWT from Vault — env var may not be a valid JWT after key rotation
+        const { data: internalToken, error: tokenErr } = await admin.rpc(
+          "get_internal_function_auth_token",
+        );
+        if (tokenErr || !internalToken) {
+          console.warn("[auto-wa] no internal token", tokenErr);
+          throw new Error("Internal auth token unavailable");
+        }
         const sendUrl = `${Deno.env.get("SUPABASE_URL")}/functions/v1/twilio-whatsapp-send`;
         const sendRes = await fetch(sendUrl, {
           method: "POST",
           headers: {
             "Content-Type": "application/json",
-            Authorization: `Bearer ${Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")}`,
+            Authorization: `Bearer ${internalToken}`,
           },
           body: JSON.stringify({
             organizationId: organization_id,
