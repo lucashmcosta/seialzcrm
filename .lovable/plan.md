@@ -1,70 +1,29 @@
-## Problema
+## Causa raiz
 
-O badge "Filtros 1" persiste corretamente (o `ownerFilter = Lucas Costa` foi restaurado), mas a lista mostra TODOS os contatos em vez de só o 1 do Lucas.
+Os logs da edge `meta-lead-ads-process-lead` mostram erro `23505` (unique violation em `uniq_contacts_org_phone_normalized`) para 2 leads recentes do CT FORM. A função aborta no `INSERT` do contato e nunca chega no bloco de envio do template WhatsApp.
 
-## Causa raiz: race condition entre hidratação e fetch
+A dedup atual depende de `organizations.duplicate_check_mode`. Quando está `none` (ou `email`), o telefone não é checado, mas o banco tem unique constraint em `phone_normalized` — então o insert falha.
 
-Quando a tela monta e a organização termina de carregar (`ready` passa a `true`), no MESMO commit:
+## Correção (mínima e cirúrgica)
 
-1. `usePersistedFilters` (hidratação) chama `setOwnerFilter('lucas-id')` — mas `setState` só vale no próximo render.
-2. O `useEffect` de `fetchContacts` também dispara (deps incluem `organization`), executando a query com `ownerFilter='all'` (valor atual do render). Resultado: busca TODOS os contatos.
-3. Re-render com `ownerFilter='lucas-id'` → o `useEffect` de fetch refaz a query com o filtro correto.
+**Arquivo:** `supabase/functions/meta-lead-ads-process-lead/index.ts`
 
-Os dois fetches ficam em flight. Como nenhum tem cancelamento/sequência, o resultado do **primeiro** fetch (lista completa, mais dados, demora mais) chega depois do segundo e sobrescreve via `setContacts(...)`. UI fica com todos os contatos, badge mostra 1 — exatamente o que o usuário viu.
+1. **Fallback de dedup por telefone** — antes do `INSERT` do contato, se ainda não temos `existingId` e há `phone`, fazer um lookup adicional por `phone` (mesma org, `deleted_at is null`). Se achar, tratar como contato existente (mesmo caminho do `existingId`). Isso evita o 23505 e mantém o comportamento esperado: contato duplicado → não dispara template (já existia).
 
-## Correção
+2. **Tratamento defensivo do 23505** — envolver o `INSERT` num try/catch que, em caso de `code === '23505'`, refaz o `select` por `(organization_id, phone)` e segue com o `contactId` recuperado (sem disparar template, pois não é "primeiro contato"). Garante que mesmo race conditions não derrubem a função.
 
-Resolver o race no nível certo: garantir que o `fetchContacts` só rode depois que os filtros estiverem hidratados. Duas peças:
+3. **2 logs de observabilidade** no bloco de auto-WhatsApp:
+   - `console.log("[auto-wa] eval", { isNew: !existingId, hasPhone: !!phone, autoSend: settings?.auto_send_whatsapp, tplId: settings?.whatsapp_template_id })`
+   - Log do status da resposta do `twilio-whatsapp-send`.
 
-### 1. `usePersistedFilters` expõe estado de hidratação
+## O que NÃO muda
 
-Adicionar um terceiro retorno `hydrated: boolean` (ou retornar via tupla estendida) que vira `true` somente após o `setValue` da hidratação ter sido aplicado no render.
+- Nenhuma alteração na lógica de mapeamento, owner, oportunidade, tags, custom fields, activity ou name confirmation.
+- Nenhuma migration. A constraint do banco continua válida (é correta — protege duplicados).
+- Settings, payload e contrato da função permanecem idênticos.
 
-```ts
-const [value, setValue, reset, hydrated] = usePersistedFilters(...)
-```
+## Validação pós-deploy
 
-Implementação: usar `useState<boolean>(!ready)` para `hydrated` e setar `true` no MESMO `setValue` da hidratação (ou no efeito após). Quando `ready=false` ainda, `hydrated=false`. Isso evita quebrar consumidores existentes — quem não usar o 4º item continua funcionando.
-
-### 2. Páginas com fetch dependente esperam a hidratação
-
-Em `ContactsList.tsx` (e demais telas que disparam fetch baseado em filtros persistidos), criar um único flag agregado:
-
-```ts
-const filtersHydrated = ownerHydrated && stageHydrated && createdFromHydrated && createdToHydrated;
-useEffect(() => {
-  if (!organization || !filtersHydrated) return;
-  fetchContacts();
-}, [organization, filtersHydrated, currentPage, itemsPerPage, debouncedSearch, ownerFilter, stageFilter, createdFromFilter, createdToFilter]);
-```
-
-Aplicar o mesmo padrão (`!filtersHydrated → return`) nas demais telas que carregam dados via filtros persistidos:
-
-- `src/pages/opportunities/OpportunitiesKanban.tsx`
-- `src/pages/tasks/TasksList.tsx`
-- `src/pages/messages/MessagesList.tsx`
-- `src/pages/reports/ReportsPage.tsx`
-- `src/pages/marketing/*` (via `useMarketingPeriod` — exportar `hydrated` do hook também)
-
-## Por que não resolver só com `await` ou debounce
-
-- Debounce mascara o problema mas não elimina (em rede lenta, o "all" ainda pode ganhar).
-- Cancelamento de request via `AbortController` funcionaria mas exige mexer em todos os fetches; o flag de hidratação é mais simples e cobre o caso real.
-
-## Arquivos alterados
-
-- `src/hooks/usePersistedFilters.ts` — retornar `hydrated` como 4º item da tupla.
-- `src/pages/marketing/_hooks/useMarketingPeriod.ts` — propagar `hydrated`.
-- `src/pages/contacts/ContactsList.tsx` — gate em `filtersHydrated` no `useEffect` de fetch.
-- `src/pages/opportunities/OpportunitiesKanban.tsx` — idem.
-- `src/pages/tasks/TasksList.tsx` — idem.
-- `src/pages/messages/MessagesList.tsx` — idem.
-- `src/pages/reports/ReportsPage.tsx` — idem.
-- `src/pages/marketing/index.tsx`, `ads/index.tsx`, `funnel.tsx`, `timeline.tsx` — gate nos hooks de dados que dependem de período.
-
-## Verificação
-
-1. Aplicar filtro "Lucas Costa" em `/contacts`, sair, voltar → badge mostra 1 E a lista mostra apenas o cliente do Lucas (1 linha).
-2. F5 com filtro aplicado → mesmo resultado, sem flash de "todos os contatos".
-3. Abrir DevTools → Network: ao voltar para a tela, deve haver exatamente UMA request de contatos (não duas).
-4. Repetir cenário em Oportunidades, Tarefas, Mensagens, Relatórios, Marketing.
+- Próximo lead novo do CT FORM (telefone inédito): deve criar contato + disparar template; log `[auto-wa] eval` deve mostrar `isNew: true`.
+- Próximo lead com telefone já existente: deve atualizar contato, **não** disparar template, sem 500.
+- Conferir `messages` com `sender_name = "Meta Lead Ads (auto)"` e logs da `twilio-whatsapp-send`.

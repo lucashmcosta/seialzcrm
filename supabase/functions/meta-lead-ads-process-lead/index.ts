@@ -183,6 +183,19 @@ serve(async (req) => {
       }
     }
 
+    // Safety net: DB has UNIQUE (organization_id, phone_normalized).
+    // Even if dupMode doesn't include phone, we must look it up to avoid 23505.
+    if (!existingId && phone) {
+      const { data: byPhone } = await admin
+        .from("contacts")
+        .select("id")
+        .eq("organization_id", organization_id)
+        .eq("phone", phone)
+        .is("deleted_at", null)
+        .maybeSingle();
+      if (byPhone?.id) existingId = byPhone.id;
+    }
+
     // Owner: settings.default_owner_user_id → round_robin → null
     let ownerId: string | null = settings?.default_owner_user_id ?? null;
     if (!ownerId && settings?.use_round_robin !== false) {
