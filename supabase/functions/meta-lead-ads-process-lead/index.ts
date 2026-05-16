@@ -497,10 +497,12 @@ serve(async (req) => {
         });
         if (!sendRes.ok) {
           const errBody = await sendRes.text();
-          console.warn("auto WhatsApp send failed", sendRes.status, errBody);
+          console.warn("[auto-wa] send failed", sendRes.status, errBody);
+        } else {
+          console.log("[auto-wa] send ok", sendRes.status);
         }
       } catch (waErr) {
-        console.warn("auto WhatsApp send error", waErr);
+        console.warn("[auto-wa] send error", waErr);
       }
     }
 
