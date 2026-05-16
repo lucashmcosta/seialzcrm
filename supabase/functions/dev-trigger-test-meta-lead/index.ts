@@ -26,12 +26,23 @@ serve(async (req) => {
       ],
     };
 
+    const admin = createClient(
+      Deno.env.get("SUPABASE_URL")!,
+      Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!,
+    );
+    const { data: token, error: tokenErr } = await admin.rpc("get_internal_function_auth_token");
+    if (tokenErr || !token) {
+      return new Response(JSON.stringify({ error: "no token", details: tokenErr }), {
+        status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
+
     const url = `${Deno.env.get("SUPABASE_URL")}/functions/v1/meta-lead-ads-process-lead`;
     const r = await fetch(url, {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
-        Authorization: `Bearer ${Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")}`,
+        Authorization: `Bearer ${token}`,
       },
       body: JSON.stringify({
         lead,
