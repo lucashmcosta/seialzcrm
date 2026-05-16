@@ -183,6 +183,19 @@ serve(async (req) => {
       }
     }
 
+    // Safety net: DB has UNIQUE (organization_id, phone_normalized).
+    // Even if dupMode doesn't include phone, we must look it up to avoid 23505.
+    if (!existingId && phone) {
+      const { data: byPhone } = await admin
+        .from("contacts")
+        .select("id")
+        .eq("organization_id", organization_id)
+        .eq("phone", phone)
+        .is("deleted_at", null)
+        .maybeSingle();
+      if (byPhone?.id) existingId = byPhone.id;
+    }
+
     // Owner: settings.default_owner_user_id → round_robin → null
     let ownerId: string | null = settings?.default_owner_user_id ?? null;
     if (!ownerId && settings?.use_round_robin !== false) {
@@ -227,9 +240,27 @@ serve(async (req) => {
           created_at: lead.created_time || new Date().toISOString(),
         })
         .select("id")
-        .single();
-      if (insErr) throw insErr;
-      contactId = ins.id;
+        .maybeSingle();
+      if (insErr) {
+        // Race condition or stale dedup state: another path inserted this contact.
+        if ((insErr as any).code === "23505" && phone) {
+          console.warn("[meta-lead-ads] 23505 on insert, recovering by phone lookup", phone);
+          const { data: recovered } = await admin
+            .from("contacts")
+            .select("id")
+            .eq("organization_id", organization_id)
+            .eq("phone", phone)
+            .is("deleted_at", null)
+            .maybeSingle();
+          if (!recovered?.id) throw insErr;
+          contactId = recovered.id;
+          existingId = recovered.id; // mark as existing → skip auto-WA template
+        } else {
+          throw insErr;
+        }
+      } else {
+        contactId = ins!.id;
+      }
     }
 
     // Contact custom field values
@@ -418,6 +449,12 @@ serve(async (req) => {
     }
 
     // Auto-send WhatsApp template (only on first contact creation, when phone is present)
+    console.log("[auto-wa] eval", {
+      isNew: !existingId,
+      hasPhone: !!phone,
+      autoSend: settings?.auto_send_whatsapp,
+      tplId: settings?.whatsapp_template_id ?? null,
+    });
     if (
       !existingId &&
       phone &&
@@ -460,10 +497,12 @@ serve(async (req) => {
         });
         if (!sendRes.ok) {
           const errBody = await sendRes.text();
-          console.warn("auto WhatsApp send failed", sendRes.status, errBody);
+          console.warn("[auto-wa] send failed", sendRes.status, errBody);
+        } else {
+          console.log("[auto-wa] send ok", sendRes.status);
         }
       } catch (waErr) {
-        console.warn("auto WhatsApp send error", waErr);
+        console.warn("[auto-wa] send error", waErr);
       }
     }
 
