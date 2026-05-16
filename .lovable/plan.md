@@ -1,29 +1,36 @@
-## Causa raiz
+## Objetivo
+Fazer com que o clique em **Salvar configurações** realmente persista `auto_send_whatsapp` e `whatsapp_template_id` na `organization_integrations`, para que o fluxo do Meta Lead Ads volte a disparar o template automático.
 
-Os logs da edge `meta-lead-ads-process-lead` mostram erro `23505` (unique violation em `uniq_contacts_org_phone_normalized`) para 2 leads recentes do CT FORM. A função aborta no `INSERT` do contato e nunca chega no bloco de envio do template WhatsApp.
+## O que vou implementar
+1. **Corrigir o save do SettingsCard**
+   - Revisar `src/components/integrations/meta-lead-ads/SettingsCard.tsx` para garantir que o update esteja sendo feito na linha correta e com o payload correto.
+   - Endurecer a mutação para não tratar como sucesso um update que não alterou nada.
+   - Fazer o save retornar a linha atualizada e validar explicitamente que `config_values.meta_lead_ads_settings` ficou persistido.
 
-A dedup atual depende de `organizations.duplicate_check_mode`. Quando está `none` (ou `email`), o telefone não é checado, mas o banco tem unique constraint em `phone_normalized` — então o insert falha.
+2. **Eliminar estado visual enganoso no modal**
+   - Ajustar o fluxo entre `IntegrationsSettings.tsx` e `MetaLeadAdsDialog.tsx` para que o modal sempre trabalhe com dados frescos.
+   - Corrigir a sincronização do estado local do formulário para reagir a mudanças reais em `config_values`, não só ao `id` da integração.
+   - Invalidar/refetch das queries certas após salvar para evitar a UI mostrar “ON” quando o banco ainda está “OFF”.
 
-## Correção (mínima e cirúrgica)
+3. **Validar o fluxo ponta a ponta**
+   - Confirmar no banco que `auto_send_whatsapp` virou `true` e que o `whatsapp_template_id` ficou salvo.
+   - Verificar os logs de `meta-lead-ads-process-lead` para confirmar que o eval passou a mostrar `autoSend: true`.
+   - Fazer um novo teste de lead e conferir se `twilio-whatsapp-send` é invocada.
 
-**Arquivo:** `supabase/functions/meta-lead-ads-process-lead/index.ts`
+## Evidência já confirmada
+- A linha atual da org `b246ef6f-6242-4011-a112-6d8783d2896a` continua salva no banco com:
+  - `auto_send_whatsapp: false`
+  - sem `whatsapp_template_id`
+  - `updated_at` antigo (`2026-05-07`)
+- Os logs recentes de `meta-lead-ads-process-lead` ainda mostram:
+  - `autoSend: false`
+  - `tplId: null`
+- Ou seja: o problema agora está na **persistência/frontend**, não no disparo da edge function.
 
-1. **Fallback de dedup por telefone** — antes do `INSERT` do contato, se ainda não temos `existingId` e há `phone`, fazer um lookup adicional por `phone` (mesma org, `deleted_at is null`). Se achar, tratar como contato existente (mesmo caminho do `existingId`). Isso evita o 23505 e mantém o comportamento esperado: contato duplicado → não dispara template (já existia).
-
-2. **Tratamento defensivo do 23505** — envolver o `INSERT` num try/catch que, em caso de `code === '23505'`, refaz o `select` por `(organization_id, phone)` e segue com o `contactId` recuperado (sem disparar template, pois não é "primeiro contato"). Garante que mesmo race conditions não derrubem a função.
-
-3. **2 logs de observabilidade** no bloco de auto-WhatsApp:
-   - `console.log("[auto-wa] eval", { isNew: !existingId, hasPhone: !!phone, autoSend: settings?.auto_send_whatsapp, tplId: settings?.whatsapp_template_id })`
-   - Log do status da resposta do `twilio-whatsapp-send`.
-
-## O que NÃO muda
-
-- Nenhuma alteração na lógica de mapeamento, owner, oportunidade, tags, custom fields, activity ou name confirmation.
-- Nenhuma migration. A constraint do banco continua válida (é correta — protege duplicados).
-- Settings, payload e contrato da função permanecem idênticos.
-
-## Validação pós-deploy
-
-- Próximo lead novo do CT FORM (telefone inédito): deve criar contato + disparar template; log `[auto-wa] eval` deve mostrar `isNew: true`.
-- Próximo lead com telefone já existente: deve atualizar contato, **não** disparar template, sem 500.
-- Conferir `messages` com `sender_name = "Meta Lead Ads (auto)"` e logs da `twilio-whatsapp-send`.
+## Detalhes técnicos
+- Arquivos principais:
+  - `src/components/integrations/meta-lead-ads/SettingsCard.tsx`
+  - `src/components/integrations/meta-lead-ads/MetaLeadAdsDialog.tsx`
+  - `src/components/settings/IntegrationsSettings.tsx`
+- Não pretendo mexer no banco nem em migrations neste passo.
+- Só mexo no backend se, após corrigir o save, os logs ainda mostrarem configuração stale.
