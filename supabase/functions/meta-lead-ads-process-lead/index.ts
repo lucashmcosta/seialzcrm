@@ -449,6 +449,12 @@ serve(async (req) => {
     }
 
     // Auto-send WhatsApp template (only on first contact creation, when phone is present)
+    console.log("[auto-wa] eval", {
+      isNew: !existingId,
+      hasPhone: !!phone,
+      autoSend: settings?.auto_send_whatsapp,
+      tplId: settings?.whatsapp_template_id ?? null,
+    });
     if (
       !existingId &&
       phone &&
