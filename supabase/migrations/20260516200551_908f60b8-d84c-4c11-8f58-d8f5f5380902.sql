@@ -1,0 +1,1 @@
+DELETE FROM contacts WHERE id IN ('3bf70ce9-2ec3-4aae-bf02-ef38e30954f3','026b74d6-9b0e-421c-ab68-cf935c41534a');
