@@ -22,7 +22,7 @@ serve(async (req) => {
       ad_name: "Teste",
       field_data: [
         { name: "full_name", values: [full_name || "Teste Lovable"] },
-        { name: "phone_number", values: [phone] },
+        { name: "whatsapp_number", values: [phone] },
       ],
     };
 
