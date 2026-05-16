@@ -240,9 +240,27 @@ serve(async (req) => {
           created_at: lead.created_time || new Date().toISOString(),
         })
         .select("id")
-        .single();
-      if (insErr) throw insErr;
-      contactId = ins.id;
+        .maybeSingle();
+      if (insErr) {
+        // Race condition or stale dedup state: another path inserted this contact.
+        if ((insErr as any).code === "23505" && phone) {
+          console.warn("[meta-lead-ads] 23505 on insert, recovering by phone lookup", phone);
+          const { data: recovered } = await admin
+            .from("contacts")
+            .select("id")
+            .eq("organization_id", organization_id)
+            .eq("phone", phone)
+            .is("deleted_at", null)
+            .maybeSingle();
+          if (!recovered?.id) throw insErr;
+          contactId = recovered.id;
+          existingId = recovered.id; // mark as existing → skip auto-WA template
+        } else {
+          throw insErr;
+        }
+      } else {
+        contactId = ins!.id;
+      }
     }
 
     // Contact custom field values
