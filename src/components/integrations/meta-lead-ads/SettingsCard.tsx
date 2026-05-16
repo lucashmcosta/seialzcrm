@@ -1,5 +1,5 @@
 import { useState, useEffect, useMemo } from "react";
-import { useMutation, useQuery } from "@tanstack/react-query";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { Card } from "@/components/ui/card";
 import { Switch } from "@/components/ui/switch";
@@ -37,12 +37,17 @@ const AVAILABLE_TOKENS = [
 ];
 
 export function SettingsCard({ orgIntegration, onUpdated }: Props) {
+  const qc = useQueryClient();
   const initial = { ...DEFAULTS, ...((orgIntegration?.config_values as any)?.meta_lead_ads_settings || {}) };
   const [s, setS] = useState(initial);
 
+  // Re-sync when the underlying row changes (id OR persisted settings)
+  const persistedKey = JSON.stringify(
+    (orgIntegration?.config_values as any)?.meta_lead_ads_settings || {}
+  );
   useEffect(() => {
     setS({ ...DEFAULTS, ...((orgIntegration?.config_values as any)?.meta_lead_ads_settings || {}) });
-  }, [orgIntegration?.id]);
+  }, [orgIntegration?.id, persistedKey]);
 
   const { data: stages } = useQuery({
     queryKey: ["pipeline-stages", orgIntegration?.organization_id],
@@ -85,6 +90,9 @@ export function SettingsCard({ orgIntegration, onUpdated }: Props) {
 
   const save = useMutation({
     mutationFn: async () => {
+      if (!orgIntegration?.id) {
+        throw new Error("Integração não carregada. Recarregue a página.");
+      }
       if (s.auto_send_whatsapp && !s.whatsapp_template_id) {
         throw new Error("Selecione um template para o disparo automático.");
       }
@@ -92,17 +100,39 @@ export function SettingsCard({ orgIntegration, onUpdated }: Props) {
         ...(orgIntegration.config_values || {}),
         meta_lead_ads_settings: s,
       };
-      const { error } = await supabase
+      const { data, error } = await supabase
         .from("organization_integrations")
         .update({ config_values })
-        .eq("id", orgIntegration.id);
+        .eq("id", orgIntegration.id)
+        .select("id, config_values")
+        .maybeSingle();
+
       if (error) throw error;
+      if (!data) {
+        // RLS silently rejected — update returned 0 rows
+        throw new Error(
+          "Não foi possível salvar: você não tem permissão para alterar esta integração nesta organização."
+        );
+      }
+
+      const saved = (data.config_values as any)?.meta_lead_ads_settings || {};
+      if (
+        saved.auto_send_whatsapp !== s.auto_send_whatsapp ||
+        (saved.whatsapp_template_id ?? null) !== (s.whatsapp_template_id ?? null)
+      ) {
+        throw new Error(
+          "O banco confirmou o save, mas os valores não bateram. Tente novamente."
+        );
+      }
+      return data;
     },
     onSuccess: () => {
       toast.success("Configurações salvas");
+      qc.invalidateQueries({ queryKey: ["org-integration", "meta-lead-ads"] });
+      qc.invalidateQueries({ queryKey: ["organization-integrations"] });
       onUpdated();
     },
-    onError: (e: any) => toast.error(e.message),
+    onError: (e: any) => toast.error(e.message || "Erro ao salvar"),
   });
 
   const Row = ({ label, hint, children }: any) => (
