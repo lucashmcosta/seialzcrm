@@ -1,6 +1,7 @@
 // TEMPORARY test endpoint: forces a synthetic Meta lead through process-lead
 // Safe to delete after debug is done.
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
+import { createClient } from "jsr:@supabase/supabase-js@2";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
