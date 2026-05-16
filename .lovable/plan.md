@@ -1,36 +1,26 @@
-## Objetivo
-Fazer com que o clique em **Salvar configurações** realmente persista `auto_send_whatsapp` e `whatsapp_template_id` na `organization_integrations`, para que o fluxo do Meta Lead Ads volte a disparar o template automático.
+## Limpeza pós-teste do Meta Lead Ads → WhatsApp
 
-## O que vou implementar
-1. **Corrigir o save do SettingsCard**
-   - Revisar `src/components/integrations/meta-lead-ads/SettingsCard.tsx` para garantir que o update esteja sendo feito na linha correta e com o payload correto.
-   - Endurecer a mutação para não tratar como sucesso um update que não alterou nada.
-   - Fazer o save retornar a linha atualizada e validar explicitamente que `config_values.meta_lead_ads_settings` ficou persistido.
+### O que será removido
 
-2. **Eliminar estado visual enganoso no modal**
-   - Ajustar o fluxo entre `IntegrationsSettings.tsx` e `MetaLeadAdsDialog.tsx` para que o modal sempre trabalhe com dados frescos.
-   - Corrigir a sincronização do estado local do formulário para reagir a mudanças reais em `config_values`, não só ao `id` da integração.
-   - Invalidar/refetch das queries certas após salvar para evitar a UI mostrar “ON” quando o banco ainda está “OFF”.
+**1. Dados de teste em Central Trabalhista (org `40ae935c`)**
+Tudo ligado ao contato `Teste Lovable v3` (`+5511985658770`, id `d207964f`):
+- 1 contato
+- 1 oportunidade (`76f299f6` — a que você visualizou agora há pouco)
+- 1 thread de WhatsApp + mensagens enviadas (template "Viagi - Twilio API")
+- 4 atividades vinculadas
 
-3. **Validar o fluxo ponta a ponta**
-   - Confirmar no banco que `auto_send_whatsapp` virou `true` e que o `whatsapp_template_id` ficou salvo.
-   - Verificar os logs de `meta-lead-ads-process-lead` para confirmar que o eval passou a mostrar `autoSend: true`.
-   - Fazer um novo teste de lead e conferir se `twilio-whatsapp-send` é invocada.
+Ordem da exclusão (via insert tool com `DELETE`):
+1. `messages` da thread `5d9117b5`
+2. `message_threads` `5d9117b5`
+3. `activities` (4 ids)
+4. `opportunities` `76f299f6`
+5. `contacts` `d207964f`
 
-## Evidência já confirmada
-- A linha atual da org `b246ef6f-6242-4011-a112-6d8783d2896a` continua salva no banco com:
-  - `auto_send_whatsapp: false`
-  - sem `whatsapp_template_id`
-  - `updated_at` antigo (`2026-05-07`)
-- Os logs recentes de `meta-lead-ads-process-lead` ainda mostram:
-  - `autoSend: false`
-  - `tplId: null`
-- Ou seja: o problema agora está na **persistência/frontend**, não no disparo da edge function.
+**2. Edge function de teste**
+- Apagar `supabase/functions/dev-trigger-test-meta-lead/` do código
+- Chamar `supabase--delete_edge_functions(["dev-trigger-test-meta-lead"])` para remover o deploy
 
-## Detalhes técnicos
-- Arquivos principais:
-  - `src/components/integrations/meta-lead-ads/SettingsCard.tsx`
-  - `src/components/integrations/meta-lead-ads/MetaLeadAdsDialog.tsx`
-  - `src/components/settings/IntegrationsSettings.tsx`
-- Não pretendo mexer no banco nem em migrations neste passo.
-- Só mexo no backend se, após corrigir o save, os logs ainda mostrarem configuração stale.
+### O que NÃO será mexido
+- Código de produção do `meta-lead-ads-process-lead` (o fix do Vault permanece)
+- Configuração do sender Twilio (`+551150287027`) — quem ajusta o display name é você no Twilio Console
+- Qualquer outro contato/lead real da Central Trabalhista
