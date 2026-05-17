@@ -1696,28 +1696,12 @@ function DesktopMessagesList() {
 
                     {/* Input Area */}
                     <div className="border-t border-border p-4 bg-card">
-                      {!isIn24hWindow && messages.length > 0 ? (
-                        <div className="flex flex-col items-center gap-3 py-4 text-center">
-                          <div className="flex items-center gap-2 text-amber-600 dark:text-amber-400">
-                            <Clock className="h-5 w-5" />
-                            <p className="text-sm font-medium">
-                              {locale === 'pt-BR' ? 'Fora da janela de 24h' : 'Outside 24h window'}
-                            </p>
-                          </div>
-                          <p className="text-xs text-muted-foreground">
-                            {locale === 'pt-BR'
-                              ? 'Use um template aprovado para reabrir a conversa'
-                              : 'Use an approved template to reopen the conversation'}
-                          </p>
-                          <Button onClick={() => setShowTemplates(true)} size="sm">
-                            <FileText className="w-4 h-4 mr-2" />
-                            {locale === 'pt-BR' ? 'Selecionar template' : 'Select template'}
-                          </Button>
-                        </div>
-                      ) : (
-                        <>
+                      {(() => {
+                        const outOfWindow = !isIn24hWindow && messages.length > 0;
+                        return (
+                          <>
                           {/* Note Mode Indicator */}
-                          {isNoteMode && (
+                          {!outOfWindow && isNoteMode && (
                             <div className="flex items-center gap-2 px-3 py-1.5 bg-yellow-100 dark:bg-yellow-900/30 border border-yellow-300 dark:border-yellow-700 rounded-t-lg">
                               <NotePencil className="w-3.5 h-3.5 text-yellow-600 dark:text-yellow-400" />
                               <span className="text-xs font-medium text-yellow-700 dark:text-yellow-400">
@@ -1730,7 +1714,7 @@ function DesktopMessagesList() {
                           )}
 
                           {/* Reply Preview */}
-                          {replyingTo && !isNoteMode && (
+                          {!outOfWindow && replyingTo && !isNoteMode && (
                             <ReplyPreview
                               message={replyingTo}
                               onClose={() => setReplyingTo(null)}
@@ -1739,38 +1723,56 @@ function DesktopMessagesList() {
 
                           <div className={cn(
                             "flex gap-2",
-                            replyingTo && !isNoteMode && "border border-t-0 border-border rounded-b-lg p-2 bg-card",
-                            isNoteMode && "border border-t-0 border-yellow-300 dark:border-yellow-700 rounded-b-lg p-2 bg-yellow-50 dark:bg-yellow-900/20"
+                            !outOfWindow && replyingTo && !isNoteMode && "border border-t-0 border-border rounded-b-lg p-2 bg-card",
+                            !outOfWindow && isNoteMode && "border border-t-0 border-yellow-300 dark:border-yellow-700 rounded-b-lg p-2 bg-yellow-50 dark:bg-yellow-900/20"
                           )}>
                             <div className="flex gap-1">
-                              <MediaUploadButton onFileSelected={handleFileSelected} onTemplateClick={() => setShowTemplates(true)} onNoteClick={() => setIsNoteMode(true)} disabled={submitting || mediaUploading} />
-                              <AudioRecorder onSend={handleAudioSend} disabled={submitting || mediaUploading} />
-                              
-                              {/* Emoji Picker */}
-                              <Popover open={showEmojiPicker} onOpenChange={setShowEmojiPicker}>
-                                <PopoverTrigger asChild>
-                                  <Button
-                                    variant="ghost"
-                                    size="icon"
-                                    className="h-10 w-10"
-                                  >
-                                    <FaceSmile className="h-5 w-5" />
-                                  </Button>
-                                </PopoverTrigger>
-                                <PopoverContent className="w-auto p-0 border-none" align="start" side="top">
-                                  <EmojiPicker
-                                    onEmojiClick={handleEmojiClick}
-                                    theme={document.documentElement.classList.contains('dark') ? Theme.DARK : Theme.LIGHT}
-                                    lazyLoadEmojis
-                                    searchPlaceHolder={locale === 'pt-BR' ? 'Buscar emoji...' : 'Search emoji...'}
-                                  />
-                                </PopoverContent>
-                              </Popover>
+                              {outOfWindow ? (
+                                <Button
+                                  variant="outline"
+                                  size="icon"
+                                  onClick={() => setShowTemplates(true)}
+                                  title={locale === 'pt-BR' ? 'Selecionar template (fora da janela de 24h)' : 'Select template (outside 24h window)'}
+                                  className="h-10 w-10"
+                                >
+                                  <FileText className="h-5 w-5" />
+                                </Button>
+                              ) : (
+                                <>
+                                  <MediaUploadButton onFileSelected={handleFileSelected} onTemplateClick={() => setShowTemplates(true)} onNoteClick={() => setIsNoteMode(true)} disabled={submitting || mediaUploading} />
+                                  <AudioRecorder onSend={handleAudioSend} disabled={submitting || mediaUploading} />
+
+                                  {/* Emoji Picker */}
+                                  <Popover open={showEmojiPicker} onOpenChange={setShowEmojiPicker}>
+                                    <PopoverTrigger asChild>
+                                      <Button
+                                        variant="ghost"
+                                        size="icon"
+                                        className="h-10 w-10"
+                                      >
+                                        <FaceSmile className="h-5 w-5" />
+                                      </Button>
+                                    </PopoverTrigger>
+                                    <PopoverContent className="w-auto p-0 border-none" align="start" side="top">
+                                      <EmojiPicker
+                                        onEmojiClick={handleEmojiClick}
+                                        theme={document.documentElement.classList.contains('dark') ? Theme.DARK : Theme.LIGHT}
+                                        lazyLoadEmojis
+                                        searchPlaceHolder={locale === 'pt-BR' ? 'Buscar emoji...' : 'Search emoji...'}
+                                      />
+                                    </PopoverContent>
+                                  </Popover>
+                                </>
+                              )}
                             </div>
                             <div className="relative flex-1">
                               <Textarea
                                 ref={textareaRef}
-                                placeholder={isNoteMode ? (locale === 'pt-BR' ? 'Escreva uma nota interna...' : 'Write an internal note...') : (locale === 'pt-BR' ? 'Digite uma mensagem...' : 'Type a message...')}
+                                placeholder={outOfWindow
+                                  ? (locale === 'pt-BR' ? 'Fora da janela de 24h — selecione um template' : 'Outside 24h window — select a template')
+                                  : isNoteMode
+                                    ? (locale === 'pt-BR' ? 'Escreva uma nota interna...' : 'Write an internal note...')
+                                    : (locale === 'pt-BR' ? 'Digite uma mensagem...' : 'Type a message...')}
                                 value={messageText}
                                 onChange={(e) => {
                                   setMessageText(e.target.value);
@@ -1787,11 +1789,12 @@ function DesktopMessagesList() {
                                   }
                                 }}
                                 rows={1}
+                                disabled={outOfWindow}
                                 className={`w-full resize-none min-h-[40px] max-h-[150px] pr-10 ${textareaOverflow ? 'overflow-y-auto' : 'overflow-hidden'}`}
                               />
-                              
+
                               {/* AI Improve Button */}
-                              {hasAIIntegration && (
+                              {!outOfWindow && hasAIIntegration && (
                                 <DropdownMenu open={aiMenuOpen} onOpenChange={setAiMenuOpen}>
                                   <DropdownMenuTrigger asChild>
                                     <Button
@@ -1830,7 +1833,7 @@ function DesktopMessagesList() {
                             </div>
                             <Button
                               onClick={handleSendMessage}
-                              disabled={submitting || !messageText.trim()}
+                              disabled={outOfWindow || submitting || !messageText.trim()}
                               size="icon"
                               className={cn(
                                 "shrink-0",
@@ -1846,8 +1849,9 @@ function DesktopMessagesList() {
                               )}
                             </Button>
                           </div>
-                        </>
-                      )}
+                          </>
+                        );
+                      })()}
                     </div>
                   </>
                 )}
