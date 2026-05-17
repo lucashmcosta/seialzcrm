@@ -504,55 +504,59 @@ export function WhatsAppChat({ contactId, threadId: initialThreadId, onThreadCre
 
       {/* Input */}
       <div className="pt-4 border-t mt-4">
-        {!isIn24hWindow && messages.length > 0 ? (
-          <div className="flex flex-col items-center gap-3 py-4 text-center">
-            <div className="flex items-center gap-2 text-amber-600 dark:text-amber-400">
-              <Clock className="h-5 w-5" />
-              <p className="text-sm font-medium">Fora da janela de 24h</p>
-            </div>
-            <p className="text-xs text-muted-foreground">
-              Use um template aprovado para reabrir a conversa
-            </p>
-            <Button onClick={() => setShowTemplates(true)} size="sm">
-              <FileText className="w-4 h-4 mr-2" />
-              Selecionar template
-            </Button>
-          </div>
-        ) : (
-          <div className="flex gap-2">
-            <div className="flex gap-1">
-              <MediaUploadButton onFileSelected={handleMediaUpload} onTemplateClick={() => setShowTemplates(true)} disabled={submitting} />
-              <AudioRecorder onSend={handleAudioSend} disabled={submitting} />
-            </div>
-            <Textarea
-              placeholder="Digite uma mensagem..."
-              value={messageText}
-              onChange={(e) => setMessageText(e.target.value)}
-              onKeyDown={(e) => {
-                if (e.key === 'Enter' && !e.shiftKey) {
-                  e.preventDefault();
-                  handleSendMessage();
-                }
-              }}
-              rows={2}
-              className="flex-1 resize-none"
-            />
-            <div className="flex flex-col gap-2">
-              <Button
-                onClick={() => handleSendMessage()}
-                disabled={submitting || !messageText.trim()}
-                size="icon"
-                className="bg-green-600 hover:bg-green-700"
-              >
-                {submitting ? (
-                   <SpinnerGap className="w-4 h-4 animate-spin" />
+        {(() => {
+          const outOfWindow = !isIn24hWindow && messages.length > 0;
+          return (
+            <div className="flex gap-2">
+              <div className="flex gap-1">
+                {outOfWindow ? (
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="icon"
+                    onClick={() => setShowTemplates(true)}
+                    title="Selecionar template (fora da janela de 24h)"
+                  >
+                    <FileText className="w-4 h-4" />
+                  </Button>
                 ) : (
-                  <PaperPlaneTilt className="w-4 h-4" />
+                  <>
+                    <MediaUploadButton onFileSelected={handleMediaUpload} onTemplateClick={() => setShowTemplates(true)} disabled={submitting} />
+                    <AudioRecorder onSend={handleAudioSend} disabled={submitting} />
+                  </>
                 )}
-              </Button>
+              </div>
+              <Textarea
+                placeholder={outOfWindow ? 'Fora da janela de 24h — selecione um template' : 'Digite uma mensagem...'}
+                value={messageText}
+                onChange={(e) => setMessageText(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter' && !e.shiftKey) {
+                    e.preventDefault();
+                    handleSendMessage();
+                  }
+                }}
+                rows={2}
+                disabled={outOfWindow}
+                className="flex-1 resize-none"
+              />
+              <div className="flex flex-col gap-2">
+                <Button
+                  onClick={() => handleSendMessage()}
+                  disabled={outOfWindow || submitting || !messageText.trim()}
+                  size="icon"
+                  className="bg-green-600 hover:bg-green-700"
+                >
+                  {submitting ? (
+                    <SpinnerGap className="w-4 h-4 animate-spin" />
+                  ) : (
+                    <PaperPlaneTilt className="w-4 h-4" />
+                  )}
+                </Button>
+              </div>
             </div>
-          </div>
-        )}
+          );
+        })()}
       </div>
     </div>
   );
