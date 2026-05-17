@@ -53,7 +53,7 @@ serve(async (req) => {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          Authorization: `Bearer ${serviceKey}`,
+          Authorization: `Bearer ${internalToken}`,
         },
         body: JSON.stringify({
           organizationId: ORG_ID,
