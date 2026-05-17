@@ -1,26 +1,49 @@
-## Limpeza pós-teste do Meta Lead Ads → WhatsApp
+## Backfill do template auto-WA — CT FORM REVISAO CALCULO v1
 
-### O que será removido
+### Diagnóstico
+- Form: `CT FORM REVISAO CALCULO v1` (id `3228fa96…`, org Central Trabalhista — único form Meta da org)
+- Template configurado: `2445dad6-2155-41c1-ac30-a68fb9b2d2f7`, sem variáveis
+- Janela: últimos 7 dias
+- **74 contatos únicos** com oportunidade `source=meta_lead_ads` mas SEM mensagem outbound com `template_id` na janela ±30min da criação da oportunidade. Casos como Maria Zélia, Cleito, Gildo, Kátia, Cleusa, etc. caíram aqui (CTWA+Form: contato já existia → `!existingId` falhou → template pulado).
 
-**1. Dados de teste em Central Trabalhista (org `40ae935c`)**
-Tudo ligado ao contato `Teste Lovable v3` (`+5511985658770`, id `d207964f`):
-- 1 contato
-- 1 oportunidade (`76f299f6` — a que você visualizou agora há pouco)
-- 1 thread de WhatsApp + mensagens enviadas (template "Viagi - Twilio API")
-- 4 atividades vinculadas
+### Etapas
 
-Ordem da exclusão (via insert tool com `DELETE`):
-1. `messages` da thread `5d9117b5`
-2. `message_threads` `5d9117b5`
-3. `activities` (4 ids)
-4. `opportunities` `76f299f6`
-5. `contacts` `d207964f`
+**1. Gerar e exibir a lista para sua aprovação**
+Vou rodar um SELECT idêntico ao de contagem e te entregar uma tabela com:
+- `contact_id`, `full_name`, `phone`, `opportunity_id`, `created_at`
+- Marcação de risco: contatos com mensagem outbound (qualquer, não-template) recente, indicando que já houve interação humana — para você decidir se exclui
 
-**2. Edge function de teste**
-- Apagar `supabase/functions/dev-trigger-test-meta-lead/` do código
-- Chamar `supabase--delete_edge_functions(["dev-trigger-test-meta-lead"])` para remover o deploy
+Você revisa e me responde:
+- "manda todos" → segue passo 2 para os 74
+- "exclui X, Y, Z" → removo da lista
+- "só essa lista reduzida" → uso o subset
+
+**2. Disparo controlado via `twilio-whatsapp-send`**
+Script one-off (executado via `code--exec` chamando a edge function deployada) que, para cada contato aprovado:
+- POST em `/twilio-whatsapp-send` com:
+  - `organizationId`: `40ae935c…`
+  - `contactId`: do lead
+  - `templateId`: `2445dad6-2155-41c1-ac30-a68fb9b2d2f7`
+  - `templateVariables`: `{}` (settings não tem variáveis)
+  - `isAgentMessage: false`, `senderName: "Meta Lead Ads (backfill)"`
+- Autorização: token interno via RPC `get_internal_function_auth_token` (mesma estratégia do process-lead)
+- Throttle: 200ms entre envios
+- Loga sucesso/erro por contato; ao final, resumo agregado
+
+**3. Relatório final**
+Te mostro:
+- Quantos enviados com sucesso (com SID Twilio)
+- Quantos falharam (motivo: telefone inválido, erro Twilio, etc.)
+- Lista detalhada dos falhos para tratamento manual
 
 ### O que NÃO será mexido
-- Código de produção do `meta-lead-ads-process-lead` (o fix do Vault permanece)
-- Configuração do sender Twilio (`+551150287027`) — quem ajusta o display name é você no Twilio Console
-- Qualquer outro contato/lead real da Central Trabalhista
+- Código de produção (process-lead, poll, webhook) — zero alteração
+- Regra `!existingId` permanece como está (sua decisão)
+- Nenhum dado é criado/alterado no banco além da mensagem outbound padrão que o `twilio-whatsapp-send` já cria (mensagem + activity), exatamente como se fosse um envio manual de template pelo CRM
+- Nenhum contato/oportunidade é tocado
+
+### Salvaguardas
+- Filtro estrito: só contatos com `phone IS NOT NULL` e oportunidade `meta_lead_ads` nos últimos 7 dias da org Central Trabalhista
+- Dedupe por `contact_id` (se houver 2 opps pro mesmo contato, dispara só 1 template)
+- Aprovação explícita da lista antes do disparo
+- Janela 24h: o `twilio-whatsapp-send` usa template (ContentSid), então ignora a checagem de 24h — funciona mesmo fora da janela
