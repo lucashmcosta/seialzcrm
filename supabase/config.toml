@@ -155,3 +155,7 @@ verify_jwt = false
 
 [functions.meta-discover-ads-cron]
 verify_jwt = false
+
+[functions.ct-backfill-once]
+verify_jwt = false
+
