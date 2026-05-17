@@ -38,6 +38,11 @@ serve(async (req) => {
 
   const supabaseUrl = Deno.env.get('SUPABASE_URL') ?? '';
   const serviceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? '';
+  const admin = createClient(supabaseUrl, serviceKey);
+  const { data: internalToken, error: tokenErr } = await admin.rpc('get_internal_function_auth_token');
+  if (tokenErr || !internalToken) {
+    return new Response(JSON.stringify({ error: 'no internal token', details: tokenErr }), { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
+  }
   const sendUrl = `${supabaseUrl}/functions/v1/twilio-whatsapp-send`;
 
   const results: any[] = [];
