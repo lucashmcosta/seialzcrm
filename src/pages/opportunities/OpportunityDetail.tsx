@@ -201,6 +201,15 @@ export default function OpportunityDetail() {
   };
 
   if (loading) {
+    if (isMobile) {
+      return (
+        <MobileLayout>
+          <div className="flex items-center justify-center h-full">
+            <MobileSpinner />
+          </div>
+        </MobileLayout>
+      );
+    }
     return (
       <Layout>
         <div className="p-6 space-y-6">
@@ -228,6 +237,13 @@ export default function OpportunityDetail() {
   }
 
   if (!opportunity) {
+    if (isMobile) {
+      return (
+        <MobileLayout>
+          <div className="p-4 text-center text-muted-foreground">{t('common.noResults')}</div>
+        </MobileLayout>
+      );
+    }
     return (
       <Layout>
         <div className="flex items-center justify-center h-full">
