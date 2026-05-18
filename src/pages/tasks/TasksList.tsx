@@ -212,6 +212,39 @@ export default function TasksList() {
     return new Date(task.due_at) < new Date();
   };
 
+  if (isMobile) {
+    return (
+      <MobileLayout>
+        <MobileTasksList
+          tasks={tasks as any}
+          loading={loading}
+          searchTerm={searchTerm}
+          onSearchChange={setSearchTerm}
+          statusFilter={statusFilter}
+          onStatusFilterChange={setStatusFilter}
+          onTaskClick={(task) => openTask(task as any)}
+          onComplete={(task) => openCompleteFlow(task as any)}
+          onCreate={() => openEditFlow(null)}
+          locale={locale}
+        />
+        <TaskDialog
+          open={editDialogOpen}
+          onOpenChange={setEditDialogOpen}
+          task={editingTask}
+          readOnly={editReadOnly}
+          onSuccess={fetchTasks}
+        />
+        <CompleteTaskDialog
+          open={completeDialogOpen}
+          onOpenChange={setCompleteDialogOpen}
+          task={completingTask as any}
+          onSuccess={fetchTasks}
+          onRequestEdit={(task) => openEditFlow(task as any)}
+        />
+      </MobileLayout>
+    );
+  }
+
   return (
     <Layout>
       <div className="flex flex-col h-full">
