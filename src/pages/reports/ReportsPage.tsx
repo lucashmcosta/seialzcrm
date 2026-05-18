@@ -40,6 +40,7 @@ interface Opp {
   owner_user_id: string | null;
   created_at: string;
   updated_at: string;
+  close_date: string | null;
 }
 
 interface Stage {
