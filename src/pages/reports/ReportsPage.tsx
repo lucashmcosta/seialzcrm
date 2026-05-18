@@ -220,8 +220,10 @@ export default function ReportsPage() {
       return t >= fromDate && t <= toDate;
     };
     const inPeriodClosed = (o: Opp) => {
-      const t = new Date(o.updated_at);
-      return (o.status === 'won' || o.status === 'lost') && t >= fromDate && t <= toDate;
+      if (o.status !== 'won' && o.status !== 'lost') return false;
+      if (!o.close_date) return false;
+      const t = new Date(o.close_date);
+      return t >= fromDate && t <= toDate;
     };
 
     const created = currentOpps.filter(inPeriodCreated);
@@ -239,7 +241,7 @@ export default function ReportsPage() {
     const cycleDaysList = won
       .map((o) => {
         const c = new Date(o.created_at).getTime();
-        const u = new Date(o.updated_at).getTime();
+        const u = o.close_date ? new Date(o.close_date).getTime() : NaN;
         return Math.max(0, (u - c) / 86400000);
       })
       .filter((d) => isFinite(d));
@@ -257,11 +259,12 @@ export default function ReportsPage() {
       return t >= prevFrom && t < prevTo;
     };
     const inPrevClosed = (o: Opp) => {
-      const t = new Date(o.updated_at);
-      return (
-        (o.status === 'won' || o.status === 'lost') && t >= prevFrom && t < prevTo
-      );
+      if (o.status !== 'won' && o.status !== 'lost') return false;
+      if (!o.close_date) return false;
+      const t = new Date(o.close_date);
+      return t >= prevFrom && t < prevTo;
     };
+
     const prevCreated = previousOpps.filter(inPrevCreated);
     const prevWon = previousOpps.filter(
       (o) => o.status === 'won' && inPrevClosed(o),
