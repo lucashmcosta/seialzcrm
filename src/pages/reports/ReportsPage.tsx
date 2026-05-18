@@ -351,8 +351,8 @@ export default function ReportsPage() {
         if (idx >= 0) points[idx].created += 1;
       }
 
-      if (o.status === 'won') {
-        const closed = new Date(o.updated_at);
+      if (o.status === 'won' && o.close_date) {
+        const closed = new Date(o.close_date);
         if (closed >= fromDate && closed <= toDate) {
           const i = points.findIndex((p) => p.date === matchKey(closed));
           if (i >= 0) {
