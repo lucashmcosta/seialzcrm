@@ -1,43 +1,43 @@
-# Corrigir /marketing/ads vazio após filtro de data
+## Problema
 
-## Diagnóstico
+A refatoração recente da tela `src/pages/opportunities/OpportunityDetail.tsx` introduziu um "card horizontal estilo Divus" no topo (linhas 267–388) usando `flex items-center justify-between` numa única linha, com:
 
-Antes do filtro de data, a página consultava direto a view `vw_marketing_ad_performance`. Essa view é owned pelo `postgres` e **roda como definer**, ignorando RLS — por isso funcionava.
+- Avatar + nome + título + badge do estágio + telefone + data (lado esquerdo)
+- Botão ligar + assinatura + menu (...) + divisor + badge de status + valor em `text-xl` (lado direito)
 
-Quando adicionei o filtro de data, a página passou a chamar a RPC `get_marketing_ad_performance`, que foi criada como `SECURITY INVOKER`. A RPC roda como o usuário e bate na RLS da tabela `marketing_campaigns`:
+Em viewport mobile (390px) isso quebra: os elementos do lado direito comprimem o lado esquerdo, o valor (`R$ 0`) e o status saem para baixo de forma desalinhada e o título da oportunidade fica espremido/cortado. O padding externo `px-6 py-3` e o card interno `p-4` também consomem muito espaço.
 
-```sql
-organization_id IN (
-  SELECT organization_id FROM user_organizations
-  WHERE user_id = auth.uid() AND is_active = true
-)
-```
+## Objetivo
 
-O problema: `user_organizations.user_id` é o **id interno** (`users.id`), não o `auth.uid()`. Essa policy nunca casa com nenhum registro — então a RPC devolve 0 linhas, e a UI mostra "Nenhum ad encontrado", mesmo havendo 20 ads na Central Trabalhista.
+Manter exatamente o layout desktop atual e adaptar apenas o comportamento mobile (sem mexer em lógica de dados).
 
-Confirmei via DB:
-- 20 ads para a org, 0 retornados via RLS atual.
-- Chamando a RPC como service role com mesmo filtro de "Ontem" → 20 linhas.
+## Mudanças
 
-## Correção (1 arquivo)
+**Arquivo:** `src/pages/opportunities/OpportunityDetail.tsx`
 
-Criar nova migration que recria `public.get_marketing_ad_performance` como `SECURITY DEFINER` com guard explícito de acesso:
+1. **Wrapper externo do header** (linha 252): reduzir padding em mobile — `px-3 py-2 md:px-6 md:py-3`.
 
-```sql
-SECURITY DEFINER
-SET search_path = public
--- início do corpo:
-  IF p_organization_id IS NULL
-     OR NOT (p_organization_id = ANY(public.current_user_org_ids()))
-  THEN RETURN; END IF;
-```
+2. **Card horizontal (linha 269):**
+   - Em mobile, virar coluna: `flex-col md:flex-row md:items-center md:justify-between`.
+   - Reduzir padding interno em mobile: `p-3 md:p-4`.
+   - Permitir wrap dos blocos: `gap-3`.
 
-Mantém toda a lógica/colunas atuais. Sem alterações no frontend.
+3. **Bloco esquerdo (avatar + infos, linha 270):** manter como está, mas garantir `w-full md:flex-1` para ocupar a largura toda em mobile.
+
+4. **Linha 1 do bloco esquerdo (nome · título · stage, linha 278):** manter `flex-wrap`; reduzir tamanho do título em mobile (`text-sm`) — já está ok.
+
+5. **Bloco direito (ações + valor + status, linha 314):**
+   - Em mobile, virar uma segunda linha que ocupa largura total e distribui: `w-full md:w-auto flex-wrap justify-between md:justify-end`.
+   - Esconder o divisor vertical (`h-6 w-px bg-border`) em mobile (`hidden md:block`).
+   - Reduzir o valor em mobile: `text-base md:text-xl`.
+   - Garantir que os botões de ícone (`ClickToCallButton`, `SendToSignatureButton`, menu `...`) fiquem agrupados à esquerda da segunda linha e o valor/badge à direita.
+
+6. **Conteúdo abaixo do header (linha 392):** reduzir padding em mobile — `p-3 md:p-6`.
+
+Nada de lógica, dados, queries ou comportamento é alterado — apenas classes Tailwind responsivas.
 
 ## Fora de escopo
 
-A policy `marketing_campaigns_org_isolation` continua quebrada para outros consumidores diretos da tabela. Posso corrigir num passo seguinte, mas isso afeta vários módulos e merece teste isolado — vou tratar separadamente se você quiser.
-
-## Arquivos
-
-- `supabase/migrations/<novo>.sql` — recria a RPC com SECURITY DEFINER + guard.
+- Desktop (mantém o visual atual idêntico).
+- Componentes filhos (Tabs, ContactMessages, etc.).
+- Outras telas.

@@ -249,7 +249,7 @@ export default function OpportunityDetail() {
     <Layout>
       <div className="flex flex-col h-full">
         <div className="border-b bg-background/95 backdrop-blur">
-          <div className="px-6 py-3 space-y-3">
+          <div className="px-3 py-2 md:px-6 md:py-3 space-y-3">
             {/* Linha 1: Voltar + Ações */}
             <div className="flex items-center justify-between">
               <Button
