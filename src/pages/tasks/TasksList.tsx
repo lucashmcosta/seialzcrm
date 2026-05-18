@@ -90,7 +90,7 @@ export default function TasksList() {
       fetchUsers();
       fetchTasks();
     }
-  }, [organization, filtersHydrated, currentPage, searchTerm, statusFilter, priorityFilter, assignedFilter, viewMode, showCompletedKanban]);
+  }, [organization, filtersHydrated, currentPage, searchTerm, statusFilter, priorityFilter, assignedFilter, viewMode, showCompletedKanban, isMobile]);
 
   const fetchUsers = async () => {
     if (!organization) return;
