@@ -266,8 +266,8 @@ export default function OpportunityDetail() {
 
             {/* Card horizontal estilo Divus */}
             <TooltipProvider delayDuration={200}>
-              <div className="flex items-center justify-between gap-4 rounded-lg border border-border bg-card p-4">
-                <div className="flex items-center gap-3 min-w-0 flex-1">
+              <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-3 rounded-lg border border-border bg-card p-3 md:p-4">
+                <div className="flex items-center gap-3 min-w-0 w-full md:flex-1">
                   {/* Avatar */}
                   <div className="h-12 w-12 rounded-full bg-primary/10 text-primary flex items-center justify-center shrink-0 text-sm font-semibold">
                     {contactName ? contactName.charAt(0).toUpperCase() : <User className="h-5 w-5" />}
