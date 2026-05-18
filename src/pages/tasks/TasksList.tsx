@@ -2,6 +2,9 @@ import { useState, useEffect } from 'react';
 import { usePersistedFilters } from '@/hooks/usePersistedFilters';
 import { Layout } from '@/components/Layout';
 import { Skeleton } from '@/components/ui/skeleton';
+import { MobileLayout } from '@/components/mobile/MobileLayout';
+import { MobileTasksList } from '@/components/mobile/MobileTasksList';
+import { useIsMobile } from '@/hooks/use-mobile';
 import { useOrganization } from '@/hooks/useOrganization';
 import { useAuth } from '@/hooks/useAuth';
 import { useTranslation } from '@/lib/i18n';
@@ -45,6 +48,7 @@ export default function TasksList() {
   const { user } = useAuth();
   const { t } = useTranslation(locale as 'pt-BR' | 'en-US');
   const { toast } = useToast();
+  const isMobile = useIsMobile();
   
   const [tasks, setTasks] = useState<Task[]>([]);
   const [loading, setLoading] = useState(true);
@@ -86,7 +90,7 @@ export default function TasksList() {
       fetchUsers();
       fetchTasks();
     }
-  }, [organization, filtersHydrated, currentPage, searchTerm, statusFilter, priorityFilter, assignedFilter, viewMode, showCompletedKanban]);
+  }, [organization, filtersHydrated, currentPage, searchTerm, statusFilter, priorityFilter, assignedFilter, viewMode, showCompletedKanban, isMobile]);
 
   const fetchUsers = async () => {
     if (!organization) return;
@@ -121,7 +125,7 @@ export default function TasksList() {
     
     if (searchTerm) query = query.ilike('title', `%${searchTerm}%`);
 
-    if (viewMode === 'kanban') {
+    if (!isMobile && viewMode === 'kanban') {
       if (showCompletedKanban) {
         query = query.in('status', ['open', 'completed']);
       } else {
@@ -207,6 +211,39 @@ export default function TasksList() {
     if (!task.due_at || task.status !== 'open') return false;
     return new Date(task.due_at) < new Date();
   };
+
+  if (isMobile) {
+    return (
+      <MobileLayout>
+        <MobileTasksList
+          tasks={tasks as any}
+          loading={loading}
+          searchTerm={searchTerm}
+          onSearchChange={setSearchTerm}
+          statusFilter={statusFilter}
+          onStatusFilterChange={setStatusFilter}
+          onTaskClick={(task) => openTask(task as any)}
+          onComplete={(task) => openCompleteFlow(task as any)}
+          onCreate={() => openEditFlow(null)}
+          locale={locale}
+        />
+        <TaskDialog
+          open={editDialogOpen}
+          onOpenChange={setEditDialogOpen}
+          task={editingTask}
+          readOnly={editReadOnly}
+          onSuccess={fetchTasks}
+        />
+        <CompleteTaskDialog
+          open={completeDialogOpen}
+          onOpenChange={setCompleteDialogOpen}
+          task={completingTask as any}
+          onSuccess={fetchTasks}
+          onRequestEdit={(task) => openEditFlow(task as any)}
+        />
+      </MobileLayout>
+    );
+  }
 
   return (
     <Layout>

@@ -1,14 +1,19 @@
 ## Objetivo
-Restaurar o comportamento anterior da tela de detalhe da oportunidade no celular, sem redesenhar o mobile e sem alterar o desktop.
+Corrigir a tela `/tasks` no mobile, que hoje renderiza o `<Layout>` desktop comprimido (sidebar aparecendo sobre o conteúdo).
 
 ## Plano
-1. Reintroduzir a detecção mobile em `src/pages/opportunities/OpportunityDetail.tsx` com `useIsMobile()` e `MobileLayout`, seguindo o mesmo padrão já usado em `ContactDetail` e `OpportunitiesKanban`.
-2. Fazer o fluxo de renderização checar `isMobile` antes do layout desktop, inclusive nos estados de loading e empty, para impedir que o `<Layout>` desktop apareça comprimido no celular.
-3. No branch mobile, manter uma estrutura simples e estável: botão de voltar, bloco principal da oportunidade, seletor de abas mobile e conteúdo das abas — sem reaproveitar a barra/header desktop que causou a quebra.
-4. Preservar o branch desktop atual como está, para não mexer no layout que você aprovou no desktop.
-5. Validar no viewport mobile da rota `/opportunities/:id` para confirmar que o sidebar desktop não aparece mais no celular.
+1. Em `src/pages/tasks/TasksList.tsx`, adicionar `useIsMobile()` e, quando `isMobile === true`, renderizar dentro de `<MobileLayout>` em vez do `<Layout>` desktop.
+2. Criar `src/components/mobile/MobileTasksList.tsx` seguindo o mesmo padrão de `MobileContactsList` / `MobileOpportunitiesKanban`:
+   - Header simples com título "Tarefas" e botão "+" para nova tarefa
+   - Busca compacta
+   - Filtro de status como abas roláveis horizontalmente (Atrasadas / Hoje / Abertas / Concluídas)
+   - Lista vertical de cards (não kanban) com: prioridade, título, contato/oportunidade, data, ações de concluir/editar acessadas via tap no card
+   - Loading com `MobileSpinner`, empty state simples
+3. Reusar dialogs existentes (`TaskDialog`, `CompleteTaskDialog`) — eles já funcionam em mobile.
+4. Não alterar o branch desktop (kanban + lista) que já está aprovado.
 
 ## Detalhes técnicos
-- Arquivo principal: `src/pages/opportunities/OpportunityDetail.tsx`
-- Referências de padrão: `src/pages/contacts/ContactDetail.tsx` e `src/pages/opportunities/OpportunitiesKanban.tsx`
-- Causa atual identificada: a tela hoje renderiza `<Layout>` diretamente; não há branch ativo com `if (isMobile)`, então o mobile nunca entra em um layout separado.
+- Arquivo principal: `src/pages/tasks/TasksList.tsx` (adicionar branch `if (isMobile)`)
+- Novo arquivo: `src/components/mobile/MobileTasksList.tsx`
+- Padrão de referência: `src/components/mobile/MobileContactsList.tsx` e `src/pages/opportunities/OpportunitiesKanban.tsx`
+- O fetch/queries permanecem na page; o componente mobile recebe `tasks`, `loading`, callbacks via props (igual `MobileContactsList`).
