@@ -393,8 +393,10 @@ export default function ReportsPage() {
     });
 
     currentOpps.forEach((o) => {
-      const t = new Date(o.updated_at);
-      if ((o.status === 'won' || o.status === 'lost') && t >= fromDate && t <= toDate) {
+      if (o.status !== 'won' && o.status !== 'lost') return;
+      if (!o.close_date) return;
+      const t = new Date(o.close_date);
+      if (t >= fromDate && t <= toDate) {
         const uid = o.owner_user_id || 'unassigned';
         const row = ensure(uid);
         if (o.status === 'won') {
