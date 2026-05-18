@@ -371,7 +371,7 @@ export default function OpportunityDetail() {
                     </DropdownMenu>
                   )}
 
-                  <div className="h-6 w-px bg-border mx-1" />
+                  <div className="hidden md:block h-6 w-px bg-border mx-1" />
 
                   <Badge className={statusColor}>
                     {opportunity.status === 'won'
@@ -380,7 +380,7 @@ export default function OpportunityDetail() {
                       ? t('status.lost')
                       : t('status.open')}
                   </Badge>
-                  <div className="text-xl font-semibold text-foreground tabular-nums">
+                  <div className="text-base md:text-xl font-semibold text-foreground tabular-nums">
                     {formatCurrency(opportunity.amount || 0)}
                   </div>
                 </div>
