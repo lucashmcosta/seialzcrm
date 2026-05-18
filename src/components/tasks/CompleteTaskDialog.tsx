@@ -49,6 +49,7 @@ type Mode = 'complete' | 'postpone';
 export function CompleteTaskDialog({ open, onOpenChange, task, onSuccess, onRequestEdit }: CompleteTaskDialogProps) {
   const { locale } = useOrganization();
   const { t } = useTranslation(locale as any);
+  const isMobile = useIsMobile();
   const [mode, setMode] = useState<Mode>('complete');
   const [submitting, setSubmitting] = useState(false);
   const [completionNotes, setCompletionNotes] = useState('');
