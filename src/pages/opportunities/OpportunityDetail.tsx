@@ -2,6 +2,9 @@ import { useState, useEffect } from 'react';
 import { useParams, useNavigate, Link } from 'react-router-dom';
 import type { Key } from 'react-aria-components';
 import { Layout } from '@/components/Layout';
+import { MobileLayout } from '@/components/mobile/MobileLayout';
+import { MobileSpinner } from '@/components/mobile/MobileSpinner';
+import { useIsMobile } from '@/hooks/use-mobile';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
@@ -54,6 +57,7 @@ interface PipelineStage {
 export default function OpportunityDetail() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
+  const isMobile = useIsMobile();
   const { organization, locale } = useOrganization();
   const { t } = useTranslation(locale as any);
   const { permissions } = usePermissions();
