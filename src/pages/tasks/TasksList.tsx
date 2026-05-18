@@ -125,7 +125,7 @@ export default function TasksList() {
     
     if (searchTerm) query = query.ilike('title', `%${searchTerm}%`);
 
-    if (viewMode === 'kanban') {
+    if (!isMobile && viewMode === 'kanban') {
       if (showCompletedKanban) {
         query = query.in('status', ['open', 'completed']);
       } else {
