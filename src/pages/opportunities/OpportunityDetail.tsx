@@ -265,6 +265,130 @@ export default function OpportunityDetail() {
   const contactPhone = opportunity.contacts?.phone;
   const contactName = opportunity.contacts?.full_name;
 
+  // ── Mobile ──
+  if (isMobile) {
+    return (
+      <MobileLayout>
+        <div className="flex flex-col h-full">
+          {/* Back */}
+          <div className="px-4 pt-3 pb-2">
+            <button
+              onClick={() => navigate('/opportunities')}
+              className="flex items-center gap-1 text-sm text-muted-foreground hover:text-foreground transition-colors"
+            >
+              <ArrowLeft className="h-4 w-4" />
+              {t('common.back')}
+            </button>
+          </div>
+
+          {/* Header */}
+          <div className="flex flex-col items-center px-4 pb-4 gap-2 text-center">
+            <div className="h-16 w-16 rounded-full bg-primary/10 text-primary flex items-center justify-center text-lg font-semibold">
+              {contactName ? contactName.charAt(0).toUpperCase() : <User className="h-6 w-6" />}
+            </div>
+            {opportunity.contacts && (
+              <Link
+                to={`/contacts/${opportunity.contact_id}`}
+                className="text-base font-semibold text-foreground hover:text-primary transition-colors"
+              >
+                {opportunity.contacts.full_name}
+              </Link>
+            )}
+            <div className="text-sm text-muted-foreground">{opportunity.title}</div>
+            <div className="flex items-center gap-2 flex-wrap justify-center">
+              {opportunity.pipeline_stages && (
+                <Badge variant="secondary" className="text-[11px]">
+                  {opportunity.pipeline_stages.name}
+                </Badge>
+              )}
+              <Badge className={statusColor}>
+                {opportunity.status === 'won'
+                  ? t('status.won')
+                  : opportunity.status === 'lost'
+                  ? t('status.lost')
+                  : t('status.open')}
+              </Badge>
+            </div>
+            <div className="text-xl font-semibold text-foreground tabular-nums mt-1">
+              {formatCurrency(opportunity.amount || 0)}
+            </div>
+          </div>
+
+          {/* Tabs + content */}
+          <div className="flex-1 overflow-auto px-4 pb-6">
+            <NativeSelect
+              aria-label="Tabs"
+              value={selectedTab as string}
+              onChange={(e) => setSelectedTab(e.target.value)}
+              options={tabs.map((tab) => ({ label: tab.label, value: tab.id }))}
+              className="w-full mb-4"
+            />
+
+            {selectedTab === 'overview' && (
+              <Card>
+                <CardContent className="pt-6 space-y-4">
+                  <div>
+                    <p className="text-sm text-muted-foreground">{t('opportunities.stage')}</p>
+                    <p className="text-base font-semibold">{opportunity.pipeline_stages?.name || '-'}</p>
+                  </div>
+                  <div>
+                    <p className="text-sm text-muted-foreground">{t('opportunities.closeDate')}</p>
+                    <p className="text-base font-semibold">
+                      {opportunity.close_date ? formatDateOnly(opportunity.close_date, locale) : '-'}
+                    </p>
+                  </div>
+                  <div>
+                    <p className="text-sm text-muted-foreground">{t('opportunities.contact')}</p>
+                    {opportunity.contacts ? (
+                      <Link to={`/contacts/${opportunity.contact_id}`} className="text-base font-semibold text-primary hover:underline">
+                        {opportunity.contacts.full_name}
+                      </Link>
+                    ) : (
+                      <p className="text-base font-semibold">-</p>
+                    )}
+                  </div>
+                  <div>
+                    <p className="text-sm text-muted-foreground">{t('opportunities.owner')}</p>
+                    <p className="text-base font-semibold">{opportunity.users?.full_name || '-'}</p>
+                  </div>
+                </CardContent>
+              </Card>
+            )}
+            {selectedTab === 'timeline' && <ActivityTimeline opportunityId={opportunity.id} />}
+            {selectedTab === 'calls' && opportunity.contact_id && (
+              <ContactCalls
+                contactId={opportunity.contact_id}
+                opportunityId={opportunity.id}
+                contactPhone={contactPhone || undefined}
+                contactName={contactName || undefined}
+              />
+            )}
+            {selectedTab === 'messages' && <ContactMessages opportunityId={opportunity.id} />}
+            {selectedTab === 'tasks' && <ContactTasks opportunityId={opportunity.id} />}
+            {selectedTab === 'attachments' && <ContactAttachments entityId={opportunity.id} entityType="opportunity" />}
+            {selectedTab === 'notes' && <ContactNotes opportunityId={opportunity.id} />}
+          </div>
+        </div>
+
+        <OpportunityDialog
+          open={editDialogOpen}
+          onOpenChange={setEditDialogOpen}
+          opportunity={opportunity}
+          stages={stages}
+          onSuccess={fetchOpportunity}
+          titleOnly={isClosed}
+        />
+        <CloseDatePromptDialog
+          open={pendingStatus !== null}
+          onOpenChange={(o) => !o && setPendingStatus(null)}
+          title={pendingStatus === 'won' ? 'Marcar como Ganho' : 'Marcar como Perdido'}
+          onConfirm={(date) => pendingStatus && applyStatusChange(pendingStatus, date)}
+        />
+      </MobileLayout>
+    );
+  }
+
+
   return (
     <Layout>
       <div className="flex flex-col h-full">
