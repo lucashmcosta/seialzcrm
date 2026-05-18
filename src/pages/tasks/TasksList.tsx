@@ -48,6 +48,7 @@ export default function TasksList() {
   const { user } = useAuth();
   const { t } = useTranslation(locale as 'pt-BR' | 'en-US');
   const { toast } = useToast();
+  const isMobile = useIsMobile();
   
   const [tasks, setTasks] = useState<Task[]>([]);
   const [loading, setLoading] = useState(true);
