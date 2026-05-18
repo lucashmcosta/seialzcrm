@@ -389,7 +389,7 @@ export default function OpportunityDetail() {
           </div>
         </div>
 
-        <div className="flex-1 overflow-auto p-6">
+        <div className="flex-1 overflow-auto p-3 md:p-6">
           {/* Mobile: Native Select */}
           <NativeSelect
             aria-label="Tabs"
