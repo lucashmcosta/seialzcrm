@@ -40,6 +40,7 @@ interface Opp {
   owner_user_id: string | null;
   created_at: string;
   updated_at: string;
+  close_date: string | null;
 }
 
 interface Stage {
@@ -137,16 +138,32 @@ export default function ReportsPage() {
       // Build base queries
       const ownerEq = ownerId !== 'all' ? ownerId : null;
 
-      const baseSelect = 'id, amount, status, pipeline_stage_id, owner_user_id, created_at, updated_at';
+      const baseSelect =
+        'id, amount, status, pipeline_stage_id, owner_user_id, created_at, updated_at, close_date';
 
-      // Current period: opps created OR closed within period
+      const fmtDate = (d: Date) => {
+        const y = d.getFullYear();
+        const m = String(d.getMonth() + 1).padStart(2, '0');
+        const day = String(d.getDate()).padStart(2, '0');
+        return `${y}-${m}-${day}`;
+      };
+      const fromIso = fromDate.toISOString();
+      const toIso = toDate.toISOString();
+      const prevFromIso = prevFrom.toISOString();
+      const prevToIso = prevTo.toISOString();
+      const fromDay = fmtDate(fromDate);
+      const toDay = fmtDate(toDate);
+      const prevFromDay = fmtDate(prevFrom);
+      const prevToDay = fmtDate(prevTo);
+
+      // Current period: opps created within period OR closed (by close_date) within period
       let q1 = supabase
         .from('opportunities')
         .select(baseSelect)
         .eq('organization_id', organization.id)
         .is('deleted_at', null)
         .or(
-          `and(created_at.gte.${fromDate.toISOString()},created_at.lte.${toDate.toISOString()}),and(status.in.(won,lost),updated_at.gte.${fromDate.toISOString()},updated_at.lte.${toDate.toISOString()})`,
+          `and(created_at.gte.${fromIso},created_at.lte.${toIso}),and(status.in.(won,lost),close_date.gte.${fromDay},close_date.lte.${toDay})`,
         );
       if (ownerEq) q1 = q1.eq('owner_user_id', ownerEq);
 
@@ -157,7 +174,7 @@ export default function ReportsPage() {
         .eq('organization_id', organization.id)
         .is('deleted_at', null)
         .or(
-          `and(created_at.gte.${prevFrom.toISOString()},created_at.lt.${prevTo.toISOString()}),and(status.in.(won,lost),updated_at.gte.${prevFrom.toISOString()},updated_at.lt.${prevTo.toISOString()})`,
+          `and(created_at.gte.${prevFromIso},created_at.lt.${prevToIso}),and(status.in.(won,lost),close_date.gte.${prevFromDay},close_date.lt.${prevToDay})`,
         );
       if (ownerEq) q2 = q2.eq('owner_user_id', ownerEq);
 
@@ -169,6 +186,7 @@ export default function ReportsPage() {
         .eq('status', 'open')
         .is('deleted_at', null);
       if (ownerEq) q3 = q3.eq('owner_user_id', ownerEq);
+
 
       const [r1, r2, r3] = await Promise.all([q1, q2, q3]);
 
@@ -202,8 +220,10 @@ export default function ReportsPage() {
       return t >= fromDate && t <= toDate;
     };
     const inPeriodClosed = (o: Opp) => {
-      const t = new Date(o.updated_at);
-      return (o.status === 'won' || o.status === 'lost') && t >= fromDate && t <= toDate;
+      if (o.status !== 'won' && o.status !== 'lost') return false;
+      if (!o.close_date) return false;
+      const t = new Date(o.close_date);
+      return t >= fromDate && t <= toDate;
     };
 
     const created = currentOpps.filter(inPeriodCreated);
@@ -221,7 +241,7 @@ export default function ReportsPage() {
     const cycleDaysList = won
       .map((o) => {
         const c = new Date(o.created_at).getTime();
-        const u = new Date(o.updated_at).getTime();
+        const u = o.close_date ? new Date(o.close_date).getTime() : NaN;
         return Math.max(0, (u - c) / 86400000);
       })
       .filter((d) => isFinite(d));
@@ -239,11 +259,12 @@ export default function ReportsPage() {
       return t >= prevFrom && t < prevTo;
     };
     const inPrevClosed = (o: Opp) => {
-      const t = new Date(o.updated_at);
-      return (
-        (o.status === 'won' || o.status === 'lost') && t >= prevFrom && t < prevTo
-      );
+      if (o.status !== 'won' && o.status !== 'lost') return false;
+      if (!o.close_date) return false;
+      const t = new Date(o.close_date);
+      return t >= prevFrom && t < prevTo;
     };
+
     const prevCreated = previousOpps.filter(inPrevCreated);
     const prevWon = previousOpps.filter(
       (o) => o.status === 'won' && inPrevClosed(o),
@@ -330,8 +351,8 @@ export default function ReportsPage() {
         if (idx >= 0) points[idx].created += 1;
       }
 
-      if (o.status === 'won') {
-        const closed = new Date(o.updated_at);
+      if (o.status === 'won' && o.close_date) {
+        const closed = new Date(o.close_date);
         if (closed >= fromDate && closed <= toDate) {
           const i = points.findIndex((p) => p.date === matchKey(closed));
           if (i >= 0) {
@@ -372,8 +393,10 @@ export default function ReportsPage() {
     });
 
     currentOpps.forEach((o) => {
-      const t = new Date(o.updated_at);
-      if ((o.status === 'won' || o.status === 'lost') && t >= fromDate && t <= toDate) {
+      if (o.status !== 'won' && o.status !== 'lost') return;
+      if (!o.close_date) return;
+      const t = new Date(o.close_date);
+      if (t >= fromDate && t <= toDate) {
         const uid = o.owner_user_id || 'unassigned';
         const row = ensure(uid);
         if (o.status === 'won') {
