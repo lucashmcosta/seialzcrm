@@ -311,7 +311,7 @@ export default function OpportunityDetail() {
                 </div>
 
                 {/* Direita: ações + valor + status */}
-                <div className="flex items-center gap-2 shrink-0">
+                <div className="flex items-center gap-2 shrink-0 w-full md:w-auto flex-wrap justify-between md:justify-end">
                   {contactPhone && (
                     <Tooltip>
                       <TooltipTrigger asChild>
