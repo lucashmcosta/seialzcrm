@@ -193,8 +193,8 @@ export default function AdminOrganizations() {
                             variant="ghost"
                             size="sm"
                             onClick={() => handleAccess(org)}
-                            disabled={!org.user_count || accessingId === org.id}
-                            title={!org.user_count ? 'Sem usuário ativo' : 'Acessar conta como admin'}
+                            disabled={accessingId === org.id}
+                            title="Acessar conta como admin"
                           >
                             {accessingId === org.id ? (
                               <SpinnerGap className="h-4 w-4 mr-2 animate-spin" />
