@@ -63,7 +63,9 @@ export function ImpersonationBanner() {
     if (orgs.length > 0) return;
     setLoadingOrgs(true);
     try {
-      const { data, error } = await supabase.functions.invoke('admin-list-orgs-for-switch');
+      const { data, error } = await supabase.functions.invoke('admin-list-orgs-for-switch', {
+        body: { sessionId },
+      });
       if (error) throw error;
       setOrgs(data?.organizations ?? []);
     } catch (e) {
