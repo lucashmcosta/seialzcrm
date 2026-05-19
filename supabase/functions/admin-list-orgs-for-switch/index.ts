@@ -17,21 +17,25 @@ serve(async (req) => {
       Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''
     );
 
-    const authHeader = req.headers.get('Authorization');
-    if (!authHeader) throw new Error('Não autenticado');
+    let sessionId: string | null = null;
+    try {
+      const body = await req.json();
+      sessionId = body?.sessionId ?? null;
+    } catch (_) {
+      // no body
+    }
+    if (!sessionId) throw new Error('sessionId obrigatório');
 
-    const token = authHeader.replace('Bearer ', '');
-    const { data: { user }, error: authError } = await supabase.auth.getUser(token);
-    if (authError || !user) throw new Error('Usuário não autenticado');
+    const { data: impSession, error: impErr } = await supabase
+      .from('impersonation_sessions')
+      .select('id, status, ended_at')
+      .eq('id', sessionId)
+      .eq('status', 'active')
+      .is('ended_at', null)
+      .maybeSingle();
 
-    const { data: adminUser, error: adminError } = await supabase
-      .from('admin_users')
-      .select('id, mfa_enabled, is_active')
-      .eq('auth_user_id', user.id)
-      .single();
-
-    if (adminError || !adminUser || !adminUser.mfa_enabled || !adminUser.is_active) {
-      throw new Error('Acesso negado');
+    if (impErr || !impSession) {
+      throw new Error('Sessão de impersonação inválida');
     }
 
     // Orgs with at least one active user
