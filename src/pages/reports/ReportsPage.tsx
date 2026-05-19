@@ -32,6 +32,21 @@ const BlockFallback = ({ className = 'h-32' }: { className?: string }) => (
   <div className={`animate-pulse rounded-md bg-muted/50 ${className}`} />
 );
 
+/**
+ * Parse a YYYY-MM-DD date string as LOCAL midnight (not UTC).
+ * `new Date("2026-05-11")` produces UTC midnight, which in BR (UTC-3) becomes
+ * 2026-05-10T21:00 local — pushing close_date values one day back and causing
+ * report counts to disagree with the Kanban (which compares as date strings
+ * server-side). Always use this when comparing `close_date` against local
+ * Date ranges from `computeRange`.
+ */
+const parseLocalDate = (s: string | null | undefined): Date | null => {
+  if (!s) return null;
+  const m = /^(\d{4})-(\d{2})-(\d{2})/.exec(s);
+  if (!m) return new Date(s);
+  return new Date(Number(m[1]), Number(m[2]) - 1, Number(m[3]));
+};
+
 interface Opp {
   id: string;
   amount: number | null;
