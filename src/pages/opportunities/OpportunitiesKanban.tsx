@@ -1309,18 +1309,19 @@ export default function OpportunitiesKanban() {
             <div className="flex gap-3 overflow-x-auto pb-4">
               {stages.map((stage) => {
                 const stageOpportunities = getOpportunitiesForStage(stage.id);
-                const isFiltered = searchResults !== null || activeFiltersCount > 0;
-                const realCount = isFiltered
+                // Dialog filters are applied server-side via the RPC; only search uses client-side counts.
+                const isSearching = searchResults !== null;
+                const realCount = isSearching
                   ? stageOpportunities.length
                   : (stageCounts[stage.id]?.count ?? stageOpportunities.length);
-                const realAmount = isFiltered
+                const realAmount = isSearching
                   ? stageOpportunities.reduce((sum, opp) => sum + (Number(opp.amount) || 0), 0)
                   : (stageCounts[stage.id]?.amount ?? stageOpportunities.reduce(
                       (sum, opp) => sum + (Number(opp.amount) || 0),
                       0
                     ));
                 const loadedCount = stageOpportunities.length;
-                const hasMore = !isFiltered && hasMoreByStage[stage.id] && loadedCount < realCount;
+                const hasMore = !isSearching && hasMoreByStage[stage.id] && loadedCount < realCount;
 
                 return (
                   <div key={stage.id} className="flex-shrink-0 w-[240px]">
