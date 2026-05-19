@@ -205,6 +205,7 @@ const App = () => (
           <Route path="/auth/signin" element={<ResponsiveSignIn />} />
           <Route path="/auth/confirm-email" element={<ConfirmEmail />} />
           <Route path="/invite/:token" element={<AcceptInvitation />} />
+          <Route path="/impersonate/callback" element={<ImpersonateCallback />} />
           
           {/* Admin Portal routes */}
           <Route path="/admin/login" element={<AdminLogin />} />
