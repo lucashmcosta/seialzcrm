@@ -194,6 +194,7 @@ function LandingOrImpersonationFallback() {
     return null;
   }
   return <LandingPage />;
+}
 
 const App = () => (
   <QueryClientProvider client={queryClient}>
