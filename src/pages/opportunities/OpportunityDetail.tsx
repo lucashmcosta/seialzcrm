@@ -521,18 +521,26 @@ export default function OpportunityDetail() {
                           <PencilSimple className="h-4 w-4 mr-2" />
                           {t('common.edit')}
                         </DropdownMenuItem>
-                        {opportunity.status === 'open' && (
+                        {opportunity.status !== 'won' && (
                           <>
                             <DropdownMenuSeparator />
                             <DropdownMenuItem onClick={handleMarkWon}>
                               <TrendUp className="h-4 w-4 mr-2" />
                               {t('opportunities.markWon')}
                             </DropdownMenuItem>
-                            <DropdownMenuItem onClick={handleMarkLost}>
-                              <TrendDown className="h-4 w-4 mr-2" />
-                              {t('opportunities.markLost')}
-                            </DropdownMenuItem>
                           </>
+                        )}
+                        {opportunity.status !== 'lost' && (
+                          <DropdownMenuItem onClick={handleMarkLost}>
+                            <TrendDown className="h-4 w-4 mr-2" />
+                            {t('opportunities.markLost')}
+                          </DropdownMenuItem>
+                        )}
+                        {opportunity.status !== 'open' && (
+                          <DropdownMenuItem onClick={handleReopen}>
+                            <PencilSimple className="h-4 w-4 mr-2" />
+                            Reabrir
+                          </DropdownMenuItem>
                         )}
                       </DropdownMenuContent>
                     </DropdownMenu>
