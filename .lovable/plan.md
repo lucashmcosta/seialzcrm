@@ -1,58 +1,51 @@
-## Objetivo
-Adicionar um botão **Acessar** direto na coluna **Ações** da tela `/admin/organizations`, para abrir a conta já impersonada com **1 clique**, sem precisar entrar no detalhe da organização.
+## Problema
 
-## O que vou implementar
+No print, **todos os botões "Acessar" estão desabilitados** — inclusive em contas que claramente têm usuário (ex.: `Minha Empresa` com `Usuários = 1`).
 
-1. **Adicionar o botão `Acessar` na listagem de Contas**
-   - Fica ao lado do `Ver` em cada linha.
-   - O clique já inicia a impersonação da organização.
-   - A abertura será em **nova aba**, para **não derrubar sua sessão do Admin** nem tirar você da lista de contas.
+A causa é a regra atual no frontend:
 
-2. **Usar o fluxo já existente de troca por organização**
-   - Reaproveitar a edge function `admin-impersonate-switch`, passando apenas:
-     - `targetOrganizationId`
-     - `redirectUrl`
-   - Como ela já sabe escolher o **primeiro usuário ativo** da organização, não preciso duplicar regra no frontend.
-
-3. **Tratar contas sem usuário ativo**
-   - No seu print já existem várias contas com `Usuários = 0`.
-   - Nessas linhas, o botão `Acessar` ficará **desabilitado** ou com feedback claro (`Sem usuário ativo`).
-   - Assim evitamos clique que falha e a UX fica previsível.
-
-4. **Manter o switcher de tenant no banner impersonado**
-   - Depois que a conta abrir, o banner vermelho continua sendo o lugar para trocar rapidamente entre tenants já dentro do CRM.
-   - Ou seja:
-
-```text
-Admin / Contas  ->  [Acessar]  ->  abre tenant já logado
-Tenant aberto   ->  banner vermelho  ->  troca para outro tenant
+```ts
+disabled={!org.user_count || accessingId === org.id}
 ```
 
-## Arquivos previstos
+O `user_count` é calculado no browser via:
+
+```ts
+supabase.from('user_organizations').select('*', { count: 'exact', head: true })
+```
+
+Esse `count` roda com a sessão do admin e está sujeito a **RLS de `user_organizations`**, que só deixa o admin ver as orgs das quais ele mesmo participa. Resultado: na maioria das linhas o count volta `0` e o botão fica travado — mesmo quando a org tem usuário ativo de verdade.
+
+## Correção proposta
+
+1. **Parar de bloquear pelo `user_count` do frontend.**
+   - Quem sabe de verdade se existe usuário ativo é a edge function `admin-impersonate-switch` (roda com service role).
+   - O botão `Acessar` passa a ficar habilitado por padrão, só desabilitando enquanto a requisição daquela linha está em andamento (`accessingId === org.id`).
+
+2. **Tratar o erro "Organização sem usuário ativo" no frontend.**
+   - A edge function já lança esse erro — basta exibir num toast amigável: _"Esta conta não tem usuário ativo para acessar."_
+   - Sem abrir nova aba quando der erro.
+
+3. **Mostrar `Usuários` real na lista (opcional, mesma correção).**
+   - Trocar a contagem feita no browser por uma chamada à edge function `admin-list-orgs-for-switch` (ou estender `admin-list-orgs-for-switch` para devolver `user_count`).
+   - Assim a coluna `Usuários` para de mentir "0" em contas que têm gente.
+   - Esse passo é o que resolve a causa raiz; sem ele, a coluna `Usuários` continua incorreta mesmo com o botão funcionando.
+
+## Arquivos
 
 - `src/pages/admin/AdminOrganizations.tsx`
-  - adicionar botão `Acessar`
-  - loading por linha
-  - estado desabilitado para contas sem usuário ativo
-  - chamada da edge function e `window.open(...)`
+  - remover `!org.user_count` da prop `disabled`
+  - tratar mensagem de erro vinda da edge function
+  - (opcional) trocar a fonte de `user_count` para a edge function admin
 
-- `supabase/functions/admin-impersonate-switch/index.ts`
-  - no máximo um ajuste pequeno para garantir suporte explícito ao uso **sem `currentSessionId`** como acesso inicial vindo do Admin
-  - sem mudança de schema
+- `supabase/functions/admin-list-orgs-for-switch/index.ts` (apenas se formos corrigir a coluna `Usuários`)
+  - incluir `user_count` no payload de retorno
 
-## Validação / risco
-
-- **Baixo risco**: mudança aditiva, localizada, sem migration, sem alterar RLS.
-- **Não quebra o fluxo atual**:
-  - `Ver` continua existindo
-  - `Entrar como` na aba de usuários continua existindo
-  - switcher no banner continua funcionando
-- **Preserva sua sessão admin** porque o acesso abre em nova aba.
+Sem migration, sem mudança de RLS.
 
 ## Critérios de aceite
 
-1. Na tela **Contas**, cada linha passa a exibir `Acessar` + `Ver`.
-2. Clicar em `Acessar` numa conta com usuário ativo abre uma nova aba já logada naquele tenant.
-3. Dentro dessa aba, o banner vermelho permite trocar para outro tenant.
-4. Contas sem usuário ativo não tentam abrir impersonação e mostram estado claro de indisponibilidade.
-5. A tela de detalhe da organização continua funcionando igual.
+1. Botão `Acessar` fica habilitado em todas as linhas (exceto enquanto carrega aquela linha).
+2. Clicar numa conta com usuário ativo abre nova aba logada.
+3. Clicar numa conta realmente sem usuário ativo mostra toast claro e **não** abre aba.
+4. (Se incluirmos passo 3) Coluna `Usuários` passa a refletir o número real de usuários ativos.
