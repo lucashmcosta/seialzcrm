@@ -236,8 +236,8 @@ export default function ReportsPage() {
     };
     const inPeriodClosed = (o: Opp) => {
       if (o.status !== 'won' && o.status !== 'lost') return false;
-      if (!o.close_date) return false;
-      const t = new Date(o.close_date);
+      const t = parseLocalDate(o.close_date);
+      if (!t) return false;
       return t >= fromDate && t <= toDate;
     };
 
