@@ -1,78 +1,52 @@
-## Objetivo
-Consertar o fluxo completo de impersonação para que:
-- acesso pelo portal admin funcione em nova aba
-- troca de organização dentro da sessão impersonada funcione
-- links mágicos nunca caiam em `404`
-- callback finalize a sessão sem corrida entre auth e carregamento da app
+# Plan: Bisect and Fix `Cannot access 'Lt' before initialization`
 
-## Causa raiz identificada
-Hoje as edge functions estão reescrevendo o `action_link` gerado pelo Supabase para o host do app (`seialz.com` / preview). Isso quebra o endpoint de verificação, porque `/auth/v1/verify` precisa continuar no domínio do Supabase, não no domínio da aplicação.
+The error is a TDZ (temporal dead zone) hit in the production bundle. `madge --circular` reports no cycles in `src/`, so the cycle is likely either (a) introduced by Vite's chunking of mixed eager+lazy imports of the same module, or (b) a top-level use-before-declare inside a single file. Either way, the only reliable way to find it is to bisect by layer, exactly as requested.
 
-Em resumo:
-- correto: `https://qvmtzfvkhkhkhdpclzua.supabase.co/auth/v1/verify?...&redirect_to=https://seialz.com/impersonate/callback...`
-- quebrado hoje: `https://seialz.com/auth/v1/verify?...`
+## Approach
 
-## Plano
+I will keep the current `src/App.tsx` untouched on disk by moving it aside (`App.full.tsx`) and swapping in a stub `App.tsx` for each step. After each step I will run the production build (`vite build`) — the failure only reproduces in the minified bundle — load `dist/` in the preview, and confirm whether the blank screen returns.
 
-### 1. Corrigir a geração do magic link nas edge functions
-Ajustar `admin-impersonate` e `admin-impersonate-switch` para:
-- manter o `action_link` original no domínio do Supabase
-- alterar apenas o parâmetro `redirect_to`
-- garantir que `redirect_to` sempre aponte para `/impersonate/callback`
-- preservar `imp_session` dentro do `redirect_to`
-- manter a autorização dupla já implementada no switch (admin JWT ou sessão de impersonação ativa)
+## Steps
 
-### 2. Padronizar todos os pontos de entrada do frontend
-Revisar os três pontos que iniciam impersonação:
-- `AdminOrganizations`
-- `AdminOrganizationDetail`
-- `ImpersonationBanner`
+1. **Baseline boot**
+   - Rename `src/App.tsx` → `src/App.full.tsx`.
+   - New `src/App.tsx`: `export default () => <div>App boots</div>`.
+   - Build + preview. Must show "App boots".
 
-Todos devem continuar enviando `redirectUrl: ${window.location.origin}/impersonate/callback`, mas sem qualquer lógica adicional que dependa do host do magic link.
+2. **Add providers, no router** — QueryClient, Tooltip, Theme, Auth, Organization, OutboundCall. Build + preview.
 
-### 3. Fortalecer o callback de impersonação
-Ajustar `ImpersonateCallback` para:
-- capturar `imp_session` de forma robusta
-- aguardar a sessão autenticada com segurança
-- evitar corrida entre `onAuthStateChange`, `getSession()` e carregamento inicial
-- limpar hash/query temporários sem perder o `imp_session`
-- navegar para onboarding ou dashboard só depois de resolver o usuário interno e sua organização ativa
-- exibir erro útil apenas quando realmente falhar a autenticação
+3. **Add `BrowserRouter` + a single dummy route** to `<div>routed</div>`. Build + preview.
 
-### 4. Corrigir o fallback do `/`
-Revisar o fallback em `App.tsx` para redirecionar somente casos válidos de callback legado e não mascarar outros acessos.
+4. **Add eager-imported pages only** (SignUp, SignIn, ConfirmEmail, AcceptInvitation, LandingPage, Onboarding, Dashboard, ReportsPage, DocsIndex, DocsModule) wired to real routes. Build + preview.
 
-### 5. Validar o fluxo ponta a ponta
-Vou validar estes cenários:
-1. Admin portal -> acessar organização
-2. Admin portal -> detalhe da organização -> impersonar usuário
-3. Sessão impersonada -> trocar de organização
-4. Link antigo com `imp_session`/hash chegando em `/`
-5. Encerramento da sessão impersonada
+5. **Add `Layout` + `Dashboard`'s real subtree** (the route the user is currently on). Build + preview. This is the most likely failure point given the current route is `/dashboard`.
 
-## Arquivos a ajustar
-- `supabase/functions/admin-impersonate/index.ts`
-- `supabase/functions/admin-impersonate-switch/index.ts`
-- `src/pages/admin/ImpersonateCallback.tsx`
-- `src/App.tsx`
-- se necessário, pequenos ajustes em:
-  - `src/pages/admin/AdminOrganizations.tsx`
-  - `src/pages/admin/AdminOrganizationDetail.tsx`
-  - `src/components/admin/ImpersonationBanner.tsx`
+6. **Add lazy CRM pages** in groups of ~5 (contacts → opportunities → tasks → messages → marketing → settings group → whatsapp → admin). Build + preview after each group.
 
-## Detalhes técnicos
-```text
-Admin/CRM
-  -> invoke edge function
-  -> edge function gera magic link no Supabase
-  -> mantém host qvmtzfvkhkhkhdpclzua.supabase.co/auth/v1/verify
-  -> redirect_to = https://seialz.com/impersonate/callback?imp_session=...
-  -> Supabase autentica
-  -> app recebe callback
-  -> callback persiste imp_session
-  -> resolve users/auth_user_id + organization
-  -> navega para onboarding ou dashboard
-```
+7. **Add `GlobalCallHandler`** (lazy Twilio handlers). Build + preview.
 
-## Resultado esperado
-Ao clicar em acessar/trocar organização, a navegação passa direto pelo verify do Supabase, cai no callback correto da app e abre a organização impersonada sem 404 nem tela branca.
+When a step turns the screen blank, bisect that step's imports in halves until a single file is identified.
+
+## Root-cause fix patterns I will apply once the file is identified
+
+- **Eager + lazy import of the same module** (e.g. a settings component imported both at top and via `lazy(() => import(...))` elsewhere) — pick one strategy per module. This is the most common cause of `Cannot access 'X' before initialization` in Vite bundles and is my top hypothesis given how many `lazy(() => import("./components/settings/..."))` are mixed with regular components from the same folders.
+- **Barrel re-export cycles** (`src/components/common/index.ts`, etc.) — replace barrel imports with direct file imports on the offending path.
+- **Top-level use-before-declare** — hoist constants/types to dependency-free files.
+- **Context consumed before created** — ensure `createContext` runs in a module with no transitive import back to its consumers.
+- **Routes/arrays referencing components declared later** — reorder declarations.
+
+## Deliverables I will report back
+
+- Exact file (and import) that triggers the TDZ.
+- The import chain that produces the cycle (printed from `madge --circular` re-run after I tag the suspect, or from manual trace).
+- The source-code refactor applied.
+- Screenshot/confirmation of `/dashboard` rendering without blank screen.
+
+## Notes / constraints
+
+- I will not touch `dist/` or any built artifact.
+- I will not change behavior — only move imports / split files.
+- Each bisection step is a single small commit-sized change so it's easy to revert if I'm wrong.
+- Estimated 8–15 build cycles. Each Vite build on this project is ~30–60s, so the whole bisection should complete in a single working session.
+
+Approve and I'll start at step 1.
