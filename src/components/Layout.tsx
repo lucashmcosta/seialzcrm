@@ -96,18 +96,20 @@ export function Layout({ children }: LayoutProps) {
     groups.push({ label: 'SISTEMA', items: sysItems });
 
     return (
-      <div className="flex h-screen bg-background overflow-hidden">
+      <div className="flex flex-col h-screen bg-background overflow-hidden">
         <ImpersonationBanner />
-        <SeialzSidebar
-          groups={groups}
-          userProfile={userProfile}
-          onSignOut={signOut}
-          locale={locale}
-        />
-        <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden">
-          <main className="min-h-0 flex-1 overflow-y-auto overflow-x-hidden">
-            {children}
-          </main>
+        <div className="flex flex-1 min-h-0 overflow-hidden">
+          <SeialzSidebar
+            groups={groups}
+            userProfile={userProfile}
+            onSignOut={signOut}
+            locale={locale}
+          />
+          <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden">
+            <main className="min-h-0 flex-1 overflow-y-auto overflow-x-hidden">
+              {children}
+            </main>
+          </div>
         </div>
       </div>
     );
