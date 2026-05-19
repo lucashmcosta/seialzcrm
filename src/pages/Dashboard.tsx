@@ -23,7 +23,19 @@ interface OppRow {
   status: string;
   created_at: string;
   updated_at: string;
+  close_date: string | null;
 }
+
+/** Parse YYYY-MM-DD as LOCAL midnight (close_date is a DATE column). */
+const parseLocalDate = (s: string | null | undefined): Date | null => {
+  if (!s) return null;
+  const m = /^(\d{4})-(\d{2})-(\d{2})/.exec(s);
+  if (!m) return new Date(s);
+  return new Date(Number(m[1]), Number(m[2]) - 1, Number(m[3]));
+};
+
+const toDayStr = (d: Date) =>
+  `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
 
 export default function Dashboard() {
   const { organization, userProfile, locale, loading: orgLoading, error } = useOrganization();
@@ -140,16 +152,18 @@ export default function Dashboard() {
     try {
       const fromIso = from.toISOString();
       const toIso = to.toISOString();
+      const fromDay = toDayStr(from);
+      const toDay = toDayStr(to);
 
-      // Single query: rows created in period OR won-and-closed in period
+      // Single query: rows created in period OR won-and-closed (by close_date) in period
       const { data, error } = await supabase
         .from('opportunities')
-        .select('id, status, created_at, updated_at')
+        .select('id, status, created_at, updated_at, close_date')
         .eq('organization_id', organization.id)
         .eq('owner_user_id', userProfile.id)
         .is('deleted_at', null)
         .or(
-          `and(created_at.gte.${fromIso},created_at.lte.${toIso}),and(status.eq.won,updated_at.gte.${fromIso},updated_at.lte.${toIso})`,
+          `and(created_at.gte.${fromIso},created_at.lte.${toIso}),and(status.eq.won,close_date.gte.${fromDay},close_date.lte.${toDay})`,
         )
         .limit(5000);
 
@@ -163,9 +177,12 @@ export default function Dashboard() {
       for (const r of rows) {
         const c = new Date(r.created_at).getTime();
         if (c >= fromMs && c <= toMs) entered += 1;
-        if (r.status === 'won' && r.updated_at) {
-          const u = new Date(r.updated_at).getTime();
-          if (u >= fromMs && u <= toMs) closed += 1;
+        if (r.status === 'won' && r.close_date) {
+          const d = parseLocalDate(r.close_date);
+          if (d) {
+            const u = d.getTime();
+            if (u >= fromMs && u <= toMs) closed += 1;
+          }
         }
       }
 

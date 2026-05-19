@@ -14,7 +14,15 @@ interface OppPoint {
   created_at: string;
   status: string;
   updated_at: string;
+  close_date?: string | null;
 }
+
+const parseLocalDate = (s: string | null | undefined): Date | null => {
+  if (!s) return null;
+  const m = /^(\d{4})-(\d{2})-(\d{2})/.exec(s);
+  if (!m) return new Date(s);
+  return new Date(Number(m[1]), Number(m[2]) - 1, Number(m[3]));
+};
 
 interface Props {
   data: OppPoint[];
@@ -67,9 +75,9 @@ export function DashboardTrendChart({ data, from, to, loading }: Props) {
         const b = buckets.get(key);
         if (b) b.entered += 1;
       }
-      if (opp.status === 'won' && opp.updated_at) {
-        const updated = new Date(opp.updated_at);
-        if (updated.getTime() >= fromMs && updated.getTime() <= toMs) {
+      if (opp.status === 'won' && opp.close_date) {
+        const updated = parseLocalDate(opp.close_date);
+        if (updated && updated.getTime() >= fromMs && updated.getTime() <= toMs) {
           const key = (weekly ? startOfWeek(updated) : startOfDay(updated)).getTime();
           const b = buckets.get(key);
           if (b) b.closed += 1;
