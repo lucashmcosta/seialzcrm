@@ -31,7 +31,36 @@ export default function AdminOrganizations() {
   const [organizations, setOrganizations] = useState<Organization[]>([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
+  const [accessingId, setAccessingId] = useState<string | null>(null);
   const navigate = useNavigate();
+
+  const handleAccess = async (org: Organization) => {
+    if (!org.user_count || accessingId) return;
+    setAccessingId(org.id);
+    try {
+      const { data, error } = await supabase.functions.invoke('admin-impersonate-switch', {
+        body: {
+          targetOrganizationId: org.id,
+          redirectUrl: window.location.origin,
+        },
+      });
+      if (error) throw error;
+      if (!data?.action_link) throw new Error('Sem link de acesso');
+      window.open(data.action_link, '_blank', 'noopener');
+      toast({
+        title: 'Acesso iniciado',
+        description: `Abrindo ${org.name} em nova aba.`,
+      });
+    } catch (e: any) {
+      toast({
+        title: 'Erro',
+        description: e?.message || 'Falha ao acessar conta.',
+        variant: 'destructive',
+      });
+    } finally {
+      setAccessingId(null);
+    }
+  };
 
   useEffect(() => {
     fetchOrganizations();
