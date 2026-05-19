@@ -167,8 +167,17 @@ export default function OpportunitiesKanban() {
 
   useEffect(() => {
     if (!organization?.id) return;
-    fetchData();
-  }, [organization?.id]);
+    // Debounce filter-driven refetch so typing in date/amount inputs doesn't spam the RPC
+    const t = setTimeout(() => { fetchData(); }, 200);
+    return () => clearTimeout(t);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [
+    organization?.id,
+    filterOwners, filterMinAmount, filterMaxAmount,
+    filterDateFrom, filterDateTo, filterNoCloseDate,
+    filterCreatedFrom, filterCreatedTo,
+    filterTags, filterStages,
+  ]);
 
   // Server-side search with debounce
   useEffect(() => {
@@ -230,11 +239,28 @@ export default function OpportunitiesKanban() {
 
     setLoading(true);
 
-    // Try new RPC first, fall back to direct queries if not available
-    const stageResult = await supabase.rpc('get_opportunities_by_stage', {
+    // Translate UI filter state into RPC params so per-stage counts match
+    // the filtered dataset exactly (fixes Kanban-vs-Reports inconsistency).
+    const ownerUuids = filterOwners.filter((o) => o !== 'none');
+    const includeNoOwner = filterOwners.includes('none');
+    const rpcParams: Record<string, unknown> = {
       p_organization_id: organization.id,
       p_limit_per_stage: CARDS_PER_STAGE,
-    });
+      p_owner_ids: ownerUuids.length > 0 ? ownerUuids : null,
+      p_include_no_owner: includeNoOwner,
+      p_min_amount: filterMinAmount ? Number(filterMinAmount) : null,
+      p_max_amount: filterMaxAmount ? Number(filterMaxAmount) : null,
+      p_close_date_from: filterDateFrom || null,
+      p_close_date_to: filterDateTo || null,
+      p_no_close_date: filterNoCloseDate,
+      p_created_from: filterCreatedFrom || null,
+      p_created_to: filterCreatedTo || null,
+      p_tag_ids: filterTags.length > 0 ? filterTags : null,
+      p_stage_ids: filterStages.length > 0 ? filterStages : null,
+    };
+
+    // Try new RPC first, fall back to direct queries if not available
+    const stageResult = await (supabase.rpc as any)('get_opportunities_by_stage', rpcParams);
 
     const useRpc = !stageResult.error && stageResult.data;
 
@@ -981,18 +1007,21 @@ export default function OpportunitiesKanban() {
       <div className="flex gap-3 overflow-x-auto pb-1 px-6 pt-4 flex-1">
         {stages.map((stage, stageIndex) => {
           const stageOpportunities = getOpportunitiesForStage(stage.id);
-          const isFiltered = searchResults !== null || activeFiltersCount > 0;
-          const realCount = isFiltered
+          // Dialog filters are now applied server-side inside the RPC, so stageCounts
+          // is already the correct filtered total. Only client-side search falls back
+          // to a local count (search bypasses the RPC).
+          const isSearching = searchResults !== null;
+          const realCount = isSearching
             ? stageOpportunities.length
             : (stageCounts[stage.id]?.count ?? stageOpportunities.length);
-          const realAmount = isFiltered
+          const realAmount = isSearching
             ? stageOpportunities.reduce((sum, opp) => sum + (Number(opp.amount) || 0), 0)
             : (stageCounts[stage.id]?.amount ?? stageOpportunities.reduce(
                 (sum, opp) => sum + (Number(opp.amount) || 0),
                 0
               ));
           const loadedCount = stageOpportunities.length;
-          const hasMore = !isFiltered && hasMoreByStage[stage.id] && loadedCount < realCount;
+          const hasMore = !isSearching && hasMoreByStage[stage.id] && loadedCount < realCount;
           const stageColor = STAGE_COLORS[stageIndex % STAGE_COLORS.length];
 
           return (
@@ -1280,18 +1309,19 @@ export default function OpportunitiesKanban() {
             <div className="flex gap-3 overflow-x-auto pb-4">
               {stages.map((stage) => {
                 const stageOpportunities = getOpportunitiesForStage(stage.id);
-                const isFiltered = searchResults !== null || activeFiltersCount > 0;
-                const realCount = isFiltered
+                // Dialog filters are applied server-side via the RPC; only search uses client-side counts.
+                const isSearching = searchResults !== null;
+                const realCount = isSearching
                   ? stageOpportunities.length
                   : (stageCounts[stage.id]?.count ?? stageOpportunities.length);
-                const realAmount = isFiltered
+                const realAmount = isSearching
                   ? stageOpportunities.reduce((sum, opp) => sum + (Number(opp.amount) || 0), 0)
                   : (stageCounts[stage.id]?.amount ?? stageOpportunities.reduce(
                       (sum, opp) => sum + (Number(opp.amount) || 0),
                       0
                     ));
                 const loadedCount = stageOpportunities.length;
-                const hasMore = !isFiltered && hasMoreByStage[stage.id] && loadedCount < realCount;
+                const hasMore = !isSearching && hasMoreByStage[stage.id] && loadedCount < realCount;
 
                 return (
                   <div key={stage.id} className="flex-shrink-0 w-[240px]">
