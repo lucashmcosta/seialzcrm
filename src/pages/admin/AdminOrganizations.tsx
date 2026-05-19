@@ -12,9 +12,10 @@ import {
   TableHeader,
   TableRow,
 } from '@/components/ui/table';
-import { MagnifyingGlass, Eye } from '@phosphor-icons/react';
+import { MagnifyingGlass, Eye, SignIn, SpinnerGap } from '@phosphor-icons/react';
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
+import { toast } from '@/hooks/use-toast';
 
 interface Organization {
   id: string;
@@ -30,7 +31,36 @@ export default function AdminOrganizations() {
   const [organizations, setOrganizations] = useState<Organization[]>([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
+  const [accessingId, setAccessingId] = useState<string | null>(null);
   const navigate = useNavigate();
+
+  const handleAccess = async (org: Organization) => {
+    if (!org.user_count || accessingId) return;
+    setAccessingId(org.id);
+    try {
+      const { data, error } = await supabase.functions.invoke('admin-impersonate-switch', {
+        body: {
+          targetOrganizationId: org.id,
+          redirectUrl: window.location.origin,
+        },
+      });
+      if (error) throw error;
+      if (!data?.action_link) throw new Error('Sem link de acesso');
+      window.open(data.action_link, '_blank', 'noopener');
+      toast({
+        title: 'Acesso iniciado',
+        description: `Abrindo ${org.name} em nova aba.`,
+      });
+    } catch (e: any) {
+      toast({
+        title: 'Erro',
+        description: e?.message || 'Falha ao acessar conta.',
+        variant: 'destructive',
+      });
+    } finally {
+      setAccessingId(null);
+    }
+  };
 
   useEffect(() => {
     fetchOrganizations();
@@ -151,14 +181,30 @@ export default function AdminOrganizations() {
                         {format(new Date(org.created_at), 'dd/MM/yyyy', { locale: ptBR })}
                       </TableCell>
                       <TableCell className="text-right">
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          onClick={() => navigate(`/admin/organizations/${org.id}`)}
-                        >
-                          <Eye className="h-4 w-4 mr-2" />
-                          Ver
-                        </Button>
+                        <div className="flex items-center justify-end gap-1">
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            onClick={() => handleAccess(org)}
+                            disabled={!org.user_count || accessingId === org.id}
+                            title={!org.user_count ? 'Sem usuário ativo' : 'Acessar conta como admin'}
+                          >
+                            {accessingId === org.id ? (
+                              <SpinnerGap className="h-4 w-4 mr-2 animate-spin" />
+                            ) : (
+                              <SignIn className="h-4 w-4 mr-2" />
+                            )}
+                            Acessar
+                          </Button>
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            onClick={() => navigate(`/admin/organizations/${org.id}`)}
+                          >
+                            <Eye className="h-4 w-4 mr-2" />
+                            Ver
+                          </Button>
+                        </div>
                       </TableCell>
                     </TableRow>
                   ))
