@@ -367,8 +367,8 @@ export default function ReportsPage() {
       }
 
       if (o.status === 'won' && o.close_date) {
-        const closed = new Date(o.close_date);
-        if (closed >= fromDate && closed <= toDate) {
+        const closed = parseLocalDate(o.close_date);
+        if (closed && closed >= fromDate && closed <= toDate) {
           const i = points.findIndex((p) => p.date === matchKey(closed));
           if (i >= 0) {
             points[i].won += 1;
