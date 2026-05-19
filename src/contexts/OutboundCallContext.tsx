@@ -1,52 +1,17 @@
-import React, { createContext, useContext, useState, useRef, useCallback, useEffect, ReactNode } from 'react';
+import React, { useState, useRef, useCallback, useEffect, ReactNode } from 'react';
 import { useLocation } from 'react-router-dom';
-import { Device, Call } from '@twilio/voice-sdk';
+import type { Device as TwilioDevice, Call as TwilioCall } from '@twilio/voice-sdk';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
 import { getTwilioAccessToken, getVerifiedSession } from '@/lib/authSession';
 
+import { OutboundCallContext } from './outbound-call/context';
+import type { CallInfo, CallStatus, OutboundCallContextType, TokenCache } from './outbound-call/types';
 
-export type CallStatus = 'idle' | 'initializing' | 'ready' | 'connecting' | 'ringing' | 'connected' | 'ended' | 'failed';
-
-interface CallInfo {
-  phoneNumber: string;
-  contactName?: string;
-  contactId?: string;
-  opportunityId?: string;
-}
-
-interface TokenCache {
-  token: string;
-  expires: number;
-}
-
-interface OutboundCallContextType {
-  // Start a call
-  startCall: (params: CallInfo) => void;
-  
-  // Call state
-  isOnCall: boolean;
-  callInfo: CallInfo | null;
-  status: CallStatus;
-  duration: number;
-  errorMessage: string | null;
-  
-  // Controls
-  endCall: () => void;
-  toggleMute: () => void;
-  isMuted: boolean;
-  sendDTMF: (digit: string) => void;
-  dtmfDigits: string;
-  
-  // UI state
-  isMinimized: boolean;
-  setMinimized: (val: boolean) => void;
-  
-  // Device state
-  isDeviceReady: boolean;
-}
-
-const OutboundCallContext = createContext<OutboundCallContextType | undefined>(undefined);
+// Re-export public API so existing import paths
+// (`@/contexts/OutboundCallContext`) keep working unchanged.
+export { useOutboundCall } from './outbound-call/context';
+export type { CallStatus, CallInfo } from './outbound-call/types';
 
 export function OutboundCallProvider({ children }: { children: ReactNode }) {
   const location = useLocation();
@@ -60,12 +25,12 @@ export function OutboundCallProvider({ children }: { children: ReactNode }) {
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [isMinimized, setIsMinimized] = useState(false);
   const [isDeviceReady, setIsDeviceReady] = useState(false);
-  
+
   // SECURITY: Never initialize in admin routes
   const isAdminRoute = location.pathname.startsWith('/admin');
-  
-  const deviceRef = useRef<Device | null>(null);
-  const activeCallRef = useRef<Call | null>(null);
+
+  const deviceRef = useRef<TwilioDevice | null>(null);
+  const activeCallRef = useRef<TwilioCall | null>(null);
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const callIdRef = useRef<string | null>(null);
   const callStartTimeRef = useRef<Date | null>(null);
@@ -208,7 +173,7 @@ export function OutboundCallProvider({ children }: { children: ReactNode }) {
   // Get cached token or fetch new one
   const getToken = useCallback(async (): Promise<string> => {
     const now = Date.now();
-    
+
     // Return cached token if still valid (with 1 minute buffer)
     if (tokenCacheRef.current && tokenCacheRef.current.expires > now + 60000) {
       console.log('Using cached token');
@@ -343,7 +308,7 @@ export function OutboundCallProvider({ children }: { children: ReactNode }) {
 
     try {
       const updateData: Record<string, any> = { status: callStatus };
-      
+
       if (endedAt && callStartTimeRef.current) {
         const durationSeconds = Math.floor((endedAt.getTime() - callStartTimeRef.current.getTime()) / 1000);
         updateData.ended_at = endedAt.toISOString();
@@ -354,7 +319,7 @@ export function OutboundCallProvider({ children }: { children: ReactNode }) {
         .from('calls')
         .update(updateData)
         .eq('id', callIdRef.current);
-        
+
       console.log('Call record updated:', updateData);
     } catch (error) {
       console.error('Error updating call record:', error);
@@ -368,7 +333,7 @@ export function OutboundCallProvider({ children }: { children: ReactNode }) {
       if (!userData) return;
 
       callStartTimeRef.current = new Date();
-      
+
       const { data: newCall } = await supabase.from('calls').insert({
         organization_id: userData.orgId,
         user_id: userData.userId,
@@ -390,7 +355,7 @@ export function OutboundCallProvider({ children }: { children: ReactNode }) {
     } catch (dbError) {
       console.error('Error recording call:', dbError);
     }
-  }, [getUserData]);
+  }, [getUserData, subscribeToCallStatus]);
 
   // Make the actual call (fast path - device already ready)
   const makeCall = useCallback(async () => {
@@ -469,12 +434,12 @@ export function OutboundCallProvider({ children }: { children: ReactNode }) {
         updateCallRecord('busy', new Date());
       });
 
-      call.on('error', (error) => {
+      call.on('error', (error: any) => {
         console.error('[SDK] Call error:', error);
         callFinalizedRef.current = true;
         lastProcessedStatusRef.current = 'failed';
         clearStateTimeout();
-        setErrorMessage(error.message || 'Erro na chamada');
+        setErrorMessage(error?.message || 'Erro na chamada');
         setStatus('failed');
         updateCallRecord('failed', new Date());
       });
@@ -485,7 +450,7 @@ export function OutboundCallProvider({ children }: { children: ReactNode }) {
       setErrorMessage(error.message || 'Erro ao conectar chamada');
       setStatus('failed');
     }
-  }, [updateCallRecord, createCallRecordAsync]);
+  }, [updateCallRecord, createCallRecordAsync, setStateTimeout, clearStateTimeout]);
 
   // Initialize device (persistent - runs once)
   const initializeDevice = useCallback(async () => {
@@ -510,6 +475,11 @@ export function OutboundCallProvider({ children }: { children: ReactNode }) {
 
       const token = await getToken();
       console.log('Got access token, initializing persistent device...');
+
+      // Dynamic import: keeps @twilio/voice-sdk out of the eager static
+      // graph so the main bundle never references its bindings during
+      // initialization (fixes "Cannot access 'Lt' before initialization").
+      const { Device, Call } = await import('@twilio/voice-sdk');
 
       const device = new Device(token, {
         codecPreferences: [Call.Codec.PCMU, Call.Codec.Opus],
@@ -603,7 +573,7 @@ export function OutboundCallProvider({ children }: { children: ReactNode }) {
           .eq('auth_user_id', session.user.id)
           .maybeSingle();
         if (!userData || cancelled) { setVoiceLoading(false); return; }
-        
+
         const { data: orgData } = await supabase
           .from('user_organizations')
           .select('organization_id')
@@ -619,7 +589,7 @@ export function OutboundCallProvider({ children }: { children: ReactNode }) {
           .eq('is_enabled', true)
           .or('slug.eq.twilio-voice,category.eq.telephony', { referencedTable: 'admin_integrations' })
           .maybeSingle();
-        
+
         if (!cancelled) {
           setHasVoiceIntegration(!!data);
           setVoiceLoading(false);
@@ -646,10 +616,10 @@ export function OutboundCallProvider({ children }: { children: ReactNode }) {
       console.log('[OutboundCall] Voice integration not enabled, skipping device initialization');
       return;
     }
-    
+
     let timer: ReturnType<typeof setTimeout> | null = null;
     let isMounted = true;
-    
+
     // Check auth before initializing
     const checkAuthAndInitialize = async () => {
       try {
@@ -658,7 +628,7 @@ export function OutboundCallProvider({ children }: { children: ReactNode }) {
           console.log('[OutboundCall] Not authenticated, skipping device initialization');
           return;
         }
-        
+
         if (isMounted) {
           // Small delay to ensure everything is ready
           timer = setTimeout(() => {
@@ -671,7 +641,7 @@ export function OutboundCallProvider({ children }: { children: ReactNode }) {
         console.log('[OutboundCall] Auth check failed:', error);
       }
     };
-    
+
     checkAuthAndInitialize();
 
     return () => {
@@ -689,7 +659,7 @@ export function OutboundCallProvider({ children }: { children: ReactNode }) {
     if (isOnCall) {
       cleanupCall();
     }
-    
+
     setCallInfo(params);
     pendingCallRef.current = params;
 
@@ -788,12 +758,4 @@ export function OutboundCallProvider({ children }: { children: ReactNode }) {
       {children}
     </OutboundCallContext.Provider>
   );
-}
-
-export function useOutboundCall() {
-  const context = useContext(OutboundCallContext);
-  if (context === undefined) {
-    throw new Error('useOutboundCall must be used within an OutboundCallProvider');
-  }
-  return context;
 }
