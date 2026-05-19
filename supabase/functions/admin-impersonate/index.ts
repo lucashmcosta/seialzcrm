@@ -63,6 +63,7 @@ serve(async (req) => {
     const { data: sessionData, error: sessionError } = await supabase.auth.admin.generateLink({
       type: 'magiclink',
       email: targetUser.email,
+      options: redirectUrl ? { redirectTo: redirectUrl } : undefined,
     });
 
     if (sessionError || !sessionData) {
@@ -102,17 +103,24 @@ serve(async (req) => {
 
     console.log(`Admin ${adminUser.email} impersonating user ${targetUser.email}`);
 
-    // Return magic link with session_id as query param
+    // Build final magic link
     const magicLinkUrl = new URL(sessionData.properties.action_link);
-    
-    // Replace domain with the correct one from redirectUrl
+
+    // Force host/protocol to match the caller (preview vs published)
     if (redirectUrl) {
       const targetUrl = new URL(redirectUrl);
       magicLinkUrl.protocol = targetUrl.protocol;
       magicLinkUrl.host = targetUrl.host;
-    }
-    
-    if (impSession) {
+
+      // Ensure redirect_to ends at the impersonation callback (carrying imp_session)
+      try {
+        const inner = new URL(targetUrl.toString());
+        if (impSession) inner.searchParams.set('imp_session', impSession.id);
+        magicLinkUrl.searchParams.set('redirect_to', inner.toString());
+      } catch (_) {
+        if (impSession) magicLinkUrl.searchParams.set('imp_session', impSession.id);
+      }
+    } else if (impSession) {
       magicLinkUrl.searchParams.set('imp_session', impSession.id);
     }
 

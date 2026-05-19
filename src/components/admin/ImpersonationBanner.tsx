@@ -86,7 +86,7 @@ export function ImpersonationBanner() {
         body: {
           currentSessionId: sessionId,
           targetOrganizationId: orgId,
-          redirectUrl: window.location.origin,
+          redirectUrl: `${window.location.origin}/impersonate/callback`,
         },
       });
       if (error) throw error;

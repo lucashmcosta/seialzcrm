@@ -132,7 +132,7 @@ export default function AdminOrganizationDetail() {
       const { data, error } = await supabase.functions.invoke('admin-impersonate', {
         body: { 
           userId: user.id,
-          redirectUrl: window.location.origin
+          redirectUrl: `${window.location.origin}/impersonate/callback`
         },
       });
 

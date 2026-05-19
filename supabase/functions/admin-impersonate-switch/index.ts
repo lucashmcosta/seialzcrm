@@ -145,7 +145,21 @@ serve(async (req) => {
     });
 
     const magicLinkUrl = new URL(sessionData.properties.action_link);
-    if (impSession) {
+
+    // Force host/protocol to match the caller (preview vs published)
+    if (redirectUrl) {
+      try {
+        const targetUrl = new URL(redirectUrl);
+        magicLinkUrl.protocol = targetUrl.protocol;
+        magicLinkUrl.host = targetUrl.host;
+
+        const inner = new URL(targetUrl.toString());
+        if (impSession) inner.searchParams.set('imp_session', impSession.id);
+        magicLinkUrl.searchParams.set('redirect_to', inner.toString());
+      } catch (_) {
+        if (impSession) magicLinkUrl.searchParams.set('imp_session', impSession.id);
+      }
+    } else if (impSession) {
       const innerRedirect = magicLinkUrl.searchParams.get('redirect_to');
       if (innerRedirect) {
         try {
