@@ -180,6 +180,21 @@ function GlobalCallHandler() {
   );
 }
 
+// Fallback for impersonation magic links that land on "/" instead of /impersonate/callback
+function LandingOrImpersonationFallback() {
+  const search = window.location.search;
+  const hash = window.location.hash;
+  const hasImp =
+    search.includes('imp_session=') ||
+    hash.includes('access_token=') ||
+    hash.includes('type=magiclink') ||
+    hash.includes('type=recovery');
+  if (hasImp) {
+    window.location.replace('/impersonate/callback' + search + hash);
+    return null;
+  }
+  return <LandingPage />;
+
 const App = () => (
   <QueryClientProvider client={queryClient}>
     <TooltipProvider>
