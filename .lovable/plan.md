@@ -1,83 +1,53 @@
 ## Problema
 
-Ao clicar em **Acessar**, abre uma nova aba em:
+Após o clique em **Acessar**, a nova aba é aberta no link do Supabase Auth (`/auth/v1/verify?...`), o Supabase processa o token e redireciona para `https://seialz.com/?imp_session=...#access_token=...`.
 
-```
-https://seialz.com/auth/v1/verify?token=...&type=magiclink&redirect_to=...
-```
+O destino é a **landing page** (`/`). Ela não trata o hash do magic link de forma confiável (sem `useEffect` que aguarde `onAuthStateChange`), e como a aba não tem sessão prévia, qualquer navegação subsequente acaba caindo em `/auth/signin`. Resultado: o admin "loga", mas é jogado para a tela de login do Seialz em vez do dashboard da organização.
 
-…que cai no **404** do app.
+## Solução
 
-O caminho `/auth/v1/verify` **não pertence ao app** — é o endpoint do **Supabase Auth** (`https://qvmtzfvkhkhkhdpclzua.supabase.co/auth/v1/verify`).
+Criar uma rota pública dedicada `/impersonate/callback` que:
 
-A edge function `admin-impersonate-switch` hoje faz:
+1. É pública (não passa por `ProtectedRoute`).
+2. Espera o `supabase-js` consumir o `#access_token` do hash (detectSessionInUrl).
+3. Lê `imp_session` da query string e guarda em `sessionStorage` (para o `ImpersonationBanner` exibir o aviso).
+4. Quando `onAuthStateChange` dispara `SIGNED_IN`, resolve a organização do usuário e navega para `/dashboard` (ou `/onboarding` se aplicável) com `replace`.
+5. Mostra um loader enquanto isso (`PageLoader`).
 
-```ts
-const magicLinkUrl = new URL(sessionData.properties.action_link);
-if (redirectUrl) {
-  const targetUrl = new URL(redirectUrl);
-  magicLinkUrl.protocol = targetUrl.protocol;
-  magicLinkUrl.host = targetUrl.host;   // <-- troca supabase.co por seialz.com
-}
-```
+E ajustar o fluxo para apontar para essa rota:
 
-Ou seja, ela está reescrevendo o **host do endpoint de verify** para `seialz.com`. Como o app não tem rota `/auth/v1/verify`, o React Router devolve 404 e o login nunca acontece.
-
-## Correção
-
-1. **Parar de reescrever `host`/`protocol` do `action_link`.**
-   O link de verify precisa continuar apontando para o domínio do Supabase Auth — é lá que o token é validado e a sessão é criada.
-
-2. **Usar `redirectTo` no `generateLink` para mandar o usuário de volta pro app depois do verify.**
-
-   ```ts
-   const { data: sessionData, error: sessionError } =
-     await supabase.auth.admin.generateLink({
-       type: 'magiclink',
-       email: targetUser.email,
-       options: {
-         redirectTo: redirectUrl,            // ex: https://seialz.com
-       },
-     });
-   ```
-
-   O Supabase embute esse `redirectTo` dentro do próprio `action_link` (`?redirect_to=...`). Após validar o token, o Supabase redireciona o navegador para `redirectUrl` já autenticado.
-
-3. **Manter o `imp_session` no link final**, só que agora anexado ao **`redirect_to` interno** (não no host do verify), para que ele sobreviva ao redirect:
-
-   ```ts
-   const magicLinkUrl = new URL(sessionData.properties.action_link);
-   if (impSession) {
-     const innerRedirect = magicLinkUrl.searchParams.get('redirect_to');
-     if (innerRedirect) {
-       const inner = new URL(innerRedirect);
-       inner.searchParams.set('imp_session', impSession.id);
-       magicLinkUrl.searchParams.set('redirect_to', inner.toString());
-     }
-   }
-   ```
-
-4. **Garantir que o domínio do app (`https://seialz.com`, preview, custom domain) esteja na lista de Redirect URLs do Supabase Auth.** Sem isso, o `redirectTo` é ignorado e cai na Site URL padrão. (Configuração no dashboard, não é código.)
+- **`src/pages/admin/AdminOrganizations.tsx`**: trocar `redirectUrl: window.location.origin` por `redirectUrl: \`${window.location.origin}/impersonate/callback\``.
+- **`supabase/functions/admin-impersonate-switch/index.ts`**: nenhuma mudança lógica — continua repassando `redirectUrl` em `options.redirectTo` e anexando `imp_session` ao `redirect_to` interno. Apenas o destino muda.
 
 ## Arquivos
 
-- `supabase/functions/admin-impersonate-switch/index.ts`
-  - remover a reescrita de `host`/`protocol`
-  - passar `options.redirectTo: redirectUrl` no `generateLink`
-  - mover o `imp_session` para o `redirect_to` interno
+```text
+src/pages/admin/ImpersonateCallback.tsx   (novo)
+src/App.tsx                                (registrar rota pública)
+src/pages/admin/AdminOrganizations.tsx     (mudar redirectUrl)
+```
 
-Frontend (`AdminOrganizations.tsx`) **não precisa mudar** — já envia `redirectUrl: window.location.origin` e abre `data.action_link` em nova aba.
+## Detalhes técnicos
 
-## Critérios de aceite
+- `ImpersonateCallback` usa `useAuth()` + `useEffect` que observa `user`/`loading`. Quando `user` existir, busca `user_organizations` → `organizations.onboarding_step` e roteia para `/dashboard` ou `/onboarding`.
+- Timeout de 8s: se `user` continuar `null`, mostra erro e botão "Voltar ao admin".
+- Limpa o hash da URL após processar (`window.history.replaceState`).
 
-1. Clicar em **Acessar** abre nova aba que passa pelo verify do Supabase e cai no app já logado como aquele usuário da org.
-2. Não aparece mais 404 em `seialz.com/auth/v1/verify`.
-3. O parâmetro `imp_session` chega na URL final do app (para o banner de impersonação funcionar).
-4. Conta sem usuário ativo continua mostrando o toast amigável (sem abrir aba).
+## Configuração manual obrigatória
 
-## Ação manual (fora do código)
+No Supabase Dashboard → **Authentication → URL Configuration → Redirect URLs**, adicionar:
 
-Conferir em **Supabase Dashboard → Authentication → URL Configuration → Redirect URLs** se estão liberados:
-- `https://seialz.com`
-- `https://seialzcrm.lovable.app`
-- URL de preview do Lovable
+```
+https://seialz.com/impersonate/callback
+https://seialzcrm.lovable.app/impersonate/callback
+https://id-preview--3e7cbf89-7e65-4eb1-ae96-6b6359aa6e47.lovable.app/impersonate/callback
+```
+
+Sem isso o Supabase recusa o `redirect_to` e cai no fallback (Site URL → `/auth/signin`), que é exatamente o sintoma atual.
+
+## Validação
+
+1. Como admin, clicar **Acessar** numa org.
+2. Nova aba abre em `qvmtzfvkhkhkhdpclzua.supabase.co/auth/v1/verify?...`.
+3. Redireciona para `seialz.com/impersonate/callback?imp_session=...#access_token=...`.
+4. Loader breve → cai em `/dashboard` logado como o usuário da org, com `ImpersonationBanner` no topo.
