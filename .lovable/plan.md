@@ -1,36 +1,30 @@
 ## Problema
 
-O `ImpersonationBanner` (faixa vermelha "Logado como…") está sendo renderizado como **filho direto** de um container `flex h-screen` (flex-row) em `src/components/Layout.tsx`. Como o banner foi desenhado para ser uma barra horizontal no topo, ao virar item de uma row flex ele aparece espremido como uma **faixa vertical** entre o sidebar e o conteúdo — exatamente o que aparece no screenshot.
+Confirmado nos logs da edge function: `admin-list-orgs-for-switch` retorna `Acesso negado` em todas as chamadas.
 
-Isso acontece em dois lugares do `Layout.tsx`:
-- Linha 99-100 (layout Seialz)
-- Linha 245-246 (layout default)
+Causa: durante a impersonação o usuário autenticado no Supabase é o **usuário-alvo**, não o admin. A função valida o caller via `admin_users.auth_user_id = user.id`, então sempre falha — e o popover mostra "Nenhuma organização encontrada".
 
 ## Correção
 
-Envolver cada layout num wrapper `flex-col h-screen` com o `ImpersonationBanner` no topo (largura total) e a row sidebar+main embaixo ocupando o espaço restante.
+Trocar a autorização para usar o `sessionId` da impersonação (que o frontend já tem):
 
-### Mudança 1 — layout Seialz (linhas 98-113)
-```tsx
-return (
-  <div className="flex flex-col h-screen bg-background overflow-hidden">
-    <ImpersonationBanner />
-    <div className="flex flex-1 min-h-0 overflow-hidden">
-      <SeialzSidebar ... />
-      <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden">
-        <main className="min-h-0 flex-1 overflow-y-auto overflow-x-hidden">
-          {children}
-        </main>
-      </div>
-    </div>
-  </div>
-);
+### 1. `src/components/admin/ImpersonationBanner.tsx`
+Em `loadOrgs()`, passar o `sessionId` no body:
+```ts
+const { data, error } = await supabase.functions.invoke('admin-list-orgs-for-switch', {
+  body: { sessionId },
+});
 ```
 
-### Mudança 2 — layout default (linhas 244-256)
-Mesma ideia: wrapper `flex-col`, banner no topo, depois a estrutura atual (`flex w-full` com sidebar fixa + main `pl-64`) dentro de um `flex-1 min-h-0 relative`.
+### 2. `supabase/functions/admin-list-orgs-for-switch/index.ts`
+Substituir a validação atual por:
+- Ler `sessionId` do body.
+- Buscar `impersonation_sessions` por `id = sessionId` com `status = 'active'` e `ended_at IS NULL`.
+- Se não existir, retornar 403.
+- Caso exista, prosseguir com a listagem de organizações (mesma query atual com service role).
 
-Nenhuma alteração no `ImpersonationBanner.tsx` é necessária — ele já está bem desenhado como barra horizontal full-width.
+Isso mantém a segurança (só funciona com um session id válido + ativo, criado pelo fluxo de impersonate-start que já valida MFA/admin) e funciona mesmo com o JWT do usuário-alvo.
 
-## Arquivos afetados
-- `src/components/Layout.tsx` (apenas estrutura JSX dos dois retornos)
+## Por que não usar o JWT do admin
+
+Após o login via magic link de impersonação, a sessão do admin foi descartada — só sobra a sessão do alvo. O `impersonation_sessions.id` é o único elo confiável com o admin original.
