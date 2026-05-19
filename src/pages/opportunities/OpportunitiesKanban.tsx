@@ -1021,7 +1021,7 @@ export default function OpportunitiesKanban() {
                 0
               ));
           const loadedCount = stageOpportunities.length;
-          const hasMore = !isFiltered && hasMoreByStage[stage.id] && loadedCount < realCount;
+          const hasMore = !isSearching && hasMoreByStage[stage.id] && loadedCount < realCount;
           const stageColor = STAGE_COLORS[stageIndex % STAGE_COLORS.length];
 
           return (
