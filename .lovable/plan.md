@@ -1,13 +1,12 @@
 ## Problema
-Mesmo bug do `list-orgs`: `admin-impersonate-switch` valida o caller por `admin_users.auth_user_id = user.id`, mas durante a impersonação o JWT é do usuário-alvo → "Acesso negado".
+A correção anterior tornou `currentSessionId` obrigatório em `admin-impersonate-switch`. Mas a tela `AdminOrganizations` (admin portal) também usa essa função — e lá não existe sessão ativa ainda. Resultado: "Acessar" no portal quebrou.
 
 ## Correção
-Em `supabase/functions/admin-impersonate-switch/index.ts`:
+Tornar a autorização em `supabase/functions/admin-impersonate-switch/index.ts` **dual**:
 
-1. Ler `currentSessionId` do body **antes** da autorização.
-2. Buscar `impersonation_sessions` por `id = currentSessionId` com `status = 'active'`. Se não existir/ativa → 403.
-3. Carregar `admin_users` pelo `admin_user_id` da sessão (em vez de pelo JWT). Validar `is_active` e `mfa_enabled`.
-4. Remover toda a lógica baseada em `Authorization` header / `getUser`.
-5. Resto do fluxo (encerrar sessão atual, gerar magic link, criar nova sessão, audit log) permanece igual usando o `adminUser` derivado.
+1. Ler `currentSessionId`, `targetOrganizationId`, `redirectUrl` do body. Apenas `targetOrganizationId` obrigatório.
+2. **Se `currentSessionId` presente** → autorizar via `impersonation_sessions` (modo "trocar conta de dentro do CRM").
+3. **Se não** → cair no fluxo antigo: validar JWT do `Authorization` header, buscar `admin_users.auth_user_id = user.id`, validar MFA + active (modo "iniciar do portal admin").
+4. Em ambos os casos, prosseguir com o restante do fluxo já existente usando o `adminUser` resolvido.
 
-Segurança preservada: só funciona com um `currentSessionId` ativo (que foi criado por `impersonate-start` após MFA do admin).
+Sem mudanças no frontend.

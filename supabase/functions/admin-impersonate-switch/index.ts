@@ -19,27 +19,49 @@ serve(async (req) => {
 
     const { currentSessionId, targetOrganizationId, redirectUrl } = await req.json();
     if (!targetOrganizationId) throw new Error('targetOrganizationId é obrigatório');
-    if (!currentSessionId) throw new Error('currentSessionId é obrigatório');
 
-    // Authorize via active impersonation session (caller JWT is the impersonated user)
-    const { data: activeImp, error: activeImpErr } = await supabase
-      .from('impersonation_sessions')
-      .select('id, admin_user_id, status, ended_at')
-      .eq('id', currentSessionId)
-      .eq('status', 'active')
-      .is('ended_at', null)
-      .maybeSingle();
+    let adminUser: any = null;
 
-    if (activeImpErr || !activeImp) throw new Error('Sessão de impersonação inválida');
+    if (currentSessionId) {
+      // Mode A: caller is the impersonated user, authorize via active impersonation session
+      const { data: activeImp, error: activeImpErr } = await supabase
+        .from('impersonation_sessions')
+        .select('id, admin_user_id, status, ended_at')
+        .eq('id', currentSessionId)
+        .eq('status', 'active')
+        .is('ended_at', null)
+        .maybeSingle();
 
-    const { data: adminUser, error: adminError } = await supabase
-      .from('admin_users')
-      .select('*')
-      .eq('id', activeImp.admin_user_id)
-      .single();
+      if (activeImpErr || !activeImp) throw new Error('Sessão de impersonação inválida');
 
-    if (adminError || !adminUser || !adminUser.mfa_enabled || !adminUser.is_active) {
-      throw new Error('Acesso negado');
+      const { data: au, error: adminError } = await supabase
+        .from('admin_users')
+        .select('*')
+        .eq('id', activeImp.admin_user_id)
+        .single();
+
+      if (adminError || !au || !au.mfa_enabled || !au.is_active) {
+        throw new Error('Acesso negado');
+      }
+      adminUser = au;
+    } else {
+      // Mode B: caller is the admin himself (admin portal), authorize via JWT
+      const authHeader = req.headers.get('Authorization');
+      if (!authHeader) throw new Error('Não autenticado');
+      const token = authHeader.replace('Bearer ', '');
+      const { data: { user }, error: authError } = await supabase.auth.getUser(token);
+      if (authError || !user) throw new Error('Usuário não autenticado');
+
+      const { data: au, error: adminError } = await supabase
+        .from('admin_users')
+        .select('*')
+        .eq('auth_user_id', user.id)
+        .single();
+
+      if (adminError || !au || !au.mfa_enabled || !au.is_active) {
+        throw new Error('Acesso negado');
+      }
+      adminUser = au;
     }
 
     // 1) End current session
