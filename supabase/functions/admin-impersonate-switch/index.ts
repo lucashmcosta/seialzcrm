@@ -17,25 +17,30 @@ serve(async (req) => {
       Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''
     );
 
-    const authHeader = req.headers.get('Authorization');
-    if (!authHeader) throw new Error('Não autenticado');
+    const { currentSessionId, targetOrganizationId, redirectUrl } = await req.json();
+    if (!targetOrganizationId) throw new Error('targetOrganizationId é obrigatório');
+    if (!currentSessionId) throw new Error('currentSessionId é obrigatório');
 
-    const token = authHeader.replace('Bearer ', '');
-    const { data: { user }, error: authError } = await supabase.auth.getUser(token);
-    if (authError || !user) throw new Error('Usuário não autenticado');
+    // Authorize via active impersonation session (caller JWT is the impersonated user)
+    const { data: activeImp, error: activeImpErr } = await supabase
+      .from('impersonation_sessions')
+      .select('id, admin_user_id, status, ended_at')
+      .eq('id', currentSessionId)
+      .eq('status', 'active')
+      .is('ended_at', null)
+      .maybeSingle();
+
+    if (activeImpErr || !activeImp) throw new Error('Sessão de impersonação inválida');
 
     const { data: adminUser, error: adminError } = await supabase
       .from('admin_users')
       .select('*')
-      .eq('auth_user_id', user.id)
+      .eq('id', activeImp.admin_user_id)
       .single();
 
     if (adminError || !adminUser || !adminUser.mfa_enabled || !adminUser.is_active) {
       throw new Error('Acesso negado');
     }
-
-    const { currentSessionId, targetOrganizationId, redirectUrl } = await req.json();
-    if (!targetOrganizationId) throw new Error('targetOrganizationId é obrigatório');
 
     // 1) End current session
     let fromOrgId: string | null = null;
