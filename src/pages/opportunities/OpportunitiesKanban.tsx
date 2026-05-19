@@ -167,8 +167,17 @@ export default function OpportunitiesKanban() {
 
   useEffect(() => {
     if (!organization?.id) return;
-    fetchData();
-  }, [organization?.id]);
+    // Debounce filter-driven refetch so typing in date/amount inputs doesn't spam the RPC
+    const t = setTimeout(() => { fetchData(); }, 200);
+    return () => clearTimeout(t);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [
+    organization?.id,
+    filterOwners, filterMinAmount, filterMaxAmount,
+    filterDateFrom, filterDateTo, filterNoCloseDate,
+    filterCreatedFrom, filterCreatedTo,
+    filterTags, filterStages,
+  ]);
 
   // Server-side search with debounce
   useEffect(() => {

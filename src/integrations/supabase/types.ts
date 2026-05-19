@@ -5514,10 +5514,29 @@ export type Database = {
           whatsapp_business_account_id: string
         }[]
       }
-      get_opportunities_by_stage: {
-        Args: { p_limit_per_stage?: number; p_organization_id: string }
-        Returns: Json
-      }
+      get_opportunities_by_stage:
+        | {
+            Args: { p_limit_per_stage?: number; p_organization_id: string }
+            Returns: Json
+          }
+        | {
+            Args: {
+              p_close_date_from?: string
+              p_close_date_to?: string
+              p_created_from?: string
+              p_created_to?: string
+              p_include_no_owner?: boolean
+              p_limit_per_stage?: number
+              p_max_amount?: number
+              p_min_amount?: number
+              p_no_close_date?: boolean
+              p_organization_id: string
+              p_owner_ids?: string[]
+              p_stage_ids?: string[]
+              p_tag_ids?: string[]
+            }
+            Returns: Json
+          }
       get_opportunity_stage_counts: {
         Args: { org_id: string }
         Returns: {
