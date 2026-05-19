@@ -125,6 +125,7 @@ const AdminIntegrationDetail = lazy(() => import("./pages/admin/AdminIntegration
 const AdminDocumentation = lazy(() => import("./pages/admin/AdminDocumentation"));
 const AdminDocumentationEdit = lazy(() => import("./pages/admin/AdminDocumentationEdit"));
 const AdminProtectedRoute = lazy(() => import("./components/admin/AdminProtectedRoute").then(m => ({ default: m.AdminProtectedRoute })));
+const ImpersonateCallback = lazy(() => import("./pages/admin/ImpersonateCallback"));
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -204,6 +205,7 @@ const App = () => (
           <Route path="/auth/signin" element={<ResponsiveSignIn />} />
           <Route path="/auth/confirm-email" element={<ConfirmEmail />} />
           <Route path="/invite/:token" element={<AcceptInvitation />} />
+          <Route path="/impersonate/callback" element={<ImpersonateCallback />} />
           
           {/* Admin Portal routes */}
           <Route path="/admin/login" element={<AdminLogin />} />

@@ -41,7 +41,7 @@ export default function AdminOrganizations() {
       const { data, error } = await supabase.functions.invoke('admin-impersonate-switch', {
         body: {
           targetOrganizationId: org.id,
-          redirectUrl: window.location.origin,
+          redirectUrl: `${window.location.origin}/impersonate/callback`,
         },
       });
       const errMsg = (error as any)?.message || (data as any)?.error;
