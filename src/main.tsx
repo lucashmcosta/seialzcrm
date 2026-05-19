@@ -3,6 +3,8 @@ import { createRoot } from "react-dom/client";
 import App from "./App.tsx";
 import "./index.css";
 
+console.log("CURRENT BUILD:", import.meta.env.MODE, "OutboundCall fix active");
+
 function isStandaloneMode() {
   return window.matchMedia?.('(display-mode: standalone)').matches || (window.navigator as Navigator & { standalone?: boolean }).standalone === true;
 }
