@@ -201,6 +201,24 @@ const App = () => (
     <TooltipProvider>
       <Toaster />
       <Sonner />
+      <div
+        style={{
+          position: 'fixed',
+          bottom: 8,
+          right: 8,
+          zIndex: 99999,
+          background: '#000',
+          color: '#0f0',
+          padding: '4px 8px',
+          fontSize: 11,
+          fontFamily: 'monospace',
+          borderRadius: 4,
+          pointerEvents: 'none',
+          opacity: 0.85,
+        }}
+      >
+        BUILD DlhKu3cl - OutboundCall fix active
+      </div>
       <BrowserRouter>
         <AuthProvider>
         <OrganizationProvider>
