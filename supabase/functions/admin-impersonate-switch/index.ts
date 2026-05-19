@@ -83,6 +83,7 @@ serve(async (req) => {
     const { data: sessionData, error: sessionError } = await supabase.auth.admin.generateLink({
       type: 'magiclink',
       email: targetUser.email,
+      options: redirectUrl ? { redirectTo: redirectUrl } : undefined,
     });
     if (sessionError || !sessionData) throw new Error('Falha ao gerar sessão');
 

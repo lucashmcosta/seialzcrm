@@ -1,51 +1,83 @@
 ## Problema
 
-No print, **todos os botões "Acessar" estão desabilitados** — inclusive em contas que claramente têm usuário (ex.: `Minha Empresa` com `Usuários = 1`).
+Ao clicar em **Acessar**, abre uma nova aba em:
 
-A causa é a regra atual no frontend:
-
-```ts
-disabled={!org.user_count || accessingId === org.id}
+```
+https://seialz.com/auth/v1/verify?token=...&type=magiclink&redirect_to=...
 ```
 
-O `user_count` é calculado no browser via:
+…que cai no **404** do app.
+
+O caminho `/auth/v1/verify` **não pertence ao app** — é o endpoint do **Supabase Auth** (`https://qvmtzfvkhkhkhdpclzua.supabase.co/auth/v1/verify`).
+
+A edge function `admin-impersonate-switch` hoje faz:
 
 ```ts
-supabase.from('user_organizations').select('*', { count: 'exact', head: true })
+const magicLinkUrl = new URL(sessionData.properties.action_link);
+if (redirectUrl) {
+  const targetUrl = new URL(redirectUrl);
+  magicLinkUrl.protocol = targetUrl.protocol;
+  magicLinkUrl.host = targetUrl.host;   // <-- troca supabase.co por seialz.com
+}
 ```
 
-Esse `count` roda com a sessão do admin e está sujeito a **RLS de `user_organizations`**, que só deixa o admin ver as orgs das quais ele mesmo participa. Resultado: na maioria das linhas o count volta `0` e o botão fica travado — mesmo quando a org tem usuário ativo de verdade.
+Ou seja, ela está reescrevendo o **host do endpoint de verify** para `seialz.com`. Como o app não tem rota `/auth/v1/verify`, o React Router devolve 404 e o login nunca acontece.
 
-## Correção proposta
+## Correção
 
-1. **Parar de bloquear pelo `user_count` do frontend.**
-   - Quem sabe de verdade se existe usuário ativo é a edge function `admin-impersonate-switch` (roda com service role).
-   - O botão `Acessar` passa a ficar habilitado por padrão, só desabilitando enquanto a requisição daquela linha está em andamento (`accessingId === org.id`).
+1. **Parar de reescrever `host`/`protocol` do `action_link`.**
+   O link de verify precisa continuar apontando para o domínio do Supabase Auth — é lá que o token é validado e a sessão é criada.
 
-2. **Tratar o erro "Organização sem usuário ativo" no frontend.**
-   - A edge function já lança esse erro — basta exibir num toast amigável: _"Esta conta não tem usuário ativo para acessar."_
-   - Sem abrir nova aba quando der erro.
+2. **Usar `redirectTo` no `generateLink` para mandar o usuário de volta pro app depois do verify.**
 
-3. **Mostrar `Usuários` real na lista (opcional, mesma correção).**
-   - Trocar a contagem feita no browser por uma chamada à edge function `admin-list-orgs-for-switch` (ou estender `admin-list-orgs-for-switch` para devolver `user_count`).
-   - Assim a coluna `Usuários` para de mentir "0" em contas que têm gente.
-   - Esse passo é o que resolve a causa raiz; sem ele, a coluna `Usuários` continua incorreta mesmo com o botão funcionando.
+   ```ts
+   const { data: sessionData, error: sessionError } =
+     await supabase.auth.admin.generateLink({
+       type: 'magiclink',
+       email: targetUser.email,
+       options: {
+         redirectTo: redirectUrl,            // ex: https://seialz.com
+       },
+     });
+   ```
+
+   O Supabase embute esse `redirectTo` dentro do próprio `action_link` (`?redirect_to=...`). Após validar o token, o Supabase redireciona o navegador para `redirectUrl` já autenticado.
+
+3. **Manter o `imp_session` no link final**, só que agora anexado ao **`redirect_to` interno** (não no host do verify), para que ele sobreviva ao redirect:
+
+   ```ts
+   const magicLinkUrl = new URL(sessionData.properties.action_link);
+   if (impSession) {
+     const innerRedirect = magicLinkUrl.searchParams.get('redirect_to');
+     if (innerRedirect) {
+       const inner = new URL(innerRedirect);
+       inner.searchParams.set('imp_session', impSession.id);
+       magicLinkUrl.searchParams.set('redirect_to', inner.toString());
+     }
+   }
+   ```
+
+4. **Garantir que o domínio do app (`https://seialz.com`, preview, custom domain) esteja na lista de Redirect URLs do Supabase Auth.** Sem isso, o `redirectTo` é ignorado e cai na Site URL padrão. (Configuração no dashboard, não é código.)
 
 ## Arquivos
 
-- `src/pages/admin/AdminOrganizations.tsx`
-  - remover `!org.user_count` da prop `disabled`
-  - tratar mensagem de erro vinda da edge function
-  - (opcional) trocar a fonte de `user_count` para a edge function admin
+- `supabase/functions/admin-impersonate-switch/index.ts`
+  - remover a reescrita de `host`/`protocol`
+  - passar `options.redirectTo: redirectUrl` no `generateLink`
+  - mover o `imp_session` para o `redirect_to` interno
 
-- `supabase/functions/admin-list-orgs-for-switch/index.ts` (apenas se formos corrigir a coluna `Usuários`)
-  - incluir `user_count` no payload de retorno
-
-Sem migration, sem mudança de RLS.
+Frontend (`AdminOrganizations.tsx`) **não precisa mudar** — já envia `redirectUrl: window.location.origin` e abre `data.action_link` em nova aba.
 
 ## Critérios de aceite
 
-1. Botão `Acessar` fica habilitado em todas as linhas (exceto enquanto carrega aquela linha).
-2. Clicar numa conta com usuário ativo abre nova aba logada.
-3. Clicar numa conta realmente sem usuário ativo mostra toast claro e **não** abre aba.
-4. (Se incluirmos passo 3) Coluna `Usuários` passa a refletir o número real de usuários ativos.
+1. Clicar em **Acessar** abre nova aba que passa pelo verify do Supabase e cai no app já logado como aquele usuário da org.
+2. Não aparece mais 404 em `seialz.com/auth/v1/verify`.
+3. O parâmetro `imp_session` chega na URL final do app (para o banner de impersonação funcionar).
+4. Conta sem usuário ativo continua mostrando o toast amigável (sem abrir aba).
+
+## Ação manual (fora do código)
+
+Conferir em **Supabase Dashboard → Authentication → URL Configuration → Redirect URLs** se estão liberados:
+- `https://seialz.com`
+- `https://seialzcrm.lovable.app`
+- URL de preview do Lovable
