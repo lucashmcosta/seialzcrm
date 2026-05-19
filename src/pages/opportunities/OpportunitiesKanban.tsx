@@ -1007,11 +1007,14 @@ export default function OpportunitiesKanban() {
       <div className="flex gap-3 overflow-x-auto pb-1 px-6 pt-4 flex-1">
         {stages.map((stage, stageIndex) => {
           const stageOpportunities = getOpportunitiesForStage(stage.id);
-          const isFiltered = searchResults !== null || activeFiltersCount > 0;
-          const realCount = isFiltered
+          // Dialog filters are now applied server-side inside the RPC, so stageCounts
+          // is already the correct filtered total. Only client-side search falls back
+          // to a local count (search bypasses the RPC).
+          const isSearching = searchResults !== null;
+          const realCount = isSearching
             ? stageOpportunities.length
             : (stageCounts[stage.id]?.count ?? stageOpportunities.length);
-          const realAmount = isFiltered
+          const realAmount = isSearching
             ? stageOpportunities.reduce((sum, opp) => sum + (Number(opp.amount) || 0), 0)
             : (stageCounts[stage.id]?.amount ?? stageOpportunities.reduce(
                 (sum, opp) => sum + (Number(opp.amount) || 0),
