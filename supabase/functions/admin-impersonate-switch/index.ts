@@ -83,6 +83,7 @@ serve(async (req) => {
     const { data: sessionData, error: sessionError } = await supabase.auth.admin.generateLink({
       type: 'magiclink',
       email: targetUser.email,
+      options: redirectUrl ? { redirectTo: redirectUrl } : undefined,
     });
     if (sessionError || !sessionData) throw new Error('Falha ao gerar sessão');
 
@@ -117,13 +118,19 @@ serve(async (req) => {
     });
 
     const magicLinkUrl = new URL(sessionData.properties.action_link);
-    if (redirectUrl) {
-      const targetUrl = new URL(redirectUrl);
-      magicLinkUrl.protocol = targetUrl.protocol;
-      magicLinkUrl.host = targetUrl.host;
-    }
     if (impSession) {
-      magicLinkUrl.searchParams.set('imp_session', impSession.id);
+      const innerRedirect = magicLinkUrl.searchParams.get('redirect_to');
+      if (innerRedirect) {
+        try {
+          const inner = new URL(innerRedirect);
+          inner.searchParams.set('imp_session', impSession.id);
+          magicLinkUrl.searchParams.set('redirect_to', inner.toString());
+        } catch (_) {
+          magicLinkUrl.searchParams.set('imp_session', impSession.id);
+        }
+      } else {
+        magicLinkUrl.searchParams.set('imp_session', impSession.id);
+      }
     }
 
     return new Response(
