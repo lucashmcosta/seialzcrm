@@ -144,16 +144,13 @@ serve(async (req) => {
       },
     });
 
+    // Build final magic link — KEEP Supabase host on /auth/v1/verify,
+    // only rewrite the `redirect_to` param to land on /impersonate/callback.
     const magicLinkUrl = new URL(sessionData.properties.action_link);
 
-    // Force host/protocol to match the caller (preview vs published)
     if (redirectUrl) {
       try {
-        const targetUrl = new URL(redirectUrl);
-        magicLinkUrl.protocol = targetUrl.protocol;
-        magicLinkUrl.host = targetUrl.host;
-
-        const inner = new URL(targetUrl.toString());
+        const inner = new URL(redirectUrl);
         if (impSession) inner.searchParams.set('imp_session', impSession.id);
         magicLinkUrl.searchParams.set('redirect_to', inner.toString());
       } catch (_) {
