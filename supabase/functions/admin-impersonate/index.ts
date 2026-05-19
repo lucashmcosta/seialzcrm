@@ -103,25 +103,31 @@ serve(async (req) => {
 
     console.log(`Admin ${adminUser.email} impersonating user ${targetUser.email}`);
 
-    // Build final magic link
+    // Build final magic link — KEEP Supabase host on /auth/v1/verify,
+    // only rewrite the `redirect_to` param to land on /impersonate/callback.
     const magicLinkUrl = new URL(sessionData.properties.action_link);
 
-    // Force host/protocol to match the caller (preview vs published)
     if (redirectUrl) {
-      const targetUrl = new URL(redirectUrl);
-      magicLinkUrl.protocol = targetUrl.protocol;
-      magicLinkUrl.host = targetUrl.host;
-
-      // Ensure redirect_to ends at the impersonation callback (carrying imp_session)
       try {
-        const inner = new URL(targetUrl.toString());
+        const inner = new URL(redirectUrl);
         if (impSession) inner.searchParams.set('imp_session', impSession.id);
         magicLinkUrl.searchParams.set('redirect_to', inner.toString());
       } catch (_) {
         if (impSession) magicLinkUrl.searchParams.set('imp_session', impSession.id);
       }
     } else if (impSession) {
-      magicLinkUrl.searchParams.set('imp_session', impSession.id);
+      const innerRedirect = magicLinkUrl.searchParams.get('redirect_to');
+      if (innerRedirect) {
+        try {
+          const inner = new URL(innerRedirect);
+          inner.searchParams.set('imp_session', impSession.id);
+          magicLinkUrl.searchParams.set('redirect_to', inner.toString());
+        } catch (_) {
+          magicLinkUrl.searchParams.set('imp_session', impSession.id);
+        }
+      } else {
+        magicLinkUrl.searchParams.set('imp_session', impSession.id);
+      }
     }
 
     return new Response(
