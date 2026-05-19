@@ -256,7 +256,7 @@ export default function ReportsPage() {
     const cycleDaysList = won
       .map((o) => {
         const c = new Date(o.created_at).getTime();
-        const u = o.close_date ? new Date(o.close_date).getTime() : NaN;
+        const u = o.close_date ? (parseLocalDate(o.close_date)?.getTime() ?? NaN) : NaN;
         return Math.max(0, (u - c) / 86400000);
       })
       .filter((d) => isFinite(d));
