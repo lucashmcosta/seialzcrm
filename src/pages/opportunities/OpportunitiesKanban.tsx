@@ -239,11 +239,28 @@ export default function OpportunitiesKanban() {
 
     setLoading(true);
 
-    // Try new RPC first, fall back to direct queries if not available
-    const stageResult = await supabase.rpc('get_opportunities_by_stage', {
+    // Translate UI filter state into RPC params so per-stage counts match
+    // the filtered dataset exactly (fixes Kanban-vs-Reports inconsistency).
+    const ownerUuids = filterOwners.filter((o) => o !== 'none');
+    const includeNoOwner = filterOwners.includes('none');
+    const rpcParams: Record<string, unknown> = {
       p_organization_id: organization.id,
       p_limit_per_stage: CARDS_PER_STAGE,
-    });
+      p_owner_ids: ownerUuids.length > 0 ? ownerUuids : null,
+      p_include_no_owner: includeNoOwner,
+      p_min_amount: filterMinAmount ? Number(filterMinAmount) : null,
+      p_max_amount: filterMaxAmount ? Number(filterMaxAmount) : null,
+      p_close_date_from: filterDateFrom || null,
+      p_close_date_to: filterDateTo || null,
+      p_no_close_date: filterNoCloseDate,
+      p_created_from: filterCreatedFrom || null,
+      p_created_to: filterCreatedTo || null,
+      p_tag_ids: filterTags.length > 0 ? filterTags : null,
+      p_stage_ids: filterStages.length > 0 ? filterStages : null,
+    };
+
+    // Try new RPC first, fall back to direct queries if not available
+    const stageResult = await (supabase.rpc as any)('get_opportunities_by_stage', rpcParams);
 
     const useRpc = !stageResult.error && stageResult.data;
 
