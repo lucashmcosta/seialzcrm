@@ -35,7 +35,7 @@ export default function AdminOrganizations() {
   const navigate = useNavigate();
 
   const handleAccess = async (org: Organization) => {
-    if (!org.user_count || accessingId) return;
+    if (accessingId) return;
     setAccessingId(org.id);
     try {
       const { data, error } = await supabase.functions.invoke('admin-impersonate-switch', {
@@ -44,7 +44,14 @@ export default function AdminOrganizations() {
           redirectUrl: window.location.origin,
         },
       });
-      if (error) throw error;
+      const errMsg = (error as any)?.message || (data as any)?.error;
+      if (errMsg) {
+        const friendly = /sem usu[aá]rio ativo/i.test(errMsg)
+          ? 'Esta conta não tem usuário ativo para acessar.'
+          : errMsg;
+        toast({ title: 'Não foi possível acessar', description: friendly, variant: 'destructive' });
+        return;
+      }
       if (!data?.action_link) throw new Error('Sem link de acesso');
       window.open(data.action_link, '_blank', 'noopener');
       toast({
@@ -186,8 +193,8 @@ export default function AdminOrganizations() {
                             variant="ghost"
                             size="sm"
                             onClick={() => handleAccess(org)}
-                            disabled={!org.user_count || accessingId === org.id}
-                            title={!org.user_count ? 'Sem usuário ativo' : 'Acessar conta como admin'}
+                            disabled={accessingId === org.id}
+                            title="Acessar conta como admin"
                           >
                             {accessingId === org.id ? (
                               <SpinnerGap className="h-4 w-4 mr-2 animate-spin" />
