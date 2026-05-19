@@ -244,24 +244,26 @@ export function Layout({ children }: LayoutProps) {
   );
 
   return (
-    <div className="flex h-screen w-full overflow-hidden bg-background">
+    <div className="flex flex-col h-screen w-full overflow-hidden bg-background">
       <ImpersonationBanner />
-      
-      {/* Sidebar */}
-      <div className="fixed inset-y-0 left-0 z-40">
-        <SidebarNavigationSimple
-          items={navItems}
-          footerItems={footerItems}
-          logo={logoSection}
-          userSection={userSection}
-        />
-      </div>
 
-      {/* Main content */}
-      <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden pl-64">
-        <main className="min-h-0 flex-1 overflow-y-auto overflow-x-hidden">
-          {children}
-        </main>
+      <div className="relative flex flex-1 min-h-0 w-full overflow-hidden">
+        {/* Sidebar */}
+        <div className="absolute inset-y-0 left-0 z-40">
+          <SidebarNavigationSimple
+            items={navItems}
+            footerItems={footerItems}
+            logo={logoSection}
+            userSection={userSection}
+          />
+        </div>
+
+        {/* Main content */}
+        <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden pl-64">
+          <main className="min-h-0 flex-1 overflow-y-auto overflow-x-hidden">
+            {children}
+          </main>
+        </div>
       </div>
     </div>
   );
