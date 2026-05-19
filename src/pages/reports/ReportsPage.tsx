@@ -32,6 +32,21 @@ const BlockFallback = ({ className = 'h-32' }: { className?: string }) => (
   <div className={`animate-pulse rounded-md bg-muted/50 ${className}`} />
 );
 
+/**
+ * Parse a YYYY-MM-DD date string as LOCAL midnight (not UTC).
+ * `new Date("2026-05-11")` produces UTC midnight, which in BR (UTC-3) becomes
+ * 2026-05-10T21:00 local — pushing close_date values one day back and causing
+ * report counts to disagree with the Kanban (which compares as date strings
+ * server-side). Always use this when comparing `close_date` against local
+ * Date ranges from `computeRange`.
+ */
+const parseLocalDate = (s: string | null | undefined): Date | null => {
+  if (!s) return null;
+  const m = /^(\d{4})-(\d{2})-(\d{2})/.exec(s);
+  if (!m) return new Date(s);
+  return new Date(Number(m[1]), Number(m[2]) - 1, Number(m[3]));
+};
+
 interface Opp {
   id: string;
   amount: number | null;
@@ -221,8 +236,8 @@ export default function ReportsPage() {
     };
     const inPeriodClosed = (o: Opp) => {
       if (o.status !== 'won' && o.status !== 'lost') return false;
-      if (!o.close_date) return false;
-      const t = new Date(o.close_date);
+      const t = parseLocalDate(o.close_date);
+      if (!t) return false;
       return t >= fromDate && t <= toDate;
     };
 
@@ -241,7 +256,7 @@ export default function ReportsPage() {
     const cycleDaysList = won
       .map((o) => {
         const c = new Date(o.created_at).getTime();
-        const u = o.close_date ? new Date(o.close_date).getTime() : NaN;
+        const u = o.close_date ? (parseLocalDate(o.close_date)?.getTime() ?? NaN) : NaN;
         return Math.max(0, (u - c) / 86400000);
       })
       .filter((d) => isFinite(d));
@@ -260,8 +275,8 @@ export default function ReportsPage() {
     };
     const inPrevClosed = (o: Opp) => {
       if (o.status !== 'won' && o.status !== 'lost') return false;
-      if (!o.close_date) return false;
-      const t = new Date(o.close_date);
+      const t = parseLocalDate(o.close_date);
+      if (!t) return false;
       return t >= prevFrom && t < prevTo;
     };
 
@@ -352,8 +367,8 @@ export default function ReportsPage() {
       }
 
       if (o.status === 'won' && o.close_date) {
-        const closed = new Date(o.close_date);
-        if (closed >= fromDate && closed <= toDate) {
+        const closed = parseLocalDate(o.close_date);
+        if (closed && closed >= fromDate && closed <= toDate) {
           const i = points.findIndex((p) => p.date === matchKey(closed));
           if (i >= 0) {
             points[i].won += 1;
@@ -394,8 +409,8 @@ export default function ReportsPage() {
 
     currentOpps.forEach((o) => {
       if (o.status !== 'won' && o.status !== 'lost') return;
-      if (!o.close_date) return;
-      const t = new Date(o.close_date);
+      const t = parseLocalDate(o.close_date);
+      if (!t) return;
       if (t >= fromDate && t <= toDate) {
         const uid = o.owner_user_id || 'unassigned';
         const row = ensure(uid);
