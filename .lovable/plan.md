@@ -1,52 +1,62 @@
-# Plan: Bisect and Fix `Cannot access 'Lt' before initialization`
+# Fix TDZ in OutboundCallContext.tsx
 
-The error is a TDZ (temporal dead zone) hit in the production bundle. `madge --circular` reports no cycles in `src/`, so the cycle is likely either (a) introduced by Vite's chunking of mixed eager+lazy imports of the same module, or (b) a top-level use-before-declare inside a single file. Either way, the only reliable way to find it is to bisect by layer, exactly as requested.
+## Root cause
 
-## Approach
+`src/contexts/OutboundCallContext.tsx` is imported in two ways:
 
-I will keep the current `src/App.tsx` untouched on disk by moving it aside (`App.full.tsx`) and swapping in a stub `App.tsx` for each step. After each step I will run the production build (`vite build`) — the failure only reproduces in the minified bundle — load `dist/` in the preview, and confirm whether the blank screen returns.
+- Eagerly from `src/App.tsx` (`OutboundCallProvider`)
+- Lazily via the `OutboundCallHandler` lazy chunk and lazy pages (`ContactDetail`, `OutboundCallModal`, `ContactCalls`) that pull `useOutboundCall` / `CallStatus`
 
-## Steps
+Because the same module also statically imports the heavy `@twilio/voice-sdk` at top level, Vite places shared symbols (the `OutboundCallContext` token + Twilio SDK bindings) into a shared chunk that is referenced from the eager `index-*.js` before that chunk's `const` bindings are initialized. The minified symbol `Lt` is the context token / a Twilio SDK binding in that shared chunk — accessed in its Temporal Dead Zone → `Cannot access 'Lt' before initialization`.
 
-1. **Baseline boot**
-   - Rename `src/App.tsx` → `src/App.full.tsx`.
-   - New `src/App.tsx`: `export default () => <div>App boots</div>`.
-   - Build + preview. Must show "App boots".
+The fix is purely structural: separate the **module surface that consumers import** (context token + hook + types) from the **provider implementation** (which owns Twilio side effects), and move the `@twilio/voice-sdk` import inside the provider so it is only evaluated when the provider mounts.
 
-2. **Add providers, no router** — QueryClient, Tooltip, Theme, Auth, Organization, OutboundCall. Build + preview.
+No behavior changes. No Twilio features removed.
 
-3. **Add `BrowserRouter` + a single dummy route** to `<div>routed</div>`. Build + preview.
+## File plan
 
-4. **Add eager-imported pages only** (SignUp, SignIn, ConfirmEmail, AcceptInvitation, LandingPage, Onboarding, Dashboard, ReportsPage, DocsIndex, DocsModule) wired to real routes. Build + preview.
+### 1. New file: `src/contexts/outbound-call/types.ts`
+Pure type-only module (no runtime side effects).
+- `CallStatus` (re-exported)
+- `CallInfo`, `TokenCache`, `OutboundCallContextType` interfaces
 
-5. **Add `Layout` + `Dashboard`'s real subtree** (the route the user is currently on). Build + preview. This is the most likely failure point given the current route is `/dashboard`.
+### 2. New file: `src/contexts/outbound-call/context.ts`
+- `createContext` call → `OutboundCallContext`
+- `useOutboundCall()` hook
+- Re-exports `CallStatus` type
 
-6. **Add lazy CRM pages** in groups of ~5 (contacts → opportunities → tasks → messages → marketing → settings group → whatsapp → admin). Build + preview after each group.
+Imports: only React + `./types`. No Twilio, no Supabase. This is the module every consumer (lazy pages, handlers, modals) imports — guaranteed cycle-free and side-effect-free.
 
-7. **Add `GlobalCallHandler`** (lazy Twilio handlers). Build + preview.
+### 3. Rewrite: `src/contexts/OutboundCallContext.tsx`
+- Re-exports `useOutboundCall`, `CallStatus` from `./outbound-call/context` (preserves the public API path that all existing consumers import — zero changes outside this folder).
+- Defines `OutboundCallProvider` using the context token imported from `./outbound-call/context`.
+- Moves `import { Device, Call } from '@twilio/voice-sdk'` from top-level to a **dynamic import inside `initializeDevice`** (`const { Device, Call } = await import('@twilio/voice-sdk')`). This removes the eager Twilio SDK from the provider module's static graph, breaking the shared-chunk TDZ.
+- `deviceRef`/`activeCallRef` typing: use `any` (or import `type { Device, Call }` — type-only imports are erased at runtime and do not cause the chunk issue).
+- All logic preserved verbatim: token fetching, voice integration check, device registration, inbound/outbound handlers, realtime status subscription, mute, DTMF, cleanup, fullCleanup on unmount, GlobalCallHandler integration (unchanged — it imports from the same path).
 
-When a step turns the screen blank, bisect that step's imports in halves until a single file is identified.
+### 4. No changes to
+- `src/App.tsx` (still imports `OutboundCallProvider` from `@/contexts/OutboundCallContext`)
+- `src/components/calls/OutboundCallHandler.tsx`
+- `src/components/calls/OutboundCallModal.tsx`
+- `src/components/contacts/ContactCalls.tsx`
+- `src/pages/contacts/ContactDetail.tsx`
+- `src/lib/authSession.ts`
 
-## Root-cause fix patterns I will apply once the file is identified
+All consumer import paths stay `@/contexts/OutboundCallContext` — the barrel re-exports keep their public API intact.
 
-- **Eager + lazy import of the same module** (e.g. a settings component imported both at top and via `lazy(() => import(...))` elsewhere) — pick one strategy per module. This is the most common cause of `Cannot access 'X' before initialization` in Vite bundles and is my top hypothesis given how many `lazy(() => import("./components/settings/..."))` are mixed with regular components from the same folders.
-- **Barrel re-export cycles** (`src/components/common/index.ts`, etc.) — replace barrel imports with direct file imports on the offending path.
-- **Top-level use-before-declare** — hoist constants/types to dependency-free files.
-- **Context consumed before created** — ensure `createContext` runs in a module with no transitive import back to its consumers.
-- **Routes/arrays referencing components declared later** — reorder declarations.
+## Why this prevents the circular/TDZ initialization
 
-## Deliverables I will report back
+1. The **context token** lives in a tiny leaf module (`context.ts`) with no Twilio/Supabase deps, so lazy chunks and the eager provider share one identical binding without pulling heavy modules into the shared chunk.
+2. **`@twilio/voice-sdk` is no longer in the static graph** of any eagerly-loaded module. It is fetched on first `initializeDevice()` call, after auth + voice-integration checks already pass. The eager `index-*.js` never references Twilio bindings → no TDZ on `Lt`.
+3. **Type-only imports** of `Device`/`Call` are erased by esbuild → zero runtime references in the eager bundle.
 
-- Exact file (and import) that triggers the TDZ.
-- The import chain that produces the cycle (printed from `madge --circular` re-run after I tag the suspect, or from manual trace).
-- The source-code refactor applied.
-- Screenshot/confirmation of `/dashboard` rendering without blank screen.
+Inline comments in the new files will explain these constraints so future edits do not regress.
 
-## Notes / constraints
+## Verification
 
-- I will not touch `dist/` or any built artifact.
-- I will not change behavior — only move imports / split files.
-- Each bisection step is a single small commit-sized change so it's easy to revert if I'm wrong.
-- Estimated 8–15 build cycles. Each Vite build on this project is ~30–60s, so the whole bisection should complete in a single working session.
-
-Approve and I'll start at step 1.
+After the refactor:
+1. `bun run build` succeeds.
+2. Serve `dist/` and load `/` and `/dashboard` — app boots, no blank screen, no `Cannot access 'Lt' before initialization` in console.
+3. `OutboundCallProvider` mounts (verify via React DevTools / a one-line console.log added during verification then removed).
+4. Trigger an outbound call from `ContactDetail` → device initializes (dynamic import of `@twilio/voice-sdk` happens here), token is fetched, call connects, status updates flow, mute/DTMF work, end-call cleanup runs.
+5. Unmount cleanup (`fullCleanup`) runs on logout/navigation away from CRM.
