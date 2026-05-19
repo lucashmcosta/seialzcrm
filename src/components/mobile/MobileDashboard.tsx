@@ -41,6 +41,10 @@ export function MobileDashboard() {
 
       const fromIso = from.toISOString();
       const toIso = to.toISOString();
+      const toDayStr = (d: Date) =>
+        `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+      const fromDay = toDayStr(from);
+      const toDay = toDayStr(to);
 
       const [enteredRes, closedRes] = await Promise.all([
         supabase
@@ -58,8 +62,8 @@ export function MobileDashboard() {
           .eq('owner_user_id', userProfile.id)
           .eq('status', 'won')
           .is('deleted_at', null)
-          .gte('updated_at', fromIso)
-          .lte('updated_at', toIso),
+          .gte('close_date', fromDay)
+          .lte('close_date', toDay),
       ]);
 
       setEnteredCount(enteredRes.count || 0);
