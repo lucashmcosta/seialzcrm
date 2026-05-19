@@ -200,6 +200,29 @@ export default function OpportunityDetail() {
     }
   };
 
+  const handleReopen = async () => {
+    if (!opportunity || !organization) return;
+    const firstOpenStage = stages.find((s) => s.type === 'open') || stages[0];
+    if (!firstOpenStage) return;
+    try {
+      const { error } = await supabase
+        .from('opportunities')
+        .update({
+          status: 'open',
+          pipeline_stage_id: firstOpenStage.id,
+          close_date: null,
+          updated_by: userProfile?.id || null,
+        } as any)
+        .eq('id', opportunity.id);
+      if (error) throw error;
+      toast({ title: t('opportunities.updated') });
+      fetchOpportunity();
+    } catch (error) {
+      console.error('Error reopening opportunity:', error);
+      toast({ title: t('common.error'), variant: 'destructive' });
+    }
+  };
+
   if (loading) {
     if (isMobile) {
       return (
