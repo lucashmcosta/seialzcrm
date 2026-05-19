@@ -125,6 +125,7 @@ const AdminIntegrationDetail = lazy(() => import("./pages/admin/AdminIntegration
 const AdminDocumentation = lazy(() => import("./pages/admin/AdminDocumentation"));
 const AdminDocumentationEdit = lazy(() => import("./pages/admin/AdminDocumentationEdit"));
 const AdminProtectedRoute = lazy(() => import("./components/admin/AdminProtectedRoute").then(m => ({ default: m.AdminProtectedRoute })));
+const ImpersonateCallback = lazy(() => import("./pages/admin/ImpersonateCallback"));
 
 const queryClient = new QueryClient({
   defaultOptions: {
