@@ -1,53 +1,36 @@
 ## Problema
 
-Após o clique em **Acessar**, a nova aba é aberta no link do Supabase Auth (`/auth/v1/verify?...`), o Supabase processa o token e redireciona para `https://seialz.com/?imp_session=...#access_token=...`.
+O `ImpersonationBanner` (faixa vermelha "Logado como…") está sendo renderizado como **filho direto** de um container `flex h-screen` (flex-row) em `src/components/Layout.tsx`. Como o banner foi desenhado para ser uma barra horizontal no topo, ao virar item de uma row flex ele aparece espremido como uma **faixa vertical** entre o sidebar e o conteúdo — exatamente o que aparece no screenshot.
 
-O destino é a **landing page** (`/`). Ela não trata o hash do magic link de forma confiável (sem `useEffect` que aguarde `onAuthStateChange`), e como a aba não tem sessão prévia, qualquer navegação subsequente acaba caindo em `/auth/signin`. Resultado: o admin "loga", mas é jogado para a tela de login do Seialz em vez do dashboard da organização.
+Isso acontece em dois lugares do `Layout.tsx`:
+- Linha 99-100 (layout Seialz)
+- Linha 245-246 (layout default)
 
-## Solução
+## Correção
 
-Criar uma rota pública dedicada `/impersonate/callback` que:
+Envolver cada layout num wrapper `flex-col h-screen` com o `ImpersonationBanner` no topo (largura total) e a row sidebar+main embaixo ocupando o espaço restante.
 
-1. É pública (não passa por `ProtectedRoute`).
-2. Espera o `supabase-js` consumir o `#access_token` do hash (detectSessionInUrl).
-3. Lê `imp_session` da query string e guarda em `sessionStorage` (para o `ImpersonationBanner` exibir o aviso).
-4. Quando `onAuthStateChange` dispara `SIGNED_IN`, resolve a organização do usuário e navega para `/dashboard` (ou `/onboarding` se aplicável) com `replace`.
-5. Mostra um loader enquanto isso (`PageLoader`).
-
-E ajustar o fluxo para apontar para essa rota:
-
-- **`src/pages/admin/AdminOrganizations.tsx`**: trocar `redirectUrl: window.location.origin` por `redirectUrl: \`${window.location.origin}/impersonate/callback\``.
-- **`supabase/functions/admin-impersonate-switch/index.ts`**: nenhuma mudança lógica — continua repassando `redirectUrl` em `options.redirectTo` e anexando `imp_session` ao `redirect_to` interno. Apenas o destino muda.
-
-## Arquivos
-
-```text
-src/pages/admin/ImpersonateCallback.tsx   (novo)
-src/App.tsx                                (registrar rota pública)
-src/pages/admin/AdminOrganizations.tsx     (mudar redirectUrl)
+### Mudança 1 — layout Seialz (linhas 98-113)
+```tsx
+return (
+  <div className="flex flex-col h-screen bg-background overflow-hidden">
+    <ImpersonationBanner />
+    <div className="flex flex-1 min-h-0 overflow-hidden">
+      <SeialzSidebar ... />
+      <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden">
+        <main className="min-h-0 flex-1 overflow-y-auto overflow-x-hidden">
+          {children}
+        </main>
+      </div>
+    </div>
+  </div>
+);
 ```
 
-## Detalhes técnicos
+### Mudança 2 — layout default (linhas 244-256)
+Mesma ideia: wrapper `flex-col`, banner no topo, depois a estrutura atual (`flex w-full` com sidebar fixa + main `pl-64`) dentro de um `flex-1 min-h-0 relative`.
 
-- `ImpersonateCallback` usa `useAuth()` + `useEffect` que observa `user`/`loading`. Quando `user` existir, busca `user_organizations` → `organizations.onboarding_step` e roteia para `/dashboard` ou `/onboarding`.
-- Timeout de 8s: se `user` continuar `null`, mostra erro e botão "Voltar ao admin".
-- Limpa o hash da URL após processar (`window.history.replaceState`).
+Nenhuma alteração no `ImpersonationBanner.tsx` é necessária — ele já está bem desenhado como barra horizontal full-width.
 
-## Configuração manual obrigatória
-
-No Supabase Dashboard → **Authentication → URL Configuration → Redirect URLs**, adicionar:
-
-```
-https://seialz.com/impersonate/callback
-https://seialzcrm.lovable.app/impersonate/callback
-https://id-preview--3e7cbf89-7e65-4eb1-ae96-6b6359aa6e47.lovable.app/impersonate/callback
-```
-
-Sem isso o Supabase recusa o `redirect_to` e cai no fallback (Site URL → `/auth/signin`), que é exatamente o sintoma atual.
-
-## Validação
-
-1. Como admin, clicar **Acessar** numa org.
-2. Nova aba abre em `qvmtzfvkhkhkhdpclzua.supabase.co/auth/v1/verify?...`.
-3. Redireciona para `seialz.com/impersonate/callback?imp_session=...#access_token=...`.
-4. Loader breve → cai em `/dashboard` logado como o usuário da org, com `ImpersonationBanner` no topo.
+## Arquivos afetados
+- `src/components/Layout.tsx` (apenas estrutura JSX dos dois retornos)
