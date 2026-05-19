@@ -6,6 +6,12 @@ verify_jwt = true
 [functions.admin-impersonate-end]
 verify_jwt = false
 
+[functions.admin-impersonate-switch]
+verify_jwt = true
+
+[functions.admin-list-orgs-for-switch]
+verify_jwt = true
+
 [functions.twilio-call]
 verify_jwt = true
 
