@@ -1,27 +1,57 @@
-# Adaptar CompleteTaskDialog para Mobile
+# Troca rápida entre tenants (Admin) — v2
 
-## Problema
-No mobile (`/tasks`), o modal de "Concluir tarefa" estoura a largura da tela: o botão "Concluir" fica cortado, o footer não se ajusta e o `Dialog` centralizado fica desconfortável em telas pequenas.
+Validado: mudanças são **100% aditivas**, sem migration de banco, sem alterar edge functions existentes nem layouts. O `ImpersonationBanner` já é montado globalmente no CRM, então o switcher aparece em qualquer rota sem mexer em `Layout`/`MobileLayout`.
 
-## Solução
-Renderizar uma versão mobile dedicada do `CompleteTaskDialog` quando `useIsMobile()` for true, mantendo intactos: lógica de submit, estado, props e a versão desktop.
+## UX
+
+No `ImpersonationBanner` (topo do CRM enquanto impersona):
+
+```text
+[⚠] Logado como N Junior · Org: [Viagi ▼]   [Encerrar Sessão]
+```
+
+- Clicar no chip da org abre `Popover` + `Command` com busca.
+- Selecionar organização → encerra sessão atual + abre próxima no mesmo tab (`window.location.href`).
+- Funciona em qualquer rota do CRM.
 
 ## Mudanças
 
-### `src/components/tasks/CompleteTaskDialog.tsx`
-1. Importar `useIsMobile` e os componentes `Sheet`, `SheetContent`, `SheetHeader`, `SheetTitle` de `@/components/ui/sheet`.
-2. Extrair o conteúdo (meta, tabs Concluir/Adiar, textarea/input, footer) em variáveis JSX reutilizadas pelos dois branches.
-3. Branch mobile (`if (isMobile)`): usar `Sheet` com `SheetContent side="bottom"`, `rounded-t-2xl`, `max-h-[92vh]`, `overflow-y-auto`, padding `p-4`.
-   - Header: título da tarefa em `text-lg font-semibold`.
-   - Tabs Concluir/Adiar ocupando `w-full` (cada botão `flex-1`).
-   - Footer empilhado: linha superior com `Editar` + `Excluir` (ghost), linha inferior com `Cancelar` + `Concluir/Adiar` em `grid grid-cols-2 gap-2` para garantir que o CTA verde não corte.
-   - Botão principal `w-full` dentro da sua célula do grid.
-4. Branch desktop: manter exatamente o `Dialog` atual.
+### 1. Edge function `admin-impersonate-switch` (nova)
+Reaproveita a lógica das funções existentes:
+- Valida admin: `admin_users` + `mfa_enabled=true` + `is_active=true` (mesmo bloco do `admin-impersonate`).
+- Encerra `currentSessionId`: copia o bloco de `admin-impersonate-end` (`ended_at`, `duration_seconds`, `status='ended'`).
+- Escolhe usuário alvo: `user_organizations` da org com `is_active=true`, ordenado por `created_at ASC` → pega o primeiro. Se vazio → erro 400 "Organização sem usuário ativo".
+- Gera magic link (`auth.admin.generateLink` igual ao `admin-impersonate`), insere nova `impersonation_sessions`, grava `admin_audit_logs` com `action='impersonate_switch'` e `details={ from_org_id, to_org_id, previous_session_id }`.
+- Retorna `{ action_link, session_id }`.
+- CORS conforme padrão do projeto (`'Access-Control-Allow-Origin': '*'`).
 
-### Sem mudanças
-- `MobileTasksList.tsx`, `TasksList.tsx`, traduções, lógica de Supabase.
-- Nenhum novo arquivo necessário; o `AlertDialog` de exclusão continua funcionando dentro do `Sheet`.
+### 2. Edge function `admin-list-orgs-for-switch` (nova, leve)
+- Valida admin (mesmo check).
+- `SELECT id, name, slug, logo_url FROM organizations ORDER BY name`.
+- Filtra apenas as que têm pelo menos 1 `user_organizations.is_active=true` (subquery), para evitar erro no clique.
+- Retorna array.
+
+### 3. `src/components/admin/ImpersonationBanner.tsx` (único arquivo do frontend tocado)
+- Estender o `select` de `impersonation_sessions` para trazer `organization_id` e join com `organizations(name)`.
+- Adicionar `<Popover>` com `<Command>` (já temos em `@/components/ui/command`) — lista carregada lazy no `onOpenChange(true)`.
+- Item selecionado:
+  1. `loading=true`
+  2. `invoke('admin-impersonate-switch', { currentSessionId, targetOrganizationId, redirectUrl: window.location.origin })`
+  3. `localStorage.removeItem('impersonation_session_id')` (o novo será setado pelo `?imp_session=` no redirect, igual ao fluxo atual)
+  4. `await supabase.auth.signOut()`
+  5. `window.location.href = action_link`
+- Botão "Encerrar Sessão" permanece intacto.
+
+### Nenhum impacto em
+- `admin-impersonate`, `admin-impersonate-end` → não tocados.
+- RLS, schema, triggers → não tocados.
+- Layouts `Layout`/`MobileLayout`/`AdminLayout` → não tocados.
+- Outras telas admin → não tocadas.
 
 ## Verificação
-- Abrir `/tasks` no viewport 390px, tocar em uma tarefa, conferir que o sheet sobe pela base, todos os botões aparecem inteiros e o textarea recebe foco.
-- Confirmar que no desktop o `Dialog` segue idêntico.
+1. Logar como admin → impersonar Viagi → banner mostra chip "Viagi ▼".
+2. Abrir popover → buscar "Central" → clicar.
+3. Tab recarrega já como usuário ativo da Central Trabalhista.
+4. Conferir em `impersonation_sessions`: sessão antiga `status=ended` com `duration_seconds`, nova sessão `status=active`.
+5. Conferir em `admin_audit_logs`: registro `impersonate_switch` com `from_org_id`/`to_org_id`.
+6. Tela admin original (`AdminOrganizationDetail` → Impersonar) continua funcionando idêntica.
