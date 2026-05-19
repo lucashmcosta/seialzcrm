@@ -181,14 +181,30 @@ export default function AdminOrganizations() {
                         {format(new Date(org.created_at), 'dd/MM/yyyy', { locale: ptBR })}
                       </TableCell>
                       <TableCell className="text-right">
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          onClick={() => navigate(`/admin/organizations/${org.id}`)}
-                        >
-                          <Eye className="h-4 w-4 mr-2" />
-                          Ver
-                        </Button>
+                        <div className="flex items-center justify-end gap-1">
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            onClick={() => handleAccess(org)}
+                            disabled={!org.user_count || accessingId === org.id}
+                            title={!org.user_count ? 'Sem usuário ativo' : 'Acessar conta como admin'}
+                          >
+                            {accessingId === org.id ? (
+                              <SpinnerGap className="h-4 w-4 mr-2 animate-spin" />
+                            ) : (
+                              <SignIn className="h-4 w-4 mr-2" />
+                            )}
+                            Acessar
+                          </Button>
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            onClick={() => navigate(`/admin/organizations/${org.id}`)}
+                          >
+                            <Eye className="h-4 w-4 mr-2" />
+                            Ver
+                          </Button>
+                        </div>
                       </TableCell>
                     </TableRow>
                   ))
