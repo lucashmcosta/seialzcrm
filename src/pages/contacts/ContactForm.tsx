@@ -222,6 +222,27 @@ export default function ContactForm() {
       owner_user_id: formData.owner_user_id || userProfile.id,
     };
 
+    const handleDbError = async (error: any) => {
+      // Postgres unique violation
+      if (error?.code === '23505') {
+        const msg = String(error?.message || '');
+        if (msg.includes('phone_normalized') || msg.includes('phone')) {
+          const dups = await checkPhoneUniqueness();
+          if (dups.length > 0) {
+            setDuplicates(dups);
+            setShowDuplicateWarning(true);
+          }
+          toast.error('Já existe um contato com este telefone nesta organização');
+          return;
+        }
+        if (msg.includes('email')) {
+          toast.error('Já existe um contato com este e-mail nesta organização');
+          return;
+        }
+      }
+      toast.error(error?.message || t('common.error'));
+    };
+
     if (isEdit) {
       const { error } = await supabase
         .from('contacts')
@@ -229,7 +250,7 @@ export default function ContactForm() {
         .eq('id', id);
 
       if (error) {
-        toast.error(t('common.error'));
+        await handleDbError(error);
         setLoading(false);
         return;
       }
@@ -244,7 +265,7 @@ export default function ContactForm() {
         .single();
 
       if (error) {
-        toast.error(t('common.error'));
+        await handleDbError(error);
         setLoading(false);
         return;
       }
