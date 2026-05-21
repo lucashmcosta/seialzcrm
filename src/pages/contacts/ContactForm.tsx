@@ -299,35 +299,50 @@ export default function ContactForm() {
 
         <div className="flex-1 overflow-auto p-6">
           <Card className="max-w-2xl mx-auto p-6">
-            {showDuplicateWarning && duplicates.length > 0 && (
-              <div className="mb-6 p-4 border border-destructive/50 bg-destructive/10 rounded-lg">
-                <h3 className="font-semibold text-destructive mb-2">
-                  {t('contacts.duplicateWarning')}
-                </h3>
-                <p className="text-sm text-muted-foreground mb-3">
-                  {t('contacts.duplicateDescription')}
-                </p>
-                <div className="space-y-2 mb-4">
-                  {duplicates.map((dup) => (
-                    <div key={dup.id} className="text-sm p-2 bg-background rounded border">
-                      <div className="font-medium">{dup.full_name}</div>
-                      {dup.email && <div className="text-muted-foreground">{dup.email}</div>}
-                      {dup.phone && <div className="text-muted-foreground">{dup.phone}</div>}
-                    </div>
-                  ))}
-                </div>
-                <div className="flex gap-2">
-                  {!organization?.duplicate_enforce_block && (
-                    <Button type="button" onClick={handleForceSave} color="destructive">
-                      {t('contacts.saveDespiteDuplicate')}
+            {showDuplicateWarning && duplicates.length > 0 && (() => {
+              const hasPhoneDup = duplicates.some((d) => d.phone && d.phone === formData.phone);
+              return (
+                <div className="mb-6 p-4 border border-destructive/50 bg-destructive/10 rounded-lg">
+                  <h3 className="font-semibold text-destructive mb-2">
+                    {t('contacts.duplicateWarning')}
+                  </h3>
+                  <p className="text-sm text-muted-foreground mb-3">
+                    {hasPhoneDup
+                      ? 'Já existe um contato com este telefone. Deseja abrir o contato existente?'
+                      : t('contacts.duplicateDescription')}
+                  </p>
+                  <div className="space-y-2 mb-4">
+                    {duplicates.map((dup) => (
+                      <div key={dup.id} className="text-sm p-2 bg-background rounded border flex items-center justify-between gap-2">
+                        <div className="min-w-0">
+                          <div className="font-medium truncate">{dup.full_name}</div>
+                          {dup.email && <div className="text-muted-foreground truncate">{dup.email}</div>}
+                          {dup.phone && <div className="text-muted-foreground">{dup.phone}</div>}
+                        </div>
+                        <Button
+                          type="button"
+                          color="primary"
+                          size="sm"
+                          onClick={() => navigate(`/contacts/${dup.id}`)}
+                        >
+                          Abrir contato
+                        </Button>
+                      </div>
+                    ))}
+                  </div>
+                  <div className="flex gap-2">
+                    {!hasPhoneDup && !organization?.duplicate_enforce_block && (
+                      <Button type="button" onClick={handleForceSave} color="destructive">
+                        {t('contacts.saveDespiteDuplicate')}
+                      </Button>
+                    )}
+                    <Button type="button" onClick={() => setShowDuplicateWarning(false)} color="secondary">
+                      {t('common.cancel')}
                     </Button>
-                  )}
-                  <Button type="button" onClick={() => setShowDuplicateWarning(false)} color="secondary">
-                    {t('common.cancel')}
-                  </Button>
+                  </div>
                 </div>
-              </div>
-            )}
+              );
+            })()}
             
             <form onSubmit={handleSubmit} className="space-y-6">
               <NameInput
