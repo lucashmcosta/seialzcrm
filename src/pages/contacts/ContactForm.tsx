@@ -158,27 +158,51 @@ export default function ContactForm() {
     return unique;
   };
 
+  const checkPhoneUniqueness = async () => {
+    if (!organization || !formData.phone) return [];
+    let query = supabase
+      .from('contacts')
+      .select('id, full_name, email, phone')
+      .eq('organization_id', organization.id)
+      .eq('phone', formData.phone)
+      .is('deleted_at', null);
+    if (isEdit && id) query = query.neq('id', id);
+    const { data } = await query;
+    return data || [];
+  };
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!organization || !userProfile) return;
 
     setLoading(true);
 
-    // Check for duplicates
+    // Check for duplicates (org rule)
     const foundDuplicates = await checkDuplicates();
-    
-    if (foundDuplicates.length > 0) {
-      setDuplicates(foundDuplicates);
+
+    // Always check phone uniqueness — DB has a unique index on (org, phone_normalized)
+    const phoneDuplicates = await checkPhoneUniqueness();
+    const allDuplicates = Array.from(
+      new Map([...foundDuplicates, ...phoneDuplicates].map((d) => [d.id, d])).values()
+    );
+
+    if (allDuplicates.length > 0) {
+      setDuplicates(allDuplicates);
       setShowDuplicateWarning(true);
-      
-      // If enforce_block is true, stop here
-      if (organization.duplicate_enforce_block) {
-        toast.error(t('contacts.duplicateFound'));
+
+      // Phone duplicates are always blocking (DB unique index)
+      const hasPhoneDup = phoneDuplicates.length > 0;
+
+      if (organization.duplicate_enforce_block || hasPhoneDup) {
+        toast.error(
+          hasPhoneDup
+            ? 'Já existe um contato com este telefone nesta organização'
+            : t('contacts.duplicateFound')
+        );
         setLoading(false);
         return;
       }
-      
-      // If not enforcing, show warning but allow to continue
+
       setLoading(false);
       return;
     }
@@ -198,6 +222,27 @@ export default function ContactForm() {
       owner_user_id: formData.owner_user_id || userProfile.id,
     };
 
+    const handleDbError = async (error: any) => {
+      // Postgres unique violation
+      if (error?.code === '23505') {
+        const msg = String(error?.message || '');
+        if (msg.includes('phone_normalized') || msg.includes('phone')) {
+          const dups = await checkPhoneUniqueness();
+          if (dups.length > 0) {
+            setDuplicates(dups);
+            setShowDuplicateWarning(true);
+          }
+          toast.error('Já existe um contato com este telefone nesta organização');
+          return;
+        }
+        if (msg.includes('email')) {
+          toast.error('Já existe um contato com este e-mail nesta organização');
+          return;
+        }
+      }
+      toast.error(error?.message || t('common.error'));
+    };
+
     if (isEdit) {
       const { error } = await supabase
         .from('contacts')
@@ -205,7 +250,7 @@ export default function ContactForm() {
         .eq('id', id);
 
       if (error) {
-        toast.error(t('common.error'));
+        await handleDbError(error);
         setLoading(false);
         return;
       }
@@ -220,7 +265,7 @@ export default function ContactForm() {
         .single();
 
       if (error) {
-        toast.error(t('common.error'));
+        await handleDbError(error);
         setLoading(false);
         return;
       }
