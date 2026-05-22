@@ -1,36 +1,59 @@
+
 ## Problema
 
-Na tela **Mensagens**, o filtro de aba (Minhas / Não atribuídas / Todas abertas / Resolvidas) já está usando `usePersistedFilters('messages.filter', 'all_open')`, mas existe um `useEffect` (linhas 525–534 de `src/pages/messages/MessagesList.tsx`) que **sobrescreve** o filtro toda vez que `threads` carrega:
+O mesmo contato gera 2 oportunidades quando chega quase simultaneamente por dois canais:
+- **Meta Lead Ads** (`supabase/functions/meta-lead-ads-process-lead/index.ts`) → cria opp `source='meta_lead_ads'`
+- **WhatsApp Inbound** (`supabase/functions/twilio-whatsapp-webhook/index.ts`, ~linha 478) → cria opp `source='manual'` com título `"Oportunidade - {nome}"`
+
+Nenhum dos dois consulta a tabela `opportunities` antes de criar. Resultado: contatos como Eliene e Navaha Hanan ficaram com 2 opps (mesmo `contact_id`, criadas com 20–30s de diferença).
+
+## Regra escolhida
+
+**Se o contato já tem qualquer oportunidade com `status='open'` (e não deletada), NÃO cria uma nova.**
+
+## Mudanças
+
+### 1. `twilio-whatsapp-webhook/index.ts` (auto-criação de opp no inbound)
+
+Antes do `insert` em `opportunities`, checar:
 
 ```ts
-if (hasMine) setFilter('mine');
-else setFilter('unassigned');
+const { data: existingOpp } = await admin
+  .from('opportunities')
+  .select('id')
+  .eq('organization_id', organization_id)
+  .eq('contact_id', contactId)
+  .eq('status', 'open')
+  .is('deleted_at', null)
+  .limit(1)
+  .maybeSingle();
+
+if (existingOpp) {
+  console.log('[wa-inbound] skip opp creation — open opp already exists', existingOpp.id);
+} else {
+  // insert atual
+}
 ```
 
-Como isso roda sempre que `threads.length` ou `userProfile.id` mudam (inclusive ao reentrar na tela), o valor persistido é descartado.
+### 2. `meta-lead-ads-process-lead/index.ts` (~linha 336, dentro do `if (shouldCreateOpp)`)
 
-## Mudança
+Mesma checagem. Se já houver opp aberta:
+- **Não cria nova.**
+- Reaproveita `opportunityId = existingOpp.id` para que custom fields, tags e activity log do lead continuem vinculados à opp existente (não perdemos rastreio do form Meta).
 
-Fazer esse "smart default" rodar **apenas na primeira vez** (quando o usuário ainda não escolheu nada). Estratégia:
+### 3. Índice único parcial (proteção contra race condition)
 
-1. Em `src/pages/messages/MessagesList.tsx`, trocar a inicialização de `filter` para usar um sentinel:
-   ```ts
-   const [filter, setFilter, , filterHydrated] =
-     usePersistedFilters<ThreadFilter | null>('messages.filter', null);
-   ```
-2. Adicionar um `useRef(false)` `appliedSmartDefaultRef`. No `useEffect` das linhas 525–534:
-   - Só aplica o smart default se `filterHydrated && filter === null && !appliedSmartDefaultRef.current`.
-   - Marca o ref como `true` depois de setar.
-   - Resultado: se o usuário já escolheu (valor persistido != null), o effect não toca.
-3. Em todos os lugares que leem `filter` (switch de status na linha ~1119, `filterOptions`, render dos chips), tratar `null` como `'all_open'` via:
-   ```ts
-   const effectiveFilter: ThreadFilter = filter ?? 'all_open';
-   ```
-   E usar `effectiveFilter` nesses pontos. O `setFilter` continua recebendo `ThreadFilter` normal nos cliques dos chips.
-4. Manter o effect de "Force mine for users without view-all" (linha 1170) usando `effectiveFilter`.
+Migration:
+```sql
+CREATE UNIQUE INDEX IF NOT EXISTS opportunities_one_open_per_contact
+ON public.opportunities (organization_id, contact_id)
+WHERE status = 'open' AND deleted_at IS NULL;
+```
+
+Garante que, mesmo se Meta e WhatsApp chegarem no mesmíssimo instante (a checagem em (1) e (2) passaria nos dois), o segundo `insert` falha com `23505`. Os handlers já tratam esse erro recuperando a opp existente.
 
 ## Fora de escopo
 
-- Não mexer em busca, threads, realtime ou qualquer outra lógica.
-- Não alterar UI/visual.
-- Mobile (`MobileMessagesList`) não está nesse fluxo — não tocar a menos que apareça o mesmo bug.
+- Não mexo na deduplicação de **contatos** (`normalizePhoneForSearch`) — é outro problema.
+- Não alteração de UI nem de criação manual de opps.
+- Não retroativo: opps duplicadas que já existem ficam como estão (você merge manualmente se quiser).
