@@ -1230,7 +1230,7 @@ function DesktopMessagesList() {
                     onClick={() => setFilter(opt.key)}
                     className={cn(
                       'px-2.5 py-1 text-xs font-medium rounded-full border transition-colors',
-                      filter === opt.key
+                      effectiveFilter === opt.key
                         ? 'bg-primary text-primary-foreground border-primary'
                         : 'bg-transparent text-muted-foreground border-border hover:bg-accent'
                     )}
