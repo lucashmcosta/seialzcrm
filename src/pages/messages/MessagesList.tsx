@@ -523,17 +523,18 @@ function DesktopMessagesList() {
 
   const selectedThread = threads?.find((t) => t.id === selectedThreadId);
 
-  // Set default filter based on assigned threads
+  // Set default filter based on assigned threads — only on first load
+  // when there's no persisted choice yet. Once the user picks a filter,
+  // the persisted value wins and this effect no-ops.
   useEffect(() => {
-    if (threads && threads.length > 0 && userProfile?.id) {
-      const hasMine = threads.some(t => t.assigned_user_id === userProfile.id && ['open', 'awaiting_client'].includes(t.status));
-      if (hasMine) {
-        setFilter('mine');
-      } else {
-        setFilter('unassigned');
-      }
-    }
-  }, [threads?.length, userProfile?.id]);
+    if (!filterHydrated) return;
+    if (filter !== null) return;
+    if (appliedSmartDefaultRef.current) return;
+    if (!threads || threads.length === 0 || !userProfile?.id) return;
+    const hasMine = threads.some(t => t.assigned_user_id === userProfile.id && ['open', 'awaiting_client'].includes(t.status));
+    setFilter(hasMine ? 'mine' : 'unassigned');
+    appliedSmartDefaultRef.current = true;
+  }, [filterHydrated, filter, threads, userProfile?.id, setFilter]);
 
   // Fetch messages when thread selected
   useEffect(() => {
