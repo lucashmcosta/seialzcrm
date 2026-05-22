@@ -766,7 +766,7 @@ export default function OpportunitiesKanban() {
 
   // Mobile layout — check BEFORE loading to avoid flashing desktop Layout
   if (isMobile) {
-    if (loading) {
+    if (initialLoading) {
       return (
         <MobileLayout>
           <div className="flex items-center justify-center h-full">
