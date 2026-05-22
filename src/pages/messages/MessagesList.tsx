@@ -1119,7 +1119,7 @@ function DesktopMessagesList() {
     // were likely auto-resolved or marked too early and the client never replied.
     const isPendingFirstReply = thread.status === 'resolved' && !thread.last_inbound_at && !thread.whatsapp_last_inbound_at;
     const isOpenLike = ['open', 'awaiting_client'].includes(thread.status) || isPendingFirstReply;
-    switch (filter) {
+    switch (effectiveFilter) {
       case 'mine':
         return thread.assigned_user_id === userProfile?.id && isOpenLike;
       case 'unassigned':
