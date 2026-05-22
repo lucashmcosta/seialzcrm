@@ -20,6 +20,57 @@ function formatRelative(iso: string): string {
   return `há ${days}d`;
 }
 
+function normalizeSyncError(reason?: string | null): string {
+  switch (reason) {
+    case 'not_configured':
+      return 'Ads Manager não configurado.';
+    case 'no_token':
+      return 'Token Meta ausente ou inválido.';
+    case 'decrypt_failed':
+      return 'Não foi possível ler o token Meta salvo.';
+    case 'token_invalid':
+      return 'O token Meta expirou ou foi invalidado.';
+    default:
+      return reason || 'A sincronização não retornou dados válidos.';
+  }
+}
+
+function getSyncIssue(discoverData: any, insightsData: any): string | null {
+  const discoverResults = Array.isArray(discoverData?.results) ? discoverData.results : [];
+  const discoverFailure =
+    discoverData?.success === false ||
+    (discoverData?.orgs_failed ?? 0) > 0 ||
+    discoverResults.some((result: any) => result?.status === 'failed');
+
+  if (discoverFailure) {
+    const failedResult = discoverResults.find((result: any) => result?.status === 'failed');
+    return normalizeSyncError(failedResult?.error || discoverData?.error);
+  }
+
+  const skippedResults = discoverResults.filter((result: any) => result?.status === 'skipped');
+  if (skippedResults.length > 0 && skippedResults.length === discoverResults.length) {
+    return normalizeSyncError(skippedResults[0]?.error);
+  }
+
+  const insightFailure =
+    insightsData?.success === false ||
+    (insightsData?.ads_failed ?? 0) > 0 ||
+    (insightsData?.errors?.length ?? 0) > 0;
+
+  if (insightFailure) {
+    return normalizeSyncError(insightsData?.errors?.[0]?.error || insightsData?.error);
+  }
+
+  const noDiscoverWork = (discoverData?.ads_discovered ?? 0) === 0 && (discoverData?.ads_created ?? 0) === 0;
+  const noInsightWork = (insightsData?.ads_processed ?? 0) === 0 && (insightsData?.days_inserted ?? 0) === 0;
+
+  if (noDiscoverWork && noInsightWork) {
+    return 'Nenhuma campanha elegível foi sincronizada.';
+  }
+
+  return null;
+}
+
 export function SyncStatusCard({ orgId }: Props) {
   const qc = useQueryClient();
   const [syncing, setSyncing] = useState(false);
@@ -61,15 +112,28 @@ export function SyncStatusCard({ orgId }: Props) {
     if (!orgId || syncing) return;
     setSyncing(true);
     try {
-      const { error: discErr } = await supabase.functions.invoke('meta-discover-ads-cron', {
+      const { data: discoverData, error: discErr } = await supabase.functions.invoke('meta-discover-ads-cron', {
         body: { organization_id: orgId },
       });
       if (discErr) throw discErr;
-      const { error: insErr } = await supabase.functions.invoke('marketing-insights-sync-daily', {
+
+      const { data: insightsData, error: insErr } = await supabase.functions.invoke('marketing-insights-sync-daily', {
         body: { organization_id: orgId, days_back: 3, limit: 200 },
       });
       if (insErr) throw insErr;
-      toast.success('Sincronização concluída');
+
+      const syncIssue = getSyncIssue(discoverData, insightsData);
+      if (syncIssue) throw new Error(syncIssue);
+
+      const details = [
+        (discoverData?.ads_created ?? 0) > 0 ? `${discoverData.ads_created} campanhas novas` : null,
+        (insightsData?.ads_processed ?? 0) > 0 ? `${insightsData.ads_processed} anúncios processados` : null,
+        (insightsData?.days_inserted ?? 0) > 0 ? `${insightsData.days_inserted} dias de insights` : null,
+      ].filter(Boolean).join(' • ');
+
+      toast.success('Sincronização concluída', {
+        description: details || undefined,
+      });
       await qc.invalidateQueries({ queryKey: ['marketing-sync-status', orgId] });
       await qc.invalidateQueries({ queryKey: ['marketing-overview'] });
       await qc.invalidateQueries({ queryKey: ['marketing-timeseries'] });
