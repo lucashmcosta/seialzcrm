@@ -113,6 +113,7 @@ export default function OpportunitiesKanban() {
   const [stages, setStages] = useState<PipelineStage[]>([]);
   const [opportunities, setOpportunities] = useState<Opportunity[]>([]);
   const [loading, setLoading] = useState(true);
+  const [initialLoading, setInitialLoading] = useState(true);
   const [dialogOpen, setDialogOpen] = useState(false);
   const [editingOpportunity, setEditingOpportunity] = useState<Opportunity | null>(null);
   const [deleteId, setDeleteId] = useState<string | null>(null);
@@ -386,6 +387,7 @@ export default function OpportunitiesKanban() {
     }
 
     setLoading(false);
+    setInitialLoading(false);
   };
 
   const formatCurrency = (value: number, currency: string) => {
@@ -764,7 +766,7 @@ export default function OpportunitiesKanban() {
 
   // Mobile layout — check BEFORE loading to avoid flashing desktop Layout
   if (isMobile) {
-    if (loading) {
+    if (initialLoading) {
       return (
         <MobileLayout>
           <div className="flex items-center justify-center h-full">
@@ -797,7 +799,7 @@ export default function OpportunitiesKanban() {
     );
   }
 
-  if (loading) {
+  if (initialLoading) {
     return (
       <Layout>
         <div className="flex flex-col h-full">
