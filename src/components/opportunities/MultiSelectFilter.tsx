@@ -56,7 +56,25 @@ export function MultiSelectFilter({
         </Button>
       </PopoverTrigger>
       <PopoverContent className="w-[260px] p-0" align="start">
-        <div className="max-h-64 overflow-auto py-1">
+        <div
+          className="max-h-64 overflow-auto py-1"
+          onWheel={(e) => {
+            const el = e.currentTarget;
+            const canScroll = el.scrollHeight > el.clientHeight;
+            const atTop = el.scrollTop <= 0;
+            const atBottom = el.scrollTop + el.clientHeight >= el.scrollHeight - 1;
+            const goingDown = e.deltaY > 0;
+            const goingUp = e.deltaY < 0;
+            const popoverHandles =
+              canScroll && ((goingDown && !atBottom) || (goingUp && !atTop));
+            if (popoverHandles) return;
+            const target = document.querySelector<HTMLElement>('[data-filters-scroll]');
+            if (target) {
+              target.scrollTop += e.deltaY;
+              e.preventDefault();
+            }
+          }}
+        >
           {options.length === 0 ? (
             <div className="px-3 py-2 text-sm text-muted-foreground">Sem opções</div>
           ) : (
