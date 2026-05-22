@@ -1171,10 +1171,10 @@ function DesktopMessagesList() {
 
   // Force "mine" for users without view-all
   useEffect(() => {
-    if (!permissions.viewAllThreads && filter !== 'mine') {
+    if (!permissions.viewAllThreads && effectiveFilter !== 'mine') {
       setFilter('mine');
     }
-  }, [permissions.viewAllThreads, filter]);
+  }, [permissions.viewAllThreads, effectiveFilter]);
 
 
   return (
