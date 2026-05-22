@@ -477,66 +477,82 @@ serve(async (req) => {
           // Auto-create opportunity if enabled
           if (inboundSettings.auto_create_opportunity) {
             try {
-              const oppData: any = {
-                organization_id: orgId,
-                contact_id: contactId,
-                title: `Oportunidade - ${contactName}`,
-                status: 'open',
-              }
+              // Guard: skip if contact already has an open opportunity
+              const { data: existingOpenOpp } = await supabase
+                .from('opportunities')
+                .select('id')
+                .eq('organization_id', orgId)
+                .eq('contact_id', contactId)
+                .eq('status', 'open')
+                .is('deleted_at', null)
+                .limit(1)
+                .maybeSingle()
 
-              // Resolve pipeline_stage_id
-              let resolvedStageId: string | null = null
-
-              if (inboundSettings.default_stage_id) {
-                // Validate stage belongs to org
-                const { data: validStage } = await supabase
-                  .from('pipeline_stages')
-                  .select('id')
-                  .eq('id', inboundSettings.default_stage_id)
-                  .eq('organization_id', orgId)
-                  .single()
-                if (validStage) {
-                  resolvedStageId = validStage.id
-                }
-              }
-
-              if (!resolvedStageId) {
-                // Fallback: first stage by order_index
-                const { data: firstStage } = await supabase
-                  .from('pipeline_stages')
-                  .select('id')
-                  .eq('organization_id', orgId)
-                  .order('order_index', { ascending: true })
-                  .limit(1)
-                  .single()
-                if (firstStage) {
-                  resolvedStageId = firstStage.id
-                }
-              }
-
-              if (!resolvedStageId) {
-                console.error('No pipeline stages found for org', orgId, '- skipping opportunity creation')
+              if (existingOpenOpp) {
+                console.log('[wa-inbound] skip opp creation — open opp already exists', existingOpenOpp.id)
               } else {
-                oppData.pipeline_stage_id = resolvedStageId
-              }
+                const oppData: any = {
+                  organization_id: orgId,
+                  contact_id: contactId,
+                  title: `Oportunidade - ${contactName}`,
+                  status: 'open',
+                }
 
-              if (contactOwnerId) {
-                oppData.owner_user_id = contactOwnerId
-              }
+                // Resolve pipeline_stage_id
+                let resolvedStageId: string | null = null
 
-              if (resolvedStageId) {
-                const { data: newOpp, error: oppError } = await supabase
-                  .from('opportunities')
-                  .insert(oppData)
-                  .select('id')
-                  .single()
+                if (inboundSettings.default_stage_id) {
+                  // Validate stage belongs to org
+                  const { data: validStage } = await supabase
+                    .from('pipeline_stages')
+                    .select('id')
+                    .eq('id', inboundSettings.default_stage_id)
+                    .eq('organization_id', orgId)
+                    .single()
+                  if (validStage) {
+                    resolvedStageId = validStage.id
+                  }
+                }
 
-                if (newOpp) {
-                  console.log('Auto-created opportunity:', newOpp.id)
-                } else if (oppError) {
-                  console.error('Error auto-creating opportunity:', oppError)
+                if (!resolvedStageId) {
+                  // Fallback: first stage by order_index
+                  const { data: firstStage } = await supabase
+                    .from('pipeline_stages')
+                    .select('id')
+                    .eq('organization_id', orgId)
+                    .order('order_index', { ascending: true })
+                    .limit(1)
+                    .single()
+                  if (firstStage) {
+                    resolvedStageId = firstStage.id
+                  }
+                }
+
+                if (!resolvedStageId) {
+                  console.error('No pipeline stages found for org', orgId, '- skipping opportunity creation')
+                } else {
+                  oppData.pipeline_stage_id = resolvedStageId
+                }
+
+                if (contactOwnerId) {
+                  oppData.owner_user_id = contactOwnerId
+                }
+
+                if (resolvedStageId) {
+                  const { data: newOpp, error: oppError } = await supabase
+                    .from('opportunities')
+                    .insert(oppData)
+                    .select('id')
+                    .single()
+
+                  if (newOpp) {
+                    console.log('Auto-created opportunity:', newOpp.id)
+                  } else if (oppError) {
+                    console.error('Error auto-creating opportunity:', oppError)
+                  }
                 }
               }
+
             } catch (oppErr) {
               console.error('Error in auto-create opportunity:', oppErr)
             }
