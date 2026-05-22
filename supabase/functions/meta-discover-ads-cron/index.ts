@@ -101,6 +101,11 @@ function mapStatus(s?: string | null): string {
   return "unknown";
 }
 
+function normalizeAdAccountId(adAccountId: string): string {
+  const trimmed = adAccountId.trim();
+  return trimmed.startsWith("act_") ? trimmed : `act_${trimmed}`;
+}
+
 function extractDestinationUrl(creative: any): string | null {
   const oss = creative?.object_story_spec;
   if (!oss) return null;
@@ -142,7 +147,8 @@ async function processOrg(
     return { org_id: orgId, status: "failed", ads_discovered: 0, ads_created: 0, ads_archived: 0, error: "decrypt_failed" };
   }
 
-  const result = await fetchAllAds(cred.ad_account_id, token);
+  const normalizedAdAccountId = normalizeAdAccountId(cred.ad_account_id);
+  const result = await fetchAllAds(normalizedAdAccountId, token);
   if (!result.ok) {
     const msg = result.error?.error?.message ?? `http_${result.status}`;
     return { org_id: orgId, status: "failed", ads_discovered: 0, ads_created: 0, ads_archived: 0, error: String(msg).slice(0, 300) };
@@ -222,7 +228,7 @@ async function processOrg(
 
   console.log("[discover-ads]", JSON.stringify({
     org_id: orgId,
-    ad_account_id: cred.ad_account_id,
+    ad_account_id: normalizedAdAccountId,
     ads_discovered: result.ads.length,
     ads_created: adsCreated,
     ads_archived: adsArchived,
