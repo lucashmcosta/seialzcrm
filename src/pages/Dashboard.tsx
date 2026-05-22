@@ -15,6 +15,7 @@ import { ReportFilters } from '@/components/reports/ReportFilters';
 import { computeRange, type PeriodPreset, type CustomRange } from '@/lib/report-period';
 import { DashboardTrendChart } from '@/components/reports/DashboardTrendChart';
 import { DashboardStatusDonut } from '@/components/reports/DashboardStatusDonut';
+import { usePersistedFilters } from '@/hooks/usePersistedFilters';
 
 import { cn } from '@/lib/utils';
 
@@ -44,8 +45,18 @@ export default function Dashboard() {
   const navigate = useNavigate();
   const isMobile = useIsMobile();
 
-  const [preset, setPreset] = useState<PeriodPreset>('last_30');
-  const [customRange, setCustomRange] = useState<CustomRange | undefined>();
+  const [preset, setPreset] = usePersistedFilters<PeriodPreset>('dashboard.preset', 'last_30');
+  const [customRange, setCustomRange] = usePersistedFilters<CustomRange | undefined>(
+    'dashboard.custom',
+    undefined,
+    (raw) => {
+      if (!raw || typeof raw !== 'object') return undefined;
+      return {
+        from: raw.from ? new Date(raw.from) : undefined,
+        to: raw.to ? new Date(raw.to) : undefined,
+      };
+    },
+  );
 
   const [enteredCount, setEnteredCount] = useState(0);
   const [closedCount, setClosedCount] = useState(0);

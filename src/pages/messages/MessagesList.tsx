@@ -250,7 +250,7 @@ function DesktopMessagesList() {
   const [submitting, setSubmitting] = useState(false);
   const [isIn24hWindow, setIsIn24hWindow] = useState(false);
   const [showTemplates, setShowTemplates] = useState(false);
-  const [searchQuery, setSearchQuery] = useState('');
+  const [searchQuery, setSearchQuery] = usePersistedFilters<string>('messages.search', '');
   const [filter, setFilter] = usePersistedFilters<ThreadFilter>('messages.filter', 'all_open');
   
   // Media preview state
