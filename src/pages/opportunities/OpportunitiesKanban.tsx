@@ -387,6 +387,7 @@ export default function OpportunitiesKanban() {
     }
 
     setLoading(false);
+    setInitialLoading(false);
   };
 
   const formatCurrency = (value: number, currency: string) => {
