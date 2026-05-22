@@ -65,9 +65,16 @@ export function MultiSelectFilter({
             const atBottom = el.scrollTop + el.clientHeight >= el.scrollHeight - 1;
             const goingDown = e.deltaY > 0;
             const goingUp = e.deltaY < 0;
-            const popoverHandles =
-              canScroll && ((goingDown && !atBottom) || (goingUp && !atTop));
-            if (popoverHandles) return;
+
+            // Radix Dialog's RemoveScroll blocks native wheel scroll on portaled
+            // popovers — apply scroll programmatically as a workaround.
+            if (canScroll && ((goingDown && !atBottom) || (goingUp && !atTop))) {
+              el.scrollTop += e.deltaY;
+              e.preventDefault();
+              e.stopPropagation();
+              return;
+            }
+
             const target = document.querySelector<HTMLElement>('[data-filters-scroll]');
             if (target) {
               target.scrollTop += e.deltaY;
