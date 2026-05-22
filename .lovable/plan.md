@@ -1,23 +1,43 @@
 ## Bug
 
-No `OpportunitiesKanban.tsx`, ao alterar qualquer filtro (Responsável, Etapa, Tag, etc.), o efeito da linha 168 dispara `fetchData()`, que chama `setLoading(true)` (linha 240). O early-return da linha 800 (`if (loading) { return <Skeleton/> }`) então desmonta toda a página — incluindo o `<Dialog>` de Filtros — e ao terminar o fetch a página remonta e o modal reabre. É exatamente o "pisca e volta" que você vê.
+O `MultiSelectFilter` usa `Popover` (shadcn/Radix), que é renderizado em portal fora do `DialogContent` de Filtros. O `Dialog` do Radix ativa o `RemoveScroll`, que bloqueia eventos de wheel em tudo que está fora da árvore do Dialog — por isso a lista do popover só rola com arrasto da scrollbar, nunca com a roda do mouse.
 
-A mesma coisa acontece nas datas/valores (mas o debounce de 200ms disfarça um pouco).
+O `onWheel` atual em `MultiSelectFilter.tsx` (linhas 60–76) só tenta repassar o wheel pro Dialog quando o popover já está no topo/fundo. Não resolve o caso geral, pois o navegador nunca chega a aplicar o scroll nativo no popover.
 
 ## Correção
 
-Separar **carregamento inicial** de **refetch**:
+Em `src/components/opportunities/MultiSelectFilter.tsx`, substituir o `onWheel` do `<div className="max-h-64 overflow-auto py-1">` por uma versão que aplica o scroll programaticamente (contornando o `RemoveScroll`):
 
-1. Adicionar `const [initialLoading, setInitialLoading] = useState(true)`.
-2. Em `fetchData()`:
-   - Continuar usando `setLoading(true)` (para o `onRefresh` e indicadores inline existentes).
-   - No `finally`/após o fetch, fazer `setInitialLoading(false)`.
-3. Trocar o early-return da linha 767 (mobile) e da linha 800 (desktop) de `if (loading)` para `if (initialLoading)`.
+```tsx
+onWheel={(e) => {
+  const el = e.currentTarget;
+  const canScroll = el.scrollHeight > el.clientHeight;
+  const atTop = el.scrollTop <= 0;
+  const atBottom = el.scrollTop + el.clientHeight >= el.scrollHeight - 1;
+  const goingDown = e.deltaY > 0;
+  const goingUp = e.deltaY < 0;
 
-Resultado: o skeleton aparece só na primeira carga da página. Mudanças de filtro continuam refazendo o fetch normalmente, mas o `<Dialog>` permanece montado — nada de fechar/reabrir.
+  // Se o popover ainda pode rolar na direção do wheel, aplica programaticamente
+  // (necessário porque o RemoveScroll do Dialog bloqueia o scroll nativo).
+  if (canScroll && ((goingDown && !atBottom) || (goingUp && !atTop))) {
+    el.scrollTop += e.deltaY;
+    e.preventDefault();
+    e.stopPropagation();
+    return;
+  }
+
+  // Caso contrário, repassa pro container de filtros do Dialog
+  const target = document.querySelector<HTMLElement>('[data-filters-scroll]');
+  if (target) {
+    target.scrollTop += e.deltaY;
+    e.preventDefault();
+  }
+}}
+```
+
+Mudança única, isolada ao `MultiSelectFilter`. Não toco em `Popover`, `Dialog` nem em `OpportunitiesKanban`.
 
 ## Fora de escopo
 
-- Não mexo na lógica de filtros, RPC, debounce nem na UI do `MultiSelectFilter`.
-- Não toco no mobile além de trocar a condição do early-return pelo mesmo `initialLoading`.
-- Não mexo em outras páginas.
+- Não troco o `Popover` por menu inline nem mexo no portal.
+- Não altero outros filtros (datas/valores) — não usam popover.
