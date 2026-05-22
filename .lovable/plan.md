@@ -1,43 +1,33 @@
-## Bug
+## O que tem hoje
 
-O `MultiSelectFilter` usa `Popover` (shadcn/Radix), que é renderizado em portal fora do `DialogContent` de Filtros. O `Dialog` do Radix ativa o `RemoveScroll`, que bloqueia eventos de wheel em tudo que está fora da árvore do Dialog — por isso a lista do popover só rola com arrasto da scrollbar, nunca com a roda do mouse.
+Na página da integração **Meta Lead Ads** (Configurações → Integrações → Meta Lead Ads) já tem uma aba **"Conexão"** com o componente `ConnectionForm.tsx` — é ali que se cola o System User Token. Mas esse formulário só salva pra parte de Leads. Não pede ad account nem liga a flag de sync de campanhas. Por isso o `/marketing` da Viagi não carrega.
 
-O `onWheel` atual em `MultiSelectFilter.tsx` (linhas 60–76) só tenta repassar o wheel pro Dialog quando o popover já está no topo/fundo. Não resolve o caso geral, pois o navegador nunca chega a aplicar o scroll nativo no popover.
+## O que vou fazer (sem aba nova, mesma tela)
 
-## Correção
+Estender o `ConnectionForm.tsx` existente pra cobrir tudo em um lugar só:
 
-Em `src/components/opportunities/MultiSelectFilter.tsx`, substituir o `onWheel` do `<div className="max-h-64 overflow-auto py-1">` por uma versão que aplica o scroll programaticamente (contornando o `RemoveScroll`):
+1. Campo **System User Token** (já existe) — onde o usuário cola o token da Meta.
+2. Campo novo **App Secret** (opcional, recomendado).
+3. Depois de salvar/validar o token, mostra um **`<Select>` de Ad Account** populado automaticamente via `meta-discover-ad-accounts` (edge function que já existe).
+4. **Toggle** "Sincronizar campanhas e insights (módulo Marketing)" → grava `feature_ads_manager_sync = true`.
+5. Botão **"Sincronizar agora"** → chama `meta-discover-ads-cron` + `marketing-insights-sync-daily` na hora.
 
-```tsx
-onWheel={(e) => {
-  const el = e.currentTarget;
-  const canScroll = el.scrollHeight > el.clientHeight;
-  const atTop = el.scrollTop <= 0;
-  const atBottom = el.scrollTop + el.clientHeight >= el.scrollHeight - 1;
-  const goingDown = e.deltaY > 0;
-  const goingUp = e.deltaY < 0;
+Tudo salva no `connected_account` (token criptografado com `META_TOKEN_ENCRYPTION_KEY`, `ad_account_id` com prefixo `act_`, `business_id`) e em `config_values.feature_ads_manager_sync`. Vira o fluxo padrão multi-tenant — qualquer org futura cola token, escolhe conta, liga o toggle, pronto.
 
-  // Se o popover ainda pode rolar na direção do wheel, aplica programaticamente
-  // (necessário porque o RemoveScroll do Dialog bloqueia o scroll nativo).
-  if (canScroll && ((goingDown && !atBottom) || (goingUp && !atTop))) {
-    el.scrollTop += e.deltaY;
-    e.preventDefault();
-    e.stopPropagation();
-    return;
-  }
+## Arquivos
 
-  // Caso contrário, repassa pro container de filtros do Dialog
-  const target = document.querySelector<HTMLElement>('[data-filters-scroll]');
-  if (target) {
-    target.scrollTop += e.deltaY;
-    e.preventDefault();
-  }
-}}
-```
+**Edge function nova:** `supabase/functions/meta-ads-manager-save/index.ts`
+- Recebe `{ organization_id, ad_account_id, ad_account_name, business_id, enable_sync }`.
+- Garante prefixo `act_`.
+- Merge em `connected_account` da integração Meta; se token estiver cru em row legada, criptografa e move pra row consolidada.
+- Atualiza `config_values.feature_ads_manager_sync`.
 
-Mudança única, isolada ao `MultiSelectFilter`. Não toco em `Popover`, `Dialog` nem em `OpportunitiesKanban`.
+**Frontend:**
+- `src/components/integrations/meta-lead-ads/ConnectionForm.tsx` — adicionar bloco "Ads Manager" abaixo da conexão atual (Select de conta + toggle + botão sync). Sem nova aba, sem nova rota.
 
-## Fora de escopo
+## Fix imediato pra Viagi
 
-- Não troco o `Popover` por menu inline nem mexo no portal.
-- Não altero outros filtros (datas/valores) — não usam popover.
+Depois do código pronto, abro a integração na Viagi, colo/reuso o token que já existe lá, seleciono `act_1145377357130771`, ligo o toggle, clico "Sincronizar agora". `/marketing` da Viagi passa a carregar.
+
+## Sem migration
+Nada de schema novo — tudo no JSONB que já existe.
