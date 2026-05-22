@@ -330,31 +330,54 @@ serve(async (req) => {
           "Cannot create opportunity: default_pipeline_stage_id not configured",
         );
       } else {
-        const oppTitle =
-          oppStandard.title || `${fullName} — ${lead_form_name || "Meta Lead"}`;
-
-        const { data: opp, error: oppErr } = await admin
+        // Guard: reuse existing open opportunity for this contact instead of creating a new one
+        const { data: existingOpenOpp } = await admin
           .from("opportunities")
-          .insert({
-            organization_id,
-            contact_id: contactId,
-            pipeline_stage_id: settings.default_pipeline_stage_id,
-            title: oppTitle,
-            amount: oppStandard.amount ? Number(oppStandard.amount) : 0,
-            close_date: oppStandard.close_date || null,
-            status: "open",
-            owner_user_id: ownerId,
-            source: "meta_lead_ads",
-            source_external_id: lead.id,
-            created_at: lead.created_time || new Date().toISOString(),
-          })
           .select("id")
-          .single();
+          .eq("organization_id", organization_id)
+          .eq("contact_id", contactId)
+          .eq("status", "open")
+          .is("deleted_at", null)
+          .limit(1)
+          .maybeSingle();
 
-        if (oppErr) {
-          console.error("Failed to create opportunity:", oppErr);
+        if (existingOpenOpp) {
+          console.log(
+            "[meta-lead-ads] reusing existing open opp",
+            existingOpenOpp.id,
+          );
+          opportunityId = existingOpenOpp.id;
         } else {
-          opportunityId = opp.id;
+          const oppTitle =
+            oppStandard.title || `${fullName} — ${lead_form_name || "Meta Lead"}`;
+
+          const { data: opp, error: oppErr } = await admin
+            .from("opportunities")
+            .insert({
+              organization_id,
+              contact_id: contactId,
+              pipeline_stage_id: settings.default_pipeline_stage_id,
+              title: oppTitle,
+              amount: oppStandard.amount ? Number(oppStandard.amount) : 0,
+              close_date: oppStandard.close_date || null,
+              status: "open",
+              owner_user_id: ownerId,
+              source: "meta_lead_ads",
+              source_external_id: lead.id,
+              created_at: lead.created_time || new Date().toISOString(),
+            })
+            .select("id")
+            .single();
+
+          if (oppErr) {
+            console.error("Failed to create opportunity:", oppErr);
+          } else {
+            opportunityId = opp.id;
+          }
+        }
+
+        if (opportunityId) {
+
 
           // Opportunity custom fields
           for (const op of oppCustomFields) {
