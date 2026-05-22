@@ -799,7 +799,7 @@ export default function OpportunitiesKanban() {
     );
   }
 
-  if (loading) {
+  if (initialLoading) {
     return (
       <Layout>
         <div className="flex flex-col h-full">
