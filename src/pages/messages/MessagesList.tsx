@@ -251,7 +251,9 @@ function DesktopMessagesList() {
   const [isIn24hWindow, setIsIn24hWindow] = useState(false);
   const [showTemplates, setShowTemplates] = useState(false);
   const [searchQuery, setSearchQuery] = usePersistedFilters<string>('messages.search', '');
-  const [filter, setFilter] = usePersistedFilters<ThreadFilter>('messages.filter', 'all_open');
+  const [filter, setFilter, , filterHydrated] = usePersistedFilters<ThreadFilter | null>('messages.filter', null);
+  const effectiveFilter: ThreadFilter = filter ?? 'all_open';
+  const appliedSmartDefaultRef = useRef(false);
   
   // Media preview state
   const [previewFile, setPreviewFile] = useState<File | null>(null);
@@ -521,17 +523,18 @@ function DesktopMessagesList() {
 
   const selectedThread = threads?.find((t) => t.id === selectedThreadId);
 
-  // Set default filter based on assigned threads
+  // Set default filter based on assigned threads — only on first load
+  // when there's no persisted choice yet. Once the user picks a filter,
+  // the persisted value wins and this effect no-ops.
   useEffect(() => {
-    if (threads && threads.length > 0 && userProfile?.id) {
-      const hasMine = threads.some(t => t.assigned_user_id === userProfile.id && ['open', 'awaiting_client'].includes(t.status));
-      if (hasMine) {
-        setFilter('mine');
-      } else {
-        setFilter('unassigned');
-      }
-    }
-  }, [threads?.length, userProfile?.id]);
+    if (!filterHydrated) return;
+    if (filter !== null) return;
+    if (appliedSmartDefaultRef.current) return;
+    if (!threads || threads.length === 0 || !userProfile?.id) return;
+    const hasMine = threads.some(t => t.assigned_user_id === userProfile.id && ['open', 'awaiting_client'].includes(t.status));
+    setFilter(hasMine ? 'mine' : 'unassigned');
+    appliedSmartDefaultRef.current = true;
+  }, [filterHydrated, filter, threads, userProfile?.id, setFilter]);
 
   // Fetch messages when thread selected
   useEffect(() => {
@@ -1116,7 +1119,7 @@ function DesktopMessagesList() {
     // were likely auto-resolved or marked too early and the client never replied.
     const isPendingFirstReply = thread.status === 'resolved' && !thread.last_inbound_at && !thread.whatsapp_last_inbound_at;
     const isOpenLike = ['open', 'awaiting_client'].includes(thread.status) || isPendingFirstReply;
-    switch (filter) {
+    switch (effectiveFilter) {
       case 'mine':
         return thread.assigned_user_id === userProfile?.id && isOpenLike;
       case 'unassigned':
@@ -1168,10 +1171,10 @@ function DesktopMessagesList() {
 
   // Force "mine" for users without view-all
   useEffect(() => {
-    if (!permissions.viewAllThreads && filter !== 'mine') {
+    if (!permissions.viewAllThreads && effectiveFilter !== 'mine') {
       setFilter('mine');
     }
-  }, [permissions.viewAllThreads, filter]);
+  }, [permissions.viewAllThreads, effectiveFilter]);
 
 
   return (
@@ -1227,7 +1230,7 @@ function DesktopMessagesList() {
                     onClick={() => setFilter(opt.key)}
                     className={cn(
                       'px-2.5 py-1 text-xs font-medium rounded-full border transition-colors',
-                      filter === opt.key
+                      effectiveFilter === opt.key
                         ? 'bg-primary text-primary-foreground border-primary'
                         : 'bg-transparent text-muted-foreground border-border hover:bg-accent'
                     )}
