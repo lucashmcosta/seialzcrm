@@ -1,0 +1,1 @@
+UPDATE public.user_organizations SET permission_profile_id = '2f5bd892-8392-43a9-8a03-325f25541747', updated_at = now() WHERE user_id = 'c1733528-d97d-4db2-b029-bf3ed32c2f29' AND organization_id = 'b246ef6f-6242-4011-a112-6d8783d2896a';
