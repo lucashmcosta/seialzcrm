@@ -120,7 +120,22 @@ async function processJob(supabase: any, job: IntegrationJob, summary: Record<st
   }
 
   const totalDurationMs = Math.round(performance.now() - startMs);
-  await persistResult(supabase, job, result, totalDurationMs, summary);
+  try {
+    await persistResult(supabase, job, result, totalDurationMs, summary);
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err);
+    console.error("[integration-worker] persistResult threw", job.id, msg);
+    // Fallback estrito: só roda quando persistResult lança exceção.
+    await supabase
+      .from("integration_jobs")
+      .update({
+        status: "failed",
+        last_error: `persistResult threw: ${msg}`,
+        last_error_at: new Date().toISOString(),
+        next_run_at: new Date(Date.now() + 60_000).toISOString(),
+      })
+      .eq("id", job.id);
+  }
 }
 
 // deno-lint-ignore no-explicit-any
@@ -174,10 +189,22 @@ async function persistResult(
     case Classification.Retryable: {
       summary.retryable++;
       const { error } = await supabase.rpc("fn_schedule_retry", {
-        job_id: job.id,
-        error_msg: result.error ?? "unknown error",
+        p_job_id: job.id,
+        p_error: result.error ?? "unknown error",
       });
-      if (error) console.error("[integration-worker] fn_schedule_retry failed", job.id, error);
+      if (error) {
+        console.error("[integration-worker] fn_schedule_retry failed", job.id, error);
+        // Fallback: garante que o job não fica preso em 'running'.
+        await supabase
+          .from("integration_jobs")
+          .update({
+            status: "failed",
+            last_error: `fn_schedule_retry fallback: ${error.message}`,
+            last_error_at: nowIso,
+            next_run_at: new Date(Date.now() + 60_000).toISOString(),
+          })
+          .eq("id", job.id);
+      }
       break;
     }
 

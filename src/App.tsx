@@ -123,6 +123,7 @@ const AdminCoupons = lazy(() => import("./pages/admin/AdminCoupons"));
 const AdminIntegrations = lazy(() => import("./pages/admin/AdminIntegrations"));
 const AdminIntegrationDetail = lazy(() => import("./pages/admin/AdminIntegrationDetail"));
 const AdminDocumentation = lazy(() => import("./pages/admin/AdminDocumentation"));
+const AdminIntegrationHealth = lazy(() => import("./pages/admin/AdminIntegrationHealth"));
 const AdminDocumentationEdit = lazy(() => import("./pages/admin/AdminDocumentationEdit"));
 const AdminProtectedRoute = lazy(() => import("./components/admin/AdminProtectedRoute").then(m => ({ default: m.AdminProtectedRoute })));
 const ImpersonateCallback = lazy(() => import("./pages/admin/ImpersonateCallback"));
@@ -284,6 +285,11 @@ const App = () => (
           <Route path="/admin/integrations/:id" element={
             <AdminProtectedRoute>
               <AdminIntegrationDetail />
+            </AdminProtectedRoute>
+          } />
+          <Route path="/admin/integration-health" element={
+            <AdminProtectedRoute>
+              <AdminIntegrationHealth />
             </AdminProtectedRoute>
           } />
           <Route path="/admin/documentation" element={
