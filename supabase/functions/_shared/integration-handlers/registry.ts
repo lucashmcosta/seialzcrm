@@ -5,6 +5,7 @@
 import type { Handler } from "./types.ts";
 import { webhookDispatchHandler } from "./webhook.ts";
 import { kommoUpsertHandler } from "./kommo.ts";
+import { testOutboxHandler } from "./test-outbox.ts";
 
 const registry = new Map<string, Handler>();
 
@@ -19,3 +20,5 @@ export function resolve(slug: string, action: string): Handler | undefined {
 // Defaults
 register("webhook", "dispatch", webhookDispatchHandler);
 register("kommo", "upsert", kommoUpsertHandler);
+// TEMPORARY: remove after Outbox validation
+register("test-outbox", "run", testOutboxHandler);
