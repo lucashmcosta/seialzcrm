@@ -4309,6 +4309,24 @@ export type Database = {
           },
         ]
       }
+      outbox_system_heartbeats: {
+        Row: {
+          component: string
+          last_detail: Json | null
+          last_run_at: string
+        }
+        Insert: {
+          component: string
+          last_detail?: Json | null
+          last_run_at?: string
+        }
+        Update: {
+          component?: string
+          last_detail?: Json | null
+          last_run_at?: string
+        }
+        Relationships: []
+      }
       permission_profiles: {
         Row: {
           created_at: string | null
@@ -5431,6 +5449,25 @@ export type Database = {
           p_organization_id: string
         }
         Returns: undefined
+      }
+      fn_outbox_dismiss_job: {
+        Args: { p_job_id: string; p_reason: string }
+        Returns: undefined
+      }
+      fn_outbox_health_summary: { Args: never; Returns: Json }
+      fn_outbox_health_summary_internal: { Args: never; Returns: Json }
+      fn_outbox_pause_subscription: {
+        Args: { p_id: string; p_until: string }
+        Returns: undefined
+      }
+      fn_outbox_resume_subscription: {
+        Args: { p_id: string }
+        Returns: undefined
+      }
+      fn_outbox_retry_job: { Args: { p_job_id: string }; Returns: undefined }
+      fn_reap_stuck_jobs: {
+        Args: { p_threshold_minutes?: number }
+        Returns: number
       }
       fn_schedule_retry: {
         Args: { p_error: string; p_job_id: string }
