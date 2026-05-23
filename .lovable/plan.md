@@ -1,33 +1,22 @@
-## O que tem hoje
+# Outbox Stabilization v2 — ajustes confirmados
 
-Na página da integração **Meta Lead Ads** (Configurações → Integrações → Meta Lead Ads) já tem uma aba **"Conexão"** com o componente `ConnectionForm.tsx` — é ali que se cola o System User Token. Mas esse formulário só salva pra parte de Leads. Não pede ad account nem liga a flag de sync de campanhas. Por isso o `/marketing` da Viagi não carrega.
+## Ajustes do usuário aplicados
+1. `fn_reap_stuck_jobs` SEM grant a authenticated. Apenas `cron`/`service_role`.
+2. `admin_users` verificada: existe com 2 admins MFA. `is_admin_user()` checa essa tabela (mesma fonte do `AdminProtectedRoute`). `has_role` não existe no projeto.
+3. `integration_audit_logs.organization_id` é NOT NULL → criada tabela `outbox_system_heartbeats(component pk, last_run_at, last_detail)` para heartbeat do reaper sem precisar de org.
 
-## O que vou fazer (sem aba nova, mesma tela)
+## Migration (já aplicada com os ajustes)
+- Tabela `outbox_system_heartbeats` + RLS leitura só admin.
+- `is_admin_user()`, `fn_reap_stuck_jobs(int)`, `fn_outbox_health_summary()`, `fn_outbox_health_summary_internal()`, `fn_outbox_retry_job`, `fn_outbox_dismiss_job`, `fn_outbox_pause_subscription`, `fn_outbox_resume_subscription`.
+- Saneamento: webhook.site subs `is_active=false`; jobs webhook.site travados → `dead_letter` + audit `dismissed`; outros jobs travados → `failed` escalonado (0 linhas).
 
-Estender o `ConnectionForm.tsx` existente pra cobrir tudo em um lugar só:
+## Próximos passos (implementação)
+- Cron `outbox-reaper` a cada 1 min via insert tool, chamando `public.fn_reap_stuck_jobs(5)`.
+- Corrigir `integration-worker/index.ts`: parâmetros `p_job_id`/`p_error`, try/catch em `persistResult`, fallback estrito (sem `finally` lendo banco).
+- Criar `supabase/functions/outbox-health/index.ts` (autenticado por `x-health-token`).
+- Criar `src/pages/admin/AdminIntegrationHealth.tsx` em `<AdminLayout>` + rota `/admin/integration-health` em `App.tsx` (lazy + `AdminProtectedRoute`) + item no `AdminSidebar`.
+- Polling 10s, StatusBanner Verde/Amarelo/Vermelho, 6 MetricCards, tabs (falhas/execuções/subs ativas/pausadas), ações retry/dismiss/pausar/retomar.
+- Rodar as 6 queries de validação, invocar worker, esperar 2min, reconfirmar 0 running.
 
-1. Campo **System User Token** (já existe) — onde o usuário cola o token da Meta.
-2. Campo novo **App Secret** (opcional, recomendado).
-3. Depois de salvar/validar o token, mostra um **`<Select>` de Ad Account** populado automaticamente via `meta-discover-ad-accounts` (edge function que já existe).
-4. **Toggle** "Sincronizar campanhas e insights (módulo Marketing)" → grava `feature_ads_manager_sync = true`.
-5. Botão **"Sincronizar agora"** → chama `meta-discover-ads-cron` + `marketing-insights-sync-daily` na hora.
-
-Tudo salva no `connected_account` (token criptografado com `META_TOKEN_ENCRYPTION_KEY`, `ad_account_id` com prefixo `act_`, `business_id`) e em `config_values.feature_ads_manager_sync`. Vira o fluxo padrão multi-tenant — qualquer org futura cola token, escolhe conta, liga o toggle, pronto.
-
-## Arquivos
-
-**Edge function nova:** `supabase/functions/meta-ads-manager-save/index.ts`
-- Recebe `{ organization_id, ad_account_id, ad_account_name, business_id, enable_sync }`.
-- Garante prefixo `act_`.
-- Merge em `connected_account` da integração Meta; se token estiver cru em row legada, criptografa e move pra row consolidada.
-- Atualiza `config_values.feature_ads_manager_sync`.
-
-**Frontend:**
-- `src/components/integrations/meta-lead-ads/ConnectionForm.tsx` — adicionar bloco "Ads Manager" abaixo da conexão atual (Select de conta + toggle + botão sync). Sem nova aba, sem nova rota.
-
-## Fix imediato pra Viagi
-
-Depois do código pronto, abro a integração na Viagi, colo/reuso o token que já existe lá, seleciono `act_1145377357130771`, ligo o toggle, clico "Sincronizar agora". `/marketing` da Viagi passa a carregar.
-
-## Sem migration
-Nada de schema novo — tudo no JSONB que já existe.
+## Entrega
+Diff de arquivos, SQL aplicada (resumo), confirmação do cron, resultados das 6 queries, descrição da tela, checklist final SIM/NÃO para Nammux.
