@@ -325,28 +325,75 @@ serve(async (req) => {
             .maybeSingle()
           const authToken = (integ?.config_values as any)?.auth_token as string | undefined
           if (!authToken) return
-          // Reconstrói URL canônica que o Twilio assina (https + /functions/v1).
-          // req.url interno aparece como http://host/twilio-whatsapp-webhook/...
           const parsed = new URL(req.url)
-          const proto = (req.headers.get('x-forwarded-proto') || 'https').split(',')[0].trim()
-          const host = (req.headers.get('x-forwarded-host') || req.headers.get('host') || parsed.host).split(',')[0].trim()
+          const search = parsed.search || ''
           const pathPart = parsed.pathname.startsWith('/functions/v1/')
             ? parsed.pathname
-            : `/functions/v1${parsed.pathname}`
-          const fullUrl = `${proto}://${host}${pathPart}${parsed.search}`
+            : '/functions/v1' + parsed.pathname
+
+          const candidates: { label: string; url: string }[] = []
+          let publicBase = (Deno.env.get('TWILIO_WEBHOOK_PUBLIC_BASE_URL') || '').trim()
+          while (publicBase.endsWith('/')) publicBase = publicBase.slice(0, -1)
+          if (publicBase) {
+            candidates.push({ label: 'canonical_env', url: publicBase + '/' + path + search })
+          }
+          const fwdHost = (req.headers.get('x-forwarded-host') || '').split(',')[0].trim()
+          const fwdProto = (req.headers.get('x-forwarded-proto') || 'https').split(',')[0].trim()
+          if (fwdHost) {
+            candidates.push({ label: 'forwarded_headers', url: fwdProto + '://' + fwdHost + pathPart + search })
+          }
+          const internalHost = (req.headers.get('host') || parsed.host).split(',')[0].trim()
+          candidates.push({ label: 'fallback_internal', url: (fwdProto || 'https') + '://' + internalHost + pathPart + search })
+
           const sortedKeys = Object.keys(params).sort()
-          const concat = fullUrl + sortedKeys.map((k) => k + params[k]).join('')
+          const paramsConcat = sortedKeys.map((k) => k + params[k]).join('')
           const key = await crypto.subtle.importKey(
             'raw', new TextEncoder().encode(authToken),
             { name: 'HMAC', hash: 'SHA-1' }, false, ['sign']
           )
-          const sig = await crypto.subtle.sign('HMAC', key, new TextEncoder().encode(concat))
-          const b64 = btoa(String.fromCharCode(...new Uint8Array(sig)))
-          const valid = b64 === twilioSignature
+
+          let matched = 'none'
+          let valid = false
+          for (const c of candidates) {
+            const sig = await crypto.subtle.sign('HMAC', key, new TextEncoder().encode(c.url + paramsConcat))
+            const b64 = btoa(String.fromCharCode(...new Uint8Array(sig)))
+            if (b64 === twilioSignature) {
+              valid = true
+              matched = c.label
+              break
+            }
+          }
+
+          const diagHeaders = {
+            ...rawHeaders,
+            _signature_diag: {
+              candidate_count: candidates.length,
+              matched_candidate_label: matched,
+              host_used: fwdHost || internalHost,
+              path_used: pathPart,
+              canonical_env_present: !!publicBase,
+            },
+          }
           await supabase
             .from('integration_inbound_events')
-            .update({ signature_valid: valid })
+            .update({ signature_valid: valid, raw_headers: diagHeaders })
             .eq('id', insertedEventId)
+
+          const logPayload = {
+            provider: 'twilio-whatsapp',
+            external_id: rawMessageSid,
+            trace_id: traceId,
+            candidate_count: candidates.length,
+            matched_candidate_label: matched,
+            host_used: fwdHost || internalHost,
+            path_used: pathPart,
+            canonical_env_present: !!publicBase,
+          }
+          if (!valid) {
+            console.warn('[twilio-signature] no_match ' + JSON.stringify(logPayload))
+          } else {
+            console.log('[twilio-signature] match ' + JSON.stringify(logPayload))
+          }
         } catch (e) {
           console.error('[signature_valid] update failed:', e)
         }
