@@ -789,6 +789,57 @@ export default function ObservabilityPage() {
       setSubscriptions((r.data as any[]) || []);
     }
 
+    // Aggregation for subscription health + retry rate/histogram (window, unfiltered)
+    {
+      const r = await instrument(reg, {
+        key: 'outbox.jobs.agg', label: 'Outbox jobs agg (window)',
+        source: 'integration_jobs', type: 'table', window: windowSel,
+      }, () => (supabase as any).from('integration_jobs')
+        .select('integration_slug, target_action, status, attempts')
+        .gte('created_at', sinceISO).limit(5000));
+      const rows = (r.data as any[]) || [];
+      // Retry rate + histogram
+      const buckets = { '0': 0, '1': 0, '2': 0, '3': 0, '4': 0, '5+': 0 } as Record<string, number>;
+      let withRetry = 0;
+      rows.forEach((j) => {
+        const a = j.attempts ?? 0;
+        const k = a >= 5 ? '5+' : String(a);
+        buckets[k] = (buckets[k] || 0) + 1;
+        if (a > 1) withRetry += 1;
+      });
+      setRetryRate({ total: rows.length, withRetry, pct: rows.length ? (withRetry / rows.length) * 100 : 0 });
+      setRetryHistogram(Object.entries(buckets).map(([bucket, count]) => ({ bucket, count })));
+
+      // Subscription health: aggregate jobs by slug+action+status, then merge with subscriptions
+      const agg: Record<string, { total: number; success: number; failed: number; dlq: number }> = {};
+      rows.forEach((j) => {
+        const k = `${j.integration_slug}::${j.target_action}`;
+        agg[k] ||= { total: 0, success: 0, failed: 0, dlq: 0 };
+        agg[k].total += 1;
+        if (j.status === 'success') agg[k].success += 1;
+        else if (j.status === 'failed') agg[k].failed += 1;
+        else if (j.status === 'dead_letter') agg[k].dlq += 1;
+      });
+      // merge with subscriptions list (use latest snapshot)
+      const merged = ((await (supabase as any).from('integration_subscriptions')
+        .select('integration_slug, target_action, is_active, paused_until').limit(200)).data as any[] || [])
+        .map((s) => {
+          const k = `${s.integration_slug}::${s.target_action}`;
+          const a = agg[k] || { total: 0, success: 0, failed: 0, dlq: 0 };
+          const denom = a.success + a.failed + a.dlq;
+          return {
+            integration_slug: s.integration_slug,
+            target_action: s.target_action,
+            is_active: !!s.is_active,
+            paused_until: s.paused_until,
+            total: a.total, success: a.success, failed: a.failed, dlq: a.dlq,
+            success_rate: denom > 0 ? (a.success / denom) * 100 : null,
+          };
+        })
+        .sort((x, y) => y.total - x.total);
+      setSubscriptionHealth(merged);
+    }
+
     if (errs.length) setError((prev) => [prev, ...errs].filter(Boolean).join(' | '));
   }, [providerFilter, statusFilter, orgFilter, search, sinceISO, since1hISO, since24hISO, windowSel]);
 
