@@ -269,8 +269,18 @@ serve(async (req) => {
       })
     )
 
+    // Metadata enrichment (read-only) — Fase 1.x observability
+    const twilioSignature = req.headers.get('x-twilio-signature') || req.headers.get('X-Twilio-Signature')
+    const fwdTraceId = req.headers.get('x-trace-id') || req.headers.get('x-request-id') || null
+    const traceId: string = (fwdTraceId && fwdTraceId.length === 36 && /^[0-9a-f-]{36}$/i.test(fwdTraceId))
+      ? fwdTraceId
+      : crypto.randomUUID()
+    const handlerKey = `twilio.whatsapp.${path === 'inbound' ? 'inbound' : (rawSourceEvent === 'status_callback' ? 'status' : 'unknown')}`
+    const signatureAlgo = twilioSignature ? 'HMAC-SHA1' : null
+
+    let insertedEventId: string | null = null
     try {
-      const { error: rawInsertError } = await supabase
+      const { data: ins, error: rawInsertError } = await supabase
         .from('integration_inbound_events')
         .insert({
           integration_slug: 'twilio-whatsapp',
@@ -282,19 +292,57 @@ serve(async (req) => {
           http_method: req.method,
           request_path: new URL(req.url).pathname,
           parser_function: 'twilio-whatsapp-webhook',
-          // organization_id e parser_version ficam null por enquanto — Step 3 vai popular
+          organization_id: orgId,
+          trace_id: traceId,
+          handler_key: handlerKey,
+          signature_algo: signatureAlgo,
         })
+        .select('id')
+        .maybeSingle()
 
       if (rawInsertError) {
-        // Duplicate (idempotency_key collision) é Twilio retry — ignorar silenciosamente.
-        // 23505 = unique_violation
         if (rawInsertError.code !== '23505') {
           console.error('[integration_inbound_events] insert failed:', rawInsertError)
         }
+      } else if (ins?.id) {
+        insertedEventId = ins.id
       }
     } catch (rawErr) {
-      // NUNCA propaga — raw logging não pode quebrar processamento de lead.
       console.error('[integration_inbound_events] exception:', rawErr)
+    }
+
+    // Fire-and-forget: validar assinatura HMAC-SHA1 e atualizar a linha.
+    // Não bloqueia o webhook legacy.
+    if (insertedEventId && twilioSignature) {
+      ;(async () => {
+        try {
+          const { data: integ } = await supabase
+            .from('organization_integrations')
+            .select('config_values, admin_integrations!inner(slug)')
+            .eq('organization_id', orgId)
+            .eq('admin_integrations.slug', 'twilio-whatsapp')
+            .eq('is_enabled', true)
+            .maybeSingle()
+          const authToken = (integ?.config_values as any)?.auth_token as string | undefined
+          if (!authToken) return
+          const fullUrl = req.url
+          const sortedKeys = Object.keys(params).sort()
+          const concat = fullUrl + sortedKeys.map((k) => k + params[k]).join('')
+          const key = await crypto.subtle.importKey(
+            'raw', new TextEncoder().encode(authToken),
+            { name: 'HMAC', hash: 'SHA-1' }, false, ['sign']
+          )
+          const sig = await crypto.subtle.sign('HMAC', key, new TextEncoder().encode(concat))
+          const b64 = btoa(String.fromCharCode(...new Uint8Array(sig)))
+          const valid = b64 === twilioSignature
+          await supabase
+            .from('integration_inbound_events')
+            .update({ signature_valid: valid })
+            .eq('id', insertedEventId)
+        } catch (e) {
+          console.error('[signature_valid] update failed:', e)
+        }
+      })().catch(() => {})
     }
     // =====================================================================
     // Fim do raw logging — daqui pra baixo é o código existente, intocado.

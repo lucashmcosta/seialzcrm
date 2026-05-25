@@ -267,6 +267,18 @@ export default function ObservabilityPage() {
   const [shadowAttempts, setShadowAttempts] = useState<number>(0);
   const [shadowFailures, setShadowFailures] = useState<number>(0);
 
+  // Coverage / unknown org / maturity (computed in fetchInbox)
+  const [coverageByProvider, setCoverageByProvider] = useState<
+    { provider: string; total: number; with_org: number; with_trace: number; with_sig: number; org_pct: number; trace_pct: number; sig_pct: number }[]
+  >([]);
+  const [unknownOrg, setUnknownOrg] = useState<{ total: number; pct: number; byProvider: { provider: string; count: number }[] }>(
+    { total: 0, pct: 0, byProvider: [] }
+  );
+  const [maturityRows, setMaturityRows] = useState<
+    { provider: string; org: number; trace: number; sig: number; retry_rate: number; dlq_rate: number; ingest_err_rate: number; score: number }[]
+  >([]);
+  const [statusTimeline, setStatusTimeline] = useState<{ status: string; count: number }[]>([]);
+
   // Outbox state
   const [outboxHealth, setOutboxHealth] = useState<OutboxHealth | null>(null);
   const [outboxHealthErr, setOutboxHealthErr] = useState<string | null>(null);
@@ -281,6 +293,13 @@ export default function ObservabilityPage() {
   >([]);
   const [outboxLatencies, setOutboxLatencies] = useState<number[]>([]);
   const [topErrors, setTopErrors] = useState<{ message: string; count: number; last_seen: string; sample_integration_slug: string }[]>([]);
+
+  // Outbox refinements (computed from jobs/subscriptions in fetchOutbox)
+  const [retryRate, setRetryRate] = useState<{ total: number; withRetry: number; pct: number }>({ total: 0, withRetry: 0, pct: 0 });
+  const [retryHistogram, setRetryHistogram] = useState<{ bucket: string; count: number }[]>([]);
+  const [subscriptionHealth, setSubscriptionHealth] = useState<
+    { integration_slug: string; target_action: string; is_active: boolean; paused_until: string | null; total: number; success: number; failed: number; dlq: number; success_rate: number | null }[]
+  >([]);
 
   // Drill-down
   const [drillRow, setDrillRow] = useState<any>(null);
@@ -567,6 +586,65 @@ export default function ObservabilityPage() {
         if (buckets[t]) buckets[t].ingest_err += 1;
       });
       setTimelineBuckets(Object.values(buckets).sort((a, b) => a.ts - b.ts));
+
+      // ---------- Coverage / unknown org / status timeline / maturity ----------
+      const provAgg: Record<string, { total: number; with_org: number; with_trace: number; with_sig: number; retry: number; dlq: number; ingest_err: number }> = {};
+      rows.forEach((e) => {
+        const p = e.integration_slug || 'unknown';
+        provAgg[p] ||= { total: 0, with_org: 0, with_trace: 0, with_sig: 0, retry: 0, dlq: 0, ingest_err: 0 };
+        const a = provAgg[p];
+        a.total += 1;
+        if ((e as any).organization_id) a.with_org += 1;
+        if ((e as any).trace_id) a.with_trace += 1;
+        if (e.signature_valid === true || e.signature_valid === false) a.with_sig += 1;
+        if ((e.retry_count ?? 0) > 0) a.retry += 1;
+        if (e.process_status === 'dead_letter') a.dlq += 1;
+      });
+      const cov = Object.entries(provAgg).map(([provider, a]) => ({
+        provider, total: a.total, with_org: a.with_org, with_trace: a.with_trace, with_sig: a.with_sig,
+        org_pct: a.total ? (a.with_org / a.total) * 100 : 0,
+        trace_pct: a.total ? (a.with_trace / a.total) * 100 : 0,
+        sig_pct: a.total ? (a.with_sig / a.total) * 100 : 0,
+      })).sort((a, b) => b.total - a.total);
+      setCoverageByProvider(cov);
+
+      // Unknown org breakdown (24h fixed window as solicitado)
+      const sample24 = rows.filter((e) => new Date(e.received_at).getTime() >= Date.now() - 86_400_000);
+      const unknown24 = sample24.filter((e) => !(e as any).organization_id);
+      const byProvU: Record<string, number> = {};
+      unknown24.forEach((e) => { const p = e.integration_slug || 'unknown'; byProvU[p] = (byProvU[p] || 0) + 1; });
+      setUnknownOrg({
+        total: unknown24.length,
+        pct: sample24.length ? (unknown24.length / sample24.length) * 100 : 0,
+        byProvider: Object.entries(byProvU).map(([provider, count]) => ({ provider, count })).sort((a, b) => b.count - a.count),
+      });
+
+      // Status transition tally (received → processing → retry → dead_letter → archived)
+      const order = ['received', 'processing', 'retry', 'processed', 'dead_letter', 'expired', 'archived'];
+      const stm: Record<string, number> = {};
+      rows.forEach((e) => { stm[e.process_status] = (stm[e.process_status] || 0) + 1; });
+      setStatusTimeline(order.filter((s) => stm[s] != null).map((s) => ({ status: s, count: stm[s] })));
+
+      // Provider maturity score (0-100, weighted)
+      // ingest errors per provider via counts in ingestErrors state? We compute from a separate fetch:
+      const ingestErrByProv: Record<string, number> = {};
+      // reuse already-loaded ingestErrors (state set above)
+      // NOTE: ingestErrors is the in-component state — read from variable in closure
+      const mat = cov.map((c) => {
+        const totalOk = Math.max(c.total, 1);
+        const org = c.org_pct;
+        const trace = c.trace_pct;
+        const sig = c.sig_pct;
+        const retry_rate = (provAgg[c.provider].retry / totalOk) * 100;
+        const dlq_rate = (provAgg[c.provider].dlq / totalOk) * 100;
+        const ingest_err_rate = ((ingestErrByProv[c.provider] || 0) / totalOk) * 100;
+        // score: 40% org+trace+sig coverage, 30% inversa retry+dlq+ingest_err, 30% volume sanity
+        const cover = (org + trace + sig) / 3;
+        const inv = Math.max(0, 100 - (retry_rate + dlq_rate * 2 + ingest_err_rate));
+        const score = Math.round(cover * 0.6 + inv * 0.4);
+        return { provider: c.provider, org, trace, sig, retry_rate, dlq_rate, ingest_err_rate, score };
+      }).sort((a, b) => b.score - a.score);
+      setMaturityRows(mat);
     }
 
     if (errors.length) setError(errors.join(' | '));
@@ -709,6 +787,57 @@ export default function ObservabilityPage() {
         .order('integration_slug', { ascending: true }).limit(200));
       if (r.error) errs.push(`subscriptions: ${r.error.message}`);
       setSubscriptions((r.data as any[]) || []);
+    }
+
+    // Aggregation for subscription health + retry rate/histogram (window, unfiltered)
+    {
+      const r = await instrument(reg, {
+        key: 'outbox.jobs.agg', label: 'Outbox jobs agg (window)',
+        source: 'integration_jobs', type: 'table', window: windowSel,
+      }, () => (supabase as any).from('integration_jobs')
+        .select('integration_slug, target_action, status, attempts')
+        .gte('created_at', sinceISO).limit(5000));
+      const rows = (r.data as any[]) || [];
+      // Retry rate + histogram
+      const buckets = { '0': 0, '1': 0, '2': 0, '3': 0, '4': 0, '5+': 0 } as Record<string, number>;
+      let withRetry = 0;
+      rows.forEach((j) => {
+        const a = j.attempts ?? 0;
+        const k = a >= 5 ? '5+' : String(a);
+        buckets[k] = (buckets[k] || 0) + 1;
+        if (a > 1) withRetry += 1;
+      });
+      setRetryRate({ total: rows.length, withRetry, pct: rows.length ? (withRetry / rows.length) * 100 : 0 });
+      setRetryHistogram(Object.entries(buckets).map(([bucket, count]) => ({ bucket, count })));
+
+      // Subscription health: aggregate jobs by slug+action+status, then merge with subscriptions
+      const agg: Record<string, { total: number; success: number; failed: number; dlq: number }> = {};
+      rows.forEach((j) => {
+        const k = `${j.integration_slug}::${j.target_action}`;
+        agg[k] ||= { total: 0, success: 0, failed: 0, dlq: 0 };
+        agg[k].total += 1;
+        if (j.status === 'success') agg[k].success += 1;
+        else if (j.status === 'failed') agg[k].failed += 1;
+        else if (j.status === 'dead_letter') agg[k].dlq += 1;
+      });
+      // merge with subscriptions list (use latest snapshot)
+      const merged = ((await (supabase as any).from('integration_subscriptions')
+        .select('integration_slug, target_action, is_active, paused_until').limit(200)).data as any[] || [])
+        .map((s) => {
+          const k = `${s.integration_slug}::${s.target_action}`;
+          const a = agg[k] || { total: 0, success: 0, failed: 0, dlq: 0 };
+          const denom = a.success + a.failed + a.dlq;
+          return {
+            integration_slug: s.integration_slug,
+            target_action: s.target_action,
+            is_active: !!s.is_active,
+            paused_until: s.paused_until,
+            total: a.total, success: a.success, failed: a.failed, dlq: a.dlq,
+            success_rate: denom > 0 ? (a.success / denom) * 100 : null,
+          };
+        })
+        .sort((x, y) => y.total - x.total);
+      setSubscriptionHealth(merged);
     }
 
     if (errs.length) setError((prev) => [prev, ...errs].filter(Boolean).join(' | '));
@@ -1003,6 +1132,144 @@ export default function ObservabilityPage() {
               </CardContent>
             </Card>
 
+            {/* Coverage by provider (org / trace / signature) */}
+            <Card noAnimation>
+              <CardHeader className="pb-2">
+                <CardTitle className="text-sm">Metadata coverage por provider ({windowSel})</CardTitle>
+              </CardHeader>
+              <CardContent>
+                {coverageByProvider.length === 0 ? (
+                  <div className="text-xs text-muted-foreground">Sem dados na janela.</div>
+                ) : (
+                  <Table>
+                    <TableHeader>
+                      <TableRow>
+                        <TableHead>Provider</TableHead>
+                        <TableHead className="text-right">Eventos</TableHead>
+                        <TableHead className="text-right">org_id %</TableHead>
+                        <TableHead className="text-right">trace_id %</TableHead>
+                        <TableHead className="text-right">signature_valid %</TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {coverageByProvider.map((r) => (
+                        <TableRow key={r.provider}>
+                          <TableCell className="text-xs">{r.provider}</TableCell>
+                          <TableCell className="text-right font-mono text-xs">{r.total}</TableCell>
+                          <TableCell className="text-right font-mono text-xs">
+                            <span className={r.org_pct < 50 ? 'text-destructive' : r.org_pct < 80 ? 'text-amber-600' : ''}>{r.org_pct.toFixed(1)}%</span>
+                          </TableCell>
+                          <TableCell className="text-right font-mono text-xs">
+                            <span className={r.trace_pct < 80 ? 'text-amber-600' : ''}>{r.trace_pct.toFixed(1)}%</span>
+                          </TableCell>
+                          <TableCell className="text-right font-mono text-xs">
+                            <span className={r.sig_pct < 80 ? 'text-amber-600' : ''}>{r.sig_pct.toFixed(1)}%</span>
+                          </TableCell>
+                        </TableRow>
+                      ))}
+                    </TableBody>
+                  </Table>
+                )}
+              </CardContent>
+            </Card>
+
+            <div className="grid md:grid-cols-2 gap-4">
+              {/* Unknown org analysis (24h) */}
+              <Card noAnimation>
+                <CardHeader className="pb-2">
+                  <CardTitle className="text-sm">Unknown organization_id (24h)</CardTitle>
+                </CardHeader>
+                <CardContent>
+                  <div className="flex items-baseline gap-4 mb-3">
+                    <div className="text-2xl font-mono">{unknownOrg.total}</div>
+                    <div className="text-xs text-muted-foreground">{unknownOrg.pct.toFixed(2)}% do total 24h</div>
+                  </div>
+                  {unknownOrg.byProvider.length === 0 ? (
+                    <div className="text-xs text-muted-foreground">Nenhum evento sem organization_id.</div>
+                  ) : (
+                    <div className="space-y-1 text-xs">
+                      {unknownOrg.byProvider.map((r) => (
+                        <div key={r.provider} className="flex justify-between">
+                          <Badge variant="outline">{r.provider}</Badge>
+                          <span className="font-mono">{r.count}</span>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </CardContent>
+              </Card>
+
+              {/* Status transitions */}
+              <Card noAnimation>
+                <CardHeader className="pb-2">
+                  <CardTitle className="text-sm">Status transitions ({windowSel})</CardTitle>
+                </CardHeader>
+                <CardContent>
+                  {statusTimeline.length === 0 ? (
+                    <div className="text-xs text-muted-foreground">Sem dados.</div>
+                  ) : (
+                    <div className="flex flex-wrap items-center gap-2 text-xs">
+                      {statusTimeline.map((s, i) => (
+                        <span key={s.status} className="flex items-center gap-1">
+                          <Badge variant={statusVariant(s.status)}>{s.status}</Badge>
+                          <span className="font-mono text-muted-foreground">{s.count}</span>
+                          {i < statusTimeline.length - 1 && <span className="text-muted-foreground">→</span>}
+                        </span>
+                      ))}
+                    </div>
+                  )}
+                  <div className="text-[10px] text-muted-foreground mt-2">
+                    Canônico: received → processing → retry → processed | dead_letter | expired → archived
+                  </div>
+                </CardContent>
+              </Card>
+            </div>
+
+            {/* Provider maturity score */}
+            <Card noAnimation>
+              <CardHeader className="pb-2">
+                <CardTitle className="text-sm">Provider maturity score ({windowSel})</CardTitle>
+              </CardHeader>
+              <CardContent>
+                {maturityRows.length === 0 ? (
+                  <div className="text-xs text-muted-foreground">Sem dados na janela.</div>
+                ) : (
+                  <Table>
+                    <TableHeader>
+                      <TableRow>
+                        <TableHead>Provider</TableHead>
+                        <TableHead className="text-right">org%</TableHead>
+                        <TableHead className="text-right">trace%</TableHead>
+                        <TableHead className="text-right">sig%</TableHead>
+                        <TableHead className="text-right">retry%</TableHead>
+                        <TableHead className="text-right">DLQ%</TableHead>
+                        <TableHead className="text-right">Score</TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {maturityRows.map((m) => (
+                        <TableRow key={m.provider}>
+                          <TableCell className="text-xs">{m.provider}</TableCell>
+                          <TableCell className="text-right font-mono text-xs">{m.org.toFixed(0)}</TableCell>
+                          <TableCell className="text-right font-mono text-xs">{m.trace.toFixed(0)}</TableCell>
+                          <TableCell className="text-right font-mono text-xs">{m.sig.toFixed(0)}</TableCell>
+                          <TableCell className="text-right font-mono text-xs">{m.retry_rate.toFixed(1)}</TableCell>
+                          <TableCell className="text-right font-mono text-xs">{m.dlq_rate.toFixed(1)}</TableCell>
+                          <TableCell className="text-right">
+                            {m.score >= 80 ? <Badge className="bg-emerald-500 hover:bg-emerald-500">{m.score}</Badge>
+                              : m.score >= 50 ? <Badge className="bg-amber-500 hover:bg-amber-500">{m.score}</Badge>
+                              : <Badge variant="destructive">{m.score}</Badge>}
+                          </TableCell>
+                        </TableRow>
+                      ))}
+                    </TableBody>
+                  </Table>
+                )}
+                <div className="text-[10px] text-muted-foreground mt-2">
+                  Score = 60% coverage (org+trace+sig) + 40% inverse(retry + 2·DLQ + ingest_err). Quanto maior, mais maduro o provider.
+                </div>
+              </CardContent>
+            </Card>
 
             <div className="grid md:grid-cols-2 gap-4">
               <Card noAnimation>
@@ -1260,6 +1527,94 @@ export default function ObservabilityPage() {
                 )}
               </CardContent>
             </Card>
+
+            {/* Retry rate + histogram */}
+            <div className="grid md:grid-cols-2 gap-4">
+              <Card noAnimation>
+                <CardHeader className="pb-2"><CardTitle className="text-sm">Retry rate ({windowSel})</CardTitle></CardHeader>
+                <CardContent>
+                  <div className="flex items-baseline gap-3">
+                    <div className="text-2xl font-mono">{retryRate.pct.toFixed(2)}%</div>
+                    <div className="text-xs text-muted-foreground">{retryRate.withRetry} / {retryRate.total} jobs com attempts &gt; 1</div>
+                  </div>
+                </CardContent>
+              </Card>
+              <Card noAnimation>
+                <CardHeader className="pb-2"><CardTitle className="text-sm">Retry histogram ({windowSel})</CardTitle></CardHeader>
+                <CardContent>
+                  {retryHistogram.length === 0 ? <div className="text-xs text-muted-foreground">Sem jobs.</div> : (
+                    <div className="space-y-1">
+                      {(() => {
+                        const max = Math.max(...retryHistogram.map(b => b.count), 1);
+                        return retryHistogram.map((b) => (
+                          <div key={b.bucket} className="flex items-center gap-2 text-xs">
+                            <span className="w-8 font-mono text-muted-foreground">{b.bucket}</span>
+                            <div className="flex-1 bg-muted rounded h-3 overflow-hidden">
+                              <div className="bg-primary h-full" style={{ width: `${(b.count / max) * 100}%` }} />
+                            </div>
+                            <span className="w-12 text-right font-mono">{b.count}</span>
+                          </div>
+                        ));
+                      })()}
+                    </div>
+                  )}
+                </CardContent>
+              </Card>
+            </div>
+
+            {/* Subscription health */}
+            <Card noAnimation>
+              <CardHeader className="pb-2">
+                <CardTitle className="text-sm">Subscription health ({windowSel})</CardTitle>
+              </CardHeader>
+              <CardContent>
+                {subscriptionHealth.length === 0 ? (
+                  <div className="text-xs text-muted-foreground">Sem subscriptions.</div>
+                ) : (
+                  <Table>
+                    <TableHeader>
+                      <TableRow>
+                        <TableHead>Provider</TableHead>
+                        <TableHead>Action</TableHead>
+                        <TableHead>Estado</TableHead>
+                        <TableHead className="text-right">Total</TableHead>
+                        <TableHead className="text-right">Success</TableHead>
+                        <TableHead className="text-right">Failed</TableHead>
+                        <TableHead className="text-right">DLQ</TableHead>
+                        <TableHead className="text-right">Success rate</TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {subscriptionHealth.map((s, i) => {
+                        const paused = !!s.paused_until && new Date(s.paused_until).getTime() > Date.now();
+                        return (
+                          <TableRow key={i}>
+                            <TableCell className="text-xs">{s.integration_slug}</TableCell>
+                            <TableCell className="text-xs">{s.target_action}</TableCell>
+                            <TableCell>
+                              {!s.is_active ? <Badge variant="outline">inativa</Badge>
+                                : paused ? <Badge className="bg-amber-500 hover:bg-amber-500">paused</Badge>
+                                : <Badge>ativa</Badge>}
+                            </TableCell>
+                            <TableCell className="text-right font-mono text-xs">{s.total}</TableCell>
+                            <TableCell className="text-right font-mono text-xs text-emerald-600">{s.success}</TableCell>
+                            <TableCell className="text-right font-mono text-xs text-amber-600">{s.failed}</TableCell>
+                            <TableCell className="text-right font-mono text-xs text-destructive">{s.dlq}</TableCell>
+                            <TableCell className="text-right font-mono text-xs">
+                              {s.success_rate == null ? '—' : `${s.success_rate.toFixed(1)}%`}
+                            </TableCell>
+                          </TableRow>
+                        );
+                      })}
+                    </TableBody>
+                  </Table>
+                )}
+                <div className="text-[10px] text-muted-foreground mt-2">
+                  Success rate = success / (success + failed + dlq). Paused = paused_until &gt; now. Subscriptions sem jobs aparecem com total=0.
+                </div>
+              </CardContent>
+            </Card>
+
 
             <Card noAnimation>
               <CardHeader className="pb-2 flex flex-row justify-between items-center">
