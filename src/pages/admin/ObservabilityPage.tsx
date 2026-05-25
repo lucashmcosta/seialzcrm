@@ -1112,10 +1112,12 @@ export default function ObservabilityPage() {
                 tone={(outboxHealth?.dead_letter ?? 0) > 0 ? 'warning' : 'success'} />
               <StatCard label="Success 24h" value={outboxHealth?.success_24h ?? '—'}
                 hint={`failed: ${outboxHealth?.failed_24h ?? 0}`} tone="success" />
-              <StatCard label="p50 latency" value={fmtLatency(p50(outboxLatencies))}
-                hint={outboxLatencies.length === 0 ? 'sem success no período' : `n=${outboxLatencies.length}`} />
-              <StatCard label="p95 latency" value={fmtLatency(p95(outboxLatencies))}
-                hint={outboxLatencies.length === 0 ? 'sem success no período' : `n=${outboxLatencies.length}`} />
+              <StatCard label="p50 latency"
+                value={outboxLatencies.length === 0 ? <span className="text-muted-foreground text-base">dispatcher inativo</span> : fmtLatency(p50(outboxLatencies))}
+                hint={outboxLatencies.length === 0 ? 'sem jobs success com event publish_at na janela' : `n=${outboxLatencies.length}`} />
+              <StatCard label="p95 latency"
+                value={outboxLatencies.length === 0 ? <span className="text-muted-foreground text-base">dispatcher inativo</span> : fmtLatency(p95(outboxLatencies))}
+                hint={outboxLatencies.length === 0 ? 'sem jobs success com event publish_at na janela' : `n=${outboxLatencies.length}`} />
               <StatCard label="Subscriptions"
                 value={`${outboxHealth?.subscriptions_active ?? 0} / ${(outboxHealth?.subscriptions_active ?? 0) + (outboxHealth?.subscriptions_paused ?? 0)}`}
                 hint="ativas / total" />
