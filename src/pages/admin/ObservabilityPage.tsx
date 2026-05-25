@@ -924,6 +924,7 @@ export default function ObservabilityPage() {
                         <TableHead className="text-right">Inbox v2 (shadow)</TableHead>
                         <TableHead className="text-right">Diff abs</TableHead>
                         <TableHead className="text-right">Diff %</TableHead>
+                        <TableHead>Legacy source</TableHead>
                         <TableHead>Status</TableHead>
                       </TableRow>
                     </TableHeader>
@@ -935,6 +936,7 @@ export default function ObservabilityPage() {
                           <TableCell className="text-right font-mono text-xs">{r.shadow}</TableCell>
                           <TableCell className="text-right font-mono text-xs">{r.diff_abs}</TableCell>
                           <TableCell className="text-right font-mono text-xs">{r.diff_pct == null ? '—' : `${r.diff_pct.toFixed(2)}%`}</TableCell>
+                          <TableCell className="text-[10px] font-mono text-muted-foreground">{r.legacy_source}</TableCell>
                           <TableCell>
                             {r.status === 'ok' && <Badge className="bg-emerald-500 hover:bg-emerald-500">OK</Badge>}
                             {r.status === 'warning' && <Badge className="bg-amber-500 hover:bg-amber-500">Warning</Badge>}
@@ -947,7 +949,7 @@ export default function ObservabilityPage() {
                   </Table>
                 )}
                 <div className="text-[10px] text-muted-foreground mt-2">
-                  OK &lt;1% · Warning &lt;5% · Critical ≥5%. Status “n/a” quando ainda não há eventos shadow.
+                  Legacy = efeito colateral real do fluxo antigo (ex.: suvsign → activities "Documento assinado%"). Shadow = inserts em integration_inbound_events com shadow_mode=true. OK &lt;1% · Warning &lt;5% · Critical ≥5%.
                 </div>
               </CardContent>
             </Card>
