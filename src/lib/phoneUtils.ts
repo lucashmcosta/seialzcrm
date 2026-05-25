@@ -60,8 +60,9 @@ export function formatPhoneForCountry(phone: string, countryCode: string): strin
   // Remove o código do país se presente
   if (cleaned.startsWith(country.dialCode)) {
     const rest = cleaned.substring(country.dialCode.length);
-    // BR special case: only strip leading "55" if remainder is a valid local length (10 or 11).
-    if (country.code !== 'BR' || rest.length === 10 || rest.length === 11) {
+    // BR special case: only strip leading "55" if remainder is a valid local length (10/11)
+    // OR if total length is already E.164 BR (12 or 13). Intermediate lengths keep digits as-is.
+    if (country.code !== 'BR' || rest.length === 10 || rest.length === 11 || cleaned.length >= 12) {
       cleaned = rest;
     }
   }
