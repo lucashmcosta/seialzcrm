@@ -74,6 +74,7 @@ export default function ContactDetail() {
   const { hasVoiceIntegration } = useVoiceIntegration();
   const { startCall } = useOutboundCall();
   const [contact, setContact] = useState<any>(null);
+  const [campaign, setCampaign] = useState<any>(null);
   const [loading, setLoading] = useState(true);
   const [selectedTab, setSelectedTab] = useState<Key>("details");
   const [createdByName, setCreatedByName] = useState<string | null>(null);
