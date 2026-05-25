@@ -640,6 +640,7 @@ export default function ObservabilityPage() {
         const fb = await instrument(reg, {
           key: 'outbox.dlq_by_integration.fb', label: 'DLQ (fallback)',
           source: 'integration_jobs', type: 'table', filters: 'status=dead_letter limit 1000',
+          fallback_used: true,
         }, () => (supabase as any).from('integration_jobs')
           .select('integration_slug, target_action, last_error, last_error_at')
           .eq('status', 'dead_letter').limit(1000));
