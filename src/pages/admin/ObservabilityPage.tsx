@@ -1337,11 +1337,14 @@ export default function ObservabilityPage() {
 
       {/* Drill-down modal */}
       <Dialog open={!!drillRow} onOpenChange={(o) => !o && setDrillRow(null)}>
-        <DialogContent className="max-w-3xl max-h-[80vh] overflow-auto">
-          <DialogHeader><DialogTitle>{drillTitle}</DialogTitle></DialogHeader>
-          <pre className="text-xs whitespace-pre-wrap break-all bg-muted p-3 rounded">
-            {drillRow ? JSON.stringify(drillRow, null, 2) : ''}
-          </pre>
+        <DialogContent className="max-w-4xl max-h-[85vh] overflow-auto">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              {drillTitle}
+              {drillLoading && <span className="text-[10px] text-muted-foreground font-mono">carregando payload…</span>}
+            </DialogTitle>
+          </DialogHeader>
+          {drillRow && <DrillDownView row={drillRow} />}
         </DialogContent>
       </Dialog>
     </AdminLayout>
