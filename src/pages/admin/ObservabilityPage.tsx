@@ -919,7 +919,7 @@ export default function ObservabilityPage() {
             <Card noAnimation>
               <CardContent className="p-3 flex flex-wrap items-center gap-2">
                 <span className="text-[10px] uppercase tracking-wide text-muted-foreground mr-1">Quick filter:</span>
-                {(['all', 'shadow', 'errors', 'duplicates', 'sig_invalid'] as QuickFilter[]).map((f) => (
+                {(['all', 'ingest_only', 'errors', 'duplicates', 'sig_invalid'] as QuickFilter[]).map((f) => (
                   <Button
                     key={f}
                     size="sm"
