@@ -336,11 +336,15 @@ export default function ObservabilityPage() {
     {
       const filters: string[] = [`received_at>=${sinceISO}`];
       let q = (supabase as any).from('integration_inbound_events')
-        .select('id, received_at, integration_slug, source_event, process_status, shadow_mode, signature_valid, retry_count, trace_id, external_id, organization_id, process_error, processed_at')
+        .select('id, received_at, integration_slug, source_event, process_status, shadow_mode, signature_valid, retry_count, replay_count, trace_id, external_id, organization_id, process_error, processed_at, expires_at')
         .gte('received_at', sinceISO).order('received_at', { ascending: false }).limit(100);
       if (providerFilter !== 'all') { q = q.eq('integration_slug', providerFilter); filters.push(`slug=${providerFilter}`); }
       if (statusFilter !== 'all') { q = q.eq('process_status', statusFilter); filters.push(`status=${statusFilter}`); }
       if (orgFilter) { q = q.eq('organization_id', orgFilter); filters.push(`org=${orgFilter.slice(0, 8)}`); }
+      if (quickFilter === 'shadow') { q = q.eq('shadow_mode', true); filters.push('only=shadow'); }
+      if (quickFilter === 'sig_invalid') { q = q.eq('signature_valid', false); filters.push('only=sig_invalid'); }
+      if (quickFilter === 'errors') { q = q.in('process_status', ['dead_letter', 'expired', 'retry']); filters.push('only=errors'); }
+      if (quickFilter === 'duplicates') { q = q.eq('process_status', 'duplicate_ignored'); filters.push('only=duplicates'); }
       if (search) {
         const s = search.trim();
         q = q.or(`trace_id.eq.${s},external_id.eq.${s}`);
