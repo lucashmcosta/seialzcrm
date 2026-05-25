@@ -25,18 +25,23 @@ export const COUNTRIES: Country[] = [
  */
 export function detectCountryFromE164(phone: string): string {
   if (!phone) return 'BR';
-  
+
   const cleaned = phone.replace(/\D/g, '');
-  
+
   // Check each country's dial code (longer codes first to avoid false matches)
   const sortedCountries = [...COUNTRIES].sort((a, b) => b.dialCode.length - a.dialCode.length);
-  
+
   for (const country of sortedCountries) {
     if (cleaned.startsWith(country.dialCode)) {
+      // BR special case: dial code "55" collides with DDD 55.
+      // Only treat leading "55" as country code if total length matches E.164 BR (12 or 13 digits).
+      if (country.code === 'BR' && cleaned.length !== 12 && cleaned.length !== 13) {
+        continue;
+      }
       return country.code;
     }
   }
-  
+
   return 'BR'; // Default
 }
 
@@ -54,7 +59,11 @@ export function formatPhoneForCountry(phone: string, countryCode: string): strin
   
   // Remove o código do país se presente
   if (cleaned.startsWith(country.dialCode)) {
-    cleaned = cleaned.substring(country.dialCode.length);
+    const rest = cleaned.substring(country.dialCode.length);
+    // BR special case: only strip leading "55" if remainder is a valid local length (10 or 11).
+    if (country.code !== 'BR' || rest.length === 10 || rest.length === 11) {
+      cleaned = rest;
+    }
   }
   
   // Formata baseado no país
@@ -138,6 +147,11 @@ export function buildE164(localNumber: string, countryCode: string): string {
   
   // Se já começa com o código do país, não duplica
   if (cleaned.startsWith(country.dialCode)) {
+    // BR special case: "55" inicial pode ser DDD, não country code.
+    // Só tratar como country code se o comprimento total for válido (12 ou 13).
+    if (country.code === 'BR' && cleaned.length !== 12 && cleaned.length !== 13) {
+      return `+${country.dialCode}${cleaned}`;
+    }
     return `+${cleaned}`;
   }
   
