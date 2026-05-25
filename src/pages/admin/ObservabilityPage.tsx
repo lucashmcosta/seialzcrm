@@ -1348,7 +1348,7 @@ function HealthPill({ level }: { level: 'healthy' | 'warning' | 'critical' }) {
 
 function EventFlagBadges({ e }: { e: any }) {
   const flags: { label: string; cls: string }[] = [];
-  if (e.shadow_mode === true) flags.push({ label: 'shadow', cls: 'bg-indigo-500/15 text-indigo-600 border-indigo-500/30' });
+  if (e.shadow_mode === true) flags.push({ label: 'ingest_only', cls: 'bg-indigo-500/15 text-indigo-600 border-indigo-500/30' });
   if (e.process_status === 'duplicate_ignored') flags.push({ label: 'duplicate', cls: 'bg-amber-500/15 text-amber-600 border-amber-500/30' });
   if (e.signature_valid === false) flags.push({ label: 'sig_invalid', cls: 'bg-destructive/15 text-destructive border-destructive/30' });
   if ((e.replay_count ?? 0) > 0) flags.push({ label: 'replayed', cls: 'bg-sky-500/15 text-sky-600 border-sky-500/30' });
