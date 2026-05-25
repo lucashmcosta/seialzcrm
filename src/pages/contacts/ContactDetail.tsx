@@ -13,6 +13,7 @@ import { usePermissions } from '@/hooks/usePermissions';
 import { useVoiceIntegration } from '@/hooks/useVoiceIntegration';
 import { useOutboundCall } from '@/contexts/OutboundCallContext';
 import { formatPhoneDisplay } from '@/lib/phoneUtils';
+import { LeadOriginBadge } from '@/components/contacts/LeadOriginBadge';
 import { Card } from '@/components/ui/card';
 import { toast } from 'sonner';
 import { EnvelopeSimple, Phone, Buildings, PencilSimple, TrashSimple, DotsThreeVertical, DotsThree, ChatCircle, User, UserPlus, FileText, MapPin, Calendar, Megaphone, ArrowSquareOut, CaretLeft, Archive, ArrowsLeftRight } from '@phosphor-icons/react';
