@@ -82,13 +82,16 @@ set search_path = public
 as $$
 declare _n integer;
 begin
-  update public.integration_inbound_events
-     set process_status = 'retry',
-         next_run_at = now(),
-         process_error = coalesce(process_error,'') || ' [reaped:stuck]'
-   where process_status = 'processing'
-     and claimed_at < now() - _timeout
-  returning 1 into _n;
+  with upd as (
+    update public.integration_inbound_events
+       set process_status = 'retry',
+           next_run_at = now(),
+           process_error = coalesce(process_error,'') || ' [reaped:stuck]'
+     where process_status = 'processing'
+       and claimed_at < now() - _timeout
+    returning 1
+  )
+  select count(*) into _n from upd;
   return coalesce(_n, 0);
 end;
 $$;
