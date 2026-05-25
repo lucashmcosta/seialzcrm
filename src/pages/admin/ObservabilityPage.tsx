@@ -1528,6 +1528,94 @@ export default function ObservabilityPage() {
               </CardContent>
             </Card>
 
+            {/* Retry rate + histogram */}
+            <div className="grid md:grid-cols-2 gap-4">
+              <Card noAnimation>
+                <CardHeader className="pb-2"><CardTitle className="text-sm">Retry rate ({windowSel})</CardTitle></CardHeader>
+                <CardContent>
+                  <div className="flex items-baseline gap-3">
+                    <div className="text-2xl font-mono">{retryRate.pct.toFixed(2)}%</div>
+                    <div className="text-xs text-muted-foreground">{retryRate.withRetry} / {retryRate.total} jobs com attempts &gt; 1</div>
+                  </div>
+                </CardContent>
+              </Card>
+              <Card noAnimation>
+                <CardHeader className="pb-2"><CardTitle className="text-sm">Retry histogram ({windowSel})</CardTitle></CardHeader>
+                <CardContent>
+                  {retryHistogram.length === 0 ? <div className="text-xs text-muted-foreground">Sem jobs.</div> : (
+                    <div className="space-y-1">
+                      {(() => {
+                        const max = Math.max(...retryHistogram.map(b => b.count), 1);
+                        return retryHistogram.map((b) => (
+                          <div key={b.bucket} className="flex items-center gap-2 text-xs">
+                            <span className="w-8 font-mono text-muted-foreground">{b.bucket}</span>
+                            <div className="flex-1 bg-muted rounded h-3 overflow-hidden">
+                              <div className="bg-primary h-full" style={{ width: `${(b.count / max) * 100}%` }} />
+                            </div>
+                            <span className="w-12 text-right font-mono">{b.count}</span>
+                          </div>
+                        ));
+                      })()}
+                    </div>
+                  )}
+                </CardContent>
+              </Card>
+            </div>
+
+            {/* Subscription health */}
+            <Card noAnimation>
+              <CardHeader className="pb-2">
+                <CardTitle className="text-sm">Subscription health ({windowSel})</CardTitle>
+              </CardHeader>
+              <CardContent>
+                {subscriptionHealth.length === 0 ? (
+                  <div className="text-xs text-muted-foreground">Sem subscriptions.</div>
+                ) : (
+                  <Table>
+                    <TableHeader>
+                      <TableRow>
+                        <TableHead>Provider</TableHead>
+                        <TableHead>Action</TableHead>
+                        <TableHead>Estado</TableHead>
+                        <TableHead className="text-right">Total</TableHead>
+                        <TableHead className="text-right">Success</TableHead>
+                        <TableHead className="text-right">Failed</TableHead>
+                        <TableHead className="text-right">DLQ</TableHead>
+                        <TableHead className="text-right">Success rate</TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {subscriptionHealth.map((s, i) => {
+                        const paused = !!s.paused_until && new Date(s.paused_until).getTime() > Date.now();
+                        return (
+                          <TableRow key={i}>
+                            <TableCell className="text-xs">{s.integration_slug}</TableCell>
+                            <TableCell className="text-xs">{s.target_action}</TableCell>
+                            <TableCell>
+                              {!s.is_active ? <Badge variant="outline">inativa</Badge>
+                                : paused ? <Badge className="bg-amber-500 hover:bg-amber-500">paused</Badge>
+                                : <Badge>ativa</Badge>}
+                            </TableCell>
+                            <TableCell className="text-right font-mono text-xs">{s.total}</TableCell>
+                            <TableCell className="text-right font-mono text-xs text-emerald-600">{s.success}</TableCell>
+                            <TableCell className="text-right font-mono text-xs text-amber-600">{s.failed}</TableCell>
+                            <TableCell className="text-right font-mono text-xs text-destructive">{s.dlq}</TableCell>
+                            <TableCell className="text-right font-mono text-xs">
+                              {s.success_rate == null ? '—' : `${s.success_rate.toFixed(1)}%`}
+                            </TableCell>
+                          </TableRow>
+                        );
+                      })}
+                    </TableBody>
+                  </Table>
+                )}
+                <div className="text-[10px] text-muted-foreground mt-2">
+                  Success rate = success / (success + failed + dlq). Paused = paused_until &gt; now. Subscriptions sem jobs aparecem com total=0.
+                </div>
+              </CardContent>
+            </Card>
+
+
             <Card noAnimation>
               <CardHeader className="pb-2 flex flex-row justify-between items-center">
                 <CardTitle className="text-sm">Subscriptions ({subscriptions.length})</CardTitle>
