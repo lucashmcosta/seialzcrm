@@ -255,6 +255,19 @@ export default function ObservabilityPage() {
   const [inboundLatencies, setInboundLatencies] = useState<number[]>([]);
   const [inboundProcessedCount, setInboundProcessedCount] = useState<number>(0);
 
+  // Shadow / parity / timeline / quick filter
+  type QuickFilter = 'all' | 'shadow' | 'errors' | 'duplicates' | 'sig_invalid';
+  const [quickFilter, setQuickFilter] = useState<QuickFilter>('all');
+  const [parityRows, setParityRows] = useState<
+    { integration_slug: string; legacy: number; shadow: number; diff_abs: number; diff_pct: number | null; status: 'ok' | 'warning' | 'critical' | 'na' }[]
+  >([]);
+  const [timelineBuckets, setTimelineBuckets] = useState<
+    { ts: number; ingest: number; sig_fail: number; duplicates: number; ingest_err: number; latencies: number[] }[]
+  >([]);
+  const [duplicatesCount, setDuplicatesCount] = useState<number>(0);
+  const [shadowAttempts, setShadowAttempts] = useState<number>(0);
+  const [shadowFailures, setShadowFailures] = useState<number>(0);
+
   // Outbox state
   const [outboxHealth, setOutboxHealth] = useState<OutboxHealth | null>(null);
   const [outboxHealthErr, setOutboxHealthErr] = useState<string | null>(null);
@@ -323,11 +336,15 @@ export default function ObservabilityPage() {
     {
       const filters: string[] = [`received_at>=${sinceISO}`];
       let q = (supabase as any).from('integration_inbound_events')
-        .select('id, received_at, integration_slug, source_event, process_status, shadow_mode, signature_valid, retry_count, trace_id, external_id, organization_id, process_error, processed_at')
+        .select('id, received_at, integration_slug, source_event, process_status, shadow_mode, signature_valid, retry_count, replay_count, trace_id, external_id, organization_id, process_error, processed_at, expires_at')
         .gte('received_at', sinceISO).order('received_at', { ascending: false }).limit(100);
       if (providerFilter !== 'all') { q = q.eq('integration_slug', providerFilter); filters.push(`slug=${providerFilter}`); }
       if (statusFilter !== 'all') { q = q.eq('process_status', statusFilter); filters.push(`status=${statusFilter}`); }
       if (orgFilter) { q = q.eq('organization_id', orgFilter); filters.push(`org=${orgFilter.slice(0, 8)}`); }
+      if (quickFilter === 'shadow') { q = q.eq('shadow_mode', true); filters.push('only=shadow'); }
+      if (quickFilter === 'sig_invalid') { q = q.eq('signature_valid', false); filters.push('only=sig_invalid'); }
+      if (quickFilter === 'errors') { q = q.in('process_status', ['dead_letter', 'expired', 'retry']); filters.push('only=errors'); }
+      if (quickFilter === 'duplicates') { q = q.eq('process_status', 'duplicate_ignored'); filters.push('only=duplicates'); }
       if (search) {
         const s = search.trim();
         q = q.or(`trace_id.eq.${s},external_id.eq.${s}`);
@@ -413,8 +430,86 @@ export default function ObservabilityPage() {
       setInboundTopErrors((r.data as any[]) || []);
     }
 
+    // Sample for timeline + parity + duplicates + shadow rate (window-scoped)
+    {
+      const r = await instrument(reg, {
+        key: 'inbound.sample', label: 'Amostra (timeline/parity)',
+        source: 'integration_inbound_events', type: 'table', window: windowSel,
+        filters: 'received_at>=since (cap 5000)',
+      }, () => (supabase as any).from('integration_inbound_events')
+        .select('received_at, integration_slug, shadow_mode, signature_valid, process_status, processed_at, process_error')
+        .gte('received_at', sinceISO)
+        .order('received_at', { ascending: false })
+        .limit(5000));
+      const rows = (r.data as any[]) || [];
+
+      // Parity por provider
+      const byProv: Record<string, { legacy: number; shadow: number }> = {};
+      rows.forEach((e) => {
+        const slug = e.integration_slug || 'unknown';
+        byProv[slug] ||= { legacy: 0, shadow: 0 };
+        if (e.shadow_mode === true) byProv[slug].shadow += 1;
+        else byProv[slug].legacy += 1;
+      });
+      const parity = Object.entries(byProv).map(([integration_slug, v]) => {
+        const diff_abs = Math.abs(v.legacy - v.shadow);
+        const diff_pct = v.legacy > 0 ? (diff_abs / v.legacy) * 100 : null;
+        let status: 'ok' | 'warning' | 'critical' | 'na' = 'na';
+        if (v.shadow === 0 && v.legacy > 0) status = 'na';
+        else if (diff_pct == null) status = 'na';
+        else if (diff_pct < 1) status = 'ok';
+        else if (diff_pct < 5) status = 'warning';
+        else status = 'critical';
+        return { integration_slug, legacy: v.legacy, shadow: v.shadow, diff_abs, diff_pct, status };
+      }).sort((a, b) => (b.legacy + b.shadow) - (a.legacy + a.shadow));
+      setParityRows(parity);
+
+      // Duplicates (process_status convention)
+      const dup = rows.filter((e) => e.process_status === 'duplicate_ignored').length;
+      setDuplicatesCount(dup);
+
+      // Shadow success rate
+      const shAtt = rows.filter((e) => e.shadow_mode === true).length;
+      const shFail = rows.filter((e) =>
+        e.shadow_mode === true &&
+        (['dead_letter', 'expired'].includes(e.process_status) || e.signature_valid === false || !!e.process_error)
+      ).length;
+      setShadowAttempts(shAtt);
+      setShadowFailures(shFail);
+
+      // Timeline buckets
+      const winMs = WINDOW_TO_MS[windowSel];
+      const bucketMs = windowSel === '1h' ? 60_000 : windowSel === '24h' ? 3_600_000 : 21_600_000; // 1m / 1h / 6h
+      const buckets: Record<number, { ts: number; ingest: number; sig_fail: number; duplicates: number; ingest_err: number; latencies: number[] }> = {};
+      const nowFloor = Math.floor(Date.now() / bucketMs) * bucketMs;
+      const start = nowFloor - winMs + bucketMs;
+      for (let t = start; t <= nowFloor; t += bucketMs) {
+        buckets[t] = { ts: t, ingest: 0, sig_fail: 0, duplicates: 0, ingest_err: 0, latencies: [] };
+      }
+      rows.forEach((e) => {
+        const t = Math.floor(new Date(e.received_at).getTime() / bucketMs) * bucketMs;
+        const b = buckets[t];
+        if (!b) return;
+        b.ingest += 1;
+        if (e.signature_valid === false) b.sig_fail += 1;
+        if (e.process_status === 'duplicate_ignored') b.duplicates += 1;
+        if (e.processed_at) {
+          const d = (new Date(e.processed_at).getTime() - new Date(e.received_at).getTime()) / 1000;
+          if (d >= 0 && d < 86400) b.latencies.push(d);
+        }
+      });
+      // mix in ingest_errors counts per bucket (uses ingestErrors fetched above)
+      ((await (supabase as any).from('integration_inbound_ingest_errors')
+        .select('created_at').gte('created_at', sinceISO).limit(5000)).data as any[] || []
+      ).forEach((er) => {
+        const t = Math.floor(new Date(er.created_at).getTime() / bucketMs) * bucketMs;
+        if (buckets[t]) buckets[t].ingest_err += 1;
+      });
+      setTimelineBuckets(Object.values(buckets).sort((a, b) => a.ts - b.ts));
+    }
+
     if (errors.length) setError(errors.join(' | '));
-  }, [windowSel, providerFilter, statusFilter, orgFilter, search, since1hISO, sinceISO]);
+  }, [windowSel, providerFilter, statusFilter, orgFilter, search, since1hISO, sinceISO, quickFilter]);
 
   // ----------------------------------------------------------------
   // Fetch OUTBOX
@@ -575,7 +670,7 @@ export default function ObservabilityPage() {
   useEffect(() => {
     refresh();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [windowSel, providerFilter, statusFilter, orgFilter]);
+  }, [windowSel, providerFilter, statusFilter, orgFilter, quickFilter]);
 
   // Derived
   const inboundByStatus = useMemo(() => {
@@ -734,7 +829,116 @@ export default function ObservabilityPage() {
                 value={fmtLatency(p95(inboundLatencies))}
                 hint={inboundProcessedCount === 0 ? 'sem eventos processados' : `n=${inboundProcessedCount}`}
               />
+              <StatCard
+                label={`Duplicates ignored (${windowSel})`}
+                value={duplicatesCount}
+                hint="process_status=duplicate_ignored"
+                tone={duplicatesCount > 0 ? 'warning' : 'default'}
+                probeKey="inbound.sample" registry={registryRef.current} debug={debug}
+              />
+              <StatCard
+                label="Shadow insert success rate"
+                value={
+                  shadowAttempts === 0
+                    ? '—'
+                    : `${(((shadowAttempts - shadowFailures) / shadowAttempts) * 100).toFixed(2)}%`
+                }
+                hint={shadowAttempts === 0 ? 'sem inserts shadow ainda' : `${shadowAttempts - shadowFailures}/${shadowAttempts} ok`}
+                tone={
+                  shadowAttempts === 0 ? 'default'
+                  : shadowFailures === 0 ? 'success'
+                  : shadowFailures / shadowAttempts < 0.01 ? 'success'
+                  : shadowFailures / shadowAttempts < 0.05 ? 'warning' : 'critical'
+                }
+              />
             </div>
+
+            {/* Quick filters */}
+            <Card noAnimation>
+              <CardContent className="p-3 flex flex-wrap items-center gap-2">
+                <span className="text-[10px] uppercase tracking-wide text-muted-foreground mr-1">Quick filter:</span>
+                {(['all', 'shadow', 'errors', 'duplicates', 'sig_invalid'] as QuickFilter[]).map((f) => (
+                  <Button
+                    key={f}
+                    size="sm"
+                    variant={quickFilter === f ? 'default' : 'outline'}
+                    onClick={() => setQuickFilter(f)}
+                    className="h-7 text-xs"
+                  >
+                    {f === 'all' ? 'All' : `Only ${f.replace('_', ' ')}`}
+                  </Button>
+                ))}
+                {quickFilter !== 'all' && (
+                  <span className="text-[10px] text-muted-foreground ml-2">
+                    aplicado a “Eventos recentes” • janela {windowSel}
+                  </span>
+                )}
+              </CardContent>
+            </Card>
+
+            {/* Shadow parity */}
+            <Card noAnimation>
+              <CardHeader className="pb-2 flex flex-row justify-between items-center">
+                <CardTitle className="text-sm">Shadow parity ({windowSel})</CardTitle>
+                {debug && <ProbeMiniBadge probeKey="inbound.sample" registry={registryRef.current} />}
+              </CardHeader>
+              <CardContent>
+                {parityRows.length === 0 ? (
+                  <div className="text-xs text-muted-foreground">Sem dados na janela.</div>
+                ) : (
+                  <Table>
+                    <TableHeader>
+                      <TableRow>
+                        <TableHead>Provider</TableHead>
+                        <TableHead className="text-right">Legacy</TableHead>
+                        <TableHead className="text-right">Inbox v2 (shadow)</TableHead>
+                        <TableHead className="text-right">Diff abs</TableHead>
+                        <TableHead className="text-right">Diff %</TableHead>
+                        <TableHead>Status</TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {parityRows.map((r) => (
+                        <TableRow key={r.integration_slug}>
+                          <TableCell className="text-xs">{r.integration_slug}</TableCell>
+                          <TableCell className="text-right font-mono text-xs">{r.legacy}</TableCell>
+                          <TableCell className="text-right font-mono text-xs">{r.shadow}</TableCell>
+                          <TableCell className="text-right font-mono text-xs">{r.diff_abs}</TableCell>
+                          <TableCell className="text-right font-mono text-xs">{r.diff_pct == null ? '—' : `${r.diff_pct.toFixed(2)}%`}</TableCell>
+                          <TableCell>
+                            {r.status === 'ok' && <Badge className="bg-emerald-500 hover:bg-emerald-500">OK</Badge>}
+                            {r.status === 'warning' && <Badge className="bg-amber-500 hover:bg-amber-500">Warning</Badge>}
+                            {r.status === 'critical' && <Badge variant="destructive">Critical</Badge>}
+                            {r.status === 'na' && <Badge variant="outline">n/a</Badge>}
+                          </TableCell>
+                        </TableRow>
+                      ))}
+                    </TableBody>
+                  </Table>
+                )}
+                <div className="text-[10px] text-muted-foreground mt-2">
+                  OK &lt;1% · Warning &lt;5% · Critical ≥5%. Status “n/a” quando ainda não há eventos shadow.
+                </div>
+              </CardContent>
+            </Card>
+
+            {/* Timeline */}
+            <Card noAnimation>
+              <CardHeader className="pb-2 flex flex-row justify-between items-center">
+                <CardTitle className="text-sm">
+                  Timeline ({windowSel === '1h' ? 'por minuto' : windowSel === '24h' ? 'por hora' : 'por 6h'})
+                </CardTitle>
+                {debug && <ProbeMiniBadge probeKey="inbound.sample" registry={registryRef.current} />}
+              </CardHeader>
+              <CardContent>
+                {timelineBuckets.length === 0 ? (
+                  <div className="text-xs text-muted-foreground">Sem dados na janela.</div>
+                ) : (
+                  <TimelineSparkChart buckets={timelineBuckets} />
+                )}
+              </CardContent>
+            </Card>
+
 
             <div className="grid md:grid-cols-2 gap-4">
               <Card noAnimation>
@@ -832,7 +1036,7 @@ export default function ObservabilityPage() {
                     <TableHeader>
                       <TableRow>
                         <TableHead>Quando</TableHead><TableHead>Provider</TableHead><TableHead>Event</TableHead>
-                        <TableHead>Status</TableHead><TableHead>Shadow</TableHead><TableHead>Sig</TableHead>
+                        <TableHead>Status</TableHead><TableHead>Flags</TableHead><TableHead>Sig</TableHead>
                         <TableHead>Retry</TableHead><TableHead>trace</TableHead><TableHead>external</TableHead>
                         <TableHead>org</TableHead><TableHead>error</TableHead>
                       </TableRow>
@@ -844,7 +1048,7 @@ export default function ObservabilityPage() {
                           <TableCell className="text-xs">{e.integration_slug}</TableCell>
                           <TableCell className="text-xs">{e.source_event || '—'}</TableCell>
                           <TableCell><Badge variant={statusVariant(e.process_status)}>{e.process_status}</Badge></TableCell>
-                          <TableCell className="text-xs">{e.shadow_mode ? '✓' : ''}</TableCell>
+                          <TableCell><EventFlagBadges e={e} /></TableCell>
                           <TableCell className="text-xs">{e.signature_valid === false ? '✗' : e.signature_valid ? '✓' : '—'}</TableCell>
                           <TableCell className="text-xs">{e.retry_count ?? 0}</TableCell>
                           <TableCell className="font-mono text-xs">{e.trace_id?.slice(0, 8) || '—'}</TableCell>
@@ -1106,4 +1310,81 @@ function HealthPill({ level }: { level: 'healthy' | 'warning' | 'critical' }) {
     return <Badge className="bg-amber-500 hover:bg-amber-500"><AlertTriangle className="h-3 w-3 mr-1" /> Warning</Badge>;
   }
   return <Badge variant="destructive"><AlertOctagon className="h-3 w-3 mr-1" /> Critical</Badge>;
+}
+
+function EventFlagBadges({ e }: { e: any }) {
+  const flags: { label: string; cls: string }[] = [];
+  if (e.shadow_mode === true) flags.push({ label: 'shadow', cls: 'bg-indigo-500/15 text-indigo-600 border-indigo-500/30' });
+  if (e.process_status === 'duplicate_ignored') flags.push({ label: 'duplicate', cls: 'bg-amber-500/15 text-amber-600 border-amber-500/30' });
+  if (e.signature_valid === false) flags.push({ label: 'sig_invalid', cls: 'bg-destructive/15 text-destructive border-destructive/30' });
+  if ((e.replay_count ?? 0) > 0) flags.push({ label: 'replayed', cls: 'bg-sky-500/15 text-sky-600 border-sky-500/30' });
+  if (e.process_status === 'expired' || (e.expires_at && new Date(e.expires_at).getTime() < Date.now())) {
+    flags.push({ label: 'expired', cls: 'bg-muted text-muted-foreground border-border' });
+  }
+  if (flags.length === 0) return <span className="text-xs text-muted-foreground">—</span>;
+  return (
+    <div className="flex flex-wrap gap-1">
+      {flags.map((f) => (
+        <span key={f.label} className={`text-[9px] px-1.5 py-0.5 border rounded ${f.cls}`}>{f.label}</span>
+      ))}
+    </div>
+  );
+}
+
+function TimelineSparkChart({
+  buckets,
+}: {
+  buckets: { ts: number; ingest: number; sig_fail: number; duplicates: number; ingest_err: number; latencies: number[] }[];
+}) {
+  const max = Math.max(1, ...buckets.map((b) => Math.max(b.ingest, b.sig_fail, b.duplicates, b.ingest_err)));
+  const W = 800;
+  const H = 120;
+  const step = buckets.length > 1 ? W / (buckets.length - 1) : 0;
+  const path = (key: keyof typeof buckets[number]) =>
+    buckets.map((b, i) => {
+      const v = Number(b[key] as number) || 0;
+      const x = i * step;
+      const y = H - (v / max) * (H - 8) - 4;
+      return `${i === 0 ? 'M' : 'L'}${x.toFixed(1)},${y.toFixed(1)}`;
+    }).join(' ');
+
+  const fmtBucketTs = (ts: number) => {
+    const d = new Date(ts);
+    return `${d.getHours().toString().padStart(2, '0')}:${d.getMinutes().toString().padStart(2, '0')}`;
+  };
+  const allLats = buckets.flatMap((b) => b.latencies);
+  const p50v = p50(allLats); const p95v = p95(allLats);
+
+  const legend = [
+    { k: 'ingest', label: 'ingest volume', color: 'hsl(217 91% 60%)' },
+    { k: 'sig_fail', label: 'sig failures', color: 'hsl(0 84% 60%)' },
+    { k: 'duplicates', label: 'duplicates', color: 'hsl(38 92% 50%)' },
+    { k: 'ingest_err', label: 'ingest errors', color: 'hsl(280 70% 55%)' },
+  ];
+
+  return (
+    <div className="space-y-2">
+      <div className="flex flex-wrap gap-3 text-[10px]">
+        {legend.map((l) => (
+          <div key={l.k} className="flex items-center gap-1">
+            <span className="inline-block w-3 h-0.5" style={{ background: l.color }} />
+            <span className="text-muted-foreground">{l.label}</span>
+          </div>
+        ))}
+        <div className="ml-auto text-muted-foreground font-mono">
+          p50={fmtLatency(p50v)} · p95={fmtLatency(p95v)} · max y={max}
+        </div>
+      </div>
+      <svg viewBox={`0 0 ${W} ${H}`} className="w-full h-32 border rounded bg-muted/30">
+        {legend.map((l) => (
+          <path key={l.k} d={path(l.k as any)} fill="none" stroke={l.color} strokeWidth={1.5} />
+        ))}
+      </svg>
+      <div className="flex justify-between text-[9px] font-mono text-muted-foreground">
+        <span>{buckets[0] ? fmtBucketTs(buckets[0].ts) : ''}</span>
+        <span>{buckets[Math.floor(buckets.length / 2)] ? fmtBucketTs(buckets[Math.floor(buckets.length / 2)].ts) : ''}</span>
+        <span>{buckets[buckets.length - 1] ? fmtBucketTs(buckets[buckets.length - 1].ts) : ''}</span>
+      </div>
+    </div>
+  );
 }
