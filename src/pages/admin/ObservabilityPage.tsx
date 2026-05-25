@@ -294,6 +294,13 @@ export default function ObservabilityPage() {
   const [outboxLatencies, setOutboxLatencies] = useState<number[]>([]);
   const [topErrors, setTopErrors] = useState<{ message: string; count: number; last_seen: string; sample_integration_slug: string }[]>([]);
 
+  // Outbox refinements (computed from jobs/subscriptions in fetchOutbox)
+  const [retryRate, setRetryRate] = useState<{ total: number; withRetry: number; pct: number }>({ total: 0, withRetry: 0, pct: 0 });
+  const [retryHistogram, setRetryHistogram] = useState<{ bucket: string; count: number }[]>([]);
+  const [subscriptionHealth, setSubscriptionHealth] = useState<
+    { integration_slug: string; target_action: string; is_active: boolean; paused_until: string | null; total: number; success: number; failed: number; dlq: number; success_rate: number | null }[]
+  >([]);
+
   // Drill-down
   const [drillRow, setDrillRow] = useState<any>(null);
   const [drillTitle, setDrillTitle] = useState<string>('');
