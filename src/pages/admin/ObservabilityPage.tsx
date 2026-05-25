@@ -208,14 +208,13 @@ function ProbeBadge({ probe }: { probe: Probe }) {
     : 'secondary';
   return (
     <div className="mt-2 text-[10px] font-mono leading-tight border-t pt-1 space-y-0.5">
-      <div className="flex items-center gap-1">
-        <Badge variant={tone as any} className="px-1 py-0 text-[9px]">
-          {probe.type}{probe.fallback_used ? '→fb' : ''}
-        </Badge>
+      <div className="flex items-center gap-1 flex-wrap">
+        <Badge variant={tone as any} className="px-1 py-0 text-[9px]">{probe.type}</Badge>
+        {probe.fallback_used && <Badge variant="outline" className="px-1 py-0 text-[9px]">fallback</Badge>}
         <span className="text-muted-foreground truncate">{probe.source}</span>
       </div>
       <div className="text-muted-foreground">
-        rows={probe.rows} · {probe.latency_ms}ms
+        rows={probe.rows} · {probe.latency_ms}ms · cache=miss
         {probe.window && ` · win=${probe.window}`}
       </div>
       {probe.filters && <div className="text-muted-foreground truncate">f: {probe.filters}</div>}
@@ -256,13 +255,13 @@ export default function ObservabilityPage() {
   const [inboundProcessedCount, setInboundProcessedCount] = useState<number>(0);
 
   // Shadow / parity / timeline / quick filter
-  type QuickFilter = 'all' | 'shadow' | 'errors' | 'duplicates' | 'sig_invalid';
+  type QuickFilter = 'all' | 'ingest_only' | 'errors' | 'duplicates' | 'sig_invalid';
   const [quickFilter, setQuickFilter] = useState<QuickFilter>('all');
   const [parityRows, setParityRows] = useState<
-    { integration_slug: string; legacy: number; shadow: number; diff_abs: number; diff_pct: number | null; status: 'ok' | 'warning' | 'critical' | 'na' }[]
+    { integration_slug: string; legacy: number; shadow: number; diff_abs: number; diff_pct: number | null; status: 'ok' | 'warning' | 'critical' | 'na'; legacy_source: string }[]
   >([]);
   const [timelineBuckets, setTimelineBuckets] = useState<
-    { ts: number; ingest: number; sig_fail: number; duplicates: number; ingest_err: number; latencies: number[] }[]
+    { ts: number; ingest: number; sig_fail: number; duplicates: number; ingest_err: number; retries: number; dlq: number; latencies: number[] }[]
   >([]);
   const [duplicatesCount, setDuplicatesCount] = useState<number>(0);
   const [shadowAttempts, setShadowAttempts] = useState<number>(0);
@@ -286,6 +285,38 @@ export default function ObservabilityPage() {
   // Drill-down
   const [drillRow, setDrillRow] = useState<any>(null);
   const [drillTitle, setDrillTitle] = useState<string>('');
+  const [drillLoading, setDrillLoading] = useState(false);
+
+  const openInboundDrill = useCallback(async (e: InboundEvent) => {
+    setDrillTitle('Inbound event');
+    setDrillRow(e);
+    setDrillLoading(true);
+    try {
+      const { data } = await (supabase as any)
+        .from('integration_inbound_events')
+        .select('*')
+        .eq('id', e.id)
+        .maybeSingle();
+      if (data) setDrillRow(data);
+    } finally {
+      setDrillLoading(false);
+    }
+  }, []);
+  const openJobDrill = useCallback(async (j: IntegrationJob) => {
+    setDrillTitle('Outbox job');
+    setDrillRow(j);
+    setDrillLoading(true);
+    try {
+      const { data } = await (supabase as any)
+        .from('integration_jobs')
+        .select('*')
+        .eq('id', j.id)
+        .maybeSingle();
+      if (data) setDrillRow(data);
+    } finally {
+      setDrillLoading(false);
+    }
+  }, []);
 
   const sinceISO = useMemo(() => new Date(Date.now() - WINDOW_TO_MS[windowSel]).toISOString(), [windowSel, lastUpdated]);
   const since1hISO = useMemo(() => new Date(Date.now() - 3600_000).toISOString(), [lastUpdated]);
@@ -309,6 +340,7 @@ export default function ObservabilityPage() {
         const fb = await instrument(reg, {
           key: 'inbound.health.1h.fb', label: 'Inbound health 1h (fallback)',
           source: 'integration_inbound_events', type: 'table', filters: `received_at>=${since1hISO}`,
+          fallback_used: true,
         }, () => (supabase as any).from('integration_inbound_events')
           .select('integration_slug, process_status').gte('received_at', since1hISO).limit(5000));
         const agg: Record<string, InboundHealthRow> = {};
@@ -341,7 +373,7 @@ export default function ObservabilityPage() {
       if (providerFilter !== 'all') { q = q.eq('integration_slug', providerFilter); filters.push(`slug=${providerFilter}`); }
       if (statusFilter !== 'all') { q = q.eq('process_status', statusFilter); filters.push(`status=${statusFilter}`); }
       if (orgFilter) { q = q.eq('organization_id', orgFilter); filters.push(`org=${orgFilter.slice(0, 8)}`); }
-      if (quickFilter === 'shadow') { q = q.eq('shadow_mode', true); filters.push('only=shadow'); }
+      if (quickFilter === 'ingest_only') { q = q.eq('shadow_mode', true); filters.push('only=ingest_only'); }
       if (quickFilter === 'sig_invalid') { q = q.eq('signature_valid', false); filters.push('only=sig_invalid'); }
       if (quickFilter === 'errors') { q = q.in('process_status', ['dead_letter', 'expired', 'retry']); filters.push('only=errors'); }
       if (quickFilter === 'duplicates') { q = q.eq('process_status', 'duplicate_ignored'); filters.push('only=duplicates'); }
@@ -437,30 +469,57 @@ export default function ObservabilityPage() {
         source: 'integration_inbound_events', type: 'table', window: windowSel,
         filters: 'received_at>=since (cap 5000)',
       }, () => (supabase as any).from('integration_inbound_events')
-        .select('received_at, integration_slug, shadow_mode, signature_valid, process_status, processed_at, process_error')
+        .select('received_at, integration_slug, shadow_mode, signature_valid, process_status, processed_at, process_error, retry_count, replay_count')
         .gte('received_at', sinceISO)
         .order('received_at', { ascending: false })
         .limit(5000));
       const rows = (r.data as any[]) || [];
 
-      // Parity por provider
-      const byProv: Record<string, { legacy: number; shadow: number }> = {};
+      // ----- Parity por provider: legacy real vs shadow inbox -----
+      // Shadow side: inbox_v2 events com shadow_mode=true.
+      const byProv: Record<string, { shadow: number }> = {};
       rows.forEach((e) => {
         const slug = e.integration_slug || 'unknown';
-        byProv[slug] ||= { legacy: 0, shadow: 0 };
+        byProv[slug] ||= { shadow: 0 };
         if (e.shadow_mode === true) byProv[slug].shadow += 1;
-        else byProv[slug].legacy += 1;
       });
-      const parity = Object.entries(byProv).map(([integration_slug, v]) => {
-        const diff_abs = Math.abs(v.legacy - v.shadow);
-        const diff_pct = v.legacy > 0 ? (diff_abs / v.legacy) * 100 : null;
+
+      // Legacy side: por provider, contar efeito colateral real do fluxo antigo.
+      // suvsign → activities `system` com título "Documento assinado%" na janela.
+      const legacyBy: Record<string, { count: number; source: string }> = {};
+      // suvsign legacy
+      {
+        const lr = await instrument(reg, {
+          key: 'parity.legacy.suvsign', label: 'Legacy suvsign (activities)',
+          source: 'activities', type: 'table', window: windowSel,
+          filters: "activity_type=system & title ilike 'Documento assinado%'",
+        }, () => (supabase as any).from('activities')
+          .select('id', { count: 'exact', head: true })
+          .eq('activity_type', 'system')
+          .ilike('title', 'Documento assinado%')
+          .gte('created_at', sinceISO));
+        legacyBy['suvsign'] = { count: (lr as any).count || 0, source: 'activities[Documento assinado%]' };
+      }
+      // Outros providers conhecidos no sample: legacy = N/A (sem fonte definida)
+      Object.keys(byProv).forEach((slug) => {
+        if (!legacyBy[slug]) legacyBy[slug] = { count: 0, source: 'n/a (sem fonte definida)' };
+      });
+
+      const allSlugs = new Set<string>([...Object.keys(byProv), ...Object.keys(legacyBy)]);
+      const parity = Array.from(allSlugs).map((slug) => {
+        const shadow = byProv[slug]?.shadow ?? 0;
+        const legacy = legacyBy[slug]?.count ?? 0;
+        const legacy_source = legacyBy[slug]?.source ?? 'n/a';
+        const diff_abs = Math.abs(legacy - shadow);
+        const diff_pct = legacy > 0 ? (diff_abs / legacy) * 100 : null;
         let status: 'ok' | 'warning' | 'critical' | 'na' = 'na';
-        if (v.shadow === 0 && v.legacy > 0) status = 'na';
+        if (legacy_source.startsWith('n/a')) status = 'na';
+        else if (diff_pct == null && shadow === 0) status = 'na';
         else if (diff_pct == null) status = 'na';
         else if (diff_pct < 1) status = 'ok';
         else if (diff_pct < 5) status = 'warning';
         else status = 'critical';
-        return { integration_slug, legacy: v.legacy, shadow: v.shadow, diff_abs, diff_pct, status };
+        return { integration_slug: slug, legacy, shadow, diff_abs, diff_pct, status, legacy_source };
       }).sort((a, b) => (b.legacy + b.shadow) - (a.legacy + a.shadow));
       setParityRows(parity);
 
@@ -480,11 +539,11 @@ export default function ObservabilityPage() {
       // Timeline buckets
       const winMs = WINDOW_TO_MS[windowSel];
       const bucketMs = windowSel === '1h' ? 60_000 : windowSel === '24h' ? 3_600_000 : 21_600_000; // 1m / 1h / 6h
-      const buckets: Record<number, { ts: number; ingest: number; sig_fail: number; duplicates: number; ingest_err: number; latencies: number[] }> = {};
+      const buckets: Record<number, { ts: number; ingest: number; sig_fail: number; duplicates: number; ingest_err: number; retries: number; dlq: number; latencies: number[] }> = {};
       const nowFloor = Math.floor(Date.now() / bucketMs) * bucketMs;
       const start = nowFloor - winMs + bucketMs;
       for (let t = start; t <= nowFloor; t += bucketMs) {
-        buckets[t] = { ts: t, ingest: 0, sig_fail: 0, duplicates: 0, ingest_err: 0, latencies: [] };
+        buckets[t] = { ts: t, ingest: 0, sig_fail: 0, duplicates: 0, ingest_err: 0, retries: 0, dlq: 0, latencies: [] };
       }
       rows.forEach((e) => {
         const t = Math.floor(new Date(e.received_at).getTime() / bucketMs) * bucketMs;
@@ -493,12 +552,14 @@ export default function ObservabilityPage() {
         b.ingest += 1;
         if (e.signature_valid === false) b.sig_fail += 1;
         if (e.process_status === 'duplicate_ignored') b.duplicates += 1;
+        if ((e.retry_count ?? 0) > 0) b.retries += 1;
+        if (e.process_status === 'dead_letter') b.dlq += 1;
         if (e.processed_at) {
           const d = (new Date(e.processed_at).getTime() - new Date(e.received_at).getTime()) / 1000;
           if (d >= 0 && d < 86400) b.latencies.push(d);
         }
       });
-      // mix in ingest_errors counts per bucket (uses ingestErrors fetched above)
+      // mix in ingest_errors counts per bucket
       ((await (supabase as any).from('integration_inbound_ingest_errors')
         .select('created_at').gte('created_at', sinceISO).limit(5000)).data as any[] || []
       ).forEach((er) => {
@@ -610,6 +671,7 @@ export default function ObservabilityPage() {
         const fb = await instrument(reg, {
           key: 'outbox.dlq_by_integration.fb', label: 'DLQ (fallback)',
           source: 'integration_jobs', type: 'table', filters: 'status=dead_letter limit 1000',
+          fallback_used: true,
         }, () => (supabase as any).from('integration_jobs')
           .select('integration_slug, target_action, last_error, last_error_at')
           .eq('status', 'dead_letter').limit(1000));
@@ -811,7 +873,7 @@ export default function ObservabilityPage() {
               <StatCard label="Stuck processing >5m" value={inboundStuck}
                 tone={inboundStuck > 10 ? 'critical' : inboundStuck > 0 ? 'warning' : 'success'}
                 probeKey="inbound.stuck" registry={registryRef.current} debug={debug} />
-              <StatCard label="Shadow mode" value={inboundShadow} hint={`janela ${windowSel}`}
+              <StatCard label="Ingest-only (shadow_mode=true)" value={inboundShadow} hint={`janela ${windowSel}`}
                 probeKey="inbound.shadow" registry={registryRef.current} debug={debug} />
               <StatCard label={`Signature failures (${windowSel})`} value={inboundSigFailures}
                 tone={inboundSigFailures > 0 ? 'warning' : 'success'}
@@ -821,13 +883,13 @@ export default function ObservabilityPage() {
                 probeKey="inbound.ingest_errors" registry={registryRef.current} debug={debug} />
               <StatCard
                 label="p50 latency"
-                value={fmtLatency(p50(inboundLatencies))}
-                hint={inboundProcessedCount === 0 ? 'sem eventos processados (dispatcher inerte)' : `n=${inboundProcessedCount}`}
+                value={inboundProcessedCount === 0 ? <span className="text-muted-foreground text-base">dispatcher inativo</span> : fmtLatency(p50(inboundLatencies))}
+                hint={inboundProcessedCount === 0 ? 'nenhum evento processado_at na janela' : `n=${inboundProcessedCount}`}
               />
               <StatCard
                 label="p95 latency"
-                value={fmtLatency(p95(inboundLatencies))}
-                hint={inboundProcessedCount === 0 ? 'sem eventos processados' : `n=${inboundProcessedCount}`}
+                value={inboundProcessedCount === 0 ? <span className="text-muted-foreground text-base">dispatcher inativo</span> : fmtLatency(p95(inboundLatencies))}
+                hint={inboundProcessedCount === 0 ? 'nenhum evento processado_at na janela' : `n=${inboundProcessedCount}`}
               />
               <StatCard
                 label={`Duplicates ignored (${windowSel})`}
@@ -857,7 +919,7 @@ export default function ObservabilityPage() {
             <Card noAnimation>
               <CardContent className="p-3 flex flex-wrap items-center gap-2">
                 <span className="text-[10px] uppercase tracking-wide text-muted-foreground mr-1">Quick filter:</span>
-                {(['all', 'shadow', 'errors', 'duplicates', 'sig_invalid'] as QuickFilter[]).map((f) => (
+                {(['all', 'ingest_only', 'errors', 'duplicates', 'sig_invalid'] as QuickFilter[]).map((f) => (
                   <Button
                     key={f}
                     size="sm"
@@ -894,6 +956,7 @@ export default function ObservabilityPage() {
                         <TableHead className="text-right">Inbox v2 (shadow)</TableHead>
                         <TableHead className="text-right">Diff abs</TableHead>
                         <TableHead className="text-right">Diff %</TableHead>
+                        <TableHead>Legacy source</TableHead>
                         <TableHead>Status</TableHead>
                       </TableRow>
                     </TableHeader>
@@ -905,6 +968,7 @@ export default function ObservabilityPage() {
                           <TableCell className="text-right font-mono text-xs">{r.shadow}</TableCell>
                           <TableCell className="text-right font-mono text-xs">{r.diff_abs}</TableCell>
                           <TableCell className="text-right font-mono text-xs">{r.diff_pct == null ? '—' : `${r.diff_pct.toFixed(2)}%`}</TableCell>
+                          <TableCell className="text-[10px] font-mono text-muted-foreground">{r.legacy_source}</TableCell>
                           <TableCell>
                             {r.status === 'ok' && <Badge className="bg-emerald-500 hover:bg-emerald-500">OK</Badge>}
                             {r.status === 'warning' && <Badge className="bg-amber-500 hover:bg-amber-500">Warning</Badge>}
@@ -917,7 +981,7 @@ export default function ObservabilityPage() {
                   </Table>
                 )}
                 <div className="text-[10px] text-muted-foreground mt-2">
-                  OK &lt;1% · Warning &lt;5% · Critical ≥5%. Status “n/a” quando ainda não há eventos shadow.
+                  Legacy = efeito colateral real do fluxo antigo (ex.: suvsign → activities "Documento assinado%"). Shadow = inserts em integration_inbound_events com shadow_mode=true. OK &lt;1% · Warning &lt;5% · Critical ≥5%.
                 </div>
               </CardContent>
             </Card>
@@ -1043,7 +1107,7 @@ export default function ObservabilityPage() {
                     </TableHeader>
                     <TableBody>
                       {inboundEvents.map((e) => (
-                        <TableRow key={e.id} className="cursor-pointer" onClick={() => { setDrillRow(e); setDrillTitle('Inbound event'); }}>
+                        <TableRow key={e.id} className="cursor-pointer" onClick={() => openInboundDrill(e)}>
                           <TableCell className="whitespace-nowrap text-xs">{fmtRelative(e.received_at)}</TableCell>
                           <TableCell className="text-xs">{e.integration_slug}</TableCell>
                           <TableCell className="text-xs">{e.source_event || '—'}</TableCell>
@@ -1053,7 +1117,7 @@ export default function ObservabilityPage() {
                           <TableCell className="text-xs">{e.retry_count ?? 0}</TableCell>
                           <TableCell className="font-mono text-xs">{e.trace_id?.slice(0, 8) || '—'}</TableCell>
                           <TableCell className="font-mono text-xs">{e.external_id?.slice(0, 12) || '—'}</TableCell>
-                          <TableCell className="font-mono text-xs">{e.organization_id?.slice(0, 8) || '—'}</TableCell>
+                          <TableCell className="font-mono text-xs">{e.organization_id ? e.organization_id.slice(0, 8) : <span className="text-amber-600">unknown</span>}</TableCell>
                           <TableCell className="max-w-xs truncate text-xs text-destructive">{e.process_error || ''}</TableCell>
                         </TableRow>
                       ))}
@@ -1082,10 +1146,12 @@ export default function ObservabilityPage() {
                 tone={(outboxHealth?.dead_letter ?? 0) > 0 ? 'warning' : 'success'} />
               <StatCard label="Success 24h" value={outboxHealth?.success_24h ?? '—'}
                 hint={`failed: ${outboxHealth?.failed_24h ?? 0}`} tone="success" />
-              <StatCard label="p50 latency" value={fmtLatency(p50(outboxLatencies))}
-                hint={outboxLatencies.length === 0 ? 'sem success no período' : `n=${outboxLatencies.length}`} />
-              <StatCard label="p95 latency" value={fmtLatency(p95(outboxLatencies))}
-                hint={outboxLatencies.length === 0 ? 'sem success no período' : `n=${outboxLatencies.length}`} />
+              <StatCard label="p50 latency"
+                value={outboxLatencies.length === 0 ? <span className="text-muted-foreground text-base">dispatcher inativo</span> : fmtLatency(p50(outboxLatencies))}
+                hint={outboxLatencies.length === 0 ? 'sem jobs success com event publish_at na janela' : `n=${outboxLatencies.length}`} />
+              <StatCard label="p95 latency"
+                value={outboxLatencies.length === 0 ? <span className="text-muted-foreground text-base">dispatcher inativo</span> : fmtLatency(p95(outboxLatencies))}
+                hint={outboxLatencies.length === 0 ? 'sem jobs success com event publish_at na janela' : `n=${outboxLatencies.length}`} />
               <StatCard label="Subscriptions"
                 value={`${outboxHealth?.subscriptions_active ?? 0} / ${(outboxHealth?.subscriptions_active ?? 0) + (outboxHealth?.subscriptions_paused ?? 0)}`}
                 hint="ativas / total" />
@@ -1174,14 +1240,14 @@ export default function ObservabilityPage() {
                     </TableHeader>
                     <TableBody>
                       {jobs.map((j) => (
-                        <TableRow key={j.id} className="cursor-pointer" onClick={() => { setDrillRow(j); setDrillTitle('Outbox job'); }}>
+                        <TableRow key={j.id} className="cursor-pointer" onClick={() => openJobDrill(j)}>
                           <TableCell className="whitespace-nowrap text-xs">{fmtRelative(j.created_at)}</TableCell>
                           <TableCell className="text-xs">{j.integration_slug}</TableCell>
                           <TableCell className="text-xs">{j.target_action}</TableCell>
                           <TableCell><Badge variant={statusVariant(j.status)}>{j.status}</Badge></TableCell>
                           <TableCell className="text-xs">{j.attempts ?? 0}/{j.max_attempts ?? '—'}</TableCell>
                           <TableCell className="text-xs">{j.next_run_at ? fmtRelative(j.next_run_at) : '—'}</TableCell>
-                          <TableCell className="font-mono text-xs">{j.organization_id?.slice(0, 8) || '—'}</TableCell>
+                          <TableCell className="font-mono text-xs">{j.organization_id ? j.organization_id.slice(0, 8) : <span className="text-amber-600">unknown</span>}</TableCell>
                           <TableCell className="font-mono text-xs">{j.idempotency_key?.slice(0, 12) || '—'}</TableCell>
                           <TableCell className="max-w-xs truncate text-xs text-destructive">{j.last_error || ''}</TableCell>
                         </TableRow>
@@ -1271,11 +1337,14 @@ export default function ObservabilityPage() {
 
       {/* Drill-down modal */}
       <Dialog open={!!drillRow} onOpenChange={(o) => !o && setDrillRow(null)}>
-        <DialogContent className="max-w-3xl max-h-[80vh] overflow-auto">
-          <DialogHeader><DialogTitle>{drillTitle}</DialogTitle></DialogHeader>
-          <pre className="text-xs whitespace-pre-wrap break-all bg-muted p-3 rounded">
-            {drillRow ? JSON.stringify(drillRow, null, 2) : ''}
-          </pre>
+        <DialogContent className="max-w-4xl max-h-[85vh] overflow-auto">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              {drillTitle}
+              {drillLoading && <span className="text-[10px] text-muted-foreground font-mono">carregando payload…</span>}
+            </DialogTitle>
+          </DialogHeader>
+          {drillRow && <DrillDownView row={drillRow} />}
         </DialogContent>
       </Dialog>
     </AdminLayout>
@@ -1314,7 +1383,7 @@ function HealthPill({ level }: { level: 'healthy' | 'warning' | 'critical' }) {
 
 function EventFlagBadges({ e }: { e: any }) {
   const flags: { label: string; cls: string }[] = [];
-  if (e.shadow_mode === true) flags.push({ label: 'shadow', cls: 'bg-indigo-500/15 text-indigo-600 border-indigo-500/30' });
+  if (e.shadow_mode === true) flags.push({ label: 'ingest_only', cls: 'bg-indigo-500/15 text-indigo-600 border-indigo-500/30' });
   if (e.process_status === 'duplicate_ignored') flags.push({ label: 'duplicate', cls: 'bg-amber-500/15 text-amber-600 border-amber-500/30' });
   if (e.signature_valid === false) flags.push({ label: 'sig_invalid', cls: 'bg-destructive/15 text-destructive border-destructive/30' });
   if ((e.replay_count ?? 0) > 0) flags.push({ label: 'replayed', cls: 'bg-sky-500/15 text-sky-600 border-sky-500/30' });
@@ -1334,9 +1403,11 @@ function EventFlagBadges({ e }: { e: any }) {
 function TimelineSparkChart({
   buckets,
 }: {
-  buckets: { ts: number; ingest: number; sig_fail: number; duplicates: number; ingest_err: number; latencies: number[] }[];
+  buckets: { ts: number; ingest: number; sig_fail: number; duplicates: number; ingest_err: number; retries: number; dlq: number; latencies: number[] }[];
 }) {
-  const max = Math.max(1, ...buckets.map((b) => Math.max(b.ingest, b.sig_fail, b.duplicates, b.ingest_err)));
+  const max = Math.max(1, ...buckets.map((b) =>
+    Math.max(b.ingest, b.sig_fail, b.duplicates, b.ingest_err, b.retries, b.dlq)
+  ));
   const W = 800;
   const H = 120;
   const step = buckets.length > 1 ? W / (buckets.length - 1) : 0;
@@ -1360,6 +1431,8 @@ function TimelineSparkChart({
     { k: 'sig_fail', label: 'sig failures', color: 'hsl(0 84% 60%)' },
     { k: 'duplicates', label: 'duplicates', color: 'hsl(38 92% 50%)' },
     { k: 'ingest_err', label: 'ingest errors', color: 'hsl(280 70% 55%)' },
+    { k: 'retries', label: 'retries', color: 'hsl(199 89% 48%)' },
+    { k: 'dlq', label: 'DLQ', color: 'hsl(340 82% 52%)' },
   ];
 
   return (
@@ -1385,6 +1458,76 @@ function TimelineSparkChart({
         <span>{buckets[Math.floor(buckets.length / 2)] ? fmtBucketTs(buckets[Math.floor(buckets.length / 2)].ts) : ''}</span>
         <span>{buckets[buckets.length - 1] ? fmtBucketTs(buckets[buckets.length - 1].ts) : ''}</span>
       </div>
+    </div>
+  );
+}
+
+// ------------------------------------------------------------------
+// Drill-down structured view
+// ------------------------------------------------------------------
+function DrillDownView({ row }: { row: any }) {
+  const meta: [string, any][] = [
+    ['id', row.id],
+    ['trace_id', row.trace_id],
+    ['organization_id', row.organization_id ?? <span className="text-amber-600">unknown</span>],
+    ['integration_slug', row.integration_slug],
+    ['source_event / target_action', row.source_event ?? row.target_action],
+    ['external_id', row.external_id],
+    ['idempotency_key', row.idempotency_key],
+    ['handler_key', row.handler_key],
+    ['process_status / status', row.process_status ?? row.status],
+    ['signature_valid', String(row.signature_valid ?? '—')],
+    ['shadow_mode (=ingest_only)', String(row.shadow_mode ?? '—')],
+    ['retry_count / attempts', row.retry_count ?? row.attempts ?? 0],
+    ['replay_count', row.replay_count ?? 0],
+    ['max_attempts', row.max_attempts],
+    ['received_at / created_at', row.received_at ?? row.created_at],
+    ['claimed_at / started_at', row.claimed_at ?? row.started_at],
+    ['processed_at / completed_at', row.processed_at ?? row.completed_at],
+    ['next_run_at', row.next_run_at],
+    ['expires_at', row.expires_at],
+    ['process_error / last_error', row.process_error ?? row.last_error],
+  ];
+  return (
+    <div className="space-y-4 text-xs">
+      <div className="grid grid-cols-2 gap-x-4 gap-y-1 font-mono">
+        {meta.map(([k, v]) => (
+          <div key={String(k)} className="flex gap-2 border-b border-border/40 py-1">
+            <span className="text-muted-foreground min-w-[180px]">{k}</span>
+            <span className="break-all">{v == null || v === '' ? <span className="text-muted-foreground">—</span> : v}</span>
+          </div>
+        ))}
+      </div>
+      {row.raw_headers && (
+        <details open>
+          <summary className="cursor-pointer text-muted-foreground uppercase text-[10px] tracking-wide">headers</summary>
+          <pre className="text-[11px] whitespace-pre-wrap break-all bg-muted p-3 rounded mt-1">
+            {JSON.stringify(row.raw_headers, null, 2)}
+          </pre>
+        </details>
+      )}
+      {row.raw_payload !== undefined && (
+        <details open>
+          <summary className="cursor-pointer text-muted-foreground uppercase text-[10px] tracking-wide">payload</summary>
+          <pre className="text-[11px] whitespace-pre-wrap break-all bg-muted p-3 rounded mt-1">
+            {JSON.stringify(row.raw_payload, null, 2)}
+          </pre>
+        </details>
+      )}
+      {(row.payload !== undefined || row.external_response !== undefined) && (
+        <details>
+          <summary className="cursor-pointer text-muted-foreground uppercase text-[10px] tracking-wide">job payload / response</summary>
+          <pre className="text-[11px] whitespace-pre-wrap break-all bg-muted p-3 rounded mt-1">
+            {JSON.stringify({ payload: row.payload, external_response: row.external_response }, null, 2)}
+          </pre>
+        </details>
+      )}
+      <details>
+        <summary className="cursor-pointer text-muted-foreground uppercase text-[10px] tracking-wide">raw row (all columns)</summary>
+        <pre className="text-[11px] whitespace-pre-wrap break-all bg-muted p-3 rounded mt-1">
+          {JSON.stringify(row, null, 2)}
+        </pre>
+      </details>
     </div>
   );
 }
