@@ -1403,9 +1403,11 @@ function EventFlagBadges({ e }: { e: any }) {
 function TimelineSparkChart({
   buckets,
 }: {
-  buckets: { ts: number; ingest: number; sig_fail: number; duplicates: number; ingest_err: number; latencies: number[] }[];
+  buckets: { ts: number; ingest: number; sig_fail: number; duplicates: number; ingest_err: number; retries: number; dlq: number; latencies: number[] }[];
 }) {
-  const max = Math.max(1, ...buckets.map((b) => Math.max(b.ingest, b.sig_fail, b.duplicates, b.ingest_err)));
+  const max = Math.max(1, ...buckets.map((b) =>
+    Math.max(b.ingest, b.sig_fail, b.duplicates, b.ingest_err, b.retries, b.dlq)
+  ));
   const W = 800;
   const H = 120;
   const step = buckets.length > 1 ? W / (buckets.length - 1) : 0;
@@ -1429,6 +1431,8 @@ function TimelineSparkChart({
     { k: 'sig_fail', label: 'sig failures', color: 'hsl(0 84% 60%)' },
     { k: 'duplicates', label: 'duplicates', color: 'hsl(38 92% 50%)' },
     { k: 'ingest_err', label: 'ingest errors', color: 'hsl(280 70% 55%)' },
+    { k: 'retries', label: 'retries', color: 'hsl(199 89% 48%)' },
+    { k: 'dlq', label: 'DLQ', color: 'hsl(340 82% 52%)' },
   ];
 
   return (
@@ -1454,6 +1458,76 @@ function TimelineSparkChart({
         <span>{buckets[Math.floor(buckets.length / 2)] ? fmtBucketTs(buckets[Math.floor(buckets.length / 2)].ts) : ''}</span>
         <span>{buckets[buckets.length - 1] ? fmtBucketTs(buckets[buckets.length - 1].ts) : ''}</span>
       </div>
+    </div>
+  );
+}
+
+// ------------------------------------------------------------------
+// Drill-down structured view
+// ------------------------------------------------------------------
+function DrillDownView({ row }: { row: any }) {
+  const meta: [string, any][] = [
+    ['id', row.id],
+    ['trace_id', row.trace_id],
+    ['organization_id', row.organization_id ?? <span className="text-amber-600">unknown</span>],
+    ['integration_slug', row.integration_slug],
+    ['source_event / target_action', row.source_event ?? row.target_action],
+    ['external_id', row.external_id],
+    ['idempotency_key', row.idempotency_key],
+    ['handler_key', row.handler_key],
+    ['process_status / status', row.process_status ?? row.status],
+    ['signature_valid', String(row.signature_valid ?? '—')],
+    ['shadow_mode (=ingest_only)', String(row.shadow_mode ?? '—')],
+    ['retry_count / attempts', row.retry_count ?? row.attempts ?? 0],
+    ['replay_count', row.replay_count ?? 0],
+    ['max_attempts', row.max_attempts],
+    ['received_at / created_at', row.received_at ?? row.created_at],
+    ['claimed_at / started_at', row.claimed_at ?? row.started_at],
+    ['processed_at / completed_at', row.processed_at ?? row.completed_at],
+    ['next_run_at', row.next_run_at],
+    ['expires_at', row.expires_at],
+    ['process_error / last_error', row.process_error ?? row.last_error],
+  ];
+  return (
+    <div className="space-y-4 text-xs">
+      <div className="grid grid-cols-2 gap-x-4 gap-y-1 font-mono">
+        {meta.map(([k, v]) => (
+          <div key={String(k)} className="flex gap-2 border-b border-border/40 py-1">
+            <span className="text-muted-foreground min-w-[180px]">{k}</span>
+            <span className="break-all">{v == null || v === '' ? <span className="text-muted-foreground">—</span> : v}</span>
+          </div>
+        ))}
+      </div>
+      {row.raw_headers && (
+        <details open>
+          <summary className="cursor-pointer text-muted-foreground uppercase text-[10px] tracking-wide">headers</summary>
+          <pre className="text-[11px] whitespace-pre-wrap break-all bg-muted p-3 rounded mt-1">
+            {JSON.stringify(row.raw_headers, null, 2)}
+          </pre>
+        </details>
+      )}
+      {row.raw_payload !== undefined && (
+        <details open>
+          <summary className="cursor-pointer text-muted-foreground uppercase text-[10px] tracking-wide">payload</summary>
+          <pre className="text-[11px] whitespace-pre-wrap break-all bg-muted p-3 rounded mt-1">
+            {JSON.stringify(row.raw_payload, null, 2)}
+          </pre>
+        </details>
+      )}
+      {(row.payload !== undefined || row.external_response !== undefined) && (
+        <details>
+          <summary className="cursor-pointer text-muted-foreground uppercase text-[10px] tracking-wide">job payload / response</summary>
+          <pre className="text-[11px] whitespace-pre-wrap break-all bg-muted p-3 rounded mt-1">
+            {JSON.stringify({ payload: row.payload, external_response: row.external_response }, null, 2)}
+          </pre>
+        </details>
+      )}
+      <details>
+        <summary className="cursor-pointer text-muted-foreground uppercase text-[10px] tracking-wide">raw row (all columns)</summary>
+        <pre className="text-[11px] whitespace-pre-wrap break-all bg-muted p-3 rounded mt-1">
+          {JSON.stringify(row, null, 2)}
+        </pre>
+      </details>
     </div>
   );
 }
