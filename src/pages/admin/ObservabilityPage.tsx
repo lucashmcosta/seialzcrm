@@ -1132,6 +1132,144 @@ export default function ObservabilityPage() {
               </CardContent>
             </Card>
 
+            {/* Coverage by provider (org / trace / signature) */}
+            <Card noAnimation>
+              <CardHeader className="pb-2">
+                <CardTitle className="text-sm">Metadata coverage por provider ({windowSel})</CardTitle>
+              </CardHeader>
+              <CardContent>
+                {coverageByProvider.length === 0 ? (
+                  <div className="text-xs text-muted-foreground">Sem dados na janela.</div>
+                ) : (
+                  <Table>
+                    <TableHeader>
+                      <TableRow>
+                        <TableHead>Provider</TableHead>
+                        <TableHead className="text-right">Eventos</TableHead>
+                        <TableHead className="text-right">org_id %</TableHead>
+                        <TableHead className="text-right">trace_id %</TableHead>
+                        <TableHead className="text-right">signature_valid %</TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {coverageByProvider.map((r) => (
+                        <TableRow key={r.provider}>
+                          <TableCell className="text-xs">{r.provider}</TableCell>
+                          <TableCell className="text-right font-mono text-xs">{r.total}</TableCell>
+                          <TableCell className="text-right font-mono text-xs">
+                            <span className={r.org_pct < 50 ? 'text-destructive' : r.org_pct < 80 ? 'text-amber-600' : ''}>{r.org_pct.toFixed(1)}%</span>
+                          </TableCell>
+                          <TableCell className="text-right font-mono text-xs">
+                            <span className={r.trace_pct < 80 ? 'text-amber-600' : ''}>{r.trace_pct.toFixed(1)}%</span>
+                          </TableCell>
+                          <TableCell className="text-right font-mono text-xs">
+                            <span className={r.sig_pct < 80 ? 'text-amber-600' : ''}>{r.sig_pct.toFixed(1)}%</span>
+                          </TableCell>
+                        </TableRow>
+                      ))}
+                    </TableBody>
+                  </Table>
+                )}
+              </CardContent>
+            </Card>
+
+            <div className="grid md:grid-cols-2 gap-4">
+              {/* Unknown org analysis (24h) */}
+              <Card noAnimation>
+                <CardHeader className="pb-2">
+                  <CardTitle className="text-sm">Unknown organization_id (24h)</CardTitle>
+                </CardHeader>
+                <CardContent>
+                  <div className="flex items-baseline gap-4 mb-3">
+                    <div className="text-2xl font-mono">{unknownOrg.total}</div>
+                    <div className="text-xs text-muted-foreground">{unknownOrg.pct.toFixed(2)}% do total 24h</div>
+                  </div>
+                  {unknownOrg.byProvider.length === 0 ? (
+                    <div className="text-xs text-muted-foreground">Nenhum evento sem organization_id.</div>
+                  ) : (
+                    <div className="space-y-1 text-xs">
+                      {unknownOrg.byProvider.map((r) => (
+                        <div key={r.provider} className="flex justify-between">
+                          <Badge variant="outline">{r.provider}</Badge>
+                          <span className="font-mono">{r.count}</span>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </CardContent>
+              </Card>
+
+              {/* Status transitions */}
+              <Card noAnimation>
+                <CardHeader className="pb-2">
+                  <CardTitle className="text-sm">Status transitions ({windowSel})</CardTitle>
+                </CardHeader>
+                <CardContent>
+                  {statusTimeline.length === 0 ? (
+                    <div className="text-xs text-muted-foreground">Sem dados.</div>
+                  ) : (
+                    <div className="flex flex-wrap items-center gap-2 text-xs">
+                      {statusTimeline.map((s, i) => (
+                        <span key={s.status} className="flex items-center gap-1">
+                          <Badge variant={statusVariant(s.status)}>{s.status}</Badge>
+                          <span className="font-mono text-muted-foreground">{s.count}</span>
+                          {i < statusTimeline.length - 1 && <span className="text-muted-foreground">→</span>}
+                        </span>
+                      ))}
+                    </div>
+                  )}
+                  <div className="text-[10px] text-muted-foreground mt-2">
+                    Canônico: received → processing → retry → processed | dead_letter | expired → archived
+                  </div>
+                </CardContent>
+              </Card>
+            </div>
+
+            {/* Provider maturity score */}
+            <Card noAnimation>
+              <CardHeader className="pb-2">
+                <CardTitle className="text-sm">Provider maturity score ({windowSel})</CardTitle>
+              </CardHeader>
+              <CardContent>
+                {maturityRows.length === 0 ? (
+                  <div className="text-xs text-muted-foreground">Sem dados na janela.</div>
+                ) : (
+                  <Table>
+                    <TableHeader>
+                      <TableRow>
+                        <TableHead>Provider</TableHead>
+                        <TableHead className="text-right">org%</TableHead>
+                        <TableHead className="text-right">trace%</TableHead>
+                        <TableHead className="text-right">sig%</TableHead>
+                        <TableHead className="text-right">retry%</TableHead>
+                        <TableHead className="text-right">DLQ%</TableHead>
+                        <TableHead className="text-right">Score</TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {maturityRows.map((m) => (
+                        <TableRow key={m.provider}>
+                          <TableCell className="text-xs">{m.provider}</TableCell>
+                          <TableCell className="text-right font-mono text-xs">{m.org.toFixed(0)}</TableCell>
+                          <TableCell className="text-right font-mono text-xs">{m.trace.toFixed(0)}</TableCell>
+                          <TableCell className="text-right font-mono text-xs">{m.sig.toFixed(0)}</TableCell>
+                          <TableCell className="text-right font-mono text-xs">{m.retry_rate.toFixed(1)}</TableCell>
+                          <TableCell className="text-right font-mono text-xs">{m.dlq_rate.toFixed(1)}</TableCell>
+                          <TableCell className="text-right">
+                            {m.score >= 80 ? <Badge className="bg-emerald-500 hover:bg-emerald-500">{m.score}</Badge>
+                              : m.score >= 50 ? <Badge className="bg-amber-500 hover:bg-amber-500">{m.score}</Badge>
+                              : <Badge variant="destructive">{m.score}</Badge>}
+                          </TableCell>
+                        </TableRow>
+                      ))}
+                    </TableBody>
+                  </Table>
+                )}
+                <div className="text-[10px] text-muted-foreground mt-2">
+                  Score = 60% coverage (org+trace+sig) + 40% inverse(retry + 2·DLQ + ingest_err). Quanto maior, mais maduro o provider.
+                </div>
+              </CardContent>
+            </Card>
 
             <div className="grid md:grid-cols-2 gap-4">
               <Card noAnimation>
