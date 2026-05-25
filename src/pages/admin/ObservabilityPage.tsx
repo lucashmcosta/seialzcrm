@@ -208,14 +208,13 @@ function ProbeBadge({ probe }: { probe: Probe }) {
     : 'secondary';
   return (
     <div className="mt-2 text-[10px] font-mono leading-tight border-t pt-1 space-y-0.5">
-      <div className="flex items-center gap-1">
-        <Badge variant={tone as any} className="px-1 py-0 text-[9px]">
-          {probe.type}{probe.fallback_used ? '→fb' : ''}
-        </Badge>
+      <div className="flex items-center gap-1 flex-wrap">
+        <Badge variant={tone as any} className="px-1 py-0 text-[9px]">{probe.type}</Badge>
+        {probe.fallback_used && <Badge variant="outline" className="px-1 py-0 text-[9px]">fallback</Badge>}
         <span className="text-muted-foreground truncate">{probe.source}</span>
       </div>
       <div className="text-muted-foreground">
-        rows={probe.rows} · {probe.latency_ms}ms
+        rows={probe.rows} · {probe.latency_ms}ms · cache=miss
         {probe.window && ` · win=${probe.window}`}
       </div>
       {probe.filters && <div className="text-muted-foreground truncate">f: {probe.filters}</div>}
