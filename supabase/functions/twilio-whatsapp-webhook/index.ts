@@ -325,7 +325,15 @@ serve(async (req) => {
             .maybeSingle()
           const authToken = (integ?.config_values as any)?.auth_token as string | undefined
           if (!authToken) return
-          const fullUrl = req.url
+          // Reconstrói URL canônica que o Twilio assina (https + /functions/v1).
+          // req.url interno aparece como http://host/twilio-whatsapp-webhook/...
+          const parsed = new URL(req.url)
+          const proto = (req.headers.get('x-forwarded-proto') || 'https').split(',')[0].trim()
+          const host = (req.headers.get('x-forwarded-host') || req.headers.get('host') || parsed.host).split(',')[0].trim()
+          const pathPart = parsed.pathname.startsWith('/functions/v1/')
+            ? parsed.pathname
+            : `/functions/v1${parsed.pathname}`
+          const fullUrl = `${proto}://${host}${pathPart}${parsed.search}`
           const sortedKeys = Object.keys(params).sort()
           const concat = fullUrl + sortedKeys.map((k) => k + params[k]).join('')
           const key = await crypto.subtle.importKey(
