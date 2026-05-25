@@ -59,7 +59,11 @@ export function formatPhoneForCountry(phone: string, countryCode: string): strin
   
   // Remove o código do país se presente
   if (cleaned.startsWith(country.dialCode)) {
-    cleaned = cleaned.substring(country.dialCode.length);
+    const rest = cleaned.substring(country.dialCode.length);
+    // BR special case: only strip leading "55" if remainder is a valid local length (10 or 11).
+    if (country.code !== 'BR' || rest.length === 10 || rest.length === 11) {
+      cleaned = rest;
+    }
   }
   
   // Formata baseado no país
