@@ -1107,7 +1107,7 @@ export default function ObservabilityPage() {
                     </TableHeader>
                     <TableBody>
                       {inboundEvents.map((e) => (
-                        <TableRow key={e.id} className="cursor-pointer" onClick={() => { setDrillRow(e); setDrillTitle('Inbound event'); }}>
+                        <TableRow key={e.id} className="cursor-pointer" onClick={() => openInboundDrill(e)}>
                           <TableCell className="whitespace-nowrap text-xs">{fmtRelative(e.received_at)}</TableCell>
                           <TableCell className="text-xs">{e.integration_slug}</TableCell>
                           <TableCell className="text-xs">{e.source_event || '—'}</TableCell>
