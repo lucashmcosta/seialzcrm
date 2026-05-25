@@ -147,6 +147,11 @@ export function buildE164(localNumber: string, countryCode: string): string {
   
   // Se já começa com o código do país, não duplica
   if (cleaned.startsWith(country.dialCode)) {
+    // BR special case: "55" inicial pode ser DDD, não country code.
+    // Só tratar como country code se o comprimento total for válido (12 ou 13).
+    if (country.code === 'BR' && cleaned.length !== 12 && cleaned.length !== 13) {
+      return `+${country.dialCode}${cleaned}`;
+    }
     return `+${cleaned}`;
   }
   
