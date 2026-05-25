@@ -498,6 +498,7 @@ export default function ContactDetail() {
                 {contact.email && (
                   <p className="text-sm text-muted-foreground">{contact.email}</p>
                 )}
+                <LeadOriginBadge contact={contact} campaign={campaign} />
               </div>
             </div>
 
