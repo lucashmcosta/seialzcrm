@@ -670,7 +670,7 @@ export default function ObservabilityPage() {
   useEffect(() => {
     refresh();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [windowSel, providerFilter, statusFilter, orgFilter]);
+  }, [windowSel, providerFilter, statusFilter, orgFilter, quickFilter]);
 
   // Derived
   const inboundByStatus = useMemo(() => {
