@@ -216,6 +216,27 @@ Deno.serve(async (req) => {
   const document = payload.data?.document || {};
   const signatories = payload.data?.signatories || [];
 
+  // ============================================================
+  // Inbox v2 — shadow ingest (best-effort, NUNCA quebra legado)
+  // Executa apenas se inbox_v2.ingest.suvsign=true.
+  // shadow_mode=true garante que dispatcher v2 ignore.
+  // ============================================================
+  {
+    const rawHeaders: Record<string, string> = {};
+    req.headers.forEach((v, k) => { rawHeaders[k] = v; });
+    // Não aguardamos para não impactar latência do legado; falhas são logadas internamente.
+    shadowIngestSuvSign({
+      supabase,
+      req,
+      payload,
+      rawHeaders,
+      orgId,
+      signatureValid: true, // HMAC já validado acima (ou ausente quando connector_id não definido)
+    }).catch(() => {});
+  }
+
+
+
   // --- Download signed PDF ---
   const fileUrl = document.file_url;
   if (!fileUrl) {
