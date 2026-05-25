@@ -255,6 +255,19 @@ export default function ObservabilityPage() {
   const [inboundLatencies, setInboundLatencies] = useState<number[]>([]);
   const [inboundProcessedCount, setInboundProcessedCount] = useState<number>(0);
 
+  // Shadow / parity / timeline / quick filter
+  type QuickFilter = 'all' | 'shadow' | 'errors' | 'duplicates' | 'sig_invalid';
+  const [quickFilter, setQuickFilter] = useState<QuickFilter>('all');
+  const [parityRows, setParityRows] = useState<
+    { integration_slug: string; legacy: number; shadow: number; diff_abs: number; diff_pct: number | null; status: 'ok' | 'warning' | 'critical' | 'na' }[]
+  >([]);
+  const [timelineBuckets, setTimelineBuckets] = useState<
+    { ts: number; ingest: number; sig_fail: number; duplicates: number; ingest_err: number; latencies: number[] }[]
+  >([]);
+  const [duplicatesCount, setDuplicatesCount] = useState<number>(0);
+  const [shadowAttempts, setShadowAttempts] = useState<number>(0);
+  const [shadowFailures, setShadowFailures] = useState<number>(0);
+
   // Outbox state
   const [outboxHealth, setOutboxHealth] = useState<OutboxHealth | null>(null);
   const [outboxHealthErr, setOutboxHealthErr] = useState<string | null>(null);
