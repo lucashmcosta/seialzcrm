@@ -829,7 +829,116 @@ export default function ObservabilityPage() {
                 value={fmtLatency(p95(inboundLatencies))}
                 hint={inboundProcessedCount === 0 ? 'sem eventos processados' : `n=${inboundProcessedCount}`}
               />
+              <StatCard
+                label={`Duplicates ignored (${windowSel})`}
+                value={duplicatesCount}
+                hint="process_status=duplicate_ignored"
+                tone={duplicatesCount > 0 ? 'warning' : 'default'}
+                probeKey="inbound.sample" registry={registryRef.current} debug={debug}
+              />
+              <StatCard
+                label="Shadow insert success rate"
+                value={
+                  shadowAttempts === 0
+                    ? '—'
+                    : `${(((shadowAttempts - shadowFailures) / shadowAttempts) * 100).toFixed(2)}%`
+                }
+                hint={shadowAttempts === 0 ? 'sem inserts shadow ainda' : `${shadowAttempts - shadowFailures}/${shadowAttempts} ok`}
+                tone={
+                  shadowAttempts === 0 ? 'default'
+                  : shadowFailures === 0 ? 'success'
+                  : shadowFailures / shadowAttempts < 0.01 ? 'success'
+                  : shadowFailures / shadowAttempts < 0.05 ? 'warning' : 'critical'
+                }
+              />
             </div>
+
+            {/* Quick filters */}
+            <Card noAnimation>
+              <CardContent className="p-3 flex flex-wrap items-center gap-2">
+                <span className="text-[10px] uppercase tracking-wide text-muted-foreground mr-1">Quick filter:</span>
+                {(['all', 'shadow', 'errors', 'duplicates', 'sig_invalid'] as QuickFilter[]).map((f) => (
+                  <Button
+                    key={f}
+                    size="sm"
+                    variant={quickFilter === f ? 'default' : 'outline'}
+                    onClick={() => setQuickFilter(f)}
+                    className="h-7 text-xs"
+                  >
+                    {f === 'all' ? 'All' : `Only ${f.replace('_', ' ')}`}
+                  </Button>
+                ))}
+                {quickFilter !== 'all' && (
+                  <span className="text-[10px] text-muted-foreground ml-2">
+                    aplicado a “Eventos recentes” • janela {windowSel}
+                  </span>
+                )}
+              </CardContent>
+            </Card>
+
+            {/* Shadow parity */}
+            <Card noAnimation>
+              <CardHeader className="pb-2 flex flex-row justify-between items-center">
+                <CardTitle className="text-sm">Shadow parity ({windowSel})</CardTitle>
+                {debug && <ProbeMiniBadge probeKey="inbound.sample" registry={registryRef.current} />}
+              </CardHeader>
+              <CardContent>
+                {parityRows.length === 0 ? (
+                  <div className="text-xs text-muted-foreground">Sem dados na janela.</div>
+                ) : (
+                  <Table>
+                    <TableHeader>
+                      <TableRow>
+                        <TableHead>Provider</TableHead>
+                        <TableHead className="text-right">Legacy</TableHead>
+                        <TableHead className="text-right">Inbox v2 (shadow)</TableHead>
+                        <TableHead className="text-right">Diff abs</TableHead>
+                        <TableHead className="text-right">Diff %</TableHead>
+                        <TableHead>Status</TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {parityRows.map((r) => (
+                        <TableRow key={r.integration_slug}>
+                          <TableCell className="text-xs">{r.integration_slug}</TableCell>
+                          <TableCell className="text-right font-mono text-xs">{r.legacy}</TableCell>
+                          <TableCell className="text-right font-mono text-xs">{r.shadow}</TableCell>
+                          <TableCell className="text-right font-mono text-xs">{r.diff_abs}</TableCell>
+                          <TableCell className="text-right font-mono text-xs">{r.diff_pct == null ? '—' : `${r.diff_pct.toFixed(2)}%`}</TableCell>
+                          <TableCell>
+                            {r.status === 'ok' && <Badge className="bg-emerald-500 hover:bg-emerald-500">OK</Badge>}
+                            {r.status === 'warning' && <Badge className="bg-amber-500 hover:bg-amber-500">Warning</Badge>}
+                            {r.status === 'critical' && <Badge variant="destructive">Critical</Badge>}
+                            {r.status === 'na' && <Badge variant="outline">n/a</Badge>}
+                          </TableCell>
+                        </TableRow>
+                      ))}
+                    </TableBody>
+                  </Table>
+                )}
+                <div className="text-[10px] text-muted-foreground mt-2">
+                  OK &lt;1% · Warning &lt;5% · Critical ≥5%. Status “n/a” quando ainda não há eventos shadow.
+                </div>
+              </CardContent>
+            </Card>
+
+            {/* Timeline */}
+            <Card noAnimation>
+              <CardHeader className="pb-2 flex flex-row justify-between items-center">
+                <CardTitle className="text-sm">
+                  Timeline ({windowSel === '1h' ? 'por minuto' : windowSel === '24h' ? 'por hora' : 'por 6h'})
+                </CardTitle>
+                {debug && <ProbeMiniBadge probeKey="inbound.sample" registry={registryRef.current} />}
+              </CardHeader>
+              <CardContent>
+                {timelineBuckets.length === 0 ? (
+                  <div className="text-xs text-muted-foreground">Sem dados na janela.</div>
+                ) : (
+                  <TimelineSparkChart buckets={timelineBuckets} />
+                )}
+              </CardContent>
+            </Card>
+
 
             <div className="grid md:grid-cols-2 gap-4">
               <Card noAnimation>
