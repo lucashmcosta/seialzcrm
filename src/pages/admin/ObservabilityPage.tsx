@@ -1215,7 +1215,7 @@ export default function ObservabilityPage() {
                           <TableCell><Badge variant={statusVariant(j.status)}>{j.status}</Badge></TableCell>
                           <TableCell className="text-xs">{j.attempts ?? 0}/{j.max_attempts ?? '—'}</TableCell>
                           <TableCell className="text-xs">{j.next_run_at ? fmtRelative(j.next_run_at) : '—'}</TableCell>
-                          <TableCell className="font-mono text-xs">{j.organization_id?.slice(0, 8) || '—'}</TableCell>
+                          <TableCell className="font-mono text-xs">{j.organization_id ? j.organization_id.slice(0, 8) : <span className="text-amber-600">unknown</span>}</TableCell>
                           <TableCell className="font-mono text-xs">{j.idempotency_key?.slice(0, 12) || '—'}</TableCell>
                           <TableCell className="max-w-xs truncate text-xs text-destructive">{j.last_error || ''}</TableCell>
                         </TableRow>
