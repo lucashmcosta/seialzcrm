@@ -25,18 +25,23 @@ export const COUNTRIES: Country[] = [
  */
 export function detectCountryFromE164(phone: string): string {
   if (!phone) return 'BR';
-  
+
   const cleaned = phone.replace(/\D/g, '');
-  
+
   // Check each country's dial code (longer codes first to avoid false matches)
   const sortedCountries = [...COUNTRIES].sort((a, b) => b.dialCode.length - a.dialCode.length);
-  
+
   for (const country of sortedCountries) {
     if (cleaned.startsWith(country.dialCode)) {
+      // BR special case: dial code "55" collides with DDD 55.
+      // Only treat leading "55" as country code if total length matches E.164 BR (12 or 13 digits).
+      if (country.code === 'BR' && cleaned.length !== 12 && cleaned.length !== 13) {
+        continue;
+      }
       return country.code;
     }
   }
-  
+
   return 'BR'; // Default
 }
 
