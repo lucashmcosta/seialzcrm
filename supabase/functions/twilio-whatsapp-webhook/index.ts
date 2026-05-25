@@ -311,7 +311,7 @@ serve(async (req) => {
       console.error('[integration_inbound_events] exception:', rawErr)
     }
 
-    // Fire-and-forget: validar assinatura HMAC-SHA1 e atualizar a linha.
+    // Fire-and-forget: validar assinatura HMAC-SHA1 com múltiplos URLs candidatos (opção C).
     // Não bloqueia o webhook legacy.
     if (insertedEventId && twilioSignature) {
       ;(async () => {
