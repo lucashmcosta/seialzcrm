@@ -1445,7 +1445,7 @@ export default function ObservabilityPage() {
                           <TableCell className="text-xs">{e.retry_count ?? 0}</TableCell>
                           <TableCell className="font-mono text-xs">{e.trace_id?.slice(0, 8) || '—'}</TableCell>
                           <TableCell className="font-mono text-xs">{e.external_id?.slice(0, 12) || '—'}</TableCell>
-                          <TableCell className="font-mono text-xs">{e.organization_id ? e.organization_id.slice(0, 8) : <span className="text-amber-600">unknown</span>}</TableCell>
+                          <TableCell><OrgCell id={e.organization_id} orgsMap={orgsMap} reason={e.process_error ?? null} /></TableCell>
                           <TableCell className="max-w-xs truncate text-xs text-destructive">{e.process_error || ''}</TableCell>
                         </TableRow>
                       ))}
