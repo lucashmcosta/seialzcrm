@@ -360,6 +360,8 @@ serve(async (req) => {
           utm_source: payload.utm_source || null,
           utm_medium: payload.utm_medium || null,
           utm_campaign: payload.utm_campaign || null,
+          utm_content: payload.utm_content || null,
+          utm_term: payload.utm_term || null,
           lifecycle_stage: 'lead',
         })
         .select('id')
