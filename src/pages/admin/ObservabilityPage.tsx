@@ -863,6 +863,24 @@ export default function ObservabilityPage() {
     }
   }, [fetchInbox, fetchOutbox]);
 
+  // Load organizations once (for name/slug display + searchable filter)
+  useEffect(() => {
+    (async () => {
+      const { data } = await (supabase as any)
+        .from('organizations')
+        .select('id, name, slug')
+        .order('name', { ascending: true })
+        .limit(2000);
+      if (data) setOrgs(data as any);
+    })();
+  }, []);
+
+  const orgsMap = useMemo(() => {
+    const m = new Map<string, { id: string; name: string; slug: string | null }>();
+    orgs.forEach((o) => m.set(o.id, o));
+    return m;
+  }, [orgs]);
+
   useEffect(() => {
     refresh();
     // eslint-disable-next-line react-hooks/exhaustive-deps
