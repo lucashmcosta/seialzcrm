@@ -991,8 +991,46 @@ export default function ObservabilityPage() {
                 </SelectContent>
               </Select>
             </Field>
-            <Field label="organization_id">
-              <Input value={orgFilter} onChange={(e) => setOrgFilter(e.target.value)} placeholder="uuid" className="w-72" />
+            <Field label="Organização">
+              <Popover open={orgPickerOpen} onOpenChange={setOrgPickerOpen}>
+                <PopoverTrigger asChild>
+                  <Button variant="outline" role="combobox" className="w-72 justify-between font-normal">
+                    {orgFilter
+                      ? (orgsMap.get(orgFilter)?.name ?? <span className="font-mono text-xs">{orgFilter.slice(0, 8)}…</span>)
+                      : <span className="text-muted-foreground">Todas as organizações</span>}
+                    <ChevronsUpDown className="ml-2 h-3.5 w-3.5 opacity-50" />
+                  </Button>
+                </PopoverTrigger>
+                <PopoverContent className="w-80 p-0" align="start">
+                  <Command>
+                    <CommandInput placeholder="Buscar por nome, slug ou UUID…" />
+                    <CommandList>
+                      <CommandEmpty>Nenhuma organização.</CommandEmpty>
+                      <CommandGroup>
+                        <CommandItem value="__all__" onSelect={() => { setOrgFilter(''); setOrgPickerOpen(false); }}>
+                          <Check className={`mr-2 h-3.5 w-3.5 ${orgFilter === '' ? 'opacity-100' : 'opacity-0'}`} />
+                          Todas as organizações
+                        </CommandItem>
+                        {orgs.map((o) => (
+                          <CommandItem
+                            key={o.id}
+                            value={`${o.name} ${o.slug ?? ''} ${o.id}`}
+                            onSelect={() => { setOrgFilter(o.id); setOrgPickerOpen(false); }}
+                          >
+                            <Check className={`mr-2 h-3.5 w-3.5 ${orgFilter === o.id ? 'opacity-100' : 'opacity-0'}`} />
+                            <div className="flex flex-col">
+                              <span className="text-sm">{o.name}</span>
+                              <span className="text-[10px] font-mono text-muted-foreground">
+                                {o.slug ?? '—'} · {o.id.slice(0, 8)}
+                              </span>
+                            </div>
+                          </CommandItem>
+                        ))}
+                      </CommandGroup>
+                    </CommandList>
+                  </Command>
+                </PopoverContent>
+              </Popover>
             </Field>
             <Field label="Buscar trace_id / external_id / idempotency_key">
               <div className="flex gap-2">
