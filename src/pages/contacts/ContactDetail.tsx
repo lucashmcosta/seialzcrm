@@ -115,6 +115,18 @@ export default function ContactDetail() {
 
     setContact(data);
 
+    // Fetch linked marketing campaign for origin badge
+    if (data?.marketing_campaign_id) {
+      const { data: mc } = await supabase
+        .from('marketing_campaigns')
+        .select('id, display_name, ad_name, adset_name, campaign_name')
+        .eq('id', data.marketing_campaign_id)
+        .maybeSingle();
+      setCampaign(mc);
+    } else {
+      setCampaign(null);
+    }
+
     // Fetch created_by / updated_by names
     const byIds = [data?.created_by, data?.updated_by].filter(Boolean) as string[];
     if (byIds.length > 0) {
