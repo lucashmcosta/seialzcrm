@@ -376,6 +376,22 @@ serve(async (req) => {
       contactId = contact.id;
     }
 
+    // Conservative marketing attribution: only attributes on unique match,
+    // otherwise logs to marketing_attribution_ambiguities for manual review.
+    try {
+      const { data: attribResult, error: attribError } = await supabase.rpc(
+        'fn_log_marketing_attribution_attempt',
+        { _org_id: organizationId, _contact_id: contactId }
+      );
+      if (attribError) {
+        console.warn('marketing_attribution_attempt error:', attribError.message);
+      } else {
+        console.log(`marketing_attribution_attempt: ${attribResult}`);
+      }
+    } catch (e) {
+      console.warn('marketing_attribution_attempt threw:', (e as Error).message);
+    }
+
     let opportunityId: string | null = null;
     let activityId: string | null = null;
 
