@@ -111,7 +111,7 @@ export function SeialzOpportunityCard({
               </span>
             ))}
             {overflowCount > 0 && (
-              <span className="font-data text-[8px] uppercase tracking-wider px-1.5 py-[2px] rounded border border-[hsl(var(--sz-border))] text-muted-foreground bg-[hsl(var(--sz-bg3))] leading-none">
+              <span className="font-data text-[8px] uppercase tracking-wider px-1.5 py-[2px] rounded border border-[hsl(var(--sz-border))] text-muted-foreground bg-[hsl(var(--sz-bg3))] leading-none max-w-full break-all whitespace-normal text-left">
                 +{overflowCount}
               </span>
             )}
