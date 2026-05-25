@@ -92,7 +92,7 @@ export function OpportunityCard({
             {visibleTags.map((tag) => (
               <span
                 key={tag.id}
-                className="inline-flex items-center rounded-full border px-2 py-0.5 text-[10px] font-medium leading-tight"
+                className="inline-flex items-center max-w-full rounded-full border px-2 py-0.5 text-[10px] font-medium leading-tight break-all whitespace-normal text-left"
                 style={{
                   backgroundColor: tag.color ? `${tag.color}20` : undefined,
                   color: tag.color || undefined,
@@ -103,7 +103,7 @@ export function OpportunityCard({
               </span>
             ))}
             {overflowCount > 0 && (
-              <span className="inline-flex items-center rounded-full border border-border px-2 py-0.5 text-[10px] font-medium leading-tight text-muted-foreground">
+              <span className="inline-flex items-center max-w-full rounded-full border border-border px-2 py-0.5 text-[10px] font-medium leading-tight text-muted-foreground break-all whitespace-normal text-left">
                 +{overflowCount}
               </span>
             )}
