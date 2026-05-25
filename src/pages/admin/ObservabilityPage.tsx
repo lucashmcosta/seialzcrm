@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState, useCallback } from 'react';
+import { useEffect, useMemo, useState, useCallback, useRef } from 'react';
 import { AdminLayout } from '@/components/admin/AdminLayout';
 import { supabase } from '@/integrations/supabase/client';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -6,29 +6,16 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
+import { Switch } from '@/components/ui/switch';
 import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
+  Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from '@/components/ui/select';
 import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
+  Table, TableBody, TableCell, TableHead, TableHeader, TableRow,
 } from '@/components/ui/table';
-import {
-  Dialog,
-  DialogContent,
-  DialogHeader,
-  DialogTitle,
-} from '@/components/ui/dialog';
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Skeleton } from '@/components/ui/skeleton';
-import { RefreshCw, AlertTriangle, CheckCircle2, AlertOctagon } from 'lucide-react';
+import { RefreshCw, AlertTriangle, CheckCircle2, AlertOctagon, Bug } from 'lucide-react';
 
 // ------------------------------------------------------------------
 // Types
@@ -41,7 +28,6 @@ const WINDOW_TO_INTERVAL: Record<Window, string> = {
   '24h': '24 hours',
   '7d': '7 days',
 };
-
 const WINDOW_TO_MS: Record<Window, number> = {
   '1h': 60 * 60 * 1000,
   '24h': 24 * 60 * 60 * 1000,
@@ -55,80 +41,87 @@ interface InboundHealthRow {
   avg_latency_sec: number | null;
   p95_latency_sec: number | null;
 }
-
 interface InboundEvent {
-  id: string;
-  received_at: string;
-  integration_slug: string;
-  source_event: string | null;
-  process_status: string;
-  shadow_mode: boolean | null;
-  signature_valid: boolean | null;
-  retry_count: number | null;
-  trace_id: string | null;
-  external_id: string | null;
-  organization_id: string | null;
-  process_error: string | null;
-  raw_payload?: any;
-  raw_headers?: any;
+  id: string; received_at: string; integration_slug: string;
+  source_event: string | null; process_status: string;
+  shadow_mode: boolean | null; signature_valid: boolean | null;
+  retry_count: number | null; trace_id: string | null;
+  external_id: string | null; organization_id: string | null;
+  process_error: string | null; processed_at?: string | null;
+  raw_payload?: any; raw_headers?: any;
 }
-
 interface IngestError {
-  id: string;
-  created_at: string;
-  integration_slug: string;
-  error_code: string | null;
-  error_message: string | null;
-  trace_id: string | null;
-  external_id: string | null;
+  id: string; created_at: string; integration_slug: string;
+  error_code: string | null; error_message: string | null;
+  trace_id: string | null; external_id: string | null;
 }
-
 interface OutboxHealth {
-  pending: number;
-  running: number;
-  running_stuck_5m: number;
-  failed: number;
-  dead_letter: number;
-  success_24h: number;
-  failed_24h: number;
-  subscriptions_active: number;
-  subscriptions_paused: number;
-  worker_last_run_at: string | null;
-  reaper_last_run_at: string | null;
+  pending: number; running: number; running_stuck_5m: number;
+  failed: number; dead_letter: number; success_24h: number; failed_24h: number;
+  subscriptions_active: number; subscriptions_paused: number;
+  worker_last_run_at: string | null; reaper_last_run_at: string | null;
   generated_at: string;
 }
-
 interface IntegrationJob {
-  id: string;
-  created_at: string;
-  integration_slug: string;
-  target_action: string;
-  status: string;
-  attempts: number | null;
-  max_attempts: number | null;
-  next_run_at: string | null;
-  organization_id: string | null;
-  last_error: string | null;
-  idempotency_key: string | null;
-  payload?: any;
-  external_response?: any;
+  id: string; created_at: string; integration_slug: string;
+  target_action: string; status: string; attempts: number | null;
+  max_attempts: number | null; next_run_at: string | null;
+  organization_id: string | null; last_error: string | null;
+  idempotency_key: string | null; payload?: any; external_response?: any;
 }
-
-interface IntegrationEvent {
-  id: string;
-  occurred_at: string;
-  event_type: string;
-  status: string;
-  organization_id: string | null;
-}
-
 interface Subscription {
-  id: string;
-  integration_slug: string;
-  event_type: string;
-  target_action: string;
-  is_active: boolean;
-  paused_until: string | null;
+  id: string; integration_slug: string; event_type: string;
+  target_action: string; is_active: boolean; paused_until: string | null;
+}
+
+// ------------------------------------------------------------------
+// Debug instrumentation
+// ------------------------------------------------------------------
+
+type ProbeStatus = 'ok' | 'empty' | 'error' | 'pending';
+interface Probe {
+  key: string;
+  label: string;
+  source: string;           // rpc / table name
+  type: 'rpc' | 'table' | 'rpc+fallback';
+  window?: string;
+  filters?: string;
+  rows: number;
+  latency_ms: number;
+  status: ProbeStatus;
+  fallback_used?: boolean;
+  error?: string;
+}
+
+class ProbeRegistry {
+  private map = new Map<string, Probe>();
+  set(p: Probe) { this.map.set(p.key, p); }
+  get all() { return Array.from(this.map.values()); }
+  clear() { this.map.clear(); }
+}
+
+async function instrument<T>(
+  registry: ProbeRegistry,
+  meta: Omit<Probe, 'rows' | 'latency_ms' | 'status'>,
+  fn: () => Promise<{ data: T | null; error: any; count?: number | null }>,
+): Promise<{ data: T | null; error: any; count?: number | null }> {
+  const t0 = performance.now();
+  try {
+    const r = await fn();
+    const ms = Math.round(performance.now() - t0);
+    const rows = r.count != null ? r.count : Array.isArray(r.data) ? r.data.length : (r.data ? 1 : 0);
+    registry.set({
+      ...meta,
+      rows,
+      latency_ms: ms,
+      status: r.error ? 'error' : rows === 0 ? 'empty' : 'ok',
+      error: r.error?.message,
+    });
+    return r;
+  } catch (e: any) {
+    registry.set({ ...meta, rows: 0, latency_ms: Math.round(performance.now() - t0), status: 'error', error: e.message });
+    return { data: null, error: e };
+  }
 }
 
 // ------------------------------------------------------------------
@@ -137,10 +130,8 @@ interface Subscription {
 
 function fmtTime(ts: string | null | undefined) {
   if (!ts) return '—';
-  const d = new Date(ts);
-  return d.toLocaleString();
+  return new Date(ts).toLocaleString();
 }
-
 function fmtRelative(ts: string | null | undefined) {
   if (!ts) return '—';
   const diff = Date.now() - new Date(ts).getTime();
@@ -150,41 +141,25 @@ function fmtRelative(ts: string | null | undefined) {
   if (s < 86400) return `${Math.floor(s / 3600)}h ago`;
   return `${Math.floor(s / 86400)}d ago`;
 }
-
 function statusVariant(status: string): 'default' | 'secondary' | 'destructive' | 'outline' {
   switch (status) {
-    case 'processed':
-    case 'success':
-      return 'default';
-    case 'received':
-    case 'pending':
-    case 'processing':
-    case 'running':
-      return 'secondary';
-    case 'retry':
-      return 'outline';
-    case 'dead_letter':
-    case 'failed':
-    case 'expired':
-      return 'destructive';
-    default:
-      return 'outline';
+    case 'processed': case 'success': return 'default';
+    case 'received': case 'pending': case 'processing': case 'running': return 'secondary';
+    case 'retry': return 'outline';
+    case 'dead_letter': case 'failed': case 'expired': return 'destructive';
+    default: return 'outline';
   }
 }
-
 function p95(values: number[]): number | null {
   if (!values.length) return null;
   const sorted = [...values].sort((a, b) => a - b);
-  const idx = Math.min(sorted.length - 1, Math.floor(sorted.length * 0.95));
-  return sorted[idx];
+  return sorted[Math.min(sorted.length - 1, Math.floor(sorted.length * 0.95))];
 }
-
 function p50(values: number[]): number | null {
   if (!values.length) return null;
   const sorted = [...values].sort((a, b) => a - b);
   return sorted[Math.floor(sorted.length * 0.5)];
 }
-
 function fmtLatency(sec: number | null): string {
   if (sec == null) return '—';
   if (sec < 1) return `${Math.round(sec * 1000)}ms`;
@@ -198,32 +173,54 @@ function fmtLatency(sec: number | null): string {
 // ------------------------------------------------------------------
 
 function StatCard({
-  label,
-  value,
-  hint,
-  tone = 'default',
+  label, value, hint, tone = 'default', probeKey, registry, debug,
 }: {
   label: string;
   value: React.ReactNode;
   hint?: string;
   tone?: 'default' | 'warning' | 'critical' | 'success';
+  probeKey?: string;
+  registry?: ProbeRegistry;
+  debug?: boolean;
 }) {
   const toneClass =
-    tone === 'critical'
-      ? 'text-destructive'
-      : tone === 'warning'
-      ? 'text-amber-500'
-      : tone === 'success'
-      ? 'text-emerald-500'
-      : 'text-foreground';
+    tone === 'critical' ? 'text-destructive'
+    : tone === 'warning' ? 'text-amber-500'
+    : tone === 'success' ? 'text-emerald-500'
+    : 'text-foreground';
+  const probe = debug && probeKey ? registry?.all.find((p) => p.key === probeKey) : undefined;
   return (
     <Card noAnimation>
       <CardContent className="p-4">
         <div className="text-xs text-muted-foreground uppercase tracking-wide">{label}</div>
         <div className={`text-2xl font-semibold mt-1 ${toneClass}`}>{value}</div>
         {hint && <div className="text-xs text-muted-foreground mt-1">{hint}</div>}
+        {probe && <ProbeBadge probe={probe} />}
       </CardContent>
     </Card>
+  );
+}
+
+function ProbeBadge({ probe }: { probe: Probe }) {
+  const tone =
+    probe.status === 'error' ? 'destructive'
+    : probe.status === 'empty' ? 'outline'
+    : 'secondary';
+  return (
+    <div className="mt-2 text-[10px] font-mono leading-tight border-t pt-1 space-y-0.5">
+      <div className="flex items-center gap-1">
+        <Badge variant={tone as any} className="px-1 py-0 text-[9px]">
+          {probe.type}{probe.fallback_used ? '→fb' : ''}
+        </Badge>
+        <span className="text-muted-foreground truncate">{probe.source}</span>
+      </div>
+      <div className="text-muted-foreground">
+        rows={probe.rows} · {probe.latency_ms}ms
+        {probe.window && ` · win=${probe.window}`}
+      </div>
+      {probe.filters && <div className="text-muted-foreground truncate">f: {probe.filters}</div>}
+      {probe.error && <div className="text-destructive truncate">err: {probe.error}</div>}
+    </div>
   );
 }
 
@@ -232,25 +229,31 @@ function StatCard({
 // ------------------------------------------------------------------
 
 export default function ObservabilityPage() {
-  const [tab, setTab] = useState<'inbox' | 'outbox'>('inbox');
+  const [tab, setTab] = useState<'inbox' | 'outbox' | 'debug'>('inbox');
   const [windowSel, setWindowSel] = useState<Window>('24h');
   const [providerFilter, setProviderFilter] = useState<string>('all');
   const [statusFilter, setStatusFilter] = useState<string>('all');
   const [orgFilter, setOrgFilter] = useState<string>('');
   const [search, setSearch] = useState<string>('');
   const [loading, setLoading] = useState(false);
+  const [debug, setDebug] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [lastUpdated, setLastUpdated] = useState<Date | null>(null);
 
+  const registryRef = useRef(new ProbeRegistry());
+  const [probesVersion, setProbesVersion] = useState(0);
+
   // Inbox state
-  const [inboundHealth1h, setInboundHealth1h] = useState<InboundHealthRow[]>([]);
   const [inboundHealthWin, setInboundHealthWin] = useState<InboundHealthRow[]>([]);
+  const [inboundHealth1h, setInboundHealth1h] = useState<InboundHealthRow[]>([]);
   const [inboundEvents, setInboundEvents] = useState<InboundEvent[]>([]);
   const [ingestErrors, setIngestErrors] = useState<IngestError[]>([]);
+  const [inboundTopErrors, setInboundTopErrors] = useState<{ error_code: string; message: string; count: number; last_seen: string }[]>([]);
   const [inboundStuck, setInboundStuck] = useState<number>(0);
   const [inboundShadow, setInboundShadow] = useState<number>(0);
   const [inboundSigFailures, setInboundSigFailures] = useState<number>(0);
   const [inboundLatencies, setInboundLatencies] = useState<number[]>([]);
+  const [inboundProcessedCount, setInboundProcessedCount] = useState<number>(0);
 
   // Outbox state
   const [outboxHealth, setOutboxHealth] = useState<OutboxHealth | null>(null);
@@ -262,278 +265,306 @@ export default function ObservabilityPage() {
   const [jobsCount24h, setJobsCount24h] = useState<number>(0);
   const [subscriptions, setSubscriptions] = useState<Subscription[]>([]);
   const [dlqByIntegration, setDlqByIntegration] = useState<
-    { integration_slug: string; target_action: string; count: number; last_error: string | null }[]
+    { integration_slug: string; target_action: string; count: number; last_error: string | null; last_error_at: string | null }[]
   >([]);
   const [outboxLatencies, setOutboxLatencies] = useState<number[]>([]);
-  const [topErrors, setTopErrors] = useState<{ message: string; count: number }[]>([]);
+  const [topErrors, setTopErrors] = useState<{ message: string; count: number; last_seen: string; sample_integration_slug: string }[]>([]);
 
   // Drill-down
   const [drillRow, setDrillRow] = useState<any>(null);
   const [drillTitle, setDrillTitle] = useState<string>('');
 
-  const sinceISO = useMemo(
-    () => new Date(Date.now() - WINDOW_TO_MS[windowSel]).toISOString(),
-    [windowSel],
-  );
+  const sinceISO = useMemo(() => new Date(Date.now() - WINDOW_TO_MS[windowSel]).toISOString(), [windowSel, lastUpdated]);
   const since1hISO = useMemo(() => new Date(Date.now() - 3600_000).toISOString(), [lastUpdated]);
   const since24hISO = useMemo(() => new Date(Date.now() - 86_400_000).toISOString(), [lastUpdated]);
 
   // ----------------------------------------------------------------
-  // Fetch
+  // Fetch INBOX
   // ----------------------------------------------------------------
-
   const fetchInbox = useCallback(async () => {
+    const reg = registryRef.current;
     const errors: string[] = [];
 
-    // Health summary (RPC) — 1h and selected window
-    try {
-      const { data: h1, error: e1 } = await (supabase as any).rpc('fn_inbound_health_summary', {
-        _window: '1 hour',
-      });
-      if (e1) throw e1;
-      setInboundHealth1h(h1 || []);
-    } catch (e: any) {
-      errors.push(`inbound_health_1h: ${e.message}`);
-      // Fallback: aggregate from table
-      const { data } = await (supabase as any)
-        .from('integration_inbound_events')
-        .select('integration_slug, process_status')
-        .gte('received_at', since1hISO)
-        .limit(5000);
-      const agg: Record<string, InboundHealthRow> = {};
-      (data || []).forEach((r: any) => {
-        const k = `${r.integration_slug}::${r.process_status}`;
-        if (!agg[k]) {
-          agg[k] = {
-            integration_slug: r.integration_slug,
-            status: r.process_status,
-            count: 0,
-            avg_latency_sec: null,
-            p95_latency_sec: null,
-          };
-        }
-        agg[k].count += 1;
-      });
-      setInboundHealth1h(Object.values(agg));
-    }
-
-    try {
-      const { data: hw, error: ew } = await (supabase as any).rpc('fn_inbound_health_summary', {
-        _window: WINDOW_TO_INTERVAL[windowSel],
-      });
-      if (ew) throw ew;
-      setInboundHealthWin(hw || []);
-    } catch (e: any) {
-      errors.push(`inbound_health_win: ${e.message}`);
-      setInboundHealthWin([]);
-    }
-
-    // Recent events list (filtered)
-    let q = (supabase as any)
-      .from('integration_inbound_events')
-      .select(
-        'id, received_at, integration_slug, source_event, process_status, shadow_mode, signature_valid, retry_count, trace_id, external_id, organization_id, process_error, processed_at',
-      )
-      .gte('received_at', sinceISO)
-      .order('received_at', { ascending: false })
-      .limit(100);
-
-    if (providerFilter !== 'all') q = q.eq('integration_slug', providerFilter);
-    if (statusFilter !== 'all') q = q.eq('process_status', statusFilter);
-    if (orgFilter) q = q.eq('organization_id', orgFilter);
-    if (search) {
-      const s = search.trim();
-      // Try trace_id / external_id matches
-      q = q.or(`trace_id.eq.${s},external_id.eq.${s}`);
-    }
-    const { data: evs, error: evErr } = await q;
-    if (evErr) errors.push(`events: ${evErr.message}`);
-    setInboundEvents(evs || []);
-
-    // Latencies for p50/p95 (processed only)
-    const lats: number[] = [];
-    (evs || []).forEach((e: any) => {
-      if (e.processed_at && e.received_at) {
-        const d = (new Date(e.processed_at).getTime() - new Date(e.received_at).getTime()) / 1000;
-        if (d >= 0 && d < 86400 * 30) lats.push(d);
+    // Health summary (RPC) for 1h and window
+    {
+      const r1 = await instrument(reg, {
+        key: 'inbound.health.1h', label: 'Inbound health 1h',
+        source: 'rpc fn_inbound_health_summary', type: 'rpc+fallback', window: '1 hour',
+      }, () => (supabase as any).rpc('fn_inbound_health_summary', { _window: '1 hour' }));
+      if (r1.error || !r1.data) {
+        // Fallback aggregate
+        const fb = await instrument(reg, {
+          key: 'inbound.health.1h.fb', label: 'Inbound health 1h (fallback)',
+          source: 'integration_inbound_events', type: 'table', filters: `received_at>=${since1hISO}`,
+        }, () => (supabase as any).from('integration_inbound_events')
+          .select('integration_slug, process_status').gte('received_at', since1hISO).limit(5000));
+        const agg: Record<string, InboundHealthRow> = {};
+        (fb.data as any[] || []).forEach((r) => {
+          const k = `${r.integration_slug}::${r.process_status}`;
+          agg[k] ||= { integration_slug: r.integration_slug, status: r.process_status, count: 0, avg_latency_sec: null, p95_latency_sec: null };
+          agg[k].count += 1;
+        });
+        setInboundHealth1h(Object.values(agg));
+        if (r1.error) errors.push(`inbound_health_1h: ${r1.error.message}`);
+      } else {
+        setInboundHealth1h(r1.data as any);
       }
-    });
-    setInboundLatencies(lats);
+    }
+    {
+      const rw = await instrument(reg, {
+        key: 'inbound.health.win', label: `Inbound health ${windowSel}`,
+        source: 'rpc fn_inbound_health_summary', type: 'rpc', window: WINDOW_TO_INTERVAL[windowSel],
+      }, () => (supabase as any).rpc('fn_inbound_health_summary', { _window: WINDOW_TO_INTERVAL[windowSel] }));
+      if (rw.error) errors.push(`inbound_health_win: ${rw.error.message}`);
+      setInboundHealthWin((rw.data as any) || []);
+    }
 
-    // Stuck processing > 5min
-    const { count: stuckCount } = await (supabase as any)
-      .from('integration_inbound_events')
-      .select('id', { count: 'exact', head: true })
-      .eq('process_status', 'processing')
-      .lt('claimed_at', new Date(Date.now() - 5 * 60_000).toISOString());
-    setInboundStuck(stuckCount || 0);
+    // Recent events list
+    {
+      const filters: string[] = [`received_at>=${sinceISO}`];
+      let q = (supabase as any).from('integration_inbound_events')
+        .select('id, received_at, integration_slug, source_event, process_status, shadow_mode, signature_valid, retry_count, trace_id, external_id, organization_id, process_error, processed_at')
+        .gte('received_at', sinceISO).order('received_at', { ascending: false }).limit(100);
+      if (providerFilter !== 'all') { q = q.eq('integration_slug', providerFilter); filters.push(`slug=${providerFilter}`); }
+      if (statusFilter !== 'all') { q = q.eq('process_status', statusFilter); filters.push(`status=${statusFilter}`); }
+      if (orgFilter) { q = q.eq('organization_id', orgFilter); filters.push(`org=${orgFilter.slice(0, 8)}`); }
+      if (search) {
+        const s = search.trim();
+        q = q.or(`trace_id.eq.${s},external_id.eq.${s}`);
+        filters.push(`search=${s.slice(0, 12)}`);
+      }
+      const r = await instrument(reg, {
+        key: 'inbound.events', label: 'Eventos recentes',
+        source: 'integration_inbound_events', type: 'table', window: windowSel, filters: filters.join(' & '),
+      }, () => q);
+      if (r.error) errors.push(`events: ${r.error.message}`);
+      const evs = (r.data as any[]) || [];
+      setInboundEvents(evs);
 
-    // Shadow mode count (window)
-    const { count: shadow } = await (supabase as any)
-      .from('integration_inbound_events')
-      .select('id', { count: 'exact', head: true })
-      .eq('shadow_mode', true)
-      .gte('received_at', sinceISO);
-    setInboundShadow(shadow || 0);
+      // Latencies + processed counter
+      const lats: number[] = [];
+      let processed = 0;
+      evs.forEach((e: any) => {
+        if (e.processed_at && e.received_at) {
+          processed += 1;
+          const d = (new Date(e.processed_at).getTime() - new Date(e.received_at).getTime()) / 1000;
+          if (d >= 0 && d < 86400 * 30) lats.push(d);
+        }
+      });
+      setInboundLatencies(lats);
+      setInboundProcessedCount(processed);
+    }
 
-    // Signature failures last 24h
-    const { count: sig } = await (supabase as any)
-      .from('integration_inbound_events')
-      .select('id', { count: 'exact', head: true })
-      .eq('signature_valid', false)
-      .gte('received_at', since24hISO);
-    setInboundSigFailures(sig || 0);
+    // Stuck > 5min
+    {
+      const r = await instrument(reg, {
+        key: 'inbound.stuck', label: 'Stuck >5m',
+        source: 'integration_inbound_events', type: 'table',
+        filters: 'process_status=processing & claimed_at<now-5m',
+      }, () => (supabase as any).from('integration_inbound_events')
+        .select('id', { count: 'exact', head: true })
+        .eq('process_status', 'processing')
+        .lt('claimed_at', new Date(Date.now() - 5 * 60_000).toISOString()));
+      setInboundStuck((r as any).count || 0);
+    }
 
-    // Ingest errors last 24h
-    const { data: ierrs, error: ierr } = await (supabase as any)
-      .from('integration_inbound_ingest_errors')
-      .select('id, created_at, integration_slug, error_code, error_message, trace_id, external_id')
-      .gte('created_at', since24hISO)
-      .order('created_at', { ascending: false })
-      .limit(50);
-    if (ierr) errors.push(`ingest_errors: ${ierr.message}`);
-    setIngestErrors(ierrs || []);
+    // Shadow mode (window)
+    {
+      const r = await instrument(reg, {
+        key: 'inbound.shadow', label: 'Shadow mode',
+        source: 'integration_inbound_events', type: 'table', window: windowSel,
+        filters: 'shadow_mode=true',
+      }, () => (supabase as any).from('integration_inbound_events')
+        .select('id', { count: 'exact', head: true })
+        .eq('shadow_mode', true).gte('received_at', sinceISO));
+      setInboundShadow((r as any).count || 0);
+    }
+
+    // Signature failures (use window, not hardcoded 24h, for consistency)
+    {
+      const r = await instrument(reg, {
+        key: 'inbound.sig_failures', label: 'Signature failures',
+        source: 'integration_inbound_events', type: 'table', window: windowSel,
+        filters: 'signature_valid=false',
+      }, () => (supabase as any).from('integration_inbound_events')
+        .select('id', { count: 'exact', head: true })
+        .eq('signature_valid', false).gte('received_at', sinceISO));
+      setInboundSigFailures((r as any).count || 0);
+    }
+
+    // Ingest errors (window)
+    {
+      const r = await instrument(reg, {
+        key: 'inbound.ingest_errors', label: 'Ingest errors',
+        source: 'integration_inbound_ingest_errors', type: 'table', window: windowSel,
+      }, () => (supabase as any).from('integration_inbound_ingest_errors')
+        .select('id, created_at, integration_slug, error_code, error_message, trace_id, external_id')
+        .gte('created_at', sinceISO).order('created_at', { ascending: false }).limit(50));
+      if (r.error) errors.push(`ingest_errors: ${r.error.message}`);
+      setIngestErrors((r.data as any[]) || []);
+    }
+
+    // Top inbound errors via RPC
+    {
+      const r = await instrument(reg, {
+        key: 'inbound.top_errors', label: 'Top ingest errors',
+        source: 'rpc fn_inbound_top_errors', type: 'rpc', window: WINDOW_TO_INTERVAL[windowSel],
+      }, () => (supabase as any).rpc('fn_inbound_top_errors', { _window: WINDOW_TO_INTERVAL[windowSel], _limit: 10 }));
+      setInboundTopErrors((r.data as any[]) || []);
+    }
 
     if (errors.length) setError(errors.join(' | '));
-  }, [windowSel, providerFilter, statusFilter, orgFilter, search, since1hISO, since24hISO, sinceISO]);
+  }, [windowSel, providerFilter, statusFilter, orgFilter, search, since1hISO, sinceISO]);
 
+  // ----------------------------------------------------------------
+  // Fetch OUTBOX
+  // ----------------------------------------------------------------
   const fetchOutbox = useCallback(async () => {
+    const reg = registryRef.current;
     const errs: string[] = [];
 
     // Health summary RPC
-    try {
-      const { data, error: err } = await (supabase as any).rpc('fn_outbox_health_summary');
-      if (err) throw err;
-      setOutboxHealth(data as OutboxHealth);
-      setOutboxHealthErr(null);
-    } catch (e: any) {
-      setOutboxHealth(null);
-      setOutboxHealthErr(e.message);
+    {
+      const r = await instrument(reg, {
+        key: 'outbox.health', label: 'Outbox health',
+        source: 'rpc fn_outbox_health_summary', type: 'rpc',
+      }, () => (supabase as any).rpc('fn_outbox_health_summary'));
+      if (r.error) { setOutboxHealth(null); setOutboxHealthErr(r.error.message); }
+      else { setOutboxHealth(r.data as OutboxHealth); setOutboxHealthErr(null); }
     }
 
     // Counts
-    const { count: ec1 } = await (supabase as any)
-      .from('integration_events')
-      .select('id', { count: 'exact', head: true })
-      .gte('occurred_at', since1hISO);
-    setEventsCount1h(ec1 || 0);
-    const { count: ec24 } = await (supabase as any)
-      .from('integration_events')
-      .select('id', { count: 'exact', head: true })
-      .gte('occurred_at', since24hISO);
-    setEventsCount24h(ec24 || 0);
-    const { count: jc1 } = await (supabase as any)
-      .from('integration_jobs')
-      .select('id', { count: 'exact', head: true })
-      .gte('created_at', since1hISO);
-    setJobsCount1h(jc1 || 0);
-    const { count: jc24 } = await (supabase as any)
-      .from('integration_jobs')
-      .select('id', { count: 'exact', head: true })
-      .gte('created_at', since24hISO);
-    setJobsCount24h(jc24 || 0);
-
-    // Recent jobs (filtered)
-    let qj = (supabase as any)
-      .from('integration_jobs')
-      .select(
-        'id, created_at, integration_slug, target_action, status, attempts, max_attempts, next_run_at, organization_id, last_error, idempotency_key, started_at, completed_at',
-      )
-      .gte('created_at', sinceISO)
-      .order('created_at', { ascending: false })
-      .limit(100);
-    if (providerFilter !== 'all') qj = qj.eq('integration_slug', providerFilter);
-    if (statusFilter !== 'all') qj = qj.eq('status', statusFilter);
-    if (orgFilter) qj = qj.eq('organization_id', orgFilter);
-    if (search) qj = qj.eq('idempotency_key', search.trim());
-    const { data: jobsData, error: jErr } = await qj;
-    if (jErr) errs.push(`jobs: ${jErr.message}`);
-    setJobs(jobsData || []);
-
-    // Outbox latencies (event published_at → job success completed_at)
-    // Approximate by event-id join, lightweight
-    const { data: succJobs } = await (supabase as any)
-      .from('integration_jobs')
-      .select('event_id, completed_at, created_at')
-      .eq('status', 'success')
-      .gte('completed_at', since24hISO)
-      .not('completed_at', 'is', null)
-      .limit(500);
-    const eventIds = Array.from(new Set((succJobs || []).map((j: any) => j.event_id).filter(Boolean)));
-    let evMap: Record<string, string> = {};
-    if (eventIds.length) {
-      const { data: evRows } = await (supabase as any)
-        .from('integration_events')
-        .select('id, published_at, occurred_at')
-        .in('id', eventIds.slice(0, 500));
-      (evRows || []).forEach((e: any) => {
-        evMap[e.id] = e.published_at || e.occurred_at;
-      });
+    {
+      const r = await instrument(reg, { key: 'outbox.events.1h', label: 'Events 1h', source: 'integration_events', type: 'table', window: '1h' },
+        () => (supabase as any).from('integration_events').select('id', { count: 'exact', head: true }).gte('occurred_at', since1hISO));
+      setEventsCount1h((r as any).count || 0);
     }
-    const olats: number[] = [];
-    (succJobs || []).forEach((j: any) => {
-      const pub = evMap[j.event_id];
-      if (pub && j.completed_at) {
-        const d = (new Date(j.completed_at).getTime() - new Date(pub).getTime()) / 1000;
-        if (d >= 0 && d < 86400) olats.push(d);
-      }
-    });
-    setOutboxLatencies(olats);
+    {
+      const r = await instrument(reg, { key: 'outbox.events.24h', label: 'Events 24h', source: 'integration_events', type: 'table', window: '24h' },
+        () => (supabase as any).from('integration_events').select('id', { count: 'exact', head: true }).gte('occurred_at', since24hISO));
+      setEventsCount24h((r as any).count || 0);
+    }
+    {
+      const r = await instrument(reg, { key: 'outbox.jobs.1h', label: 'Jobs 1h', source: 'integration_jobs', type: 'table', window: '1h' },
+        () => (supabase as any).from('integration_jobs').select('id', { count: 'exact', head: true }).gte('created_at', since1hISO));
+      setJobsCount1h((r as any).count || 0);
+    }
+    {
+      const r = await instrument(reg, { key: 'outbox.jobs.24h', label: 'Jobs 24h', source: 'integration_jobs', type: 'table', window: '24h' },
+        () => (supabase as any).from('integration_jobs').select('id', { count: 'exact', head: true }).gte('created_at', since24hISO));
+      setJobsCount24h((r as any).count || 0);
+    }
 
-    // DLQ grouped by integration/action
-    const { data: dlq } = await (supabase as any)
-      .from('integration_jobs')
-      .select('integration_slug, target_action, last_error')
-      .eq('status', 'dead_letter')
-      .limit(500);
-    const dlqAgg: Record<string, { integration_slug: string; target_action: string; count: number; last_error: string | null }> = {};
-    (dlq || []).forEach((r: any) => {
-      const k = `${r.integration_slug}::${r.target_action}`;
-      if (!dlqAgg[k]) {
-        dlqAgg[k] = { integration_slug: r.integration_slug, target_action: r.target_action, count: 0, last_error: r.last_error };
-      }
-      dlqAgg[k].count += 1;
-      if (r.last_error) dlqAgg[k].last_error = r.last_error;
-    });
-    setDlqByIntegration(Object.values(dlqAgg).sort((a, b) => b.count - a.count));
+    // Recent jobs
+    {
+      const filters: string[] = [`created_at>=${sinceISO}`];
+      let q = (supabase as any).from('integration_jobs')
+        .select('id, created_at, integration_slug, target_action, status, attempts, max_attempts, next_run_at, organization_id, last_error, idempotency_key, started_at, completed_at, event_id')
+        .gte('created_at', sinceISO).order('created_at', { ascending: false }).limit(100);
+      if (providerFilter !== 'all') { q = q.eq('integration_slug', providerFilter); filters.push(`slug=${providerFilter}`); }
+      if (statusFilter !== 'all') { q = q.eq('status', statusFilter); filters.push(`status=${statusFilter}`); }
+      if (orgFilter) { q = q.eq('organization_id', orgFilter); filters.push(`org=${orgFilter.slice(0, 8)}`); }
+      if (search) { q = q.eq('idempotency_key', search.trim()); filters.push(`idem=${search.slice(0, 12)}`); }
+      const r = await instrument(reg, {
+        key: 'outbox.jobs', label: 'Jobs recentes',
+        source: 'integration_jobs', type: 'table', window: windowSel, filters: filters.join(' & '),
+      }, () => q);
+      if (r.error) errs.push(`jobs: ${r.error.message}`);
+      setJobs((r.data as any[]) || []);
+    }
 
-    // Top errors (last 24h)
-    const { data: errSamples } = await (supabase as any)
-      .from('integration_jobs')
-      .select('last_error')
-      .in('status', ['failed', 'dead_letter'])
-      .gte('last_error_at', since24hISO)
-      .not('last_error', 'is', null)
-      .limit(500);
-    const errAgg: Record<string, number> = {};
-    (errSamples || []).forEach((r: any) => {
-      const msg = (r.last_error || '').slice(0, 160);
-      errAgg[msg] = (errAgg[msg] || 0) + 1;
-    });
-    setTopErrors(
-      Object.entries(errAgg)
-        .map(([message, count]) => ({ message, count }))
-        .sort((a, b) => b.count - a.count)
-        .slice(0, 10),
-    );
+    // Latencies
+    {
+      const r = await instrument(reg, {
+        key: 'outbox.latency.jobs', label: 'Latency (success jobs)',
+        source: 'integration_jobs', type: 'table', window: windowSel,
+        filters: 'status=success & completed_at not null',
+      }, () => (supabase as any).from('integration_jobs')
+        .select('event_id, completed_at, created_at')
+        .eq('status', 'success').gte('completed_at', sinceISO).not('completed_at', 'is', null).limit(500));
+      const succJobs = (r.data as any[]) || [];
+      const eventIds = Array.from(new Set(succJobs.map((j: any) => j.event_id).filter(Boolean)));
+      let evMap: Record<string, string> = {};
+      if (eventIds.length) {
+        const r2 = await instrument(reg, {
+          key: 'outbox.latency.events', label: 'Latency (event pub)',
+          source: 'integration_events', type: 'table',
+        }, () => (supabase as any).from('integration_events')
+          .select('id, published_at, occurred_at').in('id', eventIds.slice(0, 500)));
+        (r2.data as any[] || []).forEach((e: any) => { evMap[e.id] = e.published_at || e.occurred_at; });
+      }
+      const olats: number[] = [];
+      succJobs.forEach((j: any) => {
+        const pub = evMap[j.event_id];
+        if (pub && j.completed_at) {
+          const d = (new Date(j.completed_at).getTime() - new Date(pub).getTime()) / 1000;
+          if (d >= 0 && d < 86400) olats.push(d);
+        }
+      });
+      setOutboxLatencies(olats);
+    }
+
+    // DLQ by integration (server-side via RPC)
+    {
+      const r = await instrument(reg, {
+        key: 'outbox.dlq_by_integration', label: 'DLQ por integração',
+        source: 'rpc fn_outbox_dlq_by_integration', type: 'rpc+fallback',
+      }, () => (supabase as any).rpc('fn_outbox_dlq_by_integration'));
+      if (r.error || !r.data) {
+        // fallback: client-side aggregation on a (capped) sample
+        const fb = await instrument(reg, {
+          key: 'outbox.dlq_by_integration.fb', label: 'DLQ (fallback)',
+          source: 'integration_jobs', type: 'table', filters: 'status=dead_letter limit 1000',
+        }, () => (supabase as any).from('integration_jobs')
+          .select('integration_slug, target_action, last_error, last_error_at')
+          .eq('status', 'dead_letter').limit(1000));
+        const agg: Record<string, any> = {};
+        (fb.data as any[] || []).forEach((r2: any) => {
+          const k = `${r2.integration_slug}::${r2.target_action}`;
+          agg[k] ||= { integration_slug: r2.integration_slug, target_action: r2.target_action, count: 0, last_error: null, last_error_at: null };
+          agg[k].count += 1;
+          if (!agg[k].last_error_at || (r2.last_error_at && r2.last_error_at > agg[k].last_error_at)) {
+            agg[k].last_error = r2.last_error; agg[k].last_error_at = r2.last_error_at;
+          }
+        });
+        setDlqByIntegration(Object.values(agg).sort((a: any, b: any) => b.count - a.count));
+      } else {
+        setDlqByIntegration((r.data as any[]) || []);
+      }
+    }
+
+    // Top errors via RPC (window-aware)
+    {
+      const r = await instrument(reg, {
+        key: 'outbox.top_errors', label: 'Top errors',
+        source: 'rpc fn_outbox_top_errors', type: 'rpc', window: WINDOW_TO_INTERVAL[windowSel],
+      }, () => (supabase as any).rpc('fn_outbox_top_errors', { _window: WINDOW_TO_INTERVAL[windowSel], _limit: 10 }));
+      setTopErrors((r.data as any[]) || []);
+    }
 
     // Subscriptions
-    const { data: subs } = await (supabase as any)
-      .from('integration_subscriptions')
-      .select('id, integration_slug, event_type, target_action, is_active, paused_until')
-      .order('integration_slug', { ascending: true })
-      .limit(200);
-    setSubscriptions(subs || []);
+    {
+      const r = await instrument(reg, {
+        key: 'outbox.subscriptions', label: 'Subscriptions',
+        source: 'integration_subscriptions', type: 'table',
+      }, () => (supabase as any).from('integration_subscriptions')
+        .select('id, integration_slug, event_type, target_action, is_active, paused_until')
+        .order('integration_slug', { ascending: true }).limit(200));
+      if (r.error) errs.push(`subscriptions: ${r.error.message}`);
+      setSubscriptions((r.data as any[]) || []);
+    }
 
     if (errs.length) setError((prev) => [prev, ...errs].filter(Boolean).join(' | '));
-  }, [providerFilter, statusFilter, orgFilter, search, sinceISO, since1hISO, since24hISO]);
+  }, [providerFilter, statusFilter, orgFilter, search, sinceISO, since1hISO, since24hISO, windowSel]);
 
   const refresh = useCallback(async () => {
     setLoading(true);
     setError(null);
+    registryRef.current.clear();
     try {
       await Promise.all([fetchInbox(), fetchOutbox()]);
       setLastUpdated(new Date());
+      setProbesVersion((v) => v + 1);
     } catch (e: any) {
       setError(e.message);
     } finally {
@@ -546,71 +577,48 @@ export default function ObservabilityPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [windowSel, providerFilter, statusFilter, orgFilter]);
 
-  // ----------------------------------------------------------------
   // Derived
-  // ----------------------------------------------------------------
-
   const inboundByStatus = useMemo(() => {
     const m: Record<string, number> = {};
-    inboundHealthWin.forEach((r) => {
-      m[r.status] = (m[r.status] || 0) + Number(r.count);
-    });
+    inboundHealthWin.forEach((r) => { m[r.status] = (m[r.status] || 0) + Number(r.count); });
     return m;
   }, [inboundHealthWin]);
 
   const inboundByProvider = useMemo(() => {
     const m: Record<string, number> = {};
-    inboundHealthWin.forEach((r) => {
-      m[r.integration_slug] = (m[r.integration_slug] || 0) + Number(r.count);
-    });
+    inboundHealthWin.forEach((r) => { m[r.integration_slug] = (m[r.integration_slug] || 0) + Number(r.count); });
     return Object.entries(m).sort((a, b) => b[1] - a[1]);
   }, [inboundHealthWin]);
 
-  const inboundTotal1h = useMemo(
-    () => inboundHealth1h.reduce((s, r) => s + Number(r.count || 0), 0),
-    [inboundHealth1h],
-  );
-  const inboundTotalWin = useMemo(
-    () => inboundHealthWin.reduce((s, r) => s + Number(r.count || 0), 0),
-    [inboundHealthWin],
-  );
+  const inboundTotal1h = useMemo(() => inboundHealth1h.reduce((s, r) => s + Number(r.count || 0), 0), [inboundHealth1h]);
+  const inboundTotalWin = useMemo(() => inboundHealthWin.reduce((s, r) => s + Number(r.count || 0), 0), [inboundHealthWin]);
 
   const allProviders = useMemo(() => {
     const set = new Set<string>();
     inboundHealthWin.forEach((r) => set.add(r.integration_slug));
     jobs.forEach((j) => set.add(j.integration_slug));
     subscriptions.forEach((s) => set.add(s.integration_slug));
-    return Array.from(set).sort();
+    return Array.from(set).filter(Boolean).sort();
   }, [inboundHealthWin, jobs, subscriptions]);
 
   const allStatuses = useMemo(() => {
-    if (tab === 'inbox')
-      return ['received', 'processing', 'retry', 'processed', 'dead_letter', 'expired', 'archived'];
+    if (tab === 'inbox') return ['received', 'processing', 'retry', 'processed', 'dead_letter', 'expired', 'archived'];
     return ['pending', 'running', 'success', 'failed', 'retry', 'dead_letter'];
   }, [tab]);
 
-  // Health classification
   const healthLevel: 'healthy' | 'warning' | 'critical' = useMemo(() => {
     const stuckIn = inboundStuck;
     const stuckOut = outboxHealth?.running_stuck_5m ?? 0;
     const dlqOut = outboxHealth?.dead_letter ?? 0;
     const ingest = ingestErrors.length;
     const sig = inboundSigFailures;
-
-    if (
-      stuckIn > 10 ||
-      stuckOut > 10 ||
-      outboxHealthErr ||
-      (error && error.includes('events:'))
-    )
-      return 'critical';
+    if (stuckIn > 10 || stuckOut > 10 || outboxHealthErr) return 'critical';
     if (stuckIn > 0 || stuckOut > 0 || ingest > 0 || sig > 0 || dlqOut > 0) return 'warning';
     return 'healthy';
-  }, [inboundStuck, outboxHealth, outboxHealthErr, ingestErrors.length, inboundSigFailures, error]);
+  }, [inboundStuck, outboxHealth, outboxHealthErr, ingestErrors.length, inboundSigFailures]);
 
-  // ----------------------------------------------------------------
-  // Render
-  // ----------------------------------------------------------------
+  const allProbes = registryRef.current.all;
+  void probesVersion;
 
   return (
     <AdminLayout>
@@ -621,7 +629,12 @@ export default function ObservabilityPage() {
             <h1 className="text-3xl font-bold">Observabilidade</h1>
             <HealthPill level={healthLevel} />
           </div>
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-3">
+            <div className="flex items-center gap-2">
+              <Bug className="h-3.5 w-3.5 text-muted-foreground" />
+              <label className="text-xs text-muted-foreground">Debug</label>
+              <Switch checked={debug} onCheckedChange={setDebug} />
+            </div>
             <div className="text-xs text-muted-foreground">
               Última atualização: {lastUpdated ? fmtRelative(lastUpdated.toISOString()) : '—'}
             </div>
@@ -634,7 +647,8 @@ export default function ObservabilityPage() {
 
         {/* Read-only banner */}
         <div className="text-xs text-muted-foreground border border-dashed rounded px-3 py-2">
-          Painel <span className="font-medium">read-only</span>. Nenhum botão modifica dados. Nenhuma feature flag, cron ou webhook é alterado.
+          Painel <span className="font-medium">read-only</span>. Nenhum botão modifica dados.
+          Nenhuma feature flag, cron ou webhook é alterado.
         </div>
 
         {/* Filters */}
@@ -655,9 +669,7 @@ export default function ObservabilityPage() {
                 <SelectTrigger className="w-44"><SelectValue /></SelectTrigger>
                 <SelectContent>
                   <SelectItem value="all">Todos</SelectItem>
-                  {allProviders.map((p) => (
-                    <SelectItem key={p} value={p}>{p}</SelectItem>
-                  ))}
+                  {allProviders.map((p) => <SelectItem key={p} value={p}>{p}</SelectItem>)}
                 </SelectContent>
               </Select>
             </Field>
@@ -666,29 +678,18 @@ export default function ObservabilityPage() {
                 <SelectTrigger className="w-44"><SelectValue /></SelectTrigger>
                 <SelectContent>
                   <SelectItem value="all">Todos</SelectItem>
-                  {allStatuses.map((s) => (
-                    <SelectItem key={s} value={s}>{s}</SelectItem>
-                  ))}
+                  {allStatuses.map((s) => <SelectItem key={s} value={s}>{s}</SelectItem>)}
                 </SelectContent>
               </Select>
             </Field>
             <Field label="organization_id">
-              <Input
-                value={orgFilter}
-                onChange={(e) => setOrgFilter(e.target.value)}
-                placeholder="uuid"
-                className="w-72"
-              />
+              <Input value={orgFilter} onChange={(e) => setOrgFilter(e.target.value)} placeholder="uuid" className="w-72" />
             </Field>
             <Field label="Buscar trace_id / external_id / idempotency_key">
               <div className="flex gap-2">
-                <Input
-                  value={search}
-                  onChange={(e) => setSearch(e.target.value)}
+                <Input value={search} onChange={(e) => setSearch(e.target.value)}
                   onKeyDown={(e) => e.key === 'Enter' && refresh()}
-                  placeholder="cole aqui e Enter"
-                  className="w-80"
-                />
+                  placeholder="cole aqui e Enter" className="w-80" />
                 <Button size="sm" variant="outline" onClick={refresh}>Buscar</Button>
               </div>
             </Field>
@@ -696,9 +697,7 @@ export default function ObservabilityPage() {
         </Card>
 
         {error && (
-          <div className="text-xs text-destructive border border-destructive/40 rounded px-3 py-2">
-            {error}
-          </div>
+          <div className="text-xs text-destructive border border-destructive/40 rounded px-3 py-2">{error}</div>
         )}
 
         {/* Tabs */}
@@ -706,75 +705,102 @@ export default function ObservabilityPage() {
           <TabsList>
             <TabsTrigger value="inbox">Inbox</TabsTrigger>
             <TabsTrigger value="outbox">Outbox</TabsTrigger>
+            {debug && <TabsTrigger value="debug">Debug ({allProbes.length})</TabsTrigger>}
           </TabsList>
 
           {/* ============================== INBOX ============================== */}
           <TabsContent value="inbox" className="space-y-4 mt-4">
             <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-              <StatCard label="Eventos 1h" value={inboundTotal1h} />
-              <StatCard label={`Eventos ${windowSel}`} value={inboundTotalWin} />
-              <StatCard
-                label="Stuck processing > 5m"
-                value={inboundStuck}
+              <StatCard label="Eventos 1h" value={inboundTotal1h} probeKey="inbound.health.1h" registry={registryRef.current} debug={debug} />
+              <StatCard label={`Eventos ${windowSel}`} value={inboundTotalWin} probeKey="inbound.health.win" registry={registryRef.current} debug={debug} />
+              <StatCard label="Stuck processing >5m" value={inboundStuck}
                 tone={inboundStuck > 10 ? 'critical' : inboundStuck > 0 ? 'warning' : 'success'}
-              />
-              <StatCard label="Shadow mode" value={inboundShadow} hint={`janela ${windowSel}`} />
-              <StatCard
-                label="Signature failures 24h"
-                value={inboundSigFailures}
+                probeKey="inbound.stuck" registry={registryRef.current} debug={debug} />
+              <StatCard label="Shadow mode" value={inboundShadow} hint={`janela ${windowSel}`}
+                probeKey="inbound.shadow" registry={registryRef.current} debug={debug} />
+              <StatCard label={`Signature failures (${windowSel})`} value={inboundSigFailures}
                 tone={inboundSigFailures > 0 ? 'warning' : 'success'}
+                probeKey="inbound.sig_failures" registry={registryRef.current} debug={debug} />
+              <StatCard label={`Ingest errors (${windowSel})`} value={ingestErrors.length}
+                tone={ingestErrors.length > 0 ? 'warning' : 'success'}
+                probeKey="inbound.ingest_errors" registry={registryRef.current} debug={debug} />
+              <StatCard
+                label="p50 latency"
+                value={fmtLatency(p50(inboundLatencies))}
+                hint={inboundProcessedCount === 0 ? 'sem eventos processados (dispatcher inerte)' : `n=${inboundProcessedCount}`}
               />
               <StatCard
-                label="Ingest errors 24h"
-                value={ingestErrors.length}
-                tone={ingestErrors.length > 0 ? 'warning' : 'success'}
+                label="p95 latency"
+                value={fmtLatency(p95(inboundLatencies))}
+                hint={inboundProcessedCount === 0 ? 'sem eventos processados' : `n=${inboundProcessedCount}`}
               />
-              <StatCard label="p50 latency" value={fmtLatency(p50(inboundLatencies))} hint="received→processed" />
-              <StatCard label="p95 latency" value={fmtLatency(p95(inboundLatencies))} hint="received→processed" />
             </div>
 
-            {/* By status / by provider */}
             <div className="grid md:grid-cols-2 gap-4">
               <Card noAnimation>
                 <CardHeader className="pb-2"><CardTitle className="text-sm">Por status (janela {windowSel})</CardTitle></CardHeader>
                 <CardContent className="space-y-1 text-sm">
-                  {Object.entries(inboundByStatus).length === 0 && <div className="text-muted-foreground text-xs">Sem dados.</div>}
-                  {Object.entries(inboundByStatus).map(([s, c]) => (
-                    <div key={s} className="flex justify-between">
-                      <Badge variant={statusVariant(s)}>{s}</Badge>
-                      <span className="font-mono">{c}</span>
-                    </div>
-                  ))}
+                  {Object.entries(inboundByStatus).length === 0
+                    ? <div className="text-muted-foreground text-xs">Sem dados na janela.</div>
+                    : Object.entries(inboundByStatus).map(([s, c]) => (
+                      <div key={s} className="flex justify-between">
+                        <Badge variant={statusVariant(s)}>{s}</Badge>
+                        <span className="font-mono">{c}</span>
+                      </div>
+                    ))}
                 </CardContent>
               </Card>
               <Card noAnimation>
                 <CardHeader className="pb-2"><CardTitle className="text-sm">Por provider (janela {windowSel})</CardTitle></CardHeader>
                 <CardContent className="space-y-1 text-sm">
-                  {inboundByProvider.length === 0 && <div className="text-muted-foreground text-xs">Sem dados.</div>}
-                  {inboundByProvider.map(([p, c]) => (
-                    <div key={p} className="flex justify-between">
-                      <span>{p}</span>
-                      <span className="font-mono">{c}</span>
-                    </div>
-                  ))}
+                  {inboundByProvider.length === 0
+                    ? <div className="text-muted-foreground text-xs">Sem dados na janela.</div>
+                    : inboundByProvider.map(([p, c]) => (
+                      <div key={p} className="flex justify-between">
+                        <span>{p}</span><span className="font-mono">{c}</span>
+                      </div>
+                    ))}
                 </CardContent>
               </Card>
             </div>
 
-            {/* Ingest errors */}
+            {/* Top inbound errors */}
             <Card noAnimation>
-              <CardHeader className="pb-2"><CardTitle className="text-sm">Ingest errors (24h)</CardTitle></CardHeader>
+              <CardHeader className="pb-2 flex flex-row justify-between items-center">
+                <CardTitle className="text-sm">Top ingest errors ({windowSel})</CardTitle>
+                {debug && <ProbeMiniBadge probeKey="inbound.top_errors" registry={registryRef.current} />}
+              </CardHeader>
+              <CardContent>
+                {inboundTopErrors.length === 0
+                  ? <div className="text-xs text-muted-foreground">Sem ingest errors na janela.</div>
+                  : (
+                    <div className="space-y-1 text-xs">
+                      {inboundTopErrors.map((e, i) => (
+                        <div key={i} className="flex justify-between gap-2">
+                          <span className="truncate"><Badge variant="outline" className="mr-1">{e.error_code}</Badge>{e.message}</span>
+                          <span className="font-mono">{e.count}</span>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+              </CardContent>
+            </Card>
+
+            {/* Ingest errors table */}
+            <Card noAnimation>
+              <CardHeader className="pb-2 flex flex-row justify-between items-center">
+                <CardTitle className="text-sm">Ingest errors recentes ({windowSel})</CardTitle>
+                {debug && <ProbeMiniBadge probeKey="inbound.ingest_errors" registry={registryRef.current} />}
+              </CardHeader>
               <CardContent>
                 {loading ? <Skeleton className="h-24" /> : ingestErrors.length === 0 ? (
-                  <div className="text-xs text-muted-foreground">Nenhum erro de ingestão.</div>
+                  <div className="text-xs text-muted-foreground">Sem ingest errors na janela.</div>
                 ) : (
                   <Table>
                     <TableHeader>
                       <TableRow>
-                        <TableHead>Quando</TableHead>
-                        <TableHead>Provider</TableHead>
-                        <TableHead>Code</TableHead>
-                        <TableHead>Mensagem</TableHead>
+                        <TableHead>Quando</TableHead><TableHead>Provider</TableHead>
+                        <TableHead>Code</TableHead><TableHead>Mensagem</TableHead>
                         <TableHead>trace_id</TableHead>
                       </TableRow>
                     </TableHeader>
@@ -796,23 +822,19 @@ export default function ObservabilityPage() {
 
             {/* Events */}
             <Card noAnimation>
-              <CardHeader className="pb-2"><CardTitle className="text-sm">Eventos recentes ({inboundEvents.length})</CardTitle></CardHeader>
+              <CardHeader className="pb-2 flex flex-row justify-between items-center">
+                <CardTitle className="text-sm">Eventos recentes ({inboundEvents.length}) — janela {windowSel}</CardTitle>
+                {debug && <ProbeMiniBadge probeKey="inbound.events" registry={registryRef.current} />}
+              </CardHeader>
               <CardContent>
                 {loading ? <Skeleton className="h-40" /> : (
                   <Table>
                     <TableHeader>
                       <TableRow>
-                        <TableHead>Quando</TableHead>
-                        <TableHead>Provider</TableHead>
-                        <TableHead>Event</TableHead>
-                        <TableHead>Status</TableHead>
-                        <TableHead>Shadow</TableHead>
-                        <TableHead>Sig</TableHead>
-                        <TableHead>Retry</TableHead>
-                        <TableHead>trace</TableHead>
-                        <TableHead>external</TableHead>
-                        <TableHead>org</TableHead>
-                        <TableHead>error</TableHead>
+                        <TableHead>Quando</TableHead><TableHead>Provider</TableHead><TableHead>Event</TableHead>
+                        <TableHead>Status</TableHead><TableHead>Shadow</TableHead><TableHead>Sig</TableHead>
+                        <TableHead>Retry</TableHead><TableHead>trace</TableHead><TableHead>external</TableHead>
+                        <TableHead>org</TableHead><TableHead>error</TableHead>
                       </TableRow>
                     </TableHeader>
                     <TableBody>
@@ -832,7 +854,7 @@ export default function ObservabilityPage() {
                         </TableRow>
                       ))}
                       {inboundEvents.length === 0 && (
-                        <TableRow><TableCell colSpan={11} className="text-center text-xs text-muted-foreground">Sem eventos.</TableCell></TableRow>
+                        <TableRow><TableCell colSpan={11} className="text-center text-xs text-muted-foreground">Sem eventos na janela.</TableCell></TableRow>
                       )}
                     </TableBody>
                   </Table>
@@ -844,39 +866,29 @@ export default function ObservabilityPage() {
           {/* ============================== OUTBOX ============================== */}
           <TabsContent value="outbox" className="space-y-4 mt-4">
             <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-              <StatCard label="Events 1h" value={eventsCount1h} />
-              <StatCard label="Events 24h" value={eventsCount24h} />
-              <StatCard label="Jobs 1h" value={jobsCount1h} />
-              <StatCard label="Jobs 24h" value={jobsCount24h} />
-              <StatCard label="Pending" value={outboxHealth?.pending ?? '—'} />
-              <StatCard
-                label="Running"
-                value={outboxHealth?.running ?? '—'}
+              <StatCard label="Events 1h" value={eventsCount1h} probeKey="outbox.events.1h" registry={registryRef.current} debug={debug} />
+              <StatCard label="Events 24h" value={eventsCount24h} probeKey="outbox.events.24h" registry={registryRef.current} debug={debug} />
+              <StatCard label="Jobs 1h" value={jobsCount1h} probeKey="outbox.jobs.1h" registry={registryRef.current} debug={debug} />
+              <StatCard label="Jobs 24h" value={jobsCount24h} probeKey="outbox.jobs.24h" registry={registryRef.current} debug={debug} />
+              <StatCard label="Pending" value={outboxHealth?.pending ?? '—'} probeKey="outbox.health" registry={registryRef.current} debug={debug} />
+              <StatCard label="Running" value={outboxHealth?.running ?? '—'}
                 hint={`stuck>5m: ${outboxHealth?.running_stuck_5m ?? 0}`}
-                tone={(outboxHealth?.running_stuck_5m ?? 0) > 10 ? 'critical' : (outboxHealth?.running_stuck_5m ?? 0) > 0 ? 'warning' : 'default'}
-              />
-              <StatCard
-                label="Dead letter"
-                value={outboxHealth?.dead_letter ?? '—'}
-                tone={(outboxHealth?.dead_letter ?? 0) > 0 ? 'warning' : 'success'}
-              />
-              <StatCard
-                label="Success 24h"
-                value={outboxHealth?.success_24h ?? '—'}
-                hint={`failed: ${outboxHealth?.failed_24h ?? 0}`}
-                tone="success"
-              />
-              <StatCard label="p50 latency" value={fmtLatency(p50(outboxLatencies))} hint="published→success" />
-              <StatCard label="p95 latency" value={fmtLatency(p95(outboxLatencies))} hint="published→success" />
-              <StatCard
-                label="Subscriptions"
+                tone={(outboxHealth?.running_stuck_5m ?? 0) > 10 ? 'critical' : (outboxHealth?.running_stuck_5m ?? 0) > 0 ? 'warning' : 'default'} />
+              <StatCard label="Dead letter (total)" value={outboxHealth?.dead_letter ?? '—'}
+                tone={(outboxHealth?.dead_letter ?? 0) > 0 ? 'warning' : 'success'} />
+              <StatCard label="Success 24h" value={outboxHealth?.success_24h ?? '—'}
+                hint={`failed: ${outboxHealth?.failed_24h ?? 0}`} tone="success" />
+              <StatCard label="p50 latency" value={fmtLatency(p50(outboxLatencies))}
+                hint={outboxLatencies.length === 0 ? 'sem success no período' : `n=${outboxLatencies.length}`} />
+              <StatCard label="p95 latency" value={fmtLatency(p95(outboxLatencies))}
+                hint={outboxLatencies.length === 0 ? 'sem success no período' : `n=${outboxLatencies.length}`} />
+              <StatCard label="Subscriptions"
                 value={`${outboxHealth?.subscriptions_active ?? 0} / ${(outboxHealth?.subscriptions_active ?? 0) + (outboxHealth?.subscriptions_paused ?? 0)}`}
-                hint="ativas / total"
-              />
-              <StatCard
-                label="Worker last run"
+                hint="ativas / total" />
+              <StatCard label="Worker last run"
                 value={outboxHealth?.worker_last_run_at ? fmtRelative(outboxHealth.worker_last_run_at) : '—'}
                 hint={`reaper: ${outboxHealth?.reaper_last_run_at ? fmtRelative(outboxHealth.reaper_last_run_at) : '—'}`}
+                tone={outboxHealth?.worker_last_run_at && (Date.now() - new Date(outboxHealth.worker_last_run_at).getTime()) > 3600_000 ? 'warning' : 'default'}
               />
             </div>
 
@@ -888,16 +900,18 @@ export default function ObservabilityPage() {
 
             <div className="grid md:grid-cols-2 gap-4">
               <Card noAnimation>
-                <CardHeader className="pb-2"><CardTitle className="text-sm">DLQ por integração</CardTitle></CardHeader>
+                <CardHeader className="pb-2 flex flex-row justify-between items-center">
+                  <CardTitle className="text-sm">DLQ por integração (total)</CardTitle>
+                  {debug && <ProbeMiniBadge probeKey="outbox.dlq_by_integration" registry={registryRef.current} />}
+                </CardHeader>
                 <CardContent>
                   {dlqByIntegration.length === 0 ? <div className="text-xs text-muted-foreground">Sem itens em DLQ.</div> : (
                     <Table>
                       <TableHeader>
                         <TableRow>
-                          <TableHead>Provider</TableHead>
-                          <TableHead>Action</TableHead>
+                          <TableHead>Provider</TableHead><TableHead>Action</TableHead>
                           <TableHead className="text-right">Count</TableHead>
-                          <TableHead>Último erro</TableHead>
+                          <TableHead>Último</TableHead><TableHead>Último erro</TableHead>
                         </TableRow>
                       </TableHeader>
                       <TableBody>
@@ -906,6 +920,7 @@ export default function ObservabilityPage() {
                             <TableCell className="text-xs">{r.integration_slug}</TableCell>
                             <TableCell className="text-xs">{r.target_action}</TableCell>
                             <TableCell className="text-right font-mono">{r.count}</TableCell>
+                            <TableCell className="text-xs">{r.last_error_at ? fmtRelative(r.last_error_at) : '—'}</TableCell>
                             <TableCell className="max-w-xs truncate text-xs">{r.last_error || '—'}</TableCell>
                           </TableRow>
                         ))}
@@ -916,13 +931,19 @@ export default function ObservabilityPage() {
               </Card>
 
               <Card noAnimation>
-                <CardHeader className="pb-2"><CardTitle className="text-sm">Top errors (24h)</CardTitle></CardHeader>
+                <CardHeader className="pb-2 flex flex-row justify-between items-center">
+                  <CardTitle className="text-sm">Top errors ({windowSel})</CardTitle>
+                  {debug && <ProbeMiniBadge probeKey="outbox.top_errors" registry={registryRef.current} />}
+                </CardHeader>
                 <CardContent>
-                  {topErrors.length === 0 ? <div className="text-xs text-muted-foreground">Sem erros.</div> : (
+                  {topErrors.length === 0 ? <div className="text-xs text-muted-foreground">Sem erros na janela.</div> : (
                     <div className="space-y-1 text-xs">
                       {topErrors.map((e, i) => (
                         <div key={i} className="flex justify-between gap-2">
-                          <span className="truncate max-w-md">{e.message}</span>
+                          <span className="truncate max-w-md">
+                            <Badge variant="outline" className="mr-1">{e.sample_integration_slug}</Badge>
+                            {e.message}
+                          </span>
                           <span className="font-mono">{e.count}</span>
                         </div>
                       ))}
@@ -932,23 +953,19 @@ export default function ObservabilityPage() {
               </Card>
             </div>
 
-            {/* Jobs table */}
             <Card noAnimation>
-              <CardHeader className="pb-2"><CardTitle className="text-sm">Jobs recentes ({jobs.length})</CardTitle></CardHeader>
+              <CardHeader className="pb-2 flex flex-row justify-between items-center">
+                <CardTitle className="text-sm">Jobs recentes ({jobs.length}) — janela {windowSel}</CardTitle>
+                {debug && <ProbeMiniBadge probeKey="outbox.jobs" registry={registryRef.current} />}
+              </CardHeader>
               <CardContent>
                 {loading ? <Skeleton className="h-40" /> : (
                   <Table>
                     <TableHeader>
                       <TableRow>
-                        <TableHead>Quando</TableHead>
-                        <TableHead>Provider</TableHead>
-                        <TableHead>Action</TableHead>
-                        <TableHead>Status</TableHead>
-                        <TableHead>Attempts</TableHead>
-                        <TableHead>Next run</TableHead>
-                        <TableHead>org</TableHead>
-                        <TableHead>idem_key</TableHead>
-                        <TableHead>error</TableHead>
+                        <TableHead>Quando</TableHead><TableHead>Provider</TableHead><TableHead>Action</TableHead>
+                        <TableHead>Status</TableHead><TableHead>Attempts</TableHead><TableHead>Next run</TableHead>
+                        <TableHead>org</TableHead><TableHead>idem_key</TableHead><TableHead>error</TableHead>
                       </TableRow>
                     </TableHeader>
                     <TableBody>
@@ -966,7 +983,7 @@ export default function ObservabilityPage() {
                         </TableRow>
                       ))}
                       {jobs.length === 0 && (
-                        <TableRow><TableCell colSpan={9} className="text-center text-xs text-muted-foreground">Sem jobs.</TableCell></TableRow>
+                        <TableRow><TableCell colSpan={9} className="text-center text-xs text-muted-foreground">Sem jobs na janela {windowSel}.</TableCell></TableRow>
                       )}
                     </TableBody>
                   </Table>
@@ -974,35 +991,77 @@ export default function ObservabilityPage() {
               </CardContent>
             </Card>
 
-            {/* Subscriptions */}
             <Card noAnimation>
-              <CardHeader className="pb-2"><CardTitle className="text-sm">Subscriptions ({subscriptions.length})</CardTitle></CardHeader>
+              <CardHeader className="pb-2 flex flex-row justify-between items-center">
+                <CardTitle className="text-sm">Subscriptions ({subscriptions.length})</CardTitle>
+                {debug && <ProbeMiniBadge probeKey="outbox.subscriptions" registry={registryRef.current} />}
+              </CardHeader>
               <CardContent>
-                <Table>
-                  <TableHeader>
-                    <TableRow>
-                      <TableHead>Provider</TableHead>
-                      <TableHead>Event type</TableHead>
-                      <TableHead>Action</TableHead>
-                      <TableHead>Ativa</TableHead>
-                      <TableHead>Pausada até</TableHead>
-                    </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                    {subscriptions.map((s) => (
-                      <TableRow key={s.id}>
-                        <TableCell className="text-xs">{s.integration_slug}</TableCell>
-                        <TableCell className="text-xs">{s.event_type}</TableCell>
-                        <TableCell className="text-xs">{s.target_action}</TableCell>
-                        <TableCell>{s.is_active ? <Badge>ativa</Badge> : <Badge variant="outline">inativa</Badge>}</TableCell>
-                        <TableCell className="text-xs">{s.paused_until ? fmtTime(s.paused_until) : '—'}</TableCell>
+                {subscriptions.length === 0 ? <div className="text-xs text-muted-foreground">Nenhuma subscription.</div> : (
+                  <Table>
+                    <TableHeader>
+                      <TableRow>
+                        <TableHead>Provider</TableHead><TableHead>Event type</TableHead>
+                        <TableHead>Action</TableHead><TableHead>Ativa</TableHead><TableHead>Pausada até</TableHead>
                       </TableRow>
-                    ))}
-                  </TableBody>
-                </Table>
+                    </TableHeader>
+                    <TableBody>
+                      {subscriptions.map((s) => (
+                        <TableRow key={s.id}>
+                          <TableCell className="text-xs">{s.integration_slug}</TableCell>
+                          <TableCell className="text-xs">{s.event_type}</TableCell>
+                          <TableCell className="text-xs">{s.target_action}</TableCell>
+                          <TableCell>{s.is_active ? <Badge>ativa</Badge> : <Badge variant="outline">inativa</Badge>}</TableCell>
+                          <TableCell className="text-xs">{s.paused_until ? fmtTime(s.paused_until) : '—'}</TableCell>
+                        </TableRow>
+                      ))}
+                    </TableBody>
+                  </Table>
+                )}
               </CardContent>
             </Card>
           </TabsContent>
+
+          {/* ============================== DEBUG ============================== */}
+          {debug && (
+            <TabsContent value="debug" className="space-y-4 mt-4">
+              <Card noAnimation>
+                <CardHeader className="pb-2"><CardTitle className="text-sm">Probes ({allProbes.length})</CardTitle></CardHeader>
+                <CardContent>
+                  <Table>
+                    <TableHeader>
+                      <TableRow>
+                        <TableHead>Key</TableHead><TableHead>Label</TableHead><TableHead>Source</TableHead>
+                        <TableHead>Type</TableHead><TableHead>Window</TableHead><TableHead>Filters</TableHead>
+                        <TableHead className="text-right">Rows</TableHead><TableHead className="text-right">Latency</TableHead>
+                        <TableHead>Status</TableHead><TableHead>Error</TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {allProbes.map((p) => (
+                        <TableRow key={p.key}>
+                          <TableCell className="font-mono text-[11px]">{p.key}</TableCell>
+                          <TableCell className="text-xs">{p.label}</TableCell>
+                          <TableCell className="text-xs">{p.source}</TableCell>
+                          <TableCell className="text-xs">{p.type}</TableCell>
+                          <TableCell className="text-xs">{p.window || '—'}</TableCell>
+                          <TableCell className="text-xs max-w-xs truncate">{p.filters || '—'}</TableCell>
+                          <TableCell className="text-right font-mono text-xs">{p.rows}</TableCell>
+                          <TableCell className="text-right font-mono text-xs">{p.latency_ms}ms</TableCell>
+                          <TableCell>
+                            <Badge variant={p.status === 'error' ? 'destructive' : p.status === 'empty' ? 'outline' : 'secondary'}>
+                              {p.status}
+                            </Badge>
+                          </TableCell>
+                          <TableCell className="max-w-xs truncate text-xs text-destructive">{p.error || ''}</TableCell>
+                        </TableRow>
+                      ))}
+                    </TableBody>
+                  </Table>
+                </CardContent>
+              </Card>
+            </TabsContent>
+          )}
         </Tabs>
       </div>
 
@@ -1028,24 +1087,23 @@ function Field({ label, children }: { label: string; children: React.ReactNode }
   );
 }
 
+function ProbeMiniBadge({ probeKey, registry }: { probeKey: string; registry: ProbeRegistry }) {
+  const p = registry.all.find((x) => x.key === probeKey);
+  if (!p) return null;
+  return (
+    <span className="text-[10px] font-mono text-muted-foreground">
+      [{p.type}] {p.source} · rows={p.rows} · {p.latency_ms}ms
+      {p.error && <span className="text-destructive"> · err</span>}
+    </span>
+  );
+}
+
 function HealthPill({ level }: { level: 'healthy' | 'warning' | 'critical' }) {
   if (level === 'healthy') {
-    return (
-      <Badge className="bg-emerald-500 hover:bg-emerald-500">
-        <CheckCircle2 className="h-3 w-3 mr-1" /> Healthy
-      </Badge>
-    );
+    return <Badge className="bg-emerald-500 hover:bg-emerald-500"><CheckCircle2 className="h-3 w-3 mr-1" /> Healthy</Badge>;
   }
   if (level === 'warning') {
-    return (
-      <Badge className="bg-amber-500 hover:bg-amber-500">
-        <AlertTriangle className="h-3 w-3 mr-1" /> Warning
-      </Badge>
-    );
+    return <Badge className="bg-amber-500 hover:bg-amber-500"><AlertTriangle className="h-3 w-3 mr-1" /> Warning</Badge>;
   }
-  return (
-    <Badge variant="destructive">
-      <AlertOctagon className="h-3 w-3 mr-1" /> Critical
-    </Badge>
-  );
+  return <Badge variant="destructive"><AlertOctagon className="h-3 w-3 mr-1" /> Critical</Badge>;
 }

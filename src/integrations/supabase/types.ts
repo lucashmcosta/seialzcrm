@@ -5823,6 +5823,15 @@ export type Database = {
         Args: { _classification?: string; _error: string; _event_id: string }
         Returns: undefined
       }
+      fn_inbound_top_errors: {
+        Args: { _limit?: number; _window?: string }
+        Returns: {
+          count: number
+          error_code: string
+          last_seen: string
+          message: string
+        }[]
+      }
       fn_log_marketing_attribution_attempt: {
         Args: { _contact_id: string; _org_id: string }
         Returns: string
@@ -5858,6 +5867,16 @@ export type Database = {
         Args: { p_job_id: string; p_reason: string }
         Returns: undefined
       }
+      fn_outbox_dlq_by_integration: {
+        Args: never
+        Returns: {
+          count: number
+          integration_slug: string
+          last_error: string
+          last_error_at: string
+          target_action: string
+        }[]
+      }
       fn_outbox_health_summary: { Args: never; Returns: Json }
       fn_outbox_health_summary_internal: { Args: never; Returns: Json }
       fn_outbox_pause_subscription: {
@@ -5869,6 +5888,15 @@ export type Database = {
         Returns: undefined
       }
       fn_outbox_retry_job: { Args: { p_job_id: string }; Returns: undefined }
+      fn_outbox_top_errors: {
+        Args: { _limit?: number; _window?: string }
+        Returns: {
+          count: number
+          last_seen: string
+          message: string
+          sample_integration_slug: string
+        }[]
+      }
       fn_reap_stuck_jobs: {
         Args: { p_threshold_minutes?: number }
         Returns: number
