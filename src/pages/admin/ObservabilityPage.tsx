@@ -873,7 +873,7 @@ export default function ObservabilityPage() {
               <StatCard label="Stuck processing >5m" value={inboundStuck}
                 tone={inboundStuck > 10 ? 'critical' : inboundStuck > 0 ? 'warning' : 'success'}
                 probeKey="inbound.stuck" registry={registryRef.current} debug={debug} />
-              <StatCard label="Shadow mode" value={inboundShadow} hint={`janela ${windowSel}`}
+              <StatCard label="Ingest-only (shadow_mode=true)" value={inboundShadow} hint={`janela ${windowSel}`}
                 probeKey="inbound.shadow" registry={registryRef.current} debug={debug} />
               <StatCard label={`Signature failures (${windowSel})`} value={inboundSigFailures}
                 tone={inboundSigFailures > 0 ? 'warning' : 'success'}
