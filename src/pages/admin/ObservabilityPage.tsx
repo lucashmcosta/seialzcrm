@@ -309,6 +309,7 @@ export default function ObservabilityPage() {
         const fb = await instrument(reg, {
           key: 'inbound.health.1h.fb', label: 'Inbound health 1h (fallback)',
           source: 'integration_inbound_events', type: 'table', filters: `received_at>=${since1hISO}`,
+          fallback_used: true,
         }, () => (supabase as any).from('integration_inbound_events')
           .select('integration_slug, process_status').gte('received_at', since1hISO).limit(5000));
         const agg: Record<string, InboundHealthRow> = {};
