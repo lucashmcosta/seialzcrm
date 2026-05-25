@@ -285,6 +285,38 @@ export default function ObservabilityPage() {
   // Drill-down
   const [drillRow, setDrillRow] = useState<any>(null);
   const [drillTitle, setDrillTitle] = useState<string>('');
+  const [drillLoading, setDrillLoading] = useState(false);
+
+  const openInboundDrill = useCallback(async (e: InboundEvent) => {
+    setDrillTitle('Inbound event');
+    setDrillRow(e);
+    setDrillLoading(true);
+    try {
+      const { data } = await (supabase as any)
+        .from('integration_inbound_events')
+        .select('*')
+        .eq('id', e.id)
+        .maybeSingle();
+      if (data) setDrillRow(data);
+    } finally {
+      setDrillLoading(false);
+    }
+  }, []);
+  const openJobDrill = useCallback(async (j: IntegrationJob) => {
+    setDrillTitle('Outbox job');
+    setDrillRow(j);
+    setDrillLoading(true);
+    try {
+      const { data } = await (supabase as any)
+        .from('integration_jobs')
+        .select('*')
+        .eq('id', j.id)
+        .maybeSingle();
+      if (data) setDrillRow(data);
+    } finally {
+      setDrillLoading(false);
+    }
+  }, []);
 
   const sinceISO = useMemo(() => new Date(Date.now() - WINDOW_TO_MS[windowSel]).toISOString(), [windowSel, lastUpdated]);
   const since1hISO = useMemo(() => new Date(Date.now() - 3600_000).toISOString(), [lastUpdated]);
