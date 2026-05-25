@@ -14,8 +14,11 @@ import {
   Table, TableBody, TableCell, TableHead, TableHeader, TableRow,
 } from '@/components/ui/table';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
+import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from '@/components/ui/command';
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import { Skeleton } from '@/components/ui/skeleton';
-import { RefreshCw, AlertTriangle, CheckCircle2, AlertOctagon, Bug } from 'lucide-react';
+import { RefreshCw, AlertTriangle, CheckCircle2, AlertOctagon, Bug, Check, ChevronsUpDown } from 'lucide-react';
 
 // ------------------------------------------------------------------
 // Types
