@@ -267,6 +267,18 @@ export default function ObservabilityPage() {
   const [shadowAttempts, setShadowAttempts] = useState<number>(0);
   const [shadowFailures, setShadowFailures] = useState<number>(0);
 
+  // Coverage / unknown org / maturity (computed in fetchInbox)
+  const [coverageByProvider, setCoverageByProvider] = useState<
+    { provider: string; total: number; with_org: number; with_trace: number; with_sig: number; org_pct: number; trace_pct: number; sig_pct: number }[]
+  >([]);
+  const [unknownOrg, setUnknownOrg] = useState<{ total: number; pct: number; byProvider: { provider: string; count: number }[] }>(
+    { total: 0, pct: 0, byProvider: [] }
+  );
+  const [maturityRows, setMaturityRows] = useState<
+    { provider: string; org: number; trace: number; sig: number; retry_rate: number; dlq_rate: number; ingest_err_rate: number; score: number }[]
+  >([]);
+  const [statusTimeline, setStatusTimeline] = useState<{ status: string; count: number }[]>([]);
+
   // Outbox state
   const [outboxHealth, setOutboxHealth] = useState<OutboxHealth | null>(null);
   const [outboxHealthErr, setOutboxHealthErr] = useState<string | null>(null);
