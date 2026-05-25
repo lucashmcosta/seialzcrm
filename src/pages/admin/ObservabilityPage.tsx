@@ -1760,7 +1760,7 @@ export default function ObservabilityPage() {
               {drillLoading && <span className="text-[10px] text-muted-foreground font-mono">carregando payload…</span>}
             </DialogTitle>
           </DialogHeader>
-          {drillRow && <DrillDownView row={drillRow} />}
+          {drillRow && <DrillDownView row={drillRow} orgsMap={orgsMap} />}
         </DialogContent>
       </Dialog>
     </AdminLayout>
