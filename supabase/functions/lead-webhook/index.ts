@@ -253,6 +253,8 @@ serve(async (req) => {
         utm_source: (mapped.utm_source as string) || rawPayload.utm_source,
         utm_medium: (mapped.utm_medium as string) || rawPayload.utm_medium,
         utm_campaign: (mapped.utm_campaign as string) || rawPayload.utm_campaign,
+        utm_content: (mapped.utm_content as string) || rawPayload.utm_content,
+        utm_term: (mapped.utm_term as string) || rawPayload.utm_term,
         notes: (mapped.notes as string) || rawPayload.notes,
         create_opportunity: rawPayload.create_opportunity,
         opportunity_title: rawPayload.opportunity_title,
