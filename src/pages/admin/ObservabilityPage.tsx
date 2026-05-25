@@ -14,8 +14,11 @@ import {
   Table, TableBody, TableCell, TableHead, TableHeader, TableRow,
 } from '@/components/ui/table';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
+import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from '@/components/ui/command';
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import { Skeleton } from '@/components/ui/skeleton';
-import { RefreshCw, AlertTriangle, CheckCircle2, AlertOctagon, Bug } from 'lucide-react';
+import { RefreshCw, AlertTriangle, CheckCircle2, AlertOctagon, Bug, Check, ChevronsUpDown } from 'lucide-react';
 
 // ------------------------------------------------------------------
 // Types
@@ -233,6 +236,8 @@ export default function ObservabilityPage() {
   const [providerFilter, setProviderFilter] = useState<string>('all');
   const [statusFilter, setStatusFilter] = useState<string>('all');
   const [orgFilter, setOrgFilter] = useState<string>('');
+  const [orgs, setOrgs] = useState<{ id: string; name: string; slug: string | null }[]>([]);
+  const [orgPickerOpen, setOrgPickerOpen] = useState(false);
   const [search, setSearch] = useState<string>('');
   const [loading, setLoading] = useState(false);
   const [debug, setDebug] = useState(false);
@@ -858,6 +863,24 @@ export default function ObservabilityPage() {
     }
   }, [fetchInbox, fetchOutbox]);
 
+  // Load organizations once (for name/slug display + searchable filter)
+  useEffect(() => {
+    (async () => {
+      const { data } = await (supabase as any)
+        .from('organizations')
+        .select('id, name, slug')
+        .order('name', { ascending: true })
+        .limit(2000);
+      if (data) setOrgs(data as any);
+    })();
+  }, []);
+
+  const orgsMap = useMemo(() => {
+    const m = new Map<string, { id: string; name: string; slug: string | null }>();
+    orgs.forEach((o) => m.set(o.id, o));
+    return m;
+  }, [orgs]);
+
   useEffect(() => {
     refresh();
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -968,8 +991,46 @@ export default function ObservabilityPage() {
                 </SelectContent>
               </Select>
             </Field>
-            <Field label="organization_id">
-              <Input value={orgFilter} onChange={(e) => setOrgFilter(e.target.value)} placeholder="uuid" className="w-72" />
+            <Field label="Organização">
+              <Popover open={orgPickerOpen} onOpenChange={setOrgPickerOpen}>
+                <PopoverTrigger asChild>
+                  <Button variant="outline" role="combobox" className="w-72 justify-between font-normal">
+                    {orgFilter
+                      ? (orgsMap.get(orgFilter)?.name ?? <span className="font-mono text-xs">{orgFilter.slice(0, 8)}…</span>)
+                      : <span className="text-muted-foreground">Todas as organizações</span>}
+                    <ChevronsUpDown className="ml-2 h-3.5 w-3.5 opacity-50" />
+                  </Button>
+                </PopoverTrigger>
+                <PopoverContent className="w-80 p-0" align="start">
+                  <Command>
+                    <CommandInput placeholder="Buscar por nome, slug ou UUID…" />
+                    <CommandList>
+                      <CommandEmpty>Nenhuma organização.</CommandEmpty>
+                      <CommandGroup>
+                        <CommandItem value="__all__" onSelect={() => { setOrgFilter(''); setOrgPickerOpen(false); }}>
+                          <Check className={`mr-2 h-3.5 w-3.5 ${orgFilter === '' ? 'opacity-100' : 'opacity-0'}`} />
+                          Todas as organizações
+                        </CommandItem>
+                        {orgs.map((o) => (
+                          <CommandItem
+                            key={o.id}
+                            value={`${o.name} ${o.slug ?? ''} ${o.id}`}
+                            onSelect={() => { setOrgFilter(o.id); setOrgPickerOpen(false); }}
+                          >
+                            <Check className={`mr-2 h-3.5 w-3.5 ${orgFilter === o.id ? 'opacity-100' : 'opacity-0'}`} />
+                            <div className="flex flex-col">
+                              <span className="text-sm">{o.name}</span>
+                              <span className="text-[10px] font-mono text-muted-foreground">
+                                {o.slug ?? '—'} · {o.id.slice(0, 8)}
+                              </span>
+                            </div>
+                          </CommandItem>
+                        ))}
+                      </CommandGroup>
+                    </CommandList>
+                  </Command>
+                </PopoverContent>
+              </Popover>
             </Field>
             <Field label="Buscar trace_id / external_id / idempotency_key">
               <div className="flex gap-2">
@@ -1384,7 +1445,7 @@ export default function ObservabilityPage() {
                           <TableCell className="text-xs">{e.retry_count ?? 0}</TableCell>
                           <TableCell className="font-mono text-xs">{e.trace_id?.slice(0, 8) || '—'}</TableCell>
                           <TableCell className="font-mono text-xs">{e.external_id?.slice(0, 12) || '—'}</TableCell>
-                          <TableCell className="font-mono text-xs">{e.organization_id ? e.organization_id.slice(0, 8) : <span className="text-amber-600">unknown</span>}</TableCell>
+                          <TableCell><OrgCell id={e.organization_id} orgsMap={orgsMap} reason={e.process_error ?? null} /></TableCell>
                           <TableCell className="max-w-xs truncate text-xs text-destructive">{e.process_error || ''}</TableCell>
                         </TableRow>
                       ))}
@@ -1514,7 +1575,7 @@ export default function ObservabilityPage() {
                           <TableCell><Badge variant={statusVariant(j.status)}>{j.status}</Badge></TableCell>
                           <TableCell className="text-xs">{j.attempts ?? 0}/{j.max_attempts ?? '—'}</TableCell>
                           <TableCell className="text-xs">{j.next_run_at ? fmtRelative(j.next_run_at) : '—'}</TableCell>
-                          <TableCell className="font-mono text-xs">{j.organization_id ? j.organization_id.slice(0, 8) : <span className="text-amber-600">unknown</span>}</TableCell>
+                          <TableCell><OrgCell id={j.organization_id} orgsMap={orgsMap} reason={j.last_error ?? null} /></TableCell>
                           <TableCell className="font-mono text-xs">{j.idempotency_key?.slice(0, 12) || '—'}</TableCell>
                           <TableCell className="max-w-xs truncate text-xs text-destructive">{j.last_error || ''}</TableCell>
                         </TableRow>
@@ -1699,7 +1760,7 @@ export default function ObservabilityPage() {
               {drillLoading && <span className="text-[10px] text-muted-foreground font-mono">carregando payload…</span>}
             </DialogTitle>
           </DialogHeader>
-          {drillRow && <DrillDownView row={drillRow} />}
+          {drillRow && <DrillDownView row={drillRow} orgsMap={orgsMap} />}
         </DialogContent>
       </Dialog>
     </AdminLayout>
@@ -1752,6 +1813,55 @@ function EventFlagBadges({ e }: { e: any }) {
         <span key={f.label} className={`text-[9px] px-1.5 py-0.5 border rounded ${f.cls}`}>{f.label}</span>
       ))}
     </div>
+  );
+}
+
+function OrgCell({
+  id, orgsMap, reason,
+}: {
+  id: string | null;
+  orgsMap: Map<string, { id: string; name: string; slug: string | null }>;
+  reason?: string | null;
+}) {
+  if (!id) {
+    const hint = reason && reason.length > 0
+      ? reason
+      : 'Webhook chegou sem orgId resolvido (phone não mapeado, token ausente ou fallback).';
+    return (
+      <TooltipProvider delayDuration={150}>
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <Badge className="bg-amber-500/15 text-amber-600 border border-amber-500/30 hover:bg-amber-500/20 cursor-help">unknown org</Badge>
+          </TooltipTrigger>
+          <TooltipContent side="top" className="max-w-xs">
+            <div className="space-y-1 text-xs">
+              <div className="font-medium">Organização não resolvida</div>
+              <div className="text-muted-foreground">{hint}</div>
+              <div className="text-muted-foreground">Veja drilldown para detalhes.</div>
+            </div>
+          </TooltipContent>
+        </Tooltip>
+      </TooltipProvider>
+    );
+  }
+  const o = orgsMap.get(id);
+  return (
+    <TooltipProvider delayDuration={150}>
+      <Tooltip>
+        <TooltipTrigger asChild>
+          <span className="text-xs truncate inline-block max-w-[180px] cursor-help">
+            {o?.name ?? <span className="font-mono">{id.slice(0, 8)}</span>}
+          </span>
+        </TooltipTrigger>
+        <TooltipContent side="top">
+          <div className="space-y-0.5 text-xs">
+            <div className="font-medium">{o?.name ?? '(nome não encontrado)'}</div>
+            <div className="font-mono text-[10px] text-muted-foreground">slug: {o?.slug ?? '—'}</div>
+            <div className="font-mono text-[10px] text-muted-foreground">{id}</div>
+          </div>
+        </TooltipContent>
+      </Tooltip>
+    </TooltipProvider>
   );
 }
 
@@ -1820,10 +1930,14 @@ function TimelineSparkChart({
 // ------------------------------------------------------------------
 // Drill-down structured view
 // ------------------------------------------------------------------
-function DrillDownView({ row }: { row: any }) {
+function DrillDownView({ row, orgsMap }: { row: any; orgsMap?: Map<string, { id: string; name: string; slug: string | null }> }) {
+  const org = row.organization_id ? orgsMap?.get(row.organization_id) : null;
   const meta: [string, any][] = [
     ['id', row.id],
     ['trace_id', row.trace_id],
+    ['correlation_id', row.correlation_id],
+    ['organization_name', org?.name ?? (row.organization_id ? '(não encontrado)' : <span className="text-amber-600">unknown</span>)],
+    ['organization_slug', org?.slug ?? '—'],
     ['organization_id', row.organization_id ?? <span className="text-amber-600">unknown</span>],
     ['integration_slug', row.integration_slug],
     ['source_event / target_action', row.source_event ?? row.target_action],
