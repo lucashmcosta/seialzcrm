@@ -36,15 +36,19 @@ const PhoneInput = React.forwardRef<HTMLInputElement, PhoneInputProps>(
       return "";
     });
 
-    // Update local state when value prop changes
+    // Update local state when value prop changes (external updates only — avoid clobbering typing)
     React.useEffect(() => {
       if (value) {
+        // If incoming value matches what we'd emit from current localValue, skip re-format.
+        const expected = buildE164(localValue, country);
+        if (expected === value) return;
         const detectedCountry = detectCountryFromE164(value);
         setCountry(detectedCountry);
         setLocalValue(formatPhoneForCountry(value, detectedCountry));
       } else {
-        setLocalValue("");
+        if (localValue !== "") setLocalValue("");
       }
+      // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [value]);
 
     const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
