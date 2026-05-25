@@ -1311,3 +1311,80 @@ function HealthPill({ level }: { level: 'healthy' | 'warning' | 'critical' }) {
   }
   return <Badge variant="destructive"><AlertOctagon className="h-3 w-3 mr-1" /> Critical</Badge>;
 }
+
+function EventFlagBadges({ e }: { e: any }) {
+  const flags: { label: string; cls: string }[] = [];
+  if (e.shadow_mode === true) flags.push({ label: 'shadow', cls: 'bg-indigo-500/15 text-indigo-600 border-indigo-500/30' });
+  if (e.process_status === 'duplicate_ignored') flags.push({ label: 'duplicate', cls: 'bg-amber-500/15 text-amber-600 border-amber-500/30' });
+  if (e.signature_valid === false) flags.push({ label: 'sig_invalid', cls: 'bg-destructive/15 text-destructive border-destructive/30' });
+  if ((e.replay_count ?? 0) > 0) flags.push({ label: 'replayed', cls: 'bg-sky-500/15 text-sky-600 border-sky-500/30' });
+  if (e.process_status === 'expired' || (e.expires_at && new Date(e.expires_at).getTime() < Date.now())) {
+    flags.push({ label: 'expired', cls: 'bg-muted text-muted-foreground border-border' });
+  }
+  if (flags.length === 0) return <span className="text-xs text-muted-foreground">—</span>;
+  return (
+    <div className="flex flex-wrap gap-1">
+      {flags.map((f) => (
+        <span key={f.label} className={`text-[9px] px-1.5 py-0.5 border rounded ${f.cls}`}>{f.label}</span>
+      ))}
+    </div>
+  );
+}
+
+function TimelineSparkChart({
+  buckets,
+}: {
+  buckets: { ts: number; ingest: number; sig_fail: number; duplicates: number; ingest_err: number; latencies: number[] }[];
+}) {
+  const max = Math.max(1, ...buckets.map((b) => Math.max(b.ingest, b.sig_fail, b.duplicates, b.ingest_err)));
+  const W = 800;
+  const H = 120;
+  const step = buckets.length > 1 ? W / (buckets.length - 1) : 0;
+  const path = (key: keyof typeof buckets[number]) =>
+    buckets.map((b, i) => {
+      const v = Number(b[key] as number) || 0;
+      const x = i * step;
+      const y = H - (v / max) * (H - 8) - 4;
+      return `${i === 0 ? 'M' : 'L'}${x.toFixed(1)},${y.toFixed(1)}`;
+    }).join(' ');
+
+  const fmtBucketTs = (ts: number) => {
+    const d = new Date(ts);
+    return `${d.getHours().toString().padStart(2, '0')}:${d.getMinutes().toString().padStart(2, '0')}`;
+  };
+  const allLats = buckets.flatMap((b) => b.latencies);
+  const p50v = p50(allLats); const p95v = p95(allLats);
+
+  const legend = [
+    { k: 'ingest', label: 'ingest volume', color: 'hsl(217 91% 60%)' },
+    { k: 'sig_fail', label: 'sig failures', color: 'hsl(0 84% 60%)' },
+    { k: 'duplicates', label: 'duplicates', color: 'hsl(38 92% 50%)' },
+    { k: 'ingest_err', label: 'ingest errors', color: 'hsl(280 70% 55%)' },
+  ];
+
+  return (
+    <div className="space-y-2">
+      <div className="flex flex-wrap gap-3 text-[10px]">
+        {legend.map((l) => (
+          <div key={l.k} className="flex items-center gap-1">
+            <span className="inline-block w-3 h-0.5" style={{ background: l.color }} />
+            <span className="text-muted-foreground">{l.label}</span>
+          </div>
+        ))}
+        <div className="ml-auto text-muted-foreground font-mono">
+          p50={fmtLatency(p50v)} · p95={fmtLatency(p95v)} · max y={max}
+        </div>
+      </div>
+      <svg viewBox={`0 0 ${W} ${H}`} className="w-full h-32 border rounded bg-muted/30">
+        {legend.map((l) => (
+          <path key={l.k} d={path(l.k as any)} fill="none" stroke={l.color} strokeWidth={1.5} />
+        ))}
+      </svg>
+      <div className="flex justify-between text-[9px] font-mono text-muted-foreground">
+        <span>{buckets[0] ? fmtBucketTs(buckets[0].ts) : ''}</span>
+        <span>{buckets[Math.floor(buckets.length / 2)] ? fmtBucketTs(buckets[Math.floor(buckets.length / 2)].ts) : ''}</span>
+        <span>{buckets[buckets.length - 1] ? fmtBucketTs(buckets[buckets.length - 1].ts) : ''}</span>
+      </div>
+    </div>
+  );
+}
