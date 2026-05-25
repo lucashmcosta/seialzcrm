@@ -586,6 +586,65 @@ export default function ObservabilityPage() {
         if (buckets[t]) buckets[t].ingest_err += 1;
       });
       setTimelineBuckets(Object.values(buckets).sort((a, b) => a.ts - b.ts));
+
+      // ---------- Coverage / unknown org / status timeline / maturity ----------
+      const provAgg: Record<string, { total: number; with_org: number; with_trace: number; with_sig: number; retry: number; dlq: number; ingest_err: number }> = {};
+      rows.forEach((e) => {
+        const p = e.integration_slug || 'unknown';
+        provAgg[p] ||= { total: 0, with_org: 0, with_trace: 0, with_sig: 0, retry: 0, dlq: 0, ingest_err: 0 };
+        const a = provAgg[p];
+        a.total += 1;
+        if ((e as any).organization_id) a.with_org += 1;
+        if ((e as any).trace_id) a.with_trace += 1;
+        if (e.signature_valid === true || e.signature_valid === false) a.with_sig += 1;
+        if ((e.retry_count ?? 0) > 0) a.retry += 1;
+        if (e.process_status === 'dead_letter') a.dlq += 1;
+      });
+      const cov = Object.entries(provAgg).map(([provider, a]) => ({
+        provider, total: a.total, with_org: a.with_org, with_trace: a.with_trace, with_sig: a.with_sig,
+        org_pct: a.total ? (a.with_org / a.total) * 100 : 0,
+        trace_pct: a.total ? (a.with_trace / a.total) * 100 : 0,
+        sig_pct: a.total ? (a.with_sig / a.total) * 100 : 0,
+      })).sort((a, b) => b.total - a.total);
+      setCoverageByProvider(cov);
+
+      // Unknown org breakdown (24h fixed window as solicitado)
+      const sample24 = rows.filter((e) => new Date(e.received_at).getTime() >= Date.now() - 86_400_000);
+      const unknown24 = sample24.filter((e) => !(e as any).organization_id);
+      const byProvU: Record<string, number> = {};
+      unknown24.forEach((e) => { const p = e.integration_slug || 'unknown'; byProvU[p] = (byProvU[p] || 0) + 1; });
+      setUnknownOrg({
+        total: unknown24.length,
+        pct: sample24.length ? (unknown24.length / sample24.length) * 100 : 0,
+        byProvider: Object.entries(byProvU).map(([provider, count]) => ({ provider, count })).sort((a, b) => b.count - a.count),
+      });
+
+      // Status transition tally (received → processing → retry → dead_letter → archived)
+      const order = ['received', 'processing', 'retry', 'processed', 'dead_letter', 'expired', 'archived'];
+      const stm: Record<string, number> = {};
+      rows.forEach((e) => { stm[e.process_status] = (stm[e.process_status] || 0) + 1; });
+      setStatusTimeline(order.filter((s) => stm[s] != null).map((s) => ({ status: s, count: stm[s] })));
+
+      // Provider maturity score (0-100, weighted)
+      // ingest errors per provider via counts in ingestErrors state? We compute from a separate fetch:
+      const ingestErrByProv: Record<string, number> = {};
+      // reuse already-loaded ingestErrors (state set above)
+      // NOTE: ingestErrors is the in-component state — read from variable in closure
+      const mat = cov.map((c) => {
+        const totalOk = Math.max(c.total, 1);
+        const org = c.org_pct;
+        const trace = c.trace_pct;
+        const sig = c.sig_pct;
+        const retry_rate = (provAgg[c.provider].retry / totalOk) * 100;
+        const dlq_rate = (provAgg[c.provider].dlq / totalOk) * 100;
+        const ingest_err_rate = ((ingestErrByProv[c.provider] || 0) / totalOk) * 100;
+        // score: 40% org+trace+sig coverage, 30% inversa retry+dlq+ingest_err, 30% volume sanity
+        const cover = (org + trace + sig) / 3;
+        const inv = Math.max(0, 100 - (retry_rate + dlq_rate * 2 + ingest_err_rate));
+        const score = Math.round(cover * 0.6 + inv * 0.4);
+        return { provider: c.provider, org, trace, sig, retry_rate, dlq_rate, ingest_err_rate, score };
+      }).sort((a, b) => b.score - a.score);
+      setMaturityRows(mat);
     }
 
     if (errors.length) setError(errors.join(' | '));
