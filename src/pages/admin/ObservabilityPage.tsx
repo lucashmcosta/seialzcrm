@@ -1240,7 +1240,7 @@ export default function ObservabilityPage() {
                     </TableHeader>
                     <TableBody>
                       {jobs.map((j) => (
-                        <TableRow key={j.id} className="cursor-pointer" onClick={() => { setDrillRow(j); setDrillTitle('Outbox job'); }}>
+                        <TableRow key={j.id} className="cursor-pointer" onClick={() => openJobDrill(j)}>
                           <TableCell className="whitespace-nowrap text-xs">{fmtRelative(j.created_at)}</TableCell>
                           <TableCell className="text-xs">{j.integration_slug}</TableCell>
                           <TableCell className="text-xs">{j.target_action}</TableCell>
