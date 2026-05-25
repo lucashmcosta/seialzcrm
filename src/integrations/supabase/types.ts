@@ -3117,6 +3117,102 @@ export type Database = {
           },
         ]
       }
+      marketing_attribution_ambiguities: {
+        Row: {
+          candidate_count: number
+          candidate_ids: string[]
+          contact_id: string
+          created_at: string
+          id: string
+          match_kind: string
+          organization_id: string
+          resolved: boolean
+          resolved_at: string | null
+          resolved_by: string | null
+          resolved_marketing_campaign_id: string | null
+          updated_at: string
+          utm_campaign: string | null
+          utm_content: string | null
+          utm_medium: string | null
+          utm_source: string | null
+          utm_term: string | null
+        }
+        Insert: {
+          candidate_count: number
+          candidate_ids: string[]
+          contact_id: string
+          created_at?: string
+          id?: string
+          match_kind: string
+          organization_id: string
+          resolved?: boolean
+          resolved_at?: string | null
+          resolved_by?: string | null
+          resolved_marketing_campaign_id?: string | null
+          updated_at?: string
+          utm_campaign?: string | null
+          utm_content?: string | null
+          utm_medium?: string | null
+          utm_source?: string | null
+          utm_term?: string | null
+        }
+        Update: {
+          candidate_count?: number
+          candidate_ids?: string[]
+          contact_id?: string
+          created_at?: string
+          id?: string
+          match_kind?: string
+          organization_id?: string
+          resolved?: boolean
+          resolved_at?: string | null
+          resolved_by?: string | null
+          resolved_marketing_campaign_id?: string | null
+          updated_at?: string
+          utm_campaign?: string | null
+          utm_content?: string | null
+          utm_medium?: string | null
+          utm_source?: string | null
+          utm_term?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "marketing_attribution_ambigui_resolved_marketing_campaign__fkey"
+            columns: ["resolved_marketing_campaign_id"]
+            isOneToOne: false
+            referencedRelation: "marketing_campaigns"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "marketing_attribution_ambigui_resolved_marketing_campaign__fkey"
+            columns: ["resolved_marketing_campaign_id"]
+            isOneToOne: false
+            referencedRelation: "vw_marketing_ad_performance"
+            referencedColumns: ["marketing_campaign_id"]
+          },
+          {
+            foreignKeyName: "marketing_attribution_ambigui_resolved_marketing_campaign__fkey"
+            columns: ["resolved_marketing_campaign_id"]
+            isOneToOne: false
+            referencedRelation: "vw_marketing_funnel"
+            referencedColumns: ["marketing_campaign_id"]
+          },
+          {
+            foreignKeyName: "marketing_attribution_ambiguities_contact_id_fkey"
+            columns: ["contact_id"]
+            isOneToOne: true
+            referencedRelation: "contacts"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "marketing_attribution_ambiguities_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       marketing_campaign_insights_daily: {
         Row: {
           clicks: number
@@ -5450,6 +5546,37 @@ export type Database = {
         }
         Returns: undefined
       }
+      fn_log_marketing_attribution_attempt: {
+        Args: { _contact_id: string; _org_id: string }
+        Returns: string
+      }
+      fn_marketing_attribution_dryrun: {
+        Args: never
+        Returns: {
+          ambiguous: number
+          eligible_contacts: number
+          no_match: number
+          organization_id: string
+          organization_name: string
+          unique_match: number
+        }[]
+      }
+      fn_marketing_attribution_top_conflicts: {
+        Args: { _limit?: number; _org_id?: string }
+        Returns: {
+          ad_names: string
+          adset_names: string
+          campaign_names: string
+          candidate_count: number
+          candidate_ids: string[]
+          contacts: number
+          organization_id: string
+          utm_campaign: string
+          utm_content: string
+          utm_medium: string
+          utm_term: string
+        }[]
+      }
       fn_outbox_dismiss_job: {
         Args: { p_job_id: string; p_reason: string }
         Returns: undefined
@@ -5468,6 +5595,22 @@ export type Database = {
       fn_reap_stuck_jobs: {
         Args: { p_threshold_minutes?: number }
         Returns: number
+      }
+      fn_resolve_marketing_campaign_id: {
+        Args: {
+          _org_id: string
+          _utm_campaign: string
+          _utm_content: string
+          _utm_medium: string
+          _utm_source: string
+          _utm_term: string
+        }
+        Returns: {
+          campaign_id: string
+          candidate_count: number
+          candidate_ids: string[]
+          match_kind: string
+        }[]
       }
       fn_schedule_retry: {
         Args: { p_error: string; p_job_id: string }
