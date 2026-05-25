@@ -851,13 +851,13 @@ export default function ObservabilityPage() {
                 probeKey="inbound.ingest_errors" registry={registryRef.current} debug={debug} />
               <StatCard
                 label="p50 latency"
-                value={fmtLatency(p50(inboundLatencies))}
-                hint={inboundProcessedCount === 0 ? 'sem eventos processados (dispatcher inerte)' : `n=${inboundProcessedCount}`}
+                value={inboundProcessedCount === 0 ? <span className="text-muted-foreground text-base">dispatcher inativo</span> : fmtLatency(p50(inboundLatencies))}
+                hint={inboundProcessedCount === 0 ? 'nenhum evento processado_at na janela' : `n=${inboundProcessedCount}`}
               />
               <StatCard
                 label="p95 latency"
-                value={fmtLatency(p95(inboundLatencies))}
-                hint={inboundProcessedCount === 0 ? 'sem eventos processados' : `n=${inboundProcessedCount}`}
+                value={inboundProcessedCount === 0 ? <span className="text-muted-foreground text-base">dispatcher inativo</span> : fmtLatency(p95(inboundLatencies))}
+                hint={inboundProcessedCount === 0 ? 'nenhum evento processado_at na janela' : `n=${inboundProcessedCount}`}
               />
               <StatCard
                 label={`Duplicates ignored (${windowSel})`}
