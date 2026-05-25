@@ -40,6 +40,8 @@ interface LeadPayload {
   utm_source?: string;
   utm_medium?: string;
   utm_campaign?: string;
+  utm_content?: string;
+  utm_term?: string;
   notes?: string;
   create_opportunity?: boolean;
   opportunity_title?: string;
@@ -251,6 +253,8 @@ serve(async (req) => {
         utm_source: (mapped.utm_source as string) || rawPayload.utm_source,
         utm_medium: (mapped.utm_medium as string) || rawPayload.utm_medium,
         utm_campaign: (mapped.utm_campaign as string) || rawPayload.utm_campaign,
+        utm_content: (mapped.utm_content as string) || rawPayload.utm_content,
+        utm_term: (mapped.utm_term as string) || rawPayload.utm_term,
         notes: (mapped.notes as string) || rawPayload.notes,
         create_opportunity: rawPayload.create_opportunity,
         opportunity_title: rawPayload.opportunity_title,
@@ -356,6 +360,8 @@ serve(async (req) => {
           utm_source: payload.utm_source || null,
           utm_medium: payload.utm_medium || null,
           utm_campaign: payload.utm_campaign || null,
+          utm_content: payload.utm_content || null,
+          utm_term: payload.utm_term || null,
           lifecycle_stage: 'lead',
         })
         .select('id')
@@ -368,6 +374,22 @@ serve(async (req) => {
         );
       }
       contactId = contact.id;
+    }
+
+    // Conservative marketing attribution: only attributes on unique match,
+    // otherwise logs to marketing_attribution_ambiguities for manual review.
+    try {
+      const { data: attribResult, error: attribError } = await supabase.rpc(
+        'fn_log_marketing_attribution_attempt',
+        { _org_id: organizationId, _contact_id: contactId }
+      );
+      if (attribError) {
+        console.warn('marketing_attribution_attempt error:', attribError.message);
+      } else {
+        console.log(`marketing_attribution_attempt: ${attribResult}`);
+      }
+    } catch (e) {
+      console.warn('marketing_attribution_attempt threw:', (e as Error).message);
     }
 
     let opportunityId: string | null = null;

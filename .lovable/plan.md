@@ -1,39 +1,44 @@
-## Validação final de produção da Outbox
+## Atribuição conservadora de campanhas de marketing
 
-Executar os 5 testes e entregar resultados reais. Ao final, remover totalmente o handler de teste e redeployar o worker sem ele.
+Observação: a migração SQL com `fn_resolve_marketing_campaign_id`, `marketing_attribution_ambiguities`, `fn_log_marketing_attribution_attempt`, `fn_marketing_attribution_dryrun` e `fn_marketing_attribution_top_conflicts` já foi aplicada (multi-tenant, single-match-only, sem heurística). Não muda RPC de performance nem cria frontend.
 
-### 1. Handler de teste temporário
-- Criar `supabase/functions/_shared/integration-handlers/test-outbox.ts` com 3 modos via `payload.mode`: `success` → `Classification.Success`, `retryable` → `Classification.Retryable` ('simulated retryable'), `permanent` → `Classification.Permanent` ('simulated permanent').
-- Registrar `test-outbox:run` em `registry.ts`.
-- Deploy do `integration-worker`.
+### Próximos passos a executar
 
-### 2. Seed controlado
-- 1 `integration_subscriptions` (slug `test-outbox`, `event_type='test-outbox.run'`, `target_action='run'`, `is_active=true`) em uma organização existente.
-- 3 `integration_events` + 3 `integration_jobs` (mode = success / retryable / permanent), `status='pending'`, `max_attempts=3`, `next_run_at=now()`.
+1. **Integrar no `lead-webhook`**
+   - Capturar também `utm_content` e `utm_term` do `rawPayload` / mapping e gravar no `contacts`.
+   - Após criar/reutilizar o contato, chamar `fn_log_marketing_attribution_attempt(org_id, contact_id)` via service role.
+   - Não bloqueia a resposta — log se falhar.
+   - Escopo: apenas `supabase/functions/lead-webhook/index.ts`. `meta-lead-ads-process-lead` continua intocado.
 
-### 3. Executar worker e validar
-Disparar `integration-worker` via `curl_edge_functions` com `x-worker-token` até processar os 3. Por job, validar status, `next_run_at`, `last_error`, audit `worker.{classification}` em `integration_audit_logs`, e que nenhum ficou `running`.
+2. **Adicionar coluna `utm_content`/`utm_term` em `contacts`** se ainda não existir (verificar; se faltar, migração curta).
 
-### 4. Reaper
-- INSERT direto de job `running` com `started_at = now() - interval '10 min'`.
-- Chamar `fn_reap_stuck_jobs(5)` (sem esperar cron).
-- Validar:
-  - job → `failed`, `next_run_at` futuro, `last_error LIKE 'reaped:%'`
-  - **Heartbeat em `outbox_system_heartbeats` com `component = 'reaper'` e `last_run_at` recente**
-  - `running_stuck_5m = 0` em `fn_outbox_health_summary_internal()`
+3. **Dry-run multi-tenant (sem alterar dados)**
+   - Rodar `SELECT * FROM fn_marketing_attribution_dryrun();` e `SELECT * FROM fn_marketing_attribution_top_conflicts(NULL, 50);`
+   - Entregar relatório em `/mnt/documents/marketing_attribution_dryrun.csv` com: org, elegíveis, match único, ambíguos, sem match.
+   - Entregar `/mnt/documents/marketing_attribution_top_conflicts.csv` com top conflitos por org (utm_*, contatos, candidate_count, ad_names, adset_names, campaign_names).
 
-### 5. Tela admin `/admin/integration-health`
-- Abrir no browser sandbox como admin, capturar screenshot, confirmar carregamento sem erro.
-- Disparar Retry / Dismiss em jobs de teste e Pause / Resume na subscription; confirmar efeito via SQL.
-- Validar RLS chamando `fn_outbox_health_summary()` / `fn_outbox_retry_job(...)` sem auth → esperado `42501 permission denied`.
+4. **Backfill restrito à Viagi** (após você revisar os CSVs)
+   - Migração:
+     ```sql
+     WITH cand AS (
+       SELECT id FROM contacts
+       WHERE organization_id = 'b246ef6f-6242-4011-a112-6d8783d2896a'
+         AND deleted_at IS NULL
+         AND marketing_campaign_id IS NULL
+         AND (utm_campaign IS NOT NULL OR utm_content IS NOT NULL OR utm_term IS NOT NULL)
+     )
+     SELECT fn_log_marketing_attribution_attempt(
+       'b246ef6f-6242-4011-a112-6d8783d2896a'::uuid, id
+     ) FROM cand;
+     ```
+   - Resultado esperado dado o estudo anterior: praticamente tudo cai como `ambiguous` e fica registrado em `marketing_attribution_ambiguities` para revisão manual.
+   - Entregar contagem final: assigned / ambiguous / no_match / already_assigned.
 
-### 6. Cleanup obrigatório
-- DELETE dos jobs/events/subscription de teste (e job do reaper).
-- **Remover totalmente o handler de teste do código**:
-  - Deletar `supabase/functions/_shared/integration-handlers/test-outbox.ts`.
-  - Remover import e `register("test-outbox", "run", ...)` em `registry.ts`.
-- **Redeploy do `integration-worker`** sem o handler.
-- Confirmar via SQL: `SELECT count(*) FROM integration_subscriptions WHERE integration_slug='test-outbox'` e mesma checagem em `integration_jobs` e `integration_events` → todos `0`.
+5. **Backfill multi-tenant — NÃO executar agora.** Fica condicionado à sua aprovação após revisar o dry-run e o resultado da Viagi.
 
-### Entrega
-Tabela consolidada (testes 1–5) com SIM/NÃO + valores observados, screenshot da tela admin, confirmação do cleanup. **Nenhum passo de Nammux nesta etapa.**
+### Fora de escopo (confirmado)
+- Sem mudança em `get_marketing_ad_performance`.
+- Sem mudança em `meta-lead-ads-process-lead`.
+- Sem frontend / sem tela de revisão de ambiguidades.
+- Sem heurística automática de desempate.
+- Sem mudança em Outbox / Nammux.
