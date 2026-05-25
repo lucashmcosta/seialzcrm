@@ -341,7 +341,7 @@ export default function ObservabilityPage() {
       if (providerFilter !== 'all') { q = q.eq('integration_slug', providerFilter); filters.push(`slug=${providerFilter}`); }
       if (statusFilter !== 'all') { q = q.eq('process_status', statusFilter); filters.push(`status=${statusFilter}`); }
       if (orgFilter) { q = q.eq('organization_id', orgFilter); filters.push(`org=${orgFilter.slice(0, 8)}`); }
-      if (quickFilter === 'shadow') { q = q.eq('shadow_mode', true); filters.push('only=shadow'); }
+      if (quickFilter === 'ingest_only') { q = q.eq('shadow_mode', true); filters.push('only=ingest_only'); }
       if (quickFilter === 'sig_invalid') { q = q.eq('signature_valid', false); filters.push('only=sig_invalid'); }
       if (quickFilter === 'errors') { q = q.in('process_status', ['dead_letter', 'expired', 'retry']); filters.push('only=errors'); }
       if (quickFilter === 'duplicates') { q = q.eq('process_status', 'duplicate_ignored'); filters.push('only=duplicates'); }
