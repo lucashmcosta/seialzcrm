@@ -236,6 +236,8 @@ export default function ObservabilityPage() {
   const [providerFilter, setProviderFilter] = useState<string>('all');
   const [statusFilter, setStatusFilter] = useState<string>('all');
   const [orgFilter, setOrgFilter] = useState<string>('');
+  const [orgs, setOrgs] = useState<{ id: string; name: string; slug: string | null }[]>([]);
+  const [orgPickerOpen, setOrgPickerOpen] = useState(false);
   const [search, setSearch] = useState<string>('');
   const [loading, setLoading] = useState(false);
   const [debug, setDebug] = useState(false);
