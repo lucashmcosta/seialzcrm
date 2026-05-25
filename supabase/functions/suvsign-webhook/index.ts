@@ -1,4 +1,93 @@
 import { createClient } from "jsr:@supabase/supabase-js@2";
+import { featureFlagEnabled } from "../_shared/feature-flags.ts";
+
+// ============================================================
+// Inbox v2 — shadow ingest helper (best-effort, NUNCA quebra legado)
+// ============================================================
+// deno-lint-ignore no-explicit-any
+async function shadowIngestSuvSign(opts: {
+  supabase: any;
+  req: Request;
+  payload: any;
+  rawHeaders: Record<string, string>;
+  orgId: string | null;
+  signatureValid: boolean | null;
+}) {
+  const { supabase, req, payload, rawHeaders, orgId, signatureValid } = opts;
+  const traceId = crypto.randomUUID();
+  const externalId =
+    payload?.data?.document?.id ?? payload?.event_id ?? null;
+  const eventType = payload?.event ?? "unknown";
+  const idemKey = `suvsign:${externalId ?? "no-id"}:${eventType}`;
+
+  try {
+    const enabled = await featureFlagEnabled(
+      supabase,
+      "inbox_v2.ingest.suvsign",
+      orgId,
+    );
+    if (!enabled) return;
+
+    const { error } = await supabase
+      .from("integration_inbound_events")
+      .insert({
+        integration_slug: "suvsign",
+        source_event: eventType,
+        external_id: externalId,
+        idempotency_key: idemKey,
+        organization_id: orgId,
+        raw_payload: payload,
+        raw_headers: rawHeaders,
+        http_method: req.method,
+        request_path: new URL(req.url).pathname,
+        event_version: 1,
+        trace_id: traceId,
+        signature_valid: signatureValid,
+        signature_algo: signatureValid === null ? null : "hmac-sha256",
+        source_ip: req.headers.get("x-forwarded-for") ?? null,
+        headers: rawHeaders,
+        shadow_mode: true, // CRÍTICO: dispatcher v2 ignora
+        process_status: "received",
+        handler_key: "suvsign.v1",
+      });
+
+    if (error && error.code !== "23505" /* unique_violation = duplicata esperada */) {
+      console.error(JSON.stringify({
+        level: "error",
+        msg: "inbox_v2.shadow_insert_failed",
+        trace_id: traceId,
+        integration_slug: "suvsign",
+        external_id: externalId,
+        event_type: eventType,
+        organization_id: orgId,
+        pg_code: error.code,
+        pg_message: error.message,
+      }));
+      // Best-effort: registra incidente
+      supabase.from("integration_inbound_ingest_errors").insert({
+        trace_id: traceId,
+        integration_slug: "suvsign",
+        external_id: externalId,
+        event_type: eventType,
+        organization_id: orgId,
+        error_code: error.code ?? "unknown",
+        error_message: (error.message ?? "").slice(0, 2000),
+      }).then(() => {}, () => {});
+    }
+  } catch (e) {
+    console.error(JSON.stringify({
+      level: "error",
+      msg: "inbox_v2.shadow_insert_exception",
+      trace_id: traceId,
+      integration_slug: "suvsign",
+      external_id: externalId,
+      event_type: eventType,
+      organization_id: orgId,
+      exception: String(e),
+    }));
+  }
+}
+
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
