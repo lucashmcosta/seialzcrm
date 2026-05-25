@@ -2201,15 +2201,141 @@ export type Database = {
           },
         ]
       }
+      integration_feature_flags: {
+        Row: {
+          created_at: string
+          enabled: boolean
+          flag_key: string
+          id: string
+          metadata: Json | null
+          organization_id: string | null
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          enabled?: boolean
+          flag_key: string
+          id?: string
+          metadata?: Json | null
+          organization_id?: string | null
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          enabled?: boolean
+          flag_key?: string
+          id?: string
+          metadata?: Json | null
+          organization_id?: string | null
+          updated_at?: string
+        }
+        Relationships: []
+      }
+      integration_inbound_dead_letter_archive: {
+        Row: {
+          archived_at: string
+          archived_by: string | null
+          dead_letter_reason: string | null
+          event_type: string | null
+          id: string
+          inbound_event_id: string
+          integration_slug: string
+          organization_id: string | null
+          raw_headers: Json | null
+          raw_payload: Json | null
+          retry_count: number | null
+        }
+        Insert: {
+          archived_at?: string
+          archived_by?: string | null
+          dead_letter_reason?: string | null
+          event_type?: string | null
+          id?: string
+          inbound_event_id: string
+          integration_slug: string
+          organization_id?: string | null
+          raw_headers?: Json | null
+          raw_payload?: Json | null
+          retry_count?: number | null
+        }
+        Update: {
+          archived_at?: string
+          archived_by?: string | null
+          dead_letter_reason?: string | null
+          event_type?: string | null
+          id?: string
+          inbound_event_id?: string
+          integration_slug?: string
+          organization_id?: string | null
+          raw_headers?: Json | null
+          raw_payload?: Json | null
+          retry_count?: number | null
+        }
+        Relationships: []
+      }
+      integration_inbound_dry_run_log: {
+        Row: {
+          created_at: string
+          diff_summary: Json | null
+          event_version: number | null
+          handler_key: string | null
+          id: string
+          inbound_event_id: string
+          integration_slug: string
+          intended_actions: Json
+          legacy_actual: Json | null
+          outcome: string
+          trace_id: string | null
+        }
+        Insert: {
+          created_at?: string
+          diff_summary?: Json | null
+          event_version?: number | null
+          handler_key?: string | null
+          id?: string
+          inbound_event_id: string
+          integration_slug: string
+          intended_actions: Json
+          legacy_actual?: Json | null
+          outcome: string
+          trace_id?: string | null
+        }
+        Update: {
+          created_at?: string
+          diff_summary?: Json | null
+          event_version?: number | null
+          handler_key?: string | null
+          id?: string
+          inbound_event_id?: string
+          integration_slug?: string
+          intended_actions?: Json
+          legacy_actual?: Json | null
+          outcome?: string
+          trace_id?: string | null
+        }
+        Relationships: []
+      }
       integration_inbound_events: {
         Row: {
+          aggregate_id: string | null
+          aggregate_type: string | null
+          claimed_at: string | null
+          claimed_by: string | null
+          correlation_id: string | null
+          dead_letter_reason: string | null
+          error_classification: string | null
+          event_version: number
           expires_at: string
           external_id: string | null
+          handler_key: string | null
+          headers: Json | null
           http_method: string | null
           id: string
           idempotency_key: string | null
           integration_slug: string
           last_attempt_at: string | null
+          max_attempts: number
+          next_run_at: string | null
           organization_id: string | null
           parse_attempts: number
           parser_function: string | null
@@ -2220,20 +2346,40 @@ export type Database = {
           raw_headers: Json | null
           raw_payload: Json
           received_at: string
+          replay_count: number
           request_path: string | null
           resulting_contact_id: string | null
           resulting_message_id: string | null
           resulting_opportunity_id: string | null
+          retry_count: number
+          sequence_number: number | null
+          shadow_mode: boolean
+          signature_algo: string | null
+          signature_valid: boolean | null
           source_event: string
+          source_ip: unknown
+          trace_id: string | null
         }
         Insert: {
+          aggregate_id?: string | null
+          aggregate_type?: string | null
+          claimed_at?: string | null
+          claimed_by?: string | null
+          correlation_id?: string | null
+          dead_letter_reason?: string | null
+          error_classification?: string | null
+          event_version?: number
           expires_at?: string
           external_id?: string | null
+          handler_key?: string | null
+          headers?: Json | null
           http_method?: string | null
           id?: string
           idempotency_key?: string | null
           integration_slug: string
           last_attempt_at?: string | null
+          max_attempts?: number
+          next_run_at?: string | null
           organization_id?: string | null
           parse_attempts?: number
           parser_function?: string | null
@@ -2244,20 +2390,40 @@ export type Database = {
           raw_headers?: Json | null
           raw_payload: Json
           received_at?: string
+          replay_count?: number
           request_path?: string | null
           resulting_contact_id?: string | null
           resulting_message_id?: string | null
           resulting_opportunity_id?: string | null
+          retry_count?: number
+          sequence_number?: number | null
+          shadow_mode?: boolean
+          signature_algo?: string | null
+          signature_valid?: boolean | null
           source_event: string
+          source_ip?: unknown
+          trace_id?: string | null
         }
         Update: {
+          aggregate_id?: string | null
+          aggregate_type?: string | null
+          claimed_at?: string | null
+          claimed_by?: string | null
+          correlation_id?: string | null
+          dead_letter_reason?: string | null
+          error_classification?: string | null
+          event_version?: number
           expires_at?: string
           external_id?: string | null
+          handler_key?: string | null
+          headers?: Json | null
           http_method?: string | null
           id?: string
           idempotency_key?: string | null
           integration_slug?: string
           last_attempt_at?: string | null
+          max_attempts?: number
+          next_run_at?: string | null
           organization_id?: string | null
           parse_attempts?: number
           parser_function?: string | null
@@ -2268,11 +2434,19 @@ export type Database = {
           raw_headers?: Json | null
           raw_payload?: Json
           received_at?: string
+          replay_count?: number
           request_path?: string | null
           resulting_contact_id?: string | null
           resulting_message_id?: string | null
           resulting_opportunity_id?: string | null
+          retry_count?: number
+          sequence_number?: number | null
+          shadow_mode?: boolean
+          signature_algo?: string | null
+          signature_valid?: boolean | null
           source_event?: string
+          source_ip?: unknown
+          trace_id?: string | null
         }
         Relationships: [
           {
@@ -2304,6 +2478,84 @@ export type Database = {
             referencedColumns: ["id"]
           },
         ]
+      }
+      integration_inbound_handlers: {
+        Row: {
+          created_at: string
+          description: string | null
+          event_type: string
+          event_version: number
+          handler_key: string
+          id: string
+          integration_slug: string
+          is_active: boolean
+          max_attempts: number
+          requires_ordering: boolean
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          description?: string | null
+          event_type: string
+          event_version?: number
+          handler_key: string
+          id?: string
+          integration_slug: string
+          is_active?: boolean
+          max_attempts?: number
+          requires_ordering?: boolean
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          description?: string | null
+          event_type?: string
+          event_version?: number
+          handler_key?: string
+          id?: string
+          integration_slug?: string
+          is_active?: boolean
+          max_attempts?: number
+          requires_ordering?: boolean
+          updated_at?: string
+        }
+        Relationships: []
+      }
+      integration_inbound_ingest_errors: {
+        Row: {
+          created_at: string
+          error_code: string | null
+          error_message: string | null
+          event_type: string | null
+          external_id: string | null
+          id: string
+          integration_slug: string
+          organization_id: string | null
+          trace_id: string | null
+        }
+        Insert: {
+          created_at?: string
+          error_code?: string | null
+          error_message?: string | null
+          event_type?: string | null
+          external_id?: string | null
+          id?: string
+          integration_slug: string
+          organization_id?: string | null
+          trace_id?: string | null
+        }
+        Update: {
+          created_at?: string
+          error_code?: string | null
+          error_message?: string | null
+          event_type?: string | null
+          external_id?: string | null
+          id?: string
+          integration_slug?: string
+          organization_id?: string | null
+          trace_id?: string | null
+        }
+        Relationships: []
       }
       integration_jobs: {
         Row: {
