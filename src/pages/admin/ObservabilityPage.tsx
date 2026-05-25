@@ -437,30 +437,57 @@ export default function ObservabilityPage() {
         source: 'integration_inbound_events', type: 'table', window: windowSel,
         filters: 'received_at>=since (cap 5000)',
       }, () => (supabase as any).from('integration_inbound_events')
-        .select('received_at, integration_slug, shadow_mode, signature_valid, process_status, processed_at, process_error')
+        .select('received_at, integration_slug, shadow_mode, signature_valid, process_status, processed_at, process_error, retry_count, replay_count')
         .gte('received_at', sinceISO)
         .order('received_at', { ascending: false })
         .limit(5000));
       const rows = (r.data as any[]) || [];
 
-      // Parity por provider
-      const byProv: Record<string, { legacy: number; shadow: number }> = {};
+      // ----- Parity por provider: legacy real vs shadow inbox -----
+      // Shadow side: inbox_v2 events com shadow_mode=true.
+      const byProv: Record<string, { shadow: number }> = {};
       rows.forEach((e) => {
         const slug = e.integration_slug || 'unknown';
-        byProv[slug] ||= { legacy: 0, shadow: 0 };
+        byProv[slug] ||= { shadow: 0 };
         if (e.shadow_mode === true) byProv[slug].shadow += 1;
-        else byProv[slug].legacy += 1;
       });
-      const parity = Object.entries(byProv).map(([integration_slug, v]) => {
-        const diff_abs = Math.abs(v.legacy - v.shadow);
-        const diff_pct = v.legacy > 0 ? (diff_abs / v.legacy) * 100 : null;
+
+      // Legacy side: por provider, contar efeito colateral real do fluxo antigo.
+      // suvsign → activities `system` com título "Documento assinado%" na janela.
+      const legacyBy: Record<string, { count: number; source: string }> = {};
+      // suvsign legacy
+      {
+        const lr = await instrument(reg, {
+          key: 'parity.legacy.suvsign', label: 'Legacy suvsign (activities)',
+          source: 'activities', type: 'table', window: windowSel,
+          filters: "activity_type=system & title ilike 'Documento assinado%'",
+        }, () => (supabase as any).from('activities')
+          .select('id', { count: 'exact', head: true })
+          .eq('activity_type', 'system')
+          .ilike('title', 'Documento assinado%')
+          .gte('created_at', sinceISO));
+        legacyBy['suvsign'] = { count: (lr as any).count || 0, source: 'activities[Documento assinado%]' };
+      }
+      // Outros providers conhecidos no sample: legacy = N/A (sem fonte definida)
+      Object.keys(byProv).forEach((slug) => {
+        if (!legacyBy[slug]) legacyBy[slug] = { count: 0, source: 'n/a (sem fonte definida)' };
+      });
+
+      const allSlugs = new Set<string>([...Object.keys(byProv), ...Object.keys(legacyBy)]);
+      const parity = Array.from(allSlugs).map((slug) => {
+        const shadow = byProv[slug]?.shadow ?? 0;
+        const legacy = legacyBy[slug]?.count ?? 0;
+        const legacy_source = legacyBy[slug]?.source ?? 'n/a';
+        const diff_abs = Math.abs(legacy - shadow);
+        const diff_pct = legacy > 0 ? (diff_abs / legacy) * 100 : null;
         let status: 'ok' | 'warning' | 'critical' | 'na' = 'na';
-        if (v.shadow === 0 && v.legacy > 0) status = 'na';
+        if (legacy_source.startsWith('n/a')) status = 'na';
+        else if (diff_pct == null && shadow === 0) status = 'na';
         else if (diff_pct == null) status = 'na';
         else if (diff_pct < 1) status = 'ok';
         else if (diff_pct < 5) status = 'warning';
         else status = 'critical';
-        return { integration_slug, legacy: v.legacy, shadow: v.shadow, diff_abs, diff_pct, status };
+        return { integration_slug: slug, legacy, shadow, diff_abs, diff_pct, status, legacy_source };
       }).sort((a, b) => (b.legacy + b.shadow) - (a.legacy + a.shadow));
       setParityRows(parity);
 
@@ -480,11 +507,11 @@ export default function ObservabilityPage() {
       // Timeline buckets
       const winMs = WINDOW_TO_MS[windowSel];
       const bucketMs = windowSel === '1h' ? 60_000 : windowSel === '24h' ? 3_600_000 : 21_600_000; // 1m / 1h / 6h
-      const buckets: Record<number, { ts: number; ingest: number; sig_fail: number; duplicates: number; ingest_err: number; latencies: number[] }> = {};
+      const buckets: Record<number, { ts: number; ingest: number; sig_fail: number; duplicates: number; ingest_err: number; retries: number; dlq: number; latencies: number[] }> = {};
       const nowFloor = Math.floor(Date.now() / bucketMs) * bucketMs;
       const start = nowFloor - winMs + bucketMs;
       for (let t = start; t <= nowFloor; t += bucketMs) {
-        buckets[t] = { ts: t, ingest: 0, sig_fail: 0, duplicates: 0, ingest_err: 0, latencies: [] };
+        buckets[t] = { ts: t, ingest: 0, sig_fail: 0, duplicates: 0, ingest_err: 0, retries: 0, dlq: 0, latencies: [] };
       }
       rows.forEach((e) => {
         const t = Math.floor(new Date(e.received_at).getTime() / bucketMs) * bucketMs;
@@ -493,12 +520,14 @@ export default function ObservabilityPage() {
         b.ingest += 1;
         if (e.signature_valid === false) b.sig_fail += 1;
         if (e.process_status === 'duplicate_ignored') b.duplicates += 1;
+        if ((e.retry_count ?? 0) > 0) b.retries += 1;
+        if (e.process_status === 'dead_letter') b.dlq += 1;
         if (e.processed_at) {
           const d = (new Date(e.processed_at).getTime() - new Date(e.received_at).getTime()) / 1000;
           if (d >= 0 && d < 86400) b.latencies.push(d);
         }
       });
-      // mix in ingest_errors counts per bucket (uses ingestErrors fetched above)
+      // mix in ingest_errors counts per bucket
       ((await (supabase as any).from('integration_inbound_ingest_errors')
         .select('created_at').gte('created_at', sinceISO).limit(5000)).data as any[] || []
       ).forEach((er) => {
