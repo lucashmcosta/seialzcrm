@@ -1,5 +1,9 @@
 project_id = "qvmtzfvkhkhkhdpclzua"
 
+[functions.backfill-attribution]
+verify_jwt = true
+
+
 [functions.admin-impersonate]
 verify_jwt = true
 

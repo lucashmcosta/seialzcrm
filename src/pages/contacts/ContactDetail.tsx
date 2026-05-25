@@ -13,6 +13,7 @@ import { usePermissions } from '@/hooks/usePermissions';
 import { useVoiceIntegration } from '@/hooks/useVoiceIntegration';
 import { useOutboundCall } from '@/contexts/OutboundCallContext';
 import { formatPhoneDisplay } from '@/lib/phoneUtils';
+import { LeadOriginBadge } from '@/components/contacts/LeadOriginBadge';
 import { Card } from '@/components/ui/card';
 import { toast } from 'sonner';
 import { EnvelopeSimple, Phone, Buildings, PencilSimple, TrashSimple, DotsThreeVertical, DotsThree, ChatCircle, User, UserPlus, FileText, MapPin, Calendar, Megaphone, ArrowSquareOut, CaretLeft, Archive, ArrowsLeftRight } from '@phosphor-icons/react';
@@ -74,6 +75,7 @@ export default function ContactDetail() {
   const { hasVoiceIntegration } = useVoiceIntegration();
   const { startCall } = useOutboundCall();
   const [contact, setContact] = useState<any>(null);
+  const [campaign, setCampaign] = useState<any>(null);
   const [loading, setLoading] = useState(true);
   const [selectedTab, setSelectedTab] = useState<Key>("details");
   const [createdByName, setCreatedByName] = useState<string | null>(null);
@@ -113,6 +115,18 @@ export default function ContactDetail() {
     }
 
     setContact(data);
+
+    // Fetch linked marketing campaign for origin badge
+    if (data?.marketing_campaign_id) {
+      const { data: mc } = await supabase
+        .from('marketing_campaigns')
+        .select('id, display_name, ad_name, adset_name, campaign_name')
+        .eq('id', data.marketing_campaign_id)
+        .maybeSingle();
+      setCampaign(mc);
+    } else {
+      setCampaign(null);
+    }
 
     // Fetch created_by / updated_by names
     const byIds = [data?.created_by, data?.updated_by].filter(Boolean) as string[];
@@ -305,6 +319,7 @@ export default function ContactDetail() {
                 </Badge>
               )}
             </div>
+            <LeadOriginBadge contact={contact} campaign={campaign} />
           </div>
 
           {/* Action buttons */}
@@ -483,6 +498,7 @@ export default function ContactDetail() {
                 {contact.email && (
                   <p className="text-sm text-muted-foreground">{contact.email}</p>
                 )}
+                <LeadOriginBadge contact={contact} campaign={campaign} />
               </div>
             </div>
 
