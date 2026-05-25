@@ -1036,7 +1036,7 @@ export default function ObservabilityPage() {
                     <TableHeader>
                       <TableRow>
                         <TableHead>Quando</TableHead><TableHead>Provider</TableHead><TableHead>Event</TableHead>
-                        <TableHead>Status</TableHead><TableHead>Shadow</TableHead><TableHead>Sig</TableHead>
+                        <TableHead>Status</TableHead><TableHead>Flags</TableHead><TableHead>Sig</TableHead>
                         <TableHead>Retry</TableHead><TableHead>trace</TableHead><TableHead>external</TableHead>
                         <TableHead>org</TableHead><TableHead>error</TableHead>
                       </TableRow>
@@ -1048,7 +1048,7 @@ export default function ObservabilityPage() {
                           <TableCell className="text-xs">{e.integration_slug}</TableCell>
                           <TableCell className="text-xs">{e.source_event || '—'}</TableCell>
                           <TableCell><Badge variant={statusVariant(e.process_status)}>{e.process_status}</Badge></TableCell>
-                          <TableCell className="text-xs">{e.shadow_mode ? '✓' : ''}</TableCell>
+                          <TableCell><EventFlagBadges e={e} /></TableCell>
                           <TableCell className="text-xs">{e.signature_valid === false ? '✗' : e.signature_valid ? '✓' : '—'}</TableCell>
                           <TableCell className="text-xs">{e.retry_count ?? 0}</TableCell>
                           <TableCell className="font-mono text-xs">{e.trace_id?.slice(0, 8) || '—'}</TableCell>
