@@ -1816,6 +1816,55 @@ function EventFlagBadges({ e }: { e: any }) {
   );
 }
 
+function OrgCell({
+  id, orgsMap, reason,
+}: {
+  id: string | null;
+  orgsMap: Map<string, { id: string; name: string; slug: string | null }>;
+  reason?: string | null;
+}) {
+  if (!id) {
+    const hint = reason && reason.length > 0
+      ? reason
+      : 'Webhook chegou sem orgId resolvido (phone não mapeado, token ausente ou fallback).';
+    return (
+      <TooltipProvider delayDuration={150}>
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <Badge className="bg-amber-500/15 text-amber-600 border border-amber-500/30 hover:bg-amber-500/20 cursor-help">unknown org</Badge>
+          </TooltipTrigger>
+          <TooltipContent side="top" className="max-w-xs">
+            <div className="space-y-1 text-xs">
+              <div className="font-medium">Organização não resolvida</div>
+              <div className="text-muted-foreground">{hint}</div>
+              <div className="text-muted-foreground">Veja drilldown para detalhes.</div>
+            </div>
+          </TooltipContent>
+        </Tooltip>
+      </TooltipProvider>
+    );
+  }
+  const o = orgsMap.get(id);
+  return (
+    <TooltipProvider delayDuration={150}>
+      <Tooltip>
+        <TooltipTrigger asChild>
+          <span className="text-xs truncate inline-block max-w-[180px] cursor-help">
+            {o?.name ?? <span className="font-mono">{id.slice(0, 8)}</span>}
+          </span>
+        </TooltipTrigger>
+        <TooltipContent side="top">
+          <div className="space-y-0.5 text-xs">
+            <div className="font-medium">{o?.name ?? '(nome não encontrado)'}</div>
+            <div className="font-mono text-[10px] text-muted-foreground">slug: {o?.slug ?? '—'}</div>
+            <div className="font-mono text-[10px] text-muted-foreground">{id}</div>
+          </div>
+        </TooltipContent>
+      </Tooltip>
+    </TooltipProvider>
+  );
+}
+
 function TimelineSparkChart({
   buckets,
 }: {
