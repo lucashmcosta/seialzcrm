@@ -1930,10 +1930,14 @@ function TimelineSparkChart({
 // ------------------------------------------------------------------
 // Drill-down structured view
 // ------------------------------------------------------------------
-function DrillDownView({ row }: { row: any }) {
+function DrillDownView({ row, orgsMap }: { row: any; orgsMap?: Map<string, { id: string; name: string; slug: string | null }> }) {
+  const org = row.organization_id ? orgsMap?.get(row.organization_id) : null;
   const meta: [string, any][] = [
     ['id', row.id],
     ['trace_id', row.trace_id],
+    ['correlation_id', row.correlation_id],
+    ['organization_name', org?.name ?? (row.organization_id ? '(não encontrado)' : <span className="text-amber-600">unknown</span>)],
+    ['organization_slug', org?.slug ?? '—'],
     ['organization_id', row.organization_id ?? <span className="text-amber-600">unknown</span>],
     ['integration_slug', row.integration_slug],
     ['source_event / target_action', row.source_event ?? row.target_action],
