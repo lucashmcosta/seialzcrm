@@ -318,6 +318,7 @@ export default function ContactDetail() {
                 </Badge>
               )}
             </div>
+            <LeadOriginBadge contact={contact} campaign={campaign} />
           </div>
 
           {/* Action buttons */}
