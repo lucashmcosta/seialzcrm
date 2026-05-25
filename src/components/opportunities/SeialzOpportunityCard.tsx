@@ -100,7 +100,7 @@ export function SeialzOpportunityCard({
             {visibleTags.map((tag) => (
               <span
                 key={tag.id}
-                className="font-data text-[8px] uppercase tracking-wider px-1.5 py-[2px] rounded border leading-none"
+                className="font-data text-[8px] uppercase tracking-wider px-1.5 py-[2px] rounded border leading-none max-w-full break-all whitespace-normal text-left"
                 style={{
                   backgroundColor: tag.color ? `${tag.color}15` : 'hsl(var(--sz-bg3))',
                   color: tag.color || 'hsl(var(--muted-foreground))',
