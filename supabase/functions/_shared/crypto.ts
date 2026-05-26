@@ -1,6 +1,11 @@
 // AES-256-GCM helpers for symmetric secret encryption.
 // Format: v1:{iv_b64}:{ciphertext_b64}
-// Key source: META_TOKEN_ENCRYPTION_KEY (64 hex chars = 32 bytes)
+// Key source: META_TOKEN_ENCRYPTION_KEY.
+// Compatibility order:
+// 1) 64 hex chars -> 32 raw bytes
+// 2) 32 raw chars -> UTF-8 bytes
+// 3) base64 for 32 bytes
+// 4) legacy fallback: SHA-256 of the configured secret string
 
 function hexToBytes(hex: string): Uint8Array | null {
   const clean = hex.trim().replace(/^0x/i, "").replace(/[^0-9a-f]/gi, "");
@@ -25,34 +30,75 @@ function b64decode(b64: string): Uint8Array {
   return bytes;
 }
 
-function resolveKeyBytes(secret: string): Uint8Array {
-  const trimmed = secret.trim();
-
-  const hexBytes = hexToBytes(trimmed);
-  if (hexBytes) return hexBytes;
-
-  if (trimmed.length === 32) {
-    return new TextEncoder().encode(trimmed);
-  }
-
-  try {
-    const b64 = b64decode(trimmed);
-    if (b64.length === 32) return b64;
-  } catch {
-    // ignore invalid base64 and continue
-  }
-
-  throw new Error("META_TOKEN_ENCRYPTION_KEY must be 64 hex chars, 32 raw chars, or base64 for 32 bytes");
+function raw32ToBytes(secret: string): Uint8Array | null {
+  const bytes = new TextEncoder().encode(secret.trim());
+  return bytes.length === 32 ? bytes : null;
 }
 
-async function getKey(): Promise<CryptoKey> {
-  const keyHex = Deno.env.get("META_TOKEN_ENCRYPTION_KEY");
-  if (!keyHex) throw new Error("META_TOKEN_ENCRYPTION_KEY not configured");
-  const raw = resolveKeyBytes(keyHex);
+function b64To32Bytes(secret: string): Uint8Array | null {
+  try {
+    const bytes = b64decode(secret.trim());
+    return bytes.length === 32 ? bytes : null;
+  } catch {
+    return null;
+  }
+}
+
+async function hashSecretToBytes(secret: string): Promise<Uint8Array> {
+  const digest = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(secret.trim()));
+  return new Uint8Array(digest);
+}
+
+function bytesKey(bytes: Uint8Array): string {
+  return Array.from(bytes).map((b) => b.toString(16).padStart(2, "0")).join("");
+}
+
+async function resolveKeyCandidates(secret: string): Promise<Uint8Array[]> {
+  const trimmed = secret.trim();
+  const candidates: Uint8Array[] = [];
+  const seen = new Set<string>();
+
+  const push = (bytes: Uint8Array | null) => {
+    if (!bytes) return;
+    const key = bytesKey(bytes);
+    if (seen.has(key)) return;
+    seen.add(key);
+    candidates.push(bytes);
+  };
+
+  push(hexToBytes(trimmed));
+  push(raw32ToBytes(trimmed));
+  push(b64To32Bytes(trimmed));
+  push(await hashSecretToBytes(trimmed));
+
+  return candidates;
+}
+
+async function importKey(raw: Uint8Array): Promise<CryptoKey> {
   return await crypto.subtle.importKey("raw", raw as BufferSource, { name: "AES-GCM" }, false, [
     "encrypt",
     "decrypt",
   ]);
+}
+
+async function getKey(): Promise<CryptoKey> {
+  const secret = Deno.env.get("META_TOKEN_ENCRYPTION_KEY");
+  if (!secret) throw new Error("META_TOKEN_ENCRYPTION_KEY not configured");
+  const candidates = await resolveKeyCandidates(secret);
+  if (candidates.length === 0) {
+    throw new Error("META_TOKEN_ENCRYPTION_KEY is empty or invalid");
+  }
+  return await importKey(candidates[0]);
+}
+
+async function getDecryptionKeys(): Promise<CryptoKey[]> {
+  const secret = Deno.env.get("META_TOKEN_ENCRYPTION_KEY");
+  if (!secret) throw new Error("META_TOKEN_ENCRYPTION_KEY not configured");
+  const candidates = await resolveKeyCandidates(secret);
+  if (candidates.length === 0) {
+    throw new Error("META_TOKEN_ENCRYPTION_KEY is empty or invalid");
+  }
+  return await Promise.all(candidates.map((candidate) => importKey(candidate)));
 }
 
 export async function encryptSecret(plaintext: string): Promise<string> {
@@ -74,7 +120,17 @@ export async function decryptSecret(payload: string): Promise<string> {
   }
   const iv = b64decode(parts[1]);
   const ct = b64decode(parts[2]);
-  const key = await getKey();
-  const pt = await crypto.subtle.decrypt({ name: "AES-GCM", iv: iv as BufferSource }, key, ct as BufferSource);
-  return new TextDecoder().decode(pt);
+  const keys = await getDecryptionKeys();
+
+  let lastError: unknown;
+  for (const key of keys) {
+    try {
+      const pt = await crypto.subtle.decrypt({ name: "AES-GCM", iv: iv as BufferSource }, key, ct as BufferSource);
+      return new TextDecoder().decode(pt);
+    } catch (error) {
+      lastError = error;
+    }
+  }
+
+  throw lastError instanceof Error ? lastError : new Error("Unable to decrypt payload");
 }
