@@ -214,7 +214,7 @@ async function processRun(runId: string) {
     const sliceTo = new Date(Math.min(cursor + sliceMs, toMs)).toISOString();
 
     try {
-      const r = await enqueueSlice(run.organization_id, sliceFrom, sliceTo);
+      const r = await enqueueSlice(run.organization_id, sliceFrom, sliceTo, (run.mode as any) || "all");
       enqueuedText += r.text;
       enqueuedAudio += r.audio;
     } catch (e) {
