@@ -425,6 +425,7 @@ const App = () => (
             <Route path="whatsapp-templates" element={<WhatsAppTemplatesPage />} />
             <Route path="ai-agent" element={<AIAgentSettings />} />
             <Route path="ai-providers" element={<AIProvidersSettings />} />
+            <Route path="intelligence" element={<IntelligenceSettings />} />
             <Route path="api-webhooks" element={<ApiWebhooksSettings />} />
             <Route path="products" element={<ProductsSettings />} />
             <Route path="knowledge-base" element={<KnowledgeBaseSettings />} />
