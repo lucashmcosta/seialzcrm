@@ -42,7 +42,11 @@ Deno.serve(async (req) => {
     const claimed: Job[] = jobs ?? [];
     if (claimed.length === 0) break;
 
-    await Promise.all(claimed.map((job) => process(supabase, job, summary)));
+    // Sequential to avoid bursting managed AI gateway rate limits
+    for (const job of claimed) {
+      if (performance.now() - started > MAX_RUNTIME_MS) break;
+      await process(supabase, job, summary);
+    }
     processed += claimed.length;
     if (claimed.length < BATCH_SIZE) break;
   }
