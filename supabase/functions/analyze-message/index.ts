@@ -69,6 +69,27 @@ Deno.serve(async (req) => {
     return json({ ok: true, skipped: "no_content" });
   }
 
+  // Settings gating
+  const settings = await getIntelligenceSettings(admin, organization_id);
+  const { data: thr } = await admin
+    .from("message_threads")
+    .select("channel, opportunity_id")
+    .eq("id", msg.thread_id).maybeSingle();
+  let opportunityIsOpen: boolean | null = null;
+  const oppId = msg.opportunity_id ?? thr?.opportunity_id;
+  if (oppId) {
+    const { data: opp } = await admin
+      .from("opportunities").select("status").eq("id", oppId).maybeSingle();
+    opportunityIsOpen = opp ? opp.status === "open" : null;
+  }
+  const gate = shouldAnalyze(settings, {
+    direction: (msg.direction as any) ?? null,
+    opportunityIsOpen,
+    channel: thr?.channel ?? null,
+    isInternalNote: false,
+  });
+  if (!gate.allow) return json({ ok: true, skipped: gate.reason });
+
   let provider;
   try {
     provider = await resolveProvider(admin, organization_id, "chat");
