@@ -92,6 +92,13 @@ export type Database = {
             referencedColumns: ["id"]
           },
           {
+            foreignKeyName: "activities_opportunity_id_fkey"
+            columns: ["opportunity_id"]
+            isOneToOne: false
+            referencedRelation: "vw_intel_won_vs_lost_30d"
+            referencedColumns: ["opportunity_id"]
+          },
+          {
             foreignKeyName: "activities_organization_id_fkey"
             columns: ["organization_id"]
             isOneToOne: false
@@ -1128,6 +1135,13 @@ export type Database = {
             referencedColumns: ["id"]
           },
           {
+            foreignKeyName: "calls_opportunity_id_fkey"
+            columns: ["opportunity_id"]
+            isOneToOne: false
+            referencedRelation: "vw_intel_won_vs_lost_30d"
+            referencedColumns: ["opportunity_id"]
+          },
+          {
             foreignKeyName: "calls_organization_id_fkey"
             columns: ["organization_id"]
             isOneToOne: false
@@ -1218,6 +1232,13 @@ export type Database = {
             isOneToOne: false
             referencedRelation: "opportunities"
             referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "capi_event_log_opportunity_id_fkey"
+            columns: ["opportunity_id"]
+            isOneToOne: false
+            referencedRelation: "vw_intel_won_vs_lost_30d"
+            referencedColumns: ["opportunity_id"]
           },
           {
             foreignKeyName: "capi_event_log_organization_id_fkey"
@@ -2538,6 +2559,13 @@ export type Database = {
             referencedRelation: "opportunities"
             referencedColumns: ["id"]
           },
+          {
+            foreignKeyName: "integration_inbound_events_resulting_opportunity_id_fkey"
+            columns: ["resulting_opportunity_id"]
+            isOneToOne: false
+            referencedRelation: "vw_intel_won_vs_lost_30d"
+            referencedColumns: ["opportunity_id"]
+          },
         ]
       }
       integration_inbound_handlers: {
@@ -2778,6 +2806,65 @@ export type Database = {
         Relationships: [
           {
             foreignKeyName: "integrations_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      intelligence_backfill_runs: {
+        Row: {
+          created_at: string
+          created_by: string | null
+          cursor_ts: string
+          enqueued_audio: number
+          enqueued_text: number
+          from_ts: string
+          id: string
+          last_error: string | null
+          max_cost_usd: number
+          organization_id: string
+          slice_hours: number
+          status: string
+          to_ts: string
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          created_by?: string | null
+          cursor_ts: string
+          enqueued_audio?: number
+          enqueued_text?: number
+          from_ts: string
+          id?: string
+          last_error?: string | null
+          max_cost_usd?: number
+          organization_id: string
+          slice_hours?: number
+          status?: string
+          to_ts: string
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          created_by?: string | null
+          cursor_ts?: string
+          enqueued_audio?: number
+          enqueued_text?: number
+          from_ts?: string
+          id?: string
+          last_error?: string | null
+          max_cost_usd?: number
+          organization_id?: string
+          slice_hours?: number
+          status?: string
+          to_ts?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "intelligence_backfill_runs_organization_id_fkey"
             columns: ["organization_id"]
             isOneToOne: false
             referencedRelation: "organizations"
@@ -4187,6 +4274,13 @@ export type Database = {
             referencedColumns: ["id"]
           },
           {
+            foreignKeyName: "message_threads_opportunity_id_fkey"
+            columns: ["opportunity_id"]
+            isOneToOne: false
+            referencedRelation: "vw_intel_won_vs_lost_30d"
+            referencedColumns: ["opportunity_id"]
+          },
+          {
             foreignKeyName: "message_threads_organization_id_fkey"
             columns: ["organization_id"]
             isOneToOne: false
@@ -4742,6 +4836,13 @@ export type Database = {
             isOneToOne: true
             referencedRelation: "opportunities"
             referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "opportunity_behavior_snapshot_opportunity_id_fkey"
+            columns: ["opportunity_id"]
+            isOneToOne: true
+            referencedRelation: "vw_intel_won_vs_lost_30d"
+            referencedColumns: ["opportunity_id"]
           },
         ]
       }
@@ -5845,6 +5946,13 @@ export type Database = {
             referencedColumns: ["id"]
           },
           {
+            foreignKeyName: "tasks_opportunity_id_fkey"
+            columns: ["opportunity_id"]
+            isOneToOne: false
+            referencedRelation: "vw_intel_won_vs_lost_30d"
+            referencedColumns: ["opportunity_id"]
+          },
+          {
             foreignKeyName: "tasks_organization_id_fkey"
             columns: ["organization_id"]
             isOneToOne: false
@@ -6193,6 +6301,79 @@ export type Database = {
             columns: ["organization_id"]
             isOneToOne: false
             referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      vw_intel_sellers_30d: {
+        Row: {
+          avg_audios_outbound_per_deal: number | null
+          avg_buying_signals_per_deal: number | null
+          avg_cycle_hours: number | null
+          avg_first_response_seconds: number | null
+          avg_msgs_outbound_per_deal: number | null
+          avg_objections_per_deal: number | null
+          deals_closed: number | null
+          deals_lost: number | null
+          deals_won: number | null
+          organization_id: string | null
+          owner_user_id: string | null
+          win_rate: number | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "opportunities_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "opportunities_owner_user_id_fkey"
+            columns: ["owner_user_id"]
+            isOneToOne: false
+            referencedRelation: "users"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      vw_intel_won_vs_lost_30d: {
+        Row: {
+          audios_inbound: number | null
+          audios_outbound: number | null
+          avg_lead_response_seconds: number | null
+          avg_seller_response_seconds: number | null
+          avg_urgency_score: number | null
+          buying_signals_count: number | null
+          closed_at: string | null
+          cycle_hours: number | null
+          days_to_close: number | null
+          dominant_sentiment: string | null
+          first_response_seconds: number | null
+          human_handoff_count: number | null
+          negative_sentiment_count: number | null
+          objections_count: number | null
+          opp_created_at: string | null
+          opportunity_id: string | null
+          organization_id: string | null
+          owner_user_id: string | null
+          status: Database["public"]["Enums"]["opportunity_status"] | null
+          total_messages_inbound: number | null
+          total_messages_outbound: number | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "opportunities_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "opportunities_owner_user_id_fkey"
+            columns: ["owner_user_id"]
+            isOneToOne: false
+            referencedRelation: "users"
             referencedColumns: ["id"]
           },
         ]
