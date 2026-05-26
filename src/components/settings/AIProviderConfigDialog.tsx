@@ -1,5 +1,6 @@
 import { useState, useMemo } from 'react';
 import { useMutation } from '@tanstack/react-query';
+import { FunctionsHttpError } from '@supabase/supabase-js';
 import { supabase } from '@/integrations/supabase/client';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -28,6 +29,24 @@ const PROVIDER_META: Record<AIProviderId, { name: string; docsUrl: string; place
   gemini:     { name: 'Google Gemini',  docsUrl: 'https://aistudio.google.com/app/apikey',       placeholder: 'AIza…' },
   elevenlabs: { name: 'ElevenLabs',     docsUrl: 'https://elevenlabs.io/app/settings/api-keys',  placeholder: 'sk_…' },
 };
+
+async function unwrapFunctionError(error: Error): Promise<Error> {
+  if (!(error instanceof FunctionsHttpError)) {
+    return error;
+  }
+
+  try {
+    const payload = await error.context.json();
+    if (payload?.error) {
+      const status = payload?.status != null ? `:${String(payload.status)}` : '';
+      return new Error(`${String(payload.error)}${status}`);
+    }
+  } catch {
+    // ignore json parse issues and fall back to the original message
+  }
+
+  return new Error(error.message);
+}
 
 function formatDate(iso: string | null): string {
   if (!iso) return '—';
@@ -87,7 +106,7 @@ export function AIProviderConfigDialog({
       if (exists) payload.new_api_key = apiKey;
       else payload.api_key = apiKey;
       const { data, error } = await supabase.functions.invoke(fn, { body: payload });
-      if (error) throw new Error(error.message || 'Falha ao salvar');
+      if (error) throw await unwrapFunctionError(error);
       if ((data as any)?.error) throw new Error((data as any).error);
       return data;
     },
@@ -99,6 +118,8 @@ export function AIProviderConfigDialog({
     onError: (e: Error) => {
       toast.error(e.message === 'key_test_failed'
         ? 'A chave foi rejeitada pelo provider. Verifique e tente novamente.'
+        : e.message === 'encryption_unavailable'
+        ? 'A criptografia do servidor está indisponível agora. Tente novamente em instantes.'
         : e.message);
     },
   });
@@ -108,7 +129,7 @@ export function AIProviderConfigDialog({
       const { data, error } = await supabase.functions.invoke('byok-test-key', {
         body: { organization_id: organizationId, provider: providerId },
       });
-      if (error) throw new Error(error.message);
+      if (error) throw await unwrapFunctionError(error);
       if ((data as any)?.error) throw new Error((data as any).error);
       return data;
     },
@@ -131,7 +152,7 @@ export function AIProviderConfigDialog({
           monthly_budget_usd: monthly,
         },
       });
-      if (error) throw new Error(error.message);
+      if (error) throw await unwrapFunctionError(error);
       if ((data as any)?.error) throw new Error((data as any).error);
       return data;
     },
@@ -147,7 +168,7 @@ export function AIProviderConfigDialog({
       const { data, error } = await supabase.functions.invoke('byok-revoke-key', {
         body: { organization_id: organizationId, provider: providerId },
       });
-      if (error) throw new Error(error.message);
+      if (error) throw await unwrapFunctionError(error);
       if ((data as any)?.error) throw new Error((data as any).error);
       return data;
     },

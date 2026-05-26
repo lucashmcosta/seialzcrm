@@ -13,6 +13,7 @@ import {
   writeSecretEntry,
 } from "../_shared/intelligence/byok-shared.ts";
 import { requireOrgAdmin } from "../_shared/intelligence/authz.ts";
+import { safeLog } from "../_shared/intelligence/sanitize.ts";
 
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: corsHeaders });
@@ -38,9 +39,17 @@ Deno.serve(async (req) => {
   if (!row) return json({ error: "no_byok_row" }, 404);
 
   const previous = row.secret_payload[provider] ?? {};
+  let encryptedKey = "";
+  try {
+    encryptedKey = await encryptSecret(new_api_key);
+  } catch (error) {
+    safeLog("[byok-rotate-key] encryption_failed", { provider, error: error instanceof Error ? error.message : "unknown" });
+    return json({ error: "encryption_unavailable" }, 503);
+  }
+
   const entry = {
     ...previous,
-    api_key_encrypted: await encryptSecret(new_api_key),
+    api_key_encrypted: encryptedKey,
     last4: last4(new_api_key),
     fingerprint: await fingerprint(new_api_key),
     verified_at: new Date().toISOString(),

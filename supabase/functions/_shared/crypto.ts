@@ -2,11 +2,9 @@
 // Format: v1:{iv_b64}:{ciphertext_b64}
 // Key source: META_TOKEN_ENCRYPTION_KEY (64 hex chars = 32 bytes)
 
-function hexToBytes(hex: string): Uint8Array {
+function hexToBytes(hex: string): Uint8Array | null {
   const clean = hex.trim().replace(/^0x/i, "").replace(/[^0-9a-f]/gi, "");
-  if (clean.length !== 64) {
-    throw new Error("META_TOKEN_ENCRYPTION_KEY must be 64 hex chars (32 bytes)");
-  }
+  if (clean.length !== 64) return null;
   const bytes = new Uint8Array(32);
   for (let i = 0; i < 32; i++) {
     bytes[i] = parseInt(clean.slice(i * 2, i * 2 + 2), 16);
@@ -27,10 +25,30 @@ function b64decode(b64: string): Uint8Array {
   return bytes;
 }
 
+function resolveKeyBytes(secret: string): Uint8Array {
+  const trimmed = secret.trim();
+
+  const hexBytes = hexToBytes(trimmed);
+  if (hexBytes) return hexBytes;
+
+  if (trimmed.length === 32) {
+    return new TextEncoder().encode(trimmed);
+  }
+
+  try {
+    const b64 = b64decode(trimmed);
+    if (b64.length === 32) return b64;
+  } catch {
+    // ignore invalid base64 and continue
+  }
+
+  throw new Error("META_TOKEN_ENCRYPTION_KEY must be 64 hex chars, 32 raw chars, or base64 for 32 bytes");
+}
+
 async function getKey(): Promise<CryptoKey> {
   const keyHex = Deno.env.get("META_TOKEN_ENCRYPTION_KEY");
   if (!keyHex) throw new Error("META_TOKEN_ENCRYPTION_KEY not configured");
-  const raw = hexToBytes(keyHex);
+  const raw = resolveKeyBytes(keyHex);
   return await crypto.subtle.importKey("raw", raw as BufferSource, { name: "AES-GCM" }, false, [
     "encrypt",
     "decrypt",
