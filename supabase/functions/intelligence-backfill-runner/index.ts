@@ -69,7 +69,16 @@ function shouldEnqueueText(content: string, direction: string): boolean {
   return true;
 }
 
-const ANALYSIS_VERSION = "v2.0.0";
+const ANALYSIS_VERSION = "v2.1.0";
+
+async function getPendingJobsCount(orgId: string): Promise<number> {
+  const { count } = await supabase
+    .from("intelligence_jobs")
+    .select("id", { count: "exact", head: true })
+    .eq("organization_id", orgId)
+    .eq("status", "pending");
+  return count ?? 0;
+}
 
 async function enqueueSlice(
   orgId: string,
