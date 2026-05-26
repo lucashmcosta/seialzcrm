@@ -1,0 +1,1 @@
+ALTER TABLE public.intelligence_backfill_runs ADD COLUMN IF NOT EXISTS mode text NOT NULL DEFAULT 'all';

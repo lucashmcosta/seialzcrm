@@ -2824,6 +2824,7 @@ export type Database = {
           id: string
           last_error: string | null
           max_cost_usd: number
+          mode: string
           organization_id: string
           slice_hours: number
           status: string
@@ -2840,6 +2841,7 @@ export type Database = {
           id?: string
           last_error?: string | null
           max_cost_usd?: number
+          mode?: string
           organization_id: string
           slice_hours?: number
           status?: string
@@ -2856,6 +2858,7 @@ export type Database = {
           id?: string
           last_error?: string | null
           max_cost_usd?: number
+          mode?: string
           organization_id?: string
           slice_hours?: number
           status?: string
