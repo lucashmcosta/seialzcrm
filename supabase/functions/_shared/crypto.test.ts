@@ -45,3 +45,15 @@ Deno.test("encryptSecret throws when key not configured", async () => {
     if (prev) Deno.env.set("META_TOKEN_ENCRYPTION_KEY", prev);
   }
 });
+
+Deno.test("encryptSecret accepts a 32-char raw key", async () => {
+  const prev = Deno.env.get("META_TOKEN_ENCRYPTION_KEY");
+  Deno.env.set("META_TOKEN_ENCRYPTION_KEY", "12345678901234567890123456789012");
+  try {
+    const ct = await encryptSecret("hello");
+    const back = await decryptSecret(ct);
+    assertEquals(back, "hello");
+  } finally {
+    if (prev) Deno.env.set("META_TOKEN_ENCRYPTION_KEY", prev);
+  }
+});
