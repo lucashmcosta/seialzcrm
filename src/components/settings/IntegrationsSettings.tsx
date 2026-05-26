@@ -62,6 +62,9 @@ export function IntegrationsSettings() {
   const navigate = useNavigate();
   const { t } = useTranslation(locale as any);
   const queryClient = useQueryClient();
+  const { permissions } = usePermissions();
+  const canManageAI = permissions.canManageIntegrations;
+  const { data: aiProviderMap = {} } = useAIProviders(organization?.id);
   const [selectedIntegration, setSelectedIntegration] = useState<any>(null);
   const [connectDialogOpen, setConnectDialogOpen] = useState(false);
   const [detailDialogOpen, setDetailDialogOpen] = useState(false);
