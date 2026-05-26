@@ -2,9 +2,12 @@
 // Priority: active+verified BYOK -> managed (if allowed).
 // NEVER logs the resolved api key.
 
-import type { SupabaseClient } from "jsr:@supabase/supabase-js@2";
 import { decryptSecret } from "../crypto.ts";
 import { safeLog } from "./sanitize.ts";
+// SupabaseClient typed as `any` here to avoid pulling the supabase-js JSR
+// graph into Deno's test transitive resolution. Runtime functions pass the
+// real client; only the methods we call need to exist.
+type SupabaseClient = any;
 
 export type Capability = "chat" | "transcription" | "embedding";
 export type ResolvedSource = "customer_key" | "managed";

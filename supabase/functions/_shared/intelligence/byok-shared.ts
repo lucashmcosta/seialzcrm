@@ -1,6 +1,6 @@
 // Shared helpers used by byok-* edge functions.
 
-import type { SupabaseClient } from "jsr:@supabase/supabase-js@2";
+type SupabaseClient = any; // see resolve-provider.ts for rationale
 import { encryptSecret } from "../crypto.ts";
 
 export const SUPPORTED_PROVIDERS = ["openai", "anthropic", "gemini", "elevenlabs"] as const;
