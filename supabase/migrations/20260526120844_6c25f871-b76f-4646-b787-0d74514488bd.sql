@@ -1,0 +1,1 @@
+grant execute on function public.intelligence_fire_all_now() to authenticated, anon, service_role;
