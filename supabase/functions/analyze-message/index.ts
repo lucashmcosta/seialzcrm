@@ -19,6 +19,7 @@ import {
 import { sanitizeProviderError, safeLog } from "../_shared/intelligence/sanitize.ts";
 import { logAiUsage } from "../_shared/intelligence/log-usage.ts";
 import { estimateTextCostUsd } from "../_shared/intelligence/pricing.ts";
+import { getIntelligenceSettings, shouldAnalyze } from "../_shared/intelligence/settings.ts";
 
 const SUPABASE_URL = Deno.env.get("SUPABASE_URL")!;
 const SERVICE_ROLE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
@@ -67,6 +68,27 @@ Deno.serve(async (req) => {
   if (!msg.content || msg.content.trim().length < 2) {
     return json({ ok: true, skipped: "no_content" });
   }
+
+  // Settings gating
+  const settings = await getIntelligenceSettings(admin, organization_id);
+  const { data: thr } = await admin
+    .from("message_threads")
+    .select("channel, opportunity_id")
+    .eq("id", msg.thread_id).maybeSingle();
+  let opportunityIsOpen: boolean | null = null;
+  const oppId = msg.opportunity_id ?? thr?.opportunity_id;
+  if (oppId) {
+    const { data: opp } = await admin
+      .from("opportunities").select("status").eq("id", oppId).maybeSingle();
+    opportunityIsOpen = opp ? opp.status === "open" : null;
+  }
+  const gate = shouldAnalyze(settings, {
+    direction: (msg.direction as any) ?? null,
+    opportunityIsOpen,
+    channel: thr?.channel ?? null,
+    isInternalNote: false,
+  });
+  if (!gate.allow) return json({ ok: true, skipped: gate.reason });
 
   let provider;
   try {

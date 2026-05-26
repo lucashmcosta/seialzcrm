@@ -89,6 +89,7 @@ const IntegrationsSettings = lazy(() => import("./components/settings/Integratio
 const ApiWebhooksSettings = lazy(() => import("./components/settings/ApiWebhooksSettings").then(m => ({ default: m.ApiWebhooksSettings })));
 const AIAgentSettings = lazy(() => import("./components/settings/AIAgentSettings").then(m => ({ default: m.AIAgentSettings })));
 const AIProvidersSettings = lazy(() => import("./components/settings/AIProvidersSettings").then(m => ({ default: m.AIProvidersSettings })));
+const IntelligenceSettings = lazy(() => import("./components/settings/IntelligenceSettings").then(m => ({ default: m.IntelligenceSettings })));
 const KnowledgeBaseSettings = lazy(() => import("./components/settings/KnowledgeBaseSettings").then(m => ({ default: m.KnowledgeBaseSettings })));
 const KnowledgeEditChat = lazy(() => import("./components/settings/KnowledgeEditChat").then(m => ({ default: m.KnowledgeEditChat })));
 const ProductsSettings = lazy(() => import("./components/settings/ProductsSettings").then(m => ({ default: m.ProductsSettings })));
@@ -424,6 +425,7 @@ const App = () => (
             <Route path="whatsapp-templates" element={<WhatsAppTemplatesPage />} />
             <Route path="ai-agent" element={<AIAgentSettings />} />
             <Route path="ai-providers" element={<AIProvidersSettings />} />
+            <Route path="intelligence" element={<IntelligenceSettings />} />
             <Route path="api-webhooks" element={<ApiWebhooksSettings />} />
             <Route path="products" element={<ProductsSettings />} />
             <Route path="knowledge-base" element={<KnowledgeBaseSettings />} />

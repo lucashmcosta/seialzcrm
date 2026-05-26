@@ -12,6 +12,7 @@ import {
 import { sanitizeProviderError, safeLog } from "../_shared/intelligence/sanitize.ts";
 import { logAiUsage } from "../_shared/intelligence/log-usage.ts";
 import { estimateAudioCostUsd } from "../_shared/intelligence/pricing.ts";
+import { getIntelligenceSettings, shouldTranscribe } from "../_shared/intelligence/settings.ts";
 
 const SUPABASE_URL = Deno.env.get("SUPABASE_URL")!;
 const SERVICE_ROLE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
@@ -41,11 +42,31 @@ Deno.serve(async (req) => {
 
   const { data: msg } = await admin
     .from("messages")
-    .select("id, organization_id, media_url, media_type, content")
+    .select("id, organization_id, media_url, media_type, content, direction, thread_id")
     .eq("id", message_id).single();
   if (!msg) return json({ error: "message_not_found" }, 404);
   if (msg.organization_id !== organization_id) return json({ error: "org_mismatch" }, 403);
   if (!msg.media_url) return json({ error: "no_media_url" }, 400);
+
+  // Settings gating
+  const settings = await getIntelligenceSettings(admin, organization_id);
+  const { data: thread } = await admin
+    .from("message_threads")
+    .select("opportunity_id")
+    .eq("id", msg.thread_id).maybeSingle();
+  let opportunityIsOpen: boolean | null = null;
+  if (thread?.opportunity_id) {
+    const { data: opp } = await admin
+      .from("opportunities")
+      .select("status")
+      .eq("id", thread.opportunity_id).maybeSingle();
+    opportunityIsOpen = opp ? opp.status === "open" : null;
+  }
+  const gate = shouldTranscribe(settings, {
+    senderIsLead: msg.direction === "inbound",
+    opportunityIsOpen,
+  });
+  if (!gate.allow) return json({ ok: true, skipped: gate.reason });
 
   // Resolve provider with BYOK -> managed priority. No implicit fallback after a failure.
   let provider;
