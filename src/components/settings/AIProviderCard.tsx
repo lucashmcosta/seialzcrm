@@ -75,6 +75,32 @@ export function AIProviderCard({
     onError: (e: Error) => toast.error(e.message),
   });
 
+  const migrateMut = useMutation({
+    mutationFn: async () => {
+      if (!providerId) throw new Error('Provider não reconhecido');
+      const { data, error } = await supabase.functions.invoke('migrate-legacy-ai-key', {
+        body: { organization_id: organizationId, provider: providerId },
+      });
+      if (error) throw new Error(error.message);
+      if ((data as any)?.error) throw new Error((data as any).error);
+      return data;
+    },
+    onSuccess: () => {
+      toast.success('Chave migrada com segurança. Agora está criptografada como Chave Própria.');
+      invalidate(organizationId);
+    },
+    onError: (e: Error) => {
+      const msg = e.message === 'key_test_failed'
+        ? 'A chave antiga foi rejeitada pelo provider. Atualize a chave para concluir a migração.'
+        : e.message === 'no_legacy_key'
+        ? 'Nenhuma chave antiga encontrada para migrar.'
+        : e.message === 'byok_already_configured'
+        ? 'Já existe uma chave segura cadastrada. Use Gerenciar chave.'
+        : e.message;
+      toast.error(msg);
+    },
+  });
+
   if (!providerId) return null;
 
   const meta = STATUS_MAP[status];
@@ -83,8 +109,10 @@ export function AIProviderCard({
   const handleToggle = (checked: boolean) => {
     if (!canManage) return;
     if (!hasNewKey) {
-      // No new BYOK key (with or without legacy): open dialog to configure
-      if (checked) setDialogOpen(true);
+      // No new BYOK key: if legacy exists, migrate; otherwise open config dialog.
+      if (!checked) return;
+      if (hasLegacyKey) migrateMut.mutate();
+      else setDialogOpen(true);
       return;
     }
     toggleMut.mutate(checked);
