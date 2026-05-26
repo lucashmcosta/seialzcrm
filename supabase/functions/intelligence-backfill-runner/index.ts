@@ -60,6 +60,7 @@ async function enqueueSlice(
   orgId: string,
   sliceFrom: string,
   sliceTo: string,
+  mode: "all" | "text_only" | "audio_only" = "all",
 ): Promise<{ text: number; audio: number }> {
   // Pull eligible messages in slice
   const { data: msgs, error } = await supabase
@@ -84,6 +85,8 @@ async function enqueueSlice(
     const isAudio = (m.media_type || "").toLowerCase().startsWith("audio");
     const hasText = !isAudio && typeof m.content === "string" && m.content.trim().length >= 2;
     if (!isAudio && !hasText) continue;
+    if (isAudio && mode === "text_only") continue;
+    if (!isAudio && mode === "audio_only") continue;
 
     const nextRunAt = new Date(Date.now() + stagger * 2000).toISOString();
     stagger++;
