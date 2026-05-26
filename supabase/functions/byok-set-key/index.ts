@@ -50,8 +50,16 @@ Deno.serve(async (req) => {
   const rowId = await getOrCreateByokRow(admin, organization_id);
   const current = (await readByokRow(admin, organization_id))?.secret_payload ?? {};
 
+  let encryptedKey = "";
+  try {
+    encryptedKey = await encryptSecret(api_key);
+  } catch (error) {
+    safeLog("[byok-set-key] encryption_failed", { provider, error: error instanceof Error ? error.message : "unknown" });
+    return json({ error: "encryption_unavailable" }, 503);
+  }
+
   const entry = {
-    api_key_encrypted: await encryptSecret(api_key),
+    api_key_encrypted: encryptedKey,
     last4: last4(api_key),
     fingerprint: await fingerprint(api_key),
     verified_at: new Date().toISOString(),
