@@ -5,6 +5,13 @@ import { assert, assertEquals, assertRejects } from "https://deno.land/std@0.224
 
 const TEST_KEY = "b".repeat(64);
 Deno.env.set("META_TOKEN_ENCRYPTION_KEY", TEST_KEY);
+// Ensure managed providers are NOT configured in the test process so we can
+// assert no_provider errors deterministically.
+Deno.env.delete("LOVABLE_API_KEY");
+Deno.env.delete("OPENAI_API_KEY");
+Deno.env.delete("ELEVENLABS_API_KEY");
+Deno.env.delete("ANTHROPIC_API_KEY");
+Deno.env.delete("GEMINI_API_KEY");
 
 const { encryptSecret } = await import("../crypto.ts");
 const { resolveProvider, markByokInvalid, ProviderResolutionError } = await import(
