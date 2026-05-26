@@ -39,12 +39,12 @@ const CAPABILITY_DEFAULTS: Record<Capability, { provider: string; model: string;
   ],
 };
 
-// providers per capability, in order of preference for BYOK
+// MVP: providers per capability supported as BYOK.
+// Anthropic/Gemini BYOK can be added later — for chat the MVP only
+// dispatches to OpenAI-compatible endpoints when customer_key is used.
 const CAPABILITY_BYOK_ORDER: Record<Capability, { provider: string; defaultModel: string }[]> = {
   chat: [
-    { provider: "openai",    defaultModel: "gpt-4o-mini" },
-    { provider: "anthropic", defaultModel: "claude-3-5-haiku-20241022" },
-    { provider: "gemini",    defaultModel: "gemini-2.5-flash" },
+    { provider: "openai", defaultModel: "gpt-4o-mini" },
   ],
   transcription: [
     { provider: "elevenlabs", defaultModel: "scribe_v2" },
@@ -52,7 +52,6 @@ const CAPABILITY_BYOK_ORDER: Record<Capability, { provider: string; defaultModel
   ],
   embedding: [
     { provider: "openai", defaultModel: "text-embedding-3-small" },
-    { provider: "gemini", defaultModel: "gemini-embedding-001" },
   ],
 };
 
