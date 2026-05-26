@@ -141,7 +141,7 @@ Deno.serve(async (req) => {
         payload: { provider: provider.provider, capability: "transcription" },
         occurred_at: new Date().toISOString(),
       });
-      if (provider.fallbackToManaged) {
+      if (!STRICT_BYOK && provider.fallbackToManaged) {
         const managed = getManagedProvider("transcription");
         result = await callOnce(managed);
         usedSource = "managed_fallback";
@@ -149,7 +149,7 @@ Deno.serve(async (req) => {
       } else {
         return json({ error: "byok_invalid", provider: provider.provider }, 424);
       }
-    } else if (provider.source === "customer_key" && err.kind === "rate_limit" && provider.fallbackOnRateLimit) {
+    } else if (!STRICT_BYOK && provider.source === "customer_key" && err.kind === "rate_limit" && provider.fallbackOnRateLimit) {
       const managed = getManagedProvider("transcription");
       result = await callOnce(managed);
       usedSource = "managed_fallback";
@@ -164,6 +164,20 @@ Deno.serve(async (req) => {
 
   const text = result.text;
 
+  // Anti-hallucination: descarta transcripts boilerplate (Amara.org, etc.)
+  if (isLikelyHallucination(text)) {
+    await admin.from("audio_transcriptions").upsert({
+      message_id: msg.id,
+      organization_id: msg.organization_id,
+      version: TRANSCRIPTION_VERSION,
+      provider: provider.provider,
+      language: "por",
+      transcript: "",
+      raw_response: { ...result.raw, _filtered: "hallucination" },
+    }, { onConflict: "message_id,version" });
+    return json({ ok: true, skipped: "hallucination_filtered", text_preview: text.slice(0, 80) });
+  }
+
   await admin.from("audio_transcriptions").upsert({
     message_id: msg.id,
     organization_id: msg.organization_id,
@@ -177,6 +191,7 @@ Deno.serve(async (req) => {
   if (!msg.content || msg.content.trim().length === 0) {
     await admin.from("messages").update({ content: text }).eq("id", msg.id);
   }
+
 
   await admin.from("intelligence_jobs").insert({
     organization_id: msg.organization_id,
