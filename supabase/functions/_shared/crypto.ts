@@ -31,7 +31,7 @@ async function getKey(): Promise<CryptoKey> {
   const keyHex = Deno.env.get("META_TOKEN_ENCRYPTION_KEY");
   if (!keyHex) throw new Error("META_TOKEN_ENCRYPTION_KEY not configured");
   const raw = hexToBytes(keyHex);
-  return await crypto.subtle.importKey("raw", raw, { name: "AES-GCM" }, false, [
+  return await crypto.subtle.importKey("raw", raw as BufferSource, { name: "AES-GCM" }, false, [
     "encrypt",
     "decrypt",
   ]);
