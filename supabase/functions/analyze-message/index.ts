@@ -69,14 +69,26 @@ Deno.serve(async (req) => {
     return json({ ok: true, skipped: "no_content" });
   }
 
-  // Settings gating
+  // Settings gating; derive contact/opportunity from thread
   const settings = await getIntelligenceSettings(admin, organization_id);
   const { data: thr } = await admin
     .from("message_threads")
-    .select("channel, opportunity_id")
+    .select("channel, opportunity_id, contact_id")
     .eq("id", msg.thread_id).maybeSingle();
+  const contactId: string | null = thr?.contact_id ?? null;
+  let oppId: string | null = thr?.opportunity_id ?? null;
+  if (!oppId && contactId) {
+    const { data: opp } = await admin
+      .from("opportunities")
+      .select("id, status")
+      .eq("contact_id", contactId)
+      .is("deleted_at", null)
+      .not("status", "in", "(won,lost,abandoned)")
+      .order("created_at", { ascending: false })
+      .limit(1).maybeSingle();
+    if (opp) oppId = opp.id;
+  }
   let opportunityIsOpen: boolean | null = null;
-  const oppId = msg.opportunity_id ?? thr?.opportunity_id;
   if (oppId) {
     const { data: opp } = await admin
       .from("opportunities").select("status").eq("id", oppId).maybeSingle();
