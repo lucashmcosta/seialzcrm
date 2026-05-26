@@ -888,6 +888,42 @@ export type Database = {
           },
         ]
       }
+      audio_transcriptions: {
+        Row: {
+          created_at: string
+          id: string
+          language: string | null
+          message_id: string
+          organization_id: string
+          provider: string
+          raw_response: Json | null
+          transcript: string
+          version: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          language?: string | null
+          message_id: string
+          organization_id: string
+          provider: string
+          raw_response?: Json | null
+          transcript?: string
+          version: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          language?: string | null
+          message_id?: string
+          organization_id?: string
+          provider?: string
+          raw_response?: Json | null
+          transcript?: string
+          version?: string
+        }
+        Relationships: []
+      }
       audit_logs: {
         Row: {
           action: string
@@ -1307,6 +1343,7 @@ export type Database = {
           address_state: string | null
           address_street: string | null
           address_zip: string | null
+          avg_response_time_seconds: number | null
           client_ip_address: unknown
           client_user_agent: string | null
           company_id: string | null
@@ -1317,6 +1354,7 @@ export type Database = {
           deleted_at: string | null
           do_not_contact: boolean | null
           email: string | null
+          engagement_score: number | null
           fbclid: string | null
           first_name: string | null
           full_name: string
@@ -1359,6 +1397,7 @@ export type Database = {
           address_state?: string | null
           address_street?: string | null
           address_zip?: string | null
+          avg_response_time_seconds?: number | null
           client_ip_address?: unknown
           client_user_agent?: string | null
           company_id?: string | null
@@ -1369,6 +1408,7 @@ export type Database = {
           deleted_at?: string | null
           do_not_contact?: boolean | null
           email?: string | null
+          engagement_score?: number | null
           fbclid?: string | null
           first_name?: string | null
           full_name: string
@@ -1413,6 +1453,7 @@ export type Database = {
           address_state?: string | null
           address_street?: string | null
           address_zip?: string | null
+          avg_response_time_seconds?: number | null
           client_ip_address?: unknown
           client_user_agent?: string | null
           company_id?: string | null
@@ -1423,6 +1464,7 @@ export type Database = {
           deleted_at?: string | null
           do_not_contact?: boolean | null
           email?: string | null
+          engagement_score?: number | null
           fbclid?: string | null
           first_name?: string | null
           full_name?: string
@@ -2724,6 +2766,60 @@ export type Database = {
           },
         ]
       }
+      intelligence_jobs: {
+        Row: {
+          attempts: number
+          completed_at: string | null
+          created_at: string
+          external_response: Json | null
+          id: string
+          idempotency_key: string
+          last_error: string | null
+          last_error_at: string | null
+          max_attempts: number
+          next_run_at: string
+          organization_id: string
+          payload: Json
+          started_at: string | null
+          status: string
+          target_action: string
+        }
+        Insert: {
+          attempts?: number
+          completed_at?: string | null
+          created_at?: string
+          external_response?: Json | null
+          id?: string
+          idempotency_key: string
+          last_error?: string | null
+          last_error_at?: string | null
+          max_attempts?: number
+          next_run_at?: string
+          organization_id: string
+          payload?: Json
+          started_at?: string | null
+          status?: string
+          target_action: string
+        }
+        Update: {
+          attempts?: number
+          completed_at?: string | null
+          created_at?: string
+          external_response?: Json | null
+          id?: string
+          idempotency_key?: string
+          last_error?: string | null
+          last_error_at?: string | null
+          max_attempts?: number
+          next_run_at?: string
+          organization_id?: string
+          payload?: Json
+          started_at?: string | null
+          status?: string
+          target_action?: string
+        }
+        Relationships: []
+      }
       invitations: {
         Row: {
           accepted_at: string | null
@@ -3750,6 +3846,63 @@ export type Database = {
           },
         ]
       }
+      message_analyses: {
+        Row: {
+          analysis_version: string
+          buying_signals: Json
+          created_at: string
+          id: string
+          intent: string | null
+          language_complexity: string | null
+          message_id: string
+          model: string
+          objection_type: string | null
+          organization_id: string
+          raw_response: Json | null
+          reasoning: string | null
+          requires_human: boolean
+          sentiment: string | null
+          tokens_used: number | null
+          urgency_score: number | null
+        }
+        Insert: {
+          analysis_version: string
+          buying_signals?: Json
+          created_at?: string
+          id?: string
+          intent?: string | null
+          language_complexity?: string | null
+          message_id: string
+          model: string
+          objection_type?: string | null
+          organization_id: string
+          raw_response?: Json | null
+          reasoning?: string | null
+          requires_human?: boolean
+          sentiment?: string | null
+          tokens_used?: number | null
+          urgency_score?: number | null
+        }
+        Update: {
+          analysis_version?: string
+          buying_signals?: Json
+          created_at?: string
+          id?: string
+          intent?: string | null
+          language_complexity?: string | null
+          message_id?: string
+          model?: string
+          objection_type?: string | null
+          organization_id?: string
+          raw_response?: Json | null
+          reasoning?: string | null
+          requires_human?: boolean
+          sentiment?: string | null
+          tokens_used?: number | null
+          urgency_score?: number | null
+        }
+        Relationships: []
+      }
       message_thread_reads: {
         Row: {
           last_read_at: string
@@ -3908,6 +4061,8 @@ export type Database = {
       }
       messages: {
         Row: {
+          ai_analysis_version: string | null
+          ai_analyzed_at: string | null
           ai_processed: boolean | null
           content: string
           created_at: string | null
@@ -3916,23 +4071,29 @@ export type Database = {
           error_code: string | null
           error_message: string | null
           id: string
+          intent: string | null
           is_sample: boolean | null
           media_type: string | null
           media_urls: Json | null
           metadata: Json | null
           organization_id: string
           reply_to_message_id: string | null
+          response_time_seconds: number | null
           sender_agent_id: string | null
           sender_name: string | null
           sender_type: string | null
           sender_user_id: string | null
           sent_at: string | null
+          sentiment: string | null
           template_id: string | null
           thread_id: string
+          urgency_score: number | null
           whatsapp_message_sid: string | null
           whatsapp_status: string | null
         }
         Insert: {
+          ai_analysis_version?: string | null
+          ai_analyzed_at?: string | null
           ai_processed?: boolean | null
           content: string
           created_at?: string | null
@@ -3941,23 +4102,29 @@ export type Database = {
           error_code?: string | null
           error_message?: string | null
           id?: string
+          intent?: string | null
           is_sample?: boolean | null
           media_type?: string | null
           media_urls?: Json | null
           metadata?: Json | null
           organization_id: string
           reply_to_message_id?: string | null
+          response_time_seconds?: number | null
           sender_agent_id?: string | null
           sender_name?: string | null
           sender_type?: string | null
           sender_user_id?: string | null
           sent_at?: string | null
+          sentiment?: string | null
           template_id?: string | null
           thread_id: string
+          urgency_score?: number | null
           whatsapp_message_sid?: string | null
           whatsapp_status?: string | null
         }
         Update: {
+          ai_analysis_version?: string | null
+          ai_analyzed_at?: string | null
           ai_processed?: boolean | null
           content?: string
           created_at?: string | null
@@ -3966,19 +4133,23 @@ export type Database = {
           error_code?: string | null
           error_message?: string | null
           id?: string
+          intent?: string | null
           is_sample?: boolean | null
           media_type?: string | null
           media_urls?: Json | null
           metadata?: Json | null
           organization_id?: string
           reply_to_message_id?: string | null
+          response_time_seconds?: number | null
           sender_agent_id?: string | null
           sender_name?: string | null
           sender_type?: string | null
           sender_user_id?: string | null
           sent_at?: string | null
+          sentiment?: string | null
           template_id?: string | null
           thread_id?: string
+          urgency_score?: number | null
           whatsapp_message_sid?: string | null
           whatsapp_status?: string | null
         }
@@ -4162,6 +4333,8 @@ export type Database = {
           created_by: string | null
           currency: string | null
           deleted_at: string | null
+          ghosting_risk_score: number | null
+          health_score: number | null
           id: string
           is_sample: boolean | null
           marketing_campaign_id: string | null
@@ -4191,6 +4364,8 @@ export type Database = {
           created_by?: string | null
           currency?: string | null
           deleted_at?: string | null
+          ghosting_risk_score?: number | null
+          health_score?: number | null
           id?: string
           is_sample?: boolean | null
           marketing_campaign_id?: string | null
@@ -4220,6 +4395,8 @@ export type Database = {
           created_by?: string | null
           currency?: string | null
           deleted_at?: string | null
+          ghosting_risk_score?: number | null
+          health_score?: number | null
           id?: string
           is_sample?: boolean | null
           marketing_campaign_id?: string | null
@@ -4851,6 +5028,45 @@ export type Database = {
             referencedColumns: ["id"]
           },
         ]
+      }
+      sales_events: {
+        Row: {
+          contact_id: string | null
+          created_at: string
+          event_type: string
+          id: string
+          message_id: string | null
+          occurred_at: string
+          opportunity_id: string | null
+          organization_id: string
+          payload: Json
+          user_id: string | null
+        }
+        Insert: {
+          contact_id?: string | null
+          created_at?: string
+          event_type: string
+          id?: string
+          message_id?: string | null
+          occurred_at?: string
+          opportunity_id?: string | null
+          organization_id: string
+          payload?: Json
+          user_id?: string | null
+        }
+        Update: {
+          contact_id?: string | null
+          created_at?: string
+          event_type?: string
+          id?: string
+          message_id?: string | null
+          occurred_at?: string
+          opportunity_id?: string | null
+          organization_id?: string
+          payload?: Json
+          user_id?: string | null
+        }
+        Relationships: []
       }
       saved_views: {
         Row: {
@@ -6132,6 +6348,32 @@ export type Database = {
         SetofOptions: {
           from: "*"
           to: "integration_jobs"
+          isOneToOne: false
+          isSetofReturn: true
+        }
+      }
+      rpc_claim_intelligence_jobs: {
+        Args: { p_limit?: number }
+        Returns: {
+          attempts: number
+          completed_at: string | null
+          created_at: string
+          external_response: Json | null
+          id: string
+          idempotency_key: string
+          last_error: string | null
+          last_error_at: string | null
+          max_attempts: number
+          next_run_at: string
+          organization_id: string
+          payload: Json
+          started_at: string | null
+          status: string
+          target_action: string
+        }[]
+        SetofOptions: {
+          from: "*"
+          to: "intelligence_jobs"
           isOneToOne: false
           isSetofReturn: true
         }
