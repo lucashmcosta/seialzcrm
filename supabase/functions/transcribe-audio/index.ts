@@ -21,7 +21,8 @@ const SUPABASE_URL = Deno.env.get("SUPABASE_URL")!;
 const SERVICE_ROLE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
 const WORKER_TOKEN = Deno.env.get("INTELLIGENCE_WORKER_TOKEN")!;
 const TRANSCRIPTION_VERSION = "scribe_v2_1";
-const STRICT_BYOK = (Deno.env.get("INTELLIGENCE_AUDIO_STRICT_BYOK") ?? "true").toLowerCase() === "true";
+// Onda 2a: BYOK estrito, sem fallback managed para áudio.
+const STRICT_BYOK = (Deno.env.get("INTELLIGENCE_AUDIO_STRICT_BYOK") ?? "true").toLowerCase() !== "false";
 
 Deno.serve(async (req) => {
   if (req.headers.get("x-worker-token") !== WORKER_TOKEN) {
