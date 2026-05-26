@@ -42,11 +42,14 @@ Deno.serve(async (req) => {
 
   const { data: msg } = await admin
     .from("messages")
-    .select("id, organization_id, media_url, media_type, content, direction, thread_id")
+    .select("id, organization_id, media_urls, media_type, content, direction, thread_id")
     .eq("id", message_id).single();
   if (!msg) return json({ error: "message_not_found" }, 404);
   if (msg.organization_id !== organization_id) return json({ error: "org_mismatch" }, 403);
-  if (!msg.media_url) return json({ error: "no_media_url" }, 400);
+  const mediaUrl: string | null = Array.isArray(msg.media_urls) && msg.media_urls.length > 0
+    ? (typeof msg.media_urls[0] === "string" ? msg.media_urls[0] : (msg.media_urls[0]?.url ?? null))
+    : null;
+  if (!mediaUrl) return json({ error: "no_media_url" }, 400);
 
   // Settings gating
   const settings = await getIntelligenceSettings(admin, organization_id);
