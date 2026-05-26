@@ -404,6 +404,22 @@ export function IntegrationsSettings() {
               const isConnected = !!connection?.is_enabled;
               const isBeta = integration.status === 'beta';
 
+              // Route AI providers (BYOK) to dedicated card
+              const isAIProvider =
+                (integration.config_schema as any)?.integration_kind === 'ai_provider';
+              if (isAIProvider && organization?.id) {
+                const providerKey = (integration.config_schema as any)?.provider;
+                return (
+                  <AIProviderCard
+                    key={integration.id}
+                    integration={integration}
+                    organizationId={organization.id}
+                    info={providerKey ? aiProviderMap[providerKey] : undefined}
+                    canManage={canManageAI}
+                  />
+                );
+              }
+
               // Use expanded Kommo card
               if (integration.slug === 'kommo') {
                 return renderKommoCard(integration, connection, isConnected, isBeta);
