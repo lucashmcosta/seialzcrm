@@ -1,6 +1,8 @@
-// transcribe-audio (v2 BYOK)
-// Chamado pelo intelligence-worker. Resolve provider (ElevenLabs/OpenAI),
-// transcreve, grava em audio_transcriptions, loga em ai_usage_logs com source/cost.
+// transcribe-audio (v2.1 BYOK strict)
+// Chamado pelo intelligence-worker. Estratégia atual (Onda 2a):
+//   - prefere BYOK OpenAI gpt-4o-transcribe
+//   - SEM fallback managed (definido por env INTELLIGENCE_AUDIO_STRICT_BYOK=true)
+//   - aplica filtro anti-hallucination (Whisper boilerplate) antes de persistir.
 
 import { createClient } from "jsr:@supabase/supabase-js@2";
 import {
@@ -13,11 +15,13 @@ import { sanitizeProviderError, safeLog } from "../_shared/intelligence/sanitize
 import { logAiUsage } from "../_shared/intelligence/log-usage.ts";
 import { estimateAudioCostUsd } from "../_shared/intelligence/pricing.ts";
 import { getIntelligenceSettings, shouldTranscribe } from "../_shared/intelligence/settings.ts";
+import { isLikelyHallucination } from "../_shared/intelligence/analyze-prompt.ts";
 
 const SUPABASE_URL = Deno.env.get("SUPABASE_URL")!;
 const SERVICE_ROLE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
 const WORKER_TOKEN = Deno.env.get("INTELLIGENCE_WORKER_TOKEN")!;
-const TRANSCRIPTION_VERSION = "scribe_v2-1";
+const TRANSCRIPTION_VERSION = "scribe_v2_1";
+const STRICT_BYOK = (Deno.env.get("INTELLIGENCE_AUDIO_STRICT_BYOK") ?? "true").toLowerCase() === "true";
 
 Deno.serve(async (req) => {
   if (req.headers.get("x-worker-token") !== WORKER_TOKEN) {
