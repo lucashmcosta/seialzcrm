@@ -772,11 +772,15 @@ export type Database = {
           created_at: string | null
           entity_id: string | null
           entity_type: string | null
+          estimated_cost_usd: number | null
           id: string
           integration_slug: string
+          job_id: string | null
           model_used: string
           organization_id: string
           prompt_tokens: number | null
+          provider: string | null
+          source: string | null
           total_tokens: number | null
           user_id: string | null
         }
@@ -786,11 +790,15 @@ export type Database = {
           created_at?: string | null
           entity_id?: string | null
           entity_type?: string | null
+          estimated_cost_usd?: number | null
           id?: string
           integration_slug: string
+          job_id?: string | null
           model_used: string
           organization_id: string
           prompt_tokens?: number | null
+          provider?: string | null
+          source?: string | null
           total_tokens?: number | null
           user_id?: string | null
         }
@@ -800,15 +808,26 @@ export type Database = {
           created_at?: string | null
           entity_id?: string | null
           entity_type?: string | null
+          estimated_cost_usd?: number | null
           id?: string
           integration_slug?: string
+          job_id?: string | null
           model_used?: string
           organization_id?: string
           prompt_tokens?: number | null
+          provider?: string | null
+          source?: string | null
           total_tokens?: number | null
           user_id?: string | null
         }
         Relationships: [
+          {
+            foreignKeyName: "ai_usage_logs_job_id_fkey"
+            columns: ["job_id"]
+            isOneToOne: false
+            referencedRelation: "intelligence_jobs"
+            referencedColumns: ["id"]
+          },
           {
             foreignKeyName: "ai_usage_logs_organization_id_fkey"
             columns: ["organization_id"]
@@ -4563,6 +4582,7 @@ export type Database = {
           integration_id: string | null
           is_enabled: boolean | null
           organization_id: string | null
+          secret_payload: Json | null
           updated_at: string | null
           whatsapp_inbound_settings: Json | null
         }
@@ -4576,6 +4596,7 @@ export type Database = {
           integration_id?: string | null
           is_enabled?: boolean | null
           organization_id?: string | null
+          secret_payload?: Json | null
           updated_at?: string | null
           whatsapp_inbound_settings?: Json | null
         }
@@ -4589,6 +4610,7 @@ export type Database = {
           integration_id?: string | null
           is_enabled?: boolean | null
           organization_id?: string | null
+          secret_payload?: Json | null
           updated_at?: string | null
           whatsapp_inbound_settings?: Json | null
         }
@@ -5028,6 +5050,39 @@ export type Database = {
             referencedColumns: ["id"]
           },
         ]
+      }
+      provider_pricing: {
+        Row: {
+          audio_per_minute_usd: number | null
+          created_at: string
+          effective_from: string
+          id: string
+          input_per_1k_usd: number | null
+          model: string
+          output_per_1k_usd: number | null
+          provider: string
+        }
+        Insert: {
+          audio_per_minute_usd?: number | null
+          created_at?: string
+          effective_from?: string
+          id?: string
+          input_per_1k_usd?: number | null
+          model: string
+          output_per_1k_usd?: number | null
+          provider: string
+        }
+        Update: {
+          audio_per_minute_usd?: number | null
+          created_at?: string
+          effective_from?: string
+          id?: string
+          input_per_1k_usd?: number | null
+          model?: string
+          output_per_1k_usd?: number | null
+          provider?: string
+        }
+        Relationships: []
       }
       sales_events: {
         Row: {
@@ -5982,6 +6037,58 @@ export type Database = {
           },
         ]
       }
+      vw_org_monthly_cost_byok: {
+        Row: {
+          cost_usd: number | null
+          month: string | null
+          organization_id: string | null
+          provider: string | null
+          tokens: number | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "ai_usage_logs_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      vw_org_monthly_cost_managed: {
+        Row: {
+          cost_usd: number | null
+          month: string | null
+          organization_id: string | null
+          provider: string | null
+          tokens: number | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "ai_usage_logs_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      vw_org_provider_keys: {
+        Row: {
+          info: Json | null
+          organization_id: string | null
+          provider: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "organization_integrations_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
     }
     Functions: {
       admin_list_pipeline_stages: {
@@ -6255,6 +6362,10 @@ export type Database = {
           p_timezone?: string
         }
         Returns: Json
+      }
+      has_org_role: {
+        Args: { _org_id: string; _role: string; _user_id: string }
+        Returns: boolean
       }
       is_admin_user: { Args: never; Returns: boolean }
       normalize_phone_br: { Args: { phone_input: string }; Returns: string }
