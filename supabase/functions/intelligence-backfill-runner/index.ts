@@ -94,7 +94,7 @@ async function enqueueSlice(
     if (isAudio) {
       audioJobs.push({
         organization_id: orgId,
-        target_action: "transcribe_audio",
+        target_action: "intelligence.transcribe_audio",
         payload: { message_id: m.id, source: "backfill" },
         idempotency_key: `transcribe:${m.id}`,
         status: "pending",
@@ -105,7 +105,7 @@ async function enqueueSlice(
     } else {
       textJobs.push({
         organization_id: orgId,
-        target_action: "analyze_message",
+        target_action: "intelligence.analyze_message",
         payload: { message_id: m.id, source: "backfill" },
         idempotency_key: `analyze:${m.id}`,
         status: "pending",
