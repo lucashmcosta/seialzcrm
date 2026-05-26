@@ -49,9 +49,11 @@ const CAPABILITY_BYOK_ORDER: Record<Capability, { provider: string; defaultModel
   chat: [
     { provider: "openai", defaultModel: "gpt-4o-mini" },
   ],
+  // Internal policy (piloto): preferir OpenAI gpt-4o-transcribe quando houver BYOK;
+  // ElevenLabs managed continua disponível como fallback explícito.
   transcription: [
+    { provider: "openai",     defaultModel: "gpt-4o-transcribe" },
     { provider: "elevenlabs", defaultModel: "scribe_v2" },
-    { provider: "openai",     defaultModel: "whisper-1" },
   ],
   embedding: [
     { provider: "openai", defaultModel: "text-embedding-3-small" },
