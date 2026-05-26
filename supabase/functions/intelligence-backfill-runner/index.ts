@@ -148,7 +148,7 @@ async function enqueueSlice(
         organization_id: orgId,
         target_action: "intelligence.analyze_message",
         payload: { message_id: m.id, source: "backfill", version: ANALYSIS_VERSION },
-        idempotency_key: `analyze:v2:${m.id}`,
+        idempotency_key: `analyze:v2_1:${m.id}`,
         status: "pending",
         attempts: 0,
         max_attempts: 5,
