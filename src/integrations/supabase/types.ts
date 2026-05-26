@@ -7108,6 +7108,10 @@ export type Database = {
           title: string
         }[]
       }
+      trigger_intelligence_backfill: {
+        Args: { payload: Json }
+        Returns: number
+      }
       try_lead_form_polling_lock: {
         Args: { p_lead_form_id: string }
         Returns: boolean
