@@ -82,7 +82,7 @@ Deno.serve(async (req) => {
     throw e;
   }
 
-  const audioRes = await fetch(msg.media_url);
+  const audioRes = await fetch(mediaUrl);
   if (!audioRes.ok) {
     return json({ error: "media_download_failed", status: audioRes.status }, audioRes.status >= 500 ? 502 : 400);
   }
