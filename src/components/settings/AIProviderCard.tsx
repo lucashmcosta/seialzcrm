@@ -6,7 +6,7 @@ import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Switch } from '@/components/ui/switch';
 import {
-  CheckCircle, WarningCircle, XCircle, Lock, Robot, Sparkle,
+  CheckCircle, WarningCircle, XCircle, Lock, Sparkle, Key,
 } from '@phosphor-icons/react';
 import { toast } from 'sonner';
 import {
@@ -19,12 +19,13 @@ import {
 import { AIProviderConfigDialog } from './AIProviderConfigDialog';
 
 const STATUS_MAP: Record<AIProviderStatus, { label: string; variant: 'default' | 'secondary' | 'destructive' | 'outline'; Icon: typeof CheckCircle }> = {
-  not_configured:    { label: 'Não configurado',     variant: 'outline',     Icon: Lock },
-  active:            { label: 'Ativo',               variant: 'default',     Icon: CheckCircle },
-  inactive:          { label: 'Desativado',          variant: 'secondary',   Icon: WarningCircle },
-  invalid:           { label: 'Inválido',            variant: 'destructive', Icon: XCircle },
-  budget_exceeded:   { label: 'Limite excedido',     variant: 'destructive', Icon: WarningCircle },
-  managed_fallback:  { label: 'Fallback managed',    variant: 'secondary',   Icon: WarningCircle },
+  not_configured:    { label: 'Não configurado',          variant: 'outline',     Icon: Lock },
+  legacy_detected:   { label: 'Configuração antiga',      variant: 'outline',     Icon: WarningCircle },
+  active:            { label: 'Chave própria ativa',      variant: 'default',     Icon: CheckCircle },
+  inactive:          { label: 'Chave própria inativa',    variant: 'secondary',   Icon: WarningCircle },
+  invalid:           { label: 'Chave inválida',           variant: 'destructive', Icon: XCircle },
+  budget_exceeded:   { label: 'Limite excedido',          variant: 'destructive', Icon: WarningCircle },
+  managed_fallback:  { label: 'Fallback managed',         variant: 'secondary',   Icon: WarningCircle },
 };
 
 function formatDate(iso: string | null): string {
@@ -37,16 +38,21 @@ interface AIProviderCardProps {
   integration: any;
   organizationId: string;
   info?: AIProviderInfo;
+  /** Legacy `organization_integrations` row — used only to detect old plaintext keys for UX. */
+  legacyConnection?: any;
   canManage: boolean;
 }
 
-export function AIProviderCard({ integration, organizationId, info, canManage }: AIProviderCardProps) {
+export function AIProviderCard({
+  integration, organizationId, info, legacyConnection, canManage,
+}: AIProviderCardProps) {
   const providerId = resolveProviderId(integration);
   const [dialogOpen, setDialogOpen] = useState(false);
   const invalidate = useInvalidateAIProviders();
 
-  const status = statusOfProvider(info);
-  const isConfigured = status !== 'not_configured';
+  const hasLegacyKey = !!legacyConnection?.config_values?.api_key && !info;
+  const status = statusOfProvider(info, hasLegacyKey);
+  const hasNewKey = !!info;
 
   const toggleMut = useMutation({
     mutationFn: async (nextActive: boolean) => {
@@ -69,24 +75,22 @@ export function AIProviderCard({ integration, organizationId, info, canManage }:
     onError: (e: Error) => toast.error(e.message),
   });
 
-  if (!providerId) {
-    return null;
-  }
+  if (!providerId) return null;
 
   const meta = STATUS_MAP[status];
   const StatusIcon = meta.Icon;
 
   const handleToggle = (checked: boolean) => {
     if (!canManage) return;
-    if (!isConfigured) {
-      // No key: open dialog to configure
+    if (!hasNewKey) {
+      // No new BYOK key (with or without legacy): open dialog to configure
       if (checked) setDialogOpen(true);
       return;
     }
     toggleMut.mutate(checked);
   };
 
-  const switchChecked = isConfigured && info?.is_active === true;
+  const switchChecked = hasNewKey && info?.is_active === true;
 
   return (
     <>
@@ -111,7 +115,6 @@ export function AIProviderCard({ integration, organizationId, info, canManage }:
                   <StatusIcon size={11} weight="fill" />
                   {meta.label}
                 </Badge>
-                <Badge variant="outline" className="text-[10px]">BYOK</Badge>
               </div>
               <p className="text-sm text-muted-foreground mt-1 line-clamp-2">
                 {integration.description}
@@ -125,7 +128,17 @@ export function AIProviderCard({ integration, organizationId, info, canManage }:
           />
         </div>
 
-        {isConfigured && (
+        {status === 'legacy_detected' && (
+          <div className="rounded-md border border-amber-500/40 bg-amber-500/5 px-3 py-2 text-[12px] text-amber-700 dark:text-amber-300 flex items-start gap-2">
+            <WarningCircle size={14} weight="fill" className="mt-0.5 shrink-0" />
+            <span>
+              Configuração antiga detectada. Para maior segurança, salve novamente sua chave como
+              <strong> Chave Própria criptografada</strong>. A chave antiga permanece intacta até a migração.
+            </span>
+          </div>
+        )}
+
+        {hasNewKey && (
           <dl className="grid grid-cols-2 gap-x-4 gap-y-1.5 text-xs pl-[52px]">
             <div>
               <dt className="text-[10px] uppercase tracking-wider text-muted-foreground/70">Chave</dt>
@@ -137,7 +150,7 @@ export function AIProviderCard({ integration, organizationId, info, canManage }:
             </div>
             <div>
               <dt className="text-[10px] uppercase tracking-wider text-muted-foreground/70">Origem</dt>
-              <dd>Customer key</dd>
+              <dd>Chave própria</dd>
             </div>
             <div>
               <dt className="text-[10px] uppercase tracking-wider text-muted-foreground/70">Limite</dt>
@@ -152,12 +165,15 @@ export function AIProviderCard({ integration, organizationId, info, canManage }:
 
         <div className="flex items-center justify-end gap-2">
           <Button
-            variant="link"
+            variant={status === 'legacy_detected' ? 'default' : 'link'}
             size="sm"
-            className="h-auto p-0 text-primary"
+            className={status === 'legacy_detected' ? '' : 'h-auto p-0 text-primary'}
             onClick={() => setDialogOpen(true)}
+            disabled={!canManage && !hasNewKey}
           >
-            {isConfigured ? 'Gerenciar chave' : 'Configurar'}
+            {status === 'legacy_detected' ? (
+              <><Key size={14} weight="bold" className="mr-1.5" />Migrar para chave segura</>
+            ) : hasNewKey ? 'Gerenciar chave' : 'Configurar'}
           </Button>
         </div>
       </Card>
@@ -169,9 +185,11 @@ export function AIProviderCard({ integration, organizationId, info, canManage }:
           providerId={providerId}
           organizationId={organizationId}
           currentInfo={info}
+          hasLegacyKey={hasLegacyKey}
           canManage={canManage}
         />
       )}
     </>
   );
 }
+

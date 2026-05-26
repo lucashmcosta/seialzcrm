@@ -415,6 +415,7 @@ export function IntegrationsSettings() {
                     integration={integration}
                     organizationId={organization.id}
                     info={providerKey ? aiProviderMap[providerKey] : undefined}
+                    legacyConnection={connection}
                     canManage={canManageAI}
                   />
                 );

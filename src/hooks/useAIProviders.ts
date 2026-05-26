@@ -21,19 +21,26 @@ export type AIProviderId = 'openai' | 'anthropic' | 'gemini' | 'elevenlabs';
 
 export type AIProviderStatus =
   | 'not_configured'
+  | 'legacy_detected'
   | 'active'
   | 'inactive'
   | 'invalid'
   | 'budget_exceeded'
   | 'managed_fallback';
 
-export function statusOfProvider(info?: AIProviderInfo | null): AIProviderStatus {
-  if (!info) return 'not_configured';
-  if (info.has_error) return 'invalid';
-  if (info.fallback_to_managed && info.has_error) return 'managed_fallback';
-  if (!info.is_active) return 'inactive';
-  if (info.verified_at) return 'active';
-  return 'inactive';
+export function statusOfProvider(
+  info?: AIProviderInfo | null,
+  hasLegacyKey?: boolean,
+): AIProviderStatus {
+  if (info) {
+    if (info.has_error) return 'invalid';
+    if (info.fallback_to_managed && info.has_error) return 'managed_fallback';
+    if (!info.is_active) return 'inactive';
+    if (info.verified_at) return 'active';
+    return 'inactive';
+  }
+  if (hasLegacyKey) return 'legacy_detected';
+  return 'not_configured';
 }
 
 /**

@@ -41,6 +41,8 @@ interface AIProviderConfigDialogProps {
   providerId: AIProviderId;
   organizationId: string;
   currentInfo?: AIProviderInfo;
+  /** True when a plaintext legacy `config_values.api_key` exists for this provider. */
+  hasLegacyKey?: boolean;
   canManage: boolean;
 }
 
@@ -50,6 +52,7 @@ export function AIProviderConfigDialog({
   providerId,
   organizationId,
   currentInfo,
+  hasLegacyKey,
   canManage,
 }: AIProviderConfigDialogProps) {
   const meta = PROVIDER_META[providerId];
@@ -175,6 +178,13 @@ export function AIProviderConfigDialog({
           </DialogHeader>
 
           <div className="space-y-5">
+            {hasLegacyKey && !exists && (
+              <div className="rounded-md border border-amber-500/40 bg-amber-500/5 px-3 py-2 text-[12px] text-amber-700 dark:text-amber-300">
+                Esta integração usa um formato antigo de armazenamento. Para maior segurança, salve novamente a
+                chave como <strong>Chave Própria criptografada</strong>. A chave antiga permanece intacta até você
+                confirmar a migração.
+              </div>
+            )}
             {exists && (
               <div className="rounded-md bg-muted/40 p-3 text-xs text-muted-foreground space-y-1">
                 <div className="flex items-center justify-between">
