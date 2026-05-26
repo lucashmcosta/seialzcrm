@@ -84,7 +84,7 @@ Deno.serve(async (req) => {
   const current = (await readByokRow(admin, organization_id))?.secret_payload ?? {};
 
   const entry = {
-    api_key_encrypted: await encryptSecret(legacyKey),
+    api_key_encrypted: "",
     last4: last4(legacyKey),
     fingerprint: await fingerprint(legacyKey),
     verified_at: new Date().toISOString(),
@@ -97,6 +97,12 @@ Deno.serve(async (req) => {
     monthly_budget_usd: null,
     migrated_from_legacy: true,
   };
+  try {
+    entry.api_key_encrypted = await encryptSecret(legacyKey);
+  } catch (error) {
+    safeLog("[migrate-legacy-ai-key] encryption_failed", { provider, error: error instanceof Error ? error.message : "unknown" });
+    return json({ error: "migration_temporarily_unavailable" }, 503);
+  }
   await writeSecretEntry(admin, rowId, current, provider, entry);
 
   // 4. Mark the legacy row as migrated (preserve api_key for rollback safety).
