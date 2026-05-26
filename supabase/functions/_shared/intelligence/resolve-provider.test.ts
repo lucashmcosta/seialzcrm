@@ -32,25 +32,34 @@ function makeFakeAdmin(initial: {
       const builder: any = {
         _filters: {} as Record<string, any>,
         _notNull: null as string | null,
+        _pendingUpdate: null as Record<string, any> | null,
         select() { return this; },
-        eq(col: string, val: any) { this._filters[col] = val; return this; },
+        eq(col: string, val: any) {
+          this._filters[col] = val;
+          // If an update is pending, apply once filters are set (each .eq returns a still-chainable thenable).
+          return this;
+        },
         not(col: string, _op: string, _val: any) { this._notNull = col; return this; },
-        async update(patch: Record<string, any>) {
-          for (const r of state.rows) {
-            let match = true;
-            for (const [k, v] of Object.entries(this._filters)) {
-              if ((r as any)[k] !== v) { match = false; break; }
-            }
-            if (match) Object.assign(r, patch);
-          }
-          return { error: null };
+        update(patch: Record<string, any>) {
+          this._pendingUpdate = patch;
+          return this;
         },
         async maybeSingle() {
           const list = this._run();
           return { data: list[0] ?? null, error: null };
         },
         then(resolve: any) {
-          // awaited as a thenable -> returns full list
+          if (this._pendingUpdate) {
+            for (const r of state.rows) {
+              let match = true;
+              for (const [k, v] of Object.entries(this._filters)) {
+                if ((r as any)[k] !== v) { match = false; break; }
+              }
+              if (match) Object.assign(r, this._pendingUpdate);
+            }
+            resolve({ error: null });
+            return;
+          }
           resolve({ data: this._run(), error: null });
         },
         _run() {
