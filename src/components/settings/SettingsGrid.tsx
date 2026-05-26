@@ -20,6 +20,7 @@ import {
   TrashSimple,
   MagnifyingGlass,
   ShuffleAngular,
+  Sparkle,
 } from '@phosphor-icons/react';
 import { usePermissions } from '@/hooks/usePermissions';
 import { useWhatsAppIntegration } from '@/hooks/useWhatsAppIntegration';
@@ -74,6 +75,7 @@ const settingsGroups: SettingsGroup[] = [
       { icon: Link, label: 'Integrações', description: 'Conecte com ferramentas que você já usa', to: 'integrations', permission: 'canManageIntegrations' },
       { icon: ChatCircleText, label: 'WhatsApp Templates', description: 'Gerencie modelos de mensagem do WhatsApp', to: 'whatsapp-templates', permission: 'canManageIntegrations', flag: 'hasWhatsApp' },
       { icon: Robot, label: 'Agente IA', description: 'Configure assistente virtual inteligente', to: 'ai-agent', badge: 'Beta', badgeVariant: 'warning', permission: 'canManageIntegrations', flag: 'showAIFeatures' },
+      { icon: Sparkle, label: 'Provedores de IA (BYOK)', description: 'Use suas próprias chaves OpenAI, Anthropic, Gemini ou ElevenLabs', to: 'ai-providers', permission: 'canManageIntegrations' },
       { icon: Code, label: 'API & Webhooks', description: 'Acesse a API e configure webhooks', to: 'api-webhooks', permission: 'canManageIntegrations' },
     ],
   },
