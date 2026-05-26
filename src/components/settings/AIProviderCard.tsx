@@ -192,19 +192,40 @@ export function AIProviderCard({
         )}
 
         <div className="flex items-center justify-end gap-2">
-          <Button
-            variant={status === 'legacy_detected' ? 'default' : 'link'}
-            size="sm"
-            className={status === 'legacy_detected' ? '' : 'h-auto p-0 text-primary'}
-            onClick={() => setDialogOpen(true)}
-            disabled={!canManage && !hasNewKey}
-          >
-            {status === 'legacy_detected' ? (
-              <><Key size={14} weight="bold" className="mr-1.5" />Migrar para chave segura</>
-            ) : hasNewKey ? 'Gerenciar chave' : 'Configurar'}
-          </Button>
+          {status === 'legacy_detected' ? (
+            <>
+              <Button
+                variant="link"
+                size="sm"
+                className="h-auto p-0 text-muted-foreground"
+                onClick={() => setDialogOpen(true)}
+                disabled={!canManage}
+              >
+                Usar outra chave
+              </Button>
+              <Button
+                size="sm"
+                onClick={() => migrateMut.mutate()}
+                disabled={!canManage || migrateMut.isPending}
+              >
+                <Key size={14} weight="bold" className="mr-1.5" />
+                {migrateMut.isPending ? 'Migrando…' : 'Migrar chave existente com segurança'}
+              </Button>
+            </>
+          ) : (
+            <Button
+              variant="link"
+              size="sm"
+              className="h-auto p-0 text-primary"
+              onClick={() => setDialogOpen(true)}
+              disabled={!canManage && !hasNewKey}
+            >
+              {hasNewKey ? 'Gerenciar chave' : 'Configurar'}
+            </Button>
+          )}
         </div>
       </Card>
+
 
       {dialogOpen && (
         <AIProviderConfigDialog
