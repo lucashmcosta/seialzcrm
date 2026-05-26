@@ -4038,11 +4038,14 @@ export type Database = {
         Row: {
           analysis_version: string
           buying_signals: Json
+          confidence: string | null
           created_at: string
           id: string
           intent: string | null
+          is_template: boolean | null
           language_complexity: string | null
           message_id: string
+          message_quality_score: number | null
           model: string
           objection_type: string | null
           organization_id: string
@@ -4050,17 +4053,21 @@ export type Database = {
           reasoning: string | null
           requires_human: boolean
           sentiment: string | null
+          speaker_role: string | null
           tokens_used: number | null
           urgency_score: number | null
         }
         Insert: {
           analysis_version: string
           buying_signals?: Json
+          confidence?: string | null
           created_at?: string
           id?: string
           intent?: string | null
+          is_template?: boolean | null
           language_complexity?: string | null
           message_id: string
+          message_quality_score?: number | null
           model: string
           objection_type?: string | null
           organization_id: string
@@ -4068,17 +4075,21 @@ export type Database = {
           reasoning?: string | null
           requires_human?: boolean
           sentiment?: string | null
+          speaker_role?: string | null
           tokens_used?: number | null
           urgency_score?: number | null
         }
         Update: {
           analysis_version?: string
           buying_signals?: Json
+          confidence?: string | null
           created_at?: string
           id?: string
           intent?: string | null
+          is_template?: boolean | null
           language_complexity?: string | null
           message_id?: string
+          message_quality_score?: number | null
           model?: string
           objection_type?: string | null
           organization_id?: string
@@ -4086,6 +4097,7 @@ export type Database = {
           reasoning?: string | null
           requires_human?: boolean
           sentiment?: string | null
+          speaker_role?: string | null
           tokens_used?: number | null
           urgency_score?: number | null
         }
