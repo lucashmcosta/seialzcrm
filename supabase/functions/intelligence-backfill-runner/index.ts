@@ -253,6 +253,13 @@ async function processRun(runId: string) {
       break;
     }
 
+    // Pending-queue hard cap: pausa o backfill se a fila estiver saturada
+    const pending = await getPendingJobsCount(run.organization_id);
+    if (pending >= MAX_PENDING_JOBS) {
+      finalStatus = "paused_queue_full";
+      break;
+    }
+
     const sliceFrom = new Date(cursor).toISOString();
     const sliceTo = new Date(Math.min(cursor + sliceMs, toMs)).toISOString();
 
