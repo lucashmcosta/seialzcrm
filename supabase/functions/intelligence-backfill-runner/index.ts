@@ -60,6 +60,7 @@ async function enqueueSlice(
   orgId: string,
   sliceFrom: string,
   sliceTo: string,
+  mode: "all" | "text_only" | "audio_only" = "all",
 ): Promise<{ text: number; audio: number }> {
   // Pull eligible messages in slice
   const { data: msgs, error } = await supabase
@@ -84,6 +85,8 @@ async function enqueueSlice(
     const isAudio = (m.media_type || "").toLowerCase().startsWith("audio");
     const hasText = !isAudio && typeof m.content === "string" && m.content.trim().length >= 2;
     if (!isAudio && !hasText) continue;
+    if (isAudio && mode === "text_only") continue;
+    if (!isAudio && mode === "audio_only") continue;
 
     const nextRunAt = new Date(Date.now() + stagger * 2000).toISOString();
     stagger++;
@@ -138,6 +141,8 @@ async function actionStart(body: any) {
   const sliceHours = Number(body.slice_hours) || DEFAULT_SLICE_HOURS;
   const maxCostUsd = Number(body.max_cost_usd) || DEFAULT_MAX_COST_USD;
   const dryRun = Boolean(body.dry_run);
+  const mode: "all" | "text_only" | "audio_only" =
+    body.mode === "text_only" || body.mode === "audio_only" ? body.mode : "all";
 
   if (!orgId) return json({ error: "organization_id required" }, 400);
 
@@ -149,7 +154,7 @@ async function actionStart(body: any) {
       .gte("created_at", fromTs)
       .lt("created_at", toTs)
       .is("deleted_at", null);
-    return json({ dry_run: true, organization_id: orgId, candidate_messages: count, from: fromTs, to: toTs });
+    return json({ dry_run: true, organization_id: orgId, candidate_messages: count, from: fromTs, to: toTs, mode });
   }
 
   const { data: run, error } = await supabase
@@ -162,6 +167,7 @@ async function actionStart(body: any) {
       max_cost_usd: maxCostUsd,
       cursor_ts: fromTs,
       status: "running",
+      mode,
     })
     .select()
     .single();
@@ -169,7 +175,7 @@ async function actionStart(body: any) {
 
   // Kick off processing right away
   const processed = await processRun(run.id);
-  return json({ run_id: run.id, ...processed });
+  return json({ run_id: run.id, mode, ...processed });
 }
 
 async function processRun(runId: string) {
@@ -208,7 +214,7 @@ async function processRun(runId: string) {
     const sliceTo = new Date(Math.min(cursor + sliceMs, toMs)).toISOString();
 
     try {
-      const r = await enqueueSlice(run.organization_id, sliceFrom, sliceTo);
+      const r = await enqueueSlice(run.organization_id, sliceFrom, sliceTo, (run.mode as any) || "all");
       enqueuedText += r.text;
       enqueuedAudio += r.audio;
     } catch (e) {
