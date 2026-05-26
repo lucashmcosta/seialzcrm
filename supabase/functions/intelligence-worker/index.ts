@@ -8,8 +8,8 @@ const SUPABASE_URL = Deno.env.get("SUPABASE_URL")!;
 const SERVICE_ROLE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
 const WORKER_TOKEN = Deno.env.get("INTELLIGENCE_WORKER_TOKEN")!;
 
-const BATCH_SIZE = 10;
-const MAX_BATCHES = 5;
+const BATCH_SIZE = 3;
+const MAX_BATCHES = 3;
 const MAX_RUNTIME_MS = 25_000;
 
 type Job = {
@@ -42,7 +42,11 @@ Deno.serve(async (req) => {
     const claimed: Job[] = jobs ?? [];
     if (claimed.length === 0) break;
 
-    await Promise.all(claimed.map((job) => process(supabase, job, summary)));
+    // Sequential to avoid bursting managed AI gateway rate limits
+    for (const job of claimed) {
+      if (performance.now() - started > MAX_RUNTIME_MS) break;
+      await process(supabase, job, summary);
+    }
     processed += claimed.length;
     if (claimed.length < BATCH_SIZE) break;
   }

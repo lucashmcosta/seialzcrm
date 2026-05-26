@@ -60,23 +60,35 @@ Deno.serve(async (req) => {
 
   const { data: msg, error: msgErr } = await admin
     .from("messages")
-    .select("id, organization_id, thread_id, direction, content, media_type, created_at, contact_id, opportunity_id")
+    .select("id, organization_id, thread_id, direction, content, media_type, created_at")
     .eq("id", message_id)
     .single();
-  if (msgErr || !msg) return json({ error: "message_not_found" }, 404);
+  if (msgErr || !msg) return json({ error: "message_not_found", detail: msgErr?.message }, 404);
   if (msg.organization_id !== organization_id) return json({ error: "org_mismatch" }, 403);
   if (!msg.content || msg.content.trim().length < 2) {
     return json({ ok: true, skipped: "no_content" });
   }
 
-  // Settings gating
+  // Settings gating; derive contact/opportunity from thread
   const settings = await getIntelligenceSettings(admin, organization_id);
   const { data: thr } = await admin
     .from("message_threads")
-    .select("channel, opportunity_id")
+    .select("channel, opportunity_id, contact_id")
     .eq("id", msg.thread_id).maybeSingle();
+  const contactId: string | null = thr?.contact_id ?? null;
+  let oppId: string | null = thr?.opportunity_id ?? null;
+  if (!oppId && contactId) {
+    const { data: opp } = await admin
+      .from("opportunities")
+      .select("id, status")
+      .eq("contact_id", contactId)
+      .is("deleted_at", null)
+      .not("status", "in", "(won,lost,abandoned)")
+      .order("created_at", { ascending: false })
+      .limit(1).maybeSingle();
+    if (opp) oppId = opp.id;
+  }
   let opportunityIsOpen: boolean | null = null;
-  const oppId = msg.opportunity_id ?? thr?.opportunity_id;
   if (oppId) {
     const { data: opp } = await admin
       .from("opportunities").select("status").eq("id", oppId).maybeSingle();
@@ -212,8 +224,8 @@ MENSAGEM A ANALISAR:
   const events: Array<Record<string, unknown>> = [];
   const base = {
     organization_id: msg.organization_id,
-    contact_id: msg.contact_id,
-    opportunity_id: msg.opportunity_id,
+    contact_id: contactId,
+    opportunity_id: oppId,
     message_id: msg.id,
     occurred_at: msg.created_at,
   };
