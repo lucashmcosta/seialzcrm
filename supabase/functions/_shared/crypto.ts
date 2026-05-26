@@ -57,6 +57,6 @@ export async function decryptSecret(payload: string): Promise<string> {
   const iv = b64decode(parts[1]);
   const ct = b64decode(parts[2]);
   const key = await getKey();
-  const pt = await crypto.subtle.decrypt({ name: "AES-GCM", iv }, key, ct);
+  const pt = await crypto.subtle.decrypt({ name: "AES-GCM", iv: iv as BufferSource }, key, ct as BufferSource);
   return new TextDecoder().decode(pt);
 }
