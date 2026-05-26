@@ -2839,6 +2839,85 @@ export type Database = {
         }
         Relationships: []
       }
+      intelligence_settings: {
+        Row: {
+          behavior: Json
+          capture: Json
+          created_at: string
+          organization_id: string
+          privacy: Json
+          transcription: Json
+          updated_at: string
+          updated_by: string | null
+          version: number
+        }
+        Insert: {
+          behavior?: Json
+          capture?: Json
+          created_at?: string
+          organization_id: string
+          privacy?: Json
+          transcription?: Json
+          updated_at?: string
+          updated_by?: string | null
+          version?: number
+        }
+        Update: {
+          behavior?: Json
+          capture?: Json
+          created_at?: string
+          organization_id?: string
+          privacy?: Json
+          transcription?: Json
+          updated_at?: string
+          updated_by?: string | null
+          version?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "intelligence_settings_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: true
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      intelligence_settings_audit: {
+        Row: {
+          after: Json | null
+          before: Json | null
+          changed_by: string | null
+          created_at: string
+          id: string
+          organization_id: string
+        }
+        Insert: {
+          after?: Json | null
+          before?: Json | null
+          changed_by?: string | null
+          created_at?: string
+          id?: string
+          organization_id: string
+        }
+        Update: {
+          after?: Json | null
+          before?: Json | null
+          changed_by?: string | null
+          created_at?: string
+          id?: string
+          organization_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "intelligence_settings_audit_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       invitations: {
         Row: {
           accepted_at: string | null
@@ -3922,6 +4001,51 @@ export type Database = {
         }
         Relationships: []
       }
+      message_response_times: {
+        Row: {
+          contact_id: string | null
+          created_at: string
+          id: string
+          inbound_at: string
+          inbound_message_id: string
+          opportunity_id: string | null
+          organization_id: string
+          outbound_at: string
+          outbound_message_id: string
+          response_seconds: number
+          thread_id: string
+          user_id: string | null
+        }
+        Insert: {
+          contact_id?: string | null
+          created_at?: string
+          id?: string
+          inbound_at: string
+          inbound_message_id: string
+          opportunity_id?: string | null
+          organization_id: string
+          outbound_at: string
+          outbound_message_id: string
+          response_seconds: number
+          thread_id: string
+          user_id?: string | null
+        }
+        Update: {
+          contact_id?: string | null
+          created_at?: string
+          id?: string
+          inbound_at?: string
+          inbound_message_id?: string
+          opportunity_id?: string | null
+          organization_id?: string
+          outbound_at?: string
+          outbound_message_id?: string
+          response_seconds?: number
+          thread_id?: string
+          user_id?: string | null
+        }
+        Relationships: []
+      }
       message_thread_reads: {
         Row: {
           last_read_at: string
@@ -4519,6 +4643,107 @@ export type Database = {
           status?: Database["public"]["Enums"]["opportunity_status"] | null
         }
         Relationships: []
+      }
+      opportunity_behavior_snapshot: {
+        Row: {
+          asked_deadline: boolean
+          asked_price: boolean
+          audios_inbound: number
+          audios_outbound: number
+          avg_lead_response_seconds: number | null
+          avg_seller_response_seconds: number | null
+          buying_signals_count: number
+          contact_id: string | null
+          days_to_close: number | null
+          days_to_ghost: number | null
+          documents_sent: number
+          final_status: string | null
+          first_response_seconds: number | null
+          ghosted_after_stage: string | null
+          hours_distribution: Json
+          last_inbound_at: string | null
+          last_outbound_at: string | null
+          lost_at: string | null
+          lost_reason: string | null
+          objections_count: number
+          opportunity_id: string
+          organization_id: string
+          sent_documents: boolean
+          total_messages_inbound: number
+          total_messages_outbound: number
+          updated_at: string
+          user_id: string | null
+          won_at: string | null
+        }
+        Insert: {
+          asked_deadline?: boolean
+          asked_price?: boolean
+          audios_inbound?: number
+          audios_outbound?: number
+          avg_lead_response_seconds?: number | null
+          avg_seller_response_seconds?: number | null
+          buying_signals_count?: number
+          contact_id?: string | null
+          days_to_close?: number | null
+          days_to_ghost?: number | null
+          documents_sent?: number
+          final_status?: string | null
+          first_response_seconds?: number | null
+          ghosted_after_stage?: string | null
+          hours_distribution?: Json
+          last_inbound_at?: string | null
+          last_outbound_at?: string | null
+          lost_at?: string | null
+          lost_reason?: string | null
+          objections_count?: number
+          opportunity_id: string
+          organization_id: string
+          sent_documents?: boolean
+          total_messages_inbound?: number
+          total_messages_outbound?: number
+          updated_at?: string
+          user_id?: string | null
+          won_at?: string | null
+        }
+        Update: {
+          asked_deadline?: boolean
+          asked_price?: boolean
+          audios_inbound?: number
+          audios_outbound?: number
+          avg_lead_response_seconds?: number | null
+          avg_seller_response_seconds?: number | null
+          buying_signals_count?: number
+          contact_id?: string | null
+          days_to_close?: number | null
+          days_to_ghost?: number | null
+          documents_sent?: number
+          final_status?: string | null
+          first_response_seconds?: number | null
+          ghosted_after_stage?: string | null
+          hours_distribution?: Json
+          last_inbound_at?: string | null
+          last_outbound_at?: string | null
+          lost_at?: string | null
+          lost_reason?: string | null
+          objections_count?: number
+          opportunity_id?: string
+          organization_id?: string
+          sent_documents?: boolean
+          total_messages_inbound?: number
+          total_messages_outbound?: number
+          updated_at?: string
+          user_id?: string | null
+          won_at?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "opportunity_behavior_snapshot_opportunity_id_fkey"
+            columns: ["opportunity_id"]
+            isOneToOne: true
+            referencedRelation: "opportunities"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       organization_api_keys: {
         Row: {
@@ -5262,6 +5487,66 @@ export type Database = {
             referencedColumns: ["id"]
           },
         ]
+      }
+      seller_metrics_daily: {
+        Row: {
+          audios_received: number
+          audios_sent: number
+          avg_days_before_lost: number | null
+          avg_messages_per_lost: number | null
+          avg_response_seconds: number | null
+          day: string
+          follow_ups_count: number
+          hot_leads_abandoned: number
+          leads_lost: number
+          leads_touched: number
+          leads_won: number
+          median_response_seconds: number | null
+          messages_received: number
+          messages_sent: number
+          organization_id: string
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          audios_received?: number
+          audios_sent?: number
+          avg_days_before_lost?: number | null
+          avg_messages_per_lost?: number | null
+          avg_response_seconds?: number | null
+          day: string
+          follow_ups_count?: number
+          hot_leads_abandoned?: number
+          leads_lost?: number
+          leads_touched?: number
+          leads_won?: number
+          median_response_seconds?: number | null
+          messages_received?: number
+          messages_sent?: number
+          organization_id: string
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          audios_received?: number
+          audios_sent?: number
+          avg_days_before_lost?: number | null
+          avg_messages_per_lost?: number | null
+          avg_response_seconds?: number | null
+          day?: string
+          follow_ups_count?: number
+          hot_leads_abandoned?: number
+          leads_lost?: number
+          leads_touched?: number
+          leads_won?: number
+          median_response_seconds?: number | null
+          messages_received?: number
+          messages_sent?: number
+          organization_id?: string
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: []
       }
       subscription_usage: {
         Row: {
