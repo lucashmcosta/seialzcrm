@@ -4039,6 +4039,7 @@ export type Database = {
           analysis_version: string
           buying_signals: Json
           confidence: string | null
+          conversation_stage: string | null
           created_at: string
           id: string
           intent: string | null
@@ -4061,6 +4062,7 @@ export type Database = {
           analysis_version: string
           buying_signals?: Json
           confidence?: string | null
+          conversation_stage?: string | null
           created_at?: string
           id?: string
           intent?: string | null
@@ -4083,6 +4085,7 @@ export type Database = {
           analysis_version?: string
           buying_signals?: Json
           confidence?: string | null
+          conversation_stage?: string | null
           created_at?: string
           id?: string
           intent?: string | null

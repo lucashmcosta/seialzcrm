@@ -209,6 +209,7 @@ content: ${(msg.content ?? "").slice(0, 2000)}`;
     sentiment: analysis.sentiment,
     intent: analysis.intent,
     objection_type: analysis.objection_type,
+    conversation_stage: analysis.conversation_stage,
     urgency_score: analysis.urgency_score,
     buying_signals: buyingSignals,
     requires_human: analysis.requires_human,

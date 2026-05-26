@@ -1,6 +1,8 @@
-// transcribe-audio (v2 BYOK)
-// Chamado pelo intelligence-worker. Resolve provider (ElevenLabs/OpenAI),
-// transcreve, grava em audio_transcriptions, loga em ai_usage_logs com source/cost.
+// transcribe-audio (v2.1 BYOK strict)
+// Chamado pelo intelligence-worker. Estratégia atual (Onda 2a):
+//   - prefere BYOK OpenAI gpt-4o-transcribe
+//   - SEM fallback managed (definido por env INTELLIGENCE_AUDIO_STRICT_BYOK=true)
+//   - aplica filtro anti-hallucination (Whisper boilerplate) antes de persistir.
 
 import { createClient } from "jsr:@supabase/supabase-js@2";
 import {
@@ -13,11 +15,13 @@ import { sanitizeProviderError, safeLog } from "../_shared/intelligence/sanitize
 import { logAiUsage } from "../_shared/intelligence/log-usage.ts";
 import { estimateAudioCostUsd } from "../_shared/intelligence/pricing.ts";
 import { getIntelligenceSettings, shouldTranscribe } from "../_shared/intelligence/settings.ts";
+import { isLikelyHallucination } from "../_shared/intelligence/analyze-prompt.ts";
 
 const SUPABASE_URL = Deno.env.get("SUPABASE_URL")!;
 const SERVICE_ROLE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
 const WORKER_TOKEN = Deno.env.get("INTELLIGENCE_WORKER_TOKEN")!;
-const TRANSCRIPTION_VERSION = "scribe_v2-1";
+const TRANSCRIPTION_VERSION = "scribe_v2_1";
+const STRICT_BYOK = (Deno.env.get("INTELLIGENCE_AUDIO_STRICT_BYOK") ?? "true").toLowerCase() === "true";
 
 Deno.serve(async (req) => {
   if (req.headers.get("x-worker-token") !== WORKER_TOKEN) {
@@ -81,6 +85,9 @@ Deno.serve(async (req) => {
     }
     throw e;
   }
+  if (STRICT_BYOK && provider.source !== "customer_key") {
+    return json({ error: "byok_required", capability: "transcription" }, 402);
+  }
 
   const audioRes = await fetch(mediaUrl);
   if (!audioRes.ok) {
@@ -137,7 +144,7 @@ Deno.serve(async (req) => {
         payload: { provider: provider.provider, capability: "transcription" },
         occurred_at: new Date().toISOString(),
       });
-      if (provider.fallbackToManaged) {
+      if (!STRICT_BYOK && provider.fallbackToManaged) {
         const managed = getManagedProvider("transcription");
         result = await callOnce(managed);
         usedSource = "managed_fallback";
@@ -145,7 +152,7 @@ Deno.serve(async (req) => {
       } else {
         return json({ error: "byok_invalid", provider: provider.provider }, 424);
       }
-    } else if (provider.source === "customer_key" && err.kind === "rate_limit" && provider.fallbackOnRateLimit) {
+    } else if (!STRICT_BYOK && provider.source === "customer_key" && err.kind === "rate_limit" && provider.fallbackOnRateLimit) {
       const managed = getManagedProvider("transcription");
       result = await callOnce(managed);
       usedSource = "managed_fallback";
@@ -160,6 +167,20 @@ Deno.serve(async (req) => {
 
   const text = result.text;
 
+  // Anti-hallucination: descarta transcripts boilerplate (Amara.org, etc.)
+  if (isLikelyHallucination(text)) {
+    await admin.from("audio_transcriptions").upsert({
+      message_id: msg.id,
+      organization_id: msg.organization_id,
+      version: TRANSCRIPTION_VERSION,
+      provider: provider.provider,
+      language: "por",
+      transcript: "",
+      raw_response: { ...result.raw, _filtered: "hallucination" },
+    }, { onConflict: "message_id,version" });
+    return json({ ok: true, skipped: "hallucination_filtered", text_preview: text.slice(0, 80) });
+  }
+
   await admin.from("audio_transcriptions").upsert({
     message_id: msg.id,
     organization_id: msg.organization_id,
@@ -173,6 +194,7 @@ Deno.serve(async (req) => {
   if (!msg.content || msg.content.trim().length === 0) {
     await admin.from("messages").update({ content: text }).eq("id", msg.id);
   }
+
 
   await admin.from("intelligence_jobs").insert({
     organization_id: msg.organization_id,

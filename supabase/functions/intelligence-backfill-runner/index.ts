@@ -23,6 +23,7 @@ const DEFAULT_LOOKBACK_DAYS = 30;
 const DEFAULT_MAX_COST_USD = 5;
 const BATCH_SIZE = 500;
 const MAX_SLICES_PER_INVOCATION = 4; // ~24h per run call; resume to continue
+const MAX_PENDING_JOBS = 3000; // hard cap on simultaneous pending jobs per org
 
 function json(body: unknown, status = 200) {
   return new Response(JSON.stringify(body), {
@@ -68,7 +69,16 @@ function shouldEnqueueText(content: string, direction: string): boolean {
   return true;
 }
 
-const ANALYSIS_VERSION = "v2.0.0";
+const ANALYSIS_VERSION = "v2.1.0";
+
+async function getPendingJobsCount(orgId: string): Promise<number> {
+  const { count } = await supabase
+    .from("intelligence_jobs")
+    .select("id", { count: "exact", head: true })
+    .eq("organization_id", orgId)
+    .eq("status", "pending");
+  return count ?? 0;
+}
 
 async function enqueueSlice(
   orgId: string,
@@ -122,7 +132,7 @@ async function enqueueSlice(
         organization_id: orgId,
         target_action: "intelligence.transcribe_audio",
         payload: { message_id: m.id, source: "backfill", version: ANALYSIS_VERSION },
-        idempotency_key: `transcribe:v2:${m.id}`,
+        idempotency_key: `transcribe:v2_1:${m.id}`,
         status: "pending",
         attempts: 0,
         max_attempts: 5,
@@ -138,7 +148,7 @@ async function enqueueSlice(
         organization_id: orgId,
         target_action: "intelligence.analyze_message",
         payload: { message_id: m.id, source: "backfill", version: ANALYSIS_VERSION },
-        idempotency_key: `analyze:v2:${m.id}`,
+        idempotency_key: `analyze:v2_1:${m.id}`,
         status: "pending",
         attempts: 0,
         max_attempts: 5,
@@ -240,6 +250,13 @@ async function processRun(runId: string) {
     const rlRatio = await getRecentRateLimitRatio(run.organization_id);
     if (rlRatio > 0.3) {
       finalStatus = "paused_rate_limit";
+      break;
+    }
+
+    // Pending-queue hard cap: pausa o backfill se a fila estiver saturada
+    const pending = await getPendingJobsCount(run.organization_id);
+    if (pending >= MAX_PENDING_JOBS) {
+      finalStatus = "paused_queue_full";
       break;
     }
 
