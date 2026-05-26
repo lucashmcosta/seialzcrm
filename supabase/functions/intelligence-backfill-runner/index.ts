@@ -23,6 +23,7 @@ const DEFAULT_LOOKBACK_DAYS = 30;
 const DEFAULT_MAX_COST_USD = 5;
 const BATCH_SIZE = 500;
 const MAX_SLICES_PER_INVOCATION = 4; // ~24h per run call; resume to continue
+const MAX_PENDING_JOBS = 3000; // hard cap on simultaneous pending jobs per org
 
 function json(body: unknown, status = 200) {
   return new Response(JSON.stringify(body), {
