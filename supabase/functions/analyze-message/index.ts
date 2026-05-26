@@ -8,6 +8,7 @@ import {
   ANALYSIS_SYSTEM_PROMPT,
   ANALYSIS_TOOL,
   ANALYSIS_VERSION,
+  preLlmFilter,
   type MessageAnalysisPayload,
 } from "../_shared/intelligence/analyze-prompt.ts";
 import {
@@ -65,9 +66,8 @@ Deno.serve(async (req) => {
     .single();
   if (msgErr || !msg) return json({ error: "message_not_found", detail: msgErr?.message }, 404);
   if (msg.organization_id !== organization_id) return json({ error: "org_mismatch" }, 403);
-  if (!msg.content || msg.content.trim().length < 2) {
-    return json({ ok: true, skipped: "no_content" });
-  }
+  const filt = preLlmFilter({ content: msg.content, direction: msg.direction, mediaType: msg.media_type });
+  if (filt.skip) return json({ ok: true, skipped: filt.reason });
 
   // Settings gating; derive contact/opportunity from thread
   const settings = await getIntelligenceSettings(admin, organization_id);
@@ -128,7 +128,9 @@ Deno.serve(async (req) => {
 ${conversation || "(sem histórico)"}
 
 MENSAGEM A ANALISAR:
-[${msg.direction}] ${msg.content.slice(0, 2000)}`;
+direction: ${msg.direction}
+media_type: ${msg.media_type ?? "none"}
+content: ${(msg.content ?? "").slice(0, 2000)}`;
 
   const callOnce = async (p: typeof provider) => {
     const r = await fetch(endpointFor(p.provider), {
@@ -196,6 +198,9 @@ MENSAGEM A ANALISAR:
   const completionTokens = Number(aiJson?.usage?.completion_tokens ?? 0);
   const totalTokens = Number(aiJson?.usage?.total_tokens ?? (promptTokens + completionTokens));
 
+  // Hard-enforce: buying_signals only for inbound (defense in depth vs prompt drift)
+  const buyingSignals = msg.direction === "inbound" ? (analysis.buying_signals ?? []) : [];
+
   await admin.from("message_analyses").upsert({
     message_id: msg.id,
     organization_id: msg.organization_id,
@@ -205,9 +210,13 @@ MENSAGEM A ANALISAR:
     intent: analysis.intent,
     objection_type: analysis.objection_type,
     urgency_score: analysis.urgency_score,
-    buying_signals: analysis.buying_signals,
+    buying_signals: buyingSignals,
     requires_human: analysis.requires_human,
     language_complexity: analysis.language_complexity,
+    confidence: analysis.confidence,
+    is_template: analysis.is_template,
+    speaker_role: analysis.speaker_role,
+    message_quality_score: analysis.message_quality_score,
     reasoning: analysis.reasoning,
     tokens_used: totalTokens,
     raw_response: aiJson,
@@ -229,11 +238,14 @@ MENSAGEM A ANALISAR:
     message_id: msg.id,
     occurred_at: msg.created_at,
   };
-  if (analysis.objection_type) events.push({ ...base, event_type: "objection_detected", payload: { type: analysis.objection_type, intent: analysis.intent } });
-  if (analysis.buying_signals?.length) events.push({ ...base, event_type: "buying_signal_detected", payload: { signals: analysis.buying_signals } });
-  if (analysis.requires_human) events.push({ ...base, event_type: "human_handoff_suggested", payload: { reason: analysis.reasoning, urgency: analysis.urgency_score } });
-  if (analysis.intent === "complaint" || analysis.sentiment === "very_negative") {
-    events.push({ ...base, event_type: "negative_sentiment_detected", payload: { sentiment: analysis.sentiment, intent: analysis.intent } });
+  // Only emit sales_events when confidence is not low, to avoid noise from fragile signals
+  if (analysis.confidence !== "low") {
+    if (analysis.objection_type) events.push({ ...base, event_type: "objection_detected", payload: { type: analysis.objection_type, intent: analysis.intent } });
+    if (buyingSignals.length) events.push({ ...base, event_type: "buying_signal_detected", payload: { signals: buyingSignals } });
+    if (analysis.requires_human) events.push({ ...base, event_type: "human_handoff_suggested", payload: { reason: analysis.reasoning, urgency: analysis.urgency_score } });
+    if (analysis.intent === "complaint" || analysis.sentiment === "very_negative") {
+      events.push({ ...base, event_type: "negative_sentiment_detected", payload: { sentiment: analysis.sentiment, intent: analysis.intent } });
+    }
   }
   if (events.length) await admin.from("sales_events").insert(events);
 

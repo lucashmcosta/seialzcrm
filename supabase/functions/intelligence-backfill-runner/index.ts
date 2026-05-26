@@ -56,13 +56,26 @@ async function getRecentRateLimitRatio(orgId: string): Promise<number> {
   return rateLimited / data.length;
 }
 
+// Pre-LLM filter mirroring analyze-prompt.ts preLlmFilter (kept in sync).
+const URL_ONLY_RE = /^\s*(https?:\/\/\S+|www\.\S+)\s*$/i;
+const ACK_RE = /^\s*(ok|okay|okk+|blz|beleza|valeu|vlw|obg|obgd|obrigad[oa]|tmj|show|certo|td bem|tudo bem|👍+|👌+|✅+|🙏+)\s*[.!?]*\s*$/i;
+
+function shouldEnqueueText(content: string, direction: string): boolean {
+  const raw = (content ?? "").trim();
+  if (raw.length < 5) return false;
+  if (URL_ONLY_RE.test(raw)) return false;
+  if (direction === "outbound" && ACK_RE.test(raw)) return false;
+  return true;
+}
+
+const ANALYSIS_VERSION = "v2.0.0";
+
 async function enqueueSlice(
   orgId: string,
   sliceFrom: string,
   sliceTo: string,
   mode: "all" | "text_only" | "audio_only" = "all",
-): Promise<{ text: number; audio: number }> {
-  // Pull eligible messages in slice
+): Promise<{ text: number; audio: number; skipped_prefilter: number; skipped_already_v2: number }> {
   const { data: msgs, error } = await supabase
     .from("messages")
     .select("id, content, media_type, direction, created_at")
@@ -75,51 +88,71 @@ async function enqueueSlice(
     .limit(BATCH_SIZE * 4);
 
   if (error) throw new Error(`select messages: ${error.message}`);
-  if (!msgs || msgs.length === 0) return { text: 0, audio: 0 };
+  if (!msgs || msgs.length === 0) {
+    return { text: 0, audio: 0, skipped_prefilter: 0, skipped_already_v2: 0 };
+  }
+
+  // Skip messages that already have v2 analysis (no duplicate cost)
+  const ids = (msgs as any[]).map((m) => m.id);
+  const { data: existing } = await supabase
+    .from("message_analyses")
+    .select("message_id")
+    .eq("analysis_version", ANALYSIS_VERSION)
+    .in("message_id", ids);
+  const alreadyV2 = new Set((existing ?? []).map((r: any) => r.message_id));
 
   const textJobs: any[] = [];
   const audioJobs: any[] = [];
   let stagger = 0;
+  let skippedPrefilter = 0;
+  let skippedAlreadyV2 = 0;
 
   for (const m of msgs as any[]) {
     const isAudio = (m.media_type || "").toLowerCase().startsWith("audio");
-    const hasText = !isAudio && typeof m.content === "string" && m.content.trim().length >= 2;
-    if (!isAudio && !hasText) continue;
+
     if (isAudio && mode === "text_only") continue;
     if (!isAudio && mode === "audio_only") continue;
 
+    if (alreadyV2.has(m.id)) { skippedAlreadyV2++; continue; }
+
     const nextRunAt = new Date(Date.now() + stagger * 2000).toISOString();
-    stagger++;
 
     if (isAudio) {
       audioJobs.push({
         organization_id: orgId,
         target_action: "intelligence.transcribe_audio",
-        payload: { message_id: m.id, source: "backfill" },
-        idempotency_key: `transcribe:${m.id}`,
+        payload: { message_id: m.id, source: "backfill", version: ANALYSIS_VERSION },
+        idempotency_key: `transcribe:v2:${m.id}`,
         status: "pending",
         attempts: 0,
         max_attempts: 5,
         next_run_at: nextRunAt,
       });
+      stagger++;
     } else {
+      if (!shouldEnqueueText(m.content ?? "", m.direction ?? "")) {
+        skippedPrefilter++;
+        continue;
+      }
       textJobs.push({
         organization_id: orgId,
         target_action: "intelligence.analyze_message",
-        payload: { message_id: m.id, source: "backfill" },
-        idempotency_key: `analyze:${m.id}`,
+        payload: { message_id: m.id, source: "backfill", version: ANALYSIS_VERSION },
+        idempotency_key: `analyze:v2:${m.id}`,
         status: "pending",
         attempts: 0,
         max_attempts: 5,
         next_run_at: nextRunAt,
       });
+      stagger++;
     }
   }
 
   const allJobs = [...textJobs, ...audioJobs];
-  if (allJobs.length === 0) return { text: 0, audio: 0 };
+  if (allJobs.length === 0) {
+    return { text: 0, audio: 0, skipped_prefilter: skippedPrefilter, skipped_already_v2: skippedAlreadyV2 };
+  }
 
-  // Insert in chunks of 500 with ON CONFLICT DO NOTHING via upsert+ignoreDuplicates
   const CHUNK = 500;
   for (let i = 0; i < allJobs.length; i += CHUNK) {
     const chunk = allJobs.slice(i, i + CHUNK);
@@ -129,7 +162,7 @@ async function enqueueSlice(
     if (insErr) throw new Error(`insert jobs: ${insErr.message}`);
   }
 
-  return { text: textJobs.length, audio: audioJobs.length };
+  return { text: textJobs.length, audio: audioJobs.length, skipped_prefilter: skippedPrefilter, skipped_already_v2: skippedAlreadyV2 };
 }
 
 async function actionStart(body: any) {
