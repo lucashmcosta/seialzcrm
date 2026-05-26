@@ -1,181 +1,156 @@
-# BYOK — Seialz Intelligence (v2, corrigida)
 
-## 1. Autorização (corrigido)
+# Seialz Intelligence — Plano MVP final (simplificado)
 
-Fluxo correto, sem "service_role via JWT do usuário":
+## Objetivo
+Capturar **rapidamente** os dados certos para responder:
+- Won vs Lost — o que fecha faz diferente?
+- Top sellers vs Low performers — quem converte faz o quê?
+- Áudio vs Texto, response time, follow-up, ghosting, lost prematuro.
 
-```text
-Frontend (JWT do usuário, anon key)
-   → Edge Function byok-*
-       1. supabase.auth.getClaims(jwt) → userId
-       2. has_org_role(userId, orgId, 'admin') → bool
-       3. Se admin, instancia client INTERNO com SERVICE_ROLE_KEY
-       4. Service-role client lê/decripta/escreve a secret
-       5. Resposta ao frontend só com dados mascarados
-```
+Frase-guia exibida na tela:
+*"Descobrir padrões reais de fechamento, evitar leads perdidos cedo demais e treinar agentes de IA com base nos melhores vendedores."*
 
-- O JWT do usuário NUNCA recebe service_role.
-- O service_role NUNCA sai da Edge Function.
-- Toda Edge Function BYOK começa com esse mesmo guard (helper `requireOrgAdmin(req, orgId)` em `_shared/intelligence/authz.ts`).
+MVP **não entrega dashboard** — entrega a tubulação de dados + 5 telas de settings simples. "Padrões de Fechamento" fica como placeholder ("Em breve") com contagens brutas para confirmar coleta.
 
-## 2. Fallback para managed (corrigido)
+---
 
-Sem fallback automático. Comportamento por config explícita em `organization_integrations.config_values`:
+## Fase 1 — Schema (uma migration)
 
-```json
-{
-  "fallback_to_managed": false,   // default
-  "fallback_on_rate_limit": false
-}
-```
-
-`resolveProvider(orgId, capability)`:
+### 1.1 `intelligence_settings` (1:1 por organização)
+JSONB por seção, defaults ON para maximizar coleta:
 
 ```text
-1. Achou BYOK ativa e verified?
-   1a. Tenta usar.
-   1b. Se 401/403 do provider:
-        - UPDATE config: verified_at=null, last_error, is_active=false
-        - INSERT sales_events.event_type='byok_key_invalid'
-        - notifyOrgUsers(admins, "Chave <provider> inválida")
-        - SE fallback_to_managed=true E plano permite → cai p/ managed
-          (loga ai_usage_logs com source='managed_fallback')
-        - SENÃO → throw BYOK_INVALID → job marcado como 'paused_byok'
-                  (intelligence_jobs.status='paused', next_run=null)
-   1c. Se 429/quota:
-        - SE fallback_on_rate_limit=true → managed
-        - SENÃO → retry exponencial padrão do worker
-   1d. Se erro de orçamento mensal (monthly_budget_usd estourado):
-        - throw BYOK_BUDGET_EXCEEDED, sem fallback
-2. Sem BYOK ativa → managed (se plano permite); senão erro 'no_provider'
+capture     — { whatsapp: true, inbound: true, outbound: true,
+                only_open_deals: true, ignore_internal_notes: true }
+transcription — { mode: "all_whatsapp", include_lead_audio: true,
+                  include_seller_audio: true, max_audio_seconds: 600 }
+behavior    — { detect_objection: true, detect_buying_signal: true,
+                detect_ghosting: true, detect_premature_lost: true,
+                min_cadence_before_lost: { messages: 3, days: 5 },
+                ghosting_threshold_days: 4 }
+privacy     — { transcription_retention_days: 180, org_opt_out: false }
 ```
 
-Plano da org controla `managed_allowed` e `byok_required` (enterprise pode forçar BYOK).
+V2 (não-MVP): `routing` (modelos por função), `limits` (orçamento), `privacy.anonymize`, `next_best_action`.
 
-## 3. Storage seguro de chaves (corrigido — sem REVOKE direto)
+Seed: insere linha default para toda org existente; trigger insere para novas orgs.
 
-**Não revogamos `config_values`** porque há 30+ usos em edge functions e ~10 no frontend lendo o jsonb (Twilio, Meta, Kommo, SuvSign etc.). REVOKE quebraria o app.
+### 1.2 Expandir `sales_events` (mantém event sourcing único)
+Sem nova tabela. Apenas:
+- Adiciona novos `event_type` aceitos: `price_question`, `deadline_question`, `objection`, `buying_signal`, `ghosting`, `premature_lost`, `follow_up`, `no_reply`, `document_sent`, `audio_sent`, `audio_received`.
+- Garante colunas/índices úteis no `sales_events` atual:
+  - `payload jsonb` (já existe).
+  - Índices novos: `(organization_id, event_type, occurred_at desc)`, `(opportunity_id, event_type)`, `(user_id, occurred_at desc)`.
+- Sem mudar policies (mantém RLS atual).
 
-Estratégia: **nova coluna isolada, nunca no frontend**.
+### 1.3 `message_response_times` (única tabela operacional nova)
+Necessária porque calcular response time em runtime via janelas é caro.
+```text
+id, organization_id, thread_id, opportunity_id, user_id, contact_id,
+inbound_message_id, outbound_message_id,
+inbound_at, outbound_at, response_seconds,
+created_at
+```
+Populada por trigger: após insert outbound, busca último inbound não-respondido no thread → grava 1 linha.
+Índices: `(organization_id, user_id, outbound_at)`, `(opportunity_id)`.
 
-```sql
-ALTER TABLE organization_integrations
-  ADD COLUMN secret_payload jsonb;   -- contém ciphertext + metadata
+### 1.4 `opportunity_behavior_snapshot` (tabela "ouro" — 1 linha por opportunity)
+Esta é a tabela que responde **won vs lost** com um SELECT.
+```text
+opportunity_id PK, organization_id, contact_id, user_id, final_status,
+total_messages_inbound, total_messages_outbound,
+audios_inbound, audios_outbound, documents_sent,
+first_response_seconds,
+avg_lead_response_seconds, avg_seller_response_seconds,
+asked_price (bool), asked_deadline (bool), sent_documents (bool),
+objections_count, buying_signals_count,
+hours_distribution jsonb,
+days_to_close int, days_to_ghost int,
+ghosted_after_stage text, lost_reason, lost_at, won_at,
+last_inbound_at, last_outbound_at, updated_at
+```
+Trigger em `opportunities` (status change) e em `messages` (incrementa contadores) → UPSERT.
 
-COMMENT ON COLUMN organization_integrations.secret_payload IS
-  'Encrypted secrets (AES-GCM via _shared/crypto). NEVER select from PostgREST/anon. Service-role only.';
-
--- RLS continua igual em config_values (compat).
--- Nova coluna fica protegida via column-level grant:
-REVOKE SELECT (secret_payload) ON organization_integrations FROM authenticated, anon;
-GRANT  SELECT (secret_payload) ON organization_integrations TO service_role;
-GRANT  UPDATE (secret_payload) ON organization_integrations TO service_role;
+### 1.5 `seller_metrics_daily` (agregado por cron diário)
+```text
+organization_id, user_id, day,
+messages_sent, messages_received, audios_sent, audios_received,
+avg_response_seconds, median_response_seconds,
+follow_ups_count, leads_touched, leads_lost, leads_won,
+avg_messages_per_lost, avg_days_before_lost,
+hot_leads_abandoned
 ```
 
-Isso é seguro porque nenhum código atual lê `secret_payload` (coluna nova). `config_values` permanece intocado.
+### 1.6 Auditoria mínima
+`intelligence_settings_audit` — quem mudou, antes/depois, quando.
 
-Formato de `secret_payload`:
+RLS: todas as novas tabelas com `organization_id = ANY(current_user_org_ids())`. Edge functions usam `jsr:@supabase/supabase-js@2`.
 
-```json
-{
-  "openai":     { "api_key_encrypted":"v1:iv:ct", "last4":"aB12",
-                  "fingerprint":"sha256:…", "verified_at":"…",
-                  "verified_model":"gpt-4o-mini", "is_active":true,
-                  "rotated_at":null, "last_error":null },
-  "elevenlabs": { ... },
-  "anthropic":  { ... },
-  "gemini":     { ... }
-}
-```
+---
 
-View pública segura (para o frontend listar status sem ver chave):
+## Fase 2 — Edge functions
 
-```sql
-CREATE VIEW vw_org_provider_keys AS
-SELECT organization_id,
-       jsonb_object_agg(provider, jsonb_build_object(
-         'last4', v->>'last4',
-         'verified_at', v->>'verified_at',
-         'is_active', (v->>'is_active')::bool,
-         'rotated_at', v->>'rotated_at',
-         'has_error', (v->>'last_error') IS NOT NULL
-       )) AS providers
-FROM organization_integrations oi,
-     LATERAL jsonb_each(COALESCE(oi.secret_payload,'{}'::jsonb)) AS e(provider, v)
-GROUP BY organization_id;
+### Refatoradas
+- `analyze-message` — lê `intelligence_settings.capture/behavior`; ao detectar `price_question`, `deadline_question`, `objection`, `buying_signal`, `premature_lost` grava em **`sales_events`** com `event_type` novo.
+- `transcribe-audio` — respeita `transcription.mode` + flags lead/vendedor.
+- `intelligence-worker` — antes de despachar, checa `capture.only_open_deals` e `org_opt_out`.
 
-ALTER VIEW vw_org_provider_keys SET (security_invoker = true);  -- respeita RLS da OI
-```
+### Novas
+- `intelligence-ghosting-detector` (cron horário) — para deals abertos sem inbound há `ghosting_threshold_days`, insere `sales_events.event_type = 'ghosting'`.
+- `intelligence-rollup-cron` (cron diário) — popula `seller_metrics_daily` e recalcula `opportunity_behavior_snapshot` de deals fechados no dia.
+- `intelligence-retention-cron` (cron diário) — purga transcrições além de `transcription_retention_days`.
 
-Plano de migração futura (V1, fora deste MVP): mover segredos hoje em `config_values` (Twilio `auth_token`, Meta token, etc.) para `secret_payload` em ondas, refatorando cada edge function de leitura, e só então aplicar REVOKE em `config_values`. Documentado, não executado agora.
+### Helper compartilhado
+`_shared/intelligence/settings.ts` — `getIntelligenceSettings(orgId)` com cache curto.
 
-## 4. Custos separados por source
+---
 
-```sql
-ALTER TABLE ai_usage_logs
-  ADD COLUMN provider           text,
-  ADD COLUMN source             text CHECK (source IN ('managed','customer_key','managed_fallback')),
-  ADD COLUMN estimated_cost_usd numeric(12,6),
-  ADD COLUMN job_id             uuid REFERENCES intelligence_jobs(id) ON DELETE SET NULL;
+## Fase 3 — UI `/settings/intelligence` (5 abas, simples)
 
-CREATE INDEX ON ai_usage_logs (organization_id, source, created_at DESC);
-```
+Rota nova no `SettingsLayout`. Permissão admin. Breadcrumbs, sem subtítulo. Tokens semânticos, Outfit, bordas 6px.
 
-Views distintas:
+1. **Visão Geral**
+   - Frase-guia em destaque.
+   - Kill switch `org_opt_out`.
+   - 4 cards de contagem 7d: mensagens analisadas, áudios transcritos, deals com snapshot, alertas de ghosting.
+   - Card "Padrões de Fechamento — Em breve" com prévia: total won / lost / ghosted / premature_lost.
 
-```sql
-CREATE VIEW vw_org_monthly_cost_managed AS
-  SELECT organization_id, provider, date_trunc('month', created_at) AS month,
-         SUM(estimated_cost_usd) cost_usd, SUM(total_tokens) tokens
-    FROM ai_usage_logs WHERE source IN ('managed','managed_fallback')
-   GROUP BY 1,2,3;
+2. **Captura & Análise**
+   - Toggles: WhatsApp, inbound, outbound, só deals abertos, ignorar notas internas.
 
-CREATE VIEW vw_org_monthly_cost_byok AS
-  SELECT organization_id, provider, date_trunc('month', created_at) AS month,
-         SUM(estimated_cost_usd) cost_usd, SUM(total_tokens) tokens
-    FROM ai_usage_logs WHERE source = 'customer_key'
-   GROUP BY 1,2,3;
-```
+3. **Transcrição**
+   - Mode (radio): `all_whatsapp` (default) · `leads_only` · `agents_only` · `open_deals_only` · `off`.
+   - Toggles include_lead_audio / include_seller_audio.
+   - Slider `max_audio_seconds`.
+   - Input `transcription_retention_days`.
 
-- `managed` + `managed_fallback` somam o custo que recai no Seialz (fallback é sinal de churn-risk → dashboard separado).
-- `customer_key` é informativo para o cliente (não cobramos).
-- Enforcement de `monthly_budget_usd` lê apenas `vw_org_monthly_cost_byok`.
+4. **Regras Operacionais**
+   - Toggles: detectar objeção, buying signal, ghosting, lost prematuro.
+   - Cadência mínima antes de lost (mensagens + dias).
+   - Threshold de ghosting (dias).
 
-## 5. Segurança — garantias explícitas
+5. **Chaves (BYOK)**
+   - Embute `AIProvidersSettings` atual sem mudanças.
 
-| Risco | Mitigação verificável |
-|---|---|
-| Chave logada | `console.log` proibido com `api_key`/`secret_payload`; helper `safeLog()` em `_shared/intelligence/log-usage.ts` faz strip por regex (`/sk-[A-Za-z0-9-_]{10,}/`, `/[A-Za-z0-9]{32,}/`). Lint rule futura. |
-| Ciphertext ao frontend | Frontend só consulta `vw_org_provider_keys` (não expõe `api_key_encrypted`). Edge functions BYOK retornam apenas `{ last4, verified_at, is_active, has_error }`. Teste de contrato em `byok-*_test.ts`. |
-| Erro do provider vazando dados | `sanitizeProviderError(err)`: whitelist de campos (`status`, `code`, `type`) + mensagem genérica por código. Nunca repassa body bruto do provider. |
-| Rotação deixando chave antiga acessível | `byok-rotate-key` faz UPDATE atômico: novo `api_key_encrypted` sobrescreve o antigo no mesmo statement (`secret_payload = jsonb_set(...)`). Não há histórico em coluna. Auditoria em `audit_logs` guarda apenas `last4` e `fingerprint`, nunca a chave. |
-| Chave revogada ainda usada por worker em voo | `resolveProvider` relê do banco em cada job (sem cache em memória > 60s); revoke seta `is_active=false` e `verified_at=null` → próxima resolução já recusa. |
-| `META_TOKEN_ENCRYPTION_KEY` rotação | Documentado: campo `api_key_encrypted` começa com versão (`v1:`). Rotação cria `v2:` e job admin re-criptografa em lote. |
+V2 fica explícito como "Em breve" no rodapé: modelos por função, orçamento, anonimização, next best action, roteamento avançado.
 
-## 6. Edge functions BYOK (assinaturas)
+---
 
-Todas POST, todas começam com `requireOrgAdmin`:
+## Fase 4 — Sanity check de coleta
+Após deploy, validar:
+- `select count(*), final_status from opportunity_behavior_snapshot group by 2;`
+- `select event_type, count(*) from sales_events where occurred_at > now()-interval '1 day' group by 1;`
+- `select user_id, avg(avg_response_seconds) from seller_metrics_daily where day > now()-interval '7 days' group by 1;`
 
-- `byok-set-key`     `{ provider, api_key, fallback_to_managed?, monthly_budget_usd? }` → `{ last4, verified_at }`
-- `byok-test-key`    `{ provider }` → `{ ok, error? }` (chama endpoint barato do provider; nunca retorna chave)
-- `byok-revoke-key`  `{ provider }` → `{ ok }`
-- `byok-rotate-key`  `{ provider, new_api_key }` → `{ last4, verified_at }` (UPDATE atômico)
-- `byok-update-policy` `{ provider, fallback_to_managed, fallback_on_rate_limit, monthly_budget_usd }`
+Se todos retornarem dados → fundação pronta para a aba "Padrões de Fechamento" no V2.
 
-## 7. Ajustes no MVP Intelligence
+---
 
-- `analyze-message` e `transcribe-audio` chamam `resolveProvider(orgId, capability)` antes do fetch.
-- Wrap do upstream em try/catch → classifica erro (`invalid_key`, `rate_limit`, `budget`, `transient`) → aplica regras do §2.
-- Após sucesso: `logAiUsage({ org_id, provider, model, source, tokens, estimated_cost_usd, job_id })`.
-- Cálculo de custo via tabela admin `provider_pricing(provider, model, input_per_1k_usd, output_per_1k_usd, audio_per_minute_usd, effective_from)` (seed inicial OpenAI/Anthropic/Gemini/ElevenLabs).
-
-## 8. Ordem de entrega
-
-1. Migration: coluna `secret_payload` + GRANT/REVOKE só nela; colunas em `ai_usage_logs`; tabela `provider_pricing` + seeds; views `vw_org_provider_keys`, `vw_org_monthly_cost_managed`, `vw_org_monthly_cost_byok`; helper `has_org_role`.
-2. Shared: `_shared/intelligence/authz.ts`, `resolve-provider.ts`, `log-usage.ts`, `pricing.ts`, `sanitize.ts`.
-3. Refator `analyze-message` e `transcribe-audio` para usar resolver + log + classificador de erro.
-4. Edge functions `byok-set-key`, `byok-test-key`, `byok-revoke-key`, `byok-rotate-key`, `byok-update-policy`.
-5. Testes Deno de contrato (mascaramento, no-leak, fallback gating).
-6. UI Settings → AI Providers (loop seguinte).
-
-Sem REVOKE em `config_values`. Sem fallback implícito. Service-role só dentro das Edge Functions.
+## Fora do MVP (V2+)
+- Dashboard analítico won vs lost / top vs low.
+- Treino automático do agente com padrões.
+- Modelos por função na UI.
+- Orçamento, alertas de custo, anonimização PII, auditoria avançada.
+- Multi-canal (Instagram, email).
+- Sugestão automática de next best action escrita ao vendedor.
+- Separar `conversation_events` de `sales_events` (só se volume exigir).
