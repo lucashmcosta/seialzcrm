@@ -160,8 +160,8 @@ export function AIProviderCard({
           <div className="rounded-md border border-amber-500/40 bg-amber-500/5 px-3 py-2 text-[12px] text-amber-700 dark:text-amber-300 flex items-start gap-2">
             <WarningCircle size={14} weight="fill" className="mt-0.5 shrink-0" />
             <span>
-              Configuração antiga detectada. Para maior segurança, salve novamente sua chave como
-              <strong> Chave Própria criptografada</strong>. A chave antiga permanece intacta até a migração.
+              Detectamos uma chave configurada no formato antigo. Você pode migrá-la com segurança em 1 clique —
+              a chave é testada e criptografada no servidor, sem precisar digitar novamente.
             </span>
           </div>
         )}
