@@ -41,6 +41,8 @@ interface AIProviderConfigDialogProps {
   providerId: AIProviderId;
   organizationId: string;
   currentInfo?: AIProviderInfo;
+  /** True when a plaintext legacy `config_values.api_key` exists for this provider. */
+  hasLegacyKey?: boolean;
   canManage: boolean;
 }
 
@@ -50,6 +52,7 @@ export function AIProviderConfigDialog({
   providerId,
   organizationId,
   currentInfo,
+  hasLegacyKey,
   canManage,
 }: AIProviderConfigDialogProps) {
   const meta = PROVIDER_META[providerId];
