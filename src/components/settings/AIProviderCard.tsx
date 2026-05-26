@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { useMutation } from '@tanstack/react-query';
+import { FunctionsHttpError } from '@supabase/supabase-js';
 import { supabase } from '@/integrations/supabase/client';
 import { Card } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -81,7 +82,20 @@ export function AIProviderCard({
       const { data, error } = await supabase.functions.invoke('migrate-legacy-ai-key', {
         body: { organization_id: organizationId, provider: providerId },
       });
-      if (error) throw new Error(error.message);
+      if (error) {
+        if (error instanceof FunctionsHttpError) {
+          try {
+            const payload = await error.context.json();
+            if (payload?.error) {
+              const status = payload?.status != null ? `:${String(payload.status)}` : '';
+              throw new Error(`${String(payload.error)}${status}`);
+            }
+          } catch {
+            throw new Error(error.message);
+          }
+        }
+        throw new Error(error.message);
+      }
       if ((data as any)?.error) throw new Error((data as any).error);
       return data;
     },
@@ -90,12 +104,14 @@ export function AIProviderCard({
       invalidate(organizationId);
     },
     onError: (e: Error) => {
-      const msg = e.message === 'key_test_failed'
+      const msg = e.message.startsWith('key_test_failed')
         ? 'A chave antiga foi rejeitada pelo provider. Atualize a chave para concluir a migração.'
         : e.message === 'no_legacy_key'
         ? 'Nenhuma chave antiga encontrada para migrar.'
         : e.message === 'byok_already_configured'
         ? 'Já existe uma chave segura cadastrada. Use Gerenciar chave.'
+        : e.message === 'migration_temporarily_unavailable'
+        ? 'A migração está temporariamente indisponível no servidor. Tente novamente em instantes.'
         : e.message;
       toast.error(msg);
     },
