@@ -48,15 +48,18 @@ Deno.serve(async (req) => {
       const lastInbound = thr?.last_inbound_at;
       if (lastInbound && lastInbound > cutoff) continue;
 
-      // Skip if we already flagged today
+      // Cooldown: skip if we already flagged this opp within the threshold window
+      const cooldownFrom = new Date(Date.now() - days * 86_400_000).toISOString();
       const { data: dup } = await admin
         .from("sales_events")
         .select("id")
         .eq("opportunity_id", d.id)
         .eq("event_type", "ghosting")
-        .gte("occurred_at", `${todayKey}T00:00:00Z`)
+        .gte("occurred_at", cooldownFrom)
         .limit(1).maybeSingle();
       if (dup) continue;
+      // Require a real lastInbound (skip deals that never had inbound)
+      if (!lastInbound) continue;
 
       await admin.from("sales_events").insert({
         organization_id: o.organization_id,
