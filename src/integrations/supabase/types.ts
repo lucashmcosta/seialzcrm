@@ -6652,6 +6652,7 @@ export type Database = {
         Args: { _org_id: string; _role: string; _user_id: string }
         Returns: boolean
       }
+      intelligence_fire_all_now: { Args: never; Returns: Json }
       is_admin_user: { Args: never; Returns: boolean }
       is_org_admin: { Args: { _org_id: string }; Returns: boolean }
       normalize_phone_br: { Args: { phone_input: string }; Returns: string }
