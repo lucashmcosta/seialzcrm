@@ -85,6 +85,9 @@ Deno.serve(async (req) => {
     }
     throw e;
   }
+  if (STRICT_BYOK && provider.source !== "customer_key") {
+    return json({ error: "byok_required", capability: "transcription" }, 402);
+  }
 
   const audioRes = await fetch(mediaUrl);
   if (!audioRes.ok) {
