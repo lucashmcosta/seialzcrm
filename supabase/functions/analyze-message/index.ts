@@ -60,10 +60,10 @@ Deno.serve(async (req) => {
 
   const { data: msg, error: msgErr } = await admin
     .from("messages")
-    .select("id, organization_id, thread_id, direction, content, media_type, created_at, contact_id, opportunity_id")
+    .select("id, organization_id, thread_id, direction, content, media_type, created_at")
     .eq("id", message_id)
     .single();
-  if (msgErr || !msg) return json({ error: "message_not_found" }, 404);
+  if (msgErr || !msg) return json({ error: "message_not_found", detail: msgErr?.message }, 404);
   if (msg.organization_id !== organization_id) return json({ error: "org_mismatch" }, 403);
   if (!msg.content || msg.content.trim().length < 2) {
     return json({ ok: true, skipped: "no_content" });
