@@ -6,7 +6,7 @@ import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Switch } from '@/components/ui/switch';
 import {
-  CheckCircle, WarningCircle, XCircle, Lock, Robot, Sparkle,
+  CheckCircle, WarningCircle, XCircle, Lock, Sparkle, Key,
 } from '@phosphor-icons/react';
 import { toast } from 'sonner';
 import {
@@ -19,12 +19,13 @@ import {
 import { AIProviderConfigDialog } from './AIProviderConfigDialog';
 
 const STATUS_MAP: Record<AIProviderStatus, { label: string; variant: 'default' | 'secondary' | 'destructive' | 'outline'; Icon: typeof CheckCircle }> = {
-  not_configured:    { label: 'Não configurado',     variant: 'outline',     Icon: Lock },
-  active:            { label: 'Ativo',               variant: 'default',     Icon: CheckCircle },
-  inactive:          { label: 'Desativado',          variant: 'secondary',   Icon: WarningCircle },
-  invalid:           { label: 'Inválido',            variant: 'destructive', Icon: XCircle },
-  budget_exceeded:   { label: 'Limite excedido',     variant: 'destructive', Icon: WarningCircle },
-  managed_fallback:  { label: 'Fallback managed',    variant: 'secondary',   Icon: WarningCircle },
+  not_configured:    { label: 'Não configurado',          variant: 'outline',     Icon: Lock },
+  legacy_detected:   { label: 'Configuração antiga',      variant: 'outline',     Icon: WarningCircle },
+  active:            { label: 'Chave própria ativa',      variant: 'default',     Icon: CheckCircle },
+  inactive:          { label: 'Chave própria inativa',    variant: 'secondary',   Icon: WarningCircle },
+  invalid:           { label: 'Chave inválida',           variant: 'destructive', Icon: XCircle },
+  budget_exceeded:   { label: 'Limite excedido',          variant: 'destructive', Icon: WarningCircle },
+  managed_fallback:  { label: 'Fallback managed',         variant: 'secondary',   Icon: WarningCircle },
 };
 
 function formatDate(iso: string | null): string {
