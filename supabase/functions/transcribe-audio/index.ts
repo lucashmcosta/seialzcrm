@@ -12,6 +12,7 @@ import {
 import { sanitizeProviderError, safeLog } from "../_shared/intelligence/sanitize.ts";
 import { logAiUsage } from "../_shared/intelligence/log-usage.ts";
 import { estimateAudioCostUsd } from "../_shared/intelligence/pricing.ts";
+import { getIntelligenceSettings, shouldTranscribe } from "../_shared/intelligence/settings.ts";
 
 const SUPABASE_URL = Deno.env.get("SUPABASE_URL")!;
 const SERVICE_ROLE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
