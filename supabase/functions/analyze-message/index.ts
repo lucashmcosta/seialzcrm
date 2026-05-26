@@ -224,8 +224,8 @@ MENSAGEM A ANALISAR:
   const events: Array<Record<string, unknown>> = [];
   const base = {
     organization_id: msg.organization_id,
-    contact_id: msg.contact_id,
-    opportunity_id: msg.opportunity_id,
+    contact_id: contactId,
+    opportunity_id: oppId,
     message_id: msg.id,
     occurred_at: msg.created_at,
   };
