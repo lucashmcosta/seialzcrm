@@ -66,8 +66,9 @@ export async function testProviderKey(
           messages: [{ role: "user", content: "hi" }],
         }),
       });
-      return { ok: r.status === 200 || r.status === 400, status: r.status };
-      // 400 still means key is valid (bad request shape); 401/403 means invalid.
+      // 200 ok; 400 bad request shape; 404 model not_found_error — all imply
+      // the api key authenticated successfully. 401/403 mean invalid key.
+      return { ok: [200, 400, 404, 429].includes(r.status), status: r.status };
     }
     if (provider === "gemini") {
       const r = await fetch(
