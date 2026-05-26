@@ -114,8 +114,7 @@ export async function getOrCreateByokRow(
         slug: "ai-byok",
         name: "AI BYOK",
         category: "ai",
-        is_active: true,
-        is_visible: false,
+        status: "active",
       })
       .select("id")
       .single();
