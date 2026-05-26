@@ -6653,6 +6653,7 @@ export type Database = {
         Returns: boolean
       }
       is_admin_user: { Args: never; Returns: boolean }
+      is_org_admin: { Args: { _org_id: string }; Returns: boolean }
       normalize_phone_br: { Args: { phone_input: string }; Returns: string }
       record_failed_admin_login: {
         Args: { p_email: string; p_ip: string }
