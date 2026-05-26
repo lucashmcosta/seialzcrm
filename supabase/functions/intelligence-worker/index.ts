@@ -8,8 +8,8 @@ const SUPABASE_URL = Deno.env.get("SUPABASE_URL")!;
 const SERVICE_ROLE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
 const WORKER_TOKEN = Deno.env.get("INTELLIGENCE_WORKER_TOKEN")!;
 
-const BATCH_SIZE = 10;
-const MAX_BATCHES = 5;
+const BATCH_SIZE = 3;
+const MAX_BATCHES = 3;
 const MAX_RUNTIME_MS = 25_000;
 
 type Job = {
