@@ -57,3 +57,15 @@ Deno.test("encryptSecret accepts a 32-char raw key", async () => {
     if (prev) Deno.env.set("META_TOKEN_ENCRYPTION_KEY", prev);
   }
 });
+
+Deno.test("encryptSecret accepts legacy arbitrary secret via SHA-256 fallback", async () => {
+  const prev = Deno.env.get("META_TOKEN_ENCRYPTION_KEY");
+  Deno.env.set("META_TOKEN_ENCRYPTION_KEY", "legacy-secret-that-is-not-32-or-hex");
+  try {
+    const ct = await encryptSecret("hello-legacy");
+    const back = await decryptSecret(ct);
+    assertEquals(back, "hello-legacy");
+  } finally {
+    if (prev) Deno.env.set("META_TOKEN_ENCRYPTION_KEY", prev);
+  }
+});
