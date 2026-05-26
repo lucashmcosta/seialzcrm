@@ -37,6 +37,7 @@ Deno.serve(async (req) => {
       ? !!body.fallback_on_rate_limit
       : !!current.fallback_on_rate_limit,
     monthly_budget_usd: budget && budget > 0 ? budget : null,
+    is_active: body?.is_active != null ? !!body.is_active : !!current.is_active,
   };
   await writeSecretEntry(auth.admin, row.id, row.secret_payload, provider, entry);
   return json({ ok: true });
