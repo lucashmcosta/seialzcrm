@@ -141,6 +141,8 @@ async function actionStart(body: any) {
   const sliceHours = Number(body.slice_hours) || DEFAULT_SLICE_HOURS;
   const maxCostUsd = Number(body.max_cost_usd) || DEFAULT_MAX_COST_USD;
   const dryRun = Boolean(body.dry_run);
+  const mode: "all" | "text_only" | "audio_only" =
+    body.mode === "text_only" || body.mode === "audio_only" ? body.mode : "all";
 
   if (!orgId) return json({ error: "organization_id required" }, 400);
 
@@ -152,7 +154,7 @@ async function actionStart(body: any) {
       .gte("created_at", fromTs)
       .lt("created_at", toTs)
       .is("deleted_at", null);
-    return json({ dry_run: true, organization_id: orgId, candidate_messages: count, from: fromTs, to: toTs });
+    return json({ dry_run: true, organization_id: orgId, candidate_messages: count, from: fromTs, to: toTs, mode });
   }
 
   const { data: run, error } = await supabase
@@ -165,6 +167,7 @@ async function actionStart(body: any) {
       max_cost_usd: maxCostUsd,
       cursor_ts: fromTs,
       status: "running",
+      mode,
     })
     .select()
     .single();
@@ -172,7 +175,7 @@ async function actionStart(body: any) {
 
   // Kick off processing right away
   const processed = await processRun(run.id);
-  return json({ run_id: run.id, ...processed });
+  return json({ run_id: run.id, mode, ...processed });
 }
 
 async function processRun(runId: string) {
