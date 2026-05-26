@@ -354,9 +354,15 @@ Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: corsHeaders });
 
   const token = req.headers.get("x-worker-token") ?? "";
-  if (!WORKER_TOKEN || token !== WORKER_TOKEN) {
+  const apikey = req.headers.get("apikey") ?? "";
+  const auth = req.headers.get("authorization") ?? "";
+  const bearer = auth.startsWith("Bearer ") ? auth.slice(7) : "";
+  const isWorker = WORKER_TOKEN && token === WORKER_TOKEN;
+  const isServiceRole = SERVICE_ROLE && (apikey === SERVICE_ROLE || bearer === SERVICE_ROLE);
+  if (!isWorker && !isServiceRole) {
     return json({ error: "unauthorized" }, 401);
   }
+
 
   let body: any = {};
   try {
