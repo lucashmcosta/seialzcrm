@@ -22,6 +22,9 @@ import { PhoneNumberSettings } from './PhoneNumberSettings';
 import { KommoMigrationDialog } from './KommoMigrationDialog';
 import { MetaLeadAdsDialog } from '@/components/integrations/meta-lead-ads/MetaLeadAdsDialog';
 import { MetaCapiDialog } from '@/components/integrations/meta-capi/MetaCapiDialog';
+import { AIProviderCard } from './AIProviderCard';
+import { useAIProviders } from '@/hooks/useAIProviders';
+import { usePermissions } from '@/hooks/usePermissions';
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 
@@ -59,6 +62,9 @@ export function IntegrationsSettings() {
   const navigate = useNavigate();
   const { t } = useTranslation(locale as any);
   const queryClient = useQueryClient();
+  const { permissions } = usePermissions();
+  const canManageAI = permissions.canManageIntegrations;
+  const { data: aiProviderMap = {} } = useAIProviders(organization?.id);
   const [selectedIntegration, setSelectedIntegration] = useState<any>(null);
   const [connectDialogOpen, setConnectDialogOpen] = useState(false);
   const [detailDialogOpen, setDetailDialogOpen] = useState(false);
@@ -397,6 +403,22 @@ export function IntegrationsSettings() {
               const connection = getIntegrationStatus(integration.id);
               const isConnected = !!connection?.is_enabled;
               const isBeta = integration.status === 'beta';
+
+              // Route AI providers (BYOK) to dedicated card
+              const isAIProvider =
+                (integration.config_schema as any)?.integration_kind === 'ai_provider';
+              if (isAIProvider && organization?.id) {
+                const providerKey = (integration.config_schema as any)?.provider;
+                return (
+                  <AIProviderCard
+                    key={integration.id}
+                    integration={integration}
+                    organizationId={organization.id}
+                    info={providerKey ? aiProviderMap[providerKey] : undefined}
+                    canManage={canManageAI}
+                  />
+                );
+              }
 
               // Use expanded Kommo card
               if (integration.slug === 'kommo') {
