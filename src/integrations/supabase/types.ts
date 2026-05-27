@@ -2885,10 +2885,13 @@ export type Database = {
           idempotency_key: string
           last_error: string | null
           last_error_at: string | null
+          last_reclaim_at: string | null
+          last_reclaim_reason: string | null
           max_attempts: number
           next_run_at: string
           organization_id: string
           payload: Json
+          reclaim_count: number
           started_at: string | null
           status: string
           target_action: string
@@ -2902,10 +2905,13 @@ export type Database = {
           idempotency_key: string
           last_error?: string | null
           last_error_at?: string | null
+          last_reclaim_at?: string | null
+          last_reclaim_reason?: string | null
           max_attempts?: number
           next_run_at?: string
           organization_id: string
           payload?: Json
+          reclaim_count?: number
           started_at?: string | null
           status?: string
           target_action: string
@@ -2919,10 +2925,13 @@ export type Database = {
           idempotency_key?: string
           last_error?: string | null
           last_error_at?: string | null
+          last_reclaim_at?: string | null
+          last_reclaim_reason?: string | null
           max_attempts?: number
           next_run_at?: string
           organization_id?: string
           payload?: Json
+          reclaim_count?: number
           started_at?: string | null
           status?: string
           target_action?: string
@@ -6305,6 +6314,19 @@ export type Database = {
           },
         ]
       }
+      intelligence_stale_claims_metrics: {
+        Row: {
+          ever_reclaimed: number | null
+          hot_reclaimed: number | null
+          last_reclaim_at: string | null
+          organization_id: string | null
+          stale_running_30m: number | null
+          stale_running_5m: number | null
+          target_action: string | null
+          total_running: number | null
+        }
+        Relationships: []
+      }
       v_entity_sync_status: {
         Row: {
           entity_type: string | null
@@ -6852,6 +6874,13 @@ export type Database = {
         Returns: boolean
       }
       intelligence_fire_all_now: { Args: never; Returns: Json }
+      intelligence_reap_stale_jobs: {
+        Args: { p_max_reclaims?: number; p_stale_minutes?: number }
+        Returns: {
+          killed: number
+          reclaimed: number
+        }[]
+      }
       is_admin_user: { Args: never; Returns: boolean }
       is_org_admin: { Args: { _org_id: string }; Returns: boolean }
       normalize_phone_br: { Args: { phone_input: string }; Returns: string }
@@ -6960,10 +6989,13 @@ export type Database = {
           idempotency_key: string
           last_error: string | null
           last_error_at: string | null
+          last_reclaim_at: string | null
+          last_reclaim_reason: string | null
           max_attempts: number
           next_run_at: string
           organization_id: string
           payload: Json
+          reclaim_count: number
           started_at: string | null
           status: string
           target_action: string
