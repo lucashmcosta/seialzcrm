@@ -224,6 +224,47 @@ serve(async (req) => {
       resolvedSenderName = userData?.full_name || null
     }
 
+    // ============================================================
+    // Resolve endpoint_id from `whatsappFrom`
+    // Best-effort: NULL is OK, will not break insert.
+    // ============================================================
+    const fromAddress = whatsappFrom.replace(/^whatsapp:/, '')
+    let endpointId: string | null = null
+    try {
+      const { data: epData, error: epErr } = await supabase
+        .rpc('resolve_communication_endpoint', {
+          _organization_id: organizationId,
+          _channel: 'whatsapp',
+          _address: fromAddress,
+        })
+      if (epErr) {
+        console.warn('[endpoint-resolve] rpc error', JSON.stringify({
+          org_id: organizationId, from: fromAddress, to: whatsappTo, err: epErr.message,
+        }))
+      } else if (epData) {
+        endpointId = epData as unknown as string
+      } else {
+        console.warn('[endpoint-resolve] no match', JSON.stringify({
+          org_id: organizationId, from: fromAddress, to: whatsappTo,
+        }))
+      }
+    } catch (e) {
+      console.warn('[endpoint-resolve] exception', JSON.stringify({
+        org_id: organizationId, from: fromAddress, to: whatsappTo, err: String(e),
+      }))
+    }
+
+    // Build initial twilio metadata snapshot
+    const twilioMetadata: Record<string, any> = {
+      From: whatsappFrom,
+      To: whatsappTo,
+      AccountSid: accountSid,
+      ContentSid: contentSid || null,
+    }
+    if (allMediaUrls.length > 0) {
+      twilioMetadata.MediaUrls = allMediaUrls
+    }
+
     // Insert message record first (with status 'sending')
     const { data: insertedMessage, error: insertError } = await supabase
       .from('messages')
@@ -243,6 +284,8 @@ serve(async (req) => {
         sender_type: isAgentMessage ? 'agent' : 'user',
         sender_name: resolvedSenderName,
         sender_agent_id: isAgentMessage && agentId ? agentId : null,
+        endpoint_id: endpointId,
+        metadata: { twilio: twilioMetadata },
       })
       .select('id')
       .single()
@@ -253,6 +296,18 @@ serve(async (req) => {
         JSON.stringify({ error: 'Failed to create message record' }),
         { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       )
+    }
+
+    // Backfill primary_endpoint_id on thread if missing (best-effort, non-blocking)
+    if (endpointId && currentThreadId) {
+      supabase
+        .from('message_threads')
+        .update({ primary_endpoint_id: endpointId })
+        .eq('id', currentThreadId)
+        .is('primary_endpoint_id', null)
+        .then(({ error }) => {
+          if (error) console.warn('[thread-endpoint-backfill] failed', error.message)
+        })
     }
 
     // Send via Twilio
@@ -343,12 +398,19 @@ serve(async (req) => {
       )
     }
 
-    // Update message with Twilio SID
+    // Update message with Twilio SID + enrich metadata
+    const enrichedMetadata = {
+      twilio: {
+        ...twilioMetadata,
+        MessageSid: twilioData.sid,
+      },
+    }
     await supabase
       .from('messages')
       .update({
         whatsapp_message_sid: twilioData.sid,
         whatsapp_status: 'sent',
+        metadata: enrichedMetadata,
       })
       .eq('id', insertedMessage.id)
 

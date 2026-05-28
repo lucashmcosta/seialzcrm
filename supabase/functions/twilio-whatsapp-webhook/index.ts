@@ -699,12 +699,41 @@ serve(async (req) => {
         }
       }
 
+      // ============================================================
+      // Resolve communication_endpoint from `To` (org's WhatsApp number)
+      // Best-effort: NULL is OK and does not break insert.
+      // ============================================================
+      let endpointId: string | null = null
+      try {
+        const { data: epData, error: epErr } = await supabase
+          .rpc('resolve_communication_endpoint', {
+            _organization_id: orgId,
+            _channel: 'whatsapp',
+            _address: to,
+          })
+        if (epErr) {
+          console.warn('[endpoint-resolve] rpc error', JSON.stringify({
+            org_id: orgId, to, from, messageSid, err: epErr.message,
+          }))
+        } else if (epData) {
+          endpointId = epData as unknown as string
+        } else {
+          console.warn('[endpoint-resolve] no match', JSON.stringify({
+            org_id: orgId, to, from, messageSid,
+          }))
+        }
+      } catch (e) {
+        console.warn('[endpoint-resolve] exception', JSON.stringify({
+          org_id: orgId, to, from, messageSid, err: String(e),
+        }))
+      }
+
       // Find or create message thread
       let threadId: string | null = null
       
       const { data: existingThread } = await supabase
         .from('message_threads')
-        .select('id')
+        .select('id, primary_endpoint_id')
         .eq('organization_id', orgId)
         .eq('contact_id', contactId)
         .eq('channel', 'whatsapp')
@@ -715,14 +744,19 @@ serve(async (req) => {
         threadId = existingThread.id
         
         // Update last inbound timestamp for 24h window tracking
+        const threadUpdate: Record<string, any> = {
+          whatsapp_last_inbound_at: new Date().toISOString(),
+          last_inbound_at: new Date().toISOString(),
+          external_id: waId,
+          updated_at: new Date().toISOString(),
+        }
+        // Backfill primary_endpoint_id if missing
+        if (endpointId && !existingThread.primary_endpoint_id) {
+          threadUpdate.primary_endpoint_id = endpointId
+        }
         await supabase
           .from('message_threads')
-          .update({
-            whatsapp_last_inbound_at: new Date().toISOString(),
-            last_inbound_at: new Date().toISOString(),
-            external_id: waId,
-            updated_at: new Date().toISOString(),
-          })
+          .update(threadUpdate)
           .eq('id', threadId)
           
         console.log('Updated existing thread:', threadId)
@@ -737,6 +771,7 @@ serve(async (req) => {
             external_id: waId,
             whatsapp_last_inbound_at: new Date().toISOString(),
             last_inbound_at: new Date().toISOString(),
+            primary_endpoint_id: endpointId,
           })
           .select('id')
           .single()
@@ -767,6 +802,23 @@ serve(async (req) => {
         }
       }
 
+      // Build twilio metadata snapshot (raw payload preservation)
+      const twilioMetadata: Record<string, any> = {
+        To: params.To ?? null,
+        From: params.From ?? null,
+        AccountSid: params.AccountSid ?? null,
+        MessageSid: messageSid ?? null,
+        WaId: waId || null,
+        ProfileName: profileName || null,
+        NumMedia: numMedia,
+      }
+      if (rawMediaUrls.length > 0) {
+        twilioMetadata.MediaUrls = rawMediaUrls
+        twilioMetadata.MediaContentTypes = contentTypes
+      }
+      if (params.MessagingServiceSid) twilioMetadata.MessagingServiceSid = params.MessagingServiceSid
+      if (params.ChannelInstallSid) twilioMetadata.ChannelInstallSid = params.ChannelInstallSid
+
       // Insert message with persisted media URLs
       const { error: messageError } = await supabase
         .from('messages')
@@ -781,12 +833,14 @@ serve(async (req) => {
           media_type: mediaType,
           sent_at: new Date().toISOString(),
           reply_to_message_id: replyToMessageId,
+          endpoint_id: endpointId,
+          metadata: { twilio: twilioMetadata },
         })
 
       if (messageError) {
         console.error('Error inserting message:', messageError)
       } else {
-        console.log('Message saved successfully with', persistedMediaUrls.length, 'media files', replyToMessageId ? '(reply)' : '')
+        console.log('Message saved successfully with', persistedMediaUrls.length, 'media files', replyToMessageId ? '(reply)' : '', 'endpoint:', endpointId || 'unresolved')
       }
 
       // Create notification for contact owner
@@ -937,6 +991,42 @@ serve(async (req) => {
         console.error('Error updating message status:', updateError)
       } else {
         console.log('Message status updated:', messageSid, messageStatus)
+      }
+
+      // ============================================================
+      // Backfill endpoint_id from ChannelInstallSid (sender_sid)
+      // Only updates rows where endpoint_id is still NULL.
+      // ============================================================
+      const channelInstallSid = params.ChannelInstallSid
+      if (channelInstallSid) {
+        try {
+          const { data: epRow } = await supabase
+            .from('communication_endpoints')
+            .select('id, organization_id')
+            .eq('sender_sid', channelInstallSid)
+            .maybeSingle()
+
+          if (epRow?.id) {
+            const { error: backfillErr } = await supabase
+              .from('messages')
+              .update({ endpoint_id: epRow.id })
+              .eq('whatsapp_message_sid', messageSid)
+              .is('endpoint_id', null)
+            if (backfillErr) {
+              console.warn('[endpoint-backfill] update failed', JSON.stringify({
+                messageSid, channelInstallSid, err: backfillErr.message,
+              }))
+            }
+          } else {
+            console.warn('[endpoint-backfill] no endpoint for sender_sid', JSON.stringify({
+              messageSid, channelInstallSid,
+            }))
+          }
+        } catch (e) {
+          console.warn('[endpoint-backfill] exception', JSON.stringify({
+            messageSid, channelInstallSid, err: String(e),
+          }))
+        }
       }
 
       return new Response('OK', { status: 200 })
