@@ -398,12 +398,19 @@ serve(async (req) => {
       )
     }
 
-    // Update message with Twilio SID
+    // Update message with Twilio SID + enrich metadata
+    const enrichedMetadata = {
+      twilio: {
+        ...twilioMetadata,
+        MessageSid: twilioData.sid,
+      },
+    }
     await supabase
       .from('messages')
       .update({
         whatsapp_message_sid: twilioData.sid,
         whatsapp_status: 'sent',
+        metadata: enrichedMetadata,
       })
       .eq('id', insertedMessage.id)
 
