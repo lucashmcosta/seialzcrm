@@ -12,7 +12,28 @@ const SERVICE_ROLE = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
 
 const ORG_ID = 'b246ef6f-6242-4011-a112-6d8783d2896a';
 const LEAD_STAGE_ID = 'b4f5fce5-cefa-4770-a928-298b72c22562'; // "Novo"
+const OWNER_USER_ID = '95697f6c-0b0e-4b04-95ac-118d140d3c1b'; // Ketlyn Vieira
 const CONFIRM_TOKEN = 'VIAGI_2026_05_28';
+
+async function fireCapiLead(contactId: string): Promise<{ ok: boolean; err?: string }> {
+  try {
+    const res = await fetch(`${SUPABASE_URL}/functions/v1/meta-capi-send-event`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${SERVICE_ROLE}`,
+      },
+      body: JSON.stringify({ organization_id: ORG_ID, event_name: 'Lead', contact_id: contactId }),
+    });
+    if (!res.ok) {
+      const t = await res.text().catch(() => '');
+      return { ok: false, err: `HTTP ${res.status}: ${t.slice(0, 200)}` };
+    }
+    return { ok: true };
+  } catch (e) {
+    return { ok: false, err: String(e).slice(0, 200) };
+  }
+}
 
 type CsvRow = {
   lead_id: string;
