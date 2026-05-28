@@ -376,7 +376,6 @@ Deno.serve(async (req) => {
 
   return jsonOk({ mode, organization_id: ORG_ID, totals, applied, sample_branch_D: sampleD });
 });
-});
 
 function jsonOk(payload: unknown) {
   return new Response(JSON.stringify(payload, null, 2), {
