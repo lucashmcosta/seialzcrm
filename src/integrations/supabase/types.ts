@@ -1249,6 +1249,72 @@ export type Database = {
           },
         ]
       }
+      communication_endpoints: {
+        Row: {
+          channel: string
+          created_at: string
+          default_context_type: string
+          display_name: string | null
+          external_account_id: string | null
+          external_address: string | null
+          id: string
+          is_active: boolean
+          metadata: Json
+          organization_id: string
+          organization_integration_id: string | null
+          sender_sid: string | null
+          status: string
+          updated_at: string
+        }
+        Insert: {
+          channel: string
+          created_at?: string
+          default_context_type?: string
+          display_name?: string | null
+          external_account_id?: string | null
+          external_address?: string | null
+          id?: string
+          is_active?: boolean
+          metadata?: Json
+          organization_id: string
+          organization_integration_id?: string | null
+          sender_sid?: string | null
+          status?: string
+          updated_at?: string
+        }
+        Update: {
+          channel?: string
+          created_at?: string
+          default_context_type?: string
+          display_name?: string | null
+          external_account_id?: string | null
+          external_address?: string | null
+          id?: string
+          is_active?: boolean
+          metadata?: Json
+          organization_id?: string
+          organization_integration_id?: string | null
+          sender_sid?: string | null
+          status?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "communication_endpoints_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "communication_endpoints_organization_integration_id_fkey"
+            columns: ["organization_integration_id"]
+            isOneToOne: false
+            referencedRelation: "organization_integrations"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       companies: {
         Row: {
           address: string | null
@@ -4216,6 +4282,7 @@ export type Database = {
           opportunity_id: string | null
           organization_id: string
           original_owner_user_id: string | null
+          primary_endpoint_id: string | null
           resolved_at: string | null
           status: string
           subject: string | null
@@ -4244,6 +4311,7 @@ export type Database = {
           opportunity_id?: string | null
           organization_id: string
           original_owner_user_id?: string | null
+          primary_endpoint_id?: string | null
           resolved_at?: string | null
           status?: string
           subject?: string | null
@@ -4272,6 +4340,7 @@ export type Database = {
           opportunity_id?: string | null
           organization_id?: string
           original_owner_user_id?: string | null
+          primary_endpoint_id?: string | null
           resolved_at?: string | null
           status?: string
           subject?: string | null
@@ -4321,6 +4390,13 @@ export type Database = {
             referencedRelation: "users"
             referencedColumns: ["id"]
           },
+          {
+            foreignKeyName: "message_threads_primary_endpoint_id_fkey"
+            columns: ["primary_endpoint_id"]
+            isOneToOne: false
+            referencedRelation: "communication_endpoints"
+            referencedColumns: ["id"]
+          },
         ]
       }
       messages: {
@@ -4332,6 +4408,7 @@ export type Database = {
           created_at: string | null
           deleted_at: string | null
           direction: string | null
+          endpoint_id: string | null
           error_code: string | null
           error_message: string | null
           id: string
@@ -4363,6 +4440,7 @@ export type Database = {
           created_at?: string | null
           deleted_at?: string | null
           direction?: string | null
+          endpoint_id?: string | null
           error_code?: string | null
           error_message?: string | null
           id?: string
@@ -4394,6 +4472,7 @@ export type Database = {
           created_at?: string | null
           deleted_at?: string | null
           direction?: string | null
+          endpoint_id?: string | null
           error_code?: string | null
           error_message?: string | null
           id?: string
@@ -4418,6 +4497,13 @@ export type Database = {
           whatsapp_status?: string | null
         }
         Relationships: [
+          {
+            foreignKeyName: "messages_endpoint_id_fkey"
+            columns: ["endpoint_id"]
+            isOneToOne: false
+            referencedRelation: "communication_endpoints"
+            referencedColumns: ["id"]
+          },
           {
             foreignKeyName: "messages_organization_id_fkey"
             columns: ["organization_id"]
@@ -6884,6 +6970,14 @@ export type Database = {
       is_admin_user: { Args: never; Returns: boolean }
       is_org_admin: { Args: { _org_id: string }; Returns: boolean }
       normalize_phone_br: { Args: { phone_input: string }; Returns: string }
+      populate_communication_endpoints_from_v2_senders: {
+        Args: never
+        Returns: {
+          inserted: number
+          scanned_integrations: number
+          updated: number
+        }[]
+      }
       record_failed_admin_login: {
         Args: { p_email: string; p_ip: string }
         Returns: undefined
@@ -6891,6 +6985,10 @@ export type Database = {
       reset_admin_login_attempts: {
         Args: { p_admin_id: string }
         Returns: undefined
+      }
+      resolve_communication_endpoint: {
+        Args: { _address: string; _channel: string; _organization_id: string }
+        Returns: string
       }
       rpc_claim_inbound_events: {
         Args: {
