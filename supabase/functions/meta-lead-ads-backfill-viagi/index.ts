@@ -54,6 +54,7 @@ type CsvRow = {
 type ContactRow = {
   id: string;
   phone: string | null;
+  phone_normalized: string | null;
   email: string | null;
   source: string | null;
   source_external_id: string | null;
