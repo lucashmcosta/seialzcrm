@@ -281,7 +281,7 @@ export default function MarketingAds() {
                       );
                     })}
                     <TotalsRow key={`sub-${group.name}`} totals={group.totals} label={`Subtotal · ${group.name}`} variant="subtotal" />
-                  </>
+                  </Fragment>
                 ))}
                 <TotalsRow totals={grouped.grand} label="Total geral" variant="grand" />
               </tbody>
