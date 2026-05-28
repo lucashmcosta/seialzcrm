@@ -1,6 +1,8 @@
 import { useEffect, useMemo, useState, Suspense } from 'react';
 import { usePersistedFilters } from '@/hooks/usePersistedFilters';
-import { Navigate } from 'react-router-dom';
+import { Navigate, useNavigate } from 'react-router-dom';
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+
 import { Layout } from '@/components/Layout';
 import { useOrganization } from '@/hooks/useOrganization';
 import { usePermissions } from '@/hooks/usePermissions';
