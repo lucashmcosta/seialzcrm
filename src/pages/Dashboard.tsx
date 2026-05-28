@@ -41,12 +41,16 @@ const parseLocalDate = (s: string | null | undefined): Date | null => {
 const toDayStr = (d: Date) =>
   `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
 
-export default function Dashboard() {
   const { organization, userProfile, locale, loading: orgLoading, error } = useOrganization();
   const { user, signOut } = useAuth();
   const { t } = useTranslation(locale as 'pt-BR' | 'en-US');
   const navigate = useNavigate();
   const isMobile = useIsMobile();
+  const { permissions } = (() => {
+    const p = usePermissions();
+    return { permissions: p.permissions };
+  })();
+  const canViewAll = !!permissions?.viewAllOpportunities;
 
   const [preset, setPreset] = usePersistedFilters<PeriodPreset>('dashboard.preset', 'today');
   const [customRange, setCustomRange] = usePersistedFilters<CustomRange | undefined>(
@@ -60,10 +64,12 @@ export default function Dashboard() {
       };
     },
   );
+  const [ownerId, setOwnerId] = usePersistedFilters<string>('dashboard.ownerId', 'all');
 
   const [enteredCount, setEnteredCount] = useState(0);
   const [closedCount, setClosedCount] = useState(0);
   const [opps, setOpps] = useState<OppRow[]>([]);
+  const [users, setUsers] = useState<{ id: string; full_name: string }[]>([]);
   const [loading, setLoading] = useState(true);
   const [detail, setDetail] = useState<null | 'entered' | 'closed'>(null);
 
