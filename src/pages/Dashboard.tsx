@@ -45,7 +45,7 @@ export default function Dashboard() {
   const { organization, userProfile, locale, loading: orgLoading, error } = useOrganization();
   const { user, signOut } = useAuth();
   const { t } = useTranslation(locale as 'pt-BR' | 'en-US');
-  const navigate = useNavigate();
+  const [preset, setPreset] = usePersistedFilters<PeriodPreset>('dashboard.preset', 'today');
   const isMobile = useIsMobile();
 
   const [preset, setPreset] = usePersistedFilters<PeriodPreset>('dashboard.preset', 'last_30');
