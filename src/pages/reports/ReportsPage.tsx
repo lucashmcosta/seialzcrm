@@ -76,6 +76,8 @@ interface UserRow {
 export default function ReportsPage() {
   const { organization, locale } = useOrganization();
   const { permissions, loading: permsLoading } = usePermissions();
+  const navigate = useNavigate();
+
   const isMobile = useIsMobile();
 
   const [preset, setPreset, , presetHydrated] = usePersistedFilters<PeriodPreset>('reports.preset', 'last_30');
