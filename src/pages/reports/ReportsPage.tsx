@@ -172,8 +172,6 @@ export default function ReportsPage() {
       const fromDay = fmtDate(fromDate);
       const toDay = fmtDate(toDate);
       const prevFromDay = fmtDate(prevFrom);
-      const prevToDay = fmtDate(prevTo);
-
       // Current period: opps created within period OR closed (by close_date) within period
       let q1 = supabase
         .from('opportunities')
@@ -182,7 +180,8 @@ export default function ReportsPage() {
         .is('deleted_at', null)
         .or(
           `and(created_at.gte.${fromIso},created_at.lte.${toIso}),and(status.in.(won,lost),close_date.gte.${fromDay},close_date.lte.${toDay})`,
-        );
+        )
+        .limit(50000);
       if (ownerEq) q1 = q1.eq('owner_user_id', ownerEq);
 
       // Previous period (for delta)
@@ -193,7 +192,8 @@ export default function ReportsPage() {
         .is('deleted_at', null)
         .or(
           `and(created_at.gte.${prevFromIso},created_at.lt.${prevToIso}),and(status.in.(won,lost),close_date.gte.${prevFromDay},close_date.lt.${prevToDay})`,
-        );
+        )
+        .limit(50000);
       if (ownerEq) q2 = q2.eq('owner_user_id', ownerEq);
 
       // All currently open (independent of period — for funnel/distribution)
@@ -202,6 +202,10 @@ export default function ReportsPage() {
         .select(baseSelect)
         .eq('organization_id', organization.id)
         .eq('status', 'open')
+        .is('deleted_at', null)
+        .limit(50000);
+      if (ownerEq) q3 = q3.eq('owner_user_id', ownerEq);
+
         .is('deleted_at', null);
       if (ownerEq) q3 = q3.eq('owner_user_id', ownerEq);
 
