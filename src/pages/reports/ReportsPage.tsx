@@ -154,8 +154,9 @@ export default function ReportsPage() {
     try {
       // Build base queries
       const ownerEq = ownerId !== 'all' ? ownerId : null;
-
       const baseSelect =
+        'id, title, amount, status, pipeline_stage_id, owner_user_id, created_at, updated_at, close_date';
+
         'id, amount, status, pipeline_stage_id, owner_user_id, created_at, updated_at, close_date';
 
       const fmtDate = (d: Date) => {
