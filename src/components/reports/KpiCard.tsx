@@ -6,7 +6,7 @@ interface KpiCardProps {
   label: string;
   value: string | number;
   sublabel?: string;
-  delta?: number | null; // percentage change vs previous period
+  delta?: number | null;
   icon?: PhosphorIcon;
   accent?: 'primary' | 'success' | 'destructive' | 'warning';
   loading?: boolean;
@@ -14,12 +14,13 @@ interface KpiCardProps {
   onClick?: () => void;
 }
 
-
 const accentColor = {
   primary: 'text-primary',
   success: 'text-success',
   destructive: 'text-destructive',
   warning: 'text-warning',
+};
+
 export function KpiCard({
   label,
   value,
@@ -49,20 +50,8 @@ export function KpiCard({
     );
   };
 
-  const Wrapper: any = onClick ? 'button' : 'div';
-  return (
-    <Wrapper
-      onClick={onClick}
-      type={onClick ? 'button' : undefined}
-      className={cn(
-        'relative overflow-hidden rounded-md border border-border bg-card p-5 transition-shadow text-left w-full',
-        onClick ? 'hover:shadow-md hover:border-primary/40 cursor-pointer' : 'hover:shadow-sm',
-      )}
-    >
-
-  return (
-    <div className="relative overflow-hidden rounded-md border border-border bg-card p-5 transition-shadow hover:shadow-sm">
-      {/* Subtle accent gradient */}
+  const inner = (
+    <>
       <div
         className={cn(
           'absolute -right-8 -top-8 h-24 w-24 rounded-full opacity-[0.07]',
@@ -72,12 +61,9 @@ export function KpiCard({
           accent === 'warning' && 'bg-warning',
         )}
       />
-
       <div className="relative flex items-start justify-between">
         <div className="min-w-0 flex-1">
-          <p className="text-xs uppercase tracking-wider text-muted-foreground">
-            {label}
-          </p>
+          <p className="text-xs uppercase tracking-wider text-muted-foreground">{label}</p>
           {loading ? (
             <div className="mt-2 h-8 w-24 animate-pulse rounded bg-muted" />
           ) : (
@@ -110,6 +96,22 @@ export function KpiCard({
           </div>
         )}
       </div>
-    </div>
+    </>
   );
+
+  const baseClass =
+    'relative overflow-hidden rounded-md border border-border bg-card p-5 transition-shadow text-left w-full';
+
+  if (onClick) {
+    return (
+      <button
+        type="button"
+        onClick={onClick}
+        className={cn(baseClass, 'hover:shadow-md hover:border-primary/40 cursor-pointer')}
+      >
+        {inner}
+      </button>
+    );
+  }
+  return <div className={cn(baseClass, 'hover:shadow-sm')}>{inner}</div>;
 }
