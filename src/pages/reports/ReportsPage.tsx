@@ -257,13 +257,6 @@ export default function ReportsPage() {
       setCurrentOpps(dedupe(r1c.data as any[], r1x.data as any[]));
       setPreviousOpps(dedupe(r2c.data as any[], r2x.data as any[]));
       setOpenOpps((r3.data as Opp[]) || []);
-
-
-      const [r1, r2, r3] = await Promise.all([q1, q2, q3]);
-
-      setCurrentOpps((r1.data as Opp[]) || []);
-      setPreviousOpps((r2.data as Opp[]) || []);
-      setOpenOpps((r3.data as Opp[]) || []);
     } catch (e) {
       console.error('Reports fetch error:', e);
     } finally {
