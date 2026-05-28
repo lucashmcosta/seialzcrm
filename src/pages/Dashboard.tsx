@@ -16,6 +16,7 @@ import { computeRange, type PeriodPreset, type CustomRange } from '@/lib/report-
 import { DashboardTrendChart } from '@/components/reports/DashboardTrendChart';
 import { DashboardStatusDonut } from '@/components/reports/DashboardStatusDonut';
 import { usePersistedFilters } from '@/hooks/usePersistedFilters';
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 
 import { cn } from '@/lib/utils';
 
