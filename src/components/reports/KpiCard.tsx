@@ -20,8 +20,6 @@ const accentColor = {
   success: 'text-success',
   destructive: 'text-destructive',
   warning: 'text-warning',
-};
-
 export function KpiCard({
   label,
   value,
@@ -31,6 +29,7 @@ export function KpiCard({
   accent = 'primary',
   loading,
   mono,
+  onClick,
 }: KpiCardProps) {
   const renderDelta = () => {
     if (delta == null || !isFinite(delta)) return null;
@@ -49,6 +48,17 @@ export function KpiCard({
       </div>
     );
   };
+
+  const Wrapper: any = onClick ? 'button' : 'div';
+  return (
+    <Wrapper
+      onClick={onClick}
+      type={onClick ? 'button' : undefined}
+      className={cn(
+        'relative overflow-hidden rounded-md border border-border bg-card p-5 transition-shadow text-left w-full',
+        onClick ? 'hover:shadow-md hover:border-primary/40 cursor-pointer' : 'hover:shadow-sm',
+      )}
+    >
 
   return (
     <div className="relative overflow-hidden rounded-md border border-border bg-card p-5 transition-shadow hover:shadow-sm">
