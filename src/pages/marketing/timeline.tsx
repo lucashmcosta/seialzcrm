@@ -18,7 +18,7 @@ import {
 
 const METRICS = [
   { key: 'spend', label: 'Investido', color: 'hsl(var(--primary))', currency: true },
-  { key: 'leads', label: 'Leads', color: 'hsl(var(--success))' },
+  { key: 'leads', label: 'Contatos', color: 'hsl(var(--success))' },
   { key: 'cpl', label: 'CPL real', color: 'hsl(40 90% 55%)', currency: true },
   { key: 'impressions', label: 'Impressões', color: 'hsl(220 70% 55%)' },
   { key: 'clicks', label: 'Cliques', color: 'hsl(180 60% 45%)' },
@@ -118,7 +118,7 @@ export default function MarketingTimeline() {
                   <th className="py-2 px-3 font-medium text-xs text-right">Δ vs dia anterior</th>
                   <th className="py-2 px-3 font-medium text-xs text-right">Impressões</th>
                   <th className="py-2 px-3 font-medium text-xs text-right">Cliques</th>
-                  <th className="py-2 px-3 font-medium text-xs text-right">Leads</th>
+                  <th className="py-2 px-3 font-medium text-xs text-right">Contatos</th>
                   <th className="py-2 px-3 font-medium text-xs text-right">Δ leads</th>
                   <th className="py-2 px-3 font-medium text-xs text-right">CPL</th>
                 </tr>

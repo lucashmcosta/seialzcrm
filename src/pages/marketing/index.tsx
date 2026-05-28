@@ -40,7 +40,8 @@ export default function MarketingOverview() {
         <MetricCard label="Investido" value={fmtBRL(k?.spend ?? 0)} current={k?.spend} previous={p?.spend} loading={loading} />
         <MetricCard label="Impressões" value={fmtInt(k?.impressions ?? 0)} current={k?.impressions} previous={p?.impressions} loading={loading} mono />
         <MetricCard label="Cliques" value={fmtInt(k?.clicks ?? 0)} current={k?.clicks} previous={p?.clicks} loading={loading} mono />
-        <MetricCard label="Leads (CRM)" value={fmtInt(k?.leads ?? 0)} current={k?.leads} previous={p?.leads} loading={loading} accent="success" />
+        <MetricCard label="Contatos (CRM)" value={fmtInt(k?.leads ?? 0)} current={k?.leads} previous={p?.leads} loading={loading} accent="success" />
+
         <MetricCard label="Oportunidades abertas" value={fmtInt(k?.opps_open ?? 0)} current={k?.opps_open} previous={p?.opps_open} loading={loading} />
         <MetricCard label="Wins" value={fmtInt(k?.wins ?? 0)} current={k?.wins} previous={p?.wins} loading={loading} accent="success" />
       </div>
@@ -50,13 +51,13 @@ export default function MarketingOverview() {
         <MetricCard label="CPL real" value={k?.cpl_real != null ? fmtBRL(k.cpl_real) : '—'} loading={loading} accent="warning" />
         <MetricCard label="CAC" value={k?.cac != null ? fmtBRL(k.cac) : '—'} loading={loading} accent="warning" />
         <MetricCard label="ROAS" value={fmtRoas(k?.roas)} loading={loading} accent={k?.roas && k.roas >= 1 ? 'success' : 'destructive'} />
-        <MetricCard label="Lead → Opp" value={k?.lead_to_opp_pct != null ? fmtPct(k.lead_to_opp_pct) : '—'} loading={loading} />
+        <MetricCard label="Contato → Opp" value={k?.lead_to_opp_pct != null ? fmtPct(k.lead_to_opp_pct) : '—'} loading={loading} />
       </div>
 
       {/* Time series */}
       <div className="rounded-md border border-border bg-card p-4">
         <div className="flex items-center justify-between mb-3">
-          <h3 className="text-sm font-semibold">Investimento × Leads por dia</h3>
+          <h3 className="text-sm font-semibold">Investimento × Contatos por dia</h3>
           <span className="text-xs text-muted-foreground">{ts.data?.length || 0} dias</span>
         </div>
         {ts.isLoading ? (
@@ -77,7 +78,7 @@ export default function MarketingOverview() {
                 />
                 <Legend wrapperStyle={{ fontSize: 12 }} />
                 <Line yAxisId="left" type="monotone" dataKey="spend" name="Investido" stroke="hsl(var(--primary))" strokeWidth={2} dot={false} />
-                <Line yAxisId="right" type="monotone" dataKey="leads" name="Leads" stroke="hsl(var(--success))" strokeWidth={2} dot={false} />
+                <Line yAxisId="right" type="monotone" dataKey="leads" name="Contatos" stroke="hsl(var(--success))" strokeWidth={2} dot={false} />
               </LineChart>
             </ResponsiveContainer>
           </div>
@@ -99,7 +100,7 @@ export default function MarketingOverview() {
                 <tr className="text-left text-xs text-muted-foreground border-b border-border">
                   <th className="py-2 pr-3 font-medium">Ad</th>
                   <th className="py-2 px-3 font-medium text-right">Investido</th>
-                  <th className="py-2 px-3 font-medium text-right">Leads</th>
+                  <th className="py-2 px-3 font-medium text-right">Contatos</th>
                   <th className="py-2 px-3 font-medium text-right">CPL</th>
                   <th className="py-2 px-3 font-medium text-right">Wins</th>
                   <th className="py-2 pl-3 font-medium text-right">ROAS</th>

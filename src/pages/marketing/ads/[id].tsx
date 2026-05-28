@@ -95,13 +95,13 @@ export default function AdDrilldown() {
 
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
         <MetricCard label="Investido" value={fmtBRL(a?.spend_brl ?? 0)} loading={ad.isLoading} />
-        <MetricCard label="Leads" value={fmtInt(a?.leads_total ?? 0)} loading={ad.isLoading} accent="success" />
+        <MetricCard label="Contatos" value={fmtInt(a?.leads_total ?? 0)} loading={ad.isLoading} accent="success" />
         <MetricCard label="Opps Abertas" value={fmtInt(a?.opps_open ?? 0)} loading={ad.isLoading} />
         <MetricCard label="Wins" value={fmtInt(a?.opps_won ?? 0)} loading={ad.isLoading} accent="success" sublabel={`ROAS ${fmtRoas(a?.roas)}`} />
       </div>
 
       <div className="rounded-md border border-border bg-card p-4">
-        <h3 className="text-sm font-semibold mb-3">Investimento × Leads (30 dias)</h3>
+        <h3 className="text-sm font-semibold mb-3">Investimento × Contatos (30 dias)</h3>
         {insights.isLoading ? (
           <ChartSkeleton height={220} />
         ) : !insights.data || insights.data.length === 0 ? (
@@ -117,7 +117,7 @@ export default function AdDrilldown() {
                 <Tooltip contentStyle={{ background: 'hsl(var(--card))', border: '1px solid hsl(var(--border))', borderRadius: 6, fontSize: 12 }} formatter={(v: any, n: string) => n === 'spend' ? fmtBRL(v) : fmtInt(v)} />
                 <Legend wrapperStyle={{ fontSize: 12 }} />
                 <Line yAxisId="left" type="monotone" dataKey="spend" name="Investido" stroke="hsl(var(--primary))" strokeWidth={2} dot={false} />
-                <Line yAxisId="right" type="monotone" dataKey="leads" name="Leads" stroke="hsl(var(--success))" strokeWidth={2} dot={false} />
+                <Line yAxisId="right" type="monotone" dataKey="leads" name="Contatos" stroke="hsl(var(--success))" strokeWidth={2} dot={false} />
               </LineChart>
             </ResponsiveContainer>
           </div>

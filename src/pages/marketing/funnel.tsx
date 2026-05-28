@@ -15,7 +15,7 @@ const STAGES = [
   { key: 'impressions', label: 'Impressões', color: 'hsl(var(--primary))' },
   { key: 'clicks', label: 'Cliques', color: 'hsl(220 70% 55%)' },
   { key: 'conversations', label: 'Conversas', color: 'hsl(180 60% 45%)' },
-  { key: 'leads', label: 'Leads (CRM)', color: 'hsl(var(--success))' },
+  { key: 'leads', label: 'Contatos (CRM)', color: 'hsl(var(--success))' },
   { key: 'opps', label: 'Oportunidades', color: 'hsl(40 90% 55%)' },
   { key: 'won', label: 'Wins', color: 'hsl(140 70% 40%)' },
 ] as const;
