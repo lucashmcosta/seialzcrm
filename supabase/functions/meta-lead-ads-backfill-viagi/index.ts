@@ -440,3 +440,4 @@ function jsonErr(msg: string, status = 500) {
     status, headers: { ...corsHeaders, 'Content-Type': 'application/json' },
   });
 }
+}
