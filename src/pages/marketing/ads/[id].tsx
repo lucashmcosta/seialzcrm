@@ -117,7 +117,7 @@ export default function AdDrilldown() {
                 <Tooltip contentStyle={{ background: 'hsl(var(--card))', border: '1px solid hsl(var(--border))', borderRadius: 6, fontSize: 12 }} formatter={(v: any, n: string) => n === 'spend' ? fmtBRL(v) : fmtInt(v)} />
                 <Legend wrapperStyle={{ fontSize: 12 }} />
                 <Line yAxisId="left" type="monotone" dataKey="spend" name="Investido" stroke="hsl(var(--primary))" strokeWidth={2} dot={false} />
-                <Line yAxisId="right" type="monotone" dataKey="leads" name="Leads" stroke="hsl(var(--success))" strokeWidth={2} dot={false} />
+                <Line yAxisId="right" type="monotone" dataKey="leads" name="Contatos" stroke="hsl(var(--success))" strokeWidth={2} dot={false} />
               </LineChart>
             </ResponsiveContainer>
           </div>

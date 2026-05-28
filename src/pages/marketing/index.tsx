@@ -51,7 +51,7 @@ export default function MarketingOverview() {
         <MetricCard label="CPL real" value={k?.cpl_real != null ? fmtBRL(k.cpl_real) : '—'} loading={loading} accent="warning" />
         <MetricCard label="CAC" value={k?.cac != null ? fmtBRL(k.cac) : '—'} loading={loading} accent="warning" />
         <MetricCard label="ROAS" value={fmtRoas(k?.roas)} loading={loading} accent={k?.roas && k.roas >= 1 ? 'success' : 'destructive'} />
-        <MetricCard label="Lead → Opp" value={k?.lead_to_opp_pct != null ? fmtPct(k.lead_to_opp_pct) : '—'} loading={loading} />
+        <MetricCard label="Contato → Opp" value={k?.lead_to_opp_pct != null ? fmtPct(k.lead_to_opp_pct) : '—'} loading={loading} />
       </div>
 
       {/* Time series */}
@@ -78,7 +78,7 @@ export default function MarketingOverview() {
                 />
                 <Legend wrapperStyle={{ fontSize: 12 }} />
                 <Line yAxisId="left" type="monotone" dataKey="spend" name="Investido" stroke="hsl(var(--primary))" strokeWidth={2} dot={false} />
-                <Line yAxisId="right" type="monotone" dataKey="leads" name="Leads" stroke="hsl(var(--success))" strokeWidth={2} dot={false} />
+                <Line yAxisId="right" type="monotone" dataKey="leads" name="Contatos" stroke="hsl(var(--success))" strokeWidth={2} dot={false} />
               </LineChart>
             </ResponsiveContainer>
           </div>
@@ -100,7 +100,7 @@ export default function MarketingOverview() {
                 <tr className="text-left text-xs text-muted-foreground border-b border-border">
                   <th className="py-2 pr-3 font-medium">Ad</th>
                   <th className="py-2 px-3 font-medium text-right">Investido</th>
-                  <th className="py-2 px-3 font-medium text-right">Leads</th>
+                  <th className="py-2 px-3 font-medium text-right">Contatos</th>
                   <th className="py-2 px-3 font-medium text-right">CPL</th>
                   <th className="py-2 px-3 font-medium text-right">Wins</th>
                   <th className="py-2 pl-3 font-medium text-right">ROAS</th>
