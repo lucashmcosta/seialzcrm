@@ -83,6 +83,24 @@ function buildFullName(nome: string | null, telefone: string | null): string {
   if (n) return n;
   const p = (telefone || '').trim();
   return p || 'Lead Meta';
+
+// Mirrors public.normalize_phone_br SQL function exactly
+function normalizePhoneBR(phoneInput: string | null | undefined): string | null {
+  if (!phoneInput || phoneInput.trim().length === 0) return null;
+  const digits = phoneInput.replace(/\D/g, '');
+  if (digits.length < 10) return digits;
+  let local: string;
+  if (digits.startsWith('55') && digits.length >= 12) {
+    local = digits.slice(2);
+  } else {
+    return digits;
+  }
+  if (local.length !== 10 && local.length !== 11) return digits;
+  const ddd = local.slice(0, 2);
+  const rest = local.slice(2);
+  if (local.length === 11 && rest[0] === '9') return '55' + local;
+  if (local.length === 10) return '55' + ddd + '9' + rest;
+  return '55' + local;
 }
 
 Deno.serve(async (req) => {
