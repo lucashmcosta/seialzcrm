@@ -29,6 +29,7 @@ import { computeRange, type PeriodPreset, type CustomRange } from '@/lib/report-
 import { useIsMobile } from '@/hooks/use-mobile';
 import { MobileLayout } from '@/components/mobile/MobileLayout';
 import { MobileReports } from '@/components/mobile/MobileReports';
+import { dedupeRowsById, fetchAllPagedRows } from '@/lib/fetchAllPagedRows';
 
 const BlockFallback = ({ className = 'h-32' }: { className?: string }) => (
   <div className={`animate-pulse rounded-md bg-muted/50 ${className}`} />
@@ -181,82 +182,55 @@ export default function ReportsPage() {
 
       // Helper: applies owner filter if set
       const withOwner = (q: any) => (ownerEq ? q.eq('owner_user_id', ownerEq) : q);
+      const paged = <T,>(factory: (from: number, to: number) => Promise<{ data: T[] | null; error: any }>) =>
+        fetchAllPagedRows<T>(factory);
 
-      // Current period — split into 2 queries to avoid PostgREST mis-parsing
-      // commas inside `in.(won,lost)` when nested in `or(and(...))`.
-      const q1created = withOwner(
-        supabase
-          .from('opportunities')
-          .select(baseSelect)
-          .eq('organization_id', organization.id)
-          .is('deleted_at', null)
-          .gte('created_at', fromIso)
-          .lte('created_at', toIso)
-          .limit(50000),
-      );
-      const q1closed = withOwner(
-        supabase
-          .from('opportunities')
-          .select(baseSelect)
-          .eq('organization_id', organization.id)
-          .is('deleted_at', null)
-          .in('status', ['won', 'lost'])
-          .gte('close_date', fromDay)
-          .lte('close_date', toDay)
-          .limit(50000),
-      );
+      const baseQuery = () =>
+        withOwner(
+          supabase
+            .from('opportunities')
+            .select(baseSelect)
+            .eq('organization_id', organization.id)
+            .is('deleted_at', null),
+        );
 
-      // Previous period (for delta)
-      const q2created = withOwner(
-        supabase
-          .from('opportunities')
-          .select(baseSelect)
-          .eq('organization_id', organization.id)
-          .is('deleted_at', null)
-          .gte('created_at', prevFromIso)
-          .lt('created_at', prevToIso)
-          .limit(50000),
-      );
-      const q2closed = withOwner(
-        supabase
-          .from('opportunities')
-          .select(baseSelect)
-          .eq('organization_id', organization.id)
-          .is('deleted_at', null)
-          .in('status', ['won', 'lost'])
-          .gte('close_date', prevFromDay)
-          .lt('close_date', prevToDay)
-          .limit(50000),
-      );
-
-      // All currently open (independent of period — for funnel/distribution)
-      const q3 = withOwner(
-        supabase
-          .from('opportunities')
-          .select(baseSelect)
-          .eq('organization_id', organization.id)
-          .eq('status', 'open')
-          .is('deleted_at', null)
-          .limit(50000),
-      );
-
-      const [r1c, r1x, r2c, r2x, r3] = await Promise.all([
-        q1created,
-        q1closed,
-        q2created,
-        q2closed,
-        q3,
+      const [currentCreated, currentClosed, previousCreated, previousClosed, openRows] = await Promise.all([
+        paged<Opp>(async (pageFrom, pageTo) =>
+          await baseQuery()
+            .gte('created_at', fromIso)
+            .lte('created_at', toIso)
+            .range(pageFrom, pageTo),
+        ),
+        paged<Opp>(async (pageFrom, pageTo) =>
+          await baseQuery()
+            .in('status', ['won', 'lost'])
+            .gte('close_date', fromDay)
+            .lte('close_date', toDay)
+            .range(pageFrom, pageTo),
+        ),
+        paged<Opp>(async (pageFrom, pageTo) =>
+          await baseQuery()
+            .gte('created_at', prevFromIso)
+            .lt('created_at', prevToIso)
+            .range(pageFrom, pageTo),
+        ),
+        paged<Opp>(async (pageFrom, pageTo) =>
+          await baseQuery()
+            .in('status', ['won', 'lost'])
+            .gte('close_date', prevFromDay)
+            .lt('close_date', prevToDay)
+            .range(pageFrom, pageTo),
+        ),
+        paged<Opp>(async (pageFrom, pageTo) =>
+          await baseQuery()
+            .eq('status', 'open')
+            .range(pageFrom, pageTo),
+        ),
       ]);
 
-      const dedupe = (a: any[], b: any[]) => {
-        const map = new Map<string, Opp>();
-        for (const row of [...(a || []), ...(b || [])]) map.set(row.id, row as Opp);
-        return Array.from(map.values());
-      };
-
-      setCurrentOpps(dedupe(r1c.data as any[], r1x.data as any[]));
-      setPreviousOpps(dedupe(r2c.data as any[], r2x.data as any[]));
-      setOpenOpps((r3.data as Opp[]) || []);
+      setCurrentOpps(dedupeRowsById<Opp>([...currentCreated, ...currentClosed]));
+      setPreviousOpps(dedupeRowsById<Opp>([...previousCreated, ...previousClosed]));
+      setOpenOpps(openRows);
     } catch (e) {
       console.error('Reports fetch error:', e);
     } finally {

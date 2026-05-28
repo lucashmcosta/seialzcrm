@@ -20,6 +20,7 @@ import { usePermissions } from '@/hooks/usePermissions';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 
 import { cn } from '@/lib/utils';
+import { dedupeRowsById, fetchAllPagedRows } from '@/lib/fetchAllPagedRows';
 interface OppRow {
   id: string;
   title: string | null;
@@ -195,29 +196,39 @@ export default function Dashboard() {
       const fromDay = toDayStr(from);
       const toDay = toDayStr(to);
 
-      // Single query: rows created in period OR won-and-closed (by close_date) in period
-      let query = supabase
-        .from('opportunities')
-        .select('id, title, status, created_at, updated_at, close_date, amount')
-        .eq('organization_id', organization.id)
-        .is('deleted_at', null);
+      const baseQuery = () => {
+        let query = supabase
+          .from('opportunities')
+          .select('id, title, status, created_at, updated_at, close_date, amount')
+          .eq('organization_id', organization.id)
+          .is('deleted_at', null);
 
-      // Owner scoping: admins (viewAllOpportunities) can pick a user or 'all'.
-      // Everyone else is limited to their own opportunities.
-      if (!canViewAll) {
-        query = query.eq('owner_user_id', userProfile.id);
-      } else if (ownerId && ownerId !== 'all') {
-        query = query.eq('owner_user_id', ownerId);
-      }
+        if (!canViewAll) {
+          query = query.eq('owner_user_id', userProfile.id);
+        } else if (ownerId && ownerId !== 'all') {
+          query = query.eq('owner_user_id', ownerId);
+        }
 
-      const { data, error } = await query
-        .or(
-          `and(created_at.gte.${fromIso},created_at.lte.${toIso}),and(status.eq.won,close_date.gte.${fromDay},close_date.lte.${toDay})`,
-        )
-        .limit(5000);
+        return query;
+      };
 
-      if (error) throw error;
-      const rows = (data || []) as OppRow[];
+      const [createdRows, wonRows] = await Promise.all([
+        fetchAllPagedRows<OppRow>(async (pageFrom, pageTo) =>
+          await baseQuery()
+            .gte('created_at', fromIso)
+            .lte('created_at', toIso)
+            .range(pageFrom, pageTo),
+        ),
+        fetchAllPagedRows<OppRow>(async (pageFrom, pageTo) =>
+          await baseQuery()
+            .eq('status', 'won')
+            .gte('close_date', fromDay)
+            .lte('close_date', toDay)
+            .range(pageFrom, pageTo),
+        ),
+      ]);
+
+      const rows = dedupeRowsById<OppRow>([...createdRows, ...wonRows]);
 
       const fromMs = from.getTime();
       const toMs = to.getTime();
