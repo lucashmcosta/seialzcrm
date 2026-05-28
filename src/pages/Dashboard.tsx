@@ -20,6 +20,7 @@ import { usePermissions } from '@/hooks/usePermissions';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 
 import { cn } from '@/lib/utils';
+import { fetchAllPagedRows } from '@/lib/fetchAllPagedRows';
 interface OppRow {
   id: string;
   title: string | null;
@@ -210,14 +211,13 @@ export default function Dashboard() {
         query = query.eq('owner_user_id', ownerId);
       }
 
-      const { data, error } = await query
-        .or(
-          `and(created_at.gte.${fromIso},created_at.lte.${toIso}),and(status.eq.won,close_date.gte.${fromDay},close_date.lte.${toDay})`,
-        )
-        .limit(5000);
-
-      if (error) throw error;
-      const rows = (data || []) as OppRow[];
+      const rows = await fetchAllPagedRows<OppRow>((pageFrom, pageTo) =>
+        query
+          .or(
+            `and(created_at.gte.${fromIso},created_at.lte.${toIso}),and(status.eq.won,close_date.gte.${fromDay},close_date.lte.${toDay})`,
+          )
+          .range(pageFrom, pageTo),
+      );
 
       const fromMs = from.getTime();
       const toMs = to.getTime();
