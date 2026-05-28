@@ -40,7 +40,8 @@ export default function MarketingOverview() {
         <MetricCard label="Investido" value={fmtBRL(k?.spend ?? 0)} current={k?.spend} previous={p?.spend} loading={loading} />
         <MetricCard label="Impressões" value={fmtInt(k?.impressions ?? 0)} current={k?.impressions} previous={p?.impressions} loading={loading} mono />
         <MetricCard label="Cliques" value={fmtInt(k?.clicks ?? 0)} current={k?.clicks} previous={p?.clicks} loading={loading} mono />
-        <MetricCard label="Leads (CRM)" value={fmtInt(k?.leads ?? 0)} current={k?.leads} previous={p?.leads} loading={loading} accent="success" />
+        <MetricCard label="Contatos (CRM)" value={fmtInt(k?.leads ?? 0)} current={k?.leads} previous={p?.leads} loading={loading} accent="success" />
+
         <MetricCard label="Oportunidades abertas" value={fmtInt(k?.opps_open ?? 0)} current={k?.opps_open} previous={p?.opps_open} loading={loading} />
         <MetricCard label="Wins" value={fmtInt(k?.wins ?? 0)} current={k?.wins} previous={p?.wins} loading={loading} accent="success" />
       </div>
