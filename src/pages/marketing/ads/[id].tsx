@@ -95,13 +95,13 @@ export default function AdDrilldown() {
 
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
         <MetricCard label="Investido" value={fmtBRL(a?.spend_brl ?? 0)} loading={ad.isLoading} />
-        <MetricCard label="Leads" value={fmtInt(a?.leads_total ?? 0)} loading={ad.isLoading} accent="success" />
+        <MetricCard label="Contatos" value={fmtInt(a?.leads_total ?? 0)} loading={ad.isLoading} accent="success" />
         <MetricCard label="Opps Abertas" value={fmtInt(a?.opps_open ?? 0)} loading={ad.isLoading} />
         <MetricCard label="Wins" value={fmtInt(a?.opps_won ?? 0)} loading={ad.isLoading} accent="success" sublabel={`ROAS ${fmtRoas(a?.roas)}`} />
       </div>
 
       <div className="rounded-md border border-border bg-card p-4">
-        <h3 className="text-sm font-semibold mb-3">Investimento × Leads (30 dias)</h3>
+        <h3 className="text-sm font-semibold mb-3">Investimento × Contatos (30 dias)</h3>
         {insights.isLoading ? (
           <ChartSkeleton height={220} />
         ) : !insights.data || insights.data.length === 0 ? (

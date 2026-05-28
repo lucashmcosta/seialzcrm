@@ -57,7 +57,7 @@ export default function MarketingOverview() {
       {/* Time series */}
       <div className="rounded-md border border-border bg-card p-4">
         <div className="flex items-center justify-between mb-3">
-          <h3 className="text-sm font-semibold">Investimento × Leads por dia</h3>
+          <h3 className="text-sm font-semibold">Investimento × Contatos por dia</h3>
           <span className="text-xs text-muted-foreground">{ts.data?.length || 0} dias</span>
         </div>
         {ts.isLoading ? (

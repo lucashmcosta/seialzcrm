@@ -222,7 +222,7 @@ export default function MarketingAds() {
                   <SortHead k="impressions" label="Impr." />
                   <SortHead k="clicks" label="Cliques" />
                   <th className="py-2 px-3 font-medium text-xs text-right">CTR</th>
-                  <SortHead k="leads_total" label="Leads" />
+                  <SortHead k="leads_total" label="Contatos" />
                   <SortHead k="cpl_real_brl" label="CPL" />
                   <SortHead k="opps_open" label="Opps" />
                   <SortHead k="opps_won" label="Wins" />
