@@ -39,7 +39,6 @@ export function useAdLeads(adId: string | undefined, opts: { status?: string; se
       const byContact = new Map<string, AdLead['lifecycle_status']>();
       for (const o of opps || []) {
         const cur = byContact.get(o.contact_id);
-        // priority: won > open > lost
         const next = (o.status === 'won') ? 'won'
                   : (o.status === 'open') ? 'open'
                   : (o.status === 'lost') ? 'lost' : null;
@@ -60,6 +59,68 @@ export function useAdLeads(adId: string | undefined, opts: { status?: string; se
         rows = rows.filter(r => r.lifecycle_status === opts.status);
       }
       return rows;
+    },
+  });
+}
+
+export interface AdOpportunity {
+  id: string;
+  title: string | null;
+  amount: number | null;
+  status: 'open' | 'won' | 'lost' | string;
+  close_date: string | null;
+  created_at: string;
+  contact_id: string;
+  contact_name: string | null;
+  contact_phone: string | null;
+}
+
+/**
+ * Lista TODAS as oportunidades vinculadas a contatos deste ad.
+ * Usa join embarcado com filtro `!inner` para garantir que o total bate
+ * com o KPI "Wins/Opps Abertas" da view de performance.
+ */
+export function useAdOpportunities(
+  adId: string | undefined,
+  opts: { status?: string; search?: string; limit?: number } = {},
+) {
+  return useQuery({
+    queryKey: ['marketing', 'ad-opps', adId, opts.status, opts.search, opts.limit],
+    enabled: !!adId,
+    staleTime: 1000 * 60 * 2,
+    queryFn: async (): Promise<AdOpportunity[]> => {
+      let q = supabase
+        .from('opportunities')
+        .select(
+          'id, title, amount, status, close_date, created_at, contact_id, contact:contacts!inner(id, full_name, phone, marketing_campaign_id, deleted_at)'
+        )
+        .eq('contact.marketing_campaign_id', adId!)
+        .is('contact.deleted_at', null)
+        .is('deleted_at', null)
+        .order('created_at', { ascending: false })
+        .limit(opts.limit ?? 500);
+
+      if (opts.status && opts.status !== 'all') {
+        q = q.eq('status', opts.status);
+      }
+      if (opts.search) {
+        q = q.ilike('contact.full_name', `%${opts.search}%`);
+      }
+
+      const { data, error } = await q;
+      if (error) throw error;
+
+      return (data || []).map((r: any) => ({
+        id: r.id,
+        title: r.title,
+        amount: r.amount,
+        status: r.status,
+        close_date: r.close_date,
+        created_at: r.created_at,
+        contact_id: r.contact_id,
+        contact_name: r.contact?.full_name ?? null,
+        contact_phone: r.contact?.phone ?? null,
+      }));
     },
   });
 }
