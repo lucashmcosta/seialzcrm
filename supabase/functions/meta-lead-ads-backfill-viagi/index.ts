@@ -93,6 +93,7 @@ Deno.serve(async (req) => {
   try { body = await req.json(); } catch { /* ok */ }
 
   const mode: 'dry_run' | 'apply' = body?.mode === 'apply' ? 'apply' : 'dry_run';
+  const skipCapi: boolean = body?.skip_capi === true;
   if (mode === 'apply' && body?.confirm_token !== CONFIRM_TOKEN) {
     return new Response(JSON.stringify({ error: `apply mode requires confirm_token="${CONFIRM_TOKEN}"` }), {
       status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' },
