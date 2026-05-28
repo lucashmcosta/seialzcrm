@@ -5,7 +5,7 @@ import { MetricCard } from '../_components/MetricCard';
 import { ChartSkeleton, TableSkeleton } from '../_components/Skeletons';
 import { EmptyState } from '../_components/EmptyState';
 import { useAdById } from '../_hooks/useAdPerformance';
-import { useAdOpportunities, useAdDailyInsights, useAdLeads, type AdOpportunity } from '../_hooks/useAdLeads';
+import { useAdOpportunities, useAdDailyInsights, type AdOpportunity } from '../_hooks/useAdLeads';
 import { fmtBRL, fmtInt, fmtDateBR, fmtRoas } from '../_lib/format';
 import { Input } from '@/components/ui/input';
 import { Select, SelectTrigger, SelectValue, SelectContent, SelectItem } from '@/components/ui/select';
