@@ -196,12 +196,21 @@ const toDayStr = (d: Date) =>
       const toDay = toDayStr(to);
 
       // Single query: rows created in period OR won-and-closed (by close_date) in period
-      const { data, error } = await supabase
+      let query = supabase
         .from('opportunities')
         .select('id, title, status, created_at, updated_at, close_date, amount')
         .eq('organization_id', organization.id)
-        .eq('owner_user_id', userProfile.id)
-        .is('deleted_at', null)
+        .is('deleted_at', null);
+
+      // Owner scoping: admins (viewAllOpportunities) can pick a user or 'all'.
+      // Everyone else is limited to their own opportunities.
+      if (!canViewAll) {
+        query = query.eq('owner_user_id', userProfile.id);
+      } else if (ownerId && ownerId !== 'all') {
+        query = query.eq('owner_user_id', ownerId);
+      }
+
+      const { data, error } = await query
         .or(
           `and(created_at.gte.${fromIso},created_at.lte.${toIso}),and(status.eq.won,close_date.gte.${fromDay},close_date.lte.${toDay})`,
         )
