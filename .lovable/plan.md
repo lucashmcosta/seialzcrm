@@ -1,179 +1,178 @@
 
-## Volume real (últimos 30 dias)
+# Pré-implementação — Backfill Meta Lead Ads Viagi
 
-| Item | Quantidade |
-|---|---|
-| Mensagens totais | 43.977 |
-| Texto analisável (≥2 chars) | 32.823 |
-| Áudios WhatsApp | 8.948 |
-| Opportunities won | 360 |
-| Opportunities lost | 3.271 |
-| Orgs com BYOK OpenAI | 1 |
-| Orgs total | 9 |
+Antes de qualquer mudança de código ou dados, abaixo está o escopo exato pedido.
 
-## 1. Backfill histórico
+---
 
-Fonte única de verdade: tabela `messages` com `created_at >= now() - 30 days` cruzada com `message_threads` (para `opportunity_id`/`contact_id` quando faltar) e `opportunities` (`status` ∈ won/lost/open).
+## 1. Arquivos que vão ser tocados
 
-Critérios de inclusão por mensagem:
-- Texto: `content` com ≥2 chars não nulos, `direction` ∈ inbound/outbound, thread em canal `whatsapp` e org não opt-out.
-- Áudio: `media_type ilike 'audio%'`, `media_urls[0]` resolvível, duração estimada ≤600s (de `intelligence_settings.transcription.max_audio_seconds`).
-- Pular se já existir `message_analyses` na `analysis_version` corrente, ou `audio_transcriptions` na `version` corrente (idempotência).
+### Migrations (schema)
+- `supabase/migrations/<timestamp>_contacts_attribution_path.sql` — nova coluna + index
+- `supabase/migrations/<timestamp>_backup_meta_backfill_2026_05_28.sql` — cria tabela snapshot dos 229 (item 4)
 
-Output esperado:
-- `message_analyses`: ~32.823 linhas novas (texto direto + texto vindo de transcrição).
-- `audio_transcriptions`: ~8.948 linhas novas → cada uma reenfileira `analyze_message`.
-- `sales_events`: `objection_detected`, `buying_signal_detected`, `human_handoff_suggested`, `negative_sentiment_detected` derivados da análise + `ghosting` já em produção.
-- `opportunity_behavior_snapshot`: refresh por (opportunity, thread) com contadores e timestamps.
-- `seller_metrics_daily`: rollup diário a partir de `message_response_times`.
+### Edge functions (lógica contínua)
+- `supabase/functions/meta-lead-ads-process-lead/index.ts` — refator 3 ramos (A novo / B upgrade / C no-op), grava `attribution_path`, dispara CAPI Lead em A sempre e em B se `lead.created_time >= now()-7d`
+- `supabase/functions/_shared/capi-fire.ts` (novo) — helper único para chamar `meta-capi-send-event` com payload `Lead`, isolando lógica da janela 7d e do dedupe
 
-## 2. Processamento em batches
+### Backfill (one-shot, **dry-run obrigatório**)
+- `supabase/functions/meta-lead-ads-backfill-viagi/index.ts` (novo, descartável) — modos `dry_run` (default) e `apply`. Lê CSV já salvo em storage, processa em lotes de 50, usa `SET LOCAL app.skip_event_emit='true'` por transação, emite relatório JSON com counts e amostra.
+- `scripts/upload_viagi_csv.md` (novo) — instrução curta de upload do CSV no bucket `private-imports/`
 
-Pipeline já tem `intelligence_jobs` + trigger `trg_messages_intelligence_enqueue` + cron `intelligence-worker-30s`. O backfill é uma única função que enfileira jobs em fatias temporais.
+### UI (zero alteração nesta fase)
+Nenhum arquivo em `src/` será tocado. O backfill é server-side puro.
 
-Nova edge function `intelligence-backfill-runner` (admin-only via `x-worker-token`):
+---
 
-Parâmetros:
-- `organization_id` (opcional — se ausente, varre todas as orgs não opt-out)
-- `from`, `to` (default: now-30d .. now)
-- `slice_hours` (default 6) — corta a janela em fatias para não estourar `intelligence_jobs.idempotency_key` em massa
-- `dry_run` (default false) — só conta o que faria
+## 2. Esquema da nova coluna + migration
 
-Algoritmo por slice:
-1. SELECT mensagens elegíveis (texto OU áudio) em batch de 500 por org.
-2. Para cada uma, INSERT em `intelligence_jobs` com `idempotency_key = analyze:<id>` ou `transcribe:<id>` e `ON CONFLICT DO NOTHING` — protege contra reentrada.
-3. Registra progresso em nova tabela `intelligence_backfill_runs (id, organization_id, from, to, slice_started_at, slice_finished_at, enqueued_count, status)`.
+### Coluna `contacts.attribution_path`
 
-Worker existente (`intelligence-worker`, batch=3 sequencial, a cada 30s) drena. Não precisa de novo worker.
+Semântica: **rastro ordenado** dos canais pelos quais o contato passou, do mais antigo ao mais recente. Append-only. Permite separar "canal de chegada" (`source`) do histórico real.
 
-## 3. Controle de custo
-
-Estimativa para 30 dias com defaults atuais:
-
-| Função | Volume | Modelo default | Custo unitário | Total |
-|---|---|---|---|---|
-| analyze_message (managed) | ~32k | google/gemini-2.5-flash | ~$0.0001 | ~$3,30 |
-| transcribe_audio (BYOK openai 1 org) | ~1k | whisper-1 | $0.006/min × 0,5min | ~$3 |
-| transcribe_audio (managed 8 orgs) | ~7,9k | elevenlabs scribe_v1 | ~$0.40/h ≈ $0,003 | ~$24 |
-| analyze pós-transcrição | ~8,9k | gemini-2.5-flash | $0.0001 | ~$0,90 |
-
-**Total estimado: ~$30-35** para os 30 dias, dominado por transcrição de áudio.
-
-Controles aplicados:
-- `intelligence_settings.transcription.max_audio_seconds = 600` (hard cap).
-- `privacy.org_opt_out = true` desliga tudo para a org.
-- `behavior.only_open_deals = true` (já existe) limita análise a deals abertos quando ativado.
-- `provider_pricing` (tabela existente) é a fonte usada por `estimateTextCostUsd` / `estimateAudioCostUsd` que escreve `estimated_cost_usd` em `ai_usage_logs`.
-- `vw_org_monthly_cost_byok` (view existente) consolida custo por org.
-
-Novo: budget cap interno por org no backfill (não em produção):
-- Parâmetro `max_cost_usd` na função runner (default $5/org).
-- Antes de enfileirar próximo slice, soma `estimated_cost_usd` de `ai_usage_logs` da org no run → se ≥ cap, pausa e marca run como `paused_budget`.
-
-## 4. Proteção contra rate limit
-
-Já implementado:
-- `intelligence-worker`: sequencial, BATCH_SIZE=3, MAX_BATCHES=3 por invocação, cron 30s → ~18 jobs/min máx.
-- BYOK: `fallbackToManaged` no `resolveProvider` evita pane quando key do cliente quebra.
-- Retry com backoff exponencial: `60s * 2^attempts` até `max_attempts=5`, depois `permanent_failure`.
-
-Adicional para backfill:
-- Throttle de enqueue: runner pausa 1s entre fatias.
-- Detecção de saturação: se >30% dos jobs últimas 5min estão `failed` com `rate_limit`, runner pausa próxima fatia por 2 min.
-- Prioridade: jobs realtime do trigger têm `created_at` mais novo; o `rpc_claim_intelligence_jobs` já ordena por `next_run_at`. Backfill usa `next_run_at = now() + (i × 2s)` para escalonar e dar prioridade a tempo real.
-
-## 5. Métricas iniciais won vs lost
-
-Após backfill, view materializada `vw_intel_won_vs_lost_30d` agrupa por org:
-
-Por opportunity (won ou lost nos 30d):
-- `total_messages_inbound/outbound`, `audios_inbound/outbound` (de `opportunity_behavior_snapshot`).
-- `avg_response_time_seconds`, `p50`, `p95` (de `message_response_times`).
-- `objections_count`, `buying_signals_count`, `negative_sentiment_count`, `human_handoff_count` (de `sales_events`).
-- `avg_urgency_score`, `dominant_sentiment` (de `message_analyses`).
-- `cycle_hours` = `closed_at - created_at`.
-
-Comparação:
 ```text
-won vs lost (org X, 30d)
-                       WON    LOST   delta
-avg_msgs_outbound       18     11    +64%
-avg_response_seconds    340   1820   -81%
-buying_signals/deal     2.4    0.6   +300%
-objections/deal         1.1    2.8   -61%
-cycle_hours             36     192   -81%
+Tipo:      text[]              (não jsonb — queries com ANY/array_position são triviais)
+Default:   ARRAY[]::text[]
+Nullable:  false
+Valores:   tokens controlados — 'meta_lead_ads' | 'ctwa' | 'whatsapp' |
+           'landing_page_viagi' | 'manual' | 'kommo' | 'webhook' | ...
+Regra:     novo token só é appended se diferente do último elemento (evita ruído)
+Index:     GIN para filtros tipo `WHERE 'meta_lead_ads' = ANY(attribution_path)`
 ```
 
-Entregue como query SQL pronta + script Python (skill `ai-gateway`) que gera CSV em `/mnt/documents/intel_won_vs_lost_<org>.csv`.
+### SQL da migration
 
-## 6. Top sellers vs low performers
+```sql
+ALTER TABLE public.contacts
+  ADD COLUMN attribution_path text[] NOT NULL DEFAULT ARRAY[]::text[];
 
-Base: `seller_metrics_daily` agregada nos 30d por `owner_user_id`:
-- `deals_won`, `deals_lost`, `win_rate`.
-- `avg_first_response_seconds`, `median_response_seconds`.
-- `messages_sent_per_deal`, `audios_sent_per_deal`.
-- `avg_urgency_handled`, `human_handoff_rate`, `negative_sentiment_rate`.
+CREATE INDEX idx_contacts_attribution_path
+  ON public.contacts USING GIN (attribution_path);
 
-Ranking: top quartil vs bottom quartil por `win_rate` (mínimo 5 deals fechados no período). Output CSV `intel_sellers_30d_<org>.csv` mais um arquivo de "padrões diferenciadores" gerado por um prompt LLM que recebe os dois grupos e identifica práticas distintas.
+COMMENT ON COLUMN public.contacts.attribution_path IS
+  'Rastro ordenado de canais pelos quais o contato passou. Append-only, sem duplicar último elemento. source = chegada inicial; attribution_path = histórico completo.';
+```
 
-## 7. Seleção interna de modelo/provider
+Sem backfill de dados nessa migration — a coluna nasce vazia. O backfill dos 229 é feito no script (item 3), que popula `attribution_path = ARRAY['ctwa','meta_lead_ads']` (ou equivalente) para os contatos órfãos.
 
-Tabela existente `organization_api_keys` + view `vw_org_provider_keys` já guardam BYOK. Política interna (não exposta no UI ainda) ficará em `_shared/intelligence/policy.ts`:
+---
 
-| Função | Se BYOK | Sem BYOK (managed) | Fallback |
-|---|---|---|---|
-| analyze-message | openai `gpt-4o-mini` | gemini `google/gemini-2.5-flash` | managed em rate_limit/invalid_key |
-| transcribe-audio | openai `whisper-1` | elevenlabs `scribe_v1` | managed em rate_limit/invalid_key |
-| embeddings (futuro) | voyage `voyage-3` (per-org já existente) | voyage com `VOYAGE_API_KEY` global | sem fallback (embeddings são determinísticos) |
+## 3. Dry-run obrigatório — output esperado (amostra de 5)
 
-Defaults ficam em `provider_pricing` + constantes em `resolve-provider.ts` (já implementado). Não muda UI; só a tabela de pricing/policy é editada.
+A função `meta-lead-ads-backfill-viagi` exige `{ "mode": "dry_run" }` por default. Só executa UPDATE/INSERT se receber explicitamente `{ "mode": "apply", "confirm_token": "VIAGI_2026_05_28" }`.
 
-## 8. Estratégia de processamento incremental
+### Estrutura do output (JSON)
 
-- Backfill é idempotente: rodar 2× não duplica (idempotency_key + upsert em `message_analyses`/`audio_transcriptions`).
-- Estado em `intelligence_backfill_runs` permite resume: ao falhar ou pausar, próxima execução continua da `slice_finished_at` salva.
-- Cron diário (opcional, fase 2): `intelligence-backfill-incremental` roda 1×/dia processando `now() - 26h .. now() - 2h` para qualquer mensagem que o trigger realtime tenha perdido.
+```json
+{
+  "mode": "dry_run",
+  "organization_id": "b246ef6f-...",
+  "totals": {
+    "csv_leads": 1297,
+    "branch_A_new_contact":   37,
+    "branch_B_attribution":  229,
+    "branch_C_already_attributed": 1031,
+    "capi_lead_within_7d":    18,
+    "capi_lead_skipped_old": 248
+  },
+  "sample_branch_B": [ /* 5 contatos — antes/depois */ ],
+  "sample_branch_A": [ /* 5 leads que viram contact novo */ ]
+}
+```
 
-## 9. Estratégia de retry
+### Exemplo de uma linha em `sample_branch_B`
 
-Já no worker:
-- `failed` → backoff `60s × 2^attempts`, máx 10 min, até `max_attempts=5`.
-- `permanent_failure` para erros 4xx não recuperáveis (validação, invalid_key sem fallback).
-- BYOK inválida: marca `byok_key_invalid` em `sales_events`, marca key como inativa, cai para managed se permitido.
+```json
+{
+  "lead_id": "1234567890",
+  "contact_id": "c4f1...",
+  "before": {
+    "source": "ctwa",
+    "source_external_id": null,
+    "marketing_campaign_id": null,
+    "ad_referral_source_id": null,
+    "ad_referral_source_type": null,
+    "ad_referral_captured_at": null,
+    "utm_source": null, "utm_medium": null, "utm_campaign": null,
+    "attribution_path": []
+  },
+  "after": {
+    "source": "ctwa",                          // INALTERADO
+    "source_external_id": "1234567890",
+    "marketing_campaign_id": "a91e...",
+    "ad_referral_source_id": "120209876543210",
+    "ad_referral_source_type": "lead_form",
+    "ad_referral_captured_at": "2026-05-23T14:22:11Z",
+    "utm_source": "facebook",
+    "utm_medium": "paid_social",
+    "utm_campaign": "VIAGI_PROMO_MAIO",
+    "attribution_path": ["ctwa","meta_lead_ads"]
+  },
+  "opportunity": { "action": "reuse_existing", "id": "op_88..." },
+  "capi_lead": { "action": "skip", "reason": "lead_created_time_older_than_7d" }
+}
+```
 
-Adicional para backfill:
-- Reset manual via SQL: `UPDATE intelligence_jobs SET status='pending', attempts=0 WHERE ...` (operação admin documentada).
+### Exemplo de `sample_branch_A` (lead totalmente ausente)
 
-## 10. Pausar/resumir
+```json
+{
+  "lead_id": "9988776655",
+  "action": "insert_contact + insert_opportunity",
+  "contact": {
+    "full_name": "Maria Souza",
+    "phone": "+5511999998888",
+    "source": "meta_lead_ads",
+    "attribution_path": ["meta_lead_ads"],
+    "owner_user_id": "round_robin → u_xx"
+  },
+  "opportunity": { "pipeline_stage_id": "ps_lead", "amount": 0 },
+  "capi_lead": { "action": "fire", "event_time": "2026-05-27T19:11:03Z" }
+}
+```
 
-Tabela `intelligence_backfill_runs.status` ∈ `running | paused_manual | paused_budget | paused_rate_limit | done | error`.
+---
 
-Comandos admin (via curl direto na edge function):
-- `POST /intelligence-backfill-runner` `{action: "start", organization_id, from, to}`
-- `POST /intelligence-backfill-runner` `{action: "pause", run_id}`
-- `POST /intelligence-backfill-runner` `{action: "resume", run_id}`
-- `POST /intelligence-backfill-runner` `{action: "status", run_id}`
+## 4. Snapshot dos 229 antes do UPDATE
 
-Pausar não cancela jobs já enfileirados (eles drenam); apenas para de adicionar mais.
+Tabela de backup criada na **mesma migration**, populada com SELECT direto antes do backfill rodar.
 
-## Entrega em fases
+```sql
+CREATE TABLE public.backup_meta_backfill_2026_05_28_contacts AS
+SELECT c.*
+FROM public.contacts c
+WHERE c.organization_id = 'b246ef6f-…-2896a'
+  AND c.deleted_at IS NULL
+  AND c.source_external_id IS NULL
+  AND c.marketing_campaign_id IS NULL
+  AND c.id = ANY (
+    -- lista dos 229 IDs derivada do match CSV ↔ contacts por phone normalizado
+    SELECT id FROM public.contacts
+    WHERE organization_id = 'b246ef6f-…-2896a'
+      AND phone = ANY ($1::text[])
+      AND deleted_at IS NULL
+      AND source IN ('ctwa','whatsapp')
+      AND source_external_id IS NULL
+  );
 
-**Fase A — Infra (1 migração + 1 função):**
-- Tabela `intelligence_backfill_runs`.
-- Edge function `intelligence-backfill-runner`.
-- View `vw_intel_won_vs_lost_30d` + `vw_intel_sellers_30d`.
+GRANT SELECT ON public.backup_meta_backfill_2026_05_28_contacts TO authenticated;
+GRANT ALL    ON public.backup_meta_backfill_2026_05_28_contacts TO service_role;
+ALTER TABLE  public.backup_meta_backfill_2026_05_28_contacts ENABLE ROW LEVEL SECURITY;
+-- sem POLICY = só service_role acessa. Tabela é leitura admin manual.
 
-**Fase B — Execução piloto (1 org):**
-- Rodar backfill na org com BYOK (custo controlado).
-- Validar qualidade dos `message_analyses` (sentiment, intent, objection_type).
-- Conferir transcrições por amostragem manual (~20 áudios).
-- Medir custo real em `ai_usage_logs` vs estimativa.
+COMMENT ON TABLE public.backup_meta_backfill_2026_05_28_contacts IS
+  'Snapshot completo dos 229 contatos Viagi antes do attribution backfill de 28/05/2026. Restauração: UPDATE contacts SET ... FROM backup_meta_backfill_2026_05_28_contacts WHERE contacts.id = backup....id;';
+```
 
-**Fase C — Métricas:**
-- Gerar 2 CSVs (`won_vs_lost`, `sellers_30d`) + 1 relatório LLM de "padrões diferenciadores".
-- Critério go/no-go: precisão ≥80% em amostra anotada e custo real ≤120% do estimado.
+A lista exata de 229 phone numbers vem do CSV que você me passou — vou consolidar no script de backfill e a tabela é populada no `mode=dry_run` (zero risco de mexer em `contacts`).
 
-**Fase D — Rollout interno:**
-- Backfill nas demais 8 orgs em janelas separadas, respeitando budget cap.
+---
 
-Sem UI nesta fase. Resultados consumidos via SQL/CSV pelo time interno.
+## Pendente — sua aprovação antes de eu rodar a migration
+
+1. Confirma o tipo da coluna `text[]` + index GIN (vs. `jsonb`)?
+2. Confirma vocabulário inicial dos tokens: `meta_lead_ads`, `ctwa`, `whatsapp`, `landing_page_viagi`, `manual`, `kommo`, `webhook`?
+3. Confirma `confirm_token = "VIAGI_2026_05_28"` para destravar `mode=apply`?
+4. Quer que eu inclua na mesma migration o trigger que faz append automático em `attribution_path` quando `source` muda, ou prefere que isso fique 100% no código das edge functions?
+
+Assim que aprovar, rodo migration → upload do CSV → `mode=dry_run` → te mando o JSON real com totais e 10 amostras → você libera `mode=apply`.
