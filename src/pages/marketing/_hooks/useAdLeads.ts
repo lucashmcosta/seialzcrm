@@ -101,7 +101,7 @@ export function useAdOpportunities(
         .limit(opts.limit ?? 500);
 
       if (opts.status && opts.status !== 'all') {
-        q = q.eq('status', opts.status);
+        q = q.eq('status', opts.status as 'open' | 'won' | 'lost');
       }
       if (opts.search) {
         q = q.ilike('contact.full_name', `%${opts.search}%`);
