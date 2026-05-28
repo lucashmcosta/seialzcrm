@@ -16,15 +16,17 @@ import { computeRange, type PeriodPreset, type CustomRange } from '@/lib/report-
 import { DashboardTrendChart } from '@/components/reports/DashboardTrendChart';
 import { DashboardStatusDonut } from '@/components/reports/DashboardStatusDonut';
 import { usePersistedFilters } from '@/hooks/usePersistedFilters';
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 
 import { cn } from '@/lib/utils';
-
 interface OppRow {
   id: string;
+  title: string | null;
   status: string;
   created_at: string;
   updated_at: string;
   close_date: string | null;
+  amount: number | null;
 }
 
 /** Parse YYYY-MM-DD as LOCAL midnight (close_date is a DATE column). */
@@ -45,7 +47,7 @@ export default function Dashboard() {
   const navigate = useNavigate();
   const isMobile = useIsMobile();
 
-  const [preset, setPreset] = usePersistedFilters<PeriodPreset>('dashboard.preset', 'last_30');
+  const [preset, setPreset] = usePersistedFilters<PeriodPreset>('dashboard.preset', 'today');
   const [customRange, setCustomRange] = usePersistedFilters<CustomRange | undefined>(
     'dashboard.custom',
     undefined,
@@ -62,6 +64,7 @@ export default function Dashboard() {
   const [closedCount, setClosedCount] = useState(0);
   const [opps, setOpps] = useState<OppRow[]>([]);
   const [loading, setLoading] = useState(true);
+  const [detail, setDetail] = useState<null | 'entered' | 'closed'>(null);
 
   const { from, to } = computeRange(preset, customRange);
 
@@ -169,7 +172,7 @@ export default function Dashboard() {
       // Single query: rows created in period OR won-and-closed (by close_date) in period
       const { data, error } = await supabase
         .from('opportunities')
-        .select('id, status, created_at, updated_at, close_date')
+        .select('id, title, status, created_at, updated_at, close_date, amount')
         .eq('organization_id', organization.id)
         .eq('owner_user_id', userProfile.id)
         .is('deleted_at', null)
@@ -211,24 +214,58 @@ export default function Dashboard() {
 
   const kpis = [
     {
+      key: 'entered' as const,
       label: t('dashboard.entered'),
       value: enteredCount.toString(),
       icon: TrendUp,
       color: 'text-primary',
+      clickable: true,
     },
     {
+      key: 'closed' as const,
       label: t('dashboard.closed'),
       value: closedCount.toString(),
       icon: CheckCircle,
       color: 'text-success',
+      clickable: true,
     },
     {
+      key: 'conversion' as const,
       label: t('dashboard.conversion'),
       value: conversion === null ? '—' : `${conversion.toFixed(1)}%`,
       icon: ChartLineUp,
       color: 'text-primary',
+      clickable: false,
     },
   ];
+
+  const fromMs = from.getTime();
+  const toMs = to.getTime();
+  const enteredOpps = opps.filter((o) => {
+    const c = new Date(o.created_at).getTime();
+    return c >= fromMs && c <= toMs;
+  });
+  const closedOpps = opps.filter((o) => {
+    if (o.status !== 'won' || !o.close_date) return false;
+    const d = parseLocalDate(o.close_date);
+    if (!d) return false;
+    const u = d.getTime();
+    return u >= fromMs && u <= toMs;
+  });
+  const detailRows = detail === 'entered' ? enteredOpps : detail === 'closed' ? closedOpps : [];
+  const detailTitle =
+    detail === 'entered' ? t('dashboard.entered') : detail === 'closed' ? t('dashboard.closed') : '';
+
+  const fmtMoney = (v: number | null) =>
+    v == null ? '—' : v.toLocaleString(locale === 'en-US' ? 'en-US' : 'pt-BR', {
+      style: 'currency',
+      currency: 'BRL',
+    });
+  const fmtDate = (s: string | null, local = false) => {
+    if (!s) return '—';
+    const d = local ? parseLocalDate(s) : new Date(s);
+    return d ? d.toLocaleDateString(locale === 'en-US' ? 'en-US' : 'pt-BR') : '—';
+  };
 
   return (
     <Layout>
@@ -249,19 +286,30 @@ export default function Dashboard() {
           />
 
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-            {kpis.map((kpi, i) => (
-              <Card key={i} className={cn('p-6', loading && 'animate-pulse')}>
-                <div className="flex items-start justify-between gap-4">
-                  <div className="min-w-0">
-                    <p className="text-sm text-muted-foreground">{kpi.label}</p>
-                    <p className={cn('text-3xl font-semibold mt-2', kpi.color)}>
-                      {loading ? '—' : kpi.value}
-                    </p>
+            {kpis.map((kpi) => {
+              const interactive = kpi.clickable && !loading;
+              return (
+                <Card
+                  key={kpi.key}
+                  onClick={interactive ? () => setDetail(kpi.key as 'entered' | 'closed') : undefined}
+                  className={cn(
+                    'p-6 transition',
+                    loading && 'animate-pulse',
+                    interactive && 'cursor-pointer hover:border-primary/40 hover:shadow-sm',
+                  )}
+                >
+                  <div className="flex items-start justify-between gap-4">
+                    <div className="min-w-0">
+                      <p className="text-sm text-muted-foreground">{kpi.label}</p>
+                      <p className={cn('text-3xl font-semibold mt-2', kpi.color)}>
+                        {loading ? '—' : kpi.value}
+                      </p>
+                    </div>
+                    <kpi.icon size={32} weight="light" className={cn(kpi.color, 'opacity-60 flex-shrink-0')} />
                   </div>
-                  <kpi.icon size={32} weight="light" className={cn(kpi.color, 'opacity-60 flex-shrink-0')} />
-                </div>
-              </Card>
-            ))}
+                </Card>
+              );
+            })}
           </div>
 
           <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
@@ -274,6 +322,52 @@ export default function Dashboard() {
           </div>
         </div>
       </div>
+
+      <Dialog open={detail !== null} onOpenChange={(o) => !o && setDetail(null)}>
+        <DialogContent className="max-w-2xl max-h-[80vh] overflow-hidden flex flex-col">
+          <DialogHeader>
+            <DialogTitle>
+              {detailTitle} — {detailRows.length}
+            </DialogTitle>
+          </DialogHeader>
+          <div className="overflow-auto -mx-6 px-6">
+            {detailRows.length === 0 ? (
+              <p className="text-sm text-muted-foreground py-6 text-center">
+                Sem oportunidades no período.
+              </p>
+            ) : (
+              <ul className="divide-y divide-border">
+                {detailRows.map((o) => (
+                  <li key={o.id}>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setDetail(null);
+                        navigate(`/opportunities/${o.id}`);
+                      }}
+                      className="w-full flex items-center justify-between gap-4 py-3 text-left hover:bg-muted/50 px-2 rounded transition"
+                    >
+                      <div className="min-w-0 flex-1">
+                        <p className="text-sm font-medium text-foreground truncate">
+                          {o.title || '(sem título)'}
+                        </p>
+                        <p className="text-xs text-muted-foreground mt-0.5">
+                          {detail === 'closed'
+                            ? `Fechada em ${fmtDate(o.close_date, true)}`
+                            : `Criada em ${fmtDate(o.created_at)}`}
+                        </p>
+                      </div>
+                      <span className="text-sm font-mono text-muted-foreground flex-shrink-0">
+                        {fmtMoney(o.amount)}
+                      </span>
+                    </button>
+                  </li>
+                ))}
+              </ul>
+            )}
+          </div>
+        </DialogContent>
+      </Dialog>
     </Layout>
   );
 }
