@@ -367,7 +367,7 @@ Deno.serve(async (req) => {
     }
 
     // CAPI best-effort (apenas para contatos recém-criados)
-    if (createdNow) {
+    if (createdNow && !skipCapi) {
       const capi = await fireCapiLead(contactId!);
       if (capi.ok) applied.capi_sent++;
       else {
