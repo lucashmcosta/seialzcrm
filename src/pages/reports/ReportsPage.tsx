@@ -179,45 +179,83 @@ export default function ReportsPage() {
       const prevToDay = fmtDate(prevTo);
 
 
-      let q1 = supabase
-        .from('opportunities')
-        .select(baseSelect)
-        .eq('organization_id', organization.id)
-        .is('deleted_at', null)
-        .or(
-          `and(created_at.gte.${fromIso},created_at.lte.${toIso}),and(status.in.(won,lost),close_date.gte.${fromDay},close_date.lte.${toDay})`,
-        )
-        .limit(50000);
-      if (ownerEq) q1 = q1.eq('owner_user_id', ownerEq);
+      // Helper: applies owner filter if set
+      const withOwner = (q: any) => (ownerEq ? q.eq('owner_user_id', ownerEq) : q);
+
+      // Current period — split into 2 queries to avoid PostgREST mis-parsing
+      // commas inside `in.(won,lost)` when nested in `or(and(...))`.
+      const q1created = withOwner(
+        supabase
+          .from('opportunities')
+          .select(baseSelect)
+          .eq('organization_id', organization.id)
+          .is('deleted_at', null)
+          .gte('created_at', fromIso)
+          .lte('created_at', toIso)
+          .limit(50000),
+      );
+      const q1closed = withOwner(
+        supabase
+          .from('opportunities')
+          .select(baseSelect)
+          .eq('organization_id', organization.id)
+          .is('deleted_at', null)
+          .in('status', ['won', 'lost'])
+          .gte('close_date', fromDay)
+          .lte('close_date', toDay)
+          .limit(50000),
+      );
 
       // Previous period (for delta)
-      let q2 = supabase
-        .from('opportunities')
-        .select(baseSelect)
-        .eq('organization_id', organization.id)
-        .is('deleted_at', null)
-        .or(
-          `and(created_at.gte.${prevFromIso},created_at.lt.${prevToIso}),and(status.in.(won,lost),close_date.gte.${prevFromDay},close_date.lt.${prevToDay})`,
-        )
-        .limit(50000);
-      if (ownerEq) q2 = q2.eq('owner_user_id', ownerEq);
+      const q2created = withOwner(
+        supabase
+          .from('opportunities')
+          .select(baseSelect)
+          .eq('organization_id', organization.id)
+          .is('deleted_at', null)
+          .gte('created_at', prevFromIso)
+          .lt('created_at', prevToIso)
+          .limit(50000),
+      );
+      const q2closed = withOwner(
+        supabase
+          .from('opportunities')
+          .select(baseSelect)
+          .eq('organization_id', organization.id)
+          .is('deleted_at', null)
+          .in('status', ['won', 'lost'])
+          .gte('close_date', prevFromDay)
+          .lt('close_date', prevToDay)
+          .limit(50000),
+      );
 
       // All currently open (independent of period — for funnel/distribution)
-      let q3 = supabase
-        .from('opportunities')
-        .select(baseSelect)
-        .eq('organization_id', organization.id)
-        .eq('status', 'open')
-        .is('deleted_at', null)
-        .limit(50000);
-      if (ownerEq) q3 = q3.eq('owner_user_id', ownerEq);
+      const q3 = withOwner(
+        supabase
+          .from('opportunities')
+          .select(baseSelect)
+          .eq('organization_id', organization.id)
+          .eq('status', 'open')
+          .is('deleted_at', null)
+          .limit(50000),
+      );
 
+      const [r1c, r1x, r2c, r2x, r3] = await Promise.all([
+        q1created,
+        q1closed,
+        q2created,
+        q2closed,
+        q3,
+      ]);
 
+      const dedupe = (a: any[], b: any[]) => {
+        const map = new Map<string, Opp>();
+        for (const row of [...(a || []), ...(b || [])]) map.set(row.id, row as Opp);
+        return Array.from(map.values());
+      };
 
-      const [r1, r2, r3] = await Promise.all([q1, q2, q3]);
-
-      setCurrentOpps((r1.data as Opp[]) || []);
-      setPreviousOpps((r2.data as Opp[]) || []);
+      setCurrentOpps(dedupe(r1c.data as any[], r1x.data as any[]));
+      setPreviousOpps(dedupe(r2c.data as any[], r2x.data as any[]));
       setOpenOpps((r3.data as Opp[]) || []);
     } catch (e) {
       console.error('Reports fetch error:', e);
