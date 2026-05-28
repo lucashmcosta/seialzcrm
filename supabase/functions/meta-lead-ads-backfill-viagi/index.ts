@@ -155,8 +155,7 @@ Deno.serve(async (req) => {
   const PAGE = 1000;
   for (let from = 0; ; from += PAGE) {
     const { data, error } = await supabase
-      .from('contacts')
-      .select('id,phone,email,source,source_external_id,marketing_campaign_id,attribution_path')
+      .select('id,phone,phone_normalized,email,source,source_external_id,marketing_campaign_id,attribution_path')
       .eq('organization_id', ORG_ID)
       .is('deleted_at', null)
       .range(from, from + PAGE - 1);
@@ -168,6 +167,7 @@ Deno.serve(async (req) => {
 
   // 4. Build phone/email indexes
   const byPhone11 = new Map<string, ContactRow>();
+  const byPhoneBR = new Map<string, ContactRow>(); // phone_normalized (canonical BR)
   const byEmail = new Map<string, ContactRow>();
   for (const c of allContacts) {
     const p = normalizePhone(c.phone);
@@ -175,6 +175,7 @@ Deno.serve(async (req) => {
       const key = last11(p);
       if (!byPhone11.has(key)) byPhone11.set(key, c);
     }
+    if (c.phone_normalized && !byPhoneBR.has(c.phone_normalized)) byPhoneBR.set(c.phone_normalized, c);
     const e = normalizeEmail(c.email);
     if (e && !byEmail.has(e)) byEmail.set(e, c);
   }
@@ -182,7 +183,7 @@ Deno.serve(async (req) => {
   // 5. Classify
   type Plan =
     | { branch: 'A'; row: CsvRow }
-    | { branch: 'B'; row: CsvRow; contact: ContactRow; via: 'phone' | 'email' }
+    | { branch: 'B'; row: CsvRow; contact: ContactRow; via: 'phone' | 'email' | 'phone_br' }
     | { branch: 'C'; row: CsvRow; contact: ContactRow }
     | { branch: 'D'; row: CsvRow; contact: ContactRow; existing_external_id: string };
 
@@ -191,9 +192,12 @@ Deno.serve(async (req) => {
   for (const row of csv) {
     const phone = normalizePhone(row.telefone);
     const email = normalizeEmail(row.email);
+    const phoneBR = normalizePhoneBR(row.telefone);
     let match: ContactRow | undefined;
-    let via: 'phone' | 'email' | undefined;
+    let via: 'phone' | 'email' | 'phone_br' | undefined;
     if (phone.length >= 10) { match = byPhone11.get(last11(phone)); if (match) via = 'phone'; }
+    if (!match && phoneBR) { match = byPhoneBR.get(phoneBR); if (match) via = 'phone_br'; }
+    if (!match && email) { match = byEmail.get(email); if (match) via = 'email'; }
     if (!match && email) { match = byEmail.get(email); if (match) via = 'email'; }
 
     if (row.ad_id && !mcByAd.has(row.ad_id)) adsNotMapped.add(row.ad_id);
