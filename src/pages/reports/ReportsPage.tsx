@@ -157,8 +157,6 @@ export default function ReportsPage() {
       const baseSelect =
         'id, title, amount, status, pipeline_stage_id, owner_user_id, created_at, updated_at, close_date';
 
-        'id, amount, status, pipeline_stage_id, owner_user_id, created_at, updated_at, close_date';
-
       const fmtDate = (d: Date) => {
         const y = d.getFullYear();
         const m = String(d.getMonth() + 1).padStart(2, '0');
@@ -172,7 +170,9 @@ export default function ReportsPage() {
       const fromDay = fmtDate(fromDate);
       const toDay = fmtDate(toDate);
       const prevFromDay = fmtDate(prevFrom);
-      // Current period: opps created within period OR closed (by close_date) within period
+      const prevToDay = fmtDate(prevTo);
+
+
       let q1 = supabase
         .from('opportunities')
         .select(baseSelect)
