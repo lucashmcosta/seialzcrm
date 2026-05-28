@@ -279,11 +279,13 @@ Deno.serve(async (req) => {
     applied.B_updated++;
 
     // CAPI best-effort
-    const capi = await fireCapiLead(pl.contact.id);
-    if (capi.ok) applied.capi_sent++;
-    else {
-      applied.capi_failed++;
-      if (applied.capi_errors_sample.length < 5) applied.capi_errors_sample.push({ branch: 'B', lead_id: pl.row.lead_id, error: capi.err });
+    if (!skipCapi) {
+      const capi = await fireCapiLead(pl.contact.id);
+      if (capi.ok) applied.capi_sent++;
+      else {
+        applied.capi_failed++;
+        if (applied.capi_errors_sample.length < 5) applied.capi_errors_sample.push({ branch: 'B', lead_id: pl.row.lead_id, error: capi.err });
+      }
     }
   }
 
