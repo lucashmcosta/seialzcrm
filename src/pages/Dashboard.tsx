@@ -21,10 +21,12 @@ import { cn } from '@/lib/utils';
 
 interface OppRow {
   id: string;
+  name: string | null;
   status: string;
   created_at: string;
   updated_at: string;
   close_date: string | null;
+  value: number | null;
 }
 
 /** Parse YYYY-MM-DD as LOCAL midnight (close_date is a DATE column). */
