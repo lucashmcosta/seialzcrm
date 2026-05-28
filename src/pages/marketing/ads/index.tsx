@@ -232,7 +232,7 @@ export default function MarketingAds() {
               </thead>
               <tbody>
                 {grouped.groups.map(group => (
-                  <>
+                  <Fragment key={`grp-${group.name}`}>
                     <tr key={`hdr-${group.name}`} className="bg-muted/20 border-b border-border">
                       <td colSpan={12} className="py-1.5 px-3 text-[11px] uppercase tracking-wide text-muted-foreground font-medium">
                         Adset: <span className="text-foreground">{group.name}</span>
