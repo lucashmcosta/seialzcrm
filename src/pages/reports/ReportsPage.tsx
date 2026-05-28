@@ -49,6 +49,7 @@ const parseLocalDate = (s: string | null | undefined): Date | null => {
 
 interface Opp {
   id: string;
+  title?: string | null;
   amount: number | null;
   status: string;
   pipeline_stage_id: string | null;
@@ -57,6 +58,7 @@ interface Opp {
   updated_at: string;
   close_date: string | null;
 }
+
 
 interface Stage {
   id: string;
