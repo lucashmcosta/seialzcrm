@@ -16,6 +16,7 @@ import { computeRange, type PeriodPreset, type CustomRange } from '@/lib/report-
 import { DashboardTrendChart } from '@/components/reports/DashboardTrendChart';
 import { DashboardStatusDonut } from '@/components/reports/DashboardStatusDonut';
 import { usePersistedFilters } from '@/hooks/usePersistedFilters';
+import { usePermissions } from '@/hooks/usePermissions';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 
 import { cn } from '@/lib/utils';
@@ -39,13 +40,14 @@ const parseLocalDate = (s: string | null | undefined): Date | null => {
 
 const toDayStr = (d: Date) =>
   `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
-
 export default function Dashboard() {
   const { organization, userProfile, locale, loading: orgLoading, error } = useOrganization();
   const { user, signOut } = useAuth();
   const { t } = useTranslation(locale as 'pt-BR' | 'en-US');
   const navigate = useNavigate();
   const isMobile = useIsMobile();
+  const { permissions } = usePermissions();
+  const canViewAll = !!permissions?.viewAllOpportunities;
 
   const [preset, setPreset] = usePersistedFilters<PeriodPreset>('dashboard.preset', 'today');
   const [customRange, setCustomRange] = usePersistedFilters<CustomRange | undefined>(
@@ -59,10 +61,12 @@ export default function Dashboard() {
       };
     },
   );
+  const [ownerId, setOwnerId] = usePersistedFilters<string>('dashboard.ownerId', 'all');
 
   const [enteredCount, setEnteredCount] = useState(0);
   const [closedCount, setClosedCount] = useState(0);
   const [opps, setOpps] = useState<OppRow[]>([]);
+  const [users, setUsers] = useState<{ id: string; full_name: string }[]>([]);
   const [loading, setLoading] = useState(true);
   const [detail, setDetail] = useState<null | 'entered' | 'closed'>(null);
 
@@ -79,7 +83,29 @@ export default function Dashboard() {
       fetchStats();
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [organization?.id, userProfile?.id, from.getTime(), to.getTime()]);
+  }, [organization?.id, userProfile?.id, from.getTime(), to.getTime(), canViewAll, ownerId]);
+
+  useEffect(() => {
+    if (!organization || !canViewAll) {
+      setUsers([]);
+      return;
+    }
+    (async () => {
+      const { data } = await supabase
+        .from('user_organizations')
+        .select('user_id, users(id, full_name)')
+        .eq('organization_id', organization.id)
+        .eq('is_active', true);
+      if (data) {
+        setUsers(
+          data
+            .filter((r: any) => r.users)
+            .map((r: any) => ({ id: r.users.id, full_name: r.users.full_name }))
+            .sort((a, b) => a.full_name.localeCompare(b.full_name)),
+        );
+      }
+    })();
+  }, [organization?.id, canViewAll]);
 
   if (isMobile) {
     if (orgLoading) {
@@ -170,12 +196,21 @@ export default function Dashboard() {
       const toDay = toDayStr(to);
 
       // Single query: rows created in period OR won-and-closed (by close_date) in period
-      const { data, error } = await supabase
+      let query = supabase
         .from('opportunities')
         .select('id, title, status, created_at, updated_at, close_date, amount')
         .eq('organization_id', organization.id)
-        .eq('owner_user_id', userProfile.id)
-        .is('deleted_at', null)
+        .is('deleted_at', null);
+
+      // Owner scoping: admins (viewAllOpportunities) can pick a user or 'all'.
+      // Everyone else is limited to their own opportunities.
+      if (!canViewAll) {
+        query = query.eq('owner_user_id', userProfile.id);
+      } else if (ownerId && ownerId !== 'all') {
+        query = query.eq('owner_user_id', ownerId);
+      }
+
+      const { data, error } = await query
         .or(
           `and(created_at.gte.${fromIso},created_at.lte.${toIso}),and(status.eq.won,close_date.gte.${fromDay},close_date.lte.${toDay})`,
         )
@@ -282,7 +317,10 @@ export default function Dashboard() {
             onPresetChange={setPreset}
             customRange={customRange}
             onCustomRangeChange={setCustomRange}
-            showOwner={false}
+            ownerId={canViewAll ? ownerId : undefined}
+            onOwnerChange={canViewAll ? setOwnerId : undefined}
+            users={users}
+            showOwner={canViewAll}
           />
 
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
