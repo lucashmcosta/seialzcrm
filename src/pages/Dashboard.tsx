@@ -46,10 +46,7 @@ const toDayStr = (d: Date) =>
   const { t } = useTranslation(locale as 'pt-BR' | 'en-US');
   const navigate = useNavigate();
   const isMobile = useIsMobile();
-  const { permissions } = (() => {
-    const p = usePermissions();
-    return { permissions: p.permissions };
-  })();
+  const { permissions } = usePermissions();
   const canViewAll = !!permissions?.viewAllOpportunities;
 
   const [preset, setPreset] = usePersistedFilters<PeriodPreset>('dashboard.preset', 'today');
