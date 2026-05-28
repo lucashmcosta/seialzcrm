@@ -111,13 +111,65 @@ Deno.serve(async (req) => {
   let body: any = {};
   try { body = await req.json(); } catch { /* ok */ }
 
-  const mode: 'dry_run' | 'apply' = body?.mode === 'apply' ? 'apply' : 'dry_run';
+  const mode: 'dry_run' | 'apply' | 'capi_only' =
+    body?.mode === 'apply' ? 'apply' : body?.mode === 'capi_only' ? 'capi_only' : 'dry_run';
   const skipCapi: boolean = body?.skip_capi === true;
-  if (mode === 'apply' && body?.confirm_token !== CONFIRM_TOKEN) {
-    return new Response(JSON.stringify({ error: `apply mode requires confirm_token="${CONFIRM_TOKEN}"` }), {
+  if ((mode === 'apply' || mode === 'capi_only') && body?.confirm_token !== CONFIRM_TOKEN) {
+    return new Response(JSON.stringify({ error: `apply/capi_only mode requires confirm_token="${CONFIRM_TOKEN}"` }), {
       status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' },
     });
   }
+
+  // capi_only short-circuit: send Lead event for backfill contacts missing a successful CAPI Lead
+  if (mode === 'capi_only') {
+    const batchSize = Math.max(1, Math.min(20, Number(body?.batch_size) || 8));
+    const limit = Math.max(1, Math.min(200, Number(body?.limit) || 50));
+    // Find pending contacts
+    const { data: pending, error: pErr } = await supabase.rpc('exec_sql' as any, {}).then(() => ({ data: null as any, error: 'fallback' as any })).catch(() => ({ data: null, error: null }));
+    // Fallback: query directly via two-step (no RPC available). Use staging join.
+    const { data: csvLeads, error: csvErr } = await supabase
+      .from('viagi_csv_staging_2026_05_28')
+      .select('lead_id')
+      .limit(2000);
+    if (csvErr) return jsonErr('csv list: ' + csvErr.message);
+    const leadIds = (csvLeads || []).map((r: any) => r.lead_id);
+    const contactIds = new Set<string>();
+    for (let i = 0; i < leadIds.length; i += 500) {
+      const { data, error } = await supabase
+        .from('contacts').select('id')
+        .eq('organization_id', ORG_ID).is('deleted_at', null)
+        .in('source_external_id', leadIds.slice(i, i + 500));
+      if (error) return jsonErr('contacts lookup: ' + error.message);
+      for (const r of data || []) contactIds.add(r.id as string);
+    }
+    // Filter out those that already have a sent Lead
+    const allIds = Array.from(contactIds);
+    const sentSet = new Set<string>();
+    for (let i = 0; i < allIds.length; i += 500) {
+      const { data, error } = await supabase
+        .from('capi_event_log').select('contact_id')
+        .eq('organization_id', ORG_ID).eq('event_name', 'Lead').eq('status', 'sent')
+        .in('contact_id', allIds.slice(i, i + 500));
+      if (error) return jsonErr('capi log lookup: ' + error.message);
+      for (const r of data || []) if (r.contact_id) sentSet.add(r.contact_id as string);
+    }
+    const pendingIds = allIds.filter((id) => !sentSet.has(id)).slice(0, limit);
+
+    const result = { pending_total: allIds.length - sentSet.size, processed: pendingIds.length, sent: 0, failed: 0, errors_sample: [] as any[] };
+    for (let i = 0; i < pendingIds.length; i += batchSize) {
+      const batch = pendingIds.slice(i, i + batchSize);
+      const results = await Promise.all(batch.map((cid) => fireCapiLead(cid)));
+      for (let j = 0; j < results.length; j++) {
+        if (results[j].ok) result.sent++;
+        else {
+          result.failed++;
+          if (result.errors_sample.length < 5) result.errors_sample.push({ contact_id: batch[j], error: results[j].err });
+        }
+      }
+    }
+    return jsonOk({ mode, organization_id: ORG_ID, result });
+  }
+
 
   // 1. Load CSV staging (paginate; default Supabase cap is 1000)
   const csv: CsvRow[] = [];
