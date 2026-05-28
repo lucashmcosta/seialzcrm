@@ -246,17 +246,54 @@ Deno.serve(async (req) => {
     return jsonOk({ mode, organization_id: ORG_ID, totals, sample_branch_B: sampleB, sample_branch_A: sampleA, sample_branch_D: sampleD });
   }
 
-  // 7. APPLY
+  // 7. APPLY — bulk strategy to avoid per-row round trips
   const applied = {
     B_updated: 0, A_contacts_created: 0, A_opps_created: 0, D_skipped: sampleD.length,
     capi_sent: 0, capi_failed: 0, capi_errors_sample: [] as any[],
     errors: [] as any[],
   };
 
-  // Branch B: per-row UPDATE (safety: only if source_external_id still null)
+  // Pre-check: which CSV lead_ids already have a contact (idempotency for re-runs)
+  const allLeadIds = csv.map((r) => r.lead_id);
+  const existingByLeadId = new Map<string, string>(); // lead_id -> contact_id
+  const CHUNK = 500;
+  for (let i = 0; i < allLeadIds.length; i += CHUNK) {
+    const chunk = allLeadIds.slice(i, i + CHUNK);
+    const { data, error } = await supabase
+      .from('contacts')
+      .select('id,source_external_id')
+      .eq('organization_id', ORG_ID)
+      .is('deleted_at', null)
+      .in('source_external_id', chunk);
+    if (error) return jsonErr('precheck contacts: ' + error.message);
+    for (const row of data || []) {
+      if (row.source_external_id) existingByLeadId.set(row.source_external_id as string, row.id as string);
+    }
+  }
+  const existingOppByLeadId = new Map<string, string>();
+  for (let i = 0; i < allLeadIds.length; i += CHUNK) {
+    const chunk = allLeadIds.slice(i, i + CHUNK);
+    const { data, error } = await supabase
+      .from('opportunities')
+      .select('id,source_external_id')
+      .eq('organization_id', ORG_ID)
+      .is('deleted_at', null)
+      .in('source_external_id', chunk);
+    if (error) return jsonErr('precheck opps: ' + error.message);
+    for (const row of data || []) {
+      if (row.source_external_id) existingOppByLeadId.set(row.source_external_id as string, row.id as string);
+    }
+  }
+
+  // Branch B — bulk per row (UPDATE can't be batched cleanly without RPC). Still small (20 rows).
+  const bToCapi: string[] = [];
   for (const p of plans) {
     if (p.branch !== 'B') continue;
     const pl = p as Extract<Plan, { branch: 'B' }>;
+    if (existingByLeadId.has(pl.row.lead_id)) {
+      // Already attributed by prior partial run — skip update
+      continue;
+    }
     const mc = pl.row.ad_id ? mcByAd.get(pl.row.ad_id) : undefined;
     const newPath = appendPath(pl.contact.attribution_path, 'meta_lead_ads');
     const update: any = {
@@ -277,105 +314,96 @@ Deno.serve(async (req) => {
       .is('source_external_id', null);
     if (error) { applied.errors.push({ branch: 'B', lead_id: pl.row.lead_id, error: error.message }); continue; }
     applied.B_updated++;
-
-    // CAPI best-effort
-    if (!skipCapi) {
-      const capi = await fireCapiLead(pl.contact.id);
-      if (capi.ok) applied.capi_sent++;
-      else {
-        applied.capi_failed++;
-        if (applied.capi_errors_sample.length < 5) applied.capi_errors_sample.push({ branch: 'B', lead_id: pl.row.lead_id, error: capi.err });
-      }
-    }
+    bToCapi.push(pl.contact.id);
   }
 
-  // Branch A: insert contact + opportunity (idempotent via source_external_id)
+  // Branch A — bulk INSERT contacts
+  const aToInsert: any[] = [];
+  const aPlansToInsert: Extract<Plan, { branch: 'A' }>[] = [];
   for (const p of plans) {
     if (p.branch !== 'A') continue;
     const pl = p as Extract<Plan, { branch: 'A' }>;
+    if (existingByLeadId.has(pl.row.lead_id)) continue;
     const mc = pl.row.ad_id ? mcByAd.get(pl.row.ad_id) : undefined;
     const fullName = buildFullName(pl.row.nome, pl.row.telefone);
+    aToInsert.push({
+      organization_id: ORG_ID,
+      owner_user_id: OWNER_USER_ID,
+      full_name: fullName,
+      phone: pl.row.telefone,
+      email: pl.row.email,
+      source: 'meta_lead_ads',
+      source_external_id: pl.row.lead_id,
+      marketing_campaign_id: mc?.id ?? null,
+      attribution_path: ['meta_lead_ads'],
+      ad_referral_source_id: pl.row.ad_id,
+      ad_referral_source_type: 'lead_form',
+      ad_referral_captured_at: pl.row.created_time,
+      utm_source: 'facebook',
+      utm_medium: 'paid_social',
+      utm_campaign: pl.row.campaign_name || mc?.campaign_name || null,
+      created_at: pl.row.created_time || undefined,
+    });
+    aPlansToInsert.push(pl);
+  }
 
-    const { data: existing, error: exErr } = await supabase
-      .from('contacts')
-      .select('id')
-      .eq('organization_id', ORG_ID)
-      .eq('source_external_id', pl.row.lead_id)
-      .is('deleted_at', null)
-      .maybeSingle();
-    if (exErr) { applied.errors.push({ branch: 'A', lead_id: pl.row.lead_id, error: exErr.message }); continue; }
-
-    let contactId = existing?.id;
-    let createdNow = false;
-    if (!contactId) {
-      const { data: ins, error: insErr } = await supabase
-        .from('contacts')
-        .insert({
-          organization_id: ORG_ID,
-          owner_user_id: OWNER_USER_ID,
-          full_name: fullName,
-          phone: pl.row.telefone,
-          email: pl.row.email,
-          source: 'meta_lead_ads',
-          source_external_id: pl.row.lead_id,
-          marketing_campaign_id: mc?.id ?? null,
-          attribution_path: ['meta_lead_ads'],
-          ad_referral_source_id: pl.row.ad_id,
-          ad_referral_source_type: 'lead_form',
-          ad_referral_captured_at: pl.row.created_time,
-          utm_source: 'facebook',
-          utm_medium: 'paid_social',
-          utm_campaign: pl.row.campaign_name || mc?.campaign_name || null,
-          created_at: pl.row.created_time || undefined,
-        })
-        .select('id')
-        .single();
-      if (insErr) { applied.errors.push({ branch: 'A', lead_id: pl.row.lead_id, error: insErr.message }); continue; }
-      contactId = ins!.id;
-      applied.A_contacts_created++;
-      createdNow = true;
+  const insertedContactIdByLeadId = new Map<string, string>();
+  const INS_CHUNK = 100;
+  for (let i = 0; i < aToInsert.length; i += INS_CHUNK) {
+    const batch = aToInsert.slice(i, i + INS_CHUNK);
+    const { data, error } = await supabase.from('contacts').insert(batch).select('id,source_external_id');
+    if (error) { applied.errors.push({ stage: 'A_contacts_batch', batch_start: i, error: error.message }); continue; }
+    applied.A_contacts_created += (data || []).length;
+    for (const row of data || []) {
+      if (row.source_external_id) insertedContactIdByLeadId.set(row.source_external_id as string, row.id as string);
     }
+  }
 
-    const { data: existingOpp, error: opChkErr } = await supabase
-      .from('opportunities')
-      .select('id')
-      .eq('organization_id', ORG_ID)
-      .eq('source_external_id', pl.row.lead_id)
-      .is('deleted_at', null)
-      .maybeSingle();
-    if (opChkErr) { applied.errors.push({ branch: 'A_opp_check', lead_id: pl.row.lead_id, error: opChkErr.message }); continue; }
-    if (!existingOpp?.id) {
-      const { error: opInsErr } = await supabase
-        .from('opportunities')
-        .insert({
-          organization_id: ORG_ID,
-          contact_id: contactId,
-          owner_user_id: OWNER_USER_ID,
-          title: fullName,
-          pipeline_stage_id: LEAD_STAGE_ID,
-          status: 'open',
-          source: 'meta_lead_ads',
-          source_external_id: pl.row.lead_id,
-          marketing_campaign_id: mc?.id ?? null,
-          utm_source: 'facebook',
-          utm_medium: 'paid_social',
-          utm_campaign: pl.row.campaign_name || mc?.campaign_name || null,
-          created_at: pl.row.created_time || undefined,
-        });
-      if (opInsErr) { applied.errors.push({ branch: 'A_opp', lead_id: pl.row.lead_id, error: opInsErr.message }); }
-      else applied.A_opps_created++;
-    }
+  // Branch A — bulk INSERT opportunities
+  const oppsToInsert: any[] = [];
+  for (const pl of aPlansToInsert) {
+    const contactId = insertedContactIdByLeadId.get(pl.row.lead_id);
+    if (!contactId) continue;
+    if (existingOppByLeadId.has(pl.row.lead_id)) continue;
+    const mc = pl.row.ad_id ? mcByAd.get(pl.row.ad_id) : undefined;
+    const fullName = buildFullName(pl.row.nome, pl.row.telefone);
+    oppsToInsert.push({
+      organization_id: ORG_ID,
+      contact_id: contactId,
+      owner_user_id: OWNER_USER_ID,
+      title: fullName,
+      pipeline_stage_id: LEAD_STAGE_ID,
+      status: 'open',
+      source: 'meta_lead_ads',
+      source_external_id: pl.row.lead_id,
+      marketing_campaign_id: mc?.id ?? null,
+      utm_source: 'facebook',
+      utm_medium: 'paid_social',
+      utm_campaign: pl.row.campaign_name || mc?.campaign_name || null,
+      created_at: pl.row.created_time || undefined,
+    });
+  }
+  for (let i = 0; i < oppsToInsert.length; i += INS_CHUNK) {
+    const batch = oppsToInsert.slice(i, i + INS_CHUNK);
+    const { data, error } = await supabase.from('opportunities').insert(batch).select('id');
+    if (error) { applied.errors.push({ stage: 'A_opps_batch', batch_start: i, error: error.message }); continue; }
+    applied.A_opps_created += (data || []).length;
+  }
 
-    // CAPI best-effort (apenas para contatos recém-criados)
-    if (createdNow && !skipCapi) {
-      const capi = await fireCapiLead(contactId!);
+  // CAPI best-effort — separate phase, sequential (slow but isolated)
+  if (!skipCapi) {
+    const capiTargets = [...bToCapi, ...Array.from(insertedContactIdByLeadId.values())];
+    for (const cid of capiTargets) {
+      const capi = await fireCapiLead(cid);
       if (capi.ok) applied.capi_sent++;
       else {
         applied.capi_failed++;
-        if (applied.capi_errors_sample.length < 5) applied.capi_errors_sample.push({ branch: 'A', lead_id: pl.row.lead_id, error: capi.err });
+        if (applied.capi_errors_sample.length < 5) applied.capi_errors_sample.push({ contact_id: cid, error: capi.err });
       }
     }
   }
+
+  return jsonOk({ mode, organization_id: ORG_ID, totals, applied, sample_branch_D: sampleD });
 
   return jsonOk({ mode, organization_id: ORG_ID, totals, applied, sample_branch_D: sampleD });
 });
