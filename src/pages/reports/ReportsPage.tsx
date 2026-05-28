@@ -635,6 +635,93 @@ export default function ReportsPage() {
             )}
         </div>
       </div>
+
+      <Dialog open={detail !== null} onOpenChange={(o) => !o && setDetail(null)}>
+        <DialogContent className="max-w-2xl max-h-[80vh] overflow-hidden flex flex-col">
+          <DialogHeader>
+            <DialogTitle>
+              {detail === 'won' && 'Oportunidades ganhas'}
+              {detail === 'lost' && 'Oportunidades perdidas'}
+              {detail === 'created' && 'Oportunidades criadas'}
+              {' — '}
+              {(() => {
+                if (!detail) return 0;
+                const fromDate = range.from;
+                const toDate = range.to;
+                if (detail === 'created') {
+                  return currentOpps.filter((o) => {
+                    const t = new Date(o.created_at);
+                    return t >= fromDate && t <= toDate;
+                  }).length;
+                }
+                return currentOpps.filter((o) => {
+                  if (o.status !== detail) return false;
+                  const t = parseLocalDate(o.close_date);
+                  return !!t && t >= fromDate && t <= toDate;
+                }).length;
+              })()}
+            </DialogTitle>
+          </DialogHeader>
+          <div className="overflow-auto -mx-6 px-6">
+            {(() => {
+              if (!detail) return null;
+              const fromDate = range.from;
+              const toDate = range.to;
+              const rows =
+                detail === 'created'
+                  ? currentOpps.filter((o) => {
+                      const t = new Date(o.created_at);
+                      return t >= fromDate && t <= toDate;
+                    })
+                  : currentOpps.filter((o) => {
+                      if (o.status !== detail) return false;
+                      const t = parseLocalDate(o.close_date);
+                      return !!t && t >= fromDate && t <= toDate;
+                    });
+              if (rows.length === 0) {
+                return (
+                  <p className="text-sm text-muted-foreground py-6 text-center">
+                    Sem oportunidades no período.
+                  </p>
+                );
+              }
+              return (
+                <ul className="divide-y divide-border">
+                  {rows.map((o) => {
+                    const dateLabel =
+                      detail === 'created'
+                        ? `Criada em ${new Date(o.created_at).toLocaleDateString(locale)}`
+                        : `Fechada em ${parseLocalDate(o.close_date)?.toLocaleDateString(locale) ?? '—'}`;
+                    return (
+                      <li key={o.id}>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setDetail(null);
+                            navigate(`/opportunities/${o.id}`);
+                          }}
+                          className="w-full flex items-center justify-between gap-4 py-3 text-left hover:bg-muted/50 px-2 rounded transition"
+                        >
+                          <div className="min-w-0 flex-1">
+                            <p className="text-sm font-medium text-foreground truncate">
+                              {o.title || '(sem título)'}
+                            </p>
+                            <p className="text-xs text-muted-foreground mt-0.5">{dateLabel}</p>
+                          </div>
+                          <span className="text-sm font-mono text-muted-foreground flex-shrink-0">
+                            {formatCurrency(Number(o.amount) || 0)}
+                          </span>
+                        </button>
+                      </li>
+                    );
+                  })}
+                </ul>
+              );
+            })()}
+          </div>
+        </DialogContent>
+      </Dialog>
     </Layout>
+
   );
 }
