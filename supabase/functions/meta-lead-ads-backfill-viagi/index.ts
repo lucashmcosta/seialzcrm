@@ -246,9 +246,13 @@ Deno.serve(async (req) => {
   }
 
   // 7. APPLY
-  const applied = { B_updated: 0, A_contacts_created: 0, A_opps_created: 0, D_skipped: sampleD.length, errors: [] as any[] };
+  const applied = {
+    B_updated: 0, A_contacts_created: 0, A_opps_created: 0, D_skipped: sampleD.length,
+    capi_sent: 0, capi_failed: 0, capi_errors_sample: [] as any[],
+    errors: [] as any[],
+  };
 
-  // Branch B: per-row UPDATE (re-check inside transaction would be ideal; here we use the snapshot)
+  // Branch B: per-row UPDATE (safety: only if source_external_id still null)
   for (const p of plans) {
     if (p.branch !== 'B') continue;
     const pl = p as Extract<Plan, { branch: 'B' }>;
@@ -269,19 +273,26 @@ Deno.serve(async (req) => {
       .from('contacts')
       .update(update)
       .eq('id', pl.contact.id)
-      .is('source_external_id', null); // safety: only if still null
-    if (error) applied.errors.push({ branch: 'B', lead_id: pl.row.lead_id, error: error.message });
-    else applied.B_updated++;
+      .is('source_external_id', null);
+    if (error) { applied.errors.push({ branch: 'B', lead_id: pl.row.lead_id, error: error.message }); continue; }
+    applied.B_updated++;
+
+    // CAPI best-effort
+    const capi = await fireCapiLead(pl.contact.id);
+    if (capi.ok) applied.capi_sent++;
+    else {
+      applied.capi_failed++;
+      if (applied.capi_errors_sample.length < 5) applied.capi_errors_sample.push({ branch: 'B', lead_id: pl.row.lead_id, error: capi.err });
+    }
   }
 
-  // Branch A: insert contact then opportunity. Re-check inside via source_external_id idempotency.
+  // Branch A: insert contact + opportunity (idempotent via source_external_id)
   for (const p of plans) {
     if (p.branch !== 'A') continue;
     const pl = p as Extract<Plan, { branch: 'A' }>;
     const mc = pl.row.ad_id ? mcByAd.get(pl.row.ad_id) : undefined;
     const fullName = buildFullName(pl.row.nome, pl.row.telefone);
 
-    // Idempotency check: is there already a contact with this source_external_id?
     const { data: existing, error: exErr } = await supabase
       .from('contacts')
       .select('id')
@@ -292,11 +303,13 @@ Deno.serve(async (req) => {
     if (exErr) { applied.errors.push({ branch: 'A', lead_id: pl.row.lead_id, error: exErr.message }); continue; }
 
     let contactId = existing?.id;
+    let createdNow = false;
     if (!contactId) {
       const { data: ins, error: insErr } = await supabase
         .from('contacts')
         .insert({
           organization_id: ORG_ID,
+          owner_user_id: OWNER_USER_ID,
           full_name: fullName,
           phone: pl.row.telefone,
           email: pl.row.email,
@@ -317,9 +330,9 @@ Deno.serve(async (req) => {
       if (insErr) { applied.errors.push({ branch: 'A', lead_id: pl.row.lead_id, error: insErr.message }); continue; }
       contactId = ins!.id;
       applied.A_contacts_created++;
+      createdNow = true;
     }
 
-    // Opportunity idempotency: check by source_external_id
     const { data: existingOpp, error: opChkErr } = await supabase
       .from('opportunities')
       .select('id')
@@ -328,29 +341,41 @@ Deno.serve(async (req) => {
       .is('deleted_at', null)
       .maybeSingle();
     if (opChkErr) { applied.errors.push({ branch: 'A_opp_check', lead_id: pl.row.lead_id, error: opChkErr.message }); continue; }
-    if (existingOpp?.id) continue;
+    if (!existingOpp?.id) {
+      const { error: opInsErr } = await supabase
+        .from('opportunities')
+        .insert({
+          organization_id: ORG_ID,
+          contact_id: contactId,
+          owner_user_id: OWNER_USER_ID,
+          title: fullName,
+          pipeline_stage_id: LEAD_STAGE_ID,
+          status: 'open',
+          source: 'meta_lead_ads',
+          source_external_id: pl.row.lead_id,
+          marketing_campaign_id: mc?.id ?? null,
+          utm_source: 'facebook',
+          utm_medium: 'paid_social',
+          utm_campaign: pl.row.campaign_name || mc?.campaign_name || null,
+          created_at: pl.row.created_time || undefined,
+        });
+      if (opInsErr) { applied.errors.push({ branch: 'A_opp', lead_id: pl.row.lead_id, error: opInsErr.message }); }
+      else applied.A_opps_created++;
+    }
 
-    const { error: opInsErr } = await supabase
-      .from('opportunities')
-      .insert({
-        organization_id: ORG_ID,
-        contact_id: contactId,
-        title: fullName,
-        pipeline_stage_id: LEAD_STAGE_ID,
-        status: 'open',
-        source: 'meta_lead_ads',
-        source_external_id: pl.row.lead_id,
-        marketing_campaign_id: mc?.id ?? null,
-        utm_source: 'facebook',
-        utm_medium: 'paid_social',
-        utm_campaign: pl.row.campaign_name || mc?.campaign_name || null,
-        created_at: pl.row.created_time || undefined,
-      });
-    if (opInsErr) applied.errors.push({ branch: 'A_opp', lead_id: pl.row.lead_id, error: opInsErr.message });
-    else applied.A_opps_created++;
+    // CAPI best-effort (apenas para contatos recém-criados)
+    if (createdNow) {
+      const capi = await fireCapiLead(contactId!);
+      if (capi.ok) applied.capi_sent++;
+      else {
+        applied.capi_failed++;
+        if (applied.capi_errors_sample.length < 5) applied.capi_errors_sample.push({ branch: 'A', lead_id: pl.row.lead_id, error: capi.err });
+      }
+    }
   }
 
   return jsonOk({ mode, organization_id: ORG_ID, totals, applied, sample_branch_D: sampleD });
+});
 });
 
 function jsonOk(payload: unknown) {
