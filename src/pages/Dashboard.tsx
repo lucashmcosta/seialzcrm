@@ -83,7 +83,29 @@ const toDayStr = (d: Date) =>
       fetchStats();
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [organization?.id, userProfile?.id, from.getTime(), to.getTime()]);
+  }, [organization?.id, userProfile?.id, from.getTime(), to.getTime(), canViewAll, ownerId]);
+
+  useEffect(() => {
+    if (!organization || !canViewAll) {
+      setUsers([]);
+      return;
+    }
+    (async () => {
+      const { data } = await supabase
+        .from('user_organizations')
+        .select('user_id, users(id, full_name)')
+        .eq('organization_id', organization.id)
+        .eq('is_active', true);
+      if (data) {
+        setUsers(
+          data
+            .filter((r: any) => r.users)
+            .map((r: any) => ({ id: r.users.id, full_name: r.users.full_name }))
+            .sort((a, b) => a.full_name.localeCompare(b.full_name)),
+        );
+      }
+    })();
+  }, [organization?.id, canViewAll]);
 
   if (isMobile) {
     if (orgLoading) {
