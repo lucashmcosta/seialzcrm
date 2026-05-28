@@ -188,6 +188,4 @@ export default function AdDrilldown() {
       </div>
     </MarketingLayout>
   );
-    </MarketingLayout>
-  );
 }
