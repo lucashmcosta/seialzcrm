@@ -206,8 +206,6 @@ export default function ReportsPage() {
         .limit(50000);
       if (ownerEq) q3 = q3.eq('owner_user_id', ownerEq);
 
-        .is('deleted_at', null);
-      if (ownerEq) q3 = q3.eq('owner_user_id', ownerEq);
 
 
       const [r1, r2, r3] = await Promise.all([q1, q2, q3]);
