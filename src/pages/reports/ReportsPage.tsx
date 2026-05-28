@@ -101,6 +101,8 @@ export default function ReportsPage() {
   const [openOpps, setOpenOpps] = useState<Opp[]>([]);
   const [loading, setLoading] = useState(true);
   const [selectedUser, setSelectedUser] = useState<UserStats | null>(null);
+  const [detail, setDetail] = useState<null | 'won' | 'lost' | 'created'>(null);
+
 
   useEffect(() => {
     if (!organization) return;
