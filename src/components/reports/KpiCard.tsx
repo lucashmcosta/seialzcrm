@@ -11,7 +11,9 @@ interface KpiCardProps {
   accent?: 'primary' | 'success' | 'destructive' | 'warning';
   loading?: boolean;
   mono?: boolean;
+  onClick?: () => void;
 }
+
 
 const accentColor = {
   primary: 'text-primary',
