@@ -124,9 +124,7 @@ Deno.serve(async (req) => {
   if (mode === 'capi_only') {
     const batchSize = Math.max(1, Math.min(20, Number(body?.batch_size) || 8));
     const limit = Math.max(1, Math.min(200, Number(body?.limit) || 50));
-    // Find pending contacts
-    const { data: pending, error: pErr } = await supabase.rpc('exec_sql' as any, {}).then(() => ({ data: null as any, error: 'fallback' as any })).catch(() => ({ data: null, error: null }));
-    // Fallback: query directly via two-step (no RPC available). Use staging join.
+    // Find pending contacts: backfill contacts (from CSV) that don't have a successful Lead event
     const { data: csvLeads, error: csvErr } = await supabase
       .from('viagi_csv_staging_2026_05_28')
       .select('lead_id')
