@@ -317,7 +317,10 @@ const toDayStr = (d: Date) =>
             onPresetChange={setPreset}
             customRange={customRange}
             onCustomRangeChange={setCustomRange}
-            showOwner={false}
+            ownerId={canViewAll ? ownerId : undefined}
+            onOwnerChange={canViewAll ? setOwnerId : undefined}
+            users={users}
+            showOwner={canViewAll}
           />
 
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
