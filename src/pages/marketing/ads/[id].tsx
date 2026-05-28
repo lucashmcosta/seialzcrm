@@ -33,7 +33,7 @@ export default function AdDrilldown() {
   const insights = useAdDailyInsights(id, 30);
   const [statusFilter, setStatusFilter] = useState('all');
   const [search, setSearch] = useState('');
-  const leads = useAdLeads(id, { status: statusFilter, search, limit: 200 });
+  const opps = useAdOpportunities(id, { status: statusFilter, search, limit: 500 });
 
   const a = ad.data;
 
