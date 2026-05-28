@@ -12,7 +12,28 @@ const SERVICE_ROLE = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
 
 const ORG_ID = 'b246ef6f-6242-4011-a112-6d8783d2896a';
 const LEAD_STAGE_ID = 'b4f5fce5-cefa-4770-a928-298b72c22562'; // "Novo"
+const OWNER_USER_ID = '95697f6c-0b0e-4b04-95ac-118d140d3c1b'; // Ketlyn Vieira
 const CONFIRM_TOKEN = 'VIAGI_2026_05_28';
+
+async function fireCapiLead(contactId: string): Promise<{ ok: boolean; err?: string }> {
+  try {
+    const res = await fetch(`${SUPABASE_URL}/functions/v1/meta-capi-send-event`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${SERVICE_ROLE}`,
+      },
+      body: JSON.stringify({ organization_id: ORG_ID, event_name: 'Lead', contact_id: contactId }),
+    });
+    if (!res.ok) {
+      const t = await res.text().catch(() => '');
+      return { ok: false, err: `HTTP ${res.status}: ${t.slice(0, 200)}` };
+    }
+    return { ok: true };
+  } catch (e) {
+    return { ok: false, err: String(e).slice(0, 200) };
+  }
+}
 
 type CsvRow = {
   lead_id: string;
@@ -33,6 +54,7 @@ type CsvRow = {
 type ContactRow = {
   id: string;
   phone: string | null;
+  phone_normalized: string | null;
   email: string | null;
   source: string | null;
   source_external_id: string | null;
@@ -62,6 +84,24 @@ function buildFullName(nome: string | null, telefone: string | null): string {
   if (n) return n;
   const p = (telefone || '').trim();
   return p || 'Lead Meta';
+
+// Mirrors public.normalize_phone_br SQL function exactly
+function normalizePhoneBR(phoneInput: string | null | undefined): string | null {
+  if (!phoneInput || phoneInput.trim().length === 0) return null;
+  const digits = phoneInput.replace(/\D/g, '');
+  if (digits.length < 10) return digits;
+  let local: string;
+  if (digits.startsWith('55') && digits.length >= 12) {
+    local = digits.slice(2);
+  } else {
+    return digits;
+  }
+  if (local.length !== 10 && local.length !== 11) return digits;
+  const ddd = local.slice(0, 2);
+  const rest = local.slice(2);
+  if (local.length === 11 && rest[0] === '9') return '55' + local;
+  if (local.length === 10) return '55' + ddd + '9' + rest;
+  return '55' + local;
 }
 
 Deno.serve(async (req) => {
@@ -72,6 +112,7 @@ Deno.serve(async (req) => {
   try { body = await req.json(); } catch { /* ok */ }
 
   const mode: 'dry_run' | 'apply' = body?.mode === 'apply' ? 'apply' : 'dry_run';
+  const skipCapi: boolean = body?.skip_capi === true;
   if (mode === 'apply' && body?.confirm_token !== CONFIRM_TOKEN) {
     return new Response(JSON.stringify({ error: `apply mode requires confirm_token="${CONFIRM_TOKEN}"` }), {
       status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' },
@@ -115,7 +156,7 @@ Deno.serve(async (req) => {
   for (let from = 0; ; from += PAGE) {
     const { data, error } = await supabase
       .from('contacts')
-      .select('id,phone,email,source,source_external_id,marketing_campaign_id,attribution_path')
+      .select('id,phone,phone_normalized,email,source,source_external_id,marketing_campaign_id,attribution_path')
       .eq('organization_id', ORG_ID)
       .is('deleted_at', null)
       .range(from, from + PAGE - 1);
@@ -127,6 +168,7 @@ Deno.serve(async (req) => {
 
   // 4. Build phone/email indexes
   const byPhone11 = new Map<string, ContactRow>();
+  const byPhoneBR = new Map<string, ContactRow>(); // phone_normalized (canonical BR)
   const byEmail = new Map<string, ContactRow>();
   for (const c of allContacts) {
     const p = normalizePhone(c.phone);
@@ -134,6 +176,7 @@ Deno.serve(async (req) => {
       const key = last11(p);
       if (!byPhone11.has(key)) byPhone11.set(key, c);
     }
+    if (c.phone_normalized && !byPhoneBR.has(c.phone_normalized)) byPhoneBR.set(c.phone_normalized, c);
     const e = normalizeEmail(c.email);
     if (e && !byEmail.has(e)) byEmail.set(e, c);
   }
@@ -141,7 +184,7 @@ Deno.serve(async (req) => {
   // 5. Classify
   type Plan =
     | { branch: 'A'; row: CsvRow }
-    | { branch: 'B'; row: CsvRow; contact: ContactRow; via: 'phone' | 'email' }
+    | { branch: 'B'; row: CsvRow; contact: ContactRow; via: 'phone' | 'email' | 'phone_br' }
     | { branch: 'C'; row: CsvRow; contact: ContactRow }
     | { branch: 'D'; row: CsvRow; contact: ContactRow; existing_external_id: string };
 
@@ -150,9 +193,11 @@ Deno.serve(async (req) => {
   for (const row of csv) {
     const phone = normalizePhone(row.telefone);
     const email = normalizeEmail(row.email);
+    const phoneBR = normalizePhoneBR(row.telefone);
     let match: ContactRow | undefined;
-    let via: 'phone' | 'email' | undefined;
+    let via: 'phone' | 'email' | 'phone_br' | undefined;
     if (phone.length >= 10) { match = byPhone11.get(last11(phone)); if (match) via = 'phone'; }
+    if (!match && phoneBR) { match = byPhoneBR.get(phoneBR); if (match) via = 'phone_br'; }
     if (!match && email) { match = byEmail.get(email); if (match) via = 'email'; }
 
     if (row.ad_id && !mcByAd.has(row.ad_id)) adsNotMapped.add(row.ad_id);
@@ -170,6 +215,7 @@ Deno.serve(async (req) => {
     branch_A_missing_contact: plans.filter((p) => p.branch === 'A').length,
     branch_B_attribution_upgrade: plans.filter((p) => p.branch === 'B').length,
     branch_B_via_phone: plans.filter((p) => p.branch === 'B' && (p as any).via === 'phone').length,
+    branch_B_via_phone_br: plans.filter((p) => p.branch === 'B' && (p as any).via === 'phone_br').length,
     branch_B_via_email: plans.filter((p) => p.branch === 'B' && (p as any).via === 'email').length,
     branch_C_already_attributed: plans.filter((p) => p.branch === 'C').length,
     branch_D_other_external_id: plans.filter((p) => p.branch === 'D').length,
@@ -224,13 +270,54 @@ Deno.serve(async (req) => {
     return jsonOk({ mode, organization_id: ORG_ID, totals, sample_branch_B: sampleB, sample_branch_A: sampleA, sample_branch_D: sampleD });
   }
 
-  // 7. APPLY
-  const applied = { B_updated: 0, A_contacts_created: 0, A_opps_created: 0, D_skipped: sampleD.length, errors: [] as any[] };
+  // 7. APPLY — bulk strategy to avoid per-row round trips
+  const applied = {
+    B_updated: 0, A_contacts_created: 0, A_opps_created: 0, D_skipped: sampleD.length,
+    capi_sent: 0, capi_failed: 0, capi_errors_sample: [] as any[],
+    errors: [] as any[],
+  };
 
-  // Branch B: per-row UPDATE (re-check inside transaction would be ideal; here we use the snapshot)
+  // Pre-check: which CSV lead_ids already have a contact (idempotency for re-runs)
+  const allLeadIds = csv.map((r) => r.lead_id);
+  const existingByLeadId = new Map<string, string>(); // lead_id -> contact_id
+  const CHUNK = 500;
+  for (let i = 0; i < allLeadIds.length; i += CHUNK) {
+    const chunk = allLeadIds.slice(i, i + CHUNK);
+    const { data, error } = await supabase
+      .from('contacts')
+      .select('id,source_external_id')
+      .eq('organization_id', ORG_ID)
+      .is('deleted_at', null)
+      .in('source_external_id', chunk);
+    if (error) return jsonErr('precheck contacts: ' + error.message);
+    for (const row of data || []) {
+      if (row.source_external_id) existingByLeadId.set(row.source_external_id as string, row.id as string);
+    }
+  }
+  const existingOppByLeadId = new Map<string, string>();
+  for (let i = 0; i < allLeadIds.length; i += CHUNK) {
+    const chunk = allLeadIds.slice(i, i + CHUNK);
+    const { data, error } = await supabase
+      .from('opportunities')
+      .select('id,source_external_id')
+      .eq('organization_id', ORG_ID)
+      .is('deleted_at', null)
+      .in('source_external_id', chunk);
+    if (error) return jsonErr('precheck opps: ' + error.message);
+    for (const row of data || []) {
+      if (row.source_external_id) existingOppByLeadId.set(row.source_external_id as string, row.id as string);
+    }
+  }
+
+  // Branch B — bulk per row (UPDATE can't be batched cleanly without RPC). Still small (20 rows).
+  const bToCapi: string[] = [];
   for (const p of plans) {
     if (p.branch !== 'B') continue;
     const pl = p as Extract<Plan, { branch: 'B' }>;
+    if (existingByLeadId.has(pl.row.lead_id)) {
+      // Already attributed by prior partial run — skip update
+      continue;
+    }
     const mc = pl.row.ad_id ? mcByAd.get(pl.row.ad_id) : undefined;
     const newPath = appendPath(pl.contact.attribution_path, 'meta_lead_ads');
     const update: any = {
@@ -248,85 +335,96 @@ Deno.serve(async (req) => {
       .from('contacts')
       .update(update)
       .eq('id', pl.contact.id)
-      .is('source_external_id', null); // safety: only if still null
-    if (error) applied.errors.push({ branch: 'B', lead_id: pl.row.lead_id, error: error.message });
-    else applied.B_updated++;
+      .is('source_external_id', null);
+    if (error) { applied.errors.push({ branch: 'B', lead_id: pl.row.lead_id, error: error.message }); continue; }
+    applied.B_updated++;
+    bToCapi.push(pl.contact.id);
   }
 
-  // Branch A: insert contact then opportunity. Re-check inside via source_external_id idempotency.
+  // Branch A — bulk INSERT contacts
+  const aToInsert: any[] = [];
+  const aPlansToInsert: Extract<Plan, { branch: 'A' }>[] = [];
   for (const p of plans) {
     if (p.branch !== 'A') continue;
     const pl = p as Extract<Plan, { branch: 'A' }>;
+    if (existingByLeadId.has(pl.row.lead_id)) continue;
     const mc = pl.row.ad_id ? mcByAd.get(pl.row.ad_id) : undefined;
     const fullName = buildFullName(pl.row.nome, pl.row.telefone);
+    aToInsert.push({
+      organization_id: ORG_ID,
+      owner_user_id: OWNER_USER_ID,
+      full_name: fullName,
+      phone: pl.row.telefone,
+      email: pl.row.email,
+      source: 'meta_lead_ads',
+      source_external_id: pl.row.lead_id,
+      marketing_campaign_id: mc?.id ?? null,
+      attribution_path: ['meta_lead_ads'],
+      ad_referral_source_id: pl.row.ad_id,
+      ad_referral_source_type: 'lead_form',
+      ad_referral_captured_at: pl.row.created_time,
+      utm_source: 'facebook',
+      utm_medium: 'paid_social',
+      utm_campaign: pl.row.campaign_name || mc?.campaign_name || null,
+      created_at: pl.row.created_time || undefined,
+    });
+    aPlansToInsert.push(pl);
+  }
 
-    // Idempotency check: is there already a contact with this source_external_id?
-    const { data: existing, error: exErr } = await supabase
-      .from('contacts')
-      .select('id')
-      .eq('organization_id', ORG_ID)
-      .eq('source_external_id', pl.row.lead_id)
-      .is('deleted_at', null)
-      .maybeSingle();
-    if (exErr) { applied.errors.push({ branch: 'A', lead_id: pl.row.lead_id, error: exErr.message }); continue; }
-
-    let contactId = existing?.id;
-    if (!contactId) {
-      const { data: ins, error: insErr } = await supabase
-        .from('contacts')
-        .insert({
-          organization_id: ORG_ID,
-          full_name: fullName,
-          phone: pl.row.telefone,
-          email: pl.row.email,
-          source: 'meta_lead_ads',
-          source_external_id: pl.row.lead_id,
-          marketing_campaign_id: mc?.id ?? null,
-          attribution_path: ['meta_lead_ads'],
-          ad_referral_source_id: pl.row.ad_id,
-          ad_referral_source_type: 'lead_form',
-          ad_referral_captured_at: pl.row.created_time,
-          utm_source: 'facebook',
-          utm_medium: 'paid_social',
-          utm_campaign: pl.row.campaign_name || mc?.campaign_name || null,
-          created_at: pl.row.created_time || undefined,
-        })
-        .select('id')
-        .single();
-      if (insErr) { applied.errors.push({ branch: 'A', lead_id: pl.row.lead_id, error: insErr.message }); continue; }
-      contactId = ins!.id;
-      applied.A_contacts_created++;
+  const insertedContactIdByLeadId = new Map<string, string>();
+  const INS_CHUNK = 100;
+  for (let i = 0; i < aToInsert.length; i += INS_CHUNK) {
+    const batch = aToInsert.slice(i, i + INS_CHUNK);
+    const { data, error } = await supabase.from('contacts').insert(batch).select('id,source_external_id');
+    if (error) { applied.errors.push({ stage: 'A_contacts_batch', batch_start: i, error: error.message }); continue; }
+    applied.A_contacts_created += (data || []).length;
+    for (const row of data || []) {
+      if (row.source_external_id) insertedContactIdByLeadId.set(row.source_external_id as string, row.id as string);
     }
+  }
 
-    // Opportunity idempotency: check by source_external_id
-    const { data: existingOpp, error: opChkErr } = await supabase
-      .from('opportunities')
-      .select('id')
-      .eq('organization_id', ORG_ID)
-      .eq('source_external_id', pl.row.lead_id)
-      .is('deleted_at', null)
-      .maybeSingle();
-    if (opChkErr) { applied.errors.push({ branch: 'A_opp_check', lead_id: pl.row.lead_id, error: opChkErr.message }); continue; }
-    if (existingOpp?.id) continue;
+  // Branch A — bulk INSERT opportunities
+  const oppsToInsert: any[] = [];
+  for (const pl of aPlansToInsert) {
+    const contactId = insertedContactIdByLeadId.get(pl.row.lead_id);
+    if (!contactId) continue;
+    if (existingOppByLeadId.has(pl.row.lead_id)) continue;
+    const mc = pl.row.ad_id ? mcByAd.get(pl.row.ad_id) : undefined;
+    const fullName = buildFullName(pl.row.nome, pl.row.telefone);
+    oppsToInsert.push({
+      organization_id: ORG_ID,
+      contact_id: contactId,
+      owner_user_id: OWNER_USER_ID,
+      title: fullName,
+      pipeline_stage_id: LEAD_STAGE_ID,
+      status: 'open',
+      source: 'meta_lead_ads',
+      source_external_id: pl.row.lead_id,
+      marketing_campaign_id: mc?.id ?? null,
+      utm_source: 'facebook',
+      utm_medium: 'paid_social',
+      utm_campaign: pl.row.campaign_name || mc?.campaign_name || null,
+      created_at: pl.row.created_time || undefined,
+    });
+  }
+  for (let i = 0; i < oppsToInsert.length; i += INS_CHUNK) {
+    const batch = oppsToInsert.slice(i, i + INS_CHUNK);
+    const { data, error } = await supabase.from('opportunities').insert(batch).select('id');
+    if (error) { applied.errors.push({ stage: 'A_opps_batch', batch_start: i, error: error.message }); continue; }
+    applied.A_opps_created += (data || []).length;
+  }
 
-    const { error: opInsErr } = await supabase
-      .from('opportunities')
-      .insert({
-        organization_id: ORG_ID,
-        contact_id: contactId,
-        title: fullName,
-        pipeline_stage_id: LEAD_STAGE_ID,
-        status: 'open',
-        source: 'meta_lead_ads',
-        source_external_id: pl.row.lead_id,
-        marketing_campaign_id: mc?.id ?? null,
-        utm_source: 'facebook',
-        utm_medium: 'paid_social',
-        utm_campaign: pl.row.campaign_name || mc?.campaign_name || null,
-        created_at: pl.row.created_time || undefined,
-      });
-    if (opInsErr) applied.errors.push({ branch: 'A_opp', lead_id: pl.row.lead_id, error: opInsErr.message });
-    else applied.A_opps_created++;
+  // CAPI best-effort — separate phase, sequential (slow but isolated)
+  if (!skipCapi) {
+    const capiTargets = [...bToCapi, ...Array.from(insertedContactIdByLeadId.values())];
+    for (const cid of capiTargets) {
+      const capi = await fireCapiLead(cid);
+      if (capi.ok) applied.capi_sent++;
+      else {
+        applied.capi_failed++;
+        if (applied.capi_errors_sample.length < 5) applied.capi_errors_sample.push({ contact_id: cid, error: capi.err });
+      }
+    }
   }
 
   return jsonOk({ mode, organization_id: ORG_ID, totals, applied, sample_branch_D: sampleD });
@@ -341,4 +439,5 @@ function jsonErr(msg: string, status = 500) {
   return new Response(JSON.stringify({ error: msg }), {
     status, headers: { ...corsHeaders, 'Content-Type': 'application/json' },
   });
+}
 }
