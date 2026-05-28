@@ -171,7 +171,7 @@ export default function Dashboard() {
       // Single query: rows created in period OR won-and-closed (by close_date) in period
       const { data, error } = await supabase
         .from('opportunities')
-        .select('id, name, status, created_at, updated_at, close_date, value')
+        .select('id, title, status, created_at, updated_at, close_date, amount')
         .eq('organization_id', organization.id)
         .eq('owner_user_id', userProfile.id)
         .is('deleted_at', null)
