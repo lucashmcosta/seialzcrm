@@ -21,9 +21,8 @@ import {
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
 
-const STATUS_LABEL: Record<AdLead['lifecycle_status'], { label: string; cls: string }> = {
-  lead: { label: 'Lead', cls: 'bg-muted text-muted-foreground' },
-  open: { label: 'Opp Aberta', cls: 'bg-warning/15 text-warning border-warning/30' },
+const STATUS_LABEL: Record<string, { label: string; cls: string }> = {
+  open: { label: 'Aberta', cls: 'bg-warning/15 text-warning border-warning/30' },
   won: { label: 'Won', cls: 'bg-success/15 text-success border-success/30' },
   lost: { label: 'Lost', cls: 'bg-destructive/15 text-destructive border-destructive/30' },
 };
