@@ -237,6 +237,98 @@ export type Database = {
           },
         ]
       }
+      admin_one_off_job_items: {
+        Row: {
+          attempts: number
+          claimed_at: string | null
+          completed_at: string | null
+          created_at: string
+          id: string
+          item_type: string
+          job_id: string
+          last_error: string | null
+          payload: Json
+          status: string
+        }
+        Insert: {
+          attempts?: number
+          claimed_at?: string | null
+          completed_at?: string | null
+          created_at?: string
+          id?: string
+          item_type: string
+          job_id: string
+          last_error?: string | null
+          payload?: Json
+          status?: string
+        }
+        Update: {
+          attempts?: number
+          claimed_at?: string | null
+          completed_at?: string | null
+          created_at?: string
+          id?: string
+          item_type?: string
+          job_id?: string
+          last_error?: string | null
+          payload?: Json
+          status?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "admin_one_off_job_items_job_id_fkey"
+            columns: ["job_id"]
+            isOneToOne: false
+            referencedRelation: "admin_one_off_jobs"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      admin_one_off_jobs: {
+        Row: {
+          confirm_token_used: string | null
+          consecutive_failures: number
+          created_at: string
+          error: string | null
+          finished_at: string | null
+          id: string
+          input_summary: Json
+          job_key: string
+          mode: string
+          output_summary: Json
+          started_at: string
+          status: string
+        }
+        Insert: {
+          confirm_token_used?: string | null
+          consecutive_failures?: number
+          created_at?: string
+          error?: string | null
+          finished_at?: string | null
+          id?: string
+          input_summary?: Json
+          job_key: string
+          mode: string
+          output_summary?: Json
+          started_at?: string
+          status?: string
+        }
+        Update: {
+          confirm_token_used?: string | null
+          consecutive_failures?: number
+          created_at?: string
+          error?: string | null
+          finished_at?: string | null
+          id?: string
+          input_summary?: Json
+          job_key?: string
+          mode?: string
+          output_summary?: Json
+          started_at?: string
+          status?: string
+        }
+        Relationships: []
+      }
       admin_sessions: {
         Row: {
           admin_user_id: string
@@ -1001,6 +1093,56 @@ export type Database = {
           },
         ]
       }
+      backup_meta_backfill_2026_05_28_contacts: {
+        Row: {
+          attribution_path: string[] | null
+          contact_id: string
+          email: string | null
+          full_name: string | null
+          job_id: string | null
+          metadata: Json | null
+          organization_id: string
+          phone: string | null
+          snapshot_at: string
+          source: string | null
+          source_external_id: string | null
+        }
+        Insert: {
+          attribution_path?: string[] | null
+          contact_id: string
+          email?: string | null
+          full_name?: string | null
+          job_id?: string | null
+          metadata?: Json | null
+          organization_id: string
+          phone?: string | null
+          snapshot_at?: string
+          source?: string | null
+          source_external_id?: string | null
+        }
+        Update: {
+          attribution_path?: string[] | null
+          contact_id?: string
+          email?: string | null
+          full_name?: string | null
+          job_id?: string | null
+          metadata?: Json | null
+          organization_id?: string
+          phone?: string | null
+          snapshot_at?: string
+          source?: string | null
+          source_external_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "backup_meta_backfill_2026_05_28_contacts_job_id_fkey"
+            columns: ["job_id"]
+            isOneToOne: false
+            referencedRelation: "admin_one_off_jobs"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       call_recordings: {
         Row: {
           call_id: string
@@ -1449,6 +1591,7 @@ export type Database = {
           address_state: string | null
           address_street: string | null
           address_zip: string | null
+          attribution_path: string[]
           avg_response_time_seconds: number | null
           client_ip_address: unknown
           client_user_agent: string | null
@@ -1503,6 +1646,7 @@ export type Database = {
           address_state?: string | null
           address_street?: string | null
           address_zip?: string | null
+          attribution_path?: string[]
           avg_response_time_seconds?: number | null
           client_ip_address?: unknown
           client_user_agent?: string | null
@@ -1559,6 +1703,7 @@ export type Database = {
           address_state?: string | null
           address_street?: string | null
           address_zip?: string | null
+          attribution_path?: string[]
           avg_response_time_seconds?: number | null
           client_ip_address?: unknown
           client_user_agent?: string | null
@@ -6981,6 +7126,13 @@ export type Database = {
       record_failed_admin_login: {
         Args: { p_email: string; p_ip: string }
         Returns: undefined
+      }
+      recover_stale_job_items: {
+        Args: { _job_id: string }
+        Returns: {
+          exhausted: number
+          recovered: number
+        }[]
       }
       reset_admin_login_attempts: {
         Args: { p_admin_id: string }
