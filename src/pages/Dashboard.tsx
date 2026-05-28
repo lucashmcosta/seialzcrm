@@ -28,7 +28,6 @@ interface OppRow {
   close_date: string | null;
   amount: number | null;
 }
-}
 
 /** Parse YYYY-MM-DD as LOCAL midnight (close_date is a DATE column). */
 const parseLocalDate = (s: string | null | undefined): Date | null => {
