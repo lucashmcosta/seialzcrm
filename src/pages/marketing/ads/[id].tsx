@@ -5,7 +5,7 @@ import { MetricCard } from '../_components/MetricCard';
 import { ChartSkeleton, TableSkeleton } from '../_components/Skeletons';
 import { EmptyState } from '../_components/EmptyState';
 import { useAdById } from '../_hooks/useAdPerformance';
-import { useAdLeads, useAdDailyInsights, type AdLead } from '../_hooks/useAdLeads';
+import { useAdOpportunities, useAdDailyInsights, type AdOpportunity } from '../_hooks/useAdLeads';
 import { fmtBRL, fmtInt, fmtDateBR, fmtRoas } from '../_lib/format';
 import { Input } from '@/components/ui/input';
 import { Select, SelectTrigger, SelectValue, SelectContent, SelectItem } from '@/components/ui/select';
@@ -21,9 +21,8 @@ import {
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
 
-const STATUS_LABEL: Record<AdLead['lifecycle_status'], { label: string; cls: string }> = {
-  lead: { label: 'Lead', cls: 'bg-muted text-muted-foreground' },
-  open: { label: 'Opp Aberta', cls: 'bg-warning/15 text-warning border-warning/30' },
+const STATUS_LABEL: Record<string, { label: string; cls: string }> = {
+  open: { label: 'Aberta', cls: 'bg-warning/15 text-warning border-warning/30' },
   won: { label: 'Won', cls: 'bg-success/15 text-success border-success/30' },
   lost: { label: 'Lost', cls: 'bg-destructive/15 text-destructive border-destructive/30' },
 };
@@ -34,7 +33,7 @@ export default function AdDrilldown() {
   const insights = useAdDailyInsights(id, 30);
   const [statusFilter, setStatusFilter] = useState('all');
   const [search, setSearch] = useState('');
-  const leads = useAdLeads(id, { status: statusFilter, search, limit: 200 });
+  const opps = useAdOpportunities(id, { status: statusFilter, search, limit: 500 });
 
   const a = ad.data;
 
@@ -127,50 +126,55 @@ export default function AdDrilldown() {
 
       <div className="rounded-md border border-border bg-card overflow-hidden">
         <div className="px-4 py-3 border-b border-border flex flex-wrap gap-3 items-center justify-between">
-          <h3 className="text-sm font-semibold">Leads atribuídos</h3>
+          <h3 className="text-sm font-semibold">Oportunidades</h3>
           <div className="flex items-center gap-2">
-            <Input placeholder="Buscar nome..." value={search} onChange={(e) => setSearch(e.target.value)} className="w-48 h-8 text-xs" />
+            <Input placeholder="Buscar contato..." value={search} onChange={(e) => setSearch(e.target.value)} className="w-48 h-8 text-xs" />
             <Select value={statusFilter} onValueChange={setStatusFilter}>
               <SelectTrigger className="w-40 h-8 text-xs"><SelectValue /></SelectTrigger>
               <SelectContent>
-                <SelectItem value="all">Todos</SelectItem>
-                <SelectItem value="lead">Lead</SelectItem>
-                <SelectItem value="open">Opp aberta</SelectItem>
+                <SelectItem value="all">Todas</SelectItem>
+                <SelectItem value="open">Abertas</SelectItem>
                 <SelectItem value="won">Won</SelectItem>
                 <SelectItem value="lost">Lost</SelectItem>
               </SelectContent>
             </Select>
           </div>
         </div>
-        {leads.isLoading ? (
-          <div className="p-4"><TableSkeleton rows={6} cols={5} /></div>
-        ) : (leads.data || []).length === 0 ? (
-          <EmptyState title="Nenhum lead atribuído" hint="Verifique se o tracking de Meta CTWA está ativo." />
+        {opps.isLoading ? (
+          <div className="p-4"><TableSkeleton rows={6} cols={6} /></div>
+        ) : (opps.data || []).length === 0 ? (
+          <EmptyState title="Nenhuma oportunidade" hint="Os leads deste ad ainda não têm oportunidades vinculadas." />
         ) : (
           <div className="overflow-x-auto">
             <table className="w-full text-sm">
               <thead className="bg-muted/30">
                 <tr className="text-muted-foreground border-b border-border">
-                  <th className="py-2 px-3 font-medium text-xs text-left">Nome</th>
+                  <th className="py-2 px-3 font-medium text-xs text-left">Oportunidade</th>
+                  <th className="py-2 px-3 font-medium text-xs text-left">Contato</th>
                   <th className="py-2 px-3 font-medium text-xs text-left">Telefone</th>
-                  <th className="py-2 px-3 font-medium text-xs text-left">Email</th>
-                  <th className="py-2 px-3 font-medium text-xs text-left">Primeiro contato</th>
+                  <th className="py-2 px-3 font-medium text-xs text-right">Valor</th>
+                  <th className="py-2 px-3 font-medium text-xs text-left">Fechamento</th>
                   <th className="py-2 px-3 font-medium text-xs text-left">Status</th>
                 </tr>
               </thead>
               <tbody>
-                {(leads.data || []).map(l => {
-                  const s = STATUS_LABEL[l.lifecycle_status];
+                {(opps.data || []).map((o: AdOpportunity) => {
+                  const s = STATUS_LABEL[o.status] ?? { label: o.status, cls: 'bg-muted text-muted-foreground' };
                   return (
-                    <tr key={l.id} className="border-b border-border last:border-0 hover:bg-muted/30">
+                    <tr key={o.id} className="border-b border-border last:border-0 hover:bg-muted/30">
                       <td className="py-2 px-3">
-                        <Link to={`/contacts/${l.id}`} className="text-foreground hover:text-primary font-medium">
-                          {l.full_name || '(sem nome)'}
+                        <Link to={`/opportunities/${o.id}`} className="text-foreground hover:text-primary font-medium">
+                          {o.title || '(sem título)'}
                         </Link>
                       </td>
-                      <td className="py-2 px-3 font-mono text-xs">{l.phone || '—'}</td>
-                      <td className="py-2 px-3 text-xs text-muted-foreground">{l.email || '—'}</td>
-                      <td className="py-2 px-3 text-xs">{fmtDateBR(l.first_contact_at)}</td>
+                      <td className="py-2 px-3">
+                        <Link to={`/contacts/${o.contact_id}`} className="text-xs text-muted-foreground hover:text-primary">
+                          {o.contact_name || '—'}
+                        </Link>
+                      </td>
+                      <td className="py-2 px-3 font-mono text-xs">{o.contact_phone || '—'}</td>
+                      <td className="py-2 px-3 text-right font-mono text-xs">{fmtBRL(o.amount ?? 0)}</td>
+                      <td className="py-2 px-3 text-xs">{o.close_date ? fmtDateBR(o.close_date) : '—'}</td>
                       <td className="py-2 px-3">
                         <Badge variant="outline" className={cn('text-[10px]', s.cls)}>{s.label}</Badge>
                       </td>
