@@ -1,6 +1,8 @@
 import { useEffect, useMemo, useState, Suspense } from 'react';
 import { usePersistedFilters } from '@/hooks/usePersistedFilters';
-import { Navigate } from 'react-router-dom';
+import { Navigate, useNavigate } from 'react-router-dom';
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+
 import { Layout } from '@/components/Layout';
 import { useOrganization } from '@/hooks/useOrganization';
 import { usePermissions } from '@/hooks/usePermissions';
@@ -49,6 +51,7 @@ const parseLocalDate = (s: string | null | undefined): Date | null => {
 
 interface Opp {
   id: string;
+  title?: string | null;
   amount: number | null;
   status: string;
   pipeline_stage_id: string | null;
@@ -57,6 +60,7 @@ interface Opp {
   updated_at: string;
   close_date: string | null;
 }
+
 
 interface Stage {
   id: string;
@@ -72,6 +76,8 @@ interface UserRow {
 export default function ReportsPage() {
   const { organization, locale } = useOrganization();
   const { permissions, loading: permsLoading } = usePermissions();
+  const navigate = useNavigate();
+
   const isMobile = useIsMobile();
 
   const [preset, setPreset, , presetHydrated] = usePersistedFilters<PeriodPreset>('reports.preset', 'last_30');
@@ -99,6 +105,8 @@ export default function ReportsPage() {
   const [openOpps, setOpenOpps] = useState<Opp[]>([]);
   const [loading, setLoading] = useState(true);
   const [selectedUser, setSelectedUser] = useState<UserStats | null>(null);
+  const [detail, setDetail] = useState<null | 'won' | 'lost' | 'created'>(null);
+
 
   useEffect(() => {
     if (!organization) return;
@@ -152,9 +160,8 @@ export default function ReportsPage() {
     try {
       // Build base queries
       const ownerEq = ownerId !== 'all' ? ownerId : null;
-
       const baseSelect =
-        'id, amount, status, pipeline_stage_id, owner_user_id, created_at, updated_at, close_date';
+        'id, title, amount, status, pipeline_stage_id, owner_user_id, created_at, updated_at, close_date';
 
       const fmtDate = (d: Date) => {
         const y = d.getFullYear();
@@ -171,7 +178,7 @@ export default function ReportsPage() {
       const prevFromDay = fmtDate(prevFrom);
       const prevToDay = fmtDate(prevTo);
 
-      // Current period: opps created within period OR closed (by close_date) within period
+
       let q1 = supabase
         .from('opportunities')
         .select(baseSelect)
@@ -179,7 +186,8 @@ export default function ReportsPage() {
         .is('deleted_at', null)
         .or(
           `and(created_at.gte.${fromIso},created_at.lte.${toIso}),and(status.in.(won,lost),close_date.gte.${fromDay},close_date.lte.${toDay})`,
-        );
+        )
+        .limit(50000);
       if (ownerEq) q1 = q1.eq('owner_user_id', ownerEq);
 
       // Previous period (for delta)
@@ -190,7 +198,8 @@ export default function ReportsPage() {
         .is('deleted_at', null)
         .or(
           `and(created_at.gte.${prevFromIso},created_at.lt.${prevToIso}),and(status.in.(won,lost),close_date.gte.${prevFromDay},close_date.lt.${prevToDay})`,
-        );
+        )
+        .limit(50000);
       if (ownerEq) q2 = q2.eq('owner_user_id', ownerEq);
 
       // All currently open (independent of period — for funnel/distribution)
@@ -199,8 +208,10 @@ export default function ReportsPage() {
         .select(baseSelect)
         .eq('organization_id', organization.id)
         .eq('status', 'open')
-        .is('deleted_at', null);
+        .is('deleted_at', null)
+        .limit(50000);
       if (ownerEq) q3 = q3.eq('owner_user_id', ownerEq);
+
 
 
       const [r1, r2, r3] = await Promise.all([q1, q2, q3]);
@@ -495,6 +506,7 @@ export default function ReportsPage() {
                   icon={Briefcase}
                   accent="primary"
                   loading={loading}
+                  onClick={() => setDetail('created')}
                 />
                 <KpiCard
                   label="Ganhas"
@@ -504,6 +516,7 @@ export default function ReportsPage() {
                   icon={CheckCircle}
                   accent="success"
                   loading={loading}
+                  onClick={() => setDetail('won')}
                 />
                 <KpiCard
                   label="Perdidas"
@@ -512,7 +525,9 @@ export default function ReportsPage() {
                   icon={XCircle}
                   accent="destructive"
                   loading={loading}
+                  onClick={() => setDetail('lost')}
                 />
+
                 <KpiCard
                   label="Win Rate"
                   value={`${stats.winRate.toFixed(1)}%`}
@@ -620,6 +635,93 @@ export default function ReportsPage() {
             )}
         </div>
       </div>
+
+      <Dialog open={detail !== null} onOpenChange={(o) => !o && setDetail(null)}>
+        <DialogContent className="max-w-2xl max-h-[80vh] overflow-hidden flex flex-col">
+          <DialogHeader>
+            <DialogTitle>
+              {detail === 'won' && 'Oportunidades ganhas'}
+              {detail === 'lost' && 'Oportunidades perdidas'}
+              {detail === 'created' && 'Oportunidades criadas'}
+              {' — '}
+              {(() => {
+                if (!detail) return 0;
+                const fromDate = range.from;
+                const toDate = range.to;
+                if (detail === 'created') {
+                  return currentOpps.filter((o) => {
+                    const t = new Date(o.created_at);
+                    return t >= fromDate && t <= toDate;
+                  }).length;
+                }
+                return currentOpps.filter((o) => {
+                  if (o.status !== detail) return false;
+                  const t = parseLocalDate(o.close_date);
+                  return !!t && t >= fromDate && t <= toDate;
+                }).length;
+              })()}
+            </DialogTitle>
+          </DialogHeader>
+          <div className="overflow-auto -mx-6 px-6">
+            {(() => {
+              if (!detail) return null;
+              const fromDate = range.from;
+              const toDate = range.to;
+              const rows =
+                detail === 'created'
+                  ? currentOpps.filter((o) => {
+                      const t = new Date(o.created_at);
+                      return t >= fromDate && t <= toDate;
+                    })
+                  : currentOpps.filter((o) => {
+                      if (o.status !== detail) return false;
+                      const t = parseLocalDate(o.close_date);
+                      return !!t && t >= fromDate && t <= toDate;
+                    });
+              if (rows.length === 0) {
+                return (
+                  <p className="text-sm text-muted-foreground py-6 text-center">
+                    Sem oportunidades no período.
+                  </p>
+                );
+              }
+              return (
+                <ul className="divide-y divide-border">
+                  {rows.map((o) => {
+                    const dateLabel =
+                      detail === 'created'
+                        ? `Criada em ${new Date(o.created_at).toLocaleDateString(locale)}`
+                        : `Fechada em ${parseLocalDate(o.close_date)?.toLocaleDateString(locale) ?? '—'}`;
+                    return (
+                      <li key={o.id}>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setDetail(null);
+                            navigate(`/opportunities/${o.id}`);
+                          }}
+                          className="w-full flex items-center justify-between gap-4 py-3 text-left hover:bg-muted/50 px-2 rounded transition"
+                        >
+                          <div className="min-w-0 flex-1">
+                            <p className="text-sm font-medium text-foreground truncate">
+                              {o.title || '(sem título)'}
+                            </p>
+                            <p className="text-xs text-muted-foreground mt-0.5">{dateLabel}</p>
+                          </div>
+                          <span className="text-sm font-mono text-muted-foreground flex-shrink-0">
+                            {formatCurrency(Number(o.amount) || 0)}
+                          </span>
+                        </button>
+                      </li>
+                    );
+                  })}
+                </ul>
+              );
+            })()}
+          </div>
+        </DialogContent>
+      </Dialog>
     </Layout>
+
   );
 }
