@@ -45,10 +45,10 @@ export default function Dashboard() {
   const { organization, userProfile, locale, loading: orgLoading, error } = useOrganization();
   const { user, signOut } = useAuth();
   const { t } = useTranslation(locale as 'pt-BR' | 'en-US');
-  const [preset, setPreset] = usePersistedFilters<PeriodPreset>('dashboard.preset', 'today');
+  const navigate = useNavigate();
   const isMobile = useIsMobile();
 
-  const [preset, setPreset] = usePersistedFilters<PeriodPreset>('dashboard.preset', 'last_30');
+  const [preset, setPreset] = usePersistedFilters<PeriodPreset>('dashboard.preset', 'today');
   const [customRange, setCustomRange] = usePersistedFilters<CustomRange | undefined>(
     'dashboard.custom',
     undefined,
