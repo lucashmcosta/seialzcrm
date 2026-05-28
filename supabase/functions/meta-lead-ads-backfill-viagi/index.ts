@@ -78,12 +78,25 @@ Deno.serve(async (req) => {
     });
   }
 
-  // 1. Load CSV staging
-  const { data: csvRows, error: csvErr } = await supabase
-    .from('viagi_csv_staging_2026_05_28')
-    .select('lead_id,created_time,ad_id,ad_name,adset_id,adset_name,campaign_id,campaign_name,form_id,nome,email,telefone,problema');
-  if (csvErr) return jsonErr(csvErr.message);
-  const csv = (csvRows || []) as CsvRow[];
+  // 1. Load CSV staging (paginate; default Supabase cap is 1000)
+  const csv: CsvRow[] = [];
+  {
+    const PAGE = 1000;
+    for (let from = 0; ; from += PAGE) {
+      const { data, error } = await supabase
+        .from('viagi_csv_staging_2026_05_28')
+        .select('lead_id,created_time,ad_id,ad_name,adset_id,adset_name,campaign_id,campaign_name,form_id,nome,email,telefone,problema')
+        .range(from, from + PAGE - 1);
+      if (error) return jsonErr(error.message);
+      if (!data || data.length === 0) break;
+      // Strip "p:" prefix left over from the CSV loader
+      for (const r of data as CsvRow[]) {
+        if (r.telefone && r.telefone.startsWith('p:')) r.telefone = r.telefone.slice(2);
+      }
+      csv.push(...(data as CsvRow[]));
+      if (data.length < PAGE) break;
+    }
+  }
 
   // 2. Load ad_id -> marketing_campaign mapping
   const adIds = Array.from(new Set(csv.map((r) => r.ad_id).filter(Boolean))) as string[];
