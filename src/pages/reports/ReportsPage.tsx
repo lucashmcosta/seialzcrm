@@ -506,6 +506,7 @@ export default function ReportsPage() {
                   icon={Briefcase}
                   accent="primary"
                   loading={loading}
+                  onClick={() => setDetail('created')}
                 />
                 <KpiCard
                   label="Ganhas"
@@ -515,6 +516,7 @@ export default function ReportsPage() {
                   icon={CheckCircle}
                   accent="success"
                   loading={loading}
+                  onClick={() => setDetail('won')}
                 />
                 <KpiCard
                   label="Perdidas"
@@ -523,7 +525,9 @@ export default function ReportsPage() {
                   icon={XCircle}
                   accent="destructive"
                   loading={loading}
+                  onClick={() => setDetail('lost')}
                 />
+
                 <KpiCard
                   label="Win Rate"
                   value={`${stats.winRate.toFixed(1)}%`}
