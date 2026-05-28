@@ -993,6 +993,42 @@ serve(async (req) => {
         console.log('Message status updated:', messageSid, messageStatus)
       }
 
+      // ============================================================
+      // Backfill endpoint_id from ChannelInstallSid (sender_sid)
+      // Only updates rows where endpoint_id is still NULL.
+      // ============================================================
+      const channelInstallSid = params.ChannelInstallSid
+      if (channelInstallSid) {
+        try {
+          const { data: epRow } = await supabase
+            .from('communication_endpoints')
+            .select('id, organization_id')
+            .eq('sender_sid', channelInstallSid)
+            .maybeSingle()
+
+          if (epRow?.id) {
+            const { error: backfillErr } = await supabase
+              .from('messages')
+              .update({ endpoint_id: epRow.id })
+              .eq('whatsapp_message_sid', messageSid)
+              .is('endpoint_id', null)
+            if (backfillErr) {
+              console.warn('[endpoint-backfill] update failed', JSON.stringify({
+                messageSid, channelInstallSid, err: backfillErr.message,
+              }))
+            }
+          } else {
+            console.warn('[endpoint-backfill] no endpoint for sender_sid', JSON.stringify({
+              messageSid, channelInstallSid,
+            }))
+          }
+        } catch (e) {
+          console.warn('[endpoint-backfill] exception', JSON.stringify({
+            messageSid, channelInstallSid, err: String(e),
+          }))
+        }
+      }
+
       return new Response('OK', { status: 200 })
     }
 
