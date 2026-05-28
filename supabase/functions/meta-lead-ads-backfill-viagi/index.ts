@@ -198,7 +198,6 @@ Deno.serve(async (req) => {
     if (phone.length >= 10) { match = byPhone11.get(last11(phone)); if (match) via = 'phone'; }
     if (!match && phoneBR) { match = byPhoneBR.get(phoneBR); if (match) via = 'phone_br'; }
     if (!match && email) { match = byEmail.get(email); if (match) via = 'email'; }
-    if (!match && email) { match = byEmail.get(email); if (match) via = 'email'; }
 
     if (row.ad_id && !mcByAd.has(row.ad_id)) adsNotMapped.add(row.ad_id);
 
@@ -215,6 +214,7 @@ Deno.serve(async (req) => {
     branch_A_missing_contact: plans.filter((p) => p.branch === 'A').length,
     branch_B_attribution_upgrade: plans.filter((p) => p.branch === 'B').length,
     branch_B_via_phone: plans.filter((p) => p.branch === 'B' && (p as any).via === 'phone').length,
+    branch_B_via_phone_br: plans.filter((p) => p.branch === 'B' && (p as any).via === 'phone_br').length,
     branch_B_via_email: plans.filter((p) => p.branch === 'B' && (p as any).via === 'email').length,
     branch_C_already_attributed: plans.filter((p) => p.branch === 'C').length,
     branch_D_other_external_id: plans.filter((p) => p.branch === 'D').length,
