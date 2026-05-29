@@ -111,6 +111,49 @@ async function getFallbackTokenCandidates(
   });
 }
 
+async function syncRecoveredTokenToMeta(
+  admin: ReturnType<typeof createClient>,
+  orgId: string,
+  encryptedToken: string,
+) {
+  const { data: metaIntegration, error: metaIntegErr } = await admin
+    .from("admin_integrations")
+    .select("id")
+    .eq("slug", "meta")
+    .maybeSingle();
+
+  if (metaIntegErr || !metaIntegration?.id) return;
+
+  const { data: metaRow, error: metaRowErr } = await admin
+    .from("organization_integrations")
+    .select("id, connected_account")
+    .eq("organization_id", orgId)
+    .eq("integration_id", metaIntegration.id)
+    .maybeSingle();
+
+  if (metaRowErr || !metaRow?.id) return;
+
+  const connectedAccount = (metaRow.connected_account ?? {}) as Record<string, unknown>;
+  if (connectedAccount.system_user_token_encrypted === encryptedToken) return;
+
+  const { error: updateErr } = await admin
+    .from("organization_integrations")
+    .update({
+      connected_account: {
+        ...connectedAccount,
+        system_user_token_encrypted: encryptedToken,
+        last_token_check_error: null,
+        last_token_check_at: new Date().toISOString(),
+      },
+      updated_at: new Date().toISOString(),
+    })
+    .eq("id", metaRow.id);
+
+  if (updateErr) {
+    console.warn("failed to sync recovered token to meta row:", updateErr.message);
+  }
+}
+
 async function validateAuth(
   req: Request,
   admin: ReturnType<typeof createClient>,
@@ -213,6 +256,9 @@ serve(async (req) => {
           console.log(
             `[meta-discover-ad-accounts] recovered token using ${candidate.slug} updated_at=${candidate.updatedAt}`,
           );
+          if (candidate.slug !== "meta") {
+            await syncRecoveredTokenToMeta(admin, orgId, candidate.encrypted);
+          }
           break;
         } catch (_fallbackError) {
           // keep trying the next token candidate
