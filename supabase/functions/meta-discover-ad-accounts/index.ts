@@ -45,6 +45,72 @@ async function graphGet(path: string, token: string, fields?: string) {
   }
 }
 
+type TokenCandidate = {
+  slug: string;
+  encrypted: string;
+  updatedAt: string | null;
+  lastCheckedAt: string | null;
+};
+
+async function getFallbackTokenCandidates(
+  admin: ReturnType<typeof createClient>,
+  orgId: string,
+): Promise<TokenCandidate[]> {
+  const { data: integrations, error: integErr } = await admin
+    .from("admin_integrations")
+    .select("id, slug")
+    .in("slug", ["meta", "meta-lead-ads", "meta-capi"]);
+
+  if (integErr || !integrations?.length) {
+    throw new Error(integErr?.message || "Meta integrations not found");
+  }
+
+  const integrationIds = integrations.map((integration) => integration.id);
+  const slugById = new Map(integrations.map((integration) => [integration.id, integration.slug]));
+
+  const { data: rows, error: rowsErr } = await admin
+    .from("organization_integrations")
+    .select("integration_id, updated_at, connected_account")
+    .eq("organization_id", orgId)
+    .eq("is_enabled", true)
+    .in("integration_id", integrationIds);
+
+  if (rowsErr) {
+    throw new Error(rowsErr.message);
+  }
+
+  const seen = new Set<string>();
+  const candidates: TokenCandidate[] = [];
+
+  for (const row of rows ?? []) {
+    const slug = slugById.get(row.integration_id);
+    const connectedAccount = (row.connected_account ?? {}) as Record<string, unknown>;
+    const encrypted =
+      slug === "meta-capi"
+        ? String(connectedAccount.access_token_encrypted ?? "")
+        : String(connectedAccount.system_user_token_encrypted ?? "");
+
+    if (!slug || !encrypted || seen.has(encrypted)) continue;
+    seen.add(encrypted);
+
+    candidates.push({
+      slug,
+      encrypted,
+      updatedAt: row.updated_at ?? null,
+      lastCheckedAt:
+        typeof connectedAccount.last_token_check_at === "string"
+          ? connectedAccount.last_token_check_at
+          : null,
+    });
+  }
+
+  return candidates.sort((a, b) => {
+    const aTime = Date.parse(a.lastCheckedAt || a.updatedAt || "1970-01-01T00:00:00.000Z");
+    const bTime = Date.parse(b.lastCheckedAt || b.updatedAt || "1970-01-01T00:00:00.000Z");
+    return bTime - aTime;
+  });
+}
+
 async function validateAuth(
   req: Request,
   admin: ReturnType<typeof createClient>,
@@ -129,15 +195,41 @@ serve(async (req) => {
   }
 
   let accessToken: string;
+  let tokenSource = cred.source;
   try {
     accessToken = await decryptSecret(tokenEnc);
   } catch (e) {
-    console.error("decryptSecret failed:", (e as Error).message);
-    return errorResponse("token_decrypt_failed", "Falha ao decriptar token", undefined, 500);
+    console.warn("primary token decrypt failed, trying fallbacks:", (e as Error).message);
+
+    try {
+      const fallbackCandidates = await getFallbackTokenCandidates(admin, orgId);
+      let recovered = false;
+
+      for (const candidate of fallbackCandidates) {
+        try {
+          accessToken = await decryptSecret(candidate.encrypted);
+          tokenSource = candidate.slug;
+          recovered = true;
+          console.log(
+            `[meta-discover-ad-accounts] recovered token using ${candidate.slug} updated_at=${candidate.updatedAt}`,
+          );
+          break;
+        } catch (_fallbackError) {
+          // keep trying the next token candidate
+        }
+      }
+
+      if (!recovered) {
+        return errorResponse("token_decrypt_failed", "Falha ao decriptar token", undefined, 500);
+      }
+    } catch (fallbackError) {
+      console.error("fallback token recovery failed:", (fallbackError as Error).message);
+      return errorResponse("token_decrypt_failed", "Falha ao decriptar token", undefined, 500);
+    }
   }
 
   const sourceSlug =
-    cred.source === "meta" ? "meta" : cred.source === "legacy_merged" ? "meta-lead-ads" : "meta-lead-ads";
+    tokenSource === "meta" ? "meta" : tokenSource === "legacy_merged" ? "meta-lead-ads" : "meta-lead-ads";
 
   console.log(
     `[meta-discover-ad-accounts] org=${orgId} source=${cred.source} token=${redactToken(accessToken)}`,
