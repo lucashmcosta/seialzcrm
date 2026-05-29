@@ -182,15 +182,14 @@ export function ConnectionForm({ existing, onSuccess }: Props) {
   const syncNow = useMutation({
     mutationFn: async () => {
       if (!organization?.id) throw new Error("Organização não encontrada");
-      const [discover, insights] = await Promise.all([
-        supabase.functions.invoke("meta-discover-ads-cron", {
-          body: { organization_id: organization.id },
-        }),
-        supabase.functions.invoke("marketing-insights-sync-daily", {
-          body: { organization_id: organization.id },
-        }),
-      ]);
+      const discover = await supabase.functions.invoke("meta-discover-ads-cron", {
+        body: { organization_id: organization.id },
+      });
       if (discover.error) throw discover.error;
+
+      const insights = await supabase.functions.invoke("marketing-insights-sync-daily", {
+        body: { organization_id: organization.id },
+      });
       if (insights.error) throw insights.error;
 
       const syncIssue = getSyncIssue(discover.data, insights.data);
