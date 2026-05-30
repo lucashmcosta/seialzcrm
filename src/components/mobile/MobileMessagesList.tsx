@@ -79,6 +79,7 @@ type ThreadFilter = 'mine' | 'unassigned' | 'all_open' | 'resolved';
 // ─── Helpers ─────────────────────────────────────────────────────
 const statusConfig: Record<string, { label: string; labelEn: string; dotColor: string; color: string }> = {
   open: { label: 'Aberta', labelEn: 'Open', color: 'text-green-700 dark:text-green-400', dotColor: 'bg-green-500' },
+  in_progress: { label: 'Em atendimento', labelEn: 'In progress', color: 'text-blue-700 dark:text-blue-400', dotColor: 'bg-blue-500' },
   awaiting_client: { label: 'Aguardando', labelEn: 'Awaiting', color: 'text-amber-700 dark:text-amber-400', dotColor: 'bg-amber-500' },
   resolved: { label: 'Resolvida', labelEn: 'Resolved', color: 'text-muted-foreground', dotColor: 'bg-muted-foreground' },
   closed: { label: 'Fechada', labelEn: 'Closed', color: 'text-muted-foreground', dotColor: 'bg-muted-foreground' },
@@ -207,7 +208,7 @@ export function MobileMessagesList() {
   // Set default filter
   useEffect(() => {
     if (threads && threads.length > 0 && userProfile?.id) {
-      const hasMine = threads.some(t => t.assigned_user_id === userProfile.id && ['open', 'awaiting_client'].includes(t.status));
+      const hasMine = threads.some(t => t.assigned_user_id === userProfile.id && ['open', 'awaiting_client', 'in_progress'].includes(t.status));
       setFilter(hasMine ? 'mine' : 'unassigned');
     }
   }, [threads?.length, userProfile?.id]);
@@ -221,7 +222,7 @@ export function MobileMessagesList() {
       const match = threads?.find(t => t.contact_id === fromContactId);
       if (match) {
         setSelectedThreadId(match.id);
-        if (['open', 'awaiting_client'].includes(match.status)) {
+        if (['open', 'awaiting_client', 'in_progress'].includes(match.status)) {
           setFilter('all_open');
         } else if (match.status === 'resolved') {
           setFilter('resolved');
@@ -616,7 +617,7 @@ export function MobileMessagesList() {
   const filteredThreads = threads?.filter((thread) => {
     if (searchQuery && !thread.contact_name.toLowerCase().includes(searchQuery.toLowerCase())) return false;
     const isPendingFirstReply = thread.status === 'resolved' && !thread.last_inbound_at && !(thread as any).whatsapp_last_inbound_at;
-    const isOpenLike = ['open', 'awaiting_client'].includes(thread.status) || isPendingFirstReply;
+    const isOpenLike = ['open', 'awaiting_client', 'in_progress'].includes(thread.status) || isPendingFirstReply;
     switch (filter) {
       case 'mine': return thread.assigned_user_id === userProfile?.id && isOpenLike;
       case 'unassigned': return !thread.assigned_user_id && (thread.status === 'open' || isPendingFirstReply);
@@ -821,7 +822,7 @@ export function MobileMessagesList() {
                     {locale === 'pt-BR' ? 'Assumir' : 'Take Over'}
                   </DropdownMenuItem>
                 )}
-                {selectedThread && ['open', 'awaiting_client'].includes(selectedThread.status) && (
+                {selectedThread && ['open', 'awaiting_client', 'in_progress'].includes(selectedThread.status) && (
                   <DropdownMenuItem onClick={() => handleResolve(selectedThread.id)}>
                     <CheckCircle className="w-4 h-4 mr-2" />
                     {locale === 'pt-BR' ? 'Resolver' : 'Resolve'}

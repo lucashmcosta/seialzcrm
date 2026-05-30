@@ -144,6 +144,7 @@ type ChatItem =
 
 const statusConfig: Record<string, { label: string; labelEn: string; color: string; dotColor: string }> = {
   open: { label: 'Aberta', labelEn: 'Open', color: 'text-green-700 dark:text-green-400', dotColor: 'bg-green-500' },
+  in_progress: { label: 'Em atendimento', labelEn: 'In progress', color: 'text-blue-700 dark:text-blue-400', dotColor: 'bg-blue-500' },
   awaiting_client: { label: 'Aguardando', labelEn: 'Awaiting', color: 'text-amber-700 dark:text-amber-400', dotColor: 'bg-amber-500' },
   resolved: { label: 'Resolvida', labelEn: 'Resolved', color: 'text-muted-foreground', dotColor: 'bg-muted-foreground' },
   closed: { label: 'Fechada', labelEn: 'Closed', color: 'text-muted-foreground', dotColor: 'bg-muted-foreground' },
@@ -531,7 +532,7 @@ function DesktopMessagesList() {
     if (filter !== null) return;
     if (appliedSmartDefaultRef.current) return;
     if (!threads || threads.length === 0 || !userProfile?.id) return;
-    const hasMine = threads.some(t => t.assigned_user_id === userProfile.id && ['open', 'awaiting_client'].includes(t.status));
+    const hasMine = threads.some(t => t.assigned_user_id === userProfile.id && ['open', 'awaiting_client', 'in_progress'].includes(t.status));
     setFilter(hasMine ? 'mine' : 'unassigned');
     appliedSmartDefaultRef.current = true;
   }, [filterHydrated, filter, threads, userProfile?.id, setFilter]);
@@ -1118,7 +1119,7 @@ function DesktopMessagesList() {
     // Treat resolved threads with no client reply yet as still "pending" — they
     // were likely auto-resolved or marked too early and the client never replied.
     const isPendingFirstReply = thread.status === 'resolved' && !thread.last_inbound_at && !thread.whatsapp_last_inbound_at;
-    const isOpenLike = ['open', 'awaiting_client'].includes(thread.status) || isPendingFirstReply;
+    const isOpenLike = ['open', 'awaiting_client', 'in_progress'].includes(thread.status) || isPendingFirstReply;
     switch (effectiveFilter) {
       case 'mine':
         return thread.assigned_user_id === userProfile?.id && isOpenLike;
@@ -1372,7 +1373,7 @@ function DesktopMessagesList() {
                           <DropdownMenuLabel>
                             {locale === 'pt-BR' ? 'Conversa' : 'Conversation'}
                           </DropdownMenuLabel>
-                          {['open', 'awaiting_client'].includes(selectedThread.status) && (
+                          {['open', 'awaiting_client', 'in_progress'].includes(selectedThread.status) && (
                             <DropdownMenuItem onClick={() => handleResolve(selectedThread.id)}>
                               <CheckCircle className="w-4 h-4 mr-2" />
                               {locale === 'pt-BR' ? 'Resolver conversa' : 'Resolve'}
