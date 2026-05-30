@@ -131,6 +131,11 @@ const ObservabilityPage = lazy(() => retryImport(() => import("./pages/admin/Obs
 const AdminProtectedRoute = lazy(() => import("./components/admin/AdminProtectedRoute").then(m => ({ default: m.AdminProtectedRoute })));
 const ImpersonateCallback = lazy(() => import("./pages/admin/ImpersonateCallback"));
 
+// DEV-only smoke test panel (Inbox v2 RPCs). Stripped from production via dead-code elimination.
+const InboxSmokePanel = import.meta.env.DEV
+  ? lazy(() => import("./pages/dev/InboxSmokePanel"))
+  : null;
+
 const queryClient = new QueryClient({
   defaultOptions: {
     queries: {
@@ -226,6 +231,20 @@ const App = () => (
           <Route path="/auth/confirm-email" element={<ConfirmEmail />} />
           <Route path="/invite/:token" element={<AcceptInvitation />} />
           <Route path="/impersonate/callback" element={<ImpersonateCallback />} />
+
+          {/* DEV-only smoke test panel */}
+          {InboxSmokePanel && (
+            <Route
+              path="/dev/inbox-smoke"
+              element={
+                <ProtectedRoute>
+                  <InboxSmokePanel />
+                </ProtectedRoute>
+              }
+            />
+          )}
+          
+
           
           {/* Admin Portal routes */}
           <Route path="/admin/login" element={<AdminLogin />} />

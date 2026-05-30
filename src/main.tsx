@@ -2,13 +2,7 @@ import React from 'react';
 import { createRoot } from "react-dom/client";
 import App from "./App.tsx";
 import "./index.css";
-import { supabase } from "@/integrations/supabase/client";
 
-// DEV-only: expose supabase client for smoke tests (T5–T10a).
-// Stripped from production builds via Vite dead-code elimination.
-if (import.meta.env.DEV) {
-  (window as unknown as { sb: typeof supabase }).sb = supabase;
-}
 
 
 
