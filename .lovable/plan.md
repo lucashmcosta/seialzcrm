@@ -1,178 +1,354 @@
+## Migration 2A — versão final (com correções)
 
-# Pré-implementação — Backfill Meta Lead Ads Viagi
+Não aplicar ainda. SQL pronto para revisão final.
 
-Antes de qualquer mudança de código ou dados, abaixo está o escopo exato pedido.
-
----
-
-## 1. Arquivos que vão ser tocados
-
-### Migrations (schema)
-- `supabase/migrations/<timestamp>_contacts_attribution_path.sql` — nova coluna + index
-- `supabase/migrations/<timestamp>_backup_meta_backfill_2026_05_28.sql` — cria tabela snapshot dos 229 (item 4)
-
-### Edge functions (lógica contínua)
-- `supabase/functions/meta-lead-ads-process-lead/index.ts` — refator 3 ramos (A novo / B upgrade / C no-op), grava `attribution_path`, dispara CAPI Lead em A sempre e em B se `lead.created_time >= now()-7d`
-- `supabase/functions/_shared/capi-fire.ts` (novo) — helper único para chamar `meta-capi-send-event` com payload `Lead`, isolando lógica da janela 7d e do dedupe
-
-### Backfill (one-shot, **dry-run obrigatório**)
-- `supabase/functions/meta-lead-ads-backfill-viagi/index.ts` (novo, descartável) — modos `dry_run` (default) e `apply`. Lê CSV já salvo em storage, processa em lotes de 50, usa `SET LOCAL app.skip_event_emit='true'` por transação, emite relatório JSON com counts e amostra.
-- `scripts/upload_viagi_csv.md` (novo) — instrução curta de upload do CSV no bucket `private-imports/`
-
-### UI (zero alteração nesta fase)
-Nenhum arquivo em `src/` será tocado. O backfill é server-side puro.
+Correções aplicadas vs versão anterior:
+1. `assign_round_robin(uuid,text)` trata queue vazia/whitespace como fallback.
+2. Trigger de histórico só registra quando `last_routing_decision` está presente (evita poluir com `manual_assignment` falso vindo de UPDATEs externos).
+3. `take_over_thread` bloqueia `resolved`/`closed` (reopen vira fluxo separado depois).
 
 ---
 
-## 2. Esquema da nova coluna + migration
-
-### Coluna `contacts.attribution_path`
-
-Semântica: **rastro ordenado** dos canais pelos quais o contato passou, do mais antigo ao mais recente. Append-only. Permite separar "canal de chegada" (`source`) do histórico real.
-
-```text
-Tipo:      text[]              (não jsonb — queries com ANY/array_position são triviais)
-Default:   ARRAY[]::text[]
-Nullable:  false
-Valores:   tokens controlados — 'meta_lead_ads' | 'ctwa' | 'whatsapp' |
-           'landing_page_viagi' | 'manual' | 'kommo' | 'webhook' | ...
-Regra:     novo token só é appended se diferente do último elemento (evita ruído)
-Index:     GIN para filtros tipo `WHERE 'meta_lead_ads' = ANY(attribution_path)`
-```
-
-### SQL da migration
+### SQL completo
 
 ```sql
-ALTER TABLE public.contacts
-  ADD COLUMN attribution_path text[] NOT NULL DEFAULT ARRAY[]::text[];
+-- ============================================================
+-- Migration 2A: history + take_over + reassign + routing base
+-- ============================================================
 
-CREATE INDEX idx_contacts_attribution_path
-  ON public.contacts USING GIN (attribution_path);
+-- 1) Coluna de decisão de roteamento
+ALTER TABLE public.message_threads
+  ADD COLUMN IF NOT EXISTS last_routing_decision jsonb;
 
-COMMENT ON COLUMN public.contacts.attribution_path IS
-  'Rastro ordenado de canais pelos quais o contato passou. Append-only, sem duplicar último elemento. source = chegada inicial; attribution_path = histórico completo.';
+-- 2) Overload de assign_round_robin com queue
+CREATE OR REPLACE FUNCTION public.assign_round_robin(_org_id uuid, _queue text)
+RETURNS uuid
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path TO 'public'
+AS $$
+DECLARE
+  v_enabled boolean;
+  v_user_id uuid;
+  v_uo_id uuid;
+BEGIN
+  -- Fallback total para a função antiga quando queue é NULL ou só whitespace
+  IF _queue IS NULL OR btrim(_queue) = '' THEN
+    RETURN public.assign_round_robin(_org_id);
+  END IF;
+
+  SELECT round_robin_enabled INTO v_enabled
+  FROM organizations WHERE id = _org_id;
+  IF v_enabled IS NOT TRUE THEN
+    RETURN NULL;
+  END IF;
+
+  SELECT uo.id, uo.user_id
+    INTO v_uo_id, v_user_id
+  FROM user_organizations uo
+  WHERE uo.organization_id = _org_id
+    AND uo.is_active = true
+    AND uo.round_robin_active = true
+    AND _queue = ANY(COALESCE(uo.round_robin_queues, '{}'::text[]))
+  ORDER BY uo.last_assigned_at NULLS FIRST, uo.id
+  FOR UPDATE SKIP LOCKED
+  LIMIT 1;
+
+  IF v_user_id IS NULL THEN
+    RETURN NULL;
+  END IF;
+
+  UPDATE user_organizations
+     SET last_assigned_at = now()
+   WHERE id = v_uo_id;
+
+  RETURN v_user_id;
+END;
+$$;
+
+-- 3) Trigger central de histórico (só com decisão explícita)
+CREATE OR REPLACE FUNCTION public.fn_log_thread_assignment_change()
+RETURNS trigger
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path TO 'public'
+AS $$
+DECLARE
+  v_decision jsonb;
+  v_action   text;
+  v_reason   text;
+  v_by       uuid;
+BEGIN
+  IF NEW.assigned_user_id IS NOT DISTINCT FROM OLD.assigned_user_id THEN
+    RETURN NEW;
+  END IF;
+
+  -- Só registra histórico quando a mudança vier com decisão explícita.
+  -- UPDATEs externos sem last_routing_decision não geram linha (evita ruído).
+  IF NEW.last_routing_decision IS NULL THEN
+    RETURN NEW;
+  END IF;
+
+  v_decision := NEW.last_routing_decision;
+  v_action   := COALESCE(v_decision->>'action', 'manual_assignment');
+  v_reason   := v_decision->>'reason';
+  v_by       := NULLIF(v_decision->>'by_user_id','')::uuid;
+
+  INSERT INTO public.thread_assignment_history
+    (organization_id, thread_id, action_type,
+     from_user_id, to_user_id, performed_by_user_id,
+     reason, metadata)
+  VALUES
+    (NEW.organization_id, NEW.id, v_action,
+     OLD.assigned_user_id, NEW.assigned_user_id,
+     COALESCE(v_by, NEW.assigned_user_id),
+     v_reason, v_decision);
+
+  RETURN NEW;
+END;
+$$;
+
+DROP TRIGGER IF EXISTS trg_log_thread_assignment_change ON public.message_threads;
+CREATE TRIGGER trg_log_thread_assignment_change
+AFTER UPDATE OF assigned_user_id ON public.message_threads
+FOR EACH ROW
+EXECUTE FUNCTION public.fn_log_thread_assignment_change();
+
+-- 4) RPC take_over_thread (bloqueia resolved/closed)
+CREATE OR REPLACE FUNCTION public.take_over_thread(_thread_id uuid, _reason text DEFAULT NULL)
+RETURNS jsonb
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path TO 'public'
+AS $$
+DECLARE
+  v_uid     uuid := public.current_user_id();
+  v_org     uuid;
+  v_status  text;
+  v_allowed boolean;
+BEGIN
+  IF v_uid IS NULL THEN
+    RAISE EXCEPTION 'not_authenticated';
+  END IF;
+
+  SELECT organization_id, status
+    INTO v_org, v_status
+  FROM public.message_threads
+  WHERE id = _thread_id;
+
+  IF v_org IS NULL THEN
+    RAISE EXCEPTION 'thread_not_found';
+  END IF;
+
+  IF NOT (v_org = ANY(public.current_user_org_ids())) THEN
+    RAISE EXCEPTION 'forbidden_org';
+  END IF;
+
+  -- Takeover não reabre thread fechada. Reopen será fluxo separado.
+  IF v_status IN ('resolved','closed') THEN
+    RAISE EXCEPTION 'thread_closed_reopen_required';
+  END IF;
+
+  SELECT COALESCE((pp.permissions->>'can_takeover_thread')::bool, false)
+         OR COALESCE((pp.permissions->>'manage_assignments')::bool, false)
+    INTO v_allowed
+  FROM user_organizations uo
+  JOIN permission_profiles pp ON pp.id = uo.permission_profile_id
+  WHERE uo.user_id = v_uid
+    AND uo.organization_id = v_org
+    AND uo.is_active;
+
+  IF NOT COALESCE(v_allowed, false) THEN
+    RAISE EXCEPTION 'forbidden_permission';
+  END IF;
+
+  UPDATE public.message_threads SET
+    last_routing_decision = jsonb_build_object(
+      'action',      'take_over',
+      'reason',      _reason,
+      'by_user_id',  v_uid,
+      'decided_at',  now()
+    ),
+    assigned_user_id = v_uid,
+    assigned_at      = now(),
+    status           = 'in_progress'
+  WHERE id = _thread_id;
+
+  RETURN jsonb_build_object('ok', true, 'thread_id', _thread_id);
+END;
+$$;
+
+REVOKE ALL ON FUNCTION public.take_over_thread(uuid,text) FROM PUBLIC;
+GRANT EXECUTE ON FUNCTION public.take_over_thread(uuid,text) TO authenticated;
+
+-- 5) RPC reassign_thread
+CREATE OR REPLACE FUNCTION public.reassign_thread(_thread_id uuid, _to_user_id uuid, _reason text DEFAULT NULL)
+RETURNS jsonb
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path TO 'public'
+AS $$
+DECLARE
+  v_uid        uuid := public.current_user_id();
+  v_org        uuid;
+  v_status     text;
+  v_allowed    boolean;
+  v_target_ok  boolean;
+  v_new_status text;
+BEGIN
+  IF v_uid IS NULL THEN
+    RAISE EXCEPTION 'not_authenticated';
+  END IF;
+
+  SELECT organization_id, status
+    INTO v_org, v_status
+  FROM public.message_threads
+  WHERE id = _thread_id;
+
+  IF v_org IS NULL THEN
+    RAISE EXCEPTION 'thread_not_found';
+  END IF;
+
+  IF NOT (v_org = ANY(public.current_user_org_ids())) THEN
+    RAISE EXCEPTION 'forbidden_org';
+  END IF;
+
+  SELECT COALESCE((pp.permissions->>'manage_assignments')::bool, false)
+         OR COALESCE((pp.permissions->>'can_manage_cs_queue')::bool, false)
+    INTO v_allowed
+  FROM user_organizations uo
+  JOIN permission_profiles pp ON pp.id = uo.permission_profile_id
+  WHERE uo.user_id = v_uid
+    AND uo.organization_id = v_org
+    AND uo.is_active;
+
+  IF NOT COALESCE(v_allowed, false) THEN
+    RAISE EXCEPTION 'forbidden_permission';
+  END IF;
+
+  SELECT true INTO v_target_ok
+  FROM user_organizations
+  WHERE user_id = _to_user_id
+    AND organization_id = v_org
+    AND is_active;
+
+  IF NOT COALESCE(v_target_ok, false) THEN
+    RAISE EXCEPTION 'invalid_target_user';
+  END IF;
+
+  IF v_status IN ('resolved','closed') THEN
+    RAISE EXCEPTION 'thread_closed_reopen_required';
+  END IF;
+
+  v_new_status := CASE
+    WHEN v_status = 'open'            THEN 'in_progress'
+    WHEN v_status = 'awaiting_client' THEN 'awaiting_client'
+    ELSE v_status
+  END;
+
+  UPDATE public.message_threads SET
+    last_routing_decision = jsonb_build_object(
+      'action',     'manual_assignment',
+      'reason',     _reason,
+      'by_user_id', v_uid,
+      'decided_at', now()
+    ),
+    assigned_user_id = _to_user_id,
+    assigned_at      = now(),
+    status           = v_new_status
+  WHERE id = _thread_id;
+
+  RETURN jsonb_build_object('ok', true, 'thread_id', _thread_id);
+END;
+$$;
+
+REVOKE ALL ON FUNCTION public.reassign_thread(uuid,uuid,text) FROM PUBLIC;
+GRANT EXECUTE ON FUNCTION public.reassign_thread(uuid,uuid,text) TO authenticated;
+
+-- 6) Routing helper por purpose
+CREATE OR REPLACE FUNCTION public.get_default_queue_for_thread(_thread_id uuid)
+RETURNS TABLE(queue text, suggested_user_id uuid)
+LANGUAGE plpgsql
+STABLE
+SECURITY DEFINER
+SET search_path TO 'public'
+AS $$
+DECLARE
+  v_purpose       text;
+  v_endpoint_user uuid;
+BEGIN
+  SELECT ce.purpose, ce.assigned_user_id
+    INTO v_purpose, v_endpoint_user
+  FROM message_threads t
+  LEFT JOIN communication_endpoints ce ON ce.id = t.primary_endpoint_id
+  WHERE t.id = _thread_id;
+
+  IF v_purpose = 'customer_service' THEN
+    RETURN QUERY SELECT 'customer_service'::text, NULL::uuid;
+  ELSIF v_purpose = 'vendor_personal' THEN
+    RETURN QUERY SELECT 'commercial'::text, v_endpoint_user;  -- pode ser NULL
+  ELSE
+    -- commercial, other, NULL → commercial
+    RETURN QUERY SELECT 'commercial'::text, NULL::uuid;
+  END IF;
+END;
+$$;
+
+GRANT EXECUTE ON FUNCTION public.get_default_queue_for_thread(uuid) TO authenticated;
 ```
-
-Sem backfill de dados nessa migration — a coluna nasce vazia. O backfill dos 229 é feito no script (item 3), que popula `attribution_path = ARRAY['ctwa','meta_lead_ads']` (ou equivalente) para os contatos órfãos.
 
 ---
 
-## 3. Dry-run obrigatório — output esperado (amostra de 5)
+### Explicação de cada peça
 
-A função `meta-lead-ads-backfill-viagi` exige `{ "mode": "dry_run" }` por default. Só executa UPDATE/INSERT se receber explicitamente `{ "mode": "apply", "confirm_token": "VIAGI_2026_05_28" }`.
-
-### Estrutura do output (JSON)
-
-```json
-{
-  "mode": "dry_run",
-  "organization_id": "b246ef6f-...",
-  "totals": {
-    "csv_leads": 1297,
-    "branch_A_new_contact":   37,
-    "branch_B_attribution":  229,
-    "branch_C_already_attributed": 1031,
-    "capi_lead_within_7d":    18,
-    "capi_lead_skipped_old": 248
-  },
-  "sample_branch_B": [ /* 5 contatos — antes/depois */ ],
-  "sample_branch_A": [ /* 5 leads que viram contact novo */ ]
-}
-```
-
-### Exemplo de uma linha em `sample_branch_B`
-
-```json
-{
-  "lead_id": "1234567890",
-  "contact_id": "c4f1...",
-  "before": {
-    "source": "ctwa",
-    "source_external_id": null,
-    "marketing_campaign_id": null,
-    "ad_referral_source_id": null,
-    "ad_referral_source_type": null,
-    "ad_referral_captured_at": null,
-    "utm_source": null, "utm_medium": null, "utm_campaign": null,
-    "attribution_path": []
-  },
-  "after": {
-    "source": "ctwa",                          // INALTERADO
-    "source_external_id": "1234567890",
-    "marketing_campaign_id": "a91e...",
-    "ad_referral_source_id": "120209876543210",
-    "ad_referral_source_type": "lead_form",
-    "ad_referral_captured_at": "2026-05-23T14:22:11Z",
-    "utm_source": "facebook",
-    "utm_medium": "paid_social",
-    "utm_campaign": "VIAGI_PROMO_MAIO",
-    "attribution_path": ["ctwa","meta_lead_ads"]
-  },
-  "opportunity": { "action": "reuse_existing", "id": "op_88..." },
-  "capi_lead": { "action": "skip", "reason": "lead_created_time_older_than_7d" }
-}
-```
-
-### Exemplo de `sample_branch_A` (lead totalmente ausente)
-
-```json
-{
-  "lead_id": "9988776655",
-  "action": "insert_contact + insert_opportunity",
-  "contact": {
-    "full_name": "Maria Souza",
-    "phone": "+5511999998888",
-    "source": "meta_lead_ads",
-    "attribution_path": ["meta_lead_ads"],
-    "owner_user_id": "round_robin → u_xx"
-  },
-  "opportunity": { "pipeline_stage_id": "ps_lead", "amount": 0 },
-  "capi_lead": { "action": "fire", "event_time": "2026-05-27T19:11:03Z" }
-}
-```
+- **`last_routing_decision jsonb`**: única fonte de verdade da decisão. O trigger só dispara histórico se ela estiver presente — qualquer UPDATE em `assigned_user_id` feito sem setar este campo (ex.: edge function antiga, fix manual no SQL Editor) não polui o histórico com `manual_assignment` falso.
+- **`assign_round_robin(uuid,text)`**: novo overload. Queue NULL ou whitespace → delega ao 1-arg (zero regressão). Queue válida → filtra por `round_robin_queues @> ARRAY[_queue]` via `= ANY(...)`, mantendo `FOR UPDATE SKIP LOCKED` e a mesma ordenação `last_assigned_at NULLS FIRST, id`.
+- **`fn_log_thread_assignment_change`**: AFTER UPDATE OF `assigned_user_id`. Sai cedo se o assignee não mudou. Sai cedo se `last_routing_decision IS NULL`. Caso contrário grava 1 linha com `action`, `reason`, `by_user_id` extraídos do JSON.
+- **`take_over_thread`**: requer `current_user_id()`, valida org, bloqueia `resolved`/`closed`, exige `can_takeover_thread` ou `manage_assignments`. Seta decisão + assignee + `in_progress`. Histórico vem do trigger.
+- **`reassign_thread`**: idem com `manage_assignments` ou `can_manage_cs_queue`, valida usuário-alvo na mesma org/ativo, preserva `awaiting_client`, promove `open` → `in_progress`.
+- **`get_default_queue_for_thread`**: apenas leitura — devolve queue padrão e `suggested_user_id` (vendor_personal). Webhook NÃO é alterado nesta migration.
 
 ---
 
-## 4. Snapshot dos 229 antes do UPDATE
+### Triggers/funções preservados
 
-Tabela de backup criada na **mesma migration**, populada com SELECT direto antes do backfill rodar.
+Não recriar nem alterar: `threads_round_robin` (BEFORE INSERT), `trg_handoff_notification`, `update_message_threads_updated_at`. `trg_messages_smart_reopen`, `trg_inbound_message_status`, `fn_calc_message_response_time`, `handle_handoff_notification` ficam intocadas. Qualquer alteração futura virá com diff antes.
+
+---
+
+### Smoke tests (rodar pós-apply, fora da migration)
+
+1. `SELECT public.assign_round_robin('<org>');` → comportamento idêntico ao atual.
+2. `SELECT public.assign_round_robin('<org>', NULL);` e `SELECT public.assign_round_robin('<org>', '   ');` → caem no fallback (mesmo resultado do item 1).
+3. `SELECT public.assign_round_robin('<org>', 'customer_service');` → só sorteia usuários com `'customer_service' = ANY(round_robin_queues)`.
+4. `UPDATE message_threads SET assigned_user_id = '<x>' WHERE id = '<t>';` (sem decisão) → **NÃO** cria linha em `thread_assignment_history`.
+5. `SELECT public.take_over_thread('<thread_open>', 'teste');` autenticado com permissão → `assigned_user_id` muda, `status='in_progress'`, +1 linha com `action_type='take_over'`.
+6. `take_over_thread` em thread `resolved` ou `closed` → `thread_closed_reopen_required`.
+7. `take_over_thread` sem `can_takeover_thread`/`manage_assignments` → `forbidden_permission`.
+8. `reassign_thread` com alvo de outra org → `invalid_target_user`. Com alvo válido: `awaiting_client` preserva, `open` vira `in_progress`, `resolved` erra.
+9. Contagem antes/depois de cada RPC: exatamente +1 linha em `thread_assignment_history`.
+10. UI `/messages` (Fase 0): thread em `in_progress` aparece em Todas/Minhas com badge azul.
+
+---
+
+### Riscos remanescentes
+
+- **Edge functions futuras** que mudarem `assigned_user_id` sem setar `last_routing_decision` ficarão fora do histórico. É intencional — força chamadas explícitas via RPC ou seteo manual da decisão. Documentar no handover para times de edge.
+- **`take_over_thread` em thread `resolved`/`closed`** agora exige reopen explícito (a definir na 2B/2C). Confirmar com produto que esse é o fluxo desejado para casos de "cliente voltou após resolver".
+- **`get_default_queue_for_thread` retorna `suggested_user_id` mesmo quando NULL para vendor_personal**. Caller precisa tratar (fallback round-robin commercial). Não há consumidor ainda, então sem impacto agora.
+
+---
+
+### Rollback
 
 ```sql
-CREATE TABLE public.backup_meta_backfill_2026_05_28_contacts AS
-SELECT c.*
-FROM public.contacts c
-WHERE c.organization_id = 'b246ef6f-…-2896a'
-  AND c.deleted_at IS NULL
-  AND c.source_external_id IS NULL
-  AND c.marketing_campaign_id IS NULL
-  AND c.id = ANY (
-    -- lista dos 229 IDs derivada do match CSV ↔ contacts por phone normalizado
-    SELECT id FROM public.contacts
-    WHERE organization_id = 'b246ef6f-…-2896a'
-      AND phone = ANY ($1::text[])
-      AND deleted_at IS NULL
-      AND source IN ('ctwa','whatsapp')
-      AND source_external_id IS NULL
-  );
-
-GRANT SELECT ON public.backup_meta_backfill_2026_05_28_contacts TO authenticated;
-GRANT ALL    ON public.backup_meta_backfill_2026_05_28_contacts TO service_role;
-ALTER TABLE  public.backup_meta_backfill_2026_05_28_contacts ENABLE ROW LEVEL SECURITY;
--- sem POLICY = só service_role acessa. Tabela é leitura admin manual.
-
-COMMENT ON TABLE public.backup_meta_backfill_2026_05_28_contacts IS
-  'Snapshot completo dos 229 contatos Viagi antes do attribution backfill de 28/05/2026. Restauração: UPDATE contacts SET ... FROM backup_meta_backfill_2026_05_28_contacts WHERE contacts.id = backup....id;';
+DROP TRIGGER IF EXISTS trg_log_thread_assignment_change ON public.message_threads;
+DROP FUNCTION IF EXISTS public.fn_log_thread_assignment_change();
+DROP FUNCTION IF EXISTS public.take_over_thread(uuid, text);
+DROP FUNCTION IF EXISTS public.reassign_thread(uuid, uuid, text);
+DROP FUNCTION IF EXISTS public.get_default_queue_for_thread(uuid);
+DROP FUNCTION IF EXISTS public.assign_round_robin(uuid, text);
+ALTER TABLE public.message_threads DROP COLUMN IF EXISTS last_routing_decision;
 ```
 
-A lista exata de 229 phone numbers vem do CSV que você me passou — vou consolidar no script de backfill e a tabela é populada no `mode=dry_run` (zero risco de mexer em `contacts`).
-
----
-
-## Pendente — sua aprovação antes de eu rodar a migration
-
-1. Confirma o tipo da coluna `text[]` + index GIN (vs. `jsonb`)?
-2. Confirma vocabulário inicial dos tokens: `meta_lead_ads`, `ctwa`, `whatsapp`, `landing_page_viagi`, `manual`, `kommo`, `webhook`?
-3. Confirma `confirm_token = "VIAGI_2026_05_28"` para destravar `mode=apply`?
-4. Quer que eu inclua na mesma migration o trigger que faz append automático em `attribution_path` quando `source` muda, ou prefere que isso fique 100% no código das edge functions?
-
-Assim que aprovar, rodo migration → upload do CSV → `mode=dry_run` → te mando o JSON real com totais e 10 amostras → você libera `mode=apply`.
+`assign_round_robin(uuid)` original não é tocada — segue intacta.
