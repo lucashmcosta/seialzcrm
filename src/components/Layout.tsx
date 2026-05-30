@@ -14,6 +14,7 @@ import {
   Phone,
   ChartLineUp,
   ChartBar,
+  Headset,
 } from '@phosphor-icons/react';
 import type { Icon as PhosphorIcon } from '@phosphor-icons/react';
 import { Button } from '@/components/ui/button';
@@ -83,6 +84,12 @@ export function Layout({ children }: LayoutProps) {
     if (commItems.length > 0) {
       groups.push({ label: 'COMUNICAÇÃO', items: commItems });
     }
+
+    // Atendimento group (módulo independente — pós-venda / jurídico)
+    groups.push({
+      label: 'ATENDIMENTO',
+      items: [{ label: 'Atendimento', href: '/inbox', icon: Headset }],
+    });
 
     // System group
     const sysItems: SeialzNavGroup['items'] = [];

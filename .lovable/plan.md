@@ -1,67 +1,50 @@
-# Smoke Test Panel — DEV-only (escopo revisado)
+# Módulo de Atendimento `/inbox` — Fase 1 (somente leitura)
 
-Adicionado: campo `thread_open_2` separado para T7 e output enriquecido (usuário logado, nome do teste, RPC, args, data, error, snapshots, expected, PASS/FAIL).
+Pronto para executar. Schema confirmado via query: `message_threads` tem `assigned_user_id`, `status`, `sla_first_response_target_at`, `sla_resolution_target_at`, `first_response_at`, `resolved_at`, `priority`. `thread_assignment_history` tem `action_type`, `from_user_id`, `to_user_id`, `performed_by_user_id`, `reason`, `metadata`, `created_at`.
 
-## Arquivos
+## Arquivos a criar
 
-### 1. `src/pages/dev/InboxSmokePanel.tsx` (novo)
-- Componente único, usa `<Layout>` (CRM) e `supabase` real
-- 4 inputs: `thread_open`, `thread_open_2` (opcional, fallback p/ `thread_open`), `thread_resolved`, `user_target` — pré-preenchidos via querystring e re-sincronizados
-- Cabeçalho fixo mostra `user.email` + `user.id` do `useAuth()`
-- 4 botões: T5, T6, T7, T10a (+ Clear results)
-- Helper `snap(threadId)`:
-  - `message_threads`: id, status, assigned_user_id, last_message_at
-  - `thread_assignment_history`: id, **action_type**, from_user_id, to_user_id, reason, created_at (limit 5, desc)
-- Mapeamento RPC (parâmetros conforme migration 2A):
-  - T5 → `take_over_thread({_thread_id: thread_open, _reason})`
-  - T6 → `take_over_thread({_thread_id: thread_resolved, _reason})`
-  - T7 → `reassign_thread({_thread_id: thread_open_2 || thread_open, _to_user_id: user_target, _reason})`
-  - T10a → `take_over_thread({_thread_id: thread_open, _reason})` (esperado falhar)
-- Para cada execução, card renderiza: nome do teste, RPC, badge PASS/FAIL, `ran at` + usuário, expected, e 5 blocos `<pre>`: args, data, error, thread snapshot, history snapshot
-- Heurística PASS/FAIL:
-  - T5: `!error && thread.status === 'in_progress'`
-  - T6: erro com `thread_closed_reopen_required`
-  - T7: `!error && thread.assigned_user_id === user_target`
-  - T10a: erro com `forbidden_permission`
-- Tokens semânticos apenas (`bg-card`, `bg-muted/30`, `bg-primary`, `bg-destructive`), sem cores hardcoded, sem `p-8`
+```text
+src/hooks/inbox/
+ ├─ useInboxQueueCounts.ts   (counts por fila, 5 queries paralelas head:true)
+ ├─ useInboxThreads.ts       (lista da fila ativa + realtime isolado)
+ └─ useInboxThread.ts        (detalhe + thread_assignment_history)
 
-### 2. `src/App.tsx` (edit cirúrgico)
-- Adicionar abaixo do lazy `ImpersonateCallback`:
-  ```tsx
-  const InboxSmokePanel = import.meta.env.DEV
-    ? lazy(() => import("./pages/dev/InboxSmokePanel"))
-    : null;
-  ```
-- Dentro de `<Routes>`, junto às rotas CRM:
-  ```tsx
-  {InboxSmokePanel && (
-    <Route
-      path="/dev/inbox-smoke"
-      element={<ProtectedRoute><InboxSmokePanel /></ProtectedRoute>}
-    />
-  )}
-  ```
-- Produção: variável é `null` → rota não registrada → cai no `NotFound`
+src/components/inbox/
+ ├─ InboxQueues.tsx          (sidebar de filas)
+ ├─ InboxThreadList.tsx      (lista filtrada)
+ ├─ InboxThreadDetail.tsx    (header + dados + histórico)
+ ├─ InboxSlaChip.tsx         (verde/amarelo/vermelho)
+ ├─ InboxAssignmentHistory.tsx (read-only)
+ └─ InboxMetricsBar.tsx      (counters topo)
 
-### 3. `src/main.tsx` (revert do guard anterior)
-- Remover as 6 linhas que expunham `window.sb` (import do supabase + bloco `if (import.meta.env.DEV)`)
-
-## Uso
-
-```
-/dev/inbox-smoke?thread_open=<id>&thread_open_2=<id>&thread_resolved=<id>&user_target=<id>
+src/pages/inbox/
+ └─ InboxPage.tsx            (Layout CRM, 3 colunas, placeholder mobile)
 ```
 
-1. Autenticado como Camila (admin) → rodar T5, T6, T7 → conferir PASS
-2. Logout, login como Luana (sem permissão) → rodar T10a → conferir PASS
+## Arquivos a editar (mínimo)
 
-## Reversão (mesmo ciclo, após os 4 PASS)
+- `src/App.tsx` — lazy + `retryImport` para `InboxPage`, rota `/inbox` em `ProtectedRoute`.
+- `src/components/Layout.tsx` — adicionar grupo `ATENDIMENTO` com item "Atendimento" (`/inbox`, ícone `Headset`) **abaixo** do grupo COMUNICAÇÃO e separado dele.
 
-- Deletar `src/pages/dev/InboxSmokePanel.tsx`
-- Em `src/App.tsx`: remover o lazy `InboxSmokePanel` + a rota condicional
+## Filas (nomes reais)
 
-## Restrições
+- mine: `assigned_user_id = current_user_id`
+- unassigned: `assigned_user_id IS NULL AND status = 'open'`
+- in_sla: `sla_first_response_target_at > now() AND first_response_at IS NULL`
+- overdue: `sla_first_response_target_at < now() AND first_response_at IS NULL AND status = 'open'`
+- resolved: `status = 'resolved'`
 
-- ❌ Sem migration nova, sem alteração em RPCs, sem mudança em regras de negócio, sem mudar `client.ts`
-- ✅ Painel isolado, removível sem efeito colateral
-- 🔒 Migration 2B continua bloqueada até o revert do painel ser confirmado
+`current_user_id` resolvido no client via `users.id` (lookup por `auth_user_id`), conforme memory Core.
+
+## Não tocar (confirmado)
+
+`/messages`, `useMessageThreads`, `MessagesList.tsx`, `MobileMessagesList.tsx`, RPCs, migrations, edge functions, Twilio, IA, `/dev/inbox-smoke`.
+
+## Mobile
+
+Placeholder dentro de `/inbox`: "Atendimento mobile em breve. Use desktop por enquanto." Sem redirect.
+
+---
+
+**Aguardando troca para Build Mode para criar os 10 arquivos e editar 2.**
