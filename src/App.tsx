@@ -68,6 +68,7 @@ const OpportunitiesKanban = lazy(() => retryImport(() => import("./pages/opportu
 const OpportunityDetail = lazy(() => retryImport(() => import("./pages/opportunities/OpportunityDetail")));
 const TasksList = lazy(() => retryImport(() => import("./pages/tasks/TasksList")));
 const MessagesList = lazy(() => retryImport(() => import("./pages/messages/MessagesList")));
+const InboxPage = lazy(() => retryImport(() => import("./pages/inbox/InboxPage")));
 const MarketingOverview = lazy(() => retryImport(() => import("./pages/marketing/index")));
 const MarketingAds = lazy(() => retryImport(() => import("./pages/marketing/ads/index")));
 const MarketingAdDetail = lazy(() => retryImport(() => import("./pages/marketing/ads/[id]")));
@@ -413,6 +414,14 @@ const App = () => (
             element={
               <ProtectedRoute>
                 <MessagesList />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/inbox"
+            element={
+              <ProtectedRoute>
+                <InboxPage />
               </ProtectedRoute>
             }
           />
