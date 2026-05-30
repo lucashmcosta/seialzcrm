@@ -4514,6 +4514,7 @@ export type Database = {
           last_message_content: string | null
           last_message_direction: string | null
           last_message_id: string | null
+          last_routing_decision: Json | null
           needs_human_attention: boolean | null
           opportunity_id: string | null
           organization_id: string
@@ -4549,6 +4550,7 @@ export type Database = {
           last_message_content?: string | null
           last_message_direction?: string | null
           last_message_id?: string | null
+          last_routing_decision?: Json | null
           needs_human_attention?: boolean | null
           opportunity_id?: string | null
           organization_id: string
@@ -4584,6 +4586,7 @@ export type Database = {
           last_message_content?: string | null
           last_message_direction?: string | null
           last_message_id?: string | null
+          last_routing_decision?: Json | null
           needs_human_attention?: boolean | null
           opportunity_id?: string | null
           organization_id?: string
@@ -7324,7 +7327,9 @@ export type Database = {
           type: string
         }[]
       }
-      assign_round_robin: { Args: { _org_id: string }; Returns: string }
+      assign_round_robin:
+        | { Args: { _org_id: string }; Returns: string }
+        | { Args: { _org_id: string; _queue: string }; Returns: string }
       can_manage_integrations_in_org: {
         Args: { _org_id: string }
         Returns: boolean
@@ -7476,6 +7481,13 @@ export type Database = {
         }
         Returns: Json
       }
+      get_default_queue_for_thread: {
+        Args: { _thread_id: string }
+        Returns: {
+          queue: string
+          suggested_user_id: string
+        }[]
+      }
       get_internal_function_auth_token: { Args: never; Returns: string }
       get_marketing_ad_performance: {
         Args: {
@@ -7609,6 +7621,10 @@ export type Database = {
           scanned_integrations: number
           updated: number
         }[]
+      }
+      reassign_thread: {
+        Args: { _reason?: string; _thread_id: string; _to_user_id: string }
+        Returns: Json
       }
       record_failed_admin_login: {
         Args: { p_email: string; p_ip: string }
@@ -7891,6 +7907,10 @@ export type Database = {
           similarity: number
           title: string
         }[]
+      }
+      take_over_thread: {
+        Args: { _reason?: string; _thread_id: string }
+        Returns: Json
       }
       trigger_intelligence_backfill: {
         Args: { payload: Json }
