@@ -231,6 +231,20 @@ const App = () => (
           <Route path="/auth/confirm-email" element={<ConfirmEmail />} />
           <Route path="/invite/:token" element={<AcceptInvitation />} />
           <Route path="/impersonate/callback" element={<ImpersonateCallback />} />
+
+          {/* DEV-only smoke test panel */}
+          {InboxSmokePanel && (
+            <Route
+              path="/dev/inbox-smoke"
+              element={
+                <ProtectedRoute>
+                  <InboxSmokePanel />
+                </ProtectedRoute>
+              }
+            />
+          )}
+          
+
           
           {/* Admin Portal routes */}
           <Route path="/admin/login" element={<AdminLogin />} />
