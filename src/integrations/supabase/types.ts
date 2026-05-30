@@ -1393,54 +1393,82 @@ export type Database = {
       }
       communication_endpoints: {
         Row: {
+          assigned_user_id: string | null
           channel: string
+          coexistence_enabled: boolean
           created_at: string
+          current_tier: number | null
           default_context_type: string
           display_name: string | null
           external_account_id: string | null
           external_address: string | null
           id: string
           is_active: boolean
+          messaging_limit_per_24h: number | null
           metadata: Json
           organization_id: string
           organization_integration_id: string | null
+          provider: string | null
+          purpose: string
+          quality_rating: string | null
           sender_sid: string | null
           status: string
           updated_at: string
         }
         Insert: {
+          assigned_user_id?: string | null
           channel: string
+          coexistence_enabled?: boolean
           created_at?: string
+          current_tier?: number | null
           default_context_type?: string
           display_name?: string | null
           external_account_id?: string | null
           external_address?: string | null
           id?: string
           is_active?: boolean
+          messaging_limit_per_24h?: number | null
           metadata?: Json
           organization_id: string
           organization_integration_id?: string | null
+          provider?: string | null
+          purpose?: string
+          quality_rating?: string | null
           sender_sid?: string | null
           status?: string
           updated_at?: string
         }
         Update: {
+          assigned_user_id?: string | null
           channel?: string
+          coexistence_enabled?: boolean
           created_at?: string
+          current_tier?: number | null
           default_context_type?: string
           display_name?: string | null
           external_account_id?: string | null
           external_address?: string | null
           id?: string
           is_active?: boolean
+          messaging_limit_per_24h?: number | null
           metadata?: Json
           organization_id?: string
           organization_integration_id?: string | null
+          provider?: string | null
+          purpose?: string
+          quality_rating?: string | null
           sender_sid?: string | null
           status?: string
           updated_at?: string
         }
         Relationships: [
+          {
+            foreignKeyName: "communication_endpoints_assigned_user_id_fkey"
+            columns: ["assigned_user_id"]
+            isOneToOne: false
+            referencedRelation: "users"
+            referencedColumns: ["id"]
+          },
           {
             foreignKeyName: "communication_endpoints_organization_id_fkey"
             columns: ["organization_id"]
@@ -2098,6 +2126,67 @@ export type Database = {
             columns: ["updated_by_admin_id"]
             isOneToOne: false
             referencedRelation: "admin_users"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      escalation_targets: {
+        Row: {
+          category_id: string | null
+          created_at: string
+          escalate_after_minutes: number
+          id: string
+          is_active: boolean
+          name: string
+          organization_id: string
+          priority: string | null
+          target_user_id: string | null
+          updated_at: string
+        }
+        Insert: {
+          category_id?: string | null
+          created_at?: string
+          escalate_after_minutes?: number
+          id?: string
+          is_active?: boolean
+          name: string
+          organization_id: string
+          priority?: string | null
+          target_user_id?: string | null
+          updated_at?: string
+        }
+        Update: {
+          category_id?: string | null
+          created_at?: string
+          escalate_after_minutes?: number
+          id?: string
+          is_active?: boolean
+          name?: string
+          organization_id?: string
+          priority?: string | null
+          target_user_id?: string | null
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "escalation_targets_category_id_fkey"
+            columns: ["category_id"]
+            isOneToOne: false
+            referencedRelation: "support_categories"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "escalation_targets_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "escalation_targets_target_user_id_fkey"
+            columns: ["target_user_id"]
+            isOneToOne: false
+            referencedRelation: "users"
             referencedColumns: ["id"]
           },
         ]
@@ -4412,11 +4501,13 @@ export type Database = {
           assigned_user_id: string | null
           awaiting_button_response: boolean | null
           button_options: Json | null
+          category_id: string | null
           channel: string | null
           contact_id: string
           created_at: string | null
           external_id: string | null
           first_human_response_at: string | null
+          first_response_at: string | null
           id: string
           last_inbound_at: string | null
           last_message_at: string | null
@@ -4428,10 +4519,14 @@ export type Database = {
           organization_id: string
           original_owner_user_id: string | null
           primary_endpoint_id: string | null
+          priority: string
           resolved_at: string | null
+          sla_first_response_target_at: string | null
+          sla_resolution_target_at: string | null
           status: string
           subject: string | null
           updated_at: string | null
+          waiting_started_at: string | null
           whatsapp_last_inbound_at: string | null
         }
         Insert: {
@@ -4441,11 +4536,13 @@ export type Database = {
           assigned_user_id?: string | null
           awaiting_button_response?: boolean | null
           button_options?: Json | null
+          category_id?: string | null
           channel?: string | null
           contact_id: string
           created_at?: string | null
           external_id?: string | null
           first_human_response_at?: string | null
+          first_response_at?: string | null
           id?: string
           last_inbound_at?: string | null
           last_message_at?: string | null
@@ -4457,10 +4554,14 @@ export type Database = {
           organization_id: string
           original_owner_user_id?: string | null
           primary_endpoint_id?: string | null
+          priority?: string
           resolved_at?: string | null
+          sla_first_response_target_at?: string | null
+          sla_resolution_target_at?: string | null
           status?: string
           subject?: string | null
           updated_at?: string | null
+          waiting_started_at?: string | null
           whatsapp_last_inbound_at?: string | null
         }
         Update: {
@@ -4470,11 +4571,13 @@ export type Database = {
           assigned_user_id?: string | null
           awaiting_button_response?: boolean | null
           button_options?: Json | null
+          category_id?: string | null
           channel?: string | null
           contact_id?: string
           created_at?: string | null
           external_id?: string | null
           first_human_response_at?: string | null
+          first_response_at?: string | null
           id?: string
           last_inbound_at?: string | null
           last_message_at?: string | null
@@ -4486,10 +4589,14 @@ export type Database = {
           organization_id?: string
           original_owner_user_id?: string | null
           primary_endpoint_id?: string | null
+          priority?: string
           resolved_at?: string | null
+          sla_first_response_target_at?: string | null
+          sla_resolution_target_at?: string | null
           status?: string
           subject?: string | null
           updated_at?: string | null
+          waiting_started_at?: string | null
           whatsapp_last_inbound_at?: string | null
         }
         Relationships: [
@@ -4498,6 +4605,13 @@ export type Database = {
             columns: ["assigned_user_id"]
             isOneToOne: false
             referencedRelation: "users"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "message_threads_category_id_fkey"
+            columns: ["category_id"]
+            isOneToOne: false
+            referencedRelation: "support_categories"
             referencedColumns: ["id"]
           },
           {
@@ -4558,6 +4672,7 @@ export type Database = {
           error_message: string | null
           id: string
           intent: string | null
+          is_internal_note: boolean
           is_sample: boolean | null
           media_type: string | null
           media_urls: Json | null
@@ -4590,6 +4705,7 @@ export type Database = {
           error_message?: string | null
           id?: string
           intent?: string | null
+          is_internal_note?: boolean
           is_sample?: boolean | null
           media_type?: string | null
           media_urls?: Json | null
@@ -4622,6 +4738,7 @@ export type Database = {
           error_message?: string | null
           id?: string
           intent?: string | null
+          is_internal_note?: boolean
           is_sample?: boolean | null
           media_type?: string | null
           media_urls?: Json | null
@@ -6030,6 +6147,104 @@ export type Database = {
           },
         ]
       }
+      support_categories: {
+        Row: {
+          color: string | null
+          created_at: string
+          description: string | null
+          id: string
+          is_active: boolean
+          key: string
+          label: string
+          organization_id: string
+          updated_at: string
+        }
+        Insert: {
+          color?: string | null
+          created_at?: string
+          description?: string | null
+          id?: string
+          is_active?: boolean
+          key: string
+          label: string
+          organization_id: string
+          updated_at?: string
+        }
+        Update: {
+          color?: string | null
+          created_at?: string
+          description?: string | null
+          id?: string
+          is_active?: boolean
+          key?: string
+          label?: string
+          organization_id?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "support_categories_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      support_sla_configs: {
+        Row: {
+          business_hours_only: boolean
+          category_id: string | null
+          created_at: string
+          first_response_minutes: number
+          id: string
+          is_active: boolean
+          organization_id: string
+          priority: string
+          resolution_minutes: number
+          updated_at: string
+        }
+        Insert: {
+          business_hours_only?: boolean
+          category_id?: string | null
+          created_at?: string
+          first_response_minutes?: number
+          id?: string
+          is_active?: boolean
+          organization_id: string
+          priority?: string
+          resolution_minutes?: number
+          updated_at?: string
+        }
+        Update: {
+          business_hours_only?: boolean
+          category_id?: string | null
+          created_at?: string
+          first_response_minutes?: number
+          id?: string
+          is_active?: boolean
+          organization_id?: string
+          priority?: string
+          resolution_minutes?: number
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "support_sla_configs_category_id_fkey"
+            columns: ["category_id"]
+            isOneToOne: false
+            referencedRelation: "support_categories"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "support_sla_configs_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       tag_assignments: {
         Row: {
           created_at: string | null
@@ -6124,9 +6339,12 @@ export type Database = {
           organization_id: string
           postpone_reason: string | null
           priority: Database["public"]["Enums"]["task_priority"] | null
+          requested_by_user_id: string | null
+          resolution_text: string | null
           source_external_id: string | null
           status: Database["public"]["Enums"]["task_status"] | null
           task_type: string | null
+          thread_id: string | null
           title: string
           updated_at: string | null
         }
@@ -6146,9 +6364,12 @@ export type Database = {
           organization_id: string
           postpone_reason?: string | null
           priority?: Database["public"]["Enums"]["task_priority"] | null
+          requested_by_user_id?: string | null
+          resolution_text?: string | null
           source_external_id?: string | null
           status?: Database["public"]["Enums"]["task_status"] | null
           task_type?: string | null
+          thread_id?: string | null
           title: string
           updated_at?: string | null
         }
@@ -6168,9 +6389,12 @@ export type Database = {
           organization_id?: string
           postpone_reason?: string | null
           priority?: Database["public"]["Enums"]["task_priority"] | null
+          requested_by_user_id?: string | null
+          resolution_text?: string | null
           source_external_id?: string | null
           status?: Database["public"]["Enums"]["task_status"] | null
           task_type?: string | null
+          thread_id?: string | null
           title?: string
           updated_at?: string | null
         }
@@ -6217,6 +6441,212 @@ export type Database = {
             referencedRelation: "organizations"
             referencedColumns: ["id"]
           },
+          {
+            foreignKeyName: "tasks_requested_by_user_id_fkey"
+            columns: ["requested_by_user_id"]
+            isOneToOne: false
+            referencedRelation: "users"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "tasks_thread_id_fkey"
+            columns: ["thread_id"]
+            isOneToOne: false
+            referencedRelation: "message_threads"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      team_memberships: {
+        Row: {
+          active: boolean
+          assigned_at: string
+          assigned_by_user_id: string | null
+          created_at: string
+          ended_at: string | null
+          id: string
+          is_primary: boolean
+          metadata: Json
+          organization_id: string
+          parent_id: string
+          parent_type: string
+          role: string | null
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          active?: boolean
+          assigned_at?: string
+          assigned_by_user_id?: string | null
+          created_at?: string
+          ended_at?: string | null
+          id?: string
+          is_primary?: boolean
+          metadata?: Json
+          organization_id: string
+          parent_id: string
+          parent_type: string
+          role?: string | null
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          active?: boolean
+          assigned_at?: string
+          assigned_by_user_id?: string | null
+          created_at?: string
+          ended_at?: string | null
+          id?: string
+          is_primary?: boolean
+          metadata?: Json
+          organization_id?: string
+          parent_id?: string
+          parent_type?: string
+          role?: string | null
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "team_memberships_assigned_by_user_id_fkey"
+            columns: ["assigned_by_user_id"]
+            isOneToOne: false
+            referencedRelation: "users"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "team_memberships_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "team_memberships_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "users"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      thread_assignment_history: {
+        Row: {
+          action_type: string
+          created_at: string
+          from_user_id: string | null
+          id: string
+          metadata: Json
+          organization_id: string
+          performed_by_user_id: string | null
+          reason: string | null
+          thread_id: string
+          to_user_id: string | null
+        }
+        Insert: {
+          action_type: string
+          created_at?: string
+          from_user_id?: string | null
+          id?: string
+          metadata?: Json
+          organization_id: string
+          performed_by_user_id?: string | null
+          reason?: string | null
+          thread_id: string
+          to_user_id?: string | null
+        }
+        Update: {
+          action_type?: string
+          created_at?: string
+          from_user_id?: string | null
+          id?: string
+          metadata?: Json
+          organization_id?: string
+          performed_by_user_id?: string | null
+          reason?: string | null
+          thread_id?: string
+          to_user_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "thread_assignment_history_from_user_id_fkey"
+            columns: ["from_user_id"]
+            isOneToOne: false
+            referencedRelation: "users"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "thread_assignment_history_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "thread_assignment_history_performed_by_user_id_fkey"
+            columns: ["performed_by_user_id"]
+            isOneToOne: false
+            referencedRelation: "users"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "thread_assignment_history_thread_id_fkey"
+            columns: ["thread_id"]
+            isOneToOne: false
+            referencedRelation: "message_threads"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "thread_assignment_history_to_user_id_fkey"
+            columns: ["to_user_id"]
+            isOneToOne: false
+            referencedRelation: "users"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      thread_routing_rules: {
+        Row: {
+          action: Json
+          condition: Json
+          created_at: string
+          id: string
+          is_active: boolean
+          name: string
+          organization_id: string
+          priority: number
+          updated_at: string
+        }
+        Insert: {
+          action?: Json
+          condition?: Json
+          created_at?: string
+          id?: string
+          is_active?: boolean
+          name: string
+          organization_id: string
+          priority?: number
+          updated_at?: string
+        }
+        Update: {
+          action?: Json
+          condition?: Json
+          created_at?: string
+          id?: string
+          is_active?: boolean
+          name?: string
+          organization_id?: string
+          priority?: number
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "thread_routing_rules_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
         ]
       }
       user_organizations: {
@@ -6228,6 +6658,7 @@ export type Database = {
           organization_id: string
           permission_profile_id: string
           round_robin_active: boolean
+          round_robin_queues: string[]
           updated_at: string | null
           user_id: string
         }
@@ -6239,6 +6670,7 @@ export type Database = {
           organization_id: string
           permission_profile_id: string
           round_robin_active?: boolean
+          round_robin_queues?: string[]
           updated_at?: string | null
           user_id: string
         }
@@ -6250,6 +6682,7 @@ export type Database = {
           organization_id?: string
           permission_profile_id?: string
           round_robin_active?: boolean
+          round_robin_queues?: string[]
           updated_at?: string | null
           user_id?: string
         }
@@ -7473,6 +7906,10 @@ export type Database = {
       }
       user_can_view_all: {
         Args: { _entity: string; _org_id: string }
+        Returns: boolean
+      }
+      user_has_cs_permission: {
+        Args: { _org: string; _perm: string }
         Returns: boolean
       }
       user_has_org_access: { Args: { org_id: string }; Returns: boolean }
