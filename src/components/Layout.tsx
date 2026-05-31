@@ -160,6 +160,13 @@ export function Layout({ children }: LayoutProps) {
     });
   }
 
+  // Atendimento (módulo independente — pós-venda / jurídico)
+  navItems.push({
+    label: 'Atendimento',
+    href: '/inbox',
+    icon: Headset,
+  });
+
   // Build footer items
   const footerItems: NavItemType[] = [];
 
