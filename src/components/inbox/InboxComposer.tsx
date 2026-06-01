@@ -133,9 +133,9 @@ export function InboxComposer({ thread, replyTo, onClearReply, onSent, onThreadM
           assigned_user_id: myId,
           assigned_at: new Date().toISOString(),
           last_routing_decision: {
-            action: 'manual_takeover',
+            action: 'take_over',
             by_user_id: myId,
-            reason: 'inbox_takeover',
+            reason: thread.assigned_user_id ? 'inbox_reassign_to_self' : 'inbox_takeover',
             at: new Date().toISOString(),
           },
         })
