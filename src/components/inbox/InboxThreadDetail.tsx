@@ -33,30 +33,56 @@ export function InboxThreadDetail({ threadId }: Props) {
 
   const name = thread.contact?.name || thread.contact?.phone || 'Sem contato';
 
+  const lifecycle = thread.contact?.lifecycle_stage;
+  const endpointPurpose = thread.primary_endpoint?.purpose;
+
   return (
     <div className="flex-1 flex bg-background min-w-0">
       {/* Coluna principal: header + timeline read-only */}
       <div className="flex-1 flex flex-col min-w-0">
-        <div className="h-14 border-b border-border flex items-center px-6 gap-3 flex-shrink-0">
-          <h2 className="text-base font-semibold text-foreground truncate">{name}</h2>
-          <InboxSlaChip targetAt={thread.sla_first_response_target_at} firstResponseAt={thread.first_response_at} />
-          {thread.status && (
-            <span className="font-data text-[10px] px-1.5 py-0.5 rounded bg-muted text-muted-foreground">
-              {thread.status}
-            </span>
-          )}
-          {thread.priority && (
-            <span className="font-data text-[10px] px-1.5 py-0.5 rounded bg-muted text-muted-foreground">
-              {thread.priority}
-            </span>
-          )}
+        <div className="border-b border-border px-6 py-2 flex-shrink-0 flex items-center gap-3">
+          <div className="flex-1 min-w-0">
+            <h2 className="text-base font-semibold text-foreground truncate" title={name}>{name}</h2>
+            <div className="flex items-center gap-1.5 flex-wrap mt-0.5">
+              {lifecycle === 'customer' && (
+                <span className="font-data text-[10px] px-1.5 py-0.5 rounded bg-[hsl(var(--sz-green-dim))] text-foreground">
+                  customer
+                </span>
+              )}
+              {endpointPurpose && (
+                <span className="font-data text-[10px] px-1.5 py-0.5 rounded bg-muted text-muted-foreground">
+                  endpoint: {endpointPurpose}
+                </span>
+              )}
+              <span className="font-data text-[10px] px-1.5 py-0.5 rounded bg-[hsl(var(--sz-bg3))] text-[hsl(var(--sz-t3))] uppercase tracking-wider">
+                Somente leitura · Fase 1
+              </span>
+            </div>
+          </div>
+          <div className="flex items-center gap-2 flex-shrink-0">
+            <InboxSlaChip targetAt={thread.sla_first_response_target_at} firstResponseAt={thread.first_response_at} />
+            {thread.status && (
+              <span className="font-data text-[10px] px-1.5 py-0.5 rounded bg-muted text-muted-foreground">
+                {thread.status}
+              </span>
+            )}
+            {thread.priority && (
+              <span className="font-data text-[10px] px-1.5 py-0.5 rounded bg-muted text-muted-foreground">
+                {thread.priority}
+              </span>
+            )}
+          </div>
         </div>
 
-        <InboxConversationTimeline threadId={thread.id} organizationId={organization?.id} />
+        <InboxConversationTimeline
+          threadId={thread.id}
+          organizationId={organization?.id}
+          contactName={thread.contact?.name || undefined}
+        />
       </div>
 
       {/* Painel lateral: dados + histórico de atribuição */}
-      <aside className="w-[320px] border-l border-border overflow-y-auto flex-shrink-0">
+      <aside className="w-[280px] border-l border-border overflow-y-auto flex-shrink-0">
         <div className="p-5 space-y-6">
           <section>
             <h3 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground mb-2">Dados da conversa</h3>

@@ -10,6 +10,7 @@ import { getProxiedMediaUrl } from '@/lib/mediaProxy';
 interface Props {
   threadId: string;
   organizationId: string | undefined;
+  contactName?: string;
 }
 
 function StatusIcon({ status }: { status: string | null }) {
@@ -68,7 +69,7 @@ function Media({ msg, orgId, accessToken }: { msg: InboxMessageRow; orgId: strin
   );
 }
 
-export function InboxConversationTimeline({ threadId, organizationId }: Props) {
+export function InboxConversationTimeline({ threadId, organizationId, contactName }: Props) {
   const { messages, loading, error } = useInboxThreadMessages(threadId);
   const [accessToken, setAccessToken] = useState<string | undefined>(undefined);
   const scrollRef = useRef<HTMLDivElement>(null);
@@ -101,16 +102,7 @@ export function InboxConversationTimeline({ threadId, organizationId }: Props) {
 
   return (
     <div className="flex-1 flex flex-col min-h-0">
-      <div className="px-4 py-1.5 border-b border-border flex items-center justify-between flex-shrink-0">
-        <span className="font-data text-[10px] uppercase tracking-wider text-muted-foreground">
-          Conversa WhatsApp
-        </span>
-        <span className="font-data text-[10px] uppercase tracking-wider text-[hsl(var(--sz-t3))]">
-          Somente leitura — Fase 1
-        </span>
-      </div>
-
-      <div ref={scrollRef} className="flex-1 overflow-y-auto p-4 space-y-2 min-h-0 bg-muted/20">
+      <div ref={scrollRef} className="flex-1 overflow-y-auto p-4 space-y-3 min-h-0 bg-muted/20">
         {messages.length === 0 ? (
           <div className="h-full flex items-center justify-center text-xs text-muted-foreground">
             Sem mensagens nesta conversa.
@@ -122,8 +114,24 @@ export function InboxConversationTimeline({ threadId, organizationId }: Props) {
             const isInternal = !!m.is_internal_note;
             const timeStr = new Date(m.sent_at).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
 
+            let senderLabel: string | null = null;
+            if (isInternal) {
+              senderLabel = `Nota interna${m.sender_name ? ` · ${m.sender_name}` : ''}`;
+            } else if (isOutbound) {
+              if (m.sender_type === 'agent') senderLabel = `Agente IA${m.sender_name ? ` · ${m.sender_name}` : ''}`;
+              else if (m.sender_type === 'user') senderLabel = `Atendente${m.sender_name ? ` · ${m.sender_name}` : ''}`;
+              else senderLabel = 'Empresa';
+            } else {
+              senderLabel = contactName || 'Cliente';
+            }
+
             return (
-              <div key={m.id} className={`flex ${isInternal ? 'justify-center' : isOutbound ? 'justify-end' : 'justify-start'}`}>
+              <div key={m.id} className={`flex flex-col ${isInternal ? 'items-center' : isOutbound ? 'items-end' : 'items-start'}`}>
+                {senderLabel && !isInternal && (
+                  <span className="text-[10px] text-muted-foreground mb-0.5 px-1">
+                    {senderLabel}
+                  </span>
+                )}
                 <div
                   className={`max-w-[75%] rounded-lg ${isAudioOnly ? 'p-1' : 'p-2.5'} ${
                     isInternal
@@ -135,18 +143,7 @@ export function InboxConversationTimeline({ threadId, organizationId }: Props) {
                 >
                   {isInternal && (
                     <div className="font-data text-[9px] uppercase tracking-wider mb-1 opacity-80">
-                      Nota interna {m.sender_name ? `· ${m.sender_name}` : ''}
-                    </div>
-                  )}
-
-                  {!isInternal && isOutbound && m.sender_type === 'agent' && (
-                    <div className="text-[10px] font-semibold mb-1 opacity-80">
-                      {m.sender_name || 'Agente IA'}
-                    </div>
-                  )}
-                  {!isInternal && isOutbound && m.sender_type === 'user' && m.sender_name && (
-                    <div className="text-[10px] font-semibold mb-1 opacity-80">
-                      {m.sender_name}
+                      {senderLabel}
                     </div>
                   )}
 
