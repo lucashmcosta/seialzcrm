@@ -229,17 +229,6 @@ const App = () => (
           <Route path="/invite/:token" element={<AcceptInvitation />} />
           <Route path="/impersonate/callback" element={<ImpersonateCallback />} />
 
-          {/* DEV-only smoke test panel */}
-          {InboxSmokePanel && (
-            <Route
-              path="/dev/inbox-smoke"
-              element={
-                <ProtectedRoute>
-                  <InboxSmokePanel />
-                </ProtectedRoute>
-              }
-            />
-          )}
           
 
           
