@@ -59,7 +59,7 @@ const SELECT_A = `
   sla_first_response_target_at, sla_resolution_target_at,
   last_message_at, last_message_content, last_message_direction, resolved_at,
   primary_endpoint_id,
-  contact:contacts ( id, name, phone, lifecycle_stage ),
+  contact:contacts ( id, name:full_name, phone, lifecycle_stage ),
   primary_endpoint:communication_endpoints!inner ( id, purpose )
 `;
 
@@ -69,7 +69,7 @@ const SELECT_B = `
   sla_first_response_target_at, sla_resolution_target_at,
   last_message_at, last_message_content, last_message_direction, resolved_at,
   primary_endpoint_id,
-  contact:contacts!inner ( id, name, phone, lifecycle_stage ),
+  contact:contacts!inner ( id, name:full_name, phone, lifecycle_stage ),
   primary_endpoint:communication_endpoints ( id, purpose )
 `;
 
