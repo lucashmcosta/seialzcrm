@@ -332,7 +332,8 @@ serve(async (req) => {
     const config = integration.config_values as any
     const accountSid = config.account_sid
     const authToken = config.auth_token
-    const whatsappFrom = config.whatsapp_from
+    // Phase 1.3B: in inbox path, override `From` with endpoint.external_address (E.164).
+    const whatsappFrom = inboxWhatsappFromOverride ?? config.whatsapp_from
 
     if (!accountSid || !authToken || !whatsappFrom) {
       return new Response(
