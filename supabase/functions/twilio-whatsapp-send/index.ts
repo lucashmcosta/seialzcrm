@@ -219,7 +219,81 @@ serve(async (req) => {
       )
     }
     // ============================================================
-    // End Phase 1.3A dry-run branch. Default flow below is unchanged.
+    // End Phase 1.3A dry-run branch.
+    // ============================================================
+
+    // ============================================================
+    // Phase 1.3B — Inbox real-send guards (senderContext='inbox', dryRun!=true)
+    //
+    // When invoked from /inbox we:
+    //   - REQUIRE threadId
+    //   - resolve endpoint via thread.primary_endpoint_id (never RPC)
+    //   - accept ONLY purpose='customer_service'
+    //   - block commercial, vendor_personal, other (no feature flag)
+    //   - build From as `whatsapp:${endpoint.external_address}` (E.164)
+    //   - never use sender_sid as From
+    //
+    // The default ('messages') path below is unchanged byte-for-byte.
+    // ============================================================
+    let inboxWhatsappFromOverride: string | null = null
+    let inboxEndpointIdOverride: string | null = null
+
+    if (senderContext === 'inbox') {
+      const inboxErr = (status: number, reason: string, extra: Record<string, any> = {}) => {
+        console.log('[inbox-send] blocked', { reason, threadId, ...extra })
+        return new Response(
+          JSON.stringify({ error: reason, senderContext: 'inbox', thread_id: threadId ?? null, ...extra }),
+          { status, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        )
+      }
+
+      if (!organizationId) return inboxErr(400, 'missing_organization')
+      if (!threadId) return inboxErr(400, 'missing_thread')
+
+      const supabaseInbox = createClient(
+        Deno.env.get('SUPABASE_URL') ?? '',
+        Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''
+      )
+
+      const { data: thread, error: tErr } = await supabaseInbox
+        .from('message_threads')
+        .select('id, primary_endpoint_id, organization_id, channel')
+        .eq('id', threadId)
+        .eq('organization_id', organizationId)
+        .maybeSingle()
+      if (tErr || !thread) return inboxErr(404, 'thread_not_found')
+      if (!thread.primary_endpoint_id) return inboxErr(400, 'no_endpoint')
+
+      const { data: ep, error: eErr } = await supabaseInbox
+        .from('communication_endpoints')
+        .select('id, channel, purpose, external_address, is_active, organization_integration_id')
+        .eq('id', thread.primary_endpoint_id)
+        .maybeSingle()
+      if (eErr || !ep) return inboxErr(400, 'no_endpoint')
+
+      if (ep.is_active === false) return inboxErr(400, 'endpoint_inactive')
+      if (ep.channel !== 'whatsapp') return inboxErr(400, 'wrong_channel')
+      if (ep.purpose === 'commercial' || ep.purpose === 'vendor_personal' || ep.purpose === 'other') {
+        return inboxErr(400, 'purpose_blocked', { endpoint_purpose: ep.purpose })
+      }
+      if (ep.purpose !== 'customer_service') {
+        return inboxErr(400, 'purpose_blocked', { endpoint_purpose: ep.purpose })
+      }
+      if (!ep.organization_integration_id) return inboxErr(400, 'integration_missing')
+      if (!ep.external_address || !/^\+\d{8,15}$/.test(ep.external_address)) {
+        return inboxErr(400, 'sender_data_missing')
+      }
+
+      inboxWhatsappFromOverride = `whatsapp:${ep.external_address}`
+      inboxEndpointIdOverride = ep.id
+      console.log('[inbox-send] guards ok', {
+        threadId,
+        endpoint_id: ep.id,
+        from: inboxWhatsappFromOverride,
+      })
+    }
+    // ============================================================
+    // End Phase 1.3B inbox guards. Default flow below is unchanged.
     // ============================================================
 
     if (!organizationId || !contactId) {
