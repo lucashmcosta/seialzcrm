@@ -42,13 +42,16 @@ async function snap(threadId: string) {
 
 function evalPass(
   test: string,
-  error: { code?: string; message?: string } | null,
+  error: { code?: string; message?: string; details?: string; hint?: string } | null,
   thread: { status?: string; assigned_user_id?: string } | null,
   userTarget?: string,
 ): boolean | null {
-  const errCode = error?.code ?? null;
-  const errMsg = error?.message ?? "";
-  const combined = errCode ?? errMsg;
+  const combined = [
+    error?.code ?? "",
+    error?.message ?? "",
+    error?.details ?? "",
+    error?.hint ?? "",
+  ].join(" ");
   switch (test) {
     case "T5":
       return !error && thread?.status === "in_progress";
