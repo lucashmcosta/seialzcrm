@@ -33,7 +33,7 @@ export function useInboxThreads(
       setThreads(rows);
       setDebug(debug);
       // eslint-disable-next-line no-console
-      console.info(`[inbox] tab=${tab} A=${debug.a} B_raw=${debug.bRaw} B_filtered=${debug.bFiltered} merged=${debug.merged}`);
+      console.info(`[inbox] tab=${tab} B_raw=${debug.bRaw} B_filtered=${debug.bFiltered} merged=${debug.merged}`);
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e));
     } finally {
