@@ -1,29 +1,36 @@
 import { cn } from '@/lib/utils';
-import { Tray, UserCircle, Clock, Warning, CheckCircle } from '@phosphor-icons/react';
-import type { InboxQueue, InboxQueueCounts } from '@/hooks/inbox/useInboxQueueCounts';
+import { ChatCircleDots, Hourglass, CheckCircle, UserCircle } from '@phosphor-icons/react';
+import { Switch } from '@/components/ui/switch';
+import type { InboxQueueCounts } from '@/hooks/inbox/useInboxQueueCounts';
+import type { InboxTab } from '@/hooks/inbox/inboxScope';
 
 interface Props {
-  active: InboxQueue;
+  active: InboxTab;
   counts: InboxQueueCounts;
-  onChange: (q: InboxQueue) => void;
+  onChange: (tab: InboxTab) => void;
+  onlyMine: boolean;
+  onOnlyMineChange: (v: boolean) => void;
 }
 
-const QUEUES: { id: InboxQueue; label: string; icon: typeof Tray }[] = [
-  { id: 'mine', label: 'Minhas', icon: UserCircle },
-  { id: 'unassigned', label: 'Não atribuídas', icon: Tray },
-  { id: 'in_sla', label: 'Em SLA', icon: Clock },
-  { id: 'overdue', label: 'Atrasadas', icon: Warning },
-  { id: 'resolved', label: 'Resolvidas', icon: CheckCircle },
+const TABS: { id: InboxTab; label: string; icon: typeof ChatCircleDots }[] = [
+  { id: 'active', label: 'Ativos', icon: ChatCircleDots },
+  { id: 'waiting', label: 'Aguardando', icon: Hourglass },
+  { id: 'resolved_today', label: 'Concluídos hoje', icon: CheckCircle },
 ];
 
-export function InboxQueues({ active, counts, onChange }: Props) {
+export function InboxQueues({ active, counts, onChange, onlyMine, onOnlyMineChange }: Props) {
   return (
     <aside className="w-[220px] flex-shrink-0 border-r border-border bg-[hsl(var(--sz-bg2))] flex flex-col">
       <div className="h-14 border-b border-border flex items-center px-4">
-        <h2 className="text-sm font-semibold text-foreground">Filas</h2>
+        <h2 className="text-sm font-semibold text-foreground">Atendimento</h2>
+      </div>
+      <div className="px-4 py-3 border-b border-border flex items-center gap-2">
+        <UserCircle size={16} weight="light" className="text-muted-foreground" />
+        <span className="flex-1 text-[12px] text-foreground">Apenas minhas</span>
+        <Switch checked={onlyMine} onCheckedChange={onOnlyMineChange} />
       </div>
       <nav className="flex-1 overflow-y-auto py-2">
-        {QUEUES.map((q) => {
+        {TABS.map((q) => {
           const Icon = q.icon;
           const isActive = active === q.id;
           const count = counts[q.id];

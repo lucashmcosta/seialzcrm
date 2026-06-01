@@ -5,11 +5,9 @@ interface Props {
 }
 
 const ITEMS: { key: keyof InboxQueueCounts; label: string }[] = [
-  { key: 'mine', label: 'Minhas' },
-  { key: 'unassigned', label: 'Não atribuídas' },
-  { key: 'in_sla', label: 'Em SLA' },
-  { key: 'overdue', label: 'Atrasadas' },
-  { key: 'resolved', label: 'Resolvidas' },
+  { key: 'active', label: 'Ativos' },
+  { key: 'waiting', label: 'Aguardando' },
+  { key: 'resolved_today', label: 'Concluídos hoje' },
 ];
 
 export function InboxMetricsBar({ counts }: Props) {

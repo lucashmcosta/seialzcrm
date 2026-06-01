@@ -62,6 +62,16 @@ export function InboxThreadList({ threads, loading, selectedId, onSelect }: Prop
                     {t.status}
                   </span>
                 )}
+                {t.primary_endpoint?.purpose === 'customer_service' && (
+                  <span className="font-data text-[10px] px-1.5 py-0.5 rounded bg-primary/10 text-primary">
+                    CS endpoint
+                  </span>
+                )}
+                {t.contact?.lifecycle_stage === 'customer' && (
+                  <span className="font-data text-[10px] px-1.5 py-0.5 rounded bg-[hsl(var(--sz-green-dim))] text-foreground">
+                    customer
+                  </span>
+                )}
                 {!t.assigned_user_id && (
                   <span className="font-data text-[10px] px-1.5 py-0.5 rounded bg-yellow-500/15 text-yellow-700 dark:text-yellow-400">
                     não atribuída

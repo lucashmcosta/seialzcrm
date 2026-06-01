@@ -1,85 +1,58 @@
 import { useEffect, useState, useCallback } from 'react';
 import { supabase } from '@/integrations/supabase/client';
-import type { InboxQueue } from './useInboxQueueCounts';
+import {
+  fetchInboxScopedThreads,
+  type InboxScopedThread,
+  type InboxTab,
+  type ScopeDebug,
+} from './inboxScope';
 
-export interface InboxThreadRow {
-  id: string;
-  contact_id: string | null;
-  channel: string | null;
-  status: string | null;
-  priority: string | null;
-  assigned_user_id: string | null;
-  assigned_at: string | null;
-  first_response_at: string | null;
-  sla_first_response_target_at: string | null;
-  sla_resolution_target_at: string | null;
-  last_message_at: string | null;
-  last_message_content: string | null;
-  last_message_direction: string | null;
-  resolved_at: string | null;
-  contact?: { id: string; name: string | null; phone: string | null } | null;
-}
+export type InboxThreadRow = InboxScopedThread;
 
-const SELECT = `
-  id, contact_id, channel, status, priority,
-  assigned_user_id, assigned_at, first_response_at,
-  sla_first_response_target_at, sla_resolution_target_at,
-  last_message_at, last_message_content, last_message_direction, resolved_at,
-  contact:contacts ( id, name, phone )
-`;
-
-export function useInboxThreads(queue: InboxQueue, currentUserId: string | null) {
+export function useInboxThreads(
+  tab: InboxTab,
+  onlyMine: boolean,
+  internalUserId: string | null,
+  orgTimezone: string | null,
+) {
   const [threads, setThreads] = useState<InboxThreadRow[]>([]);
+  const [debug, setDebug] = useState<ScopeDebug | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
   const fetchThreads = useCallback(async () => {
     setLoading(true);
     setError(null);
-    let q = supabase
-      .from('message_threads')
-      .select(SELECT)
-      .order('last_message_at', { ascending: false, nullsFirst: false })
-      .limit(100);
-    const nowIso = new Date().toISOString();
-    switch (queue) {
-      case 'mine':
-        if (!currentUserId) { setThreads([]); setLoading(false); return; }
-        q = q.eq('assigned_user_id', currentUserId);
-        break;
-      case 'unassigned':
-        q = q.is('assigned_user_id', null).eq('status', 'open');
-        break;
-      case 'in_sla':
-        q = q.gt('sla_first_response_target_at', nowIso).is('first_response_at', null);
-        break;
-      case 'overdue':
-        q = q.lt('sla_first_response_target_at', nowIso).is('first_response_at', null).eq('status', 'open');
-        break;
-      case 'resolved':
-        q = q.eq('status', 'resolved');
-        break;
+    try {
+      const { rows, debug } = await fetchInboxScopedThreads({
+        tab,
+        onlyMine,
+        internalUserId,
+        orgTimezone,
+      });
+      setThreads(rows);
+      setDebug(debug);
+      // eslint-disable-next-line no-console
+      console.info(`[inbox] tab=${tab} A=${debug.a} B_raw=${debug.bRaw} B_filtered=${debug.bFiltered} merged=${debug.merged}`);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : String(e));
+    } finally {
+      setLoading(false);
     }
-    const { data, error } = await q;
-    if (error) setError(error.message);
-    setThreads((data ?? []) as unknown as InboxThreadRow[]);
-    setLoading(false);
-  }, [queue, currentUserId]);
+  }, [tab, onlyMine, internalUserId, orgTimezone]);
 
-  useEffect(() => {
-    fetchThreads();
-  }, [fetchThreads]);
+  useEffect(() => { fetchThreads(); }, [fetchThreads]);
 
-  // Realtime channel isolated to inbox — does NOT touch /messages
+  // Realtime channel isolated to inbox — does NOT touch /messages.
   useEffect(() => {
     const channel = supabase
-      .channel(`inbox-threads-${queue}`)
+      .channel(`inbox-threads-${tab}`)
       .on('postgres_changes', { event: '*', schema: 'public', table: 'message_threads' }, () => {
         fetchThreads();
       })
       .subscribe();
     return () => { supabase.removeChannel(channel); };
-  }, [queue, fetchThreads]);
+  }, [tab, fetchThreads]);
 
-  return { threads, loading, error, refresh: fetchThreads };
+  return { threads, loading, error, debug, refresh: fetchThreads };
 }
