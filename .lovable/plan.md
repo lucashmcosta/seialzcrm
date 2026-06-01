@@ -1,142 +1,143 @@
 
-# Fase 1.3A — Dry-run de validação de endpoint (somente leitura)
+# Fase 1.3B — Envio real seguro pelo `/inbox`
 
-Escopo único: `supabase/functions/twilio-whatsapp-send/index.ts`. Nada mais.
+Sem composer. Sem envio real ao cliente nesta fase. `/messages` intocado.
 
-Sem composer. Sem envio real. Sem mudar comportamento de `/messages`. Sem alterar como o `From` real é montado.
+## Decisões aprovadas
 
----
+1. **Sem feature flag.** Após reclassificação, `senderContext='inbox'` aceita **apenas** `purpose='customer_service'`. Bloqueia `commercial`, `vendor_personal`, `other`.
+2. **Reclassificação 1-a-1.** Apenas o endpoint `c09bd713-0225-4533-afe8-20ac07bd3a7c` (Central Trabalhista). Nenhum outro endpoint é tocado.
 
-## 1. Novo parâmetro de entrada
+## Ordem de execução
 
-Adicionar dois campos opcionais ao body:
+### Passo 1 — Auditoria de impacto (read-only)
 
-- `senderContext?: 'inbox' | 'messages'` — default `'messages'`.
-- `dryRun?: boolean` — default `false`.
+`rg -n "purpose" src/ supabase/functions/` filtrando referências a `communication_endpoints.purpose`. Resultado esperado: só o branch dry-run da `twilio-whatsapp-send` consome `purpose` hoje. Se aparecer outro consumidor, paramos e reavaliamos antes do UPDATE.
 
-Quando `senderContext !== 'inbox'` **e** `dryRun !== true`, o código segue exatamente o fluxo de hoje, byte-a-byte (nenhum branch novo executado). Isso garante zero risco para `/messages`.
+### Passo 2 — UPDATE pontual de dados
 
-## 2. Branch dry-run (somente leitura, zero side effects)
+Operação de DADO (não migration de schema), via `supabase--insert_data`:
 
-Quando `dryRun === true`:
+```sql
+UPDATE public.communication_endpoints
+SET purpose = 'customer_service',
+    provider = 'twilio',
+    updated_at = now()
+WHERE id = 'c09bd713-0225-4533-afe8-20ac07bd3a7c'
+  AND organization_id = '40ae935c-a7f7-4ad7-8ea4-91be6404a95f';
+```
 
-- **Não** chamar Twilio.
-- **Não** inserir em `messages`.
-- **Não** inserir em `activities`.
-- **Não** atualizar `message_threads` (nem `updated_at`, nem `primary_endpoint_id` backfill, nem `whatsapp_last_inbound_at`).
-- **Não** chamar `resolve_communication_endpoint` com efeito de escrita (a RPC atual é leitura, mas evitamos chamá-la em caminho que cause backfill posterior — o dry-run sai antes).
-- Apenas SELECTs.
+Validação pós-UPDATE: `SELECT id, purpose, provider, external_address, sender_sid, is_active FROM communication_endpoints WHERE id = '…';` deve retornar `purpose='customer_service'`, `provider='twilio'`.
 
-Se `dryRun === true` **e** `senderContext !== 'inbox'`, retornar 400 `{ error: 'dryRun is only supported with senderContext=inbox' }` — para não criar uma porta lateral em `/messages`.
+### Passo 3 — Dry-run de confirmação (antes do patch)
 
-## 3. Guarda de endpoint (apenas avaliação, sem alterar `From` real)
-
-Validações executadas (só leitura):
-
-1. `threadId` obrigatório → senão `reason: 'missing_thread'`.
-2. Carregar `message_threads` por id+org → `primary_endpoint_id`, `whatsapp_last_inbound_at`, `channel`.
-3. Se `primary_endpoint_id IS NULL` → `allowed: false, reason: 'no_endpoint'`.
-4. Carregar `communication_endpoints` por id.
-5. `is_active = false` → `endpoint_inactive`.
-6. `channel != 'whatsapp'` → `wrong_channel`.
-7. `purpose IN ('commercial','vendor_personal')` → `purpose_blocked`.
-8. `purpose = 'other'` → `allowed: true`, adicionar warning `endpoint_purpose_other` (temporário até reclassificação).
-9. `organization_integration_id IS NULL` → `integration_missing`.
-10. `sender_sid IS NULL` **e** `external_address IS NULL` → `sender_data_missing`.
-
-Sem chamar Twilio. Sem decidir formato real do `From`. Apenas relatar os candidatos.
-
-## 4. Formato da resposta do dry-run
+`curl_edge_functions` em `/twilio-whatsapp-send` com:
 
 ```json
 {
-  "dryRun": true,
-  "allowed": true,
-  "reason": "ok",
-  "warnings": ["endpoint_purpose_other"],
-  "thread_id": "...",
-  "endpoint_id": "...",
-  "resolved_sender_sid": "XE4e6a55...",
-  "resolved_external_address": "+551150287027",
-  "resolved_from": null,
-  "current_global_whatsapp_from": "whatsapp:+551150287027",
-  "in_24h_window": true,
-  "requires_template": false,
-  "notes": "resolved_from is intentionally null in Phase 1.3A. Real From format will be defined in 1.3B after Twilio format audit."
+  "organizationId": "40ae935c-a7f7-4ad7-8ea4-91be6404a95f",
+  "threadId": "af945caf-b96a-4e55-8dad-38c5105ceafc",
+  "senderContext": "inbox",
+  "dryRun": true
 }
 ```
 
-Campos:
+Esperado:
 
-- `resolved_sender_sid` / `resolved_external_address`: o que o endpoint carrega.
-- `resolved_from`: **sempre `null` nesta fase**. Não decidimos formato.
-- `current_global_whatsapp_from`: o que `config_values.whatsapp_from` traz hoje. Permite comparar visualmente.
-- `in_24h_window`, `requires_template`: derivados de `whatsapp_last_inbound_at` (read-only).
+```json
+{
+  "allowed": true,
+  "reason": "ok",
+  "warnings": [],
+  "endpoint_id": "c09bd713-0225-4533-afe8-20ac07bd3a7c",
+  "resolved_external_address": "+551150287027",
+  "resolved_sender_sid": "XE4e6a55…",
+  "resolved_from": null,
+  "current_global_whatsapp_from": "whatsapp:+551150287027"
+}
+```
 
-Em caso de bloqueio: mesmo envelope com `allowed: false`, `reason: '<código>'`, `resolved_from: null`. Status HTTP **200** (dry-run sempre 200; não é erro de servidor).
+O warning `endpoint_purpose_other` deve desaparecer. Se não desaparecer, paramos antes do patch.
 
-## 5. Auditoria pendente do `From` real (documentar, não implementar)
+### Passo 4 — Patch de envio real em `twilio-whatsapp-send`
 
-Adicionar comentário no topo da função registrando:
+Único arquivo: `supabase/functions/twilio-whatsapp-send/index.ts`.
 
-- Hoje `whatsappFrom` vem de `config_values.whatsapp_from` em formato `whatsapp:+E164` ou `whatsapp:<sender_sid>` — formato exato a confirmar com inspeção de dados de `organization_integrations`.
-- Decisão sobre `From` derivado de `thread.primary_endpoint_id` fica para Fase 1.3B, após confirmar com Twilio qual formato é aceito (E164 vs Messaging Service vs sender_sid `MG…`/`XE…`).
-
-Nada disso é executado — é só comentário de bloco para a próxima fase.
-
-## 6. Critério de aceite (sem envio real)
-
-Validação via `supabase--curl_edge_functions` com `dryRun: true, senderContext: 'inbox'`:
-
-| Cenário | threadId | Esperado |
-|---|---|---|
-| Thread CS atual | um dos 5 (ex.: `af945caf-…`) | `allowed: true`, `warnings: ["endpoint_purpose_other"]`, `resolved_sender_sid: "XE4e6a55…"`, `resolved_external_address: "+551150287027"` |
-| Thread comercial (purpose='commercial') | a localizar via query antes do teste | `allowed: false`, `reason: "purpose_blocked"` |
-| Thread sem `primary_endpoint_id` | a localizar via query antes do teste | `allowed: false`, `reason: "no_endpoint"` |
-
-Se não existir thread comercial real, criar caso negativo via `threadId` inexistente → `reason: 'missing_thread'` (registrar a limitação no resultado, não bloqueia a fase).
-
-Nenhum envio real ao cliente. Nenhuma alteração em `/messages`. Nenhuma alteração no fluxo padrão de produção.
-
-## 7. Fora de escopo (reafirmado)
-
-- Composer `/inbox`
-- Envio real (Inbox ou comercial de controle)
-- Templates no `/inbox`
-- Upload, áudio, notas internas
-- RPC nova, migration, RLS, `inbox_audit_log`
-- Mudança em `/messages`, `WhatsAppChat.tsx`, hooks do Inbox
-- Twilio setup, Meta Cloud, qualquer outra edge function
-- Fase 1.3B (definição do `From` real e ativação do composer)
-
----
-
-## Detalhes técnicos do patch
-
-**Arquivo:** `supabase/functions/twilio-whatsapp-send/index.ts` (único).
-
-**Forma:**
+Forma:
 
 ```text
 parse body { ..., senderContext, dryRun }
 
-if dryRun === true:
-    if senderContext !== 'inbox': return 400
-    if !threadId:            return 200 { allowed:false, reason:'missing_thread' }
-    load thread (org-scoped)
-    if !thread.primary_endpoint_id: return 200 { allowed:false, reason:'no_endpoint', ... }
-    load endpoint
-    run guard() → { allowed, reason, warnings }
-    compute in_24h_window from thread.whatsapp_last_inbound_at
-    return 200 { dryRun:true, allowed, reason, warnings,
-                 resolved_sender_sid, resolved_external_address,
-                 resolved_from: null,
-                 current_global_whatsapp_from,
-                 in_24h_window, requires_template, notes }
+if dryRun === true: (já implementado, sem mudança)
 
-# fluxo existente segue idêntico abaixo, sem qualquer alteração
+if senderContext === 'inbox' && dryRun !== true:
+    require threadId                         → 400 'missing_thread'
+    load thread (org-scoped)                 → 404 se não existir
+    require thread.primary_endpoint_id       → 400 'no_endpoint'
+    load endpoint
+    guard():
+      is_active=false                         → 400 'endpoint_inactive'
+      channel !== 'whatsapp'                  → 400 'wrong_channel'
+      purpose IN ('commercial','vendor_personal','other')
+                                              → 400 'purpose_blocked'
+      purpose !== 'customer_service'          → 400 'purpose_blocked'
+      !organization_integration_id            → 400 'integration_missing'
+      !external_address                       → 400 'sender_data_missing'
+      !/^\+\d{8,15}$/.test(external_address)  → 400 'sender_data_missing'
+    whatsappFrom := `whatsapp:${endpoint.external_address}`
+    endpointId   := endpoint.id   # não usar resolve_communication_endpoint no caminho inbox
+    # AccountSid/AuthToken continuam vindo de organization_integrations
+    continue → fluxo existente (24h, template, insert message com endpoint_id, Twilio call, status callback)
+
+senão (default 'messages'): fluxo atual byte-a-byte (sem mudança)
 ```
 
-**Logs:** prefixo `[inbox-dryrun]` apenas no branch dry-run.
+Sem RPC nova. Sem migration. Sem RLS. Sem alteração em `resolve_communication_endpoint`. Sem alteração em `whatsapp_from` global. Sem mexer em `/messages`.
 
-**Entrega:** patch + 3 prints de `curl_edge_functions` (CS, bloqueado, sem endpoint).
+Logs do branch novo com prefixo `[inbox-send]`.
+
+### Passo 5 — Dry-run pós-patch (sem envio real)
+
+Repetir as 3 chamadas do dry-run para validar zero regressão:
+
+| Cenário | Esperado |
+|---|---|
+| Thread CS reclassificada (`af945caf…`) | `allowed: true, reason: 'ok', warnings: []` |
+| Thread sem `primary_endpoint_id` (`10b41d35…`) | `allowed: false, reason: 'no_endpoint'` |
+| Thread inexistente (`0000…`) | `allowed: false, reason: 'missing_thread'` |
+
+O patch de envio real **não pode** alterar o JSON do dry-run.
+
+### Passo 6 — Pausa obrigatória
+
+Parar antes de qualquer envio real. Aguardar aprovação explícita sua para discutir o teste real único e controlado (que **não** acontece nesta fase).
+
+## Fora de escopo
+
+- Composer `/inbox`, templates `/inbox`, upload, áudio, notas internas, reply.
+- Envio real ao cliente (qualquer canal).
+- Reclassificação de outros endpoints.
+- Feature flag `INBOX_ALLOW_PURPOSE_OTHER` (descartada).
+- Migration de schema, RLS nova, RPC nova, `inbox_audit_log`.
+- UI de gestão de `communication_endpoints`.
+- Alteração em `/messages`, `WhatsAppChat.tsx`, hooks do Inbox, `resolve_communication_endpoint`, Twilio setup, Meta Cloud.
+- Fase 1.3C.
+
+## Riscos e mitigação
+
+| Risco | Mitigação |
+|---|---|
+| UPDATE quebrar outro consumidor de `purpose` | Passo 1 (grep) antes do UPDATE. |
+| `external_address` sem `+` ou inválido | Guard regex `^\+\d{8,15}$` → `sender_data_missing`. |
+| Patch alterar comportamento de `/messages` | Branch só ativa com `senderContext='inbox'`. Diff revisado linha-a-linha. |
+| `endpoint_id` registrado em `messages` divergir do que `resolve_communication_endpoint` retornaria | Não diverge: ambos resolvem para `c09bd713…` neste cenário (mesmo `external_address`). |
+
+## Entregáveis ao final da fase
+
+1. Resultado do grep do Passo 1 (texto).
+2. Confirmação SQL do Passo 2 (linha atualizada).
+3. JSON do dry-run pós-UPDATE (Passo 3).
+4. Diff do patch (Passo 4).
+5. JSON dos 3 dry-runs pós-patch (Passo 5).
+
+Sem composer. Sem envio real. Sem 1.3C.
