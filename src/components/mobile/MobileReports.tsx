@@ -1,4 +1,3 @@
-import { lazy, Suspense } from 'react';
 import { cn } from '@/lib/utils';
 import {
   Briefcase,
@@ -18,19 +17,15 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import type { PeriodPreset, CustomRange } from '@/lib/report-period';
-import type { TrendPoint } from '@/components/reports/SalesTrendChart';
-import type { FunnelStage } from '@/components/reports/PipelineFunnel';
+// IMPORTANT: import these chart modules statically (matching ReportsPage).
+// Mixing static + dynamic imports of the same module across pages causes
+// Rollup to emit shared chunks whose initialization order is non-deterministic
+// in production, reproducing the historical TDZ:
+// "ReferenceError: Cannot access 'X' before initialization".
+import { SalesTrendChart, type TrendPoint } from '@/components/reports/SalesTrendChart';
+import { PipelineFunnel, type FunnelStage } from '@/components/reports/PipelineFunnel';
+import { StageDistribution } from '@/components/reports/StageDistribution';
 import type { UserStats } from '@/components/reports/UserLeaderboard';
-
-const SalesTrendChart = lazy(() =>
-  import('@/components/reports/SalesTrendChart').then((m) => ({ default: m.SalesTrendChart })),
-);
-const PipelineFunnel = lazy(() =>
-  import('@/components/reports/PipelineFunnel').then((m) => ({ default: m.PipelineFunnel })),
-);
-const StageDistribution = lazy(() =>
-  import('@/components/reports/StageDistribution').then((m) => ({ default: m.StageDistribution })),
-);
 
 const PRESETS: { value: PeriodPreset; label: string }[] = [
   { value: 'today', label: 'Hoje' },
