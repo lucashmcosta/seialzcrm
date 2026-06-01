@@ -10,6 +10,7 @@ import { getProxiedMediaUrl } from '@/lib/mediaProxy';
 interface Props {
   threadId: string;
   organizationId: string | undefined;
+  contactName?: string;
 }
 
 function StatusIcon({ status }: { status: string | null }) {
