@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
-import { SpinnerGap, Check, Checks, Clock, WarningCircle, FileText } from '@phosphor-icons/react';
+import { SpinnerGap, Check, Checks, Clock, WarningCircle, FileText, ArrowBendUpLeft } from '@phosphor-icons/react';
 import { supabase } from '@/integrations/supabase/client';
 import { useInboxThreadMessages, type InboxMessageRow } from '@/hooks/inbox/useInboxThreadMessages';
 import { AudioMessagePlayer } from '@/components/whatsapp/AudioMessagePlayer';
@@ -11,6 +11,7 @@ interface Props {
   threadId: string;
   organizationId: string | undefined;
   contactName?: string;
+  onReply?: (msg: InboxMessageRow) => void;
 }
 
 function StatusIcon({ status }: { status: string | null }) {
