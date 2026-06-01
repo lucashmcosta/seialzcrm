@@ -206,27 +206,21 @@ export function MobileReports(props: MobileReportsProps) {
 
       {/* Trend chart */}
       <div className="px-4 py-2">
-        <Suspense fallback={<Block h="h-64" />}>
-          <SalesTrendChart data={trend} formatCurrency={formatCurrency} loading={loading} />
-        </Suspense>
+        <SalesTrendChart data={trend} formatCurrency={formatCurrency} loading={loading} />
       </div>
 
       {/* Funnel */}
       <div className="px-4 py-2">
-        <Suspense fallback={<Block h="h-64" />}>
-          <PipelineFunnel stages={funnel} formatCurrency={formatCurrency} loading={loading} />
-        </Suspense>
+        <PipelineFunnel stages={funnel} formatCurrency={formatCurrency} loading={loading} />
       </div>
 
       {/* Distribution */}
       <div className="px-4 py-2">
-        <Suspense fallback={<Block h="h-64" />}>
-          <StageDistribution
-            data={funnel.map((f) => ({ name: f.name, value: f.value }))}
-            formatCurrency={formatCurrency}
-            loading={loading}
-          />
-        </Suspense>
+        <StageDistribution
+          data={funnel.map((f) => ({ name: f.name, value: f.value }))}
+          formatCurrency={formatCurrency}
+          loading={loading}
+        />
       </div>
 
       {/* Leaderboard */}
