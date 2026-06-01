@@ -12,11 +12,12 @@ serve(async (req) => {
   }
 
   try {
-    const { 
-      organizationId, 
-      contactId, 
+    const body = await req.json()
+    const {
+      organizationId,
+      contactId,
       threadId,
-      message, 
+      message,
       templateId,
       templateVariables,
       mediaUrl,
@@ -28,7 +29,198 @@ serve(async (req) => {
       isAgentMessage,
       agentId,
       senderName,
-    } = await req.json()
+      // Phase 1.3A — Inbox dry-run only. Default behavior preserved bit-for-bit.
+      senderContext,
+      dryRun,
+    } = body as Record<string, any>
+
+    // ============================================================
+    // Phase 1.3A — Dry-run branch (read-only, zero side effects)
+    // - No Twilio call
+    // - No INSERT into messages/activities
+    // - No UPDATE on message_threads
+    // - Only SELECTs to evaluate endpoint eligibility for /inbox
+    //
+    // NOTE on real `From` format (deferred to 1.3B):
+    //   Today `whatsappFrom` is read from
+    //   organization_integrations.config_values.whatsapp_from and used as-is.
+    //   Whether Twilio accepts `whatsapp:<sender_sid>` (e.g. XE…/MG…) vs
+    //   `whatsapp:+E164` in this account requires a separate audit before we
+    //   switch to thread.primary_endpoint_id. In Phase 1.3A `resolved_from`
+    //   is intentionally null — we only report what the endpoint carries.
+    // ============================================================
+    if (dryRun === true) {
+      if (senderContext !== 'inbox') {
+        return new Response(
+          JSON.stringify({ error: 'dryRun is only supported with senderContext=inbox' }),
+          { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        )
+      }
+      if (!organizationId) {
+        return new Response(
+          JSON.stringify({ error: 'Missing required field: organizationId' }),
+          { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        )
+      }
+
+      const supabaseDry = createClient(
+        Deno.env.get('SUPABASE_URL') ?? '',
+        Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''
+      )
+
+      const NOTES =
+        'resolved_from is intentionally null in Phase 1.3A. Real From format will be defined in 1.3B after Twilio format audit.'
+
+      const baseEnvelope = (
+        allowed: boolean,
+        reason: string,
+        extra: Record<string, any> = {},
+      ) => ({
+        dryRun: true,
+        allowed,
+        reason,
+        warnings: [] as string[],
+        thread_id: threadId ?? null,
+        endpoint_id: null,
+        resolved_sender_sid: null,
+        resolved_external_address: null,
+        resolved_from: null,
+        current_global_whatsapp_from: null,
+        in_24h_window: false,
+        requires_template: true,
+        notes: NOTES,
+        ...extra,
+      })
+
+      // Load current global whatsapp_from for visibility (non-blocking).
+      let currentGlobalWhatsappFrom: string | null = null
+      try {
+        const { data: integ } = await supabaseDry
+          .from('organization_integrations')
+          .select('config_values, admin_integrations!inner(slug), is_enabled')
+          .eq('organization_id', organizationId)
+          .eq('admin_integrations.slug', 'twilio-whatsapp')
+          .eq('is_enabled', true)
+          .maybeSingle()
+        currentGlobalWhatsappFrom = (integ?.config_values as any)?.whatsapp_from ?? null
+      } catch (e) {
+        console.warn('[inbox-dryrun] could not read global whatsapp_from', String(e))
+      }
+
+      if (!threadId) {
+        console.log('[inbox-dryrun] missing_thread', { organizationId })
+        return new Response(
+          JSON.stringify(baseEnvelope(false, 'missing_thread', {
+            current_global_whatsapp_from: currentGlobalWhatsappFrom,
+          })),
+          { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        )
+      }
+
+      const { data: thread, error: threadErr } = await supabaseDry
+        .from('message_threads')
+        .select('id, primary_endpoint_id, whatsapp_last_inbound_at, channel, organization_id')
+        .eq('id', threadId)
+        .eq('organization_id', organizationId)
+        .maybeSingle()
+
+      if (threadErr || !thread) {
+        console.log('[inbox-dryrun] missing_thread (not found)', { threadId, err: threadErr?.message })
+        return new Response(
+          JSON.stringify(baseEnvelope(false, 'missing_thread', {
+            current_global_whatsapp_from: currentGlobalWhatsappFrom,
+          })),
+          { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        )
+      }
+
+      const now = Date.now()
+      const lastInboundMs = thread.whatsapp_last_inbound_at
+        ? new Date(thread.whatsapp_last_inbound_at).getTime()
+        : null
+      const in24h = lastInboundMs ? (now - lastInboundMs) / 3_600_000 < 24 : false
+
+      if (!thread.primary_endpoint_id) {
+        console.log('[inbox-dryrun] no_endpoint', { threadId })
+        return new Response(
+          JSON.stringify(baseEnvelope(false, 'no_endpoint', {
+            current_global_whatsapp_from: currentGlobalWhatsappFrom,
+            in_24h_window: in24h,
+            requires_template: !in24h,
+          })),
+          { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        )
+      }
+
+      const { data: endpoint, error: epErr } = await supabaseDry
+        .from('communication_endpoints')
+        .select('id, channel, purpose, provider, external_address, sender_sid, is_active, status, organization_integration_id')
+        .eq('id', thread.primary_endpoint_id)
+        .maybeSingle()
+
+      if (epErr || !endpoint) {
+        console.log('[inbox-dryrun] endpoint not found', { endpointId: thread.primary_endpoint_id })
+        return new Response(
+          JSON.stringify(baseEnvelope(false, 'no_endpoint', {
+            current_global_whatsapp_from: currentGlobalWhatsappFrom,
+            in_24h_window: in24h,
+            requires_template: !in24h,
+          })),
+          { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        )
+      }
+
+      const warnings: string[] = []
+      let allowed = true
+      let reason = 'ok'
+
+      if (endpoint.is_active === false) {
+        allowed = false
+        reason = 'endpoint_inactive'
+      } else if (endpoint.channel !== 'whatsapp') {
+        allowed = false
+        reason = 'wrong_channel'
+      } else if (endpoint.purpose === 'commercial' || endpoint.purpose === 'vendor_personal') {
+        allowed = false
+        reason = 'purpose_blocked'
+      } else if (!endpoint.organization_integration_id) {
+        allowed = false
+        reason = 'integration_missing'
+      } else if (!endpoint.sender_sid && !endpoint.external_address) {
+        allowed = false
+        reason = 'sender_data_missing'
+      }
+
+      if (allowed && endpoint.purpose === 'other') {
+        warnings.push('endpoint_purpose_other')
+      }
+
+      const result = {
+        dryRun: true,
+        allowed,
+        reason,
+        warnings,
+        thread_id: thread.id,
+        endpoint_id: endpoint.id,
+        resolved_sender_sid: endpoint.sender_sid ?? null,
+        resolved_external_address: endpoint.external_address ?? null,
+        resolved_from: null,
+        current_global_whatsapp_from: currentGlobalWhatsappFrom,
+        in_24h_window: in24h,
+        requires_template: !in24h,
+        notes: NOTES,
+      }
+
+      console.log('[inbox-dryrun] result', result)
+
+      return new Response(
+        JSON.stringify(result),
+        { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      )
+    }
+    // ============================================================
+    // End Phase 1.3A dry-run branch. Default flow below is unchanged.
+    // ============================================================
 
     if (!organizationId || !contactId) {
       return new Response(
@@ -41,6 +233,7 @@ serve(async (req) => {
       Deno.env.get('SUPABASE_URL') ?? '',
       Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''
     )
+
 
     // Get WhatsApp integration config
     const { data: integration, error: integrationError } = await supabase
