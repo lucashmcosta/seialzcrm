@@ -355,9 +355,25 @@ export function InboxComposer({ thread, replyTo, onClearReply, onSent, onThreadM
           </Button>
         )}
         {assignedToSomeoneElse && (
-          <span className="text-[10px] text-muted-foreground">
-            Atribuída a outro usuário · envio bloqueado
-          </span>
+          <>
+            <span className="text-[10px] text-muted-foreground">
+              Atribuída a outro usuário
+            </span>
+            <Button
+              size="sm"
+              variant="outline"
+              onClick={handleTakeOver}
+              disabled={takingOver}
+              className="h-7 text-xs"
+            >
+              {takingOver ? (
+                <SpinnerGap className="w-3 h-3 animate-spin mr-1" />
+              ) : (
+                <UserCirclePlus size={13} className="mr-1" />
+              )}
+              Reatribuir para mim
+            </Button>
+          </>
         )}
         {mode === 'reply' && !isIn24hWindow && (
           <span className="text-[10px] text-muted-foreground">
