@@ -3,6 +3,7 @@ import { useOrganizationContext } from '@/contexts/OrganizationContext';
 import { InboxSlaChip } from './InboxSlaChip';
 import { InboxAssignmentHistory } from './InboxAssignmentHistory';
 import { InboxConversationTimeline } from './InboxConversationTimeline';
+import { InboxComposer } from './InboxComposer';
 
 interface Props {
   threadId: string | null;
@@ -71,6 +72,8 @@ export function InboxThreadDetail({ threadId }: Props) {
           organizationId={organization?.id}
           contactName={thread.contact?.name || undefined}
         />
+
+        <InboxComposer />
       </div>
 
       {/* Painel lateral: dados + histórico de atribuição */}
