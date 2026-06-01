@@ -125,7 +125,7 @@ export default function InboxSmokePanel() {
     const s = await snap(threadId);
     const pass = evalPass(
       test,
-      error as { code?: string; message?: string } | null,
+      error as { code?: string; message?: string; details?: string; hint?: string } | null,
       s.thread as { status?: string; assigned_user_id?: string } | null,
       userTarget,
     );
