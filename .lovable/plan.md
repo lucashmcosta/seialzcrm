@@ -1,143 +1,136 @@
+# Etapa D + Etapa E — Plano aprovado
 
-# Fase 1.3B — Envio real seguro pelo `/inbox`
+Regra unificada validada em Central Trabalhista e Viagi:
+`opportunity.status = 'won'` → `contact.lifecycle_stage = 'customer'` → entra no Atendimento.
 
-Sem composer. Sem envio real ao cliente nesta fase. `/messages` intocado.
+---
 
-## Decisões aprovadas
+## Etapa D — Simplificar `inboxScope.ts` (apenas frontend)
 
-1. **Sem feature flag.** Após reclassificação, `senderContext='inbox'` aceita **apenas** `purpose='customer_service'`. Bloqueia `commercial`, `vendor_personal`, `other`.
-2. **Reclassificação 1-a-1.** Apenas o endpoint `c09bd713-0225-4533-afe8-20ac07bd3a7c` (Central Trabalhista). Nenhum outro endpoint é tocado.
+### Arquivos
+- `src/hooks/inbox/inboxScope.ts` — única alteração efetiva.
+- `src/hooks/inbox/useInboxThreads.ts` — apenas ajuste do `console.info` (remove `A=` do log; usa novo `ScopeDebug`).
+- `src/hooks/inbox/useInboxQueueCounts.ts` — sem mudanças.
+- `src/pages/inbox/InboxPage.tsx` — sem mudanças.
 
-## Ordem de execução
+### Mudanças em `inboxScope.ts`
+1. Remover `SELECT_A` e `fetchScopeA`.
+2. `fetchInboxScopedThreads` passa a usar apenas `fetchScopeB`, com sort por `last_message_at` desc e `slice(limit)`.
+3. `ScopeDebug` vira `{ bRaw, bFiltered, merged }` (campo `a` removido).
+4. Cabeçalho do arquivo reescrito explicando a regra unificada.
+5. `EXCLUDED_PURPOSES = ['commercial','vendor_personal']` preservado. Filtro client-side permanece (endpoint NULL/`other`/`customer_service` passam; `commercial`/`vendor_personal` saem).
+6. Assinaturas públicas dos hooks (`useInboxThreads`, `useInboxQueueCounts`) preservadas.
 
-### Passo 1 — Auditoria de impacto (read-only)
+### Não tocar
+`/messages`, composer, envio, RPCs, edge functions, migrations nessa etapa, endpoints.
 
-`rg -n "purpose" src/ supabase/functions/` filtrando referências a `communication_endpoints.purpose`. Resultado esperado: só o branch dry-run da `twilio-whatsapp-send` consome `purpose` hoje. Se aparecer outro consumidor, paramos e reavaliamos antes do UPDATE.
+### Validação
+- Central Trabalhista: contagens da Inbox coerentes com snapshot atual.
+- Viagi: Ativos 38 / Aguardando 32 / Concluídos hoje 0.
+- Console sem erros; log `[inbox] tab=… B_raw=… B_filtered=… merged=…`.
+- Conferir ausência de threads com endpoint `commercial`/`vendor_personal`.
 
-### Passo 2 — UPDATE pontual de dados
+### Rollback
+Reverter `src/hooks/inbox/inboxScope.ts` e o `console.info` em `useInboxThreads.ts`. Sem migration envolvida.
 
-Operação de DADO (não migration de schema), via `supabase--insert_data`:
+---
+
+## Etapa E — Trigger `won → customer` (apenas banco)
+
+### Arquivo
+- Nova migration: `supabase/migrations/<timestamp>_opportunity_won_promotes_contact.sql`.
+
+### SQL
 
 ```sql
-UPDATE public.communication_endpoints
-SET purpose = 'customer_service',
-    provider = 'twilio',
-    updated_at = now()
-WHERE id = 'c09bd713-0225-4533-afe8-20ac07bd3a7c'
-  AND organization_id = '40ae935c-a7f7-4ad7-8ea4-91be6404a95f';
+CREATE OR REPLACE FUNCTION public.fn_opportunity_won_promote_contact()
+RETURNS trigger
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = public
+AS $$
+BEGIN
+  IF NEW.status = 'won'
+     AND (TG_OP = 'INSERT' OR OLD.status IS DISTINCT FROM 'won')
+     AND NEW.contact_id IS NOT NULL
+     AND NEW.deleted_at IS NULL
+  THEN
+    UPDATE public.contacts c
+       SET lifecycle_stage = 'customer',
+           updated_at = now()
+     WHERE c.id = NEW.contact_id
+       AND c.organization_id = NEW.organization_id
+       AND c.deleted_at IS NULL
+       AND c.lifecycle_stage IS DISTINCT FROM 'customer';
+  END IF;
+  RETURN NEW;
+END;
+$$;
+
+DROP TRIGGER IF EXISTS trg_opportunity_won_promote_contact ON public.opportunities;
+
+CREATE TRIGGER trg_opportunity_won_promote_contact
+AFTER INSERT OR UPDATE OF status ON public.opportunities
+FOR EACH ROW
+EXECUTE FUNCTION public.fn_opportunity_won_promote_contact();
 ```
 
-Validação pós-UPDATE: `SELECT id, purpose, provider, external_address, sender_sid, is_active FROM communication_endpoints WHERE id = '…';` deve retornar `purpose='customer_service'`, `provider='twilio'`.
+### Garantias
+- Nunca rebaixa (`won → open/lost` não dispara UPDATE em contacts).
+- Não toca endpoint, threads ou `/messages`.
+- Idempotente (`lifecycle_stage IS DISTINCT FROM 'customer'`).
+- Respeita `organization_id` e soft delete (`deleted_at IS NULL`).
+- Sem composer, envio, edge function ou webhook.
+- Sem RLS nova, sem RPC nova.
 
-### Passo 3 — Dry-run de confirmação (antes do patch)
+### Testes (sem alterar cliente real)
+Preferência: usar SQL controlado em transação com `ROLLBACK`, criando contact + opportunity descartáveis numa org de teste. Esqueleto:
 
-`curl_edge_functions` em `/twilio-whatsapp-send` com:
+```sql
+BEGIN;
+-- 1) seed descartável
+WITH c AS (
+  INSERT INTO public.contacts (organization_id, full_name, lifecycle_stage)
+  VALUES ('<org_test>', 'TRIGGER TEST', 'lead')
+  RETURNING id
+)
+INSERT INTO public.opportunities (organization_id, contact_id, status, title)
+SELECT '<org_test>', id, 'open', 'TRIGGER TEST' FROM c;
 
-```json
-{
-  "organizationId": "40ae935c-a7f7-4ad7-8ea4-91be6404a95f",
-  "threadId": "af945caf-b96a-4e55-8dad-38c5105ceafc",
-  "senderContext": "inbox",
-  "dryRun": true
-}
+-- 2) ação: promover para won
+UPDATE public.opportunities
+   SET status = 'won'
+ WHERE title = 'TRIGGER TEST' AND organization_id = '<org_test>';
+
+-- 3) asserção: contact deve estar customer
+SELECT lifecycle_stage FROM public.contacts WHERE full_name = 'TRIGGER TEST';
+
+-- 4) regressão (não rebaixar): voltar para open
+UPDATE public.opportunities SET status='open' WHERE title='TRIGGER TEST';
+SELECT lifecycle_stage FROM public.contacts WHERE full_name='TRIGGER TEST';
+-- esperado: ainda 'customer'
+
+-- 5) limpar tudo
+ROLLBACK;
 ```
 
-Esperado:
+Se não houver org de teste segura, validar apenas com `BEGIN; … ROLLBACK;` ou aguardar oportunidade descartável real.
 
-```json
-{
-  "allowed": true,
-  "reason": "ok",
-  "warnings": [],
-  "endpoint_id": "c09bd713-0225-4533-afe8-20ac07bd3a7c",
-  "resolved_external_address": "+551150287027",
-  "resolved_sender_sid": "XE4e6a55…",
-  "resolved_from": null,
-  "current_global_whatsapp_from": "whatsapp:+551150287027"
-}
+### Rollback
+```sql
+DROP TRIGGER IF EXISTS trg_opportunity_won_promote_contact ON public.opportunities;
+DROP FUNCTION IF EXISTS public.fn_opportunity_won_promote_contact();
 ```
 
-O warning `endpoint_purpose_other` deve desaparecer. Se não desaparecer, paramos antes do patch.
-
-### Passo 4 — Patch de envio real em `twilio-whatsapp-send`
-
-Único arquivo: `supabase/functions/twilio-whatsapp-send/index.ts`.
-
-Forma:
-
-```text
-parse body { ..., senderContext, dryRun }
-
-if dryRun === true: (já implementado, sem mudança)
-
-if senderContext === 'inbox' && dryRun !== true:
-    require threadId                         → 400 'missing_thread'
-    load thread (org-scoped)                 → 404 se não existir
-    require thread.primary_endpoint_id       → 400 'no_endpoint'
-    load endpoint
-    guard():
-      is_active=false                         → 400 'endpoint_inactive'
-      channel !== 'whatsapp'                  → 400 'wrong_channel'
-      purpose IN ('commercial','vendor_personal','other')
-                                              → 400 'purpose_blocked'
-      purpose !== 'customer_service'          → 400 'purpose_blocked'
-      !organization_integration_id            → 400 'integration_missing'
-      !external_address                       → 400 'sender_data_missing'
-      !/^\+\d{8,15}$/.test(external_address)  → 400 'sender_data_missing'
-    whatsappFrom := `whatsapp:${endpoint.external_address}`
-    endpointId   := endpoint.id   # não usar resolve_communication_endpoint no caminho inbox
-    # AccountSid/AuthToken continuam vindo de organization_integrations
-    continue → fluxo existente (24h, template, insert message com endpoint_id, Twilio call, status callback)
-
-senão (default 'messages'): fluxo atual byte-a-byte (sem mudança)
-```
-
-Sem RPC nova. Sem migration. Sem RLS. Sem alteração em `resolve_communication_endpoint`. Sem alteração em `whatsapp_from` global. Sem mexer em `/messages`.
-
-Logs do branch novo com prefixo `[inbox-send]`.
-
-### Passo 5 — Dry-run pós-patch (sem envio real)
-
-Repetir as 3 chamadas do dry-run para validar zero regressão:
-
-| Cenário | Esperado |
-|---|---|
-| Thread CS reclassificada (`af945caf…`) | `allowed: true, reason: 'ok', warnings: []` |
-| Thread sem `primary_endpoint_id` (`10b41d35…`) | `allowed: false, reason: 'no_endpoint'` |
-| Thread inexistente (`0000…`) | `allowed: false, reason: 'missing_thread'` |
-
-O patch de envio real **não pode** alterar o JSON do dry-run.
-
-### Passo 6 — Pausa obrigatória
-
-Parar antes de qualquer envio real. Aguardar aprovação explícita sua para discutir o teste real único e controlado (que **não** acontece nesta fase).
+---
 
 ## Fora de escopo
+`/messages`, composer, envio real, endpoints, Fase 1.3C, RLS novas, RPCs novas.
 
-- Composer `/inbox`, templates `/inbox`, upload, áudio, notas internas, reply.
-- Envio real ao cliente (qualquer canal).
-- Reclassificação de outros endpoints.
-- Feature flag `INBOX_ALLOW_PURPOSE_OTHER` (descartada).
-- Migration de schema, RLS nova, RPC nova, `inbox_audit_log`.
-- UI de gestão de `communication_endpoints`.
-- Alteração em `/messages`, `WhatsAppChat.tsx`, hooks do Inbox, `resolve_communication_endpoint`, Twilio setup, Meta Cloud.
-- Fase 1.3C.
-
-## Riscos e mitigação
-
-| Risco | Mitigação |
-|---|---|
-| UPDATE quebrar outro consumidor de `purpose` | Passo 1 (grep) antes do UPDATE. |
-| `external_address` sem `+` ou inválido | Guard regex `^\+\d{8,15}$` → `sender_data_missing`. |
-| Patch alterar comportamento de `/messages` | Branch só ativa com `senderContext='inbox'`. Diff revisado linha-a-linha. |
-| `endpoint_id` registrado em `messages` divergir do que `resolve_communication_endpoint` retornaria | Não diverge: ambos resolvem para `c09bd713…` neste cenário (mesmo `external_address`). |
-
-## Entregáveis ao final da fase
-
-1. Resultado do grep do Passo 1 (texto).
-2. Confirmação SQL do Passo 2 (linha atualizada).
-3. JSON do dry-run pós-UPDATE (Passo 3).
-4. Diff do patch (Passo 4).
-5. JSON dos 3 dry-runs pós-patch (Passo 5).
-
-Sem composer. Sem envio real. Sem 1.3C.
+## Entregáveis
+1. Arquivos alterados.
+2. Validação Etapa D — Central Trabalhista.
+3. Validação Etapa D — Viagi (38 / 32 / 0).
+4. SQL da migration Etapa E.
+5. Resultado dos testes da trigger.
+6. Confirmação de `/messages`, composer e envio intocados.
