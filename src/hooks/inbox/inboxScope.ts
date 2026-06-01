@@ -2,15 +2,15 @@
 // SINGLE SOURCE OF TRUTH — both list and counters import from here.
 //
 // A thread is in CS scope when:
-//   (A) endpoint.purpose = 'customer_service'                                       — OR —
-//   (B) contact.lifecycle_stage = 'customer'
-//        AND endpoint.purpose NOT IN ('commercial','vendor_personal')
-//        (endpoint NULL or 'other' is accepted under rule B)
+//   contact.lifecycle_stage = 'customer'
+//     AND endpoint.purpose NOT IN ('commercial','vendor_personal')
+//     (endpoint NULL, 'other', or 'customer_service' all pass)
 //
-// PostgREST cannot express OR across two embedded relations in a single query,
-// so we run two queries with !inner and merge/dedupe on the client. The
-// commercial/vendor_personal exclusion in Query B is applied client-side
-// because the endpoint embed is LEFT-joined.
+// Unified rule (validada em Central Trabalhista e Viagi):
+//   opportunity.status = 'won' → contact.lifecycle_stage = 'customer' → Atendimento.
+// Endpoint NÃO é mais gatilho de CS enquanto os números forem mistos
+// (Query A removida). A exclusão defensiva de purposes comerciais
+// permanece e é aplicada client-side, pois o embed de endpoint é LEFT-join.
 
 import { supabase } from '@/integrations/supabase/client';
 
@@ -47,21 +47,10 @@ export interface ScopeParams {
 }
 
 export interface ScopeDebug {
-  a: number;
   bRaw: number;
   bFiltered: number;
   merged: number;
 }
-
-const SELECT_A = `
-  id, contact_id, channel, status, priority,
-  assigned_user_id, assigned_at, first_response_at,
-  sla_first_response_target_at, sla_resolution_target_at,
-  last_message_at, last_message_content, last_message_direction, resolved_at,
-  primary_endpoint_id,
-  contact:contacts ( id, name:full_name, phone, lifecycle_stage ),
-  primary_endpoint:communication_endpoints!inner ( id, purpose )
-`;
 
 const SELECT_B = `
   id, contact_id, channel, status, priority,
@@ -88,13 +77,11 @@ export function startOfDayIso(timezone: string | null): string {
       hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false,
     });
     const parts = Object.fromEntries(fmt.formatToParts(now).map((p) => [p.type, p.value]));
-    // Compute the offset between the tz wall clock and UTC at this moment.
     const asUtc = Date.UTC(
       Number(parts.year), Number(parts.month) - 1, Number(parts.day),
       Number(parts.hour), Number(parts.minute), Number(parts.second),
     );
     const offsetMs = asUtc - now.getTime();
-    // Midnight wall-clock in the org tz → convert back to UTC by subtracting offset.
     const midnightUtc = Date.UTC(Number(parts.year), Number(parts.month) - 1, Number(parts.day)) - offsetMs;
     return new Date(midnightUtc).toISOString();
   } catch {
@@ -121,20 +108,9 @@ function applyCommon(q: any, p: ScopeParams) {
   return q;
 }
 
-export async function fetchScopeA(p: ScopeParams): Promise<InboxScopedThread[]> {
-  if (p.onlyMine && !p.internalUserId) return [];
-  let q = supabase.from('message_threads').select(SELECT_A).eq('primary_endpoint.purpose', 'customer_service');
-  q = applyCommon(q, p);
-  const { data, error } = await q;
-  if (error) {
-    // eslint-disable-next-line no-console
-    console.error('[inboxScope] Query A error:', error.message);
-    return [];
-  }
-  return (data ?? []) as unknown as InboxScopedThread[];
-}
-
-export async function fetchScopeB(p: ScopeParams): Promise<{ raw: InboxScopedThread[]; filtered: InboxScopedThread[] }> {
+export async function fetchScopeB(
+  p: ScopeParams,
+): Promise<{ raw: InboxScopedThread[]; filtered: InboxScopedThread[] }> {
   if (p.onlyMine && !p.internalUserId) return { raw: [], filtered: [] };
   let q = supabase.from('message_threads').select(SELECT_B).eq('contact.lifecycle_stage', 'customer');
   q = applyCommon(q, p);
@@ -156,16 +132,16 @@ export async function fetchScopeB(p: ScopeParams): Promise<{ raw: InboxScopedThr
 export async function fetchInboxScopedThreads(
   p: ScopeParams,
 ): Promise<{ rows: InboxScopedThread[]; debug: ScopeDebug }> {
-  const [a, b] = await Promise.all([fetchScopeA(p), fetchScopeB(p)]);
-  const map = new Map<string, InboxScopedThread>();
-  for (const r of a) map.set(r.id, r);
-  for (const r of b.filtered) if (!map.has(r.id)) map.set(r.id, r);
-  const rows = Array.from(map.values()).sort((x, y) => {
-    const tx = x.last_message_at ? new Date(x.last_message_at).getTime() : 0;
-    const ty = y.last_message_at ? new Date(y.last_message_at).getTime() : 0;
-    return ty - tx;
-  }).slice(0, p.limit ?? 200);
-  return { rows, debug: { a: a.length, bRaw: b.raw.length, bFiltered: b.filtered.length, merged: rows.length } };
+  const b = await fetchScopeB(p);
+  const rows = b.filtered
+    .slice()
+    .sort((x, y) => {
+      const tx = x.last_message_at ? new Date(x.last_message_at).getTime() : 0;
+      const ty = y.last_message_at ? new Date(y.last_message_at).getTime() : 0;
+      return ty - tx;
+    })
+    .slice(0, p.limit ?? 200);
+  return { rows, debug: { bRaw: b.raw.length, bFiltered: b.filtered.length, merged: rows.length } };
 }
 
 export interface ScopedCounts { active: number; waiting: number; resolved_today: number }
