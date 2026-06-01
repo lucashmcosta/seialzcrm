@@ -70,7 +70,7 @@ function Media({ msg, orgId, accessToken }: { msg: InboxMessageRow; orgId: strin
   );
 }
 
-export function InboxConversationTimeline({ threadId, organizationId, contactName }: Props) {
+export function InboxConversationTimeline({ threadId, organizationId, contactName, onReply }: Props) {
   const { messages, loading, error } = useInboxThreadMessages(threadId);
   const [accessToken, setAccessToken] = useState<string | undefined>(undefined);
   const scrollRef = useRef<HTMLDivElement>(null);
@@ -127,45 +127,57 @@ export function InboxConversationTimeline({ threadId, organizationId, contactNam
             }
 
             return (
-              <div key={m.id} className={`flex flex-col ${isInternal ? 'items-center' : isOutbound ? 'items-end' : 'items-start'}`}>
+              <div key={m.id} className={`group flex flex-col ${isInternal ? 'items-center' : isOutbound ? 'items-end' : 'items-start'}`}>
                 {senderLabel && !isInternal && (
                   <span className="text-[10px] text-muted-foreground mb-0.5 px-1">
                     {senderLabel}
                   </span>
                 )}
-                <div
-                  className={`max-w-[75%] rounded-lg ${isAudioOnly ? 'p-1' : 'p-2.5'} ${
-                    isInternal
-                      ? 'bg-amber-100 dark:bg-amber-950/40 text-amber-900 dark:text-amber-100 border border-amber-300/40'
-                      : isOutbound
-                        ? 'bg-[#054D3E] text-white'
-                        : 'bg-card text-foreground border border-border'
-                  }`}
-                >
-                  {isInternal && (
-                    <div className="font-data text-[9px] uppercase tracking-wider mb-1 opacity-80">
-                      {senderLabel}
-                    </div>
-                  )}
+                <div className={`flex items-center gap-1 ${isOutbound ? 'flex-row-reverse' : 'flex-row'}`}>
+                  <div
+                    className={`max-w-[75%] rounded-lg ${isAudioOnly ? 'p-1' : 'p-2.5'} ${
+                      isInternal
+                        ? 'bg-amber-100 dark:bg-amber-950/40 text-amber-900 dark:text-amber-100 border border-amber-300/40'
+                        : isOutbound
+                          ? 'bg-[#054D3E] text-white'
+                          : 'bg-card text-foreground border border-border'
+                    }`}
+                  >
+                    {isInternal && (
+                      <div className="font-data text-[9px] uppercase tracking-wider mb-1 opacity-80">
+                        {senderLabel}
+                      </div>
+                    )}
 
-                  {m.reply_to_message && (
-                    <QuotedMessage
-                      content={m.reply_to_message.content || ''}
-                      direction={m.reply_to_message.direction || 'inbound'}
-                    />
-                  )}
+                    {m.reply_to_message && (
+                      <QuotedMessage
+                        content={m.reply_to_message.content || ''}
+                        direction={m.reply_to_message.direction || 'inbound'}
+                      />
+                    )}
 
-                  <Media msg={m} orgId={organizationId} accessToken={accessToken} />
+                    <Media msg={m} orgId={organizationId} accessToken={accessToken} />
 
-                  {m.content && !isAudioOnly && (
-                    <WhatsAppFormattedText content={m.content} className={isOutbound && !isInternal ? 'text-white' : ''} />
-                  )}
+                    {m.content && !isAudioOnly && (
+                      <WhatsAppFormattedText content={m.content} className={isOutbound && !isInternal ? 'text-white' : ''} />
+                    )}
 
-                  {!isAudioOnly && (
-                    <div className={`flex items-center justify-end gap-1 mt-1 text-[10px] ${isOutbound && !isInternal ? 'text-white/70' : 'text-muted-foreground'}`}>
-                      <span>{timeStr}</span>
-                      {isOutbound && !isInternal && <StatusIcon status={m.whatsapp_status} />}
-                    </div>
+                    {!isAudioOnly && (
+                      <div className={`flex items-center justify-end gap-1 mt-1 text-[10px] ${isOutbound && !isInternal ? 'text-white/70' : 'text-muted-foreground'}`}>
+                        <span>{timeStr}</span>
+                        {isOutbound && !isInternal && <StatusIcon status={m.whatsapp_status} />}
+                      </div>
+                    )}
+                  </div>
+                  {!isInternal && onReply && (
+                    <button
+                      type="button"
+                      onClick={() => onReply(m)}
+                      className="opacity-0 group-hover:opacity-100 transition-opacity p-1 text-muted-foreground hover:text-foreground"
+                      title="Responder"
+                    >
+                      <ArrowBendUpLeft size={14} />
+                    </button>
                   )}
                 </div>
               </div>
