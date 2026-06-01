@@ -6,7 +6,7 @@
 // Client-side guards mirror server-side guards as defense-in-depth.
 // Authoritative guards live in supabase/functions/twilio-whatsapp-send/index.ts.
 
-import { useEffect, useMemo, useState } from 'react';
+import { useMemo, useState } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { useOrganization } from '@/hooks/useOrganization';
 import { useToast } from '@/hooks/use-toast';
@@ -74,6 +74,14 @@ export function InboxComposer({ thread, replyTo, onClearReply, onSent, onThreadM
   const [showTemplates, setShowTemplates] = useState(false);
   const [takingOver, setTakingOver] = useState(false);
 
+  // Hooks must run unconditionally — compute before guards.
+  const lastInboundIso = thread?.last_inbound_at || thread?.whatsapp_last_inbound_at || null;
+  const isIn24hWindow = useMemo(() => {
+    if (!lastInboundIso) return false;
+    const diffMs = Date.now() - new Date(lastInboundIso).getTime();
+    return diffMs >= 0 && diffMs < 24 * 60 * 60 * 1000;
+  }, [lastInboundIso]);
+
   // --- Guards ---------------------------------------------------------------
 
   if (!thread) {
@@ -108,15 +116,6 @@ export function InboxComposer({ thread, replyTo, onClearReply, onSent, onThreadM
       />
     );
   }
-
-  // --- 24h window -----------------------------------------------------------
-
-  const lastInboundIso = thread.last_inbound_at || thread.whatsapp_last_inbound_at || null;
-  const isIn24hWindow = useMemo(() => {
-    if (!lastInboundIso) return false;
-    const diffMs = Date.now() - new Date(lastInboundIso).getTime();
-    return diffMs >= 0 && diffMs < 24 * 60 * 60 * 1000;
-  }, [lastInboundIso]);
 
   // --- Assignment -----------------------------------------------------------
 
