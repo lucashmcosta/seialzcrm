@@ -1,4 +1,3 @@
-import { lazy, Suspense } from 'react';
 import { cn } from '@/lib/utils';
 import {
   Briefcase,
@@ -18,19 +17,15 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import type { PeriodPreset, CustomRange } from '@/lib/report-period';
-import type { TrendPoint } from '@/components/reports/SalesTrendChart';
-import type { FunnelStage } from '@/components/reports/PipelineFunnel';
+// IMPORTANT: import these chart modules statically (matching ReportsPage).
+// Mixing static + dynamic imports of the same module across pages causes
+// Rollup to emit shared chunks whose initialization order is non-deterministic
+// in production, reproducing the historical TDZ:
+// "ReferenceError: Cannot access 'X' before initialization".
+import { SalesTrendChart, type TrendPoint } from '@/components/reports/SalesTrendChart';
+import { PipelineFunnel, type FunnelStage } from '@/components/reports/PipelineFunnel';
+import { StageDistribution } from '@/components/reports/StageDistribution';
 import type { UserStats } from '@/components/reports/UserLeaderboard';
-
-const SalesTrendChart = lazy(() =>
-  import('@/components/reports/SalesTrendChart').then((m) => ({ default: m.SalesTrendChart })),
-);
-const PipelineFunnel = lazy(() =>
-  import('@/components/reports/PipelineFunnel').then((m) => ({ default: m.PipelineFunnel })),
-);
-const StageDistribution = lazy(() =>
-  import('@/components/reports/StageDistribution').then((m) => ({ default: m.StageDistribution })),
-);
 
 const PRESETS: { value: PeriodPreset; label: string }[] = [
   { value: 'today', label: 'Hoje' },
@@ -211,27 +206,21 @@ export function MobileReports(props: MobileReportsProps) {
 
       {/* Trend chart */}
       <div className="px-4 py-2">
-        <Suspense fallback={<Block h="h-64" />}>
-          <SalesTrendChart data={trend} formatCurrency={formatCurrency} loading={loading} />
-        </Suspense>
+        <SalesTrendChart data={trend} formatCurrency={formatCurrency} loading={loading} />
       </div>
 
       {/* Funnel */}
       <div className="px-4 py-2">
-        <Suspense fallback={<Block h="h-64" />}>
-          <PipelineFunnel stages={funnel} formatCurrency={formatCurrency} loading={loading} />
-        </Suspense>
+        <PipelineFunnel stages={funnel} formatCurrency={formatCurrency} loading={loading} />
       </div>
 
       {/* Distribution */}
       <div className="px-4 py-2">
-        <Suspense fallback={<Block h="h-64" />}>
-          <StageDistribution
-            data={funnel.map((f) => ({ name: f.name, value: f.value }))}
-            formatCurrency={formatCurrency}
-            loading={loading}
-          />
-        </Suspense>
+        <StageDistribution
+          data={funnel.map((f) => ({ name: f.name, value: f.value }))}
+          formatCurrency={formatCurrency}
+          loading={loading}
+        />
       </div>
 
       {/* Leaderboard */}
