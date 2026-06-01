@@ -125,14 +125,21 @@ export function InboxThreadDetail({ threadId }: Props) {
         <div className="p-5 space-y-6">
           <section>
             <h3 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground mb-2">Dados da conversa</h3>
+
+            <div className="mb-3">
+              <div className="text-[11px] text-muted-foreground mb-1">Atribuída a</div>
+              <OwnerSelector
+                value={thread.assigned_user_id || null}
+                onChange={handleAssign}
+                size="sm"
+                placeholder={reassigning ? 'Atribuindo…' : 'Sem responsável'}
+              />
+            </div>
+
             <dl className="grid grid-cols-2 gap-x-4 gap-y-2 text-xs">
               <div>
                 <dt className="text-muted-foreground">Canal</dt>
                 <dd className="text-foreground">{thread.channel || '—'}</dd>
-              </div>
-              <div>
-                <dt className="text-muted-foreground">Atribuída a</dt>
-                <dd className="text-foreground font-mono">{thread.assigned_user_id?.slice(0, 8) || '—'}</dd>
               </div>
               <div>
                 <dt className="text-muted-foreground">Atribuída em</dt>
