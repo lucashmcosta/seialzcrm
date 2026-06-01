@@ -495,31 +495,36 @@ serve(async (req) => {
     // ============================================================
     // Resolve endpoint_id from `whatsappFrom`
     // Best-effort: NULL is OK, will not break insert.
+    // Phase 1.3B: in inbox path, endpoint already resolved via thread —
+    // skip the RPC to avoid resolving by global whatsapp_from when both
+    // would otherwise tie. /messages path keeps existing RPC resolution.
     // ============================================================
     const fromAddress = whatsappFrom.replace(/^whatsapp:/, '')
-    let endpointId: string | null = null
-    try {
-      const { data: epData, error: epErr } = await supabase
-        .rpc('resolve_communication_endpoint', {
-          _organization_id: organizationId,
-          _channel: 'whatsapp',
-          _address: fromAddress,
-        })
-      if (epErr) {
-        console.warn('[endpoint-resolve] rpc error', JSON.stringify({
-          org_id: organizationId, from: fromAddress, to: whatsappTo, err: epErr.message,
-        }))
-      } else if (epData) {
-        endpointId = epData as unknown as string
-      } else {
-        console.warn('[endpoint-resolve] no match', JSON.stringify({
-          org_id: organizationId, from: fromAddress, to: whatsappTo,
+    let endpointId: string | null = inboxEndpointIdOverride
+    if (!endpointId) {
+      try {
+        const { data: epData, error: epErr } = await supabase
+          .rpc('resolve_communication_endpoint', {
+            _organization_id: organizationId,
+            _channel: 'whatsapp',
+            _address: fromAddress,
+          })
+        if (epErr) {
+          console.warn('[endpoint-resolve] rpc error', JSON.stringify({
+            org_id: organizationId, from: fromAddress, to: whatsappTo, err: epErr.message,
+          }))
+        } else if (epData) {
+          endpointId = epData as unknown as string
+        } else {
+          console.warn('[endpoint-resolve] no match', JSON.stringify({
+            org_id: organizationId, from: fromAddress, to: whatsappTo,
+          }))
+        }
+      } catch (e) {
+        console.warn('[endpoint-resolve] exception', JSON.stringify({
+          org_id: organizationId, from: fromAddress, to: whatsappTo, err: String(e),
         }))
       }
-    } catch (e) {
-      console.warn('[endpoint-resolve] exception', JSON.stringify({
-        org_id: organizationId, from: fromAddress, to: whatsappTo, err: String(e),
-      }))
     }
 
     // Build initial twilio metadata snapshot
