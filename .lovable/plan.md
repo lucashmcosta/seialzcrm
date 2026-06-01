@@ -1,51 +1,37 @@
-## Objetivo
+## Diagnóstico
 
-Criar um contato de teste "Junior Teste" (+55 11 96429-8621) na organização **Viagi** e uma thread de WhatsApp com mensagens simuladas para aparecer na tela `/inbox`, permitindo testar o composer (texto, nota interna, reply, etc) **sem disparar nada para o número real**.
+A conversa "Junior Teste" foi auto-atribuída a outro usuário (Lucas Costa) por algum trigger de distribuição quando a thread foi criada. Por isso o composer mostra **"Atribuída a outro usuário · envio bloqueado"** — não há rota de reatribuição na UI: o botão "Assumir" só aparece quando `assigned_user_id IS NULL`.
 
-## Importante: nada será enviado pelo Twilio
+## O que vou fazer
 
-A criação é feita apenas via `INSERT` no banco. Nenhuma edge function é chamada. As mensagens "do cliente" são inseridas com `direction='inbound'` direto na tabela `messages`, simulando que o cliente mandou.
+### A. Desbloqueio imediato (dado)
+Reatribuir a thread "Junior Teste" para você (Mariane Carvalho) via migration, para você conseguir testar agora.
 
-Quando você responder pelo composer do Inbox, aí sim o fluxo real será exercitado — mas como o telefone é o seu, é seguro.
+### B. Correção de UX (código — só InboxComposer + InboxThreadDetail, não toca em /messages)
 
-## O que vou inserir (via insert tool, não migration)
+1. **Botão "Assumir / Reatribuir para mim" sempre disponível** no header do composer
+   - Se `assigned_user_id IS NULL` → botão "Assumir"
+   - Se `assigned_user_id !== meu_id` → botão "Reatribuir para mim" (mesma ação, com `from_user_id` registrado no `last_routing_decision`)
+   - Se já é minha → nada
+   - Mantém o aviso "Atribuída a outro usuário" como contexto, mas **não bloqueia mais sem saída**.
 
-1. **Contact** em `public.contacts`:
-   - `organization_id`: Viagi (`b246ef6f-6242-4011-a112-6d8783d2896a`)
-   - `full_name`: Junior Teste
-   - `phone`: `+5511964298621`
-   - `phone_normalized`: variantes BR (com/sem 9º dígito) para o matching
-   - `lifecycle_stage`: `customer` (obrigatório para Inbox aceitar)
-   - `source`: `manual_test`
+2. **OwnerSelector no painel lateral** (`Dados da conversa` → "Atribuída a")
+   - Substitui o texto `dadc0d30…` por um `<OwnerSelector>` que lista todos os usuários ativos da org e permite:
+     - Reatribuir para qualquer usuário
+     - Desatribuir (volta para fila)
+   - Update vai direto em `message_threads.assigned_user_id` + `assigned_at` + `last_routing_decision` (action: `manual_reassign`).
+   - Após mudança chama `refresh()` para atualizar composer.
 
-2. **Message thread** em `public.message_threads`:
-   - `organization_id`: Viagi
-   - `contact_id`: do contato acima
-   - `channel`: `whatsapp`
-   - `status`: `open` (não-resolved, para o composer liberar envio)
-   - `primary_endpoint_id`: endpoint WhatsApp ativo da Viagi (vou buscar)
-   - `last_inbound_at` / `whatsapp_last_inbound_at`: `now()` (janela 24h aberta → texto livre permitido)
+3. **Composer continua bloqueando envio quando não é meu** (regra atual mantida — só responde quem é dono). A diferença é que agora dá pra virar o dono em 1 clique.
 
-3. **2 mensagens inbound** em `public.messages` simulando o cliente:
-   - "Oi, tudo bem? Esse é um teste." (há 5 min)
-   - "Pode me responder por aqui." (há 1 min)
-   - `direction='inbound'`, `channel='whatsapp'`, `is_internal_note=false`
-   - Triggers existentes vão atualizar `last_message_*` automaticamente
+### Fora de escopo
+- Não mexer em `WhatsAppChat.tsx` nem `/messages`.
+- Não tocar nos triggers de auto-assign (eles continuam atuando em threads novas — isso é o comportamento esperado de fila).
+- Não criar permissões novas: qualquer usuário da org pode reatribuir (igual ao OwnerSelector existente em Contatos/Oportunidades).
 
-## Como testar depois
+## Arquivos afetados
+- `supabase/migrations/...` (1 update simples no thread de teste)
+- `src/components/inbox/InboxComposer.tsx` (botão "Reatribuir para mim")
+- `src/components/inbox/InboxThreadDetail.tsx` (OwnerSelector no painel lateral)
 
-1. Abrir `/inbox` → aba **Ativos** → a thread "Junior Teste" deve aparecer.
-2. Selecionar a thread → testar:
-   - Texto livre (dentro da janela 24h)
-   - Nota interna (não chama Twilio, não altera last_message)
-   - Reply/quote
-   - Mídia / áudio (se quiser, será entregue no seu WhatsApp real)
-3. Validar timeline em realtime.
-
-## Limpeza
-
-Quando terminar o teste, é só me pedir "remove o contato Junior Teste" e eu apago tudo (thread, mensagens, contato).
-
-## Confirmação necessária
-
-Sigo com a criação na **Viagi**?
+Aprova?
