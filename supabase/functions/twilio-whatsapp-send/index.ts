@@ -13,7 +13,8 @@ serve(async (req) => {
 
   try {
     const body = await req.json()
-    const {
+    // Phase 1.3D: contactId may be reassigned in inbox path from thread.contact_id
+    let {
       organizationId,
       contactId,
       threadId,
