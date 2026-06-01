@@ -2,20 +2,24 @@ import { useEffect, useState } from 'react';
 import { Layout } from '@/components/Layout';
 import { useIsMobile } from '@/hooks/use-mobile';
 import { useAuth } from '@/hooks/useAuth';
+import { useOrganizationContext } from '@/contexts/OrganizationContext';
 import { supabase } from '@/integrations/supabase/client';
 import { InboxQueues } from '@/components/inbox/InboxQueues';
 import { InboxThreadList } from '@/components/inbox/InboxThreadList';
 import { InboxThreadDetail } from '@/components/inbox/InboxThreadDetail';
 import { InboxMetricsBar } from '@/components/inbox/InboxMetricsBar';
-import { useInboxQueueCounts, type InboxQueue } from '@/hooks/inbox/useInboxQueueCounts';
+import { useInboxQueueCounts } from '@/hooks/inbox/useInboxQueueCounts';
 import { useInboxThreads } from '@/hooks/inbox/useInboxThreads';
+import type { InboxTab } from '@/hooks/inbox/inboxScope';
 import { Headset } from '@phosphor-icons/react';
 
 export default function InboxPage() {
   const isMobile = useIsMobile();
   const { user } = useAuth();
+  const { organization } = useOrganizationContext();
   const [internalUserId, setInternalUserId] = useState<string | null>(null);
-  const [queue, setQueue] = useState<InboxQueue>('mine');
+  const [tab, setTab] = useState<InboxTab>('active');
+  const [onlyMine, setOnlyMine] = useState(false);
   const [selectedId, setSelectedId] = useState<string | null>(null);
 
   // Resolve internal users.id from auth.uid (Core rule: relational tables use users.id)
@@ -33,8 +37,9 @@ export default function InboxPage() {
     return () => { cancelled = true; };
   }, [user?.id]);
 
-  const { counts } = useInboxQueueCounts(internalUserId);
-  const { threads, loading } = useInboxThreads(queue, internalUserId);
+  const orgTimezone = organization?.timezone ?? null;
+  const { counts } = useInboxQueueCounts(internalUserId, onlyMine, orgTimezone);
+  const { threads, loading } = useInboxThreads(tab, onlyMine, internalUserId, orgTimezone);
 
   // Mobile placeholder — does NOT redirect to /messages
   if (isMobile) {
@@ -57,9 +62,11 @@ export default function InboxPage() {
         <InboxMetricsBar counts={counts} />
         <div className="flex-1 flex min-h-0 overflow-hidden">
           <InboxQueues
-            active={queue}
+            active={tab}
             counts={counts}
-            onChange={(q) => { setQueue(q); setSelectedId(null); }}
+            onChange={(t) => { setTab(t); setSelectedId(null); }}
+            onlyMine={onlyMine}
+            onOnlyMineChange={(v) => { setOnlyMine(v); setSelectedId(null); }}
           />
           <InboxThreadList
             threads={threads}
