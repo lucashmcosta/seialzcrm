@@ -1,10 +1,13 @@
 import { useState } from 'react';
+import { supabase } from '@/integrations/supabase/client';
+import { useToast } from '@/hooks/use-toast';
 import { useInboxThread } from '@/hooks/inbox/useInboxThread';
 import { useOrganizationContext } from '@/contexts/OrganizationContext';
 import { InboxSlaChip } from './InboxSlaChip';
 import { InboxAssignmentHistory } from './InboxAssignmentHistory';
 import { InboxConversationTimeline } from './InboxConversationTimeline';
 import { InboxComposer } from './InboxComposer';
+import { OwnerSelector } from '@/components/common/OwnerSelector';
 import type { InboxMessageRow } from '@/hooks/inbox/useInboxThreadMessages';
 
 interface Props {
@@ -19,7 +22,38 @@ function fmt(iso: string | null) {
 export function InboxThreadDetail({ threadId }: Props) {
   const { thread, history, loading, refresh } = useInboxThread(threadId);
   const { organization } = useOrganizationContext();
+  const { toast } = useToast();
   const [replyTo, setReplyTo] = useState<InboxMessageRow | null>(null);
+  const [reassigning, setReassigning] = useState(false);
+
+  async function handleAssign(userId: string | null) {
+    if (!thread) return;
+    setReassigning(true);
+    try {
+      const { error } = await supabase
+        .from('message_threads')
+        .update({
+          assigned_user_id: userId,
+          assigned_at: userId ? new Date().toISOString() : null,
+          last_routing_decision: {
+            action: 'manual_assignment',
+            by_user_id: userId,
+            reason: userId ? 'inbox_manual_reassign' : 'inbox_unassign',
+            at: new Date().toISOString(),
+          },
+        })
+        .eq('id', thread.id);
+      if (error) throw error;
+      toast({ description: userId ? 'Conversa reatribuída.' : 'Conversa devolvida à fila.' });
+      refresh();
+    } catch (e: any) {
+      console.error('[inbox-detail] reassign failed', e);
+      toast({ variant: 'destructive', description: e?.message || 'Falha ao reatribuir.' });
+    } finally {
+      setReassigning(false);
+    }
+  }
+
 
   if (!threadId) {
     return (
@@ -91,14 +125,21 @@ export function InboxThreadDetail({ threadId }: Props) {
         <div className="p-5 space-y-6">
           <section>
             <h3 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground mb-2">Dados da conversa</h3>
+
+            <div className="mb-3">
+              <div className="text-[11px] text-muted-foreground mb-1">Atribuída a</div>
+              <OwnerSelector
+                value={thread.assigned_user_id || null}
+                onChange={handleAssign}
+                size="sm"
+                placeholder={reassigning ? 'Atribuindo…' : 'Sem responsável'}
+              />
+            </div>
+
             <dl className="grid grid-cols-2 gap-x-4 gap-y-2 text-xs">
               <div>
                 <dt className="text-muted-foreground">Canal</dt>
                 <dd className="text-foreground">{thread.channel || '—'}</dd>
-              </div>
-              <div>
-                <dt className="text-muted-foreground">Atribuída a</dt>
-                <dd className="text-foreground font-mono">{thread.assigned_user_id?.slice(0, 8) || '—'}</dd>
               </div>
               <div>
                 <dt className="text-muted-foreground">Atribuída em</dt>
