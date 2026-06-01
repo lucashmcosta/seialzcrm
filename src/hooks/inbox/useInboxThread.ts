@@ -19,7 +19,7 @@ const THREAD_SELECT = `
   assigned_user_id, assigned_at, first_response_at,
   sla_first_response_target_at, sla_resolution_target_at,
   last_message_at, last_message_content, last_message_direction, resolved_at,
-  contact:contacts ( id, name, phone )
+  contact:contacts ( id, name:full_name, phone )
 `;
 
 export function useInboxThread(threadId: string | null) {
