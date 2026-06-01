@@ -1,10 +1,13 @@
 import { useState } from 'react';
+import { supabase } from '@/integrations/supabase/client';
+import { useToast } from '@/hooks/use-toast';
 import { useInboxThread } from '@/hooks/inbox/useInboxThread';
 import { useOrganizationContext } from '@/contexts/OrganizationContext';
 import { InboxSlaChip } from './InboxSlaChip';
 import { InboxAssignmentHistory } from './InboxAssignmentHistory';
 import { InboxConversationTimeline } from './InboxConversationTimeline';
 import { InboxComposer } from './InboxComposer';
+import { OwnerSelector } from '@/components/common/OwnerSelector';
 import type { InboxMessageRow } from '@/hooks/inbox/useInboxThreadMessages';
 
 interface Props {
