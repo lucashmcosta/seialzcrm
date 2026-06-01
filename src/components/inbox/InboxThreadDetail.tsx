@@ -22,7 +22,38 @@ function fmt(iso: string | null) {
 export function InboxThreadDetail({ threadId }: Props) {
   const { thread, history, loading, refresh } = useInboxThread(threadId);
   const { organization } = useOrganizationContext();
+  const { toast } = useToast();
   const [replyTo, setReplyTo] = useState<InboxMessageRow | null>(null);
+  const [reassigning, setReassigning] = useState(false);
+
+  async function handleAssign(userId: string | null) {
+    if (!thread) return;
+    setReassigning(true);
+    try {
+      const { error } = await supabase
+        .from('message_threads')
+        .update({
+          assigned_user_id: userId,
+          assigned_at: userId ? new Date().toISOString() : null,
+          last_routing_decision: {
+            action: 'manual_assignment',
+            by_user_id: userId,
+            reason: userId ? 'inbox_manual_reassign' : 'inbox_unassign',
+            at: new Date().toISOString(),
+          },
+        })
+        .eq('id', thread.id);
+      if (error) throw error;
+      toast({ description: userId ? 'Conversa reatribuída.' : 'Conversa devolvida à fila.' });
+      refresh();
+    } catch (e: any) {
+      console.error('[inbox-detail] reassign failed', e);
+      toast({ variant: 'destructive', description: e?.message || 'Falha ao reatribuir.' });
+    } finally {
+      setReassigning(false);
+    }
+  }
+
 
   if (!threadId) {
     return (
