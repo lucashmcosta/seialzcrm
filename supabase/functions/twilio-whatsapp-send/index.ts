@@ -13,7 +13,8 @@ serve(async (req) => {
 
   try {
     const body = await req.json()
-    const {
+    // Phase 1.3D: contactId may be reassigned in inbox path from thread.contact_id
+    let {
       organizationId,
       contactId,
       threadId,
@@ -255,14 +256,34 @@ serve(async (req) => {
         Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''
       )
 
+      // Phase 1.3D: load thread including status + contact_id
       const { data: thread, error: tErr } = await supabaseInbox
         .from('message_threads')
-        .select('id, primary_endpoint_id, organization_id, channel')
+        .select('id, primary_endpoint_id, organization_id, channel, status, contact_id')
         .eq('id', threadId)
         .eq('organization_id', organizationId)
         .maybeSingle()
       if (tErr || !thread) return inboxErr(404, 'thread_not_found')
+      if (thread.status === 'resolved' || thread.status === 'closed') {
+        return inboxErr(409, 'thread_closed', { status: thread.status })
+      }
       if (!thread.primary_endpoint_id) return inboxErr(400, 'no_endpoint')
+      if (!thread.contact_id) return inboxErr(400, 'thread_without_contact')
+
+      // Phase 1.3D: validate contact lifecycle = customer (ignore payload contactId)
+      const { data: ct, error: ctErr } = await supabaseInbox
+        .from('contacts')
+        .select('id, lifecycle_stage, organization_id')
+        .eq('id', thread.contact_id)
+        .eq('organization_id', organizationId)
+        .maybeSingle()
+      if (ctErr || !ct) return inboxErr(404, 'contact_not_found')
+      if (ct.lifecycle_stage !== 'customer') {
+        return inboxErr(403, 'not_customer', { lifecycle_stage: ct.lifecycle_stage })
+      }
+
+      // Override payload contactId with the thread's authoritative contact
+      contactId = thread.contact_id
 
       const { data: ep, error: eErr } = await supabaseInbox
         .from('communication_endpoints')
@@ -273,11 +294,19 @@ serve(async (req) => {
 
       if (ep.is_active === false) return inboxErr(400, 'endpoint_inactive')
       if (ep.channel !== 'whatsapp') return inboxErr(400, 'wrong_channel')
-      if (ep.purpose === 'commercial' || ep.purpose === 'vendor_personal' || ep.purpose === 'other') {
-        return inboxErr(400, 'purpose_blocked', { endpoint_purpose: ep.purpose })
+      // Phase 1.3D: allow customer_service AND other; block only commercial/vendor_personal.
+      if (ep.purpose === 'commercial' || ep.purpose === 'vendor_personal') {
+        return inboxErr(403, 'purpose_blocked', { endpoint_purpose: ep.purpose })
       }
-      if (ep.purpose !== 'customer_service') {
-        return inboxErr(400, 'purpose_blocked', { endpoint_purpose: ep.purpose })
+      if (ep.purpose !== 'customer_service' && ep.purpose !== 'other') {
+        return inboxErr(403, 'purpose_blocked', { endpoint_purpose: ep.purpose })
+      }
+      if (ep.purpose === 'other') {
+        console.warn('[inbox-send] endpoint_purpose_other', {
+          threadId,
+          endpoint_id: ep.id,
+          organization_id: organizationId,
+        })
       }
       if (!ep.organization_integration_id) return inboxErr(400, 'integration_missing')
       if (!ep.external_address || !/^\+\d{8,15}$/.test(ep.external_address)) {
@@ -288,7 +317,9 @@ serve(async (req) => {
       inboxEndpointIdOverride = ep.id
       console.log('[inbox-send] guards ok', {
         threadId,
+        contact_id: thread.contact_id,
         endpoint_id: ep.id,
+        endpoint_purpose: ep.purpose,
         from: inboxWhatsappFromOverride,
       })
     }

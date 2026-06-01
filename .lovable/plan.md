@@ -1,136 +1,119 @@
-# Etapa D + Etapa E — Plano aprovado
 
-Regra unificada validada em Central Trabalhista e Viagi:
-`opportunity.status = 'won'` → `contact.lifecycle_stage = 'customer'` → entra no Atendimento.
+# Fase 1.3D — Build (migration ✅ já aplicada)
 
----
-
-## Etapa D — Simplificar `inboxScope.ts` (apenas frontend)
-
-### Arquivos
-- `src/hooks/inbox/inboxScope.ts` — única alteração efetiva.
-- `src/hooks/inbox/useInboxThreads.ts` — apenas ajuste do `console.info` (remove `A=` do log; usa novo `ScopeDebug`).
-- `src/hooks/inbox/useInboxQueueCounts.ts` — sem mudanças.
-- `src/pages/inbox/InboxPage.tsx` — sem mudanças.
-
-### Mudanças em `inboxScope.ts`
-1. Remover `SELECT_A` e `fetchScopeA`.
-2. `fetchInboxScopedThreads` passa a usar apenas `fetchScopeB`, com sort por `last_message_at` desc e `slice(limit)`.
-3. `ScopeDebug` vira `{ bRaw, bFiltered, merged }` (campo `a` removido).
-4. Cabeçalho do arquivo reescrito explicando a regra unificada.
-5. `EXCLUDED_PURPOSES = ['commercial','vendor_personal']` preservado. Filtro client-side permanece (endpoint NULL/`other`/`customer_service` passam; `commercial`/`vendor_personal` saem).
-6. Assinaturas públicas dos hooks (`useInboxThreads`, `useInboxQueueCounts`) preservadas.
-
-### Não tocar
-`/messages`, composer, envio, RPCs, edge functions, migrations nessa etapa, endpoints.
-
-### Validação
-- Central Trabalhista: contagens da Inbox coerentes com snapshot atual.
-- Viagi: Ativos 38 / Aguardando 32 / Concluídos hoje 0.
-- Console sem erros; log `[inbox] tab=… B_raw=… B_filtered=… merged=…`.
-- Conferir ausência de threads com endpoint `commercial`/`vendor_personal`.
-
-### Rollback
-Reverter `src/hooks/inbox/inboxScope.ts` e o `console.info` em `useInboxThreads.ts`. Sem migration envolvida.
+## Status atual
+- ✅ Migration de proteção das notas internas **aplicada** (`fn_update_thread_last_message`, `fn_messages_intelligence_enqueue`, `create_message_activity`).
+- ⏭ Edge function e frontend pendentes — exigem build mode.
 
 ---
 
-## Etapa E — Trigger `won → customer` (apenas banco)
+## Passo A — `supabase/functions/twilio-whatsapp-send/index.ts`
 
-### Arquivo
-- Nova migration: `supabase/migrations/<timestamp>_opportunity_won_promotes_contact.sql`.
+Editar **só** o caminho `senderContext === 'inbox'` (linhas 241–294). Restante intocado.
 
-### SQL
+1. Trocar `const { ... }` por `let { ... }` na destruturação do body (linha 16) para permitir reatribuir `contactId` a partir de `thread.contact_id`.
+2. Substituir o bloco inbox:
+   - Carregar thread com `id, primary_endpoint_id, organization_id, channel, status, contact_id`.
+   - Bloquear `status IN ('resolved','closed')` → `thread_closed`.
+   - Reatribuir `contactId = thread.contact_id` (ignorar payload).
+   - Carregar contato com `id, phone, full_name, lifecycle_stage, organization_id`; bloquear se `lifecycle_stage !== 'customer'` → `not_customer`.
+   - Endpoint: permitir `purpose IN ('customer_service','other')`; manter bloqueio absoluto de `commercial`/`vendor_personal`. Em `other`, log warning `[inbox-send] endpoint_purpose_other`.
+   - `inboxWhatsappFromOverride = whatsapp:${ep.external_address}` (já existe).
+   - `inboxEndpointIdOverride = ep.id` (já existe).
+3. Resto do fluxo (janela 24h, template, mídia, reply, Twilio call, insert em messages, activity) **inalterado** — usa `contactId` reatribuído.
 
-```sql
-CREATE OR REPLACE FUNCTION public.fn_opportunity_won_promote_contact()
-RETURNS trigger
-LANGUAGE plpgsql
-SECURITY DEFINER
-SET search_path = public
-AS $$
-BEGIN
-  IF NEW.status = 'won'
-     AND (TG_OP = 'INSERT' OR OLD.status IS DISTINCT FROM 'won')
-     AND NEW.contact_id IS NOT NULL
-     AND NEW.deleted_at IS NULL
-  THEN
-    UPDATE public.contacts c
-       SET lifecycle_stage = 'customer',
-           updated_at = now()
-     WHERE c.id = NEW.contact_id
-       AND c.organization_id = NEW.organization_id
-       AND c.deleted_at IS NULL
-       AND c.lifecycle_stage IS DISTINCT FROM 'customer';
-  END IF;
-  RETURN NEW;
-END;
-$$;
-
-DROP TRIGGER IF EXISTS trg_opportunity_won_promote_contact ON public.opportunities;
-
-CREATE TRIGGER trg_opportunity_won_promote_contact
-AFTER INSERT OR UPDATE OF status ON public.opportunities
-FOR EACH ROW
-EXECUTE FUNCTION public.fn_opportunity_won_promote_contact();
-```
-
-### Garantias
-- Nunca rebaixa (`won → open/lost` não dispara UPDATE em contacts).
-- Não toca endpoint, threads ou `/messages`.
-- Idempotente (`lifecycle_stage IS DISTINCT FROM 'customer'`).
-- Respeita `organization_id` e soft delete (`deleted_at IS NULL`).
-- Sem composer, envio, edge function ou webhook.
-- Sem RLS nova, sem RPC nova.
-
-### Testes (sem alterar cliente real)
-Preferência: usar SQL controlado em transação com `ROLLBACK`, criando contact + opportunity descartáveis numa org de teste. Esqueleto:
-
-```sql
-BEGIN;
--- 1) seed descartável
-WITH c AS (
-  INSERT INTO public.contacts (organization_id, full_name, lifecycle_stage)
-  VALUES ('<org_test>', 'TRIGGER TEST', 'lead')
-  RETURNING id
-)
-INSERT INTO public.opportunities (organization_id, contact_id, status, title)
-SELECT '<org_test>', id, 'open', 'TRIGGER TEST' FROM c;
-
--- 2) ação: promover para won
-UPDATE public.opportunities
-   SET status = 'won'
- WHERE title = 'TRIGGER TEST' AND organization_id = '<org_test>';
-
--- 3) asserção: contact deve estar customer
-SELECT lifecycle_stage FROM public.contacts WHERE full_name = 'TRIGGER TEST';
-
--- 4) regressão (não rebaixar): voltar para open
-UPDATE public.opportunities SET status='open' WHERE title='TRIGGER TEST';
-SELECT lifecycle_stage FROM public.contacts WHERE full_name='TRIGGER TEST';
--- esperado: ainda 'customer'
-
--- 5) limpar tudo
-ROLLBACK;
-```
-
-Se não houver org de teste segura, validar apenas com `BEGIN; … ROLLBACK;` ou aguardar oportunidade descartável real.
-
-### Rollback
-```sql
-DROP TRIGGER IF EXISTS trg_opportunity_won_promote_contact ON public.opportunities;
-DROP FUNCTION IF EXISTS public.fn_opportunity_won_promote_contact();
-```
+Caminho `/messages` (sem `senderContext='inbox'`): **zero alteração**.
 
 ---
 
-## Fora de escopo
-`/messages`, composer, envio real, endpoints, Fase 1.3C, RLS novas, RPCs novas.
+## Passo B — Frontend
 
-## Entregáveis
-1. Arquivos alterados.
-2. Validação Etapa D — Central Trabalhista.
-3. Validação Etapa D — Viagi (38 / 32 / 0).
-4. SQL da migration Etapa E.
-5. Resultado dos testes da trigger.
-6. Confirmação de `/messages`, composer e envio intocados.
+### B1. Helper Inbox-only de upload de mídia
+`src/lib/inboxMediaUpload.ts` — função pura `inboxUploadMedia(supabase, file, organizationId)` que retorna `{ url, mediaType }`. Duplica a lógica de `WhatsAppChat.tsx` (sem alterar `WhatsAppChat.tsx`) para não introduzir risco em `/messages`.
+
+### B2. `src/hooks/inbox/useInboxThread.ts`
+Adicionar ao SELECT: `assigned_user_id, status, organization_id`. Tipos no `useInboxThreads.ts` `InboxThreadRow` já cobrem.
+
+### B3. `src/components/inbox/InboxComposer.tsx` (reescrita)
+Props: `thread`, `contact`, `replyTo`, `onClearReply`, `onSent`.
+
+Guards no client (defesa em profundidade):
+- `contact.lifecycle_stage !== 'customer'` → composer disabled com motivo.
+- `thread.status in ('resolved','closed')` → disabled.
+- `primary_endpoint.purpose in ('commercial','vendor_personal')` → disabled.
+- Atribuição:
+  - sem assignee → botão "Assumir" (UPDATE `message_threads` com `assigned_user_id=me` + `last_routing_decision=jsonb('action':'manual_takeover', 'by_user_id':me, 'reason':'inbox_takeover')`). Trigger `trg_log_thread_assignment_change` registra automaticamente.
+  - assignee é outro usuário e role !== admin → disabled + msg.
+- Permissões: liberar para Admin/Superadmin (via `usePermissions`/role).
+
+UI:
+- Tabs **Responder** | **Nota interna**.
+- **Responder**:
+  - In-window 24h: `MediaUploadButton` + `AudioRecorder` + `Textarea` (Enter envia, Shift+Enter quebra) + botão enviar (estados sending/sent/failed inline).
+  - Out-of-window: bloco "Fora da janela 24h — use template" + botão abre `WhatsAppTemplateSelector` em overlay.
+  - `ReplyPreview` no topo quando `replyTo` setado, com X para limpar.
+- **Nota interna**:
+  - Textarea com fundo destacado (token `bg-warning/10` ou semântico). Placeholder "Nota visível apenas para a equipe".
+  - Botão "Salvar nota". Insert direto via PostgREST: `messages.insert({ organization_id, thread_id, content, direction:'internal', is_internal_note:true, sender_type:'user', sender_user_id, sender_name, sent_at: now() })`. **Sem** chamada ao edge function.
+
+Envio real: `supabase.functions.invoke('twilio-whatsapp-send', { body: { organizationId, threadId, senderContext:'inbox', userId, message|templateId|mediaUrl|mediaType|replyToMessageId|templateVariables|mediaUrls } })` — **sem `contactId`** (backend resolve via thread).
+
+Erros mapeados (pt-BR): `not_customer`, `thread_closed`, `purpose_blocked`, `Outside 24h window. Must use a template.`, falha Twilio.
+
+### B4. `src/components/inbox/InboxConversationTimeline.tsx`
+- Botão "Responder" por bolha (hover/menu) → callback `onReply(message)` propagado pro `InboxThreadDetail`.
+- Bolhas com `is_internal_note=true`: estilo distinto (badge "Nota interna", fundo amarelo suave); sem status whatsapp.
+- Verificar/garantir subscription realtime em `messages` filtrada por `thread_id`.
+
+### B5. `src/components/inbox/InboxThreadDetail.tsx`
+- Trocar stub do composer por `<InboxComposer thread contact={thread.contact} replyTo onClearReply onSent />`.
+- Estado local `replyTo`.
+
+---
+
+## Passo C — Validação no preview
+
+| # | Cenário | Esperado |
+|---|---|---|
+| 1 | Texto em thread customer | enviado, status `sent` |
+| 2 | Fora 24h | bloqueio inline + template envia |
+| 3 | Imagem/doc/vídeo | upload + envio |
+| 4 | Áudio gravado | envio |
+| 5 | Reply com quote | `RepliedMessageSid` no log |
+| 6 | Nota interna | sem chamada `twilio-whatsapp-send`; `last_message_content` da thread NÃO muda |
+| 7 | Lead | bloqueio `not_customer` |
+| 8 | Thread resolved | bloqueio `thread_closed` |
+| 9 | `/messages` | comportamento idêntico |
+| 10 | Realtime | timeline atualiza |
+
+Validação de regressão de `last_message`: query SQL após inserir nota interna para confirmar que `message_threads.last_message_*` permanece com o valor da última mensagem real.
+
+Se qualquer teste crítico falhar → parar e reportar antes de seguir.
+
+---
+
+## Arquivos
+
+**Novos**
+- `src/lib/inboxMediaUpload.ts`
+
+**Editados**
+- `supabase/functions/twilio-whatsapp-send/index.ts` (somente bloco inbox + linha do `let`)
+- `src/hooks/inbox/useInboxThread.ts`
+- `src/components/inbox/InboxComposer.tsx`
+- `src/components/inbox/InboxConversationTimeline.tsx`
+- `src/components/inbox/InboxThreadDetail.tsx`
+
+**Já aplicado**
+- Migration `<ts>_inbox_internal_notes_trigger_guards`
+
+**Intocado**
+- `WhatsAppChat.tsx`, `/messages`, `MessagesList.tsx`, mobile, `twilio-whatsapp-webhook`, Railway, regra de Inbox, Query A.
+
+---
+
+## Não-publicação
+
+Nenhum deploy a produção. Sem `presentation-open-publish`.
+
+Aprovar move para build mode e executo Passo A → B → C → relatório final.

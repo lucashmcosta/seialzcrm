@@ -1,9 +1,11 @@
+import { useState } from 'react';
 import { useInboxThread } from '@/hooks/inbox/useInboxThread';
 import { useOrganizationContext } from '@/contexts/OrganizationContext';
 import { InboxSlaChip } from './InboxSlaChip';
 import { InboxAssignmentHistory } from './InboxAssignmentHistory';
 import { InboxConversationTimeline } from './InboxConversationTimeline';
 import { InboxComposer } from './InboxComposer';
+import type { InboxMessageRow } from '@/hooks/inbox/useInboxThreadMessages';
 
 interface Props {
   threadId: string | null;
@@ -15,8 +17,9 @@ function fmt(iso: string | null) {
 }
 
 export function InboxThreadDetail({ threadId }: Props) {
-  const { thread, history, loading } = useInboxThread(threadId);
+  const { thread, history, loading, refresh } = useInboxThread(threadId);
   const { organization } = useOrganizationContext();
+  const [replyTo, setReplyTo] = useState<InboxMessageRow | null>(null);
 
   if (!threadId) {
     return (
@@ -71,9 +74,16 @@ export function InboxThreadDetail({ threadId }: Props) {
           threadId={thread.id}
           organizationId={organization?.id}
           contactName={thread.contact?.name || undefined}
+          onReply={(m) => setReplyTo(m)}
         />
 
-        <InboxComposer />
+        <InboxComposer
+          thread={thread as any}
+          replyTo={replyTo}
+          onClearReply={() => setReplyTo(null)}
+          onSent={() => { setReplyTo(null); refresh(); }}
+          onThreadMutated={refresh}
+        />
       </div>
 
       {/* Painel lateral: dados + histórico de atribuição */}
