@@ -1,27 +1,31 @@
-## Compactar composer da Inbox no desktop
+## Plano: Busca de conversas no /inbox
 
-Aplicar o mesmo layout compacto (pill) já usado no mobile à versão desktop do `InboxComposer`, mantendo todas as funcionalidades.
+Adicionar uma barra de pesquisa no topo da lista de conversas do Atendimento (/inbox), logo abaixo do header "Conversas".
 
-### Mudanças em `src/components/inbox/InboxComposer.tsx`
+### Escopo
+- Apenas frontend, filtro client-side sobre `threads` já carregadas.
+- Sem mudanças em backend, RPC ou realtime.
+- Não afeta /messages.
 
-Substituir o bloco grande não-compacto (Textarea com `min-h-[44px] max-h-[180px]`, linha de ações separada embaixo, hint "Enter envia · Shift+Enter quebra linha") por uma versão alinhada ao `/messages`:
+### Implementação
+Arquivo: `src/components/inbox/InboxThreadList.tsx`
 
-1. **Wrapper**: manter `px-6 pt-3 pb-3` e `max-w-3xl mx-auto`.
-2. **Tabs Responder/Nota interna + botão Assumir/Reatribuir**: manter como hoje (são úteis no desktop).
-3. **ReplyPreview**: mantém acima da caixa.
-4. **Caixa unificada**: trocar o layout de duas linhas (textarea em cima, botões embaixo) por uma única linha estilo pill:
-   - `flex items-end gap-1 rounded-full border px-1 py-1`
-   - `MediaUploadButton` (`+`) à esquerda
-   - `Textarea rows={1}` com `min-h-[36px] max-h-[120px]`, borda transparente, `scrollbar-hide`
-   - `AudioRecorder` + `Button` de envio (`h-9 w-9 rounded-full`) à direita
-   - Cores âmbar quando `mode === 'note'` (mesma lógica atual)
-5. **Remover** a linha de hint "Enter envia · Shift+Enter quebra linha" (já é convenção conhecida e ocupa espaço).
-6. **Dialog de templates**: mantém igual.
+1. Adicionar estado local `search` (string).
+2. Renderizar `<SearchBar>` (de `@/components/common/SearchBar`) abaixo do header "Conversas", com placeholder "Buscar conversa...".
+3. Filtrar `threads` por:
+   - `contact.name` (case-insensitive)
+   - `contact.phone`
+   - `last_message_content`
+4. Contador no header passa a refletir a quantidade filtrada (ex.: `filtered.length`).
+5. Mensagem de vazio adaptada: "Nenhuma conversa encontrada." quando há busca ativa sem resultados.
 
-### Fora do escopo
-- Nenhuma mudança de lógica (send, takeover, templates, 24h, notas).
-- Nenhuma mudança no mobile (`compact` branch fica como está).
-- Sem mudanças em outros arquivos.
+### Não fazer
+- Não alterar `useInboxThreads` nem queries.
+- Não tocar em /messages.
+- Não adicionar busca server-side (não necessário para o volume atual da lista carregada).
 
-### Arquivo afetado
-- `src/components/inbox/InboxComposer.tsx` (apenas a renderização do branch não-compacto)
+### Validação
+- Digitar nome filtra a lista.
+- Limpar busca restaura a lista completa.
+- Selecionar conversa filtrada continua funcionando.
+- /messages permanece inalterado.
