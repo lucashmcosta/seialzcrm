@@ -9,10 +9,14 @@ import { InboxConversationTimeline } from './InboxConversationTimeline';
 import { InboxComposer } from './InboxComposer';
 import { WhatsAppWindowChip } from './WhatsAppWindowChip';
 import { OwnerSelector } from '@/components/common/OwnerSelector';
+import { Button } from '@/components/ui/button';
+import { ConfirmDialog } from '@/components/ui/confirm-dialog';
+import { Check, ArrowCounterClockwise } from '@phosphor-icons/react';
 import type { InboxMessageRow } from '@/hooks/inbox/useInboxThreadMessages';
 
 interface Props {
   threadId: string | null;
+  onThreadStatusChanged?: () => void;
 }
 
 function fmt(iso: string | null) {
@@ -29,12 +33,55 @@ function initials(name: string) {
     .join('') || '?';
 }
 
-export function InboxThreadDetail({ threadId }: Props) {
+export function InboxThreadDetail({ threadId, onThreadStatusChanged }: Props) {
   const { thread, history, latestWonOpportunity, loading, refresh } = useInboxThread(threadId);
   const { organization } = useOrganizationContext();
   const { toast } = useToast();
   const [replyTo, setReplyTo] = useState<InboxMessageRow | null>(null);
   const [reassigning, setReassigning] = useState(false);
+  const [resolving, setResolving] = useState(false);
+  const [confirmResolveOpen, setConfirmResolveOpen] = useState(false);
+
+  async function handleResolve() {
+    if (!thread) return;
+    setResolving(true);
+    try {
+      const { error } = await supabase
+        .from('message_threads')
+        .update({ status: 'resolved', resolved_at: new Date().toISOString() })
+        .eq('id', thread.id);
+      if (error) throw error;
+      toast({ description: 'Conversa resolvida.' });
+      refresh();
+      onThreadStatusChanged?.();
+    } catch (e: any) {
+      console.error('[inbox-detail] resolve failed', e);
+      toast({ variant: 'destructive', description: e?.message || 'Falha ao resolver.' });
+    } finally {
+      setResolving(false);
+      setConfirmResolveOpen(false);
+    }
+  }
+
+  async function handleReopen() {
+    if (!thread) return;
+    setResolving(true);
+    try {
+      const { error } = await supabase
+        .from('message_threads')
+        .update({ status: 'open', resolved_at: null })
+        .eq('id', thread.id);
+      if (error) throw error;
+      toast({ description: 'Conversa reaberta.' });
+      refresh();
+      onThreadStatusChanged?.();
+    } catch (e: any) {
+      console.error('[inbox-detail] reopen failed', e);
+      toast({ variant: 'destructive', description: e?.message || 'Falha ao reabrir.' });
+    } finally {
+      setResolving(false);
+    }
+  }
 
   async function handleAssign(userId: string | null) {
     if (!thread) return;
@@ -117,6 +164,29 @@ export function InboxThreadDetail({ threadId }: Props) {
                 <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
                 {thread.status === 'open' ? 'Aberta' : thread.status === 'pending' ? 'Aguardando' : thread.status === 'resolved' ? 'Resolvida' : thread.status === 'closed' ? 'Fechada' : thread.status}
               </span>
+            )}
+            {thread.status === 'resolved' || thread.status === 'closed' ? (
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={handleReopen}
+                disabled={resolving}
+                className="h-7 px-2.5 text-xs gap-1"
+              >
+                <ArrowCounterClockwise size={14} weight="bold" />
+                Reabrir
+              </Button>
+            ) : (
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => setConfirmResolveOpen(true)}
+                disabled={resolving}
+                className="h-7 px-2.5 text-xs gap-1"
+              >
+                <Check size={14} weight="bold" />
+                Resolver
+              </Button>
             )}
           </div>
         </div>
@@ -216,6 +286,16 @@ export function InboxThreadDetail({ threadId }: Props) {
           </section>
         </div>
       </aside>
+
+      <ConfirmDialog
+        open={confirmResolveOpen}
+        onOpenChange={setConfirmResolveOpen}
+        title="Resolver conversa"
+        description="Esta conversa será marcada como resolvida e sairá da fila ativa. Você pode reabri-la a qualquer momento."
+        confirmText="Resolver"
+        onConfirm={handleResolve}
+        loading={resolving}
+      />
     </div>
   );
 }
