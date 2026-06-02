@@ -73,7 +73,10 @@ export default function InboxPage() {
             selectedId={selectedId}
             onSelect={setSelectedId}
           />
-          <InboxThreadDetail threadId={selectedId} />
+          <InboxThreadDetail
+            threadId={selectedId}
+            onThreadStatusChanged={() => { refreshCounts(); refreshThreads(); }}
+          />
         </div>
       </div>
     </Layout>
