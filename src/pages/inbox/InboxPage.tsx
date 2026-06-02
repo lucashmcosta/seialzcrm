@@ -41,19 +41,9 @@ export default function InboxPage() {
   const { counts, refresh: refreshCounts } = useInboxQueueCounts(internalUserId, onlyMine, orgTimezone);
   const { threads, loading, refresh: refreshThreads } = useInboxThreads(tab, onlyMine, internalUserId, orgTimezone);
 
-  // Mobile placeholder — does NOT redirect to /messages
+  // Mobile uses dedicated MobileInbox (lista + chat fullscreen, padrão /messages)
   if (isMobile) {
-    return (
-      <Layout>
-        <div className="h-full flex flex-col items-center justify-center text-center px-6 gap-3">
-          <Headset size={48} weight="light" className="text-muted-foreground" />
-          <h1 className="text-lg font-semibold text-foreground">Atendimento</h1>
-          <p className="text-sm text-muted-foreground max-w-xs">
-            Atendimento mobile em breve. Use desktop por enquanto.
-          </p>
-        </div>
-      </Layout>
-    );
+    return <MobileInbox />;
   }
 
   return (
