@@ -151,14 +151,14 @@ export function InboxThreadDetail({ threadId, onThreadStatusChanged }: Props) {
                   {endpointPurpose}
                 </span>
               )}
+              <WhatsAppWindowChip
+                channel={thread.channel}
+                lastInboundAt={thread.last_inbound_at || thread.whatsapp_last_inbound_at || null}
+              />
+              <InboxSlaChip targetAt={thread.sla_first_response_target_at} firstResponseAt={thread.first_response_at} />
             </div>
           </div>
-          <div className="flex items-center gap-1.5 flex-wrap justify-end flex-shrink min-w-0 max-w-[60%]">
-            <WhatsAppWindowChip
-              channel={thread.channel}
-              lastInboundAt={thread.last_inbound_at || thread.whatsapp_last_inbound_at || null}
-            />
-            <InboxSlaChip targetAt={thread.sla_first_response_target_at} firstResponseAt={thread.first_response_at} />
+          <div className="flex items-center gap-1.5 flex-shrink-0">
             {thread.status && (
               <span className="inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-medium bg-emerald-500/15 text-emerald-700 dark:text-emerald-300 capitalize flex-shrink-0">
                 <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
@@ -190,6 +190,7 @@ export function InboxThreadDetail({ threadId, onThreadStatusChanged }: Props) {
             )}
           </div>
         </div>
+
 
 
 

@@ -1,25 +1,19 @@
-## Corrigir truncamento do nome no header da conversa
+## Mover "Janela aberta · expira em..." para a segunda linha do header
 
 ### Problema
-No header de `InboxThreadDetail`, o nome do cliente ("GUSTAVO ELEOTERIO DE PAULA") aparece truncado como "GUSTAV..." mesmo havendo bastante espaço horizontal disponível. O motivo é que o título e os subbadges (Cliente / endpoint) dividem a mesma coluna `flex-1`, enquanto o cluster de chips à direita (`WhatsAppWindowChip`, `InboxSlaChip`, status, botão Resolver) consome boa parte da linha e ainda força o título a competir com os badges abaixo.
+O chip `WhatsAppWindowChip` ("Janela aberta · expira em Xh Ym") está na linha do topo junto com SLA, status e Resolver, ocupando muito espaço horizontal e empurrando o nome do cliente para truncamento.
 
-### Mudanças (apenas em `src/components/inbox/InboxThreadDetail.tsx`)
+### Mudança (apenas `src/components/inbox/InboxThreadDetail.tsx`)
 
-1. **Dar mais espaço ao nome**
-   - Manter o título `<h1>` numa única linha ocupando toda a largura disponível do bloco central (`flex-1 min-w-0`), com `truncate` só como fallback.
-   - Mover os badges secundários ("Cliente", endpoint "other") para uma segunda linha abaixo do nome, mas sem ocupar o mesmo flex item que disputa espaço com o título.
+Reorganizar o header em duas linhas lógicas:
 
-2. **Compactar o cluster de chips à direita**
-   - Reduzir o gap entre chips de `gap-2` para `gap-1.5`.
-   - Permitir que o cluster quebre para uma segunda linha em telas estreitas (`flex-wrap justify-end`) em vez de empurrar o título.
-   - Garantir `flex-shrink-0` apenas nos chips individuais, não no container, para que o título sempre tenha prioridade de largura.
+- **Linha 1 (topo):** avatar + nome do cliente (pode usar toda a largura disponível) + cluster compacto à direita com apenas: chip de status ("Aberta") + botão Resolver/Reabrir.
+- **Linha 2 (abaixo do nome, junto dos badges "Cliente" / endpoint):** mover o `WhatsAppWindowChip` e o `InboxSlaChip` para essa linha secundária, alinhados à esquerda com os outros badges.
 
-3. **Aumentar levemente o tamanho do título**
-   - Manter `text-[15px] font-semibold` mas garantir `whitespace-nowrap` + `overflow-hidden` + `text-ellipsis` apenas quando realmente não couber (caso extremo de nomes muito longos).
+Resultado: nome ganha praticamente toda a largura do topo; informação de janela e SLA continuam visíveis logo abaixo, sem competir por espaço com o título.
 
 ### Fora de escopo
-- Nenhuma mudança na lista lateral, no painel direito, nos handlers de Resolver/Reabrir/Reatribuir, ou em qualquer lógica de dados.
-- Sem mudança de layout geral, apenas reorganização interna do header.
+Nenhuma mudança em outros arquivos, lógica, dados ou no `WhatsAppWindowChip`/`InboxSlaChip` em si.
 
 ### Arquivo tocado
 - `src/components/inbox/InboxThreadDetail.tsx`
