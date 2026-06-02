@@ -4,7 +4,7 @@ import { useIsMobile } from '@/hooks/use-mobile';
 import { useAuth } from '@/hooks/useAuth';
 import { useOrganizationContext } from '@/contexts/OrganizationContext';
 import { supabase } from '@/integrations/supabase/client';
-import { InboxQueues } from '@/components/inbox/InboxQueues';
+
 import { InboxThreadList } from '@/components/inbox/InboxThreadList';
 import { InboxThreadDetail } from '@/components/inbox/InboxThreadDetail';
 import { InboxMetricsBar } from '@/components/inbox/InboxMetricsBar';
@@ -59,15 +59,14 @@ export default function InboxPage() {
   return (
     <Layout>
       <div className="h-full flex flex-col min-h-0">
-        <InboxMetricsBar counts={counts} />
+        <InboxMetricsBar
+          counts={counts}
+          active={tab}
+          onChange={(t) => { setTab(t); setSelectedId(null); }}
+          onlyMine={onlyMine}
+          onOnlyMineChange={(v) => { setOnlyMine(v); setSelectedId(null); }}
+        />
         <div className="flex-1 flex min-h-0 overflow-hidden">
-          <InboxQueues
-            active={tab}
-            counts={counts}
-            onChange={(t) => { setTab(t); setSelectedId(null); }}
-            onlyMine={onlyMine}
-            onOnlyMineChange={(v) => { setOnlyMine(v); setSelectedId(null); }}
-          />
           <InboxThreadList
             threads={threads}
             loading={loading}
