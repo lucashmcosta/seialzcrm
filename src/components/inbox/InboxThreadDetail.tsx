@@ -163,9 +163,9 @@ export function InboxThreadDetail({ threadId, onThreadStatusChanged }: Props) {
                   Cliente
                 </span>
               )}
-              {endpointPurpose && (
+              {purposeLabel(endpointPurpose) && (
                 <span className="text-[10px] px-1.5 py-0.5 rounded bg-muted text-muted-foreground">
-                  {endpointPurpose}
+                  {purposeLabel(endpointPurpose)}
                 </span>
               )}
               <WhatsAppWindowChip
