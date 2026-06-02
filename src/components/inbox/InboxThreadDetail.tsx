@@ -19,6 +19,23 @@ interface Props {
   onThreadStatusChanged?: () => void;
 }
 
+function purposeLabel(purpose: string | null | undefined): string | null {
+  if (!purpose || purpose === 'other') return null;
+  const map: Record<string, string> = {
+    commercial: 'Comercial',
+    vendor_personal: 'Vendedor pessoal',
+    customer_service: 'Atendimento',
+    support: 'Atendimento',
+  };
+  return map[purpose] ?? null;
+}
+
+function channelLabel(channel: string | null | undefined): string {
+  if (!channel) return '—';
+  if (channel === 'whatsapp') return 'WhatsApp';
+  return channel.charAt(0).toUpperCase() + channel.slice(1);
+}
+
 function fmt(iso: string | null) {
   if (!iso) return '—';
   return new Date(iso).toLocaleString('pt-BR', { dateStyle: 'short', timeStyle: 'short' });
@@ -146,9 +163,9 @@ export function InboxThreadDetail({ threadId, onThreadStatusChanged }: Props) {
                   Cliente
                 </span>
               )}
-              {endpointPurpose && (
+              {purposeLabel(endpointPurpose) && (
                 <span className="text-[10px] px-1.5 py-0.5 rounded bg-muted text-muted-foreground">
-                  {endpointPurpose}
+                  {purposeLabel(endpointPurpose)}
                 </span>
               )}
               <WhatsAppWindowChip
@@ -228,8 +245,6 @@ export function InboxThreadDetail({ threadId, onThreadStatusChanged }: Props) {
                   <dd className="text-foreground">{fmt(latestWonOpportunity.close_date || latestWonOpportunity.updated_at)}</dd>
                 </>
               )}
-              <dt className="text-muted-foreground">Endpoint</dt>
-              <dd className="text-foreground">{endpointPurpose || '—'}</dd>
             </dl>
           </section>
 
@@ -251,7 +266,7 @@ export function InboxThreadDetail({ threadId, onThreadStatusChanged }: Props) {
             <dl className="grid grid-cols-2 gap-x-4 gap-y-2.5 text-xs">
               <div>
                 <dt className="text-muted-foreground">Canal</dt>
-                <dd className="text-foreground">{thread.channel || '—'}</dd>
+                <dd className="text-foreground">{purposeLabel(endpointPurpose) ? `${channelLabel(thread.channel)} · ${purposeLabel(endpointPurpose)}` : channelLabel(thread.channel)}</dd>
               </div>
               <div>
                 <dt className="text-muted-foreground">Atribuída em</dt>
