@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { useToast } from '@/hooks/use-toast';
 import { useInboxThread } from '@/hooks/inbox/useInboxThread';
@@ -11,7 +11,7 @@ import { WhatsAppWindowChip } from './WhatsAppWindowChip';
 import { OwnerSelector } from '@/components/common/OwnerSelector';
 import { Button } from '@/components/ui/button';
 import { ConfirmDialog } from '@/components/ui/confirm-dialog';
-import { Check, ArrowCounterClockwise } from '@phosphor-icons/react';
+import { Check, ArrowCounterClockwise, SidebarSimple } from '@phosphor-icons/react';
 import type { InboxMessageRow } from '@/hooks/inbox/useInboxThreadMessages';
 
 interface Props {
@@ -58,6 +58,13 @@ export function InboxThreadDetail({ threadId, onThreadStatusChanged }: Props) {
   const [reassigning, setReassigning] = useState(false);
   const [resolving, setResolving] = useState(false);
   const [confirmResolveOpen, setConfirmResolveOpen] = useState(false);
+  const [sideOpen, setSideOpen] = useState<boolean>(() => {
+    if (typeof window === 'undefined') return true;
+    return window.localStorage.getItem('inbox.sidePanel.open') !== '0';
+  });
+  useEffect(() => {
+    try { window.localStorage.setItem('inbox.sidePanel.open', sideOpen ? '1' : '0'); } catch {}
+  }, [sideOpen]);
 
   async function handleResolve() {
     if (!thread) return;
@@ -205,6 +212,16 @@ export function InboxThreadDetail({ threadId, onThreadStatusChanged }: Props) {
                 Resolver
               </Button>
             )}
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={() => setSideOpen((v) => !v)}
+              className="h-7 w-7 p-0 flex-shrink-0"
+              title={sideOpen ? 'Ocultar painel' : 'Mostrar painel'}
+              aria-label={sideOpen ? 'Ocultar painel' : 'Mostrar painel'}
+            >
+              <SidebarSimple size={15} weight="bold" />
+            </Button>
           </div>
         </div>
 
@@ -228,8 +245,8 @@ export function InboxThreadDetail({ threadId, onThreadStatusChanged }: Props) {
       </div>
 
       {/* Painel lateral */}
-      <aside className="w-[300px] border-l border-border overflow-y-auto flex-shrink-0">
-        <div className="px-5 py-6 space-y-5">
+      <aside className={`${sideOpen ? 'w-[300px] border-l' : 'w-0 border-l-0'} border-border overflow-hidden flex-shrink-0 transition-[width] duration-200 ease-in-out`}>
+        <div className="w-[300px] h-full overflow-y-auto"><div className="px-5 py-6 space-y-5">
           <section>
             <h3 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground mb-3">Atendimento</h3>
             <dl className="grid grid-cols-[110px_1fr] gap-x-3 gap-y-2.5 text-xs">
@@ -301,7 +318,7 @@ export function InboxThreadDetail({ threadId, onThreadStatusChanged }: Props) {
             <h3 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground mb-3">Histórico de atribuição</h3>
             <InboxAssignmentHistory history={history} />
           </section>
-        </div>
+        </div></div>
       </aside>
 
       <ConfirmDialog
