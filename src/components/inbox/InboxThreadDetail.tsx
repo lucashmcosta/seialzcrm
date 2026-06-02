@@ -9,10 +9,14 @@ import { InboxConversationTimeline } from './InboxConversationTimeline';
 import { InboxComposer } from './InboxComposer';
 import { WhatsAppWindowChip } from './WhatsAppWindowChip';
 import { OwnerSelector } from '@/components/common/OwnerSelector';
+import { Button } from '@/components/ui/button';
+import { ConfirmDialog } from '@/components/ui/confirm-dialog';
+import { Check, ArrowCounterClockwise } from '@phosphor-icons/react';
 import type { InboxMessageRow } from '@/hooks/inbox/useInboxThreadMessages';
 
 interface Props {
   threadId: string | null;
+  onThreadStatusChanged?: () => void;
 }
 
 function fmt(iso: string | null) {
