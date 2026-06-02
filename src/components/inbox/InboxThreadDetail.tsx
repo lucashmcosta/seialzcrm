@@ -33,7 +33,7 @@ function initials(name: string) {
     .join('') || '?';
 }
 
-export function InboxThreadDetail({ threadId }: Props) {
+export function InboxThreadDetail({ threadId, onThreadStatusChanged }: Props) {
   const { thread, history, latestWonOpportunity, loading, refresh } = useInboxThread(threadId);
   const { organization } = useOrganizationContext();
   const { toast } = useToast();
