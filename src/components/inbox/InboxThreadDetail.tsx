@@ -286,6 +286,16 @@ export function InboxThreadDetail({ threadId, onThreadStatusChanged }: Props) {
           </section>
         </div>
       </aside>
+
+      <ConfirmDialog
+        open={confirmResolveOpen}
+        onOpenChange={setConfirmResolveOpen}
+        title="Resolver conversa"
+        description="Esta conversa será marcada como resolvida e sairá da fila ativa. Você pode reabri-la a qualquer momento."
+        confirmText="Resolver"
+        onConfirm={handleResolve}
+        loading={resolving}
+      />
     </div>
   );
 }
