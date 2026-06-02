@@ -44,12 +44,12 @@ export function InboxThreadList({ threads, loading, selectedId, onSelect }: Prop
               key={t.id}
               onClick={() => onSelect(t.id)}
               className={cn(
-                'w-full text-left px-4 py-3 border-b border-border transition-colors block',
+                'w-full text-left px-4 py-3.5 border-b border-border transition-colors block',
                 isActive ? 'bg-[hsl(var(--sz-green-dim))]' : 'hover:bg-[hsl(var(--sz-bg3))]',
               )}
             >
               <div className="flex items-center gap-2 mb-1">
-                <span className="text-[13px] font-medium text-foreground truncate flex-1">{name}</span>
+                <span className="text-sm font-medium text-foreground truncate flex-1">{name}</span>
                 <span className="font-data text-[10px] text-[hsl(var(--sz-t3))]">{relTime(t.last_message_at)}</span>
               </div>
               <div className="text-xs text-muted-foreground line-clamp-2 mb-1.5">

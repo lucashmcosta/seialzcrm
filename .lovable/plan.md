@@ -1,106 +1,78 @@
-## Pacote de acabamento — Tela de Atendimento (Inbox)
+## Polimento visual — Tela de Atendimento
 
-Entrega única, sem novas fases. Tudo aplicado em uma rodada e auditado ao final.
-
----
-
-### 1. Indicador forte da janela WhatsApp (header)
-
-Arquivo: `src/components/inbox/InboxThreadDetail.tsx`
-
-- Criar componente local `WhatsAppWindowChip` exibido no header da conversa, à direita do nome (antes do `InboxSlaChip`).
-- Cálculo: `last_inbound_at || whatsapp_last_inbound_at` + 24h.
-- Estados:
-  - Aberta: chip verde (`bg-emerald-500/15 text-emerald-700 dark:text-emerald-300`, ponto pulsante) — texto: `"Janela aberta · expira em 7h 12m"`.
-  - Próxima do fim (<2h): mesma cor base, ponto âmbar — texto: `"Janela aberta · expira em 42m"`.
-  - Fechada: chip vermelho — texto: `"Fora da janela 24h · só template"`.
-  - Sem inbound: chip neutro — `"Sem inbound · só template"`.
-- Atualização a cada 60s via `setInterval` para o countdown.
-- Apenas para `channel === 'whatsapp'`.
-- Manter o aviso compacto que já existe dentro do composer (não duplicar visual, só simplificar).
+Apenas estética/respiro. Nenhuma mudança de lógica, dados, query, edge function ou layout estrutural (mantém as 4 colunas: Filas · Lista · Conversa · Painel). Inspiração da Imagem 2 (Divus): mais ar, bolhas leves, composer baixo e limpo. Não copiar — manter padrão Seialz (Outfit, border-radius 6px, tokens semânticos).
 
 ---
 
-### 2. Painel lateral — explicar por que está em Atendimento
+### 1. Header da conversa (`InboxThreadDetail.tsx`)
 
-Arquivo: `src/components/inbox/InboxThreadDetail.tsx` + `src/hooks/inbox/useInboxThread.ts`
+- Subir altura do header de `py-1.5` para `py-3` e padding lateral `px-6`.
+- Nome do contato: passar de `text-base` para `text-[15px] font-semibold`, com avatar circular (iniciais) 32px à esquerda — usar `bg-muted text-foreground` (sem cor forte).
+- Linha secundária: substituir "customer · endpoint: other · somente leitura" por chips discretos em vez de texto concatenado:
+  - chip pequeno `Cliente` (verde suave `bg-emerald-500/10 text-emerald-700`)
+  - chip pequeno `other` (cinza `bg-muted text-muted-foreground`)
+- Chips de status/priority à direita: trocar `font-data text-[10px]` por `text-[11px]` capitalizado em vez de minúsculo cru.
+- `WhatsAppWindowChip` continua à direita, sem mudança funcional.
 
-Nova seção no painel direito, acima de "Dados da conversa":
+### 2. Timeline (`InboxConversationTimeline.tsx`)
+
+- Container: aumentar padding de `p-4 space-y-3` para `px-8 py-6 space-y-4`. Fundo `bg-muted/20` mantido.
+- Limitar largura útil das mensagens: wrapper interno `max-w-3xl mx-auto w-full` para que em telas largas a conversa não estique de ponta a ponta.
+- Bolhas:
+  - aumentar padding de `p-2.5` para `px-3.5 py-2`.
+  - aumentar `max-w-[75%]` para `max-w-[78%]` e `rounded-lg` para `rounded-2xl` (mais orgânico, padrão WhatsApp).
+  - bolha outbound: trocar verde escuro `#054D3E` por `bg-primary text-primary-foreground` (alinha com design system Seialz).
+  - bolha inbound: manter `bg-card` mas adicionar `shadow-sm` discreto.
+- Label do remetente: subir de `text-[10px]` para `text-[11px]` com `mb-1`.
+- Timestamp interno: `text-[11px]` em vez de `text-[10px]`.
+- Espaço entre bolhas consecutivas do mesmo autor: agrupar visualmente removendo o label quando o autor anterior é igual (pequena melhoria — só esconder `senderLabel` se `prev.direction === current.direction && prev.sender_name === current.sender_name && diff < 2min`).
+
+### 3. Composer (`InboxComposer.tsx`)
+
+Esse é o ponto mais "feio" — placeholder gigante, ícones desalinhados.
+
+- Wrapper externo: `px-6 pt-3 pb-4` com `bg-background border-t border-border`.
+- Tabs Responder/Nota interna: reposicionar como pílulas finas e discretas (`h-7 px-3 rounded-full text-xs`), removendo a barra de "Atribuída a outro usuário" da linha das tabs — mover esse aviso para um chip pequeno acima do textarea quando aplicável.
+- Aviso "Fora da janela 24h · use template": tirar daqui (já existe o `WhatsAppWindowChip` no header) — manter só dentro do placeholder, sem ruído extra.
+- Caixa de digitação: empacotar `Textarea` + botões de mídia + áudio + enviar dentro de **um único container arredondado** (`rounded-2xl border bg-card px-3 py-2`), assim:
 
 ```
-ATENDIMENTO
-Tipo do contato   Cliente
-Origem            Oportunidade ganha · "<nome da opp>"
-Convertido em     12/04/2026
-Endpoint          other
+┌──────────────────────────────────────────────────┐
+│  Digite uma mensagem                             │
+│                                                  │
+│  📎  📄                          🎙   ➤          │
+└──────────────────────────────────────────────────┘
 ```
 
-Dados:
-- Tipo: derivado de `contact.lifecycle_stage`.
-- Origem + data: buscar a oportunidade `won` mais recente do contato (`opportunities` onde `contact_id = thread.contact_id and status = 'won' order by won_at desc limit 1`). Estender `useInboxThread` para incluir essa query em paralelo (`latest_won_opportunity`).
-- Endpoint: `thread.primary_endpoint.purpose`.
-- Quando não houver opp ganha: mostrar `"Origem: —"` e ocultar a data.
+- `Textarea`: remover borda própria (`border-0 shadow-none focus-visible:ring-0 px-0 resize-none min-h-[44px] max-h-[160px]`), `rows={1}` com auto-grow.
+- Placeholder enxuto:
+  - janela aberta: `"Mensagem para {primeiroNome}"`
+  - fora da janela: `"Selecione um template para iniciar"`
+  - nota: `"Anotação interna visível só para a equipe"`
+- Barra inferior dentro do container: ícones de mídia (📎 anexo, 📄 template) à esquerda, áudio + enviar à direita. Tamanho uniforme `h-8 w-8` ghost. Dica `Enter envia · Shift+Enter quebra linha` em micro-texto cinza embaixo do container (`text-[10px] text-muted-foreground/70 mt-1.5 px-1`), em vez de poluir o placeholder.
+- Modo Nota interna: mesmo container, mas com `bg-amber-50/60 border-amber-200` e botão enviar âmbar.
 
-Não criar tabela nem migration — usa dados existentes.
+### 4. Painel lateral (`InboxThreadDetail.tsx`)
 
----
+- Trocar `w-[280px]` por `w-[300px]` para respirar.
+- Padding `p-5` → `px-5 py-6`, `space-y-6` mantido.
+- Títulos de seção: já estão bons (`uppercase tracking-wider`). Reduzir `mb-2` → `mb-3`.
+- Labels (`dt`): `text-muted-foreground` ok; aumentar gap vertical `gap-y-2.5`.
+- Adicionar separador sutil `<div className="h-px bg-border" />` entre Atendimento → Dados → Histórico (em vez de só espaçamento).
 
-### 3. UX de Reply visível e intuitiva
+### 5. Lista de conversas (toque rápido)
 
-Arquivo: `src/components/inbox/InboxConversationTimeline.tsx`
-
-- Remover `opacity-0 group-hover:opacity-100`.
-- Botão "Responder" sempre visível mas discreto: ícone com `text-muted-foreground/60 hover:text-foreground hover:bg-muted rounded p-1`.
-- Em mobile (`md:` breakpoint) o botão fica em tamanho touch friendly (`p-1.5`).
-- Ordem: botão sempre ao lado oposto da bolha (já está correto via `flex-row-reverse`).
-- Tooltip via `title="Responder"` mantido.
-
----
-
-### 4. Realtime completo do header e do thread
-
-Arquivo: `src/hooks/inbox/useInboxThread.ts`
-
-Adicionar subscription Realtime:
-- Canal: `inbox-thread-${threadId}`.
-- Evento: `UPDATE` em `public.message_threads` com filter `id=eq.${threadId}`.
-- Handler: aplicar o payload novo no estado `thread` (merge), sem refetch — assim `assigned_user_id`, `status`, `priority`, `last_inbound_at`, `resolved_at`, SLAs e demais campos atualizam em tempo real.
-- Para histórico de atribuição: subscription separada em `thread_assignment_history` com filter `thread_id=eq.${threadId}` (INSERT) → prepend no array `history`.
-- Cleanup correto no `useEffect` (remover canal ao trocar de thread/desmontar).
-- Manter `refresh()` para casos manuais (ex: após reassign local) mas sem dependência dele para ver mudanças de outros usuários.
+- `InboxThreadList` (não reaberto aqui, mas no escopo): aumentar padding vertical dos itens (alvo `py-3.5`) e ajustar tamanho do nome para `text-sm font-medium`. Sem alterar estrutura.
 
 ---
 
-### 5. Auditoria final (entregue como mensagem após implementação)
+### Fora de escopo
+- Sem mudança em hooks, queries, realtime, migrations, edge functions.
+- Sem mexer em InboxQueues, InboxMetricsBar, /messages, mobile.
+- Sem novos componentes além de pequenos helpers locais (se necessário).
 
-Após aplicar, responder com:
-
-**Campos carregados (consulta principal `useInboxThread`):**
-`id, contact_id, channel, status, priority, organization_id, assigned_user_id, assigned_at, first_response_at, sla_first_response_target_at, sla_resolution_target_at, last_message_at, last_message_content, last_message_direction, resolved_at, last_inbound_at, whatsapp_last_inbound_at, primary_endpoint_id, contact{id, full_name, phone, lifecycle_stage}, primary_endpoint{id, purpose, external_address}` + (novo) `latest_won_opportunity{id, name, won_at}`.
-
-**Derivados na UI:**
-- `isIn24hWindow` (composer + header chip)
-- `windowExpiresIn` (countdown texto)
-- `senderLabel` (timeline)
-- `lifecycleBadge`/origem (painel)
-- `slaStatus` (`InboxSlaChip`)
-
-**Consultas alteradas:**
-- `useInboxThread`: adicionada query paralela em `opportunities` para origem.
-- Adicionadas 2 subscriptions Realtime (UPDATE em `message_threads`, INSERT em `thread_assignment_history`).
-
-**Migration:** nenhuma. Apenas frontend.
-
-**Performance:**
-- +1 query leve por thread aberta (LIMIT 1 indexado por `contact_id`).
-- Realtime: 2 canais por thread aberta, fechados ao trocar — sem leak.
-- Chip de janela: 1 `setInterval(60_000)` por thread aberta.
-
-**Screenshots finais:** capturadas no preview após build, mostrando header com chip verde/vermelho, painel lateral com seção "Atendimento" e botão de reply sempre visível.
-
----
-
-### Fora de escopo (explícito)
-- Sem nova migration.
-- Sem mudanças em edge functions, envio Twilio ou regras de negócio.
-- Sem novas rotas ou páginas.
+### Critério de aceite
+- Conversa com claramente mais respiro lateral e vertical.
+- Composer em uma caixa única arredondada, placeholder curto.
+- Header com avatar + chips em vez de texto corrido.
+- Mantém identidade Seialz (Outfit, 6px radius nos chips, tokens semânticos, sem cores hardcoded).

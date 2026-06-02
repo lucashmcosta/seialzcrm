@@ -20,6 +20,15 @@ function fmt(iso: string | null) {
   return new Date(iso).toLocaleString('pt-BR', { dateStyle: 'short', timeStyle: 'short' });
 }
 
+function initials(name: string) {
+  return name
+    .split(' ')
+    .filter(Boolean)
+    .slice(0, 2)
+    .map((s) => s[0]?.toUpperCase())
+    .join('') || '?';
+}
+
 export function InboxThreadDetail({ threadId }: Props) {
   const { thread, history, latestWonOpportunity, loading, refresh } = useInboxThread(threadId);
   const { organization } = useOrganizationContext();
@@ -55,7 +64,6 @@ export function InboxThreadDetail({ threadId }: Props) {
     }
   }
 
-
   if (!threadId) {
     return (
       <div className="flex-1 flex items-center justify-center text-sm text-muted-foreground">
@@ -71,24 +79,31 @@ export function InboxThreadDetail({ threadId }: Props) {
   }
 
   const name = thread.contact?.name || thread.contact?.phone || 'Sem contato';
-
   const lifecycle = thread.contact?.lifecycle_stage;
   const endpointPurpose = thread.primary_endpoint?.purpose;
 
   return (
     <div className="flex-1 flex bg-background min-w-0">
-      {/* Coluna principal: header + timeline read-only */}
+      {/* Coluna principal */}
       <div className="flex-1 flex flex-col min-w-0">
-        <div className="border-b border-border px-6 py-1.5 flex-shrink-0 flex items-center gap-3">
+        <div className="border-b border-border px-6 py-3 flex-shrink-0 flex items-center gap-3">
+          <div className="h-9 w-9 rounded-full bg-muted text-foreground flex items-center justify-center text-xs font-semibold flex-shrink-0">
+            {initials(name)}
+          </div>
           <div className="flex-1 min-w-0">
-            <h2 className="text-base font-semibold text-foreground truncate leading-tight" title={name}>{name}</h2>
-            <p className="text-[11px] text-muted-foreground truncate leading-tight">
-              {[
-                lifecycle === 'customer' ? 'customer' : null,
-                endpointPurpose ? `endpoint: ${endpointPurpose}` : null,
-                'somente leitura',
-              ].filter(Boolean).join(' · ')}
-            </p>
+            <h2 className="text-[15px] font-semibold text-foreground truncate leading-tight" title={name}>{name}</h2>
+            <div className="flex items-center gap-1.5 mt-1 flex-wrap">
+              {lifecycle === 'customer' && (
+                <span className="text-[10px] px-1.5 py-0.5 rounded bg-emerald-500/10 text-emerald-700 dark:text-emerald-300">
+                  Cliente
+                </span>
+              )}
+              {endpointPurpose && (
+                <span className="text-[10px] px-1.5 py-0.5 rounded bg-muted text-muted-foreground">
+                  {endpointPurpose}
+                </span>
+              )}
+            </div>
           </div>
           <div className="flex items-center gap-2 flex-shrink-0">
             <WhatsAppWindowChip
@@ -97,13 +112,8 @@ export function InboxThreadDetail({ threadId }: Props) {
             />
             <InboxSlaChip targetAt={thread.sla_first_response_target_at} firstResponseAt={thread.first_response_at} />
             {thread.status && (
-              <span className="font-data text-[10px] px-1.5 py-0.5 rounded bg-muted text-muted-foreground">
+              <span className="text-[11px] px-2 py-0.5 rounded bg-muted text-muted-foreground capitalize">
                 {thread.status}
-              </span>
-            )}
-            {thread.priority && (
-              <span className="font-data text-[10px] px-1.5 py-0.5 rounded bg-muted text-muted-foreground">
-                {thread.priority}
               </span>
             )}
           </div>
@@ -125,19 +135,17 @@ export function InboxThreadDetail({ threadId }: Props) {
         />
       </div>
 
-      {/* Painel lateral: dados + histórico de atribuição */}
-      <aside className="w-[280px] border-l border-border overflow-y-auto flex-shrink-0">
-        <div className="p-5 space-y-6">
+      {/* Painel lateral */}
+      <aside className="w-[300px] border-l border-border overflow-y-auto flex-shrink-0">
+        <div className="px-5 py-6 space-y-5">
           <section>
-            <h3 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground mb-2">Atendimento</h3>
-            <dl className="grid grid-cols-[110px_1fr] gap-x-3 gap-y-1.5 text-xs">
+            <h3 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground mb-3">Atendimento</h3>
+            <dl className="grid grid-cols-[110px_1fr] gap-x-3 gap-y-2.5 text-xs">
               <dt className="text-muted-foreground">Tipo</dt>
               <dd className="text-foreground">{lifecycle === 'customer' ? 'Cliente' : (lifecycle || '—')}</dd>
               <dt className="text-muted-foreground">Origem</dt>
               <dd className="text-foreground truncate" title={latestWonOpportunity?.title || undefined}>
-                {latestWonOpportunity
-                  ? `Oportunidade ganha · ${latestWonOpportunity.title}`
-                  : '—'}
+                {latestWonOpportunity ? `Oportunidade · ${latestWonOpportunity.title}` : '—'}
               </dd>
               {latestWonOpportunity && (
                 <>
@@ -150,12 +158,13 @@ export function InboxThreadDetail({ threadId }: Props) {
             </dl>
           </section>
 
+          <div className="h-px bg-border" />
+
           <section>
-            <h3 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground mb-2">Dados da conversa</h3>
+            <h3 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground mb-3">Dados da conversa</h3>
 
-
-            <div className="mb-3">
-              <div className="text-[11px] text-muted-foreground mb-1">Atribuída a</div>
+            <div className="mb-4">
+              <div className="text-[11px] text-muted-foreground mb-1.5">Atribuída a</div>
               <OwnerSelector
                 value={thread.assigned_user_id || null}
                 onChange={handleAssign}
@@ -164,7 +173,7 @@ export function InboxThreadDetail({ threadId }: Props) {
               />
             </div>
 
-            <dl className="grid grid-cols-2 gap-x-4 gap-y-2 text-xs">
+            <dl className="grid grid-cols-2 gap-x-4 gap-y-2.5 text-xs">
               <div>
                 <dt className="text-muted-foreground">Canal</dt>
                 <dd className="text-foreground">{thread.channel || '—'}</dd>
@@ -196,8 +205,10 @@ export function InboxThreadDetail({ threadId }: Props) {
             </dl>
           </section>
 
+          <div className="h-px bg-border" />
+
           <section>
-            <h3 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground mb-2">Histórico de atribuição</h3>
+            <h3 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground mb-3">Histórico de atribuição</h3>
             <InboxAssignmentHistory history={history} />
           </section>
         </div>
