@@ -20,6 +20,30 @@ function relTime(iso: string | null): string {
   return `${Math.floor(h / 24)}d`;
 }
 
+function initials(name: string): string {
+  return name
+    .split(' ')
+    .filter(Boolean)
+    .slice(0, 2)
+    .map((s) => s[0]?.toUpperCase())
+    .join('') || '?';
+}
+
+const AVATAR_PALETTE = [
+  'bg-sky-500/15 text-sky-700 dark:text-sky-300',
+  'bg-emerald-500/15 text-emerald-700 dark:text-emerald-300',
+  'bg-amber-500/15 text-amber-700 dark:text-amber-300',
+  'bg-rose-500/15 text-rose-700 dark:text-rose-300',
+  'bg-violet-500/15 text-violet-700 dark:text-violet-300',
+  'bg-orange-500/15 text-orange-700 dark:text-orange-300',
+];
+
+function colorFromName(name: string): string {
+  let h = 0;
+  for (let i = 0; i < name.length; i++) h = (h * 31 + name.charCodeAt(i)) >>> 0;
+  return AVATAR_PALETTE[h % AVATAR_PALETTE.length];
+}
+
 const STATUS_MAP: Record<string, { label: string; cls: string; dot: string; pulse?: boolean }> = {
   open:     { label: 'Aberta',     cls: 'bg-emerald-500/15 text-emerald-700 dark:text-emerald-300', dot: 'bg-emerald-500', pulse: true },
   pending:  { label: 'Aguardando', cls: 'bg-amber-500/15 text-amber-700 dark:text-amber-300',       dot: 'bg-amber-500' },
@@ -56,9 +80,7 @@ export function InboxThreadList({ threads, loading, selectedId, onSelect }: Prop
           const name = t.contact?.name || t.contact?.phone || 'Sem contato';
           const isActive = selectedId === t.id;
           const status = STATUS_MAP[t.status || ''];
-          const isFresh = t.last_message_direction === 'inbound'
-            && !!t.last_message_at
-            && (Date.now() - new Date(t.last_message_at).getTime()) < 5 * 60 * 1000;
+          const isUnread = t.last_message_direction === 'inbound';
           return (
             <button
               key={t.id}
@@ -67,26 +89,46 @@ export function InboxThreadList({ threads, loading, selectedId, onSelect }: Prop
                 'w-full text-left px-4 py-3.5 border-b border-border transition-all duration-150 block border-l-2',
                 isActive
                   ? 'bg-[hsl(var(--sz-green-dim))] border-l-primary'
-                  : 'border-l-transparent hover:bg-[hsl(var(--sz-bg3))] hover:border-l-primary/30',
+                  : isUnread
+                    ? 'border-l-4 border-l-emerald-500 hover:bg-[hsl(var(--sz-bg3))]'
+                    : 'border-l-transparent hover:bg-[hsl(var(--sz-bg3))] hover:border-l-primary/30',
               )}
             >
-              <div className="flex items-center gap-2 mb-1">
-                {isFresh && <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse flex-shrink-0" />}
-                <span className="text-sm font-medium text-foreground truncate flex-1">{name}</span>
-                <span className="font-data text-[10px] text-[hsl(var(--sz-t3))]">{relTime(t.last_message_at)}</span>
-              </div>
-              <div className="text-xs text-muted-foreground line-clamp-2 mb-1.5">
-                {t.last_message_content || '—'}
-              </div>
-              <div className="flex items-center gap-1.5 flex-wrap">
-                <InboxSlaChip targetAt={t.sla_first_response_target_at} firstResponseAt={t.first_response_at} />
-                {status && <Pill cls={status.cls} dot={status.dot} pulse={status.pulse}>{status.label}</Pill>}
-                {t.contact?.lifecycle_stage === 'customer' && (
-                  <Pill cls="bg-sky-500/15 text-sky-700 dark:text-sky-300" dot="bg-sky-500">Cliente</Pill>
-                )}
-                {!t.assigned_user_id && (
-                  <Pill cls="bg-yellow-500/15 text-yellow-700 dark:text-yellow-400" dot="bg-yellow-500">Sem dono</Pill>
-                )}
+              <div className="flex gap-3">
+                <div className={cn('h-10 w-10 rounded-full flex items-center justify-center text-xs font-semibold flex-shrink-0', colorFromName(name))}>
+                  {initials(name)}
+                </div>
+                <div className="flex-1 min-w-0">
+                  <div className="flex items-center gap-2 mb-1">
+                    <span className={cn(
+                      'text-sm truncate flex-1',
+                      isUnread ? 'font-semibold text-foreground' : 'font-medium text-foreground',
+                    )}>{name}</span>
+                    <span className={cn(
+                      'font-data text-[10px]',
+                      isUnread ? 'text-emerald-600 dark:text-emerald-400 font-semibold' : 'text-[hsl(var(--sz-t3))]',
+                    )}>{relTime(t.last_message_at)}</span>
+                    {isUnread && (
+                      <span className="w-2 h-2 rounded-full bg-emerald-500 flex-shrink-0" aria-label="Não lida" />
+                    )}
+                  </div>
+                  <div className={cn(
+                    'text-xs line-clamp-2 mb-1.5',
+                    isUnread ? 'text-foreground font-medium' : 'text-muted-foreground',
+                  )}>
+                    {t.last_message_content || '—'}
+                  </div>
+                  <div className="flex items-center gap-1.5 flex-wrap">
+                    <InboxSlaChip targetAt={t.sla_first_response_target_at} firstResponseAt={t.first_response_at} />
+                    {status && <Pill cls={status.cls} dot={status.dot} pulse={status.pulse}>{status.label}</Pill>}
+                    {t.contact?.lifecycle_stage === 'customer' && (
+                      <Pill cls="bg-sky-500/15 text-sky-700 dark:text-sky-300" dot="bg-sky-500">Cliente</Pill>
+                    )}
+                    {!t.assigned_user_id && (
+                      <Pill cls="bg-yellow-500/15 text-yellow-700 dark:text-yellow-400" dot="bg-yellow-500">Sem dono</Pill>
+                    )}
+                  </div>
+                </div>
               </div>
             </button>
           );
