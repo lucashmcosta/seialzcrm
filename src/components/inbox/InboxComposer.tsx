@@ -383,13 +383,11 @@ export function InboxComposer({ thread, replyTo, onClearReply, onSent, onThreadM
         </div>
 
         <Dialog open={showTemplates} onOpenChange={setShowTemplates}>
-          <DialogContent className="max-w-2xl max-h-[80vh] overflow-hidden p-0">
-            <div className="p-2">
-              <WhatsAppTemplateSelector
-                onSelect={handleSendTemplate}
-                onCancel={() => setShowTemplates(false)}
-              />
-            </div>
+          <DialogContent className="max-w-2xl h-[80vh] p-0 flex flex-col overflow-hidden">
+            <WhatsAppTemplateSelector
+              onSelect={handleSendTemplate}
+              onCancel={() => setShowTemplates(false)}
+            />
           </DialogContent>
         </Dialog>
       </div>
