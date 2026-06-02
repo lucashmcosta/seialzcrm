@@ -63,22 +63,40 @@ function Pill({ children, cls, dot, pulse }: { children: React.ReactNode; cls: s
 }
 
 export function InboxThreadList({ threads, loading, selectedId, onSelect }: Props) {
+  const [search, setSearch] = useState('');
+
+  const filtered = useMemo(() => {
+    const q = search.trim().toLowerCase();
+    if (!q) return threads;
+    return threads.filter((t) => {
+      const name = (t.contact?.name || '').toLowerCase();
+      const phone = (t.contact?.phone || '').toLowerCase();
+      const last = (t.last_message_content || '').toLowerCase();
+      return name.includes(q) || phone.includes(q) || last.includes(q);
+    });
+  }, [threads, search]);
+
   return (
     <div className="w-[320px] flex-shrink-0 border-r border-border flex flex-col bg-background">
       <div className="h-14 border-b border-border flex items-center px-4">
         <h2 className="text-sm font-semibold text-foreground">Conversas</h2>
         <span className="ml-2 font-data text-[10px] text-[hsl(var(--sz-t3))] bg-[hsl(var(--sz-bg3))] px-1.5 py-0.5 rounded">
-          {threads.length}
+          {filtered.length}
         </span>
+      </div>
+      <div className="px-3 py-2 border-b border-border">
+        <SearchBar value={search} onChange={setSearch} placeholder="Buscar conversa..." />
       </div>
       <div className="flex-1 overflow-y-auto">
         {loading && (
           <div className="p-4 text-xs text-muted-foreground">Carregando…</div>
         )}
-        {!loading && threads.length === 0 && (
-          <div className="p-6 text-center text-xs text-muted-foreground">Nenhuma conversa nesta fila.</div>
+        {!loading && filtered.length === 0 && (
+          <div className="p-6 text-center text-xs text-muted-foreground">
+            {search ? 'Nenhuma conversa encontrada.' : 'Nenhuma conversa nesta fila.'}
+          </div>
         )}
-        {threads.map((t) => {
+        {filtered.map((t) => {
           const name = t.contact?.name || t.contact?.phone || 'Sem contato';
           const isActive = selectedId === t.id;
           const status = STATUS_MAP[t.status || ''];
