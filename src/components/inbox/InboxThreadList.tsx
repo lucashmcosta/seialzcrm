@@ -22,7 +22,7 @@ function relTime(iso: string | null): string {
 
 export function InboxThreadList({ threads, loading, selectedId, onSelect }: Props) {
   return (
-    <div className="w-[300px] flex-shrink-0 border-r border-border flex flex-col bg-background">
+    <div className="w-[320px] flex-shrink-0 border-r border-border flex flex-col bg-background">
       <div className="h-14 border-b border-border flex items-center px-4">
         <h2 className="text-sm font-semibold text-foreground">Conversas</h2>
         <span className="ml-2 font-data text-[10px] text-[hsl(var(--sz-t3))] bg-[hsl(var(--sz-bg3))] px-1.5 py-0.5 rounded">
