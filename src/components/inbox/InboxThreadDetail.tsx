@@ -139,7 +139,7 @@ export function InboxThreadDetail({ threadId, onThreadStatusChanged }: Props) {
           </div>
           <div className="flex-1 min-w-0">
             <h2 className="text-[15px] font-semibold text-foreground truncate leading-tight" title={name}>{name}</h2>
-            <div className="flex items-center gap-1.5 mt-1 flex-wrap">
+            <div className="flex items-center gap-1.5 mt-1 min-w-0 overflow-hidden whitespace-nowrap">
               {lifecycle === 'customer' && (
                 <span className="inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-medium bg-sky-500/15 text-sky-700 dark:text-sky-300">
                   <span className="w-1.5 h-1.5 rounded-full bg-sky-500" />
