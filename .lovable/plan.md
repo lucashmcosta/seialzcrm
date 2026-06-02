@@ -1,85 +1,33 @@
 ## Objetivo
-Remover o valor técnico `other` da UI de Atendimento e humanizar o display de `primary_endpoint.purpose`. Mudança puramente visual em `InboxThreadDetail.tsx`.
+Tornar o painel lateral direito ("Atendimento" / "Dados da conversa") retrátil em `InboxThreadDetail.tsx`.
 
-## Mudanças
+## Mudanças (apenas UI)
 
-### 1. Criar helper local de label
-No topo de `src/components/inbox/InboxThreadDetail.tsx`, adicionar:
+### 1. Estado local de colapso
+- Adicionar `const [sideOpen, setSideOpen] = useState(true)` em `InboxThreadDetail`.
+- Persistir preferência em `localStorage` (`inbox.sidePanel.open`) para manter entre navegações/reload.
 
-```ts
-function purposeLabel(purpose: string | null | undefined): string | null {
-  if (!purpose) return null;
-  const map: Record<string, string> = {
-    commercial: 'Comercial',
-    vendor_personal: 'Vendedor pessoal',
-    customer_service: 'Atendimento',
-    support: 'Atendimento',
-  };
-  if (purpose === 'other') return null;
-  return map[purpose] ?? null; // valores desconhecidos: esconder
-}
-```
+### 2. Botão de toggle no header
+No bloco de ações do header (onde estão "Aberta" + "Resolver"), adicionar um `Button` ghost size icon (`h-7 w-7`) à direita do botão Resolver/Reabrir:
+- Ícone: `SidebarSimple` do `@phosphor-icons/react` (ou `CaretRight`/`CaretLeft` alternando conforme estado).
+- `title`: "Ocultar painel" / "Mostrar painel".
+- `onClick`: alterna `sideOpen` e grava no localStorage.
 
-### 2. Header — chip do purpose
-Substituir o bloco que renderiza `{endpointPurpose && (<span>...{endpointPurpose}</span>)}` por:
+### 3. Renderização condicional do `<aside>`
+- Manter o `<aside>` montado (sem desmontar para preservar scroll), mas animar largura:
+  - Quando `sideOpen`: `w-[300px]`
+  - Quando colapsado: `w-0 border-l-0 overflow-hidden`
+- Aplicar `transition-[width] duration-200 ease-in-out` no `<aside>`.
+- Conteúdo interno permanece, apenas fica recortado pelo `overflow-hidden` quando largura é 0.
 
-```tsx
-{purposeLabel(endpointPurpose) && (
-  <span className="text-[10px] px-1.5 py-0.5 rounded bg-muted text-muted-foreground">
-    {purposeLabel(endpointPurpose)}
-  </span>
-)}
-```
-
-Resultado: quando `purpose` for `other`, `null` ou desconhecido → nenhum chip aparece, liberando espaço para o nome e o `WhatsAppWindowChip`.
-
-### 3. Painel lateral — trocar "Endpoint" por "Canal"
-Hoje:
-```
-<dt>Endpoint</dt>
-<dd>{endpointPurpose || '—'}</dd>
-```
-
-Trocar por uma linha "Canal" mais humana:
-- Base: `Canal: WhatsApp` (quando `thread.channel === 'whatsapp'`; senão usar o nome do canal capitalizado, fallback `—`).
-- Se `purposeLabel(endpointPurpose)` existir, anexar: `WhatsApp · Comercial` / `WhatsApp · Vendedor pessoal` / `WhatsApp · Atendimento`.
-- Nunca exibir `other` nem valores brutos.
-
-```tsx
-<dt className="text-muted-foreground">Canal</dt>
-<dd className="text-foreground">
-  {(() => {
-    const channel = thread.channel === 'whatsapp' ? 'WhatsApp' : (thread.channel || '—');
-    const label = purposeLabel(endpointPurpose);
-    return label ? `${channel} · ${label}` : channel;
-  })()}
-</dd>
-```
-
-Também remover a linha duplicada `Canal` que já existe mais abaixo em "Dados da conversa" (passa a ser redundante), OU manter apenas uma das duas — proposta: **remover a linha "Endpoint" e manter o "Canal" existente em "Dados da conversa"**, movendo a lógica humanizada para lá. Isso evita duplicação.
-
-Final do painel "Atendimento":
-- Remover completamente o par `<dt>Endpoint</dt><dd>...</dd>`.
-
-Em "Dados da conversa", substituir:
-```tsx
-<dd>{thread.channel || '—'}</dd>
-```
-por:
-```tsx
-<dd>
-  {(() => {
-    const channel = thread.channel === 'whatsapp' ? 'WhatsApp' : (thread.channel || '—');
-    const label = purposeLabel(endpointPurpose);
-    return label ? `${channel} · ${label}` : channel;
-  })()}
-</dd>
-```
-
-## Fora do escopo
-- `inboxScope.ts`, hooks, backend, schema do banco.
-- `WhatsAppWindowChip`, SLA chip, lifecycle chip.
-- Outras telas (lista do inbox, mobile, etc.).
+### 4. Nada mais muda
+- Sem alterar lógica de dados, hooks, RLS, scope, ou outros componentes.
+- A coluna central (`flex-1`) naturalmente expande ao colapsar o aside.
 
 ## Arquivo afetado
 - `src/components/inbox/InboxThreadDetail.tsx` (apenas).
+
+## Fora do escopo
+- Mobile (`MobileLayout`/`MobileMessagesList`) — Inbox é desktop only.
+- Persistência server-side da preferência.
+- Animação do conteúdo interno do aside.
