@@ -212,6 +212,16 @@ export function InboxThreadDetail({ threadId, onThreadStatusChanged }: Props) {
                 Resolver
               </Button>
             )}
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={() => setSideOpen((v) => !v)}
+              className="h-7 w-7 p-0 flex-shrink-0"
+              title={sideOpen ? 'Ocultar painel' : 'Mostrar painel'}
+              aria-label={sideOpen ? 'Ocultar painel' : 'Mostrar painel'}
+            >
+              <SidebarSimple size={15} weight="bold" />
+            </Button>
           </div>
         </div>
 
