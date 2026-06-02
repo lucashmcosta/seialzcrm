@@ -1,43 +1,25 @@
-# Resolver / Reabrir conversa na Inbox
+## Corrigir truncamento do nome no header da conversa
 
-## Objetivo
-Permitir que o atendente finalize (ou reabra) oficialmente um atendimento direto pela tela `/inbox`, reaproveitando exatamente a mesma mutação que já existe em `/messages` (`MessagesList.handleResolve` / `handleReopen`).
+### Problema
+No header de `InboxThreadDetail`, o nome do cliente ("GUSTAVO ELEOTERIO DE PAULA") aparece truncado como "GUSTAV..." mesmo havendo bastante espaço horizontal disponível. O motivo é que o título e os subbadges (Cliente / endpoint) dividem a mesma coluna `flex-1`, enquanto o cluster de chips à direita (`WhatsAppWindowChip`, `InboxSlaChip`, status, botão Resolver) consome boa parte da linha e ainda força o título a competir com os badges abaixo.
 
-## Escopo (apenas frontend)
+### Mudanças (apenas em `src/components/inbox/InboxThreadDetail.tsx`)
 
-### 1. `src/components/inbox/InboxThreadDetail.tsx`
-- Adicionar dois handlers locais:
-  - `handleResolve()` → `UPDATE message_threads SET status='resolved', resolved_at=now() WHERE id = thread.id`
-  - `handleReopen()` → `UPDATE message_threads SET status='open', resolved_at=null WHERE id = thread.id`
-- Ambos usam `supabase` client direto (mesmo padrão do `handleAssign` que já existe no arquivo) e chamam `refresh()` ao fim + `toast` (sonner) de sucesso/erro.
-- Estado `resolving` para desabilitar botão durante a request.
-- Confirmação via `ConfirmDialog` (`@/components/ui/confirm-dialog`) antes de resolver — reabrir pode ser direto.
+1. **Dar mais espaço ao nome**
+   - Manter o título `<h1>` numa única linha ocupando toda a largura disponível do bloco central (`flex-1 min-w-0`), com `truncate` só como fallback.
+   - Mover os badges secundários ("Cliente", endpoint "other") para uma segunda linha abaixo do nome, mas sem ocupar o mesmo flex item que disputa espaço com o título.
 
-### 2. UI do botão (mesmo header já existente)
-No bloco direito do header (onde estão `WhatsAppWindowChip`, `InboxSlaChip` e o chip de status), adicionar um botão à direita do chip de status:
+2. **Compactar o cluster de chips à direita**
+   - Reduzir o gap entre chips de `gap-2` para `gap-1.5`.
+   - Permitir que o cluster quebre para uma segunda linha em telas estreitas (`flex-wrap justify-end`) em vez de empurrar o título.
+   - Garantir `flex-shrink-0` apenas nos chips individuais, não no container, para que o título sempre tenha prioridade de largura.
 
-- Se `thread.status === 'resolved' | 'closed'` → botão **"Reabrir"** (ghost, ícone `ArrowCounterClockwise` do phosphor).
-- Caso contrário → botão **"Resolver"** (primary discreto, ícone `Check` do phosphor, size `xs`).
+3. **Aumentar levemente o tamanho do título**
+   - Manter `text-[15px] font-semibold` mas garantir `whitespace-nowrap` + `overflow-hidden` + `text-ellipsis` apenas quando realmente não couber (caso extremo de nomes muito longos).
 
-Estilo: usar `Button` de `@/components/ui/button` com `size="sm"` e `variant="outline"` (resolver) / `variant="ghost"` (reabrir), em linha com os chips, sem quebrar layout.
+### Fora de escopo
+- Nenhuma mudança na lista lateral, no painel direito, nos handlers de Resolver/Reabrir/Reatribuir, ou em qualquer lógica de dados.
+- Sem mudança de layout geral, apenas reorganização interna do header.
 
-### 3. Refresh de contadores e lista
-- `InboxThreadDetail` já chama `refresh()` do `useInboxThread` após a mutação, o que atualiza o thread local.
-- Para atualizar a lista lateral e os contadores ("Ativos", "Aguardando", "Concluídos hoje") do `InboxMetricsBar`, expor um callback opcional `onThreadStatusChanged` em `InboxThreadDetail` e ligar em `InboxPage.tsx` para chamar `refresh` de `useInboxQueueCounts` e `useInboxThreads` (ambos já expõem refresh internamente — adicionar exposição se necessário).
-- Realtime de `message_threads` UPDATE já existe em `useInboxThread`, então o chip de status atualiza sozinho.
-
-## Fora de escopo
-- Nenhuma mudança em SQL, RLS, triggers ou edge functions.
-- Nenhuma mudança em `/messages` (segue funcionando igual).
-- Nenhuma mudança em `InboxComposer` (ele já bloqueia envio quando `status='resolved'`).
-- Mobile (`InboxPage` mobile é placeholder).
-
-## Arquivos tocados
-- `src/components/inbox/InboxThreadDetail.tsx` (handlers + botão)
-- `src/pages/inbox/InboxPage.tsx` (passar callback de refresh para lista/contadores)
-- Possivelmente `src/hooks/inbox/useInboxThreads.ts` (expor `refresh` se ainda não exposto)
-
-## Validação
-- Resolver uma conversa "Aberta" → some de "Ativos", aparece em "Concluídos hoje", composer bloqueia envio, chip vira "Resolvida".
-- Reabrir → volta para "Ativos", composer libera, chip volta para "Aberta".
-- Toast de sucesso em ambos os casos.
+### Arquivo tocado
+- `src/components/inbox/InboxThreadDetail.tsx`
