@@ -38,8 +38,8 @@ export default function InboxPage() {
   }, [user?.id]);
 
   const orgTimezone = organization?.timezone ?? null;
-  const { counts } = useInboxQueueCounts(internalUserId, onlyMine, orgTimezone);
-  const { threads, loading } = useInboxThreads(tab, onlyMine, internalUserId, orgTimezone);
+  const { counts, refresh: refreshCounts } = useInboxQueueCounts(internalUserId, onlyMine, orgTimezone);
+  const { threads, loading, refresh: refreshThreads } = useInboxThreads(tab, onlyMine, internalUserId, orgTimezone);
 
   // Mobile placeholder — does NOT redirect to /messages
   if (isMobile) {
