@@ -58,6 +58,13 @@ export function InboxThreadDetail({ threadId, onThreadStatusChanged }: Props) {
   const [reassigning, setReassigning] = useState(false);
   const [resolving, setResolving] = useState(false);
   const [confirmResolveOpen, setConfirmResolveOpen] = useState(false);
+  const [sideOpen, setSideOpen] = useState<boolean>(() => {
+    if (typeof window === 'undefined') return true;
+    return window.localStorage.getItem('inbox.sidePanel.open') !== '0';
+  });
+  useEffect(() => {
+    try { window.localStorage.setItem('inbox.sidePanel.open', sideOpen ? '1' : '0'); } catch {}
+  }, [sideOpen]);
 
   async function handleResolve() {
     if (!thread) return;
