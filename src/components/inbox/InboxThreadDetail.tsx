@@ -21,7 +21,7 @@ function fmt(iso: string | null) {
 }
 
 export function InboxThreadDetail({ threadId }: Props) {
-  const { thread, history, loading, refresh } = useInboxThread(threadId);
+  const { thread, history, latestWonOpportunity, loading, refresh } = useInboxThread(threadId);
   const { organization } = useOrganizationContext();
   const { toast } = useToast();
   const [replyTo, setReplyTo] = useState<InboxMessageRow | null>(null);
