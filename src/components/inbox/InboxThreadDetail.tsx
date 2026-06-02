@@ -19,6 +19,23 @@ interface Props {
   onThreadStatusChanged?: () => void;
 }
 
+function purposeLabel(purpose: string | null | undefined): string | null {
+  if (!purpose || purpose === 'other') return null;
+  const map: Record<string, string> = {
+    commercial: 'Comercial',
+    vendor_personal: 'Vendedor pessoal',
+    customer_service: 'Atendimento',
+    support: 'Atendimento',
+  };
+  return map[purpose] ?? null;
+}
+
+function channelLabel(channel: string | null | undefined): string {
+  if (!channel) return '—';
+  if (channel === 'whatsapp') return 'WhatsApp';
+  return channel.charAt(0).toUpperCase() + channel.slice(1);
+}
+
 function fmt(iso: string | null) {
   if (!iso) return '—';
   return new Date(iso).toLocaleString('pt-BR', { dateStyle: 'short', timeStyle: 'short' });
