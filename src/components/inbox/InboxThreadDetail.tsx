@@ -129,7 +129,30 @@ export function InboxThreadDetail({ threadId }: Props) {
       <aside className="w-[280px] border-l border-border overflow-y-auto flex-shrink-0">
         <div className="p-5 space-y-6">
           <section>
+            <h3 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground mb-2">Atendimento</h3>
+            <dl className="grid grid-cols-[110px_1fr] gap-x-3 gap-y-1.5 text-xs">
+              <dt className="text-muted-foreground">Tipo</dt>
+              <dd className="text-foreground">{lifecycle === 'customer' ? 'Cliente' : (lifecycle || '—')}</dd>
+              <dt className="text-muted-foreground">Origem</dt>
+              <dd className="text-foreground truncate" title={latestWonOpportunity?.title || undefined}>
+                {latestWonOpportunity
+                  ? `Oportunidade ganha · ${latestWonOpportunity.title}`
+                  : '—'}
+              </dd>
+              {latestWonOpportunity && (
+                <>
+                  <dt className="text-muted-foreground">Convertido em</dt>
+                  <dd className="text-foreground">{fmt(latestWonOpportunity.close_date || latestWonOpportunity.updated_at)}</dd>
+                </>
+              )}
+              <dt className="text-muted-foreground">Endpoint</dt>
+              <dd className="text-foreground">{endpointPurpose || '—'}</dd>
+            </dl>
+          </section>
+
+          <section>
             <h3 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground mb-2">Dados da conversa</h3>
+
 
             <div className="mb-3">
               <div className="text-[11px] text-muted-foreground mb-1">Atribuída a</div>
