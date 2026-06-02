@@ -5,13 +5,13 @@ import { useAuth } from '@/hooks/useAuth';
 import { useOrganizationContext } from '@/contexts/OrganizationContext';
 import { supabase } from '@/integrations/supabase/client';
 
+import { MobileInbox } from '@/components/mobile/MobileInbox';
 import { InboxThreadList } from '@/components/inbox/InboxThreadList';
 import { InboxThreadDetail } from '@/components/inbox/InboxThreadDetail';
 import { InboxMetricsBar } from '@/components/inbox/InboxMetricsBar';
 import { useInboxQueueCounts } from '@/hooks/inbox/useInboxQueueCounts';
 import { useInboxThreads } from '@/hooks/inbox/useInboxThreads';
 import type { InboxTab } from '@/hooks/inbox/inboxScope';
-import { Headset } from '@phosphor-icons/react';
 
 export default function InboxPage() {
   const isMobile = useIsMobile();
