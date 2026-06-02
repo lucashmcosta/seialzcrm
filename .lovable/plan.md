@@ -1,38 +1,56 @@
 ## Objetivo
-Melhorar visual da lista de conversas em `InboxThreadList.tsx`:
-1. Adicionar avatar circular com iniciais (cor derivada do nome) à esquerda de cada item.
-2. Indicador claro de "não lido" (badge + nome em negrito + fundo destacado).
-3. **Não marcar como lido ao clicar** — só fica lido depois que o operador responder.
 
-## Definição de "não lido" (sem nova tabela)
-Como o módulo Inbox ainda não tem tracking de read por usuário, vamos derivar do estado já existente: **`last_message_direction === 'inbound'`** significa que a última mensagem é do cliente e ainda não foi respondida → conversa não lida.
+Substituir o placeholder "Atendimento mobile em breve" por uma experiência mobile real em `/inbox`, no mesmo padrão visual e de navegação do `/messages` mobile (lista de conversas em tela cheia → toque abre o chat em tela cheia com botão voltar).
 
-Vantagens:
-- Não precisa de schema, RLS, migration nem backend.
-- Satisfaz automaticamente o requisito #3: clicar não altera nada; só quando o operador envia uma resposta, `last_message_direction` vira `outbound` (via trigger existente) e a conversa some do estado "não lido".
-- Funciona igual para múltiplos operadores na mesma fila.
+## Escopo
 
-## Mudanças em `InboxThreadList.tsx`
+- Apenas UI mobile do Atendimento (`InboxPage` quando `isMobile`).
+- Reutilizar 100% dos hooks já existentes: `useInboxThreads`, `useInboxQueueCounts`, `useInboxThread`, `useInboxThreadMessages`.
+- Reutilizar `InboxComposer`, `InboxConversationTimeline`, `InboxSlaChip`, `WhatsAppWindowChip` (já são responsivos o suficiente).
+- Sem mudanças em backend, RLS, `inboxScope.ts`, schema ou regras de negócio.
+- Sem alterar a versão desktop (`InboxThreadList` + `InboxThreadDetail`).
 
-### 1. Avatar com iniciais
-- Helper `initials(name)` (mesma lógica de `InboxThreadDetail`) + `colorFromName(name)` que hasheia para uma paleta fixa de 6 cores semânticas (sky, emerald, amber, rose, violet, orange) usando classes Tailwind com opacidade (ex.: `bg-emerald-500/15 text-emerald-700 dark:text-emerald-300`).
-- Renderizar `<div className="h-10 w-10 rounded-full flex items-center justify-center text-xs font-semibold flex-shrink-0">` à esquerda do bloco de texto. Layout vira `flex gap-3`.
+## Arquivo novo
 
-### 2. Indicador de não lido
-Quando `isUnread = t.last_message_direction === 'inbound'`:
-- **Nome em `font-semibold text-foreground`** (vs `font-medium` quando lido); preview da mensagem em `text-foreground` em vez de `text-muted-foreground`.
-- **Badge numérico verde** à direita do timestamp: `<span className="min-w-[18px] h-[18px] px-1 rounded-full bg-emerald-500 text-white text-[10px] font-semibold flex items-center justify-center">●</span>` — como não temos contagem real de mensagens não respondidas, mostra apenas um dot/ponto verde sólido (estilo WhatsApp Web).
-- **Borda esquerda mais grossa** (`border-l-4 border-l-emerald-500`) quando não lido e não selecionado, para destaque periférico.
-- Remover o `isFresh` antigo (5min) — substituído pela lógica nova mais consistente.
+`src/components/mobile/MobileInbox.tsx` — componente único com duas "views":
 
-### 3. Não marcar como lido no clique
-- Nada a fazer: como o "não lido" é derivado de `last_message_direction`, clicar na conversa não altera nada no banco. O estado só muda quando o operador envia uma resposta (`InboxComposer` já atualiza a thread e dispara realtime).
+1. **Lista** (default)
+   - Header sticky: título "Atendimento" + contador, sem sidebar (o `MobileLayout` já cuida).
+   - Barra de busca (`Input` controlado, filtra por nome/telefone/preview localmente sobre `threads`).
+   - Chips horizontais scrolláveis para `tab`: Ativos / Aguardando / Concluídos hoje (com counts de `useInboxQueueCounts`).
+   - Toggle "Apenas minhas" como chip toggleável ao lado dos tabs.
+   - Lista de cards usando o mesmo padrão visual do `InboxThreadList` desktop adaptado a mobile:
+     - Avatar com iniciais + cor derivada do nome (mesmas helpers `initials` + `colorFromName`).
+     - Nome + horário relativo, **bold + dot verde** quando `last_message_direction === 'inbound'` (não lida), igual ao desktop.
+     - Preview da última mensagem (line-clamp-2).
+     - Pills: status, `InboxSlaChip`, "Cliente" se lifecycle, "Sem dono" se não atribuída.
+     - Borda esquerda verde grossa quando unread.
+   - Empty state e loading consistentes com o padrão mobile (SpinnerGap).
+   - Toque no card → seta `selectedId` → renderiza view de chat.
 
-## Fora do escopo
-- `useInboxThreads.ts`, `inboxScope.ts`, backend, RLS, migrations.
-- `InboxThreadDetail`, composer, timeline.
-- Mobile.
-- Tracking real per-user (não pedido; e o derivado já satisfaz o requisito).
+2. **Chat** (quando `selectedId != null`)
+   - Header fixo com botão voltar (`CaretLeft`), avatar pequeno, nome, `WhatsAppWindowChip`, `InboxSlaChip`.
+   - Botão "Resolver"/"Reabrir" no header (icon-only).
+   - Menu `DropdownMenu` (3 pontos) com: Reatribuir (abre `OwnerSelector` em `Dialog`/Sheet), Ver detalhes (abre `Sheet` lateral com o mesmo conteúdo do painel `Atendimento` do desktop — Tipo/Origem/Atribuída/SLAs/Histórico).
+   - `InboxConversationTimeline` ocupa o middle (`flex-1 min-h-0`).
+   - `InboxComposer` no rodapé.
+   - Sem painel lateral fixo (vira Sheet sob demanda).
 
-## Arquivo afetado
-- `src/components/inbox/InboxThreadList.tsx` (apenas).
+## Mudança em `src/pages/inbox/InboxPage.tsx`
+
+Substituir o bloco `if (isMobile)` placeholder por `return <MobileInbox />;` (envolto em `MobileLayout`, igual `MobileMessagesList` faz). O fluxo desktop fica intacto.
+
+## Detalhes técnicos
+
+- `MobileInbox` orquestra estado local: `tab`, `onlyMine`, `selectedId`, `searchQuery`, `showDetailsSheet`.
+- Resolução de `internalUserId` (de `auth.uid → users.id`) replicada como em `InboxPage` (Core rule).
+- Hooks chamados com os mesmos args do desktop.
+- `h-screen overflow-hidden` no container raiz seguindo a memória `fixed-viewport-layout`; lista e chat usam `flex-1 min-h-0`.
+- Tokens semânticos (sem cores diretas Tailwind tipo `bg-white`).
+- Sheet de detalhes via `@/components/ui/sheet` lado direito.
+
+## Fora de escopo
+
+- Notificações push, swipe-to-resolve, drag handles, atalhos.
+- Mudanças em `InboxThreadList`/`InboxThreadDetail`.
+- Real read tracking (mantém heurística `last_message_direction === 'inbound'`).

@@ -5,13 +5,13 @@ import { useAuth } from '@/hooks/useAuth';
 import { useOrganizationContext } from '@/contexts/OrganizationContext';
 import { supabase } from '@/integrations/supabase/client';
 
+import { MobileInbox } from '@/components/mobile/MobileInbox';
 import { InboxThreadList } from '@/components/inbox/InboxThreadList';
 import { InboxThreadDetail } from '@/components/inbox/InboxThreadDetail';
 import { InboxMetricsBar } from '@/components/inbox/InboxMetricsBar';
 import { useInboxQueueCounts } from '@/hooks/inbox/useInboxQueueCounts';
 import { useInboxThreads } from '@/hooks/inbox/useInboxThreads';
 import type { InboxTab } from '@/hooks/inbox/inboxScope';
-import { Headset } from '@phosphor-icons/react';
 
 export default function InboxPage() {
   const isMobile = useIsMobile();
@@ -41,19 +41,9 @@ export default function InboxPage() {
   const { counts, refresh: refreshCounts } = useInboxQueueCounts(internalUserId, onlyMine, orgTimezone);
   const { threads, loading, refresh: refreshThreads } = useInboxThreads(tab, onlyMine, internalUserId, orgTimezone);
 
-  // Mobile placeholder — does NOT redirect to /messages
+  // Mobile uses dedicated MobileInbox (lista + chat fullscreen, padrão /messages)
   if (isMobile) {
-    return (
-      <Layout>
-        <div className="h-full flex flex-col items-center justify-center text-center px-6 gap-3">
-          <Headset size={48} weight="light" className="text-muted-foreground" />
-          <h1 className="text-lg font-semibold text-foreground">Atendimento</h1>
-          <p className="text-sm text-muted-foreground max-w-xs">
-            Atendimento mobile em breve. Use desktop por enquanto.
-          </p>
-        </div>
-      </Layout>
-    );
+    return <MobileInbox />;
   }
 
   return (
