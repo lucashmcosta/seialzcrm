@@ -193,7 +193,7 @@ export function AudioMessagePlayer({ src, className = '', timestamp, statusIcon 
           />
         </div>
 
-        {!isLoading && (
+        {!isLoading && hasStarted && (
           <button
             onClick={cycleRate}
             style={{
