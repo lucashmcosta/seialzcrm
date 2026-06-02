@@ -46,6 +46,7 @@ interface Props {
   onClearReply: () => void;
   onSent?: () => void;
   onThreadMutated?: () => void;
+  compact?: boolean;
 }
 
 type Mode = 'reply' | 'note';
@@ -64,7 +65,7 @@ function DisabledBar({ title, hint }: { title: string; hint?: string }) {
   );
 }
 
-export function InboxComposer({ thread, replyTo, onClearReply, onSent, onThreadMutated }: Props) {
+export function InboxComposer({ thread, replyTo, onClearReply, onSent, onThreadMutated, compact = false }: Props) {
   const { organization, userProfile } = useOrganization();
   const { toast } = useToast();
 
@@ -309,6 +310,92 @@ export function InboxComposer({ thread, replyTo, onClearReply, onSent, onThreadM
 
   const isNote = mode === 'note';
 
+  if (compact) {
+    return (
+      <div className="border-t border-border bg-background flex-shrink-0 px-2 py-2">
+        {replyTo && mode === 'reply' && (
+          <div className="mb-2 px-1">
+            <ReplyPreview
+              message={{ id: replyTo.id, content: replyTo.content || '', direction: replyTo.direction || 'inbound' }}
+              onClose={onClearReply}
+            />
+          </div>
+        )}
+
+        <div
+          className={`flex items-end gap-1 rounded-full border px-1 py-1 transition-colors ${
+            isNote
+              ? 'bg-amber-50/60 dark:bg-amber-950/20 border-amber-200 dark:border-amber-900 focus-within:ring-2 focus-within:ring-amber-400/40'
+              : 'bg-card border-border focus-within:ring-2 focus-within:ring-ring/30'
+          }`}
+        >
+          {!isNote && (
+            <MediaUploadButton
+              onFileSelected={handleSendFile}
+              onTemplateClick={() => setShowTemplates(true)}
+              disabled={inputDisabled}
+            />
+          )}
+
+          <button
+            type="button"
+            onClick={() => setMode(isNote ? 'reply' : 'note')}
+            className={`h-9 w-9 flex items-center justify-center rounded-full transition-colors flex-shrink-0 ${
+              isNote
+                ? 'text-amber-700 dark:text-amber-300'
+                : 'text-muted-foreground hover:text-foreground hover:bg-muted/60'
+            }`}
+            title={isNote ? 'Voltar para resposta' : 'Nota interna'}
+          >
+            <Note size={18} />
+          </button>
+
+          <Textarea
+            value={text}
+            onChange={(e) => setText(e.target.value)}
+            onKeyDown={onKeyDown}
+            placeholder={placeholder}
+            rows={1}
+            disabled={inputDisabled}
+            className="flex-1 resize-none border-0 shadow-none focus-visible:ring-0 bg-transparent px-2 py-2 min-h-[36px] max-h-[120px] text-sm placeholder:text-muted-foreground/60 scrollbar-hide"
+          />
+
+          {!isNote && (
+            <AudioRecorder onSend={handleSendAudio} disabled={inputDisabled || !isIn24hWindow} />
+          )}
+          <Button
+            onClick={isNote ? handleSaveNote : handleSendText}
+            disabled={inputDisabled || !text.trim()}
+            size="icon"
+            className={`h-9 w-9 rounded-full flex-shrink-0 ${
+              isNote ? 'bg-amber-500 hover:bg-amber-600 text-white' : ''
+            }`}
+            title={isNote ? 'Salvar nota interna' : isIn24hWindow ? 'Enviar' : 'Selecionar template'}
+          >
+            {submitting ? (
+              <SpinnerGap className="w-4 h-4 animate-spin" />
+            ) : isNote ? (
+              <Note className="w-4 h-4" />
+            ) : (
+              <PaperPlaneTilt className="w-4 h-4" />
+            )}
+          </Button>
+        </div>
+
+        <Dialog open={showTemplates} onOpenChange={setShowTemplates}>
+          <DialogContent className="max-w-2xl max-h-[80vh] overflow-hidden p-0">
+            <div className="p-2">
+              <WhatsAppTemplateSelector
+                onSelect={handleSendTemplate}
+                onCancel={() => setShowTemplates(false)}
+              />
+            </div>
+          </DialogContent>
+        </Dialog>
+      </div>
+    );
+  }
+
   return (
     <div className="border-t border-border bg-background flex-shrink-0 px-6 pt-3 pb-4">
       <div className="max-w-3xl mx-auto w-full">
@@ -426,6 +513,7 @@ export function InboxComposer({ thread, replyTo, onClearReply, onSent, onThreadM
           Enter envia · Shift+Enter quebra linha
         </p>
       </div>
+
 
       <Dialog open={showTemplates} onOpenChange={setShowTemplates}>
         <DialogContent className="max-w-2xl max-h-[80vh] overflow-hidden p-0">
