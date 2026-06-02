@@ -221,6 +221,18 @@ export function useMessageThreads(options: UseMessageThreadsOptions = {}) {
       }, () => {
         debouncedRefetch();
       })
+      .on('postgres_changes', {
+        event: 'UPDATE',
+        schema: 'public',
+        table: 'contacts',
+        filter: `organization_id=eq.${orgId}`,
+      }, (payload) => {
+        const oldStage = (payload.old as any)?.lifecycle_stage;
+        const newStage = (payload.new as any)?.lifecycle_stage;
+        if (oldStage !== newStage) {
+          debouncedRefetch();
+        }
+      })
       .subscribe();
 
     return () => {
