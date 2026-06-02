@@ -17,9 +17,8 @@ export function AudioMessagePlayer({ src, className = '', timestamp, statusIcon 
   const [hasError, setHasError] = useState(false);
   const [playbackRate, setPlaybackRate] = useState(1);
   const [waveformData] = useState(() =>
-    Array.from({ length: 32 }, () => Math.random() * 0.5 + 0.2)
+    Array.from({ length: 45 }, () => Math.random() * 0.5 + 0.2)
   );
-
 
   const cycleRate = () => {
     const next = playbackRate === 1 ? 1.5 : playbackRate === 1.5 ? 2 : 1;
@@ -100,11 +99,8 @@ export function AudioMessagePlayer({ src, className = '', timestamp, statusIcon 
     setCurrentTime(audio.currentTime);
   };
 
-  const hasStarted = isPlaying || currentTime > 0;
-
   return (
-    <div className={className} style={{ display: 'flex', flexDirection: 'column', gap: 1, padding: 2, width: 260 }}>
-
+    <div className={className} style={{ display: 'flex', flexDirection: 'column', gap: 1, padding: 2, maxWidth: 240, minWidth: 200 }}>
       <audio ref={audioRef} src={src} preload="metadata" />
       {hasError && (
         <div style={{ fontSize: 11, opacity: 0.7, padding: '4px 6px' }}>
@@ -194,24 +190,22 @@ export function AudioMessagePlayer({ src, className = '', timestamp, statusIcon 
           />
         </div>
 
-        {!isLoading && hasStarted && (
+        {!isLoading && (
           <button
             onClick={cycleRate}
             style={{
-              fontSize: 11,
+              fontSize: 10,
               fontWeight: 600,
               lineHeight: 1,
-              padding: '2px 5px',
-              borderRadius: 4,
-              border: 'none',
+              padding: '3px 6px',
+              borderRadius: 9999,
+              border: '1px solid currentColor',
               cursor: 'pointer',
-              background: playbackRate === 1
-                ? 'transparent'
-                : 'color-mix(in srgb, currentColor 15%, transparent)',
+              background: 'transparent',
               color: 'currentColor',
-              opacity: playbackRate === 1 ? 0.75 : 1,
+              opacity: playbackRate === 1 ? 0.5 : 0.95,
               flexShrink: 0,
-              minWidth: 28,
+              minWidth: 30,
               fontVariantNumeric: 'tabular-nums',
             }}
             aria-label={`Velocidade ${playbackRate}x`}
@@ -219,7 +213,6 @@ export function AudioMessagePlayer({ src, className = '', timestamp, statusIcon 
             {playbackRate === 1 ? '1x' : playbackRate === 1.5 ? '1.5x' : '2x'}
           </button>
         )}
-
       </div>
 
       {/* Row 2: Duration + Timestamp */}
