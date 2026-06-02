@@ -39,6 +39,49 @@ export function InboxThreadDetail({ threadId, onThreadStatusChanged }: Props) {
   const { toast } = useToast();
   const [replyTo, setReplyTo] = useState<InboxMessageRow | null>(null);
   const [reassigning, setReassigning] = useState(false);
+  const [resolving, setResolving] = useState(false);
+  const [confirmResolveOpen, setConfirmResolveOpen] = useState(false);
+
+  async function handleResolve() {
+    if (!thread) return;
+    setResolving(true);
+    try {
+      const { error } = await supabase
+        .from('message_threads')
+        .update({ status: 'resolved', resolved_at: new Date().toISOString() })
+        .eq('id', thread.id);
+      if (error) throw error;
+      toast({ description: 'Conversa resolvida.' });
+      refresh();
+      onThreadStatusChanged?.();
+    } catch (e: any) {
+      console.error('[inbox-detail] resolve failed', e);
+      toast({ variant: 'destructive', description: e?.message || 'Falha ao resolver.' });
+    } finally {
+      setResolving(false);
+      setConfirmResolveOpen(false);
+    }
+  }
+
+  async function handleReopen() {
+    if (!thread) return;
+    setResolving(true);
+    try {
+      const { error } = await supabase
+        .from('message_threads')
+        .update({ status: 'open', resolved_at: null })
+        .eq('id', thread.id);
+      if (error) throw error;
+      toast({ description: 'Conversa reaberta.' });
+      refresh();
+      onThreadStatusChanged?.();
+    } catch (e: any) {
+      console.error('[inbox-detail] reopen failed', e);
+      toast({ variant: 'destructive', description: e?.message || 'Falha ao reabrir.' });
+    } finally {
+      setResolving(false);
+    }
+  }
 
   async function handleAssign(userId: string | null) {
     if (!thread) return;
