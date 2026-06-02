@@ -65,7 +65,7 @@ function DisabledBar({ title, hint }: { title: string; hint?: string }) {
   );
 }
 
-export function InboxComposer({ thread, replyTo, onClearReply, onSent, onThreadMutated }: Props) {
+export function InboxComposer({ thread, replyTo, onClearReply, onSent, onThreadMutated, compact = false }: Props) {
   const { organization, userProfile } = useOrganization();
   const { toast } = useToast();
 
