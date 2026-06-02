@@ -36,7 +36,7 @@ interface ThreadLike {
   assigned_user_id: string | null;
   last_inbound_at?: string | null;
   whatsapp_last_inbound_at?: string | null;
-  contact?: { lifecycle_stage: string | null } | null;
+  contact?: { lifecycle_stage: string | null; name?: string | null } | null;
   primary_endpoint?: { purpose: string | null } | null;
 }
 
@@ -167,7 +167,6 @@ export function InboxComposer({ thread, replyTo, onClearReply, onSent, onThreadM
       },
     });
     if (error) {
-      // Try to surface server reason
       let reason = error.message;
       try {
         const ctx: any = (error as any).context;
@@ -175,9 +174,7 @@ export function InboxComposer({ thread, replyTo, onClearReply, onSent, onThreadM
           const parsed = typeof ctx.body === 'string' ? JSON.parse(ctx.body) : ctx.body;
           reason = parsed?.error || reason;
         }
-      } catch {
-        /* noop */
-      }
+      } catch { /* noop */ }
       throw new Error(reason);
     }
     if (data?.error) throw new Error(data.error);
@@ -192,10 +189,7 @@ export function InboxComposer({ thread, replyTo, onClearReply, onSent, onThreadM
     }
     setSubmitting(true);
     try {
-      await invokeSend({
-        message: text,
-        replyToMessageId: replyTo?.id ?? null,
-      });
+      await invokeSend({ message: text, replyToMessageId: replyTo?.id ?? null });
       setText('');
       onClearReply();
       onSent?.();
@@ -231,9 +225,7 @@ export function InboxComposer({ thread, replyTo, onClearReply, onSent, onThreadM
 
   async function handleSendAudio(blob: Blob) {
     if (!organization?.id) return;
-    const audioFile = new File([blob], `audio-${Date.now()}.ogg`, {
-      type: 'audio/ogg;codecs=opus',
-    });
+    const audioFile = new File([blob], `audio-${Date.now()}.ogg`, { type: 'audio/ogg;codecs=opus' });
     setSubmitting(true);
     try {
       const { url, mediaType } = await inboxUploadMedia(supabase, audioFile, organization.id);
@@ -255,10 +247,7 @@ export function InboxComposer({ thread, replyTo, onClearReply, onSent, onThreadM
   async function handleSendTemplate(templateId: string, variables: Record<string, string>) {
     setSubmitting(true);
     try {
-      await invokeSend({
-        templateId,
-        templateVariables: variables,
-      });
+      await invokeSend({ templateId, templateVariables: variables });
       setShowTemplates(false);
       setText('');
       onClearReply();
@@ -310,144 +299,132 @@ export function InboxComposer({ thread, replyTo, onClearReply, onSent, onThreadM
   // --- UI -------------------------------------------------------------------
 
   const inputDisabled = submitting || assignedToSomeoneElse;
+  const firstName = (thread.contact?.name || '').split(' ')[0] || 'cliente';
+
+  const placeholder = mode === 'note'
+    ? 'Anotação interna visível só para a equipe'
+    : isIn24hWindow
+      ? `Mensagem para ${firstName}`
+      : 'Selecione um template para iniciar';
+
+  const isNote = mode === 'note';
 
   return (
-    <div className="border-t border-border bg-background flex-shrink-0">
-      {/* Tabs */}
-      <div className="flex items-center gap-1 px-3 pt-2">
-        <button
-          type="button"
-          onClick={() => setMode('reply')}
-          className={`flex items-center gap-1.5 text-xs px-2.5 py-1 rounded ${
-            mode === 'reply'
-              ? 'bg-muted text-foreground font-medium'
-              : 'text-muted-foreground hover:text-foreground'
-          }`}
-        >
-          <ChatCircle size={13} /> Responder
-        </button>
-        <button
-          type="button"
-          onClick={() => setMode('note')}
-          className={`flex items-center gap-1.5 text-xs px-2.5 py-1 rounded ${
-            mode === 'note'
-              ? 'bg-amber-100 dark:bg-amber-950/40 text-amber-900 dark:text-amber-100 font-medium'
-              : 'text-muted-foreground hover:text-foreground'
-          }`}
-        >
-          <Note size={13} /> Nota interna
-        </button>
-        <div className="flex-1" />
-        {!thread.assigned_user_id && myId && (
-          <Button
-            size="sm"
-            variant="outline"
-            onClick={handleTakeOver}
-            disabled={takingOver}
-            className="h-7 text-xs"
+    <div className="border-t border-border bg-background flex-shrink-0 px-6 pt-3 pb-4">
+      <div className="max-w-3xl mx-auto w-full">
+        {/* Tabs + ações */}
+        <div className="flex items-center gap-1.5 mb-2">
+          <button
+            type="button"
+            onClick={() => setMode('reply')}
+            className={`flex items-center gap-1.5 text-xs h-7 px-3 rounded-full transition-colors ${
+              mode === 'reply'
+                ? 'bg-muted text-foreground font-medium'
+                : 'text-muted-foreground hover:text-foreground hover:bg-muted/60'
+            }`}
           >
-            {takingOver ? (
-              <SpinnerGap className="w-3 h-3 animate-spin mr-1" />
-            ) : (
-              <UserCirclePlus size={13} className="mr-1" />
-            )}
-            Assumir
-          </Button>
-        )}
-        {assignedToSomeoneElse && (
-          <>
-            <span className="text-[10px] text-muted-foreground">
-              Atribuída a outro usuário
-            </span>
-            <Button
-              size="sm"
-              variant="outline"
-              onClick={handleTakeOver}
-              disabled={takingOver}
-              className="h-7 text-xs"
-            >
-              {takingOver ? (
-                <SpinnerGap className="w-3 h-3 animate-spin mr-1" />
-              ) : (
-                <UserCirclePlus size={13} className="mr-1" />
-              )}
+            <ChatCircle size={13} /> Responder
+          </button>
+          <button
+            type="button"
+            onClick={() => setMode('note')}
+            className={`flex items-center gap-1.5 text-xs h-7 px-3 rounded-full transition-colors ${
+              mode === 'note'
+                ? 'bg-amber-100 dark:bg-amber-950/40 text-amber-900 dark:text-amber-100 font-medium'
+                : 'text-muted-foreground hover:text-foreground hover:bg-muted/60'
+            }`}
+          >
+            <Note size={13} /> Nota interna
+          </button>
+
+          <div className="flex-1" />
+
+          {!thread.assigned_user_id && myId && (
+            <Button size="sm" variant="outline" onClick={handleTakeOver} disabled={takingOver} className="h-7 text-xs">
+              {takingOver ? <SpinnerGap className="w-3 h-3 animate-spin mr-1" /> : <UserCirclePlus size={13} className="mr-1" />}
+              Assumir
+            </Button>
+          )}
+          {assignedToSomeoneElse && (
+            <Button size="sm" variant="outline" onClick={handleTakeOver} disabled={takingOver} className="h-7 text-xs">
+              {takingOver ? <SpinnerGap className="w-3 h-3 animate-spin mr-1" /> : <UserCirclePlus size={13} className="mr-1" />}
               Reatribuir para mim
             </Button>
-          </>
-        )}
-        {mode === 'reply' && !isIn24hWindow && (
-          <span className="text-[10px] text-muted-foreground">
-            Fora da janela 24h · use template
-          </span>
-        )}
-      </div>
-
-      {replyTo && mode === 'reply' && (
-        <div className="px-3 pt-2">
-          <ReplyPreview
-            message={{ id: replyTo.id, content: replyTo.content || '', direction: replyTo.direction || 'inbound' }}
-            onClose={onClearReply}
-          />
+          )}
         </div>
-      )}
 
-      <div className="px-3 pt-2 pb-3">
-        {mode === 'note' ? (
-          <div className="flex items-end gap-2">
-            <Textarea
-              value={text}
-              onChange={(e) => setText(e.target.value)}
-              onKeyDown={onKeyDown}
-              placeholder="Nota visível apenas para a equipe (Enter envia, Shift+Enter quebra linha)"
-              rows={2}
-              disabled={inputDisabled}
-              className="flex-1 resize-none bg-amber-50 dark:bg-amber-950/30 border-amber-200 dark:border-amber-900 focus-visible:ring-amber-400"
-            />
-            <Button
-              onClick={handleSaveNote}
-              disabled={inputDisabled || !text.trim()}
-              size="icon"
-              className="bg-amber-500 hover:bg-amber-600 text-white"
-              title="Salvar nota interna"
-            >
-              {submitting ? <SpinnerGap className="w-4 h-4 animate-spin" /> : <Note className="w-4 h-4" />}
-            </Button>
-          </div>
-        ) : (
-          <div className="flex items-end gap-2">
-            <MediaUploadButton
-              onFileSelected={handleSendFile}
-              onTemplateClick={() => setShowTemplates(true)}
-              disabled={inputDisabled}
-            />
-            <Textarea
-              value={text}
-              onChange={(e) => setText(e.target.value)}
-              onKeyDown={onKeyDown}
-              placeholder={
-                isIn24hWindow
-                  ? 'Digite uma mensagem… (Enter envia, Shift+Enter quebra linha)'
-                  : 'Fora da janela 24h — selecione um template'
-              }
-              rows={2}
-              disabled={inputDisabled}
-              className="flex-1 resize-none"
-            />
-            <AudioRecorder onSend={handleSendAudio} disabled={inputDisabled || !isIn24hWindow} />
-            <Button
-              onClick={handleSendText}
-              disabled={inputDisabled || (!text.trim() && isIn24hWindow) || (!isIn24hWindow && !text.trim())}
-              size="icon"
-              title={isIn24hWindow ? 'Enviar' : 'Selecionar template'}
-            >
-              {submitting ? (
-                <SpinnerGap className="w-4 h-4 animate-spin" />
-              ) : (
-                <PaperPlaneTilt className="w-4 h-4" />
-              )}
-            </Button>
+        {assignedToSomeoneElse && (
+          <div className="mb-2 text-[11px] text-muted-foreground">
+            Esta conversa está atribuída a outro usuário.
           </div>
         )}
+
+        {replyTo && mode === 'reply' && (
+          <div className="mb-2">
+            <ReplyPreview
+              message={{ id: replyTo.id, content: replyTo.content || '', direction: replyTo.direction || 'inbound' }}
+              onClose={onClearReply}
+            />
+          </div>
+        )}
+
+        {/* Caixa unificada */}
+        <div
+          className={`rounded-2xl border transition-colors ${
+            isNote
+              ? 'bg-amber-50/60 dark:bg-amber-950/20 border-amber-200 dark:border-amber-900 focus-within:ring-2 focus-within:ring-amber-400/40'
+              : 'bg-card border-border focus-within:ring-2 focus-within:ring-ring/30'
+          }`}
+        >
+          <Textarea
+            value={text}
+            onChange={(e) => setText(e.target.value)}
+            onKeyDown={onKeyDown}
+            placeholder={placeholder}
+            rows={1}
+            disabled={inputDisabled}
+            className="w-full resize-none border-0 shadow-none focus-visible:ring-0 bg-transparent px-4 pt-3 pb-1 min-h-[44px] max-h-[180px] text-sm placeholder:text-muted-foreground/60"
+          />
+
+          <div className="flex items-center justify-between gap-2 px-2 pb-2 pt-1">
+            <div className="flex items-center gap-0.5">
+              {!isNote && (
+                <MediaUploadButton
+                  onFileSelected={handleSendFile}
+                  onTemplateClick={() => setShowTemplates(true)}
+                  disabled={inputDisabled}
+                />
+              )}
+            </div>
+
+            <div className="flex items-center gap-1">
+              {!isNote && (
+                <AudioRecorder onSend={handleSendAudio} disabled={inputDisabled || !isIn24hWindow} />
+              )}
+              <Button
+                onClick={isNote ? handleSaveNote : handleSendText}
+                disabled={inputDisabled || !text.trim()}
+                size="icon"
+                className={`h-9 w-9 rounded-full ${
+                  isNote ? 'bg-amber-500 hover:bg-amber-600 text-white' : ''
+                }`}
+                title={isNote ? 'Salvar nota interna' : isIn24hWindow ? 'Enviar' : 'Selecionar template'}
+              >
+                {submitting ? (
+                  <SpinnerGap className="w-4 h-4 animate-spin" />
+                ) : isNote ? (
+                  <Note className="w-4 h-4" />
+                ) : (
+                  <PaperPlaneTilt className="w-4 h-4" />
+                )}
+              </Button>
+            </div>
+          </div>
+        </div>
+
+        <p className="text-[10px] text-muted-foreground/70 mt-1.5 px-1">
+          Enter envia · Shift+Enter quebra linha
+        </p>
       </div>
 
       <Dialog open={showTemplates} onOpenChange={setShowTemplates}>

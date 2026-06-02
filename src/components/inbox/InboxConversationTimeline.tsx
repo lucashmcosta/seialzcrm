@@ -46,7 +46,7 @@ function Media({ msg, orgId, accessToken }: { msg: InboxMessageRow; orgId: strin
           );
         }
         if (mediaType === 'video' || /\.(mp4|mov|webm|avi)$/i.test(raw)) {
-          return <video key={i} src={url} controls preload="metadata" className="max-w-full rounded" />;
+          return <video key={i} src={url} controls preload="metadata" className="max-w-full rounded-lg" />;
         }
         if (mediaType === 'image' || /\.(jpg|jpeg|png|gif|webp)$/i.test(raw)) {
           return (
@@ -54,7 +54,7 @@ function Media({ msg, orgId, accessToken }: { msg: InboxMessageRow; orgId: strin
               key={i}
               src={url}
               alt="Mídia"
-              className="max-w-full rounded cursor-pointer hover:opacity-90"
+              className="max-w-full rounded-lg cursor-pointer hover:opacity-90"
               onClick={() => window.open(url, '_blank')}
             />
           );
@@ -102,14 +102,15 @@ export function InboxConversationTimeline({ threadId, organizationId, contactNam
   }
 
   return (
-    <div className="flex-1 flex flex-col min-h-0">
-      <div ref={scrollRef} className="flex-1 overflow-y-auto p-4 space-y-3 min-h-0 bg-muted/20">
+    <div className="flex-1 flex flex-col min-h-0 bg-muted/20">
+      <div ref={scrollRef} className="flex-1 overflow-y-auto px-6 py-6 min-h-0">
+        <div className="max-w-3xl mx-auto w-full space-y-3">
         {messages.length === 0 ? (
-          <div className="h-full flex items-center justify-center text-xs text-muted-foreground">
+          <div className="h-full flex items-center justify-center text-xs text-muted-foreground py-16">
             Sem mensagens nesta conversa.
           </div>
         ) : (
-          messages.map((m) => {
+          messages.map((m, idx) => {
             const isOutbound = m.direction === 'outbound';
             const isAudioOnly = m.media_type === 'audio' && !m.content;
             const isInternal = !!m.is_internal_note;
@@ -126,21 +127,30 @@ export function InboxConversationTimeline({ threadId, organizationId, contactNam
               senderLabel = contactName || 'Cliente';
             }
 
+            // Group consecutive same-sender messages within 2 min
+            const prev = messages[idx - 1];
+            const groupedWithPrev = prev
+              && !isInternal
+              && !prev.is_internal_note
+              && prev.direction === m.direction
+              && (prev.sender_name || '') === (m.sender_name || '')
+              && (new Date(m.sent_at).getTime() - new Date(prev.sent_at).getTime()) < 2 * 60 * 1000;
+
             return (
-              <div key={m.id} className={`group flex flex-col ${isInternal ? 'items-center' : isOutbound ? 'items-end' : 'items-start'}`}>
-                {senderLabel && !isInternal && (
-                  <span className="text-[10px] text-muted-foreground mb-0.5 px-1">
+              <div key={m.id} className={`group flex flex-col ${isInternal ? 'items-center' : isOutbound ? 'items-end' : 'items-start'} ${groupedWithPrev ? 'mt-0.5' : 'mt-2'}`}>
+                {senderLabel && !isInternal && !groupedWithPrev && (
+                  <span className="text-[11px] text-muted-foreground mb-1 px-1">
                     {senderLabel}
                   </span>
                 )}
                 <div className={`flex items-center gap-1 ${isOutbound ? 'flex-row-reverse' : 'flex-row'}`}>
                   <div
-                    className={`max-w-[75%] rounded-lg ${isAudioOnly ? 'p-1' : 'p-2.5'} ${
+                    className={`max-w-[78%] ${isAudioOnly ? 'p-1' : 'px-3.5 py-2'} ${
                       isInternal
-                        ? 'bg-amber-100 dark:bg-amber-950/40 text-amber-900 dark:text-amber-100 border border-amber-300/40'
+                        ? 'rounded-xl bg-amber-100 dark:bg-amber-950/40 text-amber-900 dark:text-amber-100 border border-amber-300/40'
                         : isOutbound
-                          ? 'bg-[#054D3E] text-white'
-                          : 'bg-card text-foreground border border-border'
+                          ? 'rounded-2xl bg-primary text-primary-foreground shadow-sm'
+                          : 'rounded-2xl bg-card text-foreground border border-border shadow-sm'
                     }`}
                   >
                     {isInternal && (
@@ -159,11 +169,11 @@ export function InboxConversationTimeline({ threadId, organizationId, contactNam
                     <Media msg={m} orgId={organizationId} accessToken={accessToken} />
 
                     {m.content && !isAudioOnly && (
-                      <WhatsAppFormattedText content={m.content} className={isOutbound && !isInternal ? 'text-white' : ''} />
+                      <WhatsAppFormattedText content={m.content} className={isOutbound && !isInternal ? 'text-primary-foreground' : ''} />
                     )}
 
                     {!isAudioOnly && (
-                      <div className={`flex items-center justify-end gap-1 mt-1 text-[10px] ${isOutbound && !isInternal ? 'text-white/70' : 'text-muted-foreground'}`}>
+                      <div className={`flex items-center justify-end gap-1 mt-1 text-[11px] ${isOutbound && !isInternal ? 'text-primary-foreground/70' : 'text-muted-foreground'}`}>
                         <span>{timeStr}</span>
                         {isOutbound && !isInternal && <StatusIcon status={m.whatsapp_status} />}
                       </div>
@@ -185,6 +195,7 @@ export function InboxConversationTimeline({ threadId, organizationId, contactNam
             );
           })
         )}
+        </div>
       </div>
     </div>
   );
