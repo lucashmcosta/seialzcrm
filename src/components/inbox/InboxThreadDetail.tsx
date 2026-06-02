@@ -245,8 +245,6 @@ export function InboxThreadDetail({ threadId, onThreadStatusChanged }: Props) {
                   <dd className="text-foreground">{fmt(latestWonOpportunity.close_date || latestWonOpportunity.updated_at)}</dd>
                 </>
               )}
-              <dt className="text-muted-foreground">Endpoint</dt>
-              <dd className="text-foreground">{endpointPurpose || '—'}</dd>
             </dl>
           </section>
 
