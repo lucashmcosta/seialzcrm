@@ -473,6 +473,7 @@ function ChatView({
 
       {/* Composer */}
       <InboxComposer
+        compact
         thread={thread as any}
         replyTo={replyTo}
         onClearReply={() => setReplyTo(null)}
