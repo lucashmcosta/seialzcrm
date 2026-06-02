@@ -165,6 +165,29 @@ export function InboxThreadDetail({ threadId, onThreadStatusChanged }: Props) {
                 {thread.status === 'open' ? 'Aberta' : thread.status === 'pending' ? 'Aguardando' : thread.status === 'resolved' ? 'Resolvida' : thread.status === 'closed' ? 'Fechada' : thread.status}
               </span>
             )}
+            {thread.status === 'resolved' || thread.status === 'closed' ? (
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={handleReopen}
+                disabled={resolving}
+                className="h-7 px-2.5 text-xs gap-1"
+              >
+                <ArrowCounterClockwise size={14} weight="bold" />
+                Reabrir
+              </Button>
+            ) : (
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => setConfirmResolveOpen(true)}
+                disabled={resolving}
+                className="h-7 px-2.5 text-xs gap-1"
+              >
+                <Check size={14} weight="bold" />
+                Resolver
+              </Button>
+            )}
           </div>
         </div>
 
