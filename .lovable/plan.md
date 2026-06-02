@@ -1,56 +1,22 @@
-## Objetivo
+Adicionar "Atendimento" (`/inbox`) à barra de tabs inferior do `MobileLayout`, com o ícone `Headset` (`@phosphor-icons/react`), posicionado logo após "Mensagens".
 
-Substituir o placeholder "Atendimento mobile em breve" por uma experiência mobile real em `/inbox`, no mesmo padrão visual e de navegação do `/messages` mobile (lista de conversas em tela cheia → toque abre o chat em tela cheia com botão voltar).
+## Mudanças
 
-## Escopo
+`src/components/mobile/MobileLayout.tsx`:
+- Importar `Headset` do `@phosphor-icons/react`.
+- Adicionar à lista `tabs` (após o push condicional de Mensagens):
+  `tabs.push({ label: 'Atendimento', href: '/inbox', icon: Headset });`
+- Adicionar também ao `drawerItems` (menu hambúrguer) na mesma posição, para consistência.
 
-- Apenas UI mobile do Atendimento (`InboxPage` quando `isMobile`).
-- Reutilizar 100% dos hooks já existentes: `useInboxThreads`, `useInboxQueueCounts`, `useInboxThread`, `useInboxThreadMessages`.
-- Reutilizar `InboxComposer`, `InboxConversationTimeline`, `InboxSlaChip`, `WhatsAppWindowChip` (já são responsivos o suficiente).
-- Sem mudanças em backend, RLS, `inboxScope.ts`, schema ou regras de negócio.
-- Sem alterar a versão desktop (`InboxThreadList` + `InboxThreadDetail`).
+## Ajuste de espaço
 
-## Arquivo novo
+Com isso a tab bar passa a ter até 6 itens em telas estreitas (390px). Para evitar que os rótulos quebrem:
+- Trocar `text-[10px]` por `text-[9px]` apenas quando há 6 ou mais tabs, OU
+- Manter `text-[10px]` e adicionar `truncate` + `px-0.5` nos itens.
 
-`src/components/mobile/MobileInbox.tsx` — componente único com duas "views":
-
-1. **Lista** (default)
-   - Header sticky: título "Atendimento" + contador, sem sidebar (o `MobileLayout` já cuida).
-   - Barra de busca (`Input` controlado, filtra por nome/telefone/preview localmente sobre `threads`).
-   - Chips horizontais scrolláveis para `tab`: Ativos / Aguardando / Concluídos hoje (com counts de `useInboxQueueCounts`).
-   - Toggle "Apenas minhas" como chip toggleável ao lado dos tabs.
-   - Lista de cards usando o mesmo padrão visual do `InboxThreadList` desktop adaptado a mobile:
-     - Avatar com iniciais + cor derivada do nome (mesmas helpers `initials` + `colorFromName`).
-     - Nome + horário relativo, **bold + dot verde** quando `last_message_direction === 'inbound'` (não lida), igual ao desktop.
-     - Preview da última mensagem (line-clamp-2).
-     - Pills: status, `InboxSlaChip`, "Cliente" se lifecycle, "Sem dono" se não atribuída.
-     - Borda esquerda verde grossa quando unread.
-   - Empty state e loading consistentes com o padrão mobile (SpinnerGap).
-   - Toque no card → seta `selectedId` → renderiza view de chat.
-
-2. **Chat** (quando `selectedId != null`)
-   - Header fixo com botão voltar (`CaretLeft`), avatar pequeno, nome, `WhatsAppWindowChip`, `InboxSlaChip`.
-   - Botão "Resolver"/"Reabrir" no header (icon-only).
-   - Menu `DropdownMenu` (3 pontos) com: Reatribuir (abre `OwnerSelector` em `Dialog`/Sheet), Ver detalhes (abre `Sheet` lateral com o mesmo conteúdo do painel `Atendimento` do desktop — Tipo/Origem/Atribuída/SLAs/Histórico).
-   - `InboxConversationTimeline` ocupa o middle (`flex-1 min-h-0`).
-   - `InboxComposer` no rodapé.
-   - Sem painel lateral fixo (vira Sheet sob demanda).
-
-## Mudança em `src/pages/inbox/InboxPage.tsx`
-
-Substituir o bloco `if (isMobile)` placeholder por `return <MobileInbox />;` (envolto em `MobileLayout`, igual `MobileMessagesList` faz). O fluxo desktop fica intacto.
-
-## Detalhes técnicos
-
-- `MobileInbox` orquestra estado local: `tab`, `onlyMine`, `selectedId`, `searchQuery`, `showDetailsSheet`.
-- Resolução de `internalUserId` (de `auth.uid → users.id`) replicada como em `InboxPage` (Core rule).
-- Hooks chamados com os mesmos args do desktop.
-- `h-screen overflow-hidden` no container raiz seguindo a memória `fixed-viewport-layout`; lista e chat usam `flex-1 min-h-0`.
-- Tokens semânticos (sem cores diretas Tailwind tipo `bg-white`).
-- Sheet de detalhes via `@/components/ui/sheet` lado direito.
+Vou usar a opção mais simples: `truncate max-w-full px-0.5` no `<span>` do rótulo, mantendo o tamanho atual.
 
 ## Fora de escopo
 
-- Notificações push, swipe-to-resolve, drag handles, atalhos.
-- Mudanças em `InboxThreadList`/`InboxThreadDetail`.
-- Real read tracking (mantém heurística `last_message_direction === 'inbound'`).
+- Sem mudanças em rotas, permissões, regras de visibilidade, badges de contagem ou no `InboxPage`.
+- Sem mexer em desktop nem em `MobileInbox`.

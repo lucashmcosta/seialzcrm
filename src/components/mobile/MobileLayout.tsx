@@ -13,6 +13,7 @@ import {
   Briefcase,
   CheckSquare,
   ChatCircleText,
+  Headset,
   List,
   X,
   Bell,
@@ -58,6 +59,7 @@ export function MobileLayout({ children, hideBottomBar = false }: MobileLayoutPr
 
   if (hasWhatsApp) {
     tabs.push({ label: t('nav.messages'), href: '/messages', icon: ChatCircleText });
+    tabs.push({ label: 'Atendimento', href: '/inbox', icon: Headset });
   }
 
   // Drawer nav items (full menu)
@@ -73,6 +75,7 @@ export function MobileLayout({ children, hideBottomBar = false }: MobileLayoutPr
   }
   if (hasWhatsApp) {
     drawerItems.push({ label: t('nav.messages'), href: '/messages', icon: ChatCircleText });
+    drawerItems.push({ label: 'Atendimento', href: '/inbox', icon: Headset });
   }
 
   const systemItems: { label: string; href: string; icon: typeof House }[] = [];
@@ -134,7 +137,7 @@ export function MobileLayout({ children, hideBottomBar = false }: MobileLayoutPr
                 style={{ minHeight: '56px' }}
               >
                 <tab.icon size={22} weight={active ? 'fill' : 'light'} />
-                <span className="text-[10px] font-medium leading-none">{tab.label}</span>
+                <span className="text-[9px] font-medium leading-none truncate max-w-full px-0.5">{tab.label}</span>
               </Link>
             );
           })}
