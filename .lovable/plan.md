@@ -1,43 +1,43 @@
-## Acabamento da tela de Atendimento — pacote enxuto
+# Resolver / Reabrir conversa na Inbox
 
-Três ajustes visuais, sem mudanças de lógica, dados ou consultas.
+## Objetivo
+Permitir que o atendente finalize (ou reabra) oficialmente um atendimento direto pela tela `/inbox`, reaproveitando exatamente a mesma mutação que já existe em `/messages` (`MessagesList.handleResolve` / `handleReopen`).
 
-### 1. Chips de status nas conversas (lista da esquerda)
+## Escopo (apenas frontend)
 
-Em `src/components/inbox/InboxThreadList.tsx`, substituir os chips monocromáticos atuais (`open`, `customer`, `não atribuída`, `CS endpoint`) por pílulas coloridas, traduzidas e com pontinho indicador:
+### 1. `src/components/inbox/InboxThreadDetail.tsx`
+- Adicionar dois handlers locais:
+  - `handleResolve()` → `UPDATE message_threads SET status='resolved', resolved_at=now() WHERE id = thread.id`
+  - `handleReopen()` → `UPDATE message_threads SET status='open', resolved_at=null WHERE id = thread.id`
+- Ambos usam `supabase` client direto (mesmo padrão do `handleAssign` que já existe no arquivo) e chamam `refresh()` ao fim + `toast` (sonner) de sucesso/erro.
+- Estado `resolving` para desabilitar botão durante a request.
+- Confirmação via `ConfirmDialog` (`@/components/ui/confirm-dialog`) antes de resolver — reabrir pode ser direto.
 
-- `open` → **Aberta** — verde (`bg-emerald-500/15 text-emerald-700 dark:text-emerald-300`) + dot pulsante
-- `pending` → **Aguardando** — âmbar
-- `resolved` → **Resolvida** — slate
-- `closed` → **Fechada** — slate
-- `customer` (lifecycle) → **Cliente** — azul suave (`bg-sky-500/15 text-sky-700`)
-- não atribuída → **Sem dono** — amarelo
-- `CS endpoint` → removido daqui (já aparece no header da conversa); reduz ruído visual
+### 2. UI do botão (mesmo header já existente)
+No bloco direito do header (onde estão `WhatsAppWindowChip`, `InboxSlaChip` e o chip de status), adicionar um botão à direita do chip de status:
 
-Formato unificado: `rounded-full px-2 py-0.5 text-[10px] font-medium` com dot `w-1.5 h-1.5 rounded-full` à esquerda. Mesmas cores reaproveitadas no chip `Cliente` do header (`InboxThreadDetail.tsx`) para consistência.
+- Se `thread.status === 'resolved' | 'closed'` → botão **"Reabrir"** (ghost, ícone `ArrowCounterClockwise` do phosphor).
+- Caso contrário → botão **"Resolver"** (primary discreto, ícone `Check` do phosphor, size `xs`).
 
-### 2. Balão de Nota Interna em largura total
+Estilo: usar `Button` de `@/components/ui/button` com `size="sm"` e `variant="outline"` (resolver) / `variant="ghost"` (reabrir), em linha com os chips, sem quebrar layout.
 
-Em `src/components/inbox/InboxConversationTimeline.tsx`, separar o estilo da nota interna do estilo das mensagens normais:
+### 3. Refresh de contadores e lista
+- `InboxThreadDetail` já chama `refresh()` do `useInboxThread` após a mutação, o que atualiza o thread local.
+- Para atualizar a lista lateral e os contadores ("Ativos", "Aguardando", "Concluídos hoje") do `InboxMetricsBar`, expor um callback opcional `onThreadStatusChanged` em `InboxThreadDetail` e ligar em `InboxPage.tsx` para chamar `refresh` de `useInboxQueueCounts` e `useInboxThreads` (ambos já expõem refresh internamente — adicionar exposição se necessário).
+- Realtime de `message_threads` UPDATE já existe em `useInboxThread`, então o chip de status atualiza sozinho.
 
-- Hoje a nota usa `max-w-[78%]` centralizada → fica um quadrado estreito e descolado.
-- Passar a renderizar a nota como **faixa horizontal de largura total** dentro do `max-w-3xl` do timeline: `w-full`, padding `px-4 py-2.5`, borda lateral esquerda âmbar de 3px (`border-l-[3px] border-amber-400`), fundo `bg-amber-50/70 dark:bg-amber-950/30`, cantos `rounded-lg`, label "NOTA INTERNA · {autor}" inline à esquerda com o conteúdo ao lado e horário à direita.
-- Tira o `items-center` no wrapper da nota → usa `items-stretch` para ocupar a coluna toda.
-- Mantém ícone `Note` discreto no início para diferenciar de uma mensagem comum.
+## Fora de escopo
+- Nenhuma mudança em SQL, RLS, triggers ou edge functions.
+- Nenhuma mudança em `/messages` (segue funcionando igual).
+- Nenhuma mudança em `InboxComposer` (ele já bloqueia envio quando `status='resolved'`).
+- Mobile (`InboxPage` mobile é placeholder).
 
-### 3. Toques de vida (escopo curto)
+## Arquivos tocados
+- `src/components/inbox/InboxThreadDetail.tsx` (handlers + botão)
+- `src/pages/inbox/InboxPage.tsx` (passar callback de refresh para lista/contadores)
+- Possivelmente `src/hooks/inbox/useInboxThreads.ts` (expor `refresh` se ainda não exposto)
 
-- Lista de conversas: dot verde pulsante (`animate-pulse`) ao lado do nome quando `last_message_direction === 'inbound'` e mensagem foi nos últimos 5 min (sinal de "novo").
-- Item selecionado: barra vertical primária de 2px à esquerda (`border-l-2 border-primary`) em vez de só mudar o fundo — dá hierarquia.
-- Hover dos chips: leve `transition-colors` para suavizar.
-- Avatar do header: gradiente sutil em vez de cor chapada (`bg-gradient-to-br from-primary/20 to-primary/5`).
-
-### Fora de escopo
-
-Composer, hooks, queries, RLS, migrations, edge functions, sidebar direita. Nada de novas dependências.
-
-### Arquivos tocados
-
-- `src/components/inbox/InboxThreadList.tsx`
-- `src/components/inbox/InboxConversationTimeline.tsx`
-- `src/components/inbox/InboxThreadDetail.tsx` (apenas chip "Cliente" + avatar gradient)
+## Validação
+- Resolver uma conversa "Aberta" → some de "Ativos", aparece em "Concluídos hoje", composer bloqueia envio, chip vira "Resolvida".
+- Reabrir → volta para "Ativos", composer libera, chip volta para "Aberta".
+- Toast de sucesso em ambos os casos.
