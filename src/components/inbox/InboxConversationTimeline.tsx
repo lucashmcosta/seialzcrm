@@ -136,9 +136,31 @@ export function InboxConversationTimeline({ threadId, organizationId, contactNam
               && (prev.sender_name || '') === (m.sender_name || '')
               && (new Date(m.sent_at).getTime() - new Date(prev.sent_at).getTime()) < 2 * 60 * 1000;
 
+            if (isInternal) {
+              return (
+                <div key={m.id} className={`w-full ${groupedWithPrev ? 'mt-1' : 'mt-2'}`}>
+                  <div className="w-full rounded-lg border-l-[3px] border-amber-400 bg-amber-50/70 dark:bg-amber-950/30 px-4 py-2.5 flex items-start gap-3">
+                    <div className="flex-1 min-w-0">
+                      <div className="font-data text-[9px] uppercase tracking-wider text-amber-700 dark:text-amber-300 mb-0.5">
+                        Nota interna{m.sender_name ? ` · ${m.sender_name}` : ''}
+                      </div>
+                      {m.content && (
+                        <div className="text-sm text-amber-900 dark:text-amber-100 leading-snug whitespace-pre-wrap break-words">
+                          {m.content}
+                        </div>
+                      )}
+                    </div>
+                    <span className="font-data text-[10px] text-amber-700/70 dark:text-amber-300/70 flex-shrink-0 mt-0.5">
+                      {timeStr}
+                    </span>
+                  </div>
+                </div>
+              );
+            }
+
             return (
-              <div key={m.id} className={`group flex flex-col ${isInternal ? 'items-center' : isOutbound ? 'items-end' : 'items-start'} ${groupedWithPrev ? 'mt-0.5' : 'mt-2'}`}>
-                {senderLabel && !isInternal && !groupedWithPrev && (
+              <div key={m.id} className={`group flex flex-col ${isOutbound ? 'items-end' : 'items-start'} ${groupedWithPrev ? 'mt-0.5' : 'mt-2'}`}>
+                {senderLabel && !groupedWithPrev && (
                   <span className="text-[11px] text-muted-foreground mb-1 px-1">
                     {senderLabel}
                   </span>
@@ -146,19 +168,11 @@ export function InboxConversationTimeline({ threadId, organizationId, contactNam
                 <div className={`flex items-center gap-1 ${isOutbound ? 'flex-row-reverse' : 'flex-row'}`}>
                   <div
                     className={`max-w-[78%] ${isAudioOnly ? 'p-1' : 'px-3.5 py-2'} ${
-                      isInternal
-                        ? 'rounded-xl bg-amber-100 dark:bg-amber-950/40 text-amber-900 dark:text-amber-100 border border-amber-300/40'
-                        : isOutbound
-                          ? 'rounded-2xl bg-primary text-primary-foreground shadow-sm'
-                          : 'rounded-2xl bg-card text-foreground border border-border shadow-sm'
+                      isOutbound
+                        ? 'rounded-2xl bg-primary text-primary-foreground shadow-sm'
+                        : 'rounded-2xl bg-card text-foreground border border-border shadow-sm'
                     }`}
                   >
-                    {isInternal && (
-                      <div className="font-data text-[9px] uppercase tracking-wider mb-1 opacity-80">
-                        {senderLabel}
-                      </div>
-                    )}
-
                     {m.reply_to_message && (
                       <QuotedMessage
                         content={m.reply_to_message.content || ''}
@@ -169,21 +183,21 @@ export function InboxConversationTimeline({ threadId, organizationId, contactNam
                     <Media msg={m} orgId={organizationId} accessToken={accessToken} />
 
                     {m.content && !isAudioOnly && (
-                      <WhatsAppFormattedText content={m.content} className={isOutbound && !isInternal ? 'text-primary-foreground' : ''} />
+                      <WhatsAppFormattedText content={m.content} className={isOutbound ? 'text-primary-foreground' : ''} />
                     )}
 
                     {!isAudioOnly && (
-                      <div className={`flex items-center justify-end gap-1 mt-1 text-[11px] ${isOutbound && !isInternal ? 'text-primary-foreground/70' : 'text-muted-foreground'}`}>
+                      <div className={`flex items-center justify-end gap-1 mt-1 text-[11px] ${isOutbound ? 'text-primary-foreground/70' : 'text-muted-foreground'}`}>
                         <span>{timeStr}</span>
-                        {isOutbound && !isInternal && <StatusIcon status={m.whatsapp_status} />}
+                        {isOutbound && <StatusIcon status={m.whatsapp_status} />}
                       </div>
                     )}
                   </div>
-                  {!isInternal && onReply && (
+                  {onReply && (
                     <button
                       type="button"
                       onClick={() => onReply(m)}
-                      className="p-1.5 md:p-1 rounded text-muted-foreground/60 hover:text-foreground hover:bg-muted transition-colors"
+                      className="p-1.5 md:p-1 rounded text-muted-foreground/60 hover:text-foreground hover:bg-muted transition-colors opacity-0 group-hover:opacity-100 transition-opacity"
                       title="Responder"
                       aria-label="Responder"
                     >
