@@ -266,7 +266,7 @@ export function InboxThreadDetail({ threadId, onThreadStatusChanged }: Props) {
             <dl className="grid grid-cols-2 gap-x-4 gap-y-2.5 text-xs">
               <div>
                 <dt className="text-muted-foreground">Canal</dt>
-                <dd className="text-foreground">{thread.channel || '—'}</dd>
+                <dd className="text-foreground">{purposeLabel(endpointPurpose) ? `${channelLabel(thread.channel)} · ${purposeLabel(endpointPurpose)}` : channelLabel(thread.channel)}</dd>
               </div>
               <div>
                 <dt className="text-muted-foreground">Atribuída em</dt>
