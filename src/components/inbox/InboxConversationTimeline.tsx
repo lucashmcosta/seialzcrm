@@ -173,10 +173,11 @@ export function InboxConversationTimeline({ threadId, organizationId, contactNam
                     <button
                       type="button"
                       onClick={() => onReply(m)}
-                      className="opacity-0 group-hover:opacity-100 transition-opacity p-1 text-muted-foreground hover:text-foreground"
+                      className="p-1.5 md:p-1 rounded text-muted-foreground/60 hover:text-foreground hover:bg-muted transition-colors"
                       title="Responder"
+                      aria-label="Responder"
                     >
-                      <ArrowBendUpLeft size={14} />
+                      <ArrowBendUpLeft size={15} />
                     </button>
                   )}
                 </div>
