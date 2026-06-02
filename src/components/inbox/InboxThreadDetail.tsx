@@ -87,14 +87,15 @@ export function InboxThreadDetail({ threadId }: Props) {
       {/* Coluna principal */}
       <div className="flex-1 flex flex-col min-w-0">
         <div className="border-b border-border px-6 py-3 flex-shrink-0 flex items-center gap-3">
-          <div className="h-9 w-9 rounded-full bg-muted text-foreground flex items-center justify-center text-xs font-semibold flex-shrink-0">
+          <div className="h-9 w-9 rounded-full bg-gradient-to-br from-primary/25 to-primary/5 text-foreground flex items-center justify-center text-xs font-semibold flex-shrink-0 ring-1 ring-primary/10">
             {initials(name)}
           </div>
           <div className="flex-1 min-w-0">
             <h2 className="text-[15px] font-semibold text-foreground truncate leading-tight" title={name}>{name}</h2>
             <div className="flex items-center gap-1.5 mt-1 flex-wrap">
               {lifecycle === 'customer' && (
-                <span className="text-[10px] px-1.5 py-0.5 rounded bg-emerald-500/10 text-emerald-700 dark:text-emerald-300">
+                <span className="inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-medium bg-sky-500/15 text-sky-700 dark:text-sky-300">
+                  <span className="w-1.5 h-1.5 rounded-full bg-sky-500" />
                   Cliente
                 </span>
               )}
@@ -112,12 +113,14 @@ export function InboxThreadDetail({ threadId }: Props) {
             />
             <InboxSlaChip targetAt={thread.sla_first_response_target_at} firstResponseAt={thread.first_response_at} />
             {thread.status && (
-              <span className="text-[11px] px-2 py-0.5 rounded bg-muted text-muted-foreground capitalize">
-                {thread.status}
+              <span className="inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-medium bg-emerald-500/15 text-emerald-700 dark:text-emerald-300 capitalize">
+                <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
+                {thread.status === 'open' ? 'Aberta' : thread.status === 'pending' ? 'Aguardando' : thread.status === 'resolved' ? 'Resolvida' : thread.status === 'closed' ? 'Fechada' : thread.status}
               </span>
             )}
           </div>
         </div>
+
 
         <InboxConversationTimeline
           threadId={thread.id}
