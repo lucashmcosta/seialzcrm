@@ -103,7 +103,7 @@ export function AudioMessagePlayer({ src, className = '', timestamp, statusIcon 
   const hasStarted = isPlaying || currentTime > 0;
 
   return (
-    <div className={className} style={{ display: 'flex', flexDirection: 'column', gap: 1, padding: 2, width: '100%' }}>
+    <div className={className} style={{ display: 'flex', flexDirection: 'column', gap: 1, padding: 2, width: 260 }}>
 
       <audio ref={audioRef} src={src} preload="metadata" />
       {hasError && (
