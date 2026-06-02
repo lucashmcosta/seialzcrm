@@ -33,9 +33,12 @@ export interface InboxScopedThread {
   last_message_content: string | null;
   last_message_direction: string | null;
   resolved_at: string | null;
+  last_inbound_at?: string | null;
+  whatsapp_last_inbound_at?: string | null;
+  organization_id?: string | null;
   primary_endpoint_id: string | null;
   contact?: { id: string; name: string | null; phone: string | null; lifecycle_stage: string | null } | null;
-  primary_endpoint?: { id: string; purpose: string | null } | null;
+  primary_endpoint?: { id: string; purpose: string | null; external_address?: string | null } | null;
 }
 
 export interface ScopeParams {

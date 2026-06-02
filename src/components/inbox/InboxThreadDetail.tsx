@@ -7,6 +7,7 @@ import { InboxSlaChip } from './InboxSlaChip';
 import { InboxAssignmentHistory } from './InboxAssignmentHistory';
 import { InboxConversationTimeline } from './InboxConversationTimeline';
 import { InboxComposer } from './InboxComposer';
+import { WhatsAppWindowChip } from './WhatsAppWindowChip';
 import { OwnerSelector } from '@/components/common/OwnerSelector';
 import type { InboxMessageRow } from '@/hooks/inbox/useInboxThreadMessages';
 
@@ -20,7 +21,7 @@ function fmt(iso: string | null) {
 }
 
 export function InboxThreadDetail({ threadId }: Props) {
-  const { thread, history, loading, refresh } = useInboxThread(threadId);
+  const { thread, history, latestWonOpportunity, loading, refresh } = useInboxThread(threadId);
   const { organization } = useOrganizationContext();
   const { toast } = useToast();
   const [replyTo, setReplyTo] = useState<InboxMessageRow | null>(null);
@@ -90,6 +91,10 @@ export function InboxThreadDetail({ threadId }: Props) {
             </p>
           </div>
           <div className="flex items-center gap-2 flex-shrink-0">
+            <WhatsAppWindowChip
+              channel={thread.channel}
+              lastInboundAt={thread.last_inbound_at || thread.whatsapp_last_inbound_at || null}
+            />
             <InboxSlaChip targetAt={thread.sla_first_response_target_at} firstResponseAt={thread.first_response_at} />
             {thread.status && (
               <span className="font-data text-[10px] px-1.5 py-0.5 rounded bg-muted text-muted-foreground">
@@ -124,7 +129,30 @@ export function InboxThreadDetail({ threadId }: Props) {
       <aside className="w-[280px] border-l border-border overflow-y-auto flex-shrink-0">
         <div className="p-5 space-y-6">
           <section>
+            <h3 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground mb-2">Atendimento</h3>
+            <dl className="grid grid-cols-[110px_1fr] gap-x-3 gap-y-1.5 text-xs">
+              <dt className="text-muted-foreground">Tipo</dt>
+              <dd className="text-foreground">{lifecycle === 'customer' ? 'Cliente' : (lifecycle || '—')}</dd>
+              <dt className="text-muted-foreground">Origem</dt>
+              <dd className="text-foreground truncate" title={latestWonOpportunity?.title || undefined}>
+                {latestWonOpportunity
+                  ? `Oportunidade ganha · ${latestWonOpportunity.title}`
+                  : '—'}
+              </dd>
+              {latestWonOpportunity && (
+                <>
+                  <dt className="text-muted-foreground">Convertido em</dt>
+                  <dd className="text-foreground">{fmt(latestWonOpportunity.close_date || latestWonOpportunity.updated_at)}</dd>
+                </>
+              )}
+              <dt className="text-muted-foreground">Endpoint</dt>
+              <dd className="text-foreground">{endpointPurpose || '—'}</dd>
+            </dl>
+          </section>
+
+          <section>
             <h3 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground mb-2">Dados da conversa</h3>
+
 
             <div className="mb-3">
               <div className="text-[11px] text-muted-foreground mb-1">Atribuída a</div>
