@@ -7,6 +7,7 @@ import { InboxSlaChip } from './InboxSlaChip';
 import { InboxAssignmentHistory } from './InboxAssignmentHistory';
 import { InboxConversationTimeline } from './InboxConversationTimeline';
 import { InboxComposer } from './InboxComposer';
+import { WhatsAppWindowChip } from './WhatsAppWindowChip';
 import { OwnerSelector } from '@/components/common/OwnerSelector';
 import type { InboxMessageRow } from '@/hooks/inbox/useInboxThreadMessages';
 
