@@ -1,19 +1,11 @@
-## Mover "Janela aberta · expira em..." para a segunda linha do header
+## Manter "Janela aberta" inline com "Cliente" e "other"
 
-### Problema
-O chip `WhatsAppWindowChip` ("Janela aberta · expira em Xh Ym") está na linha do topo junto com SLA, status e Resolver, ocupando muito espaço horizontal e empurrando o nome do cliente para truncamento.
+Atualmente os badges secundários estão num container `flex-wrap`, então quando "Cliente · other · Janela aberta · expira em..." não cabe, o chip da janela quebra para uma segunda linha.
 
-### Mudança (apenas `src/components/inbox/InboxThreadDetail.tsx`)
-
-Reorganizar o header em duas linhas lógicas:
-
-- **Linha 1 (topo):** avatar + nome do cliente (pode usar toda a largura disponível) + cluster compacto à direita com apenas: chip de status ("Aberta") + botão Resolver/Reabrir.
-- **Linha 2 (abaixo do nome, junto dos badges "Cliente" / endpoint):** mover o `WhatsAppWindowChip` e o `InboxSlaChip` para essa linha secundária, alinhados à esquerda com os outros badges.
-
-Resultado: nome ganha praticamente toda a largura do topo; informação de janela e SLA continuam visíveis logo abaixo, sem competir por espaço com o título.
+### Mudança (`src/components/inbox/InboxThreadDetail.tsx`)
+- Remover `flex-wrap` da linha de badges abaixo do nome para forçar tudo em linha única.
+- Adicionar `min-w-0` + `overflow-hidden` no container para que, em viewports muito estreitos, o conteúdo seja cortado em vez de quebrar.
+- O nome em cima já está em sua própria linha com `truncate`; a linha de badges agora segue o mesmo padrão.
 
 ### Fora de escopo
-Nenhuma mudança em outros arquivos, lógica, dados ou no `WhatsAppWindowChip`/`InboxSlaChip` em si.
-
-### Arquivo tocado
-- `src/components/inbox/InboxThreadDetail.tsx`
+Sem mexer em `WhatsAppWindowChip`, lógica, ou outros arquivos.
