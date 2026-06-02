@@ -245,8 +245,8 @@ export function InboxThreadDetail({ threadId, onThreadStatusChanged }: Props) {
       </div>
 
       {/* Painel lateral */}
-      <aside className="w-[300px] border-l border-border overflow-y-auto flex-shrink-0">
-        <div className="px-5 py-6 space-y-5">
+      <aside className={`${sideOpen ? 'w-[300px] border-l' : 'w-0 border-l-0'} border-border overflow-hidden flex-shrink-0 transition-[width] duration-200 ease-in-out`}>
+        <div className="w-[300px] h-full overflow-y-auto">
           <section>
             <h3 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground mb-3">Atendimento</h3>
             <dl className="grid grid-cols-[110px_1fr] gap-x-3 gap-y-2.5 text-xs">
