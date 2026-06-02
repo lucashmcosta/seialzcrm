@@ -455,14 +455,22 @@ export function InboxComposer({ thread, replyTo, onClearReply, onSent, onThreadM
           </div>
         )}
 
-        {/* Caixa unificada */}
+        {/* Caixa unificada compacta (pill) */}
         <div
-          className={`rounded-2xl border transition-colors ${
+          className={`flex items-end gap-1 rounded-full border px-1 py-1 transition-colors ${
             isNote
               ? 'bg-amber-50/60 dark:bg-amber-950/20 border-amber-200 dark:border-amber-900 focus-within:ring-2 focus-within:ring-amber-400/40'
               : 'bg-card border-border focus-within:ring-2 focus-within:ring-ring/30'
           }`}
         >
+          {!isNote && (
+            <MediaUploadButton
+              onFileSelected={handleSendFile}
+              onTemplateClick={() => setShowTemplates(true)}
+              disabled={inputDisabled}
+            />
+          )}
+
           <Textarea
             value={text}
             onChange={(e) => setText(e.target.value)}
@@ -470,49 +478,32 @@ export function InboxComposer({ thread, replyTo, onClearReply, onSent, onThreadM
             placeholder={placeholder}
             rows={1}
             disabled={inputDisabled}
-            className="w-full resize-none border-0 shadow-none focus-visible:ring-0 bg-transparent px-4 pt-3 pb-1 min-h-[44px] max-h-[180px] text-sm placeholder:text-muted-foreground/60"
+            className="flex-1 resize-none border-0 shadow-none focus-visible:ring-0 bg-transparent px-2 py-2 min-h-[36px] max-h-[120px] text-sm placeholder:text-muted-foreground/60 scrollbar-hide"
           />
 
-          <div className="flex items-center justify-between gap-2 px-2 pb-2 pt-1">
-            <div className="flex items-center gap-0.5">
-              {!isNote && (
-                <MediaUploadButton
-                  onFileSelected={handleSendFile}
-                  onTemplateClick={() => setShowTemplates(true)}
-                  disabled={inputDisabled}
-                />
-              )}
-            </div>
-
-            <div className="flex items-center gap-1">
-              {!isNote && (
-                <AudioRecorder onSend={handleSendAudio} disabled={inputDisabled || !isIn24hWindow} />
-              )}
-              <Button
-                onClick={isNote ? handleSaveNote : handleSendText}
-                disabled={inputDisabled || !text.trim()}
-                size="icon"
-                className={`h-9 w-9 rounded-full ${
-                  isNote ? 'bg-amber-500 hover:bg-amber-600 text-white' : ''
-                }`}
-                title={isNote ? 'Salvar nota interna' : isIn24hWindow ? 'Enviar' : 'Selecionar template'}
-              >
-                {submitting ? (
-                  <SpinnerGap className="w-4 h-4 animate-spin" />
-                ) : isNote ? (
-                  <Note className="w-4 h-4" />
-                ) : (
-                  <PaperPlaneTilt className="w-4 h-4" />
-                )}
-              </Button>
-            </div>
-          </div>
+          {!isNote && (
+            <AudioRecorder onSend={handleSendAudio} disabled={inputDisabled || !isIn24hWindow} />
+          )}
+          <Button
+            onClick={isNote ? handleSaveNote : handleSendText}
+            disabled={inputDisabled || !text.trim()}
+            size="icon"
+            className={`h-9 w-9 rounded-full flex-shrink-0 ${
+              isNote ? 'bg-amber-500 hover:bg-amber-600 text-white' : ''
+            }`}
+            title={isNote ? 'Salvar nota interna' : isIn24hWindow ? 'Enviar' : 'Selecionar template'}
+          >
+            {submitting ? (
+              <SpinnerGap className="w-4 h-4 animate-spin" />
+            ) : isNote ? (
+              <Note className="w-4 h-4" />
+            ) : (
+              <PaperPlaneTilt className="w-4 h-4" />
+            )}
+          </Button>
         </div>
-
-        <p className="text-[10px] text-muted-foreground/70 mt-1.5 px-1">
-          Enter envia · Shift+Enter quebra linha
-        </p>
       </div>
+
 
 
       <Dialog open={showTemplates} onOpenChange={setShowTemplates}>
