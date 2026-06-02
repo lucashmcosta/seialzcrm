@@ -133,8 +133,8 @@ export function InboxThreadDetail({ threadId, onThreadStatusChanged }: Props) {
     <div className="flex-1 flex bg-background min-w-0">
       {/* Coluna principal */}
       <div className="flex-1 flex flex-col min-w-0">
-        <div className="border-b border-border px-6 py-3 flex-shrink-0 flex items-center gap-3">
-          <div className="h-9 w-9 rounded-full bg-gradient-to-br from-primary/25 to-primary/5 text-foreground flex items-center justify-center text-xs font-semibold flex-shrink-0 ring-1 ring-primary/10">
+        <div className="border-b border-border px-6 py-3 flex-shrink-0 flex items-start gap-3">
+          <div className="h-9 w-9 rounded-full bg-gradient-to-br from-primary/25 to-primary/5 text-foreground flex items-center justify-center text-xs font-semibold flex-shrink-0 ring-1 ring-primary/10 mt-0.5">
             {initials(name)}
           </div>
           <div className="flex-1 min-w-0">
@@ -153,14 +153,14 @@ export function InboxThreadDetail({ threadId, onThreadStatusChanged }: Props) {
               )}
             </div>
           </div>
-          <div className="flex items-center gap-2 flex-shrink-0">
+          <div className="flex items-center gap-1.5 flex-wrap justify-end flex-shrink min-w-0 max-w-[60%]">
             <WhatsAppWindowChip
               channel={thread.channel}
               lastInboundAt={thread.last_inbound_at || thread.whatsapp_last_inbound_at || null}
             />
             <InboxSlaChip targetAt={thread.sla_first_response_target_at} firstResponseAt={thread.first_response_at} />
             {thread.status && (
-              <span className="inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-medium bg-emerald-500/15 text-emerald-700 dark:text-emerald-300 capitalize">
+              <span className="inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-medium bg-emerald-500/15 text-emerald-700 dark:text-emerald-300 capitalize flex-shrink-0">
                 <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
                 {thread.status === 'open' ? 'Aberta' : thread.status === 'pending' ? 'Aguardando' : thread.status === 'resolved' ? 'Resolvida' : thread.status === 'closed' ? 'Fechada' : thread.status}
               </span>
@@ -171,7 +171,7 @@ export function InboxThreadDetail({ threadId, onThreadStatusChanged }: Props) {
                 size="sm"
                 onClick={handleReopen}
                 disabled={resolving}
-                className="h-7 px-2.5 text-xs gap-1"
+                className="h-7 px-2.5 text-xs gap-1 flex-shrink-0"
               >
                 <ArrowCounterClockwise size={14} weight="bold" />
                 Reabrir
@@ -182,7 +182,7 @@ export function InboxThreadDetail({ threadId, onThreadStatusChanged }: Props) {
                 size="sm"
                 onClick={() => setConfirmResolveOpen(true)}
                 disabled={resolving}
-                className="h-7 px-2.5 text-xs gap-1"
+                className="h-7 px-2.5 text-xs gap-1 flex-shrink-0"
               >
                 <Check size={14} weight="bold" />
                 Resolver
@@ -190,6 +190,7 @@ export function InboxThreadDetail({ threadId, onThreadStatusChanged }: Props) {
             )}
           </div>
         </div>
+
 
 
         <InboxConversationTimeline
