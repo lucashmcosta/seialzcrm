@@ -91,6 +91,10 @@ export function InboxThreadDetail({ threadId }: Props) {
             </p>
           </div>
           <div className="flex items-center gap-2 flex-shrink-0">
+            <WhatsAppWindowChip
+              channel={thread.channel}
+              lastInboundAt={thread.last_inbound_at || thread.whatsapp_last_inbound_at || null}
+            />
             <InboxSlaChip targetAt={thread.sla_first_response_target_at} firstResponseAt={thread.first_response_at} />
             {thread.status && (
               <span className="font-data text-[10px] px-1.5 py-0.5 rounded bg-muted text-muted-foreground">
