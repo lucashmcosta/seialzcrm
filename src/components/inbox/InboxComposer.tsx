@@ -46,6 +46,7 @@ interface Props {
   onClearReply: () => void;
   onSent?: () => void;
   onThreadMutated?: () => void;
+  compact?: boolean;
 }
 
 type Mode = 'reply' | 'note';
