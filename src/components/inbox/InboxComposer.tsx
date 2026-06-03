@@ -7,12 +7,20 @@
 // Authoritative guards live in supabase/functions/twilio-whatsapp-send/index.ts.
 
 import { useMemo, useState } from 'react';
+import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { useOrganization } from '@/hooks/useOrganization';
 import { useToast } from '@/hooks/use-toast';
+import { useAI } from '@/hooks/useAI';
 import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
 import { Dialog, DialogContent } from '@/components/ui/dialog';
+import {
+  DropdownMenu,
+  DropdownMenuTrigger,
+  DropdownMenuContent,
+  DropdownMenuItem,
+} from '@/components/ui/dropdown-menu';
 import {
   PaperPlaneTilt,
   LockSimple,
@@ -20,6 +28,11 @@ import {
   Note,
   ChatCircle,
   UserCirclePlus,
+  Sparkle,
+  TextAa,
+  Briefcase,
+  Smiley,
+  Target,
 } from '@phosphor-icons/react';
 import { MediaUploadButton } from '@/components/whatsapp/MediaUploadButton';
 import { AudioRecorder } from '@/components/whatsapp/AudioRecorder';
