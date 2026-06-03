@@ -167,7 +167,9 @@ export function InboxConversationTimeline({ threadId, organizationId, contactNam
             }
 
             return (
-              <div key={m.id} className={`group flex flex-col ${isOutbound ? 'items-end' : 'items-start'} ${groupedWithPrev ? 'mt-0.5' : 'mt-2'}`}>
+              <div key={m.id}>
+                {dateSep}
+                <div className={`group flex flex-col ${isOutbound ? 'items-end' : 'items-start'} ${groupedWithPrev ? 'mt-0.5' : 'mt-2'}`}>
                 {senderLabel && !groupedWithPrev && (
                   <span className="text-[11px] text-muted-foreground mb-1 px-1">
                     {senderLabel}
