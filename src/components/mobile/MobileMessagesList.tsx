@@ -875,11 +875,19 @@ export function MobileMessagesList() {
                         return new Date(dateA).getTime() - new Date(dateB).getTime();
                       });
 
-                      return chatItems.map(item => {
+                      return chatItems.map((item, idx) => {
+                        const itemDate = item._type === 'message' ? item.data.sent_at : item.data.occurred_at;
+                        const prevItem = chatItems[idx - 1];
+                        const prevDate = prevItem ? (prevItem._type === 'message' ? prevItem.data.sent_at : prevItem.data.occurred_at) : null;
+                        const showDateSep = shouldShowDateSeparator(itemDate, prevDate);
+                        const sep = showDateSep ? <DateSeparator key={`sep-${idx}`} date={new Date(itemDate)} /> : null;
+
                         if (item._type === 'note') {
                           const note = item.data;
                           return (
-                            <div key={`note-${note.id}`} className="flex justify-center">
+                            <div key={`note-${note.id}`}>
+                              {sep}
+                              <div className="flex justify-center">
                               <div className="max-w-[85%] rounded-lg p-2.5 bg-yellow-100 dark:bg-yellow-900/30 border border-yellow-300 dark:border-yellow-700">
                                 <div className="flex items-center gap-1 mb-0.5">
                                   <NotePencil className="w-3 h-3 text-yellow-600 dark:text-yellow-400" />
