@@ -901,6 +901,7 @@ export function MobileMessagesList() {
                                   </span>
                                 </div>
                               </div>
+                              </div>
                             </div>
                           );
                         }
@@ -909,10 +910,11 @@ export function MobileMessagesList() {
                         const isOutbound = message.direction === 'outbound';
 
                         return (
-                          <div
-                            key={message.id}
-                            className={cn('flex', isOutbound ? 'justify-end' : 'justify-start')}
-                          >
+                          <div key={message.id}>
+                            {sep}
+                            <div
+                              className={cn('flex', isOutbound ? 'justify-end' : 'justify-start')}
+                            >
                             <div
                               className={cn(
                 'max-w-[85%] rounded-lg min-w-[60px]',
