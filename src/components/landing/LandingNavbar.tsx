@@ -52,7 +52,11 @@ export function LandingNavbar() {
       >
         <div className="max-w-7xl mx-auto px-6 h-16 flex items-center justify-between">
           <Link to="/" aria-label="Seialz" className="flex items-center">
-            <img src={logoBlack.url} alt="Seialz" style={{ height: 26, width: 'auto' }} />
+            <img
+              src={logoBlack.url}
+              alt="Seialz"
+              style={{ height: 32, width: 'auto', display: 'block', imageRendering: 'auto' }}
+            />
           </Link>
 
           {/* Desktop links */}
