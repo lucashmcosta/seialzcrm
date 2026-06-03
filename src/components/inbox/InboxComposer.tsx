@@ -7,12 +7,20 @@
 // Authoritative guards live in supabase/functions/twilio-whatsapp-send/index.ts.
 
 import { useMemo, useState } from 'react';
+import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { useOrganization } from '@/hooks/useOrganization';
 import { useToast } from '@/hooks/use-toast';
+import { useAI } from '@/hooks/useAI';
 import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
 import { Dialog, DialogContent } from '@/components/ui/dialog';
+import {
+  DropdownMenu,
+  DropdownMenuTrigger,
+  DropdownMenuContent,
+  DropdownMenuItem,
+} from '@/components/ui/dropdown-menu';
 import {
   PaperPlaneTilt,
   LockSimple,
@@ -20,6 +28,11 @@ import {
   Note,
   ChatCircle,
   UserCirclePlus,
+  Sparkle,
+  TextAa,
+  Briefcase,
+  Smiley,
+  Target,
 } from '@phosphor-icons/react';
 import { MediaUploadButton } from '@/components/whatsapp/MediaUploadButton';
 import { AudioRecorder } from '@/components/whatsapp/AudioRecorder';
@@ -74,6 +87,43 @@ export function InboxComposer({ thread, replyTo, onClearReply, onSent, onThreadM
   const [submitting, setSubmitting] = useState(false);
   const [showTemplates, setShowTemplates] = useState(false);
   const [takingOver, setTakingOver] = useState(false);
+  const [aiMenuOpen, setAiMenuOpen] = useState(false);
+  const [aiImproving, setAiImproving] = useState(false);
+  const { generate: generateAI } = useAI();
+
+  const { data: hasAIIntegration } = useQuery({
+    queryKey: ['org-has-ai-integration', organization?.id],
+    queryFn: async () => {
+      if (!organization?.id) return false;
+      const { data } = await supabase
+        .from('organization_integrations')
+        .select('id, admin_integrations!inner(slug)')
+        .eq('organization_id', organization.id)
+        .eq('is_enabled', true)
+        .in('admin_integrations.slug', ['openai-gpt', 'claude-ai', 'lovable-ai'])
+        .limit(1);
+      return !!(data && data.length > 0);
+    },
+    enabled: !!organization?.id,
+  });
+
+  async function handleImproveText(mode: 'grammar' | 'professional' | 'friendly' | 'persuasive') {
+    if (!text.trim()) return;
+    setAiMenuOpen(false);
+    setAiImproving(true);
+    try {
+      const result = await generateAI({
+        action: 'improve_text',
+        context: { text, mode },
+      });
+      if (result?.content) setText(result.content);
+    } catch (e) {
+      console.error('[inbox-composer] AI improvement error', e);
+      toast({ variant: 'destructive', description: 'Erro ao melhorar texto.' });
+    } finally {
+      setAiImproving(false);
+    }
+  }
 
   // Hooks must run unconditionally — compute before guards.
   const lastInboundIso = thread?.last_inbound_at || thread?.whatsapp_last_inbound_at || null;
@@ -360,6 +410,40 @@ export function InboxComposer({ thread, replyTo, onClearReply, onSent, onThreadM
             className="flex-1 resize-none border-0 shadow-none focus-visible:ring-0 bg-transparent px-2 py-2 min-h-[36px] max-h-[120px] text-sm placeholder:text-muted-foreground/60 scrollbar-hide"
           />
 
+          {!isNote && hasAIIntegration && isIn24hWindow && (
+            <DropdownMenu open={aiMenuOpen} onOpenChange={setAiMenuOpen}>
+              <DropdownMenuTrigger asChild>
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  className="h-9 w-9 rounded-full flex-shrink-0"
+                  disabled={!text.trim() || aiImproving || inputDisabled}
+                  title="Melhorar com IA"
+                >
+                  {aiImproving ? (
+                    <SpinnerGap className="h-4 w-4 animate-spin" />
+                  ) : (
+                    <Sparkle className="h-4 w-4 text-purple-500" />
+                  )}
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end">
+                <DropdownMenuItem onClick={() => handleImproveText('grammar')}>
+                  <TextAa className="h-4 w-4 mr-2" /> Corrigir gramática
+                </DropdownMenuItem>
+                <DropdownMenuItem onClick={() => handleImproveText('professional')}>
+                  <Briefcase className="h-4 w-4 mr-2" /> Tornar profissional
+                </DropdownMenuItem>
+                <DropdownMenuItem onClick={() => handleImproveText('friendly')}>
+                  <Smiley className="h-4 w-4 mr-2" /> Tornar amigável
+                </DropdownMenuItem>
+                <DropdownMenuItem onClick={() => handleImproveText('persuasive')}>
+                  <Target className="h-4 w-4 mr-2" /> Tornar persuasivo
+                </DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
+          )}
+
           {!isNote && (
             <AudioRecorder onSend={handleSendAudio} disabled={inputDisabled || !isIn24hWindow} />
           )}
@@ -478,6 +562,40 @@ export function InboxComposer({ thread, replyTo, onClearReply, onSent, onThreadM
             disabled={inputDisabled}
             className="flex-1 resize-none border-0 shadow-none focus-visible:ring-0 bg-transparent px-2 py-2 min-h-[36px] max-h-[120px] text-sm placeholder:text-muted-foreground/60 scrollbar-hide"
           />
+
+          {!isNote && hasAIIntegration && isIn24hWindow && (
+            <DropdownMenu open={aiMenuOpen} onOpenChange={setAiMenuOpen}>
+              <DropdownMenuTrigger asChild>
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  className="h-9 w-9 rounded-full flex-shrink-0"
+                  disabled={!text.trim() || aiImproving || inputDisabled}
+                  title="Melhorar com IA"
+                >
+                  {aiImproving ? (
+                    <SpinnerGap className="h-4 w-4 animate-spin" />
+                  ) : (
+                    <Sparkle className="h-4 w-4 text-purple-500" />
+                  )}
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end">
+                <DropdownMenuItem onClick={() => handleImproveText('grammar')}>
+                  <TextAa className="h-4 w-4 mr-2" /> Corrigir gramática
+                </DropdownMenuItem>
+                <DropdownMenuItem onClick={() => handleImproveText('professional')}>
+                  <Briefcase className="h-4 w-4 mr-2" /> Tornar profissional
+                </DropdownMenuItem>
+                <DropdownMenuItem onClick={() => handleImproveText('friendly')}>
+                  <Smiley className="h-4 w-4 mr-2" /> Tornar amigável
+                </DropdownMenuItem>
+                <DropdownMenuItem onClick={() => handleImproveText('persuasive')}>
+                  <Target className="h-4 w-4 mr-2" /> Tornar persuasivo
+                </DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
+          )}
 
           {!isNote && (
             <AudioRecorder onSend={handleSendAudio} disabled={inputDisabled || !isIn24hWindow} />
