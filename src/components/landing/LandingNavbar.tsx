@@ -41,7 +41,7 @@ export function LandingNavbar() {
     <nav
       className={`fixed top-0 left-0 right-0 z-50 transition-all duration-300 ${
         scrolled
-          ? 'bg-[hsl(240,10%,4%)]/90 backdrop-blur-xl border-b border-[hsl(150,100%,50%)]/10'
+          ? 'bg-[hsl(240,10%,4%)]/90 backdrop-blur-xl border-b border-[hsl(120,61%,50%)]/10'
           : 'bg-transparent'
       }`}
     >
@@ -56,7 +56,7 @@ export function LandingNavbar() {
             <button
               key={l.href}
               onClick={() => scrollTo(l.href)}
-              className="text-sm text-[hsl(0,0%,60%)] hover:text-[hsl(150,100%,50%)] transition-colors font-['Outfit']"
+              className="text-sm text-[hsl(0,0%,60%)] hover:text-[hsl(120,61%,50%)] transition-colors font-['Sora']"
             >
               {l.label}
             </button>
@@ -66,13 +66,13 @@ export function LandingNavbar() {
         <div className="flex items-center gap-3">
           <Link
             to="/auth/signin"
-            className="text-sm text-[hsl(0,0%,80%)] hover:text-white transition-colors font-['Outfit']"
+            className="text-sm text-[hsl(0,0%,80%)] hover:text-white transition-colors font-['Sora']"
           >
             Entrar
           </Link>
           <button
             onClick={() => scrollTo('#cta')}
-            className="hidden md:inline-flex auth-btn-primary px-5 py-2 rounded-full text-sm font-semibold font-['Outfit'] transition-all hover:shadow-[0_0_20px_hsl(150,100%,50%,0.3)]"
+            className="hidden md:inline-flex auth-btn-primary px-5 py-2 rounded-full text-sm font-semibold font-['Sora'] transition-all hover:shadow-[0_0_20px_hsl(120,61%,50%,0.3)]"
           >
             Diagnóstico
           </button>
@@ -87,12 +87,12 @@ export function LandingNavbar() {
 
       {/* Mobile menu */}
       {mobileOpen && (
-        <div className="lg:hidden bg-[hsl(240,10%,4%)]/95 backdrop-blur-xl border-t border-[hsl(150,100%,50%)]/10 px-6 pb-6 pt-2">
+        <div className="lg:hidden bg-[hsl(240,10%,4%)]/95 backdrop-blur-xl border-t border-[hsl(120,61%,50%)]/10 px-6 pb-6 pt-2">
           {navLinks.map((l) => (
             <button
               key={l.href}
               onClick={() => scrollTo(l.href)}
-              className="block w-full text-left py-3 text-[hsl(0,0%,60%)] hover:text-[hsl(150,100%,50%)] transition-colors font-['Outfit']"
+              className="block w-full text-left py-3 text-[hsl(0,0%,60%)] hover:text-[hsl(120,61%,50%)] transition-colors font-['Sora']"
             >
               {l.label}
             </button>
@@ -106,7 +106,7 @@ export function LandingNavbar() {
       <div className="md:hidden fixed bottom-6 left-4 right-4 z-50">
         <button
           onClick={() => scrollTo('#cta')}
-          className="w-full auth-btn-primary py-3.5 rounded-full text-sm font-bold font-['Outfit'] shadow-[0_0_25px_hsl(150,100%,50%,0.3)] transition-all"
+          className="w-full auth-btn-primary py-3.5 rounded-full text-sm font-bold font-['Sora'] shadow-[0_0_25px_hsl(120,61%,50%,0.3)] transition-all"
         >
           AGENDAR DIAGNÓSTICO
         </button>
