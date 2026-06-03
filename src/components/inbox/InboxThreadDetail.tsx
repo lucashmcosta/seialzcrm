@@ -261,7 +261,11 @@ export function InboxThreadDetail({ threadId, onThreadStatusChanged }: Props) {
               <dd className="text-foreground">{lifecycle === 'customer' ? 'Cliente' : (lifecycle || '—')}</dd>
               <dt className="text-muted-foreground">Origem</dt>
               <dd className="text-foreground truncate" title={latestWonOpportunity?.title || undefined}>
-                {latestWonOpportunity ? `Oportunidade · ${latestWonOpportunity.title}` : '—'}
+                {latestWonOpportunity ? (
+                  <Link to={`/opportunities/${latestWonOpportunity.id}`} className="hover:text-primary hover:underline transition-colors">
+                    {`Oportunidade · ${latestWonOpportunity.title}`}
+                  </Link>
+                ) : '—'}
               </dd>
               {latestWonOpportunity && (
                 <>
