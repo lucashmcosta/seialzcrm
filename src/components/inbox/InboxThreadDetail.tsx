@@ -163,7 +163,13 @@ export function InboxThreadDetail({ threadId, onThreadStatusChanged }: Props) {
             {initials(name)}
           </div>
           <div className="flex-1 min-w-0">
-            <h2 className="text-[15px] font-semibold text-foreground truncate leading-tight" title={name}>{name}</h2>
+            {thread.contact_id ? (
+              <Link to={`/contacts/${thread.contact_id}`} className="block">
+                <h2 className="text-[15px] font-semibold text-foreground truncate leading-tight hover:text-primary hover:underline transition-colors" title={name}>{name}</h2>
+              </Link>
+            ) : (
+              <h2 className="text-[15px] font-semibold text-foreground truncate leading-tight" title={name}>{name}</h2>
+            )}
             <div className="flex items-center gap-1.5 mt-1 min-w-0 overflow-hidden whitespace-nowrap">
               {lifecycle === 'customer' && (
                 <span className="inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-medium bg-sky-500/15 text-sky-700 dark:text-sky-300">
