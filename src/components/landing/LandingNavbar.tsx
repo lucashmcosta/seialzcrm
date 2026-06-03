@@ -47,7 +47,9 @@ export function LandingNavbar() {
     >
       <div className="max-w-7xl mx-auto px-6 h-16 flex items-center justify-between">
         <div className="flex items-center gap-4">
-          <SeialzLogo size="md" theme="dark" animated={true} />
+          <Link to="/" aria-label="Seialz" className="flex items-center">
+            <img src={logoWhite.url} alt="Seialz" className="h-7 w-auto" />
+          </Link>
         </div>
 
         {/* Desktop links */}
