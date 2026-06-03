@@ -81,7 +81,7 @@ export function LandingNavbar() {
             </Link>
             <button
               onClick={() => scrollTo('#cta')}
-              className="hidden md:inline-flex px-5 py-2 rounded-full text-sm font-bold transition-all hover:scale-105"
+              className="hidden md:inline-flex px-5 py-2 rounded-[10px] text-sm font-bold transition-all hover:scale-105"
               style={{ backgroundColor: GREEN, color: INK }}
             >
               Falar com a Seialz
@@ -124,7 +124,7 @@ export function LandingNavbar() {
         <div className="md:hidden fixed bottom-6 left-4 right-4 z-50">
           <button
             onClick={() => scrollTo('#cta')}
-            className="w-full py-3.5 rounded-full text-sm font-bold transition-all"
+            className="w-full py-3.5 rounded-[10px] text-sm font-bold transition-all"
             style={{
               backgroundColor: GREEN,
               color: INK,

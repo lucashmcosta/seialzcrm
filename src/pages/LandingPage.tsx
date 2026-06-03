@@ -27,7 +27,7 @@ function CtaButton({ full = false, children = "Falar com a Seialz" }: { full?: b
   return (
     <a
       href="#cta"
-      className={`${full ? "w-full" : "px-8"} py-4 rounded-full text-base font-semibold inline-flex items-center justify-center transition-all hover:scale-105`}
+      className={`${full ? "w-full" : "px-8"} py-4 rounded-[10px] text-base font-semibold inline-flex items-center justify-center transition-all hover:scale-105`}
       style={{
         backgroundColor: C.green,
         color: C.ink,
@@ -283,7 +283,7 @@ export default function LandingPage() {
                   <div className="pt-2">
                     <button
                       type="submit"
-                      className="w-full py-4 rounded-full text-base font-semibold transition-all hover:scale-[1.01]"
+                      className="w-full py-4 rounded-[10px] text-base font-semibold transition-all hover:scale-[1.01]"
                       style={{
                         backgroundColor: C.green,
                         color: C.ink,
