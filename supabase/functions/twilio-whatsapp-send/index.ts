@@ -267,8 +267,58 @@ serve(async (req) => {
       if (thread.status === 'resolved' || thread.status === 'closed') {
         return inboxErr(409, 'thread_closed', { status: thread.status })
       }
-      if (!thread.primary_endpoint_id) return inboxErr(400, 'no_endpoint')
       if (!thread.contact_id) return inboxErr(400, 'thread_without_contact')
+
+      // Resolve primary_endpoint_id with fallbacks for legacy threads
+      let resolvedEndpointId: string | null = thread.primary_endpoint_id ?? null
+
+      if (!resolvedEndpointId) {
+        // Fallback 1: most recent message in this thread that has endpoint_id
+        const { data: lastMsg } = await supabaseInbox
+          .from('messages')
+          .select('endpoint_id')
+          .eq('thread_id', thread.id)
+          .not('endpoint_id', 'is', null)
+          .order('created_at', { ascending: false })
+          .limit(1)
+          .maybeSingle()
+        if (lastMsg?.endpoint_id) {
+          resolvedEndpointId = lastMsg.endpoint_id as string
+          console.log('[inbox-send] endpoint_resolved_via_last_message', { threadId, endpointId: resolvedEndpointId })
+        }
+      }
+
+      if (!resolvedEndpointId) {
+        // Fallback 2: single eligible WhatsApp endpoint in the organization
+        const { data: candidates } = await supabaseInbox
+          .from('communication_endpoints')
+          .select('id')
+          .eq('organization_id', organizationId)
+          .eq('channel', 'whatsapp')
+          .eq('is_active', true)
+          .in('purpose', ['customer_service', 'other'])
+        if (candidates && candidates.length === 1) {
+          resolvedEndpointId = candidates[0].id as string
+          console.log('[inbox-send] endpoint_resolved_via_single_org_endpoint', { threadId, endpointId: resolvedEndpointId })
+        } else {
+          return inboxErr(400, 'no_endpoint', {
+            organization_id: organizationId,
+            candidates_count: candidates?.length ?? 0,
+          })
+        }
+      }
+
+      // Best-effort backfill so future sends skip the fallback
+      if (resolvedEndpointId && !thread.primary_endpoint_id) {
+        supabaseInbox
+          .from('message_threads')
+          .update({ primary_endpoint_id: resolvedEndpointId })
+          .eq('id', thread.id)
+          .is('primary_endpoint_id', null)
+          .then(({ error }) => {
+            if (error) console.warn('[inbox-send] backfill primary_endpoint_id failed', error.message)
+          })
+      }
 
       // Phase 1.3D: validate contact lifecycle = customer (ignore payload contactId)
       const { data: ct, error: ctErr } = await supabaseInbox
@@ -288,7 +338,7 @@ serve(async (req) => {
       const { data: ep, error: eErr } = await supabaseInbox
         .from('communication_endpoints')
         .select('id, channel, purpose, external_address, is_active, organization_integration_id')
-        .eq('id', thread.primary_endpoint_id)
+        .eq('id', resolvedEndpointId)
         .maybeSingle()
       if (eErr || !ep) return inboxErr(400, 'no_endpoint')
 
