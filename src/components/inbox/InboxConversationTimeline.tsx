@@ -215,6 +215,7 @@ export function InboxConversationTimeline({ threadId, organizationId, contactNam
                     </button>
                   )}
                 </div>
+                </div>
               </div>
             );
           })
