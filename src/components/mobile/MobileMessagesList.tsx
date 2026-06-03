@@ -40,6 +40,8 @@ import { AgentMessageFeedbackDialog } from '@/components/whatsapp/AgentMessageFe
 import { NewConversationDialog } from '@/components/messages/NewConversationDialog';
 import { OwnerSelector } from '@/components/common/OwnerSelector';
 import { cn } from '@/lib/utils';
+import { DateSeparator } from '@/components/messages/DateSeparator';
+import { shouldShowDateSeparator } from '@/lib/dateSeparator';
 import { useAI } from '@/hooks/useAI';
 import { useMessageThreads, type ChatThread } from '@/hooks/useMessageThreads';
 
