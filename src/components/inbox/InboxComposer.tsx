@@ -238,6 +238,13 @@ export function InboxComposer({ thread, replyTo, onClearReply, onSent, onThreadM
       setShowTemplates(true);
       return;
     }
+    if (text.length > WHATSAPP_MAX_BODY_LENGTH) {
+      toast({
+        variant: 'destructive',
+        description: `Mensagem muito longa: ${text.length} caracteres. O WhatsApp aceita no máximo ${WHATSAPP_MAX_BODY_LENGTH} por envio. Divida em partes menores ou use um template.`,
+      });
+      return;
+    }
     setSubmitting(true);
     try {
       await invokeSend({ message: text, replyToMessageId: replyTo?.id ?? null });

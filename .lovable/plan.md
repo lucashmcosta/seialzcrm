@@ -1,72 +1,42 @@
-## Problema
+# Corrigir envio da mensagem longa para Matheus
 
-A edge function `twilio-whatsapp-send` (caminho `inbox`) bloqueia o envio com `400 no_endpoint` quando `message_threads.primary_endpoint_id` é NULL. Hoje há 30+ threads de WhatsApp abertas (org Viagi) sem esse campo preenchido — todas falham ao tentar responder pelo Atendimento.
+## Objetivo
+Fazer o envio da mensagem longa do Matheus funcionar e, se houver recusa do Twilio/WhatsApp, mostrar o motivo real com clareza.
 
-A coluna foi adicionada em uma fase posterior; o webhook só faz backfill quando entra uma mensagem nova. Threads antigos sem inbound recente nunca foram preenchidos.
+## O que já foi confirmado
+- A conversa do Matheus está aberta, é `customer` e já tem `primary_endpoint_id` válido.
+- O problema não é o bloqueio por atribuição que aparece em outros casos.
+- A mensagem fornecida tem cerca de **2873 caracteres**.
+- A documentação do Twilio indica limite geral de **1600 caracteres** no campo `Body` do endpoint `Messages` e erro típico `21617` quando o corpo excede esse tamanho.
+- O `InboxComposer` hoje depende do `twilio-whatsapp-send`, mas não tem tratamento explícito para limite de tamanho nem garante exposição do detalhe retornado pelo Twilio para esse caso.
 
-## Solução em 2 etapas
+## Plano
+1. **Adicionar validação de tamanho antes do envio no Inbox**
+   - Validar o tamanho do texto antes de chamar `twilio-whatsapp-send`.
+   - Bloquear envio livre quando o texto exceder o limite suportado pelo canal.
+   - Exibir mensagem clara orientando a dividir o texto em partes ou usar template quando aplicável.
 
-### 1. Backfill (migração SQL)
+2. **Endurecer a edge function `twilio-whatsapp-send`**
+   - Adicionar guarda server-side para corpo acima do limite aceito pelo Twilio.
+   - Retornar erro estruturado e específico para `message_too_long` antes de chamar a API externa.
+   - Preservar logs detalhados para diferenciar validação local de erro retornado pelo Twilio.
 
-Preencher `primary_endpoint_id` em todos os threads de WhatsApp onde está NULL, usando o `endpoint_id` da mensagem mais recente do thread (já resolvido pelo webhook em mensagens novas).
+3. **Melhorar a tradução de erros no Inbox**
+   - Mapear `message_too_long` e também o erro Twilio `21617` para uma mensagem amigável e objetiva.
+   - Garantir que o usuário veja o motivo real do bloqueio, em vez de um genérico “falha ao enviar”.
 
-```sql
-UPDATE message_threads t
-SET primary_endpoint_id = m.endpoint_id
-FROM (
-  SELECT DISTINCT ON (thread_id) thread_id, endpoint_id
-  FROM messages
-  WHERE endpoint_id IS NOT NULL
-  ORDER BY thread_id, created_at DESC
-) m
-WHERE t.id = m.thread_id
-  AND t.channel = 'whatsapp'
-  AND t.primary_endpoint_id IS NULL;
-```
+4. **Validação final focada no caso do Matheus**
+   - Confirmar que textos curtos continuam enviando normalmente.
+   - Confirmar que esse texto longo específico gera aviso claro e previsível.
+   - Confirmar que o fluxo não fica em falha silenciosa.
 
-Para threads que **nenhuma** mensagem tem `endpoint_id` resolvido, fazer uma 2ª passada usando o único endpoint ativo de `whatsapp` da organização (quando há apenas um candidato):
-
-```sql
-UPDATE message_threads t
-SET primary_endpoint_id = ep.id
-FROM communication_endpoints ep
-WHERE t.primary_endpoint_id IS NULL
-  AND t.channel = 'whatsapp'
-  AND ep.organization_id = t.organization_id
-  AND ep.channel = 'whatsapp'
-  AND ep.is_active = true
-  AND ep.purpose IN ('customer_service','other')
-  AND (
-    SELECT count(*) FROM communication_endpoints ep2
-    WHERE ep2.organization_id = t.organization_id
-      AND ep2.channel = 'whatsapp'
-      AND ep2.is_active = true
-      AND ep2.purpose IN ('customer_service','other')
-  ) = 1;
-```
-
-### 2. Resiliência da edge function `twilio-whatsapp-send`
-
-No bloco `senderContext === 'inbox'`, antes de retornar `no_endpoint`, tentar resolver dinamicamente:
-
-1. `endpoint_id` da última mensagem do thread (`messages.endpoint_id IS NOT NULL ORDER BY created_at DESC LIMIT 1`).
-2. Se ainda NULL e a organização tem **apenas um** endpoint `whatsapp` ativo (purpose `customer_service`/`other`), usar ele.
-3. Se resolveu, fazer `UPDATE message_threads SET primary_endpoint_id = ...` best-effort (mesma lógica de backfill já existente no fim do arquivo) e seguir o fluxo normal.
-4. Só retornar `no_endpoint` se nada resolver — com um log mais detalhado (`{ organization_id, candidates_count }`).
-
-Isso evita que threads futuros que escapem do backfill quebrem o envio.
-
-## Arquivos
-
-- Nova migração SQL (via tool de migração).
-- `supabase/functions/twilio-whatsapp-send/index.ts` — adicionar fallback de resolução no bloco `inbox`.
-
-## Validação
-
-- Reabrir conversa com CLAUDIOMARA e enviar mensagem → deve sair.
-- Query: `SELECT count(*) FROM message_threads WHERE channel='whatsapp' AND primary_endpoint_id IS NULL AND status='open'` → deve cair para ~0.
-- Conferir log da edge function: sem novos `[inbox-send] blocked reason=no_endpoint`.
-
-## Observação sobre o Matheus
-
-O thread atual do Matheus (`9d4dbb52...`) **tem** `primary_endpoint_id` válido e passa em todas as guardas. O erro que vocês viram veio de uma conversa diferente selecionada no momento (CLAUDIOMARA). Após o fix os dois funcionam.
+## Detalhes técnicos
+- Arquivos prováveis:
+  - `src/components/inbox/InboxComposer.tsx`
+  - `supabase/functions/twilio-whatsapp-send/index.ts`
+- Regra proposta:
+  - Mensagens livres acima de 1600 caracteres não serão enviadas pelo caminho atual de WhatsApp/Twilio.
+  - O sistema retornará erro específico e legível.
+- Resultado esperado:
+  - Você vai saber exatamente por que essa mensagem não vai.
+  - O sistema deixa de parecer quebrado e passa a orientar corretamente o usuário.
