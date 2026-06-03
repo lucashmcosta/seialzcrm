@@ -78,10 +78,10 @@ function composeSentence(
     }
     default: {
       const who = performed ?? 'Alguém';
-      const label = actionLabel(row.action_type).toLowerCase();
+      const label = actionLabel(action).toLowerCase();
       if (from && to) return `${who} ${label}: ${from} → ${to}`;
       if (to) return `${who} ${label} para ${to}`;
-      return `${who} · ${actionLabel(row.action_type)}`;
+      return `${who} · ${actionLabel(action)}`;
     }
   }
 }
