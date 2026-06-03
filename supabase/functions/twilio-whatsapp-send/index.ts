@@ -251,6 +251,11 @@ serve(async (req) => {
       if (!organizationId) return inboxErr(400, 'missing_organization')
       if (!threadId) return inboxErr(400, 'missing_thread')
 
+      // Twilio WhatsApp Body limit is 1600 characters. Reject early with a clear reason.
+      if (!templateId && typeof message === 'string' && message.length > 1600) {
+        return inboxErr(400, 'message_too_long', { length: message.length, max: 1600 })
+      }
+
       const supabaseInbox = createClient(
         Deno.env.get('SUPABASE_URL') ?? '',
         Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''
