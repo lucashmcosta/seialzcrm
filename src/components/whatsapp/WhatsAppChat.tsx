@@ -498,6 +498,7 @@ export function WhatsAppChat({ contactId, threadId: initialThreadId, onThreadCre
                     )}
                   </div>
                 </div>
+                </div>
               );
             })
           )}
