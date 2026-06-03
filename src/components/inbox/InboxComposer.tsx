@@ -64,6 +64,8 @@ interface Props {
 
 type Mode = 'reply' | 'note';
 
+const WHATSAPP_MAX_BODY_LENGTH = 1600;
+
 function DisabledBar({ title, hint }: { title: string; hint?: string }) {
   return (
     <div className="border-t border-border bg-muted/30 px-6 py-3 flex-shrink-0">
