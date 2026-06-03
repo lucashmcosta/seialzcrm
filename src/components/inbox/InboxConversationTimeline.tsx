@@ -6,6 +6,8 @@ import { AudioMessagePlayer } from '@/components/whatsapp/AudioMessagePlayer';
 import { WhatsAppFormattedText } from '@/components/whatsapp/WhatsAppFormattedText';
 import { QuotedMessage } from '@/components/whatsapp/QuotedMessage';
 import { getProxiedMediaUrl } from '@/lib/mediaProxy';
+import { DateSeparator } from '@/components/messages/DateSeparator';
+import { shouldShowDateSeparator } from '@/lib/dateSeparator';
 
 interface Props {
   threadId: string;
