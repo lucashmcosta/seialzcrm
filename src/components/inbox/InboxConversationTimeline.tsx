@@ -161,6 +161,7 @@ export function InboxConversationTimeline({ threadId, organizationId, contactNam
                       {timeStr}
                     </span>
                   </div>
+                  </div>
                 </div>
               );
             }
