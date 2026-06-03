@@ -52,8 +52,9 @@ function composeSentence(
   const performed = row.performed_by_user_id ? nameOf(row.performed_by_user_id) : null;
   const from = row.from_user_id ? nameOf(row.from_user_id) : null;
   const to = row.to_user_id ? nameOf(row.to_user_id) : null;
+  const action = (row.action_type || '').toUpperCase();
 
-  switch (row.action_type) {
+  switch (action) {
     case 'TAKE_OVER': {
       const who = performed ?? to ?? 'Alguém';
       return from ? `${who} assumiu o atendimento de ${from}` : `${who} assumiu o atendimento`;
@@ -77,10 +78,10 @@ function composeSentence(
     }
     default: {
       const who = performed ?? 'Alguém';
-      const label = actionLabel(row.action_type).toLowerCase();
+      const label = actionLabel(action).toLowerCase();
       if (from && to) return `${who} ${label}: ${from} → ${to}`;
       if (to) return `${who} ${label} para ${to}`;
-      return `${who} · ${actionLabel(row.action_type)}`;
+      return `${who} · ${actionLabel(action)}`;
     }
   }
 }
