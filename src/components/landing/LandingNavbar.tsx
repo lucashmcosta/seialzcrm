@@ -7,7 +7,6 @@ const navLinks = [
   { label: 'O Problema', href: '#problema' },
   { label: 'Solução', href: '#solucao' },
   { label: 'O Loop', href: '#loop' },
-  { label: 'Por Que Nativo', href: '#por-que-nativo' },
 ];
 
 const INK = '#0A0A0A';
