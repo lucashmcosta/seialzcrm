@@ -87,6 +87,43 @@ export function InboxComposer({ thread, replyTo, onClearReply, onSent, onThreadM
   const [submitting, setSubmitting] = useState(false);
   const [showTemplates, setShowTemplates] = useState(false);
   const [takingOver, setTakingOver] = useState(false);
+  const [aiMenuOpen, setAiMenuOpen] = useState(false);
+  const [aiImproving, setAiImproving] = useState(false);
+  const { generate: generateAI } = useAI();
+
+  const { data: hasAIIntegration } = useQuery({
+    queryKey: ['org-has-ai-integration', organization?.id],
+    queryFn: async () => {
+      if (!organization?.id) return false;
+      const { data } = await supabase
+        .from('organization_integrations')
+        .select('id, admin_integrations!inner(slug)')
+        .eq('organization_id', organization.id)
+        .eq('is_enabled', true)
+        .in('admin_integrations.slug', ['openai-gpt', 'claude-ai', 'lovable-ai'])
+        .limit(1);
+      return !!(data && data.length > 0);
+    },
+    enabled: !!organization?.id,
+  });
+
+  async function handleImproveText(mode: 'grammar' | 'professional' | 'friendly' | 'persuasive') {
+    if (!text.trim()) return;
+    setAiMenuOpen(false);
+    setAiImproving(true);
+    try {
+      const result = await generateAI({
+        action: 'improve_text',
+        context: { text, mode },
+      });
+      if (result?.content) setText(result.content);
+    } catch (e) {
+      console.error('[inbox-composer] AI improvement error', e);
+      toast({ variant: 'destructive', description: 'Erro ao melhorar texto.' });
+    } finally {
+      setAiImproving(false);
+    }
+  }
 
   // Hooks must run unconditionally — compute before guards.
   const lastInboundIso = thread?.last_inbound_at || thread?.whatsapp_last_inbound_at || null;
