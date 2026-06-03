@@ -989,6 +989,7 @@ export function MobileMessagesList() {
                               </div>
                               )}
                             </div>
+                            </div>
                           </div>
                         );
                       });
