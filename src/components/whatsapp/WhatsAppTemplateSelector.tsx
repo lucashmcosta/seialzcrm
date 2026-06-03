@@ -99,61 +99,61 @@ export function WhatsAppTemplateSelector({
     const vars = extractVariables(selectedTemplate.body);
 
     return (
-      <div className="space-y-4">
-        <Button variant="ghost" size="sm" onClick={() => setSelectedTemplate(null)}>
-          <ArrowLeft className="w-4 h-4 mr-2" />
-          Voltar
-        </Button>
+      <div className="flex flex-col h-full min-h-0">
+        <div className="shrink-0 px-4 pt-4 pb-2 space-y-2">
+          <Button variant="ghost" size="sm" onClick={() => setSelectedTemplate(null)}>
+            <ArrowLeft className="w-4 h-4 mr-2" />
+            Voltar
+          </Button>
+          <div>
+            <h4 className="text-base font-semibold">{selectedTemplate.friendly_name}</h4>
+            <p className="text-xs text-muted-foreground">Preencha as variáveis do template</p>
+          </div>
+        </div>
 
-        <Card>
-          <CardHeader className="pb-2">
-            <CardTitle className="text-base">{selectedTemplate.friendly_name}</CardTitle>
-            <CardDescription>Preencha as variáveis do template</CardDescription>
-          </CardHeader>
-          <CardContent className="space-y-4">
-            {vars.length > 0 && (
-              <div className="space-y-3">
-                {vars.map((varName) => (
-                  <div key={varName} className="space-y-1">
-                    <Label htmlFor={`var-${varName}`}>Variável {varName}</Label>
-                    <Input
-                      id={`var-${varName}`}
-                      value={variables[varName] || ''}
-                      onChange={(e) =>
-                        setVariables({ ...variables, [varName]: e.target.value })
-                      }
-                      placeholder={`Valor para {{${varName}}}`}
-                    />
-                  </div>
-                ))}
-              </div>
+        <div className="flex-1 min-h-0 overflow-y-auto px-4 py-2 space-y-4">
+          {vars.length > 0 && (
+            <div className="space-y-3">
+              {vars.map((varName) => (
+                <div key={varName} className="space-y-1">
+                  <Label htmlFor={`var-${varName}`}>Variável {varName}</Label>
+                  <Input
+                    id={`var-${varName}`}
+                    value={variables[varName] || ''}
+                    onChange={(e) =>
+                      setVariables({ ...variables, [varName]: e.target.value })
+                    }
+                    placeholder={`Valor para {{${varName}}}`}
+                  />
+                </div>
+              ))}
+            </div>
+          )}
+
+          {/* Preview */}
+          <div className="p-3 bg-green-100 dark:bg-green-900/40 rounded-lg">
+            <p className="text-xs text-muted-foreground mb-1">Prévia:</p>
+            <p className="text-sm whitespace-pre-wrap">{getPreviewBody()}</p>
+          </div>
+        </div>
+
+        <div className="shrink-0 flex gap-2 px-4 py-3 border-t">
+          <Button variant="outline" onClick={onCancel} className="flex-1">
+            Cancelar
+          </Button>
+          <Button
+            onClick={handleSend}
+            className="flex-1 bg-green-600 hover:bg-green-700"
+            disabled={loading}
+          >
+            {loading ? (
+              <SpinnerGap className="w-4 h-4 animate-spin mr-2" />
+            ) : (
+              <Check className="w-4 h-4 mr-2" />
             )}
-
-            {/* Preview */}
-            <div className="p-3 bg-green-100 dark:bg-green-900/40 rounded-lg">
-              <p className="text-xs text-muted-foreground mb-1">Prévia:</p>
-              <p className="text-sm whitespace-pre-wrap">{getPreviewBody()}</p>
-            </div>
-
-            <div className="flex gap-2">
-              <Button variant="outline" onClick={onCancel} className="flex-1">
-                Cancelar
-              </Button>
-              <Button 
-                onClick={handleSend} 
-                className="flex-1 bg-green-600 hover:bg-green-700"
-                disabled={loading}
-              >
-                {loading ? (
-                  <SpinnerGap className="w-4 h-4 animate-spin mr-2" />
-                ) : (
-                  <Check className="w-4 h-4 mr-2" />
-                )}
-                Enviar
-              </Button>
-            </div>
-          </CardContent>
-        </Card>
+            Enviar
+          </Button>
+        </div>
       </div>
     );
   }
