@@ -89,7 +89,11 @@ export default function LandingPage() {
             </motion.p>
           </motion.div>
         </div>
-        <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_center,hsl(120,61%,50%,0.06)_0%,transparent_70%)] pointer-events-none" />
+        <div
+          className="absolute inset-0 opacity-30 pointer-events-none bg-center bg-cover mix-blend-screen"
+          style={{ backgroundImage: `url(${linhasMedia.url})` }}
+        />
+        <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_center,hsl(120,61%,50%,0.08)_0%,transparent_70%)] pointer-events-none" />
       </section>
 
       {/* ─── BARRA DE PROVA ─── */}
