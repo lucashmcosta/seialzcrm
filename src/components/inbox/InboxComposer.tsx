@@ -64,6 +64,8 @@ interface Props {
 
 type Mode = 'reply' | 'note';
 
+const WHATSAPP_MAX_BODY_LENGTH = 1600;
+
 function DisabledBar({ title, hint }: { title: string; hint?: string }) {
   return (
     <div className="border-t border-border bg-muted/30 px-6 py-3 flex-shrink-0">
@@ -236,6 +238,13 @@ export function InboxComposer({ thread, replyTo, onClearReply, onSent, onThreadM
     if (!text.trim()) return;
     if (!isIn24hWindow) {
       setShowTemplates(true);
+      return;
+    }
+    if (text.length > WHATSAPP_MAX_BODY_LENGTH) {
+      toast({
+        variant: 'destructive',
+        description: `Mensagem muito longa: ${text.length} caracteres. O WhatsApp aceita no máximo ${WHATSAPP_MAX_BODY_LENGTH} por envio. Divida em partes menores ou use um template.`,
+      });
       return;
     }
     setSubmitting(true);
@@ -651,10 +660,14 @@ function friendlyError(raw: string | undefined): string {
     missing_thread: 'Conversa não informada.',
     missing_organization: 'Organização não informada.',
     thread_without_contact: 'Conversa sem contato associado.',
+    message_too_long: `Mensagem muito longa. O WhatsApp aceita no máximo ${WHATSAPP_MAX_BODY_LENGTH} caracteres por envio. Divida em partes menores.`,
   };
   if (map[raw]) return map[raw];
   if (raw.toLowerCase().includes('outside 24h')) {
     return 'Fora da janela 24h. Use um template aprovado.';
+  }
+  if (raw.includes('21617') || raw.toLowerCase().includes('exceeds the 1600')) {
+    return `Mensagem muito longa para o WhatsApp (limite ${WHATSAPP_MAX_BODY_LENGTH} caracteres). Divida em partes menores.`;
   }
   return raw;
 }
