@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
-import logoBlack from '@/assets/brand/seialz-logo-black.svg.asset.json';
+import logoBlack from '@/assets/brand/seialz-logo-color.png.asset.json';
 import { List, X } from '@phosphor-icons/react';
 
 const navLinks = [
