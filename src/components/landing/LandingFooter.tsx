@@ -1,4 +1,4 @@
-import logoBlack from '@/assets/brand/seialz-logo-black.svg.asset.json';
+import logoBlack from '@/assets/brand/seialz-logo-color.png.asset.json';
 
 const SNOW = '#F6F7F6';
 const LINE = '#E6E8E6';
