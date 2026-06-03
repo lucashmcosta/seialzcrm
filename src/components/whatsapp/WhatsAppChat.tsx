@@ -15,6 +15,8 @@ import { AudioMessagePlayer } from './AudioMessagePlayer';
 import { MediaUploadButton } from './MediaUploadButton';
 import { WhatsAppFormattedText } from './WhatsAppFormattedText';
 import { getProxiedMediaUrl } from '@/lib/mediaProxy';
+import { DateSeparator } from '@/components/messages/DateSeparator';
+import { shouldShowDateSeparator } from '@/lib/dateSeparator';
 
 interface Message {
   id: string;
