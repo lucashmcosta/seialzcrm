@@ -1,47 +1,32 @@
-# Fix: scroll do modal de templates na /inbox
+# Separadores de data nas conversas
 
-## Problema
+Hoje a timeline de atendimento mostra apenas a hora em cada mensagem. Quando a conversa atravessa vários dias, fica impossível saber quando cada bloco ocorreu — exatamente o que o WhatsApp resolve com aquele "chip" de data no centro (22/05/2026, 25/05/2026, etc.).
 
-Em `src/components/inbox/InboxComposer.tsx`, o `<Dialog>` que abre o `WhatsAppTemplateSelector` está assim:
+## O que muda
 
-```tsx
-<DialogContent className="max-w-2xl max-h-[80vh] overflow-hidden p-0">
-  <div className="p-2">
-    <WhatsAppTemplateSelector ... />
-  </div>
-</DialogContent>
-```
+Inserir um **chip de data centralizado** entre mensagens sempre que o dia mudar em relação à mensagem anterior (e também antes da primeira mensagem).
 
-O `WhatsAppTemplateSelector` foi feito para ocupar 100% da altura do pai (`flex flex-col h-full min-h-0`) e fazer scroll interno na lista de templates. Mas:
+Formato do rótulo (pt-BR):
+- Mesmo dia → **Hoje**
+- Dia anterior → **Ontem**
+- Últimos 7 dias → nome do dia da semana (ex.: **Segunda-feira**)
+- Mais antigo → **DD/MM/AAAA**
 
-1. O wrapper `<div className="p-2">` não tem `h-full` nem é flex — então o `h-full` do selector não tem altura de referência.
-2. O `DialogContent` também não força layout flex em coluna com altura limitada.
+## Onde aplicar
 
-Resultado: a lista cresce livremente, ultrapassa o `max-h-[80vh]` (cortado por `overflow-hidden`) e não há contêiner com `overflow-y-auto` ativo — o scroll não funciona.
+- `src/components/inbox/InboxConversationTimeline.tsx` — timeline principal do Atendimento (a tela do print).
+- `src/components/whatsapp/WhatsAppChat.tsx` — mesma lógica, para manter consistência no chat antigo de WhatsApp usado em outros pontos do CRM.
+- `src/components/mobile/MobileMessagesList.tsx` — versão mobile, para o app PWA não ficar diferente.
 
-## Correção
+## Detalhes técnicos
 
-Ajustar apenas o bloco do `<Dialog>` no `InboxComposer.tsx` (tanto na variante `compact` quanto na padrão, se existir — confirmar) para que o `DialogContent` vire um flex column com altura limitada e o filho ocupe a altura toda:
+- Comparação por dia local (`toDateString()` de `sent_at`) entre `messages[idx]` e `messages[idx-1]`; renderiza o chip quando muda ou quando `idx === 0`.
+- Componente visual leve, inline: pílula centralizada com tokens semânticos do design system (`bg-muted text-muted-foreground`, `rounded-full`, `text-[11px]`, `px-3 py-1`, sombra suave), sem cores fixas — respeitando o tema claro/escuro Seialz.
+- Notas internas e mensagens normais contam para a mesma régua de dia (uma nota interna ainda dispara o separador se mudar o dia).
+- Nenhuma mudança de dados, hooks, contexto, RLS ou edge function. É puramente apresentação.
 
-```tsx
-<DialogContent className="max-w-2xl h-[80vh] p-0 flex flex-col overflow-hidden">
-  <WhatsAppTemplateSelector
-    onSelect={handleSendTemplate}
-    onCancel={() => setShowTemplates(false)}
-  />
-</DialogContent>
-```
+## Fora de escopo
 
-- Remover o wrapper `<div className="p-2">` (o próprio selector já controla seu padding interno via `px-4`).
-- Trocar `max-h-[80vh]` por `h-[80vh]` para dar altura concreta, permitindo que `flex-1 min-h-0 overflow-y-auto` da lista interna funcione.
-- Manter `flex flex-col` no `DialogContent` para o `h-full` do selector ter referência.
-
-## Escopo
-
-- Arquivo único: `src/components/inbox/InboxComposer.tsx`.
-- Sem mudanças em `WhatsAppTemplateSelector`, hooks, backend ou outras telas.
-- Mudança puramente de UI/layout.
-
-## Verificação
-
-- Abrir /inbox, selecionar conversa fora da janela 24h (ou clicar no botão de templates), abrir o modal e rolar a lista de templates.
+- Não mexer no agrupamento de mensagens consecutivas (2 min) já existente.
+- Não alterar formato da hora dentro do balão.
+- Não tocar em lógica de janela 24h, status, leitura, SLA.
