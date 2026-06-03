@@ -452,13 +452,16 @@ export function WhatsAppChat({ contactId, threadId: initialThreadId, onThreadCre
               <p className="text-xs">Envie uma mensagem para iniciar a conversa</p>
             </div>
           ) : (
-            messages.map((message) => {
+            messages.map((message, idx) => {
               const isOutbound = message.direction === 'outbound';
+              const prev = messages[idx - 1];
+              const showDateSep = shouldShowDateSeparator(message.sent_at, prev?.sent_at);
               return (
-                <div
-                  key={message.id}
-                  className={`flex ${isOutbound ? 'justify-end' : 'justify-start'}`}
-                >
+                <div key={message.id}>
+                  {showDateSep && <DateSeparator date={new Date(message.sent_at)} />}
+                  <div
+                    className={`flex ${isOutbound ? 'justify-end' : 'justify-start'}`}
+                  >
                   <div
                     className={`max-w-[70%] rounded-lg ${message.media_type === 'audio' && !message.content ? 'p-1' : 'p-3'} ${
                       isOutbound
