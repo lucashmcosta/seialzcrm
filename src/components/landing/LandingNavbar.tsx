@@ -1,16 +1,19 @@
 import { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
-import logoWhite from '@/assets/brand/seialz-logo-white.svg.asset.json';
+import logoBlack from '@/assets/brand/seialz-logo-black.svg.asset.json';
 import { List, X } from '@phosphor-icons/react';
 
 const navLinks = [
   { label: 'O Problema', href: '#problema' },
   { label: 'Solução', href: '#solucao' },
   { label: 'O Loop', href: '#loop' },
-  { label: 'O Que Recebe', href: '#incluso' },
-  { label: 'Pra Quem', href: '#pra-quem' },
   { label: 'Por Que Nativo', href: '#por-que-nativo' },
 ];
+
+const INK = '#0A0A0A';
+const SOFT = '#4A4D4A';
+const GREEN = '#32CD32';
+const LINE = '#E6E8E6';
 
 export function LandingNavbar() {
   const [scrolled, setScrolled] = useState(false);
@@ -38,82 +41,102 @@ export function LandingNavbar() {
 
   return (
     <>
-    <nav
-      className={`fixed top-0 left-0 right-0 z-50 transition-all duration-300 ${
-        scrolled
-          ? 'bg-[hsl(240,10%,4%)]/90 backdrop-blur-xl border-b border-[hsl(120,61%,50%)]/10'
-          : 'bg-transparent'
-      }`}
-    >
-      <div className="max-w-7xl mx-auto px-6 h-16 flex items-center justify-between">
-        <div className="flex items-center gap-4">
+      <nav
+        className="fixed top-0 left-0 right-0 z-50 transition-all duration-300"
+        style={{
+          backgroundColor: scrolled ? 'rgba(255,255,255,0.86)' : 'rgba(255,255,255,0.6)',
+          backdropFilter: 'blur(14px)',
+          WebkitBackdropFilter: 'blur(14px)',
+          borderBottom: scrolled ? `1px solid ${LINE}` : '1px solid transparent',
+          fontFamily: "'Sora', sans-serif",
+        }}
+      >
+        <div className="max-w-7xl mx-auto px-6 h-16 flex items-center justify-between">
           <Link to="/" aria-label="Seialz" className="flex items-center">
-            <img src={logoWhite.url} alt="Seialz" className="h-7 w-auto" />
+            <img src={logoBlack.url} alt="Seialz" style={{ height: 26, width: 'auto' }} />
           </Link>
-        </div>
 
-        {/* Desktop links */}
-        <div className="hidden lg:flex items-center gap-6">
-          {navLinks.map((l) => (
-            <button
-              key={l.href}
-              onClick={() => scrollTo(l.href)}
-              className="text-sm text-[hsl(0,0%,60%)] hover:text-[hsl(120,61%,50%)] transition-colors font-['Sora']"
+          {/* Desktop links */}
+          <div className="hidden lg:flex items-center gap-7">
+            {navLinks.map((l) => (
+              <button
+                key={l.href}
+                onClick={() => scrollTo(l.href)}
+                className="text-[13px] uppercase font-medium transition-colors"
+                style={{ color: SOFT, letterSpacing: '1.5px' }}
+                onMouseEnter={(e) => (e.currentTarget.style.color = GREEN)}
+                onMouseLeave={(e) => (e.currentTarget.style.color = SOFT)}
+              >
+                {l.label}
+              </button>
+            ))}
+          </div>
+
+          <div className="flex items-center gap-3">
+            <Link
+              to="/auth/signin"
+              className="text-sm font-medium transition-colors"
+              style={{ color: INK }}
             >
-              {l.label}
+              Entrar
+            </Link>
+            <button
+              onClick={() => scrollTo('#cta')}
+              className="hidden md:inline-flex px-5 py-2 rounded-full text-sm font-bold transition-all hover:scale-105"
+              style={{ backgroundColor: GREEN, color: INK }}
+            >
+              Falar com a Seialz
             </button>
-          ))}
+            <button
+              className="lg:hidden ml-2"
+              style={{ color: INK }}
+              onClick={() => setMobileOpen(!mobileOpen)}
+              aria-label="Menu"
+            >
+              {mobileOpen ? <X size={22} /> : <List size={22} />}
+            </button>
+          </div>
         </div>
 
-        <div className="flex items-center gap-3">
-          <Link
-            to="/auth/signin"
-            className="text-sm text-[hsl(0,0%,80%)] hover:text-white transition-colors font-['Sora']"
+        {mobileOpen && (
+          <div
+            className="lg:hidden px-6 pb-6 pt-2"
+            style={{
+              backgroundColor: 'rgba(255,255,255,0.96)',
+              backdropFilter: 'blur(14px)',
+              borderTop: `1px solid ${LINE}`,
+            }}
           >
-            Entrar
-          </Link>
+            {navLinks.map((l) => (
+              <button
+                key={l.href}
+                onClick={() => scrollTo(l.href)}
+                className="block w-full text-left py-3 text-sm uppercase font-medium transition-colors"
+                style={{ color: SOFT, letterSpacing: '1.5px' }}
+              >
+                {l.label}
+              </button>
+            ))}
+          </div>
+        )}
+      </nav>
+
+      {scrolled && !ctaVisible && (
+        <div className="md:hidden fixed bottom-6 left-4 right-4 z-50">
           <button
             onClick={() => scrollTo('#cta')}
-            className="hidden md:inline-flex auth-btn-primary px-5 py-2 rounded-full text-sm font-semibold font-['Sora'] transition-all hover:shadow-[0_0_20px_hsl(120,61%,50%,0.3)]"
+            className="w-full py-3.5 rounded-full text-sm font-bold transition-all"
+            style={{
+              backgroundColor: GREEN,
+              color: INK,
+              fontFamily: "'Sora', sans-serif",
+              boxShadow: '0 8px 28px rgba(50,205,50,0.35)',
+            }}
           >
-            Diagnóstico
+            FALAR COM A SEIALZ
           </button>
-          <button
-            className="lg:hidden text-white ml-2"
-            onClick={() => setMobileOpen(!mobileOpen)}
-          >
-            {mobileOpen ? <X size={22} /> : <List size={22} />}
-          </button>
-        </div>
-      </div>
-
-      {/* Mobile menu */}
-      {mobileOpen && (
-        <div className="lg:hidden bg-[hsl(240,10%,4%)]/95 backdrop-blur-xl border-t border-[hsl(120,61%,50%)]/10 px-6 pb-6 pt-2">
-          {navLinks.map((l) => (
-            <button
-              key={l.href}
-              onClick={() => scrollTo(l.href)}
-              className="block w-full text-left py-3 text-[hsl(0,0%,60%)] hover:text-[hsl(120,61%,50%)] transition-colors font-['Sora']"
-            >
-              {l.label}
-            </button>
-          ))}
         </div>
       )}
-    </nav>
-
-    {/* Mobile floating CTA */}
-    {scrolled && !ctaVisible && (
-      <div className="md:hidden fixed bottom-6 left-4 right-4 z-50">
-        <button
-          onClick={() => scrollTo('#cta')}
-          className="w-full auth-btn-primary py-3.5 rounded-full text-sm font-bold font-['Sora'] shadow-[0_0_25px_hsl(120,61%,50%,0.3)] transition-all"
-        >
-          AGENDAR DIAGNÓSTICO
-        </button>
-      </div>
-    )}
     </>
   );
 }

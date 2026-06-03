@@ -1,16 +1,42 @@
-import logoWhite from '@/assets/brand/seialz-logo-white.svg.asset.json';
+import logoBlack from '@/assets/brand/seialz-logo-black.svg.asset.json';
+
+const SNOW = '#F6F7F6';
+const LINE = '#E6E8E6';
+const ASH = '#7A7E7A';
+const GREEN = '#32CD32';
 
 export function LandingFooter() {
   return (
-    <footer className="bg-[hsl(240,10%,3%)] border-t border-[hsl(120,61%,50%)]/10 py-12">
+    <footer
+      style={{
+        backgroundColor: SNOW,
+        borderTop: `1px solid ${LINE}`,
+        fontFamily: "'Sora', sans-serif",
+      }}
+      className="py-12"
+    >
       <div className="max-w-7xl mx-auto px-6 flex flex-col md:flex-row items-center justify-between gap-6">
-        <img src={logoWhite.url} alt="Seialz" className="h-6 w-auto" />
-        <p className="text-sm text-[hsl(0,0%,40%)] font-['Sora']">
+        <img src={logoBlack.url} alt="Seialz" style={{ height: 22, width: 'auto' }} />
+        <p className="text-sm" style={{ color: ASH }}>
           Sales Ops Nativo · © {new Date().getFullYear()}
         </p>
-        <div className="flex gap-6 text-sm text-[hsl(0,0%,40%)] font-['Sora']">
-          <a href="#" className="hover:text-[hsl(120,61%,50%)] transition-colors">Termos</a>
-          <a href="#" className="hover:text-[hsl(120,61%,50%)] transition-colors">Privacidade</a>
+        <div className="flex gap-6 text-sm" style={{ color: ASH }}>
+          <a
+            href="#"
+            className="transition-colors"
+            onMouseEnter={(e) => (e.currentTarget.style.color = GREEN)}
+            onMouseLeave={(e) => (e.currentTarget.style.color = ASH)}
+          >
+            Termos
+          </a>
+          <a
+            href="#"
+            className="transition-colors"
+            onMouseEnter={(e) => (e.currentTarget.style.color = GREEN)}
+            onMouseLeave={(e) => (e.currentTarget.style.color = ASH)}
+          >
+            Privacidade
+          </a>
         </div>
       </div>
     </footer>
