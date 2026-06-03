@@ -1,72 +1,72 @@
 ## Problema
 
-O bloco "Histórico de atribuição" no detalhe do atendimento mostra dados crus do banco:
-- `TAKE_OVER`, `MANUAL_ASSIGNMENT` (action_type em maiúsculas)
-- IDs truncados como `f306fa3c` em vez do nome do usuário
-- Códigos de motivo como `"inbox_reassign_to_self"` entre aspas
+A edge function `twilio-whatsapp-send` (caminho `inbox`) bloqueia o envio com `400 no_endpoint` quando `message_threads.primary_endpoint_id` é NULL. Hoje há 30+ threads de WhatsApp abertas (org Viagi) sem esse campo preenchido — todas falham ao tentar responder pelo Atendimento.
 
-Nenhum usuário final entende isso.
+A coluna foi adicionada em uma fase posterior; o webhook só faz backfill quando entra uma mensagem nova. Threads antigos sem inbound recente nunca foram preenchidos.
 
-## Solução (somente UI)
+## Solução em 2 etapas
 
-Reescrever `src/components/inbox/InboxAssignmentHistory.tsx` para exibir frases em português natural, resolvendo IDs para nomes e mapeando códigos para rótulos legíveis.
+### 1. Backfill (migração SQL)
 
-### 1. Resolver nomes dos usuários
+Preencher `primary_endpoint_id` em todos os threads de WhatsApp onde está NULL, usando o `endpoint_id` da mensagem mais recente do thread (já resolvido pelo webhook em mensagens novas).
 
-No `useInboxThread` (ou diretamente no componente via query separada), buscar `users.id, full_name` de todos os `from_user_id` / `to_user_id` / `performed_by_user_id` presentes no histórico, em uma única chamada `.in('id', [...])`. Montar um `Map<id, name>`.
-
-Fallback quando o usuário não existir mais: "Usuário removido".
-
-### 2. Mapear `action_type` para rótulos
-
-```
-MANUAL_ASSIGNMENT  → "Atribuição manual"
-AUTO_ASSIGNMENT    → "Atribuição automática"
-TAKE_OVER          → "Assumiu o atendimento"
-RELEASE            → "Liberou o atendimento"
-REASSIGN           → "Reatribuição"
-UNASSIGN           → "Removeu atribuição"
-```
-(Manter fallback: title-case do código bruto se desconhecido.)
-
-### 3. Mapear `reason` para frases
-
-```
-inbox_reassign_to_self   → "Reatribuiu para si"
-inbox_manual_reassign    → "Reatribuição manual"
-inbox_auto_round_robin   → "Distribuição automática"
-inbox_release            → "Liberou da fila"
-```
-Fallback: esconder o bloco do reason se vier nulo; mostrar o texto cru entre aspas só se for frase livre (contém espaço).
-
-### 4. Novo layout do item
-
-Cada entrada vira uma frase única + timestamp discreto:
-
-```
-[ícone] Ketlyn Vieira assumiu o atendimento de João Silva
-        03/06/2026, 10:22 · Reatribuiu para si
+```sql
+UPDATE message_threads t
+SET primary_endpoint_id = m.endpoint_id
+FROM (
+  SELECT DISTINCT ON (thread_id) thread_id, endpoint_id
+  FROM messages
+  WHERE endpoint_id IS NOT NULL
+  ORDER BY thread_id, created_at DESC
+) m
+WHERE t.id = m.thread_id
+  AND t.channel = 'whatsapp'
+  AND t.primary_endpoint_id IS NULL;
 ```
 
-- Linha 1 (texto principal): nome do `performed_by` + ação + (quando aplicável) "de X para Y" usando nomes.
-- Linha 2 (meta, `text-xs text-muted-foreground`): data formatada + " · " + motivo legível.
-- Remover a exibição de IDs em `font-mono` e a label gritante em uppercase azul.
-- Manter a borda lateral esquerda sutil já existente.
+Para threads que **nenhuma** mensagem tem `endpoint_id` resolvido, fazer uma 2ª passada usando o único endpoint ativo de `whatsapp` da organização (quando há apenas um candidato):
 
-### 5. Regras de composição da frase
+```sql
+UPDATE message_threads t
+SET primary_endpoint_id = ep.id
+FROM communication_endpoints ep
+WHERE t.primary_endpoint_id IS NULL
+  AND t.channel = 'whatsapp'
+  AND ep.organization_id = t.organization_id
+  AND ep.channel = 'whatsapp'
+  AND ep.is_active = true
+  AND ep.purpose IN ('customer_service','other')
+  AND (
+    SELECT count(*) FROM communication_endpoints ep2
+    WHERE ep2.organization_id = t.organization_id
+      AND ep2.channel = 'whatsapp'
+      AND ep2.is_active = true
+      AND ep2.purpose IN ('customer_service','other')
+  ) = 1;
+```
 
-- `TAKE_OVER`: "{performed_by} assumiu o atendimento" (se houver `from_user_id` diferente: "… de {from_name}").
-- `MANUAL_ASSIGNMENT` / `REASSIGN`: "{performed_by} atribuiu para {to_name}" (ou "de {from_name} para {to_name}" se ambos).
-- `AUTO_ASSIGNMENT`: "Sistema atribuiu para {to_name}".
-- `UNASSIGN` / `RELEASE`: "{performed_by} liberou o atendimento".
-- Quando `performed_by` for o próprio `to_user_id`, usar "assumiu" em vez de "atribuiu para si".
+### 2. Resiliência da edge function `twilio-whatsapp-send`
 
-## Arquivos afetados
+No bloco `senderContext === 'inbox'`, antes de retornar `no_endpoint`, tentar resolver dinamicamente:
 
-- `src/components/inbox/InboxAssignmentHistory.tsx` — reescrita do render.
-- `src/hooks/inbox/useInboxThread.ts` — adicionar fetch dos nomes dos usuários referenciados pelo histórico e expor `userNames: Map<string,string>` (ou aceitar um prop novo no componente e fazer a query lá com `useQuery`). Preferência: query local no componente para isolar.
+1. `endpoint_id` da última mensagem do thread (`messages.endpoint_id IS NOT NULL ORDER BY created_at DESC LIMIT 1`).
+2. Se ainda NULL e a organização tem **apenas um** endpoint `whatsapp` ativo (purpose `customer_service`/`other`), usar ele.
+3. Se resolveu, fazer `UPDATE message_threads SET primary_endpoint_id = ...` best-effort (mesma lógica de backfill já existente no fim do arquivo) e seguir o fluxo normal.
+4. Só retornar `no_endpoint` se nada resolver — com um log mais detalhado (`{ organization_id, candidates_count }`).
 
-## Fora de escopo
+Isso evita que threads futuros que escapem do backfill quebrem o envio.
 
-- Não muda schema, não muda a forma como os eventos são gravados.
-- Não altera o restante do painel (Atendimento / Dados da conversa).
+## Arquivos
+
+- Nova migração SQL (via tool de migração).
+- `supabase/functions/twilio-whatsapp-send/index.ts` — adicionar fallback de resolução no bloco `inbox`.
+
+## Validação
+
+- Reabrir conversa com CLAUDIOMARA e enviar mensagem → deve sair.
+- Query: `SELECT count(*) FROM message_threads WHERE channel='whatsapp' AND primary_endpoint_id IS NULL AND status='open'` → deve cair para ~0.
+- Conferir log da edge function: sem novos `[inbox-send] blocked reason=no_endpoint`.
+
+## Observação sobre o Matheus
+
+O thread atual do Matheus (`9d4dbb52...`) **tem** `primary_endpoint_id` válido e passa em todas as guardas. O erro que vocês viram veio de uma conversa diferente selecionada no momento (CLAUDIOMARA). Após o fix os dois funcionam.
