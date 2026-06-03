@@ -65,8 +65,8 @@ const cardBase: React.CSSProperties = {
 export default function LandingPage() {
   return (
     <div
-      className="min-h-screen overflow-x-hidden"
-      style={{ backgroundColor: C.paper, color: C.ink, fontFamily: "'Sora', sans-serif" }}
+      className="overflow-x-hidden overflow-y-auto"
+      style={{ backgroundColor: C.paper, color: C.ink, fontFamily: "'Sora', sans-serif", height: "100dvh" }}
     >
       <LandingNavbar />
 
