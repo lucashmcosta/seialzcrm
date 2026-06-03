@@ -138,9 +138,14 @@ export function InboxConversationTimeline({ threadId, organizationId, contactNam
               && (prev.sender_name || '') === (m.sender_name || '')
               && (new Date(m.sent_at).getTime() - new Date(prev.sent_at).getTime()) < 2 * 60 * 1000;
 
+            const showDateSep = shouldShowDateSeparator(m.sent_at, prev?.sent_at);
+            const dateSep = showDateSep ? <DateSeparator key={`sep-${m.id}`} date={new Date(m.sent_at)} /> : null;
+
             if (isInternal) {
               return (
-                <div key={m.id} className={`w-full ${groupedWithPrev ? 'mt-1' : 'mt-2'}`}>
+                <div key={m.id}>
+                  {dateSep}
+                  <div className={`w-full ${groupedWithPrev ? 'mt-1' : 'mt-2'}`}>
                   <div className="w-full rounded-lg border-l-[3px] border-amber-400 bg-amber-50/70 dark:bg-amber-950/30 px-4 py-2.5 flex items-start gap-3">
                     <div className="flex-1 min-w-0">
                       <div className="font-data text-[9px] uppercase tracking-wider text-amber-700 dark:text-amber-300 mb-0.5">
