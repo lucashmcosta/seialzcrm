@@ -353,28 +353,29 @@ button, nav, [role="tablist"], [role="tab"] {
   }
 }
 
-/* Auth Pages — Seialz Brand */
+/* Auth Pages — Seialz Brand (Light) */
 .auth-banner-bg {
-  background-color: hsl(240, 10%, 4%);
+  background-color: #F8FAF8;
 }
 
 .auth-grid-pattern {
   background-image:
-    linear-gradient(hsla(150, 100%, 50%, 0.04) 1px, transparent 1px),
-    linear-gradient(90deg, hsla(150, 100%, 50%, 0.04) 1px, transparent 1px);
+    linear-gradient(rgba(50,205,50,0.06) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(50,205,50,0.06) 1px, transparent 1px);
   background-size: 60px 60px;
 }
 
 .auth-btn-primary {
-  background-color: hsl(150, 100%, 50%);
-  color: hsl(240, 10%, 4%);
+  background-color: #32CD32;
+  color: #07100B;
+  border-radius: 10px;
 }
 .auth-btn-primary:hover {
-  background-color: hsl(150, 100%, 44%);
+  background-color: #2BB82B;
 }
 
 .auth-link-green {
-  color: hsl(150, 100%, 50%);
+  color: #1E7A1E;
 }
 
 .auth-cursor-blink {
