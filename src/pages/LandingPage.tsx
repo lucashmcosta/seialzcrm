@@ -8,6 +8,7 @@ import {
   Target, ArrowsClockwise, ChartLineUp, PhoneCall, Robot, ChatCircleText,
   UsersThree, ChartBar, Lightning, GearSix, UserCheck, ArrowRight,
 } from '@phosphor-icons/react';
+import linhasMedia from '@/assets/brand/linhas-media-dark.svg.asset.json';
 
 /* ── Animation helpers ── */
 const fadeUp = {
@@ -21,7 +22,7 @@ const stagger = {
 
 function SectionTag({ children }: { children: string }) {
   return (
-    <span className="inline-block text-xs tracking-[4px] uppercase text-[hsl(150,100%,50%)] font-['Michroma'] mb-4">
+    <span className="inline-block text-xs tracking-[4px] uppercase text-[hsl(120,61%,50%)] font-['Sora'] font-extrabold mb-4">
       {children}
     </span>
   );
@@ -57,14 +58,14 @@ export default function LandingPage() {
             </motion.div>
             <motion.h1
               variants={fadeUp}
-              className="font-['Michroma'] text-4xl md:text-6xl lg:text-7xl leading-tight tracking-tight mb-6"
+              className="font-['Sora'] font-extrabold text-4xl md:text-6xl lg:text-7xl leading-tight tracking-tight mb-6"
             >
               Marketing e vendas{' '}
-              <span className="text-[hsl(150,100%,50%)]">nunca deveriam ter sido separados.</span>
+              <span className="text-[hsl(120,61%,50%)]">nunca deveriam ter sido separados.</span>
             </motion.h1>
             <motion.p
               variants={fadeUp}
-              className="text-lg md:text-xl text-[hsl(0,0%,60%)] max-w-3xl mx-auto mb-4 font-['Outfit'] leading-relaxed"
+              className="text-lg md:text-xl text-[hsl(0,0%,60%)] max-w-3xl mx-auto mb-4 font-['Sora'] leading-relaxed"
             >
               O Seialz é a plataforma onde os dados de marketing e vendas nascem conectados.
               Não integrados por API. Não colados por planilha.{' '}
@@ -72,28 +73,32 @@ export default function LandingPage() {
             </motion.p>
             <motion.p
               variants={fadeUp}
-              className="text-base text-[hsl(0,0%,50%)] max-w-2xl mx-auto mb-10 font-['Outfit'] leading-relaxed"
+              className="text-base text-[hsl(0,0%,50%)] max-w-2xl mx-auto mb-10 font-['Sora'] leading-relaxed"
             >
               Pra empresas de serviço que vendem por atendimento direto — e querem saber exatamente quanto cada real investido retorna.
             </motion.p>
             <motion.div variants={fadeUp} className="flex flex-col sm:flex-row items-center justify-center gap-4">
               <a
                 href="#cta"
-                className="auth-btn-primary px-8 py-4 rounded-full text-base font-bold font-['Outfit'] transition-all hover:shadow-[0_0_30px_hsl(150,100%,50%,0.35)] hover:scale-105"
+                className="auth-btn-primary px-8 py-4 rounded-full text-base font-bold font-['Sora'] transition-all hover:shadow-[0_0_30px_hsl(120,61%,50%,0.35)] hover:scale-105"
               >
                 AGENDAR DIAGNÓSTICO GRATUITO
               </a>
             </motion.div>
-            <motion.p variants={fadeUp} className="mt-4 text-sm text-[hsl(0,0%,40%)] font-['Outfit']">
+            <motion.p variants={fadeUp} className="mt-4 text-sm text-[hsl(0,0%,40%)] font-['Sora']">
               Análise do seu funil · 30 min · Sem compromisso
             </motion.p>
           </motion.div>
         </div>
-        <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_center,hsl(150,100%,50%,0.06)_0%,transparent_70%)] pointer-events-none" />
+        <div
+          className="absolute inset-0 opacity-30 pointer-events-none bg-center bg-cover mix-blend-screen"
+          style={{ backgroundImage: `url(${linhasMedia.url})` }}
+        />
+        <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_center,hsl(120,61%,50%,0.08)_0%,transparent_70%)] pointer-events-none" />
       </section>
 
       {/* ─── BARRA DE PROVA ─── */}
-      <section className="py-16 md:py-20 bg-[hsl(240,10%,3%)] border-y border-[hsl(150,100%,50%)]/10">
+      <section className="py-16 md:py-20 bg-[hsl(240,10%,3%)] border-y border-[hsl(120,61%,50%)]/10">
         <div className="max-w-5xl mx-auto px-6">
           <motion.div initial="hidden" whileInView="visible" viewport={{ once: true, amount: 0.3 }} variants={stagger}>
             <motion.div variants={fadeUp} className="grid grid-cols-2 md:grid-cols-4 gap-8">
@@ -104,12 +109,12 @@ export default function LandingPage() {
                 { value: '250+', label: 'pessoas operando\nno sistema' },
               ].map((s) => (
                 <div key={s.label} className="text-center">
-                  <span className="text-3xl md:text-4xl font-['Michroma'] text-[hsl(150,100%,50%)]">{s.value}</span>
-                  <p className="text-xs text-[hsl(0,0%,50%)] mt-3 font-['Outfit'] whitespace-pre-line">{s.label}</p>
+                  <span className="text-3xl md:text-4xl font-['Sora'] font-extrabold text-[hsl(120,61%,50%)]">{s.value}</span>
+                  <p className="text-xs text-[hsl(0,0%,50%)] mt-3 font-['Sora'] whitespace-pre-line">{s.label}</p>
                 </div>
               ))}
             </motion.div>
-            <motion.p variants={fadeUp} className="text-center text-xs text-[hsl(0,0%,35%)] font-['Outfit'] mt-8">
+            <motion.p variants={fadeUp} className="text-center text-xs text-[hsl(0,0%,35%)] font-['Sora'] mt-8">
               Dados reais de operação própria — não de cliente hipotético.
             </motion.p>
           </motion.div>
@@ -121,11 +126,11 @@ export default function LandingPage() {
         <div className="max-w-4xl mx-auto px-6">
           <motion.div initial="hidden" whileInView="visible" viewport={{ once: true, amount: 0.3 }} variants={stagger}>
             <motion.div variants={fadeUp}><SectionTag>// O Problema</SectionTag></motion.div>
-            <motion.h2 variants={fadeUp} className="font-['Michroma'] text-2xl md:text-4xl leading-tight mb-8">
+            <motion.h2 variants={fadeUp} className="font-['Sora'] font-extrabold text-2xl md:text-4xl leading-tight mb-8">
               Marketing culpa vendas. Vendas culpa marketing.{' '}
-              <span className="text-[hsl(150,100%,50%)]">Ninguém olha pro que importa: receita.</span>
+              <span className="text-[hsl(120,61%,50%)]">Ninguém olha pro que importa: receita.</span>
             </motion.h2>
-            <motion.div variants={fadeUp} className="space-y-6 text-[hsl(0,0%,60%)] font-['Outfit'] text-lg leading-relaxed mb-12">
+            <motion.div variants={fadeUp} className="space-y-6 text-[hsl(0,0%,60%)] font-['Sora'] text-lg leading-relaxed mb-12">
               <p>
                 Sua empresa tem um gestor de tráfego que mede CPL. Um time comercial que mede conversão.
                 E uma planilha que tenta juntar os dois.
@@ -138,10 +143,10 @@ export default function LandingPage() {
             {/* Versus comparison */}
             <motion.div variants={fadeUp} className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-12">
               <div className="bg-[hsl(0,60%,5%)] border border-[hsl(0,70%,20%)] rounded-2xl p-7">
-                <span className="text-[10px] tracking-[3px] uppercase text-[hsl(0,80%,60%)] font-['JetBrains_Mono'] mb-4 block">
+                <span className="text-[10px] tracking-[3px] uppercase text-[hsl(0,80%,60%)] font-['Space_Mono'] mb-4 block">
                   Integrado por API
                 </span>
-                <div className="space-y-2 text-sm text-[hsl(0,0%,50%)] font-['Outfit']">
+                <div className="space-y-2 text-sm text-[hsl(0,0%,50%)] font-['Sora']">
                   <p>Meta Ads → Zapier → CRM</p>
                   <p>Dado chega atrasado</p>
                   <p>Atribuição quebrada</p>
@@ -151,11 +156,11 @@ export default function LandingPage() {
                   <p>"Integração" que sempre quebra</p>
                 </div>
               </div>
-              <div className="bg-[hsl(150,50%,4%)] border border-[hsl(150,60%,18%)] rounded-2xl p-7">
-                <span className="text-[10px] tracking-[3px] uppercase text-[hsl(150,100%,50%)] font-['JetBrains_Mono'] mb-4 block">
+              <div className="bg-[hsl(120,40%,5%)] border border-[hsl(120,45%,22%)] rounded-2xl p-7">
+                <span className="text-[10px] tracking-[3px] uppercase text-[hsl(120,61%,50%)] font-['Space_Mono'] mb-4 block">
                   Nativo no Seialz
                 </span>
-                <div className="space-y-2 text-sm text-[hsl(0,0%,50%)] font-['Outfit']">
+                <div className="space-y-2 text-sm text-[hsl(0,0%,50%)] font-['Sora']">
                   <p>Um sistema desde o clique</p>
                   <p>Dado em tempo real</p>
                   <p>Attribution até a receita</p>
@@ -167,7 +172,7 @@ export default function LandingPage() {
               </div>
             </motion.div>
 
-            <motion.p variants={fadeUp} className="text-white font-medium font-['Outfit'] text-lg leading-relaxed">
+            <motion.p variants={fadeUp} className="text-white font-medium font-['Sora'] text-lg leading-relaxed">
               O problema não é falta de leads nem falta de vendedores. É que marketing e vendas foram construídos como dois mundos separados. O Seialz nasceu pra ser um só.
             </motion.p>
           </motion.div>
@@ -179,11 +184,11 @@ export default function LandingPage() {
         <div className="max-w-5xl mx-auto px-6">
           <motion.div initial="hidden" whileInView="visible" viewport={{ once: true, amount: 0.2 }} variants={stagger}>
             <motion.div variants={fadeUp}><SectionTag>// A Solução</SectionTag></motion.div>
-            <motion.h2 variants={fadeUp} className="font-['Michroma'] text-2xl md:text-4xl leading-tight mb-6">
+            <motion.h2 variants={fadeUp} className="font-['Sora'] font-extrabold text-2xl md:text-4xl leading-tight mb-6">
               Não é só software. Não é só consultoria.{' '}
-              <span className="text-[hsl(150,100%,50%)]">É a operação inteira.</span>
+              <span className="text-[hsl(120,61%,50%)]">É a operação inteira.</span>
             </motion.h2>
-            <motion.p variants={fadeUp} className="text-[hsl(0,0%,60%)] font-['Outfit'] text-lg leading-relaxed mb-12 max-w-4xl">
+            <motion.p variants={fadeUp} className="text-[hsl(0,0%,60%)] font-['Sora'] text-lg leading-relaxed mb-12 max-w-4xl">
               Sales Ops de verdade precisa de tecnologia que funcione, processo que o time siga, e alguém olhando os números. O Seialz entrega os três.
             </motion.p>
 
@@ -203,12 +208,12 @@ export default function LandingPage() {
                   desc: 'Acompanhamento semanal do seu time. Coaching, relatórios, gestão de verdade. Alimentado por dados em tempo real — sabe qual campanha gera receita, qual vendedor performa, e onde está o gargalo. Não é dashboard bonito que ninguém olha. É gestão ativa.',
                 },
               ].map((p) => (
-                <div key={p.num} className="bg-[hsl(240,10%,7%)] border border-[hsl(150,100%,50%)]/10 rounded-2xl p-8 relative overflow-hidden">
-                  <div className="absolute top-0 left-0 w-1 h-full bg-[hsl(150,100%,50%)] opacity-60" />
+                <div key={p.num} className="bg-[hsl(240,10%,7%)] border border-[hsl(120,61%,50%)]/10 rounded-2xl p-8 relative overflow-hidden">
+                  <div className="absolute top-0 left-0 w-1 h-full bg-[hsl(120,61%,50%)] opacity-60" />
                   <div className="pl-4">
-                    <span className="text-[10px] tracking-[3px] uppercase text-[hsl(150,100%,50%)] font-['JetBrains_Mono'] mb-3 block">{p.num}</span>
-                    <h4 className="font-['Michroma'] text-lg mb-3">{p.title}</h4>
-                    <p className="text-sm text-[hsl(0,0%,55%)] font-['Outfit'] leading-relaxed">{p.desc}</p>
+                    <span className="text-[10px] tracking-[3px] uppercase text-[hsl(120,61%,50%)] font-['Space_Mono'] mb-3 block">{p.num}</span>
+                    <h4 className="font-['Sora'] font-extrabold text-lg mb-3">{p.title}</h4>
+                    <p className="text-sm text-[hsl(0,0%,55%)] font-['Sora'] leading-relaxed">{p.desc}</p>
                   </div>
                 </div>
               ))}
@@ -222,11 +227,11 @@ export default function LandingPage() {
         <div className="max-w-4xl mx-auto px-6">
           <motion.div initial="hidden" whileInView="visible" viewport={{ once: true, amount: 0.3 }} variants={stagger}>
             <motion.div variants={fadeUp}><SectionTag>// O Loop</SectionTag></motion.div>
-            <motion.h2 variants={fadeUp} className="font-['Michroma'] text-2xl md:text-4xl leading-tight mb-6">
+            <motion.h2 variants={fadeUp} className="font-['Sora'] font-extrabold text-2xl md:text-4xl leading-tight mb-6">
               O ciclo que fica mais inteligente{' '}
-              <span className="text-[hsl(150,100%,50%)]">a cada venda.</span>
+              <span className="text-[hsl(120,61%,50%)]">a cada venda.</span>
             </motion.h2>
-            <motion.p variants={fadeUp} className="text-[hsl(0,0%,60%)] font-['Outfit'] text-lg leading-relaxed mb-12 max-w-4xl">
+            <motion.p variants={fadeUp} className="text-[hsl(0,0%,60%)] font-['Sora'] text-lg leading-relaxed mb-12 max-w-4xl">
               Quando marketing e vendas compartilham os mesmos dados nativamente, algo muda: cada venda ensina o marketing a trazer leads melhores. E cada lead melhor facilita a venda.
             </motion.p>
 
@@ -239,8 +244,8 @@ export default function LandingPage() {
                 { n: '05', t: 'O ciclo se repete. A cada rodada, o sistema sabe mais sobre o que funciona — e o que não funciona.' },
               ].map((s) => (
                 <div key={s.n} className="flex items-start gap-6 py-6 border-b border-[hsl(0,0%,8%)]">
-                  <span className="font-['Michroma'] text-2xl text-[hsl(150,100%,50%)] opacity-80 flex-shrink-0 w-14">{s.n}</span>
-                  <p className="text-[hsl(0,0%,60%)] font-['Outfit'] leading-relaxed pt-1">{s.t}</p>
+                  <span className="font-['Sora'] font-extrabold text-2xl text-[hsl(120,61%,50%)] opacity-80 flex-shrink-0 w-14">{s.n}</span>
+                  <p className="text-[hsl(0,0%,60%)] font-['Sora'] leading-relaxed pt-1">{s.t}</p>
                 </div>
               ))}
             </motion.div>
@@ -253,11 +258,11 @@ export default function LandingPage() {
         <div className="max-w-6xl mx-auto px-6">
           <motion.div initial="hidden" whileInView="visible" viewport={{ once: true, amount: 0.1 }} variants={stagger}>
             <motion.div variants={fadeUp}><SectionTag>// O Que Você Recebe</SectionTag></motion.div>
-            <motion.h2 variants={fadeUp} className="font-['Michroma'] text-2xl md:text-4xl leading-tight mb-4 max-w-4xl">
+            <motion.h2 variants={fadeUp} className="font-['Sora'] font-extrabold text-2xl md:text-4xl leading-tight mb-4 max-w-4xl">
               Tudo que sua operação precisa.{' '}
-              <span className="text-[hsl(150,100%,50%)]">Nada que não precisa.</span>
+              <span className="text-[hsl(120,61%,50%)]">Nada que não precisa.</span>
             </motion.h2>
-            <motion.p variants={fadeUp} className="text-[hsl(0,0%,60%)] font-['Outfit'] text-lg leading-relaxed mb-12 max-w-4xl">
+            <motion.p variants={fadeUp} className="text-[hsl(0,0%,60%)] font-['Sora'] text-lg leading-relaxed mb-12 max-w-4xl">
               Sem contratar gestor de tráfego avulso. Sem CRM genérico. Sem planilha de acompanhamento. Um sistema, uma assinatura.
             </motion.p>
             <motion.div variants={fadeUp} className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
@@ -271,10 +276,10 @@ export default function LandingPage() {
                 { icon: ChatCircleText, title: 'Comunicação Omnichannel', desc: 'WhatsApp, SMS, ligação, email — tudo numa thread só. Branded calling pra aumentar atendimento.' },
                 { icon: ChartBar, title: 'Sales Ops Dashboard', desc: 'Receita por vendedor, campanha, fonte. Gargalos em tempo real. Comissão calculada automaticamente.' },
               ].map((f) => (
-                <div key={f.title} className="bg-[hsl(240,10%,7%)] border border-[hsl(150,100%,50%)]/10 rounded-2xl p-6 hover:border-[hsl(150,100%,50%)]/30 transition-colors group">
-                  <f.icon className="text-[hsl(150,100%,50%)] mb-4 group-hover:scale-110 transition-transform" size={24} weight="light" />
-                  <h4 className="font-['Michroma'] text-sm mb-2">{f.title}</h4>
-                  <p className="text-sm text-[hsl(0,0%,50%)] font-['Outfit'] leading-relaxed">{f.desc}</p>
+                <div key={f.title} className="bg-[hsl(240,10%,7%)] border border-[hsl(120,61%,50%)]/10 rounded-2xl p-6 hover:border-[hsl(120,61%,50%)]/30 transition-colors group">
+                  <f.icon className="text-[hsl(120,61%,50%)] mb-4 group-hover:scale-110 transition-transform" size={24} weight="light" />
+                  <h4 className="font-['Sora'] font-extrabold text-sm mb-2">{f.title}</h4>
+                  <p className="text-sm text-[hsl(0,0%,50%)] font-['Sora'] leading-relaxed">{f.desc}</p>
                 </div>
               ))}
             </motion.div>
@@ -287,11 +292,11 @@ export default function LandingPage() {
         <div className="max-w-5xl mx-auto px-6">
           <motion.div initial="hidden" whileInView="visible" viewport={{ once: true, amount: 0.3 }} variants={stagger}>
             <motion.div variants={fadeUp}><SectionTag>// Pra Quem É</SectionTag></motion.div>
-            <motion.h2 variants={fadeUp} className="font-['Michroma'] text-2xl md:text-4xl leading-tight mb-4">
+            <motion.h2 variants={fadeUp} className="font-['Sora'] font-extrabold text-2xl md:text-4xl leading-tight mb-4">
               Empresas de serviço que vendem por{' '}
-              <span className="text-[hsl(150,100%,50%)]">atendimento direto.</span>
+              <span className="text-[hsl(120,61%,50%)]">atendimento direto.</span>
             </motion.h2>
-            <motion.p variants={fadeUp} className="text-[hsl(0,0%,60%)] font-['Outfit'] text-lg leading-relaxed mb-10 max-w-4xl">
+            <motion.p variants={fadeUp} className="text-[hsl(0,0%,60%)] font-['Sora'] text-lg leading-relaxed mb-10 max-w-4xl">
               Se sua empresa roda anúncios, gera leads e converte por WhatsApp, telefone ou atendimento presencial — o Seialz foi construído pra essa operação. Não importa o segmento. Importa o modelo.
             </motion.p>
 
@@ -303,14 +308,14 @@ export default function LandingPage() {
                 { name: 'Serviços com Drones', proof: 'Implementação ativa — case em construção' },
                 { name: 'Advocacia & Consultoria', proof: 'High-touch · WhatsApp + ligação' },
               ].map((s) => (
-                <div key={s.name} className="bg-[hsl(240,10%,7%)] border border-[hsl(150,100%,50%)]/10 rounded-xl p-5 hover:border-[hsl(150,100%,50%)]/25 transition-colors">
-                  <h4 className="font-['Outfit'] font-semibold text-white text-[15px] mb-1">{s.name}</h4>
-                  <p className="text-[11px] text-[hsl(150,100%,50%)] font-['JetBrains_Mono'] leading-relaxed">{s.proof}</p>
+                <div key={s.name} className="bg-[hsl(240,10%,7%)] border border-[hsl(120,61%,50%)]/10 rounded-xl p-5 hover:border-[hsl(120,61%,50%)]/25 transition-colors">
+                  <h4 className="font-['Sora'] font-semibold text-white text-[15px] mb-1">{s.name}</h4>
+                  <p className="text-[11px] text-[hsl(120,61%,50%)] font-['Space_Mono'] leading-relaxed">{s.proof}</p>
                 </div>
               ))}
             </motion.div>
 
-            <motion.p variants={fadeUp} className="text-[hsl(0,0%,50%)] font-['Outfit'] text-base leading-relaxed mb-10">
+            <motion.p variants={fadeUp} className="text-[hsl(0,0%,50%)] font-['Sora'] text-base leading-relaxed mb-10">
               Se sua empresa depende de gerar e converter leads por atendimento direto, a gente já ajudou alguém parecido com você.
             </motion.p>
 
@@ -322,8 +327,8 @@ export default function LandingPage() {
                 { value: '1', label: 'sistema único\nzero Frankenstein' },
               ].map((s) => (
                 <div key={s.label} className="text-center">
-                  <span className="text-2xl md:text-3xl font-['Michroma'] text-[hsl(150,100%,50%)]">{s.value}</span>
-                  <p className="text-xs text-[hsl(0,0%,50%)] mt-2 font-['Outfit'] whitespace-pre-line">{s.label}</p>
+                  <span className="text-2xl md:text-3xl font-['Sora'] font-extrabold text-[hsl(120,61%,50%)]">{s.value}</span>
+                  <p className="text-xs text-[hsl(0,0%,50%)] mt-2 font-['Sora'] whitespace-pre-line">{s.label}</p>
                 </div>
               ))}
             </motion.div>
@@ -336,11 +341,11 @@ export default function LandingPage() {
         <div className="max-w-4xl mx-auto px-6">
           <motion.div initial="hidden" whileInView="visible" viewport={{ once: true, amount: 0.3 }} variants={stagger}>
             <motion.div variants={fadeUp}><SectionTag>// Por Que "Nativo" Importa</SectionTag></motion.div>
-            <motion.h2 variants={fadeUp} className="font-['Michroma'] text-2xl md:text-4xl leading-tight mb-8">
+            <motion.h2 variants={fadeUp} className="font-['Sora'] font-extrabold text-2xl md:text-4xl leading-tight mb-8">
               Qualquer um integra.{' '}
-              <span className="text-[hsl(150,100%,50%)]">Ninguém nasceu junto.</span>
+              <span className="text-[hsl(120,61%,50%)]">Ninguém nasceu junto.</span>
             </motion.h2>
-            <motion.div variants={fadeUp} className="space-y-6 text-[hsl(0,0%,60%)] font-['Outfit'] text-lg leading-relaxed">
+            <motion.div variants={fadeUp} className="space-y-6 text-[hsl(0,0%,60%)] font-['Sora'] text-lg leading-relaxed">
               <p>
                 O mercado inteiro tenta resolver o problema de Sales Ops conectando ferramentas que foram construídas separadas. Meta Ads de um lado. CRM do outro. Zapier ou Make no meio tentando colar tudo.
               </p>
@@ -349,7 +354,7 @@ export default function LandingPage() {
               </p>
 
               {/* Manifesto quote */}
-              <blockquote className="text-xl md:text-2xl font-semibold text-white leading-snug pl-6 border-l-2 border-[hsl(150,100%,50%)]/60 my-8">
+              <blockquote className="text-xl md:text-2xl font-semibold text-white leading-snug pl-6 border-l-2 border-[hsl(120,61%,50%)]/60 my-8">
                 O Seialz não integra marketing e vendas. Eles nunca foram separados aqui.
               </blockquote>
 
@@ -369,47 +374,47 @@ export default function LandingPage() {
         <div className="max-w-3xl mx-auto px-6">
           <motion.div initial="hidden" whileInView="visible" viewport={{ once: true, amount: 0.3 }} variants={stagger} className="text-center">
             <motion.div variants={fadeUp}><SectionTag>// próximo passo</SectionTag></motion.div>
-            <motion.h2 variants={fadeUp} className="font-['Michroma'] text-3xl md:text-5xl leading-tight mb-4">
+            <motion.h2 variants={fadeUp} className="font-['Sora'] font-extrabold text-3xl md:text-5xl leading-tight mb-4">
               Quer saber onde sua operação está{' '}
-              <span className="text-[hsl(150,100%,50%)]">deixando dinheiro na mesa?</span>
+              <span className="text-[hsl(120,61%,50%)]">deixando dinheiro na mesa?</span>
             </motion.h2>
-            <motion.p variants={fadeUp} className="text-[hsl(0,0%,55%)] font-['Outfit'] text-lg mb-12 max-w-2xl mx-auto">
+            <motion.p variants={fadeUp} className="text-[hsl(0,0%,55%)] font-['Sora'] text-lg mb-12 max-w-2xl mx-auto">
               Em 30 minutos, analisamos seu funil do anúncio ao fechamento e mostramos exatamente onde estão os gargalos — com dados, não opinião.
             </motion.p>
 
             <motion.form
               variants={fadeUp}
               onSubmit={handleSubmit}
-              className="bg-[hsl(240,10%,7%)] border border-[hsl(150,100%,50%)]/15 rounded-3xl p-8 md:p-10 text-left space-y-5"
+              className="bg-[hsl(240,10%,7%)] border border-[hsl(120,61%,50%)]/15 rounded-3xl p-8 md:p-10 text-left space-y-5"
             >
               <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
                 <input
                   type="text" required placeholder="Nome" value={form.name}
                   onChange={(e) => setForm({ ...form, name: e.target.value })}
-                  className="w-full bg-[hsl(240,10%,10%)] border border-[hsl(150,100%,50%)]/10 rounded-xl px-5 py-3.5 text-white placeholder:text-[hsl(0,0%,35%)] font-['Outfit'] focus:outline-none focus:border-[hsl(150,100%,50%)]/40 transition-colors"
+                  className="w-full bg-[hsl(240,10%,10%)] border border-[hsl(120,61%,50%)]/10 rounded-xl px-5 py-3.5 text-white placeholder:text-[hsl(0,0%,35%)] font-['Sora'] focus:outline-none focus:border-[hsl(120,61%,50%)]/40 transition-colors"
                 />
                 <input
                   type="text" required placeholder="Empresa" value={form.company}
                   onChange={(e) => setForm({ ...form, company: e.target.value })}
-                  className="w-full bg-[hsl(240,10%,10%)] border border-[hsl(150,100%,50%)]/10 rounded-xl px-5 py-3.5 text-white placeholder:text-[hsl(0,0%,35%)] font-['Outfit'] focus:outline-none focus:border-[hsl(150,100%,50%)]/40 transition-colors"
+                  className="w-full bg-[hsl(240,10%,10%)] border border-[hsl(120,61%,50%)]/10 rounded-xl px-5 py-3.5 text-white placeholder:text-[hsl(0,0%,35%)] font-['Sora'] focus:outline-none focus:border-[hsl(120,61%,50%)]/40 transition-colors"
                 />
               </div>
               <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
                 <input
                   type="email" required placeholder="Email" value={form.email}
                   onChange={(e) => setForm({ ...form, email: e.target.value })}
-                  className="w-full bg-[hsl(240,10%,10%)] border border-[hsl(150,100%,50%)]/10 rounded-xl px-5 py-3.5 text-white placeholder:text-[hsl(0,0%,35%)] font-['Outfit'] focus:outline-none focus:border-[hsl(150,100%,50%)]/40 transition-colors"
+                  className="w-full bg-[hsl(240,10%,10%)] border border-[hsl(120,61%,50%)]/10 rounded-xl px-5 py-3.5 text-white placeholder:text-[hsl(0,0%,35%)] font-['Sora'] focus:outline-none focus:border-[hsl(120,61%,50%)]/40 transition-colors"
                 />
                 <input
                   type="tel" required placeholder="Telefone" value={form.phone}
                   onChange={(e) => setForm({ ...form, phone: e.target.value })}
-                  className="w-full bg-[hsl(240,10%,10%)] border border-[hsl(150,100%,50%)]/10 rounded-xl px-5 py-3.5 text-white placeholder:text-[hsl(0,0%,35%)] font-['Outfit'] focus:outline-none focus:border-[hsl(150,100%,50%)]/40 transition-colors"
+                  className="w-full bg-[hsl(240,10%,10%)] border border-[hsl(120,61%,50%)]/10 rounded-xl px-5 py-3.5 text-white placeholder:text-[hsl(0,0%,35%)] font-['Sora'] focus:outline-none focus:border-[hsl(120,61%,50%)]/40 transition-colors"
                 />
               </div>
               <select
                 required value={form.budget}
                 onChange={(e) => setForm({ ...form, budget: e.target.value })}
-                className="w-full bg-[hsl(240,10%,10%)] border border-[hsl(150,100%,50%)]/10 rounded-xl px-5 py-3.5 text-white font-['Outfit'] focus:outline-none focus:border-[hsl(150,100%,50%)]/40 transition-colors appearance-none"
+                className="w-full bg-[hsl(240,10%,10%)] border border-[hsl(120,61%,50%)]/10 rounded-xl px-5 py-3.5 text-white font-['Sora'] focus:outline-none focus:border-[hsl(120,61%,50%)]/40 transition-colors appearance-none"
               >
                 <option value="" disabled className="text-[hsl(0,0%,35%)]">Investimento mensal em ads</option>
                 <option value="<5k">Menos de R$5K</option>
@@ -420,13 +425,13 @@ export default function LandingPage() {
               <button
                 type="submit"
                 disabled={submitting}
-                className="w-full auth-btn-primary py-4 rounded-full text-base font-bold font-['Outfit'] transition-all hover:shadow-[0_0_30px_hsl(150,100%,50%,0.35)] hover:scale-[1.02] disabled:opacity-60 flex items-center justify-center gap-2"
+                className="w-full auth-btn-primary py-4 rounded-full text-base font-bold font-['Sora'] transition-all hover:shadow-[0_0_30px_hsl(120,61%,50%,0.35)] hover:scale-[1.02] disabled:opacity-60 flex items-center justify-center gap-2"
               >
                 {submitting ? 'Enviando...' : (
                   <>AGENDAR DIAGNÓSTICO <ArrowRight size={18} /></>
                 )}
               </button>
-              <p className="text-center text-xs text-[hsl(0,0%,40%)] font-['Outfit']">
+              <p className="text-center text-xs text-[hsl(0,0%,40%)] font-['Sora']">
                 30 min · Sem compromisso · Análise real do seu funil
               </p>
             </motion.form>
