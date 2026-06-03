@@ -12,6 +12,7 @@ import { OwnerSelector } from '@/components/common/OwnerSelector';
 import { Button } from '@/components/ui/button';
 import { ConfirmDialog } from '@/components/ui/confirm-dialog';
 import { Check, ArrowCounterClockwise, SidebarSimple } from '@phosphor-icons/react';
+import { Link } from 'react-router-dom';
 import type { InboxMessageRow } from '@/hooks/inbox/useInboxThreadMessages';
 
 interface Props {
@@ -162,7 +163,13 @@ export function InboxThreadDetail({ threadId, onThreadStatusChanged }: Props) {
             {initials(name)}
           </div>
           <div className="flex-1 min-w-0">
-            <h2 className="text-[15px] font-semibold text-foreground truncate leading-tight" title={name}>{name}</h2>
+            {thread.contact_id ? (
+              <Link to={`/contacts/${thread.contact_id}`} className="block">
+                <h2 className="text-[15px] font-semibold text-foreground truncate leading-tight hover:text-primary hover:underline transition-colors" title={name}>{name}</h2>
+              </Link>
+            ) : (
+              <h2 className="text-[15px] font-semibold text-foreground truncate leading-tight" title={name}>{name}</h2>
+            )}
             <div className="flex items-center gap-1.5 mt-1 min-w-0 overflow-hidden whitespace-nowrap">
               {lifecycle === 'customer' && (
                 <span className="inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-medium bg-sky-500/15 text-sky-700 dark:text-sky-300">
@@ -254,7 +261,11 @@ export function InboxThreadDetail({ threadId, onThreadStatusChanged }: Props) {
               <dd className="text-foreground">{lifecycle === 'customer' ? 'Cliente' : (lifecycle || '—')}</dd>
               <dt className="text-muted-foreground">Origem</dt>
               <dd className="text-foreground truncate" title={latestWonOpportunity?.title || undefined}>
-                {latestWonOpportunity ? `Oportunidade · ${latestWonOpportunity.title}` : '—'}
+                {latestWonOpportunity ? (
+                  <Link to={`/opportunities/${latestWonOpportunity.id}`} className="hover:text-primary hover:underline transition-colors">
+                    {`Oportunidade · ${latestWonOpportunity.title}`}
+                  </Link>
+                ) : '—'}
               </dd>
               {latestWonOpportunity && (
                 <>
