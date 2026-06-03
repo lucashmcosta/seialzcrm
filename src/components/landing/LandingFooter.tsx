@@ -16,7 +16,7 @@ export function LandingFooter() {
       className="py-12"
     >
       <div className="max-w-7xl mx-auto px-6 flex flex-col md:flex-row items-center justify-between gap-6">
-        <img src={logoBlack.url} alt="Seialz" style={{ height: 22, width: 'auto' }} />
+        <img src={logoBlack.url} alt="Seialz" style={{ height: 28, width: 'auto', display: 'block' }} />
         <p className="text-sm" style={{ color: ASH }}>
           Sales Ops Nativo · © {new Date().getFullYear()}
         </p>
