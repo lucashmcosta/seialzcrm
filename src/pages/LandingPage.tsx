@@ -8,6 +8,7 @@ import {
   Target, ArrowsClockwise, ChartLineUp, PhoneCall, Robot, ChatCircleText,
   UsersThree, ChartBar, Lightning, GearSix, UserCheck, ArrowRight,
 } from '@phosphor-icons/react';
+import linhasMedia from '@/assets/brand/linhas-media-dark.svg.asset.json';
 
 /* ── Animation helpers ── */
 const fadeUp = {
