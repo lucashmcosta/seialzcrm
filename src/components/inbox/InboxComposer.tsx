@@ -410,6 +410,40 @@ export function InboxComposer({ thread, replyTo, onClearReply, onSent, onThreadM
             className="flex-1 resize-none border-0 shadow-none focus-visible:ring-0 bg-transparent px-2 py-2 min-h-[36px] max-h-[120px] text-sm placeholder:text-muted-foreground/60 scrollbar-hide"
           />
 
+          {!isNote && hasAIIntegration && isIn24hWindow && (
+            <DropdownMenu open={aiMenuOpen} onOpenChange={setAiMenuOpen}>
+              <DropdownMenuTrigger asChild>
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  className="h-9 w-9 rounded-full flex-shrink-0"
+                  disabled={!text.trim() || aiImproving || inputDisabled}
+                  title="Melhorar com IA"
+                >
+                  {aiImproving ? (
+                    <SpinnerGap className="h-4 w-4 animate-spin" />
+                  ) : (
+                    <Sparkle className="h-4 w-4 text-purple-500" />
+                  )}
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end">
+                <DropdownMenuItem onClick={() => handleImproveText('grammar')}>
+                  <TextAa className="h-4 w-4 mr-2" /> Corrigir gramática
+                </DropdownMenuItem>
+                <DropdownMenuItem onClick={() => handleImproveText('professional')}>
+                  <Briefcase className="h-4 w-4 mr-2" /> Tornar profissional
+                </DropdownMenuItem>
+                <DropdownMenuItem onClick={() => handleImproveText('friendly')}>
+                  <Smiley className="h-4 w-4 mr-2" /> Tornar amigável
+                </DropdownMenuItem>
+                <DropdownMenuItem onClick={() => handleImproveText('persuasive')}>
+                  <Target className="h-4 w-4 mr-2" /> Tornar persuasivo
+                </DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
+          )}
+
           {!isNote && (
             <AudioRecorder onSend={handleSendAudio} disabled={inputDisabled || !isIn24hWindow} />
           )}
