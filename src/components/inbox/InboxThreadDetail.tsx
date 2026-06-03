@@ -12,6 +12,7 @@ import { OwnerSelector } from '@/components/common/OwnerSelector';
 import { Button } from '@/components/ui/button';
 import { ConfirmDialog } from '@/components/ui/confirm-dialog';
 import { Check, ArrowCounterClockwise, SidebarSimple } from '@phosphor-icons/react';
+import { Link } from 'react-router-dom';
 import type { InboxMessageRow } from '@/hooks/inbox/useInboxThreadMessages';
 
 interface Props {
