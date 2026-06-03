@@ -101,37 +101,39 @@ export default function SignIn() {
         transition={{ duration: 0.5 }}
       >
         <div className="mb-8">
-          <h1 className="text-3xl font-bold text-foreground" style={{ fontFamily: "'Michroma', sans-serif" }}>
-            {t('auth.signIn')}
+          <h1 className="text-3xl font-semibold" style={{ fontFamily: "'Sora', sans-serif", color: '#07100B', letterSpacing: '-0.02em' }}>
+            Entrar
           </h1>
-          <p className="text-muted-foreground mt-2" style={{ fontFamily: "'Outfit', sans-serif" }}>
-            Entre na sua conta do Seialz
+          <p className="mt-2 text-sm" style={{ fontFamily: "'Sora', sans-serif", color: '#6B756F' }}>
+            Acesse sua conta Seialz e continue sua operação.
           </p>
         </div>
 
-        <form onSubmit={handleSignIn} className="space-y-5">
+        <form onSubmit={handleSignIn} className="space-y-5" style={{ fontFamily: "'Sora', sans-serif" }}>
           <div className="space-y-2">
-            <Label htmlFor="email" className="text-sm font-medium text-foreground">{t('auth.email')}</Label>
+            <Label htmlFor="email" className="text-sm font-medium" style={{ color: '#07100B' }}>E-mail</Label>
             <Input
               id="email"
               type="email"
               value={email}
               onChange={(e) => setEmail(e.target.value)}
               required
-              className="h-12 rounded-xl"
+              className="h-12"
+              style={{ borderRadius: 10 }}
               glowOnFocus={false}
             />
           </div>
 
           <div className="space-y-2">
-            <Label htmlFor="password" className="text-sm font-medium text-foreground">{t('auth.password')}</Label>
+            <Label htmlFor="password" className="text-sm font-medium" style={{ color: '#07100B' }}>Senha</Label>
             <Input
               id="password"
               type="password"
               value={password}
               onChange={(e) => setPassword(e.target.value)}
               required
-              className="h-12 rounded-xl"
+              className="h-12"
+              style={{ borderRadius: 10 }}
               glowOnFocus={false}
             />
           </div>
@@ -139,19 +141,20 @@ export default function SignIn() {
           <button
             type="submit"
             disabled={loading}
-            className="w-full h-12 rounded-xl font-semibold text-sm transition-all duration-200 disabled:opacity-50 auth-btn-primary"
+            className="w-full h-12 font-semibold text-sm transition-all duration-200 disabled:opacity-50 auth-btn-primary"
+            style={{ fontFamily: "'Sora', sans-serif" }}
           >
-            {loading ? t('common.loading') : t('auth.signIn')}
+            {loading ? 'Entrando...' : 'Entrar'}
           </button>
 
           <div className="text-center text-sm pt-2">
-            <span className="text-muted-foreground">{t('auth.dontHaveAccount')} </span>
+            <span style={{ color: '#6B756F' }}>Ainda não tem uma conta? </span>
             <button
               type="button"
               className="font-semibold auth-link-green hover:underline"
               onClick={() => navigate('/auth/signup')}
             >
-              {t('auth.signUp')}
+              Criar conta
             </button>
           </div>
         </form>
