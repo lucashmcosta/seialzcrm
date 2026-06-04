@@ -27,6 +27,7 @@ import { ContactAttachments } from '@/components/contacts/ContactAttachments';
 import { ContactCalls } from '@/components/contacts/ContactCalls';
 import { ContactMessages } from '@/components/contacts/ContactMessages';
 import { ContactNotes } from '@/components/contacts/ContactNotes';
+import { DocumentChecklist } from '@/components/documents/DocumentChecklist';
 import { OpportunityDialog } from '@/components/opportunities/OpportunityDialog';
 import { CloseDatePromptDialog } from '@/components/opportunities/CloseDatePromptDialog';
 import { ClickToCallButton } from '@/components/calls/ClickToCallButton';
