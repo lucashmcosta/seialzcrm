@@ -829,6 +829,10 @@ export default function ContactDetail() {
             <Tabs.Panel id="attachments">
               <ContactAttachments contactId={contact.id} />
             </Tabs.Panel>
+
+            <Tabs.Panel id="documents">
+              <DocumentChecklist contactId={contact.id} />
+            </Tabs.Panel>
           </Tabs>
         </div>
       </div>
