@@ -232,6 +232,7 @@ export function SettingsCard({ orgIntegration, onUpdated }: Props) {
                 <p className="text-xs text-muted-foreground">
                   Preencha cada variável. Você pode usar tokens dinâmicos:{" "}
                   <span className="font-mono">{AVAILABLE_TOKENS.join(" ")}</span>
+                  . Se deixar em branco, <span className="font-mono">{`{{1}}`}</span> usa automaticamente o primeiro nome do lead.
                 </p>
                 {templateVars.map((v) => (
                   <div key={v} className="space-y-1">
