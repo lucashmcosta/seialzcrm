@@ -91,6 +91,7 @@ export default function ContactDetail() {
     { id: "calls", label: t('contacts.callsTab') },
     ...(!isMobile ? [{ id: "messages", label: t('contacts.messagesTab') }] : []),
     { id: "attachments", label: t('contacts.attachmentsTab') },
+    { id: "documents", label: "Documentos" },
   ];
 
   useEffect(() => {
