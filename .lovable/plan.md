@@ -1,42 +1,50 @@
-# Corrigir envio da mensagem longa para Matheus
+## Diagnóstico confirmado
 
-## Objetivo
-Fazer o envio da mensagem longa do Matheus funcionar e, se houver recusa do Twilio/WhatsApp, mostrar o motivo real com clareza.
+Verifiquei no banco: as 2 organizações com `auto_send_whatsapp = true` têm `whatsapp_template_variables = {}` (vazio). O template tem `{{1}}` no corpo, mas o `meta-lead-ads-process-lead` envia `ContentVariables` vazio para o Twilio, então o WhatsApp renderiza `{{1}}` literal.
 
-## O que já foi confirmado
-- A conversa do Matheus está aberta, é `customer` e já tem `primary_endpoint_id` válido.
-- O problema não é o bloqueio por atribuição que aparece em outros casos.
-- A mensagem fornecida tem cerca de **2873 caracteres**.
-- A documentação do Twilio indica limite geral de **1600 caracteres** no campo `Body` do endpoint `Messages` e erro típico `21617` quando o corpo excede esse tamanho.
-- O `InboxComposer` hoje depende do `twilio-whatsapp-send`, mas não tem tratamento explícito para limite de tamanho nem garante exposição do detalhe retornado pelo Twilio para esse caso.
+## Princípio: mudanças mínimas e aditivas
 
-## Plano
-1. **Adicionar validação de tamanho antes do envio no Inbox**
-   - Validar o tamanho do texto antes de chamar `twilio-whatsapp-send`.
-   - Bloquear envio livre quando o texto exceder o limite suportado pelo canal.
-   - Exibir mensagem clara orientando a dividir o texto em partes ou usar template quando aplicável.
+Toda a correção fica num **único bloco isolado** dentro do `try { ... } catch (waErr)` que já existe no auto-send. Se qualquer parte falhar, o `catch` continua engolindo o erro como hoje — **nada do fluxo principal (criação de contato, oportunidade, atividade) é tocado.**
 
-2. **Endurecer a edge function `twilio-whatsapp-send`**
-   - Adicionar guarda server-side para corpo acima do limite aceito pelo Twilio.
-   - Retornar erro estruturado e específico para `message_too_long` antes de chamar a API externa.
-   - Preservar logs detalhados para diferenciar validação local de erro retornado pelo Twilio.
+## Alterações
 
-3. **Melhorar a tradução de erros no Inbox**
-   - Mapear `message_too_long` e também o erro Twilio `21617` para uma mensagem amigável e objetiva.
-   - Garantir que o usuário veja o motivo real do bloqueio, em vez de um genérico “falha ao enviar”.
+### 1. `supabase/functions/meta-lead-ads-process-lead/index.ts` (única mudança backend)
 
-4. **Validação final focada no caso do Matheus**
-   - Confirmar que textos curtos continuam enviando normalmente.
-   - Confirmar que esse texto longo específico gera aviso claro e previsível.
-   - Confirmar que o fluxo não fica em falha silenciosa.
+Dentro do bloco existente `if (!existingId && phone && auto_send_whatsapp && template_id)`, logo após montar `templateVariables` a partir de `settings.whatsapp_template_variables`, adicionar fallback:
 
-## Detalhes técnicos
-- Arquivos prováveis:
-  - `src/components/inbox/InboxComposer.tsx`
-  - `supabase/functions/twilio-whatsapp-send/index.ts`
-- Regra proposta:
-  - Mensagens livres acima de 1600 caracteres não serão enviadas pelo caminho atual de WhatsApp/Twilio.
-  - O sistema retornará erro específico e legível.
-- Resultado esperado:
-  - Você vai saber exatamente por que essa mensagem não vai.
-  - O sistema deixa de parecer quebrado e passa a orientar corretamente o usuário.
+- Buscar `whatsapp_templates.body` pelo `whatsapp_template_id`.
+- Extrair índices `{{N}}` do corpo.
+- Para cada índice **não preenchido ou vazio** em `templateVariables`, aplicar default:
+  - `{{1}}` → `firstName || fullName`
+  - `{{2}}` → `fullName || firstName`
+  - demais → `firstName || fullName`
+- Se o lookup do template falhar, apenas logar e seguir com o que já tinha (comportamento atual).
+
+Salvaguardas:
+- Só sobrescreve chave **ausente ou vazia** — nunca substitui mapeamento que o usuário configurou manualmente.
+- Toda a lógica adicional está dentro de `try/catch` interno; em caso de erro no SELECT, segue o comportamento atual sem quebrar.
+- Não altera assinatura da chamada `twilio-whatsapp-send`, não muda RLS, não muda schema, não cria coluna nem migração.
+
+### 2. `src/components/integrations/meta-lead-ads/SettingsCard.tsx` (UX, sem afetar runtime existente)
+
+- Quando `templateVars.length > 0` e o input de uma variável está vazio, mostrar `placeholder="{first_name}"` na variável `{{1}}` (apenas dica visual).
+- Pequeno texto auxiliar listando tokens disponíveis: `{first_name}`, `{full_name}`, `{form_name}`, `{campaign_name}`, `{ad_name}`.
+- **Não** adicionar validação bloqueante no save — para não quebrar fluxos de quem já salvou com variáveis vazias. O fallback do backend cobre esses casos.
+
+## O que NÃO vou mudar
+
+- Schema do banco — nenhuma migração.
+- `twilio-whatsapp-send` — sem alteração.
+- Estrutura de `settings.whatsapp_template_variables` salvas no banco — continuam válidas.
+- Demais integrações que enviam template (Twilio direto, fluxos manuais).
+
+## Validação
+
+1. Após deploy do edge function, checar logs do `meta-lead-ads-process-lead` na próxima chegada de lead — deve aparecer `[auto-wa] fallback var 1 => <nome>`.
+2. Conferir em `/messages` que a nova mensagem chega como `Olá Cleide, ...` em vez de `Olá {{1}}`.
+3. Para garantir que mapeamentos existentes continuam funcionando: organizações que já configuraram variáveis manualmente seguem usando exatamente o que cadastraram (o fallback só age em chaves ausentes/vazias).
+
+## Arquivos
+
+- `supabase/functions/meta-lead-ads-process-lead/index.ts` (delta ~30 linhas, dentro do try existente)
+- `src/components/integrations/meta-lead-ads/SettingsCard.tsx` (delta cosmético: placeholder + hint)

@@ -499,7 +499,37 @@ serve(async (req) => {
         const rawVars = (settings.whatsapp_template_variables || {}) as Record<string, string>;
         const templateVariables: Record<string, string> = {};
         for (const [k, v] of Object.entries(rawVars)) {
-          templateVariables[k] = replaceTokens(String(v ?? ""));
+          const rendered = replaceTokens(String(v ?? "")).trim();
+          if (rendered) templateVariables[k] = rendered;
+        }
+
+        // Fallback: descobre placeholders {{N}} no corpo do template e preenche
+        // qualquer slot ausente/vazio, evitando que o WhatsApp renderize {{1}} literal.
+        try {
+          const { data: tpl } = await admin
+            .from("whatsapp_templates")
+            .select("body")
+            .eq("id", settings.whatsapp_template_id)
+            .maybeSingle();
+          const body: string = tpl?.body || "";
+          const matches = body.match(/\{\{(\d+)\}\}/g) || [];
+          const indices = [...new Set(matches.map((m) => m.replace(/[{}]/g, "")))];
+          const defaultFor = (idx: string) => {
+            if (idx === "1") return firstName || fullName || "";
+            if (idx === "2") return fullName || firstName || "";
+            return firstName || fullName || "";
+          };
+          for (const idx of indices) {
+            if (!templateVariables[idx] || !templateVariables[idx].trim()) {
+              const fb = defaultFor(idx).trim();
+              if (fb) {
+                templateVariables[idx] = fb;
+                console.log("[auto-wa] fallback var", idx, "=>", fb);
+              }
+            }
+          }
+        } catch (e) {
+          console.warn("[auto-wa] template fallback lookup failed", e);
         }
 
         // Fetch service_role JWT from Vault — env var may not be a valid JWT after key rotation
