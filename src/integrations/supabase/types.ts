@@ -2083,6 +2083,139 @@ export type Database = {
           },
         ]
       }
+      document_submissions: {
+        Row: {
+          attachment_id: string
+          contact_id: string
+          created_at: string
+          deleted_at: string | null
+          document_type_id: string
+          id: string
+          organization_id: string
+          rejection_reason: string | null
+          reviewed_at: string | null
+          reviewed_by_user_id: string | null
+          status: string
+          updated_at: string
+          uploaded_at: string
+          uploaded_by_user_id: string
+        }
+        Insert: {
+          attachment_id: string
+          contact_id: string
+          created_at?: string
+          deleted_at?: string | null
+          document_type_id: string
+          id?: string
+          organization_id: string
+          rejection_reason?: string | null
+          reviewed_at?: string | null
+          reviewed_by_user_id?: string | null
+          status?: string
+          updated_at?: string
+          uploaded_at?: string
+          uploaded_by_user_id: string
+        }
+        Update: {
+          attachment_id?: string
+          contact_id?: string
+          created_at?: string
+          deleted_at?: string | null
+          document_type_id?: string
+          id?: string
+          organization_id?: string
+          rejection_reason?: string | null
+          reviewed_at?: string | null
+          reviewed_by_user_id?: string | null
+          status?: string
+          updated_at?: string
+          uploaded_at?: string
+          uploaded_by_user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "document_submissions_attachment_id_fkey"
+            columns: ["attachment_id"]
+            isOneToOne: false
+            referencedRelation: "attachments"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "document_submissions_contact_id_fkey"
+            columns: ["contact_id"]
+            isOneToOne: false
+            referencedRelation: "contacts"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "document_submissions_document_type_id_fkey"
+            columns: ["document_type_id"]
+            isOneToOne: false
+            referencedRelation: "document_types"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "document_submissions_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      document_types: {
+        Row: {
+          code: string
+          created_at: string
+          created_by: string | null
+          deleted_at: string | null
+          id: string
+          is_active: boolean
+          is_required: boolean
+          name: string
+          organization_id: string
+          sort_order: number
+          updated_at: string
+          updated_by: string | null
+        }
+        Insert: {
+          code: string
+          created_at?: string
+          created_by?: string | null
+          deleted_at?: string | null
+          id?: string
+          is_active?: boolean
+          is_required?: boolean
+          name: string
+          organization_id: string
+          sort_order?: number
+          updated_at?: string
+          updated_by?: string | null
+        }
+        Update: {
+          code?: string
+          created_at?: string
+          created_by?: string | null
+          deleted_at?: string | null
+          id?: string
+          is_active?: boolean
+          is_required?: boolean
+          name?: string
+          organization_id?: string
+          sort_order?: number
+          updated_at?: string
+          updated_by?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "document_types_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       documentation: {
         Row: {
           content: string
@@ -7332,6 +7465,10 @@ export type Database = {
         | { Args: { _org_id: string; _queue: string }; Returns: string }
       can_manage_integrations_in_org: {
         Args: { _org_id: string }
+        Returns: boolean
+      }
+      can_review_contact_documents: {
+        Args: { _contact_id: string }
         Returns: boolean
       }
       count_custom_fields_for_org: {
