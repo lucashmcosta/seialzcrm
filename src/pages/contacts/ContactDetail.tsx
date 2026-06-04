@@ -54,6 +54,7 @@ import { ContactMessages } from '@/components/contacts/ContactMessages';
 import { ContactAttachments } from '@/components/contacts/ContactAttachments';
 import { ContactOpportunities } from '@/components/contacts/ContactOpportunities';
 import { ContactNotes } from '@/components/contacts/ContactNotes';
+import { DocumentChecklist } from '@/components/documents/DocumentChecklist';
 
 const getLifecycleColor = (stage: string | null): "gray" | "blue" | "purple" | "success" | "error" => {
   switch (stage) {
