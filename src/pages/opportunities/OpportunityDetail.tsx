@@ -27,6 +27,7 @@ import { ContactAttachments } from '@/components/contacts/ContactAttachments';
 import { ContactCalls } from '@/components/contacts/ContactCalls';
 import { ContactMessages } from '@/components/contacts/ContactMessages';
 import { ContactNotes } from '@/components/contacts/ContactNotes';
+import { DocumentChecklist } from '@/components/documents/DocumentChecklist';
 import { OpportunityDialog } from '@/components/opportunities/OpportunityDialog';
 import { CloseDatePromptDialog } from '@/components/opportunities/CloseDatePromptDialog';
 import { ClickToCallButton } from '@/components/calls/ClickToCallButton';
@@ -78,6 +79,7 @@ export default function OpportunityDetail() {
     { id: 'messages', label: t('contacts.messagesTab') },
     { id: 'tasks', label: t('contacts.tasksTab') },
     { id: 'attachments', label: t('attachments.title') },
+    { id: 'documents', label: 'Documentos' },
     { id: 'notes', label: t('contacts.notesTab') },
   ];
 
@@ -717,6 +719,18 @@ export default function OpportunityDetail() {
 
             <Tabs.Panel id="attachments">
               <ContactAttachments entityId={opportunity.id} entityType="opportunity" />
+            </Tabs.Panel>
+
+            <Tabs.Panel id="documents">
+              {opportunity.contact_id ? (
+                <DocumentChecklist contactId={opportunity.contact_id} />
+              ) : (
+                <Card>
+                  <CardContent className="py-8 text-center text-muted-foreground">
+                    Esta oportunidade não tem um contato associado.
+                  </CardContent>
+                </Card>
+              )}
             </Tabs.Panel>
 
             <Tabs.Panel id="notes">

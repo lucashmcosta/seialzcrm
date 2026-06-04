@@ -21,6 +21,7 @@ import {
   MagnifyingGlass,
   ShuffleAngular,
   Sparkle,
+  Files,
 } from '@phosphor-icons/react';
 import { usePermissions } from '@/hooks/usePermissions';
 import { useWhatsAppIntegration } from '@/hooks/useWhatsAppIntegration';
@@ -56,6 +57,7 @@ const settingsGroups: SettingsGroup[] = [
       { icon: SquaresFour, label: 'Campos Personalizados', description: 'Crie campos extras para contatos e oportunidades', to: 'custom-fields', permission: 'canManageSettings' },
       { icon: Tag, label: 'Etiquetas', description: 'Organize contatos e oportunidades com tags', to: 'tags', permission: 'canManageSettings' },
       { icon: GitBranch, label: 'Pipeline', description: 'Configure estágios do funil de vendas', to: 'pipeline', permission: 'canManageSettings' },
+      { icon: Files, label: 'Documentos', description: 'Configure os tipos exigidos no checklist de contatos', to: 'documents', permission: 'canManageSettings' },
     ],
   },
   {

@@ -54,6 +54,7 @@ import { ContactMessages } from '@/components/contacts/ContactMessages';
 import { ContactAttachments } from '@/components/contacts/ContactAttachments';
 import { ContactOpportunities } from '@/components/contacts/ContactOpportunities';
 import { ContactNotes } from '@/components/contacts/ContactNotes';
+import { DocumentChecklist } from '@/components/documents/DocumentChecklist';
 
 const getLifecycleColor = (stage: string | null): "gray" | "blue" | "purple" | "success" | "error" => {
   switch (stage) {
@@ -91,6 +92,7 @@ export default function ContactDetail() {
     { id: "calls", label: t('contacts.callsTab') },
     ...(!isMobile ? [{ id: "messages", label: t('contacts.messagesTab') }] : []),
     { id: "attachments", label: t('contacts.attachmentsTab') },
+    { id: "documents", label: "Documentos" },
   ];
 
   useEffect(() => {
@@ -827,6 +829,10 @@ export default function ContactDetail() {
 
             <Tabs.Panel id="attachments">
               <ContactAttachments contactId={contact.id} />
+            </Tabs.Panel>
+
+            <Tabs.Panel id="documents">
+              <DocumentChecklist contactId={contact.id} />
             </Tabs.Panel>
           </Tabs>
         </div>

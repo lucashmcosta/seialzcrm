@@ -1,50 +1,51 @@
-## Diagnóstico confirmado
+# Build — Módulo de Documentos V1
 
-Verifiquei no banco: as 2 organizações com `auto_send_whatsapp = true` têm `whatsapp_template_variables = {}` (vazio). O template tem `{{1}}` no corpo, mas o `meta-lead-ads-process-lead` envia `ContentVariables` vazio para o Twilio, então o WhatsApp renderiza `{{1}}` literal.
+Migration já aplicada (tabelas `document_types`, `document_submissions`, função `can_review_contact_documents`, RLS com validação de integridade). Agora segue o build do frontend.
 
-## Princípio: mudanças mínimas e aditivas
+## Passos
 
-Toda a correção fica num **único bloco isolado** dentro do `try { ... } catch (waErr)` que já existe no auto-send. Se qualquer parte falhar, o `catch` continua engolindo o erro como hoje — **nada do fluxo principal (criação de contato, oportunidade, atividade) é tocado.**
+### 1. Hooks
+- `src/hooks/documents/useDocumentTypes.ts` — CRUD + realtime para catálogo de tipos (admin).
+- `src/hooks/documents/useContactDocuments.ts` — lista derivada (junta `document_types` ativos com `document_submissions` do contato, status `pending` derivado quando não há submission). Inclui ações: upload, aprovar, rejeitar, substituir, excluir (soft-delete).
 
-## Alterações
+### 2. Settings → Documentos
+- Rota: `/settings/documents` (admin only).
+- Página: `src/pages/settings/DocumentsSettings.tsx` — usa `Layout`, lista tipos com ordenação, criar/editar/desativar.
+- Dialog: `DocumentTypeFormDialog` (nome, code, obrigatório, ordem).
+- Adicionar card no `SettingsGrid`.
+- Registrar rota em `App.tsx`.
 
-### 1. `supabase/functions/meta-lead-ads-process-lead/index.ts` (única mudança backend)
+### 3. Componente Checklist (reutilizável)
+- `src/components/documents/DocumentChecklist.tsx` — recebe `contactId`, renderiza linha por tipo:
+  - status badge (pending / uploaded / approved / rejected)
+  - botão Upload (quando pending/rejected)
+  - preview/download do anexo
+  - ações: Aprovar / Rejeitar (com motivo) / Substituir / Excluir, condicionadas a `can_review_contact_documents`.
+- `DocumentUploadDialog` — usa bucket `attachments` existente, cria registro em `attachments` com `entity_type='contact_document'`, `entity_id=contactId`, depois insere/atualiza `document_submissions` (status `uploaded`, zera campos de review).
+- `DocumentRejectDialog` — captura `rejection_reason`.
 
-Dentro do bloco existente `if (!existingId && phone && auto_send_whatsapp && template_id)`, logo após montar `templateVariables` a partir de `settings.whatsapp_template_variables`, adicionar fallback:
+### 4. Integração Contato
+- Aba "Documentos" já existe em `ContactDetail.tsx` → ligar ao novo `DocumentChecklist`.
 
-- Buscar `whatsapp_templates.body` pelo `whatsapp_template_id`.
-- Extrair índices `{{N}}` do corpo.
-- Para cada índice **não preenchido ou vazio** em `templateVariables`, aplicar default:
-  - `{{1}}` → `firstName || fullName`
-  - `{{2}}` → `fullName || firstName`
-  - demais → `firstName || fullName`
-- Se o lookup do template falhar, apenas logar e seguir com o que já tinha (comportamento atual).
+### 5. Integração Oportunidade
+- Adicionar aba "Documentos" em `OpportunityDetail.tsx` → renderiza `<DocumentChecklist contactId={opportunity.contact_id} />` (espelho puro).
 
-Salvaguardas:
-- Só sobrescreve chave **ausente ou vazia** — nunca substitui mapeamento que o usuário configurou manualmente.
-- Toda a lógica adicional está dentro de `try/catch` interno; em caso de erro no SELECT, segue o comportamento atual sem quebrar.
-- Não altera assinatura da chamada `twilio-whatsapp-send`, não muda RLS, não muda schema, não cria coluna nem migração.
+### 6. Regras de negócio chave
+- Substituir aprovado → novo submission volta a `uploaded`, zera `reviewed_by_user_id`, `reviewed_at`, `rejection_reason`.
+- Excluir → soft-delete em `document_submissions.deleted_at` E em `attachments.deleted_at`.
+- Sem upload livre — só dentro de slots configurados.
+- Sem campos/UI de validade/expiração.
 
-### 2. `src/components/integrations/meta-lead-ads/SettingsCard.tsx` (UX, sem afetar runtime existente)
+### 7. i18n
+- Adicionar chaves `documents.*` em pt-BR (e en se existir).
 
-- Quando `templateVars.length > 0` e o input de uma variável está vazio, mostrar `placeholder="{first_name}"` na variável `{{1}}` (apenas dica visual).
-- Pequeno texto auxiliar listando tokens disponíveis: `{first_name}`, `{full_name}`, `{form_name}`, `{campaign_name}`, `{ad_name}`.
-- **Não** adicionar validação bloqueante no save — para não quebrar fluxos de quem já salvou com variáveis vazias. O fallback do backend cobre esses casos.
+### 8. QA manual
+- Criar tipo em Settings.
+- Upload no Contato → aparece na Oportunidade.
+- Aprovar / Rejeitar com motivo.
+- Substituir aprovado → volta a uploaded.
+- Excluir → some das duas abas.
+- Verificar realtime entre Contato e Oportunidade.
 
-## O que NÃO vou mudar
-
-- Schema do banco — nenhuma migração.
-- `twilio-whatsapp-send` — sem alteração.
-- Estrutura de `settings.whatsapp_template_variables` salvas no banco — continuam válidas.
-- Demais integrações que enviam template (Twilio direto, fluxos manuais).
-
-## Validação
-
-1. Após deploy do edge function, checar logs do `meta-lead-ads-process-lead` na próxima chegada de lead — deve aparecer `[auto-wa] fallback var 1 => <nome>`.
-2. Conferir em `/messages` que a nova mensagem chega como `Olá Cleide, ...` em vez de `Olá {{1}}`.
-3. Para garantir que mapeamentos existentes continuam funcionando: organizações que já configuraram variáveis manualmente seguem usando exatamente o que cadastraram (o fallback só age em chaves ausentes/vazias).
-
-## Arquivos
-
-- `supabase/functions/meta-lead-ads-process-lead/index.ts` (delta ~30 linhas, dentro do try existente)
-- `src/components/integrations/meta-lead-ads/SettingsCard.tsx` (delta cosmético: placeholder + hint)
+## Entregáveis ao final
+Lista de arquivos criados/alterados, evidência de espelhamento Contato↔Oportunidade, validação dos fluxos e confirmação de ausência de validade/expiração.

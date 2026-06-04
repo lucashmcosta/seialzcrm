@@ -98,6 +98,7 @@ const WhatsAppTemplatesPage = lazy(() => import("./pages/settings/WhatsAppTempla
 const AuditLogs = lazy(() => import("./pages/settings/AuditLogs").then(m => ({ default: m.AuditLogs })));
 const RoundRobinSettings = lazy(() => import("./components/settings/RoundRobinSettings").then(m => ({ default: m.RoundRobinSettings })));
 const Trash = lazy(() => import("./pages/settings/Trash").then(m => ({ default: m.Trash })));
+const DocumentsSettings = lazy(() => import("./components/settings/DocumentsSettings").then(m => ({ default: m.DocumentsSettings })));
 const Profile = lazy(() => import("./pages/Profile"));
 const NotFound = lazy(() => import("./pages/NotFound"));
 
@@ -434,6 +435,7 @@ const App = () => (
             <Route path="duplicates" element={<DuplicatePreventionSettings />} />
             <Route path="custom-fields" element={<CustomFieldsSettings />} />
             <Route path="tags" element={<TagsSettings />} />
+            <Route path="documents" element={<DocumentsSettings />} />
             <Route path="integrations" element={<IntegrationsSettings />} />
             <Route path="whatsapp-templates" element={<WhatsAppTemplatesPage />} />
             <Route path="ai-agent" element={<AIAgentSettings />} />
