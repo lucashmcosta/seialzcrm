@@ -62,11 +62,11 @@ export default function LandingPage() {
           className="absolute inset-0 pointer-events-none bg-center bg-cover"
           style={{
             backgroundImage: `url(${linhasMedia.url})`,
-            opacity: 0.45,
+            opacity: 0.75,
             maskImage:
-              "radial-gradient(ellipse 70% 60% at center, transparent 0%, rgba(0,0,0,0.4) 55%, black 100%)",
+              "radial-gradient(ellipse 75% 65% at center, transparent 0%, rgba(0,0,0,0.55) 55%, black 100%)",
             WebkitMaskImage:
-              "radial-gradient(ellipse 70% 60% at center, transparent 0%, rgba(0,0,0,0.4) 55%, black 100%)",
+              "radial-gradient(ellipse 75% 65% at center, transparent 0%, rgba(0,0,0,0.55) 55%, black 100%)",
           }}
         />
         <div
