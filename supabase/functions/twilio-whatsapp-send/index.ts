@@ -294,17 +294,39 @@ serve(async (req) => {
       }
 
       if (!resolvedEndpointId) {
-        // Fallback 2: single eligible WhatsApp endpoint in the organization
+        // Fallback 2: pick best eligible WhatsApp endpoint in the organization.
+        // Prefer ONLINE senders with a sender_sid configured (memory: WA Outbound Priority).
         const { data: candidates } = await supabaseInbox
           .from('communication_endpoints')
-          .select('id')
+          .select('id, status, sender_sid, purpose, created_at')
           .eq('organization_id', organizationId)
           .eq('channel', 'whatsapp')
           .eq('is_active', true)
           .in('purpose', ['customer_service', 'other'])
-        if (candidates && candidates.length === 1) {
-          resolvedEndpointId = candidates[0].id as string
-          console.log('[inbox-send] endpoint_resolved_via_single_org_endpoint', { threadId, endpointId: resolvedEndpointId })
+
+        const ranked = (candidates ?? []).slice().sort((a: any, b: any) => {
+          const aOnline = a.status === 'online' ? 0 : 1
+          const bOnline = b.status === 'online' ? 0 : 1
+          if (aOnline !== bOnline) return aOnline - bOnline
+          const aSid = a.sender_sid ? 0 : 1
+          const bSid = b.sender_sid ? 0 : 1
+          if (aSid !== bSid) return aSid - bSid
+          const aCs = a.purpose === 'customer_service' ? 0 : 1
+          const bCs = b.purpose === 'customer_service' ? 0 : 1
+          if (aCs !== bCs) return aCs - bCs
+          return String(a.created_at ?? '').localeCompare(String(b.created_at ?? ''))
+        })
+
+        const best = ranked[0]
+        if (best && (best.status === 'online' || ranked.length === 1)) {
+          resolvedEndpointId = best.id as string
+          console.log('[inbox-send] endpoint_resolved_via_ranked_fallback', {
+            threadId,
+            endpointId: resolvedEndpointId,
+            status: best.status,
+            sender_sid: best.sender_sid,
+            total_candidates: ranked.length,
+          })
         } else {
           return inboxErr(400, 'no_endpoint', {
             organization_id: organizationId,
