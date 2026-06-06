@@ -5,6 +5,7 @@
 export type LeadOrigin =
   | { kind: 'meta_form'; label: string }
   | { kind: 'ctwa'; label: string }
+  | { kind: 'google_ads'; label: string }
   | { kind: 'landing_page'; label: string }
   | { kind: 'paid_ad'; label: string }
   | { kind: 'organic'; label: string };
@@ -19,6 +20,7 @@ interface ContactAttribution {
   utm_medium?: string | null;
   utm_campaign?: string | null;
   fbclid?: string | null;
+  gclid?: string | null;
   marketing_campaign_id?: string | null;
   source?: string | null;
 }
@@ -36,13 +38,24 @@ export function getLeadOrigin(contact: ContactAttribution | null | undefined): L
     return { kind: 'ctwa', label: 'Click-to-WhatsApp' };
   }
 
+  // Google Ads — capturado via marcador [src:gads|g:GCLID] ou UTM padrão
+  const paidMediums = ['cpc', 'ppc', 'paid', 'paid_social', 'paidsocial', 'display'];
+  if (
+    contact.gclid ||
+    contact.source === 'google_ads' ||
+    (contact.utm_source?.toLowerCase() === 'google' &&
+      contact.utm_medium &&
+      paidMediums.includes(contact.utm_medium.toLowerCase()))
+  ) {
+    return { kind: 'google_ads', label: 'Google Ads' };
+  }
+
   // Tem ID de anúncio Meta capturado mas tipo desconhecido
   if (contact.ad_referral_source_id || contact.ad_referral_headline) {
     return { kind: 'paid_ad', label: 'Anúncio Meta' };
   }
 
   // Tráfego pago via UTM
-  const paidMediums = ['cpc', 'ppc', 'paid', 'paid_social', 'paidsocial', 'display'];
   if (
     contact.fbclid ||
     (contact.utm_medium && paidMediums.includes(contact.utm_medium.toLowerCase()))
@@ -66,6 +79,8 @@ export function getLeadOriginColor(
       return 'blue';
     case 'ctwa':
       return 'success';
+    case 'google_ads':
+      return 'warning';
     case 'paid_ad':
       return 'warning';
     case 'landing_page':
