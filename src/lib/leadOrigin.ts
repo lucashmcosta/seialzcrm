@@ -38,6 +38,18 @@ export function getLeadOrigin(contact: ContactAttribution | null | undefined): L
     return { kind: 'ctwa', label: 'Click-to-WhatsApp' };
   }
 
+  // Google Ads — capturado via marcador [src:gads|g:GCLID] ou UTM padrão
+  const paidMediums = ['cpc', 'ppc', 'paid', 'paid_social', 'paidsocial', 'display'];
+  if (
+    contact.gclid ||
+    contact.source === 'google_ads' ||
+    (contact.utm_source?.toLowerCase() === 'google' &&
+      contact.utm_medium &&
+      paidMediums.includes(contact.utm_medium.toLowerCase()))
+  ) {
+    return { kind: 'google_ads', label: 'Google Ads' };
+  }
+
   // Tem ID de anúncio Meta capturado mas tipo desconhecido
   if (contact.ad_referral_source_id || contact.ad_referral_headline) {
     return { kind: 'paid_ad', label: 'Anúncio Meta' };
