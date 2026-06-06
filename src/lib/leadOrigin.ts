@@ -20,6 +20,7 @@ interface ContactAttribution {
   utm_medium?: string | null;
   utm_campaign?: string | null;
   fbclid?: string | null;
+  gclid?: string | null;
   marketing_campaign_id?: string | null;
   source?: string | null;
 }
