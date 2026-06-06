@@ -79,6 +79,8 @@ export function getLeadOriginColor(
       return 'blue';
     case 'ctwa':
       return 'success';
+    case 'google_ads':
+      return 'warning';
     case 'paid_ad':
       return 'warning';
     case 'landing_page':
