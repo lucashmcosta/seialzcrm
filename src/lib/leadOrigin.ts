@@ -56,7 +56,6 @@ export function getLeadOrigin(contact: ContactAttribution | null | undefined): L
   }
 
   // Tráfego pago via UTM
-  const paidMediums = ['cpc', 'ppc', 'paid', 'paid_social', 'paidsocial', 'display'];
   if (
     contact.fbclid ||
     (contact.utm_medium && paidMediums.includes(contact.utm_medium.toLowerCase()))
