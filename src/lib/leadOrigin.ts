@@ -5,6 +5,7 @@
 export type LeadOrigin =
   | { kind: 'meta_form'; label: string }
   | { kind: 'ctwa'; label: string }
+  | { kind: 'google_ads'; label: string }
   | { kind: 'landing_page'; label: string }
   | { kind: 'paid_ad'; label: string }
   | { kind: 'organic'; label: string };
