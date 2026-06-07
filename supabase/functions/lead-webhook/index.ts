@@ -42,6 +42,10 @@ interface LeadPayload {
   utm_campaign?: string;
   utm_content?: string;
   utm_term?: string;
+  utm_id?: string;
+  fbclid?: string;
+  gclid?: string;
+  all_params?: Record<string, unknown> | string;
   notes?: string;
   create_opportunity?: boolean;
   opportunity_title?: string;
