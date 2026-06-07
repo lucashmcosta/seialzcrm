@@ -354,6 +354,21 @@ serve(async (req) => {
       contactId = existingContactId;
       duplicateReused = true;
     } else {
+      // Parse all_params (can be JSON string or object) to extract Meta hierarchy
+      let allParams: Record<string, unknown> = {};
+      if (payload.all_params) {
+        if (typeof payload.all_params === 'string') {
+          try { allParams = JSON.parse(payload.all_params); } catch { allParams = {}; }
+        } else if (typeof payload.all_params === 'object') {
+          allParams = payload.all_params as Record<string, unknown>;
+        }
+      }
+
+      const metaAdsetId = (payload.utm_id as string) || (allParams.adset_id as string) || null;
+      const metaCampaignId = (allParams.campaign_id as string) || null;
+      const fbclid = (payload.fbclid as string) || (allParams.fbclid as string) || null;
+      const gclid = (payload.gclid as string) || (allParams.gclid as string) || null;
+
       const { data: contact, error: contactError } = await supabase
         .from('contacts')
         .insert({
@@ -370,6 +385,11 @@ serve(async (req) => {
           utm_campaign: payload.utm_campaign || null,
           utm_content: payload.utm_content || null,
           utm_term: payload.utm_term || null,
+          fbclid: fbclid,
+          fbclid_captured_at: fbclid ? new Date().toISOString() : null,
+          gclid: gclid,
+          meta_adset_id: metaAdsetId,
+          meta_campaign_id: metaCampaignId,
           lifecycle_stage: 'lead',
         })
         .select('id')
