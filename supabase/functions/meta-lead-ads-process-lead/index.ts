@@ -237,6 +237,9 @@ serve(async (req) => {
           ad_referral_source_id: lead.ad_id || null,
           ad_referral_source_type: "lead_form",
           ad_referral_captured_at: lead.created_time || new Date().toISOString(),
+          meta_lead_id: lead.id || null,
+          meta_adset_id: lead.adset_id || null,
+          meta_campaign_id: lead.campaign_id || null,
           created_at: lead.created_time || new Date().toISOString(),
         })
         .select("id")

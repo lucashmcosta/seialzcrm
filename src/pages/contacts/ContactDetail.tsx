@@ -797,7 +797,57 @@ export default function ContactDetail() {
                   )}
                 </Card>
               )}
+
+              {/* Atribuição de Marketing (UTMs / Click IDs / Meta Hierarchy) */}
+              {(contact.utm_source || contact.utm_medium || contact.utm_campaign || contact.utm_content || contact.utm_term || contact.fbclid || contact.gclid || contact.meta_adset_id || contact.meta_campaign_id || contact.meta_lead_id || contact.referrer_url || contact.landing_url) && (
+                <Card className="p-6">
+                  <div className="flex items-center gap-2 mb-4">
+                    <Megaphone className="h-5 w-5 text-primary" />
+                    <h2 className="text-lg font-semibold text-foreground">Atribuição de Marketing</h2>
+                  </div>
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    {[
+                      ['utm_source', contact.utm_source],
+                      ['utm_medium', contact.utm_medium],
+                      ['utm_campaign', contact.utm_campaign],
+                      ['utm_content', contact.utm_content],
+                      ['utm_term (ad_id)', contact.utm_term],
+                      ['fbclid', contact.fbclid],
+                      ['gclid', contact.gclid],
+                      ['meta_adset_id', contact.meta_adset_id],
+                      ['meta_campaign_id', contact.meta_campaign_id],
+                      ['meta_lead_id', contact.meta_lead_id],
+                    ].filter(([, v]) => v).map(([label, value]) => (
+                      <div key={label as string}>
+                        <div className="text-sm text-muted-foreground">{label}</div>
+                        <div className="text-foreground font-mono text-sm break-all">{value as string}</div>
+                      </div>
+                    ))}
+                    {contact.fbclid_captured_at && (
+                      <div>
+                        <div className="text-sm text-muted-foreground">fbclid capturado em</div>
+                        <div className="text-foreground text-sm">
+                          {new Date(contact.fbclid_captured_at).toLocaleString(locale)}
+                        </div>
+                      </div>
+                    )}
+                    {contact.referrer_url && (
+                      <div className="md:col-span-2">
+                        <div className="text-sm text-muted-foreground">Referrer URL</div>
+                        <div className="text-foreground text-sm break-all">{contact.referrer_url}</div>
+                      </div>
+                    )}
+                    {contact.landing_url && (
+                      <div className="md:col-span-2">
+                        <div className="text-sm text-muted-foreground">Landing URL</div>
+                        <div className="text-foreground text-sm break-all">{contact.landing_url}</div>
+                      </div>
+                    )}
+                  </div>
+                </Card>
+              )}
             </Tabs.Panel>
+
 
             <Tabs.Panel id="timeline">
               <ActivityTimeline contactId={contact.id} />
