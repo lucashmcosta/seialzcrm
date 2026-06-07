@@ -1,79 +1,68 @@
-## Contexto
-
-Na Central Trabalhista (org `40ae935c-...`), alguns clientes chegam pelo WhatsApp com a primeira mensagem contendo um marcador de origem no próprio texto, ex:
-
-```
-Olá, quero conferir meu acerto rescisório [src:gads|g:Cj0KCQjw...]
-```
-
-Esse marcador vem de um link de Click-to-WhatsApp gerado fora do Meta (provavelmente um anúncio Google Ads que envia para `wa.me`), por isso hoje o contato é classificado como **Orgânico** — não há `utm_*`, `gclid`, nem `ad_referral_*` preenchidos.
-
-Variações já observadas no histórico:
-- `[src:gads|g:<GCLID>]` → Google Ads (com gclid)
-- `[src:direct]` → digitado/colado direto
-- Potencialmente `[src:<outro>|...]` no futuro
-
-Volume confirmado nos últimos 90 dias na Central Trabalhista: 2 contatos `gads` (3/jun e 4/jun) e vários `direct`. É um piloto recém-ligado.
+# Plano: Atribuição completa de leads (Viagi LP + Meta CAPI)
 
 ## Objetivo
+Fechar os gaps de atribuição identificados na auditoria sem inventar tabelas novas. O schema já tem quase tudo — o problema é que o `lead-webhook` descarta campos críticos e o `meta-capi-send-event` lê colunas que não existem.
 
-Capturar essa origem **sem depender do frontend** (mensagens entram via Railway/edge functions/webhooks Twilio), preencher os campos de atribuição do contato, e fazer com que o badge "Origem" pare de mostrar Orgânico nesses casos.
+## Escopo
+3 correções cirúrgicas + 1 migration mínima + UI de diagnóstico read-only + teste end-to-end.
 
-Escopo deliberadamente pequeno e temporário: nada de novo dashboard, nada de marketing_campaigns sintética, nada de mexer no Railway.
+---
 
-## Plano
+## Mudanças
 
-### 1. Migration — trigger em `messages` (parser server-side)
+### 1. Migration: adicionar colunas faltantes em `contacts`
+Apenas o estritamente necessário para o CAPI funcionar e para reter o adset:
 
-Criar função `public.parse_lead_source_marker_from_message()` + trigger `AFTER INSERT ON public.messages` que:
+- `fbclid_captured_at timestamptz` — timestamp original da captura do clique (CAPI gera `fbc` com isso)
+- `meta_lead_id text` — id do lead vindo do Meta Lead Ads (deduplicação CAPI)
+- `meta_adset_id text` — id do adset (hoje só sobrevive na nota)
+- `meta_campaign_id text` — id da campanha Meta (idem)
+- Índices: `(meta_adset_id)`, `(meta_campaign_id)`, `(meta_lead_id)` parcial onde não nulo
 
-- Só executa quando `NEW.direction = 'inbound'` e `NEW.content ~ '\[src:[^\]]+\]'`.
-- Extrai com regex:
-  - `src`: string após `src:` até `|` ou `]`
-  - `g` (opcional): GCLID após `g:` até `]`
-- Localiza o contato pelo `thread_id` (`message_threads.contact_id`).
-- Atualiza `contacts` **apenas se os campos de atribuição estiverem nulos** (não sobrescreve quem já tem Meta/CTWA/UTM):
-  - `src=gads`: `utm_source='google'`, `utm_medium='cpc'`, `source='google_ads'`, `gclid=<g>` (quando presente).
-  - `src=direct`: `utm_source='direct'`, `utm_medium='none'` (mantém classificação não-paga).
-  - Outros valores: grava `utm_source=<src>` cru para não perdermos sinal.
-- `SECURITY DEFINER`, `SET search_path = public`, idempotente.
-- Escopo: somente Central Trabalhista nesta v1 (`WHERE NEW.organization_id = '40ae935c-a7f7-4ad7-8ea4-91be6404a95f'`) — pode ser ampliado depois removendo esse filtro.
+Sem alterar `marketing_campaigns` — a resolução continua via `fn_resolve_marketing_campaign_id()`.
 
-Backfill no fim da mesma migration: aplicar a mesma lógica aos contatos existentes da Central Trabalhista cujo primeiro inbound contenha `[src:...]` e que ainda estejam sem atribuição.
+### 2. Patch em `supabase/functions/lead-webhook/index.ts`
+Ler do payload (raiz) e persistir:
 
-### 2. Frontend — classificar Google Ads em `src/lib/leadOrigin.ts`
+- `fbclid` → `contacts.fbclid` + `fbclid_captured_at = now()` quando presente
+- `gclid` → `contacts.gclid` (remover trigger hardcoded por org como follow-up futuro, fora deste plano)
+- `utm_id` → `contacts.meta_adset_id` (Meta envia adset_id em `utm_id`)
+- `utm_term` continua mapeando `ad_id` (já funciona)
+- Extrair `adset_id`, `campaign_id`, `placement` de `all_params` (se vier) → `meta_adset_id`, `meta_campaign_id` (sem sobrescrever se já setado por `utm_id`)
+- Chamar `fn_resolve_marketing_campaign_id()` passando agora também `meta_adset_id` para melhorar match
 
-Adicionar variante no tipo `LeadOrigin`:
+### 3. Patch em `supabase/functions/meta-lead-ads-process-lead/index.ts`
+Gravar `meta_adset_id`, `meta_campaign_id`, `meta_lead_id` no contato (hoje só grava `ad_referral_source_id`).
 
-- `{ kind: 'google_ads'; label: 'Google Ads' }`
+### 4. Patch em `supabase/functions/meta-capi-send-event/index.ts`
+Já lê `fbclid_captured_at` e `meta_lead_id` — após a migration, esses campos passam a existir e o `fbc` será gerado com timestamp real (não mais `Date.now()` fake).
 
-Regra de detecção (antes do bloco "Tráfego Pago"):
+### 5. UI de diagnóstico (read-only) em `ContactDetail.tsx`
+Card "Atribuição" mostrando: `source`, todos `utm_*`, `fbclid`, `gclid`, `meta_adset_id`, `meta_campaign_id`, `referrer_url`, `landing_url`, link para `marketing_campaigns` resolvida. Só leitura, ajuda você a auditar visualmente cada lead.
 
-- Se `contact.gclid` **ou** `utm_source === 'google'` com `utm_medium ∈ ('cpc','ppc','paid')` → `google_ads`.
+### 6. Teste end-to-end
+Após deploy, chamar `lead-webhook` via `supabase--curl_edge_functions` com payload idêntico ao "Teste E2E Viagi" e validar via SQL que:
+- `fbclid`, `gclid`, `fbclid_captured_at` populados
+- `meta_adset_id` = `ADSET_TESTE_222`
+- `meta_campaign_id` = `CAMP_TESTE_333`
+- `marketing_campaign_id` resolvido (se houver match) ou ambiguidade logada
 
-Cor em `getLeadOriginColor`: usar `'warning'` (mesma família de pago) ou criar nova — proposta: `'warning'` para manter consistência sem inflar paleta.
-
-`LeadOriginBadge` já consome o helper, então herda automaticamente. Nenhuma outra alteração de UI necessária.
-
-### 3. (Opcional, fora desta v1) Sanitização visual do `[src:...]` no balão da mensagem
-
-**Não incluído** neste plano para manter o escopo mínimo e não tocar no pipeline de renderização do WhatsApp. Se quiser, faço numa segunda rodada removendo o trecho `\s*\[src:[^\]]+\]\s*$` apenas no render (sem alterar o conteúdo armazenado).
+---
 
 ## Detalhes técnicos
 
-- Trigger é `AFTER INSERT`, não bloqueia a escrita da mensagem; falha silenciosa em caso de erro de parse (try/except no PL/pgSQL).
-- Não cria `marketing_campaigns` nem `import_logs` — atribuição fica só no contato.
-- Regex em Postgres: `substring(NEW.content from '\[src:([^|\]]+)')` e `substring(NEW.content from '\|g:([^\]]+)\]')`.
-- Não altera RLS nem grants (tabelas já existem).
-- Reversível: `DROP TRIGGER` + `DROP FUNCTION` e os campos preenchidos podem ser limpos por SQL pontual se necessário.
+**Por que não criar `marketing_params jsonb`**: o schema já é relacional e rico. Adicionar JSONB seria duplicar dado que vai pra colunas indexadas. Mantemos relacional.
 
-## Arquivos
+**Por que não usar `utm_id` como coluna**: Viagi (e Meta no geral) usa `utm_id` semanticamente como adset_id. Nomear `meta_adset_id` é mais claro para queries de ROAS por adset e evita confusão com IDs de outras plataformas.
 
-- **Nova migration** `supabase/migrations/<timestamp>_parse_lead_source_marker.sql`
-- **Edit** `src/lib/leadOrigin.ts` (novo kind `google_ads` + regra + cor)
+**Ordem de execução**:
+1. Migration (aprovação do usuário)
+2. Patches dos 3 edge functions (deploy automático)
+3. UI card de atribuição
+4. Curl de teste + leitura SQL pra validar
+5. Reportar resultado
 
-## Verificação após aplicar
-
-1. Rodar `SELECT id, utm_source, utm_medium, gclid, source FROM contacts WHERE id IN ('7b229631-...','ee156f06-...')` e confirmar preenchimento.
-2. Abrir um desses contatos na UI → badge deve mostrar **Google Ads** (warning).
-3. Enviar mensagem-teste contendo `[src:gads|g:TESTE123]` (ou simular via insert direto) e ver o contato sendo marcado.
+## Fora de escopo (follow-up futuro)
+- Remover trigger hardcoded de `gclid` por org
+- UI admin de resolução de `marketing_attribution_ambiguities`
+- Backfill de leads históricos com `meta_adset_id` a partir das notas
