@@ -1633,6 +1633,7 @@ export type Database = {
           email: string | null
           engagement_score: number | null
           fbclid: string | null
+          fbclid_captured_at: string | null
           first_name: string | null
           full_name: string
           gclid: string | null
@@ -1642,6 +1643,9 @@ export type Database = {
           last_name: string | null
           lifecycle_stage: Database["public"]["Enums"]["lifecycle_stage"] | null
           marketing_campaign_id: string | null
+          meta_adset_id: string | null
+          meta_campaign_id: string | null
+          meta_lead_id: string | null
           nationality: string | null
           organization_id: string
           owner_user_id: string | null
@@ -1688,6 +1692,7 @@ export type Database = {
           email?: string | null
           engagement_score?: number | null
           fbclid?: string | null
+          fbclid_captured_at?: string | null
           first_name?: string | null
           full_name: string
           gclid?: string | null
@@ -1699,6 +1704,9 @@ export type Database = {
             | Database["public"]["Enums"]["lifecycle_stage"]
             | null
           marketing_campaign_id?: string | null
+          meta_adset_id?: string | null
+          meta_campaign_id?: string | null
+          meta_lead_id?: string | null
           nationality?: string | null
           organization_id: string
           owner_user_id?: string | null
@@ -1745,6 +1753,7 @@ export type Database = {
           email?: string | null
           engagement_score?: number | null
           fbclid?: string | null
+          fbclid_captured_at?: string | null
           first_name?: string | null
           full_name?: string
           gclid?: string | null
@@ -1756,6 +1765,9 @@ export type Database = {
             | Database["public"]["Enums"]["lifecycle_stage"]
             | null
           marketing_campaign_id?: string | null
+          meta_adset_id?: string | null
+          meta_campaign_id?: string | null
+          meta_lead_id?: string | null
           nationality?: string | null
           organization_id?: string
           owner_user_id?: string | null
