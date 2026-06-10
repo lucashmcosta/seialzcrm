@@ -295,16 +295,64 @@ serve(async (req) => {
 
       if (!resolvedEndpointId) {
         // Fallback 2: pick best eligible WhatsApp endpoint in the organization.
-        // Prefer ONLINE senders with a sender_sid configured (memory: WA Outbound Priority).
-        const { data: candidates } = await supabaseInbox
+        // CROSS-ORG GUARD: filter by the org's configured whatsapp_number to prevent
+        // sending through another org's Twilio endpoint when Twilio account is shared.
+        let orgWhatsappNumber: string | null = null
+        try {
+          const { data: orgInteg } = await supabaseInbox
+            .from('organization_integrations')
+            .select('config_values, admin_integrations!inner(slug)')
+            .eq('organization_id', organizationId)
+            .eq('admin_integrations.slug', 'twilio-whatsapp')
+            .eq('is_enabled', true)
+            .maybeSingle()
+          const raw = (orgInteg?.config_values as any)?.whatsapp_number ?? null
+          if (raw && typeof raw === 'string') {
+            orgWhatsappNumber = raw.replace(/^whatsapp:/i, '').trim()
+          }
+        } catch (e) {
+          console.warn('[inbox-send] failed to load org whatsapp_number', (e as Error).message)
+        }
+        console.log('[inbox-send] org_whatsapp_number', { organizationId, orgWhatsappNumber })
+
+        let query = supabaseInbox
           .from('communication_endpoints')
-          .select('id, status, sender_sid, purpose, created_at')
+          .select('id, status, sender_sid, purpose, created_at, external_address')
           .eq('organization_id', organizationId)
           .eq('channel', 'whatsapp')
           .eq('is_active', true)
           .in('purpose', ['customer_service', 'other'])
 
-        const ranked = (candidates ?? []).slice().sort((a: any, b: any) => {
+        const { data: rawCandidates } = await query
+
+        // If org has whatsapp_number configured, STRICTLY filter by it (block cross-org leak).
+        // Otherwise, fall back to old behavior to avoid breaking orgs without setup.
+        let candidates = rawCandidates ?? []
+        if (orgWhatsappNumber) {
+          const normalize = (v: string | null | undefined) =>
+            (v ?? '').replace(/^whatsapp:/i, '').replace(/\s+/g, '').trim()
+          const target = normalize(orgWhatsappNumber)
+          candidates = candidates.filter((c: any) => normalize(c.external_address) === target)
+          if (candidates.length === 0) {
+            console.error('[inbox-send] cross_org_leak_blocked', {
+              organizationId,
+              orgWhatsappNumber,
+              available_endpoints: (rawCandidates ?? []).map((c: any) => ({
+                id: c.id,
+                external_address: c.external_address,
+              })),
+            })
+            return inboxErr(400, 'no_endpoint_for_org_number', {
+              organization_id: organizationId,
+              configured_number: orgWhatsappNumber,
+              available_count: rawCandidates?.length ?? 0,
+            })
+          }
+        } else {
+          console.warn('[inbox-send] org_has_no_whatsapp_number_configured_using_legacy_fallback', { organizationId })
+        }
+
+        const ranked = candidates.slice().sort((a: any, b: any) => {
           const aOnline = a.status === 'online' ? 0 : 1
           const bOnline = b.status === 'online' ? 0 : 1
           if (aOnline !== bOnline) return aOnline - bOnline
@@ -325,12 +373,14 @@ serve(async (req) => {
             endpointId: resolvedEndpointId,
             status: best.status,
             sender_sid: best.sender_sid,
+            external_address: best.external_address,
             total_candidates: ranked.length,
+            filtered_by_org_number: !!orgWhatsappNumber,
           })
         } else {
           return inboxErr(400, 'no_endpoint', {
             organization_id: organizationId,
-            candidates_count: candidates?.length ?? 0,
+            candidates_count: candidates.length,
           })
         }
       }
