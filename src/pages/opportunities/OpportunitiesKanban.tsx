@@ -170,6 +170,13 @@ export default function OpportunitiesKanban() {
     setKanbanSelectionMode(false);
     setSelectedIds([]);
   }, []);
+  const toggleSelectColumn = useCallback((ids: string[], allSelected: boolean) => {
+    if (ids.length === 0) return;
+    setSelectedIds(prev => allSelected
+      ? prev.filter(i => !ids.includes(i))
+      : Array.from(new Set([...prev, ...ids]))
+    );
+  }, []);
   const [sortDescriptor, setSortDescriptor] = usePersistedFilters<SortDescriptor>(
     'opportunities.sort',
     { column: 'title', direction: 'ascending' },
