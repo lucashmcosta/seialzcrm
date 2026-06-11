@@ -2842,6 +2842,30 @@ export type Database = {
         }
         Relationships: []
       }
+      integration_inbound_event_claims: {
+        Row: {
+          claimed_at: string
+          claimed_by: string | null
+          expires_at: string
+          handler_key: string
+          inbound_event_id: string
+        }
+        Insert: {
+          claimed_at?: string
+          claimed_by?: string | null
+          expires_at?: string
+          handler_key: string
+          inbound_event_id: string
+        }
+        Update: {
+          claimed_at?: string
+          claimed_by?: string | null
+          expires_at?: string
+          handler_key?: string
+          inbound_event_id?: string
+        }
+        Relationships: []
+      }
       integration_inbound_events: {
         Row: {
           aggregate_id: string | null
@@ -7797,6 +7821,65 @@ export type Database = {
       rpc_claim_inbound_events: {
         Args: {
           _batch_size?: number
+          _integration_slug?: string
+          _worker_id?: string
+        }
+        Returns: {
+          aggregate_id: string | null
+          aggregate_type: string | null
+          claimed_at: string | null
+          claimed_by: string | null
+          correlation_id: string | null
+          dead_letter_reason: string | null
+          error_classification: string | null
+          event_version: number
+          expires_at: string
+          external_id: string | null
+          handler_key: string | null
+          headers: Json | null
+          http_method: string | null
+          id: string
+          idempotency_key: string | null
+          integration_slug: string
+          last_attempt_at: string | null
+          max_attempts: number
+          next_run_at: string | null
+          organization_id: string | null
+          parse_attempts: number
+          parser_function: string | null
+          parser_version: number | null
+          process_error: string | null
+          process_status: string
+          processed_at: string | null
+          raw_headers: Json | null
+          raw_payload: Json
+          received_at: string
+          replay_count: number
+          request_path: string | null
+          resulting_contact_id: string | null
+          resulting_message_id: string | null
+          resulting_opportunity_id: string | null
+          retry_count: number
+          sequence_number: number | null
+          shadow_mode: boolean
+          signature_algo: string | null
+          signature_valid: boolean | null
+          source_event: string
+          source_ip: unknown
+          trace_id: string | null
+        }[]
+        SetofOptions: {
+          from: "*"
+          to: "integration_inbound_events"
+          isOneToOne: false
+          isSetofReturn: true
+        }
+      }
+      rpc_claim_inbound_shadow_events: {
+        Args: {
+          _batch_size?: number
+          _claim_ttl?: string
+          _handler_key?: string
           _integration_slug?: string
           _worker_id?: string
         }
