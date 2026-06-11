@@ -15,7 +15,8 @@ import { useTranslation } from '@/lib/i18n';
 import { usePermissions } from '@/hooks/usePermissions';
 import { useTheme } from '@/contexts/ThemeContext';
 import { supabase } from '@/integrations/supabase/client';
-import { Plus, MagnifyingGlass, FunnelSimple, PencilSimple, TrashSimple } from '@phosphor-icons/react';
+import { Plus, MagnifyingGlass, FunnelSimple, PencilSimple, TrashSimple, CheckSquare } from '@phosphor-icons/react';
+import { BulkActionsBar } from '@/components/BulkActionsBar';
 import { Skeleton } from '@/components/ui/skeleton';
 import { OpportunityDialog } from '@/components/opportunities/OpportunityDialog';
 import { CloseDatePromptDialog } from '@/components/opportunities/CloseDatePromptDialog';
@@ -160,6 +161,15 @@ export default function OpportunitiesKanban() {
   const [currentPage, setCurrentPage] = useState(1);
   const [itemsPerPage, setItemsPerPage] = usePersistedFilters<number>('opportunities.itemsPerPage', 25);
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
+  const [kanbanSelectionMode, setKanbanSelectionMode] = useState(false);
+
+  const toggleSelect = useCallback((id: string) => {
+    setSelectedIds(prev => prev.includes(id) ? prev.filter(i => i !== id) : [...prev, id]);
+  }, []);
+  const exitSelectionMode = useCallback(() => {
+    setKanbanSelectionMode(false);
+    setSelectedIds([]);
+  }, []);
   const [sortDescriptor, setSortDescriptor] = usePersistedFilters<SortDescriptor>(
     'opportunities.sort',
     { column: 'title', direction: 'ascending' },
