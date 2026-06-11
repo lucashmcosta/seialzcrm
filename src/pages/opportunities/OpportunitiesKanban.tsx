@@ -1015,7 +1015,7 @@ export default function OpportunitiesKanban() {
   // SEIALZ KANBAN RENDER
   // ═══════════════════════════════════════
   const renderSeialzKanban = () => (
-    <DragDropContext onDragEnd={permissions.canEditOpportunities ? handleDragEnd : () => {}}>
+    <DragDropContext onDragEnd={permissions.canEditOpportunities && !kanbanSelectionMode ? handleDragEnd : () => {}}>
       <div className="flex gap-3 overflow-x-auto pb-1 px-6 pt-4 flex-1">
         {stages.map((stage, stageIndex) => {
           const stageOpportunities = getOpportunitiesForStage(stage.id);
@@ -1072,7 +1072,7 @@ export default function OpportunitiesKanban() {
                           key={opp.id}
                           draggableId={opp.id}
                           index={index}
-                          isDragDisabled={!permissions.canEditOpportunities}
+                          isDragDisabled={!permissions.canEditOpportunities || kanbanSelectionMode}
                         >
                           {(provided, snapshot) => (
                             <div
@@ -1097,6 +1097,9 @@ export default function OpportunitiesKanban() {
                                 onClick={() => navigate(`/opportunities/${opp.id}`)}
                                 tags={tagsByOpportunity[opp.id] || []}
                                 formatCurrency={formatCurrency}
+                                selectionMode={kanbanSelectionMode}
+                                selected={selectedIds.includes(opp.id)}
+                                onToggleSelect={() => toggleSelect(opp.id)}
                               />
                             </div>
                           )}
