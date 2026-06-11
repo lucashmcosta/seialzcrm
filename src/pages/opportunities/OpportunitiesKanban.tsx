@@ -1418,8 +1418,6 @@ export default function OpportunitiesKanban() {
                           );
                         })()}
                       </CardHeader>
-                        </p>
-                      </CardHeader>
                       <Droppable droppableId={stage.id}>
                         {(provided, snapshot) => (
                           <CardContent
