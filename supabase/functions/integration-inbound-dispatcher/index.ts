@@ -262,8 +262,11 @@ Deno.serve(async (req) => {
     match: 0,
     divergent: 0,
     legacy_missing: 0,
+    v2_extra: 0,
+    error: 0,
     v2_parse_error: 0,
     unsupported_event_type: 0,
+    postgrest_lookup_failed: 0,
   };
 
   for (const ev of events) {
@@ -289,33 +292,51 @@ Deno.serve(async (req) => {
         // 3a) Lookup org-scoped primeiro
         let legacy: LegacyMessage | null = null;
         let crossOrgLeak = false;
+        let lookupError: { code?: string; message?: string } | null = null;
 
         if (ev.organization_id) {
-          const { data: scoped } = await supabase
+          const { data: scoped, error: scopedErr } = await supabase
             .from("messages")
-            .select("id, organization_id, message_thread_id, direction, body, whatsapp_message_sid, created_at")
+            .select(SELECT_COLS)
             .eq("whatsapp_message_sid", messageSid)
             .eq("organization_id", ev.organization_id)
             .maybeSingle();
-          legacy = scoped as LegacyMessage | null;
+          if (scopedErr) {
+            lookupError = { code: scopedErr.code, message: scopedErr.message };
+          } else {
+            legacy = scoped as LegacyMessage | null;
+          }
         }
 
         // 3b) Fallback global apenas para detectar cross-org leak
-        if (!legacy) {
-          const { data: global } = await supabase
+        if (!legacy && !lookupError) {
+          const { data: globalRow, error: globalErr } = await supabase
             .from("messages")
-            .select("id, organization_id, message_thread_id, direction, body, whatsapp_message_sid, created_at")
+            .select(SELECT_COLS)
             .eq("whatsapp_message_sid", messageSid)
             .limit(1)
             .maybeSingle();
-          if (global) {
-            legacy = global as LegacyMessage;
+          if (globalErr) {
+            lookupError = { code: globalErr.code, message: globalErr.message };
+          } else if (globalRow) {
+            legacy = globalRow as LegacyMessage;
             crossOrgLeak = ev.organization_id != null
               && legacy.organization_id !== ev.organization_id;
           }
         }
 
-        if (!legacy) {
+        if (lookupError) {
+          outcome = "postgrest_lookup_failed";
+          diffSummary = {
+            fields: ["lookup_error"],
+            detail: {
+              sid_used: messageSid,
+              scoped_to_org: ev.organization_id,
+              pg_code: lookupError.code ?? null,
+              pg_message: lookupError.message ?? null,
+            },
+          };
+        } else if (!legacy) {
           outcome = "legacy_missing";
           diffSummary = {
             fields: ["legacy_row"],
@@ -329,6 +350,9 @@ Deno.serve(async (req) => {
         }
       }
 
+      // Map outcome to one accepted by the CHECK constraint, preserving detail
+      const persisted = persistOutcome(outcome, diffSummary);
+
       // 4) Grava resultado (idempotente via uniq_iidrl_event_handler)
       const { error: logErr } = await supabase
         .from("integration_inbound_dry_run_log")
@@ -339,8 +363,8 @@ Deno.serve(async (req) => {
           event_version: 1,
           intended_actions: intendedActions,
           legacy_actual: legacyActual,
-          diff_summary: diffSummary,
-          outcome,
+          diff_summary: persisted.diffSummary,
+          outcome: persisted.outcome,
           trace_id: ev.trace_id,
         });
 
@@ -354,7 +378,7 @@ Deno.serve(async (req) => {
         }));
       }
 
-      counters[outcome] += 1;
+      counters[outcome] = (counters[outcome] ?? 0) + 1;
       counters.processed += 1;
 
       // 5) Libera o claim (não obrigatório; expira em 5min de qualquer forma)
@@ -379,8 +403,12 @@ Deno.serve(async (req) => {
         event_version: 1,
         intended_actions: { error: String(e) },
         legacy_actual: null,
-        diff_summary: { fields: ["exception"], detail: { exception: String(e) } },
-        outcome: "v2_parse_error",
+        diff_summary: {
+          fields: ["exception"],
+          detail: { exception: String(e) },
+          error_type: "v2_parse_error",
+        },
+        outcome: "error",
         trace_id: ev.trace_id,
       }).then(() => {}, () => {});
     }
