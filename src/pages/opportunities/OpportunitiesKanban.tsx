@@ -1151,6 +1151,17 @@ export default function OpportunitiesKanban() {
               views={['kanban', 'list']}
             />
             {filterPanel}
+            {viewMode === 'kanban' && permissions.canEditOpportunities && (
+              <Button
+                variant={kanbanSelectionMode ? 'default' : 'ghost'}
+                size="sm"
+                onClick={() => kanbanSelectionMode ? exitSelectionMode() : setKanbanSelectionMode(true)}
+                className="h-8 text-[12px]"
+              >
+                <CheckSquare size={14} weight="light" className="mr-1.5" />
+                {kanbanSelectionMode ? 'Sair da seleção' : 'Selecionar'}
+              </Button>
+            )}
             <Button
               size="sm"
               onClick={handleNewOpportunity}
