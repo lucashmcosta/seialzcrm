@@ -41,9 +41,9 @@ type InboundEvent = {
 type LegacyMessage = {
   id: string;
   organization_id: string | null;
-  message_thread_id: string | null;
+  thread_id: string | null;
   direction: string | null;
-  body: string | null;
+  content: string | null;
   whatsapp_message_sid: string | null;
   created_at: string;
 };
@@ -52,8 +52,36 @@ type Outcome =
   | "match"
   | "divergent"
   | "legacy_missing"
+  | "v2_extra"
+  | "error"
   | "v2_parse_error"
-  | "unsupported_event_type";
+  | "unsupported_event_type"
+  | "postgrest_lookup_failed";
+
+// CHECK constraint on integration_inbound_dry_run_log.outcome only allows these:
+const PERSISTED_OUTCOMES = new Set<string>([
+  "match",
+  "divergent",
+  "legacy_missing",
+  "v2_extra",
+  "error",
+]);
+
+function persistOutcome(
+  outcome: Outcome,
+  diffSummary: Record<string, unknown> | null,
+): { outcome: string; diffSummary: Record<string, unknown> | null } {
+  if (PERSISTED_OUTCOMES.has(outcome)) {
+    return { outcome, diffSummary };
+  }
+  return {
+    outcome: "error",
+    diffSummary: { ...(diffSummary ?? {}), error_type: outcome },
+  };
+}
+
+const SELECT_COLS =
+  "id, organization_id, thread_id, direction, content, whatsapp_message_sid, created_at";
 
 function jsonResponse(body: unknown, status = 200): Response {
   return new Response(JSON.stringify(body), {
@@ -136,22 +164,22 @@ function buildDiff(
   }
 
   const intendedBody = (intended.body ?? "") as string;
-  const legacyBody = legacy.body ?? "";
+  const legacyBody = legacy.content ?? "";
   const intendedHasText = intendedBody.length > 0;
   const numMedia = Number(intended.num_media ?? 0);
   const allowEmpty = !intendedHasText && numMedia > 0;
   if (!allowEmpty && intendedBody !== legacyBody) {
-    fields.push("body");
-    detail.body = {
+    fields.push("content");
+    detail.content = {
       expected_len: intendedBody.length,
       legacy_len: legacyBody.length,
       equal_trimmed: intendedBody.trim() === legacyBody.trim(),
     };
   }
 
-  if (!legacy.message_thread_id) {
-    fields.push("message_thread_id");
-    detail.message_thread_id = { legacy: null };
+  if (!legacy.thread_id) {
+    fields.push("thread_id");
+    detail.thread_id = { legacy: null };
   }
 
   return {
@@ -234,8 +262,11 @@ Deno.serve(async (req) => {
     match: 0,
     divergent: 0,
     legacy_missing: 0,
+    v2_extra: 0,
+    error: 0,
     v2_parse_error: 0,
     unsupported_event_type: 0,
+    postgrest_lookup_failed: 0,
   };
 
   for (const ev of events) {
@@ -261,33 +292,51 @@ Deno.serve(async (req) => {
         // 3a) Lookup org-scoped primeiro
         let legacy: LegacyMessage | null = null;
         let crossOrgLeak = false;
+        let lookupError: { code?: string; message?: string } | null = null;
 
         if (ev.organization_id) {
-          const { data: scoped } = await supabase
+          const { data: scoped, error: scopedErr } = await supabase
             .from("messages")
-            .select("id, organization_id, message_thread_id, direction, body, whatsapp_message_sid, created_at")
+            .select(SELECT_COLS)
             .eq("whatsapp_message_sid", messageSid)
             .eq("organization_id", ev.organization_id)
             .maybeSingle();
-          legacy = scoped as LegacyMessage | null;
+          if (scopedErr) {
+            lookupError = { code: scopedErr.code, message: scopedErr.message };
+          } else {
+            legacy = scoped as LegacyMessage | null;
+          }
         }
 
         // 3b) Fallback global apenas para detectar cross-org leak
-        if (!legacy) {
-          const { data: global } = await supabase
+        if (!legacy && !lookupError) {
+          const { data: globalRow, error: globalErr } = await supabase
             .from("messages")
-            .select("id, organization_id, message_thread_id, direction, body, whatsapp_message_sid, created_at")
+            .select(SELECT_COLS)
             .eq("whatsapp_message_sid", messageSid)
             .limit(1)
             .maybeSingle();
-          if (global) {
-            legacy = global as LegacyMessage;
+          if (globalErr) {
+            lookupError = { code: globalErr.code, message: globalErr.message };
+          } else if (globalRow) {
+            legacy = globalRow as LegacyMessage;
             crossOrgLeak = ev.organization_id != null
               && legacy.organization_id !== ev.organization_id;
           }
         }
 
-        if (!legacy) {
+        if (lookupError) {
+          outcome = "postgrest_lookup_failed";
+          diffSummary = {
+            fields: ["lookup_error"],
+            detail: {
+              sid_used: messageSid,
+              scoped_to_org: ev.organization_id,
+              pg_code: lookupError.code ?? null,
+              pg_message: lookupError.message ?? null,
+            },
+          };
+        } else if (!legacy) {
           outcome = "legacy_missing";
           diffSummary = {
             fields: ["legacy_row"],
@@ -301,6 +350,9 @@ Deno.serve(async (req) => {
         }
       }
 
+      // Map outcome to one accepted by the CHECK constraint, preserving detail
+      const persisted = persistOutcome(outcome, diffSummary);
+
       // 4) Grava resultado (idempotente via uniq_iidrl_event_handler)
       const { error: logErr } = await supabase
         .from("integration_inbound_dry_run_log")
@@ -311,8 +363,8 @@ Deno.serve(async (req) => {
           event_version: 1,
           intended_actions: intendedActions,
           legacy_actual: legacyActual,
-          diff_summary: diffSummary,
-          outcome,
+          diff_summary: persisted.diffSummary,
+          outcome: persisted.outcome,
           trace_id: ev.trace_id,
         });
 
@@ -326,7 +378,7 @@ Deno.serve(async (req) => {
         }));
       }
 
-      counters[outcome] += 1;
+      counters[outcome] = (counters[outcome] ?? 0) + 1;
       counters.processed += 1;
 
       // 5) Libera o claim (não obrigatório; expira em 5min de qualquer forma)
@@ -351,8 +403,12 @@ Deno.serve(async (req) => {
         event_version: 1,
         intended_actions: { error: String(e) },
         legacy_actual: null,
-        diff_summary: { fields: ["exception"], detail: { exception: String(e) } },
-        outcome: "v2_parse_error",
+        diff_summary: {
+          fields: ["exception"],
+          detail: { exception: String(e) },
+          error_type: "v2_parse_error",
+        },
+        outcome: "error",
         trace_id: ev.trace_id,
       }).then(() => {}, () => {});
     }
