@@ -1057,6 +1057,19 @@ export default function OpportunitiesKanban() {
                 <p className="font-data text-[11px] text-muted-foreground mt-1">
                   {formatCurrency(realAmount, organization?.default_currency || 'BRL')}
                 </p>
+                {kanbanSelectionMode && stageOpportunities.length > 0 && (() => {
+                  const colIds = stageOpportunities.map(o => o.id);
+                  const allSel = colIds.every(id => selectedIds.includes(id));
+                  return (
+                    <button
+                      type="button"
+                      onClick={() => toggleSelectColumn(colIds, allSel)}
+                      className="mt-1 text-[11px] text-muted-foreground hover:text-foreground underline-offset-2 hover:underline"
+                    >
+                      {allSel ? 'Limpar coluna' : `Selecionar todos (${colIds.length})`}
+                    </button>
+                  );
+                })()}
               </div>
 
               {/* Droppable area */}
