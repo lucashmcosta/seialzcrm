@@ -1283,6 +1283,18 @@ export default function OpportunitiesKanban() {
             </AlertDialogFooter>
           </AlertDialogContent>
         </AlertDialog>
+
+        <BulkActionsBar
+          selectedIds={selectedIds}
+          module="opportunities"
+          users={users}
+          stages={stages}
+          onClear={exitSelectionMode}
+          onSuccess={fetchData}
+          locale={locale}
+          canEdit={permissions.canEditOpportunities}
+          canDelete={permissions.canDeleteOpportunities}
+        />
       </Layout>
     );
   }
@@ -1592,7 +1604,20 @@ export default function OpportunitiesKanban() {
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
-      </AlertDialog>
+        </AlertDialog>
+
+        <BulkActionsBar
+          selectedIds={selectedIds}
+          module="opportunities"
+          users={users}
+          stages={stages}
+          onClear={exitSelectionMode}
+          onSuccess={fetchData}
+          locale={locale}
+          canEdit={permissions.canEditOpportunities}
+          canDelete={permissions.canDeleteOpportunities}
+        />
+      </div>
     </Layout>
   );
 }
