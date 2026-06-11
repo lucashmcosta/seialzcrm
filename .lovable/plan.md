@@ -1,81 +1,210 @@
 
-# Patch mínimo — integration-inbound-dispatcher
+# Patch mínimo no `integration-inbound-dispatcher` + teste de paridade batch_size=50
 
 ## Escopo
-Apenas `supabase/functions/integration-inbound-dispatcher/index.ts`. Nenhuma alteração em webhook legado, `messages`, `message_threads`, `process_status`, cron ou flag permanente.
+Editar apenas `supabase/functions/integration-inbound-dispatcher/index.ts`. Sem mudanças em RPC, webhook legado, `messages`, `message_threads`, `process_status`, cron ou flag permanente.
 
-## Ajuste obrigatório aplicado
-O CHECK de `integration_inbound_dry_run_log.outcome` aceita somente: `match`, `divergent`, `legacy_missing`, `v2_extra`, `error`.
+## Por que o patch é necessário
+O dispatcher hoje só lê `batch_size` e delega o claim ao `rpc_claim_inbound_shadow_events`, que ordena por `received_at ASC` sem filtros. Sem patch, um batch_size=50 consumiria eventos antigos com `organization_id NULL` e fixtures `SMtest_*` — o oposto da amostra pedida.
 
-Portanto:
-- `v2_parse_error` e `unsupported_event_type` **não** serão gravados em `outcome`.
-- Ambos serão mapeados para `outcome = "error"` no insert.
-- O detalhe é preservado em `diff_summary.error_type` (`"v2_parse_error"` | `"unsupported_event_type"` | `"postgrest_lookup_failed"`).
-- Contadores em memória (resposta da função) continuam separados por tipo para visibilidade no retorno do batch, mas só `error` vai para o banco.
+---
 
-## Mudanças no arquivo
+## Mudança 1 — body parser aceita `filters`
 
-### 1. Tipo `LegacyMessage`
-- `message_thread_id: string` → `thread_id: string`
-- `body: string | null` → `content: string | null`
+Adicionar tipo e parse depois de `MAX_BATCH`:
 
-### 2. SELECT_COLS dos lookups
-- De: `id, message_thread_id, direction, body, whatsapp_message_sid, organization_id, created_at`
-- Para: `id, thread_id, direction, content, whatsapp_message_sid, organization_id, created_at`
+```ts
+type DispatcherFilters = {
+  organization_id_not_null?: boolean;
+  source_event?: string;                 // "inbound_message"
+  received_after?: string;               // ISO timestamp
+  exclude_message_sid_prefix?: string;   // "SMtest_"
+};
 
-### 3. Tratamento explícito de erro PostgREST
-No bloco de lookup por `whatsapp_message_sid`:
-- Capturar `{ data, error }`.
-- Se `error` (com `code`/`message`): NÃO marcar `legacy_missing`. Definir `outcome = "error"`, popular `diff_summary = { error_type: "postgrest_lookup_failed", pg_code, pg_message, sid_used }`.
-- Se `data` vazio sem erro: mantém `legacy_missing` (comportamento legítimo).
+let batchSize = DEFAULT_BATCH;
+let filters: DispatcherFilters | null = null;
 
-### 4. `buildDiff`
-- `legacy.body` → `legacy.content`
-- Campo de diff `message_thread_id` → `thread_id`
-
-### 5. Mapeamento de outcome antes do insert
-Função auxiliar `persistOutcome(outcome, diffSummary)`:
-```
-const PERSISTED = new Set(["match","divergent","legacy_missing","v2_extra","error"]);
-if (!PERSISTED.has(outcome)) {
-  diffSummary = { ...(diffSummary ?? {}), error_type: outcome };
-  outcome = "error";
+if (req.method === "POST") {
+  const body = await req.json().catch(() => ({}));
+  if (typeof body?.batch_size === "number") {
+    batchSize = Math.max(1, Math.min(MAX_BATCH, Math.floor(body.batch_size)));
+  }
+  if (body?.filters && typeof body.filters === "object") {
+    filters = body.filters as DispatcherFilters;
+  }
 }
 ```
-Aplicado em todos os caminhos (`v2_parse_error`, `unsupported_event_type`, lookup error).
 
-### 6. Contadores
-Adicionar `error: 0` e manter `v2_parse_error` / `unsupported_event_type` apenas como contadores in-memory (retornados no JSON da resposta), não no DB.
+## Mudança 2 — novo caminho de claim filtrado
 
-## SQL de cleanup (apenas 6 registros de teste)
-```sql
-DELETE FROM integration_inbound_dry_run_log
- WHERE handler_key = 'twilio.whatsapp.parity_check.v1'
-   AND inbound_event_id IN (
-     -- 5 IDs do batch_size=5 + 1 prévio identificado
-     '<id1>','<id2>','<id3>','<id4>','<id5>','22b7b5b9-5797-4075-93f0-bd0c2453886e'
-   );
+Substituir o bloco atual de `workerId` + `rpc_claim_inbound_shadow_events` por:
 
-DELETE FROM integration_inbound_event_claims
- WHERE handler_key = 'twilio.whatsapp.parity_check.v1'
-   AND inbound_event_id IN ( ...mesmos 6 IDs... );
+```ts
+const workerId = `dispatcher-${crypto.randomUUID()}`;
+let events: InboundEvent[] = [];
+
+if (filters) {
+  // (a) Pré-seleção sem efeitos colaterais
+  let q = supabase
+    .from("integration_inbound_events")
+    .select(
+      "id, organization_id, integration_slug, source_event, external_id, " +
+      "raw_payload, received_at, trace_id, handler_key, shadow_mode"
+    )
+    .eq("integration_slug", INTEGRATION_SLUG)
+    .eq("shadow_mode", true)
+    .eq("process_status", "received")
+    .order("received_at", { ascending: true })
+    .limit(batchSize * 5); // folga para descartes
+
+  if (filters.organization_id_not_null) q = q.not("organization_id", "is", null);
+  if (filters.source_event)             q = q.eq("source_event", filters.source_event);
+  if (filters.received_after)           q = q.gt("received_at", filters.received_after);
+
+  const { data: candidates, error: candErr } = await q;
+  if (candErr) {
+    console.error(JSON.stringify({
+      level: "error", msg: "inbox_v2.parity.filter_select_failed",
+      error: candErr.message,
+    }));
+    return jsonResponse({ ok: false, error: "filter_select_failed" }, 500);
+  }
+
+  // (b) Filtro de prefixo de SID em memória
+  const prefix = filters.exclude_message_sid_prefix;
+  const filteredBySid = (candidates ?? []).filter((row) => {
+    if (!prefix) return true;
+    const p = (row.raw_payload ?? {}) as Record<string, unknown>;
+    const sid = String(p.MessageSid ?? p.SmsMessageSid ?? "");
+    return !sid.startsWith(prefix);
+  });
+
+  // (c) AJUSTE OBRIGATÓRIO #2 — excluir eventos JÁ logados em
+  //     integration_inbound_dry_run_log para o mesmo handler_key.
+  //     Sem isso o dispatcher pode reclaimar e bater no índice único
+  //     uniq_iidrl_event_handler na hora do insert do log.
+  let notLogged = filteredBySid;
+  if (filteredBySid.length > 0) {
+    const candidateIds = filteredBySid.map((r) => r.id);
+    const { data: alreadyLogged, error: logSelErr } = await supabase
+      .from("integration_inbound_dry_run_log")
+      .select("inbound_event_id")
+      .eq("handler_key", HANDLER_KEY)
+      .in("inbound_event_id", candidateIds);
+    if (logSelErr) {
+      console.error(JSON.stringify({
+        level: "error", msg: "inbox_v2.parity.dry_run_log_check_failed",
+        error: logSelErr.message,
+      }));
+      return jsonResponse({ ok: false, error: "dry_run_log_check_failed" }, 500);
+    }
+    const loggedSet = new Set((alreadyLogged ?? []).map((r) => r.inbound_event_id));
+    notLogged = filteredBySid.filter((r) => !loggedSet.has(r.id));
+  }
+
+  // (d) Claim idempotente um a um até bater batchSize ou esgotar.
+  //     AJUSTE OBRIGATÓRIO #1 — a coluna correta em
+  //     integration_inbound_event_claims é `claimed_by`, NÃO `worker_id`.
+  for (const row of notLogged) {
+    if (events.length >= batchSize) break;
+    const { error: claimErr } = await supabase
+      .from("integration_inbound_event_claims")
+      .insert({
+        inbound_event_id: row.id,
+        handler_key: HANDLER_KEY,
+        claimed_by: workerId,   // <-- claimed_by (não worker_id)
+      });
+    if (!claimErr) {
+      events.push(row as InboundEvent);
+    } else if (claimErr.code !== "23505") {
+      console.error(JSON.stringify({
+        level: "warn", msg: "inbox_v2.parity.claim_insert_failed",
+        inbound_event_id: row.id, pg_code: claimErr.code, pg_message: claimErr.message,
+      }));
+    }
+    // 23505 = colisão de unique (já reivindicado): pula silenciosamente
+  }
+} else {
+  // Caminho legado preservado
+  const { data: claimed, error: claimErr } = await supabase.rpc(
+    "rpc_claim_inbound_shadow_events",
+    { _batch_size: batchSize, _integration_slug: INTEGRATION_SLUG,
+      _handler_key: HANDLER_KEY, _worker_id: workerId },
+  );
+  if (claimErr) {
+    console.error(JSON.stringify({
+      level: "error", msg: "inbox_v2.parity.claim_failed", error: claimErr.message,
+    }));
+    return jsonResponse({ ok: false, error: "claim_failed" }, 500);
+  }
+  events = (claimed ?? []) as InboundEvent[];
+}
 ```
-Os 5 IDs exatos serão lidos via `read_query` no início do build, para garantir match.
 
-## Revalidação batch_size=5
-1. `UPDATE integration_feature_flags SET enabled=true WHERE flag_key='inbox_v2.dispatch.twilio-whatsapp' AND organization_id IS NULL`
-2. Aguardar ~2s de propagação
-3. `POST integration-inbound-dispatcher {"batch_size":5}`
-4. `UPDATE ... SET enabled=false` imediatamente
-5. Ler `dry_run_log` dos 5 eventos: `outcome`, `diff_summary`, `source_event`, SID usado.
+> Antes de aplicar, será feito um `read_query` de confirmação em `information_schema.columns` para `integration_inbound_event_claims` validando o nome `claimed_by`. Se houver divergência, paramos e reportamos antes de prosseguir.
 
-### Esperado
-- 3 `match` (SIDs reais já confirmados em `messages`)
-- 2 `legacy_missing` (SIDs sintéticos `SMtest_*`)
-- 0 `error` (se houver, o `diff_summary.error_type` indicará a causa)
-- `messages` / `message_threads` inalterados
-- `process_status` permanece `received`
+## Mudança 3 — resposta
+Incluir `filters_applied: filters` no JSON de retorno para auditoria. Restante do fluxo (`parseIntended`, lookups, `persistOutcome`, insert em `dry_run_log`, cleanup de claims) permanece intocado.
 
-## Fora de escopo (apenas reportar)
-- 43% dos shadow events com `organization_id` null — precisa plano de cutover separado.
-- Política de limpeza de claims pós-replay (decidir depois).
+---
+
+## Pré-check antes de ligar a flag
+
+```sql
+SELECT COUNT(*) AS elegiveis
+FROM integration_inbound_events e
+WHERE e.integration_slug='twilio-whatsapp'
+  AND e.shadow_mode=true
+  AND e.process_status='received'
+  AND e.organization_id IS NOT NULL
+  AND e.source_event='inbound_message'
+  AND e.received_at > '2026-05-25 19:31:40'::timestamptz
+  AND COALESCE(e.raw_payload->>'MessageSid', e.raw_payload->>'SmsMessageSid','') NOT LIKE 'SMtest_%'
+  AND NOT EXISTS (
+    SELECT 1 FROM integration_inbound_dry_run_log l
+     WHERE l.inbound_event_id = e.id
+       AND l.handler_key = 'twilio.whatsapp.parity_check.v1'
+  );
+```
+
+## Execução controlada (uma única invocação)
+
+1. Liga a flag:
+   ```sql
+   UPDATE integration_feature_flags
+      SET enabled=true, updated_at=now()
+    WHERE flag_key='inbox_v2.dispatch.twilio-whatsapp' AND organization_id IS NULL;
+   ```
+2. Aguardar ~2s.
+3. `POST integration-inbound-dispatcher` uma única vez:
+   ```json
+   {
+     "batch_size": 50,
+     "filters": {
+       "organization_id_not_null": true,
+       "source_event": "inbound_message",
+       "received_after": "2026-05-25T19:31:40Z",
+       "exclude_message_sid_prefix": "SMtest_"
+     }
+   }
+   ```
+4. Desliga a flag imediatamente:
+   ```sql
+   UPDATE integration_feature_flags
+      SET enabled=false, updated_at=now()
+    WHERE flag_key='inbox_v2.dispatch.twilio-whatsapp' AND organization_id IS NULL;
+   ```
+5. Confirmar `enabled=false` via SELECT.
+
+## Coleta de evidências
+- Counters HTTP: `claimed`, `processed`, `match`, `divergent`, `legacy_missing`, `error`, `duration_ms`, `filters_applied`.
+- Breakdown via `dry_run_log` (últimos 10 min, handler `twilio.whatsapp.parity_check.v1`).
+- Até 5 amostras de `divergent` com `diff_summary`.
+- Até 5 amostras de `error` com `pg_code`/`pg_message`/`error_type`.
+- Zero side-effect:
+  - `process_status` permanece `received`;
+  - sem inserts/updates em `messages`/`message_threads`;
+  - flag final = `false`.
+
+## Fora de escopo
+Backfill dos 26k eventos `organization_id NULL`, cron, mudança no RPC `rpc_claim_inbound_shadow_events`, webhook legado, `messages`, `message_threads`, `process_status`, flag permanente, cleanup dos novos registros em `dry_run_log`/claims.
