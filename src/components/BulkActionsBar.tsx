@@ -5,11 +5,17 @@ import { ConfirmDialog } from '@/components/ui/confirm-dialog';
 import { supabase } from '@/integrations/supabase/client';
 import { useTranslation } from '@/lib/i18n';
 import { toast } from '@/hooks/use-toast';
-import { X, User, Prohibit, TrashSimple } from '@phosphor-icons/react';
+import { X, User, Prohibit, TrashSimple, Stack } from '@phosphor-icons/react';
 
 interface User {
   id: string;
   full_name: string;
+}
+
+interface StageOption {
+  id: string;
+  name: string;
+  type?: string; // 'open' | 'won' | 'lost'
 }
 
 interface BulkActionsBarProps {
@@ -21,6 +27,8 @@ interface BulkActionsBarProps {
   locale: string;
   canEdit?: boolean;
   canDelete?: boolean;
+  /** Apenas para `opportunities`: lista de etapas disponíveis para mover em massa */
+  stages?: StageOption[];
 }
 
 export function BulkActionsBar({
@@ -32,6 +40,7 @@ export function BulkActionsBar({
   locale,
   canEdit = true,
   canDelete = true,
+  stages,
 }: BulkActionsBarProps) {
   const { t } = useTranslation(locale as any);
   const [processing, setProcessing] = useState(false);
@@ -54,6 +63,33 @@ export function BulkActionsBar({
       onClear();
     } catch (error) {
       console.error('Error updating owner:', error);
+      toast({ title: t('common.error'), variant: 'destructive' });
+    } finally {
+      setProcessing(false);
+    }
+  };
+
+  const handleChangeStage = async (stageId: string) => {
+    if (!stageId || selectedIds.length === 0 || module !== 'opportunities') return;
+    const target = stages?.find((s) => s.id === stageId);
+    if (!target) return;
+
+    setProcessing(true);
+    try {
+      const status =
+        target.type === 'won' ? 'won' : target.type === 'lost' ? 'lost' : 'open';
+      const { error } = await supabase
+        .from('opportunities')
+        .update({ pipeline_stage_id: stageId, status })
+        .in('id', selectedIds);
+
+      if (error) throw error;
+
+      toast({ title: t('common.success') });
+      onSuccess();
+      onClear();
+    } catch (error) {
+      console.error('Error changing stage:', error);
       toast({ title: t('common.error'), variant: 'destructive' });
     } finally {
       setProcessing(false);
@@ -112,12 +148,28 @@ export function BulkActionsBar({
   return (
     <>
       <div className="fixed bottom-6 left-1/2 -translate-x-1/2 z-50">
-        <div className="bg-primary text-primary-foreground rounded-lg shadow-lg p-4 flex items-center gap-4">
+        <div className="bg-primary text-primary-foreground rounded-lg shadow-lg p-4 flex items-center gap-4 flex-wrap">
           <span className="font-medium">
             {selectedIds.length} {selectedIds.length === 1 ? 'selecionado' : 'selecionados'}
           </span>
 
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-2 flex-wrap">
+            {canEdit && module === 'opportunities' && stages && stages.length > 0 && (
+              <Select onValueChange={handleChangeStage} disabled={processing}>
+                <SelectTrigger className="w-48 bg-background text-foreground">
+                  <Stack className="h-4 w-4 mr-2" />
+                  <SelectValue placeholder="Mover para etapa" />
+                </SelectTrigger>
+                <SelectContent>
+                  {stages.map((stage) => (
+                    <SelectItem key={stage.id} value={stage.id}>
+                      {stage.name}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            )}
+
             {canEdit && (
               <Select onValueChange={handleChangeOwner} disabled={processing}>
                 <SelectTrigger className="w-48 bg-background text-foreground">
