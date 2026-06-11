@@ -514,5 +514,5 @@ Deno.serve(async (req) => {
   };
   console.log(JSON.stringify(summary));
 
-  return jsonResponse({ ok: true, ...counters, duration_ms: durationMs, worker_id: workerId });
+  return jsonResponse({ ok: true, ...counters, duration_ms: durationMs, worker_id: workerId, filters_applied: filters });
 });
