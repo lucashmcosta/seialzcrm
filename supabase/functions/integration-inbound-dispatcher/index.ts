@@ -164,22 +164,22 @@ function buildDiff(
   }
 
   const intendedBody = (intended.body ?? "") as string;
-  const legacyBody = legacy.body ?? "";
+  const legacyBody = legacy.content ?? "";
   const intendedHasText = intendedBody.length > 0;
   const numMedia = Number(intended.num_media ?? 0);
   const allowEmpty = !intendedHasText && numMedia > 0;
   if (!allowEmpty && intendedBody !== legacyBody) {
-    fields.push("body");
-    detail.body = {
+    fields.push("content");
+    detail.content = {
       expected_len: intendedBody.length,
       legacy_len: legacyBody.length,
       equal_trimmed: intendedBody.trim() === legacyBody.trim(),
     };
   }
 
-  if (!legacy.message_thread_id) {
-    fields.push("message_thread_id");
-    detail.message_thread_id = { legacy: null };
+  if (!legacy.thread_id) {
+    fields.push("thread_id");
+    detail.thread_id = { legacy: null };
   }
 
   return {
