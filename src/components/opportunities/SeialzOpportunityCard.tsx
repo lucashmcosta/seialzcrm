@@ -1,4 +1,5 @@
 import { User, Calendar, PencilSimple } from '@phosphor-icons/react';
+import { Checkbox } from '@/components/ui/checkbox';
 import { format } from 'date-fns';
 import { ptBR, enUS } from 'date-fns/locale';
 import { parseDateOnly } from '@/lib/utils';
@@ -24,6 +25,9 @@ interface SeialzOpportunityCardProps {
   onDelete: () => void;
   onClick: () => void;
   formatCurrency: (value: number, currency: string) => string;
+  selectionMode?: boolean;
+  selected?: boolean;
+  onToggleSelect?: () => void;
 }
 
 export function SeialzOpportunityCard({
@@ -40,6 +44,9 @@ export function SeialzOpportunityCard({
   onDelete,
   onClick,
   formatCurrency,
+  selectionMode = false,
+  selected = false,
+  onToggleSelect,
 }: SeialzOpportunityCardProps) {
   const dateLocale = locale === 'pt-BR' ? ptBR : enUS;
   const MAX_VISIBLE_TAGS = 3;
@@ -60,25 +67,44 @@ export function SeialzOpportunityCard({
     ? `hsl(${[...ownerName].reduce((acc, c) => acc + c.charCodeAt(0), 0) % 360}, 70%, 60%)`
     : undefined;
 
+  const handleCardClick = () => {
+    if (selectionMode) onToggleSelect?.();
+    else onClick();
+  };
+
   return (
     <div
-      className="bg-[hsl(var(--sz-bg2))] border border-[hsl(var(--sz-border))] rounded-md p-3 cursor-pointer group hover:-translate-y-px hover:border-[hsl(var(--sz-border2))] transition-all duration-150"
-      onClick={onClick}
+      className={`bg-[hsl(var(--sz-bg2))] border rounded-md p-3 cursor-pointer group hover:-translate-y-px transition-all duration-150 ${
+        selected
+          ? 'border-primary ring-2 ring-primary'
+          : 'border-[hsl(var(--sz-border))] hover:border-[hsl(var(--sz-border2))]'
+      }`}
+      onClick={handleCardClick}
     >
       <div className="space-y-2.5">
         {/* Title + actions */}
         <div className="flex justify-between items-start gap-2">
+          {selectionMode && (
+            <Checkbox
+              checked={selected}
+              onCheckedChange={() => onToggleSelect?.()}
+              onClick={(e) => e.stopPropagation()}
+              className="mt-0.5"
+            />
+          )}
           <div className="flex-1 min-w-0">
             <h4 className="font-medium text-[13px] leading-snug text-foreground line-clamp-2 break-words" title={title}>{title}</h4>
           </div>
-          <div className="flex gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity">
-            <button
-              className="p-1 rounded hover:bg-[hsl(var(--sz-bg4))] text-muted-foreground hover:text-foreground transition-colors"
-              onClick={(e) => { e.stopPropagation(); onEdit(); }}
-            >
-              <PencilSimple size={12} weight="light" />
-            </button>
-          </div>
+          {!selectionMode && (
+            <div className="flex gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity">
+              <button
+                className="p-1 rounded hover:bg-[hsl(var(--sz-bg4))] text-muted-foreground hover:text-foreground transition-colors"
+                onClick={(e) => { e.stopPropagation(); onEdit(); }}
+              >
+                <PencilSimple size={12} weight="light" />
+              </button>
+            </div>
+          )}
         </div>
 
         {/* Contact name */}

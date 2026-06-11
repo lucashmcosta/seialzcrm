@@ -15,7 +15,8 @@ import { useTranslation } from '@/lib/i18n';
 import { usePermissions } from '@/hooks/usePermissions';
 import { useTheme } from '@/contexts/ThemeContext';
 import { supabase } from '@/integrations/supabase/client';
-import { Plus, MagnifyingGlass, FunnelSimple, PencilSimple, TrashSimple } from '@phosphor-icons/react';
+import { Plus, MagnifyingGlass, FunnelSimple, PencilSimple, TrashSimple, CheckSquare } from '@phosphor-icons/react';
+import { BulkActionsBar } from '@/components/BulkActionsBar';
 import { Skeleton } from '@/components/ui/skeleton';
 import { OpportunityDialog } from '@/components/opportunities/OpportunityDialog';
 import { CloseDatePromptDialog } from '@/components/opportunities/CloseDatePromptDialog';
@@ -160,6 +161,15 @@ export default function OpportunitiesKanban() {
   const [currentPage, setCurrentPage] = useState(1);
   const [itemsPerPage, setItemsPerPage] = usePersistedFilters<number>('opportunities.itemsPerPage', 25);
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
+  const [kanbanSelectionMode, setKanbanSelectionMode] = useState(false);
+
+  const toggleSelect = useCallback((id: string) => {
+    setSelectedIds(prev => prev.includes(id) ? prev.filter(i => i !== id) : [...prev, id]);
+  }, []);
+  const exitSelectionMode = useCallback(() => {
+    setKanbanSelectionMode(false);
+    setSelectedIds([]);
+  }, []);
   const [sortDescriptor, setSortDescriptor] = usePersistedFilters<SortDescriptor>(
     'opportunities.sort',
     { column: 'title', direction: 'ascending' },
@@ -1005,7 +1015,7 @@ export default function OpportunitiesKanban() {
   // SEIALZ KANBAN RENDER
   // ═══════════════════════════════════════
   const renderSeialzKanban = () => (
-    <DragDropContext onDragEnd={permissions.canEditOpportunities ? handleDragEnd : () => {}}>
+    <DragDropContext onDragEnd={permissions.canEditOpportunities && !kanbanSelectionMode ? handleDragEnd : () => {}}>
       <div className="flex gap-3 overflow-x-auto pb-1 px-6 pt-4 flex-1">
         {stages.map((stage, stageIndex) => {
           const stageOpportunities = getOpportunitiesForStage(stage.id);
@@ -1062,7 +1072,7 @@ export default function OpportunitiesKanban() {
                           key={opp.id}
                           draggableId={opp.id}
                           index={index}
-                          isDragDisabled={!permissions.canEditOpportunities}
+                          isDragDisabled={!permissions.canEditOpportunities || kanbanSelectionMode}
                         >
                           {(provided, snapshot) => (
                             <div
@@ -1087,6 +1097,9 @@ export default function OpportunitiesKanban() {
                                 onClick={() => navigate(`/opportunities/${opp.id}`)}
                                 tags={tagsByOpportunity[opp.id] || []}
                                 formatCurrency={formatCurrency}
+                                selectionMode={kanbanSelectionMode}
+                                selected={selectedIds.includes(opp.id)}
+                                onToggleSelect={() => toggleSelect(opp.id)}
                               />
                             </div>
                           )}
@@ -1138,6 +1151,17 @@ export default function OpportunitiesKanban() {
               views={['kanban', 'list']}
             />
             {filterPanel}
+            {viewMode === 'kanban' && permissions.canEditOpportunities && (
+              <Button
+                variant={kanbanSelectionMode ? 'default' : 'ghost'}
+                size="sm"
+                onClick={() => kanbanSelectionMode ? exitSelectionMode() : setKanbanSelectionMode(true)}
+                className="h-8 text-[12px]"
+              >
+                <CheckSquare size={14} weight="light" className="mr-1.5" />
+                {kanbanSelectionMode ? 'Sair da seleção' : 'Selecionar'}
+              </Button>
+            )}
             <Button
               size="sm"
               onClick={handleNewOpportunity}
@@ -1259,6 +1283,18 @@ export default function OpportunitiesKanban() {
             </AlertDialogFooter>
           </AlertDialogContent>
         </AlertDialog>
+
+        <BulkActionsBar
+          selectedIds={selectedIds}
+          module="opportunities"
+          users={users}
+          stages={stages}
+          onClear={exitSelectionMode}
+          onSuccess={fetchData}
+          locale={locale}
+          canEdit={permissions.canEditOpportunities}
+          canDelete={permissions.canDeleteOpportunities}
+        />
       </Layout>
     );
   }
@@ -1297,6 +1333,16 @@ export default function OpportunitiesKanban() {
           
           {filterPanel}
 
+          {viewMode === 'kanban' && permissions.canEditOpportunities && (
+            <Button
+              variant={kanbanSelectionMode ? 'default' : 'outline'}
+              onClick={() => kanbanSelectionMode ? exitSelectionMode() : setKanbanSelectionMode(true)}
+            >
+              <CheckSquare className="w-4 h-4 mr-2" />
+              {kanbanSelectionMode ? 'Sair da seleção' : 'Selecionar'}
+            </Button>
+          )}
+
           {viewMode === 'list' && (
             <ColumnSelector
               columns={availableColumns}
@@ -1307,7 +1353,7 @@ export default function OpportunitiesKanban() {
         </div>
 
         {viewMode === 'kanban' ? (
-          <DragDropContext onDragEnd={permissions.canEditOpportunities ? handleDragEnd : () => {}}>
+          <DragDropContext onDragEnd={permissions.canEditOpportunities && !kanbanSelectionMode ? handleDragEnd : () => {}}>
             <div className="flex gap-3 overflow-x-auto pb-4">
               {stages.map((stage) => {
                 const stageOpportunities = getOpportunitiesForStage(stage.id);
@@ -1358,7 +1404,7 @@ export default function OpportunitiesKanban() {
                                   key={opp.id} 
                                   draggableId={opp.id} 
                                   index={index}
-                                  isDragDisabled={!permissions.canEditOpportunities}
+                                  isDragDisabled={!permissions.canEditOpportunities || kanbanSelectionMode}
                                 >
                                   {(provided, snapshot) => (
                                     <div
@@ -1383,6 +1429,9 @@ export default function OpportunitiesKanban() {
                                         onClick={() => navigate(`/opportunities/${opp.id}`)}
                                         tags={tagsByOpportunity[opp.id] || []}
                                         formatCurrency={formatCurrency}
+                                        selectionMode={kanbanSelectionMode}
+                                        selected={selectedIds.includes(opp.id)}
+                                        onToggleSelect={() => toggleSelect(opp.id)}
                                       />
                                     </div>
                                   )}
@@ -1555,7 +1604,19 @@ export default function OpportunitiesKanban() {
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
-      </AlertDialog>
+        </AlertDialog>
+
+        <BulkActionsBar
+          selectedIds={selectedIds}
+          module="opportunities"
+          users={users}
+          stages={stages}
+          onClear={exitSelectionMode}
+          onSuccess={fetchData}
+          locale={locale}
+          canEdit={permissions.canEditOpportunities}
+          canDelete={permissions.canDeleteOpportunities}
+        />
     </Layout>
   );
 }

@@ -1,54 +1,54 @@
 ## Objetivo
-Executar 2 rodadas adicionais de validação read-only do `integration-inbound-dispatcher` para aumentar a confiança na paridade em eventos recentes saudáveis. Sem cron, sem backfill, sem alteração de webhook/messages/process_status.
+Adicionar **modo de seleção múltipla** ao Kanban de Oportunidades, permitindo selecionar vários cards (em qualquer coluna) e executar em massa:
+- **Mover para outra etapa** (pipeline_stage)
+- **Trocar responsável** (owner_user_id)
+- **Excluir** (soft-delete, já suportado pelo BulkActionsBar)
 
-## Filtros (idênticos à rodada aprovada)
-- integration_slug = `twilio-whatsapp`
-- shadow_mode = true
-- process_status = `received`
-- organization_id IS NOT NULL
-- received_at > `2026-05-25T19:31:40Z`
-- source_event = `inbound_message`
-- MessageSid NOT LIKE `SMtest_%`
-- exclusão de eventos já presentes em `integration_inbound_dry_run_log` para `handler_key = twilio.whatsapp.parity_check.v1` (já implementado no dispatcher)
+## UX
 
-## Procedimento por rodada (executar 2x, sequencial)
+1. **Botão "Selecionar"** no topo do Kanban (ao lado de Filtros / ViewSwitcher).
+2. Ao ativar:
+   - Cada card mostra um **checkbox** no canto superior esquerdo (some no modo normal).
+   - O **drag-and-drop é desabilitado** enquanto o modo seleção está ativo (evita conflito).
+   - Clicar no card **alterna a seleção** em vez de abrir o detalhe.
+   - Cada header de coluna ganha um link "Selecionar todos" / "Limpar" para os cards carregados daquela coluna.
+3. Aparece a `BulkActionsBar` flutuante (já existe) com ações:
+   - **Mover para etapa** (novo Select com as `stages` open/won/lost)
+   - **Trocar responsável** (já existe)
+   - **Excluir** (já existe)
+   - Contador e botão "X" para sair do modo
+4. Após sucesso: refetch (`fetchData`) e sair do modo seleção.
 
-Para cada rodada R ∈ {1, 2}:
+## Mudanças
 
-1. **Snapshot pré-rodada** — registrar `max(created_at)` atual em `integration_inbound_dry_run_log` para o handler, para isolar as linhas novas dessa rodada.
-2. **Ligar flag** — `UPDATE integration_feature_flags SET enabled=true, updated_at=now() WHERE flag_key='inbox_v2.dispatch.twilio-whatsapp' AND organization_id IS NULL`.
-3. **Invocar 1x** — `POST integration-inbound-dispatcher` com:
-   ```json
-   {
-     "batch_size": 50,
-     "filters": {
-       "organization_id_not_null": true,
-       "source_event": "inbound_message",
-       "received_after": "2026-05-25T19:31:40Z",
-       "exclude_message_sid_prefix": "SMtest_"
-     }
-   }
-   ```
-   (Mesmo timeout esperado da rodada anterior; resultados são lidos via DB, não pela resposta HTTP.)
-4. **Desligar flag imediatamente** — `UPDATE ... SET enabled=false`. Confirmar `enabled=false` com SELECT.
-5. **Coletar outcomes** — agregar por `outcome` em `integration_inbound_dry_run_log` para o handler, filtrando `created_at > snapshot`. Contar: claimed (= linhas novas), processed, match, divergent, legacy_missing, error.
-6. **Confirmar zero side-effect:**
-   - `process_status` dos `inbound_event_id` da rodada: 100% ainda `received`.
-   - `integration_inbound_event_claims` para esses ids + handler: 0 (claim é liberado após processamento).
-   - Sem novos inserts/updates em `messages` / `message_threads` (read-only por design — confirmado pelo código, sem necessidade de diff destrutivo).
-7. **Gate de parada** — se a rodada apresentar `divergent > 0` OU `error > 0`, PARAR e reportar exemplos (`inbound_event_id`, `diff_summary`, `intended_actions`, `legacy_actual`). Não executar a rodada seguinte.
+### `src/components/BulkActionsBar.tsx`
+- Adicionar props opcionais: `stages?: {id,name}[]` e `onStageChange?` para módulo `opportunities`.
+- Novo handler `handleChangeStage(stageId)` que faz `update({ pipeline_stage_id })` em `opportunities` para os ids selecionados. Mantém `status` consistente quando a stage destino for won/lost (mapeando por `stage.type`).
+- Renderizar o Select de etapa apenas quando `module === 'opportunities'` e `stages` foi passado.
 
-## Relatório final esperado (por rodada)
-- counters: claimed / processed / match / divergent / legacy_missing / error
-- confirmação `enabled=false` ao final
-- confirmação de zero side-effect em produção
-- worker_id e janela temporal da rodada
+### `src/components/opportunities/OpportunityCard.tsx` e `SeialzOpportunityCard.tsx`
+- Adicionar props `selectionMode?: boolean`, `selected?: boolean`, `onToggleSelect?: () => void`.
+- Quando `selectionMode`: renderizar `<Checkbox>` no topo do card; o `onClick` do card passa a chamar `onToggleSelect` em vez de `onClick` original; aplicar `ring-2 ring-primary` quando selecionado.
 
-## Fora de escopo (explícito)
-- Backfill dos ~26k eventos com `organization_id` NULL
-- Criação de cron
-- Alteração de `rpc_claim_inbound_shadow_events`, webhook legado, `messages`, `message_threads`, `process_status`
-- Alterações de código no dispatcher (patch atual já atende)
+### `src/pages/opportunities/OpportunitiesKanban.tsx`
+- Novo estado: `kanbanSelectionMode: boolean` + reuso de `selectedIds`.
+- Botão "Selecionar" no header (visível apenas no `viewMode === 'kanban'`).
+- Quando `kanbanSelectionMode`:
+  - `<DragDropContext>` recebe `isDropDisabled`/condicional (ou envolve só quando não está em seleção) — simplesmente não permitir início do drag via prop `isDragDisabled` no Draggable.
+  - Passar `selectionMode`, `selected`, `onToggleSelect` aos cards.
+- Renderizar `<BulkActionsBar module="opportunities" stages={openOrAllStages} users={users} ... />` quando há ids selecionados.
+- Helper "Selecionar todos da coluna X" no header da coluna (apenas no modo).
 
-## Observação técnica
-O dispatcher já exclui candidates presentes em `dry_run_log` para o mesmo handler, então a Rodada 2 selecionará automaticamente 50 eventos distintos dos da Rodada 1 (e da rodada aprovada anterior).
+## Regras de negócio (move de etapa)
+- Stage destino `open` → `status='open'`, `close_date` preserva.
+- Stage destino `won` → `status='won'`. Se algum card não tiver `close_date`, ainda assim atualizar (sem prompt — bulk não usa `CloseDatePromptDialog` para não interromper).
+- Stage destino `lost` → `status='lost'`.
+- O backfill de `pipeline_stage_id` e `status` é feito em uma única chamada `update().in('id', selectedIds)`.
+
+## Fora de escopo
+- Mobile (manter kanban mobile como está; pode ser fase 2)
+- Mudanças no view de lista (já tem seleção + BulkActionsBar funcionando)
+- Confirmação especial para won/lost em massa (usuário escolhe consciente)
+
+## Memória
+Também salvo memória de projeto registrando o estado atual do **Inbox v2** (shadow 150/150 match, flag off, pendências: backfill 26k NULL, validação volume maior, critério de cutover, Meta Cloud API) para retomar a próxima sessão.
