@@ -1617,7 +1617,6 @@ export default function OpportunitiesKanban() {
           canEdit={permissions.canEditOpportunities}
           canDelete={permissions.canDeleteOpportunities}
         />
-      </div>
     </Layout>
   );
 }
