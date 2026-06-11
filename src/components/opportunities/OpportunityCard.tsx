@@ -1,5 +1,6 @@
 import { Card } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
+import { Checkbox } from '@/components/ui/checkbox';
 import { PencilSimple, User, Calendar } from '@phosphor-icons/react';
 import { format } from 'date-fns';
 import { ptBR, enUS } from 'date-fns/locale';
@@ -26,6 +27,9 @@ interface OpportunityCardProps {
   onDelete: () => void;
   onClick: () => void;
   formatCurrency: (value: number, currency: string) => string;
+  selectionMode?: boolean;
+  selected?: boolean;
+  onToggleSelect?: () => void;
 }
 
 export function OpportunityCard({
@@ -42,25 +46,49 @@ export function OpportunityCard({
   onDelete,
   onClick,
   formatCurrency,
+  selectionMode = false,
+  selected = false,
+  onToggleSelect,
 }: OpportunityCardProps) {
   const dateLocale = locale === 'pt-BR' ? ptBR : enUS;
   const MAX_VISIBLE_TAGS = 3;
   const visibleTags = tags?.slice(0, MAX_VISIBLE_TAGS) || [];
   const overflowCount = (tags?.length || 0) - MAX_VISIBLE_TAGS;
 
+  const handleCardClick = () => {
+    if (selectionMode) onToggleSelect?.();
+    else onClick();
+  };
+
   return (
-    <Card className="p-3 bg-background hover:shadow-md transition-all cursor-pointer group" onClick={onClick}>
+    <Card
+      className={`p-3 bg-background hover:shadow-md transition-all cursor-pointer group ${
+        selected ? 'ring-2 ring-primary' : ''
+      }`}
+      onClick={handleCardClick}
+    >
       <div className="space-y-2">
         <div className="flex justify-between items-start gap-2">
+          {selectionMode && (
+            <Checkbox
+              checked={selected}
+              onCheckedChange={() => onToggleSelect?.()}
+              onClick={(e) => e.stopPropagation()}
+              className="mt-0.5"
+            />
+          )}
           <div className="flex-1 min-w-0">
             <h4 className="font-medium text-xs text-foreground line-clamp-2 break-words" title={title}>{title}</h4>
           </div>
-          <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
-            <Button variant="ghost" size="icon" className="h-7 w-7" onClick={(e) => { e.stopPropagation(); onEdit(); }}>
-              <PencilSimple className="h-3 w-3" />
-            </Button>
-          </div>
+          {!selectionMode && (
+            <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+              <Button variant="ghost" size="icon" className="h-7 w-7" onClick={(e) => { e.stopPropagation(); onEdit(); }}>
+                <PencilSimple className="h-3 w-3" />
+              </Button>
+            </div>
+          )}
         </div>
+
 
         {contactName && (
           <div className="flex items-center gap-2 text-xs text-muted-foreground">
