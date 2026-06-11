@@ -41,9 +41,9 @@ type InboundEvent = {
 type LegacyMessage = {
   id: string;
   organization_id: string | null;
-  message_thread_id: string | null;
+  thread_id: string | null;
   direction: string | null;
-  body: string | null;
+  content: string | null;
   whatsapp_message_sid: string | null;
   created_at: string;
 };
@@ -52,8 +52,36 @@ type Outcome =
   | "match"
   | "divergent"
   | "legacy_missing"
+  | "v2_extra"
+  | "error"
   | "v2_parse_error"
-  | "unsupported_event_type";
+  | "unsupported_event_type"
+  | "postgrest_lookup_failed";
+
+// CHECK constraint on integration_inbound_dry_run_log.outcome only allows these:
+const PERSISTED_OUTCOMES = new Set<string>([
+  "match",
+  "divergent",
+  "legacy_missing",
+  "v2_extra",
+  "error",
+]);
+
+function persistOutcome(
+  outcome: Outcome,
+  diffSummary: Record<string, unknown> | null,
+): { outcome: string; diffSummary: Record<string, unknown> | null } {
+  if (PERSISTED_OUTCOMES.has(outcome)) {
+    return { outcome, diffSummary };
+  }
+  return {
+    outcome: "error",
+    diffSummary: { ...(diffSummary ?? {}), error_type: outcome },
+  };
+}
+
+const SELECT_COLS =
+  "id, organization_id, thread_id, direction, content, whatsapp_message_sid, created_at";
 
 function jsonResponse(body: unknown, status = 200): Response {
   return new Response(JSON.stringify(body), {
