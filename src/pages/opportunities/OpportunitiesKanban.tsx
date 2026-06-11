@@ -1321,6 +1321,16 @@ export default function OpportunitiesKanban() {
           
           {filterPanel}
 
+          {viewMode === 'kanban' && permissions.canEditOpportunities && (
+            <Button
+              variant={kanbanSelectionMode ? 'default' : 'outline'}
+              onClick={() => kanbanSelectionMode ? exitSelectionMode() : setKanbanSelectionMode(true)}
+            >
+              <CheckSquare className="w-4 h-4 mr-2" />
+              {kanbanSelectionMode ? 'Sair da seleção' : 'Selecionar'}
+            </Button>
+          )}
+
           {viewMode === 'list' && (
             <ColumnSelector
               columns={availableColumns}
@@ -1331,7 +1341,7 @@ export default function OpportunitiesKanban() {
         </div>
 
         {viewMode === 'kanban' ? (
-          <DragDropContext onDragEnd={permissions.canEditOpportunities ? handleDragEnd : () => {}}>
+          <DragDropContext onDragEnd={permissions.canEditOpportunities && !kanbanSelectionMode ? handleDragEnd : () => {}}>
             <div className="flex gap-3 overflow-x-auto pb-4">
               {stages.map((stage) => {
                 const stageOpportunities = getOpportunitiesForStage(stage.id);
@@ -1382,7 +1392,7 @@ export default function OpportunitiesKanban() {
                                   key={opp.id} 
                                   draggableId={opp.id} 
                                   index={index}
-                                  isDragDisabled={!permissions.canEditOpportunities}
+                                  isDragDisabled={!permissions.canEditOpportunities || kanbanSelectionMode}
                                 >
                                   {(provided, snapshot) => (
                                     <div
@@ -1407,6 +1417,9 @@ export default function OpportunitiesKanban() {
                                         onClick={() => navigate(`/opportunities/${opp.id}`)}
                                         tags={tagsByOpportunity[opp.id] || []}
                                         formatCurrency={formatCurrency}
+                                        selectionMode={kanbanSelectionMode}
+                                        selected={selectedIds.includes(opp.id)}
+                                        onToggleSelect={() => toggleSelect(opp.id)}
                                       />
                                     </div>
                                   )}
