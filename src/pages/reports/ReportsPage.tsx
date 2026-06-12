@@ -16,7 +16,14 @@ import {
   CurrencyDollar,
   Clock,
   Target,
+  Users,
+  Timer,
+  ChatsCircle,
+  ClockClockwise,
+  Headset,
 } from '@phosphor-icons/react';
+import { useServiceStats } from '@/hooks/useServiceStats';
+import { formatSeconds } from '@/lib/format-duration';
 import { SalesTrendChart, type TrendPoint } from '@/components/reports/SalesTrendChart';
 import { PipelineFunnel, type FunnelStage } from '@/components/reports/PipelineFunnel';
 import { UserLeaderboard, type UserStats } from '@/components/reports/UserLeaderboard';
