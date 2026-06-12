@@ -2031,6 +2031,75 @@ function DesktopMessagesList() {
         loading={markingOpp}
         onConfirm={(date) => pendingCloseDate && handleMarkOpportunity(pendingCloseDate.kind, pendingCloseDate.opp, date)}
       />
+
+      {/* Move stage dialog */}
+      <Dialog
+        open={!!moveStageOpp}
+        onOpenChange={(o) => { if (!o) { setMoveStageOpp(null); setMoveStageTargetId(null); } }}
+      >
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle>{locale === 'pt-BR' ? 'Mover etapa' : 'Move stage'}</DialogTitle>
+            <DialogDescription>
+              {moveStageOpp
+                ? (locale === 'pt-BR'
+                    ? `Escolha a nova etapa para "${moveStageOpp.title}".`
+                    : `Choose the new stage for "${moveStageOpp.title}".`)
+                : ''}
+            </DialogDescription>
+          </DialogHeader>
+          <RadioGroup
+            value={moveStageTargetId ?? ''}
+            onValueChange={(v) => setMoveStageTargetId(v)}
+            className="max-h-[50vh] overflow-y-auto py-1"
+          >
+            {pipelineStages.map((s) => {
+              const isCurrent = moveStageOpp?.pipeline_stage_id === s.id;
+              const typeLabel = s.type === 'won'
+                ? (locale === 'pt-BR' ? 'Ganho' : 'Won')
+                : s.type === 'lost'
+                ? (locale === 'pt-BR' ? 'Perdido' : 'Lost')
+                : (locale === 'pt-BR' ? 'Aberto' : 'Open');
+              const variant: 'default' | 'destructive' | 'secondary' = s.type === 'won' ? 'default' : s.type === 'lost' ? 'destructive' : 'secondary';
+              return (
+                <Label
+                  key={s.id}
+                  htmlFor={`stage-${s.id}`}
+                  className={`flex items-center justify-between gap-3 rounded-md border p-3 cursor-pointer hover:bg-accent ${isCurrent ? 'opacity-60' : ''}`}
+                >
+                  <div className="flex items-center gap-3 min-w-0">
+                    <RadioGroupItem id={`stage-${s.id}`} value={s.id} disabled={isCurrent} />
+                    <span className="truncate text-sm font-medium">{s.name}</span>
+                  </div>
+                  <div className="flex items-center gap-2 shrink-0">
+                    {isCurrent && (
+                      <span className="text-xs text-muted-foreground">{locale === 'pt-BR' ? 'atual' : 'current'}</span>
+                    )}
+                    <Badge variant={variant} className="text-[10px]">{typeLabel}</Badge>
+                  </div>
+                </Label>
+              );
+            })}
+          </RadioGroup>
+          <DialogFooter>
+            <Button
+              variant="outline"
+              onClick={() => { setMoveStageOpp(null); setMoveStageTargetId(null); }}
+              disabled={movingStage}
+            >
+              {locale === 'pt-BR' ? 'Cancelar' : 'Cancel'}
+            </Button>
+            <Button
+              onClick={handleMoveStage}
+              disabled={movingStage || !moveStageTargetId || moveStageTargetId === moveStageOpp?.pipeline_stage_id}
+            >
+              {movingStage
+                ? (locale === 'pt-BR' ? 'Movendo…' : 'Moving…')
+                : (locale === 'pt-BR' ? 'Confirmar' : 'Confirm')}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </Layout>
   );
 }
