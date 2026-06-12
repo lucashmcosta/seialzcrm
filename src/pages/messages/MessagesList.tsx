@@ -2060,7 +2060,7 @@ function DesktopMessagesList() {
                 : s.type === 'lost'
                 ? (locale === 'pt-BR' ? 'Perdido' : 'Lost')
                 : (locale === 'pt-BR' ? 'Aberto' : 'Open');
-              const variant: 'default' | 'destructive' | 'secondary' = s.type === 'won' ? 'default' : s.type === 'lost' ? 'destructive' : 'secondary';
+              const variant = s.type === 'won' ? 'default' : s.type === 'lost' ? 'destructive' : 'secondary';
               return (
                 <Label
                   key={s.id}
