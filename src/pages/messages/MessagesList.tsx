@@ -631,6 +631,47 @@ function DesktopMessagesList() {
     }
   };
 
+  const handleMoveStage = async () => {
+    if (!moveStageOpp || !moveStageTargetId) return;
+    const target = pipelineStages.find((s) => s.id === moveStageTargetId);
+    if (!target) return;
+
+    // If target is won/lost, route through existing confirm flow (handles close_date)
+    if (target.type === 'won' || target.type === 'lost') {
+      const kind = target.type as 'won' | 'lost';
+      const opp = moveStageOpp;
+      setMoveStageOpp(null);
+      setMoveStageTargetId(null);
+      setConfirmAction({ kind, opp });
+      return;
+    }
+
+    setMovingStage(true);
+    try {
+      const { error } = await supabase
+        .from('opportunities')
+        .update({
+          pipeline_stage_id: target.id,
+          status: 'open',
+          updated_by: userProfile?.id || null,
+        } as any)
+        .eq('id', moveStageOpp.id);
+      if (error) throw error;
+      toast({
+        title: locale === 'pt-BR' ? 'Etapa atualizada' : 'Stage updated',
+        description: locale === 'pt-BR' ? `"${moveStageOpp.title}" movida para ${target.name}.` : `"${moveStageOpp.title}" moved to ${target.name}.`,
+      });
+      setContactOpportunities((prev) => prev.map((o) => o.id === moveStageOpp.id ? { ...o, pipeline_stage_id: target.id } : o));
+      setMoveStageOpp(null);
+      setMoveStageTargetId(null);
+    } catch (err) {
+      console.error('Error moving stage:', err);
+      toast({ title: locale === 'pt-BR' ? 'Erro ao mover etapa' : 'Error moving stage', variant: 'destructive' });
+    } finally {
+      setMovingStage(false);
+    }
+  };
+
 
   // Real-time subscription for messages in the active chat only
   // Thread list realtime is handled by useMessageThreads hook
