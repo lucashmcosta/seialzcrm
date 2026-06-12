@@ -115,6 +115,16 @@ export default function ReportsPage() {
   const [selectedUser, setSelectedUser] = useState<UserStats | null>(null);
   const [detail, setDetail] = useState<null | 'won' | 'lost' | 'created'>(null);
 
+  const { data: serviceStats, loading: serviceLoading } = useServiceStats({
+    organizationId: organization?.id,
+    from: range.from,
+    to: range.to,
+    ownerId,
+    refreshKey: rangeKey,
+  });
+
+
+
 
   useEffect(() => {
     if (!organization) return;
