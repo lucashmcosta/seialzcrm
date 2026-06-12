@@ -215,6 +215,46 @@ export function MobileReports(props: MobileReportsProps) {
         />
       </div>
 
+      {/* Atendimento */}
+      <div className="px-4 pt-3 pb-1 flex items-center gap-1.5">
+        <Headset size={14} weight="duotone" className="text-primary" />
+        <h2 className="text-sm font-semibold text-foreground">Atendimento</h2>
+      </div>
+      <div className="px-4 py-2 grid grid-cols-2 gap-2">
+        <MiniKpi
+          label="Pessoas em contato"
+          value={serviceLoading ? '—' : serviceStats.contactsCount}
+          icon={Users}
+          accent="primary"
+        />
+        <MiniKpi
+          label="1ª resposta (méd.)"
+          value={serviceLoading ? '—' : formatSeconds(serviceStats.avgFirstResponseSeconds)}
+          icon={Timer}
+          accent="warning"
+        />
+        <MiniKpi
+          label="Encerrados"
+          value={serviceLoading ? '—' : serviceStats.resolvedCount}
+          icon={CheckCircle}
+          accent="success"
+        />
+        <MiniKpi
+          label="Total"
+          value={serviceLoading ? '—' : serviceStats.totalCount}
+          icon={ChatsCircle}
+          accent="primary"
+        />
+        <MiniKpi
+          label="Resposta (méd.)"
+          value={serviceLoading ? '—' : formatSeconds(serviceStats.avgResponseSeconds)}
+          icon={ClockClockwise}
+          accent="warning"
+        />
+      </div>
+
+
+
       {/* Trend chart */}
       <div className="px-4 py-2">
         <SalesTrendChart data={trend} formatCurrency={formatCurrency} loading={loading} />
