@@ -2060,7 +2060,7 @@ function DesktopMessagesList() {
                 : s.type === 'lost'
                 ? (locale === 'pt-BR' ? 'Perdido' : 'Lost')
                 : (locale === 'pt-BR' ? 'Aberto' : 'Open');
-              const variant = s.type === 'won' ? 'default' : s.type === 'lost' ? 'destructive' : 'secondary';
+              const badgeColor: 'success' | 'error' | 'gray' = s.type === 'won' ? 'success' : s.type === 'lost' ? 'error' : 'gray';
               return (
                 <Label
                   key={s.id}
