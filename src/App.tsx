@@ -412,13 +412,14 @@ const App = () => (
             }
           />
           <Route
-            path="/reports"
+            path="/dashboards"
             element={
               <ProtectedRoute>
                 <ReportsPage />
               </ProtectedRoute>
             }
           />
+          <Route path="/reports" element={<Navigate to="/dashboards" replace />} />
           <Route path="/marketing" element={<ProtectedRoute><MarketingOverview /></ProtectedRoute>} />
           <Route path="/marketing/ads" element={<ProtectedRoute><MarketingAds /></ProtectedRoute>} />
           <Route path="/marketing/ads/:id" element={<ProtectedRoute><MarketingAdDetail /></ProtectedRoute>} />

@@ -490,7 +490,7 @@ export default function ReportsPage() {
               <div className="flex h-10 w-10 items-center justify-center rounded-md bg-primary/10">
                 <ChartLineUp size={22} weight="duotone" className="text-primary" />
               </div>
-              <h1 className="text-3xl font-bold text-foreground">Relatórios</h1>
+              <h1 className="text-3xl font-bold text-foreground">Dashboards</h1>
             </div>
           </div>
         </div>

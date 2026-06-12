@@ -80,7 +80,7 @@ export function MobileLayout({ children, hideBottomBar = false }: MobileLayoutPr
 
   const systemItems: { label: string; href: string; icon: typeof House }[] = [];
   if (permissions.canManageSettings) {
-    systemItems.push({ label: 'Relatórios', href: '/reports', icon: ChartLineUp });
+    systemItems.push({ label: 'Dashboards', href: '/dashboards', icon: ChartLineUp });
   }
   if (permissions.canManageSettings) {
     systemItems.push({ label: t('nav.settings'), href: '/settings', icon: GearSix });

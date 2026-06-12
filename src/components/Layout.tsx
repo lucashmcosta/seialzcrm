@@ -53,7 +53,7 @@ export function Layout({ children }: LayoutProps) {
       { label: t('nav.dashboard'), href: '/dashboard', icon: House },
     ];
     if (permissions.canManageSettings) {
-      principalItems.push({ label: t('nav.reports'), href: '/reports', icon: ChartLineUp });
+      principalItems.push({ label: t('nav.reports'), href: '/dashboards', icon: ChartLineUp });
       principalItems.push({ label: 'Marketing', href: '/marketing', icon: ChartBar });
     }
     principalItems.push(
@@ -131,7 +131,7 @@ export function Layout({ children }: LayoutProps) {
     { label: t('nav.dashboard'), href: '/dashboard', icon: House },
   ];
   if (permissions.canManageSettings) {
-    navItems.push({ label: t('nav.reports'), href: '/reports', icon: ChartLineUp });
+    navItems.push({ label: t('nav.reports'), href: '/dashboards', icon: ChartLineUp });
     navItems.push({ label: 'Marketing', href: '/marketing', icon: ChartBar });
   }
   navItems.push(
