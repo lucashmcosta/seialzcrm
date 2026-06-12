@@ -555,8 +555,9 @@ function DesktopMessagesList() {
     (async () => {
       const { data } = await supabase
         .from('pipeline_stages')
-        .select('id, type')
-        .eq('organization_id', organization.id);
+        .select('id, name, type, order_index')
+        .eq('organization_id', organization.id)
+        .order('order_index', { ascending: true });
       if (data) setPipelineStages(data as any);
     })();
   }, [organization?.id]);
