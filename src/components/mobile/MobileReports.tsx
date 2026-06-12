@@ -123,7 +123,7 @@ export function MobileReports(props: MobileReportsProps) {
         <div className="h-8 w-8 rounded-md bg-primary/10 flex items-center justify-center">
           <ChartLineUp size={18} weight="duotone" className="text-primary" />
         </div>
-        <h1 className="text-xl font-bold text-foreground">Relatórios</h1>
+        <h1 className="text-xl font-bold text-foreground">Dashboards</h1>
       </div>
 
       {/* Filters */}

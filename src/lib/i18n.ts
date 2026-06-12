@@ -40,7 +40,7 @@ export const translations = {
     'nav.opportunities': 'Oportunidades',
     'nav.tasks': 'Tarefas',
     'nav.messages': 'Mensagens',
-    'nav.reports': 'Relatórios',
+    'nav.reports': 'Dashboards',
     'nav.settings': 'Configurações',
     'nav.profile': 'Meu Perfil',
     'nav.admin': 'Administração',
