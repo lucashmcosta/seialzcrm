@@ -536,7 +536,7 @@ export const translations = {
     'nav.opportunities': 'Opportunities',
     'nav.tasks': 'Tasks',
     'nav.messages': 'Messages',
-    'nav.reports': 'Reports',
+    'nav.reports': 'Dashboards',
     'nav.settings': 'Settings',
     'nav.profile': 'My Profile',
     'nav.admin': 'Administration',
