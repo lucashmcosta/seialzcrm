@@ -616,6 +616,54 @@ export default function ReportsPage() {
               </div>
             </Suspense>
 
+            {/* Atendimento */}
+            <section className="space-y-3">
+              <div className="flex items-center gap-2">
+                <Headset size={18} weight="duotone" className="text-primary" />
+                <h2 className="text-lg font-semibold text-foreground">Atendimento</h2>
+              </div>
+              <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-5">
+                <KpiCard
+                  label="Pessoas em contato"
+                  value={serviceStats.contactsCount}
+                  icon={Users}
+                  accent="primary"
+                  loading={serviceLoading}
+                />
+                <KpiCard
+                  label="Tempo médio 1ª resposta"
+                  value={formatSeconds(serviceStats.avgFirstResponseSeconds)}
+                  icon={Timer}
+                  accent="warning"
+                  loading={serviceLoading}
+                  mono
+                />
+                <KpiCard
+                  label="Encerrados"
+                  value={serviceStats.resolvedCount}
+                  icon={CheckCircle}
+                  accent="success"
+                  loading={serviceLoading}
+                />
+                <KpiCard
+                  label="Total"
+                  value={serviceStats.totalCount}
+                  icon={ChatsCircle}
+                  accent="primary"
+                  loading={serviceLoading}
+                />
+                <KpiCard
+                  label="Tempo médio de resposta"
+                  value={formatSeconds(serviceStats.avgResponseSeconds)}
+                  icon={ClockClockwise}
+                  accent="warning"
+                  loading={serviceLoading}
+                  mono
+                />
+              </div>
+            </section>
+
+
             {/* Trend chart */}
             <Suspense fallback={<BlockFallback className="h-72" />}>
               <SalesTrendChart data={trend} formatCurrency={formatCurrency} loading={loading} />
