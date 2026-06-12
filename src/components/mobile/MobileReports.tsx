@@ -8,7 +8,14 @@ import {
   Clock,
   Trophy,
   ChartLineUp,
+  Users,
+  Timer,
+  ChatsCircle,
+  ClockClockwise,
+  Headset,
 } from '@phosphor-icons/react';
+import { formatSeconds } from '@/lib/format-duration';
+import type { ServiceStats } from '@/hooks/useServiceStats';
 import {
   Select,
   SelectContent,
