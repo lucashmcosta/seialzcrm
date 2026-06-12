@@ -115,7 +115,7 @@ export function UserLeaderboard({ rows, formatCurrency, loading, onRowClick }: P
                 <Th k="open" label="Abertas" align="right" />
                 <Th k="won" label="Ganhas" align="right" />
                 <Th k="lost" label="Perdidas" align="right" />
-                <Th k="winRate" label="Win Rate" align="right" />
+                <Th k="winRate" label="Conversão" align="right" />
                 <Th k="wonValue" label="Valor Ganho" align="right" />
               </tr>
             </thead>

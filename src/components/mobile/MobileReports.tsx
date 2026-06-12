@@ -173,7 +173,7 @@ export function MobileReports(props: MobileReportsProps) {
           accent="destructive"
         />
         <MiniKpi
-          label="Win Rate"
+          label="Conversão"
           value={loading ? '—' : `${stats.winRate.toFixed(1)}%`}
           icon={Target}
           accent="warning"
@@ -303,7 +303,7 @@ export function MobileReports(props: MobileReportsProps) {
                               {formatCurrency(u.wonValue)}
                             </p>
                             <p className="text-[10px] text-muted-foreground tabular-nums">
-                              {winRate.toFixed(0)}% win
+                              {winRate.toFixed(0)}% conv.
                             </p>
                           </div>
                         </div>

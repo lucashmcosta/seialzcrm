@@ -14,7 +14,7 @@ export function WinRateGauge({ rate, wonCount, lostCount, loading }: WinRateGaug
 
   return (
     <div className="rounded-md border border-border bg-card p-5">
-      <h3 className="text-sm font-semibold text-foreground">Win Rate</h3>
+      <h3 className="text-sm font-semibold text-foreground">Conversão</h3>
       <p className="mt-0.5 text-xs text-muted-foreground">Taxa de conversão de oportunidades fechadas</p>
 
       <div className="relative mt-2 h-48">
