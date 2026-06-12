@@ -492,6 +492,8 @@ export default function ReportsPage() {
           funnel={funnel}
           userStats={userStats}
           formatCurrency={formatCurrency}
+          serviceStats={serviceStats}
+          serviceLoading={serviceLoading}
         />
       </MobileLayout>
     );
