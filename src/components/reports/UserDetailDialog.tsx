@@ -196,7 +196,7 @@ export default function UserDetailDialog({
           </div>
           <div className="bg-card p-3">
             <div className="flex items-center gap-1.5 text-[11px] uppercase tracking-wide text-muted-foreground">
-              <Target size={11} weight="duotone" /> Win Rate
+              <Target size={11} weight="duotone" /> Conversão
             </div>
             <p className="mt-1 font-mono text-lg font-semibold text-primary">
               {winRate.toFixed(1)}%

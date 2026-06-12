@@ -541,7 +541,7 @@ export default function ReportsPage() {
                 />
 
                 <KpiCard
-                  label="Win Rate"
+                  label="Conversão"
                   value={`${stats.winRate.toFixed(1)}%`}
                   delta={stats.winRateDelta}
                   icon={Target}
