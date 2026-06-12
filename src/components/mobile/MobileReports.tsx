@@ -104,6 +104,8 @@ export interface MobileReportsProps {
   funnel: FunnelStage[];
   userStats: UserStats[];
   formatCurrency: (n: number) => string;
+  serviceStats: ServiceStats;
+  serviceLoading: boolean;
 }
 
 export function MobileReports(props: MobileReportsProps) {
