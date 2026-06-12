@@ -123,6 +123,8 @@ export function MobileReports(props: MobileReportsProps) {
     funnel,
     userStats,
     formatCurrency,
+    serviceStats,
+    serviceLoading,
   } = props;
 
   return (
