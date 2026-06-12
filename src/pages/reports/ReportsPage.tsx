@@ -16,7 +16,14 @@ import {
   CurrencyDollar,
   Clock,
   Target,
+  Users,
+  Timer,
+  ChatsCircle,
+  ClockClockwise,
+  Headset,
 } from '@phosphor-icons/react';
+import { useServiceStats } from '@/hooks/useServiceStats';
+import { formatSeconds } from '@/lib/format-duration';
 import { SalesTrendChart, type TrendPoint } from '@/components/reports/SalesTrendChart';
 import { PipelineFunnel, type FunnelStage } from '@/components/reports/PipelineFunnel';
 import { UserLeaderboard, type UserStats } from '@/components/reports/UserLeaderboard';
@@ -107,6 +114,16 @@ export default function ReportsPage() {
   const [loading, setLoading] = useState(true);
   const [selectedUser, setSelectedUser] = useState<UserStats | null>(null);
   const [detail, setDetail] = useState<null | 'won' | 'lost' | 'created'>(null);
+
+  const { data: serviceStats, loading: serviceLoading } = useServiceStats({
+    organizationId: organization?.id,
+    from: range.from,
+    to: range.to,
+    ownerId,
+    refreshKey: rangeKey,
+  });
+
+
 
 
   useEffect(() => {
@@ -475,6 +492,8 @@ export default function ReportsPage() {
           funnel={funnel}
           userStats={userStats}
           formatCurrency={formatCurrency}
+          serviceStats={serviceStats}
+          serviceLoading={serviceLoading}
         />
       </MobileLayout>
     );
@@ -598,6 +617,54 @@ export default function ReportsPage() {
                 </div>
               </div>
             </Suspense>
+
+            {/* Atendimento */}
+            <section className="space-y-3">
+              <div className="flex items-center gap-2">
+                <Headset size={18} weight="duotone" className="text-primary" />
+                <h2 className="text-lg font-semibold text-foreground">Atendimento</h2>
+              </div>
+              <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-5">
+                <KpiCard
+                  label="Pessoas em contato"
+                  value={serviceStats.contactsCount}
+                  icon={Users}
+                  accent="primary"
+                  loading={serviceLoading}
+                />
+                <KpiCard
+                  label="Tempo médio 1ª resposta"
+                  value={formatSeconds(serviceStats.avgFirstResponseSeconds)}
+                  icon={Timer}
+                  accent="warning"
+                  loading={serviceLoading}
+                  mono
+                />
+                <KpiCard
+                  label="Encerrados"
+                  value={serviceStats.resolvedCount}
+                  icon={CheckCircle}
+                  accent="success"
+                  loading={serviceLoading}
+                />
+                <KpiCard
+                  label="Total"
+                  value={serviceStats.totalCount}
+                  icon={ChatsCircle}
+                  accent="primary"
+                  loading={serviceLoading}
+                />
+                <KpiCard
+                  label="Tempo médio de resposta"
+                  value={formatSeconds(serviceStats.avgResponseSeconds)}
+                  icon={ClockClockwise}
+                  accent="warning"
+                  loading={serviceLoading}
+                  mono
+                />
+              </div>
+            </section>
+
 
             {/* Trend chart */}
             <Suspense fallback={<BlockFallback className="h-72" />}>

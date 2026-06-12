@@ -8,7 +8,14 @@ import {
   Clock,
   Trophy,
   ChartLineUp,
+  Users,
+  Timer,
+  ChatsCircle,
+  ClockClockwise,
+  Headset,
 } from '@phosphor-icons/react';
+import { formatSeconds } from '@/lib/format-duration';
+import type { ServiceStats } from '@/hooks/useServiceStats';
 import {
   Select,
   SelectContent,
@@ -97,6 +104,8 @@ export interface MobileReportsProps {
   funnel: FunnelStage[];
   userStats: UserStats[];
   formatCurrency: (n: number) => string;
+  serviceStats: ServiceStats;
+  serviceLoading: boolean;
 }
 
 export function MobileReports(props: MobileReportsProps) {
@@ -114,6 +123,8 @@ export function MobileReports(props: MobileReportsProps) {
     funnel,
     userStats,
     formatCurrency,
+    serviceStats,
+    serviceLoading,
   } = props;
 
   return (
@@ -203,6 +214,46 @@ export function MobileReports(props: MobileReportsProps) {
           accent="warning"
         />
       </div>
+
+      {/* Atendimento */}
+      <div className="px-4 pt-3 pb-1 flex items-center gap-1.5">
+        <Headset size={14} weight="duotone" className="text-primary" />
+        <h2 className="text-sm font-semibold text-foreground">Atendimento</h2>
+      </div>
+      <div className="px-4 py-2 grid grid-cols-2 gap-2">
+        <MiniKpi
+          label="Pessoas em contato"
+          value={serviceLoading ? '—' : serviceStats.contactsCount}
+          icon={Users}
+          accent="primary"
+        />
+        <MiniKpi
+          label="1ª resposta (méd.)"
+          value={serviceLoading ? '—' : formatSeconds(serviceStats.avgFirstResponseSeconds)}
+          icon={Timer}
+          accent="warning"
+        />
+        <MiniKpi
+          label="Encerrados"
+          value={serviceLoading ? '—' : serviceStats.resolvedCount}
+          icon={CheckCircle}
+          accent="success"
+        />
+        <MiniKpi
+          label="Total"
+          value={serviceLoading ? '—' : serviceStats.totalCount}
+          icon={ChatsCircle}
+          accent="primary"
+        />
+        <MiniKpi
+          label="Resposta (méd.)"
+          value={serviceLoading ? '—' : formatSeconds(serviceStats.avgResponseSeconds)}
+          icon={ClockClockwise}
+          accent="warning"
+        />
+      </div>
+
+
 
       {/* Trend chart */}
       <div className="px-4 py-2">
