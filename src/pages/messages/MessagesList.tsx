@@ -1470,6 +1470,10 @@ function DesktopMessagesList() {
                                     <TrendDown className="w-4 h-4 mr-2 text-red-600" />
                                     {locale === 'pt-BR' ? 'Marcar como Perdido' : 'Mark as Lost'}
                                   </DropdownMenuItem>
+                                  <DropdownMenuItem onClick={() => { setMoveStageTargetId(opp.pipeline_stage_id); setMoveStageOpp(opp); }}>
+                                    <ArrowsLeftRight className="w-4 h-4 mr-2" />
+                                    {locale === 'pt-BR' ? 'Mover etapa…' : 'Move stage…'}
+                                  </DropdownMenuItem>
                                 </Fragment>
                               ))}
                             </>
