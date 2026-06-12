@@ -2075,7 +2075,7 @@ function DesktopMessagesList() {
                     {isCurrent && (
                       <span className="text-xs text-muted-foreground">{locale === 'pt-BR' ? 'atual' : 'current'}</span>
                     )}
-                    <Badge variant={variant} className="text-[10px]">{typeLabel}</Badge>
+                    <Badge color={badgeColor} className="text-[10px]">{typeLabel}</Badge>
                   </div>
                 </Label>
               );
