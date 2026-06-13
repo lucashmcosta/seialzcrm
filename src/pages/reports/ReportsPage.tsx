@@ -663,6 +663,7 @@ export default function ReportsPage() {
                   accent="warning"
                   loading={serviceLoading}
                   mono
+                  onClick={() => setServiceDetail('all')}
                 />
               </div>
             </section>
