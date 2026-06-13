@@ -87,11 +87,7 @@ export function ServiceResponseDetailDialog({
                 {rows.map((r, i) => (
                   <tr
                     key={r.id}
-                    onClick={() => {
-                      onClose();
-                      navigate(`/messages?thread=${r.thread_id}`);
-                    }}
-                    className="cursor-pointer border-b border-border/50 transition hover:bg-muted/40"
+                    className="border-b border-border/50"
                   >
                     <td className="py-2 pr-2 text-muted-foreground">{i + 1}</td>
                     <td className="py-2 pr-2 font-medium text-foreground">
