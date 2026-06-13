@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { fetchAllPagedRows } from '@/lib/fetchAllPagedRows';
+import { SERVICE_MODULE_START_ISO, SERVICE_MODULE_START_MS } from '@/lib/serviceCutoff';
 
 export interface ServiceStats {
   contactsCount: number;
@@ -38,8 +39,10 @@ export function useServiceStats({ organizationId, from, to, ownerId, refreshKey 
     (async () => {
       setLoading(true);
       try {
-        const fromIso = from.toISOString();
+        const fromIsoRaw = from.toISOString();
         const toIso = to.toISOString();
+        // Atendimento module cutoff: nada antes da criação da tela conta.
+        const fromIso = fromIsoRaw < SERVICE_MODULE_START_ISO ? SERVICE_MODULE_START_ISO : fromIsoRaw;
         const owner = ownerId !== 'all' ? ownerId : null;
 
         // Build base threads query helper
@@ -124,8 +127,10 @@ export function useServiceStats({ organizationId, from, to, ownerId, refreshKey 
             return await q;
           });
           for (const r of rows) {
+            const inboundMs = new Date(r.inbound_at).getTime();
+            if (!isFinite(inboundMs) || inboundMs < SERVICE_MODULE_START_MS) continue;
             const prev = firstByThread.get(r.thread_id);
-            if (!prev || new Date(r.inbound_at).getTime() < new Date(prev.inbound_at).getTime()) {
+            if (!prev || inboundMs < new Date(prev.inbound_at).getTime()) {
               firstByThread.set(r.thread_id, { inbound_at: r.inbound_at, response_seconds: r.response_seconds });
             }
           }

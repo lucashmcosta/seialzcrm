@@ -1,32 +1,37 @@
-# Corrigir "Tempo médio 1ª resposta" no Dashboard de Atendimento
+## Contexto
 
-## Diagnóstico
+A TAMIRIS aparece com gap de 553h (~23 dias) porque o inbound dela é de **20/05/2026**, mas o módulo de Atendimento (`/inbox`) só foi criado em **30/05/2026** (confirmado no histórico — mensagens #4210-#4215, primeira implementação read-only da fase 1).
 
-O KPI lê `message_threads.first_response_at` em `src/hooks/useServiceStats.ts`, mas essa coluna **nunca é populada** — confirmado no banco:
+Antes dessa data, ninguém via aquela conversa como "atendimento aberto", então não faz sentido contar o tempo até a primeira resposta — o relógio só deveria começar a partir do momento em que a tela existia.
 
-- Central Trabalhista: 4.529 threads, **0** com `first_response_at`.
-- Globalmente: 8.436 threads, **0** com `first_response_at`.
+## O que mudar
 
-Não existe trigger/job atualizando essa coluna. Já os demais KPIs funcionam porque vêm de `message_response_times` (que é populada normalmente — daí "Tempo médio de resposta" mostrar 7h 52m).
+Criar uma constante única com a data de corte do Atendimento e aplicar em **todos** os KPIs que dependem de eventos antigos.
 
-## Solução
+### 1. Nova constante
 
-Derivar a 1ª resposta a partir de `message_response_times` em vez da coluna morta. Para cada thread criada no período, pegar o **primeiro** registro de resposta (menor `inbound_at`) e usar seu `response_seconds` na média.
+`src/lib/serviceCutoff.ts` (novo):
+```ts
+// Atendimento module went live on 2026-05-30 (see /inbox phase 1)
+export const SERVICE_MODULE_START = new Date('2026-05-30T00:00:00-03:00');
+export const SERVICE_MODULE_START_ISO = SERVICE_MODULE_START.toISOString();
+```
 
-## Alteração
+### 2. `src/hooks/useServiceStats.ts`
 
-**`src/hooks/useServiceStats.ts`** — trocar a leitura de `first_response_at`:
+Aplicar o cutoff em duas frentes:
 
-1. Remover `first_response_at` do `select` de `threadRowsPromise` (ficam `contact_id, id, created_at`).
-2. Substituir o cálculo atual de `firstResponseDiffs` por:
-   - Buscar de `message_response_times` os campos `thread_id, inbound_at, response_seconds` filtrando por `organization_id`, `thread_id IN (ids das threads do período)` e, se `ownerId !== 'all'`, `user_id = ownerId`.
-   - Usar `fetchAllPagedRows` para paginar; chunkar o `.in('thread_id', …)` em lotes de 300 para evitar URL gigante.
-   - Reduzir para um Map<thread_id, {inbound_at, response_seconds}> mantendo apenas o registro com menor `inbound_at` por thread.
-   - `avgFirstResponseSeconds = média dos response_seconds finitos e ≥ 0` desse Map (ou `null` se vazio).
-3. Manter todo o resto (contactsCount, totalCount, resolvedCount, avgResponseSeconds) inalterado.
+- **Janela efetiva**: `effectiveFromIso = max(fromIso, SERVICE_MODULE_START_ISO)`. Usar `effectiveFromIso` em todos os filtros `.gte('created_at', ...)`, `.gte('resolved_at', ...)` e nas consultas a `message_response_times`.
+- **1ª resposta por thread**: ao montar `firstByThread`, ignorar registros cujo `inbound_at < SERVICE_MODULE_START_ISO`. Assim, mesmo que um inbound antigo seja o "primeiro" da thread, ele não inflaciona a média.
+
+Resultado: o caso TAMIRIS (inbound 20/05) deixa de entrar; threads com inbound antes de 30/05 só contam se houver inbound posterior (que vira o "primeiro" válido).
+
+### 3. Sem mudanças visuais
+
+Nenhuma alteração em UI, label ou tooltip nesta etapa. Apenas o cálculo passa a respeitar o cutoff.
 
 ## Fora de escopo
 
-- Backfill/trigger para popular `first_response_at` (coluna fica como está — opcional para uma próxima).
-- Mudanças em `MobileReports` / Inbox (eles usam outras fontes).
-- UI: nenhum componente muda.
+- Backfill de `first_response_at` no banco.
+- Mostrar a data de corte na UI (pode virar próximo passo se quiser deixar explícito pro usuário).
+- Mudanças em outros relatórios (Dashboard comercial, Marketing) — só `useServiceStats`.
