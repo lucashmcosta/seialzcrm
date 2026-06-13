@@ -31,6 +31,7 @@ import { KpiCard } from '@/components/reports/KpiCard';
 import { WinRateGauge } from '@/components/reports/WinRateGauge';
 import { StageDistribution } from '@/components/reports/StageDistribution';
 import UserDetailDialog from '@/components/reports/UserDetailDialog';
+import { ServiceResponseDetailDialog } from '@/components/reports/ServiceResponseDetailDialog';
 import { ReportFilters } from '@/components/reports/ReportFilters';
 import { computeRange, type PeriodPreset, type CustomRange } from '@/lib/report-period';
 import { useIsMobile } from '@/hooks/use-mobile';
