@@ -1,37 +1,50 @@
-## Contexto
+# Drill-down nos KPIs de Atendimento
 
-A TAMIRIS aparece com gap de 553h (~23 dias) porque o inbound dela é de **20/05/2026**, mas o módulo de Atendimento (`/inbox`) só foi criado em **30/05/2026** (confirmado no histórico — mensagens #4210-#4215, primeira implementação read-only da fase 1).
+Tornar os cards **"Tempo médio 1ª resposta"** e **"Tempo médio de resposta"** clicáveis. Ao clicar, abre um modal leve com:
 
-Antes dessa data, ninguém via aquela conversa como "atendimento aberto", então não faz sentido contar o tempo até a primeira resposta — o relógio só deveria começar a partir do momento em que a tela existia.
+- **Top 20 piores casos** do período (ordenados por gap desc)
+- **Distribuição rápida**: mediana, p90, máximo (pra contextualizar a média)
+- Linha por linha: contato, responsável, quando entrou, quando respondeu, gap formatado
+- Clicar na linha → navega para `/messages?thread=<id>` (ou abre a conversa)
 
-## O que mudar
+## Por que assim (peso na tela)
 
-Criar uma constante única com a data de corte do Atendimento e aplicar em **todos** os KPIs que dependem de eventos antigos.
+- **Sob demanda**: dados só são buscados quando o usuário clica no card. Nada extra no load do dashboard.
+- **Reaproveita** o que `useServiceStats` já busca (`message_response_times` filtrado por org + período + cutoff 30/05). Não duplica query — extraímos a lista pra um novo hook que o modal consome.
+- **Limite hard de 20 linhas** + join leve (contact name, user name) via 2 chamadas `.in()` em vez de embed.
+- Modal usa o `Dialog` do shadcn já presente no projeto, sem novas libs.
 
-### 1. Nova constante
+## Arquivos
 
-`src/lib/serviceCutoff.ts` (novo):
-```ts
-// Atendimento module went live on 2026-05-30 (see /inbox phase 1)
-export const SERVICE_MODULE_START = new Date('2026-05-30T00:00:00-03:00');
-export const SERVICE_MODULE_START_ISO = SERVICE_MODULE_START.toISOString();
-```
+1. **`src/hooks/useServiceWorstResponses.ts`** (novo)
+   - Params: `organizationId`, `from`, `to`, `ownerId`, `kind: 'first' | 'all'`, `enabled`
+   - Só dispara quando `enabled=true` (modal aberto)
+   - Aplica o mesmo `SERVICE_MODULE_START_ISO` cutoff
+   - Para `kind='first'`: agrupa por `thread_id` e pega o menor `inbound_at` ≥ cutoff de cada thread, depois ordena por `response_seconds` desc, top 20
+   - Para `kind='all'`: ordena diretamente `message_response_times` por `response_seconds` desc, top 20
+   - Calcula mediana / p90 / max sobre os valores já carregados pelo `useServiceStats` (passados como prop) — sem nova query
+   - Enriquecimento: 1 query `users.in(id, ...)` + 1 query `contacts.in(id, ...)` + 1 query `message_threads.in(id, ...)` pra pegar `contact_id`
 
-### 2. `src/hooks/useServiceStats.ts`
+2. **`src/components/reports/ServiceResponseDetailDialog.tsx`** (novo)
+   - Props: `open`, `onClose`, `kind`, `title`, `stats` (mediana/p90/max), `rows`, `loading`
+   - Header com 3 mini-stats (mediana / p90 / máximo)
+   - Tabela densa com: Contato · Responsável · Inbound · Outbound · Gap
+   - Click na linha → `navigate('/messages?thread=<id>')`
 
-Aplicar o cutoff em duas frentes:
+3. **Página do dashboard de Atendimento** (achar via grep — provavelmente `src/pages/dashboards/...` ou `ServiceDashboard.tsx`)
+   - Adicionar `onClick` nos dois cards
+   - Estado `detail: null | 'first' | 'all'`
+   - Renderizar `<ServiceResponseDetailDialog />`
+   - Adicionar visual de "clicável" (cursor-pointer, hover sutil) — mesmo padrão do `Dashboard.tsx`
 
-- **Janela efetiva**: `effectiveFromIso = max(fromIso, SERVICE_MODULE_START_ISO)`. Usar `effectiveFromIso` em todos os filtros `.gte('created_at', ...)`, `.gte('resolved_at', ...)` e nas consultas a `message_response_times`.
-- **1ª resposta por thread**: ao montar `firstByThread`, ignorar registros cujo `inbound_at < SERVICE_MODULE_START_ISO`. Assim, mesmo que um inbound antigo seja o "primeiro" da thread, ele não inflaciona a média.
+## Fora de escopo (avisar e perguntar depois)
 
-Resultado: o caso TAMIRIS (inbound 20/05) deixa de entrar; threads com inbound antes de 30/05 só contam se houver inbound posterior (que vira o "primeiro" válido).
+- Não vou trocar média por mediana no card principal (só mostrar dentro do modal)
+- Não vou aplicar filtro de horário comercial agora
+- Não vou exportar CSV
 
-### 3. Sem mudanças visuais
+## Validação
 
-Nenhuma alteração em UI, label ou tooltip nesta etapa. Apenas o cálculo passa a respeitar o cutoff.
-
-## Fora de escopo
-
-- Backfill de `first_response_at` no banco.
-- Mostrar a data de corte na UI (pode virar próximo passo se quiser deixar explícito pro usuário).
-- Mudanças em outros relatórios (Dashboard comercial, Marketing) — só `useServiceStats`.
+- Abrir card "Tempo médio 1ª resposta" → ver top 20 com TAMIRIS / W F B S / Elisangela no topo
+- Verificar que mediana << média (confirma que outliers puxam o número)
+- Clicar numa linha → abre a conversa correspondente

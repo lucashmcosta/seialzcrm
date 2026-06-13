@@ -31,6 +31,7 @@ import { KpiCard } from '@/components/reports/KpiCard';
 import { WinRateGauge } from '@/components/reports/WinRateGauge';
 import { StageDistribution } from '@/components/reports/StageDistribution';
 import UserDetailDialog from '@/components/reports/UserDetailDialog';
+import { ServiceResponseDetailDialog } from '@/components/reports/ServiceResponseDetailDialog';
 import { ReportFilters } from '@/components/reports/ReportFilters';
 import { computeRange, type PeriodPreset, type CustomRange } from '@/lib/report-period';
 import { useIsMobile } from '@/hooks/use-mobile';
@@ -114,6 +115,7 @@ export default function ReportsPage() {
   const [loading, setLoading] = useState(true);
   const [selectedUser, setSelectedUser] = useState<UserStats | null>(null);
   const [detail, setDetail] = useState<null | 'won' | 'lost' | 'created'>(null);
+  const [serviceDetail, setServiceDetail] = useState<null | 'first' | 'all'>(null);
 
   const { data: serviceStats, loading: serviceLoading } = useServiceStats({
     organizationId: organization?.id,
@@ -639,6 +641,7 @@ export default function ReportsPage() {
                   accent="warning"
                   loading={serviceLoading}
                   mono
+                  onClick={() => setServiceDetail('first')}
                 />
                 <KpiCard
                   label="Encerrados"
@@ -661,6 +664,7 @@ export default function ReportsPage() {
                   accent="warning"
                   loading={serviceLoading}
                   mono
+                  onClick={() => setServiceDetail('all')}
                 />
               </div>
             </section>
@@ -712,8 +716,22 @@ export default function ReportsPage() {
                 />
               </Suspense>
             )}
+
+            {serviceDetail && organization && (
+              <ServiceResponseDetailDialog
+                open={!!serviceDetail}
+                onClose={() => setServiceDetail(null)}
+                kind={serviceDetail}
+                organizationId={organization.id}
+                from={range.from}
+                to={range.to}
+                ownerId={ownerId}
+              />
+            )}
         </div>
       </div>
+
+
 
       <Dialog open={detail !== null} onOpenChange={(o) => !o && setDetail(null)}>
         <DialogContent className="max-w-2xl max-h-[80vh] overflow-hidden flex flex-col">
