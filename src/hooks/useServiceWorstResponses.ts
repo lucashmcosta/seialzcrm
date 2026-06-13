@@ -130,9 +130,9 @@ export function useServiceWorstResponses({
         if (contactIds.length > 0) {
           const { data: cdata } = await supabase
             .from('contacts')
-            .select('id, name')
+            .select('id, full_name')
             .in('id', contactIds);
-          for (const c of cdata || []) contactsMap.set(c.id, c.name);
+          for (const c of cdata || []) contactsMap.set(c.id, c.full_name);
         }
         const usersMap = new Map<string, string | null>();
         if (userIds.length > 0) {
