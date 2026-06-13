@@ -1,46 +1,32 @@
-## Objetivo
+# Corrigir "Tempo médio 1ª resposta" no Dashboard de Atendimento
 
-No menu **Ações → Oportunidades** da página `/messages` (desktop), adicionar uma terceira opção **"Mover etapa…"** ao lado de *Marcar como Ganho* e *Marcar como Perdido*. Ao clicar, abre um modal listando todas as etapas do kanban da organização; o usuário escolhe a etapa de destino e confirma.
+## Diagnóstico
 
-Os atalhos atuais de Ganho/Perdido continuam funcionando exatamente como hoje.
+O KPI lê `message_threads.first_response_at` em `src/hooks/useServiceStats.ts`, mas essa coluna **nunca é populada** — confirmado no banco:
 
-## Mudanças
+- Central Trabalhista: 4.529 threads, **0** com `first_response_at`.
+- Globalmente: 8.436 threads, **0** com `first_response_at`.
 
-### `src/pages/messages/MessagesList.tsx`
+Não existe trigger/job atualizando essa coluna. Já os demais KPIs funcionam porque vêm de `message_response_times` (que é populada normalmente — daí "Tempo médio de resposta" mostrar 7h 52m).
 
-1. **Carregar etapas completas** (linha 547-557): incluir `name` e `order_index` no `select` de `pipeline_stages` para conseguir listar e ordenar no modal.
+## Solução
 
-2. **Novo estado**: `const [moveStageOpp, setMoveStageOpp] = useState<ChatOpp | null>(null)`.
+Derivar a 1ª resposta a partir de `message_response_times` em vez da coluna morta. Para cada thread criada no período, pegar o **primeiro** registro de resposta (menor `inbound_at`) e usar seu `response_seconds` na média.
 
-3. **Novo item no DropdownMenu** (linha 1418-1425) — após "Marcar como Perdido", adicionar:
-   ```
-   <DropdownMenuItem onClick={() => setMoveStageOpp(opp)}>
-     <ArrowsLeftRight /> Mover etapa…
-   </DropdownMenuItem>
-   ```
+## Alteração
 
-4. **Novo handler** `handleMoveStage(opp, stageId)`:
-   - Faz `UPDATE opportunities SET pipeline_stage_id = stageId, updated_by = userProfile.id WHERE id = opp.id`.
-   - Se a etapa escolhida for `type='won'` ou `'lost'`: reutiliza o fluxo atual (`setConfirmAction` / `setPendingCloseDate`) para pedir `close_date` se necessário e setar `status`.
-   - Se for etapa "aberta" (qualquer outro `type`): apenas troca `pipeline_stage_id`, mantém `status='open'`, mostra toast de sucesso e remove a opp da lista local se mudou de contato/contexto (mantém na lista).
-   - Toast: "Etapa atualizada".
+**`src/hooks/useServiceStats.ts`** — trocar a leitura de `first_response_at`:
 
-5. **Novo componente inline** `MoveStageDialog` (dentro do mesmo arquivo, próximo ao `ConfirmDialog` no final):
-   - `Dialog` shadcn com lista de etapas (radio buttons) ordenadas por `order_index`.
-   - Cada item mostra `name` + badge pequeno com o `type` (Aberto/Ganho/Perdido) usando cor semântica.
-   - Desabilita a etapa atual da oportunidade.
-   - Botões "Cancelar" / "Confirmar".
-   - Estado de loading enquanto o update roda.
-
-## Detalhes técnicos
-
-- A tabela `pipeline_stages` já tem `id, name, type, order_index, organization_id` (verificado).
-- Reuso de `ConfirmDialog` e `CloseDatePromptDialog` existentes para o caso won/lost — sem duplicação.
-- Sem mudanças em backend, RLS, edge functions ou outras páginas.
-- Ícone `ArrowsLeftRight` do `@phosphor-icons/react` já é padrão do projeto.
+1. Remover `first_response_at` do `select` de `threadRowsPromise` (ficam `contact_id, id, created_at`).
+2. Substituir o cálculo atual de `firstResponseDiffs` por:
+   - Buscar de `message_response_times` os campos `thread_id, inbound_at, response_seconds` filtrando por `organization_id`, `thread_id IN (ids das threads do período)` e, se `ownerId !== 'all'`, `user_id = ownerId`.
+   - Usar `fetchAllPagedRows` para paginar; chunkar o `.in('thread_id', …)` em lotes de 300 para evitar URL gigante.
+   - Reduzir para um Map<thread_id, {inbound_at, response_seconds}> mantendo apenas o registro com menor `inbound_at` por thread.
+   - `avgFirstResponseSeconds = média dos response_seconds finitos e ≥ 0` desse Map (ou `null` se vazio).
+3. Manter todo o resto (contactsCount, totalCount, resolvedCount, avgResponseSeconds) inalterado.
 
 ## Fora de escopo
 
-- Mobile (`MobileMessagesList`) — pode ser feito depois se solicitado.
-- Inbox novo (`InboxThreadDetail`) — explicitamente o usuário pediu só em `/messages`.
-- Bulk move (já existe no kanban).
+- Backfill/trigger para popular `first_response_at` (coluna fica como está — opcional para uma próxima).
+- Mudanças em `MobileReports` / Inbox (eles usam outras fontes).
+- UI: nenhum componente muda.

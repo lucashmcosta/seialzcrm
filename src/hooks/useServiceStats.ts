@@ -52,15 +52,15 @@ export function useServiceStats({ organizationId, from, to, ownerId, refreshKey 
           return q;
         };
 
-        // 1 + 4 + 2: fetch thread rows in period (contact_id + created_at + first_response_at)
+        // 1 + 4: fetch thread rows in period (id + contact_id + created_at)
         const threadRowsPromise = fetchAllPagedRows<{
+          id: string;
           contact_id: string | null;
           created_at: string;
-          first_response_at: string | null;
         }>(async (pf, pt) => {
           let q = supabase
             .from('message_threads')
-            .select('contact_id, created_at, first_response_at')
+            .select('id, contact_id, created_at')
             .eq('organization_id', organizationId)
             .gte('created_at', fromIso)
             .lte('created_at', toIso)
@@ -97,19 +97,46 @@ export function useServiceStats({ organizationId, from, to, ownerId, refreshKey 
 
         const totalCount = threadRows.length;
         const contactIds = new Set<string>();
-        const firstResponseDiffs: number[] = [];
         for (const r of threadRows) {
           if (r.contact_id) contactIds.add(r.contact_id);
-          if (r.first_response_at) {
-            const diff =
-              (new Date(r.first_response_at).getTime() - new Date(r.created_at).getTime()) / 1000;
-            if (isFinite(diff) && diff >= 0) firstResponseDiffs.push(diff);
+        }
+
+        // First response per thread derived from message_response_times
+        // (column message_threads.first_response_at is not populated).
+        const threadIds = threadRows.map((r) => r.id);
+        const firstByThread = new Map<string, { inbound_at: string; response_seconds: number | null }>();
+        const CHUNK = 300;
+        for (let i = 0; i < threadIds.length; i += CHUNK) {
+          const slice = threadIds.slice(i, i + CHUNK);
+          if (slice.length === 0) continue;
+          const rows = await fetchAllPagedRows<{
+            thread_id: string;
+            inbound_at: string;
+            response_seconds: number | null;
+          }>(async (pf, pt) => {
+            let q = supabase
+              .from('message_response_times')
+              .select('thread_id, inbound_at, response_seconds')
+              .eq('organization_id', organizationId)
+              .in('thread_id', slice)
+              .range(pf, pt);
+            if (owner) q = q.eq('user_id', owner);
+            return await q;
+          });
+          for (const r of rows) {
+            const prev = firstByThread.get(r.thread_id);
+            if (!prev || new Date(r.inbound_at).getTime() < new Date(prev.inbound_at).getTime()) {
+              firstByThread.set(r.thread_id, { inbound_at: r.inbound_at, response_seconds: r.response_seconds });
+            }
           }
         }
+        const firstValues: number[] = [];
+        firstByThread.forEach((v) => {
+          const n = Number(v.response_seconds);
+          if (isFinite(n) && n >= 0) firstValues.push(n);
+        });
         const avgFirstResponseSeconds =
-          firstResponseDiffs.length > 0
-            ? firstResponseDiffs.reduce((a, b) => a + b, 0) / firstResponseDiffs.length
-            : null;
+          firstValues.length > 0 ? firstValues.reduce((a, b) => a + b, 0) / firstValues.length : null;
 
         const respValues = responses
           .map((r) => Number(r.response_seconds))
@@ -124,6 +151,7 @@ export function useServiceStats({ organizationId, from, to, ownerId, refreshKey 
           totalCount,
           avgResponseSeconds,
         });
+
       } catch (e) {
         console.error('useServiceStats error:', e);
         if (!cancelled) setData(EMPTY);
