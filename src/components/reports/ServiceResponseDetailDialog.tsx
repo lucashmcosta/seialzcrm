@@ -33,7 +33,6 @@ export function ServiceResponseDetailDialog({
   to,
   ownerId,
 }: Props) {
-  const navigate = useNavigate();
   const { rows, stats, loading } = useServiceWorstResponses({
     organizationId,
     from,
