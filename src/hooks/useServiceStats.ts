@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { fetchAllPagedRows } from '@/lib/fetchAllPagedRows';
+import { SERVICE_MODULE_START_ISO, SERVICE_MODULE_START_MS } from '@/lib/serviceCutoff';
 
 export interface ServiceStats {
   contactsCount: number;
