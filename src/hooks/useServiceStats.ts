@@ -127,8 +127,10 @@ export function useServiceStats({ organizationId, from, to, ownerId, refreshKey 
             return await q;
           });
           for (const r of rows) {
+            const inboundMs = new Date(r.inbound_at).getTime();
+            if (!isFinite(inboundMs) || inboundMs < SERVICE_MODULE_START_MS) continue;
             const prev = firstByThread.get(r.thread_id);
-            if (!prev || new Date(r.inbound_at).getTime() < new Date(prev.inbound_at).getTime()) {
+            if (!prev || inboundMs < new Date(prev.inbound_at).getTime()) {
               firstByThread.set(r.thread_id, { inbound_at: r.inbound_at, response_seconds: r.response_seconds });
             }
           }
