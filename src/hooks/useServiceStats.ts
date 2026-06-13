@@ -39,8 +39,10 @@ export function useServiceStats({ organizationId, from, to, ownerId, refreshKey 
     (async () => {
       setLoading(true);
       try {
-        const fromIso = from.toISOString();
+        const fromIsoRaw = from.toISOString();
         const toIso = to.toISOString();
+        // Atendimento module cutoff: nada antes da criação da tela conta.
+        const fromIso = fromIsoRaw < SERVICE_MODULE_START_ISO ? SERVICE_MODULE_START_ISO : fromIsoRaw;
         const owner = ownerId !== 'all' ? ownerId : null;
 
         // Build base threads query helper
