@@ -114,6 +114,7 @@ export default function ReportsPage() {
   const [loading, setLoading] = useState(true);
   const [selectedUser, setSelectedUser] = useState<UserStats | null>(null);
   const [detail, setDetail] = useState<null | 'won' | 'lost' | 'created'>(null);
+  const [serviceDetail, setServiceDetail] = useState<null | 'first' | 'all'>(null);
 
   const { data: serviceStats, loading: serviceLoading } = useServiceStats({
     organizationId: organization?.id,
