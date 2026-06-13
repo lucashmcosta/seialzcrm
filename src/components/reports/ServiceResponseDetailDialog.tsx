@@ -1,6 +1,5 @@
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { formatSeconds } from '@/lib/format-duration';
-import { useNavigate } from 'react-router-dom';
 import { useServiceWorstResponses } from '@/hooks/useServiceWorstResponses';
 
 interface Props {
