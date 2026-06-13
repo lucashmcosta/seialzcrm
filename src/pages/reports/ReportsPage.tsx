@@ -716,8 +716,22 @@ export default function ReportsPage() {
                 />
               </Suspense>
             )}
+
+            {serviceDetail && organization && (
+              <ServiceResponseDetailDialog
+                open={!!serviceDetail}
+                onClose={() => setServiceDetail(null)}
+                kind={serviceDetail}
+                organizationId={organization.id}
+                from={range.from}
+                to={range.to}
+                ownerId={ownerId}
+              />
+            )}
         </div>
       </div>
+
+
 
       <Dialog open={detail !== null} onOpenChange={(o) => !o && setDetail(null)}>
         <DialogContent className="max-w-2xl max-h-[80vh] overflow-hidden flex flex-col">
