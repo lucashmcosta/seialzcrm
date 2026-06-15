@@ -7,7 +7,8 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { ConfirmDialog } from '@/components/ui/confirm-dialog';
 import { useToast } from '@/hooks/use-toast';
-import { SpinnerGap, UploadSimple, DownloadSimple, TrashSimple, File, FileText, Image, FileXls } from '@phosphor-icons/react';
+import { SpinnerGap, UploadSimple, DownloadSimple, TrashSimple, File, FileText, Image, FileXls, Eye, ArrowSquareOut } from '@phosphor-icons/react';
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { formatDistanceToNow } from 'date-fns';
 import { ptBR, enUS } from 'date-fns/locale';
 
@@ -37,6 +38,9 @@ export function ContactAttachments({ contactId, entityId, entityType }: ContactA
   const [confirmOpen, setConfirmOpen] = useState(false);
   const [deletingAttachment, setDeletingAttachment] = useState<Attachment | null>(null);
   const [deleting, setDeleting] = useState(false);
+  const [previewAttachment, setPreviewAttachment] = useState<Attachment | null>(null);
+  const [previewUrl, setPreviewUrl] = useState<string | null>(null);
+  const [previewLoading, setPreviewLoading] = useState(false);
 
   useEffect(() => {
     fetchAttachments();
@@ -139,6 +143,30 @@ export function ContactAttachments({ contactId, entityId, entityType }: ContactA
     }
   };
 
+  const handlePreview = async (attachment: Attachment) => {
+    setPreviewAttachment(attachment);
+    setPreviewUrl(null);
+    setPreviewLoading(true);
+    try {
+      const { data, error } = await supabase.storage
+        .from(attachment.bucket)
+        .createSignedUrl(attachment.storage_path, 600);
+      if (error) throw error;
+      setPreviewUrl(data?.signedUrl ?? null);
+    } catch (error) {
+      console.error('Error creating preview URL:', error);
+      toast({ variant: 'destructive', description: t('common.error') });
+      setPreviewAttachment(null);
+    } finally {
+      setPreviewLoading(false);
+    }
+  };
+
+  const isPreviewable = (mimeType: string | null) => {
+    if (!mimeType) return false;
+    return mimeType === 'application/pdf' || mimeType.startsWith('image/');
+  };
+
   const handleDeleteClick = (attachment: Attachment) => {
     setDeletingAttachment(attachment);
     setConfirmOpen(true);
@@ -235,22 +263,31 @@ export function ContactAttachments({ contactId, entityId, entityType }: ContactA
             ) : (
               attachments.map((attachment) => (
                 <div key={attachment.id} className="flex items-center justify-between p-3 rounded-lg border hover:bg-muted/50 transition-colors">
-                  <div className="flex items-center gap-3 flex-1 min-w-0">
+                  <button
+                    type="button"
+                    onClick={() => isPreviewable(attachment.mime_type) ? handlePreview(attachment) : handleDownload(attachment)}
+                    className="flex items-center gap-3 flex-1 min-w-0 text-left"
+                  >
                     <div className="flex-shrink-0 text-muted-foreground">
                       {getFileIcon(attachment.mime_type)}
                     </div>
                     <div className="flex-1 min-w-0">
-                      <p className="font-medium text-sm truncate">{attachment.file_name}</p>
+                      <p className="font-medium text-sm truncate hover:underline">{attachment.file_name}</p>
                       <p className="text-xs text-muted-foreground">
                         {formatFileSize(attachment.size_bytes)} • {formatDistanceToNow(new Date(attachment.created_at), { addSuffix: true, locale: dateLocale })}
                       </p>
                     </div>
-                  </div>
+                  </button>
                   <div className="flex gap-1">
-                    <Button variant="ghost" size="icon" onClick={() => handleDownload(attachment)}>
+                    {isPreviewable(attachment.mime_type) && (
+                      <Button variant="ghost" size="icon" onClick={() => handlePreview(attachment)} title="Visualizar">
+                        <Eye className="w-4 h-4" />
+                      </Button>
+                    )}
+                    <Button variant="ghost" size="icon" onClick={() => handleDownload(attachment)} title="Baixar">
                       <DownloadSimple className="w-4 h-4" />
                     </Button>
-                    <Button variant="ghost" size="icon" onClick={() => handleDeleteClick(attachment)}>
+                    <Button variant="ghost" size="icon" onClick={() => handleDeleteClick(attachment)} title="Excluir">
                       <TrashSimple className="w-4 h-4" />
                     </Button>
                   </div>
@@ -271,6 +308,69 @@ export function ContactAttachments({ contactId, entityId, entityType }: ContactA
         onConfirm={handleDeleteConfirm}
         loading={deleting}
       />
+
+      <Dialog
+        open={!!previewAttachment}
+        onOpenChange={(open) => {
+          if (!open) {
+            setPreviewAttachment(null);
+            setPreviewUrl(null);
+          }
+        }}
+      >
+        <DialogContent className="max-w-5xl w-[95vw] h-[90vh] flex flex-col p-0 gap-0">
+          <DialogHeader className="px-4 py-3 border-b flex-row items-center justify-between space-y-0">
+            <DialogTitle className="text-sm font-medium truncate pr-4">
+              {previewAttachment?.file_name}
+            </DialogTitle>
+            <div className="flex gap-1 items-center">
+              {previewUrl && (
+                <Button variant="ghost" size="icon" asChild title="Abrir em nova aba">
+                  <a href={previewUrl} target="_blank" rel="noopener noreferrer">
+                    <ArrowSquareOut className="w-4 h-4" />
+                  </a>
+                </Button>
+              )}
+              {previewAttachment && (
+                <Button variant="ghost" size="icon" onClick={() => handleDownload(previewAttachment)} title="Baixar">
+                  <DownloadSimple className="w-4 h-4" />
+                </Button>
+              )}
+            </div>
+          </DialogHeader>
+          <div className="flex-1 min-h-0 bg-muted/30">
+            {previewLoading ? (
+              <div className="w-full h-full flex items-center justify-center">
+                <SpinnerGap className="h-8 w-8 animate-spin text-muted-foreground" />
+              </div>
+            ) : previewUrl && previewAttachment ? (
+              previewAttachment.mime_type === 'application/pdf' ? (
+                <iframe
+                  src={previewUrl}
+                  className="w-full h-full border-0"
+                  title={previewAttachment.file_name}
+                />
+              ) : previewAttachment.mime_type?.startsWith('image/') ? (
+                <div className="w-full h-full flex items-center justify-center p-4 overflow-auto">
+                  <img
+                    src={previewUrl}
+                    alt={previewAttachment.file_name}
+                    className="max-w-full max-h-full object-contain"
+                  />
+                </div>
+              ) : (
+                <div className="w-full h-full flex flex-col items-center justify-center gap-3 text-center p-6">
+                  <p className="text-muted-foreground">Pré-visualização não disponível para este tipo de arquivo.</p>
+                  <Button onClick={() => handleDownload(previewAttachment)}>
+                    <DownloadSimple className="w-4 h-4 mr-2" />
+                    Baixar
+                  </Button>
+                </div>
+              )
+            ) : null}
+          </div>
+        </DialogContent>
+      </Dialog>
     </>
   );
 }
