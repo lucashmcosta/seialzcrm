@@ -1643,6 +1643,7 @@ export type Database = {
           last_name: string | null
           lifecycle_stage: Database["public"]["Enums"]["lifecycle_stage"] | null
           marketing_campaign_id: string | null
+          meta_ad_id: string | null
           meta_adset_id: string | null
           meta_campaign_id: string | null
           meta_lead_id: string | null
@@ -1704,6 +1705,7 @@ export type Database = {
             | Database["public"]["Enums"]["lifecycle_stage"]
             | null
           marketing_campaign_id?: string | null
+          meta_ad_id?: string | null
           meta_adset_id?: string | null
           meta_campaign_id?: string | null
           meta_lead_id?: string | null
@@ -1765,6 +1767,7 @@ export type Database = {
             | Database["public"]["Enums"]["lifecycle_stage"]
             | null
           marketing_campaign_id?: string | null
+          meta_ad_id?: string | null
           meta_adset_id?: string | null
           meta_campaign_id?: string | null
           meta_lead_id?: string | null

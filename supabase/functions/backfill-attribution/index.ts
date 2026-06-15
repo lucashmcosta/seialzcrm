@@ -1,5 +1,10 @@
 // Backfill: vincula contatos antigos a marketing_campaigns usando sinais já capturados.
 // Pode ser executada quantas vezes for necessário; só atualiza contatos ainda não vinculados.
+//
+// Ordem de prioridade (do mais robusto pro mais frouxo):
+//   Camada 0 — contacts.meta_ad_id          → marketing_campaigns.ad_id   (LP nova)
+//   Camada 1 — contacts.ad_referral_source_id → mc.ad_id ou mc.external_id (CTWA)
+//   Camada 2 — utm_content/utm_campaign     → ad_name/adset_name/campaign_name (match único)
 import { createClient } from 'jsr:@supabase/supabase-js@2';
 
 const corsHeaders = {
@@ -20,68 +25,46 @@ Deno.serve(async (req) => {
     const body = await req.json().catch(() => ({}));
     const organizationId: string | undefined = body.organization_id;
 
-    const orgFilter = organizationId ? `AND c.organization_id = '${organizationId}'` : '';
+    // ─── Camada 0: meta_ad_id → mc.ad_id (mais robusto, sem ambiguidade) ───
+    let q0 = supabase
+      .from('contacts')
+      .select('id, organization_id, meta_ad_id')
+      .is('marketing_campaign_id', null)
+      .is('deleted_at', null)
+      .not('meta_ad_id', 'is', null)
+      .limit(5000);
+    if (organizationId) q0 = q0.eq('organization_id', organizationId);
+    const { data: adIdContacts } = await q0;
 
-    // Camada 1: CTWA ad id
-    const layer1Sql = `
-      WITH updated AS (
-        UPDATE contacts c
-        SET marketing_campaign_id = mc.id
-        FROM marketing_campaigns mc
-        WHERE c.marketing_campaign_id IS NULL
-          AND c.deleted_at IS NULL
-          AND c.ad_referral_source_id IS NOT NULL
-          AND mc.organization_id = c.organization_id
-          AND mc.deleted_at IS NULL
-          AND (mc.ad_id = c.ad_referral_source_id OR mc.external_id = c.ad_referral_source_id)
-          ${orgFilter}
-        RETURNING c.id
-      )
-      SELECT COUNT(*)::int AS n FROM updated;
-    `;
+    let layer0 = 0;
+    for (const c of adIdContacts || []) {
+      const { data: mc } = await supabase
+        .from('marketing_campaigns')
+        .select('id')
+        .eq('organization_id', c.organization_id)
+        .is('deleted_at', null)
+        .eq('ad_id', c.meta_ad_id)
+        .limit(1)
+        .maybeSingle();
+      if (mc?.id) {
+        await supabase.from('contacts').update({ marketing_campaign_id: mc.id }).eq('id', c.id);
+        layer0++;
+      }
+    }
 
-    // Camada 2: UTM com match único
-    const layer2Sql = `
-      WITH candidates AS (
-        SELECT c.id AS contact_id, mc.id AS campaign_id,
-               COUNT(*) OVER (PARTITION BY c.id) AS n
-        FROM contacts c
-        JOIN marketing_campaigns mc
-          ON mc.organization_id = c.organization_id
-         AND mc.deleted_at IS NULL
-         AND (
-              (c.utm_content  IS NOT NULL AND (mc.ad_name = c.utm_content OR mc.adset_name = c.utm_content))
-           OR (c.utm_campaign IS NOT NULL AND  mc.campaign_name = c.utm_campaign)
-         )
-        WHERE c.marketing_campaign_id IS NULL
-          AND c.deleted_at IS NULL
-          ${orgFilter}
-      ), updated AS (
-        UPDATE contacts c
-        SET marketing_campaign_id = ca.campaign_id
-        FROM candidates ca
-        WHERE ca.contact_id = c.id AND ca.n = 1
-        RETURNING c.id
-      )
-      SELECT COUNT(*)::int AS n FROM updated;
-    `;
-
-    // We can't run raw SQL via the JS client without an RPC, so use the
-    // built-in postgrest "exec_sql" pattern via the underlying REST endpoint
-    // is not available. Instead we replicate the logic in batches.
-
-    // Camada 1 — iterate matching contacts and update
-    const { data: ctwaContacts } = await supabase
+    // ─── Camada 1: ad_referral_source_id (CTWA) ───
+    let q1 = supabase
       .from('contacts')
       .select('id, organization_id, ad_referral_source_id')
       .is('marketing_campaign_id', null)
       .is('deleted_at', null)
       .not('ad_referral_source_id', 'is', null)
       .limit(5000);
+    if (organizationId) q1 = q1.eq('organization_id', organizationId);
+    const { data: ctwaContacts } = await q1;
 
     let layer1 = 0;
     for (const c of ctwaContacts || []) {
-      if (organizationId && c.organization_id !== organizationId) continue;
       const { data: mc } = await supabase
         .from('marketing_campaigns')
         .select('id')
@@ -96,31 +79,43 @@ Deno.serve(async (req) => {
       }
     }
 
-    // Camada 2 — UTM-based, match only when unique
-    const { data: utmContacts } = await supabase
+    // ─── Camada 2: UTM (relaxado) — só atribui se houver match único ───
+    let q2 = supabase
       .from('contacts')
-      .select('id, organization_id, utm_campaign, utm_content')
+      .select('id, organization_id, utm_campaign, utm_content, utm_source, utm_medium')
       .is('marketing_campaign_id', null)
       .is('deleted_at', null)
       .or('utm_campaign.not.is.null,utm_content.not.is.null')
       .limit(5000);
+    if (organizationId) q2 = q2.eq('organization_id', organizationId);
+    const { data: utmContacts } = await q2;
 
     let layer2 = 0;
     for (const c of utmContacts || []) {
-      if (organizationId && c.organization_id !== organizationId) continue;
-      let q = supabase
-        .from('marketing_campaigns')
-        .select('id')
-        .eq('organization_id', c.organization_id)
-        .is('deleted_at', null);
       const filters: string[] = [];
+      // utm_content geralmente carrega o nome (ou id) do ad/adset
       if (c.utm_content) {
         filters.push(`ad_name.eq.${c.utm_content}`);
         filters.push(`adset_name.eq.${c.utm_content}`);
+        filters.push(`ad_id.eq.${c.utm_content}`);
+        filters.push(`adset_id.eq.${c.utm_content}`);
       }
-      if (c.utm_campaign) filters.push(`campaign_name.eq.${c.utm_campaign}`);
+      // utm_campaign pode ser id (template novo do Ads Manager) OU nome do ad/campanha (legado)
+      if (c.utm_campaign) {
+        filters.push(`ad_id.eq.${c.utm_campaign}`);
+        filters.push(`campaign_name.eq.${c.utm_campaign}`);
+        filters.push(`ad_name.eq.${c.utm_campaign}`);
+      }
       if (filters.length === 0) continue;
-      const { data: matches } = await q.or(filters.join(',')).limit(2);
+
+      const { data: matches } = await supabase
+        .from('marketing_campaigns')
+        .select('id')
+        .eq('organization_id', c.organization_id)
+        .is('deleted_at', null)
+        .or(filters.join(','))
+        .limit(2);
+
       if (matches && matches.length === 1) {
         await supabase
           .from('contacts')
@@ -131,7 +126,13 @@ Deno.serve(async (req) => {
     }
 
     return new Response(
-      JSON.stringify({ ok: true, layer1, layer2, total: layer1 + layer2 }),
+      JSON.stringify({
+        ok: true,
+        layer0_meta_ad_id: layer0,
+        layer1_ctwa: layer1,
+        layer2_utm: layer2,
+        total: layer0 + layer1 + layer2,
+      }),
       { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
     );
   } catch (e) {

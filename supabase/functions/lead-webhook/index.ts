@@ -366,6 +366,12 @@ serve(async (req) => {
 
       const metaAdsetId = (payload.utm_id as string) || (allParams.adset_id as string) || null;
       const metaCampaignId = (allParams.campaign_id as string) || null;
+      const metaAdId =
+        (rawPayload.meta_ad_id as string) ||
+        (payload.meta_ad_id as string) ||
+        (allParams.ad_id as string) ||
+        (allParams.meta_ad_id as string) ||
+        null;
       const fbclid = (payload.fbclid as string) || (allParams.fbclid as string) || null;
       const gclid = (payload.gclid as string) || (allParams.gclid as string) || null;
 
@@ -390,6 +396,7 @@ serve(async (req) => {
           gclid: gclid,
           meta_adset_id: metaAdsetId,
           meta_campaign_id: metaCampaignId,
+          meta_ad_id: metaAdId,
           lifecycle_stage: 'lead',
         })
         .select('id')
