@@ -1,11 +1,35 @@
-## Ajuste: sobreposição do botão Baixar com o X de fechar
+## Objetivo
 
-**Problema:** No `DialogContent` o botão "X" de fechar é absoluto no canto superior direito (`right-4 top-4`). Os botões "Abrir em nova aba" e "Baixar" do header do preview ficam no mesmo lugar e o X cai em cima do ícone de download.
+Nos modais "Oportunidades que entraram" e "Oportunidades fechadas" da tela **Início** (`/dashboard`), destacar o **nome do contato** como informação principal de cada linha. Título da oportunidade e nome do vendedor ficam como secundários.
 
-**Arquivo:** `src/components/contacts/ContactAttachments.tsx`
+## Como está hoje
 
-**Mudança (apenas CSS, sem mexer em lógica):**
-- Adicionar `pr-10` (ou `pr-12`) ao container do `DialogHeader` / linha de ações para reservar espaço para o X nativo do Dialog.
-- Garantir que os botões "Abrir em nova aba" e "Baixar" fiquem à esquerda do X, com `gap-2` entre eles.
+Cada linha mostra:
+- **Principal:** Título da oportunidade (ex: "Oportunidade - Isaías leite")
+- **Secundário:** "Criada em DD/MM/AAAA" ou "Fechada em DD/MM/AAAA"
+- **Direita:** Valor (R$ 0,00)
 
-Sem alterações em outros componentes, hooks, storage ou políticas.
+## Como vai ficar
+
+- **Principal (negrito):** Nome do contato (fallback: "(sem contato)")
+- **Secundário linha 1:** Título da oportunidade
+- **Secundário linha 2:** "Criada/Fechada em DD/MM/AAAA · Vendedor: Nome"
+- **Direita:** Valor (sem alteração)
+
+## Mudanças técnicas
+
+Arquivo único: `src/pages/Dashboard.tsx`
+
+1. **Query em `fetchStats`:** adicionar joins de contato e vendedor ao `select`:
+   ```
+   .select('id, title, status, created_at, updated_at, close_date, amount,
+            contact_id, owner_user_id,
+            contacts:contact_id(full_name),
+            users:owner_user_id(full_name)')
+   ```
+
+2. **Tipo `OppRow`:** acrescentar `contacts?: { full_name: string } | null` e `users?: { full_name: string } | null`.
+
+3. **Render da linha no `Dialog`:** reorganizar em três níveis tipográficos — contato (`text-sm font-medium`), título da oportunidade (`text-xs text-muted-foreground`) e linha de metadados com data + vendedor (`text-xs text-muted-foreground`).
+
+Nenhuma mudança em hooks, lógica de negócio, KPIs, gráficos ou em outras telas.
