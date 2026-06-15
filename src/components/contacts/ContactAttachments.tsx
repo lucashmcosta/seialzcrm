@@ -38,6 +38,9 @@ export function ContactAttachments({ contactId, entityId, entityType }: ContactA
   const [confirmOpen, setConfirmOpen] = useState(false);
   const [deletingAttachment, setDeletingAttachment] = useState<Attachment | null>(null);
   const [deleting, setDeleting] = useState(false);
+  const [previewAttachment, setPreviewAttachment] = useState<Attachment | null>(null);
+  const [previewUrl, setPreviewUrl] = useState<string | null>(null);
+  const [previewLoading, setPreviewLoading] = useState(false);
 
   useEffect(() => {
     fetchAttachments();
