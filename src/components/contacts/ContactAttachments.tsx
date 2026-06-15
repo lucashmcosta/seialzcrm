@@ -143,6 +143,30 @@ export function ContactAttachments({ contactId, entityId, entityType }: ContactA
     }
   };
 
+  const handlePreview = async (attachment: Attachment) => {
+    setPreviewAttachment(attachment);
+    setPreviewUrl(null);
+    setPreviewLoading(true);
+    try {
+      const { data, error } = await supabase.storage
+        .from(attachment.bucket)
+        .createSignedUrl(attachment.storage_path, 600);
+      if (error) throw error;
+      setPreviewUrl(data?.signedUrl ?? null);
+    } catch (error) {
+      console.error('Error creating preview URL:', error);
+      toast({ variant: 'destructive', description: t('common.error') });
+      setPreviewAttachment(null);
+    } finally {
+      setPreviewLoading(false);
+    }
+  };
+
+  const isPreviewable = (mimeType: string | null) => {
+    if (!mimeType) return false;
+    return mimeType === 'application/pdf' || mimeType.startsWith('image/');
+  };
+
   const handleDeleteClick = (attachment: Attachment) => {
     setDeletingAttachment(attachment);
     setConfirmOpen(true);
