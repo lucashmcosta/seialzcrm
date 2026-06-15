@@ -29,7 +29,10 @@ interface OppRow {
   updated_at: string;
   close_date: string | null;
   amount: number | null;
+  contacts?: { full_name: string | null } | null;
+  users?: { full_name: string | null } | null;
 }
+
 
 /** Parse YYYY-MM-DD as LOCAL midnight (close_date is a DATE column). */
 const parseLocalDate = (s: string | null | undefined): Date | null => {
@@ -199,7 +202,7 @@ export default function Dashboard() {
       const baseQuery = () => {
         let query = supabase
           .from('opportunities')
-          .select('id, title, status, created_at, updated_at, close_date, amount')
+          .select('id, title, status, created_at, updated_at, close_date, amount, contact_id, owner_user_id, contacts:contact_id(full_name), users:owner_user_id(full_name)')
           .eq('organization_id', organization.id)
           .is('deleted_at', null);
 
@@ -398,14 +401,19 @@ export default function Dashboard() {
                     >
                       <div className="min-w-0 flex-1">
                         <p className="text-sm font-medium text-foreground truncate">
+                          {o.contacts?.full_name || '(sem contato)'}
+                        </p>
+                        <p className="text-xs text-muted-foreground mt-0.5 truncate">
                           {o.title || '(sem título)'}
                         </p>
-                        <p className="text-xs text-muted-foreground mt-0.5">
-                          {detail === 'closed'
+                        <p className="text-xs text-muted-foreground mt-0.5 truncate">
+                          {(detail === 'closed'
                             ? `Fechada em ${fmtDate(o.close_date, true)}`
-                            : `Criada em ${fmtDate(o.created_at)}`}
+                            : `Criada em ${fmtDate(o.created_at)}`)
+                            + ` · Vendedor: ${o.users?.full_name || '—'}`}
                         </p>
                       </div>
+
                       <span className="text-sm font-mono text-muted-foreground flex-shrink-0">
                         {fmtMoney(o.amount)}
                       </span>
