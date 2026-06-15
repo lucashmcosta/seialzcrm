@@ -263,22 +263,31 @@ export function ContactAttachments({ contactId, entityId, entityType }: ContactA
             ) : (
               attachments.map((attachment) => (
                 <div key={attachment.id} className="flex items-center justify-between p-3 rounded-lg border hover:bg-muted/50 transition-colors">
-                  <div className="flex items-center gap-3 flex-1 min-w-0">
+                  <button
+                    type="button"
+                    onClick={() => isPreviewable(attachment.mime_type) ? handlePreview(attachment) : handleDownload(attachment)}
+                    className="flex items-center gap-3 flex-1 min-w-0 text-left"
+                  >
                     <div className="flex-shrink-0 text-muted-foreground">
                       {getFileIcon(attachment.mime_type)}
                     </div>
                     <div className="flex-1 min-w-0">
-                      <p className="font-medium text-sm truncate">{attachment.file_name}</p>
+                      <p className="font-medium text-sm truncate hover:underline">{attachment.file_name}</p>
                       <p className="text-xs text-muted-foreground">
                         {formatFileSize(attachment.size_bytes)} • {formatDistanceToNow(new Date(attachment.created_at), { addSuffix: true, locale: dateLocale })}
                       </p>
                     </div>
-                  </div>
+                  </button>
                   <div className="flex gap-1">
-                    <Button variant="ghost" size="icon" onClick={() => handleDownload(attachment)}>
+                    {isPreviewable(attachment.mime_type) && (
+                      <Button variant="ghost" size="icon" onClick={() => handlePreview(attachment)} title="Visualizar">
+                        <Eye className="w-4 h-4" />
+                      </Button>
+                    )}
+                    <Button variant="ghost" size="icon" onClick={() => handleDownload(attachment)} title="Baixar">
                       <DownloadSimple className="w-4 h-4" />
                     </Button>
-                    <Button variant="ghost" size="icon" onClick={() => handleDeleteClick(attachment)}>
+                    <Button variant="ghost" size="icon" onClick={() => handleDeleteClick(attachment)} title="Excluir">
                       <TrashSimple className="w-4 h-4" />
                     </Button>
                   </div>
