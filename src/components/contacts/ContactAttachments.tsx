@@ -319,7 +319,7 @@ export function ContactAttachments({ contactId, entityId, entityType }: ContactA
         }}
       >
         <DialogContent className="max-w-5xl w-[95vw] h-[90vh] flex flex-col p-0 gap-0">
-          <DialogHeader className="px-4 py-3 border-b flex-row items-center justify-between space-y-0">
+          <DialogHeader className="px-4 py-3 pr-14 border-b flex-row items-center justify-between space-y-0">
             <DialogTitle className="text-sm font-medium truncate pr-4">
               {previewAttachment?.file_name}
             </DialogTitle>
