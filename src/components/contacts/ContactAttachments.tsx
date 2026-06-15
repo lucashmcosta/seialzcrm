@@ -7,7 +7,8 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { ConfirmDialog } from '@/components/ui/confirm-dialog';
 import { useToast } from '@/hooks/use-toast';
-import { SpinnerGap, UploadSimple, DownloadSimple, TrashSimple, File, FileText, Image, FileXls } from '@phosphor-icons/react';
+import { SpinnerGap, UploadSimple, DownloadSimple, TrashSimple, File, FileText, Image, FileXls, Eye, ArrowSquareOut } from '@phosphor-icons/react';
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { formatDistanceToNow } from 'date-fns';
 import { ptBR, enUS } from 'date-fns/locale';
 
