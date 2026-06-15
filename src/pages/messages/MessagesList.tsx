@@ -1211,15 +1211,15 @@ function DesktopMessagesList() {
 
   const allFilterOptions: { key: ThreadFilter; label: string; requiresViewAll?: boolean }[] = [
     { key: 'mine', label: locale === 'pt-BR' ? 'Minhas' : 'Mine' },
-    { key: 'unassigned', label: locale === 'pt-BR' ? 'Não atribuídas' : 'Unassigned', requiresViewAll: true },
+    { key: 'unassigned', label: locale === 'pt-BR' ? 'Não atribuídas' : 'Unassigned' },
     { key: 'all_open', label: locale === 'pt-BR' ? 'Todas abertas' : 'All Open', requiresViewAll: true },
     { key: 'resolved', label: locale === 'pt-BR' ? 'Resolvidas' : 'Resolved', requiresViewAll: true },
   ];
   const filterOptions = allFilterOptions.filter(o => !o.requiresViewAll || permissions.viewAllThreads);
 
-  // Force "mine" for users without view-all
+  // Force "mine"/"unassigned" for users without view-all
   useEffect(() => {
-    if (!permissions.viewAllThreads && effectiveFilter !== 'mine') {
+    if (!permissions.viewAllThreads && effectiveFilter !== 'mine' && effectiveFilter !== 'unassigned') {
       setFilter('mine');
     }
   }, [permissions.viewAllThreads, effectiveFilter]);
