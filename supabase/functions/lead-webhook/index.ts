@@ -364,11 +364,25 @@ serve(async (req) => {
         }
       }
 
-      const metaAdsetId = (payload.utm_id as string) || (allParams.adset_id as string) || null;
-      const metaCampaignId = (allParams.campaign_id as string) || null;
+      const metaAdsetId =
+        (rawPayload.meta_adset_id as string) ||
+        (payload.meta_adset_id as string) ||
+        (payload.utm_term as string) ||
+        (payload.utm_id as string) ||
+        (allParams.adset_id as string) ||
+        (allParams.meta_adset_id as string) ||
+        null;
+      const metaCampaignId =
+        (rawPayload.meta_campaign_id as string) ||
+        (payload.meta_campaign_id as string) ||
+        (allParams.campaign_id as string) ||
+        (allParams.meta_campaign_id as string) ||
+        null;
       const metaAdId =
         (rawPayload.meta_ad_id as string) ||
         (payload.meta_ad_id as string) ||
+        (payload.utm_content as string) ||
+        (payload.utm_term as string) ||
         (allParams.ad_id as string) ||
         (allParams.meta_ad_id as string) ||
         null;
