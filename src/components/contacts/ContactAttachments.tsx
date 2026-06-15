@@ -308,6 +308,69 @@ export function ContactAttachments({ contactId, entityId, entityType }: ContactA
         onConfirm={handleDeleteConfirm}
         loading={deleting}
       />
+
+      <Dialog
+        open={!!previewAttachment}
+        onOpenChange={(open) => {
+          if (!open) {
+            setPreviewAttachment(null);
+            setPreviewUrl(null);
+          }
+        }}
+      >
+        <DialogContent className="max-w-5xl w-[95vw] h-[90vh] flex flex-col p-0 gap-0">
+          <DialogHeader className="px-4 py-3 border-b flex-row items-center justify-between space-y-0">
+            <DialogTitle className="text-sm font-medium truncate pr-4">
+              {previewAttachment?.file_name}
+            </DialogTitle>
+            <div className="flex gap-1 items-center">
+              {previewUrl && (
+                <Button variant="ghost" size="icon" asChild title="Abrir em nova aba">
+                  <a href={previewUrl} target="_blank" rel="noopener noreferrer">
+                    <ArrowSquareOut className="w-4 h-4" />
+                  </a>
+                </Button>
+              )}
+              {previewAttachment && (
+                <Button variant="ghost" size="icon" onClick={() => handleDownload(previewAttachment)} title="Baixar">
+                  <DownloadSimple className="w-4 h-4" />
+                </Button>
+              )}
+            </div>
+          </DialogHeader>
+          <div className="flex-1 min-h-0 bg-muted/30">
+            {previewLoading ? (
+              <div className="w-full h-full flex items-center justify-center">
+                <SpinnerGap className="h-8 w-8 animate-spin text-muted-foreground" />
+              </div>
+            ) : previewUrl && previewAttachment ? (
+              previewAttachment.mime_type === 'application/pdf' ? (
+                <iframe
+                  src={previewUrl}
+                  className="w-full h-full border-0"
+                  title={previewAttachment.file_name}
+                />
+              ) : previewAttachment.mime_type?.startsWith('image/') ? (
+                <div className="w-full h-full flex items-center justify-center p-4 overflow-auto">
+                  <img
+                    src={previewUrl}
+                    alt={previewAttachment.file_name}
+                    className="max-w-full max-h-full object-contain"
+                  />
+                </div>
+              ) : (
+                <div className="w-full h-full flex flex-col items-center justify-center gap-3 text-center p-6">
+                  <p className="text-muted-foreground">Pré-visualização não disponível para este tipo de arquivo.</p>
+                  <Button onClick={() => handleDownload(previewAttachment)}>
+                    <DownloadSimple className="w-4 h-4 mr-2" />
+                    Baixar
+                  </Button>
+                </div>
+              )
+            ) : null}
+          </div>
+        </DialogContent>
+      </Dialog>
     </>
   );
 }
