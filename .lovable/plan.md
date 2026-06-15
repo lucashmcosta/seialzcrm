@@ -1,28 +1,11 @@
-# Liberar aba "Não atribuídas" para Sales Rep em /messages
+## Ajuste: sobreposição do botão Baixar com o X de fechar
 
-Hoje o perfil Sales Rep só enxerga "Minhas" porque a aba "Não atribuídas" é gated por `permissions.viewAllThreads`, e o RPC `rpc_list_message_threads` só retorna threads atribuídas ao próprio usuário quando esse perm é falso. Vamos liberar especificamente conversas SEM dono para qualquer usuário do org, sem dar acesso às atribuídas a outros.
+**Problema:** No `DialogContent` o botão "X" de fechar é absoluto no canto superior direito (`right-4 top-4`). Os botões "Abrir em nova aba" e "Baixar" do header do preview ficam no mesmo lugar e o X cai em cima do ícone de download.
 
-## Mudanças
+**Arquivo:** `src/components/contacts/ContactAttachments.tsx`
 
-### 1. Backend — `rpc_list_message_threads` (migration)
-Ajustar duas cláusulas para que threads sem `assigned_user_id` sejam sempre visíveis dentro do org:
+**Mudança (apenas CSS, sem mexer em lógica):**
+- Adicionar `pr-10` (ou `pr-12`) ao container do `DialogHeader` / linha de ações para reservar espaço para o X nativo do Dialog.
+- Garantir que os botões "Abrir em nova aba" e "Baixar" fiquem à esquerda do X, com `gap-2` entre eles.
 
-- `WHERE` de threads:
-  - de: `(v_can_view_all_threads OR mt.assigned_user_id = v_user_id)`
-  - para: `(v_can_view_all_threads OR mt.assigned_user_id = v_user_id OR mt.assigned_user_id IS NULL)`
-- `JOIN contacts`: quando a thread é não atribuída, não exigir que o contato seja do owner. Trocar:
-  - de: `(v_can_view_all_contacts OR c.owner_user_id = v_user_id)`
-  - para: `(v_can_view_all_contacts OR c.owner_user_id = v_user_id OR mt.assigned_user_id IS NULL)`
-
-Sem mudar `SECURITY DEFINER`, assinatura, nem demais filtros. Atribuídas a outros continuam ocultas para Sales Rep.
-
-### 2. Frontend — `src/pages/messages/MessagesList.tsx`
-- Em `allFilterOptions`, remover `requiresViewAll: true` do item `unassigned` (manter em `all_open` e `resolved`).
-- No `useEffect` que força `'mine'`, permitir também `'unassigned'`:
-  - `if (!permissions.viewAllThreads && effectiveFilter !== 'mine' && effectiveFilter !== 'unassigned') setFilter('mine');`
-
-Sem mexer no Mobile (`MobileMessagesList`) nem no Inbox v2 — fora do escopo do pedido.
-
-## Fora de escopo
-- Não altera `usePermissions`, perfis de permissão ou RLS de outras tabelas.
-- Não muda visual/abas do `/inbox`, do Atendimento ou do dashboard.
+Sem alterações em outros componentes, hooks, storage ou políticas.
