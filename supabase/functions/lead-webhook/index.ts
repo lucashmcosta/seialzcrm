@@ -396,6 +396,7 @@ serve(async (req) => {
           gclid: gclid,
           meta_adset_id: metaAdsetId,
           meta_campaign_id: metaCampaignId,
+          meta_ad_id: metaAdId,
           lifecycle_stage: 'lead',
         })
         .select('id')
