@@ -719,7 +719,7 @@ serve(async (req) => {
     // would otherwise tie. /messages path keeps existing RPC resolution.
     // ============================================================
     const fromAddress = whatsappFrom.replace(/^whatsapp:/, '')
-    let endpointId: string | null = inboxEndpointIdOverride
+    let endpointId: string | null = inboxEndpointIdOverride ?? messagesEndpointIdOverride
     if (!endpointId) {
       try {
         const { data: epData, error: epErr } = await supabase
