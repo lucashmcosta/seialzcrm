@@ -33,6 +33,11 @@ serve(async (req) => {
       // Phase 1.3A — Inbox dry-run only. Default behavior preserved bit-for-bit.
       senderContext,
       dryRun,
+      // Optional explicit endpoint selection from /messages composer.
+      // When provided (and senderContext !== 'inbox'), the function uses this
+      // endpoint's external_address as `From` and stamps messages.endpoint_id
+      // with it. Does NOT alter message_threads.primary_endpoint_id.
+      endpointId: messagesEndpointIdInput,
     } = body as Record<string, any>
 
     // ============================================================
