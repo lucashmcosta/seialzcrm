@@ -2,13 +2,14 @@ import { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { WhatsAppInboundSettings } from '@/components/settings/WhatsAppInboundSettings';
+import { AddWhatsAppEndpointDialog } from '@/components/settings/AddWhatsAppEndpointDialog';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Label } from '@/components/ui/label';
 import { Input } from '@/components/ui/input';
 import { Card } from '@/components/ui/card';
 import { ScrollArea } from '@/components/ui/scroll-area';
-import { Phone, CheckCircle, XCircle, GearSix, ArrowSquareOut, SpinnerGap, ArrowsClockwise, Wrench, PencilSimple, UploadSimple, Users, Briefcase, Buildings, Clock, ArrowCounterClockwise } from '@phosphor-icons/react';
+import { Phone, CheckCircle, XCircle, GearSix, ArrowSquareOut, SpinnerGap, ArrowsClockwise, Wrench, PencilSimple, UploadSimple, Users, Briefcase, Buildings, Clock, ArrowCounterClockwise, Plus } from '@phosphor-icons/react';
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { formatPhoneDisplay } from '@/lib/phoneUtils';
@@ -66,6 +67,7 @@ export function IntegrationDetailDialog({
   const [isEditing, setIsEditing] = useState(false);
   const [editValues, setEditValues] = useState<Record<string, any>>({});
   const [isSaving, setIsSaving] = useState(false);
+  const [addEndpointOpen, setAddEndpointOpen] = useState(false);
 
   const isKommo = integration?.slug === 'kommo';
 
