@@ -1,7 +1,6 @@
 import { useEffect, useState } from 'react';
 import { supabase } from '@/integrations/supabase/client';
-import { fetchAllPagedRows } from '@/lib/fetchAllPagedRows';
-import { SERVICE_MODULE_START_ISO, SERVICE_MODULE_START_MS } from '@/lib/serviceCutoff';
+import { SERVICE_MODULE_START_ISO } from '@/lib/serviceCutoff';
 
 export interface ServiceStats {
   contactsCount: number;
@@ -41,122 +40,32 @@ export function useServiceStats({ organizationId, from, to, ownerId, refreshKey 
       try {
         const fromIsoRaw = from.toISOString();
         const toIso = to.toISOString();
-        // Atendimento module cutoff: nada antes da criação da tela conta.
         const fromIso = fromIsoRaw < SERVICE_MODULE_START_ISO ? SERVICE_MODULE_START_ISO : fromIsoRaw;
         const owner = ownerId !== 'all' ? ownerId : null;
 
-        // Build base threads query helper
-        const threads = () => {
-          let q = supabase
-            .from('message_threads')
-            .select('id', { count: 'exact', head: true })
-            .eq('organization_id', organizationId);
-          if (owner) q = q.eq('assigned_user_id', owner);
-          return q;
-        };
-
-        // 1 + 4: fetch thread rows in period (id + contact_id + created_at)
-        const threadRowsPromise = fetchAllPagedRows<{
-          id: string;
-          contact_id: string | null;
-          created_at: string;
-        }>(async (pf, pt) => {
-          let q = supabase
-            .from('message_threads')
-            .select('id, contact_id, created_at')
-            .eq('organization_id', organizationId)
-            .gte('created_at', fromIso)
-            .lte('created_at', toIso)
-            .range(pf, pt);
-          if (owner) q = q.eq('assigned_user_id', owner);
-          return await q;
+        const { data: rows, error } = await supabase.rpc('get_service_dashboard_stats', {
+          p_org: organizationId,
+          p_from: fromIso,
+          p_to: toIso,
+          p_owner: owner,
         });
-
-        // 3: resolved count
-        const resolvedPromise = threads().gte('resolved_at', fromIso).lte('resolved_at', toIso);
-
-        // 5: avg response seconds across response time records in period
-        const responsesPromise = fetchAllPagedRows<{ response_seconds: number | null }>(
-          async (pf, pt) => {
-            let q = supabase
-              .from('message_response_times')
-              .select('response_seconds')
-              .eq('organization_id', organizationId)
-              .gte('created_at', fromIso)
-              .lte('created_at', toIso)
-              .range(pf, pt);
-            if (owner) q = q.eq('user_id', owner);
-            return await q;
-          },
-        );
-
-        const [threadRows, resolvedRes, responses] = await Promise.all([
-          threadRowsPromise,
-          resolvedPromise,
-          responsesPromise,
-        ]);
-
+        if (error) throw error;
         if (cancelled) return;
 
-        const totalCount = threadRows.length;
-        const contactIds = new Set<string>();
-        for (const r of threadRows) {
-          if (r.contact_id) contactIds.add(r.contact_id);
-        }
-
-        // First response per thread derived from message_response_times
-        // (column message_threads.first_response_at is not populated).
-        const threadIds = threadRows.map((r) => r.id);
-        const firstByThread = new Map<string, { inbound_at: string; response_seconds: number | null }>();
-        const CHUNK = 300;
-        for (let i = 0; i < threadIds.length; i += CHUNK) {
-          const slice = threadIds.slice(i, i + CHUNK);
-          if (slice.length === 0) continue;
-          const rows = await fetchAllPagedRows<{
-            thread_id: string;
-            inbound_at: string;
-            response_seconds: number | null;
-          }>(async (pf, pt) => {
-            let q = supabase
-              .from('message_response_times')
-              .select('thread_id, inbound_at, response_seconds')
-              .eq('organization_id', organizationId)
-              .in('thread_id', slice)
-              .range(pf, pt);
-            if (owner) q = q.eq('user_id', owner);
-            return await q;
-          });
-          for (const r of rows) {
-            const inboundMs = new Date(r.inbound_at).getTime();
-            if (!isFinite(inboundMs) || inboundMs < SERVICE_MODULE_START_MS) continue;
-            const prev = firstByThread.get(r.thread_id);
-            if (!prev || inboundMs < new Date(prev.inbound_at).getTime()) {
-              firstByThread.set(r.thread_id, { inbound_at: r.inbound_at, response_seconds: r.response_seconds });
-            }
-          }
-        }
-        const firstValues: number[] = [];
-        firstByThread.forEach((v) => {
-          const n = Number(v.response_seconds);
-          if (isFinite(n) && n >= 0) firstValues.push(n);
-        });
-        const avgFirstResponseSeconds =
-          firstValues.length > 0 ? firstValues.reduce((a, b) => a + b, 0) / firstValues.length : null;
-
-        const respValues = responses
-          .map((r) => Number(r.response_seconds))
-          .filter((n) => isFinite(n) && n >= 0);
-        const avgResponseSeconds =
-          respValues.length > 0 ? respValues.reduce((a, b) => a + b, 0) / respValues.length : null;
+        const r = Array.isArray(rows) ? rows[0] : rows;
+        const toNum = (v: unknown): number | null => {
+          if (v == null) return null;
+          const n = Number(v);
+          return isFinite(n) ? n : null;
+        };
 
         setData({
-          contactsCount: contactIds.size,
-          avgFirstResponseSeconds,
-          resolvedCount: resolvedRes.count || 0,
-          totalCount,
-          avgResponseSeconds,
+          contactsCount: Number(r?.contacts_count ?? 0) || 0,
+          avgFirstResponseSeconds: toNum(r?.avg_first_response_seconds),
+          resolvedCount: Number(r?.resolved_count ?? 0) || 0,
+          totalCount: Number(r?.total_count ?? 0) || 0,
+          avgResponseSeconds: toNum(r?.avg_response_seconds),
         });
-
       } catch (e) {
         console.error('useServiceStats error:', e);
         if (!cancelled) setData(EMPTY);
