@@ -295,7 +295,20 @@ export function WhatsAppIntegrationStatus({ onReconfigure }: WhatsAppIntegration
               Reconectar
             </Button>
           )}
+          <Button
+            variant="default"
+            size="sm"
+            onClick={() => setAddOpen(true)}
+          >
+            <Plus className="h-4 w-4 mr-2" />
+            Adicionar número
+          </Button>
         </div>
+        <AddWhatsAppEndpointDialog
+          open={addOpen}
+          onOpenChange={setAddOpen}
+          onSuccess={() => refetch()}
+        />
       </CardContent>
     </Card>
   );
