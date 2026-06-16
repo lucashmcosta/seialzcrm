@@ -1,4 +1,4 @@
-import { useEffect, useState, useCallback } from 'react';
+import { useEffect, useState, useCallback, useRef } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import {
   fetchInboxScopedThreads,
@@ -14,6 +14,7 @@ export function useInboxThreads(
   onlyMine: boolean,
   internalUserId: string | null,
   orgTimezone: string | null,
+  organizationId: string | null,
 ) {
   const [threads, setThreads] = useState<InboxThreadRow[]>([]);
   const [debug, setDebug] = useState<ScopeDebug | null>(null);
@@ -43,16 +44,46 @@ export function useInboxThreads(
 
   useEffect(() => { fetchThreads(); }, [fetchThreads]);
 
-  // Realtime channel isolated to inbox — does NOT touch /messages.
+  // Realtime — debounced refetch scoped to the current organization to avoid
+  // a refetch storm when many threads change in quick succession (e.g. when
+  // fn_update_thread_last_message fires for every new message).
+  const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   useEffect(() => {
-    const channel = supabase
-      .channel(`inbox-threads-${tab}`)
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'message_threads' }, () => {
+    if (!organizationId) return;
+    const scheduleRefetch = () => {
+      if (debounceRef.current) clearTimeout(debounceRef.current);
+      debounceRef.current = setTimeout(() => {
         fetchThreads();
-      })
+      }, 1500);
+    };
+    const channel = supabase
+      .channel(`inbox-threads-${tab}-${organizationId}`)
+      .on(
+        'postgres_changes',
+        {
+          event: 'INSERT',
+          schema: 'public',
+          table: 'message_threads',
+          filter: `organization_id=eq.${organizationId}`,
+        },
+        scheduleRefetch,
+      )
+      .on(
+        'postgres_changes',
+        {
+          event: 'UPDATE',
+          schema: 'public',
+          table: 'message_threads',
+          filter: `organization_id=eq.${organizationId}`,
+        },
+        scheduleRefetch,
+      )
       .subscribe();
-    return () => { supabase.removeChannel(channel); };
-  }, [tab, fetchThreads]);
+    return () => {
+      if (debounceRef.current) clearTimeout(debounceRef.current);
+      supabase.removeChannel(channel);
+    };
+  }, [tab, organizationId, fetchThreads]);
 
   return { threads, loading, error, debug, refresh: fetchThreads };
 }
