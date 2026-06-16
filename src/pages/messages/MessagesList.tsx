@@ -1353,7 +1353,17 @@ function DesktopMessagesList() {
                     }}
                   >
                     {(visibleThreads || []).map((thread) => (
-                      <ChatListItem key={thread.id} value={thread} locale={locale as 'pt-BR' | 'en-US'} onHide={handleHideThread} />
+                      <ChatListItem
+                        key={thread.id}
+                        value={thread}
+                        locale={locale as 'pt-BR' | 'en-US'}
+                        onHide={handleHideThread}
+                        endpointAddress={
+                          hasMultipleEndpoints
+                            ? endpointById[threadEndpointMap[thread.id] ?? '']?.external_address ?? null
+                            : null
+                        }
+                      />
                     ))}
                   </ListBox>
                   {hasMore && (
