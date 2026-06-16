@@ -161,9 +161,10 @@ interface ChatListItemProps extends ListBoxItemProps<ChatThread> {
   locale: 'pt-BR' | 'en-US';
   showLastMessage?: boolean;
   onHide?: (threadId: string) => void;
+  endpointAddress?: string | null;
 }
 
-const ChatListItem = ({ value, locale, className, onHide, ...otherProps }: ChatListItemProps) => {
+const ChatListItem = ({ value, locale, className, onHide, endpointAddress, ...otherProps }: ChatListItemProps) => {
   if (!value) return null;
 
   const status = statusConfig[value.status] || statusConfig.open;
@@ -189,6 +190,7 @@ const ChatListItem = ({ value, locale, className, onHide, ...otherProps }: ChatL
             <span className="font-semibold text-sm text-foreground truncate">
               {value.contact_name}
             </span>
+            {endpointAddress && <EndpointBadge externalAddress={endpointAddress} />}
             {(value.unread) && (
               <span className="h-2 w-2 shrink-0 rounded-full bg-primary" />
             )}
