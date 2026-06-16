@@ -1819,6 +1819,18 @@ function DesktopMessagesList() {
                             />
                           )}
 
+                          {/* Multi-number sender selector (only when org has 2+ active WhatsApp endpoints) */}
+                          {hasMultipleEndpoints && !isNoteMode && (
+                            <EndpointSelector
+                              endpoints={orgEndpoints}
+                              value={composerEndpointId}
+                              onChange={setComposerEndpointId}
+                              disabled={submitting}
+                              locale={locale as 'pt-BR' | 'en-US'}
+                            />
+                          )}
+
+
                           <div className={cn(
                             "flex gap-2",
                             !outOfWindow && replyingTo && !isNoteMode && "border border-t-0 border-border rounded-b-lg p-2 bg-card",
