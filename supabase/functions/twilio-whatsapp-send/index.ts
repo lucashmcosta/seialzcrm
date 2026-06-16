@@ -790,8 +790,10 @@ serve(async (req) => {
       )
     }
 
-    // Backfill primary_endpoint_id on thread if missing (best-effort, non-blocking)
-    if (endpointId && currentThreadId) {
+    // Backfill primary_endpoint_id on thread if missing (best-effort, non-blocking).
+    // SKIP when the caller explicitly chose an endpoint from the /messages
+    // composer — that selection is per-send, not a thread-level decision.
+    if (endpointId && currentThreadId && !manualEndpointOverride) {
       supabase
         .from('message_threads')
         .update({ primary_endpoint_id: endpointId })
