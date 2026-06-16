@@ -953,6 +953,7 @@ function DesktopMessagesList() {
           message: savedText,
           userId: userProfile?.id,
           replyToMessageId: savedReplyTo?.id || null,
+          ...(hasMultipleEndpoints && composerEndpointId ? { endpointId: composerEndpointId } : {}),
         },
       });
 
