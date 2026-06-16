@@ -509,11 +509,50 @@ serve(async (req) => {
               // Override inbound settings below (we reassign after this block)
               ;(integration as any).whatsapp_inbound_settings = correctOrg.whatsapp_inbound_settings
             } else {
-              console.warn(`[SECURITY] To number ${to} not found in ANY org. Rejecting.`)
-              return new Response('<?xml version="1.0" encoding="UTF-8"?><Response></Response>', { 
-                status: 200, 
-                headers: { ...corsHeaders, 'Content-Type': 'text/xml' } 
+              // Fallback: look up an additional WhatsApp sender in communication_endpoints
+              // (e.g. a second number registered for an org that isn't the primary whatsapp_number)
+              const { data: endpointMatch, error: endpointLookupError } = await supabase
+                .from('communication_endpoints')
+                .select('organization_id, external_address')
+                .eq('channel', 'whatsapp')
+                .eq('is_active', true)
+                .limit(50)
+
+              if (endpointLookupError) {
+                console.error('[CROSS-ORG] Endpoint lookup error:', endpointLookupError.message)
+              }
+
+              const matchedEndpoint = endpointMatch?.find((ep: any) => {
+                const epNormalized = (ep.external_address || '').replace('+', '').replace(/\D/g, '')
+                return epNormalized === toNormalized
               })
+
+              if (matchedEndpoint?.organization_id) {
+                console.log(`[CROSS-ORG] Found org ${matchedEndpoint.organization_id} via communication_endpoints for number ${to}. Redirecting message.`)
+                orgId = matchedEndpoint.organization_id
+
+                // Reload integration credentials/settings for the resolved org
+                const { data: resolvedIntegration } = await supabase
+                  .from('organization_integrations')
+                  .select('config_values, whatsapp_inbound_settings, admin_integrations!inner(slug)')
+                  .eq('organization_id', orgId)
+                  .eq('admin_integrations.slug', 'twilio-whatsapp')
+                  .eq('is_enabled', true)
+                  .single()
+
+                if (resolvedIntegration?.config_values) {
+                  const rc = resolvedIntegration.config_values as any
+                  twilioAccountSid = rc.account_sid || twilioAccountSid
+                  twilioAuthToken = rc.auth_token || twilioAuthToken
+                  ;(integration as any).whatsapp_inbound_settings = resolvedIntegration.whatsapp_inbound_settings
+                }
+              } else {
+                console.warn(`[SECURITY] To number ${to} not found in ANY org (integrations or endpoints). Rejecting.`)
+                return new Response('<?xml version="1.0" encoding="UTF-8"?><Response></Response>', {
+                  status: 200,
+                  headers: { ...corsHeaders, 'Content-Type': 'text/xml' }
+                })
+              }
             }
           }
         }
