@@ -31,9 +31,11 @@ export function useOrgWhatsAppEndpoints(organizationId: string | undefined) {
       .from('communication_endpoints')
       .select('id, external_address, display_name, is_active')
       .eq('organization_id', organizationId)
-      .eq('channel', 'whatsapp')
-      .eq('is_active', true)
-      .order('external_address', { ascending: true })
+        .eq('channel', 'whatsapp')
+        .eq('is_active', true)
+        .not('sender_sid', 'is', null)
+        .neq('status', 'offline')
+        .order('external_address', { ascending: true })
       .then(({ data, error }) => {
         if (cancelled) return;
         if (error) {
