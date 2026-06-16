@@ -471,6 +471,60 @@ serve(async (req) => {
       Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''
     )
 
+    // ============================================================
+    // /messages path — optional explicit endpoint override
+    // Used during the temporary period where an org operates more than one
+    // WhatsApp number on /messages. Validates strict ownership and channel.
+    // Does NOT mutate message_threads.primary_endpoint_id.
+    // ============================================================
+    let messagesFromOverride: string | null = null
+    let messagesEndpointIdOverride: string | null = null
+    let manualEndpointOverride = false
+    if (
+      senderContext !== 'inbox' &&
+      typeof messagesEndpointIdInput === 'string' &&
+      messagesEndpointIdInput.length > 0 &&
+      organizationId
+    ) {
+      const { data: ep, error: epErr } = await supabase
+        .from('communication_endpoints')
+        .select('id, external_address, channel, is_active, organization_id')
+        .eq('id', messagesEndpointIdInput)
+        .maybeSingle()
+      if (epErr || !ep) {
+        console.warn('[messages-endpoint-override] endpoint not found', { messagesEndpointIdInput, err: epErr?.message })
+        return new Response(
+          JSON.stringify({ error: 'Invalid endpointId' }),
+          { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        )
+      }
+      if (
+        ep.organization_id !== organizationId ||
+        ep.channel !== 'whatsapp' ||
+        !ep.is_active ||
+        !ep.external_address
+      ) {
+        console.warn('[messages-endpoint-override] endpoint rejected', {
+          messagesEndpointIdInput,
+          organizationId,
+          ep_org: ep.organization_id,
+          channel: ep.channel,
+          is_active: ep.is_active,
+        })
+        return new Response(
+          JSON.stringify({ error: 'Endpoint not allowed for this organization/channel' }),
+          { status: 403, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        )
+      }
+      messagesFromOverride = `whatsapp:${ep.external_address}`
+      messagesEndpointIdOverride = ep.id
+      manualEndpointOverride = true
+      console.log('[messages-endpoint-override] applied', {
+        organizationId,
+        endpoint_id: ep.id,
+        from: messagesFromOverride,
+      })
+    }
 
     // Get WhatsApp integration config
     const { data: integration, error: integrationError } = await supabase
@@ -496,7 +550,9 @@ serve(async (req) => {
     const accountSid = config.account_sid
     const authToken = config.auth_token
     // Phase 1.3B: in inbox path, override `From` with endpoint.external_address (E.164).
-    const whatsappFrom = inboxWhatsappFromOverride ?? config.whatsapp_from
+    // /messages: when caller passed a valid `endpointId`, use that endpoint's
+    // address; otherwise fall back to config.whatsapp_from (legacy behavior).
+    const whatsappFrom = inboxWhatsappFromOverride ?? messagesFromOverride ?? config.whatsapp_from
 
     if (!accountSid || !authToken || !whatsappFrom) {
       return new Response(
