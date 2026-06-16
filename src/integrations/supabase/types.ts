@@ -7765,6 +7765,41 @@ export type Database = {
           total_amount: number
         }[]
       }
+      get_service_dashboard_stats: {
+        Args: { p_from: string; p_org: string; p_owner?: string; p_to: string }
+        Returns: {
+          avg_first_response_seconds: number
+          avg_response_seconds: number
+          contacts_count: number
+          resolved_count: number
+          total_count: number
+        }[]
+      }
+      get_service_worst_responses: {
+        Args: {
+          p_from: string
+          p_kind?: string
+          p_limit?: number
+          p_org: string
+          p_owner?: string
+          p_to: string
+        }
+        Returns: {
+          contact_id: string
+          contact_name: string
+          id: string
+          inbound_at: string
+          max_seconds: number
+          median_seconds: number
+          outbound_at: string
+          p90_seconds: number
+          response_seconds: number
+          thread_id: string
+          total_count: number
+          user_id: string
+          user_name: string
+        }[]
+      }
       handle_user_signup: {
         Args: {
           p_email: string
