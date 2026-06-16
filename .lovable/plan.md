@@ -1,73 +1,66 @@
-## Objetivo
+# Cadastro de novo número WhatsApp via interface
 
-Limpar o dropdown "Enviar de" da Central Trabalhista mostrando apenas o número oficial atual (`…7027`) e, no futuro, o número que o Lucas vai inserir — sem alterar banco, migration, RLS ou envio.
+Lucas precisa cadastrar o novo número WhatsApp da Central Trabalhista sem rodar SQL. Vamos adicionar um formulário simples na tela de integração WhatsApp para inserir o endpoint diretamente em `communication_endpoints`.
 
-## Restrição técnica encontrada
+## Onde fica
 
-RLS de `organization_integrations` (`user_has_org_access(organization_id)`) impede o frontend de ler `config_values.whatsapp_number` de **outras** orgs. Logo, a regra "address é whatsapp_number de outra org → ocultar" não é executável puramente no cliente sem RPC SECURITY DEFINER (que exigiria migration — proibido pelo usuário).
+Em `src/components/settings/WhatsAppIntegrationStatus.tsx` (card "WhatsApp Business" em `/settings/integrations`), adicionar um botão **"Adicionar número"** ao lado de "Atualizar / Verificar Webhooks / Reconectar".
 
-## Regra alternativa equivalente (pura frontend)
+O botão abre um `Dialog` (shadcn) com 3 campos:
 
-Todas as duplicatas fantasmas (incluindo `…5098` sob CT) foram criadas no **mesmo batch de migration** com `created_at = 2026-05-28 17:22:02.165649+00`. Isso dá uma assinatura confiável e localizada para o problema atual.
+- **Número WhatsApp** (`external_address`) — input com máscara/validação E.164 (`+55…`). Obrigatório.
+- **Sender SID Twilio** (`sender_sid`) — input texto, deve começar com `XE`. Obrigatório.
+- **Nome de exibição** (`display_name`) — input texto opcional (ex.: "CT — Lucas").
 
-Regra do hook (composição AND/OR, todas avaliadas no array já carregado):
+Botões: **Cancelar** / **Cadastrar**.
 
-1. `is_active = true` (já existe)
-2. `channel = 'whatsapp'` (já existe)
-3. `sender_sid IS NOT NULL` (já existe)
-4. `status <> 'offline'` (já existe)
-5. **Novo:** manter o endpoint se **qualquer** das condições for verdadeira:
-   - `external_address === ownIntegrationWhatsappNumber` (número oficial da própria org), **ou**
-   - `created_at > '2026-05-28T17:22:03Z'` (criado fora do batch da migration — cobre Lucas e qualquer inserção futura via `twilio-whatsapp-setup`)
+## O que o submit faz
 
-Endpoints originados na migration **que não sejam o número oficial da própria org** ficam ocultos. O `…7027` passa pela cláusula "é o whatsapp_number da CT"; o `…5098` (fantasma na CT) falha em ambas e some.
+Insere uma linha em `public.communication_endpoints` via `supabase.from('communication_endpoints').insert({...})` com:
 
-## Mudança (1 arquivo, ~15 linhas)
+```
+organization_id           = organization.id (do contexto atual)
+organization_integration_id = id da integration 'twilio-whatsapp' ativa da org
+channel                   = 'whatsapp'
+external_address          = input do form (trim, valida regex E.164)
+external_account_id       = config_values.account_sid da integration
+sender_sid                = input do form (trim, valida começa com 'XE')
+display_name              = input do form ou null
+is_active                 = true
+status                    = 'online'
+metadata                  = {}
+```
 
-**`src/hooks/useOrgWhatsAppEndpoints.ts`**
+O `organization_integration_id` e o `external_account_id` são lidos da mesma query que `WhatsAppIntegrationStatus` já faz em `getCredentials()` (não precisa hardcode da CT — funciona para qualquer org com Twilio WhatsApp habilitado).
 
-- Adicionar uma segunda query ao Supabase para buscar `config_values->>'whatsapp_number'` das `organization_integrations` **da própria org** (RLS permite). Pegar todos os números não-nulos em um `Set<string>` (`ownNumbers`).
-- Após o `.then` da query de endpoints, aplicar filtro no array:
-  ```ts
-  const MIGRATION_CUTOFF = '2026-05-28T17:22:03Z';
-  const filtered = data.filter(ep =>
-    ownNumbers.has(ep.external_address) ||
-    new Date(ep.created_at) > new Date(MIGRATION_CUTOFF)
-  );
-  ```
-- Incluir `created_at` no `.select(...)` e no tipo `OrgEndpoint`.
-- Constante `MIGRATION_CUTOFF` documentada com comentário curto explicando o batch fantasma.
+Após sucesso: `toast.success`, fecha o dialog, chama `refetch()` do hook de integração. O novo endpoint passa automaticamente no filtro do dropdown de `/messages` porque `created_at > MIGRATION_GHOST_CUTOFF`.
 
-Sem mudanças em `EndpointSelector`, `EndpointBadge`, `useThreadEndpointMap`, `MessagesList`, edge functions, RLS, schema, ou Inbox.
+## Validações (client-side, zod)
 
-## Resultado esperado
+- `external_address`: regex `^\+[1-9]\d{7,14}$`
+- `sender_sid`: regex `^XE[a-zA-Z0-9]{32}$`
+- `display_name`: opcional, max 100 chars
 
-| Org | Endpoints visíveis hoje |
-|---|---|
-| **Central Trabalhista** | `+551150287027` (passa por `ownNumbers`) |
-| **Viagi** | `+551150265098` (passa por `ownNumbers`) → 1 endpoint → dropdown segue oculto (`hasMultiple` false) |
+Erro de constraint do banco (ex.: número duplicado na mesma org) → toast com mensagem amigável.
 
-Após o INSERT do Lucas (com `created_at = now()` > cutoff):
-- CT passa a mostrar `…7027` + número novo do Lucas (2 opções, dropdown aparece).
-- Viagi segue inalterada.
+## RLS
 
-Sandbox `+14155238886` segue oculto (`status='offline'`). Fantasmas `available_numbers` seguem ocultos (`sender_sid IS NULL`).
+A policy de INSERT em `communication_endpoints` exige que o usuário tenha acesso à org. Como Lucas é admin da CT, o insert passa sem alterar policies.
 
-## Validação pós-deploy
+## Fora de escopo
 
-1. Login CT → `/messages` → dropdown não aparece (só 1 endpoint visível: `…7027`).
-2. Console: `useOrgWhatsAppEndpoints` retorna `endpoints.length === 1` para CT.
-3. Login Viagi → `/messages` → sem dropdown (1 endpoint `…5098`).
-4. Após `INSERT` do Lucas → CT mostra dropdown com `…7027` + número novo.
-5. Envio por `…7027` continua funcionando (roteamento inalterado).
+- Não mexer em `useOrgWhatsAppEndpoints.ts` (filtro já cobre o caso).
+- Não mexer no Inbox, Viagi, migrations, `twilio-whatsapp-send`, sandbox.
+- Não criar fluxo de edição/remoção — apenas cadastro.
 
-## Reversão
+## Arquivos
 
-Remover a query extra de `ownNumbers`, a constante `MIGRATION_CUTOFF` e o `.filter(...)` adicionados. Volta ao comportamento atual (7 endpoints filtrados só pelos 4 critérios anteriores).
+- **novo** `src/components/settings/AddWhatsAppEndpointDialog.tsx` — dialog + form + insert
+- **editar** `src/components/settings/WhatsAppIntegrationStatus.tsx` — adicionar botão "Adicionar número" que abre o dialog
 
-## O que NÃO muda
+## Validação após implementar
 
-- `communication_endpoints` (sem INSERT/UPDATE/DELETE)
-- Migrations / schema / RLS
-- `twilio-whatsapp-send` (roteamento por `organization_id` segue como está)
-- Inbox v2, Viagi, mobile, envio
+1. Em `/settings/integrations` da CT, clicar "Adicionar número", preencher com os dados do Lucas, salvar.
+2. Conferir toast de sucesso.
+3. Ir em `/messages`: dropdown "Enviar de" deve mostrar `…7027` + novo número.
+4. Viagi: sem alteração.

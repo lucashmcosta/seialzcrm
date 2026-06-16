@@ -12,8 +12,10 @@ import {
   ArrowSquareOut,
   MagnifyingGlass,
   Wrench,
-  Warning
+  Warning,
+  Plus
 } from '@phosphor-icons/react';
+import { AddWhatsAppEndpointDialog } from './AddWhatsAppEndpointDialog';
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { supabase } from '@/integrations/supabase/client';
@@ -55,6 +57,7 @@ export function WhatsAppIntegrationStatus({ onReconfigure }: WhatsAppIntegration
   const { organization } = useOrganization();
   const [checking, setChecking] = useState(false);
   const [fixing, setFixing] = useState(false);
+  const [addOpen, setAddOpen] = useState(false);
   const [diagnosis, setDiagnosis] = useState<WebhookDiagnosis | null>(null);
 
   const getCredentials = async () => {
@@ -292,7 +295,20 @@ export function WhatsAppIntegrationStatus({ onReconfigure }: WhatsAppIntegration
               Reconectar
             </Button>
           )}
+          <Button
+            variant="default"
+            size="sm"
+            onClick={() => setAddOpen(true)}
+          >
+            <Plus className="h-4 w-4 mr-2" />
+            Adicionar número
+          </Button>
         </div>
+        <AddWhatsAppEndpointDialog
+          open={addOpen}
+          onOpenChange={setAddOpen}
+          onSuccess={() => refetch()}
+        />
       </CardContent>
     </Card>
   );
