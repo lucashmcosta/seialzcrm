@@ -65,7 +65,7 @@ import { useMessageThreads, type ChatThread } from '@/hooks/useMessageThreads';
 import { useOrgWhatsAppEndpoints } from '@/hooks/useOrgWhatsAppEndpoints';
 import { useThreadEndpointMap } from '@/hooks/useThreadEndpointMap';
 import { EndpointBadge } from '@/components/messages/EndpointBadge';
-import { EndpointSelector } from '@/components/messages/EndpointSelector';
+
 import { useHiddenThreads } from '@/hooks/useHiddenThreads';
 import { EyeSlash } from '@phosphor-icons/react';
 import { ToastAction } from '@/components/ui/toast';
@@ -162,9 +162,10 @@ interface ChatListItemProps extends ListBoxItemProps<ChatThread> {
   showLastMessage?: boolean;
   onHide?: (threadId: string) => void;
   endpointAddress?: string | null;
+  officialNumbers?: Set<string>;
 }
 
-const ChatListItem = ({ value, locale, className, onHide, endpointAddress, ...otherProps }: ChatListItemProps) => {
+const ChatListItem = ({ value, locale, className, onHide, endpointAddress, officialNumbers, ...otherProps }: ChatListItemProps) => {
   if (!value) return null;
 
   const status = statusConfig[value.status] || statusConfig.open;
@@ -190,7 +191,7 @@ const ChatListItem = ({ value, locale, className, onHide, endpointAddress, ...ot
             <span className="font-semibold text-sm text-foreground truncate">
               {value.contact_name}
             </span>
-            {endpointAddress && <EndpointBadge externalAddress={endpointAddress} />}
+            {endpointAddress && <EndpointBadge externalAddress={endpointAddress} officialNumbers={officialNumbers} />}
             {(value.unread) && (
               <span className="h-2 w-2 shrink-0 rounded-full bg-primary" />
             )}
@@ -537,7 +538,7 @@ function DesktopMessagesList() {
 
   // Multi-number support (temporary CT transition period).
   // Only renders selector + per-thread badge when the org has 2+ active endpoints.
-  const { endpoints: orgEndpoints, hasMultiple: hasMultipleEndpoints } = useOrgWhatsAppEndpoints(organization?.id);
+  const { endpoints: orgEndpoints, officialNumbers, hasMultiple: hasMultipleEndpoints } = useOrgWhatsAppEndpoints(organization?.id);
   const threadIdsForEndpointMap = (threads ?? []).map((t) => t.id);
   const threadEndpointMap = useThreadEndpointMap(threadIdsForEndpointMap, hasMultipleEndpoints);
   const endpointById: Record<string, typeof orgEndpoints[number]> = Object.fromEntries(orgEndpoints.map((e) => [e.id, e]));
@@ -1366,6 +1367,7 @@ function DesktopMessagesList() {
                             ? endpointById[threadEndpointMap[thread.id] ?? '']?.external_address ?? null
                             : null
                         }
+                        officialNumbers={officialNumbers}
                       />
                     ))}
                   </ListBox>
@@ -1409,7 +1411,7 @@ function DesktopMessagesList() {
                             {selectedThread.contact_name}
                           </Link>
                           {hasMultipleEndpoints && selectedThreadEndpoint && (
-                            <EndpointBadge externalAddress={selectedThreadEndpoint.external_address} size="lg" />
+                            <EndpointBadge externalAddress={selectedThreadEndpoint.external_address} size="lg" officialNumbers={officialNumbers} />
                           )}
                           {isIn24hWindow && (
                             <BadgeWithDot color="success" size="sm" className="shrink-0">
@@ -1822,16 +1824,6 @@ function DesktopMessagesList() {
                             />
                           )}
 
-                          {/* Multi-number sender selector (only when org has 2+ active WhatsApp endpoints) */}
-                          {hasMultipleEndpoints && !isNoteMode && (
-                            <EndpointSelector
-                              endpoints={orgEndpoints}
-                              value={composerEndpointId}
-                              onChange={setComposerEndpointId}
-                              disabled={submitting}
-                              locale={locale as 'pt-BR' | 'en-US'}
-                            />
-                          )}
 
 
                           <div className={cn(
