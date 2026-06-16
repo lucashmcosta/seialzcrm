@@ -38,8 +38,9 @@ export default function InboxPage() {
   }, [user?.id]);
 
   const orgTimezone = organization?.timezone ?? null;
-  const { counts, refresh: refreshCounts } = useInboxQueueCounts(internalUserId, onlyMine, orgTimezone);
-  const { threads, loading, refresh: refreshThreads } = useInboxThreads(tab, onlyMine, internalUserId, orgTimezone);
+  const organizationId = organization?.id ?? null;
+  const { counts, refreshDebounced: refreshCounts } = useInboxQueueCounts(internalUserId, onlyMine, orgTimezone);
+  const { threads, loading, refresh: refreshThreads } = useInboxThreads(tab, onlyMine, internalUserId, orgTimezone, organizationId);
 
   // Mobile uses dedicated MobileInbox (lista + chat fullscreen, padrão /messages)
   if (isMobile) {

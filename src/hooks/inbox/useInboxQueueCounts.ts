@@ -1,4 +1,4 @@
-import { useEffect, useState, useCallback } from 'react';
+import { useEffect, useState, useCallback, useRef } from 'react';
 import { fetchInboxScopedCounts, type ScopedCounts } from './inboxScope';
 
 export type InboxQueueCounts = ScopedCounts;
@@ -21,5 +21,17 @@ export function useInboxQueueCounts(
 
   useEffect(() => { refresh(); }, [refresh]);
 
-  return { counts, loading, refresh };
+  // Debounced refresh to coalesce rapid-fire calls (e.g. user toggling status
+  // on multiple threads, or many realtime events at once).
+  const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const refreshDebounced = useCallback(() => {
+    if (debounceRef.current) clearTimeout(debounceRef.current);
+    debounceRef.current = setTimeout(() => { refresh(); }, 1500);
+  }, [refresh]);
+
+  useEffect(() => () => {
+    if (debounceRef.current) clearTimeout(debounceRef.current);
+  }, []);
+
+  return { counts, loading, refresh, refreshDebounced };
 }
