@@ -1,68 +1,41 @@
-## Diagnóstico da Etapa 2
+## Etapa 3 + Etapa 4 — separar threads por endpoint e ajustar UI
 
-A mensagem para o 7067 chegou ao webhook (`From: +5511964298621, To: +551150287067, Body: Falaaa`), mas foi **rejeitada** com:
+### Etapa 3 — Match de thread por `primary_endpoint_id` no webhook
 
-```
-[CROSS-ORG] Message To +551150287067 does NOT match org 40ae935c... configured number +551150287027
-[SECURITY] To number +551150287067 not found in ANY org. Rejecting.
-```
+Em `supabase/functions/twilio-whatsapp-webhook/index.ts` (linhas 770–825), trocar a query única atual por uma busca em duas etapas:
 
-Causa: o bloco de cross-org em `twilio-whatsapp-webhook/index.ts` (linhas 476-519) só procura o número em `organization_integrations.config_values.whatsapp_number` (o número "oficial" da org). Ele **não considera** `communication_endpoints`, onde está cadastrado o sender adicional 7067 (`b303253e-…`, org `40ae935c-…`). Resultado: o número é tratado como desconhecido e a mensagem é descartada antes de qualquer outra lógica.
+1. **Match preferencial (reutilização)** — `(org, contact, channel='whatsapp', primary_endpoint_id = endpointId)`. Se existir, reutiliza essa thread (evita criar uma thread nova a cada inbound do 7067).
+2. **Fallback de compatibilidade** — se não houver match e `endpointId` estiver definido, procurar thread com `primary_endpoint_id IS NULL` (legado 7027) e fazer backfill com o endpoint atual.
+3. **Criar nova thread** com `primary_endpoint_id = endpointId` apenas se nenhum dos dois bater.
 
-Os outbounds pelo 7067 funcionam porque `twilio-whatsapp-send` usa `endpoint_id` diretamente; só o inbound estava bloqueado.
-
-## Plano revisado
-
-### Etapa 2.1 — Corrigir cross-org lookup (NOVO, pré-requisito da Etapa 3)
-
-Em `supabase/functions/twilio-whatsapp-webhook/index.ts`, dentro do bloco `if (toNormalized !== configNormalized)`:
-
-1. Manter a busca atual em `organization_integrations` (número primário).
-2. Se não encontrar, fazer fallback em `communication_endpoints`:
-   ```text
-   select organization_id, sender_sid
-   from communication_endpoints
-   where channel='whatsapp'
-     and is_active=true
-     and regexp_replace(external_address,'\D','','g') = toNormalized
-   limit 1
-   ```
-3. Se encontrar, sobrescrever `orgId` com `organization_id` do endpoint e recarregar `organization_integrations` daquela org para obter `account_sid`, `auth_token` e `whatsapp_inbound_settings` (a integração da org continua sendo a fonte de credenciais; o endpoint só roteia).
-4. Só rejeitar com `[SECURITY] not found` se ambos (integrations e endpoints) falharem.
-
-Sem essa mudança, qualquer Etapa 3 fica inútil — a mensagem nem chega na lógica de thread.
-
-### Etapa 2.2 — Reteste inbound 7067
-
-Após o deploy:
-- Usuário envia nova mensagem do número pessoal para o 7067.
-- Confirmar nos logs: nenhum `[SECURITY] Rejecting`, `resolve_communication_endpoint` retorna `b303253e-a7f3-49b7-b92f-efdeb12071f4`, e a mensagem é salva com `endpoint_id = b303253e-…`.
-- Se OK, seguir para Etapa 3. Se não, parar e ajustar.
-
-### Etapa 3 — Separar threads por endpoint (como já aprovado)
-
-Em `twilio-whatsapp-webhook/index.ts`, na busca de thread existente (linha ~736):
-- Match preferencial: `(organization_id, contact_id, channel='whatsapp', primary_endpoint_id = endpointId)`.
-- Fallback (compatibilidade): se não houver thread com esse endpoint, aceitar thread com `primary_endpoint_id IS NULL` e fazer backfill com o endpoint atual (já há lógica de backfill nas linhas 754-755 — manter).
-- Se nenhum match, criar nova thread com `primary_endpoint_id = endpointId`.
-
-Resultado esperado: inbound do 7067 cria/usa thread distinta da thread legada do 7027.
+Quando `endpointId` for `null` (caso raro), manter o comportamento atual: match único por `(org, contact, channel)`.
 
 ### Etapa 4 — UI
 
-1. **`MessagesList.tsx`**: remover o dropdown "Enviar de" do composer. `twilio-whatsapp-send` continua roteando pelo `primary_endpoint_id` da thread.
-2. **`useOrgWhatsAppEndpoints.ts`**: expor `officialNumbers: Set<string>` montado a partir de `organization_integrations.config_values.whatsapp_number` (normalizado).
-3. **`EndpointBadge.tsx`**: só renderizar o badge `via …NNNN` quando o `external_address` do endpoint da thread **não** estiver em `officialNumbers`. Threads do 7027 ficam sem badge; threads do 7067 mostram `via …7067`.
+**`src/hooks/useOrgWhatsAppEndpoints.ts`**
+- Expor `officialNumbers: Set<string>` (dígitos normalizados de `organization_integrations.config_values.whatsapp_number`).
 
-## Fora de escopo (mantido)
+**`src/components/messages/EndpointBadge.tsx`**
+- Nova prop opcional `officialNumbers?: Set<string>`. Se o `externalAddress` normalizado estiver no set, retorna `null`. Caso contrário, renderiza `via …NNNN` como hoje.
 
-- `twilio-whatsapp-send` (não mexer).
-- Threads antigas mistas (não migrar/excluir).
-- Webhook do 7067 já foi configurado na Etapa 1.
+**`src/pages/messages/MessagesList.tsx`**
+- Passar `officialNumbers` do hook para os dois `<EndpointBadge>` (linhas 193 e 1412).
+- Remover o bloco `<EndpointSelector>` (linhas 1825–1834) e o import. O envio continua roteado pelo `primary_endpoint_id` da thread; `composerEndpointId` cai automaticamente para o endpoint primário da thread.
 
-## Arquivos a alterar
+### Fora de escopo
+- `twilio-whatsapp-send` (intacto)
+- Threads antigas mistas (sem migração/exclusão)
+- Arquivo `EndpointSelector.tsx` (permanece no repo, apenas deixa de ser usado)
 
-- `supabase/functions/twilio-whatsapp-webhook/index.ts` (Etapas 2.1 e 3)
-- `src/components/messages/MessagesList.tsx` (remover dropdown)
-- `src/hooks/useOrgWhatsAppEndpoints.ts` (expor officialNumbers)
-- `src/components/messages/EndpointBadge.tsx` (badge condicional)
+### Arquivos alterados
+- `supabase/functions/twilio-whatsapp-webhook/index.ts`
+- `src/hooks/useOrgWhatsAppEndpoints.ts`
+- `src/components/messages/EndpointBadge.tsx`
+- `src/pages/messages/MessagesList.tsx`
+
+### Validação
+Após o deploy, enviar nova mensagem do número pessoal para o 7067:
+- Aparece nova conversa "Joao Teste" na lista, com badge `via …7067`.
+- Mensagens subsequentes do 7067 caem na mesma nova thread (sem duplicar).
+- Thread antiga do 7027 continua existindo, **sem badge**.
+- Composer sem dropdown "Enviar de".

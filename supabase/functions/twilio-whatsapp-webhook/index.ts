@@ -767,29 +767,61 @@ serve(async (req) => {
         }))
       }
 
-      // Find or create message thread
+      // Find or create message thread.
+      // Quando temos endpointId, threads são separadas por número:
+      //   1. match preferencial: (org, contact, channel, primary_endpoint_id = endpointId)
+      //   2. fallback de compatibilidade: thread legada com primary_endpoint_id IS NULL (faz backfill)
+      //   3. cria nova thread com primary_endpoint_id = endpointId
+      // Sem endpointId resolvido, mantém o comportamento legado: match único por (org, contact, channel).
       let threadId: string | null = null
-      
-      const { data: existingThread } = await supabase
-        .from('message_threads')
-        .select('id, primary_endpoint_id')
-        .eq('organization_id', orgId)
-        .eq('contact_id', contactId)
-        .eq('channel', 'whatsapp')
-        .limit(1)
-        .single()
+      let existingThread: { id: string; primary_endpoint_id: string | null } | null = null
+
+      if (endpointId) {
+        const { data: matched } = await supabase
+          .from('message_threads')
+          .select('id, primary_endpoint_id')
+          .eq('organization_id', orgId)
+          .eq('contact_id', contactId)
+          .eq('channel', 'whatsapp')
+          .eq('primary_endpoint_id', endpointId)
+          .limit(1)
+          .maybeSingle()
+        if (matched) existingThread = matched
+
+        if (!existingThread) {
+          const { data: legacy } = await supabase
+            .from('message_threads')
+            .select('id, primary_endpoint_id')
+            .eq('organization_id', orgId)
+            .eq('contact_id', contactId)
+            .eq('channel', 'whatsapp')
+            .is('primary_endpoint_id', null)
+            .limit(1)
+            .maybeSingle()
+          if (legacy) existingThread = legacy
+        }
+      } else {
+        const { data: anyThread } = await supabase
+          .from('message_threads')
+          .select('id, primary_endpoint_id')
+          .eq('organization_id', orgId)
+          .eq('contact_id', contactId)
+          .eq('channel', 'whatsapp')
+          .limit(1)
+          .maybeSingle()
+        if (anyThread) existingThread = anyThread
+      }
 
       if (existingThread) {
         threadId = existingThread.id
-        
-        // Update last inbound timestamp for 24h window tracking
+
         const threadUpdate: Record<string, any> = {
           whatsapp_last_inbound_at: new Date().toISOString(),
           last_inbound_at: new Date().toISOString(),
           external_id: waId,
           updated_at: new Date().toISOString(),
         }
-        // Backfill primary_endpoint_id if missing
+        // Backfill primary_endpoint_id se ainda não estiver setado
         if (endpointId && !existingThread.primary_endpoint_id) {
           threadUpdate.primary_endpoint_id = endpointId
         }
@@ -797,8 +829,8 @@ serve(async (req) => {
           .from('message_threads')
           .update(threadUpdate)
           .eq('id', threadId)
-          
-        console.log('Updated existing thread:', threadId)
+
+        console.log('Updated existing thread:', threadId, 'endpoint:', endpointId)
       } else {
         const { data: newThread, error: threadError } = await supabase
           .from('message_threads')
@@ -817,12 +849,13 @@ serve(async (req) => {
 
         if (newThread) {
           threadId = newThread.id
-          console.log('Created new thread:', threadId)
+          console.log('Created new thread:', threadId, 'endpoint:', endpointId)
         } else if (threadError) {
           console.error('Error creating thread:', threadError)
           return new Response('OK', { status: 200 })
         }
       }
+
 
       // Resolve reply_to_message_id from OriginalRepliedMessageSid (if customer replied to a message)
       let replyToMessageId: string | null = null

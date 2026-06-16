@@ -5,15 +5,25 @@ interface EndpointBadgeProps {
   className?: string;
   /** "lg" = chat header, "sm" = list item */
   size?: 'sm' | 'lg';
+  /** Dígitos normalizados dos números "oficiais" da org. Se o endereço bater,
+   *  o badge é ocultado — somente senders secundários exibem "via …NNNN". */
+  officialNumbers?: Set<string>;
 }
 
 /**
  * Small "via …XXXX" pill that identifies which WhatsApp number a
- * conversation entered through. Renders nothing if no address.
+ * conversation entered through. Renders nothing if no address or if
+ * the address corresponds to one of the org's official numbers.
  */
-export function EndpointBadge({ externalAddress, className, size = 'sm' }: EndpointBadgeProps) {
+export function EndpointBadge({
+  externalAddress,
+  className,
+  size = 'sm',
+  officialNumbers,
+}: EndpointBadgeProps) {
   if (!externalAddress) return null;
   const digits = externalAddress.replace(/\D/g, '');
+  if (officialNumbers && digits && officialNumbers.has(digits)) return null;
   const suffix = digits.slice(-4) || externalAddress;
   return (
     <span
