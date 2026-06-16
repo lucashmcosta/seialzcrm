@@ -464,6 +464,26 @@ export function IntegrationDetailDialog({
         )}
       </div>
 
+      <div className="border-t pt-4">
+        <Button
+          variant="default"
+          size="sm"
+          className="w-full"
+          onClick={() => setAddEndpointOpen(true)}
+        >
+          <Plus className="h-4 w-4 mr-2" />
+          Adicionar número WhatsApp
+        </Button>
+        <p className="text-xs text-muted-foreground mt-2 text-center">
+          Cadastre um sender WhatsApp adicional do Twilio para esta organização.
+        </p>
+      </div>
+
+      <AddWhatsAppEndpointDialog
+        open={addEndpointOpen}
+        onOpenChange={setAddEndpointOpen}
+      />
+
       {orgIntegration?.id && (
         <WhatsAppInboundSettings integrationId={orgIntegration.id} />
       )}
