@@ -62,6 +62,10 @@ import EmojiPicker, { EmojiClickData, Theme } from 'emoji-picker-react';
 import { cn } from '@/lib/utils';
 import { useAI } from '@/hooks/useAI';
 import { useMessageThreads, type ChatThread } from '@/hooks/useMessageThreads';
+import { useOrgWhatsAppEndpoints } from '@/hooks/useOrgWhatsAppEndpoints';
+import { useThreadEndpointMap } from '@/hooks/useThreadEndpointMap';
+import { EndpointBadge } from '@/components/messages/EndpointBadge';
+import { EndpointSelector } from '@/components/messages/EndpointSelector';
 import { useHiddenThreads } from '@/hooks/useHiddenThreads';
 import { EyeSlash } from '@phosphor-icons/react';
 import { ToastAction } from '@/components/ui/toast';
@@ -157,9 +161,10 @@ interface ChatListItemProps extends ListBoxItemProps<ChatThread> {
   locale: 'pt-BR' | 'en-US';
   showLastMessage?: boolean;
   onHide?: (threadId: string) => void;
+  endpointAddress?: string | null;
 }
 
-const ChatListItem = ({ value, locale, className, onHide, ...otherProps }: ChatListItemProps) => {
+const ChatListItem = ({ value, locale, className, onHide, endpointAddress, ...otherProps }: ChatListItemProps) => {
   if (!value) return null;
 
   const status = statusConfig[value.status] || statusConfig.open;
@@ -185,6 +190,7 @@ const ChatListItem = ({ value, locale, className, onHide, ...otherProps }: ChatL
             <span className="font-semibold text-sm text-foreground truncate">
               {value.contact_name}
             </span>
+            {endpointAddress && <EndpointBadge externalAddress={endpointAddress} />}
             {(value.unread) && (
               <span className="h-2 w-2 shrink-0 rounded-full bg-primary" />
             )}
@@ -528,6 +534,30 @@ function DesktopMessagesList() {
   const { threads, loading: threadsLoading, refetchThreads, loadMore, hasMore, loadingMore, markThreadRead } = useMessageThreads({ channels: ['whatsapp'] });
 
   const selectedThread = threads?.find((t) => t.id === selectedThreadId);
+
+  // Multi-number support (temporary CT transition period).
+  // Only renders selector + per-thread badge when the org has 2+ active endpoints.
+  const { endpoints: orgEndpoints, hasMultiple: hasMultipleEndpoints } = useOrgWhatsAppEndpoints(organization?.id);
+  const threadIdsForEndpointMap = (threads ?? []).map((t) => t.id);
+  const threadEndpointMap = useThreadEndpointMap(threadIdsForEndpointMap, hasMultipleEndpoints);
+  const endpointById: Record<string, typeof orgEndpoints[number]> = Object.fromEntries(orgEndpoints.map((e) => [e.id, e]));
+
+  // Per-thread composer endpoint choice. Defaults to the thread's
+  // primary_endpoint_id; falls back to the first active endpoint.
+  // Does NOT persist back to the thread — purely a per-send choice.
+  const [composerEndpointByThread, setComposerEndpointByThread] = useState<Record<string, string>>({});
+  const selectedThreadPrimaryEndpointId = selectedThreadId ? threadEndpointMap[selectedThreadId] ?? null : null;
+  const defaultComposerEndpointId = selectedThreadPrimaryEndpointId ?? orgEndpoints[0]?.id ?? null;
+  const composerEndpointId = selectedThreadId
+    ? composerEndpointByThread[selectedThreadId] ?? defaultComposerEndpointId
+    : null;
+  const setComposerEndpointId = (id: string) => {
+    if (!selectedThreadId) return;
+    setComposerEndpointByThread((prev) => ({ ...prev, [selectedThreadId]: id }));
+  };
+  const selectedThreadEndpoint = selectedThreadPrimaryEndpointId
+    ? endpointById[selectedThreadPrimaryEndpointId]
+    : undefined;
 
   // Set default filter based on assigned threads — only on first load
   // when there's no persisted choice yet. Once the user picks a filter,
@@ -923,6 +953,7 @@ function DesktopMessagesList() {
           message: savedText,
           userId: userProfile?.id,
           replyToMessageId: savedReplyTo?.id || null,
+          ...(hasMultipleEndpoints && composerEndpointId ? { endpointId: composerEndpointId } : {}),
         },
       });
 
@@ -991,6 +1022,7 @@ function DesktopMessagesList() {
           templateId,
           templateVariables: variables,
           userId: userProfile?.id,
+          ...(hasMultipleEndpoints && composerEndpointId ? { endpointId: composerEndpointId } : {}),
         },
       });
 
@@ -1084,6 +1116,7 @@ function DesktopMessagesList() {
           mediaType,
           userId: userProfile?.id,
           replyToMessageId: savedReplyTo?.id || null,
+          ...(hasMultipleEndpoints && composerEndpointId ? { endpointId: composerEndpointId } : {}),
         },
       });
 
@@ -1323,7 +1356,17 @@ function DesktopMessagesList() {
                     }}
                   >
                     {(visibleThreads || []).map((thread) => (
-                      <ChatListItem key={thread.id} value={thread} locale={locale as 'pt-BR' | 'en-US'} onHide={handleHideThread} />
+                      <ChatListItem
+                        key={thread.id}
+                        value={thread}
+                        locale={locale as 'pt-BR' | 'en-US'}
+                        onHide={handleHideThread}
+                        endpointAddress={
+                          hasMultipleEndpoints
+                            ? endpointById[threadEndpointMap[thread.id] ?? '']?.external_address ?? null
+                            : null
+                        }
+                      />
                     ))}
                   </ListBox>
                   {hasMore && (
@@ -1365,6 +1408,9 @@ function DesktopMessagesList() {
                           >
                             {selectedThread.contact_name}
                           </Link>
+                          {hasMultipleEndpoints && selectedThreadEndpoint && (
+                            <EndpointBadge externalAddress={selectedThreadEndpoint.external_address} size="lg" />
+                          )}
                           {isIn24hWindow && (
                             <BadgeWithDot color="success" size="sm" className="shrink-0">
                               {locale === 'pt-BR' ? 'Online' : 'Online'}
@@ -1775,6 +1821,18 @@ function DesktopMessagesList() {
                               onClose={() => setReplyingTo(null)}
                             />
                           )}
+
+                          {/* Multi-number sender selector (only when org has 2+ active WhatsApp endpoints) */}
+                          {hasMultipleEndpoints && !isNoteMode && (
+                            <EndpointSelector
+                              endpoints={orgEndpoints}
+                              value={composerEndpointId}
+                              onChange={setComposerEndpointId}
+                              disabled={submitting}
+                              locale={locale as 'pt-BR' | 'en-US'}
+                            />
+                          )}
+
 
                           <div className={cn(
                             "flex gap-2",
