@@ -57,6 +57,7 @@ export function WhatsAppIntegrationStatus({ onReconfigure }: WhatsAppIntegration
   const { organization } = useOrganization();
   const [checking, setChecking] = useState(false);
   const [fixing, setFixing] = useState(false);
+  const [addOpen, setAddOpen] = useState(false);
   const [diagnosis, setDiagnosis] = useState<WebhookDiagnosis | null>(null);
 
   const getCredentials = async () => {
