@@ -1,136 +1,59 @@
-# Ajuste de performance — Dashboard de Atendimento
+## Objetivo
 
-## Problema
+Corrigir apenas a origem dos dados do dropdown "Enviar de" em `/messages` para esconder endpoints que não conseguem enviar WhatsApp. **Nenhuma mudança em banco, migration ou `communication_endpoints`.**
 
-O Dashboard de Atendimento (`useServiceStats` + `useServiceWorstResponses`) hoje executa, **a cada abertura / troca de filtro**:
+## Diagnóstico dos endpoints WhatsApp da Central Trabalhista (hoje)
 
-- `useServiceStats`:
-  1. `count` em `message_threads` (não usado depois — pode remover)
-  2. **Paginação completa** (1000 em 1000) de todas as threads do período em `message_threads`
-  3. `count` de threads resolvidas em `message_threads`
-  4. **Paginação completa** de `message_response_times` do período
-  5. **Loop em chunks de 300 thread_ids** fazendo `IN (...)` paginado em `message_response_times` — pode virar 5, 10, 20+ requisições só nessa etapa
+Consulta direta em `communication_endpoints` retornou 7 linhas para a CT no canal `whatsapp`. Classificação:
 
-  Resultado real: **~10 a 50 round-trips** ao Supabase por carregamento, varrendo milhares de linhas no cliente para calcular médias e contagem distinta de contatos.
+| external_address | sender_sid | status | metadata.source | Operacional? |
+|---|---|---|---|---|
+| +14155238886 (sandbox) | XE599ab5…df1d | offline | (null) | Sandbox — esconder |
+| +551140403128 | **null** | unknown | available_numbers | Não — número Twilio bruto |
+| +551150265098 | XE65b18bb8…ac34 | online | (null) | **Sim** |
+| +551150281820 | **null** | unknown | available_numbers | Não |
+| +551150283680 | **null** | unknown | available_numbers | Não |
+| +551150286860 | **null** | unknown | available_numbers | Não |
+| +551150287027 | XE4e6a553e…b385 | online | (null) | **Sim** |
 
-- `useServiceWorstResponses`: 1 query pesada de até 5000 linhas + 3 lookups (threads, contacts, users).
+Padrão claro: senders WhatsApp reais têm `sender_sid` preenchido e `status` ∈ {`online`,`offline`}; os 4 fantasmas vieram da Twilio Available Numbers API (`metadata.source = 'available_numbers'`), têm `sender_sid = null` e `status = 'unknown'`.
 
-Isso pesa no Postgres (aparecem nas top queries do `pg_stat_statements`) e na rede.
+## Mudança (somente frontend, 1 arquivo)
 
-## Solução
+**`src/hooks/useOrgWhatsAppEndpoints.ts`** — acrescentar dois filtros à query Supabase do hook:
 
-Mover a agregação para o Postgres via **duas RPCs `STABLE` `SECURITY DEFINER`** e fazer cada hook chamar **1 vez** por refresh. Cálculo continua igual; muda só o local da agregação.
-
-### Migration (nova)
-
-```sql
-create or replace function public.get_service_dashboard_stats(
-  p_org uuid,
-  p_from timestamptz,
-  p_to timestamptz,
-  p_owner uuid default null
-) returns table (
-  contacts_count int,
-  avg_first_response_seconds numeric,
-  resolved_count int,
-  total_count int,
-  avg_response_seconds numeric
-)
-language sql stable security definer set search_path = public as $$
-  with t as (
-    select id, contact_id, resolved_at
-    from message_threads
-    where organization_id = p_org
-      and created_at between p_from and p_to
-      and (p_owner is null or assigned_user_id = p_owner)
-  ),
-  first_rt as (
-    select distinct on (r.thread_id) r.thread_id, r.response_seconds
-    from message_response_times r
-    join t on t.id = r.thread_id
-    where r.organization_id = p_org
-      and r.inbound_at >= '2026-05-21'::timestamptz  -- SERVICE_MODULE_START
-      and (p_owner is null or r.user_id = p_owner)
-    order by r.thread_id, r.inbound_at asc
-  ),
-  all_rt as (
-    select response_seconds
-    from message_response_times
-    where organization_id = p_org
-      and created_at between greatest(p_from,'2026-05-21'::timestamptz) and p_to
-      and (p_owner is null or user_id = p_owner)
-  )
-  select
-    (select count(distinct contact_id)::int from t where contact_id is not null),
-    (select avg(response_seconds) from first_rt where response_seconds >= 0),
-    (select count(*)::int from t where resolved_at between p_from and p_to),
-    (select count(*)::int from t),
-    (select avg(response_seconds) from all_rt where response_seconds >= 0);
-$$;
-
-grant execute on function public.get_service_dashboard_stats(uuid,timestamptz,timestamptz,uuid)
-  to authenticated, service_role;
-
-create or replace function public.get_service_worst_responses(
-  p_org uuid,
-  p_from timestamptz,
-  p_to timestamptz,
-  p_owner uuid default null,
-  p_kind text default 'all',   -- 'first' | 'all'
-  p_limit int default 20
-) returns table (
-  id uuid,
-  thread_id uuid,
-  contact_id uuid,
-  contact_name text,
-  user_id uuid,
-  user_name text,
-  inbound_at timestamptz,
-  outbound_at timestamptz,
-  response_seconds numeric,
-  median_seconds numeric,
-  p90_seconds numeric,
-  max_seconds numeric,
-  total_count int
-) language plpgsql stable security definer set search_path = public as $$
-  -- builds the pool (all or first-per-thread), computes percentiles,
-  -- returns top N enriched with contact_name + user_name
-$$;
-
-grant execute on function public.get_service_worst_responses(uuid,timestamptz,timestamptz,uuid,text,int)
-  to authenticated, service_role;
+```text
+.not('sender_sid', 'is', null)   // só senders WhatsApp reais
+.neq('status', 'offline')        // esconde sandbox (e qualquer sender desativado pela Twilio)
 ```
 
-Índices de apoio (criar se ainda não existirem — verificar antes):
+Mantém os filtros já existentes (`organization_id`, `channel='whatsapp'`, `is_active=true`).
 
-```sql
-create index if not exists idx_mrt_org_created
-  on message_response_times (organization_id, created_at desc);
-create index if not exists idx_mrt_thread_inbound
-  on message_response_times (thread_id, inbound_at asc);
-create index if not exists idx_mt_org_created
-  on message_threads (organization_id, created_at desc);
-```
+Sem alterações em:
+- `EndpointSelector.tsx`, `EndpointBadge.tsx`, `useThreadEndpointMap.ts`
+- `MessagesList.tsx`
+- `twilio-whatsapp-send` (roteamento de envio inalterado)
+- Banco, migration, seed, RLS
 
-### Frontend (somente refatoração dos 2 hooks)
+## Resultado esperado por organização
 
-- `src/hooks/useServiceStats.ts` — substituir toda a lógica por **1** chamada `supabase.rpc('get_service_dashboard_stats', {...})`. Mantém a mesma interface `ServiceStats` exportada — nenhuma página precisa mudar.
-- `src/hooks/useServiceWorstResponses.ts` — substituir por **1** chamada `supabase.rpc('get_service_worst_responses', {...})`. Mesma interface `WorstResponseRow` / `WorstResponseStats`.
+**Central Trabalhista** — dropdown passa a mostrar **2 números**:
+- `+551150265098` (…5098)
+- `+551150287027` (…7027)
 
-Nenhuma mudança em `ReportsPage.tsx`, `MobileReports.tsx`, UI ou design system.
+Quando o Lucas cadastrar o número novo pelo `twilio-whatsapp-setup`, ele aparecerá automaticamente como 3ª opção (será criado com `sender_sid` preenchido e `status='online'`, satisfazendo os dois filtros).
 
-## Ganho esperado
+**Viagi** — continua sem dropdown (tem só 1 endpoint operacional, e a regra `hasMultiple = endpoints.length >= 2` esconde o seletor para orgs single-endpoint).
 
-- Carregamento do dashboard: de **10–50 requisições** para **2 requisições**.
-- Tempo total no Postgres por abertura: queda esperada de ~80–95% (agregação roda 1 vez no servidor, usando índices, em vez de várias varreduras paginadas).
-- Remove o dashboard das top queries do `pg_stat_statements`.
+**Sandbox `+14155238886`** — oculto na CT por estar com `status='offline'`. Se um dia a Twilio reativar o sandbox para teste, ele voltaria a aparecer — comportamento aceitável.
 
-## Risco
+## Validação pós-deploy
 
-Baixo. Mudança isolada em 2 hooks + 1 migration aditiva (não altera tabelas existentes). Reversível voltando os hooks à versão atual.
+1. Login como usuário da CT → `/messages` → abrir composer → dropdown lista exatamente `…5098` e `…7027`.
+2. Login como Viagi → `/messages` → dropdown não aparece (single-endpoint).
+3. Confirmar no console que `useOrgWhatsAppEndpoints` retorna `endpoints.length === 2` para CT.
+4. Enviar uma mensagem de teste pela CT escolhendo `…7027` → confirmar que `messages.endpoint_id` é stampado e `From` correto sai na Twilio (sem mudança de comportamento de envio).
 
-## Fora de escopo
+## Reversão
 
-- Triggers (`fn_calc_message_response_time`) — continuam como estão.
-- Crons (`integration-worker`, `intelligence-worker`) — não tocados.
-- Inbox — já foi otimizada na etapa anterior.
+Remover as duas linhas adicionadas ao hook restaura o estado atual (7 endpoints visíveis para CT).
