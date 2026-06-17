@@ -292,6 +292,8 @@ function DesktopMessagesList() {
   
   // New conversation dialog state
   const [showNewConversation, setShowNewConversation] = useState(false);
+  const [endpointFilter, setEndpointFilter] = useState<string>('all');
+  const [endpointFilterOpen, setEndpointFilterOpen] = useState(false);
 
   // Auth token for Twilio media proxy
   const [accessToken, setAccessToken] = useState<string | undefined>(undefined);
