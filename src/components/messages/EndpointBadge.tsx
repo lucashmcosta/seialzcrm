@@ -29,12 +29,12 @@ export function EndpointBadge({
     <span
       title={externalAddress}
       className={cn(
-        'inline-flex items-center shrink-0 rounded-full border border-border bg-muted text-muted-foreground font-medium',
+        'inline-flex items-center shrink-0 rounded-full border border-blue-500/30 bg-blue-500/10 text-blue-600 dark:text-blue-400 font-semibold',
         size === 'lg' ? 'px-2 py-0.5 text-[11px]' : 'px-1.5 py-0 text-[10px] leading-[14px]',
         className,
       )}
     >
-      via …{suffix}
+      Novo · {suffix}
     </span>
   );
 }
