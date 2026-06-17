@@ -65,6 +65,8 @@ import { useMessageThreads, type ChatThread } from '@/hooks/useMessageThreads';
 import { useOrgWhatsAppEndpoints } from '@/hooks/useOrgWhatsAppEndpoints';
 import { useThreadEndpointMap } from '@/hooks/useThreadEndpointMap';
 import { EndpointBadge } from '@/components/messages/EndpointBadge';
+import { EndpointFilterDialog } from '@/components/messages/EndpointFilterDialog';
+import { FunnelSimple } from '@phosphor-icons/react';
 
 import { useHiddenThreads } from '@/hooks/useHiddenThreads';
 import { EyeSlash } from '@phosphor-icons/react';
@@ -290,6 +292,8 @@ function DesktopMessagesList() {
   
   // New conversation dialog state
   const [showNewConversation, setShowNewConversation] = useState(false);
+  const [endpointFilter, setEndpointFilter] = useState<string>('all');
+  const [endpointFilterOpen, setEndpointFilterOpen] = useState(false);
 
   // Auth token for Twilio media proxy
   const [accessToken, setAccessToken] = useState<string | undefined>(undefined);
@@ -1217,9 +1221,9 @@ function DesktopMessagesList() {
 
   // Hidden threads (per-user, with 5s undo)
   const { hideThread, unhideThread, isHidden } = useHiddenThreads(userProfile?.id);
-  const visibleThreads = filteredThreads?.filter(
-    (t) => !isHidden(t.id, t.last_inbound_at || t.whatsapp_last_inbound_at)
-  );
+  const visibleThreads = filteredThreads
+    ?.filter((t) => !isHidden(t.id, t.last_inbound_at || t.whatsapp_last_inbound_at))
+    .filter((t) => endpointFilter === 'all' || threadEndpointMap[t.id] === endpointFilter);
 
   const handleHideThread = (threadId: string) => {
     const thread = threads?.find((t) => t.id === threadId);
@@ -1290,9 +1294,24 @@ function DesktopMessagesList() {
                   >
                     <ChatCircleDots className="w-4 h-4" />
                   </Button>
+                  {hasMultipleEndpoints && (
+                    <Button
+                      variant="outline"
+                      size="icon"
+                      className="h-8 w-8 relative"
+                      onClick={() => setEndpointFilterOpen(true)}
+                      title={locale === 'pt-BR' ? 'Filtrar por número' : 'Filter by number'}
+                    >
+                      <FunnelSimple className="w-4 h-4" />
+                      {endpointFilter !== 'all' && (
+                        <span className="absolute top-1 right-1 w-2 h-2 rounded-full bg-emerald-500" />
+                      )}
+                    </Button>
+                  )}
                   <Badge color="gray" size="md">
                     {visibleThreads?.length || 0}
                   </Badge>
+
                 </div>
               </div>
               <div className="relative mb-3">
@@ -2045,6 +2064,15 @@ function DesktopMessagesList() {
           setSelectedThreadId(threadId);
           refetchThreads();
         }}
+      />
+
+      <EndpointFilterDialog
+        open={endpointFilterOpen}
+        onOpenChange={setEndpointFilterOpen}
+        endpoints={orgEndpoints}
+        officialNumbers={officialNumbers}
+        value={endpointFilter}
+        onChange={setEndpointFilter}
       />
 
       {/* Confirm Mark Won/Lost */}
