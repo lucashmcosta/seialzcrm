@@ -558,12 +558,67 @@ serve(async (req) => {
         }
       }
 
-      // Parse inbound settings
-      const inboundSettings = (integration?.whatsapp_inbound_settings as any) || {
+      // ============================================================
+      // Resolve communication_endpoint from `To` (org's WhatsApp number)
+      // Best-effort: NULL is OK and does not break insert.
+      // ============================================================
+      let endpointId: string | null = null
+      try {
+        const { data: epData, error: epErr } = await supabase
+          .rpc('resolve_communication_endpoint', {
+            _organization_id: orgId,
+            _channel: 'whatsapp',
+            _address: to,
+          })
+        if (epErr) {
+          console.warn('[endpoint-resolve] rpc error', JSON.stringify({
+            org_id: orgId, to, from, messageSid, err: epErr.message,
+          }))
+        } else if (epData) {
+          endpointId = epData as unknown as string
+        } else {
+          console.warn('[endpoint-resolve] no match', JSON.stringify({
+            org_id: orgId, to, from, messageSid,
+          }))
+        }
+      } catch (e) {
+        console.warn('[endpoint-resolve] exception', JSON.stringify({
+          org_id: orgId, to, from, messageSid, err: String(e),
+        }))
+      }
+
+      // Parse inbound settings — hierarquia:
+      // 1) communication_endpoints.inbound_settings (por número)
+      // 2) organization_integrations.whatsapp_inbound_settings (geral da integração)
+      // 3) fallback hardcoded
+      let endpointInbound: any = null
+      if (endpointId) {
+        const { data: epRow, error: epInbErr } = await supabase
+          .from('communication_endpoints')
+          .select('inbound_settings')
+          .eq('id', endpointId)
+          .maybeSingle()
+        if (epInbErr) {
+          console.warn('[wa-inbound] endpoint inbound_settings fetch error', JSON.stringify({
+            endpointId, err: epInbErr.message,
+          }))
+        } else {
+          endpointInbound = (epRow?.inbound_settings as any) ?? null
+        }
+      }
+
+      const integrationInbound = (integration?.whatsapp_inbound_settings as any) || null
+
+      const inboundSettings = endpointInbound || integrationInbound || {
         auto_create_contact: true,
         default_lifecycle_stage: 'lead',
         auto_create_opportunity: false,
       }
+
+      console.log('[wa-inbound] settings resolved', JSON.stringify({
+        endpointId,
+        source: endpointInbound ? 'endpoint' : (integrationInbound ? 'integration' : 'default'),
+      }))
 
       // Persist media to storage
       const { urls: persistedMediaUrls, mediaType } = await persistMedia(
