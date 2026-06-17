@@ -1221,9 +1221,9 @@ function DesktopMessagesList() {
 
   // Hidden threads (per-user, with 5s undo)
   const { hideThread, unhideThread, isHidden } = useHiddenThreads(userProfile?.id);
-  const visibleThreads = filteredThreads?.filter(
-    (t) => !isHidden(t.id, t.last_inbound_at || t.whatsapp_last_inbound_at)
-  );
+  const visibleThreads = filteredThreads
+    ?.filter((t) => !isHidden(t.id, t.last_inbound_at || t.whatsapp_last_inbound_at))
+    .filter((t) => endpointFilter === 'all' || threadEndpointMap[t.id] === endpointFilter);
 
   const handleHideThread = (threadId: string) => {
     const thread = threads?.find((t) => t.id === threadId);
