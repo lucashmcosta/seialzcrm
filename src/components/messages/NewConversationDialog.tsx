@@ -49,6 +49,32 @@ export function NewConversationDialog({
   const { t } = useTranslation(locale as 'pt-BR' | 'en-US');
   const [search, setSearch] = useState('');
   const [selecting, setSelecting] = useState<string | null>(null);
+  const { endpoints, officialNumbers, loading: endpointsLoading } =
+    useOrgWhatsAppEndpoints(organization?.id);
+
+  /**
+   * Endpoint preferido para criar/abrir conversa a partir do botão
+   * "Nova Conversa". Regra genérica por tenant:
+   * - se existir endpoint cujo external_address NÃO consta em
+   *   `organization_integrations.config_values.whatsapp_number` (set
+   *   `officialNumbers`), considera-o "novo/transicional" e usa o mais
+   *   recente. Esse é o caminho usado quando a org está migrando de
+   *   número (ex.: Central Trabalhista 7027 → 7067).
+   * - senão, usa o endpoint mais recente disponível (oficial).
+   * - se a org não tem endpoints carregados, retorna null e o insert
+   *   cai no fallback legado (sem primary_endpoint_id).
+   */
+  const preferredEndpointId = useMemo<string | null>(() => {
+    if (!endpoints.length) return null;
+    const sorted = [...endpoints].sort(
+      (a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime(),
+    );
+    const transitional = sorted.filter((ep) => {
+      const digits = ep.external_address.replace(/\D/g, '');
+      return digits && !officialNumbers.has(digits);
+    });
+    return (transitional[0] ?? sorted[0]).id;
+  }, [endpoints, officialNumbers]);
 
   const { data: contacts, isLoading } = useQuery({
     queryKey: ['contacts-with-phone', organization?.id, search],
