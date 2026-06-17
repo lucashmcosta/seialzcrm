@@ -79,13 +79,17 @@ export function NewConversationDialog({
 
     setSelecting(contact.id);
     try {
-      // Check for existing WhatsApp thread
+      // Check for existing WhatsApp thread (any endpoint). Multiple threads
+      // per (org, contact, channel) are allowed when separated by
+      // primary_endpoint_id, so pick the most recently updated one.
       const { data: existingThread } = await supabase
         .from('message_threads')
         .select('id')
         .eq('organization_id', organization.id)
         .eq('contact_id', contact.id)
         .eq('channel', 'whatsapp')
+        .order('updated_at', { ascending: false })
+        .limit(1)
         .maybeSingle();
 
       if (existingThread) {

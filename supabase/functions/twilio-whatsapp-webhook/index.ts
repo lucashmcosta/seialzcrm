@@ -712,7 +712,10 @@ serve(async (req) => {
 
       if (!contactId) {
         console.error('Could not find or create contact')
-        return new Response('OK', { status: 200 })
+        return new Response('<?xml version="1.0" encoding="UTF-8"?><Response></Response>', {
+          status: 200,
+          headers: { ...corsHeaders, 'Content-Type': 'text/xml' }
+        })
       }
 
       // Save CTWA Referral data to contact (only on first message with referral)
@@ -852,7 +855,10 @@ serve(async (req) => {
           console.log('Created new thread:', threadId, 'endpoint:', endpointId)
         } else if (threadError) {
           console.error('Error creating thread:', threadError)
-          return new Response('OK', { status: 200 })
+          return new Response('<?xml version="1.0" encoding="UTF-8"?><Response></Response>', {
+            status: 200,
+            headers: { ...corsHeaders, 'Content-Type': 'text/xml' }
+          })
         }
       }
 

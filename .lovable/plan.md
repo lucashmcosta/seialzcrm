@@ -1,41 +1,69 @@
-## Etapa 3 + Etapa 4 — separar threads por endpoint e ajustar UI
+## Aplicação aprovada — aguardando build mode
 
-### Etapa 3 — Match de thread por `primary_endpoint_id` no webhook
+Os 6 patches e a migration estão prontos. Vou executar nesta ordem assim que o build mode for ativado.
 
-Em `supabase/functions/twilio-whatsapp-webhook/index.ts` (linhas 770–825), trocar a query única atual por uma busca em duas etapas:
+### 1) Patches de código (paralelos)
 
-1. **Match preferencial (reutilização)** — `(org, contact, channel='whatsapp', primary_endpoint_id = endpointId)`. Se existir, reutiliza essa thread (evita criar uma thread nova a cada inbound do 7067).
-2. **Fallback de compatibilidade** — se não houver match e `endpointId` estiver definido, procurar thread com `primary_endpoint_id IS NULL` (legado 7027) e fazer backfill com o endpoint atual.
-3. **Criar nova thread** com `primary_endpoint_id = endpointId` apenas se nenhum dos dois bater.
+**A. `supabase/functions/twilio-whatsapp-send/index.ts` (linhas 607–616)**
+Substituir `.limit(1).single()` pelo fallback ordenado:
+```ts
+} else {
+  // Legacy fallback: threadId not provided. Pick the most recently updated
+  // WhatsApp thread for this contact (any endpoint).
+  const { data: existingThread } = await supabase
+    .from('message_threads')
+    .select('id, whatsapp_last_inbound_at')
+    .eq('organization_id', organizationId)
+    .eq('contact_id', contactId)
+    .eq('channel', 'whatsapp')
+    .order('updated_at', { ascending: false })
+    .limit(1)
+    .maybeSingle()
+```
 
-Quando `endpointId` for `null` (caso raro), manter o comportamento atual: match único por `(org, contact, channel)`.
+**B. `src/components/messages/NewConversationDialog.tsx` (82–89)** — mesma troca: `.order('updated_at',{ascending:false}).limit(1).maybeSingle()`.
 
-### Etapa 4 — UI
+**C. `src/components/whatsapp/WhatsAppChat.tsx` (133–139)** — idem.
 
-**`src/hooks/useOrgWhatsAppEndpoints.ts`**
-- Expor `officialNumbers: Set<string>` (dígitos normalizados de `organization_integrations.config_values.whatsapp_number`).
+**D. `src/components/contacts/ContactMessages.tsx` (273–279)** — idem.
 
-**`src/components/messages/EndpointBadge.tsx`**
-- Nova prop opcional `officialNumbers?: Set<string>`. Se o `externalAddress` normalizado estiver no set, retorna `null`. Caso contrário, renderiza `via …NNNN` como hoje.
+**E. `supabase/functions/twilio-whatsapp-webhook/index.ts`**
+- Linha 715 (`!contactId`) → TwiML vazio.
+- Linha 855 (erro criando thread) → TwiML vazio.
+- `/status` (linhas 1036 e 1104) **permanece `OK`** (conforme combinado).
 
-**`src/pages/messages/MessagesList.tsx`**
-- Passar `officialNumbers` do hook para os dois `<EndpointBadge>` (linhas 193 e 1412).
-- Remover o bloco `<EndpointSelector>` (linhas 1825–1834) e o import. O envio continua roteado pelo `primary_endpoint_id` da thread; `composerEndpointId` cai automaticamente para o endpoint primário da thread.
+### 2) Migration (chamada separada, sem paralelo)
 
-### Fora de escopo
-- `twilio-whatsapp-send` (intacto)
-- Threads antigas mistas (sem migração/exclusão)
-- Arquivo `EndpointSelector.tsx` (permanece no repo, apenas deixa de ser usado)
+```sql
+SET lock_timeout = '5s';
+SET statement_timeout = '60s';
 
-### Arquivos alterados
-- `supabase/functions/twilio-whatsapp-webhook/index.ts`
-- `src/hooks/useOrgWhatsAppEndpoints.ts`
-- `src/components/messages/EndpointBadge.tsx`
-- `src/pages/messages/MessagesList.tsx`
+DROP INDEX IF EXISTS public.message_threads_unique_open_per_contact;
 
-### Validação
-Após o deploy, enviar nova mensagem do número pessoal para o 7067:
-- Aparece nova conversa "Joao Teste" na lista, com badge `via …7067`.
-- Mensagens subsequentes do 7067 caem na mesma nova thread (sem duplicar).
-- Thread antiga do 7027 continua existindo, **sem badge**.
-- Composer sem dropdown "Enviar de".
+CREATE UNIQUE INDEX message_threads_unique_open_per_contact_endpoint
+  ON public.message_threads (organization_id, contact_id, channel, primary_endpoint_id)
+  WHERE status IN ('open', 'awaiting_client', 'in_progress')
+    AND primary_endpoint_id IS NOT NULL;
+
+CREATE UNIQUE INDEX message_threads_unique_open_per_contact_legacy
+  ON public.message_threads (organization_id, contact_id, channel)
+  WHERE status IN ('open', 'awaiting_client', 'in_progress')
+    AND primary_endpoint_id IS NULL;
+```
+
+Se falhar por `lock_timeout` ou `statement_timeout`, paro e reporto sem retry automático.
+
+### 3) Deploy
+`twilio-whatsapp-webhook` e `twilio-whatsapp-send` são deployados automaticamente.
+
+### 4) Teste end-to-end (João Teste — `+5511964298621`)
+1. Cliente envia inbound para 7067 → confere via logs do webhook (`endpointId = b303253e-…`, `Created new thread`).
+2. `/messages` mostra nova conversa "Joao Teste" com badge `via …7067`.
+3. Thread 7027 antiga (`26e41c8b-…`) continua aberta, sem badge.
+4. Twilio **não** envia mais `OK` ao cliente (resposta TwiML vazia).
+5. Segundo inbound do 7067 cai na **mesma** nova thread (log `Updated existing thread`).
+
+### Fora de escopo (mantido)
+- Threads antigas, mensagens antigas, Inbox v2, `twilio-whatsapp-send` fora do fallback legacy.
+
+**Ação necessária:** mudar para build mode para eu executar.
