@@ -3,6 +3,7 @@ import { useQuery } from '@tanstack/react-query';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { WhatsAppInboundSettings } from '@/components/settings/WhatsAppInboundSettings';
 import { AddWhatsAppEndpointDialog } from '@/components/settings/AddWhatsAppEndpointDialog';
+import { AdditionalEndpointsSection } from '@/components/settings/AdditionalEndpointsSection';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Label } from '@/components/ui/label';
