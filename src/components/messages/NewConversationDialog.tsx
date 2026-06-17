@@ -106,18 +106,24 @@ export function NewConversationDialog({
 
     setSelecting(contact.id);
     try {
-      // Check for existing WhatsApp thread (any endpoint). Multiple threads
-      // per (org, contact, channel) are allowed when separated by
-      // primary_endpoint_id, so pick the most recently updated one.
-      const { data: existingThread } = await supabase
+      // "Nova Conversa" sempre abre/cria thread no endpoint preferido
+      // da org (transicional > oficial). Filtrar por primary_endpoint_id
+      // garante que threads antigas em outros endpoints não sejam
+      // reaproveitadas — elas continuam visíveis na lista separadamente.
+      let existingQuery = supabase
         .from('message_threads')
         .select('id')
         .eq('organization_id', organization.id)
         .eq('contact_id', contact.id)
         .eq('channel', 'whatsapp')
         .order('updated_at', { ascending: false })
-        .limit(1)
-        .maybeSingle();
+        .limit(1);
+
+      if (preferredEndpointId) {
+        existingQuery = existingQuery.eq('primary_endpoint_id', preferredEndpointId);
+      }
+
+      const { data: existingThread } = await existingQuery.maybeSingle();
 
       if (existingThread) {
         onSelectContact(contact.id, existingThread.id);
@@ -125,14 +131,19 @@ export function NewConversationDialog({
         return;
       }
 
-      // Create new thread
+      // Create new thread anchored to the preferred endpoint (when known).
+      const insertPayload: Record<string, unknown> = {
+        organization_id: organization.id,
+        contact_id: contact.id,
+        channel: 'whatsapp',
+      };
+      if (preferredEndpointId) {
+        insertPayload.primary_endpoint_id = preferredEndpointId;
+      }
+
       const { data: newThread, error } = await supabase
         .from('message_threads')
-        .insert({
-          organization_id: organization.id,
-          contact_id: contact.id,
-          channel: 'whatsapp',
-        })
+        .insert(insertPayload as any)
         .select('id')
         .single();
 
