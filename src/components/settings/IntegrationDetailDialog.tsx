@@ -485,6 +485,15 @@ export function IntegrationDetailDialog({
         onOpenChange={setAddEndpointOpen}
       />
 
+      {organization?.id && orgIntegration?.id && (
+        <AdditionalEndpointsSection
+          organizationId={organization.id}
+          organizationIntegrationId={orgIntegration.id}
+          officialNumber={configValues.whatsapp_number}
+          integrationFallback={orgIntegration.whatsapp_inbound_settings}
+        />
+      )}
+
       {orgIntegration?.id && (
         <WhatsAppInboundSettings integrationId={orgIntegration.id} />
       )}
