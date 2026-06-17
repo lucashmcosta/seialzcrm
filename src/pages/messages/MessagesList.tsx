@@ -2066,6 +2066,15 @@ function DesktopMessagesList() {
         }}
       />
 
+      <EndpointFilterDialog
+        open={endpointFilterOpen}
+        onOpenChange={setEndpointFilterOpen}
+        endpoints={orgEndpoints}
+        officialNumbers={officialNumbers}
+        value={endpointFilter}
+        onChange={setEndpointFilter}
+      />
+
       {/* Confirm Mark Won/Lost */}
       <ConfirmDialog
         open={!!confirmAction}
