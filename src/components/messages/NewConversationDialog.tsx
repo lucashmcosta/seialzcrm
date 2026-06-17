@@ -1,5 +1,6 @@
-import { useState } from 'react';
+import { useMemo, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
+import { useOrgWhatsAppEndpoints } from '@/hooks/useOrgWhatsAppEndpoints';
 import { supabase } from '@/integrations/supabase/client';
 import { useOrganization } from '@/hooks/useOrganization';
 import { useTranslation } from '@/lib/i18n';
@@ -48,6 +49,32 @@ export function NewConversationDialog({
   const { t } = useTranslation(locale as 'pt-BR' | 'en-US');
   const [search, setSearch] = useState('');
   const [selecting, setSelecting] = useState<string | null>(null);
+  const { endpoints, officialNumbers, loading: endpointsLoading } =
+    useOrgWhatsAppEndpoints(organization?.id);
+
+  /**
+   * Endpoint preferido para criar/abrir conversa a partir do botão
+   * "Nova Conversa". Regra genérica por tenant:
+   * - se existir endpoint cujo external_address NÃO consta em
+   *   `organization_integrations.config_values.whatsapp_number` (set
+   *   `officialNumbers`), considera-o "novo/transicional" e usa o mais
+   *   recente. Esse é o caminho usado quando a org está migrando de
+   *   número (ex.: Central Trabalhista 7027 → 7067).
+   * - senão, usa o endpoint mais recente disponível (oficial).
+   * - se a org não tem endpoints carregados, retorna null e o insert
+   *   cai no fallback legado (sem primary_endpoint_id).
+   */
+  const preferredEndpointId = useMemo<string | null>(() => {
+    if (!endpoints.length) return null;
+    const sorted = [...endpoints].sort(
+      (a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime(),
+    );
+    const transitional = sorted.filter((ep) => {
+      const digits = ep.external_address.replace(/\D/g, '');
+      return digits && !officialNumbers.has(digits);
+    });
+    return (transitional[0] ?? sorted[0]).id;
+  }, [endpoints, officialNumbers]);
 
   const { data: contacts, isLoading } = useQuery({
     queryKey: ['contacts-with-phone', organization?.id, search],
@@ -79,18 +106,24 @@ export function NewConversationDialog({
 
     setSelecting(contact.id);
     try {
-      // Check for existing WhatsApp thread (any endpoint). Multiple threads
-      // per (org, contact, channel) are allowed when separated by
-      // primary_endpoint_id, so pick the most recently updated one.
-      const { data: existingThread } = await supabase
+      // "Nova Conversa" sempre abre/cria thread no endpoint preferido
+      // da org (transicional > oficial). Filtrar por primary_endpoint_id
+      // garante que threads antigas em outros endpoints não sejam
+      // reaproveitadas — elas continuam visíveis na lista separadamente.
+      let existingQuery = supabase
         .from('message_threads')
         .select('id')
         .eq('organization_id', organization.id)
         .eq('contact_id', contact.id)
         .eq('channel', 'whatsapp')
         .order('updated_at', { ascending: false })
-        .limit(1)
-        .maybeSingle();
+        .limit(1);
+
+      if (preferredEndpointId) {
+        existingQuery = existingQuery.eq('primary_endpoint_id', preferredEndpointId);
+      }
+
+      const { data: existingThread } = await existingQuery.maybeSingle();
 
       if (existingThread) {
         onSelectContact(contact.id, existingThread.id);
@@ -98,14 +131,19 @@ export function NewConversationDialog({
         return;
       }
 
-      // Create new thread
+      // Create new thread anchored to the preferred endpoint (when known).
+      const insertPayload: Record<string, unknown> = {
+        organization_id: organization.id,
+        contact_id: contact.id,
+        channel: 'whatsapp',
+      };
+      if (preferredEndpointId) {
+        insertPayload.primary_endpoint_id = preferredEndpointId;
+      }
+
       const { data: newThread, error } = await supabase
         .from('message_threads')
-        .insert({
-          organization_id: organization.id,
-          contact_id: contact.id,
-          channel: 'whatsapp',
-        })
+        .insert(insertPayload as any)
         .select('id')
         .single();
 
@@ -172,7 +210,7 @@ export function NewConversationDialog({
                     <button
                       key={contact.id}
                       onClick={() => handleSelect(contact)}
-                      disabled={selecting !== null}
+                      disabled={selecting !== null || endpointsLoading}
                       className="w-full flex items-center gap-3 p-3 rounded-lg hover:bg-accent transition-colors text-left disabled:opacity-50"
                     >
                       <Avatar fallbackText={displayName} size="md" />
