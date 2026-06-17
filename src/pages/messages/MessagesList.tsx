@@ -65,6 +65,8 @@ import { useMessageThreads, type ChatThread } from '@/hooks/useMessageThreads';
 import { useOrgWhatsAppEndpoints } from '@/hooks/useOrgWhatsAppEndpoints';
 import { useThreadEndpointMap } from '@/hooks/useThreadEndpointMap';
 import { EndpointBadge } from '@/components/messages/EndpointBadge';
+import { EndpointFilterDialog } from '@/components/messages/EndpointFilterDialog';
+import { FunnelSimple } from '@phosphor-icons/react';
 
 import { useHiddenThreads } from '@/hooks/useHiddenThreads';
 import { EyeSlash } from '@phosphor-icons/react';
