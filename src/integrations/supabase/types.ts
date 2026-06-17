@@ -1403,6 +1403,7 @@ export type Database = {
           external_account_id: string | null
           external_address: string | null
           id: string
+          inbound_settings: Json | null
           is_active: boolean
           messaging_limit_per_24h: number | null
           metadata: Json
@@ -1426,6 +1427,7 @@ export type Database = {
           external_account_id?: string | null
           external_address?: string | null
           id?: string
+          inbound_settings?: Json | null
           is_active?: boolean
           messaging_limit_per_24h?: number | null
           metadata?: Json
@@ -1449,6 +1451,7 @@ export type Database = {
           external_account_id?: string | null
           external_address?: string | null
           id?: string
+          inbound_settings?: Json | null
           is_active?: boolean
           messaging_limit_per_24h?: number | null
           metadata?: Json
