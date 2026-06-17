@@ -796,34 +796,9 @@ serve(async (req) => {
         }
       }
 
-      // ============================================================
-      // Resolve communication_endpoint from `To` (org's WhatsApp number)
-      // Best-effort: NULL is OK and does not break insert.
-      // ============================================================
-      let endpointId: string | null = null
-      try {
-        const { data: epData, error: epErr } = await supabase
-          .rpc('resolve_communication_endpoint', {
-            _organization_id: orgId,
-            _channel: 'whatsapp',
-            _address: to,
-          })
-        if (epErr) {
-          console.warn('[endpoint-resolve] rpc error', JSON.stringify({
-            org_id: orgId, to, from, messageSid, err: epErr.message,
-          }))
-        } else if (epData) {
-          endpointId = epData as unknown as string
-        } else {
-          console.warn('[endpoint-resolve] no match', JSON.stringify({
-            org_id: orgId, to, from, messageSid,
-          }))
-        }
-      } catch (e) {
-        console.warn('[endpoint-resolve] exception', JSON.stringify({
-          org_id: orgId, to, from, messageSid, err: String(e),
-        }))
-      }
+      // endpointId já resolvido acima (antes de inboundSettings).
+
+
 
       // Find or create message thread.
       // Quando temos endpointId, threads são separadas por número:
