@@ -1294,9 +1294,24 @@ function DesktopMessagesList() {
                   >
                     <ChatCircleDots className="w-4 h-4" />
                   </Button>
+                  {hasMultipleEndpoints && (
+                    <Button
+                      variant="outline"
+                      size="icon"
+                      className="h-8 w-8 relative"
+                      onClick={() => setEndpointFilterOpen(true)}
+                      title={locale === 'pt-BR' ? 'Filtrar por número' : 'Filter by number'}
+                    >
+                      <FunnelSimple className="w-4 h-4" />
+                      {endpointFilter !== 'all' && (
+                        <span className="absolute top-1 right-1 w-2 h-2 rounded-full bg-emerald-500" />
+                      )}
+                    </Button>
+                  )}
                   <Badge color="gray" size="md">
                     {visibleThreads?.length || 0}
                   </Badge>
+
                 </div>
               </div>
               <div className="relative mb-3">
