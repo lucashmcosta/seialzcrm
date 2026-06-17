@@ -605,15 +605,18 @@ serve(async (req) => {
         isIn24hWindow = hoursDiff < 24
       }
     } else {
-      // Find or create thread
+      // Legacy fallback: threadId not provided. Multiple threads per
+      // (org, contact, channel) are now allowed when separated by
+      // primary_endpoint_id, so .single() would throw — pick most recent.
       const { data: existingThread } = await supabase
         .from('message_threads')
         .select('id, whatsapp_last_inbound_at')
         .eq('organization_id', organizationId)
         .eq('contact_id', contactId)
         .eq('channel', 'whatsapp')
+        .order('updated_at', { ascending: false })
         .limit(1)
-        .single()
+        .maybeSingle()
 
       if (existingThread) {
         currentThreadId = existingThread.id

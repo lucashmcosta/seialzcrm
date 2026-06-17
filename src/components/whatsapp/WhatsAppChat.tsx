@@ -130,12 +130,16 @@ export function WhatsAppChat({ contactId, threadId: initialThreadId, onThreadCre
     }
 
     try {
+      // Multiple threads per (org, contact, channel) are allowed when separated
+      // by primary_endpoint_id — pick the most recently updated one.
       const { data: thread } = await supabase
         .from('message_threads')
         .select('id, whatsapp_last_inbound_at, last_inbound_at')
         .eq('organization_id', organization.id)
         .eq('contact_id', contactId)
         .eq('channel', 'whatsapp')
+        .order('updated_at', { ascending: false })
+        .limit(1)
         .maybeSingle();
 
       if (thread) {
