@@ -576,7 +576,7 @@ export default function ReportsPage() {
                 <WinRateGauge
                   rate={stats.winRate}
                   wonCount={stats.wonCount}
-                  lostCount={stats.lostCount}
+                  createdCount={stats.createdCount}
                   loading={loading}
                 />
                 <div className="lg:col-span-2 grid grid-cols-1 gap-4 sm:grid-cols-2">
