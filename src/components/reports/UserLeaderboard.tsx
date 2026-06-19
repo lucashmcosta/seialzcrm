@@ -6,6 +6,7 @@ export interface UserStats {
   userId: string;
   fullName: string;
   open: number;
+  created: number;
   won: number;
   lost: number;
   wonValue: number;
