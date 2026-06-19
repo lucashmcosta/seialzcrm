@@ -125,6 +125,7 @@ serve(async (req) => {
   }
 
   // Already-imported lead_ids (idempotency)
+  // (a) Direct match by source_external_id
   const leadIds = leads.map((l) => l.id);
   const alreadyImported = new Set<string>();
   const CHUNK = 500;
@@ -134,10 +135,40 @@ serve(async (req) => {
       .from("contacts")
       .select("source_external_id")
       .eq("organization_id", ORG_ID)
-      .eq("source", "meta_lead_ads")
       .in("source_external_id", slice);
     for (const r of data || []) if (r.source_external_id) alreadyImported.add(r.source_external_id);
   }
+
+  // (b) Fallback: lead phone already exists as meta_lead_ads contact in this org
+  const leadsByPhone = new Map<string, string[]>();
+  for (const l of leads) {
+    if (alreadyImported.has(l.id)) continue;
+    const phoneField = (l.field_data || []).find((f: any) =>
+      ["phone_number", "número_de_telefone", "numero_de_telefone", "telefone", "phone"].includes(f.name),
+    );
+    const raw = phoneField?.values?.[0];
+    if (!raw) continue;
+    const digits = String(raw).replace(/\D/g, "");
+    if (digits.length < 10) continue;
+    const key = digits.length >= 12 && digits.startsWith("55") ? digits : `55${digits}`;
+    if (!leadsByPhone.has(key)) leadsByPhone.set(key, []);
+    leadsByPhone.get(key)!.push(l.id);
+  }
+  const allPhones = Array.from(leadsByPhone.keys());
+  for (let i = 0; i < allPhones.length; i += CHUNK) {
+    const slice = allPhones.slice(i, i + CHUNK);
+    const { data } = await admin
+      .from("contacts")
+      .select("phone_normalized")
+      .eq("organization_id", ORG_ID)
+      .eq("source", "meta_lead_ads")
+      .in("phone_normalized", slice);
+    for (const r of data || []) {
+      const ids = leadsByPhone.get(r.phone_normalized as string) || [];
+      for (const id of ids) alreadyImported.add(id);
+    }
+  }
+
   const pendingLeads = leads.filter((l) => !alreadyImported.has(l.id));
 
   // Earliest / latest

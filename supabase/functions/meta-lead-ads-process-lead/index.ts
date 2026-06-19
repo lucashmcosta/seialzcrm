@@ -272,6 +272,25 @@ serve(async (req) => {
           if (!recovered?.id) throw insErr;
           contactId = recovered.id;
           existingId = recovered.id; // mark as existing → skip auto-WA template
+          // Persist meta_lead_ads attribution onto the recovered contact so future
+          // runs see it as already imported (avoids re-dispatch loop).
+          await admin
+            .from("contacts")
+            .update({
+              source: "meta_lead_ads",
+              source_external_id: lead.id,
+              ...(email ? { email } : {}),
+              utm_source: "facebook",
+              utm_medium: "paid_social",
+              utm_campaign: lead.campaign_name || null,
+              ad_referral_source_id: lead.ad_id || null,
+              ad_referral_source_type: "lead_form",
+              ad_referral_captured_at: lead.created_time || new Date().toISOString(),
+              meta_lead_id: lead.id || null,
+              meta_adset_id: lead.adset_id || null,
+              meta_campaign_id: lead.campaign_id || null,
+            })
+            .eq("id", contactId);
         } else {
           throw insErr;
         }
