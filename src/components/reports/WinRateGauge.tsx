@@ -1,11 +1,11 @@
 interface WinRateGaugeProps {
   rate: number; // 0-100
   wonCount: number;
-  lostCount: number;
+  createdCount: number;
   loading?: boolean;
 }
 
-export function WinRateGauge({ rate, wonCount, lostCount, loading }: WinRateGaugeProps) {
+export function WinRateGauge({ rate, wonCount, createdCount, loading }: WinRateGaugeProps) {
   const safeRate = Math.max(0, Math.min(100, rate));
   const radius = 84;
   const strokeWidth = 16;
