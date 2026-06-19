@@ -433,6 +433,7 @@ export default function ReportsPage() {
           userId: uid,
           fullName: u?.full_name || 'Sem responsável',
           open: 0,
+          created: 0,
           won: 0,
           lost: 0,
           wonValue: 0,
@@ -447,6 +448,11 @@ export default function ReportsPage() {
     });
 
     currentOpps.forEach((o) => {
+      const createdAt = new Date(o.created_at);
+      if (createdAt >= fromDate && createdAt <= toDate) {
+        const uid = o.owner_user_id || 'unassigned';
+        ensure(uid).created += 1;
+      }
       if (o.status !== 'won' && o.status !== 'lost') return;
       const t = parseLocalDate(o.close_date);
       if (!t) return;
@@ -463,7 +469,7 @@ export default function ReportsPage() {
     });
 
     return Array.from(map.values()).filter(
-      (r) => r.open > 0 || r.won > 0 || r.lost > 0,
+      (r) => r.open > 0 || r.created > 0 || r.won > 0 || r.lost > 0,
     );
   }, [openOpps, currentOpps, users, rangeKey]);
 
