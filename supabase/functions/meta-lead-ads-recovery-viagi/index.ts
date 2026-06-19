@@ -135,7 +135,6 @@ serve(async (req) => {
       .from("contacts")
       .select("source_external_id")
       .eq("organization_id", ORG_ID)
-      .eq("source", "meta_lead_ads")
       .in("source_external_id", slice);
     for (const r of data || []) if (r.source_external_id) alreadyImported.add(r.source_external_id);
   }
