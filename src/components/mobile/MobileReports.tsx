@@ -316,8 +316,7 @@ export function MobileReports(props: MobileReportsProps) {
                       .join('')
                       .slice(0, 2)
                       .toUpperCase();
-                    const closed = u.won + u.lost;
-                    const winRate = closed > 0 ? (u.won / closed) * 100 : 0;
+                    const winRate = u.created > 0 ? (u.won / u.created) * 100 : 0;
                     const score = useValue ? u.wonValue : u.won;
                     const pct = Math.max(2, Math.min(100, (score / maxScore) * 100));
 
