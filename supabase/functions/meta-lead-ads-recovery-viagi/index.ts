@@ -35,6 +35,7 @@ serve(async (req) => {
   let body: any = {};
   try { body = await req.json(); } catch { /* ok */ }
   const mode: "count" | "apply" = body?.mode === "apply" ? "apply" : "count";
+  const limit: number = Math.max(1, Math.min(100, Number(body?.limit) || 40));
   if (mode === "apply" && body?.confirm_token !== CONFIRM_TOKEN) {
     return json({ error: `apply mode requires confirm_token="${CONFIRM_TOKEN}"` }, 400);
   }
@@ -69,8 +70,8 @@ serve(async (req) => {
 
   const ca: any = orgIntegration.connected_account || {};
   const baseSettings = (orgIntegration.config_values as any)?.meta_lead_ads_settings || {};
-  // Recovery: never re-fire WhatsApp templates for backlogged leads
-  const settings = { ...baseSettings, auto_send_whatsapp: false };
+  // User confirmed: keep auto_send_whatsapp + round-robin owner exactly as configured
+  const settings = { ...baseSettings };
 
   let pageToken: string;
   let appSecret: string | undefined;
@@ -172,9 +173,10 @@ serve(async (req) => {
     });
   }
 
-  // APPLY — dispatch each pending lead to process-lead, await each so we don't drop fire-and-forget fetches
+  // APPLY — synchronous, capped by `limit` per invocation. Caller should re-invoke until pending=0.
+  const batch = pendingLeads.slice(0, limit);
   const dispatched = { ok: 0, failed: 0, errors: [] as any[] };
-  for (const lead of pendingLeads) {
+  for (const lead of batch) {
     try {
       const url = `${Deno.env.get("SUPABASE_URL")}/functions/v1/meta-lead-ads-process-lead`;
       const res = await fetch(url, {
@@ -206,17 +208,16 @@ serve(async (req) => {
         dispatched.errors.push({ lead_id: lead.id, error: String(e).slice(0, 200) });
       }
     }
-    // Throttle to keep Meta + DB happy
-    await new Promise((r) => setTimeout(r, 60));
+    await new Promise((r) => setTimeout(r, 120));
   }
 
-  // Reset form error state after successful recovery
-  if (dispatched.failed === 0 && dispatched.ok > 0) {
+  const remaining = pendingLeads.length - batch.length;
+  if (remaining === 0 && dispatched.ok > 0) {
     await admin
       .from("lead_forms")
       .update({
-        last_sync_status: "success",
-        last_sync_error: null,
+        last_sync_status: dispatched.failed === 0 ? "success" : "error",
+        last_sync_error: dispatched.failed === 0 ? null : `${dispatched.failed} leads failed in recovery`,
         consecutive_errors: 0,
         last_synced_lead_created_time: latest,
         last_synced_at: new Date().toISOString(),
@@ -231,7 +232,8 @@ serve(async (req) => {
     totals: {
       leads_fetched_from_meta: leads.length,
       already_imported: alreadyImported.size,
-      pending_attempted: pendingLeads.length,
+      pending_attempted: batch.length,
+      remaining_after_this_batch: remaining,
     },
     dispatched,
   });
