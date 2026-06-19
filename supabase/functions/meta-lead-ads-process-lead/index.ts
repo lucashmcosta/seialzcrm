@@ -248,13 +248,27 @@ serve(async (req) => {
         // Race condition or stale dedup state: another path inserted this contact.
         if ((insErr as any).code === "23505" && phone) {
           console.warn("[meta-lead-ads] 23505 on insert, recovering by phone lookup", phone);
-          const { data: recovered } = await admin
+          // Try exact E.164 first, then BR-normalized digits (uniq_contacts_org_phone_normalized)
+          let recovered: { id: string } | null = null;
+          const { data: byE164 } = await admin
             .from("contacts")
             .select("id")
             .eq("organization_id", organization_id)
             .eq("phone", phone)
             .is("deleted_at", null)
             .maybeSingle();
+          recovered = byE164 ?? null;
+          if (!recovered) {
+            const digits = phone.replace(/\D/g, "");
+            const { data: byNorm } = await admin
+              .from("contacts")
+              .select("id")
+              .eq("organization_id", organization_id)
+              .eq("phone_normalized", digits)
+              .is("deleted_at", null)
+              .maybeSingle();
+            recovered = byNorm ?? null;
+          }
           if (!recovered?.id) throw insErr;
           contactId = recovered.id;
           existingId = recovered.id; // mark as existing → skip auto-WA template
