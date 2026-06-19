@@ -330,9 +330,7 @@ export default function ReportsPage() {
     );
     const prevWonValue = prevWon.reduce((s, o) => s + (Number(o.amount) || 0), 0);
     const prevWinRate =
-      prevWon.length + prevLost.length > 0
-        ? (prevWon.length / (prevWon.length + prevLost.length)) * 100
-        : 0;
+      prevCreated.length > 0 ? (prevWon.length / prevCreated.length) * 100 : 0;
 
     const delta = (curr: number, prev: number): number | null => {
       if (prev === 0) return curr === 0 ? 0 : null;
