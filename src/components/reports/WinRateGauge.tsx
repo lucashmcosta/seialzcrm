@@ -61,8 +61,8 @@ export function WinRateGauge({ rate, wonCount, createdCount, loading }: WinRateG
           <p className="font-mono text-lg font-semibold text-success">{wonCount}</p>
         </div>
         <div>
-          <p className="text-xs text-muted-foreground">Perdidas</p>
-          <p className="font-mono text-lg font-semibold text-destructive">{lostCount}</p>
+          <p className="text-xs text-muted-foreground">Criadas</p>
+          <p className="font-mono text-lg font-semibold text-foreground">{createdCount}</p>
         </div>
       </div>
     </div>
