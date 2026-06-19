@@ -142,6 +142,9 @@ verify_jwt = false
 [functions.meta-lead-ads-token-health]
 verify_jwt = false
 
+[functions.meta-lead-ads-recovery-viagi]
+verify_jwt = true
+
 [functions.meta-capi-connect]
 verify_jwt = true
 
