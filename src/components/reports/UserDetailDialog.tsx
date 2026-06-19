@@ -99,7 +99,7 @@ export default function UserDetailDialog({
   }, [opps]);
 
   const winRate =
-    user.won + user.lost > 0 ? (user.won / (user.won + user.lost)) * 100 : 0;
+    user.created > 0 ? (user.won / user.created) * 100 : 0;
 
   const renderList = (items: Opp[]) => {
     if (loading) {
