@@ -289,10 +289,9 @@ export default function ReportsPage() {
 
     const wonValue = won.reduce((s, o) => s + (Number(o.amount) || 0), 0);
     const lostValue = lost.reduce((s, o) => s + (Number(o.amount) || 0), 0);
+    // Conversão = ganhas / oportunidades criadas no período
     const winRate =
-      won.length + lost.length > 0
-        ? (won.length / (won.length + lost.length)) * 100
-        : 0;
+      created.length > 0 ? (won.length / created.length) * 100 : 0;
     const avgTicket = won.length > 0 ? wonValue / won.length : 0;
 
     const cycleDaysList = won
