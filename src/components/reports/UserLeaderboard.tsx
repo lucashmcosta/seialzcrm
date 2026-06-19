@@ -39,8 +39,7 @@ export function UserLeaderboard({ rows, formatCurrency, loading, onRowClick }: P
   });
 
   const enriched = rows.map((r) => {
-    const denom = r.won + r.lost;
-    const winRate = denom > 0 ? (r.won / denom) * 100 : 0;
+    const winRate = r.created > 0 ? (r.won / r.created) * 100 : 0;
     return { ...r, winRate };
   });
 
