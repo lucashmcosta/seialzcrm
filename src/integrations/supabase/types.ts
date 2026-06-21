@@ -6968,60 +6968,6 @@ export type Database = {
         }
         Relationships: []
       }
-      viagi_csv_staging_2026_05_28: {
-        Row: {
-          ad_id: string
-          ad_name: string
-          adset_id: string
-          adset_name: string
-          campaign_id: string
-          campaign_name: string
-          created_time: string
-          email: string | null
-          form_id: string
-          lead_id: string
-          loaded_at: string
-          nome: string | null
-          phone_normalized: string | null
-          problema: string | null
-          telefone: string | null
-        }
-        Insert: {
-          ad_id: string
-          ad_name: string
-          adset_id: string
-          adset_name: string
-          campaign_id: string
-          campaign_name: string
-          created_time: string
-          email?: string | null
-          form_id: string
-          lead_id: string
-          loaded_at?: string
-          nome?: string | null
-          phone_normalized?: string | null
-          problema?: string | null
-          telefone?: string | null
-        }
-        Update: {
-          ad_id?: string
-          ad_name?: string
-          adset_id?: string
-          adset_name?: string
-          campaign_id?: string
-          campaign_name?: string
-          created_time?: string
-          email?: string | null
-          form_id?: string
-          lead_id?: string
-          loaded_at?: string
-          nome?: string | null
-          phone_normalized?: string | null
-          problema?: string | null
-          telefone?: string | null
-        }
-        Relationships: []
-      }
       webhook_field_mappings: {
         Row: {
           created_at: string | null
