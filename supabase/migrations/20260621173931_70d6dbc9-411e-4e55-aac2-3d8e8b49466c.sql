@@ -1,0 +1,1 @@
+DROP TABLE IF EXISTS public.viagi_csv_staging_2026_05_28;
