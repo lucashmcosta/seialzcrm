@@ -74,6 +74,8 @@ if (typeof window !== "undefined" && typeof navigator !== "undefined" && "servic
 
 createRoot(document.getElementById("root")!).render(
   <React.StrictMode>
-    <App />
+    <Sentry.ErrorBoundary fallback={<SentryFallback />} showDialog={false}>
+      <App />
+    </Sentry.ErrorBoundary>
   </React.StrictMode>
 );
