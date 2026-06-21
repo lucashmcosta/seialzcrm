@@ -57,6 +57,8 @@ const MobileSignIn = lazy(() => retryImport(() => import("./components/mobile/au
 // Public docs - load immediately
 import DocsIndex from "./pages/docs/DocsIndex";
 import DocsModule from "./pages/docs/DocsModule";
+import Health from "./pages/Health";
+import DevHealth from "./pages/DevHealth";
 const ApiDocs = lazy(() => retryImport(() => import("./pages/docs/ApiDocs")));
 
 
@@ -217,7 +219,11 @@ const App = () => (
         <Suspense fallback={<PageLoader />}>
         <Routes>
           <Route path="/" element={<LandingOrImpersonationFallback />} />
-          
+
+          {/* Health / monitoring */}
+          <Route path="/health" element={<Health />} />
+          <Route path="/dev/health" element={<DevHealth />} />
+
           {/* Public Documentation */}
           <Route path="/docs" element={<DocsIndex />} />
           <Route path="/docs/api" element={<ApiDocs />} />
