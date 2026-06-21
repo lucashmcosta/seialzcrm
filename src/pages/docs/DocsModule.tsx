@@ -1,11 +1,13 @@
 import { useParams, Link } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
+import DOMPurify from 'dompurify';
 import { supabase } from '@/integrations/supabase/client';
 import { Card } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Separator } from '@/components/ui/separator';
 import { ArrowLeft, BookOpen, Calendar, Tag } from '@phosphor-icons/react';
 import { useAuth } from '@/hooks/useAuth';
+
 
 export default function DocsModule() {
   const { module } = useParams();
@@ -153,9 +155,13 @@ export default function DocsModule() {
                 <div 
                   className="text-foreground"
                   dangerouslySetInnerHTML={{ 
-                    __html: documentation.content.replace(/\n/g, '<br />') 
+                    __html: DOMPurify.sanitize(
+                      documentation.content.replace(/\n/g, '<br />'),
+                      { USE_PROFILES: { html: true } }
+                    )
                   }} 
                 />
+
               </div>
             </article>
 

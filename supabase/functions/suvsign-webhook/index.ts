@@ -155,32 +155,39 @@ Deno.serve(async (req) => {
   const metadata = payload.data?.metadata || {};
   const { deal_id, contact_id, connector_id } = metadata;
 
-  // --- HMAC validation (optional, per-org) ---
-  if (connector_id) {
-    // Find org integration by connector_id in config_values
-    const { data: orgIntegrations } = await supabase
-      .from("organization_integrations")
-      .select("config_values")
-      .eq("is_enabled", true)
-      .filter("config_values->>connector_id", "eq", connector_id);
+  // --- HMAC validation (REQUIRED) ---
+  if (!connector_id) {
+    return new Response(
+      JSON.stringify({ error: "connector_id is required in metadata" }),
+      { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+    );
+  }
 
-    const orgConfig = orgIntegrations?.[0]?.config_values as any;
-    const webhookSecret = orgConfig?.webhook_secret;
+  const { data: orgIntegrations } = await supabase
+    .from("organization_integrations")
+    .select("config_values")
+    .eq("is_enabled", true)
+    .filter("config_values->>connector_id", "eq", connector_id);
 
-    if (webhookSecret) {
-      const signature = req.headers.get("x-webhook-signature") || "";
-      const valid = await verifyHmac(rawBody, signature, webhookSecret);
-      if (!valid) {
-        console.error("HMAC validation failed for connector_id:", connector_id);
-        return new Response(
-          JSON.stringify({ error: "Invalid signature" }),
-          {
-            status: 401,
-            headers: { ...corsHeaders, "Content-Type": "application/json" },
-          }
-        );
-      }
-    }
+  const orgConfig = orgIntegrations?.[0]?.config_values as any;
+  const webhookSecret = orgConfig?.webhook_secret;
+
+  if (!webhookSecret) {
+    console.error("No webhook_secret configured for connector_id:", connector_id);
+    return new Response(
+      JSON.stringify({ error: "Webhook secret not configured for this connector" }),
+      { status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+    );
+  }
+
+  const signature = req.headers.get("x-webhook-signature") || "";
+  const valid = await verifyHmac(rawBody, signature, webhookSecret);
+  if (!valid) {
+    console.error("HMAC validation failed for connector_id:", connector_id);
+    return new Response(
+      JSON.stringify({ error: "Invalid signature" }),
+      { status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+    );
   }
 
   // --- Find opportunity ---
@@ -247,6 +254,22 @@ Deno.serve(async (req) => {
         status: 400,
         headers: { ...corsHeaders, "Content-Type": "application/json" },
       }
+    );
+  }
+
+  // SSRF guard: restrict file_url to known SuvSign hosts
+  const ALLOWED_FILE_HOSTS = ["suvsign.com", "suvsign.com.br", "amazonaws.com"];
+  try {
+    const parsed = new URL(fileUrl);
+    if (parsed.protocol !== "https:") throw new Error("non-https file_url");
+    const host = parsed.hostname.toLowerCase();
+    const allowed = ALLOWED_FILE_HOSTS.some((h) => host === h || host.endsWith("." + h));
+    if (!allowed) throw new Error(`disallowed file_url host: ${host}`);
+  } catch (err) {
+    console.error("Rejected file_url:", fileUrl, err);
+    return new Response(
+      JSON.stringify({ error: "Invalid file_url" }),
+      { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
     );
   }
 
