@@ -37,11 +37,10 @@ serve(async (req) => {
     const { data: forms } = await admin
       .from("lead_forms")
       .select(
-        "id, organization_id, provider_form_id, provider_form_name, last_synced_lead_created_time, organization_integration_id, meta_lead_page_id",
+        "id, organization_id, provider_form_id, provider_form_name, last_synced_lead_created_time, organization_integration_id, meta_lead_page_id, consecutive_errors",
       )
       .eq("provider", "meta_lead_ads")
-      .eq("is_monitored", true)
-      .lt("consecutive_errors", 5);
+      .eq("is_monitored", true);
 
     if (!forms || forms.length === 0) return json({ success: true, processed: 0 });
 
@@ -49,6 +48,12 @@ serve(async (req) => {
     let totalLeads = 0;
 
     for (const form of forms) {
+      if ((form.consecutive_errors ?? 0) >= 5) {
+        console.warn(
+          `Form ${form.id} had ${form.consecutive_errors} consecutive errors; retrying instead of leaving it permanently stalled`,
+        );
+      }
+
       // Try advisory lock
       const { data: lockOk } = await admin.rpc("try_lead_form_polling_lock", {
         p_lead_form_id: form.id,
