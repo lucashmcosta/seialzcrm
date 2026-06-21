@@ -1,13 +1,11 @@
 import { useEffect, useState } from "react";
+import { supabase } from "@/integrations/supabase/client";
 
 declare const __SENTRY_RELEASE__: string;
 
 const SUPABASE_URL =
   (import.meta.env.VITE_SUPABASE_URL as string | undefined) ??
   "https://qvmtzfvkhkhkhdpclzua.supabase.co";
-const SUPABASE_ANON_KEY =
-  (import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY as string | undefined) ??
-  "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InF2bXR6ZnZraGtoa2hkcGNsenVhIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjQzODM3MzIsImV4cCI6MjA3OTk1OTczMn0.7uhE97klvxSwYrJMu_NYIaNCLBaIUhFNtcF2oRLYRUE";
 const HEALTH_URL = `${SUPABASE_URL}/functions/v1/health`;
 
 
@@ -29,6 +27,7 @@ export default function DevHealth() {
   const [remote, setRemote] = useState<HealthPayload | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
+  const [transport, setTransport] = useState<string>("supabase.functions.invoke");
 
   const release =
     typeof __SENTRY_RELEASE__ !== "undefined" ? __SENTRY_RELEASE__ : "seialz-crm@dev";
@@ -48,13 +47,13 @@ export default function DevHealth() {
     setLoading(true);
     setError(null);
     try {
-      const res = await fetch(HEALTH_URL, {
-        cache: "no-store",
-        headers: { apikey: SUPABASE_ANON_KEY, Authorization: `Bearer ${SUPABASE_ANON_KEY}` },
+      const { data, error: invokeError } = await supabase.functions.invoke<HealthPayload>("health", {
+        method: "GET",
       });
 
-      const json = (await res.json()) as HealthPayload;
-      setRemote(json);
+      if (invokeError) throw invokeError;
+      setRemote(data);
+      setTransport("supabase.functions.invoke");
     } catch (e) {
       setError((e as Error).message);
       setRemote(null);
@@ -117,18 +116,20 @@ export default function DevHealth() {
           {remote && (
             <div className="rounded-lg border border-border bg-card">
               <div className="flex items-center justify-between px-4 py-2.5 border-b border-border">
-                <span className="font-mono text-sm text-muted-foreground">status</span>
+                <span className="font-mono text-sm text-muted-foreground">backend</span>
                 <span
                   className={
                     remote.status === "ok"
-                      ? "text-green-500 font-mono text-sm font-semibold"
-                      : "text-red-500 font-mono text-sm font-semibold"
+                      ? "text-success font-mono text-sm font-semibold"
+                      : "text-destructive font-mono text-sm font-semibold"
                   }
                 >
-                  {remote.status}
+                  {remote.status === "ok" ? "ok" : "degraded"}
                 </span>
               </div>
               <dl className="divide-y divide-border">
+                <Row k="status" v={remote.status} />
+                <Row k="transport" v={transport} />
                 <Row k="release" v={remote.release} />
                 <Row k="environment" v={remote.environment} />
                 <Row k="timestamp" v={remote.timestamp} />
@@ -141,7 +142,7 @@ export default function DevHealth() {
         </section>
 
         <pre className="text-xs font-mono bg-muted text-muted-foreground rounded-lg p-4 overflow-x-auto">
-{JSON.stringify({ frontend, backend: remote, error }, null, 2)}
+{JSON.stringify({ frontend, backend: remote, transport, error }, null, 2)}
         </pre>
       </div>
     </div>
@@ -154,7 +155,7 @@ function Row({ k, v }: { k: string; v: unknown }) {
       <dt className="font-mono text-sm text-muted-foreground">{k}</dt>
       <dd className="font-mono text-sm">
         {typeof v === "boolean" ? (
-          <span className={v ? "text-green-500 font-semibold" : "text-red-500 font-semibold"}>
+          <span className={v ? "text-success font-semibold" : "text-destructive font-semibold"}>
             {String(v)}
           </span>
         ) : (
