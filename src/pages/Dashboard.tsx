@@ -425,17 +425,6 @@ export default function Dashboard() {
           </div>
         </DialogContent>
       </Dialog>
-
-      {/* Sentry test button — remove after verifying error capture */}
-      <button
-        type="button"
-        onClick={() => {
-          throw new Error('This is your first error!');
-        }}
-        className="fixed bottom-4 right-4 z-50 px-3 py-2 text-xs rounded-md bg-destructive text-destructive-foreground shadow-lg hover:opacity-90"
-      >
-        Break the world
-      </button>
     </Layout>
   );
 }
