@@ -43,7 +43,6 @@ if (dsn) {
       "localhost",
       /^https:\/\/.*\.lovable\.app/,
       /^https:\/\/seialz\.com/,
-      /^https:\/\/.*\.supabase\.co/,
     ],
 
     // Session Replay
