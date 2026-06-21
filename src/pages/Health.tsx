@@ -44,7 +44,11 @@ export default function Health() {
     let cancelled = false;
     (async () => {
       try {
-        const res = await fetch(HEALTH_URL, { cache: "no-store" });
+        const res = await fetch(HEALTH_URL, {
+          cache: "no-store",
+          headers: { apikey: SUPABASE_ANON_KEY, Authorization: `Bearer ${SUPABASE_ANON_KEY}` },
+        });
+
         const json = (await res.json()) as HealthPayload;
         if (cancelled) return;
         setPayload(json);
