@@ -21,10 +21,13 @@ const ENVIRONMENT = Deno.env.get("ENVIRONMENT") ?? "production";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
-  "Access-Control-Allow-Headers": "content-type, authorization",
+  "Access-Control-Allow-Headers":
+    "authorization, x-client-info, apikey, content-type, x-health-token",
   "Access-Control-Allow-Methods": "GET, OPTIONS",
+  "Access-Control-Max-Age": "86400",
   "Cache-Control": "no-store",
 };
+
 
 type CheckResult = { value: unknown; ok: boolean; critical: boolean };
 

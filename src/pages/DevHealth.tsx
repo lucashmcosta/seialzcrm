@@ -5,7 +5,11 @@ declare const __SENTRY_RELEASE__: string;
 const SUPABASE_URL =
   (import.meta.env.VITE_SUPABASE_URL as string | undefined) ??
   "https://qvmtzfvkhkhkhdpclzua.supabase.co";
+const SUPABASE_ANON_KEY =
+  (import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY as string | undefined) ??
+  "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InF2bXR6ZnZraGtoa2hkcGNsenVhIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjQzODM3MzIsImV4cCI6MjA3OTk1OTczMn0.7uhE97klvxSwYrJMu_NYIaNCLBaIUhFNtcF2oRLYRUE";
 const HEALTH_URL = `${SUPABASE_URL}/functions/v1/health`;
+
 
 type HealthPayload = {
   status: string;
@@ -44,7 +48,11 @@ export default function DevHealth() {
     setLoading(true);
     setError(null);
     try {
-      const res = await fetch(HEALTH_URL, { cache: "no-store" });
+      const res = await fetch(HEALTH_URL, {
+        cache: "no-store",
+        headers: { apikey: SUPABASE_ANON_KEY, Authorization: `Bearer ${SUPABASE_ANON_KEY}` },
+      });
+
       const json = (await res.json()) as HealthPayload;
       setRemote(json);
     } catch (e) {
