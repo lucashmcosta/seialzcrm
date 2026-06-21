@@ -48,7 +48,11 @@ export default function DevHealth() {
     setLoading(true);
     setError(null);
     try {
-      const res = await fetch(HEALTH_URL, { cache: "no-store" });
+      const res = await fetch(HEALTH_URL, {
+        cache: "no-store",
+        headers: { apikey: SUPABASE_ANON_KEY, Authorization: `Bearer ${SUPABASE_ANON_KEY}` },
+      });
+
       const json = (await res.json()) as HealthPayload;
       setRemote(json);
     } catch (e) {
