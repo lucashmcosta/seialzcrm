@@ -91,7 +91,7 @@ export default function DevHealth() {
                   <dt className="font-mono text-sm text-muted-foreground">{key}</dt>
                   <dd className="font-mono text-sm">
                     {typeof value === "boolean" ? (
-                      <span className={value ? "text-green-500 font-semibold" : "text-red-500 font-semibold"}>
+                      <span className={value ? "text-success font-semibold" : "text-destructive font-semibold"}>
                         {String(value)}
                       </span>
                     ) : (
@@ -109,7 +109,7 @@ export default function DevHealth() {
             Backend ({HEALTH_URL})
           </h2>
           {error && (
-            <div className="rounded-lg border border-red-500/40 bg-red-500/10 px-4 py-3 text-sm font-mono text-red-600">
+            <div className="rounded-lg border border-destructive/40 bg-destructive/10 px-4 py-3 text-sm font-mono text-destructive">
               error: {error}
             </div>
           )}
