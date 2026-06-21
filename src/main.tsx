@@ -32,27 +32,32 @@ if (typeof window !== "undefined") {
 }
 
 if (typeof window !== "undefined" && typeof navigator !== "undefined" && "serviceWorker" in navigator) {
-  const isInIframe = (() => {
-    try {
-      return window.self !== window.top;
-    } catch {
-      return true;
-    }
-  })();
-
-  const isPreviewHost = window.location.hostname.includes('id-preview--') || window.location.hostname.includes('lovableproject.com');
-
-  if (isInIframe || isPreviewHost) {
-    navigator.serviceWorker.getRegistrations().then(async (registrations) => {
-      if (registrations.length === 0) return;
-      await Promise.allSettled(registrations.map((registration) => registration.unregister()));
-
-      if ('caches' in window) {
-        const keys = await caches.keys();
-        await Promise.allSettled(keys.map((key) => caches.delete(key)));
+  // Service workers in this project are kill-switches (see public/sw.js).
+  // On EVERY load — preview, iframe, and production — force the browser to
+  // check for a SW update so returning clients pick up the new kill-switch
+  // (which then unregisters itself and flushes caches). This evicts stale
+  // bundles that caused the "Cannot access 'Lt' before initialization" TDZ
+  // on previously deployed builds.
+  navigator.serviceWorker.getRegistrations().then(async (registrations) => {
+    if (registrations.length === 0) return;
+    await Promise.allSettled(registrations.map(async (registration) => {
+      try {
+        await registration.update();
+      } catch {
+        /* ignore */
       }
-    }).catch(() => {});
-  }
+      try {
+        await registration.unregister();
+      } catch {
+        /* ignore */
+      }
+    }));
+
+    if ('caches' in window) {
+      const keys = await caches.keys();
+      await Promise.allSettled(keys.map((key) => caches.delete(key)));
+    }
+  }).catch(() => {});
 }
 
 createRoot(document.getElementById("root")!).render(
