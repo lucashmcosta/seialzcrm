@@ -11,13 +11,27 @@ export default defineConfig(({ mode }) => {
   const sentryProject = process.env.SENTRY_PROJECT;
   const sentryEnabled = Boolean(sentryAuthToken && sentryOrg && sentryProject);
 
-  // Release name: explicit SENTRY_RELEASE wins; otherwise derive a
-  // deterministic build-time name (timestamp). Same value is:
-  //   1. passed to sentryVitePlugin (creates the release + uploads maps)
-  //   2. injected into the bundle so Sentry.init() tags events with it
-  const release =
-    process.env.SENTRY_RELEASE ||
-    `seialz-crm@${new Date().toISOString().replace(/[:.]/g, "-")}`;
+  // Release name resolution (priority):
+  //   1. SENTRY_RELEASE (if set and not an unexpanded "$VAR" literal)
+  //   2. seialz-crm@<VERCEL_GIT_COMMIT_SHA>
+  //   3. seialz-crm@<VERCEL_GIT_COMMIT_REF>-<timestamp>
+  //   4. seialz-crm@<timestamp>
+  // Same value is passed to sentryVitePlugin, injected into the bundle via
+  // __SENTRY_RELEASE__, and used by Sentry.init() at runtime.
+  const explicitRelease = process.env.SENTRY_RELEASE;
+  const timestamp = new Date().toISOString().replace(/[:.]/g, "-");
+  let release: string;
+  if (explicitRelease && !explicitRelease.includes("$")) {
+    release = explicitRelease;
+  } else if (process.env.VERCEL_GIT_COMMIT_SHA) {
+    release = `seialz-crm@${process.env.VERCEL_GIT_COMMIT_SHA}`;
+  } else if (process.env.VERCEL_GIT_COMMIT_REF) {
+    release = `seialz-crm@${process.env.VERCEL_GIT_COMMIT_REF}-${timestamp}`;
+  } else {
+    release = `seialz-crm@${timestamp}`;
+  }
+  // eslint-disable-next-line no-console
+  console.log("[sentry] release:", release);
 
   return {
     server: {
