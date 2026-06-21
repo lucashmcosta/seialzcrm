@@ -92,6 +92,30 @@ serve(async (req) => {
   }
 
   try {
+    // --- AuthN: validate caller JWT ---
+    const authHeader = req.headers.get("Authorization") || req.headers.get("authorization");
+    if (!authHeader?.startsWith("Bearer ")) {
+      return new Response(
+        JSON.stringify({ error: "Unauthorized" }),
+        { status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
+    }
+    const callerToken = authHeader.replace("Bearer ", "").trim();
+
+    const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
+    const supabaseAnon = Deno.env.get("SUPABASE_ANON_KEY")!;
+    const supabaseKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
+
+    const supabaseAuth = createClient(supabaseUrl, supabaseAnon);
+    const { data: claimsData, error: claimsError } = await supabaseAuth.auth.getClaims(callerToken);
+    if (claimsError || !claimsData?.claims?.sub) {
+      return new Response(
+        JSON.stringify({ error: "Unauthorized" }),
+        { status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
+    }
+    const authUserId = claimsData.claims.sub as string;
+
     const formData = await req.formData();
     const file = formData.get("file") as File | null;
     const organizationId = formData.get("organizationId") as string;
@@ -106,11 +130,38 @@ serve(async (req) => {
       );
     }
 
-    const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
-    const supabaseKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
     const supabase = createClient(supabaseUrl, supabaseKey);
 
-    console.log(`📤 Importing file: ${file.name} (${file.type}, ${file.size} bytes)`);
+    // --- AuthZ: caller must belong to the supplied organization ---
+    const { data: userRow } = await supabase
+      .from("users")
+      .select("id")
+      .eq("auth_user_id", authUserId)
+      .maybeSingle();
+
+    if (!userRow?.id) {
+      return new Response(
+        JSON.stringify({ error: "Forbidden: user profile not found" }),
+        { status: 403, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
+    }
+
+    const { data: membership } = await supabase
+      .from("user_organizations")
+      .select("organization_id")
+      .eq("user_id", userRow.id)
+      .eq("organization_id", organizationId)
+      .eq("is_active", true)
+      .maybeSingle();
+
+    if (!membership) {
+      return new Response(
+        JSON.stringify({ error: "Forbidden: not a member of this organization" }),
+        { status: 403, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
+    }
+
+    console.log(`📤 Importing file: ${file.name} (${file.type}, ${file.size} bytes) for user ${authUserId} / org ${organizationId}`);
 
     // 1. Upload to storage
     const fileName = `${Date.now()}-${file.name.replace(/[^a-zA-Z0-9.-]/g, "_")}`;

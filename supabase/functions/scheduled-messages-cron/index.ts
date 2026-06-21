@@ -1,5 +1,6 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "jsr:@supabase/supabase-js@2";
+import { validateServiceRoleAuth } from "../_shared/auth.ts";
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -10,6 +11,16 @@ serve(async (req) => {
   // Handle CORS preflight
   if (req.method === 'OPTIONS') {
     return new Response(null, { headers: corsHeaders });
+  }
+
+  // AuthN: only service_role JWT (e.g. pg_cron / internal schedulers) may invoke this.
+  const auth = validateServiceRoleAuth(req);
+  if (!auth.ok) {
+    console.warn('[CRON] Unauthorized invocation:', auth.error);
+    return new Response(
+      JSON.stringify({ error: 'Unauthorized', reason: auth.error }),
+      { status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+    );
   }
 
   try {
