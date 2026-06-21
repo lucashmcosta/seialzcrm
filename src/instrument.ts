@@ -42,6 +42,7 @@ if (dsn) {
     tracePropagationTargets: [
       "localhost",
       /^https:\/\/.*\.lovable\.app/,
+      /^https:\/\/.*\.vercel\.app/,
       /^https:\/\/seialz\.com/,
     ],
 
