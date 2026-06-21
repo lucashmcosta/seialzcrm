@@ -7,7 +7,9 @@ import {
 } from "react-router-dom";
 import * as Sentry from "@sentry/react";
 
-const dsn = import.meta.env.VITE_SENTRY_DSN as string | undefined;
+const dsn =
+  (import.meta.env.VITE_SENTRY_DSN as string | undefined) ??
+  "https://4c1f6fa2b1b8ecf9811ac1c34bc51833@o4510769203118080.ingest.us.sentry.io/4511604734164992";
 
 if (dsn) {
   Sentry.init({
