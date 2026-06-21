@@ -11,11 +11,17 @@ const dsn =
   (import.meta.env.VITE_SENTRY_DSN as string | undefined) ??
   "https://4c1f6fa2b1b8ecf9811ac1c34bc51833@o4510769203118080.ingest.us.sentry.io/4511604734164992";
 
+// Injected by vite.config.ts via `define`. Falls back to a dev marker so
+// events fired in `bun dev` are still tagged with something readable.
+declare const __SENTRY_RELEASE__: string;
+const release =
+  typeof __SENTRY_RELEASE__ !== "undefined" ? __SENTRY_RELEASE__ : "seialz-crm@dev";
+
 if (dsn) {
   Sentry.init({
     dsn,
     environment: import.meta.env.MODE,
-    release: import.meta.env.VITE_APP_VERSION as string | undefined,
+    release,
 
     integrations: [
       Sentry.reactRouterV6BrowserTracingIntegration({
