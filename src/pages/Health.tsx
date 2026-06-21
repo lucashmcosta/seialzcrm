@@ -1,30 +1,71 @@
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
 
 /**
- * Public health endpoint for Better Stack / Uptime monitors.
+ * Public health endpoint surface for monitoring (Better Stack / UptimeRobot).
  *
- * LIMITATION: This is a frontend-only Vite SPA hosted by Lovable — there is no
- * server route to return a real JSON response with proper Content-Type headers.
- * Monitors should be configured with:
- *   - Method: GET
- *   - Expected status: 200
- *   - Expected body keyword: "ok"
+ * Canonical monitoring URL is the Supabase edge function:
+ *   https://<project>.supabase.co/functions/v1/health
+ * It returns structured JSON with proper Content-Type and HTTP 200/503.
  *
- * The page renders the literal string "ok" as the first/only visible content
- * and exposes a machine-readable payload via a <script type="application/json">
- * tag with id="health-payload" for monitors that can parse the DOM.
+ * This SPA page mirrors the same payload so monitors hitting /health on the
+ * web app domain still get a readable response. It:
+ *   - Fetches the edge function payload
+ *   - Renders the raw JSON as the page body
+ *   - Exposes <script type="application/json" id="health-payload"> for parsers
+ *   - Sets document.title to "ok" or "degraded"
+ *
+ * Note: a SPA cannot return non-200 HTTP. For real status-code-based alerts,
+ * point the monitor at the edge function URL.
  */
+
+const SUPABASE_URL =
+  (import.meta.env.VITE_SUPABASE_URL as string | undefined) ??
+  "https://qvmtzfvkhkhkhdpclzua.supabase.co";
+const HEALTH_URL = `${SUPABASE_URL}/functions/v1/health`;
+
+type HealthPayload = {
+  status: string;
+  app: string;
+  release: string;
+  environment: string;
+  timestamp: string;
+  checks: Record<string, unknown>;
+};
+
 export default function Health() {
-  const payload = {
-    status: "ok",
-    app: "seialz-crm",
-    environment: import.meta.env.MODE,
-    timestamp: new Date().toISOString(),
-  };
+  const [payload, setPayload] = useState<HealthPayload | null>(null);
+  const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    document.title = "ok";
+    let cancelled = false;
+    (async () => {
+      try {
+        const res = await fetch(HEALTH_URL, { cache: "no-store" });
+        const json = (await res.json()) as HealthPayload;
+        if (cancelled) return;
+        setPayload(json);
+        document.title = json.status === "ok" ? "ok" : json.status;
+      } catch (e) {
+        if (cancelled) return;
+        const fallback: HealthPayload = {
+          status: "degraded",
+          app: "seialz-crm",
+          release: "unknown",
+          environment: import.meta.env.MODE,
+          timestamp: new Date().toISOString(),
+          checks: { frontend: "ok", health_endpoint: `error: ${(e as Error).message}` },
+        };
+        setPayload(fallback);
+        setError((e as Error).message);
+        document.title = "degraded";
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
   }, []);
+
+  const text = payload ? JSON.stringify(payload, null, 2) : "loading";
 
   return (
     <>
@@ -34,16 +75,26 @@ export default function Health() {
           margin: 0,
           padding: "1rem",
           fontFamily: "monospace",
-          fontSize: "14px",
+          fontSize: "13px",
+          whiteSpace: "pre-wrap",
         }}
       >
-        ok
+        {text}
       </pre>
-      <script
-        type="application/json"
-        id="health-payload"
-        dangerouslySetInnerHTML={{ __html: JSON.stringify(payload) }}
-      />
+      {payload && (
+        <script
+          type="application/json"
+          id="health-payload"
+          dangerouslySetInnerHTML={{ __html: JSON.stringify(payload) }}
+        />
+      )}
+      {error && (
+        <script
+          type="application/json"
+          id="health-error"
+          dangerouslySetInnerHTML={{ __html: JSON.stringify({ error }) }}
+        />
+      )}
     </>
   );
 }
