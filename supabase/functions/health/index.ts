@@ -22,10 +22,11 @@ const ENVIRONMENT = Deno.env.get("ENVIRONMENT") ?? "production";
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
   "Access-Control-Allow-Headers":
-    "authorization, x-client-info, apikey, content-type, x-health-token",
+    "authorization, x-client-info, apikey, content-type, x-health-token, sentry-trace, baggage, x-supabase-api-version",
   "Access-Control-Allow-Methods": "GET, OPTIONS",
   "Access-Control-Max-Age": "86400",
   "Cache-Control": "no-store",
+  "Vary": "Origin, Access-Control-Request-Headers",
 };
 
 
