@@ -1,7 +1,19 @@
+import "./instrument";
+
 import React from 'react';
 import { createRoot } from "react-dom/client";
+import * as Sentry from "@sentry/react";
 import App from "./App.tsx";
 import "./index.css";
+
+function SentryFallback() {
+  return (
+    <div style={{ padding: 24, fontFamily: "system-ui, sans-serif" }}>
+      <h1>Algo deu errado</h1>
+      <p>O erro foi reportado. Tente recarregar a página.</p>
+    </div>
+  );
+}
 
 
 
