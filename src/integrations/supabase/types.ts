@@ -7466,6 +7466,10 @@ export type Database = {
       current_user_id: { Args: never; Returns: string }
       current_user_managed_org_ids: { Args: never; Returns: string[] }
       current_user_org_ids: { Args: never; Returns: string[] }
+      fn_build_opportunity_won_payload: {
+        Args: { _opportunity_id: string }
+        Returns: Json
+      }
       fn_capi_dispatch_event: {
         Args: {
           p_contact_id?: string
