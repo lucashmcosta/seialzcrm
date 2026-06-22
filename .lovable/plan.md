@@ -1,83 +1,67 @@
-## Causa imediata
+## Diagnóstico do evento 7568163063
 
-`NotSupportedError` (DOMException 9) ocorre quando `HTMLAudioElement.play()` é chamado sem fonte válida ou com MIME que o navegador não decodifica. Hoje:
+**Extras do Sentry (handled warning — hardening funcionou):**
+- `audio_error_code: 4` → `MEDIA_ERR_SRC_NOT_SUPPORTED`
+- `audio_network_state: 3` (`NETWORK_NO_SOURCE`), `audio_ready_state: 0`
+- `src_host: qvmtzfvkhkhkhdpclzua.supabase.co`, `proxied: false`
+- Chrome reporta `can_play_audio_ogg_opus: "probably"` → suporte ao codec existe
+- `media_type: audio`, `component: AudioMessagePlayer`
 
-- `AudioMessagePlayer` chama `audio.play()` sem `.catch()` → vira `unhandledrejection` no Sentry.
-- `CallRecordingPlayer` tem o mesmo padrão.
-- Consumidores repassam qualquer item de `media_urls`, inclusive vazio/`null`.
+**Mensagem:** `48da5f6c-4a05-40a6-9394-d5e4aa45f4b6` — outbound, gravada no CRM, arquivo `1782140110039-2dl8tb.ogg`.
 
-## A. Hardening dos players
+**O que o servidor entrega (verificado via curl):**
+- `HTTP 200`, `content-type: audio/ogg`, 103 KB, magic bytes `OggS … OpusHead` corretos.
 
-### `src/components/whatsapp/AudioMessagePlayer.tsx`
-- `togglePlay`: `await audio.play()` em `try/catch`. No catch: `hasError=true`, `isPlaying=false`, cancela `rAF`, dispara logger handled (C). Não relança.
-- `onError` do `<audio>`: também seta `isPlaying=false` e cancela `rAF`; dispara o mesmo logger.
-- Guard de `src`: se falsy, não parseável por `new URL(src)` ou scheme não-http(s), renderiza só "Não foi possível carregar este áudio." e não monta `<audio>`/botão.
-- Aviso de erro substitui o waveform (sem botão fantasma).
+**O que o ffmpeg diz sobre o arquivo:**
+```
+[ogg] Packet processing failed: Invalid data found when processing input
+[ogg] Error during demuxing
+```
+Testei mais 4 áudios outbound recentes do mesmo dia → **todos apresentam o mesmo erro de demux**. Não é um arquivo específico corrompido — **todo áudio outbound gravado pelo CRM está sendo gerado fora do padrão OGG/Opus**.
 
-### `src/components/calls/CallRecordingPlayer.tsx`
-- Mesmo guard de `recordingUrl`.
-- Listeners `onerror` no `Audio` setam estado de erro local.
-- `play().catch(...)` com mesmo tratamento e logger handled.
+**Causa raiz confirmada no código (`src/components/whatsapp/AudioRecorder.tsx`):**
+1. Linhas 57‑73: usa `opus-media-recorder` (polyfill JS) para produzir OGG/Opus. O polyfill gera um stream "good enough" — WhatsApp e a maioria dos browsers aceitam, mas o container não é estritamente conforme (faltam/erram páginas após `OpusHead`).
+2. Linhas 67‑73 (fallback nativo): se o polyfill falha, usa `MediaRecorder` nativo que no Chrome/Mac normalmente devolve **WebM/Opus**.
+3. Linha 87: independentemente do que o recorder produziu, embrulha os chunks em `new Blob(..., { type: 'audio/ogg;codecs=opus' })` — ou seja, **bytes WebM podem ser rotulados como OGG** no caminho fallback, gerando arquivos definitivamente quebrados.
 
-## B. Diagnóstico da causa raiz
+Chrome 145 é mais rigoroso que versões anteriores e ocasionalmente rejeita esses arquivos com `code=4` em vez de tentar tocar.
 
-Via `supabase--read_query`:
-1. Amostra de últimos 200 `messages` com `media_type='audio'` ou `media_urls` não vazio: `id, thread_id, media_type, media_urls, content, sent_at, direction, whatsapp_status, error_message`.
-2. Contagens: `media_urls` `NULL`/`[]`/com `''`; hosts distintos (`api.twilio.com` vs `media.whatsapp.net` vs Supabase Storage vs outros); sem extensão reconhecida; `audio` com `.oga/.opus`/sem extensão.
-3. Conferir a mensagem do Sentry (thread `5efef264-d706-4a78-9108-97518477e7a7`): `media_urls`/`media_type` reais.
+## Resposta às perguntas em aberto
 
-Resultado define D.
+**O hardening resolve?** Resolve o sintoma para o usuário (mostra estado de erro + download em vez de quebrar) e elimina o `unhandledrejection` no Sentry. Mas **não resolve a causa**: os arquivos `.ogg` outbound continuam tecnicamente inválidos, o que vai gerar ruído contínuo de warnings handled e, eventualmente, perda de funcionalidade de áudio no WhatsApp se a Meta apertar a validação.
 
-## C. Logging controlado (handled warning)
+**Precisa de correção no ingestor/proxy/MIME?** O proxy/MIME estão corretos. O problema está **no ingestor outbound (o próprio recorder no browser)**.
 
-`src/lib/audioErrorReport.ts` com `reportAudioFailure(ctx)`:
-- `import('@sentry/react')` dinâmico; fallback `console.warn`.
-- `Sentry.captureMessage('Audio playback failed', { level: 'warning', extra: ctx })`.
-- Contexto:
-  - `component`
-  - `message_id`, `thread_id` (opcionais)
-  - `media_type`
-  - `src_present: boolean`
-  - `src_host` (só `URL.host`, nunca path/query)
-  - `audio_error_code` (`audio.error?.code`)
-  - `audio_network_state`, `audio_ready_state`
-  - **Testes reais de MIME** (`audio.canPlayType(...)`):
-    - `audio/ogg; codecs="opus"`
-    - `audio/ogg`
-    - `audio/mpeg`
-    - `audio/mp4`
-    - `audio/wav`
-  - `proxied: boolean` (host == projeto Supabase + path inclui `twilio-media-proxy`)
-  - `error_name`, `error_message` do catch.
+## Plano de correção definitiva
 
-Estender props de `AudioMessagePlayer` com `messageId?`/`threadId?`/`mediaType?`; passá-las em `ContactMessages`, `InboxConversationTimeline`, `WhatsAppChat`, `MessagesList`, `MobileMessagesList`.
+### 1. Saneamento do `AudioRecorder.tsx` (frontend)
+- Remover o `Blob({ type: 'audio/ogg;codecs=opus' })` hardcoded no `onstop` (linha 87). Usar `recorder.mimeType` real (o que o recorder de fato produziu).
+- Padronizar a extensão e o `content-type` do upload com o `mimeType` real:
+  - Polyfill produziu `audio/ogg;codecs=opus` → upload `.ogg`
+  - Fallback nativo produziu `audio/webm;codecs=opus` → upload `.webm`
+- Garantir que o nome do arquivo e o `media_type` no insert da mensagem refletem isso.
 
-## D. Correção estrutural (condicional a B)
+### 2. Re-encode server-side para o caminho WhatsApp outbound (Railway/edge)
+- Antes de enviar para Twilio/Meta, passar o arquivo recém-uploadado por um conversor (`ffmpeg -i in -c:a libopus -f ogg out.ogg`) para garantir um OGG/Opus 100% conforme.
+- Sobrescrever o objeto no Storage ou salvar a versão "clean" e atualizar `media_urls`.
+- Isso resolve tanto o playback no CRM quanto a entrega futura para a Meta Cloud (que está mais estrita que o sandbox Twilio).
 
-- **`media_urls` com `''`/`null`** → corrigir ingestor (Railway/edge function) para não inserir entradas vazias; UI já protegida por A.
-- **Twilio expirado/401** → garantir uso de `getProxiedMediaUrl` em todos os pontos (auditar consumidores).
-- **WhatsApp `.ogg/opus`** → renderizar com `<source type="audio/ogg">`; expor download fallback no `AudioMessagePlayer` quando `hasError`; se Safari for relevante, abrir tarefa de conversão server-side.
-- **Supabase Storage privado** → usar signed URL com TTL adequado.
-- **CORS** → ajustar no proxy/origem.
+### 3. Backfill opcional (decidir depois de 1 + 2)
+- Job único que percorre os áudios outbound corrompidos dos últimos N dias e re-encoda via ffmpeg.
+- Custo baixo, melhora UX de reproduções históricas.
 
-Reporto a causa real após B e proponho fix definitivo (mesmo PR ou follow-up).
+### 4. Validação
+- Após (1): gravar áudio no CRM, baixar do Storage, rodar `ffmpeg -i ... -f null -` → zero erros de demux.
+- Após (2): mesmo teste no arquivo entregue ao WhatsApp + verificar status `delivered/read`.
+- Monitorar Sentry 24‑48h: warning "Audio playback failed" com `audio_error_code: 4` deve cair para próximo de zero.
 
-## E. Validação
+## Escopo desta entrega (próximo build mode)
 
-1. Áudio `.mp3` válido → toca.
-2. `media_urls=['']` → aviso, sem clique, sem erro Sentry.
-3. URL 404 → aviso + warning handled.
-4. MIME desconhecido (`.bin`) → idem.
-5. WhatsApp `.ogg` → toca; senão, warning com `can_play_audio_ogg_opus` para classificar.
-6. `CallRecordingPlayer` inválido → mesmo comportamento.
+Só o **item 1** (frontend recorder). É o ponto cirúrgico que para de gerar novos arquivos quebrados e é puramente UI/presentation, alinhado com a regra de não misturar com backend.
 
-Aceite:
-- Nenhum `unhandledrejection NotSupportedError` `handled:no` no Sentry.
-- Estado de erro sempre claro.
-- Warning Sentry com contexto suficiente para classificar causa.
-- Build OK; sem impacto em UI/CRM além dos players.
+Os itens 2 e 3 (Railway/edge re-encode + backfill) viram **follow-up separado** porque mexem em ingestor/worker, fora do escopo do fix de áudio do frontend.
 
-## Fora do escopo
-- Reescrever pipeline de ingestão.
-- Conversão server-side de codec (eventual follow-up).
-- Mudanças visuais nos players além do estado de erro.
+Se confirmar, em build mode eu:
+- Edito `src/components/whatsapp/AudioRecorder.tsx` para usar o `mimeType` real do recorder no Blob, no nome do arquivo e no upload.
+- Não toco em nenhum outro arquivo.
+- Documento o follow-up de re-encode server-side em `.lovable/plan.md`.
