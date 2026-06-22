@@ -888,25 +888,23 @@ export default function OpportunitiesKanban() {
         </div>
 
         <div data-filters-scroll className="flex-1 overflow-y-auto px-6 py-5 space-y-5">
-          {permissions.viewAllOpportunities && (
-            <div className="space-y-2">
-              <label className="text-sm font-medium">Responsável</label>
-              <MultiSelectFilter
-                placeholder="Todos"
-                selected={filterOwners}
-                onChange={setFilterOwners}
-                options={[
-                  { value: 'none', label: 'Sem responsável' },
-                  ...(userProfile?.id
-                    ? [{ value: userProfile.id, label: 'Meus' } as MultiSelectOption]
-                    : []),
-                  ...users
-                    .filter((u) => u.id !== userProfile?.id)
-                    .map<MultiSelectOption>((u) => ({ value: u.id, label: u.full_name })),
-                ]}
-              />
-            </div>
-          )}
+          <div className="space-y-2">
+            <label className="text-sm font-medium">Responsável</label>
+            <MultiSelectFilter
+              placeholder="Todos"
+              selected={filterOwners}
+              onChange={setFilterOwners}
+              options={[
+                { value: 'none', label: 'Sem responsável' },
+                ...(userProfile?.id
+                  ? [{ value: userProfile.id, label: 'Meus' } as MultiSelectOption]
+                  : []),
+                ...users
+                  .filter((u) => u.id !== userProfile?.id)
+                  .map<MultiSelectOption>((u) => ({ value: u.id, label: u.full_name })),
+              ]}
+            />
+          </div>
 
           {stages.length > 0 && (
             <div className="space-y-2">
