@@ -359,7 +359,7 @@ export function WhatsAppChat({ contactId, threadId: initialThreadId, onThreadCre
           if (mediaType === 'audio' || rawUrl.match(/\.(ogg|mp3|wav|m4a)$/i)) {
             return <AudioMessagePlayer key={i} src={url}
               messageId={message.id}
-              threadId={message.thread_id}
+              threadId={(message as any).thread_id}
               mediaType={mediaType}
               timestamp={isAudioOnly ? formatDistanceToNow(new Date(message.sent_at), { addSuffix: true, locale: dateLocale }) : undefined}
               statusIcon={isAudioOnly && msgIsOutbound ? renderStatusIcon(message.whatsapp_status) : undefined}

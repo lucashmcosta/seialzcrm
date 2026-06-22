@@ -1721,7 +1721,7 @@ function DesktopMessagesList() {
                                             const audioTimestamp = `${senderLabel}${timeStr}`;
                                             return <AudioMessagePlayer key={i} src={url}
                                               messageId={message.id}
-                                              threadId={message.thread_id}
+                                              threadId={(message as any).thread_id}
                                               mediaType={message.media_type}
                                               timestamp={isAudioOnly ? audioTimestamp : undefined}
                                               statusIcon={isAudioOnly && isOutbound ? renderStatusIcon(message.whatsapp_status) : undefined}

@@ -957,7 +957,7 @@ export function MobileMessagesList() {
                                       const isAudioOnly = message.media_type === 'audio' && !message.content;
                                       return <AudioMessagePlayer key={i} src={url}
                                         messageId={message.id}
-                                        threadId={message.thread_id}
+                                        threadId={(message as any).thread_id}
                                         mediaType={message.media_type}
                                         timestamp={isAudioOnly ? new Date(message.sent_at).toLocaleTimeString(locale, { hour: '2-digit', minute: '2-digit', hour12: false }) : undefined}
                                         statusIcon={isAudioOnly && isOutbound ? renderStatusIcon(message.whatsapp_status) : undefined}

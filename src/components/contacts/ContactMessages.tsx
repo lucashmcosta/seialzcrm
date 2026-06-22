@@ -537,7 +537,7 @@ export function ContactMessages({ contactId, opportunityId }: ContactMessagesPro
         {message.media_urls.map((rawUrl, i) => {
           const url = getProxiedMediaUrl(rawUrl, organization?.id, accessToken);
           if (message.media_type === 'audio' || rawUrl.match(/\.(ogg|mp3|wav|m4a)$/i)) {
-            return <AudioMessagePlayer key={i} src={url} messageId={message.id} threadId={message.thread_id} mediaType={message.media_type} />;
+            return <AudioMessagePlayer key={i} src={url} messageId={message.id} threadId={(message as any).thread_id} mediaType={message.media_type} />;
           }
           if (message.media_type === 'video' || rawUrl.match(/\.(mp4|mov|webm|avi)$/i)) {
             return (
