@@ -194,14 +194,27 @@ export function NammuxDialog({ open, onOpenChange, integration, orgIntegration: 
           .eq("id", orgIntegration.id);
         if (error) throw error;
       } else {
-        const { data: userRes } = await supabase.auth.getUser();
+        const { data: authRes } = await supabase.auth.getUser();
+        const authUid = authRes?.user?.id;
+        let internalUserId: string | null = null;
+        if (authUid) {
+          const { data: internal } = await supabase
+            .from("users")
+            .select("id")
+            .eq("auth_user_id", authUid)
+            .maybeSingle();
+          internalUserId = internal?.id ?? null;
+        }
+        if (!internalUserId) {
+          throw new Error("Usuário interno não encontrado para esta conta.");
+        }
         const { error } = await supabase.from("organization_integrations").insert({
           organization_id: organization.id,
           integration_id: integration.id,
           is_enabled: form.enabled,
           config_values,
           connected_at: new Date().toISOString(),
-          connected_by_user_id: userRes?.user?.id,
+          connected_by_user_id: internalUserId,
         } as never);
         if (error) throw error;
       }
