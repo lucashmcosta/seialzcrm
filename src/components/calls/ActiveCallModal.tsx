@@ -104,7 +104,7 @@ export function ActiveCallModal({
 
       await supabase
         .from('calls')
-        .update(updateData)
+        .update(updateData as never)
         .eq('id', callIdRef.current);
         
       console.log('Call record updated:', updateData);

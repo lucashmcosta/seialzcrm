@@ -384,7 +384,7 @@ export function MobileMessagesList() {
     if (thread.needs_human_attention && !thread.assigned_user_id) {
       updates.first_human_response_at = new Date().toISOString();
     }
-    await supabase.from('message_threads').update(updates).eq('id', threadId);
+    await supabase.from('message_threads').update(updates as never).eq('id', threadId);
   };
 
   const handleTakeOver = async (threadId: string) => {

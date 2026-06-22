@@ -114,7 +114,7 @@ export function EditUserDialog({ open, onOpenChange, user, permissionProfiles, o
       if (Object.keys(updates).length > 0) {
         const { error: memErr } = await supabase
           .from('user_organizations')
-          .update(updates)
+          .update(updates as never)
           .eq('id', user.membership_id);
         if (memErr) throw memErr;
       }

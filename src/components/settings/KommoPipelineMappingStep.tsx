@@ -120,7 +120,7 @@ export function KommoPipelineMappingStep({
           organization_id: organization.id,
           name: newStageName.trim(),
           order_index: maxOrder + 1,
-          stage_type: 'custom',
+          type: 'custom',
         })
         .select()
         .single();

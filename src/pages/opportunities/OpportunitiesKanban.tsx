@@ -1097,7 +1097,7 @@ export default function OpportunitiesKanban() {
                               ref={provided.innerRef}
                               {...provided.draggableProps}
                               {...provided.dragHandleProps}
-                              style={provided.draggableProps.style}
+                              style={provided.draggableProps.style as React.CSSProperties}
                               className={snapshot.isDragging ? 'opacity-60' : ''}
                             >
                               <SeialzOpportunityCard
@@ -1442,7 +1442,7 @@ export default function OpportunitiesKanban() {
                                       ref={provided.innerRef}
                                       {...provided.draggableProps}
                                       {...provided.dragHandleProps}
-                                      style={provided.draggableProps.style}
+                                      style={provided.draggableProps.style as React.CSSProperties}
                                       className={snapshot.isDragging ? 'opacity-50' : ''}
                                     >
                                       <OpportunityCard

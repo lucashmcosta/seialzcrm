@@ -123,7 +123,7 @@ export function RoundRobinSettings() {
     setSaving(true);
     const { error } = await supabase
       .from('organizations')
-      .update({ [key]: value })
+      .update({ [key]: value } as never)
       .eq('id', organization.id);
     setSaving(false);
     if (error) {
