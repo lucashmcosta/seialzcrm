@@ -30,6 +30,7 @@ import {
 } from '@phosphor-icons/react';
 import { WhatsAppTemplateSelector } from '@/components/whatsapp/WhatsAppTemplateSelector';
 import { AudioRecorder } from '@/components/whatsapp/AudioRecorder';
+import { audioBlobToFile } from '@/lib/audioBlobToFile';
 import { MediaUploadButton } from '@/components/whatsapp/MediaUploadButton';
 import { MediaPreviewDialog } from '@/components/whatsapp/MediaPreviewDialog';
 import { AudioMessagePlayer } from '@/components/whatsapp/AudioMessagePlayer';
