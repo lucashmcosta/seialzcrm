@@ -82,7 +82,7 @@ export const nammuxSendOpportunityWonHandler: Handler = async (ctx): Promise<Han
     "X-Seialz-Timestamp": timestamp,
     "X-Seialz-Event-Id": ctx.event.id,
     "X-Seialz-Event-Type": ctx.event.event_type,
-    "X-Seialz-Idempotency-Key": envelope.idempotency_key,
+    "X-Seialz-Idempotency-Key": eventIdemKey,
     "X-Seialz-Organization-Id": ctx.event.organization_id,
     "X-Trace-Id": ctx.event.id,
     "User-Agent": "Seialz-Integration-Worker/1.0",
