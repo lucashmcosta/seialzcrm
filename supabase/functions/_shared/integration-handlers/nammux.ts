@@ -63,16 +63,15 @@ export const nammuxSendOpportunityWonHandler: Handler = async (ctx): Promise<Han
     };
   }
 
+  const eventIdemKey = ((ctx.event as unknown as { idempotency_key?: string }).idempotency_key ?? "").toString();
   const envelope = {
     event_id: ctx.event.id,
     event_type: ctx.event.event_type,
-    idempotency_key: ctx.job.idempotency_key.replace(/:[0-9a-f-]{36}$/i, ""), // strip subscription suffix -> evento idem key
+    idempotency_key: eventIdemKey,
     organization_id: ctx.event.organization_id,
     occurred_at: ctx.event.occurred_at,
     data: ctx.event.payload,
   };
-  // Garante chave estável idêntica ao integration_events.idempotency_key.
-  // (fn_fanout_event concatena ":<subscription_id>"; removemos pra usar a do evento.)
   const rawBody = JSON.stringify(envelope);
   const timestamp = Math.floor(Date.now() / 1000).toString();
   const signature = await hmacSha256Hex(secret, `${timestamp}.${rawBody}`);
