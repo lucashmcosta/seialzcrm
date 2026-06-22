@@ -317,7 +317,7 @@ export function WhatsAppChat({ contactId, threadId: initialThreadId, onThreadCre
 
     try {
       // Convert blob to file
-      const audioFile = new File([audioBlob], `audio-${Date.now()}.ogg`, { type: audioBlob.type });
+      const audioFile = audioBlobToFile(audioBlob);
       const { url, mediaType } = await uploadMediaToStorage(audioFile);
       await handleSendMessage(url, 'audio');
       toast({ description: 'Áudio enviado com sucesso!' });
