@@ -513,7 +513,7 @@ export function IntegrationsSettings() {
         )}
       </div>
 
-      {selectedIntegration && !['meta-lead-ads', 'meta-capi'].includes(selectedIntegration.slug) && (
+      {selectedIntegration && !['meta-lead-ads', 'meta-capi', 'nammux'].includes(selectedIntegration.slug) && (
         <IntegrationConnectDialog
           open={connectDialogOpen}
           onOpenChange={setConnectDialogOpen}
@@ -521,7 +521,7 @@ export function IntegrationsSettings() {
         />
       )}
 
-      {selectedIntegration && selectedOrgIntegration && !['meta-lead-ads', 'meta-capi'].includes(selectedIntegration.slug) && (
+      {selectedIntegration && selectedOrgIntegration && !['meta-lead-ads', 'meta-capi', 'nammux'].includes(selectedIntegration.slug) && (
         <IntegrationDetailDialog
           open={detailDialogOpen}
           onOpenChange={setDetailDialogOpen}
