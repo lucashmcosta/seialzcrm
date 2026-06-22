@@ -7602,6 +7602,10 @@ export type Database = {
         Args: { p_error: string; p_job_id: string }
         Returns: undefined
       }
+      fn_sync_nammux_subscription: {
+        Args: { p_org_id: string }
+        Returns: undefined
+      }
       get_dashboard_stats: {
         Args: {
           p_days_ago?: number
