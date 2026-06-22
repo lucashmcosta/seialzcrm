@@ -29,6 +29,7 @@ import { formatDistanceToNow } from 'date-fns';
 import { ptBR, enUS } from 'date-fns/locale';
 import { WhatsAppTemplateSelector } from '@/components/whatsapp/WhatsAppTemplateSelector';
 import { AudioRecorder } from '@/components/whatsapp/AudioRecorder';
+import { audioBlobToFile } from '@/lib/audioBlobToFile';
 import { AudioMessagePlayer } from '@/components/whatsapp/AudioMessagePlayer';
 import { getProxiedMediaUrl } from '@/lib/mediaProxy';
 import { MediaUploadButton } from '@/components/whatsapp/MediaUploadButton';
