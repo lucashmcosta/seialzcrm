@@ -5,6 +5,7 @@
 import type { Handler } from "./types.ts";
 import { webhookDispatchHandler } from "./webhook.ts";
 import { kommoUpsertHandler } from "./kommo.ts";
+import { nammuxSendOpportunityWonHandler } from "./nammux.ts";
 
 const registry = new Map<string, Handler>();
 
@@ -19,3 +20,4 @@ export function resolve(slug: string, action: string): Handler | undefined {
 // Defaults
 register("webhook", "dispatch", webhookDispatchHandler);
 register("kommo", "upsert", kommoUpsertHandler);
+register("nammux", "send_opportunity_won", nammuxSendOpportunityWonHandler);
