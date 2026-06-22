@@ -29,6 +29,7 @@ import { formatDistanceToNow } from 'date-fns';
 import { ptBR, enUS } from 'date-fns/locale';
 import { WhatsAppTemplateSelector } from '@/components/whatsapp/WhatsAppTemplateSelector';
 import { AudioRecorder } from '@/components/whatsapp/AudioRecorder';
+import { audioBlobToFile } from '@/lib/audioBlobToFile';
 import { AudioMessagePlayer } from '@/components/whatsapp/AudioMessagePlayer';
 import { getProxiedMediaUrl } from '@/lib/mediaProxy';
 import { MediaUploadButton } from '@/components/whatsapp/MediaUploadButton';
@@ -478,7 +479,7 @@ export function ContactMessages({ contactId, opportunityId }: ContactMessagesPro
     if (!organization?.id) return;
 
     try {
-      const audioFile = new File([audioBlob], `audio-${Date.now()}.ogg`, { type: audioBlob.type });
+      const audioFile = audioBlobToFile(audioBlob);
       const { url } = await uploadMediaToStorage(audioFile);
       await handleSendMessage(url, 'audio');
     } catch (error: any) {

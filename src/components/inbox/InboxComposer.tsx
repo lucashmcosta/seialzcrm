@@ -36,6 +36,7 @@ import {
 } from '@phosphor-icons/react';
 import { MediaUploadButton } from '@/components/whatsapp/MediaUploadButton';
 import { AudioRecorder } from '@/components/whatsapp/AudioRecorder';
+import { audioBlobToFile } from '@/lib/audioBlobToFile';
 import { WhatsAppTemplateSelector } from '@/components/whatsapp/WhatsAppTemplateSelector';
 import { ReplyPreview } from '@/components/whatsapp/ReplyPreview';
 import { inboxUploadMedia } from '@/lib/inboxMediaUpload';
@@ -285,7 +286,7 @@ export function InboxComposer({ thread, replyTo, onClearReply, onSent, onThreadM
 
   async function handleSendAudio(blob: Blob) {
     if (!organization?.id) return;
-    const audioFile = new File([blob], `audio-${Date.now()}.ogg`, { type: 'audio/ogg;codecs=opus' });
+    const audioFile = audioBlobToFile(blob);
     setSubmitting(true);
     try {
       const { url, mediaType } = await inboxUploadMedia(supabase, audioFile, organization.id);

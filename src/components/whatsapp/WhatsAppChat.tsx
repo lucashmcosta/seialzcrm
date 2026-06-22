@@ -15,6 +15,7 @@ import { AudioMessagePlayer } from './AudioMessagePlayer';
 import { MediaUploadButton } from './MediaUploadButton';
 import { WhatsAppFormattedText } from './WhatsAppFormattedText';
 import { getProxiedMediaUrl } from '@/lib/mediaProxy';
+import { audioBlobToFile } from '@/lib/audioBlobToFile';
 import { DateSeparator } from '@/components/messages/DateSeparator';
 import { shouldShowDateSeparator } from '@/lib/dateSeparator';
 
@@ -317,7 +318,7 @@ export function WhatsAppChat({ contactId, threadId: initialThreadId, onThreadCre
 
     try {
       // Convert blob to file
-      const audioFile = new File([audioBlob], `audio-${Date.now()}.ogg`, { type: audioBlob.type });
+      const audioFile = audioBlobToFile(audioBlob);
       const { url, mediaType } = await uploadMediaToStorage(audioFile);
       await handleSendMessage(url, 'audio');
       toast({ description: 'Áudio enviado com sucesso!' });

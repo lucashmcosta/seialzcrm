@@ -52,6 +52,7 @@ import { getProxiedMediaUrl } from '@/lib/mediaProxy';
 import { NewConversationDialog } from '@/components/messages/NewConversationDialog';
 import { WhatsAppTemplateSelector } from '@/components/whatsapp/WhatsAppTemplateSelector';
 import { AudioRecorder } from '@/components/whatsapp/AudioRecorder';
+import { audioBlobToFile } from '@/lib/audioBlobToFile';
 import { MediaUploadButton } from '@/components/whatsapp/MediaUploadButton';
 import { MediaPreviewDialog } from '@/components/whatsapp/MediaPreviewDialog';
 import { AudioMessagePlayer } from '@/components/whatsapp/AudioMessagePlayer';
@@ -1146,11 +1147,7 @@ function DesktopMessagesList() {
     if (!organization?.id || !selectedThread) return;
 
     try {
-      const audioFile = new File(
-        [audioBlob], 
-        `audio-${Date.now()}.ogg`, 
-        { type: 'audio/ogg;codecs=opus' }
-      );
+      const audioFile = audioBlobToFile(audioBlob);
       await handleMediaUpload(audioFile, null);
     } catch (error: any) {
       console.error('Error sending audio:', error);
