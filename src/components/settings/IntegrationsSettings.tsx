@@ -22,6 +22,7 @@ import { PhoneNumberSettings } from './PhoneNumberSettings';
 import { KommoMigrationDialog } from './KommoMigrationDialog';
 import { MetaLeadAdsDialog } from '@/components/integrations/meta-lead-ads/MetaLeadAdsDialog';
 import { MetaCapiDialog } from '@/components/integrations/meta-capi/MetaCapiDialog';
+import { NammuxDialog } from '@/components/integrations/nammux/NammuxDialog';
 import { AIProviderCard } from './AIProviderCard';
 import { useAIProviders } from '@/hooks/useAIProviders';
 import { usePermissions } from '@/hooks/usePermissions';
