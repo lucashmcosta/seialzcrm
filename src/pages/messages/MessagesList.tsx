@@ -1147,11 +1147,7 @@ function DesktopMessagesList() {
     if (!organization?.id || !selectedThread) return;
 
     try {
-      const audioFile = new File(
-        [audioBlob], 
-        `audio-${Date.now()}.ogg`, 
-        { type: 'audio/ogg;codecs=opus' }
-      );
+      const audioFile = audioBlobToFile(audioBlob);
       await handleMediaUpload(audioFile, null);
     } catch (error: any) {
       console.error('Error sending audio:', error);
