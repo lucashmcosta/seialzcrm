@@ -42,6 +42,9 @@ function Media({ msg, orgId, accessToken }: { msg: InboxMessageRow; orgId: strin
             <AudioMessagePlayer
               key={i}
               src={url}
+              messageId={msg.id}
+              threadId={msg.thread_id}
+              mediaType={msg.media_type}
               timestamp={isAudioOnly ? new Date(msg.sent_at).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' }) : undefined}
               statusIcon={isAudioOnly && isOutbound ? <StatusIcon status={msg.whatsapp_status} /> : undefined}
             />

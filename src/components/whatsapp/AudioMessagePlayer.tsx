@@ -1,13 +1,25 @@
 import { useState, useRef, useEffect, useCallback, ReactNode } from 'react';
+import { reportAudioFailure, isValidHttpUrl } from '@/lib/audioErrorReport';
 
 interface AudioMessagePlayerProps {
   src: string;
   className?: string;
   timestamp?: string;
   statusIcon?: ReactNode;
+  messageId?: string;
+  threadId?: string;
+  mediaType?: string | null;
 }
 
-export function AudioMessagePlayer({ src, className = '', timestamp, statusIcon }: AudioMessagePlayerProps) {
+export function AudioMessagePlayer({
+  src,
+  className = '',
+  timestamp,
+  statusIcon,
+  messageId,
+  threadId,
+  mediaType,
+}: AudioMessagePlayerProps) {
   const audioRef = useRef<HTMLAudioElement>(null);
   const animFrameRef = useRef<number>(0);
   const [isPlaying, setIsPlaying] = useState(false);
@@ -19,6 +31,8 @@ export function AudioMessagePlayer({ src, className = '', timestamp, statusIcon 
   const [waveformData] = useState(() =>
     Array.from({ length: 45 }, () => Math.random() * 0.5 + 0.2)
   );
+
+  const srcOk = isValidHttpUrl(src);
 
   const cycleRate = () => {
     const next = playbackRate === 1 ? 1.5 : playbackRate === 1.5 ? 2 : 1;
@@ -40,6 +54,7 @@ export function AudioMessagePlayer({ src, className = '', timestamp, statusIcon 
   };
 
   useEffect(() => {
+    if (!srcOk) return;
     const audio = audioRef.current;
     if (!audio) return;
 
@@ -53,8 +68,19 @@ export function AudioMessagePlayer({ src, className = '', timestamp, statusIcon 
       cancelAnimationFrame(animFrameRef.current);
     };
     const onError = () => {
+      cancelAnimationFrame(animFrameRef.current);
       setIsLoading(false);
+      setIsPlaying(false);
       setHasError(true);
+      reportAudioFailure({
+        component: 'AudioMessagePlayer',
+        src,
+        audio,
+        error: audio.error ? { name: 'MediaError', message: `code=${audio.error.code}` } : undefined,
+        messageId,
+        threadId,
+        mediaType,
+      });
     };
 
     audio.addEventListener('loadedmetadata', onLoaded);
@@ -67,25 +93,42 @@ export function AudioMessagePlayer({ src, className = '', timestamp, statusIcon 
       audio.removeEventListener('error', onError);
       cancelAnimationFrame(animFrameRef.current);
     };
-  }, [src]);
+  }, [src, srcOk, messageId, threadId, mediaType]);
 
-  const togglePlay = useCallback(() => {
+  const togglePlay = useCallback(async () => {
     const audio = audioRef.current;
-    if (!audio || isLoading) return;
+    if (!audio || isLoading || hasError) return;
 
     if (isPlaying) {
       audio.pause();
       cancelAnimationFrame(animFrameRef.current);
-    } else {
-      audio.play();
+      setIsPlaying(false);
+      return;
+    }
+
+    try {
+      await audio.play();
+      setIsPlaying(true);
       const tick = () => {
         setCurrentTime(audio.currentTime);
         animFrameRef.current = requestAnimationFrame(tick);
       };
       tick();
+    } catch (err) {
+      cancelAnimationFrame(animFrameRef.current);
+      setIsPlaying(false);
+      setHasError(true);
+      reportAudioFailure({
+        component: 'AudioMessagePlayer',
+        src,
+        audio,
+        error: err,
+        messageId,
+        threadId,
+        mediaType,
+      });
     }
-    setIsPlaying(!isPlaying);
-  }, [isPlaying, isLoading]);
+  }, [isPlaying, isLoading, hasError, src, messageId, threadId, mediaType]);
 
   const handleSeek = (e: React.MouseEvent<HTMLDivElement> | React.TouchEvent<HTMLDivElement>) => {
     const audio = audioRef.current;
@@ -99,14 +142,35 @@ export function AudioMessagePlayer({ src, className = '', timestamp, statusIcon 
     setCurrentTime(audio.currentTime);
   };
 
-  return (
-    <div className={className} style={{ display: 'flex', flexDirection: 'column', gap: 1, padding: 2, maxWidth: 240, minWidth: 200 }}>
-      <audio ref={audioRef} src={src} preload="metadata" />
-      {hasError && (
+  if (!srcOk || hasError) {
+    // Report invalid src once on mount (only when src is provided but unusable).
+    return (
+      <div
+        className={className}
+        style={{ display: 'flex', flexDirection: 'column', gap: 1, padding: 2, maxWidth: 240, minWidth: 200 }}
+      >
         <div style={{ fontSize: 11, opacity: 0.7, padding: '4px 6px' }}>
           Não foi possível carregar este áudio.
         </div>
-      )}
+        {srcOk && src && (
+          <div style={{ marginLeft: 6 }}>
+            <a
+              href={src}
+              target="_blank"
+              rel="noopener noreferrer"
+              style={{ fontSize: 11, opacity: 0.7, textDecoration: 'underline', color: 'currentColor' }}
+            >
+              Baixar áudio
+            </a>
+          </div>
+        )}
+      </div>
+    );
+  }
+
+  return (
+    <div className={className} style={{ display: 'flex', flexDirection: 'column', gap: 1, padding: 2, maxWidth: 240, minWidth: 200 }}>
+      <audio ref={audioRef} src={src} preload="metadata" />
 
       {/* Row 1: Play + Waveform */}
       <div style={{ display: 'flex', alignItems: 'center', gap: 6, height: 24 }}>
