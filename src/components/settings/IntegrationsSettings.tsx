@@ -22,6 +22,7 @@ import { PhoneNumberSettings } from './PhoneNumberSettings';
 import { KommoMigrationDialog } from './KommoMigrationDialog';
 import { MetaLeadAdsDialog } from '@/components/integrations/meta-lead-ads/MetaLeadAdsDialog';
 import { MetaCapiDialog } from '@/components/integrations/meta-capi/MetaCapiDialog';
+import { NammuxDialog } from '@/components/integrations/nammux/NammuxDialog';
 import { AIProviderCard } from './AIProviderCard';
 import { useAIProviders } from '@/hooks/useAIProviders';
 import { usePermissions } from '@/hooks/usePermissions';
@@ -512,7 +513,7 @@ export function IntegrationsSettings() {
         )}
       </div>
 
-      {selectedIntegration && !['meta-lead-ads', 'meta-capi'].includes(selectedIntegration.slug) && (
+      {selectedIntegration && !['meta-lead-ads', 'meta-capi', 'nammux'].includes(selectedIntegration.slug) && (
         <IntegrationConnectDialog
           open={connectDialogOpen}
           onOpenChange={setConnectDialogOpen}
@@ -520,7 +521,7 @@ export function IntegrationsSettings() {
         />
       )}
 
-      {selectedIntegration && selectedOrgIntegration && !['meta-lead-ads', 'meta-capi'].includes(selectedIntegration.slug) && (
+      {selectedIntegration && selectedOrgIntegration && !['meta-lead-ads', 'meta-capi', 'nammux'].includes(selectedIntegration.slug) && (
         <IntegrationDetailDialog
           open={detailDialogOpen}
           onOpenChange={setDetailDialogOpen}
@@ -552,6 +553,20 @@ export function IntegrationsSettings() {
 
       {selectedIntegration?.slug === 'meta-capi' && (
         <MetaCapiDialog
+          open={detailDialogOpen || connectDialogOpen}
+          onOpenChange={(o) => {
+            if (!o) {
+              setDetailDialogOpen(false);
+              setConnectDialogOpen(false);
+            }
+          }}
+          integration={selectedIntegration}
+          orgIntegration={selectedOrgIntegration}
+        />
+      )}
+
+      {selectedIntegration?.slug === 'nammux' && (
+        <NammuxDialog
           open={detailDialogOpen || connectDialogOpen}
           onOpenChange={(o) => {
             if (!o) {
