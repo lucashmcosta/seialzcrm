@@ -317,7 +317,7 @@ export function OutboundCallProvider({ children }: { children: ReactNode }) {
 
       await supabase
         .from('calls')
-        .update(updateData)
+        .update(updateData as never)
         .eq('id', callIdRef.current);
 
       console.log('Call record updated:', updateData);

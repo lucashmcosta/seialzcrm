@@ -532,7 +532,7 @@ function DesktopMessagesList() {
 
     await supabase
       .from('message_threads')
-      .update(updates)
+      .update(updates as never)
       .eq('id', threadId);
   };
 
