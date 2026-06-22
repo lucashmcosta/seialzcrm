@@ -83,10 +83,15 @@ export function AudioRecorder({ onSend, disabled }: AudioRecorderProps) {
       };
 
       mediaRecorder.onstop = () => {
-        // Create blob with OGG Opus type
-        const blob = new Blob(chunksRef.current, { type: 'audio/ogg;codecs=opus' });
+        // Use the recorder's actual mimeType — never relabel WebM bytes as OGG.
+        // Falls back to the requested ogg/opus if the recorder doesn't expose it.
+        const actualType: string =
+          (mediaRecorder && typeof mediaRecorder.mimeType === 'string' && mediaRecorder.mimeType) ||
+          (chunksRef.current[0] && (chunksRef.current[0] as Blob).type) ||
+          'audio/ogg;codecs=opus';
+        const blob = new Blob(chunksRef.current, { type: actualType });
         setAudioBlob(blob);
-        
+
         // Stop all tracks
         stream.getTracks().forEach(track => track.stop());
       };
