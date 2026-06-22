@@ -478,7 +478,7 @@ export function ContactMessages({ contactId, opportunityId }: ContactMessagesPro
     if (!organization?.id) return;
 
     try {
-      const audioFile = new File([audioBlob], `audio-${Date.now()}.ogg`, { type: audioBlob.type });
+      const audioFile = audioBlobToFile(audioBlob);
       const { url } = await uploadMediaToStorage(audioFile);
       await handleSendMessage(url, 'audio');
     } catch (error: any) {
