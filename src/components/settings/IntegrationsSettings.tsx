@@ -565,6 +565,20 @@ export function IntegrationsSettings() {
         />
       )}
 
+      {selectedIntegration?.slug === 'nammux' && (
+        <NammuxDialog
+          open={detailDialogOpen || connectDialogOpen}
+          onOpenChange={(o) => {
+            if (!o) {
+              setDetailDialogOpen(false);
+              setConnectDialogOpen(false);
+            }
+          }}
+          integration={selectedIntegration}
+          orgIntegration={selectedOrgIntegration}
+        />
+      )}
+
       <ConfirmDialog
         open={disconnectConfirmOpen}
         onOpenChange={setDisconnectConfirmOpen}
