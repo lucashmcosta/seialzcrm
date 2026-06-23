@@ -129,6 +129,36 @@ export function GeneralSettings() {
       </CardHeader>
       <CardContent>
         <form onSubmit={handleSubmit} className="space-y-6">
+          {/* Identidade da Organização */}
+          <div className="space-y-2 rounded-lg border p-4">
+            <div className="flex items-center justify-between">
+              <Label className="text-base font-semibold">Identidade da Organização</Label>
+            </div>
+            <div className="space-y-1.5">
+              <Label htmlFor="org-id" className="text-xs text-muted-foreground">Organization ID</Label>
+              <div className="flex gap-2">
+                <Input
+                  id="org-id"
+                  value={organization?.id || ''}
+                  readOnly
+                  className="font-mono text-xs bg-muted"
+                />
+                <TooltipProvider>
+                  <Tooltip>
+                    <TooltipTrigger asChild>
+                      <Button type="button" variant="outline" size="icon" onClick={handleCopyOrgId}>
+                        {copiedOrgId ? <Check className="h-4 w-4" /> : <Copy className="h-4 w-4" />}
+                      </Button>
+                    </TooltipTrigger>
+                    <TooltipContent>
+                      Use este identificador para conectar esta organização a sistemas externos.
+                    </TooltipContent>
+                  </Tooltip>
+                </TooltipProvider>
+              </div>
+            </div>
+          </div>
+
           {/* Logo Section */}
           <div className="space-y-2">
             <Label>{t('settings.organizationLogo')}</Label>
