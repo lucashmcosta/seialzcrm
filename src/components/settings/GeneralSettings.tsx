@@ -38,6 +38,19 @@ export function GeneralSettings() {
   const [logoDialogOpen, setLogoDialogOpen] = useState(false);
   const [logoUrl, setLogoUrl] = useState('');
   const [logoSize, setLogoSize] = useState(40);
+  const [copiedOrgId, setCopiedOrgId] = useState(false);
+
+  const handleCopyOrgId = async () => {
+    if (!organization?.id) return;
+    try {
+      await navigator.clipboard.writeText(organization.id);
+      setCopiedOrgId(true);
+      toast({ title: 'Organization ID copiado' });
+      setTimeout(() => setCopiedOrgId(false), 2000);
+    } catch {
+      toast({ variant: 'destructive', title: 'Falha ao copiar' });
+    }
+  };
   const [formData, setFormData] = useState({
     name: '',
     default_currency: 'BRL',
