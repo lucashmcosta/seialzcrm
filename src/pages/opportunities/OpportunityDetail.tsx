@@ -544,6 +544,15 @@ export default function OpportunityDetail() {
                             Reabrir
                           </DropdownMenuItem>
                         )}
+                        {opportunity.status === 'won' && permissions.canManageIntegrations && (
+                          <>
+                            <DropdownMenuSeparator />
+                            <DropdownMenuItem onClick={handleReplayNammux}>
+                              <PaperPlaneTilt className="h-4 w-4 mr-2" />
+                              Reenviar para Nammux
+                            </DropdownMenuItem>
+                          </>
+                        )}
                       </DropdownMenuContent>
                     </DropdownMenu>
                   )}
