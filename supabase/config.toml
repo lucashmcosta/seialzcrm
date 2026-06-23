@@ -182,3 +182,6 @@ verify_jwt = false
 
 [functions.nammux-test-connection]
 verify_jwt = true
+
+[functions.nammux-download-attachment]
+verify_jwt = false
