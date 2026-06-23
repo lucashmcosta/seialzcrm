@@ -225,6 +225,30 @@ export default function OpportunityDetail() {
     }
   };
 
+  const handleReplayNammux = async () => {
+    if (!opportunity) return;
+    const ok = window.confirm(
+      'Reenviar esta oportunidade para o Nammux com o payload atual (anexos + documentos aprovados)?',
+    );
+    if (!ok) return;
+    try {
+      const { data, error } = await supabase.functions.invoke('nammux-replay-opportunity', {
+        body: { opportunity_id: opportunity.id, reason: 'documents_v2_backfill' },
+      });
+      if (error) throw error;
+      const res = data as { ok?: boolean; error?: string; attachments_count?: number; document_submissions_count?: number; job_id?: string };
+      if (!res?.ok) throw new Error(res?.error || 'Falha ao reenviar');
+      toast({
+        title: 'Reenvio enfileirado',
+        description: `Job ${res.job_id?.slice(0, 8)}… • ${res.attachments_count ?? 0} anexos • ${res.document_submissions_count ?? 0} documentos`,
+      });
+    } catch (err) {
+      console.error('Error replaying to Nammux:', err);
+      const msg = err instanceof Error ? err.message : 'Erro desconhecido';
+      toast({ title: 'Erro ao reenviar para Nammux', description: msg, variant: 'destructive' });
+    }
+  };
+
   if (loading) {
     if (isMobile) {
       return (
