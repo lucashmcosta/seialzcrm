@@ -44,6 +44,7 @@ interface NammuxConfig {
   include_contact_attachments: boolean;
   include_opportunity_attachments: boolean;
   include_document_submissions: boolean;
+  nammux_organization_id: string;
 }
 
 const defaultConfig: NammuxConfig = {
@@ -54,6 +55,7 @@ const defaultConfig: NammuxConfig = {
   include_contact_attachments: true,
   include_opportunity_attachments: true,
   include_document_submissions: true,
+  nammux_organization_id: "",
 };
 
 const jobStatusBadge = (s: string) => {
