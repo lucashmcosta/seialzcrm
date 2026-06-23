@@ -72,6 +72,14 @@ Deno.serve(async (req) => {
       });
     }
 
+    const targetOrgId = String(cfg.nammux_organization_id ?? "").trim();
+    if (!targetOrgId) {
+      return new Response(
+        JSON.stringify({ ok: false, error: "Nammux Organization ID não configurado." }),
+        { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } },
+      );
+    }
+
     const eventId = crypto.randomUUID();
     const idempotencyKey = `nammux.test.${eventId}`;
     const envelope = {
@@ -79,8 +87,13 @@ Deno.serve(async (req) => {
       event_type: "connection.test",
       idempotency_key: idempotencyKey,
       organization_id,
+      target_organization_id: targetOrgId,
       occurred_at: new Date().toISOString(),
-      data: { message: "Seialz → Nammux connection test" },
+      data: {
+        message: "Seialz → Nammux connection test",
+        organization_id,
+        target_organization_id: targetOrgId,
+      },
     };
     const rawBody = JSON.stringify(envelope);
     const timestamp = Math.floor(Date.now() / 1000).toString();
@@ -94,6 +107,7 @@ Deno.serve(async (req) => {
       "X-Seialz-Event-Type": "connection.test",
       "X-Seialz-Idempotency-Key": idempotencyKey,
       "X-Seialz-Organization-Id": organization_id,
+      "X-Seialz-Target-Organization-Id": targetOrgId,
       "User-Agent": "Seialz-Integration-Worker/1.0 (test)",
     };
 
