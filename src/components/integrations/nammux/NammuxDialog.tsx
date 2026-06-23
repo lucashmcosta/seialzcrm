@@ -198,6 +198,7 @@ export function NammuxDialog({ open, onOpenChange, integration, orgIntegration: 
         include_contact_attachments: form.include_contact_attachments,
         include_opportunity_attachments: form.include_opportunity_attachments,
         include_document_submissions: form.include_document_submissions,
+        nammux_organization_id: form.nammux_organization_id.trim(),
       };
 
       if (orgIntegration?.id) {
