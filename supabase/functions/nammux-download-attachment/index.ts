@@ -23,6 +23,7 @@ const corsHeaders: Record<string, string> = {
 
 const ALLOWED_ENTITY_TYPES = new Set(["contact", "opportunity", "contact_document"]);
 const TIMESTAMP_TOLERANCE_SECONDS = 5 * 60;
+const HMAC_DEBUG_ATTACHMENT_ID = "704637de-8248-4464-a9ed-923f8105ce7e";
 
 function json(body: unknown, status: number) {
   return new Response(JSON.stringify(body), {
@@ -137,23 +138,27 @@ Deno.serve(async (req) => {
   const expected = await hmacSha256Hex(secret, baseString);
   const provided = sigHeader.startsWith("sha256=") ? sigHeader.slice(7) : sigHeader;
   const signatureMatch = timingSafeEqual(expected, provided);
-  // Temporary safe debug log (no secrets, only 8-char prefixes)
-  console.log("nammux-download-attachment.verify", {
-    attachment_id: attachmentId,
-    timestamp: tsHeader,
-    method: req.method,
-    path: url.pathname,
-    query,
-    expectedBaseString: baseString,
-    secret_source: cfg.download_secret ? "download_secret" : "webhook_secret",
-    secret_len: secret.length,
-    secret_prefix: secret.slice(0, 4),
-    receivedSignaturePrefix: provided.slice(0, 8),
-    expectedSignaturePrefix: expected.slice(0, 8),
-    signatureMatch,
-    seialzOrgId,
-    nammuxOrgId,
-  });
+  // Temporary safe debug log for the real Nammux retry (no full secret exposed).
+  if (attachmentId === HMAC_DEBUG_ATTACHMENT_ID) {
+    console.log({
+      marker: "download_hmac_debug_v1",
+      attachment_id: attachmentId,
+      received_ts: tsHeader,
+      method: req.method,
+      pathname: url.pathname,
+      query,
+      base_string: baseString,
+      signature_header: sigHeader,
+      received_sig_prefix8: provided.slice(0, 8),
+      expected_sig_prefix8: expected.slice(0, 8),
+      signature_match: signatureMatch,
+      secret_source: cfg.download_secret ? "download_secret" : "webhook_secret",
+      secret_prefix4: secret.slice(0, 4),
+      secret_len: secret.length,
+      seialz_org_id: seialzOrgId,
+      nammux_org_id: nammuxOrgId,
+    });
+  }
   if (!signatureMatch) {
     await logAudit(supabase, { ...baseAudit, status: 401, error: "invalid_signature" });
     return json({ error: "Invalid signature" }, 401);
