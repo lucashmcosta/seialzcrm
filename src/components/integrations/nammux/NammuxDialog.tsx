@@ -598,7 +598,22 @@ export function NammuxDialog({ open, onOpenChange, integration, orgIntegration: 
                         </button>
 
                         {expanded && (
-                          <div className="mt-3 grid gap-3 md:grid-cols-2">
+                          <div className="mt-3 space-y-3">
+                            <div className="flex flex-wrap gap-4 text-[11px] text-muted-foreground">
+                              <span>
+                                <span className="font-medium">Seialz Org ID:</span>{" "}
+                                <span className="font-mono">
+                                  {(j.payload as any)?.organization_id || organization?.id || "—"}
+                                </span>
+                              </span>
+                              <span>
+                                <span className="font-medium">Nammux Org ID:</span>{" "}
+                                <span className="font-mono">
+                                  {(j.payload as any)?.target_organization_id || "—"}
+                                </span>
+                              </span>
+                            </div>
+                            <div className="grid gap-3 md:grid-cols-2">
                             <div>
                               <div className="text-[10px] uppercase tracking-wide text-muted-foreground mb-1">
                                 Payload
