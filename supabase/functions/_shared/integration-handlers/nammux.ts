@@ -10,6 +10,7 @@ interface NammuxConfig {
   webhook_secret?: string;
   enabled?: boolean;
   send_opportunity_won?: boolean;
+  nammux_organization_id?: string;
 }
 
 // deno-lint-ignore no-explicit-any
@@ -64,7 +65,8 @@ export const nammuxSendOpportunityWonHandler: Handler = async (ctx): Promise<Han
   }
 
   const eventIdemKey = ((ctx.event as unknown as { idempotency_key?: string }).idempotency_key ?? "").toString();
-  const envelope = {
+  const targetOrgId = (cfg.nammux_organization_id ?? "").trim();
+  const envelope: Record<string, unknown> = {
     event_id: ctx.event.id,
     event_type: ctx.event.event_type,
     idempotency_key: eventIdemKey,
@@ -72,6 +74,7 @@ export const nammuxSendOpportunityWonHandler: Handler = async (ctx): Promise<Han
     occurred_at: ctx.event.occurred_at,
     data: ctx.event.payload,
   };
+  if (targetOrgId) envelope.target_organization_id = targetOrgId;
   const rawBody = JSON.stringify(envelope);
   const timestamp = Math.floor(Date.now() / 1000).toString();
   const signature = await hmacSha256Hex(secret, `${timestamp}.${rawBody}`);
@@ -87,6 +90,7 @@ export const nammuxSendOpportunityWonHandler: Handler = async (ctx): Promise<Han
     "X-Trace-Id": ctx.event.id,
     "User-Agent": "Seialz-Integration-Worker/1.0",
   };
+  if (targetOrgId) headers["X-Nammux-Organization-Id"] = targetOrgId;
 
   const res = await fetchWithClassification(url, { method: "POST", headers, body: rawBody });
 

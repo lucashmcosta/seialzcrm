@@ -9,7 +9,13 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Switch } from '@/components/ui/switch';
 import { useToast } from '@/hooks/use-toast';
-import { SpinnerGap, TrashSimple, ImageSquare, PencilSimple } from '@phosphor-icons/react';
+import { SpinnerGap, TrashSimple, ImageSquare, PencilSimple, Copy, Check } from '@phosphor-icons/react';
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from '@/components/ui/tooltip';
 import { SimpleLogoUploader } from '@/components/settings/SimpleLogoUploader';
 import {
   AlertDialog,
@@ -32,6 +38,19 @@ export function GeneralSettings() {
   const [logoDialogOpen, setLogoDialogOpen] = useState(false);
   const [logoUrl, setLogoUrl] = useState('');
   const [logoSize, setLogoSize] = useState(40);
+  const [copiedOrgId, setCopiedOrgId] = useState(false);
+
+  const handleCopyOrgId = async () => {
+    if (!organization?.id) return;
+    try {
+      await navigator.clipboard.writeText(organization.id);
+      setCopiedOrgId(true);
+      toast({ title: 'Organization ID copiado' });
+      setTimeout(() => setCopiedOrgId(false), 2000);
+    } catch {
+      toast({ variant: 'destructive', title: 'Falha ao copiar' });
+    }
+  };
   const [formData, setFormData] = useState({
     name: '',
     default_currency: 'BRL',
@@ -110,6 +129,36 @@ export function GeneralSettings() {
       </CardHeader>
       <CardContent>
         <form onSubmit={handleSubmit} className="space-y-6">
+          {/* Identidade da Organização */}
+          <div className="space-y-2 rounded-lg border p-4">
+            <div className="flex items-center justify-between">
+              <Label className="text-base font-semibold">Identidade da Organização</Label>
+            </div>
+            <div className="space-y-1.5">
+              <Label htmlFor="org-id" className="text-xs text-muted-foreground">Organization ID</Label>
+              <div className="flex gap-2">
+                <Input
+                  id="org-id"
+                  value={organization?.id || ''}
+                  readOnly
+                  className="font-mono text-xs bg-muted"
+                />
+                <TooltipProvider>
+                  <Tooltip>
+                    <TooltipTrigger asChild>
+                      <Button type="button" variant="outline" size="icon" onClick={handleCopyOrgId}>
+                        {copiedOrgId ? <Check className="h-4 w-4" /> : <Copy className="h-4 w-4" />}
+                      </Button>
+                    </TooltipTrigger>
+                    <TooltipContent>
+                      Use este identificador para conectar esta organização a sistemas externos.
+                    </TooltipContent>
+                  </Tooltip>
+                </TooltipProvider>
+              </div>
+            </div>
+          </div>
+
           {/* Logo Section */}
           <div className="space-y-2">
             <Label>{t('settings.organizationLogo')}</Label>

@@ -21,6 +21,9 @@ import {
   CaretDown,
   CaretUp,
   PaperPlaneTilt,
+  Copy,
+  Check,
+  Warning,
 } from "@phosphor-icons/react";
 import { toast } from "sonner";
 import { format } from "date-fns";
@@ -41,6 +44,7 @@ interface NammuxConfig {
   include_contact_attachments: boolean;
   include_opportunity_attachments: boolean;
   include_document_submissions: boolean;
+  nammux_organization_id: string;
 }
 
 const defaultConfig: NammuxConfig = {
@@ -51,6 +55,7 @@ const defaultConfig: NammuxConfig = {
   include_contact_attachments: true,
   include_opportunity_attachments: true,
   include_document_submissions: true,
+  nammux_organization_id: "",
 };
 
 const jobStatusBadge = (s: string) => {
@@ -83,6 +88,18 @@ export function NammuxDialog({ open, onOpenChange, integration, orgIntegration: 
   } | null>(null);
   const [disconnectOpen, setDisconnectOpen] = useState(false);
   const [expandedJobId, setExpandedJobId] = useState<string | null>(null);
+  const [copied, setCopied] = useState<"seialz" | null>(null);
+
+  const copyToClipboard = async (value: string, key: "seialz") => {
+    try {
+      await navigator.clipboard.writeText(value);
+      setCopied(key);
+      toast.success("Copiado");
+      setTimeout(() => setCopied(null), 2000);
+    } catch {
+      toast.error("Falha ao copiar");
+    }
+  };
 
   const { data: orgIntegration } = useQuery({
     queryKey: ["org-integration", "nammux", organization?.id],
@@ -181,6 +198,7 @@ export function NammuxDialog({ open, onOpenChange, integration, orgIntegration: 
         include_contact_attachments: form.include_contact_attachments,
         include_opportunity_attachments: form.include_opportunity_attachments,
         include_document_submissions: form.include_document_submissions,
+        nammux_organization_id: form.nammux_organization_id.trim(),
       };
 
       if (orgIntegration?.id) {
@@ -318,6 +336,62 @@ export function NammuxDialog({ open, onOpenChange, integration, orgIntegration: 
 
             {/* ───────────────────────── Config ───────────────────────── */}
             <TabsContent value="config" className="space-y-6 mt-4">
+              {/* Mapeamento de Organização */}
+              <section className="space-y-3">
+                <div className="flex items-center justify-between">
+                  <h3 className="text-sm font-semibold">Mapeamento de Organização</h3>
+                  {form.nammux_organization_id.trim() ? (
+                    <Badge className="bg-green-600 text-white">🟢 Configurado</Badge>
+                  ) : (
+                    <Badge className="bg-amber-500 text-white">🟠 Não configurado</Badge>
+                  )}
+                </div>
+
+                <div className="space-y-1.5">
+                  <Label htmlFor="seialz_org_id" className="text-xs text-muted-foreground">
+                    Seialz Organization ID
+                  </Label>
+                  <div className="flex gap-2">
+                    <Input
+                      id="seialz_org_id"
+                      value={organization?.id || ""}
+                      readOnly
+                      className="font-mono text-xs bg-muted"
+                    />
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="icon"
+                      onClick={() => copyToClipboard(organization?.id || "", "seialz")}
+                    >
+                      {copied === "seialz" ? <Check size={16} /> : <Copy size={16} />}
+                    </Button>
+                  </div>
+                </div>
+
+                <div className="space-y-1.5">
+                  <Label htmlFor="nammux_org_id">Nammux Organization ID</Label>
+                  <Input
+                    id="nammux_org_id"
+                    value={form.nammux_organization_id}
+                    onChange={(e) =>
+                      setForm((p) => ({ ...p, nammux_organization_id: e.target.value }))
+                    }
+                    placeholder="Cole aqui o Organization ID do escritório no Nammux"
+                    className="font-mono text-xs"
+                  />
+                  {!form.nammux_organization_id.trim() && (
+                    <Alert className="border-amber-500/50 bg-amber-500/5">
+                      <Warning className="h-4 w-4 text-amber-600" />
+                      <AlertDescription className="text-xs">
+                        Configure o Nammux Organization ID para concluir o mapeamento entre as
+                        organizações.
+                      </AlertDescription>
+                    </Alert>
+                  )}
+                </div>
+              </section>
+
               <section className="space-y-3">
                 <h3 className="text-sm font-semibold">Geral</h3>
                 <div className="flex items-center justify-between rounded-md border p-3">
@@ -524,7 +598,22 @@ export function NammuxDialog({ open, onOpenChange, integration, orgIntegration: 
                         </button>
 
                         {expanded && (
-                          <div className="mt-3 grid gap-3 md:grid-cols-2">
+                          <div className="mt-3 space-y-3">
+                            <div className="flex flex-wrap gap-4 text-[11px] text-muted-foreground">
+                              <span>
+                                <span className="font-medium">Seialz Org ID:</span>{" "}
+                                <span className="font-mono">
+                                  {(j.payload as any)?.organization_id || organization?.id || "—"}
+                                </span>
+                              </span>
+                              <span>
+                                <span className="font-medium">Nammux Org ID:</span>{" "}
+                                <span className="font-mono">
+                                  {(j.payload as any)?.target_organization_id || "—"}
+                                </span>
+                              </span>
+                            </div>
+                            <div className="grid gap-3 md:grid-cols-2">
                             <div>
                               <div className="text-[10px] uppercase tracking-wide text-muted-foreground mb-1">
                                 Payload
@@ -543,6 +632,7 @@ export function NammuxDialog({ open, onOpenChange, integration, orgIntegration: 
                               {j.last_error && (
                                 <p className="mt-2 text-destructive text-[11px]">{j.last_error}</p>
                               )}
+                            </div>
                             </div>
                           </div>
                         )}
