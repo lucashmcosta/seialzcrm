@@ -1,7 +1,7 @@
-// Kill-switch service worker — v3 (2026-06-21)
+// Kill-switch service worker — v4 (2026-06-23)
 // Same as /sw.js, kept at legacy path so browsers with the old registration
 // also fetch a byte-different file and run the unregister flow.
-const SW_VERSION = 'kill-switch-v3-2026-06-21';
+const SW_VERSION = 'kill-switch-v4-2026-06-23';
 
 self.addEventListener('install', (event) => {
   event.waitUntil(self.skipWaiting());
