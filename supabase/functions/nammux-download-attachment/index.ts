@@ -136,7 +136,25 @@ Deno.serve(async (req) => {
   const baseString = `${tsHeader}.${req.method}.${url.pathname}.${query}`;
   const expected = await hmacSha256Hex(secret, baseString);
   const provided = sigHeader.startsWith("sha256=") ? sigHeader.slice(7) : sigHeader;
-  if (!timingSafeEqual(expected, provided)) {
+  const signatureMatch = timingSafeEqual(expected, provided);
+  // Temporary safe debug log (no secrets, only 8-char prefixes)
+  console.log("nammux-download-attachment.verify", {
+    attachment_id: attachmentId,
+    timestamp: tsHeader,
+    method: req.method,
+    path: url.pathname,
+    query,
+    expectedBaseString: baseString,
+    secret_source: cfg.download_secret ? "download_secret" : "webhook_secret",
+    secret_len: secret.length,
+    secret_prefix: secret.slice(0, 4),
+    receivedSignaturePrefix: provided.slice(0, 8),
+    expectedSignaturePrefix: expected.slice(0, 8),
+    signatureMatch,
+    seialzOrgId,
+    nammuxOrgId,
+  });
+  if (!signatureMatch) {
     await logAudit(supabase, { ...baseAudit, status: 401, error: "invalid_signature" });
     return json({ error: "Invalid signature" }, 401);
   }
