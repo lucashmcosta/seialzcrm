@@ -1,7 +1,7 @@
-// Kill-switch service worker — v3 (2026-06-21)
+// Kill-switch service worker — v4 (2026-06-23)
 // Bumped to force returning clients to fetch this file, activate it, and have it
 // unregister itself + flush caches. Any byte change in this file triggers update.
-const SW_VERSION = 'kill-switch-v3-2026-06-21';
+const SW_VERSION = 'kill-switch-v4-2026-06-23';
 
 self.addEventListener('install', (event) => {
   event.waitUntil(self.skipWaiting());
