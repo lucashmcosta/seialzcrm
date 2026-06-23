@@ -633,6 +633,7 @@ export function NammuxDialog({ open, onOpenChange, integration, orgIntegration: 
                                 <p className="mt-2 text-destructive text-[11px]">{j.last_error}</p>
                               )}
                             </div>
+                            </div>
                           </div>
                         )}
                       </div>
