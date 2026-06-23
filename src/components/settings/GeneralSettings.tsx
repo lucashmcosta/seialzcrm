@@ -9,7 +9,13 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Switch } from '@/components/ui/switch';
 import { useToast } from '@/hooks/use-toast';
-import { SpinnerGap, TrashSimple, ImageSquare, PencilSimple } from '@phosphor-icons/react';
+import { SpinnerGap, TrashSimple, ImageSquare, PencilSimple, Copy, Check } from '@phosphor-icons/react';
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from '@/components/ui/tooltip';
 import { SimpleLogoUploader } from '@/components/settings/SimpleLogoUploader';
 import {
   AlertDialog,
