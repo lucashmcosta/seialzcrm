@@ -16,7 +16,7 @@ import { useOrganization } from '@/hooks/useOrganization';
 import { useTranslation } from '@/lib/i18n';
 import { usePermissions } from '@/hooks/usePermissions';
 import { toast } from '@/hooks/use-toast';
-import { ArrowLeft, PencilSimple, TrendUp, TrendDown, DotsThreeVertical, Phone, User } from '@phosphor-icons/react';
+import { ArrowLeft, PencilSimple, TrendUp, TrendDown, DotsThreeVertical, Phone, User, PaperPlaneTilt } from '@phosphor-icons/react';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import { formatDateOnly } from '@/lib/utils';
