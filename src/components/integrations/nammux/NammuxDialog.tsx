@@ -88,6 +88,18 @@ export function NammuxDialog({ open, onOpenChange, integration, orgIntegration: 
   } | null>(null);
   const [disconnectOpen, setDisconnectOpen] = useState(false);
   const [expandedJobId, setExpandedJobId] = useState<string | null>(null);
+  const [copied, setCopied] = useState<"seialz" | null>(null);
+
+  const copyToClipboard = async (value: string, key: "seialz") => {
+    try {
+      await navigator.clipboard.writeText(value);
+      setCopied(key);
+      toast.success("Copiado");
+      setTimeout(() => setCopied(null), 2000);
+    } catch {
+      toast.error("Falha ao copiar");
+    }
+  };
 
   const { data: orgIntegration } = useQuery({
     queryKey: ["org-integration", "nammux", organization?.id],
