@@ -10,6 +10,7 @@ interface NammuxConfig {
   webhook_secret?: string;
   enabled?: boolean;
   send_opportunity_won?: boolean;
+  nammux_organization_id?: string;
 }
 
 // deno-lint-ignore no-explicit-any
