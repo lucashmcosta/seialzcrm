@@ -66,15 +66,29 @@ export const nammuxSendOpportunityWonHandler: Handler = async (ctx): Promise<Han
 
   const eventIdemKey = ((ctx.event as unknown as { idempotency_key?: string }).idempotency_key ?? "").toString();
   const targetOrgId = (cfg.nammux_organization_id ?? "").trim();
+  if (!targetOrgId) {
+    return {
+      classification: Classification.Permanent,
+      error: "Nammux Organization ID não configurado.",
+    };
+  }
+
+  const seialzOrgId = ctx.event.organization_id;
+  const basePayload = (ctx.event.payload ?? {}) as Record<string, unknown>;
+  const data = {
+    ...basePayload,
+    organization_id: seialzOrgId,
+    target_organization_id: targetOrgId,
+  };
   const envelope: Record<string, unknown> = {
     event_id: ctx.event.id,
     event_type: ctx.event.event_type,
     idempotency_key: eventIdemKey,
-    organization_id: ctx.event.organization_id,
+    organization_id: seialzOrgId,
+    target_organization_id: targetOrgId,
     occurred_at: ctx.event.occurred_at,
-    data: ctx.event.payload,
+    data,
   };
-  if (targetOrgId) envelope.target_organization_id = targetOrgId;
   const rawBody = JSON.stringify(envelope);
   const timestamp = Math.floor(Date.now() / 1000).toString();
   const signature = await hmacSha256Hex(secret, `${timestamp}.${rawBody}`);
@@ -86,7 +100,8 @@ export const nammuxSendOpportunityWonHandler: Handler = async (ctx): Promise<Han
     "X-Seialz-Event-Id": ctx.event.id,
     "X-Seialz-Event-Type": ctx.event.event_type,
     "X-Seialz-Idempotency-Key": eventIdemKey,
-    "X-Seialz-Organization-Id": ctx.event.organization_id,
+    "X-Seialz-Organization-Id": seialzOrgId,
+    "X-Seialz-Target-Organization-Id": targetOrgId,
     "X-Trace-Id": ctx.event.id,
     "User-Agent": "Seialz-Integration-Worker/1.0",
   };
