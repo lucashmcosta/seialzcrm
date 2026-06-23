@@ -185,3 +185,6 @@ verify_jwt = true
 
 [functions.nammux-download-attachment]
 verify_jwt = false
+
+[functions.nammux-replay-opportunity]
+verify_jwt = true
