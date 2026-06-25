@@ -664,7 +664,7 @@ export function ContactMessages({ contactId, opportunityId }: ContactMessagesPro
           )}
           <div ref={scrollRef} />
         </div>
-      </ScrollArea>
+      </div>
 
       {/* Input */}
       <div className="pt-4 border-t mt-4">
