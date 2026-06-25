@@ -76,6 +76,7 @@ export function AudioMessagePlayer({
     const onLoaded = () => {
       setDuration(audio.duration);
       setIsLoading(false);
+      retryCountRef.current = 0;
     };
     const onEnded = () => {
       setIsPlaying(false);
@@ -84,8 +85,20 @@ export function AudioMessagePlayer({
     };
     const onError = () => {
       cancelAnimationFrame(animFrameRef.current);
-      setIsLoading(false);
       setIsPlaying(false);
+
+      // Retry transient failures (often file not yet uploaded to Storage).
+      if (retryCountRef.current < MAX_RETRIES) {
+        const delay = RETRY_DELAYS[retryCountRef.current] ?? 10000;
+        retryCountRef.current += 1;
+        if (retryTimerRef.current) window.clearTimeout(retryTimerRef.current);
+        retryTimerRef.current = window.setTimeout(() => {
+          try { audio.load(); } catch { /* noop */ }
+        }, delay);
+        return;
+      }
+
+      setIsLoading(false);
       setHasError(true);
       reportAudioFailure({
         component: 'AudioMessagePlayer',
