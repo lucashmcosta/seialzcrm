@@ -462,7 +462,8 @@ export function ContactMessages({ contactId, opportunityId }: ContactMessagesPro
 
       if (data.threadId && data.threadId !== threadId) {
         setThreadId(data.threadId);
-        await fetchMessages(data.threadId);
+        setThreadIds((prev) => (prev.includes(data.threadId) ? prev : [data.threadId, ...prev]));
+        await fetchMessages([data.threadId, ...threadIds.filter((id) => id !== data.threadId)], data.threadId);
       }
 
       toast({ description: locale === 'pt-BR' ? 'Mensagem enviada!' : 'Message sent!' });
