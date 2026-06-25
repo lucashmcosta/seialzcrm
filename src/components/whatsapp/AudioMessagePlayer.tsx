@@ -22,6 +22,10 @@ export function AudioMessagePlayer({
 }: AudioMessagePlayerProps) {
   const audioRef = useRef<HTMLAudioElement>(null);
   const animFrameRef = useRef<number>(0);
+  const retryTimerRef = useRef<number | null>(null);
+  const retryCountRef = useRef(0);
+  const MAX_RETRIES = 3;
+  const RETRY_DELAYS = [2000, 5000, 10000];
   const [isPlaying, setIsPlaying] = useState(false);
   const [currentTime, setCurrentTime] = useState(0);
   const [duration, setDuration] = useState(0);
@@ -33,6 +37,17 @@ export function AudioMessagePlayer({
   );
 
   const srcOk = isValidHttpUrl(src);
+
+  const handleManualRetry = useCallback(() => {
+    if (retryTimerRef.current) window.clearTimeout(retryTimerRef.current);
+    retryCountRef.current = 0;
+    setHasError(false);
+    setIsLoading(true);
+    const audio = audioRef.current;
+    if (audio) {
+      try { audio.load(); } catch { /* noop */ }
+    }
+  }, []);
 
   const cycleRate = () => {
     const next = playbackRate === 1 ? 1.5 : playbackRate === 1.5 ? 2 : 1;
