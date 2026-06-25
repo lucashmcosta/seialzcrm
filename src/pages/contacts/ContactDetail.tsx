@@ -888,7 +888,7 @@ export default function ContactDetail() {
               />
             </Tabs.Panel>
 
-            <Tabs.Panel id="messages" className="flex-1 min-h-0">
+            <Tabs.Panel id="messages" className="flex-1 min-h-0 mt-4 flex flex-col overflow-hidden">
               <ContactMessages contactId={contact.id} />
             </Tabs.Panel>
 

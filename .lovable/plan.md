@@ -1,29 +1,20 @@
-## Problema
+Plano para corrigir o scroll da conversa na aba Mensagens do contato:
 
-Após fixar o input, o histórico de mensagens parou de rolar dentro da aba — a tela mostra o final da conversa mas não dá scroll para ver mensagens mais antigas.
+1. Ajustar a cadeia de altura no desktop da página de contato
+   - Trocar o wrapper principal da página de `h-full` para uma altura travada no viewport disponível (`h-[calc(100vh-var(--layout-offset...))]` ou equivalente seguro no layout atual).
+   - Manter apenas a área da aba Mensagens com `overflow-hidden`, sem afetar as outras abas.
 
-## Causa
+2. Garantir que todos os pais do chat permitam scroll interno
+   - Preservar `flex flex-col min-h-0` no wrapper da aba Mensagens.
+   - Adicionar/confirmar `overflow-hidden` no `Tabs.Panel` de Mensagens para impedir que o scroll vaze para a página.
+   - Manter o input fora da área rolável para continuar fixo no rodapé do chat.
 
-`ContactMessages.tsx` envolve as mensagens em `<ScrollArea>` (Radix). O viewport interno do Radix usa `display: table`, que não respeita bem `flex-1 min-h-0` em alguns contextos: o conteúdo cresce além do contêiner mas o wheel/touch scroll não é interceptado de forma confiável quando a altura é definida via flex. Em `WhatsAppChat.tsx`, o mesmo `ScrollArea` funciona porque tem `max-h-[400px]` explícito; aqui não há altura fixa.
+3. Corrigir a área rolável do histórico
+   - No `ContactMessages.tsx`, deixar o histórico como o único container com `overflow-y-auto` e altura flexível real.
+   - Adicionar `overscroll-contain` e padding inferior suficiente para a última mensagem não ficar colada no input.
+   - Manter o `scrollRef` no fim da lista para continuar rolando automaticamente ao carregar/enviar mensagens.
 
-## Correção
-
-Trocar o `<ScrollArea>` por um `<div>` nativo com `overflow-y-auto` no `ContactMessages.tsx`. É a mesma abordagem usada na timeline do Inbox, e garante scroll por wheel/touch sem depender da implementação interna do Radix.
-
-### Mudanças (apenas `src/components/contacts/ContactMessages.tsx`)
-
-1. Remover `import { ScrollArea } from '@/components/ui/scroll-area'` se não for usado em outro lugar do arquivo.
-2. Substituir:
-   ```tsx
-   <ScrollArea className="flex-1 min-h-0">
-     <div className="space-y-3 p-1">...</div>
-   </ScrollArea>
-   ```
-   por:
-   ```tsx
-   <div className="flex-1 min-h-0 overflow-y-auto">
-     <div className="space-y-3 p-1">...</div>
-   </div>
-   ```
-
-Nenhuma outra alteração — input continua fixo, `scrollRef.scrollIntoView` continua funcionando, e o usuário pode rolar livremente para ver o histórico.
+4. Validar visualmente
+   - Confirmar que, em conversa extensa, o input fica fixo.
+   - Confirmar que o scroll acontece dentro do histórico da conversa, não na página inteira.
+   - Não alterar backend, envio de mensagem, templates, áudio ou outras abas.
