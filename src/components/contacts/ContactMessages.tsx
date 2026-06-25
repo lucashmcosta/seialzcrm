@@ -429,6 +429,7 @@ export function ContactMessages({ contactId, opportunityId }: ContactMessagesPro
 
       if (data.threadId && data.threadId !== threadId) {
         setThreadId(data.threadId);
+        setThreadIds((prev) => (prev.includes(data.threadId) ? prev : [data.threadId, ...prev]));
       }
     } catch (error: any) {
       console.error('Error sending message:', error);
