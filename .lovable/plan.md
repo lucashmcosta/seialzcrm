@@ -1,31 +1,52 @@
-## Adicionar separador de data em ContactMessages
+## Problema
 
-A view de Mensagens dentro do Contato (`src/components/contacts/ContactMessages.tsx`) renderiza as bolhas sem o chip "Hoje / Ontem / 24 de fevereiro de 2026" que já existe na tela principal de Mensagens (via `InboxConversationTimeline` + `DateSeparator` + `shouldShowDateSeparator`).
+Na aba **Mensagens** do contato (`/contacts/:id`), o input de digitação fica no fim da lista de mensagens e rola junto com elas. Em conversas longas, o usuário precisa rolar até o fim para conseguir digitar — comportamento diferente da tela `/messages`, onde o input é fixo.
 
-### Mudança
-No `messages.map((message) => ...)` (linha ~603), passar a usar índice e mensagem anterior, e renderizar `<DateSeparator />` quando o dia muda — mesmo helper já usado no Inbox.
+## Causa
+
+`ContactMessages.tsx` já tem a estrutura correta (`flex flex-col flex-1 min-h-0` + `ScrollArea flex-1` + footer fixo no fim do flex). O problema está no **wrapper pai** em `src/pages/contacts/ContactDetail.tsx` (linha 566):
 
 ```tsx
-import { DateSeparator } from '@/components/messages/DateSeparator';
-import { shouldShowDateSeparator } from '@/lib/dateSeparator';
-
-messages.map((message, idx) => {
-  const prev = messages[idx - 1];
-  const showSep = shouldShowDateSeparator(message.sent_at, prev?.sent_at);
-  const isOutbound = message.direction === 'outbound';
-  return (
-    <div key={message.id}>
-      {showSep && <DateSeparator date={new Date(message.sent_at)} />}
-      <div className={`flex ${isOutbound ? 'justify-end' : 'justify-start'}`}>
-        {/* bolha existente inalterada */}
-      </div>
-    </div>
-  );
-})
+<div className="flex-1 overflow-auto p-6">
+  <Tabs ...>
+    ...
+    <Tabs.Panel id="messages" className="flex-1 min-h-0">
+      <ContactMessages ... />
+    </Tabs.Panel>
+  </Tabs>
+</div>
 ```
 
-Nada mais muda: mesmas regras (Hoje / Ontem / dia da semana / dd/mm/aaaa) e mesmo visual do chip da tela de Mensagens, garantindo consistência entre as duas views.
+O `overflow-auto` faz o container inteiro virar a área rolável, então o `flex-1` interno do `ContactMessages` cresce indefinidamente em vez de respeitar a altura do viewport. Resultado: histórico + input formam uma página rolável única.
 
-### Escopo
-- Arquivo único: `src/components/contacts/ContactMessages.tsx`
-- Sem mudanças em backend, hooks ou estilos globais.
+## Correção
+
+Tornar o container da aba "Mensagens" não-rolável (delegando o scroll para o `ScrollArea` interno do `ContactMessages`) **apenas quando a aba ativa for `messages`**, preservando o comportamento atual nas demais abas (que dependem do scroll global).
+
+### Mudanças (apenas em `src/pages/contacts/ContactDetail.tsx`)
+
+1. Linha 566: trocar o wrapper estático por classes condicionais:
+   ```tsx
+   <div
+     className={cn(
+       "flex-1 p-6",
+       selectedTab === 'messages'
+         ? "overflow-hidden flex flex-col min-h-0"
+         : "overflow-auto"
+     )}
+   >
+   ```
+
+2. Garantir que `<Tabs>` e `<Tabs.Panel id="messages">` propaguem altura quando messages está ativa:
+   - Adicionar `className={selectedTab === 'messages' ? 'w-full flex-1 flex flex-col min-h-0' : 'w-full'}` no `<Tabs>`.
+   - `Tabs.Panel id="messages"` já tem `flex-1 min-h-0` — manter.
+
+3. Importar `cn` de `@/lib/utils` se ainda não estiver importado.
+
+Nenhuma alteração em `ContactMessages.tsx` — sua estrutura interna já está correta (input fixo via flex). Nenhuma mudança em backend, hooks ou outras abas.
+
+## Resultado esperado
+
+- Aba Mensagens: histórico rola dentro do `ScrollArea`; input de texto + botões de mídia/áudio ficam fixos na parte inferior visível.
+- Outras abas (Detalhes, Tarefas, Notas, etc.): comportamento inalterado.
+- Mobile: inalterado (renderiza outro layout via `isMobile`).
