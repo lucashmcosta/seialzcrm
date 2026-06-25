@@ -555,12 +555,12 @@ export function ContactMessages({ contactId, opportunityId }: ContactMessagesPro
           }
           if (message.media_type === 'video' || rawUrl.match(/\.(mp4|mov|webm|avi)$/i)) {
             return (
-              <video key={i} src={url} controls className="max-w-full rounded" preload="metadata" />
+              <RetryableVideo key={i} src={url} className="max-w-full rounded" />
             );
           }
           if (message.media_type === 'image' || rawUrl.match(/\.(jpg|jpeg|png|gif|webp)$/i)) {
             return (
-              <img
+              <RetryableImage
                 key={i}
                 src={url}
                 alt="Media"
