@@ -564,7 +564,14 @@ export default function ContactDetail() {
           </div>
         </div>
 
-        <div className="flex-1 overflow-auto p-6">
+        <div
+          className={cn(
+            "flex-1 p-6",
+            selectedTab === 'messages'
+              ? "overflow-hidden flex flex-col min-h-0"
+              : "overflow-auto"
+          )}
+        >
           {/* Mobile: Native Select */}
           <NativeSelect
             aria-label="Tabs"
@@ -575,7 +582,14 @@ export default function ContactDetail() {
           />
 
           {/* Desktop: Underline Tabs */}
-          <Tabs selectedKey={selectedTab} onSelectionChange={setSelectedTab} className="w-full">
+          <Tabs
+            selectedKey={selectedTab}
+            onSelectionChange={setSelectedTab}
+            className={cn(
+              "w-full",
+              selectedTab === 'messages' && "flex-1 flex flex-col min-h-0"
+            )}
+          >
             <Tabs.List type="underline" items={tabs} className="max-md:hidden">
               {(tab) => <Tabs.Item key={tab.id} {...tab} />}
             </Tabs.List>
