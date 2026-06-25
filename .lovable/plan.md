@@ -1,52 +1,29 @@
 ## Problema
 
-Na aba **Mensagens** do contato (`/contacts/:id`), o input de digitação fica no fim da lista de mensagens e rola junto com elas. Em conversas longas, o usuário precisa rolar até o fim para conseguir digitar — comportamento diferente da tela `/messages`, onde o input é fixo.
+Após fixar o input, o histórico de mensagens parou de rolar dentro da aba — a tela mostra o final da conversa mas não dá scroll para ver mensagens mais antigas.
 
 ## Causa
 
-`ContactMessages.tsx` já tem a estrutura correta (`flex flex-col flex-1 min-h-0` + `ScrollArea flex-1` + footer fixo no fim do flex). O problema está no **wrapper pai** em `src/pages/contacts/ContactDetail.tsx` (linha 566):
-
-```tsx
-<div className="flex-1 overflow-auto p-6">
-  <Tabs ...>
-    ...
-    <Tabs.Panel id="messages" className="flex-1 min-h-0">
-      <ContactMessages ... />
-    </Tabs.Panel>
-  </Tabs>
-</div>
-```
-
-O `overflow-auto` faz o container inteiro virar a área rolável, então o `flex-1` interno do `ContactMessages` cresce indefinidamente em vez de respeitar a altura do viewport. Resultado: histórico + input formam uma página rolável única.
+`ContactMessages.tsx` envolve as mensagens em `<ScrollArea>` (Radix). O viewport interno do Radix usa `display: table`, que não respeita bem `flex-1 min-h-0` em alguns contextos: o conteúdo cresce além do contêiner mas o wheel/touch scroll não é interceptado de forma confiável quando a altura é definida via flex. Em `WhatsAppChat.tsx`, o mesmo `ScrollArea` funciona porque tem `max-h-[400px]` explícito; aqui não há altura fixa.
 
 ## Correção
 
-Tornar o container da aba "Mensagens" não-rolável (delegando o scroll para o `ScrollArea` interno do `ContactMessages`) **apenas quando a aba ativa for `messages`**, preservando o comportamento atual nas demais abas (que dependem do scroll global).
+Trocar o `<ScrollArea>` por um `<div>` nativo com `overflow-y-auto` no `ContactMessages.tsx`. É a mesma abordagem usada na timeline do Inbox, e garante scroll por wheel/touch sem depender da implementação interna do Radix.
 
-### Mudanças (apenas em `src/pages/contacts/ContactDetail.tsx`)
+### Mudanças (apenas `src/components/contacts/ContactMessages.tsx`)
 
-1. Linha 566: trocar o wrapper estático por classes condicionais:
+1. Remover `import { ScrollArea } from '@/components/ui/scroll-area'` se não for usado em outro lugar do arquivo.
+2. Substituir:
    ```tsx
-   <div
-     className={cn(
-       "flex-1 p-6",
-       selectedTab === 'messages'
-         ? "overflow-hidden flex flex-col min-h-0"
-         : "overflow-auto"
-     )}
-   >
+   <ScrollArea className="flex-1 min-h-0">
+     <div className="space-y-3 p-1">...</div>
+   </ScrollArea>
+   ```
+   por:
+   ```tsx
+   <div className="flex-1 min-h-0 overflow-y-auto">
+     <div className="space-y-3 p-1">...</div>
+   </div>
    ```
 
-2. Garantir que `<Tabs>` e `<Tabs.Panel id="messages">` propaguem altura quando messages está ativa:
-   - Adicionar `className={selectedTab === 'messages' ? 'w-full flex-1 flex flex-col min-h-0' : 'w-full'}` no `<Tabs>`.
-   - `Tabs.Panel id="messages"` já tem `flex-1 min-h-0` — manter.
-
-3. Importar `cn` de `@/lib/utils` se ainda não estiver importado.
-
-Nenhuma alteração em `ContactMessages.tsx` — sua estrutura interna já está correta (input fixo via flex). Nenhuma mudança em backend, hooks ou outras abas.
-
-## Resultado esperado
-
-- Aba Mensagens: histórico rola dentro do `ScrollArea`; input de texto + botões de mídia/áudio ficam fixos na parte inferior visível.
-- Outras abas (Detalhes, Tarefas, Notas, etc.): comportamento inalterado.
-- Mobile: inalterado (renderiza outro layout via `isMobile`).
+Nenhuma outra alteração — input continua fixo, `scrollRef.scrollIntoView` continua funcionando, e o usuário pode rolar livremente para ver o histórico.
