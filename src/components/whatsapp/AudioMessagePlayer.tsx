@@ -182,7 +182,14 @@ export function AudioMessagePlayer({
           Não foi possível carregar este áudio.
         </div>
         {srcOk && src && (
-          <div style={{ marginLeft: 6 }}>
+          <div style={{ marginLeft: 6, display: 'flex', gap: 10, alignItems: 'center' }}>
+            <button
+              type="button"
+              onClick={handleManualRetry}
+              style={{ fontSize: 11, opacity: 0.85, textDecoration: 'underline', color: 'currentColor', background: 'transparent', border: 'none', padding: 0, cursor: 'pointer' }}
+            >
+              Tentar novamente
+            </button>
             <a
               href={src}
               target="_blank"
