@@ -120,6 +120,7 @@ export function AudioMessagePlayer({
       audio.removeEventListener('ended', onEnded);
       audio.removeEventListener('error', onError);
       cancelAnimationFrame(animFrameRef.current);
+      if (retryTimerRef.current) window.clearTimeout(retryTimerRef.current);
     };
   }, [src, srcOk, messageId, threadId, mediaType]);
 
