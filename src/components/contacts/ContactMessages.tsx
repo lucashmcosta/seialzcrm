@@ -602,56 +602,60 @@ export function ContactMessages({ contactId, opportunityId }: ContactMessagesPro
               <p className="text-xs">{locale === 'pt-BR' ? 'Envie uma mensagem para iniciar a conversa' : 'Send a message to start the conversation'}</p>
             </div>
           ) : (
-            messages.map((message) => {
+            messages.map((message, idx) => {
               const isOutbound = message.direction === 'outbound';
+              const prev = messages[idx - 1];
+              const showSep = shouldShowDateSeparator(message.sent_at, prev?.sent_at);
               return (
-                <div
-                  key={message.id}
-                  className={`flex ${isOutbound ? 'justify-end' : 'justify-start'}`}
-                >
+                <div key={message.id}>
+                  {showSep && <DateSeparator date={new Date(message.sent_at)} />}
                   <div
-                    className={`max-w-[70%] rounded-lg p-3 ${
-                      isOutbound
-                        ? 'bg-green-100 dark:bg-green-900/40 text-green-900 dark:text-green-100'
-                        : 'bg-muted'
-                    }`}
+                    className={`flex ${isOutbound ? 'justify-end' : 'justify-start'}`}
                   >
-                    {/* Agent Badge */}
-                    {isOutbound && message.sender_type === 'agent' && (
-                      <div className="flex items-center gap-2 mb-2">
-                        <Badge color="purple" size="sm" icon={<Robot className="w-3 h-3" />}>
-                          {message.sender_name || 'Agente IA'}
-                        </Badge>
+                    <div
+                      className={`max-w-[70%] rounded-lg p-3 ${
+                        isOutbound
+                          ? 'bg-green-100 dark:bg-green-900/40 text-green-900 dark:text-green-100'
+                          : 'bg-muted'
+                      }`}
+                    >
+                      {/* Agent Badge */}
+                      {isOutbound && message.sender_type === 'agent' && (
+                        <div className="flex items-center gap-2 mb-2">
+                          <Badge color="purple" size="sm" icon={<Robot className="w-3 h-3" />}>
+                            {message.sender_name || 'Agente IA'}
+                          </Badge>
+                        </div>
+                      )}
+
+                      {/* Media */}
+                      {renderMediaContent(message)}
+
+                      {/* Content */}
+                      {message.content && (
+                        <WhatsAppFormattedText content={message.content} />
+                      )}
+
+                      {/* Error */}
+                      {message.error_message && (
+                        <p className="text-xs text-destructive mt-1">{message.error_message}</p>
+                      )}
+
+                      {/* Footer - Name + Time + Status */}
+                      <div className="flex items-center justify-end gap-1 mt-1">
+                        <span className="text-[10px] text-muted-foreground/70 whitespace-nowrap">
+                          {isOutbound
+                            ? (message.sender_name ? `${message.sender_name} - ` : '')
+                            : ''
+                          }
+                          {new Date(message.sent_at).toLocaleTimeString(locale, {
+                            hour: '2-digit',
+                            minute: '2-digit',
+                            hour12: false
+                          })}
+                        </span>
+                        {isOutbound && renderStatusIcon(message.whatsapp_status)}
                       </div>
-                    )}
-
-                    {/* Media */}
-                    {renderMediaContent(message)}
-
-                    {/* Content */}
-                    {message.content && (
-                      <WhatsAppFormattedText content={message.content} />
-                    )}
-
-                    {/* Error */}
-                    {message.error_message && (
-                      <p className="text-xs text-destructive mt-1">{message.error_message}</p>
-                    )}
-
-                    {/* Footer - Name + Time + Status */}
-                    <div className="flex items-center justify-end gap-1 mt-1">
-                      <span className="text-[10px] text-muted-foreground/70 whitespace-nowrap">
-                        {isOutbound 
-                          ? (message.sender_name ? `${message.sender_name} - ` : '')
-                          : ''
-                        }
-                        {new Date(message.sent_at).toLocaleTimeString(locale, {
-                          hour: '2-digit',
-                          minute: '2-digit',
-                          hour12: false
-                        })}
-                      </span>
-                      {isOutbound && renderStatusIcon(message.whatsapp_status)}
                     </div>
                   </div>
                 </div>
