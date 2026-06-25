@@ -312,33 +312,36 @@ export function ContactMessages({ contactId, opportunityId }: ContactMessagesPro
     }
   };
 
-  const fetchMessages = async (thread: string) => {
+  const fetchMessages = async (threads: string | string[], activeThread?: string) => {
     try {
+      const threadList = Array.isArray(threads) ? threads : [threads];
+      const active = activeThread || threadList[0];
       const { data, error } = await supabase
         .from('messages')
-        .select('id, content, direction, sent_at, whatsapp_status, media_urls, media_type, error_message, sender_type, sender_name, sender_agent_id')
-        .eq('thread_id', thread)
+        .select('id, thread_id, content, direction, sent_at, whatsapp_status, media_urls, media_type, error_message, sender_type, sender_name, sender_agent_id')
+        .in('thread_id', threadList)
         .is('deleted_at', null)
         .order('sent_at', { ascending: true });
 
       if (error) throw error;
       const loadedMessages = (data as Message[]) || [];
       setMessages(loadedMessages);
-      
-      // Recalculate 24h window with message fallback
-      if (!isIn24hWindow && loadedMessages.length > 0) {
+
+      // Recalculate 24h window based on the active thread
+      if (!isIn24hWindow && loadedMessages.length > 0 && active) {
         const { data: threadData } = await supabase
           .from('message_threads')
           .select('last_inbound_at, whatsapp_last_inbound_at')
-          .eq('id', thread)
+          .eq('id', active)
           .single();
-        const lastInboundTime = getLastInboundTime(threadData as any, loadedMessages);
+        const activeMessages = loadedMessages.filter((m: any) => m.thread_id === active);
+        const lastInboundTime = getLastInboundTime(threadData as any, activeMessages);
         if (lastInboundTime) {
           const hoursDiff = (Date.now() - lastInboundTime.getTime()) / (1000 * 60 * 60);
           setIsIn24hWindow(hoursDiff < 24);
         }
       }
-      
+
       scrollToBottom();
     } catch (error) {
       console.error('Error fetching messages:', error);
