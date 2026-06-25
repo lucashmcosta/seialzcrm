@@ -275,23 +275,26 @@ export function ContactMessages({ contactId, opportunityId }: ContactMessagesPro
       // Store the resolved contact ID for use in send functions
       setResolvedContactId(targetContactId);
 
-      // Multiple threads per (org, contact, channel) are allowed when separated
-      // by primary_endpoint_id — pick the most recently updated one.
-      const { data: thread } = await supabase
+      // Fetch ALL threads for this contact on whatsapp channel.
+      // The most recent one is the "active" thread (used for sending and
+      // 24h-window calculation); older threads are merged into the timeline
+      // so the user sees full history.
+      const { data: threads } = await supabase
         .from('message_threads')
-        .select('id, whatsapp_last_inbound_at, last_inbound_at')
+        .select('id, whatsapp_last_inbound_at, last_inbound_at, updated_at')
         .eq('organization_id', organization.id)
         .eq('contact_id', targetContactId)
         .eq('channel', 'whatsapp')
-        .order('updated_at', { ascending: false })
-        .limit(1)
-        .maybeSingle();
+        .order('updated_at', { ascending: false });
 
-      if (thread) {
-        setThreadId(thread.id);
-        
-        // Check 24h window - will be recalculated after messages load
-        const lastInboundAt = (thread as any).last_inbound_at || thread.whatsapp_last_inbound_at;
+      if (threads && threads.length > 0) {
+        const ids = threads.map((t) => t.id);
+        setThreadIds(ids);
+        const activeThread = threads[0];
+        setThreadId(activeThread.id);
+
+        // Check 24h window based on the active (most recent) thread
+        const lastInboundAt = (activeThread as any).last_inbound_at || activeThread.whatsapp_last_inbound_at;
         if (lastInboundAt) {
           const lastInbound = new Date(lastInboundAt);
           const now = new Date();
@@ -299,7 +302,7 @@ export function ContactMessages({ contactId, opportunityId }: ContactMessagesPro
           setIsIn24hWindow(hoursDiff < 24);
         }
 
-        await fetchMessages(thread.id);
+        await fetchMessages(ids, activeThread.id);
       } else {
         setLoading(false);
       }
