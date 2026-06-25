@@ -589,7 +589,7 @@ export function ContactMessages({ contactId, opportunityId }: ContactMessagesPro
       {/* 24h window warning removed - handled in input area */}
 
       {/* Messages */}
-      <ScrollArea className="flex-1 min-h-0">
+      <div className="flex-1 min-h-0 overflow-y-auto">
         <div className="space-y-3 p-1">
           {messages.length === 0 ? (
             <div className="flex flex-col items-center justify-center py-12 text-muted-foreground">
