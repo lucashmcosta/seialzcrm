@@ -31,6 +31,7 @@ import { WhatsAppTemplateSelector } from '@/components/whatsapp/WhatsAppTemplate
 import { AudioRecorder } from '@/components/whatsapp/AudioRecorder';
 import { audioBlobToFile } from '@/lib/audioBlobToFile';
 import { AudioMessagePlayer } from '@/components/whatsapp/AudioMessagePlayer';
+import { RetryableImage, RetryableVideo } from '@/components/whatsapp/RetryableMedia';
 import { getProxiedMediaUrl } from '@/lib/mediaProxy';
 import { MediaUploadButton } from '@/components/whatsapp/MediaUploadButton';
 import { WhatsAppFormattedText } from '@/components/whatsapp/WhatsAppFormattedText';
