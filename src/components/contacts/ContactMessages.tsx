@@ -79,6 +79,7 @@ export function ContactMessages({ contactId, opportunityId }: ContactMessagesPro
 
   const [messages, setMessages] = useState<Message[]>([]);
   const [threadId, setThreadId] = useState<string | null>(null);
+  const [threadIds, setThreadIds] = useState<string[]>([]);
   const [resolvedContactId, setResolvedContactId] = useState<string | null>(contactId || null);
   const [loading, setLoading] = useState(true);
   const [messageText, setMessageText] = useState('');
@@ -118,21 +119,21 @@ export function ContactMessages({ contactId, opportunityId }: ContactMessagesPro
     fetchThread();
   }, [contactId, opportunityId, organization?.id]);
 
-  // Real-time subscription
+  // Real-time subscription — listen to all threads of this contact
   useEffect(() => {
-    if (!threadId) return;
+    if (threadIds.length === 0) return;
 
+    const threadSet = new Set(threadIds);
     const channel = supabase
-      .channel(`contact-whatsapp-messages-${threadId}`)
+      .channel(`contact-whatsapp-messages-${threadIds.join('-')}`)
       .on('postgres_changes', {
         event: 'INSERT',
         schema: 'public',
         table: 'messages',
-        filter: `thread_id=eq.${threadId}`,
       }, (payload) => {
-        const newMessage = payload.new as Message;
+        const newMessage = payload.new as Message & { thread_id?: string };
+        if (!newMessage.thread_id || !threadSet.has(newMessage.thread_id)) return;
         setMessages((prev) => {
-          // Avoid duplicates and remove temp messages
           const filtered = prev.filter(
             (m) => !m.id.startsWith('temp-') && m.id !== newMessage.id
           );
@@ -144,10 +145,11 @@ export function ContactMessages({ contactId, opportunityId }: ContactMessagesPro
         event: 'UPDATE',
         schema: 'public',
         table: 'messages',
-        filter: `thread_id=eq.${threadId}`,
       }, (payload) => {
+        const updated = payload.new as Message & { thread_id?: string };
+        if (!updated.thread_id || !threadSet.has(updated.thread_id)) return;
         setMessages((prev) =>
-          prev.map((m) => (m.id === payload.new.id ? (payload.new as Message) : m))
+          prev.map((m) => (m.id === updated.id ? updated : m))
         );
       })
       .subscribe();
@@ -155,7 +157,7 @@ export function ContactMessages({ contactId, opportunityId }: ContactMessagesPro
     return () => {
       supabase.removeChannel(channel);
     };
-  }, [threadId]);
+  }, [threadIds.join(',')]);
 
   // Real-time subscription for thread updates (24h window)
   useEffect(() => {
@@ -273,23 +275,26 @@ export function ContactMessages({ contactId, opportunityId }: ContactMessagesPro
       // Store the resolved contact ID for use in send functions
       setResolvedContactId(targetContactId);
 
-      // Multiple threads per (org, contact, channel) are allowed when separated
-      // by primary_endpoint_id — pick the most recently updated one.
-      const { data: thread } = await supabase
+      // Fetch ALL threads for this contact on whatsapp channel.
+      // The most recent one is the "active" thread (used for sending and
+      // 24h-window calculation); older threads are merged into the timeline
+      // so the user sees full history.
+      const { data: threads } = await supabase
         .from('message_threads')
-        .select('id, whatsapp_last_inbound_at, last_inbound_at')
+        .select('id, whatsapp_last_inbound_at, last_inbound_at, updated_at')
         .eq('organization_id', organization.id)
         .eq('contact_id', targetContactId)
         .eq('channel', 'whatsapp')
-        .order('updated_at', { ascending: false })
-        .limit(1)
-        .maybeSingle();
+        .order('updated_at', { ascending: false });
 
-      if (thread) {
-        setThreadId(thread.id);
-        
-        // Check 24h window - will be recalculated after messages load
-        const lastInboundAt = (thread as any).last_inbound_at || thread.whatsapp_last_inbound_at;
+      if (threads && threads.length > 0) {
+        const ids = threads.map((t) => t.id);
+        setThreadIds(ids);
+        const activeThread = threads[0];
+        setThreadId(activeThread.id);
+
+        // Check 24h window based on the active (most recent) thread
+        const lastInboundAt = (activeThread as any).last_inbound_at || activeThread.whatsapp_last_inbound_at;
         if (lastInboundAt) {
           const lastInbound = new Date(lastInboundAt);
           const now = new Date();
@@ -297,7 +302,7 @@ export function ContactMessages({ contactId, opportunityId }: ContactMessagesPro
           setIsIn24hWindow(hoursDiff < 24);
         }
 
-        await fetchMessages(thread.id);
+        await fetchMessages(ids, activeThread.id);
       } else {
         setLoading(false);
       }
@@ -307,33 +312,36 @@ export function ContactMessages({ contactId, opportunityId }: ContactMessagesPro
     }
   };
 
-  const fetchMessages = async (thread: string) => {
+  const fetchMessages = async (threads: string | string[], activeThread?: string) => {
     try {
+      const threadList = Array.isArray(threads) ? threads : [threads];
+      const active = activeThread || threadList[0];
       const { data, error } = await supabase
         .from('messages')
-        .select('id, content, direction, sent_at, whatsapp_status, media_urls, media_type, error_message, sender_type, sender_name, sender_agent_id')
-        .eq('thread_id', thread)
+        .select('id, thread_id, content, direction, sent_at, whatsapp_status, media_urls, media_type, error_message, sender_type, sender_name, sender_agent_id')
+        .in('thread_id', threadList)
         .is('deleted_at', null)
         .order('sent_at', { ascending: true });
 
       if (error) throw error;
       const loadedMessages = (data as Message[]) || [];
       setMessages(loadedMessages);
-      
-      // Recalculate 24h window with message fallback
-      if (!isIn24hWindow && loadedMessages.length > 0) {
+
+      // Recalculate 24h window based on the active thread
+      if (!isIn24hWindow && loadedMessages.length > 0 && active) {
         const { data: threadData } = await supabase
           .from('message_threads')
           .select('last_inbound_at, whatsapp_last_inbound_at')
-          .eq('id', thread)
+          .eq('id', active)
           .single();
-        const lastInboundTime = getLastInboundTime(threadData as any, loadedMessages);
+        const activeMessages = loadedMessages.filter((m: any) => m.thread_id === active);
+        const lastInboundTime = getLastInboundTime(threadData as any, activeMessages);
         if (lastInboundTime) {
           const hoursDiff = (Date.now() - lastInboundTime.getTime()) / (1000 * 60 * 60);
           setIsIn24hWindow(hoursDiff < 24);
         }
       }
-      
+
       scrollToBottom();
     } catch (error) {
       console.error('Error fetching messages:', error);
@@ -421,6 +429,7 @@ export function ContactMessages({ contactId, opportunityId }: ContactMessagesPro
 
       if (data.threadId && data.threadId !== threadId) {
         setThreadId(data.threadId);
+        setThreadIds((prev) => (prev.includes(data.threadId) ? prev : [data.threadId, ...prev]));
       }
     } catch (error: any) {
       console.error('Error sending message:', error);
@@ -453,7 +462,8 @@ export function ContactMessages({ contactId, opportunityId }: ContactMessagesPro
 
       if (data.threadId && data.threadId !== threadId) {
         setThreadId(data.threadId);
-        await fetchMessages(data.threadId);
+        setThreadIds((prev) => (prev.includes(data.threadId) ? prev : [data.threadId, ...prev]));
+        await fetchMessages([data.threadId, ...threadIds.filter((id) => id !== data.threadId)], data.threadId);
       }
 
       toast({ description: locale === 'pt-BR' ? 'Mensagem enviada!' : 'Message sent!' });
