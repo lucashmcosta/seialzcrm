@@ -79,6 +79,7 @@ export function ContactMessages({ contactId, opportunityId }: ContactMessagesPro
 
   const [messages, setMessages] = useState<Message[]>([]);
   const [threadId, setThreadId] = useState<string | null>(null);
+  const [threadIds, setThreadIds] = useState<string[]>([]);
   const [resolvedContactId, setResolvedContactId] = useState<string | null>(contactId || null);
   const [loading, setLoading] = useState(true);
   const [messageText, setMessageText] = useState('');
