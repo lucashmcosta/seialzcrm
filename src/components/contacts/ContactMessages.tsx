@@ -35,6 +35,8 @@ import { getProxiedMediaUrl } from '@/lib/mediaProxy';
 import { MediaUploadButton } from '@/components/whatsapp/MediaUploadButton';
 import { WhatsAppFormattedText } from '@/components/whatsapp/WhatsAppFormattedText';
 import EmojiPicker, { EmojiClickData, Theme } from 'emoji-picker-react';
+import { DateSeparator } from '@/components/messages/DateSeparator';
+import { shouldShowDateSeparator } from '@/lib/dateSeparator';
 
 interface Message {
   id: string;
