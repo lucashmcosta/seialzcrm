@@ -119,21 +119,21 @@ export function ContactMessages({ contactId, opportunityId }: ContactMessagesPro
     fetchThread();
   }, [contactId, opportunityId, organization?.id]);
 
-  // Real-time subscription
+  // Real-time subscription — listen to all threads of this contact
   useEffect(() => {
-    if (!threadId) return;
+    if (threadIds.length === 0) return;
 
+    const threadSet = new Set(threadIds);
     const channel = supabase
-      .channel(`contact-whatsapp-messages-${threadId}`)
+      .channel(`contact-whatsapp-messages-${threadIds.join('-')}`)
       .on('postgres_changes', {
         event: 'INSERT',
         schema: 'public',
         table: 'messages',
-        filter: `thread_id=eq.${threadId}`,
       }, (payload) => {
-        const newMessage = payload.new as Message;
+        const newMessage = payload.new as Message & { thread_id?: string };
+        if (!newMessage.thread_id || !threadSet.has(newMessage.thread_id)) return;
         setMessages((prev) => {
-          // Avoid duplicates and remove temp messages
           const filtered = prev.filter(
             (m) => !m.id.startsWith('temp-') && m.id !== newMessage.id
           );
@@ -145,10 +145,11 @@ export function ContactMessages({ contactId, opportunityId }: ContactMessagesPro
         event: 'UPDATE',
         schema: 'public',
         table: 'messages',
-        filter: `thread_id=eq.${threadId}`,
       }, (payload) => {
+        const updated = payload.new as Message & { thread_id?: string };
+        if (!updated.thread_id || !threadSet.has(updated.thread_id)) return;
         setMessages((prev) =>
-          prev.map((m) => (m.id === payload.new.id ? (payload.new as Message) : m))
+          prev.map((m) => (m.id === updated.id ? updated : m))
         );
       })
       .subscribe();
@@ -156,7 +157,7 @@ export function ContactMessages({ contactId, opportunityId }: ContactMessagesPro
     return () => {
       supabase.removeChannel(channel);
     };
-  }, [threadId]);
+  }, [threadIds.join(',')]);
 
   // Real-time subscription for thread updates (24h window)
   useEffect(() => {
