@@ -22,6 +22,10 @@ export function AudioMessagePlayer({
 }: AudioMessagePlayerProps) {
   const audioRef = useRef<HTMLAudioElement>(null);
   const animFrameRef = useRef<number>(0);
+  const retryTimerRef = useRef<number | null>(null);
+  const retryCountRef = useRef(0);
+  const MAX_RETRIES = 3;
+  const RETRY_DELAYS = [2000, 5000, 10000];
   const [isPlaying, setIsPlaying] = useState(false);
   const [currentTime, setCurrentTime] = useState(0);
   const [duration, setDuration] = useState(0);
@@ -33,6 +37,17 @@ export function AudioMessagePlayer({
   );
 
   const srcOk = isValidHttpUrl(src);
+
+  const handleManualRetry = useCallback(() => {
+    if (retryTimerRef.current) window.clearTimeout(retryTimerRef.current);
+    retryCountRef.current = 0;
+    setHasError(false);
+    setIsLoading(true);
+    const audio = audioRef.current;
+    if (audio) {
+      try { audio.load(); } catch { /* noop */ }
+    }
+  }, []);
 
   const cycleRate = () => {
     const next = playbackRate === 1 ? 1.5 : playbackRate === 1.5 ? 2 : 1;
@@ -61,6 +76,7 @@ export function AudioMessagePlayer({
     const onLoaded = () => {
       setDuration(audio.duration);
       setIsLoading(false);
+      retryCountRef.current = 0;
     };
     const onEnded = () => {
       setIsPlaying(false);
@@ -69,8 +85,20 @@ export function AudioMessagePlayer({
     };
     const onError = () => {
       cancelAnimationFrame(animFrameRef.current);
-      setIsLoading(false);
       setIsPlaying(false);
+
+      // Retry transient failures (often file not yet uploaded to Storage).
+      if (retryCountRef.current < MAX_RETRIES) {
+        const delay = RETRY_DELAYS[retryCountRef.current] ?? 10000;
+        retryCountRef.current += 1;
+        if (retryTimerRef.current) window.clearTimeout(retryTimerRef.current);
+        retryTimerRef.current = window.setTimeout(() => {
+          try { audio.load(); } catch { /* noop */ }
+        }, delay);
+        return;
+      }
+
+      setIsLoading(false);
       setHasError(true);
       reportAudioFailure({
         component: 'AudioMessagePlayer',
@@ -92,6 +120,7 @@ export function AudioMessagePlayer({
       audio.removeEventListener('ended', onEnded);
       audio.removeEventListener('error', onError);
       cancelAnimationFrame(animFrameRef.current);
+      if (retryTimerRef.current) window.clearTimeout(retryTimerRef.current);
     };
   }, [src, srcOk, messageId, threadId, mediaType]);
 
@@ -153,7 +182,14 @@ export function AudioMessagePlayer({
           Não foi possível carregar este áudio.
         </div>
         {srcOk && src && (
-          <div style={{ marginLeft: 6 }}>
+          <div style={{ marginLeft: 6, display: 'flex', gap: 10, alignItems: 'center' }}>
+            <button
+              type="button"
+              onClick={handleManualRetry}
+              style={{ fontSize: 11, opacity: 0.85, textDecoration: 'underline', color: 'currentColor', background: 'transparent', border: 'none', padding: 0, cursor: 'pointer' }}
+            >
+              Tentar novamente
+            </button>
             <a
               href={src}
               target="_blank"

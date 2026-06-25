@@ -31,6 +31,7 @@ import { WhatsAppTemplateSelector } from '@/components/whatsapp/WhatsAppTemplate
 import { AudioRecorder } from '@/components/whatsapp/AudioRecorder';
 import { audioBlobToFile } from '@/lib/audioBlobToFile';
 import { AudioMessagePlayer } from '@/components/whatsapp/AudioMessagePlayer';
+import { RetryableImage, RetryableVideo } from '@/components/whatsapp/RetryableMedia';
 import { getProxiedMediaUrl } from '@/lib/mediaProxy';
 import { MediaUploadButton } from '@/components/whatsapp/MediaUploadButton';
 import { WhatsAppFormattedText } from '@/components/whatsapp/WhatsAppFormattedText';
@@ -554,12 +555,12 @@ export function ContactMessages({ contactId, opportunityId }: ContactMessagesPro
           }
           if (message.media_type === 'video' || rawUrl.match(/\.(mp4|mov|webm|avi)$/i)) {
             return (
-              <video key={i} src={url} controls className="max-w-full rounded" preload="metadata" />
+              <RetryableVideo key={i} src={url} className="max-w-full rounded" />
             );
           }
           if (message.media_type === 'image' || rawUrl.match(/\.(jpg|jpeg|png|gif|webp)$/i)) {
             return (
-              <img
+              <RetryableImage
                 key={i}
                 src={url}
                 alt="Media"

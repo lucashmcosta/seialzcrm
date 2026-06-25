@@ -1,39 +1,33 @@
-# Exibir histórico completo de mensagens do contato
-
 ## Problema
 
-A contato ANA LUCIA MOREIRA BALBINO tem **2 threads** de WhatsApp no banco:
+Áudios recém-enviados às vezes mostram "Não foi possível carregar este áudio" (e o mesmo para mensagens com mídia). O arquivo `.ogg` realmente existe no Storage do Supabase, mas no instante em que o `<audio>` do navegador tentou carregar pela primeira vez, o upload ainda não tinha terminado (a mensagem é inserida no banco logo após o INSERT pelo Railway/edge, antes do arquivo aparecer publicamente). O browser dispara `error`, o `AudioMessagePlayer` marca `hasError=true` e **nunca tenta de novo**, mesmo depois que o arquivo já está disponível — só F5 resolve.
 
-| Thread | Criada em | Mensagens | Última msg |
-|---|---|---|---|
-| `1ca34450…` (antiga) | 22/jun | 47 | hoje 13:59 |
-| `59494c5f…` (atual) | hoje 14:24 | 8 | hoje 17:21 |
-
-A aba **Mensagens** do contato usa `.limit(1)` ao buscar a thread (`ContactMessages.tsx` linha 278-286), então só renderiza a thread mais recente — por isso o histórico aparenta começar "Hoje". Não é dado perdido, é só a UI escondendo a thread antiga.
-
-Isso acontece sempre que uma nova conversa é aberta para um contato que já tinha thread (ex.: endpoint diferente, ou nova conversa criada manualmente).
+Confirmei o diagnóstico testando os arquivos da conversa Adriano/Tamires: todos respondem HTTP 200 `audio/ogg` agora, mas a UI ficou travada no estado de erro do primeiro carregamento.
 
 ## Solução
 
-Carregar **todas** as threads WhatsApp do contato e mesclar as mensagens em ordem cronológica única na timeline. A thread "ativa" para envio/janela 24h continua sendo a mais recente (comportamento atual preservado).
+Tornar o `AudioMessagePlayer` resiliente a falhas transitórias de carregamento, com retry automático e fallback manual. Sem mudar backend nem schema.
 
-### Mudanças em `src/components/contacts/ContactMessages.tsx`
+### Mudanças
 
-1. **Buscar todas as threads** do contato (canal whatsapp), ordenadas por `updated_at desc`, em vez de `.limit(1).maybeSingle()`.
-2. **Guardar `threadIds: string[]`** (todas) além do `threadId` atual (a mais recente — usada para envio, janela 24h e realtime de updates).
-3. **`fetchMessages`** passa a usar `.in('thread_id', threadIds)` para retornar mensagens de todas as threads, ordenadas por `sent_at`.
-4. **Realtime de novas mensagens**: ajustar o filtro do canal Supabase para escutar todas as threads (criar um channel com filtro `thread_id=in.(...)` ou um channel por thread). Manter o realtime de `message_threads` apenas na thread ativa (janela 24h).
-5. **Envio (texto/áudio/template)**: continua usando `threadId` ativo. Se a edge function retornar um `threadId` diferente, ele é adicionado à lista e vira o ativo (já é o fluxo atual).
-6. **Separadores de data** já são gerados a partir do array `messages` ordenado, então funcionam automaticamente após o merge.
+**1. `src/components/whatsapp/AudioMessagePlayer.tsx`** — adicionar retry com backoff:
+- Novo estado `retryCount` (0..N) e `isRetrying`.
+- No handler `onError` do `<audio>`: se `retryCount < 3`, agendar um retry com backoff (2s → 5s → 10s) que faz `audio.load()` (forçando re-fetch da URL). Só marca `hasError=true` após esgotar as tentativas.
+- Quando `hasError=true` (já tentou tudo), mostrar a UI atual ("Não foi possível carregar este áudio" + "Baixar áudio") **mais** um botão **"Tentar novamente"** que reseta `retryCount`/`hasError` e chama `audio.load()`.
+- Pequeno spinner/texto "Carregando áudio..." enquanto está em estado `isRetrying`, no lugar do botão de play, pra dar feedback visual.
+- Manter `reportAudioFailure` apenas após esgotar os retries (não reportar a cada tentativa) pra não poluir Sentry.
 
-### Fora do escopo
+**2. Mesmo padrão para `<video>` e `<img>` em `src/components/contacts/ContactMessages.tsx`** (e equivalentes na inbox se aplicável):
+- Wrapper leve que detecta `onError` e tenta recarregar com backoff (2s/5s/10s) antes de mostrar fallback definitivo de erro com botão "Tentar novamente".
+- Para vídeo: simples — adicionar key dinâmica + `onError` que faz `videoRef.load()`.
+- Para imagem: trocar `src` com cache-buster (`?r=N`) no retry.
 
-- Não unificar threads no banco (são threads separadas legítimas, possivelmente de endpoints diferentes).
-- Não mudar a aba Mensagens global nem o Inbox.
-- Sem mudanças de backend, schema ou edge functions.
+### Onde NÃO mexer
 
-## Validação
+- Backend / Railway / edge functions: não alterar a ordem INSERT vs upload. A solução de frontend já cobre 100% dos casos observados e é menos arriscada.
+- Layout, design system, cores: sem mudanças visuais além do botão "Tentar novamente" e do estado de loading.
 
-- Abrir o contato ANA LUCIA: devem aparecer as 47 + 8 = 55 mensagens, com separadores "22 jun", "23 jun"…, "Hoje".
-- Enviar nova mensagem: deve entrar na thread ativa (mais recente) e aparecer no fim da lista.
-- Receber nova mensagem inbound em qualquer thread: aparece em tempo real.
+## Resultado esperado
+
+- Áudio recém-enviado que falhar no primeiro `loadedmetadata` vai tentar de novo após 2s/5s/10s automaticamente, sem o usuário fazer nada. Como o upload do `.ogg` da Twilio raramente passa de poucos segundos, na prática o player vai "se curar" sozinho.
+- Se mesmo após 3 tentativas o arquivo realmente não existir (caso raro de upload que falhou de fato), aparece "Não foi possível carregar este áudio" com **"Tentar novamente"** + "Baixar áudio", e o usuário consegue se desbloquear sem precisar dar F5 na página.
