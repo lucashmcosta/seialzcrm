@@ -9,6 +9,13 @@ serve((req) => {
   if (req.method === "OPTIONS") {
     return new Response("ok", { headers: corsHeaders });
   }
+  // DEBUG TEMP: lista env keys que contenham META para diagnóstico
+  try {
+    const envKeys = Object.keys(Deno.env.toObject()).filter((k) => k.includes("META"));
+    console.log("[platform-status] meta env keys:", envKeys);
+  } catch (e) {
+    console.log("[platform-status] env list err", (e as Error).message);
+  }
   return new Response(JSON.stringify(getPlatformStatus()), {
     status: 200,
     headers: { ...corsHeaders, "Content-Type": "application/json" },
