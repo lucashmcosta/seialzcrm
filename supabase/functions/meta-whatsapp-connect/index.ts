@@ -71,12 +71,17 @@ serve(async (req) => {
       .maybeSingle();
     if (!userRow?.id) return err(403, "user_not_found");
 
-    const { data: membership } = await admin
+    const { data: membership, error: memErr } = await admin
       .from("user_organizations")
-      .select("organization_id, role")
+      .select("organization_id, is_active")
       .eq("user_id", userRow.id)
       .eq("organization_id", body.organizationId)
+      .eq("is_active", true)
       .maybeSingle();
+    if (memErr) {
+      console.error("[meta-whatsapp-connect] membership query error", memErr);
+      return err(500, "membership_query_failed", { details: memErr.message });
+    }
     if (!membership) return err(403, "not_a_member");
 
     // Valida credenciais Meta (Graph API). App secret é opcional aqui — appsecret_proof
