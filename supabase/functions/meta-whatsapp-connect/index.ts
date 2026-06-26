@@ -29,6 +29,13 @@ function err(status: number, message: string, extra: Record<string, unknown> = {
   });
 }
 
+function validationResult(message: string, extra: Record<string, unknown> = {}) {
+  return new Response(JSON.stringify({ ok: false, error: message, ...extra }), {
+    status: 200,
+    headers: { ...corsHeaders, "Content-Type": "application/json" },
+  });
+}
+
 serve(async (req) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: corsHeaders });
   if (req.method !== "POST") return err(405, "method_not_allowed");
@@ -113,7 +120,7 @@ serve(async (req) => {
         });
       } catch (e) {
         if (e instanceof MetaWaGraphError) {
-          return err(400, "meta_validation_failed", {
+          return validationResult("meta_validation_failed", {
             meta_error: e.error,
             step: "graph_api",
           });
@@ -121,7 +128,7 @@ serve(async (req) => {
         throw e;
       }
       if (!meta.belongs_to_waba) {
-        return err(400, "phone_not_in_waba", {
+        return validationResult("phone_not_in_waba", {
           message: "O Phone Number ID informado não pertence ao WABA informado.",
         });
       }

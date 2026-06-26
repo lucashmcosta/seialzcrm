@@ -13,7 +13,7 @@ import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Separator } from "@/components/ui/separator";
 import { ConfirmDialog } from "@/components/ui/confirm-dialog";
 import { CheckCircle, Warning, Eye, EyeSlash, ArrowsClockwise, LinkSimple, Plug } from "@phosphor-icons/react";
-import { metaWhatsAppService } from "@/services/metaWhatsAppService";
+import { MetaWhatsAppValidationError, metaWhatsAppService } from "@/services/metaWhatsAppService";
 
 interface Props {
   open: boolean;
@@ -73,7 +73,15 @@ export function MetaWhatsAppCloudDialog({ open, onOpenChange, integration, orgIn
       qc.invalidateQueries({ queryKey: ["organization-integrations"] });
       onOpenChange(false);
     },
-    onError: (e: any) => toast.error(`Falha ao salvar: ${e?.message ?? e}`),
+    onError: (e: any) => {
+      if (e instanceof MetaWhatsAppValidationError) {
+        toast.error("A Meta recusou a validação", {
+          description: "Se você só quer trocar número/ID agora, use Salvar sem validar.",
+        });
+        return;
+      }
+      toast.error(`Falha ao salvar: ${e?.message ?? e}`);
+    },
   });
 
   const verifyMutation = useMutation({
@@ -278,17 +286,18 @@ export function MetaWhatsAppCloudDialog({ open, onOpenChange, integration, orgIn
                 <div className="flex gap-2">
                   <Button
                     variant="outline"
+                    onClick={() => connectMutation.mutate({})}
+                    disabled={!canSubmit || connectMutation.isPending}
+                    title="Confere os dados na Graph API da Meta antes de salvar."
+                  >
+                    {connectMutation.isPending ? "Validando..." : "Validar na Meta"}
+                  </Button>
+                  <Button
                     onClick={() => connectMutation.mutate({ skipMetaValidation: true })}
                     disabled={!canSubmit || connectMutation.isPending}
                     title="Salva os dados sem chamar a Graph API da Meta. Use quando souber que os IDs estão corretos mas a Meta está recusando."
                   >
                     {connectMutation.isPending ? "Salvando..." : "Salvar sem validar"}
-                  </Button>
-                  <Button
-                    onClick={() => connectMutation.mutate({})}
-                    disabled={!canSubmit || connectMutation.isPending}
-                  >
-                    {connectMutation.isPending ? "Conectando..." : isConnected ? "Validar e salvar" : "Conectar"}
                   </Button>
                 </div>
               </div>
