@@ -258,7 +258,7 @@ Deno.serve(async (req) => {
   }
 
   // SSRF guard: restrict file_url to known SuvSign hosts
-  const ALLOWED_FILE_HOSTS = ["suvsign.com", "suvsign.com.br", "amazonaws.com"];
+  const ALLOWED_FILE_HOSTS = ["suvsign.com", "suvsign.com.br", "amazonaws.com", "vpysvlbfsvomwrgbpybc.supabase.co"];
   try {
     const parsed = new URL(fileUrl);
     if (parsed.protocol !== "https:") throw new Error("non-https file_url");
