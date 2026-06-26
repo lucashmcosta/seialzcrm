@@ -72,7 +72,7 @@ serve(async (req) => {
         .from("communication_endpoints")
         .select("id, organization_id, organization_integration_id, sender_sid, external_address, provider, is_active")
         .eq("organization_id", organizationId)
-        .eq("provider", "meta-cloud")
+        .eq("provider", "meta_cloud_api")
         .eq("is_active", true)
         .order("created_at", { ascending: false })
         .limit(1)
@@ -83,7 +83,7 @@ serve(async (req) => {
     if (endpoint.organization_id !== organizationId) {
       return jsonResponse(403, { error: "endpoint_org_mismatch" });
     }
-    if (endpoint.provider !== "meta-cloud") {
+    if (endpoint.provider !== "meta_cloud_api") {
       return jsonResponse(400, { error: "endpoint_not_meta_cloud" });
     }
     if (!endpoint.sender_sid) return jsonResponse(400, { error: "missing_phone_number_id" });
@@ -240,7 +240,7 @@ serve(async (req) => {
         messageId: insertedMsg.id,
         wamid,
         threadId: currentThreadId,
-        provider: "meta-cloud",
+        provider: "meta_cloud_api",
       });
     } catch (e) {
       const errDetails = e instanceof MetaWaGraphError

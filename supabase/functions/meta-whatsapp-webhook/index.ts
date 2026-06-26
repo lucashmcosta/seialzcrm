@@ -85,7 +85,7 @@ serve(async (req) => {
         const { data: endpoint } = await supabase
           .from("communication_endpoints")
           .select("id, organization_id, organization_integration_id")
-          .eq("provider", "meta-cloud")
+          .eq("provider", "meta_cloud_api")
           .eq("sender_sid", phoneNumberId)
           .maybeSingle();
         if (!endpoint) {

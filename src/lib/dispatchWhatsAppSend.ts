@@ -26,7 +26,7 @@ export interface WhatsAppSendPayload {
   endpointId?: string;
 }
 
-type Provider = "twilio" | "meta-cloud";
+type Provider = "twilio" | "meta_cloud_api";
 
 async function resolveProvider(payload: WhatsAppSendPayload): Promise<Provider> {
   if (payload.endpointId) {
@@ -35,7 +35,7 @@ async function resolveProvider(payload: WhatsAppSendPayload): Promise<Provider> 
       .select("provider")
       .eq("id", payload.endpointId)
       .maybeSingle();
-    if ((data as any)?.provider === "meta-cloud") return "meta-cloud";
+    if ((data as any)?.provider === "meta_cloud_api") return "meta_cloud_api";
     return "twilio";
   }
   if (payload.threadId) {
@@ -51,7 +51,7 @@ async function resolveProvider(payload: WhatsAppSendPayload): Promise<Provider> 
         .select("provider")
         .eq("id", pid)
         .maybeSingle();
-      if ((ep as any)?.provider === "meta-cloud") return "meta-cloud";
+      if ((ep as any)?.provider === "meta_cloud_api") return "meta_cloud_api";
     }
   }
   return "twilio";
@@ -63,7 +63,7 @@ async function resolveProvider(payload: WhatsAppSendPayload): Promise<Provider> 
  */
 export async function dispatchWhatsAppSend(payload: WhatsAppSendPayload) {
   const provider = await resolveProvider(payload);
-  const fnName = provider === "meta-cloud" ? "meta-whatsapp-send" : "twilio-whatsapp-send";
+  const fnName = provider === "meta_cloud_api" ? "meta-whatsapp-send" : "twilio-whatsapp-send";
   // eslint-disable-next-line no-restricted-syntax
   return await supabase.functions.invoke(fnName, { body: payload });
 }
