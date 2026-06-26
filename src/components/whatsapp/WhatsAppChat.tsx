@@ -357,7 +357,7 @@ export function WhatsAppChat({ contactId, threadId: initialThreadId, onThreadCre
               threadId={(message as any).thread_id}
               mediaType={mediaType}
               timestamp={isAudioOnly ? formatDistanceToNow(new Date(message.sent_at), { addSuffix: true, locale: dateLocale }) : undefined}
-              statusIcon={isAudioOnly && msgIsOutbound ? renderStatusIcon(message.whatsapp_status) : undefined}
+              statusIcon={isAudioOnly && msgIsOutbound ? renderStatusIcon(message) : undefined}
             />;
           }
 
@@ -481,12 +481,11 @@ export function WhatsAppChat({ contactId, threadId: initialThreadId, onThreadCre
                       <WhatsAppFormattedText content={message.content} />
                     )}
 
-                    {/* Error */}
-                    {message.error_message && (
-                      <p className="text-xs text-destructive mt-1">{message.error_message}</p>
+                    {/* Inline failure reason (substitui o error_message bruto) */}
+                    {message.whatsapp_status === 'failed' && (
+                      <MessageFailureInline errorCode={message.error_code} />
                     )}
 
-                    {/* Footer */}
                     {/* Footer (hidden for audio-only, rendered inside player) */}
                     {!(message.media_type === 'audio' && !message.content) && (
                     <div className="flex items-center justify-end gap-1 mt-1">
@@ -497,7 +496,7 @@ export function WhatsAppChat({ contactId, threadId: initialThreadId, onThreadCre
                           locale: dateLocale,
                         })}
                       </span>
-                      {isOutbound && renderStatusIcon(message.whatsapp_status)}
+                      {isOutbound && renderStatusIcon(message)}
                     </div>
                     )}
                   </div>
