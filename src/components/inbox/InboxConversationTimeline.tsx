@@ -48,7 +48,7 @@ function Media({ msg, orgId, accessToken }: { msg: InboxMessageRow; orgId: strin
               threadId={msg.thread_id}
               mediaType={msg.media_type}
               timestamp={isAudioOnly ? new Date(msg.sent_at).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' }) : undefined}
-              statusIcon={isAudioOnly && isOutbound ? <StatusIcon status={msg.whatsapp_status} /> : undefined}
+              statusIcon={isAudioOnly && isOutbound ? <StatusIcon msg={msg} /> : undefined}
             />
           );
         }
@@ -204,8 +204,11 @@ export function InboxConversationTimeline({ threadId, organizationId, contactNam
                     {!isAudioOnly && (
                       <div className={`flex items-center justify-end gap-1 mt-1 text-[11px] ${isOutbound ? 'text-primary-foreground/70' : 'text-muted-foreground'}`}>
                         <span>{timeStr}</span>
-                        {isOutbound && <StatusIcon status={m.whatsapp_status} />}
+                        {isOutbound && <StatusIcon msg={m} />}
                       </div>
+                    )}
+                    {isOutbound && m.whatsapp_status === 'failed' && (
+                      <MessageFailureInline errorCode={m.error_code} className={isOutbound ? 'text-destructive/90' : ''} />
                     )}
                   </div>
                   {onReply && (
