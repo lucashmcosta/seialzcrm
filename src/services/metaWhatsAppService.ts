@@ -31,6 +31,32 @@ export interface ConnectResult {
   };
 }
 
+export class MetaWhatsAppValidationError extends Error {
+  code = "meta_validation_failed";
+  metaError?: { message?: string; code?: number; error_subcode?: number; fbtrace_id?: string };
+
+  constructor(metaError?: MetaWhatsAppValidationError["metaError"]) {
+    super("A Meta recusou a validação deste Phone Number ID com o token informado.");
+    this.name = "MetaWhatsAppValidationError";
+    this.metaError = metaError;
+  }
+}
+
+async function readFunctionError(error: unknown, data: unknown) {
+  if (data && typeof data === "object") return data as Record<string, any>;
+
+  const context = (error as any)?.context;
+  if (context && typeof context.json === "function") {
+    try {
+      return await context.clone().json();
+    } catch {
+      return null;
+    }
+  }
+
+  return null;
+}
+
 export const metaWhatsAppService = {
   async getPlatformStatus(): Promise<PlatformStatus> {
     const { data, error } = await supabase.functions.invoke("meta-whatsapp-platform-status", {
@@ -45,11 +71,17 @@ export const metaWhatsAppService = {
       body: input,
     });
     if (error) {
-      const fnError = (data ?? {}) as any;
+      const fnError = await readFunctionError(error, data);
+      if (fnError?.error === "meta_validation_failed") {
+        throw new MetaWhatsAppValidationError(fnError.meta_error);
+      }
       const message = fnError?.error || error.message || "connect_failed";
       throw new Error(message);
     }
     if ((data as any)?.error) {
+      if ((data as any).error === "meta_validation_failed") {
+        throw new MetaWhatsAppValidationError((data as any).meta_error);
+      }
       throw new Error((data as any).error);
     }
     return data as ConnectResult;
