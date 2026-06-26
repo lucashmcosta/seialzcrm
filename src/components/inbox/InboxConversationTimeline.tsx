@@ -1,10 +1,11 @@
 import { useEffect, useRef, useState } from 'react';
-import { SpinnerGap, Check, Checks, Clock, WarningCircle, FileText, ArrowBendUpLeft } from '@phosphor-icons/react';
+import { SpinnerGap, FileText, ArrowBendUpLeft } from '@phosphor-icons/react';
 import { supabase } from '@/integrations/supabase/client';
 import { useInboxThreadMessages, type InboxMessageRow } from '@/hooks/inbox/useInboxThreadMessages';
 import { AudioMessagePlayer } from '@/components/whatsapp/AudioMessagePlayer';
 import { WhatsAppFormattedText } from '@/components/whatsapp/WhatsAppFormattedText';
 import { QuotedMessage } from '@/components/whatsapp/QuotedMessage';
+import { MessageStatusIndicator, MessageFailureInline } from '@/components/whatsapp/MessageStatusIndicator';
 import { getProxiedMediaUrl } from '@/lib/mediaProxy';
 import { DateSeparator } from '@/components/messages/DateSeparator';
 import { shouldShowDateSeparator } from '@/lib/dateSeparator';
