@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef } from 'react';
+import { dispatchWhatsAppSend } from "@/lib/dispatchWhatsAppSend";
 import { useOrganization } from '@/hooks/useOrganization';
 import { useTranslation } from '@/lib/i18n';
 import { supabase } from '@/integrations/supabase/client';
@@ -409,8 +410,7 @@ export function ContactMessages({ contactId, opportunityId }: ContactMessagesPro
     scrollToBottom();
 
     try {
-      const { data, error } = await supabase.functions.invoke('twilio-whatsapp-send', {
-        body: {
+      const { data, error } = await dispatchWhatsAppSend({
           organizationId: organization.id,
           contactId: resolvedContactId,
           threadId,
@@ -418,8 +418,7 @@ export function ContactMessages({ contactId, opportunityId }: ContactMessagesPro
           mediaUrl,
           mediaType,
           userId: userProfile?.id,
-        },
-      });
+        });
 
       if (error) throw error;
 
@@ -452,16 +451,14 @@ export function ContactMessages({ contactId, opportunityId }: ContactMessagesPro
     setShowTemplates(false);
 
     try {
-      const { data, error } = await supabase.functions.invoke('twilio-whatsapp-send', {
-        body: {
+      const { data, error } = await dispatchWhatsAppSend({
           organizationId: organization.id,
           contactId: resolvedContactId,
           threadId,
           templateId,
           templateVariables: variables,
           userId: userProfile?.id,
-        },
-      });
+        });
 
       if (error) throw error;
       if (data.error) throw new Error(data.error);
