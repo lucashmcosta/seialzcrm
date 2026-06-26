@@ -84,27 +84,18 @@ serve(async (req) => {
           throw new Error('Integração WhatsApp não configurada');
         }
 
-        // Enviar mensagem via edge function twilio-whatsapp-send
-        const sendResponse = await fetch(`${supabaseUrl}/functions/v1/twilio-whatsapp-send`, {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            'Authorization': `Bearer ${supabaseServiceKey}`,
-          },
-          body: JSON.stringify({
-            organizationId: message.organization_id,
-            contactId: message.contact_id,
-            threadId: message.thread_id,
-            content: message.content,
-            senderType: 'agent',
-            senderAgentId: message.ai_agent_id,
-          }),
+        // Enviar mensagem via dispatcher (Twilio ou Meta Cloud, conforme provider do endpoint)
+        const sendResult = await dispatchWhatsAppSend({
+          organizationId: message.organization_id,
+          contactId: message.contact_id,
+          threadId: message.thread_id,
+          message: message.content,
+          isAgentMessage: !!message.ai_agent_id,
+          agentId: message.ai_agent_id ?? undefined,
         });
 
-        const sendResult = await sendResponse.json();
-
-        if (!sendResponse.ok || sendResult.error) {
-          throw new Error(sendResult.error || 'Falha ao enviar mensagem');
+        if (sendResult.error) {
+          throw new Error(sendResult.error.message || 'Falha ao enviar mensagem');
         }
 
         // Atualizar mensagem como enviada
