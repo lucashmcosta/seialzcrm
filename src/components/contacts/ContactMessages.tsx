@@ -35,6 +35,7 @@ import { RetryableImage, RetryableVideo } from '@/components/whatsapp/RetryableM
 import { getProxiedMediaUrl } from '@/lib/mediaProxy';
 import { MediaUploadButton } from '@/components/whatsapp/MediaUploadButton';
 import { WhatsAppFormattedText } from '@/components/whatsapp/WhatsAppFormattedText';
+import { MessageStatusIndicator, MessageFailureInline } from '@/components/whatsapp/MessageStatusIndicator';
 import EmojiPicker, { EmojiClickData, Theme } from 'emoji-picker-react';
 import { DateSeparator } from '@/components/messages/DateSeparator';
 import { shouldShowDateSeparator } from '@/lib/dateSeparator';
@@ -48,6 +49,8 @@ interface Message {
   media_urls: string[] | null;
   media_type: string | null;
   error_message: string | null;
+  error_code: string | null;
+  whatsapp_message_sid: string | null;
   sender_type: 'user' | 'agent' | 'system' | null;
   sender_name: string | null;
   sender_agent_id: string | null;
@@ -319,7 +322,7 @@ export function ContactMessages({ contactId, opportunityId }: ContactMessagesPro
       const active = activeThread || threadList[0];
       const { data, error } = await supabase
         .from('messages')
-        .select('id, thread_id, content, direction, sent_at, whatsapp_status, media_urls, media_type, error_message, sender_type, sender_name, sender_agent_id')
+        .select('id, thread_id, content, direction, sent_at, whatsapp_status, whatsapp_message_sid, media_urls, media_type, error_message, error_code, sender_type, sender_name, sender_agent_id')
         .in('thread_id', threadList)
         .is('deleted_at', null)
         .order('sent_at', { ascending: true });
@@ -393,6 +396,8 @@ export function ContactMessages({ contactId, opportunityId }: ContactMessagesPro
       media_urls: mediaUrl ? [mediaUrl] : null,
       media_type: mediaType || null,
       error_message: null,
+      error_code: null,
+      whatsapp_message_sid: null,
       sender_type: 'user',
       sender_name: userProfile?.full_name || null,
       sender_agent_id: null,
@@ -526,22 +531,15 @@ export function ContactMessages({ contactId, opportunityId }: ContactMessagesPro
     textareaRef.current?.focus();
   };
 
-  const renderStatusIcon = (status: string | null) => {
-    switch (status) {
-      case 'sending':
-        return <Clock className="w-3 h-3 text-muted-foreground" />;
-      case 'sent':
-        return <Check className="w-3 h-3 text-muted-foreground" />;
-      case 'delivered':
-        return <Checks className="w-3 h-3 text-muted-foreground" />;
-      case 'read':
-        return <Checks className="w-3 h-3 text-blue-500" />;
-      case 'failed':
-        return <WarningCircle className="w-3 h-3 text-destructive" />;
-      default:
-        return null;
-    }
-  };
+  const renderStatusIcon = (message: Message) => (
+    <MessageStatusIndicator
+      status={message.whatsapp_status}
+      errorCode={message.error_code}
+      errorMessage={message.error_message}
+      sid={message.whatsapp_message_sid}
+      sentAt={message.sent_at}
+    />
+  );
 
   const renderMediaContent = (message: Message) => {
     if (!message.media_urls || message.media_urls.length === 0) return null;
@@ -647,9 +645,9 @@ export function ContactMessages({ contactId, opportunityId }: ContactMessagesPro
                         <WhatsAppFormattedText content={message.content} />
                       )}
 
-                      {/* Error */}
-                      {message.error_message && (
-                        <p className="text-xs text-destructive mt-1">{message.error_message}</p>
+                      {/* Inline failure reason */}
+                      {message.whatsapp_status === 'failed' && (
+                        <MessageFailureInline errorCode={message.error_code} />
                       )}
 
                       {/* Footer - Name + Time + Status */}
@@ -665,7 +663,7 @@ export function ContactMessages({ contactId, opportunityId }: ContactMessagesPro
                             hour12: false
                           })}
                         </span>
-                        {isOutbound && renderStatusIcon(message.whatsapp_status)}
+                        {isOutbound && renderStatusIcon(message)}
                       </div>
                     </div>
                   </div>

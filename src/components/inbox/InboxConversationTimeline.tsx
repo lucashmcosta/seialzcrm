@@ -1,10 +1,11 @@
 import { useEffect, useRef, useState } from 'react';
-import { SpinnerGap, Check, Checks, Clock, WarningCircle, FileText, ArrowBendUpLeft } from '@phosphor-icons/react';
+import { SpinnerGap, FileText, ArrowBendUpLeft } from '@phosphor-icons/react';
 import { supabase } from '@/integrations/supabase/client';
 import { useInboxThreadMessages, type InboxMessageRow } from '@/hooks/inbox/useInboxThreadMessages';
 import { AudioMessagePlayer } from '@/components/whatsapp/AudioMessagePlayer';
 import { WhatsAppFormattedText } from '@/components/whatsapp/WhatsAppFormattedText';
 import { QuotedMessage } from '@/components/whatsapp/QuotedMessage';
+import { MessageStatusIndicator, MessageFailureInline } from '@/components/whatsapp/MessageStatusIndicator';
 import { getProxiedMediaUrl } from '@/lib/mediaProxy';
 import { DateSeparator } from '@/components/messages/DateSeparator';
 import { shouldShowDateSeparator } from '@/lib/dateSeparator';
@@ -16,15 +17,16 @@ interface Props {
   onReply?: (msg: InboxMessageRow) => void;
 }
 
-function StatusIcon({ status }: { status: string | null }) {
-  switch (status) {
-    case 'sending': return <Clock className="w-3 h-3 opacity-70" />;
-    case 'sent': return <Check className="w-3 h-3 opacity-70" />;
-    case 'delivered': return <Checks className="w-3 h-3 opacity-70" />;
-    case 'read': return <Checks className="w-3 h-3 text-sky-400" />;
-    case 'failed': return <WarningCircle className="w-3 h-3 text-destructive" />;
-    default: return null;
-  }
+function StatusIcon({ msg }: { msg: InboxMessageRow }) {
+  return (
+    <MessageStatusIndicator
+      status={msg.whatsapp_status}
+      errorCode={msg.error_code}
+      errorMessage={msg.error_message}
+      sentAt={msg.sent_at}
+      iconClassName="opacity-70"
+    />
+  );
 }
 
 function Media({ msg, orgId, accessToken }: { msg: InboxMessageRow; orgId: string | undefined; accessToken: string | undefined }) {
@@ -46,7 +48,7 @@ function Media({ msg, orgId, accessToken }: { msg: InboxMessageRow; orgId: strin
               threadId={msg.thread_id}
               mediaType={msg.media_type}
               timestamp={isAudioOnly ? new Date(msg.sent_at).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' }) : undefined}
-              statusIcon={isAudioOnly && isOutbound ? <StatusIcon status={msg.whatsapp_status} /> : undefined}
+              statusIcon={isAudioOnly && isOutbound ? <StatusIcon msg={msg} /> : undefined}
             />
           );
         }
@@ -202,8 +204,11 @@ export function InboxConversationTimeline({ threadId, organizationId, contactNam
                     {!isAudioOnly && (
                       <div className={`flex items-center justify-end gap-1 mt-1 text-[11px] ${isOutbound ? 'text-primary-foreground/70' : 'text-muted-foreground'}`}>
                         <span>{timeStr}</span>
-                        {isOutbound && <StatusIcon status={m.whatsapp_status} />}
+                        {isOutbound && <StatusIcon msg={m} />}
                       </div>
+                    )}
+                    {isOutbound && m.whatsapp_status === 'failed' && (
+                      <MessageFailureInline errorCode={m.error_code} className={isOutbound ? 'text-destructive/90' : ''} />
                     )}
                   </div>
                   {onReply && (

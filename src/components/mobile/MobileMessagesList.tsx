@@ -29,6 +29,7 @@ import {
   MagnifyingGlass, Plus, X,
 } from '@phosphor-icons/react';
 import { WhatsAppTemplateSelector } from '@/components/whatsapp/WhatsAppTemplateSelector';
+import { MessageStatusIndicator, MessageFailureInline } from '@/components/whatsapp/MessageStatusIndicator';
 import { AudioRecorder } from '@/components/whatsapp/AudioRecorder';
 import { audioBlobToFile } from '@/lib/audioBlobToFile';
 import { MediaUploadButton } from '@/components/whatsapp/MediaUploadButton';
@@ -58,6 +59,8 @@ interface Message {
   media_urls: string[] | null;
   media_type: string | null;
   error_message: string | null;
+  error_code: string | null;
+  whatsapp_message_sid: string | null;
   reply_to_message_id: string | null;
   reply_to_message?: { content: string; direction: string } | null;
   sender_type: 'user' | 'agent' | 'system' | null;
@@ -453,7 +456,7 @@ export function MobileMessagesList() {
     const tempMessage: Message = {
       id: tempId, content: messageText, direction: 'outbound',
       sent_at: new Date().toISOString(), whatsapp_status: 'sending',
-      media_urls: null, media_type: null, error_message: null,
+      media_urls: null, media_type: null, error_message: null, error_code: null, whatsapp_message_sid: null,
       reply_to_message_id: replyingTo?.id || null,
       reply_to_message: replyingTo ? { content: replyingTo.content, direction: replyingTo.direction } : null,
       sender_type: 'user', sender_name: userProfile?.full_name || null, sender_agent_id: null,
@@ -501,7 +504,7 @@ export function MobileMessagesList() {
     setMessages(prev => [...prev, {
       id: tempId, content: '📋 Template...', direction: 'outbound',
       sent_at: new Date().toISOString(), whatsapp_status: 'sending',
-      media_urls: null, media_type: null, error_message: null,
+      media_urls: null, media_type: null, error_message: null, error_code: null, whatsapp_message_sid: null,
       reply_to_message_id: null, reply_to_message: null,
       sender_type: 'user', sender_name: userProfile?.full_name || null, sender_agent_id: null,
     }]);
@@ -556,7 +559,7 @@ export function MobileMessagesList() {
     setMessages(prev => [...prev, {
       id: tempId, content: displayContent, direction: 'outbound',
       sent_at: new Date().toISOString(), whatsapp_status: 'sending',
-      media_urls: null, media_type: mediaType, error_message: null,
+      media_urls: null, media_type: mediaType, error_message: null, error_code: null, whatsapp_message_sid: null,
       reply_to_message_id: savedReplyTo?.id || null,
       reply_to_message: savedReplyTo ? { content: savedReplyTo.content, direction: savedReplyTo.direction } : null,
       sender_type: 'user', sender_name: userProfile?.full_name || null, sender_agent_id: null,
@@ -605,16 +608,15 @@ export function MobileMessagesList() {
     } catch { /* ignore */ } finally { setAiImproving(false); }
   };
 
-  const renderStatusIcon = (status: string | null) => {
-    switch (status) {
-      case 'sending': return <Clock className="w-3 h-3 text-muted-foreground" />;
-      case 'sent': return <Check className="w-3 h-3 text-muted-foreground" />;
-      case 'delivered': return <Checks className="w-3 h-3 text-muted-foreground" />;
-      case 'read': return <Checks className="w-3 h-3 text-blue-500" />;
-      case 'failed': return <WarningCircle className="w-3 h-3 text-destructive" />;
-      default: return null;
-    }
-  };
+  const renderStatusIcon = (message: Message) => (
+    <MessageStatusIndicator
+      status={message.whatsapp_status}
+      errorCode={message.error_code}
+      errorMessage={message.error_message}
+      sid={message.whatsapp_message_sid}
+      sentAt={message.sent_at}
+    />
+  );
 
   // ─── Filters ──────────────────────────────────────────────────
   const filteredThreads = threads?.filter((thread) => {
@@ -961,7 +963,7 @@ export function MobileMessagesList() {
                                         threadId={(message as any).thread_id}
                                         mediaType={message.media_type}
                                         timestamp={isAudioOnly ? new Date(message.sent_at).toLocaleTimeString(locale, { hour: '2-digit', minute: '2-digit', hour12: false }) : undefined}
-                                        statusIcon={isAudioOnly && isOutbound ? renderStatusIcon(message.whatsapp_status) : undefined}
+                                        statusIcon={isAudioOnly && isOutbound ? renderStatusIcon(message) : undefined}
                                       />;
                                     }
                                     if (message.media_type === 'image' || rawUrl.match(/\.(jpg|jpeg|png|gif|webp)$/i))
@@ -981,8 +983,8 @@ export function MobileMessagesList() {
                                 <p className="text-sm whitespace-pre-wrap break-all">{message.content}</p>
                               )}
 
-                              {message.error_message && (
-                                <p className="text-[10px] text-destructive mt-0.5">{message.error_message}</p>
+                              {message.whatsapp_status === 'failed' && (
+                                <MessageFailureInline errorCode={message.error_code} />
                               )}
 
                               {/* Footer (hidden for audio-only, rendered inside player) */}
@@ -991,7 +993,7 @@ export function MobileMessagesList() {
                                 <span className={cn('text-[11px] leading-[14px]', isOutbound ? 'text-white/60' : 'text-muted-foreground/70')}>
                                   {new Date(message.sent_at).toLocaleTimeString(locale, { hour: '2-digit', minute: '2-digit', hour12: false })}
                                 </span>
-                                {isOutbound && renderStatusIcon(message.whatsapp_status)}
+                                {isOutbound && renderStatusIcon(message)}
                               </div>
                               )}
                             </div>
