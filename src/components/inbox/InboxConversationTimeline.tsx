@@ -17,15 +17,16 @@ interface Props {
   onReply?: (msg: InboxMessageRow) => void;
 }
 
-function StatusIcon({ status }: { status: string | null }) {
-  switch (status) {
-    case 'sending': return <Clock className="w-3 h-3 opacity-70" />;
-    case 'sent': return <Check className="w-3 h-3 opacity-70" />;
-    case 'delivered': return <Checks className="w-3 h-3 opacity-70" />;
-    case 'read': return <Checks className="w-3 h-3 text-sky-400" />;
-    case 'failed': return <WarningCircle className="w-3 h-3 text-destructive" />;
-    default: return null;
-  }
+function StatusIcon({ msg }: { msg: InboxMessageRow }) {
+  return (
+    <MessageStatusIndicator
+      status={msg.whatsapp_status}
+      errorCode={msg.error_code}
+      errorMessage={msg.error_message}
+      sentAt={msg.sent_at}
+      iconClassName="opacity-70"
+    />
+  );
 }
 
 function Media({ msg, orgId, accessToken }: { msg: InboxMessageRow; orgId: string | undefined; accessToken: string | undefined }) {
