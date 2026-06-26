@@ -3,6 +3,7 @@ import { createClient } from "jsr:@supabase/supabase-js@2";
 import { corsHeaders } from "../_shared/cors.ts";
 import { notifyOrgUsers } from "../_shared/notify.ts";
 import { validateServiceRoleAuth } from "../_shared/auth.ts";
+import { dispatchWhatsAppSend } from "../_shared/dispatch-whatsapp-send.ts";
 
 function normalizePhoneToE164(phone: string): string {
   if (!phone) return "";
