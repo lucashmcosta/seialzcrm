@@ -16,6 +16,7 @@ export interface ConnectInput {
   phoneNumberId: string;
   phoneE164: string;
   systemUserToken: string;
+  skipMetaValidation?: boolean;
 }
 
 export interface ConnectResult {
