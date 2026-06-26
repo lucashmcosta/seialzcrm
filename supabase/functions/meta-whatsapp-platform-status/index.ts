@@ -1,4 +1,5 @@
 // Retorna o estado dos secrets globais Meta WhatsApp Cloud.
+// build: 2026-06-26T22:00 (bump para recarregar env após criação dos secrets globais)
 // Endpoint público (verify_jwt=false), retorna apenas booleans — nenhum valor de secret trafega.
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { corsHeaders } from "../_shared/cors.ts";
