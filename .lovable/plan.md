@@ -1,26 +1,33 @@
 ## Problema
 
-Os secrets `META_WHATSAPP_APP_SECRET` e `META_WHATSAPP_VERIFY_TOKEN` já estão salvos no projeto (confirmado via `fetch_secrets`), mas a edge `meta-whatsapp-platform-status` ainda retorna `false` para os dois. Isso significa que o runtime das edge functions ainda não recarregou o ambiente com os novos secrets.
+Hoje o botão "Conectar" sempre chama a Graph API da Meta pra validar Phone Number ID + WABA + Token antes de salvar. Se a Meta recusa (mesmo que os dados estejam corretos do seu lado), nada é gravado — então você não consegue só trocar o número e o Phone Number ID de uma conexão já existente.
 
-```
-curl .../meta-whatsapp-platform-status
-→ {"appSecretConfigured":false,"verifyTokenConfigured":false,"webhookActive":false}
-```
+## O que vou fazer
 
-## Causa
+Permitir **editar** uma conexão Meta WhatsApp Cloud já existente sem precisar passar pela validação Graph API.
 
-No Supabase, secrets recém-criados só aparecem em `Deno.env.get(...)` depois que cada função é redeployada (o runtime cacheia o env no boot da função).
+### 1. Edge function `meta-whatsapp-connect`
+- Aceitar uma flag `skipMetaValidation: true` no body.
+- Quando ela vier:
+  - Pular a chamada `validateCredentials` (sem `/me`, sem `/{phone_number_id}`, sem checagem de WABA).
+  - Gravar/atualizar `organization_integrations` e `communication_endpoints` direto com os valores enviados (App ID, WABA ID, Phone Number ID, telefone E.164, token).
+  - Preencher `display_phone_number` com o E.164 informado, e deixar `verified_name`/`quality_rating`/`messaging_limit_tier` como `null` (ou manter os antigos, se já existirem).
 
-## Ação (1 passo)
+### 2. UI `MetaWhatsAppCloudDialog`
+- Quando a organização já tem integração conectada, mostrar um modo "Editar conexão" com os campos pré-preenchidos.
+- Adicionar um botão secundário **"Salvar sem validar na Meta"** que chama o connect com `skipMetaValidation: true`.
+- O botão principal "Conectar / Validar" continua funcionando do jeito atual pra quem quer revalidar.
 
-Forçar redeploy das duas funções que leem esses secrets, sem alterar lógica:
+### 3. Service `metaWhatsAppService.connect`
+- Adicionar `skipMetaValidation?: boolean` em `ConnectInput` e repassar pro edge function.
 
-1. `meta-whatsapp-platform-status` — toca o arquivo para regerar deploy (bump de comentário de versão no topo).
-2. `meta-whatsapp-webhook` — mesmo bump, para que o handshake GET e a validação HMAC passem a enxergar os secrets.
+## Detalhes técnicos
 
-Nenhuma outra mudança de código, schema ou config. Após o redeploy:
+- Arquivos tocados:
+  - `supabase/functions/meta-whatsapp-connect/index.ts`
+  - `src/services/metaWhatsAppService.ts`
+  - `src/components/integrations/meta-whatsapp-cloud/MetaWhatsAppCloudDialog.tsx`
+- Sem mudança de schema, sem migration.
+- Segurança: a checagem de membership na organização continua igual — só pulamos a chamada externa à Meta.
 
-- O painel admin (`/admin/integrations/.../Configuração da Plataforma`) deve mostrar os 3 itens como **Configurado / Ativo** em até 15s (o `useQuery` faz refetch a cada 15s).
-- Verificação manual: `curl .../meta-whatsapp-platform-status` deve devolver `{"appSecretConfigured":true,"verifyTokenConfigured":true,"webhookActive":true}`.
-
-Se mesmo após o redeploy continuar `false`, investigo se houve falha de propagação no lado do Supabase (raro) antes de mexer em qualquer outra coisa.
+Confirma que é isso? Se sim, eu implemento.

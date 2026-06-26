@@ -60,16 +60,20 @@ export function MetaWhatsAppCloudDialog({ open, onOpenChange, integration, orgIn
   });
 
   const connectMutation = useMutation({
-    mutationFn: async () => {
+    mutationFn: async (opts: { skipMetaValidation?: boolean } = {}) => {
       if (!organization?.id) throw new Error("Organização indisponível");
-      return await metaWhatsAppService.connect({ organizationId: organization.id, ...form });
+      return await metaWhatsAppService.connect({
+        organizationId: organization.id,
+        ...form,
+        skipMetaValidation: opts.skipMetaValidation,
+      });
     },
-    onSuccess: () => {
-      toast.success("Meta WhatsApp Cloud conectado!");
+    onSuccess: (_data, vars) => {
+      toast.success(vars?.skipMetaValidation ? "Dados salvos (sem validação Meta)" : "Meta WhatsApp Cloud conectado!");
       qc.invalidateQueries({ queryKey: ["organization-integrations"] });
       onOpenChange(false);
     },
-    onError: (e: any) => toast.error(`Falha ao conectar: ${e?.message ?? e}`),
+    onError: (e: any) => toast.error(`Falha ao salvar: ${e?.message ?? e}`),
   });
 
   const verifyMutation = useMutation({
@@ -193,91 +197,102 @@ export function MetaWhatsAppCloudDialog({ open, onOpenChange, integration, orgIn
               )}
             </Card>
 
-            {/* ===== Form de conexão / reconexão ===== */}
-            {!isConnected && (
-              <Card className="p-4 space-y-4">
-                <h4 className="font-medium">Dados do número (organização)</h4>
+            {/* ===== Form de conexão / edição ===== */}
+            <Card className="p-4 space-y-4">
+              <h4 className="font-medium">
+                {isConnected ? "Editar dados do número" : "Dados do número (organização)"}
+              </h4>
 
-                <div className="grid grid-cols-2 gap-3">
-                  <div className="space-y-1.5">
-                    <Label htmlFor="meta-app-id">App ID</Label>
-                    <Input
-                      id="meta-app-id"
-                      value={form.appId}
-                      placeholder="1234567890123456"
-                      onChange={(e) => setForm((f) => ({ ...f, appId: e.target.value.trim() }))}
-                    />
-                  </div>
-                  <div className="space-y-1.5">
-                    <Label htmlFor="meta-waba-id">WABA ID</Label>
-                    <Input
-                      id="meta-waba-id"
-                      value={form.wabaId}
-                      placeholder="9876543210987654"
-                      onChange={(e) => setForm((f) => ({ ...f, wabaId: e.target.value.trim() }))}
-                    />
-                  </div>
-                  <div className="space-y-1.5">
-                    <Label htmlFor="meta-phone-id">Phone Number ID</Label>
-                    <Input
-                      id="meta-phone-id"
-                      value={form.phoneNumberId}
-                      placeholder="1122334455667788"
-                      onChange={(e) => setForm((f) => ({ ...f, phoneNumberId: e.target.value.trim() }))}
-                    />
-                  </div>
-                  <div className="space-y-1.5">
-                    <Label htmlFor="meta-phone-e164">Número (E.164)</Label>
-                    <Input
-                      id="meta-phone-e164"
-                      value={form.phoneE164}
-                      placeholder="+5511999999999"
-                      onChange={(e) => setForm((f) => ({ ...f, phoneE164: e.target.value.trim() }))}
-                    />
-                  </div>
-                </div>
-
+              <div className="grid grid-cols-2 gap-3">
                 <div className="space-y-1.5">
-                  <Label htmlFor="meta-token">System User Token (permanente)</Label>
-                  <div className="relative">
-                    <Input
-                      id="meta-token"
-                      type={showToken ? "text" : "password"}
-                      value={form.systemUserToken}
-                      placeholder="EAAB..."
-                      onChange={(e) => setForm((f) => ({ ...f, systemUserToken: e.target.value }))}
-                      className="pr-10"
-                    />
-                    <button
-                      type="button"
-                      onClick={() => setShowToken((s) => !s)}
-                      className="absolute right-2 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
-                    >
-                      {showToken ? <EyeSlash className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
-                    </button>
-                  </div>
-                  <p className="text-xs text-muted-foreground">
-                    Será criptografado antes de salvar. Não trafega de volta ao navegador.
-                  </p>
+                  <Label htmlFor="meta-app-id">App ID</Label>
+                  <Input
+                    id="meta-app-id"
+                    value={form.appId}
+                    placeholder="1234567890123456"
+                    onChange={(e) => setForm((f) => ({ ...f, appId: e.target.value.trim() }))}
+                  />
                 </div>
+                <div className="space-y-1.5">
+                  <Label htmlFor="meta-waba-id">WABA ID</Label>
+                  <Input
+                    id="meta-waba-id"
+                    value={form.wabaId}
+                    placeholder="9876543210987654"
+                    onChange={(e) => setForm((f) => ({ ...f, wabaId: e.target.value.trim() }))}
+                  />
+                </div>
+                <div className="space-y-1.5">
+                  <Label htmlFor="meta-phone-id">Phone Number ID</Label>
+                  <Input
+                    id="meta-phone-id"
+                    value={form.phoneNumberId}
+                    placeholder="1122334455667788"
+                    onChange={(e) => setForm((f) => ({ ...f, phoneNumberId: e.target.value.trim() }))}
+                  />
+                </div>
+                <div className="space-y-1.5">
+                  <Label htmlFor="meta-phone-e164">Número (E.164)</Label>
+                  <Input
+                    id="meta-phone-e164"
+                    value={form.phoneE164}
+                    placeholder="+5511999999999"
+                    onChange={(e) => setForm((f) => ({ ...f, phoneE164: e.target.value.trim() }))}
+                  />
+                </div>
+              </div>
 
-                <div className="flex justify-between items-center pt-1">
-                  <a
-                    href="https://developers.facebook.com/docs/whatsapp/cloud-api/get-started"
-                    target="_blank" rel="noreferrer"
-                    className="text-xs text-primary inline-flex items-center gap-1"
+              <div className="space-y-1.5">
+                <Label htmlFor="meta-token">System User Token (permanente)</Label>
+                <div className="relative">
+                  <Input
+                    id="meta-token"
+                    type={showToken ? "text" : "password"}
+                    value={form.systemUserToken}
+                    placeholder="EAAB..."
+                    onChange={(e) => setForm((f) => ({ ...f, systemUserToken: e.target.value }))}
+                    className="pr-10"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setShowToken((s) => !s)}
+                    className="absolute right-2 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
                   >
-                    <LinkSimple className="h-3 w-3" /> Documentação Meta Cloud
-                  </a>
+                    {showToken ? <EyeSlash className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                  </button>
+                </div>
+                <p className="text-xs text-muted-foreground">
+                  Será criptografado antes de salvar. Não trafega de volta ao navegador.
+                  {isConnected && " Cole o token novamente para atualizar — ele não é exibido de volta."}
+                </p>
+              </div>
+
+              <div className="flex justify-between items-center pt-1 gap-2 flex-wrap">
+                <a
+                  href="https://developers.facebook.com/docs/whatsapp/cloud-api/get-started"
+                  target="_blank" rel="noreferrer"
+                  className="text-xs text-primary inline-flex items-center gap-1"
+                >
+                  <LinkSimple className="h-3 w-3" /> Documentação Meta Cloud
+                </a>
+                <div className="flex gap-2">
                   <Button
-                    onClick={() => connectMutation.mutate()}
+                    variant="outline"
+                    onClick={() => connectMutation.mutate({ skipMetaValidation: true })}
+                    disabled={!canSubmit || connectMutation.isPending}
+                    title="Salva os dados sem chamar a Graph API da Meta. Use quando souber que os IDs estão corretos mas a Meta está recusando."
+                  >
+                    {connectMutation.isPending ? "Salvando..." : "Salvar sem validar"}
+                  </Button>
+                  <Button
+                    onClick={() => connectMutation.mutate({})}
                     disabled={!canSubmit || connectMutation.isPending}
                   >
-                    {connectMutation.isPending ? "Conectando..." : "Conectar"}
+                    {connectMutation.isPending ? "Conectando..." : isConnected ? "Validar e salvar" : "Conectar"}
                   </Button>
                 </div>
-              </Card>
-            )}
+              </div>
+            </Card>
           </div>
         </DialogContent>
       </Dialog>

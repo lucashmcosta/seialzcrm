@@ -19,6 +19,7 @@ interface ConnectBody {
   systemUserToken: string;
   endpointPurpose?: "customer_service" | "other";
   displayName?: string;
+  skipMetaValidation?: boolean;
 }
 
 function err(status: number, message: string, extra: Record<string, unknown> = {}) {
@@ -84,30 +85,46 @@ serve(async (req) => {
     }
     if (!membership) return err(403, "not_a_member");
 
-    // Valida credenciais Meta (Graph API). App secret é opcional aqui — appsecret_proof
-    // só é exigido em produção pelo webhook; algumas chamadas /v23.0/{...} funcionam sem ele.
+    // Valida credenciais Meta (Graph API). Pode ser pulado via skipMetaValidation
+    // para permitir edição manual quando a Meta recusa por motivos externos (token/permissão).
     const appSecret = Deno.env.get("META_WHATSAPP_APP_SECRET") ?? undefined;
-    let meta;
-    try {
-      meta = await validateCredentials({
-        phoneNumberId: body.phoneNumberId,
-        wabaId: body.wabaId,
-        accessToken: body.systemUserToken,
-        appSecret,
-      });
-    } catch (e) {
-      if (e instanceof MetaWaGraphError) {
-        return err(400, "meta_validation_failed", {
-          meta_error: e.error,
-          step: "graph_api",
+    let meta: {
+      display_phone_number: string;
+      verified_name?: string | null;
+      quality_rating?: string | null;
+      messaging_limit_tier?: string | null;
+      belongs_to_waba: boolean;
+    };
+    if (body.skipMetaValidation) {
+      meta = {
+        display_phone_number: body.phoneE164,
+        verified_name: null,
+        quality_rating: null,
+        messaging_limit_tier: null,
+        belongs_to_waba: true,
+      };
+    } else {
+      try {
+        meta = await validateCredentials({
+          phoneNumberId: body.phoneNumberId,
+          wabaId: body.wabaId,
+          accessToken: body.systemUserToken,
+          appSecret,
+        });
+      } catch (e) {
+        if (e instanceof MetaWaGraphError) {
+          return err(400, "meta_validation_failed", {
+            meta_error: e.error,
+            step: "graph_api",
+          });
+        }
+        throw e;
+      }
+      if (!meta.belongs_to_waba) {
+        return err(400, "phone_not_in_waba", {
+          message: "O Phone Number ID informado não pertence ao WABA informado.",
         });
       }
-      throw e;
-    }
-    if (!meta.belongs_to_waba) {
-      return err(400, "phone_not_in_waba", {
-        message: "O Phone Number ID informado não pertence ao WABA informado.",
-      });
     }
 
     // Busca integration_id pelo slug
