@@ -1,33 +1,67 @@
-## Problema
+# Auditoria WhatsApp Seialz — Read-Only
 
-Áudios recém-enviados às vezes mostram "Não foi possível carregar este áudio" (e o mesmo para mensagens com mídia). O arquivo `.ogg` realmente existe no Storage do Supabase, mas no instante em que o `<audio>` do navegador tentou carregar pela primeira vez, o upload ainda não tinha terminado (a mensagem é inserida no banco logo após o INSERT pelo Railway/edge, antes do arquivo aparecer publicamente). O browser dispara `error`, o `AudioMessagePlayer` marca `hasError=true` e **nunca tenta de novo**, mesmo depois que o arquivo já está disponível — só F5 resolve.
+Objetivo: descobrir **exatamente** onde o envio quebra hoje, sem mexer em nada. Ao final entrego um relatório com causa raiz + plano de correção para você aprovar antes de qualquer mudança.
 
-Confirmei o diagnóstico testando os arquivos da conversa Adriano/Tamires: todos respondem HTTP 200 `audio/ogg` agora, mas a UI ficou travada no estado de erro do primeiro carregamento.
+## Contexto já conhecido
+- O envio outbound do CRM passa por: **Frontend → Railway (`seialz-backend-production`) → Twilio Content API → Meta WhatsApp**.
+- Webhooks inbound/status passam por edge functions Supabase (`twilio-whatsapp-webhook`).
+- Já confirmado nas últimas auditorias: 502/503 em `analyze-message` e `transcribe-audio` são **OpenAI 429**, não relacionados a envio.
+- Última mensagem registrada: 26/06 17:46 — então **algo está saindo**, precisamos confirmar se é só inbound ou também outbound.
 
-## Solução
+## Etapas da auditoria (todas read-only)
 
-Tornar o `AudioMessagePlayer` resiliente a falhas transitórias de carregamento, com retry automático e fallback manual. Sem mudar backend nem schema.
+### 1. Confirmar o escopo real da falha (DB)
+Rodar em `supabase--read_query`:
+- Últimos envios outbound por status nas últimas 24h / 7d (`messages` filtrando `direction='outbound'`, agrupado por `status`).
+- Última mensagem outbound com `status='sent'` / `delivered` vs. `failed` / `queued` / `pending`.
+- Distribuição por `endpoint_id` / org para ver se é global ou de uma org só.
+- Mensagens criadas com `external_id IS NULL` (nunca chegaram na Twilio).
+- `scheduled_messages` presas (`status != 'sent'`, `scheduled_at < now()`).
 
-### Mudanças
+### 2. Estado das integrações WhatsApp por org
+- `organization_integrations` join `admin_integrations` onde slug = `twilio-whatsapp`: `is_enabled`, `webhooks_configured`, `setup_completed_at`, `whatsapp_from`, `messaging_service_sid`.
+- `communication_endpoints` ativos por org: `status`, `last_seen_at`, `provider_phone_id`.
+- `whatsapp_templates` recentes: contagem por `status` (approved / pending / rejected) e templates marcados como `is_active`.
 
-**1. `src/components/whatsapp/AudioMessagePlayer.tsx`** — adicionar retry com backoff:
-- Novo estado `retryCount` (0..N) e `isRetrying`.
-- No handler `onError` do `<audio>`: se `retryCount < 3`, agendar um retry com backoff (2s → 5s → 10s) que faz `audio.load()` (forçando re-fetch da URL). Só marca `hasError=true` após esgotar as tentativas.
-- Quando `hasError=true` (já tentou tudo), mostrar a UI atual ("Não foi possível carregar este áudio" + "Baixar áudio") **mais** um botão **"Tentar novamente"** que reseta `retryCount`/`hasError` e chama `audio.load()`.
-- Pequeno spinner/texto "Carregando áudio..." enquanto está em estado `isRetrying`, no lugar do botão de play, pra dar feedback visual.
-- Manter `reportAudioFailure` apenas após esgotar os retries (não reportar a cada tentativa) pra não poluir Sentry.
+### 3. Logs Twilio/Railway-side (Supabase analytics)
+- `integration_inbound_events` últimos 7d: status webhooks (`sent`, `delivered`, `failed`, `undelivered`), `ErrorCode` predominantes.
+- `integration_inbound_ingest_errors` últimas 24h.
+- `integration_jobs` + `integration_audit_logs` últimas 24h: jobs em `dead_letter` / `failed` / presos em `running`.
+- `capi_event_log` por completude (sanity check Meta).
 
-**2. Mesmo padrão para `<video>` e `<img>` em `src/components/contacts/ContactMessages.tsx`** (e equivalentes na inbox se aplicável):
-- Wrapper leve que detecta `onError` e tenta recarregar com backoff (2s/5s/10s) antes de mostrar fallback definitivo de erro com botão "Tentar novamente".
-- Para vídeo: simples — adicionar key dinâmica + `onError` que faz `videoRef.load()`.
-- Para imagem: trocar `src` com cache-buster (`?r=N`) no retry.
+### 4. Edge functions relacionadas (logs Supabase)
+- `twilio-whatsapp-webhook` — erros, latência, status responses.
+- `twilio-whatsapp-send` (se ainda em uso) — boot + invocações + erros.
+- `integration-worker` — sumário de classifications no último ciclo.
+- `analytics_query` em `function_edge_logs` filtrando 4xx/5xx das últimas 24h só dessas funções.
 
-### Onde NÃO mexer
+### 5. Frontend / serviço Railway
+- Confirmar que `src/services/whatsapp.ts` ainda aponta para `https://seialz-backend-production.up.railway.app/api/whatsapp` e que esse host está respondendo (curl read-only de `/health` se existir, sem credenciais).
+- Verificar se há erros recentes nos console logs do preview relativos a `whatsapp/send` (já temos snapshot disponível).
 
-- Backend / Railway / edge functions: não alterar a ordem INSERT vs upload. A solução de frontend já cobre 100% dos casos observados e é menos arriscada.
-- Layout, design system, cores: sem mudanças visuais além do botão "Tentar novamente" e do estado de loading.
+### 6. Secrets (apenas listar nomes, nunca valores)
+- `fetch_secrets` para confirmar presença de: `TWILIO_ACCOUNT_SID`, `TWILIO_AUTH_TOKEN`, `TWILIO_WHATSAPP_FROM`, `META_*` (se aplicável), `INTEGRATION_WORKER_TOKEN`, `RAILWAY_*`.
+- Não há como validar expiração de token Meta pelo Supabase; sinalizar onde checar no painel Twilio/Meta.
 
-## Resultado esperado
+### 7. Janela 24h e templates
+- Para uma amostra de 5 threads recentes com tentativa de envio falha: checar `last_inbound_at` vs. tentativa, e se o envio era texto livre fora da janela (deveria ter virado template).
+- Listar últimos templates rejeitados pela Meta (`whatsapp_templates.rejection_reason`).
 
-- Áudio recém-enviado que falhar no primeiro `loadedmetadata` vai tentar de novo após 2s/5s/10s automaticamente, sem o usuário fazer nada. Como o upload do `.ogg` da Twilio raramente passa de poucos segundos, na prática o player vai "se curar" sozinho.
-- Se mesmo após 3 tentativas o arquivo realmente não existir (caso raro de upload que falhou de fato), aparece "Não foi possível carregar este áudio" com **"Tentar novamente"** + "Baixar áudio", e o usuário consegue se desbloquear sem precisar dar F5 na página.
+### 8. Rate limit e padrões de erro
+- Agrupar erros por código nos webhooks status (Twilio ErrorCode 63016, 63018, 21610, 429 etc.) para mapear causa raiz mais provável.
+
+## Entregável final (após rodar as 8 etapas)
+
+Relatório em chat com:
+1. **Onde quebra** (frontend, Railway, Twilio, Meta, ou múltiplos pontos) com evidência (contagens + IDs de exemplo).
+2. **Causa raiz mais provável** + códigos de erro observados.
+3. **Logs/queries relevantes** copiados.
+4. **Plano de correção** priorizado (curto prazo: destravar envio; médio prazo: melhorar observabilidade — surfaces de erro "token expirado / template não aprovado / fora da janela 24h" no UI).
+5. **Como prevenir recorrência** (alertas, dashboard de saúde de envio, retry/backoff).
+
+## Garantias
+- Nenhum `INSERT` / `UPDATE` / `DELETE`, nenhuma migration, nenhum deploy de edge function, nenhum secret alterado.
+- Só `read_query`, `analytics_query`, `edge_function_logs`, `fetch_secrets` (lista de nomes) e leitura de arquivos do repo.
+- Qualquer mudança (mesmo adicionar logging) só depois de você aprovar o plano de correção no fim do relatório.
+
+Quer que eu prossiga com essa auditoria?
