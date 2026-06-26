@@ -1723,7 +1723,7 @@ function DesktopMessagesList() {
                                               threadId={(message as any).thread_id}
                                               mediaType={message.media_type}
                                               timestamp={isAudioOnly ? audioTimestamp : undefined}
-                                              statusIcon={isAudioOnly && isOutbound ? renderStatusIcon(message.whatsapp_status) : undefined}
+                                              statusIcon={isAudioOnly && isOutbound ? renderStatusIcon(message) : undefined}
                                             />;
                                           }
                                           if (message.media_type === 'image' || rawUrl.match(/\.(jpg|jpeg|png|gif|webp)$/i)) {
@@ -1763,11 +1763,9 @@ function DesktopMessagesList() {
                                       </p>
                                     )}
 
-                                    {/* Error */}
-                                    {message.error_message && (
-                                      <p className="text-xs text-destructive mt-1">
-                                        {message.error_message}
-                                      </p>
+                                    {/* Inline failure reason */}
+                                    {message.whatsapp_status === 'failed' && (
+                                      <MessageFailureInline errorCode={message.error_code} />
                                     )}
 
                                     {/* Footer - Name + Time + Status (hidden for audio-only, rendered inside player) */}
@@ -1784,7 +1782,7 @@ function DesktopMessagesList() {
                                           hour12: false
                                         })}
                                       </span>
-                                      {isOutbound && renderStatusIcon(message.whatsapp_status)}
+                                      {isOutbound && renderStatusIcon(message)}
                                     </div>
                                     )}
                                   </div>
