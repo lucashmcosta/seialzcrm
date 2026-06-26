@@ -60,16 +60,20 @@ export function MetaWhatsAppCloudDialog({ open, onOpenChange, integration, orgIn
   });
 
   const connectMutation = useMutation({
-    mutationFn: async () => {
+    mutationFn: async (opts: { skipMetaValidation?: boolean } = {}) => {
       if (!organization?.id) throw new Error("Organização indisponível");
-      return await metaWhatsAppService.connect({ organizationId: organization.id, ...form });
+      return await metaWhatsAppService.connect({
+        organizationId: organization.id,
+        ...form,
+        skipMetaValidation: opts.skipMetaValidation,
+      });
     },
-    onSuccess: () => {
-      toast.success("Meta WhatsApp Cloud conectado!");
+    onSuccess: (_data, vars) => {
+      toast.success(vars?.skipMetaValidation ? "Dados salvos (sem validação Meta)" : "Meta WhatsApp Cloud conectado!");
       qc.invalidateQueries({ queryKey: ["organization-integrations"] });
       onOpenChange(false);
     },
-    onError: (e: any) => toast.error(`Falha ao conectar: ${e?.message ?? e}`),
+    onError: (e: any) => toast.error(`Falha ao salvar: ${e?.message ?? e}`),
   });
 
   const verifyMutation = useMutation({
