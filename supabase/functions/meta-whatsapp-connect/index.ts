@@ -19,6 +19,7 @@ interface ConnectBody {
   systemUserToken: string;
   endpointPurpose?: "customer_service" | "other";
   displayName?: string;
+  skipMetaValidation?: boolean;
 }
 
 function err(status: number, message: string, extra: Record<string, unknown> = {}) {
