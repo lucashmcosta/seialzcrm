@@ -1409,7 +1409,7 @@ export type Database = {
           metadata: Json
           organization_id: string
           organization_integration_id: string | null
-          provider: string | null
+          provider: string
           purpose: string
           quality_rating: string | null
           sender_sid: string | null
@@ -1433,7 +1433,7 @@ export type Database = {
           metadata?: Json
           organization_id: string
           organization_integration_id?: string | null
-          provider?: string | null
+          provider?: string
           purpose?: string
           quality_rating?: string | null
           sender_sid?: string | null
@@ -1457,7 +1457,7 @@ export type Database = {
           metadata?: Json
           organization_id?: string
           organization_integration_id?: string | null
-          provider?: string | null
+          provider?: string
           purpose?: string
           quality_rating?: string | null
           sender_sid?: string | null
