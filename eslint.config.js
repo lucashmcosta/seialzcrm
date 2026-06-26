@@ -33,6 +33,16 @@ export default tseslint.config(
       // ("Cannot access 'X' before initialization"). Ignore dynamic imports
       // since they are split into separate chunks and don't create TDZ.
       "import/no-cycle": ["error", { maxDepth: 10, ignoreExternal: true, allowUnsafeDynamicCyclicDependency: true }],
+      // Force every WhatsApp send to go through src/lib/dispatchWhatsAppSend.ts.
+      // The dispatcher file itself is excluded via the override below.
+      "no-restricted-syntax": ["error", {
+        selector: "CallExpression[callee.object.property.name='functions'][callee.property.name='invoke'] > Literal:first-child[value=/^(twilio|meta)-whatsapp-send$/]",
+        message: "Não invoque twilio-whatsapp-send/meta-whatsapp-send diretamente. Use dispatchWhatsAppSend de @/lib/dispatchWhatsAppSend.",
+      }],
     },
+  },
+  {
+    files: ["src/lib/dispatchWhatsAppSend.ts"],
+    rules: { "no-restricted-syntax": "off" },
   },
 );
