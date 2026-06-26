@@ -1,67 +1,109 @@
-# Auditoria WhatsApp Seialz — Read-Only
+# Meta WhatsApp Cloud API — MVP (plano final aprovado)
 
-Objetivo: descobrir **exatamente** onde o envio quebra hoje, sem mexer em nada. Ao final entrego um relatório com causa raiz + plano de correção para você aprovar antes de qualquer mudança.
+## Ajustes finais incorporados
 
-## Contexto já conhecido
-- O envio outbound do CRM passa por: **Frontend → Railway (`seialz-backend-production`) → Twilio Content API → Meta WhatsApp**.
-- Webhooks inbound/status passam por edge functions Supabase (`twilio-whatsapp-webhook`).
-- Já confirmado nas últimas auditorias: 502/503 em `analyze-message` e `transcribe-audio` são **OpenAI 429**, não relacionados a envio.
-- Última mensagem registrada: 26/06 17:46 — então **algo está saindo**, precisamos confirmar se é só inbound ou também outbound.
+1. **`communication_endpoints.provider`**: `NOT NULL DEFAULT 'twilio'`, e o **DEFAULT permanece** após a migration. Endpoints legados, seeds, imports, jobs e telas antigas continuam funcionando sem precisar declarar provider. Apenas o fluxo Meta envia `provider='meta-cloud'` explicitamente.
+2. **Acesso aos envios é exclusivo via dispatcher.** Nenhum código (novo ou existente) chama `twilio-whatsapp-send` ou `meta-whatsapp-send` diretamente. Toda chamada passa por:
+   - `src/lib/dispatchWhatsAppSend.ts` (cliente)
+   - `supabase/functions/_shared/dispatch-whatsapp-send.ts` (server)
 
-## Etapas da auditoria (todas read-only)
+   Para travar isso, adiciono regra de lint:
+   ```js
+   // eslint.config.js — bloqueia invokes diretos
+   'no-restricted-syntax': ['error', {
+     selector: "CallExpression[callee.property.name='invoke'][arguments.0.value=/whatsapp-send$/]",
+     message: 'Use dispatchWhatsAppSend em vez de invocar o provider diretamente.'
+   }]
+   ```
+   Os arquivos de dispatcher ficam fora dessa regra via override. Em docs (`ApiDocs.tsx`) o nome aparece só como string informativa — sem invoke real, não dispara.
 
-### 1. Confirmar o escopo real da falha (DB)
-Rodar em `supabase--read_query`:
-- Últimos envios outbound por status nas últimas 24h / 7d (`messages` filtrando `direction='outbound'`, agrupado por `status`).
-- Última mensagem outbound com `status='sent'` / `delivered` vs. `failed` / `queued` / `pending`.
-- Distribuição por `endpoint_id` / org para ver se é global ou de uma org só.
-- Mensagens criadas com `external_id IS NULL` (nunca chegaram na Twilio).
-- `scheduled_messages` presas (`status != 'sent'`, `scheduled_at < now()`).
+## Arquitetura final
 
-### 2. Estado das integrações WhatsApp por org
-- `organization_integrations` join `admin_integrations` onde slug = `twilio-whatsapp`: `is_enabled`, `webhooks_configured`, `setup_completed_at`, `whatsapp_from`, `messaging_service_sid`.
-- `communication_endpoints` ativos por org: `status`, `last_seen_at`, `provider_phone_id`.
-- `whatsapp_templates` recentes: contagem por `status` (approved / pending / rejected) e templates marcados como `is_active`.
+```text
+UI (Settings → Integrações → card Meta WhatsApp Cloud)
+        │
+        ▼
+MetaWhatsAppCloudDialog  (apresentação pura)
+        │
+        ▼
+src/services/metaWhatsAppService.ts   ← ciclo de vida da integração
+        ├── validateCredentials() / connect() / disconnect()
+        ├── verifyWebhook() / getStatus()
+        └── invoca apenas as edges meta-whatsapp-connect/disconnect/verify
 
-### 3. Logs Twilio/Railway-side (Supabase analytics)
-- `integration_inbound_events` últimos 7d: status webhooks (`sent`, `delivered`, `failed`, `undelivered`), `ErrorCode` predominantes.
-- `integration_inbound_ingest_errors` últimas 24h.
-- `integration_jobs` + `integration_audit_logs` últimas 24h: jobs em `dead_letter` / `failed` / presos em `running`.
-- `capi_event_log` por completude (sanity check Meta).
+ENVIO DE MENSAGEM (qualquer origem):
+src/lib/dispatchWhatsAppSend.ts                       ← único ponto no cliente
+supabase/functions/_shared/dispatch-whatsapp-send.ts  ← único ponto no server
+        │
+        ├── endpoint.provider === 'meta-cloud' → meta-whatsapp-send
+        └── endpoint.provider === 'twilio'     → twilio-whatsapp-send (inalterado)
+```
 
-### 4. Edge functions relacionadas (logs Supabase)
-- `twilio-whatsapp-webhook` — erros, latência, status responses.
-- `twilio-whatsapp-send` (se ainda em uso) — boot + invocações + erros.
-- `integration-worker` — sumário de classifications no último ciclo.
-- `analytics_query` em `function_edge_logs` filtrando 4xx/5xx das últimas 24h só dessas funções.
+Composer, Inbox, AI Agent, Scheduled Messages, ContactMessages, Mobile, Lead Ads — todos chamam só o dispatcher. Adicionar Gupshup/Evolution/360Dialog amanhã = mexer só no dispatcher + CHECK constraint.
 
-### 5. Frontend / serviço Railway
-- Confirmar que `src/services/whatsapp.ts` ainda aponta para `https://seialz-backend-production.up.railway.app/api/whatsapp` e que esse host está respondendo (curl read-only de `/health` se existir, sem credenciais).
-- Verificar se há erros recentes nos console logs do preview relativos a `whatsapp/send` (já temos snapshot disponível).
+## Migration mínima
 
-### 6. Secrets (apenas listar nomes, nunca valores)
-- `fetch_secrets` para confirmar presença de: `TWILIO_ACCOUNT_SID`, `TWILIO_AUTH_TOKEN`, `TWILIO_WHATSAPP_FROM`, `META_*` (se aplicável), `INTEGRATION_WORKER_TOKEN`, `RAILWAY_*`.
-- Não há como validar expiração de token Meta pelo Supabase; sinalizar onde checar no painel Twilio/Meta.
+1. `INSERT` em `admin_integrations` do slug **`meta-whatsapp-cloud`** (category=communication, status=available).
+2. `ALTER TABLE communication_endpoints ADD COLUMN provider text NOT NULL DEFAULT 'twilio'` — **DEFAULT mantido**.
+3. `ALTER TABLE communication_endpoints ADD CONSTRAINT communication_endpoints_provider_check CHECK (provider IN ('twilio','meta-cloud'))`.
+4. `CREATE INDEX ... ON communication_endpoints (sender_sid) WHERE provider='meta-cloud'` — lookup do webhook por `phone_number_id`.
 
-### 7. Janela 24h e templates
-- Para uma amostra de 5 threads recentes com tentativa de envio falha: checar `last_inbound_at` vs. tentativa, e se o envio era texto livre fora da janela (deveria ter virado template).
-- Listar últimos templates rejeitados pela Meta (`whatsapp_templates.rejection_reason`).
+Sem alterações em `meta`, `meta-capi`, `meta-lead-ads` ou em `twilio-whatsapp-send`/`twilio-whatsapp-webhook`.
 
-### 8. Rate limit e padrões de erro
-- Agrupar erros por código nos webhooks status (Twilio ErrorCode 63016, 63018, 21610, 429 etc.) para mapear causa raiz mais provável.
+## Camada de serviço (`metaWhatsAppService.ts`)
 
-## Entregável final (após rodar as 8 etapas)
+Encapsula todo ciclo de vida. Dialog é casca visual. Embedded Signup futuro substitui apenas o `ConnectForm`; service, banco, dispatcher e edges não mudam.
 
-Relatório em chat com:
-1. **Onde quebra** (frontend, Railway, Twilio, Meta, ou múltiplos pontos) com evidência (contagens + IDs de exemplo).
-2. **Causa raiz mais provável** + códigos de erro observados.
-3. **Logs/queries relevantes** copiados.
-4. **Plano de correção** priorizado (curto prazo: destravar envio; médio prazo: melhorar observabilidade — surfaces de erro "token expirado / template não aprovado / fora da janela 24h" no UI).
-5. **Como prevenir recorrência** (alertas, dashboard de saúde de envio, retry/backoff).
+Edges pequenas e focadas:
 
-## Garantias
-- Nenhum `INSERT` / `UPDATE` / `DELETE`, nenhuma migration, nenhum deploy de edge function, nenhum secret alterado.
-- Só `read_query`, `analytics_query`, `edge_function_logs`, `fetch_secrets` (lista de nomes) e leitura de arquivos do repo.
-- Qualquer mudança (mesmo adicionar logging) só depois de você aprovar o plano de correção no fim do relatório.
+- `meta-whatsapp-connect` — valida payload (Zod) + 3 chamadas Graph (`/{phone_number_id}`, `/{waba_id}/phone_numbers`, `/debug_token`), criptografa token via `encryptSecret`, cria `organization_integrations` + `communication_endpoints` (`provider='meta-cloud'`). Helpers em `_shared/meta-whatsapp/` (`validate.ts`, `graph.ts`, `persist.ts`).
+- `meta-whatsapp-disconnect` — desativa endpoint + remove integration.
+- `meta-whatsapp-verify` — checa `phone_number_id` na Graph + subscription do webhook.
+- `meta-whatsapp-webhook` (verify_jwt=false) — valida `hub.verify_token` no GET; valida `X-Hub-Signature-256` no POST; processa `messages[]` e `statuses[]`. Roteia por `phone_number_id` (= `sender_sid` + `provider='meta-cloud'`).
+- `meta-whatsapp-send` — POST texto em `/v23.0/{phone_number_id}/messages`. Retorna `{success, messageId}` no mesmo shape do Twilio.
 
-Quer que eu prossiga com essa auditoria?
+## Dados coletados (formulário do MVP)
+
+| Dado | Destino |
+|---|---|
+| App ID | `organization_integrations.config_values.app_id` |
+| WABA ID | `communication_endpoints.external_account_id` + `config_values.waba_id` |
+| Phone Number ID | `communication_endpoints.sender_sid` + `config_values.phone_number_id` |
+| E.164 | `communication_endpoints.external_address` |
+| Permanent System User Token | `connected_account.access_token_encrypted` (via `encryptSecret`) |
+| App Secret | secret global `META_WHATSAPP_APP_SECRET` |
+| Verify Token | secret global `META_WHATSAPP_VERIFY_TOKEN` |
+
+## Painel da integração (`ConnectedPanel.tsx`)
+
+Estrutura em seções, lê tudo via `metaWhatsAppService.getStatus()`; campos ausentes mostram `—`/skeleton:
+
+- **Identidade**: Provider, Meta App, WABA ID, Phone Number ID, Business Verification
+- **Saúde**: Quality Rating, Messaging Tier, Status do Webhook, Última sincronização, Último erro
+- **Tráfego**: Última mensagem enviada, Última mensagem recebida
+- **Ações**: Verificar Webhook, Desconectar
+
+Pronto para abas futuras (templates, mídia, métricas).
+
+## Ordem de execução
+
+1. `add_secret`: `META_WHATSAPP_APP_SECRET`, `META_WHATSAPP_VERIFY_TOKEN`.
+2. Migration mínima.
+3. `_shared/meta-whatsapp/*` + `meta-whatsapp-connect`.
+4. `metaWhatsAppService.ts` + `MetaWhatsAppCloudDialog` + `ConnectForm` + roteamento no `IntegrationsSettings`.
+5. `meta-whatsapp-webhook` (configurar no Meta Dashboard depois).
+6. `meta-whatsapp-send`.
+7. Dispatchers (cliente + server) + substituição dos 11 call-sites front + 4 server + regra de ESLint que trava invokes diretos.
+8. `meta-whatsapp-disconnect` + `meta-whatsapp-verify` + `ConnectedPanel`.
+9. Teste E2E.
+
+## Plano de teste E2E
+
+- Conectar pela UI com credenciais reais → integration + endpoint criados com `provider='meta-cloud'`.
+- Credenciais inválidas → erro claro, nada gravado.
+- Enviar do Composer/Inbox/AI Agent/Mobile para número Meta → entrega; para número Twilio → continua funcionando.
+- Webhook recebe → thread criada/atualizada; status sent/delivered/read/failed propaga.
+- Fora da janela 24h → `131047` exibido.
+- Desconectar pela UI → endpoint `is_active=false`, integration removida.
+- Lint: `bun run lint` falha se algum código invocar `twilio-whatsapp-send`/`meta-whatsapp-send` diretamente.
+- Regressão Twilio: rodar fluxos legados (18 endpoints existentes) e confirmar zero impacto.
