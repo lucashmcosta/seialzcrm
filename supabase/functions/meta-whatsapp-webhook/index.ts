@@ -1,4 +1,5 @@
 // Webhook Meta WhatsApp Cloud (verify_jwt=false).
+// build: 2026-06-26T22:00 (bump para recarregar env após criação dos secrets globais)
 // Estados:
 //  - Pendente (secrets globais ausentes): GET/POST respondem 503 sem efeito colateral.
 //  - Ativo: GET valida verify_token; POST valida X-Hub-Signature-256; processa messages[]/statuses[].
