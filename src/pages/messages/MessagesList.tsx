@@ -129,6 +129,8 @@ interface Message {
   media_urls: string[] | null;
   media_type: string | null;
   error_message: string | null;
+  error_code: string | null;
+  whatsapp_message_sid: string | null;
   reply_to_message_id: string | null;
   reply_to_message?: {
     content: string;
@@ -810,7 +812,7 @@ function DesktopMessagesList() {
       const { data, error } = await supabase
         .from('messages')
         .select(`
-          id, content, direction, sent_at, whatsapp_status, media_urls, media_type, error_message, reply_to_message_id,
+          id, content, direction, sent_at, whatsapp_status, whatsapp_message_sid, media_urls, media_type, error_message, error_code, reply_to_message_id,
           sender_type, sender_name, sender_agent_id,
           reply_to_message:reply_to_message_id (content, direction)
         `)
@@ -1166,22 +1168,15 @@ function DesktopMessagesList() {
     }
   };
 
-  const renderStatusIcon = (status: string | null) => {
-    switch (status) {
-      case 'sending':
-        return <Clock className="w-3 h-3 text-muted-foreground" />;
-      case 'sent':
-        return <Check className="w-3 h-3 text-muted-foreground" />;
-      case 'delivered':
-         return <Checks className="w-3 h-3 text-muted-foreground" />;
-      case 'read':
-        return <Checks className="w-3 h-3 text-blue-500" />;
-      case 'failed':
-        return <WarningCircle className="w-3 h-3 text-destructive" />;
-      default:
-        return null;
-    }
-  };
+  const renderStatusIcon = (message: Message) => (
+    <MessageStatusIndicator
+      status={message.whatsapp_status}
+      errorCode={message.error_code}
+      errorMessage={message.error_message}
+      sid={message.whatsapp_message_sid}
+      sentAt={message.sent_at}
+    />
+  );
 
   const handleEmojiClick = (emojiData: EmojiClickData) => {
     setMessageText((prev) => prev + emojiData.emoji);
