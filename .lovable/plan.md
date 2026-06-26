@@ -1,109 +1,127 @@
-# Meta WhatsApp Cloud API — MVP (plano final aprovado)
+# Meta WhatsApp Cloud API — MVP (plano final com separação tenant × plataforma)
 
-## Ajustes finais incorporados
+## Localização das duas configurações
 
-1. **`communication_endpoints.provider`**: `NOT NULL DEFAULT 'twilio'`, e o **DEFAULT permanece** após a migration. Endpoints legados, seeds, imports, jobs e telas antigas continuam funcionando sem precisar declarar provider. Apenas o fluxo Meta envia `provider='meta-cloud'` explicitamente.
-2. **Acesso aos envios é exclusivo via dispatcher.** Nenhum código (novo ou existente) chama `twilio-whatsapp-send` ou `meta-whatsapp-send` diretamente. Toda chamada passa por:
-   - `src/lib/dispatchWhatsAppSend.ts` (cliente)
-   - `supabase/functions/_shared/dispatch-whatsapp-send.ts` (server)
+| Camada | Rota | Quem acessa | O que configura |
+|---|---|---|---|
+| **Tenant (organização)** | `/settings/integrations` → card **Meta WhatsApp Cloud** → **Ver integração** | Qualquer usuário da org com permissão de integrações | App ID, WABA ID, Phone Number ID, E.164, System User Token |
+| **Plataforma (global)** | `/admin/integrations/meta-whatsapp-cloud` (`AdminIntegrationDetail` + `AdminProtectedRoute`) | Apenas admin/superadmin Seialz | `META_WHATSAPP_APP_SECRET`, `META_WHATSAPP_VERIFY_TOKEN` |
 
-   Para travar isso, adiciono regra de lint:
-   ```js
-   // eslint.config.js — bloqueia invokes diretos
-   'no-restricted-syntax': ['error', {
-     selector: "CallExpression[callee.property.name='invoke'][arguments.0.value=/whatsapp-send$/]",
-     message: 'Use dispatchWhatsAppSend em vez de invocar o provider diretamente.'
-   }]
-   ```
-   Os arquivos de dispatcher ficam fora dessa regra via override. Em docs (`ApiDocs.tsx`) o nome aparece só como string informativa — sem invoke real, não dispara.
+A rota admin já existe — adiciono apenas uma aba "Configuração da Plataforma" dentro de `AdminIntegrationDetail.tsx` que aparece somente quando `slug === 'meta-whatsapp-cloud'`.
 
-## Arquitetura final
+## 1. Tela admin (plataforma)
 
-```text
-UI (Settings → Integrações → card Meta WhatsApp Cloud)
-        │
-        ▼
-MetaWhatsAppCloudDialog  (apresentação pura)
-        │
-        ▼
-src/services/metaWhatsAppService.ts   ← ciclo de vida da integração
-        ├── validateCredentials() / connect() / disconnect()
-        ├── verifyWebhook() / getStatus()
-        └── invoca apenas as edges meta-whatsapp-connect/disconnect/verify
+`/admin/integrations/meta-whatsapp-cloud` → aba **Configuração da Plataforma**:
 
-ENVIO DE MENSAGEM (qualquer origem):
-src/lib/dispatchWhatsAppSend.ts                       ← único ponto no cliente
-supabase/functions/_shared/dispatch-whatsapp-send.ts  ← único ponto no server
-        │
-        ├── endpoint.provider === 'meta-cloud' → meta-whatsapp-send
-        └── endpoint.provider === 'twilio'     → twilio-whatsapp-send (inalterado)
-```
+- Campo **App Secret** — placeholder mostra `••••••• Configurado` ou `Não configurado`; nunca exibe o valor real.
+- Campo **Verify Token** — idem.
+- Botão **Atualizar secrets globais** → edge `admin-platform-secrets-set` (verify_jwt + checa `admin_users`) que escreve via Supabase Management API nos secrets `META_WHATSAPP_APP_SECRET` e `META_WHATSAPP_VERIFY_TOKEN`.
+- Botão **Status** → edge `meta-whatsapp-platform-status` (público, retorna apenas booleanos) → `{ appSecretConfigured, verifyTokenConfigured, webhookActive }`. Usado tanto pelo admin quanto pelo modal da organização.
 
-Composer, Inbox, AI Agent, Scheduled Messages, ContactMessages, Mobile, Lead Ads — todos chamam só o dispatcher. Adicionar Gupshup/Evolution/360Dialog amanhã = mexer só no dispatcher + CHECK constraint.
+Nenhum valor de secret trafega pro front. O front só recebe booleans.
 
-## Migration mínima
+## 2. Tela tenant (organização)
 
-1. `INSERT` em `admin_integrations` do slug **`meta-whatsapp-cloud`** (category=communication, status=available).
-2. `ALTER TABLE communication_endpoints ADD COLUMN provider text NOT NULL DEFAULT 'twilio'` — **DEFAULT mantido**.
-3. `ALTER TABLE communication_endpoints ADD CONSTRAINT communication_endpoints_provider_check CHECK (provider IN ('twilio','meta-cloud'))`.
-4. `CREATE INDEX ... ON communication_endpoints (sender_sid) WHERE provider='meta-cloud'` — lookup do webhook por `phone_number_id`.
+`MetaWhatsAppCloudDialog` com duas seções:
 
-Sem alterações em `meta`, `meta-capi`, `meta-lead-ads` ou em `twilio-whatsapp-send`/`twilio-whatsapp-webhook`.
+### Seção "Dados do número" (editável)
+- App ID
+- WABA ID
+- Phone Number ID
+- E.164 (com `PhoneInput`)
+- System User Token (password input, criptografado server-side)
+- Botão **Conectar** → edge `meta-whatsapp-connect`
 
-## Camada de serviço (`metaWhatsAppService.ts`)
+### Seção "Status da plataforma" (read-only, alimentada por `meta-whatsapp-platform-status`)
+- App Secret global: **Configurado** / **Pendente**
+- Verify Token global: **Configurado** / **Pendente**
+- Webhook: **Ativo** / **Pendente de configuração global**
+- Banner explicativo quando algo falta:
+  > "Configuração global da Meta WhatsApp Cloud pendente. O envio pode ser configurado, mas o recebimento de mensagens e callbacks só serão ativados após a configuração global da plataforma."
 
-Encapsula todo ciclo de vida. Dialog é casca visual. Embedded Signup futuro substitui apenas o `ConnectForm`; service, banco, dispatcher e edges não mudam.
+Quando conectado, vira `ConnectedPanel` com Identidade / Saúde / Tráfego / Ações (Verificar / Desconectar).
 
-Edges pequenas e focadas:
+## 3. Webhook em dois estados
 
-- `meta-whatsapp-connect` — valida payload (Zod) + 3 chamadas Graph (`/{phone_number_id}`, `/{waba_id}/phone_numbers`, `/debug_token`), criptografa token via `encryptSecret`, cria `organization_integrations` + `communication_endpoints` (`provider='meta-cloud'`). Helpers em `_shared/meta-whatsapp/` (`validate.ts`, `graph.ts`, `persist.ts`).
+`meta-whatsapp-webhook` (verify_jwt=false):
+
+**Pendente** — quando `META_WHATSAPP_VERIFY_TOKEN` e/ou `META_WHATSAPP_APP_SECRET` ausentes:
+- GET retorna `503` com `{status:'pending_global_config'}`
+- POST retorna `503` idem
+- Não derruba o restante; UI/outbound continuam testáveis
+
+**Ativo** — secrets globais presentes:
+- GET valida `hub.verify_token` contra `META_WHATSAPP_VERIFY_TOKEN`
+- POST valida `X-Hub-Signature-256` com `META_WHATSAPP_APP_SECRET`
+- Resolve endpoint por `phone_number_id` (= `sender_sid` + `provider='meta-cloud'`)
+- Processa `messages[]` e `statuses[]`
+
+`meta-whatsapp-platform-status` reflete esses estados pra UI.
+
+## 4. Dispatcher único (mantido do plano anterior)
+
+- `src/lib/dispatchWhatsAppSend.ts` (cliente)
+- `supabase/functions/_shared/dispatch-whatsapp-send.ts` (server)
+- Regra ESLint `no-restricted-syntax` bloqueia `supabase.functions.invoke('twilio-whatsapp-send'|'meta-whatsapp-send')` fora dos dispatchers.
+- 11 call-sites front + 4 server migrados.
+- `twilio-whatsapp-send`/`twilio-whatsapp-webhook` intocados; `provider NULL` legado é tratado como Twilio porque o DEFAULT da coluna fixa Twilio.
+
+## 5. Migration mínima
+
+1. `INSERT` em `admin_integrations` do slug `meta-whatsapp-cloud` (category=communication, status=available, com metadata indicando que possui secrets globais).
+2. `ALTER TABLE communication_endpoints ADD COLUMN provider text NOT NULL DEFAULT 'twilio'` — **DEFAULT permanece**.
+3. `CHECK (provider IN ('twilio','meta-cloud'))`.
+4. `CREATE INDEX ... ON communication_endpoints (sender_sid) WHERE provider='meta-cloud'`.
+
+Sem mexer em `meta`, `meta-capi`, `meta-lead-ads`.
+
+## 6. Edge functions criadas
+
+- `meta-whatsapp-connect` — valida (Zod + 3 chamadas Graph) e persiste org+endpoint.
 - `meta-whatsapp-disconnect` — desativa endpoint + remove integration.
-- `meta-whatsapp-verify` — checa `phone_number_id` na Graph + subscription do webhook.
-- `meta-whatsapp-webhook` (verify_jwt=false) — valida `hub.verify_token` no GET; valida `X-Hub-Signature-256` no POST; processa `messages[]` e `statuses[]`. Roteia por `phone_number_id` (= `sender_sid` + `provider='meta-cloud'`).
-- `meta-whatsapp-send` — POST texto em `/v23.0/{phone_number_id}/messages`. Retorna `{success, messageId}` no mesmo shape do Twilio.
+- `meta-whatsapp-verify` — checa phone_number_id na Graph + subscription do webhook.
+- `meta-whatsapp-send` — POST texto em `/v23.0/{phone_number_id}/messages`. Mesmo shape do Twilio.
+- `meta-whatsapp-webhook` — verify_jwt=false, estrutura completa com modo pendente/ativo.
+- `meta-whatsapp-platform-status` — público, retorna booleans (`appSecretConfigured`, `verifyTokenConfigured`, `webhookActive`). Consumido por admin e tenant.
+- `admin-platform-secrets-set` — verify_jwt=true + guarda `admin_users`. Usa Supabase Management API para gravar `META_WHATSAPP_APP_SECRET`/`META_WHATSAPP_VERIFY_TOKEN`. Requer secret `SUPABASE_MANAGEMENT_TOKEN` (peço ao usuário no ato da implementação, somente se ele optar por configurar pela UI; alternativa é via `add_secret` direto pela Lovable).
 
-## Dados coletados (formulário do MVP)
+   > Se preferir, no MVP os secrets globais podem ser configurados diretamente pela tela de secrets da Lovable, e a aba admin mostra apenas status (`Configurado / Pendente`) — sem necessidade de `SUPABASE_MANAGEMENT_TOKEN`. Default: status-only.
+
+## 7. Service layer
+
+`src/services/metaWhatsAppService.ts`:
+- `getPlatformStatus()` → `meta-whatsapp-platform-status`
+- `validateAndConnect(formData)` → `meta-whatsapp-connect`
+- `disconnect()`, `verifyWebhook()`, `getStatus()`
+
+`MetaWhatsAppCloudDialog` puro de UI.
+
+## 8. Dados → destino
 
 | Dado | Destino |
 |---|---|
-| App ID | `organization_integrations.config_values.app_id` |
-| WABA ID | `communication_endpoints.external_account_id` + `config_values.waba_id` |
-| Phone Number ID | `communication_endpoints.sender_sid` + `config_values.phone_number_id` |
-| E.164 | `communication_endpoints.external_address` |
-| Permanent System User Token | `connected_account.access_token_encrypted` (via `encryptSecret`) |
-| App Secret | secret global `META_WHATSAPP_APP_SECRET` |
-| Verify Token | secret global `META_WHATSAPP_VERIFY_TOKEN` |
+| App ID (tenant) | `organization_integrations.config_values.app_id` |
+| WABA ID (tenant) | `communication_endpoints.external_account_id` + `config_values.waba_id` |
+| Phone Number ID (tenant) | `communication_endpoints.sender_sid` + `config_values.phone_number_id` |
+| E.164 (tenant) | `communication_endpoints.external_address` |
+| System User Token (tenant) | `connected_account.access_token_encrypted` via `encryptSecret` |
+| **App Secret (global)** | secret `META_WHATSAPP_APP_SECRET` |
+| **Verify Token (global)** | secret `META_WHATSAPP_VERIFY_TOKEN` |
 
-## Painel da integração (`ConnectedPanel.tsx`)
+## 9. Ordem de execução
 
-Estrutura em seções, lê tudo via `metaWhatsAppService.getStatus()`; campos ausentes mostram `—`/skeleton:
+1. Migration (slug + coluna provider + check + index).
+2. `_shared/meta-whatsapp/*` (graph, validate, persist, status).
+3. Edges: `meta-whatsapp-platform-status` → `meta-whatsapp-connect` → `meta-whatsapp-send` → `meta-whatsapp-webhook` (com modo pendente) → `meta-whatsapp-disconnect` → `meta-whatsapp-verify`.
+4. `metaWhatsAppService.ts` + `MetaWhatsAppCloudDialog` (ConnectForm + StatusPanel + ConnectedPanel) + registro no `IntegrationsSettings`.
+5. Aba "Configuração da Plataforma" em `AdminIntegrationDetail.tsx` quando `slug === 'meta-whatsapp-cloud'` (status-only).
+6. Dispatcher cliente + server + migração dos 15 call-sites + regra ESLint.
+7. Smoke test E2E (sem secrets globais ainda): conectar → enviar dentro da janela 24h funciona; webhook retorna pendente.
+8. Quando o usuário fornecer App Secret/Verify Token via `add_secret`, webhook entra automaticamente em modo ativo — nenhum redeploy necessário.
 
-- **Identidade**: Provider, Meta App, WABA ID, Phone Number ID, Business Verification
-- **Saúde**: Quality Rating, Messaging Tier, Status do Webhook, Última sincronização, Último erro
-- **Tráfego**: Última mensagem enviada, Última mensagem recebida
-- **Ações**: Verificar Webhook, Desconectar
+## 10. Plano de teste
 
-Pronto para abas futuras (templates, mídia, métricas).
-
-## Ordem de execução
-
-1. `add_secret`: `META_WHATSAPP_APP_SECRET`, `META_WHATSAPP_VERIFY_TOKEN`.
-2. Migration mínima.
-3. `_shared/meta-whatsapp/*` + `meta-whatsapp-connect`.
-4. `metaWhatsAppService.ts` + `MetaWhatsAppCloudDialog` + `ConnectForm` + roteamento no `IntegrationsSettings`.
-5. `meta-whatsapp-webhook` (configurar no Meta Dashboard depois).
-6. `meta-whatsapp-send`.
-7. Dispatchers (cliente + server) + substituição dos 11 call-sites front + 4 server + regra de ESLint que trava invokes diretos.
-8. `meta-whatsapp-disconnect` + `meta-whatsapp-verify` + `ConnectedPanel`.
-9. Teste E2E.
-
-## Plano de teste E2E
-
-- Conectar pela UI com credenciais reais → integration + endpoint criados com `provider='meta-cloud'`.
-- Credenciais inválidas → erro claro, nada gravado.
-- Enviar do Composer/Inbox/AI Agent/Mobile para número Meta → entrega; para número Twilio → continua funcionando.
-- Webhook recebe → thread criada/atualizada; status sent/delivered/read/failed propaga.
-- Fora da janela 24h → `131047` exibido.
-- Desconectar pela UI → endpoint `is_active=false`, integration removida.
-- Lint: `bun run lint` falha se algum código invocar `twilio-whatsapp-send`/`meta-whatsapp-send` diretamente.
-- Regressão Twilio: rodar fluxos legados (18 endpoints existentes) e confirmar zero impacto.
+- Sem secrets globais: UI mostra "Pendente"; conectar funciona; `meta-whatsapp-send` entrega; webhook responde 503 pendente.
+- Com secrets globais: UI mostra "Ativo"; webhook GET valida verify_token; POST valida assinatura; mensagens inbound criam thread.
+- Twilio inalterado (18 endpoints existentes).
+- `bun run lint` falha se algum código chamar `twilio-whatsapp-send`/`meta-whatsapp-send` fora do dispatcher.
