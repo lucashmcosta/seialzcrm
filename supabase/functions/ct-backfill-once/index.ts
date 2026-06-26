@@ -1,5 +1,6 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "jsr:@supabase/supabase-js@2";
+import { dispatchWhatsAppSend } from "../_shared/dispatch-whatsapp-send.ts";
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -39,34 +40,22 @@ serve(async (req) => {
   const supabaseUrl = Deno.env.get('SUPABASE_URL') ?? '';
   const serviceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? '';
   const admin = createClient(supabaseUrl, serviceKey);
-  const { data: internalToken, error: tokenErr } = await admin.rpc('get_internal_function_auth_token');
-  if (tokenErr || !internalToken) {
-    return new Response(JSON.stringify({ error: 'no internal token', details: tokenErr }), { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
-  }
-  const sendUrl = `${supabaseUrl}/functions/v1/twilio-whatsapp-send`;
 
   const results: any[] = [];
 
   for (const c of CONTACTS) {
     try {
-      const r = await fetch(sendUrl, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          Authorization: `Bearer ${internalToken}`,
-        },
-        body: JSON.stringify({
-          organizationId: ORG_ID,
-          contactId: c.id,
-          templateId: TEMPLATE_ID,
-          templateVariables: {},
-          isAgentMessage: false,
-          senderName: 'Meta Lead Ads (backfill)',
-        }),
+      const r = await dispatchWhatsAppSend({
+        organizationId: ORG_ID,
+        contactId: c.id,
+        templateId: TEMPLATE_ID,
+        templateVariables: {},
+        isAgentMessage: false,
+        senderName: 'Meta Lead Ads (backfill)',
       });
-      const body = await r.json().catch(() => ({}));
-      results.push({ name: c.name, phone: c.phone, status: r.status, ok: r.ok, sid: body?.messageSid, error: body?.error, details: body?.details });
-      console.log(`[backfill] ${c.name} ${c.phone} -> ${r.status} ${body?.messageSid ?? body?.error ?? ''}`);
+      const ok = !r.error;
+      results.push({ name: c.name, phone: c.phone, ok, sid: r.data?.messageSid, error: r.error?.message, details: r.error?.details });
+      console.log(`[backfill] ${c.name} ${c.phone} -> ${ok ? 'ok' : 'fail'} ${r.data?.messageSid ?? r.error?.message ?? ''}`);
     } catch (e) {
       results.push({ name: c.name, phone: c.phone, ok: false, error: String(e) });
       console.error(`[backfill] ${c.name} EXC`, e);

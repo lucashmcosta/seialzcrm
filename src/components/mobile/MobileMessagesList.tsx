@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef, Fragment } from 'react';
+import { dispatchWhatsAppSend } from "@/lib/dispatchWhatsAppSend";
 import { Link, useSearchParams, useNavigate } from 'react-router-dom';
 import { MobileLayout } from './MobileLayout';
 import { Avatar } from '@/components/base/avatar/avatar';
@@ -472,13 +473,11 @@ export function MobileMessagesList() {
     if (selectedThreadId && selectedThread) autoAssignOnSend(selectedThreadId, selectedThread);
 
     try {
-      const { data, error } = await supabase.functions.invoke('twilio-whatsapp-send', {
-        body: {
+      const { data, error } = await dispatchWhatsAppSend({
           organizationId: organization.id, contactId: selectedThread.contact_id,
           threadId: selectedThreadId, message: savedText,
           userId: userProfile?.id, replyToMessageId: savedReplyTo?.id || null,
-        },
-      });
+        });
       if (error) throw error;
       if (data.error) {
         if (data.requiresTemplate) {
@@ -513,13 +512,11 @@ export function MobileMessagesList() {
     if (selectedThreadId && selectedThread) autoAssignOnSend(selectedThreadId, selectedThread);
 
     try {
-      const { data, error } = await supabase.functions.invoke('twilio-whatsapp-send', {
-        body: {
+      const { data, error } = await dispatchWhatsAppSend({
           organizationId: organization.id, contactId: selectedThread.contact_id,
           threadId: selectedThreadId, templateId, templateVariables: variables,
           userId: userProfile?.id,
-        },
-      });
+        });
       if (error) throw error;
       if (data.error) throw new Error(data.error);
       refetchThreads();
@@ -572,13 +569,11 @@ export function MobileMessagesList() {
       if (uploadError) throw uploadError;
       const { data: { publicUrl } } = supabase.storage.from('whatsapp-media').getPublicUrl(filePath);
 
-      const { error } = await supabase.functions.invoke('twilio-whatsapp-send', {
-        body: {
+      const { error } = await dispatchWhatsAppSend({
           organizationId: organization.id, contactId: selectedThread.contact_id,
           threadId: selectedThreadId, message: caption, mediaUrl: publicUrl, mediaType,
           userId: userProfile?.id, replyToMessageId: savedReplyTo?.id || null,
-        },
-      });
+        });
       if (error) throw error;
       refetchThreads();
     } catch (error: any) {

@@ -1,5 +1,6 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "npm:@supabase/supabase-js@2";
+import { dispatchWhatsAppSend } from "../_shared/dispatch-whatsapp-send.ts";
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -1537,13 +1538,12 @@ serve(async (req) => {
 
       // Send out of hours message
       if (agent.out_of_hours_message) {
-        await supabase.functions.invoke('twilio-whatsapp-send', {
-          body: {
-            threadId,
-            content: agent.out_of_hours_message,
-            isAgentMessage: true,
-          }
-        });
+        await dispatchWhatsAppSend({
+          organizationId,
+          threadId,
+          message: agent.out_of_hours_message,
+          isAgentMessage: true,
+        } as any);
       }
 
       return new Response(
@@ -2298,16 +2298,14 @@ serve(async (req) => {
     }
 
     // 8. Send response via WhatsApp (production mode)
-    const { error: sendError } = await supabase.functions.invoke('twilio-whatsapp-send', {
-      body: {
-        organizationId,
-        contactId,
-        threadId,
-        message: aiResponse,
-        isAgentMessage: true,
-        agentId: agent.id,
-        senderName: agent.name,
-      }
+    const { error: sendError } = await dispatchWhatsAppSend({
+      organizationId,
+      contactId,
+      threadId,
+      message: aiResponse,
+      isAgentMessage: true,
+      agentId: agent.id,
+      senderName: agent.name,
     });
 
     if (sendError) {

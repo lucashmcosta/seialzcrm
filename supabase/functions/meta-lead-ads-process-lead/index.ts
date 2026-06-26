@@ -3,6 +3,7 @@ import { createClient } from "jsr:@supabase/supabase-js@2";
 import { corsHeaders } from "../_shared/cors.ts";
 import { notifyOrgUsers } from "../_shared/notify.ts";
 import { validateServiceRoleAuth } from "../_shared/auth.ts";
+import { dispatchWhatsAppSend } from "../_shared/dispatch-whatsapp-send.ts";
 
 function normalizePhoneToE164(phone: string): string {
   if (!phone) return "";
@@ -568,35 +569,19 @@ serve(async (req) => {
           console.warn("[auto-wa] template fallback lookup failed", e);
         }
 
-        // Fetch service_role JWT from Vault — env var may not be a valid JWT after key rotation
-        const { data: internalToken, error: tokenErr } = await admin.rpc(
-          "get_internal_function_auth_token",
-        );
-        if (tokenErr || !internalToken) {
-          console.warn("[auto-wa] no internal token", tokenErr);
-          throw new Error("Internal auth token unavailable");
-        }
-        const sendUrl = `${Deno.env.get("SUPABASE_URL")}/functions/v1/twilio-whatsapp-send`;
-        const sendRes = await fetch(sendUrl, {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-            Authorization: `Bearer ${internalToken}`,
-          },
-          body: JSON.stringify({
-            organizationId: organization_id,
-            contactId,
-            templateId: settings.whatsapp_template_id,
-            templateVariables,
-            isAgentMessage: false,
-            senderName: "Meta Lead Ads (auto)",
-          }),
+        // Envia via dispatcher (Twilio ou Meta Cloud, conforme provider do endpoint)
+        const sendResult = await dispatchWhatsAppSend({
+          organizationId: organization_id,
+          contactId,
+          templateId: settings.whatsapp_template_id,
+          templateVariables,
+          isAgentMessage: false,
+          senderName: "Meta Lead Ads (auto)",
         });
-        if (!sendRes.ok) {
-          const errBody = await sendRes.text();
-          console.warn("[auto-wa] send failed", sendRes.status, errBody);
+        if (sendResult.error) {
+          console.warn("[auto-wa] send failed", sendResult.error.message);
         } else {
-          console.log("[auto-wa] send ok", sendRes.status);
+          console.log("[auto-wa] send ok");
         }
       } catch (waErr) {
         console.warn("[auto-wa] send error", waErr);

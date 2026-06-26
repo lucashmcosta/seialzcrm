@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef } from 'react';
+import { dispatchWhatsAppSend } from "@/lib/dispatchWhatsAppSend";
 import { useOrganization } from '@/hooks/useOrganization';
 import { supabase } from '@/integrations/supabase/client';
 import { Button } from '@/components/ui/button';
@@ -224,8 +225,7 @@ export function WhatsAppChat({ contactId, threadId: initialThreadId, onThreadCre
 
     setSubmitting(true);
     try {
-      const { data, error } = await supabase.functions.invoke('twilio-whatsapp-send', {
-        body: {
+      const { data, error } = await dispatchWhatsAppSend({
           organizationId: organization.id,
           contactId,
           threadId,
@@ -233,8 +233,7 @@ export function WhatsAppChat({ contactId, threadId: initialThreadId, onThreadCre
           mediaUrl,
           mediaType,
           userId: userProfile?.id,
-        },
-      });
+        });
 
       if (error) throw error;
 
@@ -270,16 +269,14 @@ export function WhatsAppChat({ contactId, threadId: initialThreadId, onThreadCre
     setShowTemplates(false);
 
     try {
-      const { data, error } = await supabase.functions.invoke('twilio-whatsapp-send', {
-        body: {
+      const { data, error } = await dispatchWhatsAppSend({
           organizationId: organization.id,
           contactId,
           threadId,
           templateId,
           templateVariables: variables,
           userId: userProfile?.id,
-        },
-      });
+        });
 
       if (error) throw error;
 

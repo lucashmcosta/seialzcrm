@@ -7,6 +7,7 @@
 // Authoritative guards live in supabase/functions/twilio-whatsapp-send/index.ts.
 
 import { useMemo, useState } from 'react';
+import { dispatchWhatsAppSend } from "@/lib/dispatchWhatsAppSend";
 import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { useOrganization } from '@/hooks/useOrganization';
@@ -210,16 +211,14 @@ export function InboxComposer({ thread, replyTo, onClearReply, onSent, onThreadM
   const senderName = userProfile?.full_name || userProfile?.email || 'Atendente';
 
   async function invokeSend(payload: Record<string, any>) {
-    const { data, error } = await supabase.functions.invoke('twilio-whatsapp-send', {
-      body: {
+    const { data, error } = await dispatchWhatsAppSend({
         organizationId: thread!.organization_id || organization?.id,
         threadId: thread!.id,
         senderContext: 'inbox',
         userId: myId,
         senderName,
         ...payload,
-      },
-    });
+      });
     if (error) {
       let reason = error.message;
       try {

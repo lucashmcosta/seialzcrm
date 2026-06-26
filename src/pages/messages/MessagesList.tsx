@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef, Fragment } from 'react';
+import { dispatchWhatsAppSend } from "@/lib/dispatchWhatsAppSend";
 import { usePersistedFilters } from '@/hooks/usePersistedFilters';
 import { Link } from 'react-router-dom';
 import { useIsMobile } from '@/hooks/use-mobile';
@@ -956,8 +957,7 @@ function DesktopMessagesList() {
     }
 
     try {
-      const { data, error } = await supabase.functions.invoke('twilio-whatsapp-send', {
-        body: {
+      const { data, error } = await dispatchWhatsAppSend({
           organizationId: organization.id,
           contactId: selectedThread.contact_id,
           threadId: selectedThreadId,
@@ -965,8 +965,7 @@ function DesktopMessagesList() {
           userId: userProfile?.id,
           replyToMessageId: savedReplyTo?.id || null,
           ...(hasMultipleEndpoints && composerEndpointId ? { endpointId: composerEndpointId } : {}),
-        },
-      });
+        });
 
       if (error) throw error;
 
@@ -1027,8 +1026,7 @@ function DesktopMessagesList() {
     }
 
     try {
-      const { data, error } = await supabase.functions.invoke('twilio-whatsapp-send', {
-        body: {
+      const { data, error } = await dispatchWhatsAppSend({
           organizationId: organization.id,
           contactId: selectedThread.contact_id,
           threadId: selectedThreadId,
@@ -1036,8 +1034,7 @@ function DesktopMessagesList() {
           templateVariables: variables,
           userId: userProfile?.id,
           ...(hasMultipleEndpoints && composerEndpointId ? { endpointId: composerEndpointId } : {}),
-        },
-      });
+        });
 
       if (error) throw error;
 
@@ -1121,8 +1118,7 @@ function DesktopMessagesList() {
         .from('whatsapp-media')
         .getPublicUrl(filePath);
 
-      const { error } = await supabase.functions.invoke('twilio-whatsapp-send', {
-        body: {
+      const { error } = await dispatchWhatsAppSend({
           organizationId: organization.id,
           contactId: selectedThread.contact_id,
           threadId: selectedThreadId,
@@ -1132,8 +1128,7 @@ function DesktopMessagesList() {
           userId: userProfile?.id,
           replyToMessageId: savedReplyTo?.id || null,
           ...(hasMultipleEndpoints && composerEndpointId ? { endpointId: composerEndpointId } : {}),
-        },
-      });
+        });
 
       if (error) throw error;
       refetchThreads();
