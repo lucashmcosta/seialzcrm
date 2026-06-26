@@ -14,6 +14,7 @@ import { AudioRecorder } from './AudioRecorder';
 import { AudioMessagePlayer } from './AudioMessagePlayer';
 import { MediaUploadButton } from './MediaUploadButton';
 import { WhatsAppFormattedText } from './WhatsAppFormattedText';
+import { MessageStatusIndicator, MessageFailureInline } from './MessageStatusIndicator';
 import { getProxiedMediaUrl } from '@/lib/mediaProxy';
 import { audioBlobToFile } from '@/lib/audioBlobToFile';
 import { DateSeparator } from '@/components/messages/DateSeparator';
@@ -328,22 +329,15 @@ export function WhatsAppChat({ contactId, threadId: initialThreadId, onThreadCre
     }
   };
 
-  const renderStatusIcon = (status: string | null) => {
-    switch (status) {
-      case 'sending':
-        return <Clock className="w-3 h-3 text-muted-foreground" />;
-      case 'sent':
-        return <Check className="w-3 h-3 text-muted-foreground" />;
-      case 'delivered':
-         return <Checks className="w-3 h-3 text-muted-foreground" />;
-      case 'read':
-        return <Checks className="w-3 h-3 text-blue-500" />;
-      case 'failed':
-        return <WarningCircle className="w-3 h-3 text-destructive" />;
-      default:
-        return null;
-    }
-  };
+  const renderStatusIcon = (message: Message) => (
+    <MessageStatusIndicator
+      status={message.whatsapp_status}
+      errorCode={message.error_code}
+      errorMessage={message.error_message}
+      sid={message.whatsapp_message_sid}
+      sentAt={message.sent_at}
+    />
+  );
 
   const renderMediaContent = (message: Message) => {
     if (!message.media_urls || message.media_urls.length === 0) return null;
