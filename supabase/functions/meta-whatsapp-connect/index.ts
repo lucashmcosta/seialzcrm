@@ -187,7 +187,7 @@ serve(async (req) => {
       .from("communication_endpoints")
       .select("id")
       .eq("organization_id", body.organizationId)
-      .eq("provider", "meta-cloud")
+      .eq("provider", "meta_cloud_api")
       .eq("sender_sid", body.phoneNumberId)
       .maybeSingle();
 
@@ -195,7 +195,7 @@ serve(async (req) => {
       organization_id: body.organizationId,
       organization_integration_id: orgIntegrationId,
       channel: "whatsapp" as const,
-      provider: "meta-cloud" as const,
+      provider: "meta_cloud_api" as const,
       external_account_id: body.wabaId,
       sender_sid: body.phoneNumberId,
       external_address: body.phoneE164,

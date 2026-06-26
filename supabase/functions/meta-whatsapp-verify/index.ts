@@ -107,7 +107,7 @@ serve(async (req) => {
           status: "online",
         })
         .eq("organization_id", organizationId)
-        .eq("provider", "meta-cloud");
+        .eq("provider", "meta_cloud_api");
     }
 
     return new Response(JSON.stringify({
