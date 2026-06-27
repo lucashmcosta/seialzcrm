@@ -69,7 +69,58 @@ function placeholderForMedia(kind: MediaKind): string {
   }
 }
 
+serve(async (req) => {
+  if (req.method === "OPTIONS") return new Response("ok", { headers: corsHeaders });
+  if (req.method !== "POST") return jsonResponse(405, { error: "method_not_allowed" });
 
+  try {
+    const body = await req.json().catch(() => null);
+    if (!body) return jsonResponse(400, { error: "invalid_json" });
+
+    const {
+      organizationId, contactId, threadId, message,
+      mediaUrl, mediaUrls, mediaType, mimeType: payloadMime, filename: payloadFilename,
+      userId, replyToMessageId, isAgentMessage, agentId, senderName,
+      endpointId: explicitEndpointId,
+    } = body as Record<string, any>;
+
+    if (!organizationId) return jsonResponse(400, { error: "missing_organization" });
+    if (!contactId) return jsonResponse(400, { error: "missing_contact" });
+
+    // Normaliza mídia
+    const mediaUrlsArr: string[] = Array.isArray(mediaUrls) && mediaUrls.length
+      ? mediaUrls.filter((u: any) => typeof u === "string" && u)
+      : (typeof mediaUrl === "string" && mediaUrl ? [mediaUrl] : []);
+    const hasMedia = mediaUrlsArr.length > 0 || !!mediaType;
+    const trimmedMessage = typeof message === "string" ? message : "";
+
+    if (hasMedia) {
+      if (mediaType === "sticker") {
+        return jsonResponse(400, {
+          error: "sticker_not_supported_yet",
+          details: "Envio de sticker via Meta Cloud ainda não está habilitado.",
+        });
+      }
+      if (!mediaType || !SUPPORTED_MEDIA.includes(mediaType as MediaKind)) {
+        return jsonResponse(400, {
+          error: "unsupported_media_type",
+          details: "Tipos suportados: image, audio, video, document.",
+        });
+      }
+      if (mediaUrlsArr.length === 0) {
+        return jsonResponse(400, { error: "missing_media_url" });
+      }
+      if (trimmedMessage.length > 1024) {
+        return jsonResponse(400, { error: "caption_too_long", max: 1024 });
+      }
+    } else {
+      if (!trimmedMessage.trim()) {
+        return jsonResponse(400, { error: "empty_message", details: "Digite uma mensagem antes de enviar." });
+      }
+      if (trimmedMessage.length > 4096) {
+        return jsonResponse(400, { error: "message_too_long", max: 4096 });
+      }
+    }
 
     const supabase = createClient(
       Deno.env.get("SUPABASE_URL")!,
