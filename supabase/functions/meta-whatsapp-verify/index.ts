@@ -1,13 +1,12 @@
 // Verifica o estado atual da integração Meta WhatsApp Cloud:
 // - reconfere phone_number_id na Graph API
-// - retorna se webhook está em modo ativo (secrets globais presentes)
 // - atualiza metadata com a última validação
+// Fase 3: removida a noção de "configuração global" (platform status).
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "npm:@supabase/supabase-js@2";
 import { corsHeaders } from "../_shared/cors.ts";
 import { decryptSecret } from "../_shared/crypto.ts";
 import { validateCredentials, MetaWaGraphError } from "../_shared/meta-whatsapp/graph.ts";
-import { getPlatformStatus } from "../_shared/meta-whatsapp/platform.ts";
 import { resolveAppSecretForIntegration } from "../_shared/meta-whatsapp/credentials.ts";
 
 function err(status: number, message: string, extra: Record<string, unknown> = {}) {
