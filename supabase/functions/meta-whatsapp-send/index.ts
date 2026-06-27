@@ -403,7 +403,19 @@ serve(async (req) => {
       let mimeUsed: string | null = null;
       let filenameUsed: string | null = null;
 
-      if (hasMedia) {
+      if (isTemplateSend) {
+        outboundPayload = {
+          messaging_product: "whatsapp",
+          recipient_type: "individual",
+          to,
+          type: "template",
+          template: {
+            name: templateName,
+            language: { code: templateLanguage },
+            components: outboundTemplateComponents,
+          },
+        };
+      } else if (hasMedia) {
         // 1) Baixa o arquivo da URL pública do Storage
         const sourceUrl = mediaUrlsArr[0];
         const fileRes = await fetch(sourceUrl);
