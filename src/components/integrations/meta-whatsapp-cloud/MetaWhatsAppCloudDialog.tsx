@@ -259,8 +259,10 @@ export function MetaWhatsAppCloudDialog({ open, onOpenChange, integration, orgIn
               <div className="space-y-1.5">
                 <Label htmlFor="meta-app-secret">
                   App Secret
-                  {hasStoredAppSecret && (
+                  {hasStoredAppSecret ? (
                     <span className="ml-2 text-xs text-green-600 font-normal">••• já configurado</span>
+                  ) : (
+                    <span className="ml-1 text-destructive">*</span>
                   )}
                 </Label>
                 <div className="relative">
@@ -289,8 +291,10 @@ export function MetaWhatsAppCloudDialog({ open, onOpenChange, integration, orgIn
               <div className="space-y-1.5">
                 <Label htmlFor="meta-verify-token">
                   Verify Token
-                  {hasStoredVerifyToken && (
+                  {hasStoredVerifyToken ? (
                     <span className="ml-2 text-xs text-green-600 font-normal">••• já configurado</span>
+                  ) : (
+                    <span className="ml-1 text-destructive">*</span>
                   )}
                 </Label>
                 <div className="relative">
