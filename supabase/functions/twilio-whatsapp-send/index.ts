@@ -180,7 +180,10 @@ serve(async (req) => {
       let allowed = true
       let reason = 'ok'
 
-      if (endpoint.is_active === false) {
+      if ((endpoint as any).provider === 'meta_cloud_api') {
+        allowed = false
+        reason = 'wrong_provider_for_endpoint'
+      } else if (endpoint.is_active === false) {
         allowed = false
         reason = 'endpoint_inactive'
       } else if (endpoint.channel !== 'whatsapp') {
