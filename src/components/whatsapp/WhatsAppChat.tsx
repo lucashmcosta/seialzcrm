@@ -54,6 +54,8 @@ export function WhatsAppChat({ contactId, threadId: initialThreadId, onThreadCre
   const [isIn24hWindow, setIsIn24hWindow] = useState(false);
   const [showTemplates, setShowTemplates] = useState(false);
   const [accessToken, setAccessToken] = useState<string | undefined>(undefined);
+  const waProvider = useWhatsAppProvider({ threadId });
+  const templateSelectorProvider = waProvider === 'meta_cloud_api' ? 'meta_cloud_api' : undefined;
 
   const dateLocale = locale === 'pt-BR' ? ptBR : enUS;
 
