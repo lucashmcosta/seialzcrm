@@ -637,8 +637,8 @@ export function ContactMessages({ contactId, opportunityId }: ContactMessagesPro
                       {/* Media */}
                       {renderMediaContent(message)}
 
-                      {/* Content */}
-                      {message.content && (
+                      {/* Content - hide media placeholders */}
+                      {message.content && !(message.media_urls && message.media_urls.length > 0 && ['[Áudio]', '[Imagem]', '[Vídeo]', '[Documento]', '[Sticker]'].includes(message.content)) && (
                         <WhatsAppFormattedText content={message.content} />
                       )}
 
