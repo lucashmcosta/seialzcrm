@@ -28,36 +28,23 @@ serve(async (req) => {
   if (req.method !== "POST") return json(405, { error: "method_not_allowed" });
 
   try {
-    const authHeader = req.headers.get("Authorization") ?? "";
-    if (!authHeader.startsWith("Bearer ")) return json(401, { error: "unauthorized" });
-
-    const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
-    const anonKey = Deno.env.get("SUPABASE_ANON_KEY")!;
-    const serviceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
-
-    const supabaseUser = createClient(supabaseUrl, anonKey, {
-      global: { headers: { Authorization: authHeader } },
-    });
-    const token = authHeader.replace("Bearer ", "");
-    const { data: claims, error: cErr } = await supabaseUser.auth.getClaims(token);
-    if (cErr || !claims?.claims?.sub) return json(401, { error: "unauthorized" });
-    const authUid = claims.claims.sub as string;
-
-    const admin = createClient(supabaseUrl, serviceKey);
-
-    // Verifica que o chamador é admin (admin_users por auth_user_id).
-    const { data: adminRow } = await admin
-      .from("admin_users")
-      .select("id, role, is_active")
-      .eq("auth_user_id", authUid)
-      .maybeSingle();
-    if (!adminRow || adminRow.is_active === false) {
-      return json(403, { error: "admin_only" });
+    // Função one-shot Fase 2: sem JWT obrigatório.
+    // Para evitar abuso, exige um token compartilhado via env e só aceita
+    // organizações presentes na allowlist explícita.
+    const expectedToken = Deno.env.get("META_MIGRATION_TOKEN")?.trim();
+    const providedToken = (req.headers.get("x-migration-token") ?? "").trim();
+    if (!expectedToken || providedToken !== expectedToken) {
+      return json(403, { error: "forbidden" });
     }
 
-    const body = await req.json().catch(() => ({})) as { organizationId?: string; dryRun?: boolean };
-    if (!body.organizationId) return json(400, { error: "missing_organization_id" });
-    const dryRun = body.dryRun === true;
+    const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
+    const serviceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
+    const admin = createClient(supabaseUrl, serviceKey);
+
+    const ALLOWLIST = new Set<string>([
+      "40ae935c-a7f7-4ad7-8ea4-91be6404a95f", // Central Trabalhista
+    ]);
+
 
     const globalAppSecret = Deno.env.get("META_WHATSAPP_APP_SECRET")?.trim();
     const globalVerifyToken = Deno.env.get("META_WHATSAPP_VERIFY_TOKEN")?.trim();
