@@ -369,15 +369,3 @@ function Field({ label, value, mono }: { label: string; value: any; mono?: boole
   );
 }
 
-function StatusRow({
-  label, ok, okLabel = "Configurado", pendingLabel = "Pendente",
-}: { label: string; ok: boolean; okLabel?: string; pendingLabel?: string }) {
-  return (
-    <div className="flex items-center justify-between">
-      <span>{label}</span>
-      {ok
-        ? <Badge className="bg-green-600 text-white">{okLabel}</Badge>
-        : <Badge variant="outline" className="border-amber-500 text-amber-600">{pendingLabel}</Badge>}
-    </div>
-  );
-}
