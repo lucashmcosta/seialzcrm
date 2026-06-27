@@ -5,3 +5,6 @@ verify_jwt = false
 
 [functions.meta-whatsapp-send]
 verify_jwt = false
+
+[functions.meta-whatsapp-templates-sync]
+verify_jwt = false
