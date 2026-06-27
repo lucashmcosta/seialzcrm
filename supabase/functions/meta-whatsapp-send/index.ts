@@ -1,11 +1,15 @@
 // Envia mensagem WhatsApp via Meta Cloud API.
 // Shape de entrada/saída compatível com twilio-whatsapp-send para uso pelo dispatcher.
-// MVP: apenas texto + reply opcional dentro da janela 24h. Templates/mídia ficam fora.
+// Suporta texto, image, audio, video, document dentro da janela 24h.
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "npm:@supabase/supabase-js@2";
 import { corsHeaders } from "../_shared/cors.ts";
 import { decryptSecret } from "../_shared/crypto.ts";
-import { metaWaPostJson, MetaWaGraphError } from "../_shared/meta-whatsapp/graph.ts";
+import {
+  metaWaPostJson,
+  metaWaUploadMedia,
+  MetaWaGraphError,
+} from "../_shared/meta-whatsapp/graph.ts";
 
 function jsonResponse(status: number, body: Record<string, unknown>) {
   return new Response(JSON.stringify(body), {
@@ -14,36 +18,57 @@ function jsonResponse(status: number, body: Record<string, unknown>) {
   });
 }
 
-serve(async (req) => {
-  if (req.method === "OPTIONS") return new Response("ok", { headers: corsHeaders });
-  if (req.method !== "POST") return jsonResponse(405, { error: "method_not_allowed" });
+type MediaKind = "image" | "audio" | "video" | "document";
+const SUPPORTED_MEDIA: MediaKind[] = ["image", "audio", "video", "document"];
 
+function inferMimeType(mediaType: string, sourceUrl?: string, headerCt?: string | null): string {
+  if (headerCt && headerCt.includes("/") && !headerCt.startsWith("application/octet-stream")) {
+    return headerCt.split(";")[0].trim();
+  }
+  const ext = (sourceUrl || "").toLowerCase().split("?")[0].split("#")[0].split(".").pop() || "";
+  const map: Record<string, string> = {
+    ogg: "audio/ogg", oga: "audio/ogg", opus: "audio/ogg",
+    mp3: "audio/mpeg", m4a: "audio/mp4", aac: "audio/aac", wav: "audio/wav", amr: "audio/amr",
+    jpg: "image/jpeg", jpeg: "image/jpeg", png: "image/png", webp: "image/webp",
+    mp4: "video/mp4", "3gp": "video/3gpp", "3gpp": "video/3gpp",
+    pdf: "application/pdf",
+    doc: "application/msword",
+    docx: "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+    xls: "application/vnd.ms-excel",
+    xlsx: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+    ppt: "application/vnd.ms-powerpoint",
+    pptx: "application/vnd.openxmlformats-officedocument.presentationml.presentation",
+    txt: "text/plain",
+    csv: "text/csv",
+  };
+  if (map[ext]) return map[ext];
+  switch (mediaType) {
+    case "audio": return "audio/ogg";
+    case "image": return "image/jpeg";
+    case "video": return "video/mp4";
+    case "document": return "application/pdf";
+  }
+  return "application/octet-stream";
+}
+
+function filenameFromUrl(url: string, fallback: string): string {
   try {
-    const body = await req.json().catch(() => null);
-    if (!body) return jsonResponse(400, { error: "invalid_json" });
+    const u = new URL(url);
+    const tail = u.pathname.split("/").pop() || "";
+    if (tail) return decodeURIComponent(tail);
+  } catch { /* ignore */ }
+  return fallback;
+}
 
-    const {
-      organizationId, contactId, threadId, message,
-      mediaUrl, mediaUrls, mediaType,
-      userId, replyToMessageId, isAgentMessage, agentId, senderName,
-      endpointId: explicitEndpointId,
-    } = body as Record<string, any>;
+function placeholderForMedia(kind: MediaKind): string {
+  switch (kind) {
+    case "audio": return "[Áudio]";
+    case "image": return "[Imagem]";
+    case "video": return "[Vídeo]";
+    case "document": return "[Documento]";
+  }
+}
 
-    if (!organizationId) return jsonResponse(400, { error: "missing_organization" });
-    if (!contactId) return jsonResponse(400, { error: "missing_contact" });
-    const hasMedia = !!(mediaUrl || (Array.isArray(mediaUrls) && mediaUrls.length) || mediaType);
-    if (hasMedia) {
-      return jsonResponse(400, {
-        error: "media_not_supported",
-        details: "Este número usa Meta Cloud API e por enquanto só envia texto. Mídia/áudio ainda não está habilitado neste canal.",
-      });
-    }
-    if (!message || typeof message !== "string" || !message.trim()) {
-      return jsonResponse(400, { error: "empty_message", details: "Digite uma mensagem antes de enviar." });
-    }
-    if (message.length > 4096) {
-      return jsonResponse(400, { error: "message_too_long", max: 4096 });
-    }
 
 
     const supabase = createClient(
