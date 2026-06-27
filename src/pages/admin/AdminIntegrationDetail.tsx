@@ -285,11 +285,6 @@ export default function AdminIntegrationDetail() {
           </TabsContent>
         )}
 
-        {integration?.slug === 'meta-whatsapp-cloud' && (
-          <TabsContent value="platform" className="mt-6">
-            <MetaWhatsAppPlatformConfig />
-          </TabsContent>
-        )}
       </Tabs>
       </div>
 
