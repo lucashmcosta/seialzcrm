@@ -24,18 +24,27 @@ serve(async (req) => {
 
     const {
       organizationId, contactId, threadId, message,
+      mediaUrl, mediaUrls, mediaType,
       userId, replyToMessageId, isAgentMessage, agentId, senderName,
       endpointId: explicitEndpointId,
     } = body as Record<string, any>;
 
     if (!organizationId) return jsonResponse(400, { error: "missing_organization" });
     if (!contactId) return jsonResponse(400, { error: "missing_contact" });
-    if (!message || typeof message !== "string") {
-      return jsonResponse(400, { error: "missing_message", details: "MVP só suporta texto." });
+    const hasMedia = !!(mediaUrl || (Array.isArray(mediaUrls) && mediaUrls.length) || mediaType);
+    if (hasMedia) {
+      return jsonResponse(400, {
+        error: "media_not_supported",
+        details: "Este número usa Meta Cloud API e por enquanto só envia texto. Mídia/áudio ainda não está habilitado neste canal.",
+      });
+    }
+    if (!message || typeof message !== "string" || !message.trim()) {
+      return jsonResponse(400, { error: "empty_message", details: "Digite uma mensagem antes de enviar." });
     }
     if (message.length > 4096) {
       return jsonResponse(400, { error: "message_too_long", max: 4096 });
     }
+
 
     const supabase = createClient(
       Deno.env.get("SUPABASE_URL")!,
