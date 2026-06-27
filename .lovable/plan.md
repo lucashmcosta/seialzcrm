@@ -1,86 +1,53 @@
-## Ajustes confirmados via diagnóstico
-1. **Provider padrão**: `communication_endpoints.provider` usa `twilio` e `meta_cloud_api` (18 e 2 rows). Adoto exatamente esses dois valores em `whatsapp_templates.provider`. Nada de `meta-cloud`/`meta`.
-2. **Duplicados Twilio**: `SELECT organization_id, twilio_content_sid, count(*) FROM whatsapp_templates GROUP BY 1,2 HAVING count(*)>1` retornou 0 linhas. Seguro criar o índice único parcial Twilio.
-3. **Seletor**: default = Twilio (comportamento atual preservado). Meta só quando o caller passar explicitamente `provider='meta_cloud_api'`.
+## Bug confirmado
 
-## Objetivo
-Adicionar suporte a templates Meta WhatsApp Cloud (sync + envio fora da janela 24h) reutilizando `whatsapp_templates`, sem mexer em Twilio.
+A conversa do Joao Teste está, sim, no endpoint **`+551150287020` (provider `meta_cloud_api`, "Central Trabalhista")** — confirmei direto no banco:
 
-## 1. Migration mínima em `whatsapp_templates`
-- `ALTER COLUMN twilio_content_sid DROP NOT NULL`.
-- `ADD COLUMN provider text NOT NULL DEFAULT 'twilio' CHECK (provider IN ('twilio','meta_cloud_api'))`.
-- `ADD COLUMN organization_integration_id uuid REFERENCES organization_integrations(id) ON DELETE CASCADE`.
-- `ADD COLUMN meta_template_name text`.
-- `ADD COLUMN meta_waba_id text`.
-- `ADD COLUMN components jsonb`.
-- Índice parcial Meta: `UNIQUE (organization_integration_id, meta_template_name, language) WHERE provider='meta_cloud_api'`.
-- Índice parcial Twilio: `UNIQUE (organization_id, twilio_content_sid) WHERE provider='twilio' AND twilio_content_sid IS NOT NULL`.
-- Backfill defensivo: `UPDATE whatsapp_templates SET provider='twilio' WHERE provider IS NULL`.
+```
+thread 5f77df99 → primary_endpoint 407ff93d
+endpoint: provider='meta_cloud_api', external_address='+551150287020'
+```
 
-## 2. Edge function nova: `meta-whatsapp-templates-sync`
-- Input: `{ organizationId }`. Resolve `organization_integrations` slug `meta-whatsapp-cloud` ativo.
-- Descriptografa token + app_secret via `_shared/meta-whatsapp/credentials.ts`; lê `config_values.waba_id`.
-- `GET /{waba_id}/message_templates?fields=name,language,status,category,components&limit=200` com `appsecret_proof` (`metaGraphGet`), paginando `paging.next`.
-- Upsert em `whatsapp_templates` por `(organization_integration_id, meta_template_name, language)`:
-  - `provider='meta_cloud_api'`, `twilio_content_sid=NULL`
-  - `friendly_name = name`, `meta_template_name = name`, `language`, `category` (upper), `status` mapeado (`APPROVED→approved`, `PENDING→pending`, `REJECTED→rejected`, demais → `pending`)
-  - `body` = texto do componente BODY (preview), `header`/`footer` extraídos
-  - `variables` = `{{n}}` extraídos do BODY (compatível com selector atual)
-  - `components` = JSON cru da Meta
-  - `metadata.meta_cloud = { waba_id, raw }`, `source='meta'`, `last_synced_at=now()`, `meta_waba_id`, `organization_integration_id`
-- Retorna `{ synced, approved, by_status }`. Fase 1 não desativa templates removidos da Meta.
+Mas o seletor está listando **50 templates Twilio**. Causa raiz: o filtro por provider (`useWhatsAppProvider` + prop `provider` no `WhatsAppTemplateSelector`) só foi ligado em **2 dos 5 pontos** que abrem o seletor.
 
-## 3. `meta-whatsapp-send` — suporte a template
-Novo branch quando `templateId` (preferido) ou `type === 'template'`:
-- Com `templateId`: carrega row, valida `provider='meta_cloud_api'`, `status='approved'`, mesma org. Extrai `meta_template_name`, `language`, `components`.
-- Renderiza variáveis: substitui `{{n}}` em BODY usando `templateVariables`. Monta `components` finais para Graph API (BODY com `parameters:[{type:'text', text:'...'}]`; HEADER/BUTTONS dinâmicos ficam para fase futura). Se template sem variáveis, envia `components: []`.
-- Aceita também shape direto `{ type:'template', templateName, languageCode, components }` para chamadas server-to-server.
-- `POST /{phone_number_id}/messages` com payload template padrão.
-- Persiste em `messages`:
-  - `content` = preview renderizado ou `[Template: nome]`
-  - `whatsapp_message_sid` = `messages[0].id` (wamid)
-  - `whatsapp_status='sent'`
-  - `metadata.meta_cloud.template = { name, language, components, rendered_preview }`
-- Atualiza thread (`last_message_*`) como fluxo de texto atual.
+### Onde está ligado (correto)
+- `src/components/whatsapp/WhatsAppChat.tsx` — passa `provider={waProvider}`
+- `src/components/inbox/InboxComposer.tsx` — passa `provider={templateSelectorProvider}`
 
-## 4. Dispatcher `src/lib/dispatchWhatsAppSend.ts`
-Sem mudança de roteamento — `templateId`/`templateVariables` já passam por spread. Confirmar que rota Meta usa esses campos.
+### Onde NÃO está ligado (bug)
+- `src/pages/messages/MessagesList.tsx:1552` — **esta é a tela do seu print** (`/messages`)
+- `src/components/contacts/ContactMessages.tsx:801`
+- `src/components/mobile/MobileMessagesList.tsx:850`
 
-## 5. UI
+Sem a prop, o seletor cai no default legado (`provider IS NULL OR 'twilio'`) e mostra os 134 templates Twilio em qualquer thread, inclusive Meta Cloud.
 
-### a) Card da integração (`MetaWhatsAppCloudDialog.tsx` + Admin)
-- Botão "Sincronizar templates" → `metaWhatsAppService.syncTemplates(orgId)`.
-- Lista resumida pós-sync: nome, idioma, categoria, badge de status. Lê `whatsapp_templates` filtrando `provider='meta_cloud_api'` + `organization_integration_id`. Mostra contagem de aprovados.
+## Correção
 
-### b) `WhatsAppTemplateSelector.tsx`
-- Prop **opcional** `provider?: 'twilio' | 'meta_cloud_api'`.
-- **Default = Twilio** (filtra `provider='twilio'` OR `provider IS NULL` para cobrir rows legadas). Comportamento atual idêntico quando prop omitida.
-- Quando `provider='meta_cloud_api'`, filtra só Meta.
+Ligar o `useWhatsAppProvider(threadId)` nos 3 call sites restantes e propagar a prop `provider` para o `WhatsAppTemplateSelector`. Nenhuma mudança em backend, sync, edge functions, schema ou no próprio seletor — só fiação de prop.
 
-### c) `InboxComposer.tsx` e `WhatsAppChat.tsx`
-- Resolver provider do endpoint/thread (mesma lógica do dispatcher: `primary_endpoint_id` → `communication_endpoints.provider`).
-- Passar prop `provider` para `WhatsAppTemplateSelector` **somente** quando o provider for Meta. Threads/contextos sem provider detectado continuam usando o default (Twilio).
-- `handleSendTemplate` já dispara `dispatchWhatsAppSend({ templateId, templateVariables })` — roteia automático.
+### Arquivos a editar
 
-## 6. Service layer
-`metaWhatsAppService.syncTemplates(organizationId)` → invoca `meta-whatsapp-templates-sync`.
+1. **`src/pages/messages/MessagesList.tsx`**
+   - Importar `useWhatsAppProvider`.
+   - No componente que renderiza o chat da thread selecionada, calcular `const waProvider = useWhatsAppProvider({ threadId: selectedThreadId })` (usar o mesmo id já disponível no contexto da thread aberta).
+   - Passar `provider={waProvider === 'meta_cloud_api' ? 'meta_cloud_api' : undefined}` no `<WhatsAppTemplateSelector>` da linha 1552.
 
-## 7. Compatibilidade
-Não tocar em: `twilio-whatsapp-send`, `twilio-whatsapp-templates`, webhooks, dispatcher inbound, mídia/texto Meta atual. Sync Twilio segue preenchendo `twilio_content_sid` e `provider` default = `twilio`.
+2. **`src/components/contacts/ContactMessages.tsx`**
+   - Mesmo padrão, usando o `threadId` da conversa aberta no dialog. Aplicar no `<WhatsAppTemplateSelector>` da linha 801.
 
-## 8. Validação manual
-1. Sincronizar templates da Central → rows com `provider='meta_cloud_api'`, `components` populado, status mapeado.
-2. Conversa Meta fora da janela 24h → selector lista apenas Meta aprovados.
-3. Conversa Twilio (qualquer estado) → selector idêntico ao atual (só Twilio).
-4. Enviar template Meta com variáveis → 200 da Graph, wamid em `messages.whatsapp_message_sid`, `metadata.meta_cloud.template`, status `delivered/read` via webhook.
-5. Texto Meta dentro da janela continua enviando; fora continua bloqueado.
-6. Envio Twilio (template e texto) sem regressão.
+3. **`src/components/mobile/MobileMessagesList.tsx`**
+   - Mesmo padrão na linha 850.
 
-## Arquivos previstos
-- Migration nova.
-- `supabase/functions/meta-whatsapp-templates-sync/index.ts` (nova).
-- `supabase/functions/meta-whatsapp-send/index.ts` (estender).
-- `src/services/metaWhatsAppService.ts` (+ syncTemplates).
-- `src/components/integrations/meta-whatsapp-cloud/MetaWhatsAppCloudDialog.tsx` (botão + lista).
-- `src/components/whatsapp/WhatsAppTemplateSelector.tsx` (prop provider, default Twilio).
-- `src/components/inbox/InboxComposer.tsx`, `src/components/whatsapp/WhatsAppChat.tsx` (resolver provider; passar prop só para Meta).
+### Resultado esperado após o fix
+
+Abrindo a conversa do Joao Teste em `/messages` (endpoint 7020 Meta Cloud):
+- Selector consulta `whatsapp_templates` com `provider='meta_cloud_api'` e `status='approved'`.
+- Como a WABA `2206490376764877` ainda tem 0 aprovados (`conscentimento` está `pending`), o painel mostra o empty state em vez dos 50 templates Twilio.
+- Quando a Meta aprovar o template, ele aparecerá automaticamente após clicar "Sincronizar templates".
+
+Threads Twilio (números 5098, 7067, 7027 etc.) continuam vendo os 134 templates Twilio normalmente — isolamento preservado.
+
+### Fora de escopo
+
+- Não mexer no `WhatsAppTemplateSelector`, nas edge functions, no schema ou no sync.
+- Não criar cruzamento Twilio ↔ Meta (decisão já firmada).
+- Não alterar empty state copy nesta etapa (posso adicionar um aviso "Esta conversa é Meta Cloud / Twilio" depois, se você quiser).
