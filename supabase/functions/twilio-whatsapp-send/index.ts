@@ -500,13 +500,26 @@ serve(async (req) => {
     ) {
       const { data: ep, error: epErr } = await supabase
         .from('communication_endpoints')
-        .select('id, external_address, channel, is_active, organization_id')
+        .select('id, external_address, channel, is_active, organization_id, provider')
         .eq('id', messagesEndpointIdInput)
         .maybeSingle()
       if (epErr || !ep) {
         console.warn('[messages-endpoint-override] endpoint not found', { messagesEndpointIdInput, err: epErr?.message })
         return new Response(
           JSON.stringify({ error: 'Invalid endpointId' }),
+          { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        )
+      }
+      if ((ep as any).provider === 'meta_cloud_api') {
+        console.error('[twilio-send] BLOCKED meta_cloud_api endpoint reached twilio-send', {
+          threadId: threadId ?? null, endpointId: ep.id,
+          external_address: ep.external_address, path: 'messages-override',
+        })
+        return new Response(
+          JSON.stringify({
+            error: 'wrong_provider_for_endpoint',
+            expected: 'twilio', actual: 'meta_cloud_api', endpoint_id: ep.id,
+          }),
           { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
         )
       }
