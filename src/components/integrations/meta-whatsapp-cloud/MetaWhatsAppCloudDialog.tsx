@@ -278,6 +278,15 @@ export function MetaWhatsAppCloudDialog({ open, onOpenChange, integration, orgIn
               </Card>
             )}
 
+            {/* ===== Regras de Entrada ===== */}
+            {isConnected && orgIntegration?.id && (
+              <Card className="p-4">
+                <WhatsAppInboundSettings integrationId={orgIntegration.id} />
+              </Card>
+            )}
+
+
+
 
 
 
