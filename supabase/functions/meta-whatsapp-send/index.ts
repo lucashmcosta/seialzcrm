@@ -98,8 +98,10 @@ serve(async (req) => {
     const ca = oi.connected_account as any;
     if (!ca?.access_token_encrypted) return jsonResponse(400, { error: "missing_access_token" });
 
-    const accessToken = await decryptSecret(ca.access_token_encrypted);
-    const appSecret = Deno.env.get("META_WHATSAPP_APP_SECRET") ?? undefined;
+    const decryptedAccessToken = await decryptSecret(ca.access_token_encrypted);
+    const rawAppSecret = Deno.env.get("META_WHATSAPP_APP_SECRET") ?? undefined;
+    const accessToken = decryptedAccessToken.trim();
+    const appSecret = rawAppSecret?.trim();
 
     // Contato + telefone
     const { data: contact } = await supabase
