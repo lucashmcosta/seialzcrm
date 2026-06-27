@@ -1,12 +1,11 @@
 // Webhook Meta WhatsApp Cloud (verify_jwt=false).
-// build: 2026-06-27 (per-integration App Secret / Verify Token + global fallback)
+// build: 2026-06-27 (Fase 3 — per-integration estrito, sem fallback global)
 // Estados:
-//  - GET handshake: aceita match contra qualquer integração habilitada
-//    (verify_token_encrypted) OU contra o secret global META_WHATSAPP_VERIFY_TOKEN.
-//  - POST: identifica a integração pelo phone_number_id do payload,
-//    valida X-Hub-Signature-256 com o App Secret da própria integração;
-//    se a integração não tiver app_secret_encrypted, cai no global
-//    (compat Central durante migração — Fase 1).
+//  - GET handshake: aceita match somente contra organization_integrations
+//    habilitadas que tenham verify_token_encrypted.
+//  - POST: identifica a integração pelo phone_number_id do payload e
+//    valida X-Hub-Signature-256 com o App Secret cifrado da própria
+//    integração. Sem app_secret_encrypted = 401 invalid_signature.
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "npm:@supabase/supabase-js@2";
 import { corsHeaders } from "../_shared/cors.ts";
@@ -15,8 +14,6 @@ import { metaWaGetMediaUrl, metaWaDownloadMedia, MetaWaGraphError } from "../_sh
 import {
   resolveAppSecretForIntegration,
   resolveVerifyTokenForIntegration,
-  globalVerifyToken,
-  globalAppSecret,
 } from "../_shared/meta-whatsapp/credentials.ts";
 
 type MediaKind = "image" | "audio" | "video" | "document" | "sticker";
