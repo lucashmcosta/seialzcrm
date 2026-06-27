@@ -7,12 +7,10 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } f
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Badge } from "@/components/ui/badge";
 import { Card } from "@/components/ui/card";
-import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Separator } from "@/components/ui/separator";
 import { ConfirmDialog } from "@/components/ui/confirm-dialog";
-import { CheckCircle, Warning, Eye, EyeSlash, ArrowsClockwise, LinkSimple, Plug } from "@phosphor-icons/react";
+import { CheckCircle, Eye, EyeSlash, ArrowsClockwise, LinkSimple, Plug } from "@phosphor-icons/react";
 import { MetaWhatsAppValidationError, metaWhatsAppService } from "@/services/metaWhatsAppService";
 
 interface Props {
