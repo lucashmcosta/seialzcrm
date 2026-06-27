@@ -226,11 +226,77 @@ async function handleInbound(
   }
   if (!threadId) { console.error("[meta-wa-webhook] no threadId"); return; }
 
-  const content = msg?.text?.body
-    ?? msg?.button?.text
-    ?? msg?.interactive?.button_reply?.title
-    ?? msg?.interactive?.list_reply?.title
-    ?? "[mensagem não-textual]";
+  // Detecta tipo de mídia
+  const mediaKind = MEDIA_KINDS.find((k) => msg?.[k]) as MediaKind | undefined;
+
+  let mediaUrls: string[] | null = null;
+  let mediaType: MediaKind | null = null;
+  let mediaInfo: Record<string, any> = {};
+
+  if (mediaKind) {
+    mediaType = mediaKind;
+    const mediaObj = msg[mediaKind] ?? {};
+    const mediaId = mediaObj?.id as string | undefined;
+    const initialMime = mediaObj?.mime_type as string | undefined;
+    const sha256 = mediaObj?.sha256 as string | undefined;
+    const caption = mediaObj?.caption as string | undefined;
+    const filename = mediaObj?.filename as string | undefined;
+    mediaInfo = { media_id: mediaId, mime_type: initialMime, sha256, filename, caption };
+
+    if (mediaId) {
+      try {
+        // Carrega access token da organização (lazy)
+        const { data: oi } = await supabase
+          .from("organization_integrations")
+          .select("connected_account")
+          .eq("id", endpoint.organization_integration_id)
+          .maybeSingle();
+        const enc = (oi?.connected_account as any)?.access_token_encrypted;
+        if (!enc) throw new Error("missing_access_token");
+        const accessToken = (await decryptSecret(enc)).trim();
+        const appSecret = Deno.env.get("META_WHATSAPP_APP_SECRET")?.trim() || undefined;
+
+        // 1) Resolve URL temporária
+        const meta = await metaWaGetMediaUrl(mediaId, { accessToken, appSecret });
+        const mime = meta.mime_type || initialMime || "application/octet-stream";
+        // 2) Download
+        const { bytes } = await metaWaDownloadMedia(meta.url, { accessToken, appSecret });
+        // 3) Upload Storage
+        const ext = extFromMime(mime);
+        const path = `${endpoint.organization_id}/meta-inbound/${mediaId}.${ext}`;
+        const { error: upErr } = await supabase.storage
+          .from("whatsapp-media")
+          .upload(path, bytes, { contentType: mime, upsert: true });
+        if (upErr) throw upErr;
+        const { data: pub } = supabase.storage.from("whatsapp-media").getPublicUrl(path);
+        mediaUrls = pub?.publicUrl ? [pub.publicUrl] : null;
+        mediaInfo.mime_type = mime;
+        mediaInfo.storage_path = path;
+      } catch (e) {
+        const errMsg = e instanceof MetaWaGraphError ? e.error.message : (e as Error).message;
+        console.error("[meta-wa-webhook] media download/store failed", { mediaId, errMsg });
+        mediaInfo.media_download_error = errMsg;
+      }
+    } else {
+      mediaInfo.media_download_error = "missing_media_id";
+    }
+  }
+
+  // Conteúdo textual / placeholder
+  let content: string;
+  if (mediaKind) {
+    const cap = mediaInfo.caption as string | undefined;
+    const fname = mediaInfo.filename as string | undefined;
+    if (mediaKind === "image" || mediaKind === "video") content = cap || placeholderForInbound(mediaKind);
+    else if (mediaKind === "document") content = cap || fname || placeholderForInbound(mediaKind);
+    else content = placeholderForInbound(mediaKind);
+  } else {
+    content = msg?.text?.body
+      ?? msg?.button?.text
+      ?? msg?.interactive?.button_reply?.title
+      ?? msg?.interactive?.list_reply?.title
+      ?? "[mensagem não-textual]";
+  }
 
   const { error: msgInsErr } = await supabase.from("messages").insert({
     organization_id: endpoint.organization_id,
@@ -240,7 +306,9 @@ async function handleInbound(
     whatsapp_message_sid: wamid,
     endpoint_id: endpoint.id,
     sender_type: "contact",
-    metadata: { meta_cloud: { raw: msg } },
+    media_urls: mediaUrls,
+    media_type: mediaType,
+    metadata: { meta_cloud: { ...mediaInfo, raw: msg } },
   });
   if (msgInsErr) console.error("[meta-wa-webhook] message insert error", msgInsErr);
 
@@ -250,6 +318,7 @@ async function handleInbound(
     .eq("id", threadId);
 
 }
+
 
 async function handleStatus(supabase: any, endpoint: any, st: any): Promise<void> {
   const wamid = st.id;
