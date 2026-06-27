@@ -1,17 +1,72 @@
 // Envia mensagem WhatsApp via Meta Cloud API.
 // Shape de entrada/saída compatível com twilio-whatsapp-send para uso pelo dispatcher.
-// MVP: apenas texto + reply opcional dentro da janela 24h. Templates/mídia ficam fora.
+// Suporta texto, image, audio, video, document dentro da janela 24h.
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "npm:@supabase/supabase-js@2";
 import { corsHeaders } from "../_shared/cors.ts";
 import { decryptSecret } from "../_shared/crypto.ts";
-import { metaWaPostJson, MetaWaGraphError } from "../_shared/meta-whatsapp/graph.ts";
+import {
+  metaWaPostJson,
+  metaWaUploadMedia,
+  MetaWaGraphError,
+} from "../_shared/meta-whatsapp/graph.ts";
 
 function jsonResponse(status: number, body: Record<string, unknown>) {
   return new Response(JSON.stringify(body), {
     status,
     headers: { ...corsHeaders, "Content-Type": "application/json" },
   });
+}
+
+type MediaKind = "image" | "audio" | "video" | "document";
+const SUPPORTED_MEDIA: MediaKind[] = ["image", "audio", "video", "document"];
+
+function inferMimeType(mediaType: string, sourceUrl?: string, headerCt?: string | null): string {
+  if (headerCt && headerCt.includes("/") && !headerCt.startsWith("application/octet-stream")) {
+    return headerCt.split(";")[0].trim();
+  }
+  const ext = (sourceUrl || "").toLowerCase().split("?")[0].split("#")[0].split(".").pop() || "";
+  const map: Record<string, string> = {
+    ogg: "audio/ogg", oga: "audio/ogg", opus: "audio/ogg",
+    mp3: "audio/mpeg", m4a: "audio/mp4", aac: "audio/aac", wav: "audio/wav", amr: "audio/amr",
+    jpg: "image/jpeg", jpeg: "image/jpeg", png: "image/png", webp: "image/webp",
+    mp4: "video/mp4", "3gp": "video/3gpp", "3gpp": "video/3gpp",
+    pdf: "application/pdf",
+    doc: "application/msword",
+    docx: "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+    xls: "application/vnd.ms-excel",
+    xlsx: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+    ppt: "application/vnd.ms-powerpoint",
+    pptx: "application/vnd.openxmlformats-officedocument.presentationml.presentation",
+    txt: "text/plain",
+    csv: "text/csv",
+  };
+  if (map[ext]) return map[ext];
+  switch (mediaType) {
+    case "audio": return "audio/ogg";
+    case "image": return "image/jpeg";
+    case "video": return "video/mp4";
+    case "document": return "application/pdf";
+  }
+  return "application/octet-stream";
+}
+
+function filenameFromUrl(url: string, fallback: string): string {
+  try {
+    const u = new URL(url);
+    const tail = u.pathname.split("/").pop() || "";
+    if (tail) return decodeURIComponent(tail);
+  } catch { /* ignore */ }
+  return fallback;
+}
+
+function placeholderForMedia(kind: MediaKind): string {
+  switch (kind) {
+    case "audio": return "[Áudio]";
+    case "image": return "[Imagem]";
+    case "video": return "[Vídeo]";
+    case "document": return "[Documento]";
+  }
 }
 
 serve(async (req) => {
@@ -24,27 +79,48 @@ serve(async (req) => {
 
     const {
       organizationId, contactId, threadId, message,
-      mediaUrl, mediaUrls, mediaType,
+      mediaUrl, mediaUrls, mediaType, mimeType: payloadMime, filename: payloadFilename,
       userId, replyToMessageId, isAgentMessage, agentId, senderName,
       endpointId: explicitEndpointId,
     } = body as Record<string, any>;
 
     if (!organizationId) return jsonResponse(400, { error: "missing_organization" });
     if (!contactId) return jsonResponse(400, { error: "missing_contact" });
-    const hasMedia = !!(mediaUrl || (Array.isArray(mediaUrls) && mediaUrls.length) || mediaType);
-    if (hasMedia) {
-      return jsonResponse(400, {
-        error: "media_not_supported",
-        details: "Este número usa Meta Cloud API e por enquanto só envia texto. Mídia/áudio ainda não está habilitado neste canal.",
-      });
-    }
-    if (!message || typeof message !== "string" || !message.trim()) {
-      return jsonResponse(400, { error: "empty_message", details: "Digite uma mensagem antes de enviar." });
-    }
-    if (message.length > 4096) {
-      return jsonResponse(400, { error: "message_too_long", max: 4096 });
-    }
 
+    // Normaliza mídia
+    const mediaUrlsArr: string[] = Array.isArray(mediaUrls) && mediaUrls.length
+      ? mediaUrls.filter((u: any) => typeof u === "string" && u)
+      : (typeof mediaUrl === "string" && mediaUrl ? [mediaUrl] : []);
+    const hasMedia = mediaUrlsArr.length > 0 || !!mediaType;
+    const trimmedMessage = typeof message === "string" ? message : "";
+
+    if (hasMedia) {
+      if (mediaType === "sticker") {
+        return jsonResponse(400, {
+          error: "sticker_not_supported_yet",
+          details: "Envio de sticker via Meta Cloud ainda não está habilitado.",
+        });
+      }
+      if (!mediaType || !SUPPORTED_MEDIA.includes(mediaType as MediaKind)) {
+        return jsonResponse(400, {
+          error: "unsupported_media_type",
+          details: "Tipos suportados: image, audio, video, document.",
+        });
+      }
+      if (mediaUrlsArr.length === 0) {
+        return jsonResponse(400, { error: "missing_media_url" });
+      }
+      if (trimmedMessage.length > 1024) {
+        return jsonResponse(400, { error: "caption_too_long", max: 1024 });
+      }
+    } else {
+      if (!trimmedMessage.trim()) {
+        return jsonResponse(400, { error: "empty_message", details: "Digite uma mensagem antes de enviar." });
+      }
+      if (trimmedMessage.length > 4096) {
+        return jsonResponse(400, { error: "message_too_long", max: 4096 });
+      }
+    }
 
     const supabase = createClient(
       Deno.env.get("SUPABASE_URL")!,
@@ -187,12 +263,23 @@ serve(async (req) => {
       resolvedSenderName = u?.full_name || null;
     }
 
+    const kind = (hasMedia ? mediaType : null) as MediaKind | null;
+    const initialContent = hasMedia
+      ? (trimmedMessage.trim() || placeholderForMedia(kind!))
+      : trimmedMessage;
+
+    const baseMeta: Record<string, any> = { phone_number_id: endpoint.sender_sid, to };
+    if (hasMedia) {
+      baseMeta.media_source_url = mediaUrlsArr[0];
+      baseMeta.media_kind = kind;
+    }
+
     const { data: insertedMsg, error: insErr } = await supabase
       .from("messages")
       .insert({
         organization_id: organizationId,
         thread_id: currentThreadId,
-        content: message,
+        content: initialContent,
         direction: "outbound",
         sender_user_id: userId || null,
         whatsapp_status: "sending",
@@ -202,7 +289,9 @@ serve(async (req) => {
         sender_name: resolvedSenderName,
         sender_agent_id: isAgentMessage && agentId ? agentId : null,
         endpoint_id: endpoint.id,
-        metadata: { meta_cloud: { phone_number_id: endpoint.sender_sid, to } },
+        media_urls: hasMedia ? mediaUrlsArr : null,
+        media_type: hasMedia ? kind : null,
+        metadata: { meta_cloud: baseMeta },
       })
       .select("id")
       .single();
@@ -221,28 +310,94 @@ serve(async (req) => {
       }
     }
 
-    // POST /v23.0/{phone_number_id}/messages
     try {
-      const result = await metaWaPostJson(
-        `/${endpoint.sender_sid}/messages`,
-        {
+      let outboundPayload: Record<string, unknown>;
+      let mediaIdForMeta: string | null = null;
+      let mimeUsed: string | null = null;
+      let filenameUsed: string | null = null;
+
+      if (hasMedia) {
+        // 1) Baixa o arquivo da URL pública do Storage
+        const sourceUrl = mediaUrlsArr[0];
+        const fileRes = await fetch(sourceUrl);
+        if (!fileRes.ok) {
+          throw new Error(`source_fetch_failed_${fileRes.status}`);
+        }
+        const fileBytes = new Uint8Array(await fileRes.arrayBuffer());
+        const headerCt = fileRes.headers.get("content-type");
+        mimeUsed = (typeof payloadMime === "string" && payloadMime.includes("/"))
+          ? payloadMime
+          : inferMimeType(kind!, sourceUrl, headerCt);
+        filenameUsed = (typeof payloadFilename === "string" && payloadFilename)
+          ? payloadFilename
+          : filenameFromUrl(sourceUrl, `file-${Date.now()}`);
+
+        // 2) Upload para Graph
+        const uploaded = await metaWaUploadMedia(
+          endpoint.sender_sid,
+          fileBytes,
+          mimeUsed,
+          filenameUsed,
+          { accessToken, appSecret },
+        );
+        mediaIdForMeta = uploaded.id;
+
+        // 3) Monta payload por tipo
+        const captionText = trimmedMessage.trim() || undefined;
+        const mediaObj: Record<string, unknown> = { id: mediaIdForMeta };
+        if (kind === "image" || kind === "video") {
+          if (captionText) mediaObj.caption = captionText;
+        } else if (kind === "document") {
+          if (captionText) mediaObj.caption = captionText;
+          mediaObj.filename = filenameUsed;
+        }
+        // audio: sem caption nem filename
+        outboundPayload = {
+          messaging_product: "whatsapp",
+          recipient_type: "individual",
+          to,
+          type: kind,
+          [kind!]: mediaObj,
+          ...(context ? { context } : {}),
+        };
+      } else {
+        outboundPayload = {
           messaging_product: "whatsapp",
           recipient_type: "individual",
           to,
           type: "text",
-          text: { body: message, preview_url: false },
+          text: { body: trimmedMessage, preview_url: false },
           ...(context ? { context } : {}),
-        },
+        };
+      }
+
+      const result = await metaWaPostJson(
+        `/${endpoint.sender_sid}/messages`,
+        outboundPayload,
         { accessToken, appSecret },
       );
 
       const wamid = result?.messages?.[0]?.id ?? null;
+      const finalMeta: Record<string, any> = {
+        phone_number_id: endpoint.sender_sid,
+        to,
+        wamid,
+        response: result,
+      };
+      if (hasMedia) {
+        finalMeta.media_id = mediaIdForMeta;
+        finalMeta.mime_type = mimeUsed;
+        finalMeta.filename = filenameUsed;
+        finalMeta.media_kind = kind;
+        finalMeta.media_source_url = mediaUrlsArr[0];
+      }
+
       await supabase
         .from("messages")
         .update({
           whatsapp_status: "sent",
           whatsapp_message_sid: wamid,
-          metadata: { meta_cloud: { phone_number_id: endpoint.sender_sid, to, wamid, response: result } },
+          metadata: { meta_cloud: finalMeta },
         })
         .eq("id", insertedMsg.id);
 
@@ -263,10 +418,12 @@ serve(async (req) => {
           whatsapp_status: "failed",
           error_code: errDetails.code ? String(errDetails.code) : null,
           error_message: errDetails.message,
+          metadata: { meta_cloud: { ...baseMeta, error: errDetails } },
         })
         .eq("id", insertedMsg.id);
       return jsonResponse(500, { error: "meta_send_failed", details: errDetails });
     }
+
   } catch (e) {
     console.error("[meta-whatsapp-send] fatal", e);
     return jsonResponse(500, { error: "internal_error", message: (e as Error).message });
