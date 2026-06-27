@@ -1,121 +1,86 @@
+## Ajustes confirmados via diagnóstico
+1. **Provider padrão**: `communication_endpoints.provider` usa `twilio` e `meta_cloud_api` (18 e 2 rows). Adoto exatamente esses dois valores em `whatsapp_templates.provider`. Nada de `meta-cloud`/`meta`.
+2. **Duplicados Twilio**: `SELECT organization_id, twilio_content_sid, count(*) FROM whatsapp_templates GROUP BY 1,2 HAVING count(*)>1` retornou 0 linhas. Seguro criar o índice único parcial Twilio.
+3. **Seletor**: default = Twilio (comportamento atual preservado). Meta só quando o caller passar explicitamente `provider='meta_cloud_api'`.
 
-# Fase 3 — Encerrar a dependência global Meta WhatsApp Cloud
+## Objetivo
+Adicionar suporte a templates Meta WhatsApp Cloud (sync + envio fora da janela 24h) reutilizando `whatsapp_templates`, sem mexer em Twilio.
 
-Objetivo: deixar a integração Meta 100% per-tenant. Após esta fase, o único caminho válido para credenciais Meta é o `connected_account` da própria `organization_integrations`. Os secrets globais `META_WHATSAPP_APP_SECRET` e `META_WHATSAPP_VERIFY_TOKEN` deixam de ser lidos pelas funções e a tela admin de configuração global desaparece.
+## 1. Migration mínima em `whatsapp_templates`
+- `ALTER COLUMN twilio_content_sid DROP NOT NULL`.
+- `ADD COLUMN provider text NOT NULL DEFAULT 'twilio' CHECK (provider IN ('twilio','meta_cloud_api'))`.
+- `ADD COLUMN organization_integration_id uuid REFERENCES organization_integrations(id) ON DELETE CASCADE`.
+- `ADD COLUMN meta_template_name text`.
+- `ADD COLUMN meta_waba_id text`.
+- `ADD COLUMN components jsonb`.
+- Índice parcial Meta: `UNIQUE (organization_integration_id, meta_template_name, language) WHERE provider='meta_cloud_api'`.
+- Índice parcial Twilio: `UNIQUE (organization_id, twilio_content_sid) WHERE provider='twilio' AND twilio_content_sid IS NOT NULL`.
+- Backfill defensivo: `UPDATE whatsapp_templates SET provider='twilio' WHERE provider IS NULL`.
 
-Pré-condição já satisfeita: Central Trabalhista validada nos 4 fluxos com `app_secret_source=per_integration` e sem nenhum `global_fallback` nos logs.
+## 2. Edge function nova: `meta-whatsapp-templates-sync`
+- Input: `{ organizationId }`. Resolve `organization_integrations` slug `meta-whatsapp-cloud` ativo.
+- Descriptografa token + app_secret via `_shared/meta-whatsapp/credentials.ts`; lê `config_values.waba_id`.
+- `GET /{waba_id}/message_templates?fields=name,language,status,category,components&limit=200` com `appsecret_proof` (`metaGraphGet`), paginando `paging.next`.
+- Upsert em `whatsapp_templates` por `(organization_integration_id, meta_template_name, language)`:
+  - `provider='meta_cloud_api'`, `twilio_content_sid=NULL`
+  - `friendly_name = name`, `meta_template_name = name`, `language`, `category` (upper), `status` mapeado (`APPROVED→approved`, `PENDING→pending`, `REJECTED→rejected`, demais → `pending`)
+  - `body` = texto do componente BODY (preview), `header`/`footer` extraídos
+  - `variables` = `{{n}}` extraídos do BODY (compatível com selector atual)
+  - `components` = JSON cru da Meta
+  - `metadata.meta_cloud = { waba_id, raw }`, `source='meta'`, `last_synced_at=now()`, `meta_waba_id`, `organization_integration_id`
+- Retorna `{ synced, approved, by_status }`. Fase 1 não desativa templates removidos da Meta.
 
-## Mudanças
+## 3. `meta-whatsapp-send` — suporte a template
+Novo branch quando `templateId` (preferido) ou `type === 'template'`:
+- Com `templateId`: carrega row, valida `provider='meta_cloud_api'`, `status='approved'`, mesma org. Extrai `meta_template_name`, `language`, `components`.
+- Renderiza variáveis: substitui `{{n}}` em BODY usando `templateVariables`. Monta `components` finais para Graph API (BODY com `parameters:[{type:'text', text:'...'}]`; HEADER/BUTTONS dinâmicos ficam para fase futura). Se template sem variáveis, envia `components: []`.
+- Aceita também shape direto `{ type:'template', templateName, languageCode, components }` para chamadas server-to-server.
+- `POST /{phone_number_id}/messages` com payload template padrão.
+- Persiste em `messages`:
+  - `content` = preview renderizado ou `[Template: nome]`
+  - `whatsapp_message_sid` = `messages[0].id` (wamid)
+  - `whatsapp_status='sent'`
+  - `metadata.meta_cloud.template = { name, language, components, rendered_preview }`
+- Atualiza thread (`last_message_*`) como fluxo de texto atual.
 
-### 1. Edge Functions — remover qualquer leitura dos globals
+## 4. Dispatcher `src/lib/dispatchWhatsAppSend.ts`
+Sem mudança de roteamento — `templateId`/`templateVariables` já passam por spread. Confirmar que rota Meta usa esses campos.
 
-**`supabase/functions/_shared/meta-whatsapp/credentials.ts`**
-- Remover `globalAppSecret()` e `globalVerifyToken()`.
-- Remover o fallback `Deno.env.get("META_WHATSAPP_APP_SECRET")` dentro de `resolveAppSecretForIntegration`.
-- Remover o helper `logSource` e todos os logs `app_secret_source` / `verify_token_source` / `global_fallback`.
-- `resolveAppSecretForIntegration` passa a retornar somente o valor cifrado per-integration (ou `undefined`).
-- `resolveVerifyTokenForIntegration` idem.
+## 5. UI
 
-**`supabase/functions/_shared/meta-whatsapp/platform.ts`**
-- Deletar o arquivo. Não é mais usado.
+### a) Card da integração (`MetaWhatsAppCloudDialog.tsx` + Admin)
+- Botão "Sincronizar templates" → `metaWhatsAppService.syncTemplates(orgId)`.
+- Lista resumida pós-sync: nome, idioma, categoria, badge de status. Lê `whatsapp_templates` filtrando `provider='meta_cloud_api'` + `organization_integration_id`. Mostra contagem de aprovados.
 
-**`supabase/functions/meta-whatsapp-webhook/index.ts`**
-- Remover `import { globalVerifyToken, globalAppSecret }`.
-- GET handshake: tirar o bloco "Fallback global (Central durante migração)" — match passa a ser apenas per-integration.
-- POST: tirar `if (!appSecret) appSecret = globalAppSecret();` — sem secret per-integration, responde `invalid_signature` (mesmo comportamento de hoje quando não encontra a integração, só sem o fallback).
-- Trocar `via: matchedIntegrationId ? "per_integration" : "global_fallback"` por `via: "per_integration"`; o caso sem match retorna 401 antes do log.
+### b) `WhatsAppTemplateSelector.tsx`
+- Prop **opcional** `provider?: 'twilio' | 'meta_cloud_api'`.
+- **Default = Twilio** (filtra `provider='twilio'` OR `provider IS NULL` para cobrir rows legadas). Comportamento atual idêntico quando prop omitida.
+- Quando `provider='meta_cloud_api'`, filtra só Meta.
 
-**`supabase/functions/meta-whatsapp-send/index.ts`**
-- Já usa `resolveAppSecretForIntegration`. Sem mudança funcional — só perde o fallback automático ao desaparecer do helper.
+### c) `InboxComposer.tsx` e `WhatsAppChat.tsx`
+- Resolver provider do endpoint/thread (mesma lógica do dispatcher: `primary_endpoint_id` → `communication_endpoints.provider`).
+- Passar prop `provider` para `WhatsAppTemplateSelector` **somente** quando o provider for Meta. Threads/contextos sem provider detectado continuam usando o default (Twilio).
+- `handleSendTemplate` já dispara `dispatchWhatsAppSend({ templateId, templateVariables })` — roteia automático.
 
-**`supabase/functions/meta-whatsapp-verify/index.ts`**
-- Remover `import { getPlatformStatus }` e o campo `platform` da resposta JSON (substituir por status puro `{ connected, meta, validation_error }`).
-- Continua usando `resolveAppSecretForIntegration` (sem fallback).
+## 6. Service layer
+`metaWhatsAppService.syncTemplates(organizationId)` → invoca `meta-whatsapp-templates-sync`.
 
-**`supabase/functions/meta-whatsapp-connect/index.ts`**
-- Remover o `?? Deno.env.get("META_WHATSAPP_APP_SECRET")` da resolução do `appSecret` usado na validação Graph.
-- Para **novas conexões** (org sem `connected_account.app_secret_encrypted` prévio e sem `verify_token_encrypted` prévio), passar a exigir `body.appSecret` e `body.verifyToken` como obrigatórios — retorna `400 missing_field` com `field: "appSecret"` / `"verifyToken"` se ausentes. Edição de uma integração já conectada continua aceitando esses campos vazios (preserva os já cifrados via `priorCa`), garantindo zero regressão para a Central.
+## 7. Compatibilidade
+Não tocar em: `twilio-whatsapp-send`, `twilio-whatsapp-templates`, webhooks, dispatcher inbound, mídia/texto Meta atual. Sync Twilio segue preenchendo `twilio_content_sid` e `provider` default = `twilio`.
 
-**`supabase/functions/meta-whatsapp-platform-status/index.ts`**
-- Deletar a função (código + entrada em `supabase/config.toml` `[functions.meta-whatsapp-platform-status]`).
-- Chamar `supabase--delete_edge_functions(["meta-whatsapp-platform-status"])` para remover do Supabase.
-
-**`supabase/functions/meta-whatsapp-migrate-credentials/index.ts`**
-- Deletar a função (one-shot, papel cumprido).
-- Chamar `supabase--delete_edge_functions(["meta-whatsapp-migrate-credentials"])`.
-- Remover também o secret `META_MIGRATION_TOKEN` que ficou pendurado.
-
-### 2. Frontend — remover tela e estado da configuração global
-
-**`src/services/metaWhatsAppService.ts`**
-- Remover `interface PlatformStatus` e o método `getPlatformStatus`.
-
-**`src/components/admin/MetaWhatsAppPlatformConfig.tsx`**
-- Deletar o arquivo.
-
-**`src/pages/admin/AdminIntegrationDetail.tsx`**
-- Remover o import e o uso de `<MetaWhatsAppPlatformConfig />` (linhas 18 e 293).
-
-**`src/components/integrations/meta-whatsapp-cloud/MetaWhatsAppCloudDialog.tsx`**
-- Remover `platformQuery`, o Card "Status da plataforma" e o Alert "Configuração global pendente".
-- Tornar `appSecret` e `verifyToken` campos obrigatórios para conexões novas (marcador `*`, `required`, mensagem inline). Em edição (já conectado), manter como opcionais com placeholder "••• configurado" como hoje.
-- Atualizar a copy do topo do dialog para deixar claro: "Cada tenant usa o próprio App Meta — preencha todos os campos com os dados do App da sua organização."
-- Os 7 campos pedidos (App ID, App Secret, Verify Token, WABA ID, Phone Number ID, Número E.164, System User Token) já existem; só ajustar labels/asteriscos/placeholders.
-
-### 3. Secrets globais
-
-Após confirmação dos 4 testes finais na Central, **remover** do projeto:
-- `META_WHATSAPP_APP_SECRET`
-- `META_WHATSAPP_VERIFY_TOKEN`
-- `META_MIGRATION_TOKEN`
-
-Feito via `secrets--delete_secret`. `META_TOKEN_ENCRYPTION_KEY` permanece — ele cifra/decifra todos os tokens per-integration e nada tem a ver com os globals da Meta.
-
-## O que NÃO é tocado
-
-- Twilio (qualquer função, secret, componente).
-- `connected_account` da Central (já tem os dois `*_encrypted` certos; o código novo lê deles).
-- `messages`, `message_threads`, `communication_endpoints`, dispatcher (`dispatchWhatsAppSend.ts`), mídia Meta, storage de mídia.
-- `_shared/crypto.ts` e `_shared/meta-whatsapp/graph.ts`.
-- Schema de banco: nenhuma migração SQL — todos os campos novos já existem em `connected_account` (JSONB).
-
-## Validação após o deploy
-
-Repetir os 4 testes na Central:
-1. Inbound texto.
-2. Inbound mídia.
-3. Outbound texto pelo CRM.
-4. Outbound mídia pelo CRM.
-
-Critério de sucesso:
-- Logs de `meta-whatsapp-webhook` e `meta-whatsapp-send` saem **sem** `app_secret_source` / `verify_token_source` / `global_fallback` (esses prints foram removidos).
-- Mensagens persistidas em `messages` com `media_type` + `media_urls` corretos nos casos de mídia.
-- `meta-whatsapp-verify` retorna `connected: true` para a Central.
-- Frontend admin não renderiza mais "Status da plataforma global Meta WhatsApp Cloud" — confirmação visual em `/admin/integrations/...`.
-
-Se algo na Central falhar com `invalid_signature` ou `no_app_secret_available`, o rollback é trivial: a Central tem os secrets per-integration corretos, então a falha indicaria bug de código, não de dados.
-
-## Riscos
-
-- **Único risco real**: alguma terceira organização tinha sido conectada à força usando o fallback global e está sem `app_secret_encrypted`/`verify_token_encrypted` próprios. Mitigação: query `SELECT organization_id FROM organization_integrations oi JOIN admin_integrations ai ON ai.id=oi.integration_id WHERE ai.slug='meta-whatsapp-cloud' AND oi.is_enabled AND NOT (oi.connected_account ? 'app_secret_encrypted')` antes de remover os secrets globais. Se devolver só a Central (que já está OK), pode deletar com segurança. Se aparecer outra org, paro e te aviso.
+## 8. Validação manual
+1. Sincronizar templates da Central → rows com `provider='meta_cloud_api'`, `components` populado, status mapeado.
+2. Conversa Meta fora da janela 24h → selector lista apenas Meta aprovados.
+3. Conversa Twilio (qualquer estado) → selector idêntico ao atual (só Twilio).
+4. Enviar template Meta com variáveis → 200 da Graph, wamid em `messages.whatsapp_message_sid`, `metadata.meta_cloud.template`, status `delivered/read` via webhook.
+5. Texto Meta dentro da janela continua enviando; fora continua bloqueado.
+6. Envio Twilio (template e texto) sem regressão.
 
 ## Arquivos previstos
-
-Deletados:
-- `supabase/functions/meta-whatsapp-platform-status/index.ts`
-- `supabase/functions/meta-whatsapp-migrate-credentials/index.ts`
-- `supabase/functions/_shared/meta-whatsapp/platform.ts`
-- `src/components/admin/MetaWhatsAppPlatformConfig.tsx`
-
-Editados:
-- `supabase/config.toml`
-- `supabase/functions/_shared/meta-whatsapp/credentials.ts`
-- `supabase/functions/meta-whatsapp-webhook/index.ts`
-- `supabase/functions/meta-whatsapp-verify/index.ts`
-- `supabase/functions/meta-whatsapp-connect/index.ts`
-- `src/services/metaWhatsAppService.ts`
-- `src/pages/admin/AdminIntegrationDetail.tsx`
-- `src/components/integrations/meta-whatsapp-cloud/MetaWhatsAppCloudDialog.tsx`
-- `.lovable/plan.md`
-
-Secrets removidos: `META_WHATSAPP_APP_SECRET`, `META_WHATSAPP_VERIFY_TOKEN`, `META_MIGRATION_TOKEN`.
+- Migration nova.
+- `supabase/functions/meta-whatsapp-templates-sync/index.ts` (nova).
+- `supabase/functions/meta-whatsapp-send/index.ts` (estender).
+- `src/services/metaWhatsAppService.ts` (+ syncTemplates).
+- `src/components/integrations/meta-whatsapp-cloud/MetaWhatsAppCloudDialog.tsx` (botão + lista).
+- `src/components/whatsapp/WhatsAppTemplateSelector.tsx` (prop provider, default Twilio).
+- `src/components/inbox/InboxComposer.tsx`, `src/components/whatsapp/WhatsAppChat.tsx` (resolver provider; passar prop só para Meta).
