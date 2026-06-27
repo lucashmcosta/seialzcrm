@@ -33,7 +33,7 @@ function Media({ msg, orgId, accessToken }: { msg: InboxMessageRow; orgId: strin
   if (!msg.media_urls || msg.media_urls.length === 0) return null;
   const mediaType = msg.media_type;
   const isOutbound = msg.direction === 'outbound';
-  const isAudioOnly = mediaType === 'audio' && !msg.content;
+  const isAudioOnly = mediaType === 'audio';
 
   return (
     <div className="space-y-2">
