@@ -138,6 +138,10 @@ export function InboxComposer({ thread, replyTo, onClearReply, onSent, onThreadM
     return diffMs >= 0 && diffMs < 24 * 60 * 60 * 1000;
   }, [lastInboundIso]);
 
+  // Resolve provider para escolher quais templates listar (default = Twilio).
+  const waProvider = useWhatsAppProvider({ threadId: thread?.id ?? null });
+  const templateSelectorProvider = waProvider === 'meta_cloud_api' ? 'meta_cloud_api' : undefined;
+
   // --- Guards ---------------------------------------------------------------
 
   if (!thread) {
