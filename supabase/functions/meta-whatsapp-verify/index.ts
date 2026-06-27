@@ -73,11 +73,12 @@ serve(async (req) => {
         ? await decryptSecret(ca.access_token_encrypted)
         : null;
       if (accessToken && ca?.phone_number_id && ca?.waba_id) {
+        const appSecret = await resolveAppSecretForIntegration(ca);
         metaResult = await validateCredentials({
           phoneNumberId: ca.phone_number_id,
           wabaId: ca.waba_id,
           accessToken,
-          appSecret: Deno.env.get("META_WHATSAPP_APP_SECRET") ?? undefined,
+          appSecret,
         });
       }
     } catch (e) {
