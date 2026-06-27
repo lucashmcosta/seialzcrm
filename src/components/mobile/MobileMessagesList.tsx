@@ -974,7 +974,7 @@ export function MobileMessagesList() {
                               )}
 
                               {/* Content */}
-                              {message.content && !(message.media_urls && message.media_urls.length > 0 && ['📎 Mídia', '📷 Imagem', '🎵 Áudio', '🎬 Vídeo'].includes(message.content)) && (
+                              {message.content && !(message.media_urls && message.media_urls.length > 0 && ['📎 Mídia', '📷 Imagem', '🎵 Áudio', '🎬 Vídeo', '[Áudio]', '[Imagem]', '[Vídeo]', '[Documento]', '[Sticker]'].includes(message.content)) && (
                                 <p className="text-sm whitespace-pre-wrap break-all">{message.content}</p>
                               )}
 
@@ -983,7 +983,7 @@ export function MobileMessagesList() {
                               )}
 
                               {/* Footer (hidden for audio-only, rendered inside player) */}
-                              {!(message.media_type === 'audio' && !message.content) && (
+                              {!(message.media_type === 'audio') && (
                               <div className="mt-0.5 flex items-center justify-end gap-1">
                                 <span className={cn('text-[11px] leading-[14px]', isOutbound ? 'text-white/60' : 'text-muted-foreground/70')}>
                                   {new Date(message.sent_at).toLocaleTimeString(locale, { hour: '2-digit', minute: '2-digit', hour12: false })}
