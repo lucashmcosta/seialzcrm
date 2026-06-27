@@ -3,11 +3,6 @@
 
 import { supabase } from "@/integrations/supabase/client";
 
-export interface PlatformStatus {
-  appSecretConfigured: boolean;
-  verifyTokenConfigured: boolean;
-  webhookActive: boolean;
-}
 
 export interface ConnectInput {
   organizationId: string;
@@ -60,14 +55,6 @@ async function readFunctionError(error: unknown, data: unknown) {
 }
 
 export const metaWhatsAppService = {
-  async getPlatformStatus(): Promise<PlatformStatus> {
-    const { data, error } = await supabase.functions.invoke("meta-whatsapp-platform-status", {
-      method: "GET",
-    });
-    if (error) throw error;
-    return data as PlatformStatus;
-  },
-
   async connect(input: ConnectInput): Promise<ConnectResult> {
     const { data, error } = await supabase.functions.invoke("meta-whatsapp-connect", {
       body: input,
