@@ -96,7 +96,12 @@ serve(async (req) => {
 
     // Valida credenciais Meta (Graph API). Pode ser pulado via skipMetaValidation
     // para permitir edição manual quando a Meta recusa por motivos externos (token/permissão).
-    const appSecret = Deno.env.get("META_WHATSAPP_APP_SECRET") ?? undefined;
+    // Prefere o App Secret da própria integração (per-tenant) e cai no global apenas
+    // durante a janela de migração (Fase 1).
+    const perIntegrationAppSecret = body.appSecret?.trim() || undefined;
+    const appSecret = perIntegrationAppSecret
+      ?? Deno.env.get("META_WHATSAPP_APP_SECRET")?.trim()
+      ?? undefined;
     let meta: {
       display_phone_number: string;
       verified_name?: string | null;
@@ -146,6 +151,23 @@ serve(async (req) => {
 
     const encryptedToken = await encryptSecret(body.systemUserToken);
 
+    // Recupera connected_account anterior para preservar app_secret/verify_token
+    // já configurados quando o usuário edita sem reenviar esses campos.
+    const { data: priorOi } = await admin
+      .from("organization_integrations")
+      .select("connected_account")
+      .eq("organization_id", body.organizationId)
+      .eq("integration_id", integ.id)
+      .maybeSingle();
+    const priorCa = (priorOi?.connected_account ?? {}) as any;
+
+    const appSecretEncrypted = body.appSecret && body.appSecret.trim()
+      ? await encryptSecret(body.appSecret.trim())
+      : (priorCa.app_secret_encrypted ?? null);
+    const verifyTokenEncrypted = body.verifyToken && body.verifyToken.trim()
+      ? await encryptSecret(body.verifyToken.trim())
+      : (priorCa.verify_token_encrypted ?? null);
+
     const connectedAccount = {
       app_id: body.appId,
       waba_id: body.wabaId,
@@ -153,6 +175,8 @@ serve(async (req) => {
       display_phone_number: meta.display_phone_number,
       verified_name: meta.verified_name ?? null,
       access_token_encrypted: encryptedToken,
+      app_secret_encrypted: appSecretEncrypted,
+      verify_token_encrypted: verifyTokenEncrypted,
       token_stored_at: new Date().toISOString(),
     };
 
