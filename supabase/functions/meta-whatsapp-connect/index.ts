@@ -96,12 +96,8 @@ serve(async (req) => {
 
     // Valida credenciais Meta (Graph API). Pode ser pulado via skipMetaValidation
     // para permitir edição manual quando a Meta recusa por motivos externos (token/permissão).
-    // Prefere o App Secret da própria integração (per-tenant) e cai no global apenas
-    // durante a janela de migração (Fase 1).
-    const perIntegrationAppSecret = body.appSecret?.trim() || undefined;
-    const appSecret = perIntegrationAppSecret
-      ?? Deno.env.get("META_WHATSAPP_APP_SECRET")?.trim()
-      ?? undefined;
+    // Fase 3: App Secret é estritamente per-integration. Sem fallback global.
+    const appSecret = body.appSecret?.trim() || undefined;
     let meta: {
       display_phone_number: string;
       verified_name?: string | null;
