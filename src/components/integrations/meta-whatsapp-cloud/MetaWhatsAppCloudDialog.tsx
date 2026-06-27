@@ -288,6 +288,65 @@ export function MetaWhatsAppCloudDialog({ open, onOpenChange, integration, orgIn
                 </p>
               </div>
 
+              <div className="space-y-1.5">
+                <Label htmlFor="meta-app-secret">
+                  App Secret
+                  {hasStoredAppSecret && (
+                    <span className="ml-2 text-xs text-green-600 font-normal">••• já configurado</span>
+                  )}
+                </Label>
+                <div className="relative">
+                  <Input
+                    id="meta-app-secret"
+                    type={showAppSecret ? "text" : "password"}
+                    value={form.appSecret}
+                    placeholder={hasStoredAppSecret ? "Deixe em branco para manter" : "App Secret do app Meta"}
+                    onChange={(e) => setForm((f) => ({ ...f, appSecret: e.target.value }))}
+                    className="pr-10"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setShowAppSecret((s) => !s)}
+                    className="absolute right-2 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
+                  >
+                    {showAppSecret ? <EyeSlash className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                  </button>
+                </div>
+                <p className="text-xs text-muted-foreground">
+                  Usado para calcular appsecret_proof nas chamadas Graph e validar a assinatura dos webhooks.
+                  Criptografado antes de salvar.
+                </p>
+              </div>
+
+              <div className="space-y-1.5">
+                <Label htmlFor="meta-verify-token">
+                  Verify Token
+                  {hasStoredVerifyToken && (
+                    <span className="ml-2 text-xs text-green-600 font-normal">••• já configurado</span>
+                  )}
+                </Label>
+                <div className="relative">
+                  <Input
+                    id="meta-verify-token"
+                    type={showVerifyToken ? "text" : "password"}
+                    value={form.verifyToken}
+                    placeholder={hasStoredVerifyToken ? "Deixe em branco para manter" : "Token escolhido por você"}
+                    onChange={(e) => setForm((f) => ({ ...f, verifyToken: e.target.value }))}
+                    className="pr-10"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setShowVerifyToken((s) => !s)}
+                    className="absolute right-2 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
+                  >
+                    {showVerifyToken ? <EyeSlash className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                  </button>
+                </div>
+                <p className="text-xs text-muted-foreground">
+                  Mesmo valor cadastrado no Webhook do app Meta (campo "Verify token"). Criptografado antes de salvar.
+                </p>
+              </div>
+
               <div className="flex justify-between items-center pt-1 gap-2 flex-wrap">
                 <a
                   href="https://developers.facebook.com/docs/whatsapp/cloud-api/get-started"
