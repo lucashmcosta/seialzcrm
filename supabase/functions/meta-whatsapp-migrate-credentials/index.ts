@@ -41,10 +41,11 @@ serve(async (req) => {
       "40ae935c-a7f7-4ad7-8ea4-91be6404a95f", // Central Trabalhista
     ]);
 
-    const body = await req.json().catch(() => ({})) as { organizationId?: string; dryRun?: boolean };
+    const body = await req.json().catch(() => ({})) as { organizationId?: string; dryRun?: boolean; verify?: boolean };
     if (!body.organizationId) return json(400, { error: "missing_organization_id" });
     if (!ALLOWLIST.has(body.organizationId)) return json(403, { error: "org_not_in_allowlist" });
     const dryRun = body.dryRun === true;
+    const verify = body.verify === true;
 
 
 
