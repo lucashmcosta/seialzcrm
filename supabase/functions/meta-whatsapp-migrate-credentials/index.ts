@@ -87,6 +87,36 @@ serve(async (req) => {
       phone_number_id: ca.phone_number_id ?? null,
     };
 
+    if (verify) {
+      let appOk = false;
+      let verifyOk = false;
+      let appErr: string | null = null;
+      let verifyErr: string | null = null;
+      try {
+        const decApp = ca.app_secret_encrypted ? (await decryptSecret(ca.app_secret_encrypted)).trim() : "";
+        appOk = decApp.length > 0 && decApp === globalAppSecret;
+        if (!appOk) appErr = decApp.length === 0 ? "empty_after_decrypt" : "mismatch_with_global";
+      } catch (e) {
+        appErr = (e as Error).message;
+      }
+      try {
+        const decVt = ca.verify_token_encrypted ? (await decryptSecret(ca.verify_token_encrypted)).trim() : "";
+        verifyOk = decVt.length > 0 && decVt === globalVerifyToken;
+        if (!verifyOk) verifyErr = decVt.length === 0 ? "empty_after_decrypt" : "mismatch_with_global";
+      } catch (e) {
+        verifyErr = (e as Error).message;
+      }
+      return json(200, {
+        ok: appOk && verifyOk,
+        verify: true,
+        organization_integration_id: oi.id,
+        app_secret_matches_global: appOk,
+        verify_token_matches_global: verifyOk,
+        app_secret_error: appErr,
+        verify_token_error: verifyErr,
+      });
+    }
+
     if (dryRun) {
       return json(200, {
         ok: true,
