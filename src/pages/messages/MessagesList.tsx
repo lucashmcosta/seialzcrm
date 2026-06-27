@@ -1667,7 +1667,7 @@ function DesktopMessagesList() {
                                   <div
                                     className={cn(
                                       'relative max-w-[70%] rounded-lg min-w-[80px] overflow-hidden',
-                                      message.media_type === 'audio' && !message.content ? 'p-1' : 'p-3',
+                                      message.media_type === 'audio' ? 'p-1' : 'p-3',
                                       isOutbound
                                         ? 'bg-green-100 dark:bg-green-900/40 text-green-900 dark:text-green-100'
                                         : 'bg-card border border-border text-foreground shadow-sm'
@@ -1707,7 +1707,7 @@ function DesktopMessagesList() {
                                         {message.media_urls.map((rawUrl, i) => {
                                           const url = getProxiedMediaUrl(rawUrl, organization?.id, accessToken);
                                           if (message.media_type === 'audio' || rawUrl.match(/\.(ogg|mp3|wav|m4a)$/i)) {
-                                            const isAudioOnly = message.media_type === 'audio' && !message.content;
+                                            const isAudioOnly = message.media_type === 'audio';
                                             const senderLabel = isOutbound
                                               ? (message.sender_name ? `${message.sender_name} · ` : '')
                                               : '';
@@ -1752,7 +1752,8 @@ function DesktopMessagesList() {
                                     {/* Content - hide media placeholders */}
                                     {message.content && 
                                      !(message.media_urls && message.media_urls.length > 0 && 
-                                       ['📎 Mídia', '📷 Imagem', '🎵 Áudio', '🎬 Vídeo', '📎 Media', '📷 Image', '🎵 Audio', '🎬 Video'].includes(message.content)) && (
+                                       ['📎 Mídia', '📷 Imagem', '🎵 Áudio', '🎬 Vídeo', '📎 Media', '📷 Image', '🎵 Audio', '🎬 Video',
+                                        '[Áudio]', '[Imagem]', '[Vídeo]', '[Documento]', '[Sticker]'].includes(message.content)) && (
                                       <p className="text-sm whitespace-pre-wrap break-all">
                                         {message.content}
                                       </p>
@@ -1764,7 +1765,7 @@ function DesktopMessagesList() {
                                     )}
 
                                     {/* Footer - Name + Time + Status (hidden for audio-only, rendered inside player) */}
-                                    {!(message.media_type === 'audio' && !message.content) && (
+                                    {!(message.media_type === 'audio') && (
                                     <div className="mt-1 flex items-center justify-end gap-1">
                                       <span className="text-[11px] leading-[14px] text-muted-foreground/70 whitespace-nowrap">
                                         {isOutbound 
