@@ -98,6 +98,57 @@ export async function metaWaPostJson(
 }
 
 /**
+ * Upload de mídia para /{phone_number_id}/media. Retorna { id } a ser usado
+ * como media_id no envio de mensagens type=image|audio|video|document.
+ */
+export async function metaWaUploadMedia(
+  phoneNumberId: string,
+  fileBytes: Uint8Array,
+  mimeType: string,
+  filename: string,
+  opts: MetaWaCallOpts,
+): Promise<{ id: string }> {
+  const search = new URLSearchParams();
+  await appendProof(search, opts);
+  const url = `${META_WA_BASE}/${phoneNumberId}/media?${search.toString()}`;
+  const fd = new FormData();
+  fd.append("messaging_product", "whatsapp");
+  fd.append("type", mimeType);
+  fd.append("file", new Blob([fileBytes], { type: mimeType }), filename);
+  const res = await fetch(url, { method: "POST", body: fd });
+  const json = await res.json().catch(() => ({}));
+  if (!res.ok || json.error) {
+    throw new MetaWaGraphError(res.status, json.error || { message: `HTTP ${res.status}` });
+  }
+  return json;
+}
+
+/** Lookup de URL temporária do Graph para um media_id inbound. */
+export async function metaWaGetMediaUrl(
+  mediaId: string,
+  opts: MetaWaCallOpts,
+): Promise<{ url: string; mime_type: string; sha256?: string; file_size?: number }> {
+  return await metaWaGet(`/${mediaId}`, {}, opts);
+}
+
+/** Faz download da URL lookaside autenticada do Graph. */
+export async function metaWaDownloadMedia(
+  mediaUrl: string,
+  opts: MetaWaCallOpts,
+): Promise<{ bytes: Uint8Array; contentType: string | null }> {
+  const res = await fetch(mediaUrl, {
+    headers: { Authorization: `Bearer ${opts.accessToken}` },
+  });
+  if (!res.ok) {
+    throw new MetaWaGraphError(res.status, {
+      message: `Media download failed ${res.status}`,
+    });
+  }
+  const buf = new Uint8Array(await res.arrayBuffer());
+  return { bytes: buf, contentType: res.headers.get("content-type") };
+}
+
+/**
  * Valida o conjunto Phone Number ID + WABA + System User Token.
  * Faz 2 chamadas: /{phone_number_id} e /{waba_id}/phone_numbers.
  * Retorna metadados úteis para o ConnectedPanel.
