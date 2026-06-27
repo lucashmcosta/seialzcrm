@@ -53,13 +53,33 @@ serve(async (req) => {
   const signature = req.headers.get("x-hub-signature-256") ?? "";
   const appSecret = Deno.env.get("META_WHATSAPP_APP_SECRET")!;
   const expected = "sha256=" + (await hmacSha256Hex(appSecret, rawBody));
-  // timing-safe comparison
-  if (signature.length !== expected.length) {
-    return new Response("invalid_signature", { status: 401, headers: corsHeaders });
+  let signatureMatch = false;
+  if (signature.length === expected.length) {
+    let diff = 0;
+    for (let i = 0; i < signature.length; i++) diff |= signature.charCodeAt(i) ^ expected.charCodeAt(i);
+    signatureMatch = diff === 0;
   }
-  let diff = 0;
-  for (let i = 0; i < signature.length; i++) diff |= signature.charCodeAt(i) ^ expected.charCodeAt(i);
-  if (diff !== 0) {
+
+  // DIAG: non-sensitive log — confirms Meta is calling us at all.
+  let phoneNumberIds: string[] = [];
+  try {
+    const peek = JSON.parse(new TextDecoder().decode(rawBody));
+    for (const entry of peek?.entry ?? []) {
+      for (const change of entry?.changes ?? []) {
+        const pid = change?.value?.metadata?.phone_number_id;
+        if (pid) phoneNumberIds.push(String(pid));
+      }
+    }
+  } catch { /* ignore */ }
+  console.log("[meta-wa-webhook] POST", JSON.stringify({
+    method: req.method,
+    has_x_hub_signature_256: !!signature,
+    content_length: rawBody.length,
+    signature_match: signatureMatch,
+    phone_number_ids: phoneNumberIds,
+  }));
+
+  if (!signatureMatch) {
     return new Response("invalid_signature", { status: 401, headers: corsHeaders });
   }
 
