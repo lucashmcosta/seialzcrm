@@ -8,6 +8,7 @@ import { corsHeaders } from "../_shared/cors.ts";
 import { decryptSecret } from "../_shared/crypto.ts";
 import { validateCredentials, MetaWaGraphError } from "../_shared/meta-whatsapp/graph.ts";
 import { getPlatformStatus } from "../_shared/meta-whatsapp/platform.ts";
+import { resolveAppSecretForIntegration } from "../_shared/meta-whatsapp/credentials.ts";
 
 function err(status: number, message: string, extra: Record<string, unknown> = {}) {
   return new Response(JSON.stringify({ error: message, ...extra }), {
