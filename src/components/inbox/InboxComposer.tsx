@@ -643,6 +643,7 @@ export function InboxComposer({ thread, replyTo, onClearReply, onSent, onThreadM
             onSelect={handleSendTemplate}
             onCancel={() => setShowTemplates(false)}
             loading={submitting}
+            provider={templateSelectorProvider}
           />
         </DialogContent>
       </Dialog>
