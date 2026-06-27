@@ -28,6 +28,8 @@ const empty = {
   phoneNumberId: "",
   phoneE164: "",
   systemUserToken: "",
+  appSecret: "",
+  verifyToken: "",
 };
 
 export function MetaWhatsAppCloudDialog({ open, onOpenChange, integration, orgIntegration }: Props) {
