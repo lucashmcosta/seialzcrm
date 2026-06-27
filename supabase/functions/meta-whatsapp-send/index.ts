@@ -10,6 +10,7 @@ import {
   metaWaUploadMedia,
   MetaWaGraphError,
 } from "../_shared/meta-whatsapp/graph.ts";
+import { resolveAppSecretForIntegration } from "../_shared/meta-whatsapp/credentials.ts";
 
 function jsonResponse(status: number, body: Record<string, unknown>) {
   return new Response(JSON.stringify(body), {
