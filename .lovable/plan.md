@@ -1,124 +1,74 @@
 
-# Diagnóstico + Plano de migração Meta WhatsApp Cloud (multi-App)
+# Fase 2 — Migração Central Trabalhista para credenciais per-integration
 
-## 1. Auditoria — onde os secrets globais são usados hoje
+Objetivo: gravar `app_secret_encrypted` e `verify_token_encrypted` dentro do `connected_account` da integração `meta-whatsapp-cloud` da Central Trabalhista, copiando os valores atuais dos secrets globais. Nada mais é alterado. Secrets globais permanecem ativos como fallback (Fase 3 fica para depois).
 
-Secrets globais existentes:
-- `META_WHATSAPP_APP_SECRET`
-- `META_WHATSAPP_VERIFY_TOKEN`
+## Por que precisa de edge function
 
-Pontos de leitura no código:
+`encryptSecret` (AES-GCM) só roda no runtime das edge functions, pois depende de `META_TOKEN_ENCRYPTION_KEY`. Não dá para fazer essa migração via SQL puro — o valor cifrado tem que ser produzido dentro do mesmo runtime que as functions `meta-whatsapp-*` usam para decifrar.
 
-| Arquivo | Linha | Uso | Criticidade |
-|---|---|---|---|
-| `supabase/functions/_shared/meta-whatsapp/platform.ts` | 10-13 | `getPlatformStatus()` — diz se webhook está "ativo" | Gate global de webhook |
-| `supabase/functions/meta-whatsapp-webhook/index.ts` | 68 | Compara `hub.verify_token` no handshake GET | **Bloqueante multi-tenant** |
-| `supabase/functions/meta-whatsapp-webhook/index.ts` | 87-88 | Calcula HMAC para validar `X-Hub-Signature-256` | **Bloqueante multi-tenant** |
-| `supabase/functions/meta-whatsapp-webhook/index.ts` | 257 | `appsecret_proof` em `metaWaGetMediaUrl` / `metaWaDownloadMedia` (inbound media) | Per-tenant |
-| `supabase/functions/meta-whatsapp-send/index.ts` | 187-189, 341, 377 | `appsecret_proof` em uploads e envios | Per-tenant |
-| `supabase/functions/meta-whatsapp-connect/index.ts` | 97-119 | `appsecret_proof` ao validar credenciais durante conexão | Per-tenant |
-| `supabase/functions/meta-whatsapp-verify/index.ts` | — | `appsecret_proof` na revalidação | Per-tenant |
-| `src/components/admin/MetaWhatsAppPlatformConfig.tsx` | — | UI global do status dos secrets | Será removida |
-| `src/services/metaWhatsAppService.ts` | `getPlatformStatus` | Chama edge `meta-whatsapp-platform-status` | Será removido |
-| `supabase/functions/meta-whatsapp-platform-status` | — | Reporta status global | Será removido |
-| `supabase/migrations/20260626211052_…sql` | — | Seed/registro do slug | Sem ação |
+## Passos
 
-Outros pontos sensíveis observados:
-- Em `connect`, `send` e `verify` o `appSecret` é passado como **opcional** para o helper `metaWaPostJson/Get`. Hoje funciona porque o App da Central tem `appsecret_proof` configurado como opcional. Para multi-App e maior segurança ele precisa ser **obrigatório por integração**.
-- O webhook tem **um único endpoint público** `/functions/v1/meta-whatsapp-webhook`. Multi-App significa que a Meta enviará payloads de Apps diferentes para a mesma URL — a função precisa identificar **qual integração** antes de validar assinatura.
+### 1. Identificar a organização da Central Trabalhista
+- Query read-only em `organizations` filtrando pelo nome "Central Trabalhista" para obter `organization_id`.
+- Query em `organization_integrations` + `admin_integrations` (slug `meta-whatsapp-cloud`) para confirmar que a integração existe, está `is_enabled = true` e que o `connected_account` atual ainda **não** tem `app_secret_encrypted` / `verify_token_encrypted`.
 
-## 2. Modelo de dados alvo
+### 2. Criar edge function descartável `meta-whatsapp-migrate-credentials`
+Função admin-only, usada uma única vez (será removida na Fase 3).
 
-Toda credencial Meta passa a viver em `organization_integrations` (slug `meta-whatsapp-cloud`) — nada novo no schema.
+Comportamento:
+- Valida JWT do chamador e confirma que é admin via `admin_users` (ou super_admin), recusando qualquer chamada sem essa permissão.
+- Recebe `{ organizationId, dryRun? }` no body.
+- Lê `META_WHATSAPP_APP_SECRET` e `META_WHATSAPP_VERIFY_TOKEN` do ambiente. Se algum estiver ausente, retorna erro explicando.
+- Busca `organization_integrations` da org pelo slug `meta-whatsapp-cloud`.
+- Lê o `connected_account` atual.
+- Se `dryRun`, devolve um diff (campos que seriam tocados, sem persistir).
+- Caso contrário:
+  - Cifra os dois valores com `encryptSecret`.
+  - Faz `update` em `connected_account` **mesclando** apenas:
+    - `app_secret_encrypted`
+    - `verify_token_encrypted`
+    - `credentials_migrated_at` (timestamp informativo)
+  - Preserva tudo o mais (`access_token_encrypted`, `app_id`, `waba_id`, `phone_number_id`, `display_phone_number`, `verified_name`, `token_stored_at`, etc.).
+- **Não toca** em `config_values`, `communication_endpoints`, `messages`, `message_threads`, nem em qualquer recurso Twilio.
+- Retorna o estado novo do `connected_account` com os secrets mascarados (apenas comprimento + prefixo `v1:`) para auditoria.
 
-`connected_account` (criptografado o que for sigiloso):
-```json
-{
-  "app_id": "...",
-  "waba_id": "...",
-  "phone_number_id": "...",
-  "display_phone_number": "+55...",
-  "verified_name": "...",
-  "access_token_encrypted": "<AES-GCM>",     // já existe
-  "app_secret_encrypted":  "<AES-GCM>",      // NOVO
-  "verify_token_encrypted":"<AES-GCM>",      // NOVO (recomendado criptografar)
-  "token_stored_at": "..."
-}
-```
+### 3. Executar a migração
+- Rodar dry-run primeiro via `supabase--curl_edge_functions` para conferir o diff.
+- Confirmar o resultado e rodar a chamada real apenas para a Central Trabalhista.
+- Validar diretamente no banco (`supabase--read_query`) que `connected_account ? 'app_secret_encrypted'` e `connected_account ? 'verify_token_encrypted'` são `true`, e que `access_token_encrypted`, `phone_number_id`, `waba_id`, `app_id` continuam idênticos aos de antes (snapshot antes/depois).
 
-`config_values` (não-sigilosos, já existem; nada novo).
+### 4. Validar que a Central passou a usar credenciais per-integration
 
-`communication_endpoints` continua sendo a tabela de lookup do webhook (`provider='meta_cloud_api'`, `sender_sid = phone_number_id`). Ela já carrega `organization_integration_id`, o que basta para resolver as credenciais.
+Adicionar logs temporários explícitos em `_shared/meta-whatsapp/credentials.ts` (mínimos, só para esta janela) informando qual fonte resolveu o secret: `per_integration` ou `global_fallback`, junto do `phone_number_id` (sem vazar o secret em si).
 
-## 3. Mudança crítica de fluxo no webhook
+Depois executar os seis fluxos da Central e ler `supabase--edge_function_logs`:
 
-A Meta assina o body com o **App Secret do App** que dispara o evento. Hoje validamos a assinatura **antes** de olhar o payload. Multi-App exige inverter:
+1. **Webhook GET (handshake)** — chamar `meta-whatsapp-webhook` com `hub.mode=subscribe` e o verify token; esperar log `verify_token_source=per_integration`.
+2. **Webhook POST (inbound texto)** — disparar uma mensagem WhatsApp real para o número da Central; checar nos logs `app_secret_source=per_integration` no HMAC.
+3. **Inbound mídia** — enviar uma imagem para a Central; confirmar download de mídia usando `appsecret_proof` per-integration.
+4. **Envio texto** — enviar pelo CRM uma mensagem texto a partir de um thread da Central; log `app_secret_source=per_integration` em `meta-whatsapp-send`.
+5. **Envio mídia** — enviar pelo CRM um anexo (imagem/PDF); mesmo log esperado.
+6. **Verify endpoint** — chamar `meta-whatsapp-verify` para a Central; confirmar `validation_error: null` e log per-integration.
 
-```text
-POST /meta-whatsapp-webhook
-   │
-   ├─ ler rawBody
-   ├─ JSON.parse "peek" sem confiar ainda
-   ├─ extrair entry[].changes[].value.metadata.phone_number_id
-   ├─ SELECT endpoint + organization_integration por phone_number_id
-   ├─ decryptar app_secret da integração
-   ├─ recomputar HMAC e comparar com X-Hub-Signature-256
-   ├─ se OK -> processar messages[] / statuses[]
-   └─ se múltiplos phone_number_ids no mesmo POST (raro, mas possível
-       quando o App agrega vários WABAs): validar por entry, descartando
-       só as entries cuja assinatura não fecha.
-```
+Critério de sucesso da Fase 2: em todos os seis fluxos, nenhum log emite `source=global_fallback` para a Central.
 
-Para o **handshake GET** (`hub.verify_token`), a Meta envia um GET sem identificação de App. Solução padrão e segura: aceitar se o token bater com **qualquer** `verify_token` ativo em `organization_integrations` enabled. Risco: zero — o token é segredo compartilhado entre Meta e integração específica; o GET só retorna o `hub.challenge`, não dá acesso a dados.
+### 5. Encerramento da Fase 2
+- Manter `META_WHATSAPP_APP_SECRET` e `META_WHATSAPP_VERIFY_TOKEN` configurados (Viagi e qualquer tenant futuro ainda não migrado continuam funcionando via fallback até serem conectados pela UI).
+- Manter a edge function `meta-whatsapp-migrate-credentials` no repositório, mas marcada como deprecated no topo do arquivo, para reuso caso surja outro tenant legado.
+- Remover os logs temporários adicionados no passo 4 depois da validação.
+- Fase 3 (remover fallback global, apagar `meta-whatsapp-platform-status` e `MetaWhatsAppPlatformConfig`, deletar os secrets globais) continua **fora deste escopo**.
 
-## 4. Estratégia de compatibilidade (sem downtime na Central)
+## Riscos e mitigação
 
-Implementar em **3 fases**, mantendo fallback ao secret global enquanto a Central não for migrada.
+- **Risco**: gravar valor errado e quebrar webhook da Central. **Mitigação**: dry-run + snapshot antes/depois + manter fallback global ativo, então qualquer falha de decrypt cai automaticamente no global atual.
+- **Risco**: chave de encriptação divergente entre runtime e dados antigos. **Mitigação**: `_shared/crypto.ts` já tenta múltiplos formatos de chave; o teste do passo 4.2 (inbound real) prova end-to-end.
+- **Risco**: edge function aberta indevidamente. **Mitigação**: exige JWT admin; sem isso, 403.
 
-### Fase 1 — Aditiva (sem remover nada)
-1. Migration cosmética: nenhum schema novo (usamos `connected_account` JSONB existente).
-2. Edge `meta-whatsapp-connect`:
-   - Aceita novos campos obrigatórios `appSecret` e `verifyToken` no body.
-   - Criptografa e grava em `connected_account.app_secret_encrypted` / `verify_token_encrypted`.
-   - Continua usando esses valores para `appsecret_proof` na validação Graph; fallback ao global se não vier (transição).
-3. Edge `meta-whatsapp-send`, `meta-whatsapp-verify`:
-   - Tentam ler `app_secret_encrypted` da integração; se ausente, caem no `Deno.env.get("META_WHATSAPP_APP_SECRET")` (compat Central).
-4. Edge `meta-whatsapp-webhook`:
-   - POST: novo fluxo "peek -> lookup endpoint -> per-integration secret -> validar". **Se a integração não tiver `app_secret_encrypted`**, valida com o secret global (compat Central).
-   - GET: aceita match com qualquer `verify_token_encrypted` ativo OU com o `META_WHATSAPP_VERIFY_TOKEN` global.
-5. UI:
-   - `MetaWhatsAppCloudDialog`: adiciona campos **App Secret** e **Verify Token** (com toggle mostrar/ocultar), pré-preenchidos vazios; obrigatórios para novas conexões, opcionais ao editar uma já conectada.
-   - `MetaWhatsAppPlatformConfig` (admin): marca como **deprecated** com aviso, mas continua mostrando o status global enquanto houver integrações dependendo dele.
+## Arquivos previstos
 
-> Resultado da Fase 1: Central continua funcionando sem alteração nenhuma. Viagi pode ser conectada com seu próprio App.
+- `supabase/functions/meta-whatsapp-migrate-credentials/index.ts` (novo, descartável)
+- `supabase/functions/_shared/meta-whatsapp/credentials.ts` (logs temporários `app_secret_source` / `verify_token_source`)
+- `.lovable/plan.md` (registro da execução da Fase 2)
 
-### Fase 2 — Migração da Central
-1. Editar a integração da Central pela própria UI e preencher App Secret + Verify Token do App da Central (mesmos valores hoje guardados como secret global).
-2. Confirmar via `meta-whatsapp-verify` que `appsecret_proof` continua válido.
-3. Disparar uma mensagem de teste (texto + áudio) e um inbound real para validar webhook usando o secret per-integration.
-
-### Fase 3 — Remoção do global
-1. Marcar a função `meta-whatsapp-platform-status` e a tela `MetaWhatsAppPlatformConfig` para remoção.
-2. Remover fallback ao `Deno.env.get` nos 4 edges; passar a exigir credenciais per-integration.
-3. Limpar `META_WHATSAPP_APP_SECRET` e `META_WHATSAPP_VERIFY_TOKEN` da lista de secrets do projeto (depois de confirmar produção saudável por ~48h).
-
-## 5. Considerações de segurança
-- Os dois novos campos vão criptografados com `encryptSecret` (AES-GCM, mesma chave já em uso).
-- Nunca retornados ao frontend; o dialog só mostra placeholder ("••• configurado") quando já existe.
-- Para rotação, o usuário substitui o valor → reencriptado e regravado.
-- Logs do webhook continuam não imprimindo valores; apenas `signature_match`, `phone_number_id` e `integration_id`.
-
-## 6. Pontos de teste obrigatórios antes da Fase 3
-- Central: GET handshake, POST inbound texto, POST inbound áudio, envio outbound texto, envio outbound áudio/imagem/documento.
-- Viagi: mesmo conjunto, com App Meta diferente.
-- POST com `phone_number_id` desconhecido → 401/200 silencioso, sem efeito.
-- POST com assinatura inválida usando App Secret de outra integração → rejeitado.
-
-## 7. Entregáveis desta proposta (quando aprovada — fase 1 primeiro)
-- `MetaWhatsAppCloudDialog.tsx`: adicionar inputs e mutation atualizada.
-- `meta-whatsapp-connect/index.ts`: aceitar/persistir `appSecret` e `verifyToken`.
-- `meta-whatsapp-webhook/index.ts`: refator do fluxo de validação descrito na seção 3, com fallback global.
-- `meta-whatsapp-send/index.ts` e `meta-whatsapp-verify/index.ts`: ler `app_secret_encrypted` da integração, fallback global.
-- Sem mudança de schema, sem migration.
-
-Aguardo aprovação para iniciar pela **Fase 1**.
+Nenhuma migração SQL, nenhuma alteração em UI, nenhuma mudança em `meta-whatsapp-send`, `meta-whatsapp-webhook`, `meta-whatsapp-verify` ou `meta-whatsapp-connect` além do log via helper compartilhado.
