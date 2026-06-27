@@ -126,8 +126,6 @@ export function MetaWhatsAppCloudDialog({ open, onOpenChange, integration, orgIn
     (isConnected || hasStoredAppSecret || !!form.appSecret) &&
     (isConnected || hasStoredVerifyToken || !!form.verifyToken);
 
-  const platform = platformQuery.data;
-
   return (
     <>
       <Dialog open={open} onOpenChange={onOpenChange}>
@@ -138,8 +136,9 @@ export function MetaWhatsAppCloudDialog({ open, onOpenChange, integration, orgIn
               {integration?.name ?? "Meta WhatsApp Cloud"}
             </DialogTitle>
             <DialogDescription>
-              Conecte seu número WhatsApp Business diretamente pela API oficial da Meta (Cloud API).
-              MVP: envio e recebimento de texto dentro da janela 24h.
+              Cada organização usa o próprio App Meta. Preencha todos os campos abaixo com os dados do App
+              da sua conta Meta (App ID, App Secret, Verify Token, WABA ID, Phone Number ID, número E.164
+              e System User Token permanente).
             </DialogDescription>
           </DialogHeader>
 
