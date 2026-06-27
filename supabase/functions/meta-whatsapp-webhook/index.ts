@@ -98,15 +98,10 @@ serve(async (req) => {
       }
     }
 
-    // 2) Fallback global (Central durante migração)
-    if (!matched) {
-      const g = globalVerifyToken();
-      if (g && timingSafeEqual(token, g)) matched = true;
-    }
-
     console.log("[meta-wa-webhook] GET handshake", {
       matched,
-      via: matched ? (matchedIntegrationId ? "per_integration" : "global") : "none",
+      via: matched ? "per_integration" : "none",
+      matched_integration_id: matchedIntegrationId,
     });
 
     if (matched) {
