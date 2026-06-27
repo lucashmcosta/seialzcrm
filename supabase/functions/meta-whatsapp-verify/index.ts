@@ -57,13 +57,11 @@ serve(async (req) => {
       .eq("integration_id", integ.id)
       .maybeSingle();
 
-    const platform = { appSecretConfigured: true, verifyTokenConfigured: true, webhookActive: true };
     if (!oi?.id) {
       return new Response(JSON.stringify({ connected: false }), {
         status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
     }
-    void platform;
 
     const ca = oi.connected_account as any;
     let metaResult: any = null;
