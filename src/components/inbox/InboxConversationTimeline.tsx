@@ -33,7 +33,7 @@ function Media({ msg, orgId, accessToken }: { msg: InboxMessageRow; orgId: strin
   if (!msg.media_urls || msg.media_urls.length === 0) return null;
   const mediaType = msg.media_type;
   const isOutbound = msg.direction === 'outbound';
-  const isAudioOnly = mediaType === 'audio' && !msg.content;
+  const isAudioOnly = mediaType === 'audio';
 
   return (
     <div className="space-y-2">
@@ -119,7 +119,8 @@ export function InboxConversationTimeline({ threadId, organizationId, contactNam
         ) : (
           messages.map((m, idx) => {
             const isOutbound = m.direction === 'outbound';
-            const isAudioOnly = m.media_type === 'audio' && !m.content;
+            const isAudioOnly = m.media_type === 'audio';
+            const isMediaPlaceholder = !!m.content && /^\[(Áudio|Imagem|Vídeo|Documento|Sticker)\]$/.test(m.content);
             const isInternal = !!m.is_internal_note;
             const timeStr = new Date(m.sent_at).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
 
@@ -197,7 +198,7 @@ export function InboxConversationTimeline({ threadId, organizationId, contactNam
 
                     <Media msg={m} orgId={organizationId} accessToken={accessToken} />
 
-                    {m.content && !isAudioOnly && (
+                    {m.content && !isAudioOnly && !isMediaPlaceholder && (
                       <WhatsAppFormattedText content={m.content} className={isOutbound ? 'text-primary-foreground' : ''} />
                     )}
 
