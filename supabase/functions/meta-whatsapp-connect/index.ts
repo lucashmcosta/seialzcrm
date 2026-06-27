@@ -171,25 +171,7 @@ serve(async (req) => {
       }
     }
 
-    // Busca integration_id pelo slug
-    const { data: integ } = await admin
-      .from("admin_integrations")
-      .select("id")
-      .eq("slug", "meta-whatsapp-cloud")
-      .maybeSingle();
-    if (!integ?.id) return err(500, "integration_not_seeded");
-
     const encryptedToken = await encryptSecret(body.systemUserToken);
-
-    // Recupera connected_account anterior para preservar app_secret/verify_token
-    // já configurados quando o usuário edita sem reenviar esses campos.
-    const { data: priorOi } = await admin
-      .from("organization_integrations")
-      .select("connected_account")
-      .eq("organization_id", body.organizationId)
-      .eq("integration_id", integ.id)
-      .maybeSingle();
-    const priorCa = (priorOi?.connected_account ?? {}) as any;
 
     const appSecretEncrypted = body.appSecret && body.appSecret.trim()
       ? await encryptSecret(body.appSecret.trim())
