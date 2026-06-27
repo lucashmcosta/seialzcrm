@@ -94,10 +94,44 @@ serve(async (req) => {
     }
     if (!membership) return err(403, "not_a_member");
 
+    // Busca integration_id e estado anterior cedo para validar credenciais per-tenant.
+    const { data: integ } = await admin
+      .from("admin_integrations")
+      .select("id")
+      .eq("slug", "meta-whatsapp-cloud")
+      .maybeSingle();
+    if (!integ?.id) return err(500, "integration_not_seeded");
+
+    const { data: priorOi } = await admin
+      .from("organization_integrations")
+      .select("connected_account")
+      .eq("organization_id", body.organizationId)
+      .eq("integration_id", integ.id)
+      .maybeSingle();
+    const priorCa = (priorOi?.connected_account ?? {}) as any;
+    const hasStoredAppSecret = !!priorCa.app_secret_encrypted;
+    const hasStoredVerifyToken = !!priorCa.verify_token_encrypted;
+
+    // Fase 3: App Secret e Verify Token são obrigatórios em nova conexão.
+    // Em edição, podem vir vazios — preservamos o valor já cifrado.
+    if (!hasStoredAppSecret && !(body.appSecret && body.appSecret.trim())) {
+      return err(400, "missing_field", { field: "appSecret" });
+    }
+    if (!hasStoredVerifyToken && !(body.verifyToken && body.verifyToken.trim())) {
+      return err(400, "missing_field", { field: "verifyToken" });
+    }
+
     // Valida credenciais Meta (Graph API). Pode ser pulado via skipMetaValidation
     // para permitir edição manual quando a Meta recusa por motivos externos (token/permissão).
     // Fase 3: App Secret é estritamente per-integration. Sem fallback global.
-    const appSecret = body.appSecret?.trim() || undefined;
+    let appSecret = body.appSecret?.trim() || undefined;
+    if (!appSecret && hasStoredAppSecret) {
+      try {
+        appSecret = (await decryptSecret(priorCa.app_secret_encrypted)).trim() || undefined;
+      } catch (e) {
+        console.error("[meta-whatsapp-connect] decrypt prior app_secret failed", (e as Error).message);
+      }
+    }
     let meta: {
       display_phone_number: string;
       verified_name?: string | null;
