@@ -258,15 +258,78 @@ serve(async (req) => {
       }
     }
 
-    // MVP: fora da janela 24h sem template = bloqueia
-    if (!in24h) {
+    // Fora da janela 24h só permite envio de template
+    if (!in24h && !isTemplateSend) {
       return jsonResponse(400, {
         error: "outside_24h_window",
         requiresTemplate: true,
         isIn24hWindow: false,
-        message: "MVP Meta Cloud aceita apenas texto dentro da janela 24h.",
+        message: "Fora da janela de 24h. Use um template aprovado.",
       });
     }
+
+    // === Template: carrega do banco e monta payload ===
+    let templateRow: any = null;
+    let templateName: string | null = directTemplateName || null;
+    let templateLanguage: string | null = directLanguageCode || null;
+    let templateComponentsTemplate: any[] = Array.isArray(directComponents) ? directComponents : [];
+    let templateBodyText: string | null = null;
+    if (isTemplateSend && templateId) {
+      const { data: tpl, error: tplErr } = await supabase
+        .from("whatsapp_templates")
+        .select("id, organization_id, provider, status, meta_template_name, language, body, components, friendly_name")
+        .eq("id", templateId)
+        .maybeSingle();
+      if (tplErr || !tpl) return jsonResponse(404, { error: "template_not_found" });
+      if (tpl.organization_id !== organizationId) return jsonResponse(403, { error: "template_org_mismatch" });
+      if (tpl.provider !== "meta_cloud_api") return jsonResponse(400, { error: "template_not_meta_cloud" });
+      if (tpl.status !== "approved") return jsonResponse(400, { error: "template_not_approved" });
+      templateRow = tpl;
+      templateName = tpl.meta_template_name || tpl.friendly_name;
+      templateLanguage = tpl.language;
+      templateComponentsTemplate = Array.isArray(tpl.components) ? tpl.components : [];
+      templateBodyText = tpl.body || null;
+    }
+
+    // Renderiza preview e components finais (apenas BODY com variáveis simples).
+    let renderedPreview: string | null = null;
+    let outboundTemplateComponents: any[] = [];
+    if (isTemplateSend) {
+      // Se chamado em modo "direto", usa components vindos do caller sem alteração.
+      if (!templateRow && Array.isArray(directComponents) && directComponents.length > 0) {
+        outboundTemplateComponents = directComponents;
+      } else {
+        const bodyComp = templateComponentsTemplate.find(
+          (c) => (c?.type || "").toUpperCase() === "BODY",
+        );
+        const bodyTextRaw = (bodyComp?.text as string | undefined) || templateBodyText || "";
+        const vars = Array.from(
+          new Set((bodyTextRaw.match(/\{\{(\d+)\}\}/g) || []).map((m) => m.replace(/[{}]/g, ""))),
+        ).sort((a, b) => parseInt(a) - parseInt(b));
+        const values: Record<string, string> = {};
+        const tv = (templateVariables ?? {}) as Record<string, unknown>;
+        for (const n of vars) {
+          const v = tv[n] ?? tv[`var${n}`] ?? "";
+          values[n] = String(v);
+        }
+        // Render preview
+        let preview = bodyTextRaw;
+        for (const n of vars) {
+          preview = preview.split(`{{${n}}}`).join(values[n] || `{{${n}}}`);
+        }
+        renderedPreview = preview;
+        if (vars.length > 0) {
+          outboundTemplateComponents = [{
+            type: "body",
+            parameters: vars.map((n) => ({ type: "text", text: values[n] || "" })),
+          }];
+        } else {
+          outboundTemplateComponents = [];
+        }
+      }
+    }
+
+
 
     // Insere mensagem com status sending
     let resolvedSenderName = senderName || null;
