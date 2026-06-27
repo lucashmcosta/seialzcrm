@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
 import { useOrganization } from "@/hooks/useOrganization";
@@ -58,12 +58,6 @@ export function MetaWhatsAppCloudDialog({ open, onOpenChange, integration, orgIn
     });
   }, [open, orgIntegration]);
 
-  const platformQuery = useQuery({
-    queryKey: ["meta-wa-platform-status"],
-    queryFn: () => metaWhatsAppService.getPlatformStatus(),
-    enabled: open,
-    staleTime: 30_000,
-  });
 
   const connectMutation = useMutation({
     mutationFn: async (opts: { skipMetaValidation?: boolean } = {}) => {
