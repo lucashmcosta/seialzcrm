@@ -14,6 +14,39 @@ function jsonResponse(status: number, body: Record<string, unknown>) {
   });
 }
 
+async function logMetaTokenDiagnostic(input: {
+  accessToken: string;
+  appId?: string | null;
+  appSecret?: string;
+}) {
+  const { accessToken, appId, appSecret } = input;
+  if (!accessToken || !appId || !appSecret) return;
+
+  try {
+    const url = new URL("https://graph.facebook.com/debug_token");
+    url.searchParams.set("input_token", accessToken);
+    url.searchParams.set("access_token", `${appId}|${appSecret}`);
+
+    const res = await fetch(url.toString(), { method: "GET" });
+    const json = await res.json().catch(() => ({}));
+    console.log("[meta-send] token diagnostic", {
+      status: res.status,
+      ok: res.ok,
+      token_app_id: json?.data?.app_id ?? null,
+      token_type: json?.data?.type ?? null,
+      token_is_valid: json?.data?.is_valid ?? null,
+      token_application: json?.data?.application ?? null,
+      error_code: json?.error?.code ?? null,
+      error_subcode: json?.error?.error_subcode ?? null,
+      error_message: json?.error?.message ?? null,
+    });
+  } catch (diagnosticError) {
+    console.log("[meta-send] token diagnostic failed", {
+      message: diagnosticError instanceof Error ? diagnosticError.message : String(diagnosticError),
+    });
+  }
+}
+
 serve(async (req) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: corsHeaders });
   if (req.method !== "POST") return jsonResponse(405, { error: "method_not_allowed" });
@@ -264,6 +297,13 @@ serve(async (req) => {
       const errDetails = e instanceof MetaWaGraphError
         ? { code: e.error.code, error_subcode: e.error.error_subcode, message: e.error.message }
         : { message: (e as Error).message };
+      if (errDetails.code === 100 && String(errDetails.message || "").includes("appsecret_proof")) {
+        await logMetaTokenDiagnostic({
+          accessToken,
+          appId: (oi as any).config_values?.app_id ?? null,
+          appSecret,
+        });
+      }
       await supabase
         .from("messages")
         .update({
