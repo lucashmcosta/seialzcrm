@@ -1707,7 +1707,7 @@ function DesktopMessagesList() {
                                         {message.media_urls.map((rawUrl, i) => {
                                           const url = getProxiedMediaUrl(rawUrl, organization?.id, accessToken);
                                           if (message.media_type === 'audio' || rawUrl.match(/\.(ogg|mp3|wav|m4a)$/i)) {
-                                            const isAudioOnly = message.media_type === 'audio' && !message.content;
+                                            const isAudioOnly = message.media_type === 'audio';
                                             const senderLabel = isOutbound
                                               ? (message.sender_name ? `${message.sender_name} · ` : '')
                                               : '';
