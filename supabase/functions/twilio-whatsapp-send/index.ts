@@ -774,6 +774,32 @@ serve(async (req) => {
       }
     }
 
+    // Hard guard: if the resolved endpoint is Meta Cloud, abort before any
+    // write or Twilio call. Prevents 63007 "From not in this account" loops
+    // when a Meta-originated thread accidentally reaches the Twilio sender.
+    if (endpointId) {
+      const { data: epGuard } = await supabase
+        .from('communication_endpoints')
+        .select('id, provider, external_address')
+        .eq('id', endpointId)
+        .maybeSingle()
+      if ((epGuard as any)?.provider === 'meta_cloud_api') {
+        console.error('[twilio-send] BLOCKED meta_cloud_api endpoint reached twilio-send', {
+          threadId: currentThreadId ?? null,
+          endpointId,
+          external_address: (epGuard as any)?.external_address,
+          path: 'messages-default',
+        })
+        return new Response(
+          JSON.stringify({
+            error: 'wrong_provider_for_endpoint',
+            expected: 'twilio', actual: 'meta_cloud_api', endpoint_id: endpointId,
+          }),
+          { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        )
+      }
+    }
+
     // Build initial twilio metadata snapshot
     const twilioMetadata: Record<string, any> = {
       From: whatsappFrom,
