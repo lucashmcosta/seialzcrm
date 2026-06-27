@@ -109,6 +109,34 @@ export function MetaWhatsAppCloudDialog({ open, onOpenChange, integration, orgIn
     onError: (e: any) => toast.error(`Erro: ${e?.message ?? e}`),
   });
 
+  const templatesQuery = useQuery({
+    queryKey: ["meta-wa-templates", organization?.id, orgIntegration?.id],
+    enabled: !!organization?.id && !!orgIntegration?.id && open,
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("whatsapp_templates")
+        .select("id, friendly_name, language, category, status, last_synced_at")
+        .eq("organization_id", organization!.id)
+        .eq("organization_integration_id", orgIntegration!.id)
+        .eq("provider", "meta_cloud_api")
+        .order("friendly_name");
+      if (error) throw error;
+      return data || [];
+    },
+  });
+
+  const syncTemplatesMutation = useMutation({
+    mutationFn: async () => {
+      if (!organization?.id) throw new Error("Organização indisponível");
+      return await metaWhatsAppService.syncTemplates(organization.id);
+    },
+    onSuccess: (data) => {
+      toast.success(`Templates sincronizados: ${data.synced}/${data.total} (${data.approved} aprovados)`);
+      templatesQuery.refetch();
+    },
+    onError: (e: any) => toast.error(`Falha ao sincronizar: ${e?.message ?? e}`),
+  });
+
   const ca = (orgIntegration?.connected_account ?? {}) as any;
   const cv = (orgIntegration?.config_values ?? {}) as any;
   const hasStoredAppSecret = !!ca.app_secret_encrypted;
