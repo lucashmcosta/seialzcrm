@@ -114,7 +114,7 @@ export async function metaWaUploadMedia(
   const fd = new FormData();
   fd.append("messaging_product", "whatsapp");
   fd.append("type", mimeType);
-  fd.append("file", new Blob([fileBytes], { type: mimeType }), filename);
+  fd.append("file", new Blob([fileBytes as unknown as BlobPart], { type: mimeType }), filename);
   const res = await fetch(url, { method: "POST", body: fd });
   const json = await res.json().catch(() => ({}));
   if (!res.ok || json.error) {
