@@ -339,14 +339,25 @@ serve(async (req) => {
     }
 
     const kind = (hasMedia ? mediaType : null) as MediaKind | null;
-    const initialContent = hasMedia
-      ? (trimmedMessage.trim() || placeholderForMedia(kind!))
-      : trimmedMessage;
+    const initialContent = isTemplateSend
+      ? (renderedPreview || `[Template: ${templateName ?? "?"}]`)
+      : hasMedia
+        ? (trimmedMessage.trim() || placeholderForMedia(kind!))
+        : trimmedMessage;
 
     const baseMeta: Record<string, any> = { phone_number_id: endpoint.sender_sid, to };
     if (hasMedia) {
       baseMeta.media_source_url = mediaUrlsArr[0];
       baseMeta.media_kind = kind;
+    }
+    if (isTemplateSend) {
+      baseMeta.template = {
+        name: templateName,
+        language: templateLanguage,
+        components: outboundTemplateComponents,
+        rendered_preview: renderedPreview,
+        template_id: templateRow?.id ?? null,
+      };
     }
 
     const { data: insertedMsg, error: insErr } = await supabase
@@ -366,6 +377,7 @@ serve(async (req) => {
         endpoint_id: endpoint.id,
         media_urls: hasMedia ? mediaUrlsArr : null,
         media_type: hasMedia ? kind : null,
+        template_id: templateRow?.id ?? null,
         metadata: { meta_cloud: baseMeta },
       })
       .select("id")
