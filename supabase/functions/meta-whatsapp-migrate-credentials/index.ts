@@ -45,6 +45,13 @@ serve(async (req) => {
       "40ae935c-a7f7-4ad7-8ea4-91be6404a95f", // Central Trabalhista
     ]);
 
+    const body = await req.json().catch(() => ({})) as { organizationId?: string; dryRun?: boolean };
+    if (!body.organizationId) return json(400, { error: "missing_organization_id" });
+    if (!ALLOWLIST.has(body.organizationId)) return json(403, { error: "org_not_in_allowlist" });
+    const dryRun = body.dryRun === true;
+
+
+
 
     const globalAppSecret = Deno.env.get("META_WHATSAPP_APP_SECRET")?.trim();
     const globalVerifyToken = Deno.env.get("META_WHATSAPP_VERIFY_TOKEN")?.trim();
