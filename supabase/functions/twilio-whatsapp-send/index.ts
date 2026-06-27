@@ -422,11 +422,20 @@ serve(async (req) => {
 
       const { data: ep, error: eErr } = await supabaseInbox
         .from('communication_endpoints')
-        .select('id, channel, purpose, external_address, is_active, organization_integration_id')
+        .select('id, channel, purpose, provider, external_address, is_active, organization_integration_id')
         .eq('id', resolvedEndpointId)
         .maybeSingle()
       if (eErr || !ep) return inboxErr(400, 'no_endpoint')
 
+      if ((ep as any).provider === 'meta_cloud_api') {
+        console.error('[twilio-send] BLOCKED meta_cloud_api endpoint reached twilio-send', {
+          threadId, endpointId: ep.id, external_address: (ep as any).external_address,
+          path: 'inbox',
+        })
+        return inboxErr(400, 'wrong_provider_for_endpoint', {
+          expected: 'twilio', actual: 'meta_cloud_api', endpoint_id: ep.id,
+        })
+      }
       if (ep.is_active === false) return inboxErr(400, 'endpoint_inactive')
       if (ep.channel !== 'whatsapp') return inboxErr(400, 'wrong_channel')
       // Phase 1.3D: allow customer_service AND other; block only commercial/vendor_personal.
