@@ -485,6 +485,7 @@ export function InboxComposer({ thread, replyTo, onClearReply, onSent, onThreadM
             <WhatsAppTemplateSelector
               onSelect={handleSendTemplate}
               onCancel={() => setShowTemplates(false)}
+              provider={templateSelectorProvider}
             />
           </DialogContent>
         </Dialog>
