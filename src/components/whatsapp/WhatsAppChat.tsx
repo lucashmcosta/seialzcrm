@@ -464,7 +464,7 @@ export function WhatsAppChat({ contactId, threadId: initialThreadId, onThreadCre
                     className={`flex ${isOutbound ? 'justify-end' : 'justify-start'}`}
                   >
                   <div
-                    className={`max-w-[70%] rounded-lg ${message.media_type === 'audio' && !message.content ? 'p-1' : 'p-3'} ${
+                    className={`max-w-[70%] rounded-lg ${message.media_type === 'audio' ? 'p-1' : 'p-3'} ${
                       isOutbound
                         ? 'bg-[#054D3E] text-white'
                         : 'bg-muted'
@@ -474,7 +474,7 @@ export function WhatsAppChat({ contactId, threadId: initialThreadId, onThreadCre
                     {renderMediaContent(message)}
 
                     {/* Content */}
-                    {message.content && (
+                    {message.content && !(message.media_urls && message.media_urls.length > 0 && ['[Áudio]', '[Imagem]', '[Vídeo]', '[Documento]', '[Sticker]'].includes(message.content)) && (
                       <WhatsAppFormattedText content={message.content} />
                     )}
 
@@ -484,7 +484,7 @@ export function WhatsAppChat({ contactId, threadId: initialThreadId, onThreadCre
                     )}
 
                     {/* Footer (hidden for audio-only, rendered inside player) */}
-                    {!(message.media_type === 'audio' && !message.content) && (
+                    {!(message.media_type === 'audio') && (
                     <div className="flex items-center justify-end gap-1 mt-1">
                       {message.media_type && getMediaTypeIcon(message.media_type)}
                       <span className={`text-[11px] leading-[14px] ${isOutbound ? 'text-white/60' : 'text-muted-foreground'}`}>
