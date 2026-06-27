@@ -116,16 +116,23 @@ export function MetaWhatsAppCloudDialog({ open, onOpenChange, integration, orgIn
     onError: (e: any) => toast.error(`Erro: ${e?.message ?? e}`),
   });
 
+  const ca = (orgIntegration?.connected_account ?? {}) as any;
+  const cv = (orgIntegration?.config_values ?? {}) as any;
+  const hasStoredAppSecret = !!ca.app_secret_encrypted;
+  const hasStoredVerifyToken = !!ca.verify_token_encrypted;
+
+  // Em nova conexão, App Secret + Verify Token + System User Token são obrigatórios.
+  // Ao editar uma já conectada, deixar em branco mantém o valor anterior.
   const canSubmit =
     !!form.appId &&
     !!form.wabaId &&
     !!form.phoneNumberId &&
     /^\+\d{8,15}$/.test(form.phoneE164) &&
-    !!form.systemUserToken;
+    (isConnected || !!form.systemUserToken) &&
+    (isConnected || hasStoredAppSecret || !!form.appSecret) &&
+    (isConnected || hasStoredVerifyToken || !!form.verifyToken);
 
   const platform = platformQuery.data;
-  const ca = (orgIntegration?.connected_account ?? {}) as any;
-  const cv = (orgIntegration?.config_values ?? {}) as any;
 
   return (
     <>
