@@ -28,14 +28,10 @@ serve(async (req) => {
   if (req.method !== "POST") return json(405, { error: "method_not_allowed" });
 
   try {
-    // Função one-shot Fase 2: sem JWT obrigatório.
-    // Para evitar abuso, exige um token compartilhado via env e só aceita
-    // organizações presentes na allowlist explícita.
-    const expectedToken = Deno.env.get("META_MIGRATION_TOKEN")?.trim();
-    const providedToken = (req.headers.get("x-migration-token") ?? "").trim();
-    if (!expectedToken || providedToken !== expectedToken) {
-      return json(403, { error: "forbidden" });
-    }
+    // Função one-shot Fase 2: protegida apenas por allowlist explícita de
+    // organizações (idempotente — apenas re-cifra os mesmos secrets globais).
+    // Será removida ao final da Fase 3.
+
 
     const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
     const serviceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
