@@ -83,16 +83,21 @@ serve(async (req) => {
       mediaUrl, mediaUrls, mediaType, mimeType: payloadMime, filename: payloadFilename,
       userId, replyToMessageId, isAgentMessage, agentId, senderName,
       endpointId: explicitEndpointId,
+      templateId, templateVariables,
+      type: payloadType, templateName: directTemplateName,
+      languageCode: directLanguageCode, components: directComponents,
     } = body as Record<string, any>;
 
     if (!organizationId) return jsonResponse(400, { error: "missing_organization" });
     if (!contactId) return jsonResponse(400, { error: "missing_contact" });
 
+    const isTemplateSend = !!templateId || payloadType === "template";
+
     // Normaliza mídia
     const mediaUrlsArr: string[] = Array.isArray(mediaUrls) && mediaUrls.length
       ? mediaUrls.filter((u: any) => typeof u === "string" && u)
       : (typeof mediaUrl === "string" && mediaUrl ? [mediaUrl] : []);
-    const hasMedia = mediaUrlsArr.length > 0 || !!mediaType;
+    const hasMedia = !isTemplateSend && (mediaUrlsArr.length > 0 || !!mediaType);
     const trimmedMessage = typeof message === "string" ? message : "";
 
     if (hasMedia) {
