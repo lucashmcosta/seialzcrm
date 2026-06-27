@@ -100,6 +100,17 @@ serve(async (req) => {
 
     const accessToken = await decryptSecret(ca.access_token_encrypted);
     const appSecret = Deno.env.get("META_WHATSAPP_APP_SECRET") ?? undefined;
+    console.log("[meta-send] credential diagnostic", {
+      organization_id: organizationId,
+      integration_id: endpoint.organization_integration_id,
+      endpoint_id: endpoint.id,
+      phone_number_id: endpoint.sender_sid,
+      app_id_stored: (oi as any).config_values?.app_id ?? null,
+      token_present: Boolean(accessToken),
+      token_len: accessToken?.length ?? 0,
+      app_secret_present: Boolean(appSecret),
+      app_secret_len: appSecret?.length ?? 0,
+    });
 
     // Contato + telefone
     const { data: contact } = await supabase
