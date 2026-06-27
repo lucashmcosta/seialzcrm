@@ -180,7 +180,10 @@ serve(async (req) => {
       let allowed = true
       let reason = 'ok'
 
-      if (endpoint.is_active === false) {
+      if ((endpoint as any).provider === 'meta_cloud_api') {
+        allowed = false
+        reason = 'wrong_provider_for_endpoint'
+      } else if (endpoint.is_active === false) {
         allowed = false
         reason = 'endpoint_inactive'
       } else if (endpoint.channel !== 'whatsapp') {
@@ -419,11 +422,20 @@ serve(async (req) => {
 
       const { data: ep, error: eErr } = await supabaseInbox
         .from('communication_endpoints')
-        .select('id, channel, purpose, external_address, is_active, organization_integration_id')
+        .select('id, channel, purpose, provider, external_address, is_active, organization_integration_id')
         .eq('id', resolvedEndpointId)
         .maybeSingle()
       if (eErr || !ep) return inboxErr(400, 'no_endpoint')
 
+      if ((ep as any).provider === 'meta_cloud_api') {
+        console.error('[twilio-send] BLOCKED meta_cloud_api endpoint reached twilio-send', {
+          threadId, endpointId: ep.id, external_address: (ep as any).external_address,
+          path: 'inbox',
+        })
+        return inboxErr(400, 'wrong_provider_for_endpoint', {
+          expected: 'twilio', actual: 'meta_cloud_api', endpoint_id: ep.id,
+        })
+      }
       if (ep.is_active === false) return inboxErr(400, 'endpoint_inactive')
       if (ep.channel !== 'whatsapp') return inboxErr(400, 'wrong_channel')
       // Phase 1.3D: allow customer_service AND other; block only commercial/vendor_personal.
@@ -488,13 +500,26 @@ serve(async (req) => {
     ) {
       const { data: ep, error: epErr } = await supabase
         .from('communication_endpoints')
-        .select('id, external_address, channel, is_active, organization_id')
+        .select('id, external_address, channel, is_active, organization_id, provider')
         .eq('id', messagesEndpointIdInput)
         .maybeSingle()
       if (epErr || !ep) {
         console.warn('[messages-endpoint-override] endpoint not found', { messagesEndpointIdInput, err: epErr?.message })
         return new Response(
           JSON.stringify({ error: 'Invalid endpointId' }),
+          { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        )
+      }
+      if ((ep as any).provider === 'meta_cloud_api') {
+        console.error('[twilio-send] BLOCKED meta_cloud_api endpoint reached twilio-send', {
+          threadId: threadId ?? null, endpointId: ep.id,
+          external_address: ep.external_address, path: 'messages-override',
+        })
+        return new Response(
+          JSON.stringify({
+            error: 'wrong_provider_for_endpoint',
+            expected: 'twilio', actual: 'meta_cloud_api', endpoint_id: ep.id,
+          }),
           { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
         )
       }
@@ -746,6 +771,32 @@ serve(async (req) => {
         console.warn('[endpoint-resolve] exception', JSON.stringify({
           org_id: organizationId, from: fromAddress, to: whatsappTo, err: String(e),
         }))
+      }
+    }
+
+    // Hard guard: if the resolved endpoint is Meta Cloud, abort before any
+    // write or Twilio call. Prevents 63007 "From not in this account" loops
+    // when a Meta-originated thread accidentally reaches the Twilio sender.
+    if (endpointId) {
+      const { data: epGuard } = await supabase
+        .from('communication_endpoints')
+        .select('id, provider, external_address')
+        .eq('id', endpointId)
+        .maybeSingle()
+      if ((epGuard as any)?.provider === 'meta_cloud_api') {
+        console.error('[twilio-send] BLOCKED meta_cloud_api endpoint reached twilio-send', {
+          threadId: currentThreadId ?? null,
+          endpointId,
+          external_address: (epGuard as any)?.external_address,
+          path: 'messages-default',
+        })
+        return new Response(
+          JSON.stringify({
+            error: 'wrong_provider_for_endpoint',
+            expected: 'twilio', actual: 'meta_cloud_api', endpoint_id: endpointId,
+          }),
+          { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        )
       }
     }
 
