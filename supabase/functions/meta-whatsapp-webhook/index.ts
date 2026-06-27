@@ -204,7 +204,6 @@ async function handleInbound(
     thread_id: threadId,
     content,
     direction: "inbound",
-    whatsapp_status: "received",
     whatsapp_message_sid: wamid,
     endpoint_id: endpoint.id,
     sender_type: "contact",
