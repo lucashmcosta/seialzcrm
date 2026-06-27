@@ -157,8 +157,6 @@ serve(async (req) => {
       matchedIntegrationId = ep.organization_integration_id;
     }
   }
-  // Fallback global (Central durante migração)
-  if (!appSecret) appSecret = globalAppSecret();
 
   if (!appSecret) {
     console.warn("[meta-wa-webhook] no_app_secret_available", { peekedPhoneIds });
@@ -174,7 +172,7 @@ serve(async (req) => {
     signature_match: signatureMatch,
     phone_number_ids: peekedPhoneIds,
     matched_integration_id: matchedIntegrationId,
-    via: matchedIntegrationId ? "per_integration" : "global_fallback",
+    via: "per_integration",
   }));
 
   if (!signatureMatch) {
