@@ -100,7 +100,12 @@ serve(async (req) => {
     const hasMedia = !isTemplateSend && (mediaUrlsArr.length > 0 || !!mediaType);
     const trimmedMessage = typeof message === "string" ? message : "";
 
-    if (hasMedia) {
+    if (isTemplateSend) {
+      // Validação leve aqui — restante após carregar o template do banco.
+      if (!templateId && (!directTemplateName || !directLanguageCode)) {
+        return jsonResponse(400, { error: "missing_template_payload" });
+      }
+    } else if (hasMedia) {
       if (mediaType === "sticker") {
         return jsonResponse(400, {
           error: "sticker_not_supported_yet",
