@@ -214,6 +214,71 @@ export function MetaWhatsAppCloudDialog({ open, onOpenChange, integration, orgIn
               </Card>
             )}
 
+            {/* ===== Templates ===== */}
+            {isConnected && (
+              <Card className="p-4 space-y-3">
+                <div className="flex items-center justify-between gap-2">
+                  <div>
+                    <h4 className="font-medium">Templates aprovados</h4>
+                    <p className="text-xs text-muted-foreground">
+                      Templates da Meta usados para enviar fora da janela de 24h.
+                    </p>
+                  </div>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => syncTemplatesMutation.mutate()}
+                    disabled={syncTemplatesMutation.isPending}
+                  >
+                    <ArrowsClockwise className="h-4 w-4 mr-1" />
+                    {syncTemplatesMutation.isPending ? "Sincronizando..." : "Sincronizar templates"}
+                  </Button>
+                </div>
+                <Separator />
+                {templatesQuery.isLoading ? (
+                  <p className="text-xs text-muted-foreground">Carregando…</p>
+                ) : !templatesQuery.data || templatesQuery.data.length === 0 ? (
+                  <p className="text-xs text-muted-foreground">
+                    Nenhum template sincronizado ainda. Clique em <strong>Sincronizar templates</strong> para
+                    buscar na Meta.
+                  </p>
+                ) : (
+                  <div className="space-y-1.5 max-h-64 overflow-y-auto">
+                    {templatesQuery.data.map((t: any) => (
+                      <div
+                        key={t.id}
+                        className="flex items-center justify-between text-sm px-2 py-1.5 rounded border border-border"
+                      >
+                        <div className="min-w-0">
+                          <p className="font-medium truncate">{t.friendly_name}</p>
+                          <p className="text-xs text-muted-foreground">
+                            {t.language} · {t.category ?? "—"}
+                          </p>
+                        </div>
+                        <Badge
+                          variant={
+                            t.status === "approved"
+                              ? "default"
+                              : t.status === "rejected"
+                                ? "destructive"
+                                : "secondary"
+                          }
+                        >
+                          {t.status}
+                        </Badge>
+                      </div>
+                    ))}
+                  </div>
+                )}
+                <p className="text-[11px] text-muted-foreground">
+                  Total: {templatesQuery.data?.length ?? 0} · Aprovados:{" "}
+                  {templatesQuery.data?.filter((t: any) => t.status === "approved").length ?? 0}
+                </p>
+              </Card>
+            )}
+
+
+
 
             {/* ===== Form de conexão / edição ===== */}
             <Card className="p-4 space-y-4">
