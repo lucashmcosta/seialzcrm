@@ -1,53 +1,77 @@
-## Bug confirmado
 
-A conversa do Joao Teste está, sim, no endpoint **`+551150287020` (provider `meta_cloud_api`, "Central Trabalhista")** — confirmei direto no banco:
+# Hotfix Meta Cloud — paridade funcional com Twilio (inbound)
 
-```
-thread 5f77df99 → primary_endpoint 407ff93d
-endpoint: provider='meta_cloud_api', external_address='+551150287020'
-```
+Escopo restrito ao fluxo Meta Cloud. Twilio fica intocado. Sem extração de módulo compartilhado. Sem migrations. Mídia, outbound, templates e `handleStatus` não são alterados.
 
-Mas o seletor está listando **50 templates Twilio**. Causa raiz: o filtro por provider (`useWhatsAppProvider` + prop `provider` no `WhatsAppTemplateSelector`) só foi ligado em **2 dos 5 pontos** que abrem o seletor.
+## 1. `supabase/functions/meta-whatsapp-webhook/index.ts`
 
-### Onde está ligado (correto)
-- `src/components/whatsapp/WhatsAppChat.tsx` — passa `provider={waProvider}`
-- `src/components/inbox/InboxComposer.tsx` — passa `provider={templateSelectorProvider}`
+Helpers locais novos (copiados do twilio-whatsapp-webhook):
 
-### Onde NÃO está ligado (bug)
-- `src/pages/messages/MessagesList.tsx:1552` — **esta é a tela do seu print** (`/messages`)
-- `src/components/contacts/ContactMessages.tsx:801`
-- `src/components/mobile/MobileMessagesList.tsx:850`
+- `normalizePhoneForSearch(e164)` — variações BR com/sem 9º dígito.
+- `resolveInboundSettings(supabase, endpoint)` — hierarquia `communication_endpoints.inbound_settings` → `organization_integrations.whatsapp_inbound_settings` → fallback `{auto_create_contact:true, default_lifecycle_stage:'lead', auto_create_opportunity:false}`.
+- `findOrCreateContact(...)` — busca via `normalizePhoneForSearch` + `.or('phone.eq...')`, respeita `auto_create_contact`, aplica `default_lifecycle_stage` e `source='whatsapp'`.
+- `autoCreateOpportunityIfEnabled(...)` — guard de oportunidade aberta, resolve `default_stage_id` validado por org → fallback primeira stage por `order_index`, herda `owner_user_id`.
+- `saveReferralFields(...)` — UPDATE em `contacts` com `ad_referral_*`, `ad_referral_captured_at`, `source='ctwa'`, `utm_source='meta_ads'`, `utm_medium='ctwa'`.
+- `resolveReplyToMessageId(contextWamid)` — lookup em `messages.whatsapp_message_sid`.
+- `notifyContactOwner(...)` — insert em `notifications` (mesmo shape do Twilio).
+- `insertActivity(...)` — insert em `activities` (mesmo shape do Twilio).
+- `triggerAiAgentOrFlagHuman(...)` — busca `ai_agents` (sdr, enabled), fetch async para `/functions/v1/ai-agent-respond`, ou marca `needs_human_attention=true`.
 
-Sem a prop, o seletor cai no default legado (`provider IS NULL OR 'twilio'`) e mostra os 134 templates Twilio em qualquer thread, inclusive Meta Cloud.
+Mudanças no `handleInbound` (mesma ordem do Twilio):
 
-## Correção
+1. Resolver `inboundSettings`.
+2. Parser de `msg.referral` (Cloud API):
+   - `source_url`, `source_id`, `source_type`, `headline`, `body`, `ctwa_clid`.
+   - `media_url = ref.image_url ?? ref.video_url ?? ref.thumbnail_url`.
+   - `hasReferral` se qualquer um existir.
+3. `findOrCreateContact(...)`. Se retornar `null`, sair (sem thread/mensagem).
+4. Se `created === true` → `autoCreateOpportunityIfEnabled(...)`.
+5. Se `hasReferral` → `saveReferralFields(...)`.
+6. Mídia: **inalterado** (download Graph → Storage).
+7. Thread: **inalterado**.
+8. `resolveReplyToMessageId(msg.context?.id)`.
+9. Insert da mensagem com `reply_to_message_id`, `sent_at`, `metadata.meta_cloud.raw` (preservando `referral`).
+10. `notifyContactOwner(...)`.
+11. `insertActivity(...)`.
+12. `triggerAiAgentOrFlagHuman(...)`.
 
-Ligar o `useWhatsAppProvider(threadId)` nos 3 call sites restantes e propagar a prop `provider` para o `WhatsAppTemplateSelector`. Nenhuma mudança em backend, sync, edge functions, schema ou no próprio seletor — só fiação de prop.
+`handleStatus`, verificação de assinatura, GET handshake e mídia: nenhuma mudança.
 
-### Arquivos a editar
+## 2. UI — Regras de Entrada no dialog Meta
 
-1. **`src/pages/messages/MessagesList.tsx`**
-   - Importar `useWhatsAppProvider`.
-   - No componente que renderiza o chat da thread selecionada, calcular `const waProvider = useWhatsAppProvider({ threadId: selectedThreadId })` (usar o mesmo id já disponível no contexto da thread aberta).
-   - Passar `provider={waProvider === 'meta_cloud_api' ? 'meta_cloud_api' : undefined}` no `<WhatsAppTemplateSelector>` da linha 1552.
+Arquivo: `src/components/integrations/meta-whatsapp-cloud/MetaWhatsAppCloudDialog.tsx`.
 
-2. **`src/components/contacts/ContactMessages.tsx`**
-   - Mesmo padrão, usando o `threadId` da conversa aberta no dialog. Aplicar no `<WhatsAppTemplateSelector>` da linha 801.
+- Importar `WhatsAppInboundSettings` (componente genérico já existente em `src/components/settings/WhatsAppInboundSettings.tsx`, lê/grava `organization_integrations.whatsapp_inbound_settings`).
+- Renderizar `<WhatsAppInboundSettings integrationId={orgIntegration.id} />` dentro do dialog quando `isConnected`, logo após o Card de Templates.
 
-3. **`src/components/mobile/MobileMessagesList.tsx`**
-   - Mesmo padrão na linha 850.
+`EndpointInboundSettings` (por número, em `AdditionalEndpointsSection`) já é provider-agnóstico e continuará funcionando para endpoints Meta sem alteração.
 
-### Resultado esperado após o fix
+## 3. Não-alterações
 
-Abrindo a conversa do Joao Teste em `/messages` (endpoint 7020 Meta Cloud):
-- Selector consulta `whatsapp_templates` com `provider='meta_cloud_api'` e `status='approved'`.
-- Como a WABA `2206490376764877` ainda tem 0 aprovados (`conscentimento` está `pending`), o painel mostra o empty state em vez dos 50 templates Twilio.
-- Quando a Meta aprovar o template, ele aparecerá automaticamente após clicar "Sincronizar templates".
+- `twilio-whatsapp-webhook/index.ts`: zero mudanças.
+- `meta-whatsapp-send`, templates Meta/Twilio, mídia, `handleStatus`: zero mudanças.
+- Schema: nenhuma migration. Colunas já existem (`ad_referral_*`, `inbound_settings`, `whatsapp_inbound_settings`, `needs_human_attention`, `reply_to_message_id`, `endpoint_id`).
 
-Threads Twilio (números 5098, 7067, 7027 etc.) continuam vendo os 134 templates Twilio normalmente — isolamento preservado.
+## 4. Validação pós-deploy
 
-### Fora de escopo
+### Campanha Meta (CTWA) no número 7020
+- Contato criado/reutilizado (testar com/sem 9º dígito).
+- `contacts.ad_referral_source_id`, `ad_referral_headline`, `ad_referral_ctwa_clid` preenchidos.
+- `contacts.source='ctwa'`, `utm_source='meta_ads'`, `utm_medium='ctwa'`.
+- 1 row em `opportunities` com stage e owner corretos.
+- `messages.metadata.meta_cloud.raw.referral` preservado.
+- `notifications` + `activities` criados.
+- `ai-agent-respond` invocado ou `needs_human_attention=true`.
 
-- Não mexer no `WhatsAppTemplateSelector`, nas edge functions, no schema ou no sync.
-- Não criar cruzamento Twilio ↔ Meta (decisão já firmada).
-- Não alterar empty state copy nesta etapa (posso adicionar um aviso "Esta conversa é Meta Cloud / Twilio" depois, se você quiser).
+### Conversa comum no número 7020
+- `auto_create_contact=false` → mensagem de número desconhecido é descartada.
+- `auto_create_opportunity=false` → contato criado, oportunidade não.
+
+### Smoke test Twilio
+- 1 mensagem inbound no número Twilio existente — comportamento inalterado, sem erros novos nos logs.
+
+## 5. Notas técnicas
+
+- Helpers ficam dentro do próprio `meta-whatsapp-webhook/index.ts` (cópia pragmática). Diff esperado: +300 linhas, 0 no Twilio.
+- Logs com prefixo `[meta-wa-webhook]` (distintos do `[wa-inbound]` Twilio).
+- Refator para `_shared/whatsapp-inbound/*` fica fora deste hotfix.
