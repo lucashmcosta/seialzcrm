@@ -15,7 +15,7 @@ import { AdminLayout } from '@/components/admin/AdminLayout';
 import { LogoEditorDialog } from '@/components/admin/LogoEditorDialog';
 import { KommoOutboundTab } from '@/components/admin/KommoOutboundTab';
 import { ConfirmDialog } from '@/components/ui/confirm-dialog';
-import { MetaWhatsAppPlatformConfig } from '@/components/admin/MetaWhatsAppPlatformConfig';
+
 
 export default function AdminIntegrationDetail() {
   const { id } = useParams();
@@ -121,9 +121,6 @@ export default function AdminIntegrationDetail() {
           <TabsTrigger value="config">Config Master</TabsTrigger>
           {integration?.slug === 'kommo' && (
             <TabsTrigger value="outbound">Outbound</TabsTrigger>
-          )}
-          {integration?.slug === 'meta-whatsapp-cloud' && (
-            <TabsTrigger value="platform">Configuração da Plataforma</TabsTrigger>
           )}
         </TabsList>
 
@@ -288,11 +285,6 @@ export default function AdminIntegrationDetail() {
           </TabsContent>
         )}
 
-        {integration?.slug === 'meta-whatsapp-cloud' && (
-          <TabsContent value="platform" className="mt-6">
-            <MetaWhatsAppPlatformConfig />
-          </TabsContent>
-        )}
       </Tabs>
       </div>
 

@@ -7,7 +7,7 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "npm:@supabase/supabase-js@2";
 import { corsHeaders } from "../_shared/cors.ts";
-import { encryptSecret } from "../_shared/crypto.ts";
+import { encryptSecret, decryptSecret } from "../_shared/crypto.ts";
 import { validateCredentials, MetaWaGraphError } from "../_shared/meta-whatsapp/graph.ts";
 
 interface ConnectBody {
@@ -17,8 +17,8 @@ interface ConnectBody {
   phoneNumberId: string;
   phoneE164: string; // +5511999999999
   systemUserToken: string;
-  appSecret?: string;     // NOVO — per-integration; opcional na transição (Fase 1)
-  verifyToken?: string;   // NOVO — per-integration; opcional na transição (Fase 1)
+  appSecret?: string;     // per-integration — obrigatório em conexão nova
+  verifyToken?: string;   // per-integration — obrigatório em conexão nova
   endpointPurpose?: "customer_service" | "other";
   displayName?: string;
   skipMetaValidation?: boolean;
@@ -94,14 +94,44 @@ serve(async (req) => {
     }
     if (!membership) return err(403, "not_a_member");
 
+    // Busca integration_id e estado anterior cedo para validar credenciais per-tenant.
+    const { data: integ } = await admin
+      .from("admin_integrations")
+      .select("id")
+      .eq("slug", "meta-whatsapp-cloud")
+      .maybeSingle();
+    if (!integ?.id) return err(500, "integration_not_seeded");
+
+    const { data: priorOi } = await admin
+      .from("organization_integrations")
+      .select("connected_account")
+      .eq("organization_id", body.organizationId)
+      .eq("integration_id", integ.id)
+      .maybeSingle();
+    const priorCa = (priorOi?.connected_account ?? {}) as any;
+    const hasStoredAppSecret = !!priorCa.app_secret_encrypted;
+    const hasStoredVerifyToken = !!priorCa.verify_token_encrypted;
+
+    // Fase 3: App Secret e Verify Token são obrigatórios em nova conexão.
+    // Em edição, podem vir vazios — preservamos o valor já cifrado.
+    if (!hasStoredAppSecret && !(body.appSecret && body.appSecret.trim())) {
+      return err(400, "missing_field", { field: "appSecret" });
+    }
+    if (!hasStoredVerifyToken && !(body.verifyToken && body.verifyToken.trim())) {
+      return err(400, "missing_field", { field: "verifyToken" });
+    }
+
     // Valida credenciais Meta (Graph API). Pode ser pulado via skipMetaValidation
     // para permitir edição manual quando a Meta recusa por motivos externos (token/permissão).
-    // Prefere o App Secret da própria integração (per-tenant) e cai no global apenas
-    // durante a janela de migração (Fase 1).
-    const perIntegrationAppSecret = body.appSecret?.trim() || undefined;
-    const appSecret = perIntegrationAppSecret
-      ?? Deno.env.get("META_WHATSAPP_APP_SECRET")?.trim()
-      ?? undefined;
+    // Fase 3: App Secret é estritamente per-integration. Sem fallback global.
+    let appSecret = body.appSecret?.trim() || undefined;
+    if (!appSecret && hasStoredAppSecret) {
+      try {
+        appSecret = (await decryptSecret(priorCa.app_secret_encrypted)).trim() || undefined;
+      } catch (e) {
+        console.error("[meta-whatsapp-connect] decrypt prior app_secret failed", (e as Error).message);
+      }
+    }
     let meta: {
       display_phone_number: string;
       verified_name?: string | null;
@@ -141,25 +171,7 @@ serve(async (req) => {
       }
     }
 
-    // Busca integration_id pelo slug
-    const { data: integ } = await admin
-      .from("admin_integrations")
-      .select("id")
-      .eq("slug", "meta-whatsapp-cloud")
-      .maybeSingle();
-    if (!integ?.id) return err(500, "integration_not_seeded");
-
     const encryptedToken = await encryptSecret(body.systemUserToken);
-
-    // Recupera connected_account anterior para preservar app_secret/verify_token
-    // já configurados quando o usuário edita sem reenviar esses campos.
-    const { data: priorOi } = await admin
-      .from("organization_integrations")
-      .select("connected_account")
-      .eq("organization_id", body.organizationId)
-      .eq("integration_id", integ.id)
-      .maybeSingle();
-    const priorCa = (priorOi?.connected_account ?? {}) as any;
 
     const appSecretEncrypted = body.appSecret && body.appSecret.trim()
       ? await encryptSecret(body.appSecret.trim())

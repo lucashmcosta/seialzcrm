@@ -3,11 +3,5 @@ project_id = "qvmtzfvkhkhkhdpclzua"
 [functions.meta-whatsapp-webhook]
 verify_jwt = false
 
-[functions.meta-whatsapp-platform-status]
-verify_jwt = false
-
 [functions.meta-whatsapp-send]
-verify_jwt = false
-
-[functions.meta-whatsapp-migrate-credentials]
 verify_jwt = false

@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
 import { useOrganization } from "@/hooks/useOrganization";
@@ -7,12 +7,10 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } f
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Badge } from "@/components/ui/badge";
 import { Card } from "@/components/ui/card";
-import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Separator } from "@/components/ui/separator";
 import { ConfirmDialog } from "@/components/ui/confirm-dialog";
-import { CheckCircle, Warning, Eye, EyeSlash, ArrowsClockwise, LinkSimple, Plug } from "@phosphor-icons/react";
+import { CheckCircle, Eye, EyeSlash, ArrowsClockwise, LinkSimple, Plug } from "@phosphor-icons/react";
 import { MetaWhatsAppValidationError, metaWhatsAppService } from "@/services/metaWhatsAppService";
 
 interface Props {
@@ -58,12 +56,6 @@ export function MetaWhatsAppCloudDialog({ open, onOpenChange, integration, orgIn
     });
   }, [open, orgIntegration]);
 
-  const platformQuery = useQuery({
-    queryKey: ["meta-wa-platform-status"],
-    queryFn: () => metaWhatsAppService.getPlatformStatus(),
-    enabled: open,
-    staleTime: 30_000,
-  });
 
   const connectMutation = useMutation({
     mutationFn: async (opts: { skipMetaValidation?: boolean } = {}) => {
@@ -132,8 +124,6 @@ export function MetaWhatsAppCloudDialog({ open, onOpenChange, integration, orgIn
     (isConnected || hasStoredAppSecret || !!form.appSecret) &&
     (isConnected || hasStoredVerifyToken || !!form.verifyToken);
 
-  const platform = platformQuery.data;
-
   return (
     <>
       <Dialog open={open} onOpenChange={onOpenChange}>
@@ -144,8 +134,9 @@ export function MetaWhatsAppCloudDialog({ open, onOpenChange, integration, orgIn
               {integration?.name ?? "Meta WhatsApp Cloud"}
             </DialogTitle>
             <DialogDescription>
-              Conecte seu número WhatsApp Business diretamente pela API oficial da Meta (Cloud API).
-              MVP: envio e recebimento de texto dentro da janela 24h.
+              Cada organização usa o próprio App Meta. Preencha todos os campos abaixo com os dados do App
+              da sua conta Meta (App ID, App Secret, Verify Token, WABA ID, Phone Number ID, número E.164
+              e System User Token permanente).
             </DialogDescription>
           </DialogHeader>
 
@@ -194,29 +185,6 @@ export function MetaWhatsAppCloudDialog({ open, onOpenChange, integration, orgIn
               </Card>
             )}
 
-            {/* ===== Status da plataforma ===== */}
-            <Card className="p-4 space-y-3">
-              <h4 className="font-medium">Status da plataforma</h4>
-              {platformQuery.isLoading ? (
-                <p className="text-sm text-muted-foreground">Carregando status…</p>
-              ) : (
-                <div className="space-y-2 text-sm">
-                  <StatusRow label="App Secret global" ok={!!platform?.appSecretConfigured} />
-                  <StatusRow label="Verify Token global" ok={!!platform?.verifyTokenConfigured} />
-                  <StatusRow label="Webhook" ok={!!platform?.webhookActive} okLabel="Ativo" pendingLabel="Pendente de configuração global" />
-                </div>
-              )}
-              {platform && !platform.webhookActive && (
-                <Alert>
-                  <Warning className="h-4 w-4" />
-                  <AlertDescription>
-                    Configuração global da Meta WhatsApp Cloud pendente. O envio pode ser configurado,
-                    mas o recebimento de mensagens e callbacks só serão ativados após a configuração
-                    global da plataforma (área administrativa Seialz).
-                  </AlertDescription>
-                </Alert>
-              )}
-            </Card>
 
             {/* ===== Form de conexão / edição ===== */}
             <Card className="p-4 space-y-4">
@@ -291,8 +259,10 @@ export function MetaWhatsAppCloudDialog({ open, onOpenChange, integration, orgIn
               <div className="space-y-1.5">
                 <Label htmlFor="meta-app-secret">
                   App Secret
-                  {hasStoredAppSecret && (
+                  {hasStoredAppSecret ? (
                     <span className="ml-2 text-xs text-green-600 font-normal">••• já configurado</span>
+                  ) : (
+                    <span className="ml-1 text-destructive">*</span>
                   )}
                 </Label>
                 <div className="relative">
@@ -321,8 +291,10 @@ export function MetaWhatsAppCloudDialog({ open, onOpenChange, integration, orgIn
               <div className="space-y-1.5">
                 <Label htmlFor="meta-verify-token">
                   Verify Token
-                  {hasStoredVerifyToken && (
+                  {hasStoredVerifyToken ? (
                     <span className="ml-2 text-xs text-green-600 font-normal">••• já configurado</span>
+                  ) : (
+                    <span className="ml-1 text-destructive">*</span>
                   )}
                 </Label>
                 <div className="relative">
@@ -401,15 +373,3 @@ function Field({ label, value, mono }: { label: string; value: any; mono?: boole
   );
 }
 
-function StatusRow({
-  label, ok, okLabel = "Configurado", pendingLabel = "Pendente",
-}: { label: string; ok: boolean; okLabel?: string; pendingLabel?: string }) {
-  return (
-    <div className="flex items-center justify-between">
-      <span>{label}</span>
-      {ok
-        ? <Badge className="bg-green-600 text-white">{okLabel}</Badge>
-        : <Badge variant="outline" className="border-amber-500 text-amber-600">{pendingLabel}</Badge>}
-    </div>
-  );
-}
