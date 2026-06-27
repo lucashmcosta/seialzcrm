@@ -198,7 +198,7 @@ export function InboxConversationTimeline({ threadId, organizationId, contactNam
 
                     <Media msg={m} orgId={organizationId} accessToken={accessToken} />
 
-                    {m.content && !isAudioOnly && (
+                    {m.content && !isAudioOnly && !isMediaPlaceholder && (
                       <WhatsAppFormattedText content={m.content} className={isOutbound ? 'text-primary-foreground' : ''} />
                     )}
 
