@@ -341,7 +341,7 @@ export function WhatsAppChat({ contactId, threadId: initialThreadId, onThreadCre
 
     const mediaType = message.media_type;
     const msgIsOutbound = message.direction === 'outbound';
-    const isAudioOnly = mediaType === 'audio' && !message.content;
+    const isAudioOnly = mediaType === 'audio';
 
     return (
       <div className="mb-2 space-y-2">
