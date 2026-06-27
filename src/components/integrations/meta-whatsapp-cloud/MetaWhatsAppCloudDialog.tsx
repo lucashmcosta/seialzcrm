@@ -53,6 +53,8 @@ export function MetaWhatsAppCloudDialog({ open, onOpenChange, integration, orgIn
       phoneNumberId: ca.phone_number_id ?? cv.phone_number_id ?? "",
       phoneE164: cv.phone_e164 ?? "",
       systemUserToken: "",
+      appSecret: "",
+      verifyToken: "",
     });
   }, [open, orgIntegration]);
 
