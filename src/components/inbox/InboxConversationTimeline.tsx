@@ -119,7 +119,8 @@ export function InboxConversationTimeline({ threadId, organizationId, contactNam
         ) : (
           messages.map((m, idx) => {
             const isOutbound = m.direction === 'outbound';
-            const isAudioOnly = m.media_type === 'audio' && !m.content;
+            const isAudioOnly = m.media_type === 'audio';
+            const isMediaPlaceholder = !!m.content && /^\[(Áudio|Imagem|Vídeo|Documento|Sticker)\]$/.test(m.content);
             const isInternal = !!m.is_internal_note;
             const timeStr = new Date(m.sent_at).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
 
