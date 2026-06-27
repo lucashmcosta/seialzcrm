@@ -187,29 +187,6 @@ export function MetaWhatsAppCloudDialog({ open, onOpenChange, integration, orgIn
               </Card>
             )}
 
-            {/* ===== Status da plataforma ===== */}
-            <Card className="p-4 space-y-3">
-              <h4 className="font-medium">Status da plataforma</h4>
-              {platformQuery.isLoading ? (
-                <p className="text-sm text-muted-foreground">Carregando status…</p>
-              ) : (
-                <div className="space-y-2 text-sm">
-                  <StatusRow label="App Secret global" ok={!!platform?.appSecretConfigured} />
-                  <StatusRow label="Verify Token global" ok={!!platform?.verifyTokenConfigured} />
-                  <StatusRow label="Webhook" ok={!!platform?.webhookActive} okLabel="Ativo" pendingLabel="Pendente de configuração global" />
-                </div>
-              )}
-              {platform && !platform.webhookActive && (
-                <Alert>
-                  <Warning className="h-4 w-4" />
-                  <AlertDescription>
-                    Configuração global da Meta WhatsApp Cloud pendente. O envio pode ser configurado,
-                    mas o recebimento de mensagens e callbacks só serão ativados após a configuração
-                    global da plataforma (área administrativa Seialz).
-                  </AlertDescription>
-                </Alert>
-              )}
-            </Card>
 
             {/* ===== Form de conexão / edição ===== */}
             <Card className="p-4 space-y-4">
