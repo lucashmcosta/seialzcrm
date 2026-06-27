@@ -112,7 +112,6 @@ serve(async (req) => {
 
     return new Response(JSON.stringify({
       connected: true,
-      platform,
       meta: metaResult,
       validation_error: validationError,
     }), {
