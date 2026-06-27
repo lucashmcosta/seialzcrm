@@ -98,18 +98,25 @@ serve(async (req) => {
     const ca = oi.connected_account as any;
     if (!ca?.access_token_encrypted) return jsonResponse(400, { error: "missing_access_token" });
 
-    const accessToken = await decryptSecret(ca.access_token_encrypted);
-    const appSecret = Deno.env.get("META_WHATSAPP_APP_SECRET") ?? undefined;
+    const decryptedAccessToken = await decryptSecret(ca.access_token_encrypted);
+    const rawAppSecret = Deno.env.get("META_WHATSAPP_APP_SECRET") ?? undefined;
+    const accessToken = decryptedAccessToken.trim();
+    const appSecret = rawAppSecret?.trim();
     console.log("[meta-send] credential diagnostic", {
       organization_id: organizationId,
       integration_id: endpoint.organization_integration_id,
       endpoint_id: endpoint.id,
       phone_number_id: endpoint.sender_sid,
       app_id_stored: (oi as any).config_values?.app_id ?? null,
-      token_present: Boolean(accessToken),
-      token_len: accessToken?.length ?? 0,
-      app_secret_present: Boolean(appSecret),
-      app_secret_len: appSecret?.length ?? 0,
+      token_present: Boolean(decryptedAccessToken),
+      token_len: decryptedAccessToken?.length ?? 0,
+      token_trimmed_len: accessToken?.length ?? 0,
+      token_had_outer_ws: decryptedAccessToken !== accessToken,
+      app_secret_present: Boolean(rawAppSecret),
+      app_secret_len: rawAppSecret?.length ?? 0,
+      app_secret_trimmed_len: appSecret?.length ?? 0,
+      app_secret_had_outer_ws: rawAppSecret !== appSecret,
+      app_secret_hex32: Boolean(appSecret && /^[a-f0-9]{32}$/i.test(appSecret)),
     });
 
     // Contato + telefone
