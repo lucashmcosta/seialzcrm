@@ -21,13 +21,24 @@ export function MetaWhatsAppPlatformConfig() {
   return (
     <Card>
       <CardHeader>
-        <CardTitle>Configuração global da plataforma</CardTitle>
+        <CardTitle>Configuração global da plataforma (deprecada)</CardTitle>
         <CardDescription>
-          Os secrets globais pertencem à Seialz, não a uma organização específica. São consumidos pelo
-          webhook (validação de assinatura e verify token).
+          A partir da Fase 1 de multi-tenant Meta, App Secret e Verify Token passam a ser
+          configurados <strong>dentro do card da integração de cada organização</strong>.
+          Este painel só permanece ativo enquanto houver integrações sem credenciais próprias
+          (fallback de compatibilidade). Quando todas as orgs estiverem migradas, os secrets
+          globais poderão ser removidos.
         </CardDescription>
       </CardHeader>
       <CardContent className="space-y-4">
+        <Alert>
+          <Info className="h-4 w-4" />
+          <AlertDescription className="text-xs">
+            Novos tenants devem configurar App Secret e Verify Token diretamente no diálogo
+            da integração Meta WhatsApp Cloud da sua organização — não dependem mais destes
+            secrets globais.
+          </AlertDescription>
+        </Alert>
         <Row
           label="META_WHATSAPP_APP_SECRET"
           ok={!!data?.appSecretConfigured}

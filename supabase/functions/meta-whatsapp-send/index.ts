@@ -10,6 +10,7 @@ import {
   metaWaUploadMedia,
   MetaWaGraphError,
 } from "../_shared/meta-whatsapp/graph.ts";
+import { resolveAppSecretForIntegration } from "../_shared/meta-whatsapp/credentials.ts";
 
 function jsonResponse(status: number, body: Record<string, unknown>) {
   return new Response(JSON.stringify(body), {
@@ -184,9 +185,10 @@ serve(async (req) => {
     if (!ca?.access_token_encrypted) return jsonResponse(400, { error: "missing_access_token" });
 
     const decryptedAccessToken = await decryptSecret(ca.access_token_encrypted);
-    const rawAppSecret = Deno.env.get("META_WHATSAPP_APP_SECRET") ?? undefined;
+    // App Secret per-integration (fallback global durante Fase 1).
+    const resolvedAppSecret = await resolveAppSecretForIntegration(ca);
     const accessToken = decryptedAccessToken.trim();
-    const appSecret = rawAppSecret?.trim();
+    const appSecret = resolvedAppSecret;
 
     // Contato + telefone
     const { data: contact } = await supabase

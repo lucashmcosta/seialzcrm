@@ -16,6 +16,8 @@ export interface ConnectInput {
   phoneNumberId: string;
   phoneE164: string;
   systemUserToken: string;
+  appSecret?: string;
+  verifyToken?: string;
   skipMetaValidation?: boolean;
 }
 

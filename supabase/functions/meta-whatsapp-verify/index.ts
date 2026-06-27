@@ -8,6 +8,7 @@ import { corsHeaders } from "../_shared/cors.ts";
 import { decryptSecret } from "../_shared/crypto.ts";
 import { validateCredentials, MetaWaGraphError } from "../_shared/meta-whatsapp/graph.ts";
 import { getPlatformStatus } from "../_shared/meta-whatsapp/platform.ts";
+import { resolveAppSecretForIntegration } from "../_shared/meta-whatsapp/credentials.ts";
 
 function err(status: number, message: string, extra: Record<string, unknown> = {}) {
   return new Response(JSON.stringify({ error: message, ...extra }), {
@@ -72,11 +73,12 @@ serve(async (req) => {
         ? await decryptSecret(ca.access_token_encrypted)
         : null;
       if (accessToken && ca?.phone_number_id && ca?.waba_id) {
+        const appSecret = await resolveAppSecretForIntegration(ca);
         metaResult = await validateCredentials({
           phoneNumberId: ca.phone_number_id,
           wabaId: ca.waba_id,
           accessToken,
-          appSecret: Deno.env.get("META_WHATSAPP_APP_SECRET") ?? undefined,
+          appSecret,
         });
       }
     } catch (e) {

@@ -1,14 +1,23 @@
 // Webhook Meta WhatsApp Cloud (verify_jwt=false).
-// build: 2026-06-27 (media inbound support)
+// build: 2026-06-27 (per-integration App Secret / Verify Token + global fallback)
 // Estados:
-//  - Pendente (secrets globais ausentes): GET/POST respondem 503 sem efeito colateral.
-//  - Ativo: GET valida verify_token; POST valida X-Hub-Signature-256; processa messages[]/statuses[].
+//  - GET handshake: aceita match contra qualquer integração habilitada
+//    (verify_token_encrypted) OU contra o secret global META_WHATSAPP_VERIFY_TOKEN.
+//  - POST: identifica a integração pelo phone_number_id do payload,
+//    valida X-Hub-Signature-256 com o App Secret da própria integração;
+//    se a integração não tiver app_secret_encrypted, cai no global
+//    (compat Central durante migração — Fase 1).
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "npm:@supabase/supabase-js@2";
 import { corsHeaders } from "../_shared/cors.ts";
-import { getPlatformStatus } from "../_shared/meta-whatsapp/platform.ts";
 import { decryptSecret } from "../_shared/crypto.ts";
 import { metaWaGetMediaUrl, metaWaDownloadMedia, MetaWaGraphError } from "../_shared/meta-whatsapp/graph.ts";
+import {
+  resolveAppSecretForIntegration,
+  resolveVerifyTokenForIntegration,
+  globalVerifyToken,
+  globalAppSecret,
+} from "../_shared/meta-whatsapp/credentials.ts";
 
 type MediaKind = "image" | "audio" | "video" | "document" | "sticker";
 const MEDIA_KINDS: MediaKind[] = ["image", "audio", "video", "document", "sticker"];
@@ -40,7 +49,6 @@ function placeholderForInbound(kind: MediaKind): string {
   }
 }
 
-
 async function hmacSha256Hex(key: string, message: Uint8Array): Promise<string> {
   const cryptoKey = await crypto.subtle.importKey(
     "raw", new TextEncoder().encode(key), { name: "HMAC", hash: "SHA-256" }, false, ["sign"],
@@ -49,23 +57,62 @@ async function hmacSha256Hex(key: string, message: Uint8Array): Promise<string> 
   return Array.from(new Uint8Array(sig)).map((b) => b.toString(16).padStart(2, "0")).join("");
 }
 
+function timingSafeEqual(a: string, b: string): boolean {
+  if (a.length !== b.length) return false;
+  let diff = 0;
+  for (let i = 0; i < a.length; i++) diff |= a.charCodeAt(i) ^ b.charCodeAt(i);
+  return diff === 0;
+}
+
 serve(async (req) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: corsHeaders });
-  const platform = getPlatformStatus();
 
+  const supabase = createClient(
+    Deno.env.get("SUPABASE_URL")!,
+    Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!,
+  );
   const url = new URL(req.url);
 
   // ===== GET = verification handshake =====
   if (req.method === "GET") {
-    if (!platform.webhookActive) {
-      return new Response(JSON.stringify({ status: "pending_global_config" }), {
-        status: 503, headers: { ...corsHeaders, "Content-Type": "application/json" },
-      });
-    }
     const mode = url.searchParams.get("hub.mode");
     const token = url.searchParams.get("hub.verify_token");
     const challenge = url.searchParams.get("hub.challenge");
-    if (mode === "subscribe" && token === Deno.env.get("META_WHATSAPP_VERIFY_TOKEN")) {
+
+    if (mode !== "subscribe" || !token) {
+      return new Response("forbidden", { status: 403, headers: corsHeaders });
+    }
+
+    // 1) Tenta match per-integration
+    const { data: rows } = await supabase
+      .from("organization_integrations")
+      .select("id, connected_account, admin_integrations!inner(slug)")
+      .eq("is_enabled", true)
+      .eq("admin_integrations.slug", "meta-whatsapp-cloud");
+
+    let matched = false;
+    let matchedIntegrationId: string | null = null;
+    for (const row of rows ?? []) {
+      const expected = await resolveVerifyTokenForIntegration((row as any).connected_account);
+      if (expected && timingSafeEqual(token, expected)) {
+        matched = true;
+        matchedIntegrationId = (row as any).id;
+        break;
+      }
+    }
+
+    // 2) Fallback global (Central durante migração)
+    if (!matched) {
+      const g = globalVerifyToken();
+      if (g && timingSafeEqual(token, g)) matched = true;
+    }
+
+    console.log("[meta-wa-webhook] GET handshake", {
+      matched,
+      via: matched ? (matchedIntegrationId ? "per_integration" : "global") : "none",
+    });
+
+    if (matched) {
       return new Response(challenge ?? "", { status: 200, headers: corsHeaders });
     }
     return new Response("forbidden", { status: 403, headers: corsHeaders });
@@ -76,57 +123,73 @@ serve(async (req) => {
     return new Response("method_not_allowed", { status: 405, headers: corsHeaders });
   }
 
-  if (!platform.webhookActive) {
-    return new Response(JSON.stringify({ status: "pending_global_config" }), {
-      status: 503, headers: { ...corsHeaders, "Content-Type": "application/json" },
-    });
-  }
-
   const rawBody = new Uint8Array(await req.arrayBuffer());
   const signature = req.headers.get("x-hub-signature-256") ?? "";
-  const appSecret = Deno.env.get("META_WHATSAPP_APP_SECRET")!;
-  const expected = "sha256=" + (await hmacSha256Hex(appSecret, rawBody));
-  let signatureMatch = false;
-  if (signature.length === expected.length) {
-    let diff = 0;
-    for (let i = 0; i < signature.length; i++) diff |= signature.charCodeAt(i) ^ expected.charCodeAt(i);
-    signatureMatch = diff === 0;
-  }
 
-  // DIAG: non-sensitive log — confirms Meta is calling us at all.
-  let phoneNumberIds: string[] = [];
+  // Peek do payload sem confiar ainda — só para descobrir phone_number_id.
+  let peek: any = null;
+  let peekedPhoneIds: string[] = [];
   try {
-    const peek = JSON.parse(new TextDecoder().decode(rawBody));
+    peek = JSON.parse(new TextDecoder().decode(rawBody));
     for (const entry of peek?.entry ?? []) {
       for (const change of entry?.changes ?? []) {
         const pid = change?.value?.metadata?.phone_number_id;
-        if (pid) phoneNumberIds.push(String(pid));
+        if (pid) peekedPhoneIds.push(String(pid));
       }
     }
-  } catch { /* ignore */ }
+  } catch {
+    return new Response("invalid_json", { status: 400, headers: corsHeaders });
+  }
+
+  // Resolve App Secret a partir do primeiro phone_number_id encontrado.
+  // Em um único POST a Meta agrupa apenas eventos do mesmo App, então o
+  // mesmo App Secret valida todos os entries.
+  let appSecret: string | undefined;
+  let matchedIntegrationId: string | null = null;
+  if (peekedPhoneIds.length > 0) {
+    const { data: ep } = await supabase
+      .from("communication_endpoints")
+      .select("organization_integration_id")
+      .eq("provider", "meta_cloud_api")
+      .eq("sender_sid", peekedPhoneIds[0])
+      .maybeSingle();
+    if (ep?.organization_integration_id) {
+      const { data: oi } = await supabase
+        .from("organization_integrations")
+        .select("connected_account")
+        .eq("id", ep.organization_integration_id)
+        .maybeSingle();
+      appSecret = await resolveAppSecretForIntegration(
+        (oi?.connected_account as any) ?? null,
+      );
+      matchedIntegrationId = ep.organization_integration_id;
+    }
+  }
+  // Fallback global (Central durante migração)
+  if (!appSecret) appSecret = globalAppSecret();
+
+  if (!appSecret) {
+    console.warn("[meta-wa-webhook] no_app_secret_available", { peekedPhoneIds });
+    return new Response("invalid_signature", { status: 401, headers: corsHeaders });
+  }
+
+  const expected = "sha256=" + (await hmacSha256Hex(appSecret, rawBody));
+  const signatureMatch = timingSafeEqual(signature, expected);
+
   console.log("[meta-wa-webhook] POST", JSON.stringify({
-    method: req.method,
     has_x_hub_signature_256: !!signature,
     content_length: rawBody.length,
     signature_match: signatureMatch,
-    phone_number_ids: phoneNumberIds,
+    phone_number_ids: peekedPhoneIds,
+    matched_integration_id: matchedIntegrationId,
+    via: matchedIntegrationId ? "per_integration" : "global_fallback",
   }));
 
   if (!signatureMatch) {
     return new Response("invalid_signature", { status: 401, headers: corsHeaders });
   }
 
-  let payload: any;
-  try {
-    payload = JSON.parse(new TextDecoder().decode(rawBody));
-  } catch {
-    return new Response("invalid_json", { status: 400, headers: corsHeaders });
-  }
-
-  const supabase = createClient(
-    Deno.env.get("SUPABASE_URL")!,
-    Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!,
-  );
+  const payload = peek;
 
   try {
     for (const entry of payload?.entry ?? []) {
@@ -245,16 +308,17 @@ async function handleInbound(
 
     if (mediaId) {
       try {
-        // Carrega access token da organização (lazy)
+        // Carrega access token e app_secret da integração (per-tenant)
         const { data: oi } = await supabase
           .from("organization_integrations")
           .select("connected_account")
           .eq("id", endpoint.organization_integration_id)
           .maybeSingle();
-        const enc = (oi?.connected_account as any)?.access_token_encrypted;
+        const ca = (oi?.connected_account as any) ?? null;
+        const enc = ca?.access_token_encrypted;
         if (!enc) throw new Error("missing_access_token");
         const accessToken = (await decryptSecret(enc)).trim();
-        const appSecret = Deno.env.get("META_WHATSAPP_APP_SECRET")?.trim() || undefined;
+        const appSecret = await resolveAppSecretForIntegration(ca);
 
         // 1) Resolve URL temporária
         const meta = await metaWaGetMediaUrl(mediaId, { accessToken, appSecret });
