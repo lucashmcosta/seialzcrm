@@ -263,12 +263,23 @@ serve(async (req) => {
       resolvedSenderName = u?.full_name || null;
     }
 
+    const kind = (hasMedia ? mediaType : null) as MediaKind | null;
+    const initialContent = hasMedia
+      ? (trimmedMessage.trim() || placeholderForMedia(kind!))
+      : trimmedMessage;
+
+    const baseMeta: Record<string, any> = { phone_number_id: endpoint.sender_sid, to };
+    if (hasMedia) {
+      baseMeta.media_source_url = mediaUrlsArr[0];
+      baseMeta.media_kind = kind;
+    }
+
     const { data: insertedMsg, error: insErr } = await supabase
       .from("messages")
       .insert({
         organization_id: organizationId,
         thread_id: currentThreadId,
-        content: message,
+        content: initialContent,
         direction: "outbound",
         sender_user_id: userId || null,
         whatsapp_status: "sending",
@@ -278,7 +289,9 @@ serve(async (req) => {
         sender_name: resolvedSenderName,
         sender_agent_id: isAgentMessage && agentId ? agentId : null,
         endpoint_id: endpoint.id,
-        metadata: { meta_cloud: { phone_number_id: endpoint.sender_sid, to } },
+        media_urls: hasMedia ? mediaUrlsArr : null,
+        media_type: hasMedia ? kind : null,
+        metadata: { meta_cloud: baseMeta },
       })
       .select("id")
       .single();
@@ -297,28 +310,94 @@ serve(async (req) => {
       }
     }
 
-    // POST /v23.0/{phone_number_id}/messages
     try {
-      const result = await metaWaPostJson(
-        `/${endpoint.sender_sid}/messages`,
-        {
+      let outboundPayload: Record<string, unknown>;
+      let mediaIdForMeta: string | null = null;
+      let mimeUsed: string | null = null;
+      let filenameUsed: string | null = null;
+
+      if (hasMedia) {
+        // 1) Baixa o arquivo da URL pública do Storage
+        const sourceUrl = mediaUrlsArr[0];
+        const fileRes = await fetch(sourceUrl);
+        if (!fileRes.ok) {
+          throw new Error(`source_fetch_failed_${fileRes.status}`);
+        }
+        const fileBytes = new Uint8Array(await fileRes.arrayBuffer());
+        const headerCt = fileRes.headers.get("content-type");
+        mimeUsed = (typeof payloadMime === "string" && payloadMime.includes("/"))
+          ? payloadMime
+          : inferMimeType(kind!, sourceUrl, headerCt);
+        filenameUsed = (typeof payloadFilename === "string" && payloadFilename)
+          ? payloadFilename
+          : filenameFromUrl(sourceUrl, `file-${Date.now()}`);
+
+        // 2) Upload para Graph
+        const uploaded = await metaWaUploadMedia(
+          endpoint.sender_sid,
+          fileBytes,
+          mimeUsed,
+          filenameUsed,
+          { accessToken, appSecret },
+        );
+        mediaIdForMeta = uploaded.id;
+
+        // 3) Monta payload por tipo
+        const captionText = trimmedMessage.trim() || undefined;
+        const mediaObj: Record<string, unknown> = { id: mediaIdForMeta };
+        if (kind === "image" || kind === "video") {
+          if (captionText) mediaObj.caption = captionText;
+        } else if (kind === "document") {
+          if (captionText) mediaObj.caption = captionText;
+          mediaObj.filename = filenameUsed;
+        }
+        // audio: sem caption nem filename
+        outboundPayload = {
+          messaging_product: "whatsapp",
+          recipient_type: "individual",
+          to,
+          type: kind,
+          [kind!]: mediaObj,
+          ...(context ? { context } : {}),
+        };
+      } else {
+        outboundPayload = {
           messaging_product: "whatsapp",
           recipient_type: "individual",
           to,
           type: "text",
-          text: { body: message, preview_url: false },
+          text: { body: trimmedMessage, preview_url: false },
           ...(context ? { context } : {}),
-        },
+        };
+      }
+
+      const result = await metaWaPostJson(
+        `/${endpoint.sender_sid}/messages`,
+        outboundPayload,
         { accessToken, appSecret },
       );
 
       const wamid = result?.messages?.[0]?.id ?? null;
+      const finalMeta: Record<string, any> = {
+        phone_number_id: endpoint.sender_sid,
+        to,
+        wamid,
+        response: result,
+      };
+      if (hasMedia) {
+        finalMeta.media_id = mediaIdForMeta;
+        finalMeta.mime_type = mimeUsed;
+        finalMeta.filename = filenameUsed;
+        finalMeta.media_kind = kind;
+        finalMeta.media_source_url = mediaUrlsArr[0];
+      }
+
       await supabase
         .from("messages")
         .update({
           whatsapp_status: "sent",
           whatsapp_message_sid: wamid,
-          metadata: { meta_cloud: { phone_number_id: endpoint.sender_sid, to, wamid, response: result } },
+          metadata: { meta_cloud: finalMeta },
         })
         .eq("id", insertedMsg.id);
 
@@ -339,10 +418,12 @@ serve(async (req) => {
           whatsapp_status: "failed",
           error_code: errDetails.code ? String(errDetails.code) : null,
           error_message: errDetails.message,
+          metadata: { meta_cloud: { ...baseMeta, error: errDetails } },
         })
         .eq("id", insertedMsg.id);
       return jsonResponse(500, { error: "meta_send_failed", details: errDetails });
     }
+
   } catch (e) {
     console.error("[meta-whatsapp-send] fatal", e);
     return jsonResponse(500, { error: "internal_error", message: (e as Error).message });
