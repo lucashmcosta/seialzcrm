@@ -138,17 +138,18 @@ async function handleInbound(
   const wamid = msg.id as string;
 
   // Resolve / cria contato
-  const { data: existingContact } = await supabase
+  const { data: existingContact, error: contactSelErr } = await supabase
     .from("contacts")
     .select("id")
     .eq("organization_id", endpoint.organization_id)
     .eq("phone", fromE164)
     .maybeSingle();
+  if (contactSelErr) console.error("[meta-wa-webhook] contact select error", contactSelErr);
 
   let contactId: string | null = existingContact?.id ?? null;
   if (!contactId) {
     const profileName = value?.contacts?.[0]?.profile?.name ?? null;
-    const { data: created } = await supabase
+    const { data: created, error: contactInsErr } = await supabase
       .from("contacts")
       .insert({
         organization_id: endpoint.organization_id,
@@ -158,12 +159,13 @@ async function handleInbound(
       })
       .select("id")
       .single();
+    if (contactInsErr) console.error("[meta-wa-webhook] contact insert error", contactInsErr);
     contactId = created?.id ?? null;
   }
-  if (!contactId) return;
+  if (!contactId) { console.error("[meta-wa-webhook] no contactId"); return; }
 
   // Resolve / cria thread
-  const { data: thread } = await supabase
+  const { data: thread, error: threadSelErr } = await supabase
     .from("message_threads")
     .select("id")
     .eq("organization_id", endpoint.organization_id)
@@ -171,10 +173,11 @@ async function handleInbound(
     .eq("channel", "whatsapp")
     .eq("primary_endpoint_id", endpoint.id)
     .maybeSingle();
+  if (threadSelErr) console.error("[meta-wa-webhook] thread select error", threadSelErr);
 
   let threadId = thread?.id;
   if (!threadId) {
-    const { data: created } = await supabase
+    const { data: created, error: threadInsErr } = await supabase
       .from("message_threads")
       .insert({
         organization_id: endpoint.organization_id,
@@ -185,9 +188,10 @@ async function handleInbound(
       })
       .select("id")
       .single();
+    if (threadInsErr) console.error("[meta-wa-webhook] thread insert error", threadInsErr);
     threadId = created?.id;
   }
-  if (!threadId) return;
+  if (!threadId) { console.error("[meta-wa-webhook] no threadId"); return; }
 
   const content = msg?.text?.body
     ?? msg?.button?.text
@@ -195,7 +199,7 @@ async function handleInbound(
     ?? msg?.interactive?.list_reply?.title
     ?? "[mensagem não-textual]";
 
-  await supabase.from("messages").insert({
+  const { error: msgInsErr } = await supabase.from("messages").insert({
     organization_id: endpoint.organization_id,
     thread_id: threadId,
     content,
@@ -206,11 +210,13 @@ async function handleInbound(
     sender_type: "contact",
     metadata: { meta_cloud: { raw: msg } },
   });
+  if (msgInsErr) console.error("[meta-wa-webhook] message insert error", msgInsErr);
 
   await supabase
     .from("message_threads")
     .update({ whatsapp_last_inbound_at: new Date().toISOString() })
     .eq("id", threadId);
+
 }
 
 async function handleStatus(supabase: any, endpoint: any, st: any): Promise<void> {
