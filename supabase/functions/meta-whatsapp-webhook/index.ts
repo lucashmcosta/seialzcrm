@@ -1,5 +1,5 @@
 // Webhook Meta WhatsApp Cloud (verify_jwt=false).
-// build: 2026-06-26T22:00 (bump para recarregar env após criação dos secrets globais)
+// build: 2026-06-27 (media inbound support)
 // Estados:
 //  - Pendente (secrets globais ausentes): GET/POST respondem 503 sem efeito colateral.
 //  - Ativo: GET valida verify_token; POST valida X-Hub-Signature-256; processa messages[]/statuses[].
@@ -7,6 +7,39 @@ import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "npm:@supabase/supabase-js@2";
 import { corsHeaders } from "../_shared/cors.ts";
 import { getPlatformStatus } from "../_shared/meta-whatsapp/platform.ts";
+import { decryptSecret } from "../_shared/crypto.ts";
+import { metaWaGetMediaUrl, metaWaDownloadMedia, MetaWaGraphError } from "../_shared/meta-whatsapp/graph.ts";
+
+type MediaKind = "image" | "audio" | "video" | "document" | "sticker";
+const MEDIA_KINDS: MediaKind[] = ["image", "audio", "video", "document", "sticker"];
+
+function extFromMime(mime: string): string {
+  const m = (mime || "").toLowerCase().split(";")[0].trim();
+  const map: Record<string, string> = {
+    "audio/ogg": "ogg", "audio/mpeg": "mp3", "audio/mp4": "m4a", "audio/aac": "aac",
+    "audio/wav": "wav", "audio/amr": "amr", "audio/webm": "webm",
+    "image/jpeg": "jpg", "image/png": "png", "image/webp": "webp",
+    "video/mp4": "mp4", "video/3gpp": "3gp",
+    "application/pdf": "pdf",
+    "application/msword": "doc",
+    "application/vnd.openxmlformats-officedocument.wordprocessingml.document": "docx",
+    "application/vnd.ms-excel": "xls",
+    "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet": "xlsx",
+    "text/plain": "txt", "text/csv": "csv",
+  };
+  return map[m] || "bin";
+}
+
+function placeholderForInbound(kind: MediaKind): string {
+  switch (kind) {
+    case "audio": return "[Áudio]";
+    case "image": return "[Imagem]";
+    case "video": return "[Vídeo]";
+    case "document": return "[Documento]";
+    case "sticker": return "[Sticker]";
+  }
+}
+
 
 async function hmacSha256Hex(key: string, message: Uint8Array): Promise<string> {
   const cryptoKey = await crypto.subtle.importKey(
