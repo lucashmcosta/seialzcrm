@@ -490,6 +490,15 @@ serve(async (req) => {
         finalMeta.media_kind = kind;
         finalMeta.media_source_url = mediaUrlsArr[0];
       }
+      if (isTemplateSend) {
+        finalMeta.template = {
+          name: templateName,
+          language: templateLanguage,
+          components: outboundTemplateComponents,
+          rendered_preview: renderedPreview,
+          template_id: templateRow?.id ?? null,
+        };
+      }
 
       await supabase
         .from("messages")
