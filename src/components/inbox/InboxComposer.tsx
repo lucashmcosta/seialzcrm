@@ -219,6 +219,7 @@ export function InboxComposer({ thread, replyTo, onClearReply, onSent, onThreadM
     const { data, error } = await dispatchWhatsAppSend({
         organizationId: thread!.organization_id || organization?.id,
         threadId: thread!.id,
+        contactId: thread!.contact_id ?? undefined,
         senderContext: 'inbox',
         userId: myId,
         senderName,

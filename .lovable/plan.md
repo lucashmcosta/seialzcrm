@@ -1,84 +1,57 @@
+## Causa raiz
 
-## Correção segura do roteamento outbound (Meta Cloud × Twilio)
+A mensagem de áudio enviada pela Tamires para o `arlison` (+559299626104) **nunca foi inserida** na tabela `messages` e **nunca chegou** a `meta-whatsapp-send` (zero logs, zero linha outbound no thread).
 
-### Auditoria — resultado
+O motivo é uma diferença entre `/messages` e `/inbox`:
 
-**Pontos que enviam WhatsApp outbound:**
+- `src/pages/messages/MessagesList.tsx` chama `dispatchWhatsAppSend({ ..., contactId: selectedThread.contact_id })`.
+- `src/components/inbox/InboxComposer.tsx` (`invokeSend`, linha 218–240) **não envia `contactId`** — só manda `organizationId`, `threadId`, `userId`, `senderName`.
 
-| Caminho | Arquivo | Usa dispatcher? |
-|---|---|---|
-| `/messages` desktop | `src/pages/messages/MessagesList.tsx` (3 sites) | ✅ |
-| `/messages` mobile | `src/components/mobile/MobileMessagesList.tsx` (3 sites) | ✅ |
-| `/inbox` | `src/components/inbox/InboxComposer.tsx` | ✅ |
-| Contact detail | `src/components/contacts/ContactMessages.tsx` (2 sites) | ✅ |
-| Chat legado | `src/components/whatsapp/WhatsAppChat.tsx` (2 sites) | ✅ |
-| AI Agent | `supabase/functions/ai-agent-respond/index.ts` (2 sites) | ✅ (servidor) |
-| Scheduled cron | `supabase/functions/scheduled-messages-cron/index.ts` | ✅ (servidor) |
-| Meta Lead Ads | `supabase/functions/meta-lead-ads-process-lead/index.ts` | ✅ (servidor) |
-| Backfill CT | `supabase/functions/ct-backfill-once/index.ts` | ✅ (servidor) |
-| ApiDocs | `src/pages/docs/ApiDocs.tsx` | doc estática, não envia |
-
-**Sem worker Railway / sem trigger Postgres outbound.** Verificado: `pg_triggers` em `public.messages` = 0. Nenhum dispatcher externo. Hoje, 100% dos envios reais passam por `dispatchWhatsAppSend` → edge function.
-
-**Por que então a mensagem da Tamires saiu por Twilio?** Duas brechas no caminho atual:
-
-1. `dispatchWhatsAppSend` (cliente e servidor) tem **fallback silencioso**: se a query em `communication_endpoints` retornar `null` (RLS, linha removida, rede), assume `twilio`. Linhas 38-50 / 53-68 em ambos os arquivos.
-2. `twilio-whatsapp-send` no path `inbox` (linhas 282-403) resolve `endpoint` mas **nunca checa `endpoint.provider`**. Se a thread aponta para endpoint Meta, ele constrói `whatsapp:+<external_address>` (que pertence à Meta), submete ao Twilio e recebe `63007`. Foi exatamente isso na mensagem `eb83c428…`: `endpoint_id=407ff93d` (Meta) registrado, `metadata.twilio.From=whatsapp:+551150287020`.
-
-### Mudanças
-
-#### 1. `supabase/functions/twilio-whatsapp-send/index.ts` — guard hard
-
-Em **todos** os blocos onde o endpoint é resolvido (inbox path + default `messages` path), depois de ler a linha de `communication_endpoints`:
+A função `meta-whatsapp-send` exige `contactId` logo no início:
 
 ```ts
-if (endpoint.provider === 'meta_cloud_api') {
-  console.error('[twilio-send] BLOCKED meta_cloud_api endpoint reached twilio-send', {
-    threadId, endpointId: endpoint.id, external_address: endpoint.external_address,
-  });
-  return jsonError(400, 'wrong_provider_for_endpoint', {
-    expected: 'twilio', actual: 'meta_cloud_api', endpoint_id: endpoint.id,
-  });
-}
+if (!contactId) return jsonResponse(400, { error: "missing_contact" });
 ```
 
-Idem no path `messages` (legacy): carregar `endpoint.provider` antes de montar `From` e aplicar mesmo guard. Nenhuma escrita em `messages` antes do guard — falha limpa, sem deixar `metadata.twilio` órfão.
+→ retorna 400 → o cliente vê exatamente `Edge Function returned a non-2xx status code` (como na print).
 
-#### 2. `src/lib/dispatchWhatsAppSend.ts` + `supabase/functions/_shared/dispatch-whatsapp-send.ts` — fail-closed
+Por que só apareceu agora no áudio do `arlison`:
+- Thread Meta Cloud (primary_endpoint_id = `407ff93d`, provider `meta_cloud_api`).
+- Antes do guard, áudios nessa thread iam pro `twilio-whatsapp-send` (que aceita só `threadId`) e falhavam silenciosamente com 63007.
+- Depois do guard, o roteamento foi corrigido para Meta Cloud, mas o `/inbox` continua mandando payload incompleto e a função Meta rejeita antes de qualquer insert.
+- O texto "Olá boa tarde!" das 19:11 funcionou porque foi enviado pelo `/messages`, que passa `contactId`.
 
-Reescrever `resolveProvider` para retornar `{ provider, source }` e nunca cair em `twilio` por omissão:
+A função `twilio-whatsapp-send` tolera ausência de `contactId` (deriva pela thread), por isso o problema só ficou visível no novo caminho Meta.
 
-- `endpointId` passado:
-  - row encontrada → retorna `provider` real.
-  - row ausente → **lança erro** `unknown_endpoint`.
-- senão `threadId`:
-  - thread tem `primary_endpoint_id` → carrega endpoint; ausente = erro `endpoint_missing`.
-  - thread sem `primary_endpoint_id` → **fallback explícito** olhando a última `messages.endpoint_id` da thread (mesma lógica que o twilio-whatsapp-send já faz). Se achar Meta, retorna Meta.
-  - nada disso → mantém default `twilio` (comportamento atual de threads legadas Twilio).
-- `dispatchWhatsAppSend` propaga o erro como `{ data:null, error:{ message } }`, sem invocar nenhuma função.
+## Correção proposta (1 arquivo, ~3 linhas)
 
-Adicionar log estruturado `[dispatch-wa] route` com `{ provider, source, endpointId, threadId }` em cada chamada — para auditoria futura.
+**`src/components/inbox/InboxComposer.tsx`** — em `invokeSend` (linha 218), adicionar `contactId: thread!.contact_id ?? undefined` ao payload base, junto com `organizationId`/`threadId`. Nada mais muda.
 
-#### 3. Validação no lead tcharlesmattos2
+```ts
+const { data, error } = await dispatchWhatsAppSend({
+  organizationId: thread!.organization_id || organization?.id,
+  threadId: thread!.id,
+  contactId: thread!.contact_id ?? undefined, // ← NOVO
+  senderContext: 'inbox',
+  userId: myId,
+  senderName,
+  ...payload,
+});
+```
 
-Sem alterar dado real do usuário:
+## Fora de escopo
 
-- Texto curto pela Tamires → esperar resposta `meta-whatsapp-send`, linha em `messages` com `metadata.meta_cloud.raw.*`, sem `metadata.twilio`.
-- Áudio pela Tamires → idem.
-- Smoke em thread Twilio (`Mara` no endpoint c09bd713) → texto sai via Twilio, comportamento inalterado.
-- Tentativa forçada `endpointId=407ff93d` chamando `twilio-whatsapp-send` direto via `curl_edge_functions` → deve retornar `wrong_provider_for_endpoint`.
+- Não mexer em `meta-whatsapp-send` (a exigência de `contactId` está correta; é o cliente que deve mandar).
+- Não mexer em `twilio-whatsapp-send`, dispatcher, RLS, templates ou inbound.
+- Não mexer em `/messages` (já passa `contactId` corretamente).
 
-#### 4. Fora de escopo (não toco)
+## Validação
 
-- `meta-whatsapp-send`, templates Meta/Twilio, mídia, `handleStatus`.
-- Webhooks inbound (Twilio e Meta).
-- Schema / migrations.
+1. Pedir à Tamires para reenviar o áudio na mesma thread `arlison` pelo `/inbox`.
+2. Conferir em `messages` (thread do `+559299626104`) que aparece uma linha `outbound`, `media_type='audio'`, `whatsapp_status='sent'`, `metadata.meta_cloud.wamid` preenchido.
+3. Conferir logs de `meta-whatsapp-send` mostrando o POST recebido (não havia nenhum antes).
+4. Smoke test no `/messages` (Mara/Twilio + tcharlesmattos2/Meta) para garantir que nada quebrou.
 
-### Detalhes técnicos
+## Risco
 
-- Diff esperado: ~+60 linhas em `twilio-whatsapp-send/index.ts` (dois guards + select de `provider`), ~+30 linhas em cada dispatcher (cliente + servidor).
-- Nenhum secret novo.
-- Nenhuma alteração em UI.
-- Logs: `[twilio-send] BLOCKED meta_cloud_api endpoint reached twilio-send` e `[dispatch-wa] route` para auditoria.
-
-Ao aprovar, executo as 3 mudanças em sequência, faço deploy de `twilio-whatsapp-send` e rodo a validação no tcharlesmattos2 + smoke em thread Twilio.
+Praticamente zero — adiciona um campo opcional que ambas as funções aceitam.
