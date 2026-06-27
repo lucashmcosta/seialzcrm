@@ -21,12 +21,19 @@ interface WhatsAppTemplateSelectorProps {
   onSelect: (templateId: string, variables: Record<string, string>) => void;
   onCancel: () => void;
   loading?: boolean;
+  /**
+   * Filtra templates pelo provider correto.
+   * Quando omitido, mantém o comportamento legado e lista apenas templates Twilio
+   * (provider 'twilio' ou rows antigas sem provider).
+   */
+  provider?: 'twilio' | 'meta_cloud_api';
 }
 
 export function WhatsAppTemplateSelector({ 
   onSelect, 
   onCancel,
-  loading 
+  loading,
+  provider
 }: WhatsAppTemplateSelectorProps) {
   const { organization } = useOrganization();
   const [templates, setTemplates] = useState<Template[]>([]);
@@ -36,19 +43,27 @@ export function WhatsAppTemplateSelector({
 
   useEffect(() => {
     fetchTemplates();
-  }, [organization?.id]);
+  }, [organization?.id, provider]);
 
   const fetchTemplates = async () => {
     if (!organization?.id) return;
 
     try {
-      const { data, error } = await supabase
+      let query = supabase
         .from('whatsapp_templates')
         .select('*')
         .eq('organization_id', organization.id)
         .eq('status', 'approved')
-        .eq('is_active', true)
-        .order('friendly_name');
+        .eq('is_active', true);
+
+      if (provider === 'meta_cloud_api') {
+        query = query.eq('provider', 'meta_cloud_api');
+      } else {
+        // Default Twilio: inclui rows antigas (provider IS NULL) e provider='twilio'.
+        query = query.or('provider.is.null,provider.eq.twilio');
+      }
+
+      const { data, error } = await query.order('friendly_name');
 
       if (error) throw error;
       setTemplates(data || []);

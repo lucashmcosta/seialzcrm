@@ -20,6 +20,7 @@ import { getProxiedMediaUrl } from '@/lib/mediaProxy';
 import { audioBlobToFile } from '@/lib/audioBlobToFile';
 import { DateSeparator } from '@/components/messages/DateSeparator';
 import { shouldShowDateSeparator } from '@/lib/dateSeparator';
+import { useWhatsAppProvider } from '@/hooks/useWhatsAppProvider';
 
 interface Message {
   id: string;
@@ -53,6 +54,8 @@ export function WhatsAppChat({ contactId, threadId: initialThreadId, onThreadCre
   const [isIn24hWindow, setIsIn24hWindow] = useState(false);
   const [showTemplates, setShowTemplates] = useState(false);
   const [accessToken, setAccessToken] = useState<string | undefined>(undefined);
+  const waProvider = useWhatsAppProvider({ threadId });
+  const templateSelectorProvider = waProvider === 'meta_cloud_api' ? 'meta_cloud_api' : undefined;
 
   const dateLocale = locale === 'pt-BR' ? ptBR : enUS;
 
@@ -431,6 +434,7 @@ export function WhatsAppChat({ contactId, threadId: initialThreadId, onThreadCre
         onSelect={handleSendTemplate}
         onCancel={() => setShowTemplates(false)}
         loading={submitting}
+        provider={templateSelectorProvider}
       />
     );
   }

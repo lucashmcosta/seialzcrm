@@ -7066,6 +7066,7 @@ export type Database = {
         Row: {
           body: string
           category: string | null
+          components: Json | null
           created_at: string | null
           footer: string | null
           friendly_name: string
@@ -7074,19 +7075,24 @@ export type Database = {
           is_active: boolean | null
           language: string | null
           last_synced_at: string | null
+          meta_template_name: string | null
+          meta_waba_id: string | null
           metadata: Json | null
           organization_id: string
+          organization_integration_id: string | null
+          provider: string
           rejection_reason: string | null
           source: string | null
           status: string | null
           template_type: string | null
-          twilio_content_sid: string
+          twilio_content_sid: string | null
           updated_at: string | null
           variables: Json | null
         }
         Insert: {
           body: string
           category?: string | null
+          components?: Json | null
           created_at?: string | null
           footer?: string | null
           friendly_name: string
@@ -7095,19 +7101,24 @@ export type Database = {
           is_active?: boolean | null
           language?: string | null
           last_synced_at?: string | null
+          meta_template_name?: string | null
+          meta_waba_id?: string | null
           metadata?: Json | null
           organization_id: string
+          organization_integration_id?: string | null
+          provider?: string
           rejection_reason?: string | null
           source?: string | null
           status?: string | null
           template_type?: string | null
-          twilio_content_sid: string
+          twilio_content_sid?: string | null
           updated_at?: string | null
           variables?: Json | null
         }
         Update: {
           body?: string
           category?: string | null
+          components?: Json | null
           created_at?: string | null
           footer?: string | null
           friendly_name?: string
@@ -7116,13 +7127,17 @@ export type Database = {
           is_active?: boolean | null
           language?: string | null
           last_synced_at?: string | null
+          meta_template_name?: string | null
+          meta_waba_id?: string | null
           metadata?: Json | null
           organization_id?: string
+          organization_integration_id?: string | null
+          provider?: string
           rejection_reason?: string | null
           source?: string | null
           status?: string | null
           template_type?: string | null
-          twilio_content_sid?: string
+          twilio_content_sid?: string | null
           updated_at?: string | null
           variables?: Json | null
         }
@@ -7132,6 +7147,13 @@ export type Database = {
             columns: ["organization_id"]
             isOneToOne: false
             referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "whatsapp_templates_organization_integration_id_fkey"
+            columns: ["organization_integration_id"]
+            isOneToOne: false
+            referencedRelation: "organization_integrations"
             referencedColumns: ["id"]
           },
         ]

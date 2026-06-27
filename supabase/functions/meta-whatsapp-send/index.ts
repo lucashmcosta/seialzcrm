@@ -83,19 +83,29 @@ serve(async (req) => {
       mediaUrl, mediaUrls, mediaType, mimeType: payloadMime, filename: payloadFilename,
       userId, replyToMessageId, isAgentMessage, agentId, senderName,
       endpointId: explicitEndpointId,
+      templateId, templateVariables,
+      type: payloadType, templateName: directTemplateName,
+      languageCode: directLanguageCode, components: directComponents,
     } = body as Record<string, any>;
 
     if (!organizationId) return jsonResponse(400, { error: "missing_organization" });
     if (!contactId) return jsonResponse(400, { error: "missing_contact" });
 
+    const isTemplateSend = !!templateId || payloadType === "template";
+
     // Normaliza mídia
     const mediaUrlsArr: string[] = Array.isArray(mediaUrls) && mediaUrls.length
       ? mediaUrls.filter((u: any) => typeof u === "string" && u)
       : (typeof mediaUrl === "string" && mediaUrl ? [mediaUrl] : []);
-    const hasMedia = mediaUrlsArr.length > 0 || !!mediaType;
+    const hasMedia = !isTemplateSend && (mediaUrlsArr.length > 0 || !!mediaType);
     const trimmedMessage = typeof message === "string" ? message : "";
 
-    if (hasMedia) {
+    if (isTemplateSend) {
+      // Validação leve aqui — restante após carregar o template do banco.
+      if (!templateId && (!directTemplateName || !directLanguageCode)) {
+        return jsonResponse(400, { error: "missing_template_payload" });
+      }
+    } else if (hasMedia) {
       if (mediaType === "sticker") {
         return jsonResponse(400, {
           error: "sticker_not_supported_yet",
@@ -248,15 +258,78 @@ serve(async (req) => {
       }
     }
 
-    // MVP: fora da janela 24h sem template = bloqueia
-    if (!in24h) {
+    // Fora da janela 24h só permite envio de template
+    if (!in24h && !isTemplateSend) {
       return jsonResponse(400, {
         error: "outside_24h_window",
         requiresTemplate: true,
         isIn24hWindow: false,
-        message: "MVP Meta Cloud aceita apenas texto dentro da janela 24h.",
+        message: "Fora da janela de 24h. Use um template aprovado.",
       });
     }
+
+    // === Template: carrega do banco e monta payload ===
+    let templateRow: any = null;
+    let templateName: string | null = directTemplateName || null;
+    let templateLanguage: string | null = directLanguageCode || null;
+    let templateComponentsTemplate: any[] = Array.isArray(directComponents) ? directComponents : [];
+    let templateBodyText: string | null = null;
+    if (isTemplateSend && templateId) {
+      const { data: tpl, error: tplErr } = await supabase
+        .from("whatsapp_templates")
+        .select("id, organization_id, provider, status, meta_template_name, language, body, components, friendly_name")
+        .eq("id", templateId)
+        .maybeSingle();
+      if (tplErr || !tpl) return jsonResponse(404, { error: "template_not_found" });
+      if (tpl.organization_id !== organizationId) return jsonResponse(403, { error: "template_org_mismatch" });
+      if (tpl.provider !== "meta_cloud_api") return jsonResponse(400, { error: "template_not_meta_cloud" });
+      if (tpl.status !== "approved") return jsonResponse(400, { error: "template_not_approved" });
+      templateRow = tpl;
+      templateName = tpl.meta_template_name || tpl.friendly_name;
+      templateLanguage = tpl.language;
+      templateComponentsTemplate = Array.isArray(tpl.components) ? tpl.components : [];
+      templateBodyText = tpl.body || null;
+    }
+
+    // Renderiza preview e components finais (apenas BODY com variáveis simples).
+    let renderedPreview: string | null = null;
+    let outboundTemplateComponents: any[] = [];
+    if (isTemplateSend) {
+      // Se chamado em modo "direto", usa components vindos do caller sem alteração.
+      if (!templateRow && Array.isArray(directComponents) && directComponents.length > 0) {
+        outboundTemplateComponents = directComponents;
+      } else {
+        const bodyComp = templateComponentsTemplate.find(
+          (c) => (c?.type || "").toUpperCase() === "BODY",
+        );
+        const bodyTextRaw = (bodyComp?.text as string | undefined) || templateBodyText || "";
+        const vars = Array.from(
+          new Set((bodyTextRaw.match(/\{\{(\d+)\}\}/g) || []).map((m) => m.replace(/[{}]/g, ""))),
+        ).sort((a, b) => parseInt(a) - parseInt(b));
+        const values: Record<string, string> = {};
+        const tv = (templateVariables ?? {}) as Record<string, unknown>;
+        for (const n of vars) {
+          const v = tv[n] ?? tv[`var${n}`] ?? "";
+          values[n] = String(v);
+        }
+        // Render preview
+        let preview = bodyTextRaw;
+        for (const n of vars) {
+          preview = preview.split(`{{${n}}}`).join(values[n] || `{{${n}}}`);
+        }
+        renderedPreview = preview;
+        if (vars.length > 0) {
+          outboundTemplateComponents = [{
+            type: "body",
+            parameters: vars.map((n) => ({ type: "text", text: values[n] || "" })),
+          }];
+        } else {
+          outboundTemplateComponents = [];
+        }
+      }
+    }
+
+
 
     // Insere mensagem com status sending
     let resolvedSenderName = senderName || null;
@@ -266,14 +339,25 @@ serve(async (req) => {
     }
 
     const kind = (hasMedia ? mediaType : null) as MediaKind | null;
-    const initialContent = hasMedia
-      ? (trimmedMessage.trim() || placeholderForMedia(kind!))
-      : trimmedMessage;
+    const initialContent = isTemplateSend
+      ? (renderedPreview || `[Template: ${templateName ?? "?"}]`)
+      : hasMedia
+        ? (trimmedMessage.trim() || placeholderForMedia(kind!))
+        : trimmedMessage;
 
     const baseMeta: Record<string, any> = { phone_number_id: endpoint.sender_sid, to };
     if (hasMedia) {
       baseMeta.media_source_url = mediaUrlsArr[0];
       baseMeta.media_kind = kind;
+    }
+    if (isTemplateSend) {
+      baseMeta.template = {
+        name: templateName,
+        language: templateLanguage,
+        components: outboundTemplateComponents,
+        rendered_preview: renderedPreview,
+        template_id: templateRow?.id ?? null,
+      };
     }
 
     const { data: insertedMsg, error: insErr } = await supabase
@@ -293,6 +377,7 @@ serve(async (req) => {
         endpoint_id: endpoint.id,
         media_urls: hasMedia ? mediaUrlsArr : null,
         media_type: hasMedia ? kind : null,
+        template_id: templateRow?.id ?? null,
         metadata: { meta_cloud: baseMeta },
       })
       .select("id")
@@ -318,7 +403,19 @@ serve(async (req) => {
       let mimeUsed: string | null = null;
       let filenameUsed: string | null = null;
 
-      if (hasMedia) {
+      if (isTemplateSend) {
+        outboundPayload = {
+          messaging_product: "whatsapp",
+          recipient_type: "individual",
+          to,
+          type: "template",
+          template: {
+            name: templateName,
+            language: { code: templateLanguage },
+            components: outboundTemplateComponents,
+          },
+        };
+      } else if (hasMedia) {
         // 1) Baixa o arquivo da URL pública do Storage
         const sourceUrl = mediaUrlsArr[0];
         const fileRes = await fetch(sourceUrl);
@@ -392,6 +489,15 @@ serve(async (req) => {
         finalMeta.filename = filenameUsed;
         finalMeta.media_kind = kind;
         finalMeta.media_source_url = mediaUrlsArr[0];
+      }
+      if (isTemplateSend) {
+        finalMeta.template = {
+          name: templateName,
+          language: templateLanguage,
+          components: outboundTemplateComponents,
+          rendered_preview: renderedPreview,
+          template_id: templateRow?.id ?? null,
+        };
       }
 
       await supabase

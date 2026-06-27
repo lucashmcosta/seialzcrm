@@ -41,6 +41,7 @@ import { audioBlobToFile } from '@/lib/audioBlobToFile';
 import { WhatsAppTemplateSelector } from '@/components/whatsapp/WhatsAppTemplateSelector';
 import { ReplyPreview } from '@/components/whatsapp/ReplyPreview';
 import { inboxUploadMedia } from '@/lib/inboxMediaUpload';
+import { useWhatsAppProvider } from '@/hooks/useWhatsAppProvider';
 import type { InboxMessageRow } from '@/hooks/inbox/useInboxThreadMessages';
 
 interface ThreadLike {
@@ -136,6 +137,10 @@ export function InboxComposer({ thread, replyTo, onClearReply, onSent, onThreadM
     const diffMs = Date.now() - new Date(lastInboundIso).getTime();
     return diffMs >= 0 && diffMs < 24 * 60 * 60 * 1000;
   }, [lastInboundIso]);
+
+  // Resolve provider para escolher quais templates listar (default = Twilio).
+  const waProvider = useWhatsAppProvider({ threadId: thread?.id ?? null });
+  const templateSelectorProvider = waProvider === 'meta_cloud_api' ? 'meta_cloud_api' : undefined;
 
   // --- Guards ---------------------------------------------------------------
 
@@ -480,6 +485,7 @@ export function InboxComposer({ thread, replyTo, onClearReply, onSent, onThreadM
             <WhatsAppTemplateSelector
               onSelect={handleSendTemplate}
               onCancel={() => setShowTemplates(false)}
+              provider={templateSelectorProvider}
             />
           </DialogContent>
         </Dialog>
@@ -637,6 +643,7 @@ export function InboxComposer({ thread, replyTo, onClearReply, onSent, onThreadM
             onSelect={handleSendTemplate}
             onCancel={() => setShowTemplates(false)}
             loading={submitting}
+            provider={templateSelectorProvider}
           />
         </DialogContent>
       </Dialog>

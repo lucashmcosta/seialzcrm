@@ -90,4 +90,19 @@ export const metaWhatsAppService = {
     if (error) throw error;
     return data;
   },
+
+  async syncTemplates(organizationId: string): Promise<{
+    success: boolean;
+    synced: number;
+    total: number;
+    approved: number;
+    by_status: Record<string, number>;
+  }> {
+    const { data, error } = await supabase.functions.invoke("meta-whatsapp-templates-sync", {
+      body: { organizationId },
+    });
+    if (error) throw error;
+    if ((data as any)?.error) throw new Error((data as any).error);
+    return data as any;
+  },
 };
