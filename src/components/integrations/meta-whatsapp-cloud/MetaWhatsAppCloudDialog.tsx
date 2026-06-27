@@ -13,6 +13,7 @@ import { Badge } from "@/components/ui/badge";
 import { ConfirmDialog } from "@/components/ui/confirm-dialog";
 import { CheckCircle, Eye, EyeSlash, ArrowsClockwise, LinkSimple, Plug } from "@phosphor-icons/react";
 import { MetaWhatsAppValidationError, metaWhatsAppService } from "@/services/metaWhatsAppService";
+import { WhatsAppInboundSettings } from "@/components/settings/WhatsAppInboundSettings";
 
 interface Props {
   open: boolean;
@@ -276,6 +277,15 @@ export function MetaWhatsAppCloudDialog({ open, onOpenChange, integration, orgIn
                 </p>
               </Card>
             )}
+
+            {/* ===== Regras de Entrada ===== */}
+            {isConnected && orgIntegration?.id && (
+              <Card className="p-4">
+                <WhatsAppInboundSettings integrationId={orgIntegration.id} />
+              </Card>
+            )}
+
+
 
 
 

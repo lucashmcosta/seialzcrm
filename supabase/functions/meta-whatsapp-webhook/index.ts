@@ -1,11 +1,16 @@
 // Webhook Meta WhatsApp Cloud (verify_jwt=false).
-// build: 2026-06-27 (Fase 3 — per-integration estrito, sem fallback global)
-// Estados:
-//  - GET handshake: aceita match somente contra organization_integrations
-//    habilitadas que tenham verify_token_encrypted.
-//  - POST: identifica a integração pelo phone_number_id do payload e
-//    valida X-Hub-Signature-256 com o App Secret cifrado da própria
-//    integração. Sem app_secret_encrypted = 401 invalid_signature.
+// build: 2026-06-27 (Fase 4 — paridade funcional com Twilio inbound)
+//
+// Hotfix:
+// - Honra inbound_settings (endpoint → integration → fallback)
+// - Cria contato com normalizePhoneForSearch (variações BR do 9º dígito)
+// - Auto-cria oportunidade quando configurado
+// - Captura CTWA (messages[].referral) e popula ad_referral_*
+// - Resolve reply_to_message_id via msg.context.id
+// - Cria notification e activity
+// - Dispara AI agent SDR ou marca needs_human_attention
+//
+// Mídia, outbound, templates e handleStatus permanecem inalterados.
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "npm:@supabase/supabase-js@2";
 import { corsHeaders } from "../_shared/cors.ts";
@@ -18,6 +23,22 @@ import {
 
 type MediaKind = "image" | "audio" | "video" | "document" | "sticker";
 const MEDIA_KINDS: MediaKind[] = ["image", "audio", "video", "document", "sticker"];
+
+interface InboundSettings {
+  auto_create_contact: boolean;
+  default_lifecycle_stage: string;
+  auto_create_opportunity: boolean;
+  default_pipeline_id?: string | null;
+  default_stage_id?: string | null;
+  default_opportunity_owner?: string;
+}
+
+const DEFAULT_INBOUND_SETTINGS: InboundSettings = {
+  auto_create_contact: true,
+  default_lifecycle_stage: "lead",
+  auto_create_opportunity: false,
+  default_stage_id: null,
+};
 
 function extFromMime(mime: string): string {
   const m = (mime || "").toLowerCase().split(";")[0].trim();
@@ -44,6 +65,44 @@ function placeholderForInbound(kind: MediaKind): string {
     case "document": return "[Documento]";
     case "sticker": return "[Sticker]";
   }
+}
+
+// ===== Phone matching BR (replicado do twilio-whatsapp-webhook) =====
+function normalizePhoneForSearch(phone: string): string[] {
+  const cleaned = phone.replace("whatsapp:", "").replace(/[^\d+]/g, "");
+  const variations = new Set<string>();
+  variations.add(phone);
+  variations.add(cleaned);
+  if (cleaned.startsWith("+")) variations.add(cleaned.slice(1));
+  else variations.add("+" + cleaned);
+
+  const digits = cleaned.replace("+", "");
+  if (digits.startsWith("55") && digits.length >= 12) {
+    const withoutCountry = digits.slice(2);
+    variations.add(withoutCountry);
+    variations.add("+55" + withoutCountry);
+    variations.add("55" + withoutCountry);
+  }
+  if (!digits.startsWith("55") && digits.length >= 10 && digits.length <= 11) {
+    variations.add("55" + digits);
+    variations.add("+55" + digits);
+  }
+  if (digits.startsWith("55") && digits.length >= 12) {
+    const ddd = digits.slice(2, 4);
+    const local = digits.slice(4);
+    if (local.length === 9 && local.startsWith("9")) {
+      const without9 = ddd + local.slice(1);
+      variations.add("+55" + without9);
+      variations.add("55" + without9);
+      variations.add(without9);
+    } else if (local.length === 8) {
+      const with9 = ddd + "9" + local;
+      variations.add("+55" + with9);
+      variations.add("55" + with9);
+      variations.add(with9);
+    }
+  }
+  return Array.from(variations);
 }
 
 async function hmacSha256Hex(key: string, message: Uint8Array): Promise<string> {
@@ -80,7 +139,6 @@ serve(async (req) => {
       return new Response("forbidden", { status: 403, headers: corsHeaders });
     }
 
-    // 1) Tenta match per-integration
     const { data: rows } = await supabase
       .from("organization_integrations")
       .select("id, connected_account, admin_integrations!inner(slug)")
@@ -118,9 +176,8 @@ serve(async (req) => {
   const rawBody = new Uint8Array(await req.arrayBuffer());
   const signature = req.headers.get("x-hub-signature-256") ?? "";
 
-  // Peek do payload sem confiar ainda — só para descobrir phone_number_id.
   let peek: any = null;
-  let peekedPhoneIds: string[] = [];
+  const peekedPhoneIds: string[] = [];
   try {
     peek = JSON.parse(new TextDecoder().decode(rawBody));
     for (const entry of peek?.entry ?? []) {
@@ -133,9 +190,6 @@ serve(async (req) => {
     return new Response("invalid_json", { status: 400, headers: corsHeaders });
   }
 
-  // Resolve App Secret a partir do primeiro phone_number_id encontrado.
-  // Em um único POST a Meta agrupa apenas eventos do mesmo App, então o
-  // mesmo App Secret valida todos os entries.
   let appSecret: string | undefined;
   let matchedIntegrationId: string | null = null;
   if (peekedPhoneIds.length > 0) {
@@ -199,11 +253,9 @@ serve(async (req) => {
           continue;
         }
 
-        // Inbound messages
         for (const msg of value?.messages ?? []) {
           await handleInbound(supabase, endpoint, msg, value);
         }
-        // Statuses (sent/delivered/read/failed)
         for (const st of value?.statuses ?? []) {
           await handleStatus(supabase, endpoint, st);
         }
@@ -213,45 +265,385 @@ serve(async (req) => {
     console.error("[meta-wa-webhook] processing error", e);
   }
 
-  // Meta espera 200 mesmo em erro interno para evitar retentativa em loop.
   return new Response("ok", { status: 200, headers: corsHeaders });
 });
 
+// ============================================================
+// Helpers de regra de negócio (paridade com Twilio inbound)
+// ============================================================
+
+async function resolveInboundSettings(
+  supabase: any,
+  endpoint: { id: string; organization_integration_id: string | null },
+): Promise<{ settings: InboundSettings; source: string }> {
+  const { data: epRow } = await supabase
+    .from("communication_endpoints")
+    .select("inbound_settings")
+    .eq("id", endpoint.id)
+    .maybeSingle();
+  const epInbound = (epRow?.inbound_settings as InboundSettings | null) ?? null;
+  if (epInbound) {
+    return { settings: { ...DEFAULT_INBOUND_SETTINGS, ...epInbound }, source: "endpoint" };
+  }
+
+  if (endpoint.organization_integration_id) {
+    const { data: oi } = await supabase
+      .from("organization_integrations")
+      .select("whatsapp_inbound_settings")
+      .eq("id", endpoint.organization_integration_id)
+      .maybeSingle();
+    const intInbound = (oi?.whatsapp_inbound_settings as InboundSettings | null) ?? null;
+    if (intInbound) {
+      return { settings: { ...DEFAULT_INBOUND_SETTINGS, ...intInbound }, source: "integration" };
+    }
+  }
+
+  return { settings: { ...DEFAULT_INBOUND_SETTINGS }, source: "default" };
+}
+
+async function findOrCreateContact(
+  supabase: any,
+  endpoint: { organization_id: string },
+  fromE164: string,
+  profileName: string,
+  inbound: InboundSettings,
+): Promise<{ contactId: string | null; contactOwnerId: string | null; created: boolean }> {
+  const phoneVariations = normalizePhoneForSearch(fromE164);
+  const orConditions = phoneVariations.map((p) => `phone.eq.${p}`).join(",");
+
+  const { data: existing } = await supabase
+    .from("contacts")
+    .select("id, owner_user_id")
+    .eq("organization_id", endpoint.organization_id)
+    .or(orConditions)
+    .is("deleted_at", null)
+    .limit(1)
+    .maybeSingle();
+
+  if (existing) {
+    return { contactId: existing.id, contactOwnerId: existing.owner_user_id ?? null, created: false };
+  }
+
+  if (!inbound.auto_create_contact) {
+    return { contactId: null, contactOwnerId: null, created: false };
+  }
+
+  const contactName = profileName || `WhatsApp ${fromE164}`;
+  const { data: newContact, error } = await supabase
+    .from("contacts")
+    .insert({
+      organization_id: endpoint.organization_id,
+      full_name: contactName,
+      phone: fromE164,
+      source: "whatsapp",
+      lifecycle_stage: inbound.default_lifecycle_stage || "lead",
+    })
+    .select("id, owner_user_id")
+    .single();
+
+  if (error || !newContact) {
+    console.error("[meta-wa-webhook] contact insert error", error);
+    return { contactId: null, contactOwnerId: null, created: false };
+  }
+  return { contactId: newContact.id, contactOwnerId: newContact.owner_user_id ?? null, created: true };
+}
+
+async function autoCreateOpportunityIfEnabled(
+  supabase: any,
+  endpoint: { organization_id: string },
+  contactId: string,
+  contactName: string,
+  contactOwnerId: string | null,
+  inbound: InboundSettings,
+): Promise<void> {
+  if (!inbound.auto_create_opportunity) return;
+
+  try {
+    const { data: existingOpen } = await supabase
+      .from("opportunities")
+      .select("id")
+      .eq("organization_id", endpoint.organization_id)
+      .eq("contact_id", contactId)
+      .eq("status", "open")
+      .is("deleted_at", null)
+      .limit(1)
+      .maybeSingle();
+
+    if (existingOpen) {
+      console.log("[meta-wa-webhook] skip opp creation — open opp exists", existingOpen.id);
+      return;
+    }
+
+    let resolvedStageId: string | null = null;
+    if (inbound.default_stage_id) {
+      const { data: validStage } = await supabase
+        .from("pipeline_stages")
+        .select("id")
+        .eq("id", inbound.default_stage_id)
+        .eq("organization_id", endpoint.organization_id)
+        .maybeSingle();
+      if (validStage) resolvedStageId = validStage.id;
+    }
+    if (!resolvedStageId) {
+      const { data: firstStage } = await supabase
+        .from("pipeline_stages")
+        .select("id")
+        .eq("organization_id", endpoint.organization_id)
+        .order("order_index", { ascending: true })
+        .limit(1)
+        .maybeSingle();
+      if (firstStage) resolvedStageId = firstStage.id;
+    }
+    if (!resolvedStageId) {
+      console.error("[meta-wa-webhook] no pipeline_stages — skipping opp", endpoint.organization_id);
+      return;
+    }
+
+    const oppData: Record<string, any> = {
+      organization_id: endpoint.organization_id,
+      contact_id: contactId,
+      title: `Oportunidade - ${contactName}`,
+      status: "open",
+      pipeline_stage_id: resolvedStageId,
+    };
+    if (contactOwnerId) oppData.owner_user_id = contactOwnerId;
+
+    const { data: newOpp, error } = await supabase
+      .from("opportunities")
+      .insert(oppData)
+      .select("id")
+      .single();
+    if (error) {
+      console.error("[meta-wa-webhook] auto-create opp error", error);
+    } else if (newOpp) {
+      console.log("[meta-wa-webhook] auto-created opportunity", newOpp.id);
+    }
+  } catch (e) {
+    console.error("[meta-wa-webhook] auto-create opp exception", e);
+  }
+}
+
+async function saveReferralFields(
+  supabase: any,
+  contactId: string,
+  ref: {
+    source_url: string | null;
+    source_id: string | null;
+    source_type: string | null;
+    headline: string | null;
+    body: string | null;
+    media_url: string | null;
+    ctwa_clid: string | null;
+  },
+): Promise<void> {
+  const { error } = await supabase.from("contacts").update({
+    ad_referral_source_url: ref.source_url,
+    ad_referral_headline: ref.headline,
+    ad_referral_body: ref.body,
+    ad_referral_media_url: ref.media_url,
+    ad_referral_source_id: ref.source_id,
+    ad_referral_source_type: ref.source_type,
+    ad_referral_ctwa_clid: ref.ctwa_clid,
+    ad_referral_captured_at: new Date().toISOString(),
+    source: "ctwa",
+    utm_source: "meta_ads",
+    utm_medium: "ctwa",
+  } as any).eq("id", contactId);
+  if (error) {
+    console.error("[meta-wa-webhook] referral save error", error);
+  } else {
+    console.log("[meta-wa-webhook] CTWA referral saved for contact", contactId);
+  }
+}
+
+async function resolveReplyToMessageId(
+  supabase: any,
+  organizationId: string,
+  contextWamid: string | null | undefined,
+): Promise<string | null> {
+  if (!contextWamid) return null;
+  const { data } = await supabase
+    .from("messages")
+    .select("id")
+    .eq("organization_id", organizationId)
+    .eq("whatsapp_message_sid", contextWamid)
+    .maybeSingle();
+  return data?.id ?? null;
+}
+
+async function notifyContactOwner(
+  supabase: any,
+  organizationId: string,
+  contactOwnerId: string | null,
+  profileName: string,
+  fromE164: string,
+  body: string,
+  mediaType: MediaKind | null,
+  threadId: string,
+): Promise<void> {
+  if (!contactOwnerId) return;
+
+  let notificationBody = body;
+  if (mediaType && !body) {
+    const label = mediaType === "audio" ? "🎵 Áudio"
+      : mediaType === "image" ? "📷 Imagem"
+      : mediaType === "video" ? "🎬 Vídeo"
+      : mediaType === "sticker" ? "🩹 Sticker"
+      : "📎 Mídia";
+    notificationBody = label;
+  }
+
+  await supabase.from("notifications").insert({
+    user_id: contactOwnerId,
+    organization_id: organizationId,
+    type: "whatsapp_message",
+    title: "Nova mensagem WhatsApp",
+    body: `${profileName || fromE164}: ${notificationBody.slice(0, 100)}${notificationBody.length > 100 ? "..." : ""}`,
+    entity_type: "message",
+    entity_id: threadId,
+  });
+}
+
+async function insertActivity(
+  supabase: any,
+  organizationId: string,
+  contactId: string,
+  body: string,
+  mediaType: MediaKind | null,
+): Promise<void> {
+  let title = "Mensagem WhatsApp recebida";
+  if (mediaType) title = `Mensagem WhatsApp recebida (${mediaType})`;
+
+  await supabase.from("activities").insert({
+    organization_id: organizationId,
+    contact_id: contactId,
+    activity_type: "message",
+    title,
+    body: body.slice(0, 200) || (mediaType ? "[Mídia]" : ""),
+    occurred_at: new Date().toISOString(),
+  });
+}
+
+async function triggerAiAgentOrFlagHuman(
+  supabase: any,
+  organizationId: string,
+  threadId: string,
+  contactId: string,
+  body: string,
+): Promise<void> {
+  const { data: aiAgents, error: agentError } = await supabase
+    .from("ai_agents")
+    .select("id, is_enabled, max_messages_per_conversation")
+    .eq("organization_id", organizationId)
+    .eq("agent_type", "sdr")
+    .eq("is_enabled", true)
+    .order("created_at", { ascending: false })
+    .limit(1);
+  if (agentError) console.error("[meta-wa-webhook] ai_agents fetch error", agentError);
+
+  const aiAgent = aiAgents?.[0];
+
+  if (aiAgent && body) {
+    console.log("[meta-wa-webhook] AI Agent found", aiAgent.id, "- triggering response");
+    try {
+      const supabaseUrl = Deno.env.get("SUPABASE_URL");
+      const serviceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
+      fetch(`${supabaseUrl}/functions/v1/ai-agent-respond`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "Authorization": `Bearer ${serviceKey}`,
+        },
+        body: JSON.stringify({
+          agentId: aiAgent.id,
+          contactId,
+          threadId,
+          message: body,
+        }),
+      }).catch((err) => console.error("[meta-wa-webhook] ai-agent-respond call failed", err));
+    } catch (e) {
+      console.error("[meta-wa-webhook] ai-agent trigger exception", e);
+    }
+  } else if (!aiAgent) {
+    console.log("[meta-wa-webhook] no AI agent — flagging needs_human_attention", threadId);
+    await supabase
+      .from("message_threads")
+      .update({
+        needs_human_attention: true,
+        updated_at: new Date().toISOString(),
+      })
+      .eq("id", threadId);
+  }
+}
+
+// ============================================================
+// Inbound principal
+// ============================================================
 async function handleInbound(
   supabase: any, endpoint: any, msg: any, value: any,
 ): Promise<void> {
   const fromE164 = "+" + String(msg.from).replace(/^\+/, "");
   const wamid = msg.id as string;
+  const profileName = value?.contacts?.[0]?.profile?.name ?? "";
 
-  // Resolve / cria contato
-  const { data: existingContact, error: contactSelErr } = await supabase
-    .from("contacts")
-    .select("id")
-    .eq("organization_id", endpoint.organization_id)
-    .eq("phone", fromE164)
-    .maybeSingle();
-  if (contactSelErr) console.error("[meta-wa-webhook] contact select error", contactSelErr);
+  // 1) Resolver inbound_settings
+  const { settings: inboundSettings, source: settingsSource } =
+    await resolveInboundSettings(supabase, endpoint);
+  console.log("[meta-wa-webhook] inbound_settings resolved", JSON.stringify({
+    endpoint_id: endpoint.id,
+    source: settingsSource,
+    auto_create_contact: inboundSettings.auto_create_contact,
+    auto_create_opportunity: inboundSettings.auto_create_opportunity,
+  }));
 
-  let contactId: string | null = existingContact?.id ?? null;
-  if (!contactId) {
-    const profileName = value?.contacts?.[0]?.profile?.name ?? null;
-    const { data: created, error: contactInsErr } = await supabase
-      .from("contacts")
-      .insert({
-        organization_id: endpoint.organization_id,
-        phone: fromE164,
-        full_name: profileName ?? fromE164,
-        lifecycle_stage: "lead",
-      })
-      .select("id")
-      .single();
-    if (contactInsErr) console.error("[meta-wa-webhook] contact insert error", contactInsErr);
-    contactId = created?.id ?? null;
+  // 2) Parse CTWA referral
+  const ref = msg?.referral;
+  const referral = ref ? {
+    source_url: ref.source_url ?? null,
+    source_id: ref.source_id ?? null,
+    source_type: ref.source_type ?? null,
+    headline: ref.headline ?? null,
+    body: ref.body ?? null,
+    media_url: ref.image_url ?? ref.video_url ?? ref.thumbnail_url ?? null,
+    ctwa_clid: ref.ctwa_clid ?? null,
+  } : null;
+  const hasReferral = !!(referral && (
+    referral.source_url || referral.source_id || referral.ctwa_clid ||
+    referral.headline || referral.body
+  ));
+  if (hasReferral) {
+    console.log("[meta-wa-webhook] CTWA referral detected", JSON.stringify({
+      has_source_id: !!referral!.source_id,
+      has_ctwa_clid: !!referral!.ctwa_clid,
+      has_headline: !!referral!.headline,
+    }));
   }
-  if (!contactId) { console.error("[meta-wa-webhook] no contactId"); return; }
 
-  // Resolve / cria thread
-  const { data: thread, error: threadSelErr } = await supabase
+  // 3) Find or create contact (honra auto_create_contact)
+  const { contactId, contactOwnerId, created } = await findOrCreateContact(
+    supabase, endpoint, fromE164, profileName, inboundSettings,
+  );
+  if (!contactId) {
+    console.log("[meta-wa-webhook] no contactId (auto_create_contact disabled?) — skipping", { fromE164 });
+    return;
+  }
+
+  // 4) Auto-create opportunity quando contato foi recém-criado
+  if (created) {
+    await autoCreateOpportunityIfEnabled(
+      supabase, endpoint, contactId,
+      profileName || `WhatsApp ${fromE164}`,
+      contactOwnerId, inboundSettings,
+    );
+  }
+
+  // 5) Persistir campos CTWA no contato
+  if (hasReferral && referral) {
+    await saveReferralFields(supabase, contactId, referral);
+  }
+
+  // 6) Find or create thread
+  const { data: thread } = await supabase
     .from("message_threads")
     .select("id")
     .eq("organization_id", endpoint.organization_id)
@@ -259,11 +651,10 @@ async function handleInbound(
     .eq("channel", "whatsapp")
     .eq("primary_endpoint_id", endpoint.id)
     .maybeSingle();
-  if (threadSelErr) console.error("[meta-wa-webhook] thread select error", threadSelErr);
 
   let threadId = thread?.id;
   if (!threadId) {
-    const { data: created, error: threadInsErr } = await supabase
+    const { data: createdThread, error: threadInsErr } = await supabase
       .from("message_threads")
       .insert({
         organization_id: endpoint.organization_id,
@@ -271,17 +662,18 @@ async function handleInbound(
         channel: "whatsapp",
         subject: "WhatsApp",
         primary_endpoint_id: endpoint.id,
+        whatsapp_last_inbound_at: new Date().toISOString(),
+        last_inbound_at: new Date().toISOString(),
       })
       .select("id")
       .single();
     if (threadInsErr) console.error("[meta-wa-webhook] thread insert error", threadInsErr);
-    threadId = created?.id;
+    threadId = createdThread?.id;
   }
   if (!threadId) { console.error("[meta-wa-webhook] no threadId"); return; }
 
-  // Detecta tipo de mídia
+  // 7) Mídia (inalterado)
   const mediaKind = MEDIA_KINDS.find((k) => msg?.[k]) as MediaKind | undefined;
-
   let mediaUrls: string[] | null = null;
   let mediaType: MediaKind | null = null;
   let mediaInfo: Record<string, any> = {};
@@ -298,7 +690,6 @@ async function handleInbound(
 
     if (mediaId) {
       try {
-        // Carrega access token e app_secret da integração (per-tenant)
         const { data: oi } = await supabase
           .from("organization_integrations")
           .select("connected_account")
@@ -310,12 +701,9 @@ async function handleInbound(
         const accessToken = (await decryptSecret(enc)).trim();
         const appSecret = await resolveAppSecretForIntegration(ca);
 
-        // 1) Resolve URL temporária
         const meta = await metaWaGetMediaUrl(mediaId, { accessToken, appSecret });
         const mime = meta.mime_type || initialMime || "application/octet-stream";
-        // 2) Download
         const { bytes } = await metaWaDownloadMedia(meta.url, { accessToken, appSecret });
-        // 3) Upload Storage
         const ext = extFromMime(mime);
         const path = `${endpoint.organization_id}/meta-inbound/${mediaId}.${ext}`;
         const { error: upErr } = await supabase.storage
@@ -336,7 +724,7 @@ async function handleInbound(
     }
   }
 
-  // Conteúdo textual / placeholder
+  // 8) Conteúdo textual / placeholder
   let content: string;
   if (mediaKind) {
     const cap = mediaInfo.caption as string | undefined;
@@ -352,31 +740,58 @@ async function handleInbound(
       ?? "[mensagem não-textual]";
   }
 
+  // 9) Reply context
+  const replyToMessageId = await resolveReplyToMessageId(
+    supabase, endpoint.organization_id, msg?.context?.id,
+  );
+
+  // 10) Insert message
   const { error: msgInsErr } = await supabase.from("messages").insert({
     organization_id: endpoint.organization_id,
     thread_id: threadId,
     content,
     direction: "inbound",
     whatsapp_message_sid: wamid,
+    whatsapp_status: "delivered",
     endpoint_id: endpoint.id,
     sender_type: "contact",
     media_urls: mediaUrls,
     media_type: mediaType,
-    metadata: { meta_cloud: { ...mediaInfo, raw: msg } },
+    reply_to_message_id: replyToMessageId,
+    sent_at: new Date().toISOString(),
+    metadata: { meta_cloud: { ...mediaInfo, raw: msg, referral } },
   });
   if (msgInsErr) console.error("[meta-wa-webhook] message insert error", msgInsErr);
 
   await supabase
     .from("message_threads")
-    .update({ whatsapp_last_inbound_at: new Date().toISOString() })
+    .update({
+      whatsapp_last_inbound_at: new Date().toISOString(),
+      last_inbound_at: new Date().toISOString(),
+      updated_at: new Date().toISOString(),
+    })
     .eq("id", threadId);
 
-}
+  // 11) Notificação
+  await notifyContactOwner(
+    supabase, endpoint.organization_id, contactOwnerId,
+    profileName, fromE164, content, mediaType, threadId,
+  );
 
+  // 12) Activity
+  await insertActivity(
+    supabase, endpoint.organization_id, contactId, content, mediaType,
+  );
+
+  // 13) AI agent ou needs_human_attention
+  await triggerAiAgentOrFlagHuman(
+    supabase, endpoint.organization_id, threadId, contactId, content,
+  );
+}
 
 async function handleStatus(supabase: any, endpoint: any, st: any): Promise<void> {
   const wamid = st.id;
-  const status = st.status; // sent / delivered / read / failed
+  const status = st.status;
   if (!wamid || !status) return;
 
   const update: Record<string, any> = { whatsapp_status: status };
