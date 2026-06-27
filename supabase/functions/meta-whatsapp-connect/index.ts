@@ -7,7 +7,7 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "npm:@supabase/supabase-js@2";
 import { corsHeaders } from "../_shared/cors.ts";
-import { encryptSecret } from "../_shared/crypto.ts";
+import { encryptSecret, decryptSecret } from "../_shared/crypto.ts";
 import { validateCredentials, MetaWaGraphError } from "../_shared/meta-whatsapp/graph.ts";
 
 interface ConnectBody {
