@@ -17,6 +17,8 @@ interface ConnectBody {
   phoneNumberId: string;
   phoneE164: string; // +5511999999999
   systemUserToken: string;
+  appSecret?: string;     // NOVO — per-integration; opcional na transição (Fase 1)
+  verifyToken?: string;   // NOVO — per-integration; opcional na transição (Fase 1)
   endpointPurpose?: "customer_service" | "other";
   displayName?: string;
   skipMetaValidation?: boolean;
