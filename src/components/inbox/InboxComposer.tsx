@@ -41,6 +41,7 @@ import { audioBlobToFile } from '@/lib/audioBlobToFile';
 import { WhatsAppTemplateSelector } from '@/components/whatsapp/WhatsAppTemplateSelector';
 import { ReplyPreview } from '@/components/whatsapp/ReplyPreview';
 import { inboxUploadMedia } from '@/lib/inboxMediaUpload';
+import { useWhatsAppProvider } from '@/hooks/useWhatsAppProvider';
 import type { InboxMessageRow } from '@/hooks/inbox/useInboxThreadMessages';
 
 interface ThreadLike {
