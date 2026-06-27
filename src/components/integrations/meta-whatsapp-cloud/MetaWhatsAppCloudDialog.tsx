@@ -37,6 +37,8 @@ export function MetaWhatsAppCloudDialog({ open, onOpenChange, integration, orgIn
   const qc = useQueryClient();
   const [form, setForm] = useState(empty);
   const [showToken, setShowToken] = useState(false);
+  const [showAppSecret, setShowAppSecret] = useState(false);
+  const [showVerifyToken, setShowVerifyToken] = useState(false);
   const [confirmDisconnectOpen, setConfirmDisconnectOpen] = useState(false);
   const isConnected = !!orgIntegration?.is_enabled;
 
