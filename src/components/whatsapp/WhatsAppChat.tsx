@@ -20,6 +20,7 @@ import { getProxiedMediaUrl } from '@/lib/mediaProxy';
 import { audioBlobToFile } from '@/lib/audioBlobToFile';
 import { DateSeparator } from '@/components/messages/DateSeparator';
 import { shouldShowDateSeparator } from '@/lib/dateSeparator';
+import { useWhatsAppProvider } from '@/hooks/useWhatsAppProvider';
 
 interface Message {
   id: string;
