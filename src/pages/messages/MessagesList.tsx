@@ -832,7 +832,8 @@ function DesktopMessagesList() {
       setMessages((data as Message[]) || []);
 
       // Fetch inline notes from activities for this contact
-      const thread = threads?.find((t) => t.id === threadId);
+      const thread = threads?.find((t) => t.id === threadId)
+        ?? (selectedThreadOverride?.id === threadId ? selectedThreadOverride : undefined);
       if (thread?.contact_id && organization?.id) {
         const { data: notesData } = await supabase
           .from('activities')
@@ -1224,6 +1225,12 @@ function DesktopMessagesList() {
   const visibleThreads = filteredThreads
     ?.filter((t) => !isHidden(t.id, t.last_inbound_at || t.whatsapp_last_inbound_at))
     .filter((t) => endpointFilter === 'all' || threadEndpointMap[t.id] === endpointFilter);
+
+  const visibleThreadsWithSelected = selectedThreadOverride
+    && selectedThreadId === selectedThreadOverride.id
+    && !(visibleThreads ?? []).some((t) => t.id === selectedThreadOverride.id)
+      ? [selectedThreadOverride, ...(visibleThreads ?? [])]
+      : visibleThreads;
 
   const handleHideThread = (threadId: string) => {
     const thread = threads?.find((t) => t.id === threadId);
