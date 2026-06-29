@@ -261,6 +261,7 @@ function DesktopMessagesList() {
   const dateLocale = locale === 'pt-BR' ? ptBR : enUS;
 
   const [selectedThreadId, setSelectedThreadId] = useState<string | null>(null);
+  const [selectedThreadOverride, setSelectedThreadOverride] = useState<(ChatThread & { primary_endpoint_id?: string | null }) | null>(null);
   const selectedThreadWaProvider = useWhatsAppProvider({ threadId: selectedThreadId });
   const [textareaOverflow, setTextareaOverflow] = useState(false);
   const [messages, setMessages] = useState<Message[]>([]);
@@ -545,7 +546,8 @@ function DesktopMessagesList() {
   // Fetch threads via RPC (replaces N+1 query)
   const { threads, loading: threadsLoading, refetchThreads, loadMore, hasMore, loadingMore, markThreadRead } = useMessageThreads({ channels: ['whatsapp'] });
 
-  const selectedThread = threads?.find((t) => t.id === selectedThreadId);
+  const selectedThread = threads?.find((t) => t.id === selectedThreadId)
+    ?? (selectedThreadOverride?.id === selectedThreadId ? selectedThreadOverride : undefined);
 
   // Multi-number support (temporary CT transition period).
   // Only renders selector + per-thread badge when the org has 2+ active endpoints.
@@ -558,7 +560,10 @@ function DesktopMessagesList() {
   // primary_endpoint_id; falls back to the first active endpoint.
   // Does NOT persist back to the thread — purely a per-send choice.
   const [composerEndpointByThread, setComposerEndpointByThread] = useState<Record<string, string>>({});
-  const selectedThreadPrimaryEndpointId = selectedThreadId ? threadEndpointMap[selectedThreadId] ?? null : null;
+  const selectedThreadPrimaryEndpointId = selectedThreadId
+    ? threadEndpointMap[selectedThreadId]
+      ?? (selectedThreadOverride?.id === selectedThreadId ? selectedThreadOverride.primary_endpoint_id ?? null : null)
+    : null;
   const defaultComposerEndpointId = selectedThreadPrimaryEndpointId ?? orgEndpoints[0]?.id ?? null;
   const composerEndpointId = selectedThreadId
     ? composerEndpointByThread[selectedThreadId] ?? defaultComposerEndpointId
@@ -828,7 +833,8 @@ function DesktopMessagesList() {
       setMessages((data as Message[]) || []);
 
       // Fetch inline notes from activities for this contact
-      const thread = threads?.find((t) => t.id === threadId);
+      const thread = threads?.find((t) => t.id === threadId)
+        ?? (selectedThreadOverride?.id === threadId ? selectedThreadOverride : undefined);
       if (thread?.contact_id && organization?.id) {
         const { data: notesData } = await supabase
           .from('activities')
@@ -1221,6 +1227,56 @@ function DesktopMessagesList() {
     ?.filter((t) => !isHidden(t.id, t.last_inbound_at || t.whatsapp_last_inbound_at))
     .filter((t) => endpointFilter === 'all' || threadEndpointMap[t.id] === endpointFilter);
 
+  const visibleThreadsWithSelected = selectedThreadOverride
+    && selectedThreadId === selectedThreadOverride.id
+    && !(visibleThreads ?? []).some((t) => t.id === selectedThreadOverride.id)
+      ? [selectedThreadOverride, ...(visibleThreads ?? [])]
+      : visibleThreads;
+
+  const loadThreadForSelection = async (
+    threadId: string,
+    fallbackEndpointId: string | null,
+  ): Promise<(ChatThread & { primary_endpoint_id?: string | null }) | null> => {
+    if (!organization?.id) return null;
+
+    const { data: row, error } = await supabase
+      .from('message_threads')
+      .select('id, contact_id, status, updated_at, whatsapp_last_inbound_at, last_inbound_at, needs_human_attention, assigned_user_id, primary_endpoint_id, last_message_content, last_message_direction')
+      .eq('organization_id', organization.id)
+      .eq('id', threadId)
+      .maybeSingle();
+
+    if (error) {
+      console.error('Error loading selected thread:', error);
+      return null;
+    }
+    if (!row) return null;
+
+    const { data: contact } = await supabase
+      .from('contacts')
+      .select('full_name, phone')
+      .eq('id', (row as any).contact_id)
+      .maybeSingle();
+
+    return {
+      id: (row as any).id,
+      contact_id: (row as any).contact_id,
+      contact_name: (contact as any)?.full_name || (contact as any)?.phone || 'Desconhecido',
+      contact_phone: (contact as any)?.phone ?? null,
+      last_message: (row as any).last_message_content || '...',
+      last_message_direction: (row as any).last_message_direction ?? null,
+      updated_at: (row as any).updated_at,
+      whatsapp_last_inbound_at: (row as any).whatsapp_last_inbound_at ?? null,
+      last_inbound_at: (row as any).last_inbound_at ?? null,
+      unread: false,
+      needs_human_attention: (row as any).needs_human_attention ?? false,
+      status: (row as any).status || 'open',
+      assigned_user_id: (row as any).assigned_user_id ?? null,
+      assigned_user_name: null,
+      primary_endpoint_id: (row as any).primary_endpoint_id ?? fallbackEndpointId,
+    };
+  };
+
   const handleHideThread = (threadId: string) => {
     const thread = threads?.find((t) => t.id === threadId);
     const name = thread?.contact_name || (locale === 'pt-BR' ? 'Conversa' : 'Conversation');
@@ -1305,7 +1361,7 @@ function DesktopMessagesList() {
                     </Button>
                   )}
                   <Badge color="gray" size="md">
-                    {visibleThreads?.length || 0}
+                    {visibleThreadsWithSelected?.length || 0}
                   </Badge>
 
                 </div>
@@ -1352,7 +1408,7 @@ function DesktopMessagesList() {
                     </div>
                   ))}
                 </div>
-              ) : visibleThreads?.length === 0 ? (
+              ) : visibleThreadsWithSelected?.length === 0 ? (
                 <div className="flex flex-col items-center justify-center p-8 text-muted-foreground">
                   <p className="text-sm">
                     {locale === 'pt-BR' ? 'Nenhuma conversa' : 'No conversations'}
@@ -1367,11 +1423,14 @@ function DesktopMessagesList() {
                     onSelectionChange={(keys) => {
                       const keysArray = Array.from(keys);
                       const key = keysArray[0] as string;
+                      if (key !== selectedThreadOverride?.id) {
+                        setSelectedThreadOverride(null);
+                      }
                       setSelectedThreadId(key || null);
                       if (key) markThreadRead(key);
                     }}
                   >
-                    {(visibleThreads || []).map((thread) => (
+                    {(visibleThreadsWithSelected || []).map((thread) => (
                       <ChatListItem
                         key={thread.id}
                         value={thread}
@@ -1379,7 +1438,7 @@ function DesktopMessagesList() {
                         onHide={handleHideThread}
                         endpointAddress={
                           hasMultipleEndpoints
-                            ? endpointById[threadEndpointMap[thread.id] ?? '']?.external_address ?? null
+                            ? endpointById[threadEndpointMap[thread.id] ?? (thread.id === selectedThreadOverride?.id ? selectedThreadOverride.primary_endpoint_id ?? '' : '')]?.external_address ?? null
                             : null
                         }
                         officialNumbers={officialNumbers}
@@ -2059,9 +2118,17 @@ function DesktopMessagesList() {
       <NewConversationDialog
         open={showNewConversation}
         onOpenChange={setShowNewConversation}
-        onSelectContact={(contactId, threadId) => {
+        onSelectContact={async (_contactId, threadId, endpointId) => {
+          setSearchQuery('');
+          if (endpointFilter !== 'all' && endpointFilter !== endpointId) {
+            setEndpointFilter('all');
+          }
+
+          const loadedThread = await loadThreadForSelection(threadId, endpointId);
+          setSelectedThreadOverride(loadedThread);
           setSelectedThreadId(threadId);
-          refetchThreads();
+          await refetchThreads();
+          setSelectedThreadId(threadId);
         }}
       />
 

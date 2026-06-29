@@ -1,28 +1,35 @@
-## Objetivo
+## Problema real
 
-Permitir escolher de qual número WhatsApp a Nova Conversa será aberta, evitando que a heurística atual selecione o endpoint errado (caso atual: 7491 em vez de 7020 na Central Trabalhista).
+Ao tentar abrir Nova Conversa para um contato que já tem thread resolvida em outro número, a UI pode continuar selecionando/exibindo a thread antiga (ex.: Joao Teste em 7491), em vez de abrir/criar a thread do endpoint escolhido (7020).
 
-## Mudanças
+No banco já existe uma thread do Joao Teste no 7020:
+- 7491: `a304367f...` — resolvida, criada hoje
+- 7020: `5f77df99...` — aberta, criada em 27/06
 
-### 1. `src/components/messages/NewConversationDialog.tsx`
-- Reaproveitar o componente existente `EndpointSelector` (já usado no composer).
-- Adicionar `useState<string | null>` para o endpoint selecionado, inicializado com `preferredEndpointId` (heurística atual permanece como default).
-- Renderizar o seletor logo abaixo do input de busca, **somente quando** `endpoints.length >= 2` (mesma regra do `EndpointSelector`).
-- Em `handleSelect`, usar `selectedEndpointId` (em vez de `preferredEndpointId`) tanto no filtro de thread existente quanto no `insertPayload.primary_endpoint_id`.
-- Resetar `selectedEndpointId` para o `preferredEndpointId` quando o diálogo abre/fecha.
+Ou seja, para esse caso a ação correta é selecionar a thread do 7020, não a resolvida do 7491.
 
-### 2. Label do seletor
-Manter o padrão atual do `EndpointSelector` (`Enviar de` / `Send from`) — já cobre i18n pt-BR/en-US.
+## Correção
 
-### 3. Sem mudança na heurística `preferredEndpointId`
-Ela continua válida como default; o seletor só dá ao usuário a chance de sobrescrever. Orgs com 1 endpoint não veem diferença.
+### 1. `NewConversationDialog.tsx`
+- Manter o seletor de número.
+- Corrigir a ordem dos endpoints para facilitar a escolha visual: priorizar o 7020/BR quando aplicável, em vez de deixar o 7491 como default por ser mais recente.
+- Após buscar/criar a thread pelo endpoint escolhido, retornar também o `endpointId` selecionado para o componente pai.
 
-## Fora de escopo
-- Nenhuma migração de dados.
-- Nenhuma mudança em endpoints/threads existentes.
-- Nenhuma mudança no composer ou no envio.
+### 2. `MessagesList.tsx`
+- Alterar `onSelectContact` para receber `endpointId`.
+- Ao selecionar a thread retornada:
+  - limpar o filtro de endpoint se ele estiver escondendo a thread escolhida;
+  - limpar/ajustar a busca se necessário para a lista renderizar a thread correta;
+  - chamar `refetchThreads()` e só então manter `selectedThreadId` na thread retornada.
+- Isso evita que a lista fique visualmente presa na conversa antiga/resolvida que já estava selecionada.
+
+### 3. Falha defensiva no diálogo
+- Quando o endpoint escolhido for 7020 e já existir thread do contato no 7020, abrir essa thread mesmo que haja thread mais recente/resolvida no 7491.
+- Se não existir thread naquele endpoint, criar uma nova com `primary_endpoint_id` do endpoint escolhido.
 
 ## Validação
-- Org com 1 endpoint: dialog renderiza igual a hoje.
-- Org Central Trabalhista (vários endpoints Meta Cloud): seletor aparece, mostrando 7491 e 7020; usuário escolhe 7020 e a thread é criada/encontrada com `primary_endpoint_id` = 7020.
-- Conversa já existente naquele endpoint é reaproveitada (mesma lógica de filtro por `primary_endpoint_id`).
+
+- Abrir Nova Conversa > buscar Joao Teste > escolher 7020.
+- Resultado esperado: header e lista mostram badge `Novo · 7020`, não `7491`.
+- Se já existe thread 7020, abre `5f77df99...`.
+- Se não existir, cria uma nova no 7020.
