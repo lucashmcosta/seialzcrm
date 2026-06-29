@@ -1042,6 +1042,7 @@ function DesktopMessagesList() {
           templateId,
           templateVariables: variables,
           userId: userProfile?.id,
+          senderContext: 'messages',
           ...(hasMultipleEndpoints && composerEndpointId ? { endpointId: composerEndpointId } : {}),
         });
 
