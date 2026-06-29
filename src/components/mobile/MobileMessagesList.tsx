@@ -919,6 +919,25 @@ export function MobileMessagesList() {
                         }
 
                         const message = item.data;
+
+                        const isEndpointMigration =
+                          message.metadata &&
+                          typeof message.metadata === 'object' &&
+                          (message.metadata as any).kind === 'endpoint_migration_meta_7020';
+
+                        if (isEndpointMigration) {
+                          return (
+                            <div key={`sys-${message.id}`}>
+                              {sep}
+                              <div className="flex justify-center my-3">
+                                <div className="max-w-[85%] px-3 py-1.5 rounded-full bg-muted/70 text-muted-foreground text-[11px] font-medium tracking-wide text-center shadow-sm">
+                                  {message.content}
+                                </div>
+                              </div>
+                            </div>
+                          );
+                        }
+
                         const isOutbound = message.direction === 'outbound';
 
                         return (
