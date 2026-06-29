@@ -4,6 +4,7 @@ export interface WhatsAppTemplate {
   id: string;
   organization_id: string;
   twilio_content_sid: string;
+  provider?: string;
   friendly_name: string;
   language: string;
   template_type: string;

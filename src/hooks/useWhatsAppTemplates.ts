@@ -2,6 +2,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useEffect } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { whatsappService, WhatsAppTemplate, CreateTemplateInput, SendTemplateInput } from '@/services/whatsapp';
+import { metaWhatsAppService } from '@/services/metaWhatsAppService';
 import { useToast } from '@/hooks/use-toast';
 
 export function useTemplates(orgId: string | undefined) {
@@ -180,6 +181,39 @@ export function useSyncTemplates() {
     onSuccess: (data) => {
       queryClient.invalidateQueries({ queryKey: ['whatsapp-templates'] });
       toast({ description: `${data.synced} templates sincronizados!` });
+    },
+    onError: (error: Error) => {
+      toast({ variant: 'destructive', description: error.message });
+    },
+  });
+}
+
+export function useSyncMetaTemplates() {
+  const queryClient = useQueryClient();
+  const { toast } = useToast();
+
+  return useMutation({
+    mutationFn: (orgId: string) => metaWhatsAppService.syncTemplates(orgId),
+    onSuccess: (data) => {
+      queryClient.invalidateQueries({ queryKey: ['whatsapp-templates'] });
+      toast({ description: `${data.synced} templates Meta sincronizados!` });
+    },
+    onError: (error: Error) => {
+      toast({ variant: 'destructive', description: error.message });
+    },
+  });
+}
+
+export function useCreateMetaTemplate() {
+  const queryClient = useQueryClient();
+  const { toast } = useToast();
+
+  return useMutation({
+    mutationFn: (input: Parameters<typeof metaWhatsAppService.createTemplate>[0]) =>
+      metaWhatsAppService.createTemplate(input),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['whatsapp-templates'] });
+      toast({ description: 'Template enviado à Meta para aprovação!' });
     },
     onError: (error: Error) => {
       toast({ variant: 'destructive', description: error.message });

@@ -105,4 +105,30 @@ export const metaWhatsAppService = {
     if ((data as any)?.error) throw new Error((data as any).error);
     return data as any;
   },
+
+  async createTemplate(input: {
+    organizationId: string;
+    name: string;
+    language: string;
+    category: string;
+    body: string;
+    header?: string;
+    footer?: string;
+    variables?: { key: string; name: string; example: string }[];
+    buttons?: { id: string; title: string }[];
+  }): Promise<{ success: true; id: string; meta_template_id: string | null; status: string }> {
+    const { data, error } = await supabase.functions.invoke(
+      "meta-whatsapp-templates-create",
+      { body: input },
+    );
+    if (error) {
+      const fnError = await readFunctionError(error, data);
+      const msg = fnError?.message || fnError?.error || error.message || "create_failed";
+      throw new Error(msg);
+    }
+    if ((data as any)?.error) {
+      throw new Error((data as any).message || (data as any).error);
+    }
+    return data as any;
+  },
 };

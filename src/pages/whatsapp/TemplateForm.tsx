@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { useNavigate, useParams } from 'react-router-dom';
+import { useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import { Layout } from '@/components/Layout';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -17,10 +17,11 @@ import { Alert, AlertDescription } from '@/components/ui/alert';
 import { TemplateTypeSelector, TemplateType } from '@/components/whatsapp/templates/TemplateTypeSelector';
 import { WhatsAppPreview } from '@/components/whatsapp/templates/WhatsAppPreview';
 import { VariablesTable, Variable } from '@/components/whatsapp/templates/VariablesTable';
-import { 
-  useTemplate, 
-  useCreateTemplate, 
+import {
+  useTemplate,
+  useCreateTemplate,
   useUpdateTemplate,
+  useCreateMetaTemplate,
 } from '@/hooks/useWhatsAppTemplates';
 import { useOrganization } from '@/hooks/useOrganization';
 import { getTemplateNameError, extractVariables } from '@/lib/template-validation';
@@ -48,15 +49,19 @@ interface CTAAction {
 export default function TemplateForm() {
   const navigate = useNavigate();
   const { id } = useParams<{ id: string }>();
+  const [searchParams] = useSearchParams();
+  const providerParam = searchParams.get('provider');
+  const isMetaProvider = providerParam === 'meta_cloud_api';
   const isEditing = !!id;
-  
+
   const { organization } = useOrganization();
   const { data: existingTemplate, isLoading: templateLoading } = useTemplate(
-    organization?.id, 
+    organization?.id,
     isEditing ? id : undefined
   );
   const createMutation = useCreateTemplate();
   const updateMutation = useUpdateTemplate();
+  const createMetaMutation = useCreateMetaTemplate();
 
   // Form state
   const [step, setStep] = useState(1);
@@ -160,21 +165,37 @@ export default function TemplateForm() {
   const handleSubmit = async () => {
     if (!organization?.id) return;
 
-    const data = {
-      organization_id: organization.id,
-      friendly_name: friendlyName,
-      language,
-      category,
-      template_type: templateType,
-      body,
-      header: header || undefined,
-      footer: footer || undefined,
-      variables: variables.length > 0 ? variables : undefined,
-      buttons: buttons.length > 0 ? buttons : undefined,
-      actions: actions.length > 0 ? actions : undefined,
-    };
-
     try {
+      if (isMetaProvider && !isEditing) {
+        await createMetaMutation.mutateAsync({
+          organizationId: organization.id,
+          name: friendlyName,
+          language,
+          category,
+          body,
+          header: header || undefined,
+          footer: footer || undefined,
+          variables: variables.length > 0 ? variables : undefined,
+          buttons: buttons.length > 0 ? buttons : undefined,
+        });
+        navigate('/settings/whatsapp-templates');
+        return;
+      }
+
+      const data = {
+        organization_id: organization.id,
+        friendly_name: friendlyName,
+        language,
+        category,
+        template_type: templateType,
+        body,
+        header: header || undefined,
+        footer: footer || undefined,
+        variables: variables.length > 0 ? variables : undefined,
+        buttons: buttons.length > 0 ? buttons : undefined,
+        actions: actions.length > 0 ? actions : undefined,
+      };
+
       if (isEditing && id) {
         await updateMutation.mutateAsync({ id, data });
       } else {
@@ -186,7 +207,7 @@ export default function TemplateForm() {
     }
   };
 
-  const isSubmitting = createMutation.isPending || updateMutation.isPending;
+  const isSubmitting = createMutation.isPending || updateMutation.isPending || createMetaMutation.isPending;
 
   if (isEditing && templateLoading) {
     return (
@@ -207,9 +228,18 @@ export default function TemplateForm() {
             <ArrowLeft className="w-4 h-4" />
           </Button>
           <h1 className="text-3xl font-bold">
-            {isEditing ? 'Editar Template' : 'Novo Template'}
+            {isEditing ? 'Editar Template' : isMetaProvider ? 'Novo Template Meta Cloud' : 'Novo Template'}
           </h1>
         </div>
+
+        {isMetaProvider && !isEditing && (
+          <Alert>
+            <WarningCircle className="w-4 h-4" />
+            <AlertDescription>
+              Templates Meta são enviados para aprovação automaticamente ao criar. Após aprovação não poderão ser editados.
+            </AlertDescription>
+          </Alert>
+        )}
 
         {/* Steps indicator */}
         <div className="flex items-center gap-2">

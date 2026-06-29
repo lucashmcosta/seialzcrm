@@ -37,23 +37,26 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { ConfirmDialog } from '@/components/ui/confirm-dialog';
 import { Label } from '@/components/ui/label';
 import { ApprovalStatusBadge } from '@/components/whatsapp/templates/ApprovalStatusBadge';
-import { 
-  useTemplates, 
-  useDeleteTemplate, 
+import {
+  useTemplates,
+  useDeleteTemplate,
   useSyncTemplates,
+  useSyncMetaTemplates,
   useSubmitForApproval,
 } from '@/hooks/useWhatsAppTemplates';
 import { useOrganization } from '@/hooks/useOrganization';
-import { 
-  Plus, 
-  ArrowsClockwise, 
-  DotsThree, 
-  Eye, 
-  PencilSimple, 
-  TrashSimple, 
+import { useActiveWhatsAppProviders } from '@/hooks/useActiveWhatsAppProviders';
+import {
+  Plus,
+  ArrowsClockwise,
+  DotsThree,
+  Eye,
+  PencilSimple,
+  TrashSimple,
   PaperPlaneTilt,
   ChatCircle,
   SpinnerGap,
+  CaretDown,
 } from '@phosphor-icons/react';
 import { formatDistanceToNow } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
@@ -61,6 +64,11 @@ import { ptBR } from 'date-fns/locale';
 type FilterStatus = 'all' | 'approved' | 'pending' | 'rejected' | 'not_submitted' | 'draft';
 type FilterType = 'all' | 'text' | 'quick-reply' | 'list-picker' | 'call-to-action' | 'media';
 type FilterLanguage = 'all' | 'pt_BR' | 'pt-BR' | 'en' | 'es';
+type FilterProvider = 'all' | 'twilio' | 'meta_cloud_api';
+
+function isMetaTemplate(t: { provider?: string }) {
+  return t.provider === 'meta_cloud_api';
+}
 
 export default function WhatsAppTemplates() {
   const navigate = useNavigate();
@@ -68,26 +76,32 @@ export default function WhatsAppTemplates() {
   const { data: templates, isLoading } = useTemplates(organization?.id);
   const deleteMutation = useDeleteTemplate();
   const syncMutation = useSyncTemplates();
+  const syncMetaMutation = useSyncMetaTemplates();
   const submitMutation = useSubmitForApproval();
+  const { hasTwilio, hasMeta } = useActiveWhatsAppProviders(organization?.id);
 
   const [filterStatus, setFilterStatus] = useState<FilterStatus>('all');
   const [filterType, setFilterType] = useState<FilterType>('all');
   const [filterLanguage, setFilterLanguage] = useState<FilterLanguage>('all');
+  const [filterProvider, setFilterProvider] = useState<FilterProvider>('all');
   const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false);
   const [selectedTemplateId, setSelectedTemplateId] = useState<string | null>(null);
   const [selectedTemplateName, setSelectedTemplateName] = useState<string>('');
   const [submitDialogOpen, setSubmitDialogOpen] = useState(false);
   const [selectedCategory, setSelectedCategory] = useState<string>('UTILITY');
 
-  // Filter templates
   const filteredTemplates = useMemo(() => {
     return templates?.filter(template => {
       if (filterStatus !== 'all' && template.status !== filterStatus) return false;
       if (filterType !== 'all' && template.template_type !== filterType) return false;
       if (filterLanguage !== 'all' && template.language !== filterLanguage) return false;
+      if (filterProvider !== 'all') {
+        const p = isMetaTemplate(template) ? 'meta_cloud_api' : 'twilio';
+        if (p !== filterProvider) return false;
+      }
       return true;
     }) || [];
-  }, [templates, filterStatus, filterType, filterLanguage]);
+  }, [templates, filterStatus, filterType, filterLanguage, filterProvider]);
 
   const handleDelete = (templateId: string, templateName: string) => {
     setSelectedTemplateId(templateId);
@@ -106,10 +120,11 @@ export default function WhatsAppTemplates() {
     }
   };
 
-  const handleSync = () => {
-    if (organization?.id) {
-      syncMutation.mutate(organization.id);
-    }
+  const handleSyncTwilio = () => {
+    if (organization?.id) syncMutation.mutate(organization.id);
+  };
+  const handleSyncMeta = () => {
+    if (organization?.id) syncMetaMutation.mutate(organization.id);
   };
 
   const openSubmitDialog = (templateId: string) => {
@@ -153,6 +168,77 @@ export default function WhatsAppTemplates() {
     return labels[lang] || lang;
   };
 
+  const showBoth = hasTwilio && hasMeta;
+  const onlyMeta = hasMeta && !hasTwilio;
+  const syncPending = syncMutation.isPending || syncMetaMutation.isPending;
+
+  const renderSyncButton = () => {
+    if (showBoth) {
+      return (
+        <DropdownMenu>
+          <DropdownMenuTrigger asChild>
+            <Button variant="outline" disabled={syncPending}>
+              {syncPending ? (
+                <SpinnerGap className="w-4 h-4 mr-2 animate-spin" />
+              ) : (
+                <ArrowsClockwise className="w-4 h-4 mr-2" />
+              )}
+              Sincronizar
+              <CaretDown className="w-3 h-3 ml-2" />
+            </Button>
+          </DropdownMenuTrigger>
+          <DropdownMenuContent align="end">
+            <DropdownMenuItem onClick={handleSyncTwilio}>Sincronizar Twilio</DropdownMenuItem>
+            <DropdownMenuItem onClick={handleSyncMeta}>Sincronizar Meta</DropdownMenuItem>
+          </DropdownMenuContent>
+        </DropdownMenu>
+      );
+    }
+    return (
+      <Button
+        variant="outline"
+        onClick={onlyMeta ? handleSyncMeta : handleSyncTwilio}
+        disabled={syncPending}
+      >
+        {syncPending ? (
+          <SpinnerGap className="w-4 h-4 mr-2 animate-spin" />
+        ) : (
+          <ArrowsClockwise className="w-4 h-4 mr-2" />
+        )}
+        Sincronizar
+      </Button>
+    );
+  };
+
+  const goNewTwilio = () => navigate('/whatsapp/templates/new');
+  const goNewMeta = () => navigate('/whatsapp/templates/new?provider=meta_cloud_api');
+
+  const renderNewButton = () => {
+    if (showBoth) {
+      return (
+        <DropdownMenu>
+          <DropdownMenuTrigger asChild>
+            <Button>
+              <Plus className="w-4 h-4 mr-2" />
+              Novo Template
+              <CaretDown className="w-3 h-3 ml-2" />
+            </Button>
+          </DropdownMenuTrigger>
+          <DropdownMenuContent align="end">
+            <DropdownMenuItem onClick={goNewTwilio}>Twilio</DropdownMenuItem>
+            <DropdownMenuItem onClick={goNewMeta}>Meta Cloud</DropdownMenuItem>
+          </DropdownMenuContent>
+        </DropdownMenu>
+      );
+    }
+    return (
+      <Button onClick={onlyMeta ? goNewMeta : goNewTwilio}>
+        <Plus className="w-4 h-4 mr-2" />
+        Novo Template
+      </Button>
+    );
+  };
+
   return (
     <div className="space-y-6">
       {/* Header */}
@@ -164,22 +250,8 @@ export default function WhatsAppTemplates() {
           </p>
         </div>
         <div className="flex gap-2">
-          <Button
-            variant="outline"
-            onClick={handleSync}
-            disabled={syncMutation.isPending}
-          >
-            {syncMutation.isPending ? (
-               <SpinnerGap className="w-4 h-4 mr-2 animate-spin" />
-            ) : (
-              <ArrowsClockwise className="w-4 h-4 mr-2" />
-            )}
-            Sincronizar
-          </Button>
-          <Button onClick={() => navigate('/whatsapp/templates/new')}>
-            <Plus className="w-4 h-4 mr-2" />
-            Novo Template
-          </Button>
+          {renderSyncButton()}
+          {renderNewButton()}
         </div>
       </div>
 
@@ -224,6 +296,17 @@ export default function WhatsAppTemplates() {
             <SelectItem value="es">Español</SelectItem>
           </SelectContent>
         </Select>
+
+        <Select value={filterProvider} onValueChange={(v) => setFilterProvider(v as FilterProvider)}>
+          <SelectTrigger className="w-[160px]">
+            <SelectValue placeholder="Provider" />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="all">Todos os Providers</SelectItem>
+            <SelectItem value="twilio">Twilio</SelectItem>
+            <SelectItem value="meta_cloud_api">Meta Cloud</SelectItem>
+          </SelectContent>
+        </Select>
       </div>
 
       {/* Content */}
@@ -234,6 +317,7 @@ export default function WhatsAppTemplates() {
               <TableHeader>
                 <TableRow>
                   <TableHead>Nome</TableHead>
+                  <TableHead>Provider</TableHead>
                   <TableHead>Tipo</TableHead>
                   <TableHead>Idioma</TableHead>
                   <TableHead>Status</TableHead>
@@ -245,6 +329,7 @@ export default function WhatsAppTemplates() {
                 {[1, 2, 3].map((i) => (
                   <TableRow key={i}>
                     <TableCell><Skeleton className="h-4 w-40" /></TableCell>
+                    <TableCell><Skeleton className="h-6 w-20" /></TableCell>
                     <TableCell><Skeleton className="h-4 w-24" /></TableCell>
                     <TableCell><Skeleton className="h-4 w-20" /></TableCell>
                     <TableCell><Skeleton className="h-6 w-24" /></TableCell>
@@ -262,20 +347,14 @@ export default function WhatsAppTemplates() {
             <ChatCircle className="w-12 h-12 mx-auto text-muted-foreground mb-4" />
             <h3 className="font-medium mb-2">Nenhum template encontrado</h3>
             <p className="text-sm text-muted-foreground mb-4">
-              {templates?.length === 0 
-                ? 'Crie um novo template ou sincronize os existentes do Twilio'
+              {templates?.length === 0
+                ? 'Crie um novo template ou sincronize os existentes'
                 : 'Nenhum template corresponde aos filtros selecionados'
               }
             </p>
             <div className="flex gap-2 justify-center">
-              <Button variant="outline" onClick={handleSync} disabled={syncMutation.isPending}>
-                <ArrowsClockwise className="w-4 h-4 mr-2" />
-                Sincronizar do Twilio
-              </Button>
-              <Button onClick={() => navigate('/whatsapp/templates/new')}>
-                <Plus className="w-4 h-4 mr-2" />
-                Criar Template
-              </Button>
+              {renderSyncButton()}
+              {renderNewButton()}
             </div>
           </CardContent>
         </Card>
@@ -286,6 +365,7 @@ export default function WhatsAppTemplates() {
               <TableHeader>
                 <TableRow>
                   <TableHead>Nome</TableHead>
+                  <TableHead>Provider</TableHead>
                   <TableHead>Tipo</TableHead>
                   <TableHead>Idioma</TableHead>
                   <TableHead>Status</TableHead>
@@ -294,64 +374,82 @@ export default function WhatsAppTemplates() {
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {filteredTemplates.map((template) => (
-                  <TableRow key={template.id}>
-                    <TableCell>
-                      <div className="font-medium">{template.friendly_name}</div>
-                      <div className="text-xs text-muted-foreground truncate max-w-xs">
-                        {template.body}
-                      </div>
-                    </TableCell>
-                    <TableCell>
-                      <Badge variant="outline">{getTypeLabel(template.template_type)}</Badge>
-                    </TableCell>
-                    <TableCell>{getLanguageLabel(template.language)}</TableCell>
-                    <TableCell>
-                      <ApprovalStatusBadge status={template.status} />
-                    </TableCell>
-                    <TableCell className="text-muted-foreground text-sm">
-                      {formatDistanceToNow(new Date(template.created_at), {
-                        addSuffix: true,
-                        locale: ptBR,
-                      })}
-                    </TableCell>
-                    <TableCell>
-                      <DropdownMenu>
-                        <DropdownMenuTrigger asChild>
-                          <Button variant="ghost" size="icon">
-                            <DotsThree className="w-4 h-4" />
-                          </Button>
-                        </DropdownMenuTrigger>
-                        <DropdownMenuContent align="end">
-                          <DropdownMenuItem onClick={() => navigate(`/whatsapp/templates/${template.id}`)}>
-                            <Eye className="w-4 h-4 mr-2" />
-                            Ver Detalhes
-                          </DropdownMenuItem>
-                          {template.status !== 'approved' && (
-                            <DropdownMenuItem onClick={() => navigate(`/whatsapp/templates/${template.id}/edit`)}>
-                              <PencilSimple className="w-4 h-4 mr-2" />
-                              Editar
+                {filteredTemplates.map((template) => {
+                  const isMeta = isMetaTemplate(template);
+                  return (
+                    <TableRow key={template.id}>
+                      <TableCell>
+                        <div className="font-medium">{template.friendly_name}</div>
+                        <div className="text-xs text-muted-foreground truncate max-w-xs">
+                          {template.body}
+                        </div>
+                      </TableCell>
+                      <TableCell>
+                        {isMeta ? (
+                          <Badge className="bg-emerald-500/15 text-emerald-700 dark:text-emerald-400 border border-emerald-500/30 hover:bg-emerald-500/15">
+                            Meta Cloud
+                          </Badge>
+                        ) : (
+                          <Badge className="bg-sky-500/15 text-sky-700 dark:text-sky-400 border border-sky-500/30 hover:bg-sky-500/15">
+                            Twilio
+                          </Badge>
+                        )}
+                      </TableCell>
+                      <TableCell>
+                        <Badge variant="outline">{getTypeLabel(template.template_type)}</Badge>
+                      </TableCell>
+                      <TableCell>{getLanguageLabel(template.language)}</TableCell>
+                      <TableCell>
+                        <ApprovalStatusBadge status={template.status} />
+                      </TableCell>
+                      <TableCell className="text-muted-foreground text-sm">
+                        {formatDistanceToNow(new Date(template.created_at), {
+                          addSuffix: true,
+                          locale: ptBR,
+                        })}
+                      </TableCell>
+                      <TableCell>
+                        <DropdownMenu>
+                          <DropdownMenuTrigger asChild>
+                            <Button variant="ghost" size="icon">
+                              <DotsThree className="w-4 h-4" />
+                            </Button>
+                          </DropdownMenuTrigger>
+                          <DropdownMenuContent align="end">
+                            <DropdownMenuItem onClick={() => navigate(`/whatsapp/templates/${template.id}`)}>
+                              <Eye className="w-4 h-4 mr-2" />
+                              Ver Detalhes
                             </DropdownMenuItem>
-                          )}
-                          {(template.status === 'not_submitted' || template.status === 'draft' || template.status === 'rejected') && (
-                            <DropdownMenuItem onClick={() => openSubmitDialog(template.id)}>
-                               <PaperPlaneTilt className="w-4 h-4 mr-2" />
-                              Submeter para Aprovação
-                            </DropdownMenuItem>
-                          )}
-                          <DropdownMenuSeparator />
-                          <DropdownMenuItem 
-                            onClick={() => handleDelete(template.id, template.friendly_name)}
-                            className="text-destructive focus:text-destructive"
-                          >
-                            <TrashSimple className="w-4 h-4 mr-2" />
-                            Excluir
-                          </DropdownMenuItem>
-                        </DropdownMenuContent>
-                      </DropdownMenu>
-                    </TableCell>
-                  </TableRow>
-                ))}
+                            {template.status !== 'approved' && (
+                              <DropdownMenuItem onClick={() => navigate(`/whatsapp/templates/${template.id}/edit`)}>
+                                <PencilSimple className="w-4 h-4 mr-2" />
+                                Editar
+                              </DropdownMenuItem>
+                            )}
+                            {!isMeta && (template.status === 'not_submitted' || template.status === 'draft' || template.status === 'rejected') && (
+                              <DropdownMenuItem onClick={() => openSubmitDialog(template.id)}>
+                                <PaperPlaneTilt className="w-4 h-4 mr-2" />
+                                Submeter para Aprovação
+                              </DropdownMenuItem>
+                            )}
+                            {!isMeta && (
+                              <>
+                                <DropdownMenuSeparator />
+                                <DropdownMenuItem
+                                  onClick={() => handleDelete(template.id, template.friendly_name)}
+                                  className="text-destructive focus:text-destructive"
+                                >
+                                  <TrashSimple className="w-4 h-4 mr-2" />
+                                  Excluir
+                                </DropdownMenuItem>
+                              </>
+                            )}
+                          </DropdownMenuContent>
+                        </DropdownMenu>
+                      </TableCell>
+                    </TableRow>
+                  );
+                })}
               </TableBody>
             </Table>
           </CardContent>
@@ -380,7 +478,7 @@ export default function WhatsAppTemplates() {
               Selecione a categoria do template antes de submeter para aprovação do WhatsApp.
             </DialogDescription>
           </DialogHeader>
-          
+
           <div className="space-y-3">
             <Label>Categoria</Label>
             <Select value={selectedCategory} onValueChange={setSelectedCategory}>
@@ -397,17 +495,17 @@ export default function WhatsAppTemplates() {
               A categoria determina as regras de envio e custos do WhatsApp.
             </p>
           </div>
-          
+
           <DialogFooter>
             <Button variant="outline" onClick={() => setSubmitDialogOpen(false)}>
               Cancelar
             </Button>
-            <Button 
-              onClick={confirmSubmitForApproval} 
+            <Button
+              onClick={confirmSubmitForApproval}
               disabled={submitMutation.isPending}
             >
               {submitMutation.isPending ? (
-                 <SpinnerGap className="w-4 h-4 mr-2 animate-spin" />
+                <SpinnerGap className="w-4 h-4 mr-2 animate-spin" />
               ) : (
                 <PaperPlaneTilt className="w-4 h-4 mr-2" />
               )}
