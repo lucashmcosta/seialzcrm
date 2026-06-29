@@ -1316,7 +1316,7 @@ function DesktopMessagesList() {
                     </Button>
                   )}
                   <Badge color="gray" size="md">
-                    {visibleThreads?.length || 0}
+                    {visibleThreadsWithSelected?.length || 0}
                   </Badge>
 
                 </div>
@@ -1363,7 +1363,7 @@ function DesktopMessagesList() {
                     </div>
                   ))}
                 </div>
-              ) : visibleThreads?.length === 0 ? (
+              ) : visibleThreadsWithSelected?.length === 0 ? (
                 <div className="flex flex-col items-center justify-center p-8 text-muted-foreground">
                   <p className="text-sm">
                     {locale === 'pt-BR' ? 'Nenhuma conversa' : 'No conversations'}
@@ -1382,7 +1382,7 @@ function DesktopMessagesList() {
                       if (key) markThreadRead(key);
                     }}
                   >
-                    {(visibleThreads || []).map((thread) => (
+                    {(visibleThreadsWithSelected || []).map((thread) => (
                       <ChatListItem
                         key={thread.id}
                         value={thread}
@@ -1390,7 +1390,7 @@ function DesktopMessagesList() {
                         onHide={handleHideThread}
                         endpointAddress={
                           hasMultipleEndpoints
-                            ? endpointById[threadEndpointMap[thread.id] ?? '']?.external_address ?? null
+                            ? endpointById[threadEndpointMap[thread.id] ?? (thread.id === selectedThreadOverride?.id ? selectedThreadOverride.primary_endpoint_id ?? '' : '')]?.external_address ?? null
                             : null
                         }
                         officialNumbers={officialNumbers}
