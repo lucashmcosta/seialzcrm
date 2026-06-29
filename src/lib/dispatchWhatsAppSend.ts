@@ -10,6 +10,24 @@
 
 import { supabase } from "@/integrations/supabase/client";
 
+// === Re-rota Comercial → Meta 7020 (Central Trabalhista) ===
+// Lazy: somente quando a tela /messages enviar em thread cujo provider
+// resolvido seja Twilio (ou sem endpoint algum). Não toca /inbox.
+const REROUTE_ORG_ID = "40ae935c-a7f7-4ad7-8ea4-91be6404a95f";
+const REROUTE_TARGET_ENDPOINT_ID = "407ff93d-4860-49cd-82ae-beda456c1774";
+const REROUTE_MIGRATION_KIND = "commercial_twilio_to_meta_7020";
+const REROUTE_NOTE_KIND = "endpoint_migration_meta_7020";
+const REROUTE_NOTE_TEXT =
+  "Conversa migrada para o novo número WhatsApp 7020 (Meta Cloud). Histórico anterior preservado.";
+
+export interface MigrationContext {
+  kind: string;
+  previousProvider: "twilio";
+  targetEndpointId: string;
+  noteKind: string;
+  noteText: string;
+}
+
 export interface WhatsAppSendPayload {
   organizationId: string;
   contactId?: string;
@@ -28,6 +46,7 @@ export interface WhatsAppSendPayload {
   senderContext?: "inbox" | "messages" | string;
   dryRun?: boolean;
   endpointId?: string;
+  migrationContext?: MigrationContext;
 }
 
 type Provider = "twilio" | "meta_cloud_api";
