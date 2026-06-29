@@ -196,7 +196,7 @@ serve(async (req) => {
   try {
     const owned = await metaGraphGet(
       `/${META_PAGE_ID}`,
-      { fields: "id,name,tasks,access_token" },
+      { fields: "id,name,access_token" },
       { accessToken: suToken, appSecret },
     );
     out.steps.graph_page = {
