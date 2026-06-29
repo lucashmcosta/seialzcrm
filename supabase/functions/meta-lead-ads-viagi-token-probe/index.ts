@@ -95,8 +95,11 @@ serve(async (req) => {
   let body: any = {};
   try { body = await req.json(); } catch { /* ok */ }
   const mode: "probe" | "repair" = body?.mode === "repair" ? "repair" : "probe";
-  if (mode === "repair" && body?.confirm_token !== REPAIR_CONFIRM) {
-    return json({ error: `repair requires confirm_token="${REPAIR_CONFIRM}"` }, 400);
+  if (mode === "repair") {
+    if (!auth.ok) return json({ error: "Unauthorized for repair", details: auth.reason }, 401);
+    if (body?.confirm_token !== REPAIR_CONFIRM) {
+      return json({ error: `repair requires confirm_token="${REPAIR_CONFIRM}"` }, 400);
+    }
   }
 
   const out: any = {
