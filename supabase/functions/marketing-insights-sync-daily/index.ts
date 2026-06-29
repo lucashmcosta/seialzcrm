@@ -1,7 +1,7 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "jsr:@supabase/supabase-js@2";
 import { corsHeaders } from "../_shared/cors.ts";
-import { resolveMetaAccessToken } from "../_shared/meta-token.ts";
+import { decryptSecret } from "../_shared/crypto.ts";
 
 const API_VERSION = "v25.0";
 const GRAPH_TIMEOUT_MS = 30000;
@@ -321,9 +321,10 @@ serve(async (req) => {
 
     let token: string;
     try {
-      const resolved = await resolveMetaAccessToken(admin, org.id, cred.system_user_token_encrypted);
-      token = resolved.token;
-    } catch (_e) {
+      token = await decryptSecret(cred.system_user_token_encrypted);
+      console.log(`[meta-token] slug=${cred.source ?? "meta"} org=${org.id} result=ok`);
+    } catch (e) {
+      console.warn(`[meta-token] slug=${cred.source ?? "meta"} org=${org.id} result=fail reason=${(e as Error).message}`);
       errors.push({ org_id: org.id, error: "decrypt_failed" });
       continue;
     }
