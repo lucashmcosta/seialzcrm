@@ -563,7 +563,6 @@ function DesktopMessagesList() {
   const selectedThreadPrimaryEndpointId = selectedThreadId
     ? threadEndpointMap[selectedThreadId]
       ?? (selectedThreadOverride?.id === selectedThreadId ? selectedThreadOverride.primary_endpoint_id ?? null : null)
-      ?? null
     : null;
   const defaultComposerEndpointId = selectedThreadPrimaryEndpointId ?? orgEndpoints[0]?.id ?? null;
   const composerEndpointId = selectedThreadId
