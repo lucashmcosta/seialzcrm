@@ -261,6 +261,7 @@ function DesktopMessagesList() {
   const dateLocale = locale === 'pt-BR' ? ptBR : enUS;
 
   const [selectedThreadId, setSelectedThreadId] = useState<string | null>(null);
+  const [selectedThreadOverride, setSelectedThreadOverride] = useState<(ChatThread & { primary_endpoint_id?: string | null }) | null>(null);
   const selectedThreadWaProvider = useWhatsAppProvider({ threadId: selectedThreadId });
   const [textareaOverflow, setTextareaOverflow] = useState(false);
   const [messages, setMessages] = useState<Message[]>([]);
@@ -545,7 +546,8 @@ function DesktopMessagesList() {
   // Fetch threads via RPC (replaces N+1 query)
   const { threads, loading: threadsLoading, refetchThreads, loadMore, hasMore, loadingMore, markThreadRead } = useMessageThreads({ channels: ['whatsapp'] });
 
-  const selectedThread = threads?.find((t) => t.id === selectedThreadId);
+  const selectedThread = threads?.find((t) => t.id === selectedThreadId)
+    ?? (selectedThreadOverride?.id === selectedThreadId ? selectedThreadOverride : undefined);
 
   // Multi-number support (temporary CT transition period).
   // Only renders selector + per-thread badge when the org has 2+ active endpoints.
@@ -558,7 +560,9 @@ function DesktopMessagesList() {
   // primary_endpoint_id; falls back to the first active endpoint.
   // Does NOT persist back to the thread — purely a per-send choice.
   const [composerEndpointByThread, setComposerEndpointByThread] = useState<Record<string, string>>({});
-  const selectedThreadPrimaryEndpointId = selectedThreadId ? threadEndpointMap[selectedThreadId] ?? null : null;
+  const selectedThreadPrimaryEndpointId = selectedThreadId
+    ? threadEndpointMap[selectedThreadId] ?? selectedThreadOverride?.primary_endpoint_id ?? null
+    : null;
   const defaultComposerEndpointId = selectedThreadPrimaryEndpointId ?? orgEndpoints[0]?.id ?? null;
   const composerEndpointId = selectedThreadId
     ? composerEndpointByThread[selectedThreadId] ?? defaultComposerEndpointId

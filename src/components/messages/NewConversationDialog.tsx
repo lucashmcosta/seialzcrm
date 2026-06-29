@@ -38,7 +38,7 @@ const getDisplayName = (contact: Contact): string => {
 interface NewConversationDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
-  onSelectContact: (contactId: string, threadId: string) => void;
+  onSelectContact: (contactId: string, threadId: string, endpointId: string | null) => void | Promise<void>;
 }
 
 export function NewConversationDialog({
@@ -65,17 +65,33 @@ export function NewConversationDialog({
    * - se a org não tem endpoints carregados, retorna null e o insert
    *   cai no fallback legado (sem primary_endpoint_id).
    */
-  const preferredEndpointId = useMemo<string | null>(() => {
+  const orderedEndpoints = useMemo(() => {
     if (!endpoints.length) return null;
-    const sorted = [...endpoints].sort(
-      (a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime(),
-    );
+    const endpointRank = (ep: typeof endpoints[number]) => {
+      const digits = ep.external_address.replace(/\D/g, '');
+      const isBrazil = digits.startsWith('55');
+      const isMeta = ep.provider === 'meta_cloud_api';
+      if (isMeta && isBrazil) return 0;
+      if (isBrazil) return 1;
+      if (isMeta) return 2;
+      return 3;
+    };
+    return [...endpoints].sort((a, b) => {
+      const byRank = endpointRank(a) - endpointRank(b);
+      if (byRank !== 0) return byRank;
+      return new Date(b.created_at).getTime() - new Date(a.created_at).getTime();
+    });
+  }, [endpoints]);
+
+  const preferredEndpointId = useMemo<string | null>(() => {
+    if (!orderedEndpoints?.length) return null;
+    const sorted = orderedEndpoints;
     const transitional = sorted.filter((ep) => {
       const digits = ep.external_address.replace(/\D/g, '');
       return digits && !officialNumbers.has(digits);
     });
     return (transitional[0] ?? sorted[0]).id;
-  }, [endpoints, officialNumbers]);
+  }, [orderedEndpoints, officialNumbers]);
 
   // Endpoint efetivamente usado para abrir/criar a thread. Inicia no
   // preferido (heurística) e pode ser sobrescrito pelo usuário via
@@ -84,8 +100,9 @@ export function NewConversationDialog({
 
   useEffect(() => {
     if (open) {
-      setSelectedEndpointId(preferredEndpointId);
+      setSelectedEndpointId((current) => current ?? preferredEndpointId);
     } else {
+      setSelectedEndpointId(null);
       setSearch('');
     }
   }, [open, preferredEndpointId]);
@@ -142,7 +159,7 @@ export function NewConversationDialog({
       const { data: existingThread } = await existingQuery.maybeSingle();
 
       if (existingThread) {
-        onSelectContact(contact.id, existingThread.id);
+        await Promise.resolve(onSelectContact(contact.id, existingThread.id, effectiveEndpointId));
         onOpenChange(false);
         return;
       }
@@ -161,11 +178,12 @@ export function NewConversationDialog({
         .from('message_threads')
         .insert(insertPayload as any)
         .select('id')
-        .single();
+        .maybeSingle();
 
       if (error) throw error;
+      if (!newThread?.id) throw new Error('Thread was not created');
 
-      onSelectContact(contact.id, newThread.id);
+      await Promise.resolve(onSelectContact(contact.id, newThread.id, effectiveEndpointId));
       onOpenChange(false);
     } catch (error) {
       console.error('Error selecting contact:', error);
@@ -199,7 +217,7 @@ export function NewConversationDialog({
 
           {/* Endpoint selector (only when org has 2+ active endpoints) */}
           <EndpointSelector
-            endpoints={endpoints}
+            endpoints={orderedEndpoints ?? endpoints}
             value={selectedEndpointId}
             onChange={setSelectedEndpointId}
             disabled={selecting !== null || endpointsLoading}
