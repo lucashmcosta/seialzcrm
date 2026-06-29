@@ -77,6 +77,19 @@ export function NewConversationDialog({
     return (transitional[0] ?? sorted[0]).id;
   }, [endpoints, officialNumbers]);
 
+  // Endpoint efetivamente usado para abrir/criar a thread. Inicia no
+  // preferido (heurística) e pode ser sobrescrito pelo usuário via
+  // EndpointSelector quando a org tem 2+ endpoints ativos.
+  const [selectedEndpointId, setSelectedEndpointId] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (open) {
+      setSelectedEndpointId(preferredEndpointId);
+    } else {
+      setSearch('');
+    }
+  }, [open, preferredEndpointId]);
+
   const { data: contacts, isLoading } = useQuery({
     queryKey: ['contacts-with-phone', organization?.id, search],
     queryFn: async () => {
