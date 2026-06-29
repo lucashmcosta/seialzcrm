@@ -69,6 +69,7 @@ interface Message {
   sender_type: 'user' | 'agent' | 'system' | null;
   sender_name: string | null;
   sender_agent_id: string | null;
+  metadata?: Record<string, any> | null;
 }
 
 interface InlineNote {
@@ -337,7 +338,7 @@ export function MobileMessagesList() {
     try {
       const { data, error } = await supabase
         .from('messages')
-        .select(`id, content, direction, sent_at, whatsapp_status, media_urls, media_type, error_message, reply_to_message_id, sender_type, sender_name, sender_agent_id, reply_to_message:reply_to_message_id (content, direction)`)
+        .select(`id, content, direction, sent_at, whatsapp_status, media_urls, media_type, error_message, reply_to_message_id, sender_type, sender_name, sender_agent_id, metadata, reply_to_message:reply_to_message_id (content, direction)`)
         .eq('thread_id', threadId)
         .is('deleted_at', null)
         .order('sent_at', { ascending: true });
@@ -918,6 +919,25 @@ export function MobileMessagesList() {
                         }
 
                         const message = item.data;
+
+                        const isEndpointMigration =
+                          message.metadata &&
+                          typeof message.metadata === 'object' &&
+                          (message.metadata as any).kind === 'endpoint_migration_meta_7020';
+
+                        if (isEndpointMigration) {
+                          return (
+                            <div key={`sys-${message.id}`}>
+                              {sep}
+                              <div className="flex justify-center my-3">
+                                <div className="max-w-[85%] px-3 py-1.5 rounded-full bg-muted/70 text-muted-foreground text-[11px] font-medium tracking-wide text-center shadow-sm">
+                                  {message.content}
+                                </div>
+                              </div>
+                            </div>
+                          );
+                        }
+
                         const isOutbound = message.direction === 'outbound';
 
                         return (

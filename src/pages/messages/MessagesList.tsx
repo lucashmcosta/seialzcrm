@@ -143,6 +143,7 @@ interface Message {
   sender_type: 'user' | 'agent' | 'system' | null;
   sender_name: string | null;
   sender_agent_id: string | null;
+  metadata?: Record<string, any> | null;
 }
 
 interface InlineNote {
@@ -823,7 +824,7 @@ function DesktopMessagesList() {
         .from('messages')
         .select(`
           id, content, direction, sent_at, whatsapp_status, whatsapp_message_sid, media_urls, media_type, error_message, error_code, reply_to_message_id,
-          sender_type, sender_name, sender_agent_id,
+          sender_type, sender_name, sender_agent_id, metadata,
           reply_to_message:reply_to_message_id (content, direction)
         `)
         .eq('thread_id', threadId)
@@ -1711,6 +1712,22 @@ function DesktopMessagesList() {
                               }
 
                               const message = item.data;
+
+                              const isEndpointMigration =
+                                message.metadata &&
+                                typeof message.metadata === 'object' &&
+                                (message.metadata as any).kind === 'endpoint_migration_meta_7020';
+
+                              if (isEndpointMigration) {
+                                return (
+                                  <div key={`sys-${message.id}`} className="flex justify-center my-3">
+                                    <div className="max-w-[80%] px-3 py-1.5 rounded-full bg-muted/70 text-muted-foreground text-[11px] font-medium tracking-wide text-center shadow-sm">
+                                      {message.content}
+                                    </div>
+                                  </div>
+                                );
+                              }
+
                               const isOutbound = message.direction === 'outbound';
 
                               return (
