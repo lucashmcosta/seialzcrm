@@ -30,7 +30,9 @@ interface MetaTemplate {
   status: string;
   category?: string;
   components?: MetaComponent[];
+  rejected_reason?: string;
 }
+
 
 function mapStatus(meta: string): string {
   const s = (meta || "").toUpperCase();
@@ -106,7 +108,7 @@ serve(async (req) => {
           page = await metaWaGet(
             `/${wabaId}/message_templates`,
             {
-              fields: "name,language,status,category,components",
+              fields: "name,language,status,category,components,rejected_reason",
               limit: 200,
               after,
             },
@@ -115,10 +117,11 @@ serve(async (req) => {
         } else {
           page = await metaWaGet(
             `/${wabaId}/message_templates`,
-            { fields: "name,language,status,category,components", limit: 200 },
+            { fields: "name,language,status,category,components,rejected_reason", limit: 200 },
             { accessToken, appSecret },
           );
         }
+
       } catch (e) {
         const err = e instanceof MetaWaGraphError
           ? { code: e.error.code, message: e.error.message, status: e.status }
@@ -153,6 +156,10 @@ serve(async (req) => {
         .eq("language", tpl.language)
         .maybeSingle();
 
+      const rejectedReason = (tpl as any).rejected_reason && String((tpl as any).rejected_reason).toUpperCase() !== "NONE"
+        ? String((tpl as any).rejected_reason)
+        : null;
+
       const row = {
         organization_id: organizationId,
         organization_integration_id: oi.id,
@@ -165,6 +172,7 @@ serve(async (req) => {
         template_type: "text",
         category: tpl.category || null,
         status,
+        rejection_reason: status === "rejected" ? rejectedReason : null,
         body: bodyText || "",
         header: headerText,
         footer: footerText,
@@ -173,8 +181,9 @@ serve(async (req) => {
         source: "meta",
         is_active: true,
         last_synced_at: new Date().toISOString(),
-        metadata: { meta_cloud: { waba_id: String(wabaId), raw: tpl } },
+        metadata: { meta_cloud: { waba_id: String(wabaId), rejected_reason: rejectedReason, raw: tpl } },
       };
+
 
       if (existing?.id) {
         const { error } = await supabase

@@ -147,6 +147,9 @@ serve(async (req) => {
       : metaStatus === "REJECTED"
       ? "rejected"
       : "pending";
+    const rejectedReason = metaResponse?.rejected_reason && String(metaResponse.rejected_reason).toUpperCase() !== "NONE"
+      ? String(metaResponse.rejected_reason)
+      : null;
 
     const row = {
       organization_id: organizationId,
@@ -160,6 +163,7 @@ serve(async (req) => {
       template_type: "text",
       category: cat,
       status,
+      rejection_reason: status === "rejected" ? rejectedReason : null,
       body: input.body,
       header: input.header || null,
       footer: input.footer || null,
@@ -172,10 +176,12 @@ serve(async (req) => {
         meta_cloud: {
           waba_id: String(wabaId),
           template_id: metaTemplateId,
+          rejected_reason: rejectedReason,
           raw: metaResponse,
         },
       },
     };
+
 
     const { data: inserted, error: insErr } = await supabase
       .from("whatsapp_templates")
