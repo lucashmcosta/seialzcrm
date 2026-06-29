@@ -519,6 +519,7 @@ export function MobileMessagesList() {
           organizationId: organization.id, contactId: selectedThread.contact_id,
           threadId: selectedThreadId, templateId, templateVariables: variables,
           userId: userProfile?.id,
+          senderContext: 'messages',
         });
       if (error) throw error;
       if (data.error) throw new Error(data.error);
