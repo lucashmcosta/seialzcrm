@@ -11,6 +11,22 @@
 
 import { createClient, SupabaseClient } from "npm:@supabase/supabase-js@2";
 
+// === Re-rota Comercial → Meta 7020 (Central Trabalhista) ===
+const REROUTE_ORG_ID = "40ae935c-a7f7-4ad7-8ea4-91be6404a95f";
+const REROUTE_TARGET_ENDPOINT_ID = "407ff93d-4860-49cd-82ae-beda456c1774";
+const REROUTE_MIGRATION_KIND = "commercial_twilio_to_meta_7020";
+const REROUTE_NOTE_KIND = "endpoint_migration_meta_7020";
+const REROUTE_NOTE_TEXT =
+  "Conversa migrada para o novo número WhatsApp 7020 (Meta Cloud). Histórico anterior preservado.";
+
+export interface MigrationContext {
+  kind: string;
+  previousProvider: "twilio";
+  targetEndpointId: string;
+  noteKind: string;
+  noteText: string;
+}
+
 export interface WhatsAppSendPayload {
   organizationId: string;
   contactId?: string;
@@ -29,6 +45,7 @@ export interface WhatsAppSendPayload {
   senderContext?: "inbox" | "messages" | string;
   dryRun?: boolean;
   endpointId?: string;
+  migrationContext?: MigrationContext;
 }
 
 export interface WhatsAppSendResult {
@@ -147,6 +164,33 @@ export async function dispatchWhatsAppSend(
       threadId: payload.threadId ?? null,
     });
     return { data: null, error: { message: err.message, name: err.code } };
+  }
+
+  // Re-rota lazy Comercial → Meta 7020 (Central Trabalhista)
+  const shouldReroute =
+    payload.senderContext === "messages" &&
+    payload.organizationId === REROUTE_ORG_ID &&
+    (resolved.provider === "twilio" || resolved.source === "default") &&
+    payload.endpointId !== REROUTE_TARGET_ENDPOINT_ID &&
+    !!payload.threadId;
+
+  if (shouldReroute) {
+    console.log("[dispatch-wa] re-route commercial → meta 7020", {
+      threadId: payload.threadId,
+      previousSource: resolved.source,
+    });
+    payload = {
+      ...payload,
+      endpointId: REROUTE_TARGET_ENDPOINT_ID,
+      migrationContext: {
+        kind: REROUTE_MIGRATION_KIND,
+        previousProvider: "twilio",
+        targetEndpointId: REROUTE_TARGET_ENDPOINT_ID,
+        noteKind: REROUTE_NOTE_KIND,
+        noteText: REROUTE_NOTE_TEXT,
+      },
+    };
+    resolved = { provider: "meta_cloud_api", source: "endpoint_explicit" };
   }
 
   const fnName = resolved.provider === "meta_cloud_api"

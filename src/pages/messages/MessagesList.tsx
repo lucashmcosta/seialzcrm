@@ -972,6 +972,7 @@ function DesktopMessagesList() {
           message: savedText,
           userId: userProfile?.id,
           replyToMessageId: savedReplyTo?.id || null,
+          senderContext: 'messages',
           ...(hasMultipleEndpoints && composerEndpointId ? { endpointId: composerEndpointId } : {}),
         });
 
@@ -1041,6 +1042,7 @@ function DesktopMessagesList() {
           templateId,
           templateVariables: variables,
           userId: userProfile?.id,
+          senderContext: 'messages',
           ...(hasMultipleEndpoints && composerEndpointId ? { endpointId: composerEndpointId } : {}),
         });
 
@@ -1135,6 +1137,7 @@ function DesktopMessagesList() {
           mediaType,
           userId: userProfile?.id,
           replyToMessageId: savedReplyTo?.id || null,
+          senderContext: 'messages',
           ...(hasMultipleEndpoints && composerEndpointId ? { endpointId: composerEndpointId } : {}),
         });
 

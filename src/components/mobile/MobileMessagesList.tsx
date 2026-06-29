@@ -479,6 +479,7 @@ export function MobileMessagesList() {
           organizationId: organization.id, contactId: selectedThread.contact_id,
           threadId: selectedThreadId, message: savedText,
           userId: userProfile?.id, replyToMessageId: savedReplyTo?.id || null,
+          senderContext: 'messages',
         });
       if (error) throw error;
       if (data.error) {
@@ -518,6 +519,7 @@ export function MobileMessagesList() {
           organizationId: organization.id, contactId: selectedThread.contact_id,
           threadId: selectedThreadId, templateId, templateVariables: variables,
           userId: userProfile?.id,
+          senderContext: 'messages',
         });
       if (error) throw error;
       if (data.error) throw new Error(data.error);
@@ -575,6 +577,7 @@ export function MobileMessagesList() {
           organizationId: organization.id, contactId: selectedThread.contact_id,
           threadId: selectedThreadId, message: caption, mediaUrl: publicUrl, mediaType,
           userId: userProfile?.id, replyToMessageId: savedReplyTo?.id || null,
+          senderContext: 'messages',
         });
       if (error) throw error;
       refetchThreads();
