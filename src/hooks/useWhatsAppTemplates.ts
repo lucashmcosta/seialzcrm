@@ -2,6 +2,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useEffect } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { whatsappService, WhatsAppTemplate, CreateTemplateInput, SendTemplateInput } from '@/services/whatsapp';
+import { metaWhatsAppService } from '@/services/metaWhatsAppService';
 import { useToast } from '@/hooks/use-toast';
 
 export function useTemplates(orgId: string | undefined) {
