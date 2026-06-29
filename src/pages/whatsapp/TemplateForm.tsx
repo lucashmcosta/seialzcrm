@@ -228,9 +228,18 @@ export default function TemplateForm() {
             <ArrowLeft className="w-4 h-4" />
           </Button>
           <h1 className="text-3xl font-bold">
-            {isEditing ? 'Editar Template' : 'Novo Template'}
+            {isEditing ? 'Editar Template' : isMetaProvider ? 'Novo Template Meta Cloud' : 'Novo Template'}
           </h1>
         </div>
+
+        {isMetaProvider && !isEditing && (
+          <Alert>
+            <WarningCircle className="w-4 h-4" />
+            <AlertDescription>
+              Templates Meta são enviados para aprovação automaticamente ao criar. Após aprovação não poderão ser editados.
+            </AlertDescription>
+          </Alert>
+        )}
 
         {/* Steps indicator */}
         <div className="flex items-center gap-2">
