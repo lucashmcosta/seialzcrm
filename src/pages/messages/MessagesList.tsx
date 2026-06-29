@@ -972,6 +972,7 @@ function DesktopMessagesList() {
           message: savedText,
           userId: userProfile?.id,
           replyToMessageId: savedReplyTo?.id || null,
+          senderContext: 'messages',
           ...(hasMultipleEndpoints && composerEndpointId ? { endpointId: composerEndpointId } : {}),
         });
 
