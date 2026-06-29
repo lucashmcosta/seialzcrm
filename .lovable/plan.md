@@ -1,57 +1,28 @@
-## Causa raiz
+## Objetivo
 
-A mensagem de áudio enviada pela Tamires para o `arlison` (+559299626104) **nunca foi inserida** na tabela `messages` e **nunca chegou** a `meta-whatsapp-send` (zero logs, zero linha outbound no thread).
+Permitir escolher de qual número WhatsApp a Nova Conversa será aberta, evitando que a heurística atual selecione o endpoint errado (caso atual: 7491 em vez de 7020 na Central Trabalhista).
 
-O motivo é uma diferença entre `/messages` e `/inbox`:
+## Mudanças
 
-- `src/pages/messages/MessagesList.tsx` chama `dispatchWhatsAppSend({ ..., contactId: selectedThread.contact_id })`.
-- `src/components/inbox/InboxComposer.tsx` (`invokeSend`, linha 218–240) **não envia `contactId`** — só manda `organizationId`, `threadId`, `userId`, `senderName`.
+### 1. `src/components/messages/NewConversationDialog.tsx`
+- Reaproveitar o componente existente `EndpointSelector` (já usado no composer).
+- Adicionar `useState<string | null>` para o endpoint selecionado, inicializado com `preferredEndpointId` (heurística atual permanece como default).
+- Renderizar o seletor logo abaixo do input de busca, **somente quando** `endpoints.length >= 2` (mesma regra do `EndpointSelector`).
+- Em `handleSelect`, usar `selectedEndpointId` (em vez de `preferredEndpointId`) tanto no filtro de thread existente quanto no `insertPayload.primary_endpoint_id`.
+- Resetar `selectedEndpointId` para o `preferredEndpointId` quando o diálogo abre/fecha.
 
-A função `meta-whatsapp-send` exige `contactId` logo no início:
+### 2. Label do seletor
+Manter o padrão atual do `EndpointSelector` (`Enviar de` / `Send from`) — já cobre i18n pt-BR/en-US.
 
-```ts
-if (!contactId) return jsonResponse(400, { error: "missing_contact" });
-```
-
-→ retorna 400 → o cliente vê exatamente `Edge Function returned a non-2xx status code` (como na print).
-
-Por que só apareceu agora no áudio do `arlison`:
-- Thread Meta Cloud (primary_endpoint_id = `407ff93d`, provider `meta_cloud_api`).
-- Antes do guard, áudios nessa thread iam pro `twilio-whatsapp-send` (que aceita só `threadId`) e falhavam silenciosamente com 63007.
-- Depois do guard, o roteamento foi corrigido para Meta Cloud, mas o `/inbox` continua mandando payload incompleto e a função Meta rejeita antes de qualquer insert.
-- O texto "Olá boa tarde!" das 19:11 funcionou porque foi enviado pelo `/messages`, que passa `contactId`.
-
-A função `twilio-whatsapp-send` tolera ausência de `contactId` (deriva pela thread), por isso o problema só ficou visível no novo caminho Meta.
-
-## Correção proposta (1 arquivo, ~3 linhas)
-
-**`src/components/inbox/InboxComposer.tsx`** — em `invokeSend` (linha 218), adicionar `contactId: thread!.contact_id ?? undefined` ao payload base, junto com `organizationId`/`threadId`. Nada mais muda.
-
-```ts
-const { data, error } = await dispatchWhatsAppSend({
-  organizationId: thread!.organization_id || organization?.id,
-  threadId: thread!.id,
-  contactId: thread!.contact_id ?? undefined, // ← NOVO
-  senderContext: 'inbox',
-  userId: myId,
-  senderName,
-  ...payload,
-});
-```
+### 3. Sem mudança na heurística `preferredEndpointId`
+Ela continua válida como default; o seletor só dá ao usuário a chance de sobrescrever. Orgs com 1 endpoint não veem diferença.
 
 ## Fora de escopo
-
-- Não mexer em `meta-whatsapp-send` (a exigência de `contactId` está correta; é o cliente que deve mandar).
-- Não mexer em `twilio-whatsapp-send`, dispatcher, RLS, templates ou inbound.
-- Não mexer em `/messages` (já passa `contactId` corretamente).
+- Nenhuma migração de dados.
+- Nenhuma mudança em endpoints/threads existentes.
+- Nenhuma mudança no composer ou no envio.
 
 ## Validação
-
-1. Pedir à Tamires para reenviar o áudio na mesma thread `arlison` pelo `/inbox`.
-2. Conferir em `messages` (thread do `+559299626104`) que aparece uma linha `outbound`, `media_type='audio'`, `whatsapp_status='sent'`, `metadata.meta_cloud.wamid` preenchido.
-3. Conferir logs de `meta-whatsapp-send` mostrando o POST recebido (não havia nenhum antes).
-4. Smoke test no `/messages` (Mara/Twilio + tcharlesmattos2/Meta) para garantir que nada quebrou.
-
-## Risco
-
-Praticamente zero — adiciona um campo opcional que ambas as funções aceitam.
+- Org com 1 endpoint: dialog renderiza igual a hoje.
+- Org Central Trabalhista (vários endpoints Meta Cloud): seletor aparece, mostrando 7491 e 7020; usuário escolhe 7020 e a thread é criada/encontrada com `primary_endpoint_id` = 7020.
+- Conversa já existente naquele endpoint é reaproveitada (mesma lógica de filtro por `primary_endpoint_id`).
