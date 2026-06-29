@@ -86,6 +86,7 @@ serve(async (req) => {
       templateId, templateVariables,
       type: payloadType, templateName: directTemplateName,
       languageCode: directLanguageCode, components: directComponents,
+      migrationContext,
     } = body as Record<string, any>;
 
     if (!organizationId) return jsonResponse(400, { error: "missing_organization" });
