@@ -824,7 +824,7 @@ function DesktopMessagesList() {
         .from('messages')
         .select(`
           id, content, direction, sent_at, whatsapp_status, whatsapp_message_sid, media_urls, media_type, error_message, error_code, reply_to_message_id,
-          sender_type, sender_name, sender_agent_id,
+          sender_type, sender_name, sender_agent_id, metadata,
           reply_to_message:reply_to_message_id (content, direction)
         `)
         .eq('thread_id', threadId)
