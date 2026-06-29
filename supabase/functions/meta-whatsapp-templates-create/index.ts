@@ -127,8 +127,9 @@ serve(async (req) => {
       );
     } catch (e) {
       if (e instanceof MetaWaGraphError) {
-        let message = e.error.message;
-        if (e.error.code === 192 || /already exists|duplicate/i.test(e.error.message || "")) {
+        const errAny = e.error as any;
+        let message = errAny.error_user_msg || errAny.message || "Erro ao criar template na Meta.";
+        if (errAny.code === 192 || /already exists|duplicate/i.test(errAny.message || "")) {
           message = `Já existe um template "${name}" no idioma ${lang}.`;
         }
         return json(422, {
@@ -139,6 +140,7 @@ serve(async (req) => {
       }
       throw e;
     }
+
 
     const metaTemplateId = metaResponse?.id ? String(metaResponse.id) : null;
     const metaStatus = (metaResponse?.status || "PENDING").toString().toUpperCase();
