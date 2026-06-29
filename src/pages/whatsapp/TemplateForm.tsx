@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { useNavigate, useParams } from 'react-router-dom';
+import { useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import { Layout } from '@/components/Layout';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -17,10 +17,11 @@ import { Alert, AlertDescription } from '@/components/ui/alert';
 import { TemplateTypeSelector, TemplateType } from '@/components/whatsapp/templates/TemplateTypeSelector';
 import { WhatsAppPreview } from '@/components/whatsapp/templates/WhatsAppPreview';
 import { VariablesTable, Variable } from '@/components/whatsapp/templates/VariablesTable';
-import { 
-  useTemplate, 
-  useCreateTemplate, 
+import {
+  useTemplate,
+  useCreateTemplate,
   useUpdateTemplate,
+  useCreateMetaTemplate,
 } from '@/hooks/useWhatsAppTemplates';
 import { useOrganization } from '@/hooks/useOrganization';
 import { getTemplateNameError, extractVariables } from '@/lib/template-validation';
