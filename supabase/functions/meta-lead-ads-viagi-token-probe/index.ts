@@ -196,14 +196,14 @@ serve(async (req) => {
   try {
     const owned = await metaGraphGet(
       `/${META_PAGE_ID}`,
-      { fields: "id,name,tasks,access_token" },
+      { fields: "id,name,access_token" },
       { accessToken: suToken, appSecret },
     );
     out.steps.graph_page = {
       ok: true,
       page_id: owned.id,
       page_name: owned.name,
-      tasks: owned.tasks ?? null,
+      tasks: null,
       page_access_token_returned: !!owned.access_token,
       page_access_token_preview: mask(owned.access_token),
     };
