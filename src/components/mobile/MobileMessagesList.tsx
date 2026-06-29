@@ -479,6 +479,7 @@ export function MobileMessagesList() {
           organizationId: organization.id, contactId: selectedThread.contact_id,
           threadId: selectedThreadId, message: savedText,
           userId: userProfile?.id, replyToMessageId: savedReplyTo?.id || null,
+          senderContext: 'messages',
         });
       if (error) throw error;
       if (data.error) {
