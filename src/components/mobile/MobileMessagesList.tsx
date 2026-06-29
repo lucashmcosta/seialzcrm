@@ -338,7 +338,7 @@ export function MobileMessagesList() {
     try {
       const { data, error } = await supabase
         .from('messages')
-        .select(`id, content, direction, sent_at, whatsapp_status, media_urls, media_type, error_message, reply_to_message_id, sender_type, sender_name, sender_agent_id, reply_to_message:reply_to_message_id (content, direction)`)
+        .select(`id, content, direction, sent_at, whatsapp_status, media_urls, media_type, error_message, reply_to_message_id, sender_type, sender_name, sender_agent_id, metadata, reply_to_message:reply_to_message_id (content, direction)`)
         .eq('thread_id', threadId)
         .is('deleted_at', null)
         .order('sent_at', { ascending: true });
