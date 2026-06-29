@@ -1137,6 +1137,7 @@ function DesktopMessagesList() {
           mediaType,
           userId: userProfile?.id,
           replyToMessageId: savedReplyTo?.id || null,
+          senderContext: 'messages',
           ...(hasMultipleEndpoints && composerEndpointId ? { endpointId: composerEndpointId } : {}),
         });
 
