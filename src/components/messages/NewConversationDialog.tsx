@@ -147,6 +147,7 @@ export function NewConversationDialog({
         .eq('organization_id', organization.id)
         .eq('contact_id', contact.id)
         .eq('channel', 'whatsapp')
+        .in('status', ['open', 'awaiting_client', 'in_progress'])
         .order('updated_at', { ascending: false })
         .limit(1);
 
