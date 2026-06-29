@@ -22,6 +22,7 @@ import { supabase } from '@/integrations/supabase/client';
 import { useQuery } from '@tanstack/react-query';
 import { useToast } from '@/hooks/use-toast';
 import { useWhatsAppProvider } from '@/hooks/useWhatsAppProvider';
+import { resolveComposerProvider } from '@/lib/resolveComposerProvider';
 import {
   SpinnerGap, Check, Checks, Clock, WarningCircle,
   Sparkle, Briefcase, Smiley, Robot, ChatCircleDots,
@@ -855,7 +856,11 @@ export function MobileMessagesList() {
               <WhatsAppTemplateSelector
                 onSelect={handleSendTemplate}
                 onCancel={() => setShowTemplates(false)}
-                provider={selectedThreadWaProvider === 'meta_cloud_api' ? 'meta_cloud_api' : undefined}
+                provider={resolveComposerProvider({
+                  organizationId: organization?.id,
+                  senderContext: 'messages',
+                  resolvedProvider: selectedThreadWaProvider,
+                }) === 'meta_cloud_api' ? 'meta_cloud_api' : undefined}
               />
             </div>
           ) : (
