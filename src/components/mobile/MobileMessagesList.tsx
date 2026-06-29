@@ -577,6 +577,7 @@ export function MobileMessagesList() {
           organizationId: organization.id, contactId: selectedThread.contact_id,
           threadId: selectedThreadId, message: caption, mediaUrl: publicUrl, mediaType,
           userId: userProfile?.id, replyToMessageId: savedReplyTo?.id || null,
+          senderContext: 'messages',
         });
       if (error) throw error;
       refetchThreads();
