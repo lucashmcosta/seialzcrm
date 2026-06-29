@@ -83,8 +83,13 @@ function describeMetaError(e: unknown) {
 serve(async (req) => {
   if (req.method === "OPTIONS") return new Response(null, { headers: corsHeaders });
 
-  const auth = validateServiceRoleAuth(req);
-  if (!auth.ok) return json({ error: "Unauthorized", details: auth.error }, 401);
+  const admin = createClient(
+    Deno.env.get("SUPABASE_URL")!,
+    Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!,
+  );
+
+  const auth = await isAdminCaller(req, admin);
+  if (!auth.ok) return json({ error: "Unauthorized", details: auth.reason }, 401);
 
   let body: any = {};
   try { body = await req.json(); } catch { /* ok */ }
@@ -92,11 +97,6 @@ serve(async (req) => {
   if (mode === "repair" && body?.confirm_token !== REPAIR_CONFIRM) {
     return json({ error: `repair requires confirm_token="${REPAIR_CONFIRM}"` }, 400);
   }
-
-  const admin = createClient(
-    Deno.env.get("SUPABASE_URL")!,
-    Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!,
-  );
 
   const out: any = {
     mode,
