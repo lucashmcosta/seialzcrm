@@ -129,47 +129,24 @@ serve(async (req) => {
   }
 
   let accessToken: string;
-  let tokenSource = cred.source;
   try {
     accessToken = await decryptSecret(tokenEnc);
+    console.log(`[meta-token] slug=meta org=${orgId} result=ok`);
   } catch (e) {
-    console.warn("primary token decrypt failed, trying fallbacks:", (e as Error).message);
-
-    try {
-      const fallbackCandidates = await getFallbackTokenCandidates(admin, orgId);
-      let recovered = false;
-
-      for (const candidate of fallbackCandidates) {
-        try {
-          accessToken = await decryptSecret(candidate.encrypted);
-          tokenSource = candidate.slug;
-          recovered = true;
-          console.log(
-            `[meta-discover-ad-accounts] recovered token using ${candidate.slug} updated_at=${candidate.updatedAt}`,
-          );
-          if (candidate.slug !== "meta") {
-            await syncRecoveredTokenToMeta(admin, orgId, candidate.encrypted);
-          }
-          break;
-        } catch (_fallbackError) {
-          // keep trying the next token candidate
-        }
-      }
-
-      if (!recovered) {
-        return errorResponse("token_decrypt_failed", "Falha ao decriptar token", undefined, 500);
-      }
-    } catch (fallbackError) {
-      console.error("fallback token recovery failed:", (fallbackError as Error).message);
-      return errorResponse("token_decrypt_failed", "Falha ao decriptar token", undefined, 500);
-    }
+    console.warn(`[meta-token] slug=meta org=${orgId} result=fail reason=${(e as Error).message}`);
+    return errorResponse(
+      "token_decrypt_failed",
+      "Falha ao decriptar token da integração Meta. Reconecte a integração Meta para esta organização.",
+      undefined,
+      500,
+    );
   }
 
-  const sourceSlug =
-    tokenSource === "meta" ? "meta" : tokenSource === "legacy_merged" ? "meta-lead-ads" : "meta-lead-ads";
+  // Sem fallback cross-slug. Esta função usa exclusivamente o token da integração `meta`.
+  const sourceSlug = "meta";
 
   console.log(
-    `[meta-discover-ad-accounts] org=${orgId} source=${cred.source} token=${redactToken(accessToken)}`,
+    `[meta-discover-ad-accounts] org=${orgId} source=${sourceSlug} token=${redactToken(accessToken)}`,
   );
 
   // 1) permissions
