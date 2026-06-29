@@ -1,82 +1,51 @@
-# Renderizar nota de migração como divisor de sistema (estilo Divus)
+
+# Ordenar nota de migração antes do template enviado
 
 ## Problema
 
-A nota inserida pelo backend `meta-whatsapp-send` (metadata.kind='endpoint_migration_meta_7020') aparece como balão de mensagem comum em `/messages`. Deve virar um divisor centralizado estilo "HOJE / ONTEM".
+A nota "Conversa migrada para o novo número WhatsApp 7020 (Meta Cloud)…" está aparecendo **depois** do template enviado na thread. Deveria aparecer **antes**, marcando o ponto da virada de canal.
 
-## Escopo
+## Causa
 
-- Apenas presentational em `/messages` desktop e mobile.
-- Sem mudanças em backend, schema, edge functions, dispatcher ou `/inbox`.
-- Sem alterar a inserção da nota.
+Em `supabase/functions/meta-whatsapp-send/index.ts`:
 
-## Regra de detecção (estrita)
+1. Linha ~364: insere a mensagem do template com `sent_at: new Date().toISOString()` (T0).
+2. Linhas ~513-570: só após o POST à Meta retornar, insere a nota de migração — sem `sent_at`/`created_at` explícitos, então o Postgres carimba T0 + ~1-2s.
 
-Somente este predicado vira divisor:
+Resultado: a nota fica cronologicamente depois do template e o `chatItems` ordena assim na UI.
 
-```ts
-const isEndpointMigration =
-  m.metadata &&
-  typeof m.metadata === 'object' &&
-  (m.metadata as any).kind === 'endpoint_migration_meta_7020';
-```
+## Mudança (escopo mínimo)
 
-NÃO usar `m.direction === 'internal'`, NÃO usar `sender_type === 'system'` sozinho, NÃO usar `'kind' in metadata`. Notas internas comuns ficam como estão.
+Arquivo único: `supabase/functions/meta-whatsapp-send/index.ts`.
 
-## Mudanças
+1. Antes do insert do template (linha ~364), capturar um único timestamp:
+   ```ts
+   const sendTimestamp = new Date();
+   const templateSentAt = sendTimestamp.toISOString();
+   const migrationNoteAt = new Date(sendTimestamp.getTime() - 1000).toISOString();
+   ```
+   Usar `templateSentAt` no insert do template (substitui o `new Date().toISOString()` inline).
 
-### 1. `src/pages/messages/MessagesList.tsx`
+2. No bloco de persistência da migração (linhas ~541-559), ao inserir a nota incluir:
+   ```ts
+   sent_at: migrationNoteAt,
+   created_at: migrationNoteAt,
+   ```
+   Isso garante que a nota fique 1 segundo antes do template independentemente da latência do POST à Meta.
 
-a) Adicionar `metadata` ao `select` (linha ~824):
-```
-id, content, direction, sent_at, whatsapp_status, ..., sender_type, sender_name, sender_agent_id, metadata,
-reply_to_message:reply_to_message_id (...)
-```
+3. Manter o bloco de persistência **após** o sucesso do envio (não inserir nota se o envio falhou). Apenas o timestamp muda para retroceder a nota.
 
-b) Estender o type `Message` (linha ~143):
-```ts
-metadata?: Record<string, any> | null;
-```
+## Não muda
 
-c) No `chatItems.map` (linha ~1685), antes do render padrão da mensagem, aplicar o curto-circuito **só** para a migração:
-
-```tsx
-if (item._type === 'message') {
-  const m = item.data;
-  const isEndpointMigration =
-    m.metadata &&
-    typeof m.metadata === 'object' &&
-    (m.metadata as any).kind === 'endpoint_migration_meta_7020';
-
-  if (isEndpointMigration) {
-    return (
-      <Fragment key={`sys-${m.id}`}>
-        {separator}
-        <div className="flex justify-center my-3">
-          <div className="max-w-[80%] px-3 py-1.5 rounded-full bg-muted/70 text-muted-foreground text-[11px] font-medium tracking-wide text-center shadow-sm">
-            {m.content}
-          </div>
-        </div>
-      </Fragment>
-    );
-  }
-}
-```
-
-### 2. `src/components/mobile/MobileMessagesList.tsx`
-
-Mesma alteração:
-- Adicionar `metadata` ao `select` (linha 340).
-- Adicionar `metadata` ao type `Message` (linha ~69).
-- Inserir o mesmo curto-circuito (predicado idêntico) antes da renderização padrão do balão.
+- Lógica de detecção, conteúdo da nota, metadata.kind, RLS.
+- Frontend (`MessagesList.tsx` e `MobileMessagesList.tsx`) — o divisor system já é renderizado pelo predicado `metadata.kind === 'endpoint_migration_meta_7020'`.
+- Dispatcher, edge functions de Twilio, `/inbox`.
 
 ## Critério de aceite
 
-- Nota de migração ("A partir daqui você está falando com o cliente pelo novo número...") aparece centralizada, pill `bg-muted/70`, igual ao separador "HOJE", sem avatar/autor/timestamp/cauda de balão.
-- Notas internas comuns (amarelas) continuam idênticas.
-- Mensagens normais (inbound/outbound) inalteradas.
-- `/inbox` inalterado.
+- Em qualquer thread Comercial migrada pela próxima vez, a nota aparece imediatamente **antes** do template enviado.
+- Threads já migradas (Cheila, hellenasilva223) permanecem como estão — não vamos reordenar histórico retroativo. Se desejar corrigir as 2 threads existentes, faço um UPDATE manual depois (opcional).
 
-## Próximo passo
+## Pergunta
 
-Após aprovação visual, rodar bateria A, B, C, D.
+Quer que eu também rode um UPDATE corrigindo o `sent_at` das notas de migração já inseridas (Cheila, hellenasilva223) para 1 s antes do template enviado correspondente? Recomendo sim, são poucas rows.
