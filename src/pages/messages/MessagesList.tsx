@@ -46,6 +46,7 @@ import { formatDistanceToNow } from 'date-fns';
 import { ptBR, enUS } from 'date-fns/locale';
 import { useToast } from '@/hooks/use-toast';
 import { useWhatsAppProvider } from '@/hooks/useWhatsAppProvider';
+import { resolveComposerProvider } from '@/lib/resolveComposerProvider';
 import { SpinnerGap, Check, Checks, Clock, WarningCircle, Sparkle, Briefcase, Smiley, Robot, ChatCircleDots, FileText, Target, UserCheck, CheckCircle, ArrowCounterClockwise, ArrowsLeftRight, Note, DownloadSimple, NotePencil, TextAa, TrendUp, TrendDown } from '@phosphor-icons/react';
 import { MessageStatusIndicator, MessageFailureInline } from '@/components/whatsapp/MessageStatusIndicator';
 import { ConfirmDialog } from '@/components/ui/confirm-dialog';
@@ -1616,7 +1617,11 @@ function DesktopMessagesList() {
                     <WhatsAppTemplateSelector
                       onSelect={handleSendTemplate}
                       onCancel={() => setShowTemplates(false)}
-                      provider={selectedThreadWaProvider === 'meta_cloud_api' ? 'meta_cloud_api' : undefined}
+                      provider={resolveComposerProvider({
+                        organizationId: organization?.id,
+                        senderContext: 'messages',
+                        resolvedProvider: selectedThreadWaProvider,
+                      }) === 'meta_cloud_api' ? 'meta_cloud_api' : undefined}
                     />
                   </div>
                 ) : (
