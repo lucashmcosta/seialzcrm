@@ -1,32 +1,62 @@
-## Caminho A — Recovery Viagi em 2 lotes (read+dispatch only, sem alterar código)
+## Auditoria final read-only — Viagi (últimos 10 dias)
 
-### Pré-requisito: confirm_token correto
+**Janela:** `since_override_iso=2026-06-19T17:18:03Z`
+**Org:** `b246ef6f-6242-4011-a112-6d8783d2896a`
+**Page:** `1c11568d-fd83-4d5a-8dfe-86aa4588ce00`
 
-⚠️ O token que o usuário enviou foi `VIAGI_RECOVERY_2026_06_29`, mas o código (`supabase/functions/meta-lead-ads-recovery-viagi/index.ts:24`) exige literalmente `VIAGI_RECOVERY_2026_06_19`. Vou usar o token correto do código — caso contrário a função retorna 400.
+Apenas leituras. Nenhuma escrita, dispatch, deploy, recovery ou alteração de schema.
 
-### Passos
+### Execução
 
-1. **Tabela diária BRT exata dos 162 `would_import`** — parsear `would_import_full` do count salvo, agrupar por `created_time` convertido para America/Sao_Paulo (UTC-3), entregar tabela `dia_BRT | leads_pendentes`.
+1. **Graph × CRM** — `supabase--curl_edge_functions` POST `/meta-lead-ads-recovery-viagi` com `{"mode":"count","since_override_iso":"2026-06-19T17:18:03Z"}`. Por formulário: `graph_total_fetched`, `already_imported`, `would_import`, `duplicates_by_source_external_id`, `duplicates_by_phone_normalized`. Validar `already_imported + would_import == graph_total_fetched` e `would_import == 0`. Reconciliação por `source_external_id` (não por `created_at`).
 
-2. **Lote 1** — `POST /meta-lead-ads-recovery-viagi`
-   ```json
-   {
-     "mode": "apply",
-     "since_override_iso": "2026-06-19T17:18:03Z",
-     "limit": 100,
-     "confirm_token": "VIAGI_RECOVERY_2026_06_19"
-   }
+2. **Leads sem contato** — derivado do passo 1; se `would_import == 0`, garantido. Caso contrário, listar `would_import_lead_ids`.
+
+3. **Contatos sem Opportunity** — `supabase--read_query`:
+   ```sql
+   SELECT c.id, c.name, c.source_external_id
+   FROM contacts c
+   WHERE c.organization_id='b246ef6f-6242-4011-a112-6d8783d2896a'
+     AND c.source='meta_lead_ads'
+     AND c.deleted_at IS NULL
+     AND NOT EXISTS (
+       SELECT 1 FROM opportunities o
+       WHERE o.contact_id=c.id AND o.deleted_at IS NULL
+     );
    ```
-   Reporta: `graph_total_fetched`, `already_imported`, `applied.ok`, `applied.failed`, `applied.remaining_after_this_batch`, `applied.errors`.
+   Reportar quantidade e IDs. Esperado: 0.
 
-3. **Lote 2** (se `remaining_after_this_batch > 0`) — mesmo payload. Idempotência garante zero duplicatas (dedup por `source_external_id` no início).
+4. **Logs do recovery** — `supabase--edge_function_logs` para `meta-lead-ads-recovery-viagi`. Classificar:
+   - Erros internos (exceptions, `dispatch.failed`, Graph errors).
+   - 504 do gateway — não contam como falha se `would_import=0` e nada interno falhou.
 
-4. **Count final** — mesmo `since_override_iso`, `mode=count`. Confirmar `would_import == 0`.
+5. **Estado dos forms** — `supabase--read_query`:
+   ```sql
+   SELECT provider_form_id, provider_form_name, consecutive_errors,
+          last_sync_status, last_synced_lead_created_time
+   FROM lead_forms
+   WHERE organization_id='b246ef6f-6242-4011-a112-6d8783d2896a'
+     AND provider='meta_lead_ads'
+     AND meta_lead_page_id='1c11568d-fd83-4d5a-8dfe-86aa4588ce00';
+   ```
+   Esperado: `consecutive_errors=0`, `last_sync_status='success'`.
 
-### Stop point
+6. **Health da página** — descobrir colunas `%health%` em `meta_lead_pages` via `information_schema`, depois `SELECT * FROM meta_lead_pages WHERE id='1c11568d-...'`. Confirmar `last_health_check_status='ok'`, `last_health_check_error IS NULL`, `last_health_check_at` recente.
 
-Se qualquer lote retornar `failed > 0`, paro, reporto erros e aguardo decisão antes de continuar.
+7. **Veredito final** — tabela única com 7 checks (✅/❌):
+
+   | Check | Resultado |
+   |---|---|
+   | Graph × CRM reconciliado | ✅/❌ |
+   | would_import = 0 | ✅/❌ |
+   | Nenhum lead sem Contact | ✅/❌ |
+   | Nenhum Contact sem Opportunity | ✅/❌ |
+   | Sem erros internos | ✅/❌ |
+   | Forms saudáveis | ✅/❌ |
+   | Health da página OK | ✅/❌ |
+
+   Se todos ✅: declarar **"Incidente Viagi encerrado. Recuperação dos leads concluída com sucesso, reconciliação Graph × CRM validada e ambiente operacional saudável."**
+   Se algum ❌: listar check, valor atual, esperado e provável causa. **Nenhuma correção** — qualquer fix exige nova aprovação.
 
 ### Fora de escopo
-
-Nenhuma alteração de código, nenhum aumento de cap, nenhuma feature nova na função.
+Escritas, UPDATE, dispatches, deploys, recovery, alterações de schema. Somente Viagi.
