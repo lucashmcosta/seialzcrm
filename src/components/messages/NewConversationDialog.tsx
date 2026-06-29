@@ -194,8 +194,18 @@ export function NewConversationDialog({
               onChange={(e) => setSearch(e.target.value)}
               className="pl-9"
               autoFocus
-            />
           </div>
+
+          {/* Endpoint selector (only when org has 2+ active endpoints) */}
+          <EndpointSelector
+            endpoints={endpoints}
+            value={selectedEndpointId}
+            onChange={setSelectedEndpointId}
+            disabled={selecting !== null || endpointsLoading}
+            locale={locale as 'pt-BR' | 'en-US'}
+          />
+
+
 
           {/* Contact list */}
           <ScrollArea className="h-[300px]">
