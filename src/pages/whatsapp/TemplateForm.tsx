@@ -165,21 +165,37 @@ export default function TemplateForm() {
   const handleSubmit = async () => {
     if (!organization?.id) return;
 
-    const data = {
-      organization_id: organization.id,
-      friendly_name: friendlyName,
-      language,
-      category,
-      template_type: templateType,
-      body,
-      header: header || undefined,
-      footer: footer || undefined,
-      variables: variables.length > 0 ? variables : undefined,
-      buttons: buttons.length > 0 ? buttons : undefined,
-      actions: actions.length > 0 ? actions : undefined,
-    };
-
     try {
+      if (isMetaProvider && !isEditing) {
+        await createMetaMutation.mutateAsync({
+          organizationId: organization.id,
+          name: friendlyName,
+          language,
+          category,
+          body,
+          header: header || undefined,
+          footer: footer || undefined,
+          variables: variables.length > 0 ? variables : undefined,
+          buttons: buttons.length > 0 ? buttons : undefined,
+        });
+        navigate('/settings/whatsapp-templates');
+        return;
+      }
+
+      const data = {
+        organization_id: organization.id,
+        friendly_name: friendlyName,
+        language,
+        category,
+        template_type: templateType,
+        body,
+        header: header || undefined,
+        footer: footer || undefined,
+        variables: variables.length > 0 ? variables : undefined,
+        buttons: buttons.length > 0 ? buttons : undefined,
+        actions: actions.length > 0 ? actions : undefined,
+      };
+
       if (isEditing && id) {
         await updateMutation.mutateAsync({ id, data });
       } else {
@@ -191,7 +207,7 @@ export default function TemplateForm() {
     }
   };
 
-  const isSubmitting = createMutation.isPending || updateMutation.isPending;
+  const isSubmitting = createMutation.isPending || updateMutation.isPending || createMetaMutation.isPending;
 
   if (isEditing && templateLoading) {
     return (
