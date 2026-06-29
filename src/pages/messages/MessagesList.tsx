@@ -561,7 +561,9 @@ function DesktopMessagesList() {
   // Does NOT persist back to the thread — purely a per-send choice.
   const [composerEndpointByThread, setComposerEndpointByThread] = useState<Record<string, string>>({});
   const selectedThreadPrimaryEndpointId = selectedThreadId
-    ? threadEndpointMap[selectedThreadId] ?? selectedThreadOverride?.primary_endpoint_id ?? null
+    ? threadEndpointMap[selectedThreadId]
+      ?? (selectedThreadOverride?.id === selectedThreadId ? selectedThreadOverride.primary_endpoint_id ?? null : null)
+      ?? null
     : null;
   const defaultComposerEndpointId = selectedThreadPrimaryEndpointId ?? orgEndpoints[0]?.id ?? null;
   const composerEndpointId = selectedThreadId
@@ -1231,6 +1233,50 @@ function DesktopMessagesList() {
     && !(visibleThreads ?? []).some((t) => t.id === selectedThreadOverride.id)
       ? [selectedThreadOverride, ...(visibleThreads ?? [])]
       : visibleThreads;
+
+  const loadThreadForSelection = async (
+    threadId: string,
+    fallbackEndpointId: string | null,
+  ): Promise<(ChatThread & { primary_endpoint_id?: string | null }) | null> => {
+    if (!organization?.id) return null;
+
+    const { data: row, error } = await supabase
+      .from('message_threads')
+      .select('id, contact_id, status, updated_at, whatsapp_last_inbound_at, last_inbound_at, needs_human_attention, assigned_user_id, primary_endpoint_id, last_message_content, last_message_direction')
+      .eq('organization_id', organization.id)
+      .eq('id', threadId)
+      .maybeSingle();
+
+    if (error) {
+      console.error('Error loading selected thread:', error);
+      return null;
+    }
+    if (!row) return null;
+
+    const { data: contact } = await supabase
+      .from('contacts')
+      .select('full_name, phone')
+      .eq('id', (row as any).contact_id)
+      .maybeSingle();
+
+    return {
+      id: (row as any).id,
+      contact_id: (row as any).contact_id,
+      contact_name: (contact as any)?.full_name || (contact as any)?.phone || 'Desconhecido',
+      contact_phone: (contact as any)?.phone ?? null,
+      last_message: (row as any).last_message_content || '...',
+      last_message_direction: (row as any).last_message_direction ?? null,
+      updated_at: (row as any).updated_at,
+      whatsapp_last_inbound_at: (row as any).whatsapp_last_inbound_at ?? null,
+      last_inbound_at: (row as any).last_inbound_at ?? null,
+      unread: false,
+      needs_human_attention: (row as any).needs_human_attention ?? false,
+      status: (row as any).status || 'open',
+      assigned_user_id: (row as any).assigned_user_id ?? null,
+      assigned_user_name: null,
+      primary_endpoint_id: (row as any).primary_endpoint_id ?? fallbackEndpointId,
+    };
+  };
 
   const handleHideThread = (threadId: string) => {
     const thread = threads?.find((t) => t.id === threadId);
