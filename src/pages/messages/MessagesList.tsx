@@ -2115,9 +2115,17 @@ function DesktopMessagesList() {
       <NewConversationDialog
         open={showNewConversation}
         onOpenChange={setShowNewConversation}
-        onSelectContact={(contactId, threadId) => {
+        onSelectContact={async (_contactId, threadId, endpointId) => {
+          setSearchQuery('');
+          if (endpointFilter !== 'all' && endpointFilter !== endpointId) {
+            setEndpointFilter('all');
+          }
+
+          const loadedThread = await loadThreadForSelection(threadId, endpointId);
+          setSelectedThreadOverride(loadedThread);
           setSelectedThreadId(threadId);
-          refetchThreads();
+          await refetchThreads();
+          setSelectedThreadId(threadId);
         }}
       />
 
