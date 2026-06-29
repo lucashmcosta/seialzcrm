@@ -208,7 +208,36 @@ serve(async (req) => {
       .eq("organization_id", ORG_ID)
       .in("source_external_id", leadIds.length > 0 ? leadIds : ["__none__"]);
 
+    // Min/Max created_time observed in Graph for this form
+    let minCreated: string | null = null;
+    let maxCreated: string | null = null;
+    for (const l of leads) {
+      const t = l.created_time as string | undefined;
+      if (!t) continue;
+      if (!minCreated || t < minCreated) minCreated = t;
+      if (!maxCreated || t > maxCreated) maxCreated = t;
+    }
+
+    // Count CRM contacts for this org with source=meta_lead_ads in audit window
+    const windowEnd = maxCreated || new Date().toISOString();
+    const { count: crmContactsInWindow } = await admin
+      .from("contacts")
+      .select("id", { count: "exact", head: true })
+      .eq("organization_id", ORG_ID)
+      .eq("source", "meta_lead_ads")
+      .gte("created_at", sinceIso)
+      .lte("created_at", windowEnd);
+
     const sample = pendingLeads.slice(0, 10).map((l) => ({
+      lead_id: l.id,
+      created_time: l.created_time,
+      phone: extractField(l.field_data || [], PHONE_FIELDS),
+      full_name: extractField(l.field_data || [], NAME_FIELDS),
+      ad_name: l.ad_name,
+      campaign_name: l.campaign_name,
+    }));
+
+    const wouldImportFull = pendingLeads.map((l) => ({
       lead_id: l.id,
       created_time: l.created_time,
       phone: extractField(l.field_data || [], PHONE_FIELDS),
@@ -231,18 +260,26 @@ serve(async (req) => {
       reached_page_cap: pagesFetched >= MAX_PAGES,
       meta_error: metaError,
       graph_total_fetched: leads.length,
+      graph_min_created_time: minCreated,
+      graph_max_created_time: maxCreated,
       already_imported: alreadyImportedIds.size,
       would_import: pendingLeads.length,
+      would_import_lead_ids: pendingLeads.map((l) => l.id),
+      would_import_full: wouldImportFull,
       duplicates_by_source_external_id: dupByExternal.size,
       duplicates_by_phone_normalized: dupByPhone.size,
-      remaining_after_import: 0, // count mode = nothing applied, so post-apply remaining would be 0
+      remaining_after_import: 0,
       crm_cross_check: {
         graph_fetched: leads.length,
         crm_contacts_matching_graph_lead_ids: crmContactsFromGraph ?? 0,
+        crm_contacts_meta_lead_ads_in_window: crmContactsInWindow ?? 0,
+        window_start: sinceIso,
+        window_end: windowEnd,
         missing_in_crm: leads.length - (crmContactsFromGraph ?? 0),
       },
       sample_would_import: sample,
     };
+
 
     if (mode === "apply") {
       const batch = pendingLeads.slice(0, limit);
