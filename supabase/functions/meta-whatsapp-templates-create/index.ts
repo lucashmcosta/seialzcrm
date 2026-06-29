@@ -127,8 +127,9 @@ serve(async (req) => {
       );
     } catch (e) {
       if (e instanceof MetaWaGraphError) {
-        let message = e.error.message;
-        if (e.error.code === 192 || /already exists|duplicate/i.test(e.error.message || "")) {
+        const errAny = e.error as any;
+        let message = errAny.error_user_msg || errAny.message || "Erro ao criar template na Meta.";
+        if (errAny.code === 192 || /already exists|duplicate/i.test(errAny.message || "")) {
           message = `Já existe um template "${name}" no idioma ${lang}.`;
         }
         return json(422, {
@@ -140,6 +141,7 @@ serve(async (req) => {
       throw e;
     }
 
+
     const metaTemplateId = metaResponse?.id ? String(metaResponse.id) : null;
     const metaStatus = (metaResponse?.status || "PENDING").toString().toUpperCase();
     const status = metaStatus === "APPROVED"
@@ -147,6 +149,9 @@ serve(async (req) => {
       : metaStatus === "REJECTED"
       ? "rejected"
       : "pending";
+    const rejectedReason = metaResponse?.rejected_reason && String(metaResponse.rejected_reason).toUpperCase() !== "NONE"
+      ? String(metaResponse.rejected_reason)
+      : null;
 
     const row = {
       organization_id: organizationId,
@@ -160,6 +165,7 @@ serve(async (req) => {
       template_type: "text",
       category: cat,
       status,
+      rejection_reason: status === "rejected" ? rejectedReason : null,
       body: input.body,
       header: input.header || null,
       footer: input.footer || null,
@@ -172,10 +178,12 @@ serve(async (req) => {
         meta_cloud: {
           waba_id: String(wabaId),
           template_id: metaTemplateId,
+          rejected_reason: rejectedReason,
           raw: metaResponse,
         },
       },
     };
+
 
     const { data: inserted, error: insErr } = await supabase
       .from("whatsapp_templates")
