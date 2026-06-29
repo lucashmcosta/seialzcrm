@@ -361,6 +361,12 @@ serve(async (req) => {
       };
     }
 
+    // Timestamps coordenados: nota de migração precede o template em 1s
+    // para garantir ordenação cronológica correta na UI.
+    const sendTimestamp = new Date();
+    const templateSentAt = sendTimestamp.toISOString();
+    const migrationNoteAt = new Date(sendTimestamp.getTime() - 1000).toISOString();
+
     const { data: insertedMsg, error: insErr } = await supabase
       .from("messages")
       .insert({
@@ -370,7 +376,7 @@ serve(async (req) => {
         direction: "outbound",
         sender_user_id: userId || null,
         whatsapp_status: "sending",
-        sent_at: new Date().toISOString(),
+        sent_at: templateSentAt,
         reply_to_message_id: replyToMessageId || null,
         sender_type: isAgentMessage ? "agent" : "user",
         sender_name: resolvedSenderName,
@@ -549,6 +555,8 @@ serve(async (req) => {
                 direction: "internal",
                 sender_type: "system",
                 sender_name: "Sistema",
+                sent_at: migrationNoteAt,
+                created_at: migrationNoteAt,
                 metadata: {
                   kind: migrationContext.noteKind,
                   previous_provider: migrationContext.previousProvider ?? "twilio",
