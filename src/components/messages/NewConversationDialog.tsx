@@ -1,5 +1,6 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
+import { EndpointSelector } from './EndpointSelector';
 import { useOrgWhatsAppEndpoints } from '@/hooks/useOrgWhatsAppEndpoints';
 import { supabase } from '@/integrations/supabase/client';
 import { useOrganization } from '@/hooks/useOrganization';
@@ -76,6 +77,19 @@ export function NewConversationDialog({
     return (transitional[0] ?? sorted[0]).id;
   }, [endpoints, officialNumbers]);
 
+  // Endpoint efetivamente usado para abrir/criar a thread. Inicia no
+  // preferido (heurística) e pode ser sobrescrito pelo usuário via
+  // EndpointSelector quando a org tem 2+ endpoints ativos.
+  const [selectedEndpointId, setSelectedEndpointId] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (open) {
+      setSelectedEndpointId(preferredEndpointId);
+    } else {
+      setSearch('');
+    }
+  }, [open, preferredEndpointId]);
+
   const { data: contacts, isLoading } = useQuery({
     queryKey: ['contacts-with-phone', organization?.id, search],
     queryFn: async () => {
@@ -119,8 +133,10 @@ export function NewConversationDialog({
         .order('updated_at', { ascending: false })
         .limit(1);
 
-      if (preferredEndpointId) {
-        existingQuery = existingQuery.eq('primary_endpoint_id', preferredEndpointId);
+      const effectiveEndpointId = selectedEndpointId ?? preferredEndpointId;
+
+      if (effectiveEndpointId) {
+        existingQuery = existingQuery.eq('primary_endpoint_id', effectiveEndpointId);
       }
 
       const { data: existingThread } = await existingQuery.maybeSingle();
@@ -131,14 +147,14 @@ export function NewConversationDialog({
         return;
       }
 
-      // Create new thread anchored to the preferred endpoint (when known).
+      // Create new thread anchored to the chosen endpoint (when known).
       const insertPayload: Record<string, unknown> = {
         organization_id: organization.id,
         contact_id: contact.id,
         channel: 'whatsapp',
       };
-      if (preferredEndpointId) {
-        insertPayload.primary_endpoint_id = preferredEndpointId;
+      if (effectiveEndpointId) {
+        insertPayload.primary_endpoint_id = effectiveEndpointId;
       }
 
       const { data: newThread, error } = await supabase
@@ -180,6 +196,17 @@ export function NewConversationDialog({
               autoFocus
             />
           </div>
+
+          {/* Endpoint selector (only when org has 2+ active endpoints) */}
+          <EndpointSelector
+            endpoints={endpoints}
+            value={selectedEndpointId}
+            onChange={setSelectedEndpointId}
+            disabled={selecting !== null || endpointsLoading}
+            locale={locale as 'pt-BR' | 'en-US'}
+          />
+
+
 
           {/* Contact list */}
           <ScrollArea className="h-[300px]">
