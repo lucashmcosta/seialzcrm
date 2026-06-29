@@ -1423,6 +1423,9 @@ function DesktopMessagesList() {
                     onSelectionChange={(keys) => {
                       const keysArray = Array.from(keys);
                       const key = keysArray[0] as string;
+                      if (key !== selectedThreadOverride?.id) {
+                        setSelectedThreadOverride(null);
+                      }
                       setSelectedThreadId(key || null);
                       if (key) markThreadRead(key);
                     }}
