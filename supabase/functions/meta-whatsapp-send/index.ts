@@ -510,12 +510,73 @@ serve(async (req) => {
         })
         .eq("id", insertedMsg.id);
 
+      // === Persistência da re-rota Comercial → Meta 7020 ===
+      let migration_applied = false;
+      let migration_persistence_error: string | null = null;
+      if (
+        migrationContext &&
+        typeof migrationContext === "object" &&
+        migrationContext.targetEndpointId &&
+        migrationContext.noteKind &&
+        currentThreadId
+      ) {
+        try {
+          const { error: updErr } = await supabase
+            .from("message_threads")
+            .update({ primary_endpoint_id: migrationContext.targetEndpointId })
+            .eq("id", currentThreadId)
+            .neq("primary_endpoint_id", migrationContext.targetEndpointId);
+          if (updErr) throw new Error(`thread_update_failed: ${updErr.message}`);
+
+          const { data: existingNote, error: selErr } = await supabase
+            .from("messages")
+            .select("id")
+            .eq("thread_id", currentThreadId)
+            .eq("direction", "internal")
+            .contains("metadata", { kind: migrationContext.noteKind })
+            .limit(1)
+            .maybeSingle();
+          if (selErr) throw new Error(`note_lookup_failed: ${selErr.message}`);
+
+          if (!existingNote) {
+            const { error: insNoteErr } = await supabase
+              .from("messages")
+              .insert({
+                organization_id: organizationId,
+                thread_id: currentThreadId,
+                content: migrationContext.noteText ??
+                  "Conversa migrada para o novo número WhatsApp 7020 (Meta Cloud). Histórico anterior preservado.",
+                direction: "internal",
+                sender_type: "system",
+                sender_name: "Sistema",
+                metadata: {
+                  kind: migrationContext.noteKind,
+                  previous_provider: migrationContext.previousProvider ?? "twilio",
+                  migration_kind: migrationContext.kind ?? null,
+                  target_endpoint_id: migrationContext.targetEndpointId,
+                },
+              });
+            if (insNoteErr) throw new Error(`note_insert_failed: ${insNoteErr.message}`);
+          }
+
+          migration_applied = true;
+        } catch (mErr) {
+          migration_persistence_error = (mErr as Error).message;
+          console.error("[meta-whatsapp-send] migration persistence failed", {
+            threadId: currentThreadId,
+            error: migration_persistence_error,
+          });
+        }
+      }
+
       return jsonResponse(200, {
         success: true,
         messageId: insertedMsg.id,
         wamid,
         threadId: currentThreadId,
         provider: "meta_cloud_api",
+        migration_applied,
+        migration_persistence_error,
       });
     } catch (e) {
       const errDetails = e instanceof MetaWaGraphError
