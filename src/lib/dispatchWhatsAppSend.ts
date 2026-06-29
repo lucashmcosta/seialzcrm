@@ -158,6 +158,33 @@ export async function dispatchWhatsAppSend(payload: WhatsAppSendPayload) {
     return { data: null, error: { message: err.message, name: err.code } as any };
   }
 
+  // Re-rota lazy Comercial → Meta 7020 (Central Trabalhista)
+  const shouldReroute =
+    payload.senderContext === "messages" &&
+    payload.organizationId === REROUTE_ORG_ID &&
+    (resolved.provider === "twilio" || resolved.source === "default") &&
+    payload.endpointId !== REROUTE_TARGET_ENDPOINT_ID &&
+    !!payload.threadId;
+
+  if (shouldReroute) {
+    console.log("[dispatch-wa] re-route commercial → meta 7020", {
+      threadId: payload.threadId,
+      previousSource: resolved.source,
+    });
+    payload = {
+      ...payload,
+      endpointId: REROUTE_TARGET_ENDPOINT_ID,
+      migrationContext: {
+        kind: REROUTE_MIGRATION_KIND,
+        previousProvider: "twilio",
+        targetEndpointId: REROUTE_TARGET_ENDPOINT_ID,
+        noteKind: REROUTE_NOTE_KIND,
+        noteText: REROUTE_NOTE_TEXT,
+      },
+    };
+    resolved = { provider: "meta_cloud_api", source: "endpoint_explicit" };
+  }
+
   const fnName = resolved.provider === "meta_cloud_api"
     ? "meta-whatsapp-send"
     : "twilio-whatsapp-send";
