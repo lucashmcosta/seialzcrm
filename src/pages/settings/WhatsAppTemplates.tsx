@@ -34,7 +34,9 @@ import {
   TableRow,
 } from '@/components/ui/table';
 import { Skeleton } from '@/components/ui/skeleton';
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import { ConfirmDialog } from '@/components/ui/confirm-dialog';
+
 import { Label } from '@/components/ui/label';
 import { ApprovalStatusBadge } from '@/components/whatsapp/templates/ApprovalStatusBadge';
 import {
@@ -400,8 +402,24 @@ export default function WhatsAppTemplates() {
                       </TableCell>
                       <TableCell>{getLanguageLabel(template.language)}</TableCell>
                       <TableCell>
-                        <ApprovalStatusBadge status={template.status} />
+                        {isMeta && template.status === 'rejected' ? (
+                          <TooltipProvider>
+                            <Tooltip>
+                              <TooltipTrigger asChild>
+                                <span className="inline-block cursor-help">
+                                  <ApprovalStatusBadge status={template.status} />
+                                </span>
+                              </TooltipTrigger>
+                              <TooltipContent className="max-w-xs">
+                                {template.rejection_reason || 'Motivo não informado pela Meta'}
+                              </TooltipContent>
+                            </Tooltip>
+                          </TooltipProvider>
+                        ) : (
+                          <ApprovalStatusBadge status={template.status} />
+                        )}
                       </TableCell>
+
                       <TableCell className="text-muted-foreground text-sm">
                         {formatDistanceToNow(new Date(template.created_at), {
                           addSuffix: true,
