@@ -143,6 +143,7 @@ interface Message {
   sender_type: 'user' | 'agent' | 'system' | null;
   sender_name: string | null;
   sender_agent_id: string | null;
+  metadata?: Record<string, any> | null;
 }
 
 interface InlineNote {
