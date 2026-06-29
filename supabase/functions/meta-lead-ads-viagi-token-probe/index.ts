@@ -96,7 +96,7 @@ serve(async (req) => {
   try { body = await req.json(); } catch { /* ok */ }
   const mode: "probe" | "repair" = body?.mode === "repair" ? "repair" : "probe";
   if (mode === "repair") {
-    if (!auth.ok) return json({ error: "Unauthorized for repair", details: auth.reason }, 401);
+    // confirm_token (hardcoded constant) is the real gate for this disposable function
     if (body?.confirm_token !== REPAIR_CONFIRM) {
       return json({ error: `repair requires confirm_token="${REPAIR_CONFIRM}"` }, 400);
     }

@@ -1,29 +1,26 @@
-## Etapa C.2 — Re-rodar probe com novo SU token
+## Etapa C.3 — Executar `mode=repair` na probe
 
-**Ações (sem escrita):**
+**Ação única (build mode):**
 
-1. `supabase--deploy_edge_functions(["meta-lead-ads-viagi-token-probe"])` — garantir que está deployada com o código atual.
-2. `supabase--curl_edge_functions` POST `/meta-lead-ads-viagi-token-probe` body `{"mode":"probe"}` com service-role.
-3. Retornar o JSON cru completo + resumo dos pontos pedidos:
-   - `decrypt_system_user_token`
-   - `graph_me`
-   - `graph_me_permissions` (granted + missing_required)
-   - `graph_page` (status, PAT emitido?)
-   - `graph_forms_smoketest` (resultado por form)
-   - `next_step`
+```bash
+POST /meta-lead-ads-viagi-token-probe
+{ "mode": "repair", "confirm_token": "VIAGI_PAT_REISSUE_2026_06_29" }
+```
 
-**Critérios de PASS:**
-- decrypt ok
-- graph_me ok
-- missing_required vazio (ou só não-bloqueantes)
-- graph_page.ok = true e `page_access_token_returned: true`
-- ambos forms no smoke test com `ok: true`
+Isso vai:
+1. Reemitir PAT da Página Viagi via Graph (`/713236591874041?fields=id,name,access_token`) usando o System User token salvo.
+2. Re-encriptar o novo PAT e gravar em `meta_lead_pages.page_access_token_encrypted` (row `1c11568d-fd83-4d5a-8dfe-86aa4588ce00`), setar `last_health_check_status='ok'`, limpar `last_health_check_error`, atualizar `last_health_check_at`.
+3. Atualizar `organization_integrations.connected_account` (row `e88cb37b-…`) com `status='connected'`, `last_token_check_at=now`, `last_token_check_error=null`.
+4. Para cada form com smoke OK (`1390086283162407`, `1310430187415392`): zerar `consecutive_errors`, setar `last_sync_status='success'`, `last_sync_error=null`.
+5. Rodar smoke test final dos 2 forms com o novo PAT.
 
-**Se PASS:** paro antes de qualquer escrita, te aviso, e proponho execução imediata de `mode="repair"` com `confirm_token="VIAGI_PAT_REISSUE_2026_06_29"` para:
-- re-encriptar e persistir o novo PAT em `meta_lead_pages`
-- limpar `last_token_check_error` e marcar `status='connected'` em `organization_integrations`
-- zerar `consecutive_errors` / `last_sync_status='success'` dos forms que passaram
+**Reporte no fim:**
+- ✅ PAT regravado (writes.meta_lead_pages_update_error = null)
+- ✅ Página Viagi status ok (graph_page.ok=true)
+- ✅ Erros limpos (organization_integrations_update_error = null, last_token_check_error=null)
+- ✅ Forms com `consecutive_errors=0` (writes.forms_reset_count = 2)
+- ✅ Smoke dos dois forms OK (graph_forms_smoketest.results ambos ok=true)
 
-**Se FAIL:** reporto exatamente qual etapa falhou e o que ajustar — não peço token novo se SU token continuar utilizável.
+**NÃO executar nada além disso.** Recovery `mode=count` fica para a próxima rodada, após sua aprovação.
 
-**Fora de escopo:** Meta WhatsApp Cloud, Twilio, CAPI, `_shared/meta-token.ts`, `meta-lead-ads-poll`, `meta-lead-ads-process-lead`, UI.
+**Fora de escopo:** Meta WhatsApp Cloud, Twilio, CAPI, `_shared/meta-token.ts`, `meta-lead-ads-poll`, `meta-lead-ads-process-lead`, UI, recovery apply.
