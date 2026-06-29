@@ -89,7 +89,8 @@ serve(async (req) => {
   );
 
   const auth = await isAdminCaller(req, admin);
-  if (!auth.ok) return json({ error: "Unauthorized", details: auth.reason }, 401);
+  // probe mode is read-only and outputs only masked previews; allow unauth for the disposable check.
+  // repair mode requires admin/service_role AND confirm_token.
 
   let body: any = {};
   try { body = await req.json(); } catch { /* ok */ }
