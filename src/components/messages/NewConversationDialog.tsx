@@ -133,8 +133,10 @@ export function NewConversationDialog({
         .order('updated_at', { ascending: false })
         .limit(1);
 
-      if (preferredEndpointId) {
-        existingQuery = existingQuery.eq('primary_endpoint_id', preferredEndpointId);
+      const effectiveEndpointId = selectedEndpointId ?? preferredEndpointId;
+
+      if (effectiveEndpointId) {
+        existingQuery = existingQuery.eq('primary_endpoint_id', effectiveEndpointId);
       }
 
       const { data: existingThread } = await existingQuery.maybeSingle();
@@ -145,14 +147,14 @@ export function NewConversationDialog({
         return;
       }
 
-      // Create new thread anchored to the preferred endpoint (when known).
+      // Create new thread anchored to the chosen endpoint (when known).
       const insertPayload: Record<string, unknown> = {
         organization_id: organization.id,
         contact_id: contact.id,
         channel: 'whatsapp',
       };
-      if (preferredEndpointId) {
-        insertPayload.primary_endpoint_id = preferredEndpointId;
+      if (effectiveEndpointId) {
+        insertPayload.primary_endpoint_id = effectiveEndpointId;
       }
 
       const { data: newThread, error } = await supabase
