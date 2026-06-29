@@ -1,7 +1,7 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "jsr:@supabase/supabase-js@2";
 import { corsHeaders } from "../_shared/cors.ts";
-import { decryptSecret } from "../_shared/crypto.ts";
+import { decryptSecret, encryptSecret } from "../_shared/crypto.ts";
 import { metaGraphGet, MetaGraphError } from "../_shared/meta-graph.ts";
 
 function json(body: unknown, status = 200) {
@@ -107,20 +107,30 @@ serve(async (req) => {
       .eq("auth_user_id", claims.claims.sub)
       .maybeSingle();
 
+    // Re-encrypt the token into meta-capi's OWN access_token_encrypted slot.
+    // CAPI is now autonomous at runtime — no cross-slug reads.
+    let ownAccessTokenEncrypted: string;
+    try {
+      ownAccessTokenEncrypted = await encryptSecret(tokenPlain);
+    } catch (e: any) {
+      return json({ error: "Falha ao cifrar token para meta-capi: " + e.message }, 500);
+    }
+
     const connected_account = {
       ...ca,
       pixel_id: String(pixel_id).trim(),
-      // Don't store token — read from meta-lead-ads at send time
-      access_token_encrypted: null,
+      access_token_encrypted: ownAccessTokenEncrypted,
       access_token_last4: tokenPlain.slice(-4),
       test_event_code: test_event_code || null,
       whatsapp_business_account_id: whatsapp_business_account_id || null,
       page_id: page_id || null,
       default_event_source_url: default_event_source_url || null,
-      token_source: "meta-lead-ads",
+      // token_source intentionally omitted — CAPI uses its own token now.
       status: "connected",
       last_token_check_at: new Date().toISOString(),
     };
+    // Strip any legacy token_source marker.
+    delete (connected_account as any).token_source;
 
     if (existing) {
       const { error } = await admin
@@ -147,7 +157,7 @@ serve(async (req) => {
       if (error) throw error;
     }
 
-    return json({ success: true, token_source: "meta-lead-ads" });
+    return json({ success: true, token_source: "self" });
   } catch (e: any) {
     console.error("meta-capi-connect-from-existing error", e);
     return json({ error: e.message || "Internal error" }, 500);
