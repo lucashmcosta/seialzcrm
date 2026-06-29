@@ -106,23 +106,20 @@ async function buildUserData(contact: any | null) {
   return ud;
 }
 
-async function getAccessToken(admin: any, orgId: string, ca: any): Promise<string | null> {
-  if (ca?.token_source === "meta-lead-ads") {
-    const { data } = await admin
-      .from("organization_integrations")
-      .select("connected_account, admin_integrations!inner(slug)")
-      .eq("organization_id", orgId)
-      .eq("admin_integrations.slug", "meta-lead-ads")
-      .eq("is_enabled", true)
-      .maybeSingle();
-    const enc = (data?.connected_account as any)?.system_user_token_encrypted;
-    if (!enc) return null;
-    return await decryptSecret(enc);
+async function getAccessToken(_admin: any, orgId: string, ca: any): Promise<string | null> {
+  // CAPI MUST use its own token. No cross-integration fallback.
+  if (!ca?.access_token_encrypted) {
+    console.warn(`[meta-token] slug=meta-capi org=${orgId} result=fail reason=missing_access_token_encrypted`);
+    return null;
   }
-  if (ca?.access_token_encrypted) {
-    return await decryptSecret(ca.access_token_encrypted);
+  try {
+    const token = await decryptSecret(ca.access_token_encrypted);
+    console.log(`[meta-token] slug=meta-capi org=${orgId} result=ok`);
+    return token;
+  } catch (e) {
+    console.warn(`[meta-token] slug=meta-capi org=${orgId} result=fail reason=${(e as Error).message}`);
+    return null;
   }
-  return null;
 }
 
 serve(async (req) => {
@@ -180,7 +177,12 @@ serve(async (req) => {
     if (!pixelId) return json({ error: "Pixel ID não configurado" }, 400);
 
     const accessToken = await getAccessToken(admin, organization_id, ca);
-    if (!accessToken) return json({ error: "Access token não disponível" }, 400);
+    if (!accessToken) {
+      return json({
+        error: "capi_token_missing",
+        message: "Token CAPI ausente ou inválido para esta organização. Reconecte a integração Meta CAPI.",
+      }, 400);
+    }
 
     // Carrega contato com TODOS os campos relevantes para EMQ + CTWA
     let contact: any = null;
