@@ -15,6 +15,29 @@ import { decryptSecret, encryptSecret } from "../_shared/crypto.ts";
 import { metaGraphGet, MetaGraphError } from "../_shared/meta-graph.ts";
 import { validateServiceRoleAuth } from "../_shared/auth.ts";
 
+async function isAdminCaller(req: Request, admin: ReturnType<typeof createClient>): Promise<{ ok: boolean; reason?: string }> {
+  // Accept either service_role JWT or an authenticated admin user.
+  const sr = validateServiceRoleAuth(req);
+  if (sr.ok) return { ok: true };
+  const authHeader = req.headers.get("authorization");
+  if (!authHeader?.startsWith("Bearer ")) return { ok: false, reason: "missing bearer" };
+  const token = authHeader.replace("Bearer ", "").trim();
+  try {
+    const { data, error } = await (admin as any).auth.getUser(token);
+    if (error || !data?.user) return { ok: false, reason: "invalid user token" };
+    const userId = data.user.id;
+    const { data: au } = await admin
+      .from("admin_users")
+      .select("id, is_active")
+      .eq("auth_user_id", userId)
+      .maybeSingle();
+    if (au && (au as any).is_active !== false) return { ok: true };
+    return { ok: false, reason: "not an active admin" };
+  } catch (e) {
+    return { ok: false, reason: (e as Error).message };
+  }
+}
+
 const ORG_ID = "b246ef6f-6242-4011-a112-6d8783d2896a";
 const ORG_INTEGRATION_ID = "e88cb37b-33c9-4802-a3d0-f99d611753f8";
 const PAGE_ROW_ID = "1c11568d-fd83-4d5a-8dfe-86aa4588ce00";
