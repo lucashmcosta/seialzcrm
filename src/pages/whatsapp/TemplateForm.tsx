@@ -49,15 +49,19 @@ interface CTAAction {
 export default function TemplateForm() {
   const navigate = useNavigate();
   const { id } = useParams<{ id: string }>();
+  const [searchParams] = useSearchParams();
+  const providerParam = searchParams.get('provider');
+  const isMetaProvider = providerParam === 'meta_cloud_api';
   const isEditing = !!id;
-  
+
   const { organization } = useOrganization();
   const { data: existingTemplate, isLoading: templateLoading } = useTemplate(
-    organization?.id, 
+    organization?.id,
     isEditing ? id : undefined
   );
   const createMutation = useCreateTemplate();
   const updateMutation = useUpdateTemplate();
+  const createMetaMutation = useCreateMetaTemplate();
 
   // Form state
   const [step, setStep] = useState(1);
