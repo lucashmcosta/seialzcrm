@@ -46,12 +46,19 @@ export interface ScopeParams {
   onlyMine: boolean;
   internalUserId: string | null;
   orgTimezone: string | null;
+  /**
+   * Per-org flag. When true, the Inbox additionally includes threads whose
+   * primary_endpoint.purpose = 'customer_service' regardless of the contact's
+   * lifecycle_stage. Default false preserves the legacy "customer-only" rule.
+   */
+  csIncludesServiceEndpoints?: boolean;
   limit?: number;
 }
 
 export interface ScopeDebug {
   bRaw: number;
   bFiltered: number;
+  cRaw?: number;
   merged: number;
 }
 
