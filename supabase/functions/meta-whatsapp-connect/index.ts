@@ -68,9 +68,10 @@ serve(async (req) => {
     const body = (await req.json().catch(() => null)) as ConnectBody | null;
     if (!body) return err(400, "invalid_json");
 
-    const required: (keyof ConnectBody)[] = [
-      "organizationId", "appId", "wabaId", "phoneNumberId", "phoneE164", "systemUserToken",
-    ];
+    const mode: "primary" | "additional" = body.mode === "additional" ? "additional" : "primary";
+    const required: (keyof ConnectBody)[] = mode === "additional"
+      ? ["organizationId", "wabaId", "phoneNumberId", "phoneE164"]
+      : ["organizationId", "appId", "wabaId", "phoneNumberId", "phoneE164", "systemUserToken"];
     for (const f of required) {
       if (!body[f] || typeof body[f] !== "string") {
         return err(400, "missing_field", { field: f });
