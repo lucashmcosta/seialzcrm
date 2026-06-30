@@ -213,7 +213,7 @@ export function NewConversationDialog({
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
             <ChatCircle className="w-5 h-5" />
-            {locale === 'pt-BR' ? 'Nova Conversa' : 'New Conversation'}
+            {title ?? (locale === 'pt-BR' ? 'Nova Conversa' : 'New Conversation')}
           </DialogTitle>
         </DialogHeader>
 
@@ -230,14 +230,26 @@ export function NewConversationDialog({
             />
           </div>
 
-          {/* Endpoint selector (only when org has 2+ active endpoints) */}
-          <EndpointSelector
-            endpoints={orderedEndpoints ?? endpoints}
-            value={selectedEndpointId}
-            onChange={setSelectedEndpointId}
-            disabled={selecting !== null || endpointsLoading}
-            locale={locale as 'pt-BR' | 'en-US'}
-          />
+          {/* Endpoint selector — escondido quando forcePurposes está definido */}
+          {!forcePurposes && (
+            <EndpointSelector
+              endpoints={orderedEndpoints ?? endpoints}
+              value={selectedEndpointId}
+              onChange={setSelectedEndpointId}
+              disabled={selecting !== null || endpointsLoading}
+              locale={locale as 'pt-BR' | 'en-US'}
+            />
+          )}
+
+          {noEndpointForPurpose && (
+            <div className="rounded-md border border-border bg-muted/40 px-3 py-2 text-xs text-muted-foreground">
+              {locale === 'pt-BR'
+                ? 'Nenhum número de Atendimento configurado para esta organização.'
+                : 'No service number configured for this organization.'}
+            </div>
+          )}
+
+
 
 
 
