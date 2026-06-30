@@ -80,6 +80,11 @@ export default function InboxPage() {
         onOpenChange={setNewConvOpen}
         forcePurposes={['customer_service', 'other']}
         title="Nova Conversa de Atendimento"
+        routingDecision={{
+          action: 'inbox_manual_start',
+          by_user_id: internalUserId,
+          at: new Date().toISOString(),
+        }}
         onSelectContact={(_contactId, threadId) => {
           setSelectedId(threadId);
           refreshCounts();
