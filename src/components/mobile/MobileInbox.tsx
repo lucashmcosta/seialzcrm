@@ -115,6 +115,7 @@ export function MobileInbox() {
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [search, setSearch] = useState('');
   const [showDetails, setShowDetails] = useState(false);
+  const [newConvOpen, setNewConvOpen] = useState(false);
 
   // Resolve internal users.id (Core rule)
   useEffect(() => {
