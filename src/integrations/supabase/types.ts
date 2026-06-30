@@ -5636,6 +5636,7 @@ export type Database = {
       organizations: {
         Row: {
           created_at: string | null
+          cs_inbox_includes_service_endpoints: boolean
           default_currency: string | null
           default_locale: string | null
           duplicate_check_mode:
@@ -5665,6 +5666,7 @@ export type Database = {
         }
         Insert: {
           created_at?: string | null
+          cs_inbox_includes_service_endpoints?: boolean
           default_currency?: string | null
           default_locale?: string | null
           duplicate_check_mode?:
@@ -5696,6 +5698,7 @@ export type Database = {
         }
         Update: {
           created_at?: string | null
+          cs_inbox_includes_service_endpoints?: boolean
           default_currency?: string | null
           default_locale?: string | null
           duplicate_check_mode?:
