@@ -159,10 +159,33 @@ export async function dispatchWhatsAppSend(payload: WhatsAppSendPayload) {
   }
 
   // Re-rota lazy Comercial → Meta 7020 (Central Trabalhista)
+  // Dispara quando: (a) o provider resolvido ainda é Twilio/default, OU
+  // (b) a thread já contém a nota de migração mas o endpoint resolvido não é o
+  // alvo Meta 7020 (caso de threads migradas antes da persistência do
+  // primary_endpoint_id ter sido adicionada à edge function).
+  let alreadyMigratedThread = false;
+  if (
+    payload.senderContext === "messages" &&
+    payload.organizationId === REROUTE_ORG_ID &&
+    payload.threadId &&
+    payload.endpointId !== REROUTE_TARGET_ENDPOINT_ID &&
+    resolved.provider !== "meta_cloud_api"
+  ) {
+    const { data: noteRow } = await supabase
+      .from("messages")
+      .select("id")
+      .eq("thread_id", payload.threadId)
+      .eq("direction", "internal")
+      .contains("metadata", { kind: REROUTE_NOTE_KIND })
+      .limit(1)
+      .maybeSingle();
+    alreadyMigratedThread = !!noteRow;
+  }
+
   const shouldReroute =
     payload.senderContext === "messages" &&
     payload.organizationId === REROUTE_ORG_ID &&
-    (resolved.provider === "twilio" || resolved.source === "default") &&
+    (resolved.provider === "twilio" || resolved.source === "default" || alreadyMigratedThread) &&
     payload.endpointId !== REROUTE_TARGET_ENDPOINT_ID &&
     !!payload.threadId;
 
@@ -170,6 +193,7 @@ export async function dispatchWhatsAppSend(payload: WhatsAppSendPayload) {
     console.log("[dispatch-wa] re-route commercial → meta 7020", {
       threadId: payload.threadId,
       previousSource: resolved.source,
+      reason: alreadyMigratedThread ? "thread_already_migrated" : "provider_twilio_or_default",
     });
     payload = {
       ...payload,
