@@ -14,6 +14,13 @@ export interface ConnectInput {
   appSecret?: string;
   verifyToken?: string;
   skipMetaValidation?: boolean;
+  /**
+   * 'primary' (default) → comportamento original (configura/atualiza a integração).
+   * 'additional' → adiciona apenas um novo endpoint na MESMA WABA já conectada.
+   */
+  mode?: "primary" | "additional";
+  endpointPurpose?: "commercial" | "customer_service" | "vendor_personal" | "other";
+  displayName?: string;
 }
 
 export interface ConnectResult {
