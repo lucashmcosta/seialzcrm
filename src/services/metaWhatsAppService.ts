@@ -108,6 +108,27 @@ async function readFunctionError(error: unknown, data: unknown) {
   return null;
 }
 
+async function invokeMigrate(
+  body: MigrateInput & { mode: "migrate" | "migrate_dry_run" },
+): Promise<MigrateResult> {
+  const { data, error } = await supabase.functions.invoke("meta-whatsapp-connect", { body });
+  if (error) {
+    const fnError = await readFunctionError(error, data);
+    if (fnError?.error === "meta_validation_failed") {
+      throw new MetaWhatsAppValidationError(fnError.meta_error);
+    }
+    const msg = fnError?.error || error.message || "migrate_failed";
+    const e = new Error(msg) as Error & { details?: unknown };
+    e.details = fnError;
+    throw e;
+  }
+  if ((data as any)?.error) {
+    throw new Error((data as any).error);
+  }
+  return data as MigrateResult;
+}
+
+
 export const metaWhatsAppService = {
   async connect(input: ConnectInput): Promise<ConnectResult> {
     const { data, error } = await supabase.functions.invoke("meta-whatsapp-connect", {
