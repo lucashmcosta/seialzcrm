@@ -8,6 +8,7 @@ export interface OrgEndpoint {
   provider: string | null;
   is_active: boolean;
   created_at: string;
+  purpose: string | null;
 }
 
 /**
