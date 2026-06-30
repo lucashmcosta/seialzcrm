@@ -65,10 +65,12 @@ function mapRpcToChatThread(row: RpcThreadRow): ChatThread {
 interface UseMessageThreadsOptions {
   channels?: string[];
   limit?: number;
+  search?: string;
 }
 
 export function useMessageThreads(options: UseMessageThreadsOptions = {}) {
-  const { channels = ['whatsapp'], limit = 50 } = options;
+  const { channels = ['whatsapp'], limit = 50, search } = options;
+  const searchTerm = search && search.trim().length > 0 ? search.trim() : null;
   const { organization, userProfile } = useOrganization();
 
   const [threads, setThreads] = useState<ChatThread[]>([]);
@@ -95,6 +97,7 @@ export function useMessageThreads(options: UseMessageThreadsOptions = {}) {
         p_organization_id: orgId,
         p_channels: channels,
         p_limit: limit,
+        p_search: searchTerm,
       });
 
       if (rpcError) {
@@ -118,7 +121,7 @@ export function useMessageThreads(options: UseMessageThreadsOptions = {}) {
     } finally {
       setLoading(false);
     }
-  }, [orgId, channelKey, limit]);
+  }, [orgId, channelKey, limit, searchTerm]);
 
   // Load more — cursor-based pagination
   const loadMore = useCallback(async () => {
@@ -134,6 +137,7 @@ export function useMessageThreads(options: UseMessageThreadsOptions = {}) {
         p_limit: limit,
         p_cursor_updated_at: lastThread.updated_at,
         p_cursor_id: lastThread.id,
+        p_search: searchTerm,
       });
 
       if (rpcError) throw rpcError;
@@ -147,7 +151,7 @@ export function useMessageThreads(options: UseMessageThreadsOptions = {}) {
     } finally {
       setLoadingMore(false);
     }
-  }, [orgId, channelKey, limit, hasMore, loadingMore, threads]);
+  }, [orgId, channelKey, limit, hasMore, loadingMore, threads, searchTerm]);
 
   // Debounced refetch
   const debouncedRefetch = useCallback(() => {

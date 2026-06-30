@@ -273,6 +273,11 @@ function DesktopMessagesList() {
   const [isIn24hWindow, setIsIn24hWindow] = useState(false);
   const [showTemplates, setShowTemplates] = useState(false);
   const [searchQuery, setSearchQuery] = usePersistedFilters<string>('messages.search', '');
+  const [debouncedSearch, setDebouncedSearch] = useState<string>(searchQuery || '');
+  useEffect(() => {
+    const t = setTimeout(() => setDebouncedSearch(searchQuery || ''), 300);
+    return () => clearTimeout(t);
+  }, [searchQuery]);
   const [filter, setFilter, , filterHydrated] = usePersistedFilters<ThreadFilter | null>('messages.filter', null);
   const effectiveFilter: ThreadFilter = filter ?? 'all_open';
   const appliedSmartDefaultRef = useRef(false);
@@ -546,7 +551,7 @@ function DesktopMessagesList() {
   };
 
   // Fetch threads via RPC (replaces N+1 query)
-  const { threads, loading: threadsLoading, refetchThreads, loadMore, hasMore, loadingMore, markThreadRead } = useMessageThreads({ channels: ['whatsapp'] });
+  const { threads, loading: threadsLoading, refetchThreads, loadMore, hasMore, loadingMore, markThreadRead } = useMessageThreads({ channels: ['whatsapp'], search: debouncedSearch });
 
   const selectedThread = threads?.find((t) => t.id === selectedThreadId)
     ?? (selectedThreadOverride?.id === selectedThreadId ? selectedThreadOverride : undefined);
@@ -1203,11 +1208,9 @@ function DesktopMessagesList() {
   };
 
   const filteredThreads = threads?.filter((thread) => {
-    // Search filter
-    if (searchQuery && !thread.contact_name.toLowerCase().includes(searchQuery.toLowerCase())) {
-      return false;
-    }
+    // Search is applied server-side via rpc_list_message_threads (p_search).
     // Status filter
+
     // Treat resolved threads with no client reply yet as still "pending" — they
     // were likely auto-resolved or marked too early and the client never replied.
     const isPendingFirstReply = thread.status === 'resolved' && !thread.last_inbound_at && !thread.whatsapp_last_inbound_at;
