@@ -97,6 +97,7 @@ export function useMessageThreads(options: UseMessageThreadsOptions = {}) {
         p_organization_id: orgId,
         p_channels: channels,
         p_limit: limit,
+        p_search: searchTerm,
       });
 
       if (rpcError) {
@@ -120,7 +121,7 @@ export function useMessageThreads(options: UseMessageThreadsOptions = {}) {
     } finally {
       setLoading(false);
     }
-  }, [orgId, channelKey, limit]);
+  }, [orgId, channelKey, limit, searchTerm]);
 
   // Load more — cursor-based pagination
   const loadMore = useCallback(async () => {
