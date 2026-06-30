@@ -78,13 +78,27 @@ serve(async (req) => {
     const body = (await req.json().catch(() => null)) as ConnectBody | null;
     if (!body) return err(400, "invalid_json");
 
-    const mode: "primary" | "additional" = body.mode === "additional" ? "additional" : "primary";
-    const required: (keyof ConnectBody)[] = mode === "additional"
+    const mode: "primary" | "additional" | "migrate" | "migrate_dry_run" =
+      body.mode === "additional" || body.mode === "migrate" || body.mode === "migrate_dry_run"
+        ? body.mode
+        : "primary";
+
+    const isMigrateMode = mode === "migrate" || mode === "migrate_dry_run";
+
+    const required: (keyof ConnectBody)[] = isMigrateMode
       ? ["organizationId", "wabaId", "phoneNumberId", "phoneE164"]
-      : ["organizationId", "appId", "wabaId", "phoneNumberId", "phoneE164", "systemUserToken"];
+      : mode === "additional"
+        ? ["organizationId", "wabaId", "phoneNumberId", "phoneE164"]
+        : ["organizationId", "appId", "wabaId", "phoneNumberId", "phoneE164", "systemUserToken"];
     for (const f of required) {
       if (!body[f] || typeof body[f] !== "string") {
         return err(400, "missing_field", { field: f });
+      }
+    }
+    if (isMigrateMode) {
+      if (!body.existingEndpointId) return err(400, "missing_field", { field: "existingEndpointId" });
+      if (body.provider && body.provider !== "meta_cloud_api") {
+        return err(400, "unsupported_target_provider", { received: body.provider });
       }
     }
     if (!/^\+\d{8,15}$/.test(body.phoneE164)) return err(400, "invalid_phone_e164");
