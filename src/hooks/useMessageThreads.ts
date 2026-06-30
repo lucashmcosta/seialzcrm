@@ -65,10 +65,12 @@ function mapRpcToChatThread(row: RpcThreadRow): ChatThread {
 interface UseMessageThreadsOptions {
   channels?: string[];
   limit?: number;
+  search?: string;
 }
 
 export function useMessageThreads(options: UseMessageThreadsOptions = {}) {
-  const { channels = ['whatsapp'], limit = 50 } = options;
+  const { channels = ['whatsapp'], limit = 50, search } = options;
+  const searchTerm = search && search.trim().length > 0 ? search.trim() : null;
   const { organization, userProfile } = useOrganization();
 
   const [threads, setThreads] = useState<ChatThread[]>([]);
