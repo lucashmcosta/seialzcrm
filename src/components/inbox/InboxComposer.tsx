@@ -41,7 +41,6 @@ import { audioBlobToFile } from '@/lib/audioBlobToFile';
 import { WhatsAppTemplateSelector } from '@/components/whatsapp/WhatsAppTemplateSelector';
 import { ReplyPreview } from '@/components/whatsapp/ReplyPreview';
 import { inboxUploadMedia } from '@/lib/inboxMediaUpload';
-import { useWhatsAppProvider } from '@/hooks/useWhatsAppProvider';
 import type { InboxMessageRow } from '@/hooks/inbox/useInboxThreadMessages';
 
 interface ThreadLike {
@@ -54,7 +53,7 @@ interface ThreadLike {
   whatsapp_last_inbound_at?: string | null;
   last_routing_decision?: { action?: string } | null;
   contact?: { lifecycle_stage: string | null; name?: string | null } | null;
-  primary_endpoint?: { purpose: string | null } | null;
+  primary_endpoint?: { purpose: string | null; provider?: string | null } | null;
 }
 
 interface Props {
