@@ -432,6 +432,23 @@ serve(async (req) => {
       .single();
     if (insErr || !insertedMsg) return jsonResponse(500, { error: "message_insert_failed", details: insErr?.message });
 
+    // Self-heal: carimba primary_endpoint_id em threads pré-existentes que nunca
+    // foram carimbadas. Idempotente — só atualiza quando ainda está NULL.
+    // Garante que o badge "Novo · NNNN" apareça em threads reaproveitadas
+    // (Lead Ads, templates, mensagens manuais).
+    if (currentThreadId && endpoint?.id) {
+      try {
+        await supabase
+          .from("message_threads")
+          .update({ primary_endpoint_id: endpoint.id })
+          .eq("id", currentThreadId)
+          .eq("organization_id", organizationId)
+          .is("primary_endpoint_id", null);
+      } catch (healErr) {
+        console.warn("[meta-whatsapp-send] primary_endpoint_id self-heal failed", healErr);
+      }
+    }
+
     // Reply context (Meta Cloud usa context.message_id = wamid)
     let context: { message_id: string } | undefined = undefined;
     if (replyToMessageId) {
