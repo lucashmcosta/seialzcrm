@@ -23,6 +23,53 @@ export interface ConnectInput {
   displayName?: string;
 }
 
+export interface MigrateInput {
+  organizationId: string;
+  existingEndpointId: string;
+  provider?: "meta_cloud_api";
+  appId?: string;
+  wabaId: string;
+  phoneNumberId: string;
+  phoneE164: string;
+  systemUserToken?: string;
+  appSecret?: string;
+  verifyToken?: string;
+  endpointPurpose?: "commercial" | "customer_service" | "vendor_personal" | "other";
+  displayName?: string;
+  migrationReason?: string;
+}
+
+export interface MigrateResult {
+  ok: true;
+  mode: "migrate" | "migrate_dry_run";
+  migrationApplied: boolean;
+  endpointId: string;
+  before: Record<string, unknown>;
+  after: Record<string, unknown>;
+  meta: {
+    display_phone_number: string;
+    verified_name?: string | null;
+    quality_rating?: string | null;
+    messaging_limit_tier?: string | null;
+  };
+}
+
+export interface EndpointAlreadyRegisteredInfo {
+  existing_endpoint_id: string;
+  existing_provider: string;
+  existing_sender_sid: string | null;
+}
+
+export class EndpointAlreadyRegisteredError extends Error {
+  code = "endpoint_address_already_registered";
+  info: EndpointAlreadyRegisteredInfo;
+  constructor(info: EndpointAlreadyRegisteredInfo) {
+    super("Já existe um endpoint WhatsApp com este número nesta organização.");
+    this.name = "EndpointAlreadyRegisteredError";
+    this.info = info;
+  }
+}
+
 export interface ConnectResult {
   ok: true;
   organization_integration_id: string;
