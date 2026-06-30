@@ -39,7 +39,7 @@ export interface InboxScopedThread {
   organization_id?: string | null;
   primary_endpoint_id: string | null;
   contact?: { id: string; name: string | null; phone: string | null; lifecycle_stage: string | null } | null;
-  primary_endpoint?: { id: string; purpose: string | null; external_address?: string | null } | null;
+  primary_endpoint?: { id: string; purpose: string | null; external_address?: string | null; provider?: string | null } | null;
 }
 
 export interface ScopeParams {
