@@ -282,7 +282,7 @@ export function NewConversationDialog({
                     <button
                       key={contact.id}
                       onClick={() => handleSelect(contact)}
-                      disabled={selecting !== null || endpointsLoading}
+                      disabled={selecting !== null || endpointsLoading || noEndpointForPurpose}
                       className="w-full flex items-center gap-3 p-3 rounded-lg hover:bg-accent transition-colors text-left disabled:opacity-50"
                     >
                       <Avatar fallbackText={displayName} size="md" />
