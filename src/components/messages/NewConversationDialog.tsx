@@ -45,6 +45,9 @@ interface NewConversationDialogProps {
   forcePurposes?: Array<'customer_service' | 'other' | 'commercial' | 'vendor_personal'>;
   /** Título customizado (default: "Nova Conversa"). */
   title?: string;
+  /** Marcador jsonb gravado em message_threads.last_routing_decision quando
+   *  uma thread NOVA é criada. Não é aplicado em thread já existente. */
+  routingDecision?: Record<string, unknown>;
 }
 
 export function NewConversationDialog({
@@ -53,6 +56,7 @@ export function NewConversationDialog({
   onSelectContact,
   forcePurposes,
   title,
+  routingDecision,
 }: NewConversationDialogProps) {
   const { organization, locale } = useOrganization();
   const { t } = useTranslation(locale as 'pt-BR' | 'en-US');
@@ -187,6 +191,9 @@ export function NewConversationDialog({
       };
       if (effectiveEndpointId) {
         insertPayload.primary_endpoint_id = effectiveEndpointId;
+      }
+      if (routingDecision) {
+        insertPayload.last_routing_decision = routingDecision;
       }
 
       const { data: newThread, error } = await supabase

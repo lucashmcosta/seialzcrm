@@ -152,12 +152,18 @@ export function InboxComposer({ thread, replyTo, onClearReply, onSent, onThreadM
   const endpointPurpose = thread.primary_endpoint?.purpose ?? null;
   const status = thread.status ?? null;
   const csIncludesServiceEndpoints = (organization as any)?.cs_inbox_includes_service_endpoints ?? false;
+  const lastRoutingAction = ((thread as any).last_routing_decision as { action?: string } | null)?.action ?? null;
 
   const passesCustomerRule = lifecycle === 'customer';
   const passesServiceEndpointRule =
     csIncludesServiceEndpoints && endpointPurpose === 'customer_service';
+  // Thread iniciada manualmente pelo botão "Nova conversa de Atendimento":
+  // libera o guard de lifecycle quando o endpoint é de Atendimento.
+  const isManualInboxStart =
+    lastRoutingAction === 'inbox_manual_start'
+    && (endpointPurpose === 'customer_service' || endpointPurpose === 'other');
 
-  if (!passesCustomerRule && !passesServiceEndpointRule) {
+  if (!passesCustomerRule && !passesServiceEndpointRule && !isManualInboxStart) {
     return (
       <DisabledBar
         title="Envio bloqueado: contato não é cliente (lifecycle_stage ≠ customer)."
