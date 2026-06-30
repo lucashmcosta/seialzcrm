@@ -10,7 +10,12 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { ArrowsClockwise } from "@phosphor-icons/react";
-import { MetaWhatsAppValidationError, metaWhatsAppService } from "@/services/metaWhatsAppService";
+import {
+  EndpointAlreadyRegisteredError,
+  MetaWhatsAppValidationError,
+  metaWhatsAppService,
+} from "@/services/metaWhatsAppService";
+import { MigrateEndpointDialog } from "./MigrateEndpointDialog";
 
 interface Props {
   open: boolean;
@@ -35,6 +40,12 @@ export function AddMetaWhatsAppNumberDialog({
   const [phoneE164, setPhoneE164] = useState("");
   const [displayName, setDisplayName] = useState("");
   const [purpose, setPurpose] = useState<Purpose>("customer_service");
+  const [migrateOpen, setMigrateOpen] = useState(false);
+  const [existingInfo, setExistingInfo] = useState<{
+    endpointId: string;
+    provider: string;
+    senderSid: string | null;
+  } | null>(null);
 
   const reset = () => {
     setPhoneNumberId("");
@@ -67,6 +78,18 @@ export function AddMetaWhatsAppNumberDialog({
       onOpenChange(false);
     },
     onError: (e: any) => {
+      if (e instanceof EndpointAlreadyRegisteredError) {
+        setExistingInfo({
+          endpointId: e.info.existing_endpoint_id,
+          provider: e.info.existing_provider,
+          senderSid: e.info.existing_sender_sid,
+        });
+        setMigrateOpen(true);
+        toast.message("Número já existe nesta organização", {
+          description: `Provider atual: ${e.info.existing_provider}. Use o diálogo de migração para trocar o provider preservando o histórico.`,
+        });
+        return;
+      }
       if (e instanceof MetaWhatsAppValidationError) {
         toast.error("A Meta recusou a validação", {
           description: "Confira phone_number_id e WABA. Se necessário, use 'Salvar sem validar'.",
@@ -92,6 +115,7 @@ export function AddMetaWhatsAppNumberDialog({
     !addMutation.isPending;
 
   return (
+    <>
     <Dialog
       open={open}
       onOpenChange={(o) => {
@@ -196,5 +220,30 @@ export function AddMetaWhatsAppNumberDialog({
         </DialogFooter>
       </DialogContent>
     </Dialog>
+    {existingInfo && (
+      <MigrateEndpointDialog
+        open={migrateOpen}
+        onOpenChange={setMigrateOpen}
+        existing={existingInfo}
+        payload={{
+          organizationId,
+          wabaId,
+          appId,
+          phoneNumberId: phoneNumberId.trim(),
+          phoneE164: phoneE164.trim(),
+          endpointPurpose: purpose,
+          displayName: displayName.trim() || undefined,
+          migrationReason: "provider_swap",
+        }}
+        onMigrated={() => {
+          qc.invalidateQueries({ queryKey: ["meta-additional-endpoints", organizationId] });
+          qc.invalidateQueries({ queryKey: ["organization-integrations"] });
+          setExistingInfo(null);
+          reset();
+          onOpenChange(false);
+        }}
+      />
+    )}
+    </>
   );
 }
