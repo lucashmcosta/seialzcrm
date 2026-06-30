@@ -12,10 +12,16 @@ import { Separator } from "@/components/ui/separator";
 import { Badge } from "@/components/ui/badge";
 import { ConfirmDialog } from "@/components/ui/confirm-dialog";
 import { CheckCircle, Eye, EyeSlash, ArrowsClockwise, LinkSimple, Plug } from "@phosphor-icons/react";
-import { MetaWhatsAppValidationError, metaWhatsAppService } from "@/services/metaWhatsAppService";
+import {
+  MetaWhatsAppValidationError,
+  EndpointAlreadyRegisteredError,
+  metaWhatsAppService,
+  type MigrateResult,
+} from "@/services/metaWhatsAppService";
 import { WhatsAppInboundSettings } from "@/components/settings/WhatsAppInboundSettings";
 import { AddMetaWhatsAppNumberDialog } from "./AddMetaWhatsAppNumberDialog";
 import { MetaAdditionalEndpointsSection } from "./MetaAdditionalEndpointsSection";
+import { MigrateEndpointDialog } from "./MigrateEndpointDialog";
 
 interface Props {
   open: boolean;
