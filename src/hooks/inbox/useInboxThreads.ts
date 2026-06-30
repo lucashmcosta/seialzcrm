@@ -43,7 +43,7 @@ export function useInboxThreads(
     } finally {
       setLoading(false);
     }
-  }, [tab, onlyMine, internalUserId, orgTimezone, csIncludesServiceEndpoints]);
+  }, [tab, onlyMine, internalUserId, orgTimezone, organizationId, csIncludesServiceEndpoints]);
 
   useEffect(() => { fetchThreads(); }, [fetchThreads]);
 
