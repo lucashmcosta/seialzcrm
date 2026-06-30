@@ -28,7 +28,17 @@ interface ConnectBody {
   //               Não toca campos phone-level da integração. Requer integração já conectada e
   //               wabaId idêntico ao já armazenado. systemUserToken/appSecret/verifyToken
   //               opcionais (reaproveita os já cifrados quando ausentes).
-  mode?: "primary" | "additional";
+  // 'migrate'    : faz UPDATE in-place em um endpoint existente, trocando provider/sender_sid/
+  //                organization_integration_id/external_account_id. Preserva id, external_address,
+  //                display_name, purpose, histórico de mensagens/threads. Snapshot completo é
+  //                gravado em metadata.migration + metadata.migrations[]. Hoje só suporta destino
+  //                'meta_cloud_api'. Requer existingEndpointId + provider de destino.
+  // 'migrate_dry_run': roda exatamente as mesmas validações de 'migrate', mas NÃO faz UPDATE.
+  //                    Retorna before/after para preview.
+  mode?: "primary" | "additional" | "migrate" | "migrate_dry_run";
+  existingEndpointId?: string;
+  provider?: "meta_cloud_api"; // destino da migração
+  migrationReason?: string;
 }
 
 function err(status: number, message: string, extra: Record<string, unknown> = {}) {
