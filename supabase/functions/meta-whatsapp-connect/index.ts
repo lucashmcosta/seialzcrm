@@ -307,6 +307,27 @@ serve(async (req) => {
       .eq("sender_sid", body.phoneNumberId)
       .maybeSingle();
 
+    // Fallback: também verifica colisão pelo unique (organization_id, channel, external_address).
+    // Se já existir uma linha com o mesmo E.164 mas sender_sid diferente, NÃO sobrescreve —
+    // retorna erro claro para proteger endpoints existentes (ex.: +16893077491 não-gerenciado).
+    if (!existingEp?.id) {
+      const { data: epByAddr } = await admin
+        .from("communication_endpoints")
+        .select("id, sender_sid, provider")
+        .eq("organization_id", body.organizationId)
+        .eq("channel", "whatsapp")
+        .eq("external_address", body.phoneE164)
+        .maybeSingle();
+      if (epByAddr?.id) {
+        return err(409, "endpoint_address_already_registered", {
+          message: "Já existe um endpoint WhatsApp com este número nesta organização.",
+          existing_endpoint_id: epByAddr.id,
+          existing_provider: epByAddr.provider,
+          existing_sender_sid: epByAddr.sender_sid,
+        });
+      }
+    }
+
     const endpointPayload = {
       organization_id: body.organizationId,
       organization_integration_id: orgIntegrationId,
