@@ -118,6 +118,13 @@ export const metaWhatsAppService = {
       if (fnError?.error === "meta_validation_failed") {
         throw new MetaWhatsAppValidationError(fnError.meta_error);
       }
+      if (fnError?.error === "endpoint_address_already_registered") {
+        throw new EndpointAlreadyRegisteredError({
+          existing_endpoint_id: fnError.existing_endpoint_id,
+          existing_provider: fnError.existing_provider,
+          existing_sender_sid: fnError.existing_sender_sid ?? null,
+        });
+      }
       const message = fnError?.error || error.message || "connect_failed";
       throw new Error(message);
     }
@@ -128,6 +135,14 @@ export const metaWhatsAppService = {
       throw new Error((data as any).error);
     }
     return data as ConnectResult;
+  },
+
+  async migrate(input: MigrateInput): Promise<MigrateResult> {
+    return await invokeMigrate({ ...input, mode: "migrate" });
+  },
+
+  async migrateDryRun(input: MigrateInput): Promise<MigrateResult> {
+    return await invokeMigrate({ ...input, mode: "migrate_dry_run" });
   },
 
   async disconnect(organizationId: string): Promise<void> {
