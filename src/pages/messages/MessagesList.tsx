@@ -273,6 +273,11 @@ function DesktopMessagesList() {
   const [isIn24hWindow, setIsIn24hWindow] = useState(false);
   const [showTemplates, setShowTemplates] = useState(false);
   const [searchQuery, setSearchQuery] = usePersistedFilters<string>('messages.search', '');
+  const [debouncedSearch, setDebouncedSearch] = useState<string>(searchQuery || '');
+  useEffect(() => {
+    const t = setTimeout(() => setDebouncedSearch(searchQuery || ''), 300);
+    return () => clearTimeout(t);
+  }, [searchQuery]);
   const [filter, setFilter, , filterHydrated] = usePersistedFilters<ThreadFilter | null>('messages.filter', null);
   const effectiveFilter: ThreadFilter = filter ?? 'all_open';
   const appliedSmartDefaultRef = useRef(false);
