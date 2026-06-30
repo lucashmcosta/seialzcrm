@@ -49,6 +49,12 @@ export function MetaWhatsAppCloudDialog({ open, onOpenChange, integration, orgIn
   const [showVerifyToken, setShowVerifyToken] = useState(false);
   const [confirmDisconnectOpen, setConfirmDisconnectOpen] = useState(false);
   const [addNumberOpen, setAddNumberOpen] = useState(false);
+  const [migrateOpen, setMigrateOpen] = useState(false);
+  const [existingEndpointInfo, setExistingEndpointInfo] = useState<{
+    endpointId: string;
+    provider: string;
+    senderSid: string | null;
+  } | null>(null);
   const isConnected = !!orgIntegration?.is_enabled;
 
   // Pré-preenche os campos visíveis a partir do connected_account quando reconectando
