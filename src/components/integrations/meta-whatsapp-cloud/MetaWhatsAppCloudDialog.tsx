@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
-import { supabase } from "@/integrations/supabase/client";
+
 import { useOrganization } from "@/hooks/useOrganization";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
@@ -9,7 +9,6 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Card } from "@/components/ui/card";
 import { Separator } from "@/components/ui/separator";
-import { Badge } from "@/components/ui/badge";
 import { ConfirmDialog } from "@/components/ui/confirm-dialog";
 import { CheckCircle, Eye, EyeSlash, ArrowsClockwise, LinkSimple, Plug } from "@phosphor-icons/react";
 import {
@@ -136,33 +135,8 @@ export function MetaWhatsAppCloudDialog({ open, onOpenChange, integration, orgIn
     onError: (e: any) => toast.error(`Erro: ${e?.message ?? e}`),
   });
 
-  const templatesQuery = useQuery({
-    queryKey: ["meta-wa-templates", organization?.id, orgIntegration?.id],
-    enabled: !!organization?.id && !!orgIntegration?.id && open,
-    queryFn: async () => {
-      const { data, error } = await supabase
-        .from("whatsapp_templates")
-        .select("id, friendly_name, language, category, status, last_synced_at")
-        .eq("organization_id", organization!.id)
-        .eq("organization_integration_id", orgIntegration!.id)
-        .eq("provider", "meta_cloud_api")
-        .order("friendly_name");
-      if (error) throw error;
-      return data || [];
-    },
-  });
 
-  const syncTemplatesMutation = useMutation({
-    mutationFn: async () => {
-      if (!organization?.id) throw new Error("Organização indisponível");
-      return await metaWhatsAppService.syncTemplates(organization.id);
-    },
-    onSuccess: (data) => {
-      toast.success(`Templates sincronizados: ${data.synced}/${data.total} (${data.approved} aprovados)`);
-      templatesQuery.refetch();
-    },
-    onError: (e: any) => toast.error(`Falha ao sincronizar: ${e?.message ?? e}`),
-  });
+
 
   const ca = (orgIntegration?.connected_account ?? {}) as any;
   const cv = (orgIntegration?.config_values ?? {}) as any;
@@ -273,68 +247,8 @@ export function MetaWhatsAppCloudDialog({ open, onOpenChange, integration, orgIn
 
 
 
-            {/* ===== Templates ===== */}
-            {isConnected && (
-              <Card className="p-4 space-y-3">
-                <div className="flex items-center justify-between gap-2">
-                  <div>
-                    <h4 className="font-medium">Templates aprovados</h4>
-                    <p className="text-xs text-muted-foreground">
-                      Templates da Meta usados para enviar fora da janela de 24h.
-                    </p>
-                  </div>
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    onClick={() => syncTemplatesMutation.mutate()}
-                    disabled={syncTemplatesMutation.isPending}
-                  >
-                    <ArrowsClockwise className="h-4 w-4 mr-1" />
-                    {syncTemplatesMutation.isPending ? "Sincronizando..." : "Sincronizar templates"}
-                  </Button>
-                </div>
-                <Separator />
-                {templatesQuery.isLoading ? (
-                  <p className="text-xs text-muted-foreground">Carregando…</p>
-                ) : !templatesQuery.data || templatesQuery.data.length === 0 ? (
-                  <p className="text-xs text-muted-foreground">
-                    Nenhum template sincronizado ainda. Clique em <strong>Sincronizar templates</strong> para
-                    buscar na Meta.
-                  </p>
-                ) : (
-                  <div className="space-y-1.5 max-h-64 overflow-y-auto">
-                    {templatesQuery.data.map((t: any) => (
-                      <div
-                        key={t.id}
-                        className="flex items-center justify-between text-sm px-2 py-1.5 rounded border border-border"
-                      >
-                        <div className="min-w-0">
-                          <p className="font-medium truncate">{t.friendly_name}</p>
-                          <p className="text-xs text-muted-foreground">
-                            {t.language} · {t.category ?? "—"}
-                          </p>
-                        </div>
-                        <Badge
-                          variant={
-                            t.status === "approved"
-                              ? "default"
-                              : t.status === "rejected"
-                                ? "destructive"
-                                : "secondary"
-                          }
-                        >
-                          {t.status}
-                        </Badge>
-                      </div>
-                    ))}
-                  </div>
-                )}
-                <p className="text-[11px] text-muted-foreground">
-                  Total: {templatesQuery.data?.length ?? 0} · Aprovados:{" "}
-                  {templatesQuery.data?.filter((t: any) => t.status === "approved").length ?? 0}
-                </p>
-              </Card>
-            )}
+
+
 
             {/* ===== Regras de Entrada ===== */}
             {isConnected && orgIntegration?.id && (
