@@ -14,6 +14,8 @@ import { ConfirmDialog } from "@/components/ui/confirm-dialog";
 import { CheckCircle, Eye, EyeSlash, ArrowsClockwise, LinkSimple, Plug } from "@phosphor-icons/react";
 import { MetaWhatsAppValidationError, metaWhatsAppService } from "@/services/metaWhatsAppService";
 import { WhatsAppInboundSettings } from "@/components/settings/WhatsAppInboundSettings";
+import { AddMetaWhatsAppNumberDialog } from "./AddMetaWhatsAppNumberDialog";
+import { MetaAdditionalEndpointsSection } from "./MetaAdditionalEndpointsSection";
 
 interface Props {
   open: boolean;
