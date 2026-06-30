@@ -151,12 +151,17 @@ export function InboxComposer({ thread, replyTo, onClearReply, onSent, onThreadM
   const lifecycle = thread.contact?.lifecycle_stage ?? null;
   const endpointPurpose = thread.primary_endpoint?.purpose ?? null;
   const status = thread.status ?? null;
+  const csIncludesServiceEndpoints = (organization as any)?.cs_inbox_includes_service_endpoints ?? false;
 
-  if (lifecycle !== 'customer') {
+  const passesCustomerRule = lifecycle === 'customer';
+  const passesServiceEndpointRule =
+    csIncludesServiceEndpoints && endpointPurpose === 'customer_service';
+
+  if (!passesCustomerRule && !passesServiceEndpointRule) {
     return (
       <DisabledBar
         title="Envio bloqueado: contato não é cliente (lifecycle_stage ≠ customer)."
-        hint="A Inbox só envia para contatos com lifecycle_stage = customer."
+        hint="A Inbox só envia para contatos com lifecycle_stage = customer (ou, se habilitado, threads do endpoint dedicado de Atendimento)."
       />
     );
   }

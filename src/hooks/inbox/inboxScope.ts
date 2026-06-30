@@ -46,12 +46,19 @@ export interface ScopeParams {
   onlyMine: boolean;
   internalUserId: string | null;
   orgTimezone: string | null;
+  /**
+   * Per-org flag. When true, the Inbox additionally includes threads whose
+   * primary_endpoint.purpose = 'customer_service' regardless of the contact's
+   * lifecycle_stage. Default false preserves the legacy "customer-only" rule.
+   */
+  csIncludesServiceEndpoints?: boolean;
   limit?: number;
 }
 
 export interface ScopeDebug {
   bRaw: number;
   bFiltered: number;
+  cRaw?: number;
   merged: number;
 }
 
@@ -132,11 +139,51 @@ export async function fetchScopeB(
   return { raw, filtered };
 }
 
+/**
+ * Query C — endpoint-driven scope. Only used when csIncludesServiceEndpoints
+ * is true. Returns threads whose primary_endpoint.purpose = 'customer_service'
+ * regardless of contact.lifecycle_stage. The same EXCLUDED_PURPOSES guard
+ * does not apply here because we are explicitly opting in to a CS endpoint.
+ */
+async function fetchScopeC(p: ScopeParams): Promise<InboxScopedThread[]> {
+  if (p.onlyMine && !p.internalUserId) return [];
+  let q = supabase
+    .from('message_threads')
+    .select(SELECT_B.replace(
+      'primary_endpoint:communication_endpoints ( id, purpose )',
+      'primary_endpoint:communication_endpoints!inner ( id, purpose )',
+    ))
+    .eq('primary_endpoint.purpose', 'customer_service');
+  q = applyCommon(q, p);
+  const { data, error } = await q;
+  if (error) {
+    // eslint-disable-next-line no-console
+    console.error('[inboxScope] Query C error:', error.message);
+    return [];
+  }
+  return (data ?? []) as unknown as InboxScopedThread[];
+}
+
 export async function fetchInboxScopedThreads(
   p: ScopeParams,
 ): Promise<{ rows: InboxScopedThread[]; debug: ScopeDebug }> {
   const b = await fetchScopeB(p);
-  const rows = b.filtered
+
+  let merged = b.filtered;
+  let cRaw: number | undefined;
+  if (p.csIncludesServiceEndpoints) {
+    const c = await fetchScopeC(p);
+    cRaw = c.length;
+    const seen = new Set(b.filtered.map((r) => r.id));
+    for (const row of c) {
+      if (!seen.has(row.id)) {
+        merged.push(row);
+        seen.add(row.id);
+      }
+    }
+  }
+
+  const rows = merged
     .slice()
     .sort((x, y) => {
       const tx = x.last_message_at ? new Date(x.last_message_at).getTime() : 0;
@@ -144,7 +191,10 @@ export async function fetchInboxScopedThreads(
       return ty - tx;
     })
     .slice(0, p.limit ?? 200);
-  return { rows, debug: { bRaw: b.raw.length, bFiltered: b.filtered.length, merged: rows.length } };
+  return {
+    rows,
+    debug: { bRaw: b.raw.length, bFiltered: b.filtered.length, cRaw, merged: rows.length },
+  };
 }
 
 export interface ScopedCounts { active: number; waiting: number; resolved_today: number }
