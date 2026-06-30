@@ -11,6 +11,7 @@ import {
   MetaWaGraphError,
 } from "../_shared/meta-whatsapp/graph.ts";
 import { resolveAppSecretForIntegration } from "../_shared/meta-whatsapp/credentials.ts";
+import { ensureEndpointMigrationNote } from "../_shared/endpoint-migration-note.ts";
 
 function jsonResponse(status: number, body: Record<string, unknown>) {
   return new Response(JSON.stringify(body), {
@@ -396,6 +397,16 @@ serve(async (req) => {
     const sendTimestamp = new Date();
     const templateSentAt = sendTimestamp.toISOString();
     const migrationNoteAt = new Date(sendTimestamp.getTime() - 1000).toISOString();
+
+    // Lazy: insere uma única nota de sistema quando este for o primeiro outbound
+    // após uma migração de provider deste endpoint. No-op para threads novas ou
+    // endpoints que nunca foram migrados. Nunca lança.
+    if (currentThreadId) {
+      await ensureEndpointMigrationNote(supabase, currentThreadId, endpoint.id, {
+        noteTimestamp: migrationNoteAt,
+      });
+    }
+
 
     const { data: insertedMsg, error: insErr } = await supabase
       .from("messages")

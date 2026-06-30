@@ -23,6 +23,53 @@ export interface ConnectInput {
   displayName?: string;
 }
 
+export interface MigrateInput {
+  organizationId: string;
+  existingEndpointId: string;
+  provider?: "meta_cloud_api";
+  appId?: string;
+  wabaId: string;
+  phoneNumberId: string;
+  phoneE164: string;
+  systemUserToken?: string;
+  appSecret?: string;
+  verifyToken?: string;
+  endpointPurpose?: "commercial" | "customer_service" | "vendor_personal" | "other";
+  displayName?: string;
+  migrationReason?: string;
+}
+
+export interface MigrateResult {
+  ok: true;
+  mode: "migrate" | "migrate_dry_run";
+  migrationApplied: boolean;
+  endpointId: string;
+  before: Record<string, unknown>;
+  after: Record<string, unknown>;
+  meta: {
+    display_phone_number: string;
+    verified_name?: string | null;
+    quality_rating?: string | null;
+    messaging_limit_tier?: string | null;
+  };
+}
+
+export interface EndpointAlreadyRegisteredInfo {
+  existing_endpoint_id: string;
+  existing_provider: string;
+  existing_sender_sid: string | null;
+}
+
+export class EndpointAlreadyRegisteredError extends Error {
+  code = "endpoint_address_already_registered";
+  info: EndpointAlreadyRegisteredInfo;
+  constructor(info: EndpointAlreadyRegisteredInfo) {
+    super("Já existe um endpoint WhatsApp com este número nesta organização.");
+    this.name = "EndpointAlreadyRegisteredError";
+    this.info = info;
+  }
+}
+
 export interface ConnectResult {
   ok: true;
   organization_integration_id: string;
@@ -61,6 +108,27 @@ async function readFunctionError(error: unknown, data: unknown) {
   return null;
 }
 
+async function invokeMigrate(
+  body: MigrateInput & { mode: "migrate" | "migrate_dry_run" },
+): Promise<MigrateResult> {
+  const { data, error } = await supabase.functions.invoke("meta-whatsapp-connect", { body });
+  if (error) {
+    const fnError = await readFunctionError(error, data);
+    if (fnError?.error === "meta_validation_failed") {
+      throw new MetaWhatsAppValidationError(fnError.meta_error);
+    }
+    const msg = fnError?.error || error.message || "migrate_failed";
+    const e = new Error(msg) as Error & { details?: unknown };
+    e.details = fnError;
+    throw e;
+  }
+  if ((data as any)?.error) {
+    throw new Error((data as any).error);
+  }
+  return data as MigrateResult;
+}
+
+
 export const metaWhatsAppService = {
   async connect(input: ConnectInput): Promise<ConnectResult> {
     const { data, error } = await supabase.functions.invoke("meta-whatsapp-connect", {
@@ -70,6 +138,13 @@ export const metaWhatsAppService = {
       const fnError = await readFunctionError(error, data);
       if (fnError?.error === "meta_validation_failed") {
         throw new MetaWhatsAppValidationError(fnError.meta_error);
+      }
+      if (fnError?.error === "endpoint_address_already_registered") {
+        throw new EndpointAlreadyRegisteredError({
+          existing_endpoint_id: fnError.existing_endpoint_id,
+          existing_provider: fnError.existing_provider,
+          existing_sender_sid: fnError.existing_sender_sid ?? null,
+        });
       }
       const message = fnError?.error || error.message || "connect_failed";
       throw new Error(message);
@@ -81,6 +156,14 @@ export const metaWhatsAppService = {
       throw new Error((data as any).error);
     }
     return data as ConnectResult;
+  },
+
+  async migrate(input: MigrateInput): Promise<MigrateResult> {
+    return await invokeMigrate({ ...input, mode: "migrate" });
+  },
+
+  async migrateDryRun(input: MigrateInput): Promise<MigrateResult> {
+    return await invokeMigrate({ ...input, mode: "migrate_dry_run" });
   },
 
   async disconnect(organizationId: string): Promise<void> {

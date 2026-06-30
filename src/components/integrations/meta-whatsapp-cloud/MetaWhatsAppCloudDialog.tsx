@@ -12,10 +12,15 @@ import { Separator } from "@/components/ui/separator";
 import { Badge } from "@/components/ui/badge";
 import { ConfirmDialog } from "@/components/ui/confirm-dialog";
 import { CheckCircle, Eye, EyeSlash, ArrowsClockwise, LinkSimple, Plug } from "@phosphor-icons/react";
-import { MetaWhatsAppValidationError, metaWhatsAppService } from "@/services/metaWhatsAppService";
+import {
+  MetaWhatsAppValidationError,
+  EndpointAlreadyRegisteredError,
+  metaWhatsAppService,
+} from "@/services/metaWhatsAppService";
 import { WhatsAppInboundSettings } from "@/components/settings/WhatsAppInboundSettings";
 import { AddMetaWhatsAppNumberDialog } from "./AddMetaWhatsAppNumberDialog";
 import { MetaAdditionalEndpointsSection } from "./MetaAdditionalEndpointsSection";
+import { MigrateEndpointDialog } from "./MigrateEndpointDialog";
 
 interface Props {
   open: boolean;
@@ -43,6 +48,12 @@ export function MetaWhatsAppCloudDialog({ open, onOpenChange, integration, orgIn
   const [showVerifyToken, setShowVerifyToken] = useState(false);
   const [confirmDisconnectOpen, setConfirmDisconnectOpen] = useState(false);
   const [addNumberOpen, setAddNumberOpen] = useState(false);
+  const [migrateOpen, setMigrateOpen] = useState(false);
+  const [existingEndpointInfo, setExistingEndpointInfo] = useState<{
+    endpointId: string;
+    provider: string;
+    senderSid: string | null;
+  } | null>(null);
   const isConnected = !!orgIntegration?.is_enabled;
 
   // Pré-preenche os campos visíveis a partir do connected_account quando reconectando
@@ -80,6 +91,18 @@ export function MetaWhatsAppCloudDialog({ open, onOpenChange, integration, orgIn
       if (e instanceof MetaWhatsAppValidationError) {
         toast.error("A Meta recusou a validação", {
           description: "Se você só quer trocar número/ID agora, use Salvar sem validar.",
+        });
+        return;
+      }
+      if (e instanceof EndpointAlreadyRegisteredError) {
+        setExistingEndpointInfo({
+          endpointId: e.info.existing_endpoint_id,
+          provider: e.info.existing_provider,
+          senderSid: e.info.existing_sender_sid,
+        });
+        setMigrateOpen(true);
+        toast.message("Número já existe nesta organização", {
+          description: `Provider atual: ${e.info.existing_provider}. Use o diálogo de migração para trocar o provider preservando o histórico.`,
         });
         return;
       }
@@ -507,6 +530,32 @@ export function MetaWhatsAppCloudDialog({ open, onOpenChange, integration, orgIn
           organizationId={organization.id}
           wabaId={cv.waba_id}
           appId={cv.app_id}
+        />
+      )}
+
+      {organization?.id && existingEndpointInfo && (
+        <MigrateEndpointDialog
+          open={migrateOpen}
+          onOpenChange={setMigrateOpen}
+          existing={existingEndpointInfo}
+          payload={{
+            organizationId: organization.id,
+            wabaId: form.wabaId,
+            phoneNumberId: form.phoneNumberId,
+            phoneE164: form.phoneE164,
+            appId: form.appId || undefined,
+            systemUserToken: form.systemUserToken || undefined,
+            appSecret: form.appSecret || undefined,
+            verifyToken: form.verifyToken || undefined,
+            endpointPurpose: undefined,
+            displayName: undefined,
+            migrationReason: "provider_swap",
+          }}
+          onMigrated={() => {
+            qc.invalidateQueries({ queryKey: ["organization-integrations"] });
+            setExistingEndpointInfo(null);
+            onOpenChange(false);
+          }}
         />
       )}
     </>

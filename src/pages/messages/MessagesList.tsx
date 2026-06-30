@@ -1713,10 +1713,13 @@ function DesktopMessagesList() {
 
                               const message = item.data;
 
+                              const _migMetaKind =
+                                message.metadata && typeof message.metadata === 'object'
+                                  ? (message.metadata as any).kind
+                                  : null;
                               const isEndpointMigration =
-                                message.metadata &&
-                                typeof message.metadata === 'object' &&
-                                (message.metadata as any).kind === 'endpoint_migration_meta_7020';
+                                _migMetaKind === 'endpoint_migration_meta_7020' ||
+                                _migMetaKind === 'endpoint_provider_migration';
 
                               if (isEndpointMigration) {
                                 return (
