@@ -11,9 +11,40 @@ export function useTemplates(orgId: string | undefined) {
   const query = useQuery({
     queryKey: ['whatsapp-templates', orgId],
     queryFn: async () => {
-      const templates = await whatsappService.listTemplates(orgId!);
-      // Filtrar apenas templates ativos (soft delete retorna is_active = false)
-      return templates.filter(t => t.is_active !== false);
+      const [twilioRes, metaRes] = await Promise.allSettled([
+        whatsappService.listTemplates(orgId!),
+        supabase
+          .from('whatsapp_templates')
+          .select('*')
+          .eq('organization_id', orgId!)
+          .eq('provider', 'meta_cloud_api')
+          .eq('is_active', true)
+          .order('created_at', { ascending: false }),
+      ]);
+
+      const twilio = twilioRes.status === 'fulfilled' ? twilioRes.value : [];
+      if (twilioRes.status === 'rejected') {
+        console.warn('[useTemplates] Twilio list failed', twilioRes.reason);
+      }
+
+      let meta: WhatsAppTemplate[] = [];
+      if (metaRes.status === 'fulfilled') {
+        if (metaRes.value.error) {
+          console.warn('[useTemplates] Meta list failed', metaRes.value.error.message);
+        } else {
+          meta = (metaRes.value.data ?? []) as unknown as WhatsAppTemplate[];
+        }
+      } else {
+        console.warn('[useTemplates] Meta list rejected', metaRes.reason);
+      }
+
+      const byId = new Map<string, WhatsAppTemplate>();
+      for (const t of twilio) byId.set(t.id, t);
+      for (const t of meta) if (!byId.has(t.id)) byId.set(t.id, t);
+
+      return Array.from(byId.values())
+        .filter((t) => t.is_active !== false)
+        .sort((a, b) => (a.created_at < b.created_at ? 1 : -1));
     },
     enabled: !!orgId,
   });
