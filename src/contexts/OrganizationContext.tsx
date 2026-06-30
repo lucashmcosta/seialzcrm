@@ -19,6 +19,7 @@ export interface Organization {
   theme_primary_color?: string;
   theme_sidebar_color?: string;
   theme_dark_mode?: boolean;
+  cs_inbox_includes_service_endpoints?: boolean;
 }
 
 export interface UserProfile {
