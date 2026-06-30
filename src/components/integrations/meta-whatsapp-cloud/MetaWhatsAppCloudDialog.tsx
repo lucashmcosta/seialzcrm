@@ -533,6 +533,32 @@ export function MetaWhatsAppCloudDialog({ open, onOpenChange, integration, orgIn
           appId={cv.app_id}
         />
       )}
+
+      {organization?.id && existingEndpointInfo && (
+        <MigrateEndpointDialog
+          open={migrateOpen}
+          onOpenChange={setMigrateOpen}
+          existing={existingEndpointInfo}
+          payload={{
+            organizationId: organization.id,
+            wabaId: form.wabaId,
+            phoneNumberId: form.phoneNumberId,
+            phoneE164: form.phoneE164,
+            appId: form.appId || undefined,
+            systemUserToken: form.systemUserToken || undefined,
+            appSecret: form.appSecret || undefined,
+            verifyToken: form.verifyToken || undefined,
+            endpointPurpose: undefined,
+            displayName: undefined,
+            migrationReason: "provider_swap",
+          }}
+          onMigrated={() => {
+            qc.invalidateQueries({ queryKey: ["organization-integrations"] });
+            setExistingEndpointInfo(null);
+            onOpenChange(false);
+          }}
+        />
+      )}
     </>
   );
 }
