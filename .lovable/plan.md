@@ -1,27 +1,30 @@
-Plano aprovado para implementação
 
-Escopo
-- Corrigir somente `NewConversationDialog` e validações relacionadas ao fluxo de Atendimento.
-- Manter `/messages` e Twilio legado intactos.
-- Não fazer migration, backfill ou correção em lote.
+# Fase 1 — Performance da /inbox
 
-Mudanças
-1. `NewConversationDialog`
-   - Detectar quando `forcePurposes` representa fluxo de Atendimento (`customer_service` ou `other`).
-   - Dentro dos endpoints elegíveis por `forcePurposes`, se existir endpoint `provider='meta_cloud_api'`, ele será escolhido antes de qualquer Twilio/transitional.
-   - A busca de thread existente continuará filtrando por `primary_endpoint_id = effectiveEndpointId`, agora com o endpoint efetivo Meta quando houver Meta elegível, evitando reaproveitar thread Twilio antiga do mesmo contato.
+Migration **já aplicada** (índices + RPCs `rpc_list_inbox_threads` e `rpc_inbox_queue_counts`).
 
-2. Threads criadas erradas
-   - Não fazer backfill.
-   - Não fazer correção em lote.
-   - Só avaliar correção pontual da thread do teste se houver certeza de que ela tem:
-     - `last_routing_decision.action='inbox_manual_start'`;
-     - endpoint Twilio;
-     - criação recente por este fluxo.
-   - Se houver dúvida, não alterar dados e reportar.
+Falta o ajuste no client (bloqueado pelo plan mode). Aprovar este plano para liberar build mode.
 
-Validação
-- Confirmar que Nova conversa pelo Atendimento com contato lead cria/reaproveita thread em endpoint Meta Cloud quando houver Meta elegível.
-- Confirmar que o template selector recebe/usa `provider='meta_cloud_api'` e lista somente templates Meta.
-- Confirmar que envio pelo Inbox sai via endpoint Meta.
-- Confirmar que `/messages` e fluxo Twilio legado permanecem sem alteração.
+## O que muda no client
+
+1. **`src/hooks/inbox/inboxScope.ts`** — `fetchInboxScopedThreads` e `fetchInboxScopedCounts` deixam de montar a query via PostgREST e passam a chamar as duas RPCs. Removo `fetchScopeB`/`fetchScopeC`. Adiciono `organizationId` (obrigatório) ao `ScopeParams`. Regra de escopo é a mesma — agora avaliada em SQL no servidor.
+
+2. **`src/hooks/inbox/useInboxQueueCounts.ts`** — recebe `organizationId` e repassa para `fetchInboxScopedCounts`.
+
+3. **`src/pages/inbox/InboxPage.tsx`** — passa `organizationId` para `useInboxQueueCounts`.
+
+4. **`src/components/mobile/MobileInbox.tsx`** — idem.
+
+## Garantias
+
+- Sem mudança de regra de escopo (`lifecycle_stage = 'customer'`, exclusão de `commercial`/`vendor_personal`, opt-in `cs_inbox_includes_service_endpoints`).
+- Sem mudança em composer, template selector, `NewConversationDialog` ou envio.
+- Sem Fases 2/3/4.
+- Counts agora refletem contagem real (antes saturavam em 200 e iam a 0 em timeout); a lista continua paginada em 200 como antes.
+
+## Validação pós-build
+
+- Abrir /inbox e confirmar ausência de `statement timeout` no console.
+- Conferir que a aba ativa lista as mesmas threads.
+- Conferir contadores das 3 abas.
+- Conferir org Viagi (multi-tenant) — nada vaza entre orgs (RPC filtra por `p_organization_id` + RLS continua ativa).

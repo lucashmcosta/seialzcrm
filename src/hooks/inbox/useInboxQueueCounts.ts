@@ -9,16 +9,17 @@ export function useInboxQueueCounts(
   internalUserId: string | null,
   onlyMine: boolean,
   orgTimezone: string | null,
+  organizationId: string | null,
   csIncludesServiceEndpoints: boolean = false,
 ) {
   const [counts, setCounts] = useState<ScopedCounts>(ZERO);
   const [loading, setLoading] = useState(true);
 
   const refresh = useCallback(async () => {
-    const c = await fetchInboxScopedCounts({ internalUserId, onlyMine, orgTimezone, csIncludesServiceEndpoints });
+    const c = await fetchInboxScopedCounts({ internalUserId, onlyMine, orgTimezone, organizationId, csIncludesServiceEndpoints });
     setCounts(c);
     setLoading(false);
-  }, [internalUserId, onlyMine, orgTimezone, csIncludesServiceEndpoints]);
+  }, [internalUserId, onlyMine, orgTimezone, organizationId, csIncludesServiceEndpoints]);
 
   useEffect(() => { refresh(); }, [refresh]);
 

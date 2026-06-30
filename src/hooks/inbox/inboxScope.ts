@@ -5,12 +5,13 @@
 //   contact.lifecycle_stage = 'customer'
 //     AND endpoint.purpose NOT IN ('commercial','vendor_personal')
 //     (endpoint NULL, 'other', or 'customer_service' all pass)
+//   OR (csIncludesServiceEndpoints opt-in) endpoint.purpose = 'customer_service'
 //
-// Unified rule (validada em Central Trabalhista e Viagi):
-//   opportunity.status = 'won' → contact.lifecycle_stage = 'customer' → Atendimento.
-// Endpoint NÃO é mais gatilho de CS enquanto os números forem mistos
-// (Query A removida). A exclusão defensiva de purposes comerciais
-// permanece e é aplicada client-side, pois o embed de endpoint é LEFT-join.
+// Phase 1 perf: the same scope rule now runs in Postgres via two RPCs
+// (`rpc_list_inbox_threads`, `rpc_inbox_queue_counts`). The client passes
+// `organization_id` explicitly so the planner can use the composite indexes
+// `(organization_id, status, last_message_at DESC NULLS LAST)` and friends,
+// instead of relying solely on RLS quals.
 
 import { supabase } from '@/integrations/supabase/client';
 
@@ -47,6 +48,8 @@ export interface ScopeParams {
   onlyMine: boolean;
   internalUserId: string | null;
   orgTimezone: string | null;
+  /** REQUIRED for Phase 1 perf — enables composite-index usage in Postgres. */
+  organizationId: string | null;
   /**
    * Per-org flag. When true, the Inbox additionally includes threads whose
    * primary_endpoint.purpose = 'customer_service' regardless of the contact's
@@ -62,16 +65,6 @@ export interface ScopeDebug {
   cRaw?: number;
   merged: number;
 }
-
-const SELECT_B = `
-  id, contact_id, channel, status, priority,
-  assigned_user_id, assigned_at, first_response_at,
-  sla_first_response_target_at, sla_resolution_target_at,
-  last_message_at, last_message_content, last_message_direction, resolved_at,
-  primary_endpoint_id,
-  contact:contacts!inner ( id, name:full_name, phone, lifecycle_stage ),
-  primary_endpoint:communication_endpoints ( id, purpose )
-`;
 
 /** Start of day in the org timezone, returned as an ISO (UTC) string.
  *  Falls back to UTC midnight when timezone is unknown. */
@@ -101,100 +94,33 @@ export function startOfDayIso(timezone: string | null): string {
   }
 }
 
-function applyTabFilters(q: any, tab: InboxTab, orgTimezone: string | null) {
-  switch (tab) {
-    case 'active':
-      return q.in('status', ['open', 'in_progress']);
-    case 'waiting':
-      return q.eq('status', 'awaiting_client');
-    case 'resolved_today':
-      return q.eq('status', 'resolved').gte('resolved_at', startOfDayIso(orgTimezone));
-  }
-}
-
-function applyCommon(q: any, p: ScopeParams) {
-  q = applyTabFilters(q, p.tab, p.orgTimezone);
-  if (p.onlyMine && p.internalUserId) q = q.eq('assigned_user_id', p.internalUserId);
-  q = q.order('last_message_at', { ascending: false, nullsFirst: false }).limit(p.limit ?? 200);
-  return q;
-}
-
-export async function fetchScopeB(
-  p: ScopeParams,
-): Promise<{ raw: InboxScopedThread[]; filtered: InboxScopedThread[] }> {
-  if (p.onlyMine && !p.internalUserId) return { raw: [], filtered: [] };
-  let q = supabase.from('message_threads').select(SELECT_B).eq('contact.lifecycle_stage', 'customer');
-  q = applyCommon(q, p);
-  const { data, error } = await q;
-  if (error) {
-    // eslint-disable-next-line no-console
-    console.error('[inboxScope] Query B error:', error.message);
-    return { raw: [], filtered: [] };
-  }
-  const raw = (data ?? []) as unknown as InboxScopedThread[];
-  const filtered = raw.filter((row) => {
-    const purpose = row.primary_endpoint?.purpose ?? null;
-    if (purpose && (EXCLUDED_PURPOSES as readonly string[]).includes(purpose)) return false;
-    return true;
-  });
-  return { raw, filtered };
-}
-
-/**
- * Query C — endpoint-driven scope. Only used when csIncludesServiceEndpoints
- * is true. Returns threads whose primary_endpoint.purpose = 'customer_service'
- * regardless of contact.lifecycle_stage. The same EXCLUDED_PURPOSES guard
- * does not apply here because we are explicitly opting in to a CS endpoint.
- */
-async function fetchScopeC(p: ScopeParams): Promise<InboxScopedThread[]> {
-  if (p.onlyMine && !p.internalUserId) return [];
-  let q = supabase
-    .from('message_threads')
-    .select(SELECT_B.replace(
-      'primary_endpoint:communication_endpoints ( id, purpose )',
-      'primary_endpoint:communication_endpoints!inner ( id, purpose )',
-    ))
-    .eq('primary_endpoint.purpose', 'customer_service');
-  q = applyCommon(q, p);
-  const { data, error } = await q;
-  if (error) {
-    // eslint-disable-next-line no-console
-    console.error('[inboxScope] Query C error:', error.message);
-    return [];
-  }
-  return (data ?? []) as unknown as InboxScopedThread[];
-}
-
 export async function fetchInboxScopedThreads(
   p: ScopeParams,
 ): Promise<{ rows: InboxScopedThread[]; debug: ScopeDebug }> {
-  const b = await fetchScopeB(p);
+  const empty = { rows: [] as InboxScopedThread[], debug: { bRaw: 0, bFiltered: 0, merged: 0 } };
+  if (!p.organizationId) return empty;
+  if (p.onlyMine && !p.internalUserId) return empty;
 
-  let merged = b.filtered;
-  let cRaw: number | undefined;
-  if (p.csIncludesServiceEndpoints) {
-    const c = await fetchScopeC(p);
-    cRaw = c.length;
-    const seen = new Set(b.filtered.map((r) => r.id));
-    for (const row of c) {
-      if (!seen.has(row.id)) {
-        merged.push(row);
-        seen.add(row.id);
-      }
-    }
+  const { data, error } = await supabase.rpc('rpc_list_inbox_threads', {
+    p_organization_id: p.organizationId,
+    p_tab: p.tab,
+    p_only_mine: !!p.onlyMine,
+    p_assigned_user_id: p.onlyMine ? p.internalUserId : null,
+    p_resolved_since: startOfDayIso(p.orgTimezone),
+    p_include_service_endpoints: !!p.csIncludesServiceEndpoints,
+    p_limit: p.limit ?? 200,
+  } as any);
+
+  if (error) {
+    // eslint-disable-next-line no-console
+    console.error('[inboxScope] rpc_list_inbox_threads error:', error.message);
+    return empty;
   }
 
-  const rows = merged
-    .slice()
-    .sort((x, y) => {
-      const tx = x.last_message_at ? new Date(x.last_message_at).getTime() : 0;
-      const ty = y.last_message_at ? new Date(y.last_message_at).getTime() : 0;
-      return ty - tx;
-    })
-    .slice(0, p.limit ?? 200);
+  const rows = ((data ?? []) as unknown as InboxScopedThread[]);
   return {
     rows,
-    debug: { bRaw: b.raw.length, bFiltered: b.filtered.length, cRaw, merged: rows.length },
+    debug: { bRaw: rows.length, bFiltered: rows.length, merged: rows.length },
   };
 }
 
@@ -203,15 +129,28 @@ export interface ScopedCounts { active: number; waiting: number; resolved_today:
 export async function fetchInboxScopedCounts(
   p: Omit<ScopeParams, 'tab'>,
 ): Promise<ScopedCounts> {
-  // Reuse the EXACT same helper to guarantee list and counters never diverge.
-  const [active, waiting, resolved_today] = await Promise.all([
-    fetchInboxScopedThreads({ ...p, tab: 'active' }),
-    fetchInboxScopedThreads({ ...p, tab: 'waiting' }),
-    fetchInboxScopedThreads({ ...p, tab: 'resolved_today' }),
-  ]);
+  const zero = { active: 0, waiting: 0, resolved_today: 0 };
+  if (!p.organizationId) return zero;
+  if (p.onlyMine && !p.internalUserId) return zero;
+
+  const { data, error } = await supabase.rpc('rpc_inbox_queue_counts', {
+    p_organization_id: p.organizationId,
+    p_only_mine: !!p.onlyMine,
+    p_assigned_user_id: p.onlyMine ? p.internalUserId : null,
+    p_resolved_since: startOfDayIso(p.orgTimezone),
+    p_include_service_endpoints: !!p.csIncludesServiceEndpoints,
+  } as any);
+
+  if (error) {
+    // eslint-disable-next-line no-console
+    console.error('[inboxScope] rpc_inbox_queue_counts error:', error.message);
+    return zero;
+  }
+
+  const row = Array.isArray(data) ? data[0] : data;
   return {
-    active: active.rows.length,
-    waiting: waiting.rows.length,
-    resolved_today: resolved_today.rows.length,
+    active: Number((row as any)?.active ?? 0),
+    waiting: Number((row as any)?.waiting ?? 0),
+    resolved_today: Number((row as any)?.resolved_today ?? 0),
   };
 }

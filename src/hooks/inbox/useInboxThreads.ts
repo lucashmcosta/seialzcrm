@@ -31,6 +31,7 @@ export function useInboxThreads(
         onlyMine,
         internalUserId,
         orgTimezone,
+        organizationId,
         csIncludesServiceEndpoints,
       });
       setThreads(rows);
