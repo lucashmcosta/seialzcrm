@@ -75,6 +75,10 @@ export function NewConversationDialog({
    */
   const orderedEndpoints = useMemo(() => {
     if (!endpoints.length) return null;
+    const pool = forcePurposes && forcePurposes.length > 0
+      ? endpoints.filter((ep) => ep.purpose && (forcePurposes as string[]).includes(ep.purpose))
+      : endpoints;
+    if (!pool.length) return [];
     const endpointRank = (ep: typeof endpoints[number]) => {
       const digits = ep.external_address.replace(/\D/g, '');
       const isBrazil = digits.startsWith('55');
@@ -84,12 +88,12 @@ export function NewConversationDialog({
       if (isMeta) return 2;
       return 3;
     };
-    return [...endpoints].sort((a, b) => {
+    return [...pool].sort((a, b) => {
       const byRank = endpointRank(a) - endpointRank(b);
       if (byRank !== 0) return byRank;
       return new Date(b.created_at).getTime() - new Date(a.created_at).getTime();
     });
-  }, [endpoints]);
+  }, [endpoints, forcePurposes]);
 
   const preferredEndpointId = useMemo<string | null>(() => {
     if (!orderedEndpoints?.length) return null;
@@ -100,6 +104,8 @@ export function NewConversationDialog({
     });
     return (transitional[0] ?? sorted[0]).id;
   }, [orderedEndpoints, officialNumbers]);
+
+  const noEndpointForPurpose = !endpointsLoading && !!forcePurposes && (orderedEndpoints?.length ?? 0) === 0;
 
   // Endpoint efetivamente usado para abrir/criar a thread. Inicia no
   // preferido (heurística) e pode ser sobrescrito pelo usuário via
