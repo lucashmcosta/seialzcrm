@@ -22,6 +22,7 @@ import {
   ShuffleAngular,
   Sparkle,
   Files,
+  Headset,
 } from '@phosphor-icons/react';
 import { usePermissions } from '@/hooks/usePermissions';
 import { useWhatsAppIntegration } from '@/hooks/useWhatsAppIntegration';
