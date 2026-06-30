@@ -192,6 +192,9 @@ export function NewConversationDialog({
       if (effectiveEndpointId) {
         insertPayload.primary_endpoint_id = effectiveEndpointId;
       }
+      if (routingDecision) {
+        insertPayload.last_routing_decision = routingDecision;
+      }
 
       const { data: newThread, error } = await supabase
         .from('message_threads')
