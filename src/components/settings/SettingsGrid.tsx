@@ -81,6 +81,7 @@ const settingsGroups: SettingsGroup[] = [
       { icon: Sparkle, label: 'Seialz Intelligence', description: 'Configure captura, transcrição e detecções comportamentais', to: 'intelligence', badge: 'Novo', badgeVariant: 'info', permission: 'canManageSettings' },
       { icon: Sparkle, label: 'Provedores de IA (BYOK)', description: 'Use suas próprias chaves OpenAI, Anthropic, Gemini ou ElevenLabs', to: 'ai-providers', permission: 'canManageIntegrations' },
       { icon: Code, label: 'API & Webhooks', description: 'Acesse a API e configure webhooks', to: 'api-webhooks', permission: 'canManageIntegrations' },
+      { icon: Headset, label: 'Atendimento', description: 'Regras de escopo da Inbox de Atendimento (CS)', to: 'customer-service', permission: 'canManageSettings' },
     ],
   },
   {
