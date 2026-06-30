@@ -115,6 +115,7 @@ export function AddMetaWhatsAppNumberDialog({
     !addMutation.isPending;
 
   return (
+    <>
     <Dialog
       open={open}
       onOpenChange={(o) => {
