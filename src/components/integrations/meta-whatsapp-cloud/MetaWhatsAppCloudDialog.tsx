@@ -14,6 +14,8 @@ import { ConfirmDialog } from "@/components/ui/confirm-dialog";
 import { CheckCircle, Eye, EyeSlash, ArrowsClockwise, LinkSimple, Plug } from "@phosphor-icons/react";
 import { MetaWhatsAppValidationError, metaWhatsAppService } from "@/services/metaWhatsAppService";
 import { WhatsAppInboundSettings } from "@/components/settings/WhatsAppInboundSettings";
+import { AddMetaWhatsAppNumberDialog } from "./AddMetaWhatsAppNumberDialog";
+import { MetaAdditionalEndpointsSection } from "./MetaAdditionalEndpointsSection";
 
 interface Props {
   open: boolean;
@@ -40,6 +42,7 @@ export function MetaWhatsAppCloudDialog({ open, onOpenChange, integration, orgIn
   const [showAppSecret, setShowAppSecret] = useState(false);
   const [showVerifyToken, setShowVerifyToken] = useState(false);
   const [confirmDisconnectOpen, setConfirmDisconnectOpen] = useState(false);
+  const [addNumberOpen, setAddNumberOpen] = useState(false);
   const isConnected = !!orgIntegration?.is_enabled;
 
   // Pré-preenche os campos visíveis a partir do connected_account quando reconectando
@@ -214,6 +217,38 @@ export function MetaWhatsAppCloudDialog({ open, onOpenChange, integration, orgIn
                 </div>
               </Card>
             )}
+
+            {/* ===== Números adicionais da WABA ===== */}
+            {isConnected && organization?.id && orgIntegration?.id && (
+              <Card className="p-4 space-y-3">
+                <div className="flex items-center justify-between gap-2">
+                  <div>
+                    <h4 className="font-medium">Outros números desta WABA</h4>
+                    <p className="text-xs text-muted-foreground">
+                      Mesma WABA, App e tokens da integração principal. Use para roteamento por finalidade
+                      (Atendimento vs Comercial).
+                    </p>
+                  </div>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => setAddNumberOpen(true)}
+                    disabled={!cv.waba_id || !cv.app_id}
+                    title={!cv.waba_id ? "Conecte a integração principal primeiro" : ""}
+                  >
+                    + Adicionar número desta WABA
+                  </Button>
+                </div>
+                <Separator />
+                <MetaAdditionalEndpointsSection
+                  organizationId={organization.id}
+                  organizationIntegrationId={orgIntegration.id}
+                  primaryPhoneNumberId={ca.phone_number_id ?? cv.phone_number_id ?? null}
+                />
+              </Card>
+            )}
+
+
 
             {/* ===== Templates ===== */}
             {isConnected && (
@@ -464,6 +499,16 @@ export function MetaWhatsAppCloudDialog({ open, onOpenChange, integration, orgIn
         onConfirm={() => disconnectMutation.mutate()}
         loading={disconnectMutation.isPending}
       />
+
+      {organization?.id && cv.waba_id && cv.app_id && (
+        <AddMetaWhatsAppNumberDialog
+          open={addNumberOpen}
+          onOpenChange={setAddNumberOpen}
+          organizationId={organization.id}
+          wabaId={cv.waba_id}
+          appId={cv.app_id}
+        />
+      )}
     </>
   );
 }

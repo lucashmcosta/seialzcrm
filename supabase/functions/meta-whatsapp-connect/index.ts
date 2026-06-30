@@ -19,9 +19,16 @@ interface ConnectBody {
   systemUserToken: string;
   appSecret?: string;     // per-integration — obrigatório em conexão nova
   verifyToken?: string;   // per-integration — obrigatório em conexão nova
-  endpointPurpose?: "customer_service" | "other";
+  endpointPurpose?: "commercial" | "customer_service" | "vendor_personal" | "other";
   displayName?: string;
   skipMetaValidation?: boolean;
+  // 'primary' (default): comportamento original — sobrescreve connected_account/config_values
+  //                      da integração com os dados do número informado.
+  // 'additional': adiciona apenas a linha em communication_endpoints na MESMA WABA já conectada.
+  //               Não toca campos phone-level da integração. Requer integração já conectada e
+  //               wabaId idêntico ao já armazenado. systemUserToken/appSecret/verifyToken
+  //               opcionais (reaproveita os já cifrados quando ausentes).
+  mode?: "primary" | "additional";
 }
 
 function err(status: number, message: string, extra: Record<string, unknown> = {}) {
@@ -61,9 +68,10 @@ serve(async (req) => {
     const body = (await req.json().catch(() => null)) as ConnectBody | null;
     if (!body) return err(400, "invalid_json");
 
-    const required: (keyof ConnectBody)[] = [
-      "organizationId", "appId", "wabaId", "phoneNumberId", "phoneE164", "systemUserToken",
-    ];
+    const mode: "primary" | "additional" = body.mode === "additional" ? "additional" : "primary";
+    const required: (keyof ConnectBody)[] = mode === "additional"
+      ? ["organizationId", "wabaId", "phoneNumberId", "phoneE164"]
+      : ["organizationId", "appId", "wabaId", "phoneNumberId", "phoneE164", "systemUserToken"];
     for (const f of required) {
       if (!body[f] || typeof body[f] !== "string") {
         return err(400, "missing_field", { field: f });
@@ -112,13 +120,29 @@ serve(async (req) => {
     const hasStoredAppSecret = !!priorCa.app_secret_encrypted;
     const hasStoredVerifyToken = !!priorCa.verify_token_encrypted;
 
-    // Fase 3: App Secret e Verify Token são obrigatórios em nova conexão.
-    // Em edição, podem vir vazios — preservamos o valor já cifrado.
-    if (!hasStoredAppSecret && !(body.appSecret && body.appSecret.trim())) {
-      return err(400, "missing_field", { field: "appSecret" });
-    }
-    if (!hasStoredVerifyToken && !(body.verifyToken && body.verifyToken.trim())) {
-      return err(400, "missing_field", { field: "verifyToken" });
+    // === mode='additional': exige integração já conectada na MESMA WABA ===
+    if (mode === "additional") {
+      if (!priorOi) return err(400, "integration_not_connected");
+      const priorWabaId = priorCa.waba_id as string | undefined;
+      if (!priorWabaId) return err(400, "integration_missing_waba");
+      if (priorWabaId !== body.wabaId) {
+        return err(400, "waba_mismatch", {
+          expected: priorWabaId,
+          received: body.wabaId,
+        });
+      }
+      if (!priorCa.access_token_encrypted) {
+        return err(400, "integration_missing_token");
+      }
+    } else {
+      // Fase 3: App Secret e Verify Token são obrigatórios em nova conexão.
+      // Em edição, podem vir vazios — preservamos o valor já cifrado.
+      if (!hasStoredAppSecret && !(body.appSecret && body.appSecret.trim())) {
+        return err(400, "missing_field", { field: "appSecret" });
+      }
+      if (!hasStoredVerifyToken && !(body.verifyToken && body.verifyToken.trim())) {
+        return err(400, "missing_field", { field: "verifyToken" });
+      }
     }
 
     // Valida credenciais Meta (Graph API). Pode ser pulado via skipMetaValidation
@@ -132,6 +156,22 @@ serve(async (req) => {
         console.error("[meta-whatsapp-connect] decrypt prior app_secret failed", (e as Error).message);
       }
     }
+
+    // accessToken efetivo para validar com a Meta:
+    // - primary: usa o token vindo do body (obrigatório)
+    // - additional: usa o token novo se vier, senão decripta o já armazenado
+    let effectiveAccessToken = body.systemUserToken?.trim() || undefined;
+    if (!effectiveAccessToken && mode === "additional") {
+      try {
+        effectiveAccessToken = (await decryptSecret(priorCa.access_token_encrypted)).trim() || undefined;
+      } catch (e) {
+        console.error("[meta-whatsapp-connect] decrypt prior access_token failed", (e as Error).message);
+      }
+    }
+    if (!effectiveAccessToken && !body.skipMetaValidation) {
+      return err(400, "missing_access_token");
+    }
+
     let meta: {
       display_phone_number: string;
       verified_name?: string | null;
@@ -152,7 +192,7 @@ serve(async (req) => {
         meta = await validateCredentials({
           phoneNumberId: body.phoneNumberId,
           wabaId: body.wabaId,
-          accessToken: body.systemUserToken,
+          accessToken: effectiveAccessToken!,
           appSecret,
         });
       } catch (e) {
@@ -171,77 +211,91 @@ serve(async (req) => {
       }
     }
 
-    const encryptedToken = await encryptSecret(body.systemUserToken);
-
-    const appSecretEncrypted = body.appSecret && body.appSecret.trim()
-      ? await encryptSecret(body.appSecret.trim())
-      : (priorCa.app_secret_encrypted ?? null);
-    const verifyTokenEncrypted = body.verifyToken && body.verifyToken.trim()
-      ? await encryptSecret(body.verifyToken.trim())
-      : (priorCa.verify_token_encrypted ?? null);
-
-    const connectedAccount = {
-      app_id: body.appId,
-      waba_id: body.wabaId,
-      phone_number_id: body.phoneNumberId,
-      display_phone_number: meta.display_phone_number,
-      verified_name: meta.verified_name ?? null,
-      access_token_encrypted: encryptedToken,
-      app_secret_encrypted: appSecretEncrypted,
-      verify_token_encrypted: verifyTokenEncrypted,
-      token_stored_at: new Date().toISOString(),
-    };
-
-    const configValues = {
-      app_id: body.appId,
-      waba_id: body.wabaId,
-      phone_number_id: body.phoneNumberId,
-      phone_e164: body.phoneE164,
-      display_phone_number: meta.display_phone_number,
-      verified_name: meta.verified_name ?? null,
-      quality_rating: meta.quality_rating ?? null,
-      messaging_limit_tier: meta.messaging_limit_tier ?? null,
-      last_validated_at: new Date().toISOString(),
-    };
-
-    // Upsert organization_integrations
-    const { data: existingOi } = await admin
-      .from("organization_integrations")
-      .select("id")
-      .eq("organization_id", body.organizationId)
-      .eq("integration_id", integ.id)
-      .maybeSingle();
-
+    // === Upsert organization_integrations ===
+    // - primary: comportamento original (overwrite connected_account/config_values)
+    // - additional: NÃO toca a integração existente; apenas reaproveita seu id.
     let orgIntegrationId: string;
-    if (existingOi?.id) {
-      const { error: updErr } = await admin
+    if (mode === "additional") {
+      // priorOi já foi validado acima; precisamos do id.
+      const { data: oiRow } = await admin
         .from("organization_integrations")
-        .update({
-          is_enabled: true,
-          connected_account: connectedAccount,
-          config_values: configValues,
-          connected_at: new Date().toISOString(),
-          connected_by_user_id: userRow.id,
-        })
-        .eq("id", existingOi.id);
-      if (updErr) return err(500, "oi_update_failed", { details: updErr.message });
-      orgIntegrationId = existingOi.id;
-    } else {
-      const { data: ins, error: insErr } = await admin
-        .from("organization_integrations")
-        .insert({
-          organization_id: body.organizationId,
-          integration_id: integ.id,
-          is_enabled: true,
-          connected_account: connectedAccount,
-          config_values: configValues,
-          connected_at: new Date().toISOString(),
-          connected_by_user_id: userRow.id,
-        })
         .select("id")
-        .single();
-      if (insErr || !ins?.id) return err(500, "oi_insert_failed", { details: insErr?.message });
-      orgIntegrationId = ins.id;
+        .eq("organization_id", body.organizationId)
+        .eq("integration_id", integ.id)
+        .maybeSingle();
+      if (!oiRow?.id) return err(400, "integration_not_connected");
+      orgIntegrationId = oiRow.id;
+    } else {
+      const encryptedToken = await encryptSecret(body.systemUserToken);
+
+      const appSecretEncrypted = body.appSecret && body.appSecret.trim()
+        ? await encryptSecret(body.appSecret.trim())
+        : (priorCa.app_secret_encrypted ?? null);
+      const verifyTokenEncrypted = body.verifyToken && body.verifyToken.trim()
+        ? await encryptSecret(body.verifyToken.trim())
+        : (priorCa.verify_token_encrypted ?? null);
+
+      const connectedAccount = {
+        app_id: body.appId,
+        waba_id: body.wabaId,
+        phone_number_id: body.phoneNumberId,
+        display_phone_number: meta.display_phone_number,
+        verified_name: meta.verified_name ?? null,
+        access_token_encrypted: encryptedToken,
+        app_secret_encrypted: appSecretEncrypted,
+        verify_token_encrypted: verifyTokenEncrypted,
+        token_stored_at: new Date().toISOString(),
+      };
+
+      const configValues = {
+        app_id: body.appId,
+        waba_id: body.wabaId,
+        phone_number_id: body.phoneNumberId,
+        phone_e164: body.phoneE164,
+        display_phone_number: meta.display_phone_number,
+        verified_name: meta.verified_name ?? null,
+        quality_rating: meta.quality_rating ?? null,
+        messaging_limit_tier: meta.messaging_limit_tier ?? null,
+        last_validated_at: new Date().toISOString(),
+      };
+
+      const { data: existingOi } = await admin
+        .from("organization_integrations")
+        .select("id")
+        .eq("organization_id", body.organizationId)
+        .eq("integration_id", integ.id)
+        .maybeSingle();
+
+      if (existingOi?.id) {
+        const { error: updErr } = await admin
+          .from("organization_integrations")
+          .update({
+            is_enabled: true,
+            connected_account: connectedAccount,
+            config_values: configValues,
+            connected_at: new Date().toISOString(),
+            connected_by_user_id: userRow.id,
+          })
+          .eq("id", existingOi.id);
+        if (updErr) return err(500, "oi_update_failed", { details: updErr.message });
+        orgIntegrationId = existingOi.id;
+      } else {
+        const { data: ins, error: insErr } = await admin
+          .from("organization_integrations")
+          .insert({
+            organization_id: body.organizationId,
+            integration_id: integ.id,
+            is_enabled: true,
+            connected_account: connectedAccount,
+            config_values: configValues,
+            connected_at: new Date().toISOString(),
+            connected_by_user_id: userRow.id,
+          })
+          .select("id")
+          .single();
+        if (insErr || !ins?.id) return err(500, "oi_insert_failed", { details: insErr?.message });
+        orgIntegrationId = ins.id;
+      }
     }
 
     // Upsert communication_endpoint (provider='meta-cloud', identificado pelo phone_number_id)
