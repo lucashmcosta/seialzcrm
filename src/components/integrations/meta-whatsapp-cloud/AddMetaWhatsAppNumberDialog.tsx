@@ -40,6 +40,12 @@ export function AddMetaWhatsAppNumberDialog({
   const [phoneE164, setPhoneE164] = useState("");
   const [displayName, setDisplayName] = useState("");
   const [purpose, setPurpose] = useState<Purpose>("customer_service");
+  const [migrateOpen, setMigrateOpen] = useState(false);
+  const [existingInfo, setExistingInfo] = useState<{
+    endpointId: string;
+    provider: string;
+    senderSid: string | null;
+  } | null>(null);
 
   const reset = () => {
     setPhoneNumberId("");
