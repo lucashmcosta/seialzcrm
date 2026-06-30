@@ -1,45 +1,37 @@
-## Validação E2E parcial — Templates Meta Cloud (opção a)
+## Problema
 
-Escopo aprovado: Etapa 1 + Etapa 2 + Cenários 1, 2, 3, 8. Cenários 4/5/6/7 ficam pendentes por dependência externa (orgs de teste e aprovação manual no Business Manager). Sem mexer em schema, Twilio, Railway, composer, envio ou dispatcher. Não vou ativar/desativar integrações em orgs existentes.
+Os templates Meta são gravados em `whatsapp_templates` (5 confirmados no DB com `provider='meta_cloud_api'`), mas a listagem na UI chama `whatsappService.listTemplates`, que bate em `https://seialz-backend-production.up.railway.app/api/whatsapp/templates`. Esse endpoint Railway retorna apenas templates Twilio, então os Meta ficam invisíveis na tela.
 
----
+## Correção (mínima, escopo restrito)
 
-### Etapa 1 — Investigação prévia (read-only)
+Sem mexer em Railway, Twilio, composer, dispatcher, envio ou schema.
 
-1. `supabase--read_query` em `information_schema.columns` para confirmar que `whatsapp_templates.source` existe (a entrega anterior assumiu que sim). Se não existir, parar e reportar — sem migration.
-2. Reler `meta-whatsapp-templates-sync/index.ts` para confirmar que `rejected_reason` **não** está incluído no `fields` da Graph API (é o gap que motiva a Etapa 2).
-3. Reler `WhatsAppTemplates.tsx` para localizar exatamente onde o badge de status é renderizado (ponto de extensão para tooltip).
-4. `supabase--read_query` em `organization_integrations` filtrando por slug `meta-whatsapp-cloud` para identificar 1 org com Meta ativa, que será usada nos Cenários 1, 2 e 8.
+### Mudança única: `src/hooks/useWhatsAppTemplates.ts` → `useTemplates`
 
-### Etapa 2 — Melhoria UX `rejection_reason` (mudanças cirúrgicas)
+Fazer fetch paralelo:
 
-Backend:
-- `supabase/functions/meta-whatsapp-templates-sync/index.ts`: adicionar `rejected_reason` ao `fields` das duas chamadas `metaWaGet`; persistir explicitamente em `metadata.meta_cloud.rejected_reason` (além do `raw` que já guarda tudo).
-- `supabase/functions/meta-whatsapp-templates-create/index.ts`: se Meta responder `status='REJECTED'` na criação, persistir `metadata.meta_cloud.rejected_reason` igualmente.
-- Deploy via `supabase--deploy_edge_functions` das duas funções.
+1. **Twilio** (como hoje): `whatsappService.listTemplates(orgId)` — mantém compatibilidade total com fluxo Railway.
+2. **Meta** (novo): `supabase.from('whatsapp_templates').select('*').eq('organization_id', orgId).eq('provider', 'meta_cloud_api').eq('is_active', true)` — direto no Supabase (RLS já protege).
 
-Frontend:
-- `src/pages/settings/WhatsAppTemplates.tsx`: para `provider='meta_cloud_api'` + `status='rejected'`, envolver o badge "Rejeitado" em `Tooltip` (shadcn já existente) exibindo `metadata.meta_cloud.rejected_reason` ou fallback `"Motivo não informado pela Meta"`. Templates Twilio: **inalterados**.
+Concatenar os dois arrays, deduplicar por `id` (Twilio tem prioridade caso colida — não deve colidir), aplicar o filtro `is_active !== false` já existente, e ordenar por `created_at desc`.
 
-Sem migration. Sem mexer em outros componentes.
+### Por que assim
 
-### Etapa 3 — Execução dos cenários permitidos
-
-| # | Cenário | Método de validação |
-|---|---------|---------------------|
-| 1 | Criar template Meta | Playwright via shell na UI do preview → `/whatsapp/templates/new?provider=meta_cloud_api`, preencher `teste_meta_<ts>`, UTILITY, pt_BR, body com `{{1}}`. Verificar via `supabase--read_query` a linha resultante (`provider`, `source`, `status`, `meta_template_name`, `meta_waba_id`, `metadata.meta_cloud`). Conferir `supabase--edge_function_logs` de `meta-whatsapp-templates-create`. |
-| 2 | Sync idempotente | Clicar "Sincronizar Meta" 2x. Conferir `count(*)` por `(provider, organization_integration_id, meta_template_name, language)` permanece 1. Conferir `last_synced_at` avança. |
-| 3 | Fluxo Twilio intacto | Criar template Twilio via UI normal. Conferir `twilio_content_sid` preenchido, `provider='twilio'`, badge azul, sem logs em funções Meta. |
-| 8 | Rejeição | Tentar criar template com nome inválido (ex.: `Teste-Maiusculo`) para forçar `400` antes da Meta; e um segundo com categoria/body que a Meta provavelmente rejeite. Confirmar: toast amigável, **nenhuma linha** criada em `whatsapp_templates` (sem registro parcial), logs claros. Se algum chegar a status `rejected` via sync, validar badge + tooltip da Etapa 2. |
-
-Cenários **4, 5, 6, 7**: não executados — registrados como pendentes por dependência externa.
-
-### Etapa 4 — Relatório parcial
-
-Tabela final com: passou / corrigido / pendente por dependência externa, listando arquivos tocados na Etapa 2 e qualquer correção emergente da Etapa 3.
-
----
+- Railway-side não retorna Meta e não temos permissão de mexer nele agora.
+- Supabase direto resolve só o lado Meta; o Twilio continua exatamente como está.
+- Realtime subscription existente já cobre INSERT/UPDATE/DELETE dos dois providers — sem mudança.
+- Componentes (`WhatsAppTemplates.tsx`, badges, dropdowns, tooltip de rejeição) já tratam `provider='meta_cloud_api'` — nada muda lá.
 
 ### Fora de escopo
 
-Schema, Twilio/Railway, composer, envio, dispatcher, delete Meta, edição de templates Meta aprovados, ativar/desativar integrações em orgs existentes.
+- Não mudar `src/services/whatsapp.ts` (mantém contrato Railway).
+- Não mudar Railway, dispatcher, composer, envio.
+- Não mudar schema.
+- Detail page (`useTemplate`) fica para depois se aparecer o mesmo sintoma — hoje o usuário só relatou a listagem.
+
+## Validação
+
+1. Recarregar `/settings/whatsapp-templates` → devem aparecer os 5 Meta + os Twilio existentes.
+2. Filtro "Meta Cloud" → mostra os 5.
+3. Filtro "Twilio" → mostra os 137 Twilio.
+4. Criar novo template Meta → aparece imediatamente via realtime.
