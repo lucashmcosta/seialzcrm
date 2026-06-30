@@ -95,6 +95,18 @@ export function MetaWhatsAppCloudDialog({ open, onOpenChange, integration, orgIn
         });
         return;
       }
+      if (e instanceof EndpointAlreadyRegisteredError) {
+        setExistingEndpointInfo({
+          endpointId: e.info.existing_endpoint_id,
+          provider: e.info.existing_provider,
+          senderSid: e.info.existing_sender_sid,
+        });
+        setMigrateOpen(true);
+        toast.message("Número já existe nesta organização", {
+          description: `Provider atual: ${e.info.existing_provider}. Use o diálogo de migração para trocar o provider preservando o histórico.`,
+        });
+        return;
+      }
       toast.error(`Falha ao salvar: ${e?.message ?? e}`);
     },
   });
