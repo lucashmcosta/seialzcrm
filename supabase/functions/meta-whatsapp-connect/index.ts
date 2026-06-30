@@ -126,6 +126,241 @@ serve(async (req) => {
     }
     if (!membership) return err(403, "not_a_member");
 
+    // ==========================================================================
+    // === MODE = 'migrate' / 'migrate_dry_run' ================================
+    // Migra um endpoint existente para outro provider (hoje: meta_cloud_api).
+    // Validação fail-closed: nenhum write até toda a validação Graph API passar.
+    // ==========================================================================
+    if (isMigrateMode) {
+      const targetProvider = body.provider ?? "meta_cloud_api";
+      const reason = body.migrationReason || "provider_swap";
+
+      // 1) Lê o endpoint existente.
+      const { data: existingEp, error: epErr } = await admin
+        .from("communication_endpoints")
+        .select("id, organization_id, organization_integration_id, channel, provider, sender_sid, external_address, external_account_id, display_name, purpose, status, is_active, quality_rating, current_tier, metadata")
+        .eq("id", body.existingEndpointId!)
+        .maybeSingle();
+      if (epErr) return err(500, "endpoint_lookup_failed", { details: epErr.message });
+      if (!existingEp) return err(404, "endpoint_not_found");
+      if (existingEp.organization_id !== body.organizationId) {
+        return err(403, "org_mismatch");
+      }
+      if (existingEp.channel !== "whatsapp") {
+        return err(400, "endpoint_channel_unsupported", { channel: existingEp.channel });
+      }
+      if (existingEp.external_address !== body.phoneE164) {
+        return err(400, "external_address_mismatch", {
+          endpoint_external_address: existingEp.external_address,
+          payload_phone_e164: body.phoneE164,
+        });
+      }
+      if (existingEp.provider === targetProvider) {
+        return err(400, "same_provider_noop", { provider: targetProvider });
+      }
+
+      // 2) Integração Meta de destino deve existir, estar habilitada e ter mesma WABA.
+      const { data: integMeta } = await admin
+        .from("admin_integrations")
+        .select("id")
+        .eq("slug", "meta-whatsapp-cloud")
+        .maybeSingle();
+      if (!integMeta?.id) return err(500, "integration_not_seeded");
+
+      const { data: metaOi, error: metaOiErr } = await admin
+        .from("organization_integrations")
+        .select("id, is_enabled, connected_account")
+        .eq("organization_id", body.organizationId)
+        .eq("integration_id", integMeta.id)
+        .maybeSingle();
+      if (metaOiErr) return err(500, "meta_integration_lookup_failed", { details: metaOiErr.message });
+      if (!metaOi) return err(400, "target_integration_not_connected");
+      if (!metaOi.is_enabled) return err(400, "target_integration_disabled");
+      const metaCa = (metaOi.connected_account ?? {}) as any;
+      if (!metaCa.access_token_encrypted) return err(400, "target_integration_missing_token");
+      if (metaCa.waba_id && metaCa.waba_id !== body.wabaId) {
+        return err(400, "waba_mismatch", { expected: metaCa.waba_id, received: body.wabaId });
+      }
+
+      // 3) Resolve token / app secret efetivos (novos ou já cifrados na integração).
+      let appSecret = body.appSecret?.trim() || undefined;
+      if (!appSecret && metaCa.app_secret_encrypted) {
+        try {
+          appSecret = (await decryptSecret(metaCa.app_secret_encrypted)).trim() || undefined;
+        } catch (e) {
+          console.error("[meta-whatsapp-connect][migrate] decrypt app_secret failed", (e as Error).message);
+        }
+      }
+      let effectiveAccessToken = body.systemUserToken?.trim() || undefined;
+      if (!effectiveAccessToken) {
+        try {
+          effectiveAccessToken = (await decryptSecret(metaCa.access_token_encrypted)).trim() || undefined;
+        } catch (e) {
+          console.error("[meta-whatsapp-connect][migrate] decrypt access_token failed", (e as Error).message);
+        }
+      }
+      if (!effectiveAccessToken) return err(400, "missing_access_token");
+
+      // 4) Valida com a Graph API (sempre — migração não permite skip).
+      let meta: {
+        display_phone_number: string;
+        verified_name?: string | null;
+        quality_rating?: string | null;
+        messaging_limit_tier?: string | null;
+        belongs_to_waba: boolean;
+      };
+      try {
+        meta = await validateCredentials({
+          phoneNumberId: body.phoneNumberId,
+          wabaId: body.wabaId,
+          accessToken: effectiveAccessToken,
+          appSecret,
+        });
+      } catch (e) {
+        if (e instanceof MetaWaGraphError) {
+          return validationResult("meta_validation_failed", { meta_error: e.error, step: "graph_api" });
+        }
+        throw e;
+      }
+      if (!meta.belongs_to_waba) {
+        return validationResult("phone_not_in_waba", {
+          message: "O Phone Number ID informado não pertence ao WABA informado.",
+        });
+      }
+
+      // 5) display_phone_number da Meta tem que bater com o E.164 do endpoint.
+      const normalize = (s: string) => "+" + String(s).replace(/[^\d]/g, "");
+      if (normalize(meta.display_phone_number) !== normalize(existingEp.external_address)) {
+        return err(400, "phone_number_mismatch", {
+          endpoint_external_address: existingEp.external_address,
+          meta_display_phone_number: meta.display_phone_number,
+        });
+      }
+
+      // 6) Nenhum outro endpoint da org pode ter o mesmo sender_sid (PNID).
+      const { data: collision } = await admin
+        .from("communication_endpoints")
+        .select("id")
+        .eq("organization_id", body.organizationId)
+        .eq("sender_sid", body.phoneNumberId)
+        .neq("id", existingEp.id)
+        .maybeSingle();
+      if (collision?.id) {
+        return err(409, "sender_sid_collision", {
+          conflicting_endpoint_id: collision.id,
+          phone_number_id: body.phoneNumberId,
+        });
+      }
+
+      // 7) Monta snapshots before/after.
+      const beforeSnap = {
+        provider: existingEp.provider,
+        sender_sid: existingEp.sender_sid,
+        organization_integration_id: existingEp.organization_integration_id,
+        external_account_id: existingEp.external_account_id,
+        status: existingEp.status,
+        is_active: existingEp.is_active,
+        quality_rating: existingEp.quality_rating,
+        current_tier: existingEp.current_tier,
+        metadata: existingEp.metadata ?? null,
+      };
+
+      const currentTierVal = typeof meta.messaging_limit_tier === "string"
+        ? Number(String(meta.messaging_limit_tier).replace(/\D/g, "")) || null
+        : null;
+
+      const prevMigrations = Array.isArray((existingEp.metadata as any)?.migrations)
+        ? ((existingEp.metadata as any).migrations as any[])
+        : [];
+      const migrationEntry = {
+        migration_version: 1,
+        migration_reason: reason,
+        performed_at: new Date().toISOString(),
+        performed_by_user_id: userRow.id,
+        previous_provider: beforeSnap.provider,
+        previous_sender_sid: beforeSnap.sender_sid,
+        previous_organization_integration_id: beforeSnap.organization_integration_id,
+        previous_external_account_id: beforeSnap.external_account_id,
+        before: beforeSnap,
+        after: {
+          provider: targetProvider,
+          sender_sid: body.phoneNumberId,
+          organization_integration_id: metaOi.id,
+          external_account_id: body.wabaId,
+          status: "online",
+          is_active: true,
+          quality_rating: meta.quality_rating ?? null,
+          current_tier: currentTierVal,
+        },
+      };
+
+      const mergedMetadata = {
+        ...((existingEp.metadata as any) ?? {}),
+        meta: {
+          verified_name: meta.verified_name ?? null,
+          display_phone_number: meta.display_phone_number,
+          last_validated_at: new Date().toISOString(),
+        },
+        migration: migrationEntry,
+        migrations: [...prevMigrations, migrationEntry],
+      };
+
+      const afterRow = {
+        provider: targetProvider,
+        sender_sid: body.phoneNumberId,
+        organization_integration_id: metaOi.id,
+        external_account_id: body.wabaId,
+        status: "online",
+        is_active: true,
+        quality_rating: meta.quality_rating ?? null,
+        current_tier: currentTierVal,
+        metadata: mergedMetadata,
+      };
+
+      // 8) Aplica (ou simula).
+      if (mode === "migrate_dry_run") {
+        return new Response(JSON.stringify({
+          ok: true,
+          mode,
+          migrationApplied: false,
+          endpointId: existingEp.id,
+          before: beforeSnap,
+          after: { ...afterRow, metadata: { migration_preview: migrationEntry } },
+          meta: {
+            display_phone_number: meta.display_phone_number,
+            verified_name: meta.verified_name,
+            quality_rating: meta.quality_rating,
+            messaging_limit_tier: meta.messaging_limit_tier,
+          },
+        }), { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } });
+      }
+
+      const { error: updErr } = await admin
+        .from("communication_endpoints")
+        .update(afterRow)
+        .eq("id", existingEp.id);
+      if (updErr) return err(500, "endpoint_migrate_update_failed", { details: updErr.message });
+
+      return new Response(JSON.stringify({
+        ok: true,
+        mode,
+        migrationApplied: true,
+        endpointId: existingEp.id,
+        before: beforeSnap,
+        after: afterRow,
+        meta: {
+          display_phone_number: meta.display_phone_number,
+          verified_name: meta.verified_name,
+          quality_rating: meta.quality_rating,
+          messaging_limit_tier: meta.messaging_limit_tier,
+        },
+      }), { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } });
+    }
+    // ==========================================================================
+    // === FIM modo migrate =====================================================
+    // ==========================================================================
+
+
     // Busca integration_id e estado anterior cedo para validar credenciais per-tenant.
     const { data: integ } = await admin
       .from("admin_integrations")
