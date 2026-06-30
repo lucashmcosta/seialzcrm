@@ -137,6 +137,7 @@ export function useMessageThreads(options: UseMessageThreadsOptions = {}) {
         p_limit: limit,
         p_cursor_updated_at: lastThread.updated_at,
         p_cursor_id: lastThread.id,
+        p_search: searchTerm,
       });
 
       if (rpcError) throw rpcError;
@@ -150,7 +151,7 @@ export function useMessageThreads(options: UseMessageThreadsOptions = {}) {
     } finally {
       setLoadingMore(false);
     }
-  }, [orgId, channelKey, limit, hasMore, loadingMore, threads]);
+  }, [orgId, channelKey, limit, hasMore, loadingMore, threads, searchTerm]);
 
   // Debounced refetch
   const debouncedRefetch = useCallback(() => {
