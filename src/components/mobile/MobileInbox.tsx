@@ -37,6 +37,8 @@ import { InboxConversationTimeline } from '@/components/inbox/InboxConversationT
 import { InboxComposer } from '@/components/inbox/InboxComposer';
 import { InboxAssignmentHistory } from '@/components/inbox/InboxAssignmentHistory';
 import { OwnerSelector } from '@/components/common/OwnerSelector';
+import { NewConversationDialog } from '@/components/messages/NewConversationDialog';
+import { Plus } from '@phosphor-icons/react';
 
 // ─── Helpers ─────────────────────────────────────────────────────
 function relTime(iso: string | null): string {
