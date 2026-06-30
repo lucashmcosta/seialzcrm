@@ -1,57 +1,117 @@
-## Objetivo
+## Migração genérica de provider em `communication_endpoints` — versão final
 
-Desativar o endpoint Meta Cloud **+16893077491** (id `d26280e5-2d79-495b-8983-befb534b7d15`) da org Central Trabalhista, sem quebrar histórico nem deixar threads órfãs.
+### 1. Modos em `meta-whatsapp-connect`
 
-## Por que soft‑delete e não DELETE físico
+- `mode='migrate'` — validação + UPDATE in-place.
+- `mode='migrate_dry_run'` — mesmas validações, sem UPDATE. Retorna `before` e o `after` que seria escrito.
 
-12 mensagens já referenciam esse endpoint via `messages.endpoint_id`. Um DELETE quebraria FK ou apagaria histórico. A prática correta é desligar (`is_active=false`, `status='offline'`) — fica invisível para envio, mas o histórico permanece auditável.
+Payload (idêntico nos dois modos):
 
-## Passos
-
-**1. Migrar threads ativas para o 7020**
-
-Atualizar `message_threads.primary_endpoint_id` de `d26280e5-…` para `407ff93d-4860-49cd-82ae-beda456c1774` (7020) nas 2 threads que ainda apontam pra ele:
-
-- `b13b28c0-…` — MARCOS LUIZ PEREIRA FILHO (open) — **importante**, vai continuar atendida pelo 7020
-- `a304367f-…` — Joao Teste (resolved) — só por consistência
-
-**2. Desativar o endpoint**
-
-```sql
-UPDATE communication_endpoints
-SET is_active = false,
-    status = 'offline',
-    display_name = '+16893077491 (desativado)',
-    metadata = metadata || jsonb_build_object(
-      'deactivated_at', now(),
-      'deactivation_reason', 'numero_teste_meta_sandbox_substituido_por_7020'
-    )
-WHERE id = 'd26280e5-2d79-495b-8983-befb534b7d15';
+```json
+{
+  "mode": "migrate" | "migrate_dry_run",
+  "organizationId": "…",
+  "existingEndpointId": "c09bd713-…",
+  "provider": "meta_cloud_api",
+  "appId": "…", "wabaId": "…", "phoneNumberId": "…", "phoneE164": "+551150287027",
+  "systemUserToken": "…",   // opcional — reaproveita o cifrado da integração Meta
+  "appSecret": "…",         // opcional idem
+  "verifyToken": "…",       // opcional idem
+  "endpointPurpose": "…",   // opcional — preserva o atual
+  "displayName": "…",       // opcional — preserva o atual
+  "migrationReason": "provider_swap"
+}
 ```
 
-**3. NÃO mexer**
+- A função lê o `provider` atual do endpoint; não recebe `previousProvider`.
+- Hoje apenas destino `meta_cloud_api`; outros → `unsupported_target_provider`.
+- Sem `migrate_rollback`.
 
-- 7020 (`407ff93d-…`) — intocado
-- `organization_integrations.a4036195-…` — intocado (a WABA continua conectada via 7020 e via o próprio token)
-- `connected_account.phone_number_id` da integração — intocado
-- Twilio, Lead Ads, CAPI, templates — fora do escopo
+### 2. Validação fail-closed (ordem estrita, aplicada nos dois modos)
 
-## Efeitos esperados
+1. JWT + membership ativa na org.
+2. Endpoint existe, pertence à org, `external_address = phoneE164`, `provider` atual ≠ destino.
+3. Integração `meta-whatsapp-cloud` conectada na mesma org, **mesma `waba_id`**.
+4. Decifra token (novo ou armazenado).
+5. Graph API (`validateCredentials`): token válido, PNID existe, `belongs_to_waba=true`, devolve `display_phone_number`, `verified_name`, `quality_rating`, `messaging_limit_tier`.
+6. `display_phone_number` normalizado bate com `endpoint.external_address`.
+7. Nenhum outro endpoint da org tem `sender_sid = <phoneNumberId>` (`uq_comm_endpoints_org_sender_sid`).
 
-- `/messages` (comercial) → continua em 7020 (já era hoje, via re‑route lazy)
-- `/inbox` na thread do MARCOS → passa a sair pelo 7020
-- UI Meta Cloud → endpoint some da lista "endpoints existentes" (filtra por `is_active=true`) **ou** aparece marcado como desativado se a lista incluir inativos — confirmamos depois
-- Webhook inbound da Meta no phone_number_id `616542954869698` → o handler ainda resolve o endpoint pelo `sender_sid` mas vê `is_active=false`. Hoje nunca chegou inbound nesse número (0 em toda a história), então risco prático = 0. Se um dia chegar, vira log e não cria thread — comportamento aceitável para um número que estamos aposentando
+Qualquer falha → 4xx, zero writes.
 
-## Verificação pós‑mudança (read‑only)
+### 3. UPDATE in-place (apenas `mode='migrate'`)
 
-1. `SELECT is_active, status FROM communication_endpoints WHERE id='d26280e5-…'` → `false, offline`
-2. `SELECT count(*) FROM message_threads WHERE primary_endpoint_id='d26280e5-…'` → `0`
-3. `SELECT count(*) FROM message_threads WHERE id IN ('b13b28c0-…','a304367f-…') AND primary_endpoint_id='407ff93d-…'` → `2`
-4. Histórico de mensagens preservado: `SELECT count(*) FROM messages WHERE endpoint_id='d26280e5-…'` → continua `12`
+Mesma linha (`id` preservado). Alterados: `provider`, `sender_sid`, `organization_integration_id`, `external_account_id`, `status='online'`, `is_active=true`, `quality_rating`, `current_tier`, `metadata`. Preservados: `external_address`, `display_name`/`purpose` (a menos que payload mande), `organization_id`, `channel`, `assigned_user_id`, `created_at`.
 
-## Fora do escopo
+### 4. `metadata.migration` + `metadata.migrations[]`
 
-- DELETE físico do endpoint
-- Remover/alterar o phone_number_id na WABA pelo Meta Business Manager (isso é ação fora do app)
-- Cadastrar o novo número brasileiro — fica para o próximo passo quando você passar `phone_number_id` + E.164
+```json
+{
+  "migration_version": 1,
+  "migration_reason": "provider_swap",
+  "performed_at": "…Z",
+  "performed_by_user_id": "…",
+  "previous_provider": "twilio",
+  "previous_sender_sid": "XE…",
+  "previous_organization_integration_id": "24111d0c-…",
+  "previous_external_account_id": null,
+  "before": { provider, sender_sid, organization_integration_id, external_account_id, status, is_active, quality_rating, current_tier, metadata },
+  "after":  { mesmos campos pós-UPDATE }
+}
+```
+
+`metadata.migration` = última. `metadata.migrations` = append-only.
+
+### 5. Resposta da função
+
+```json
+{
+  "ok": true,
+  "mode": "migrate" | "migrate_dry_run",
+  "migrationApplied": true | false,
+  "endpointId": "c09bd713-…",
+  "before": { … },
+  "after":  { … },   // em dry_run, o estado que seria gravado
+  "meta":   { display_phone_number, verified_name, quality_rating, messaging_limit_tier }
+}
+```
+
+### 6. Nota de sistema — lazy, **apenas no primeiro outbound**
+
+- Sem backfill, sem migration nova, sem índice novo.
+- **Único ponto de inserção:** `meta-whatsapp-send`, imediatamente antes do primeiro INSERT outbound da thread após a migração.
+- `meta-whatsapp-webhook` **não** insere a nota e segue inalterado.
+- Helper `ensureEndpointMigrationNote(supabase, threadId, endpointId)`:
+  - lê endpoint; só age se `metadata.migration.migration_version >= 1`;
+  - confirma que a thread já existia antes (`thread.created_at < metadata.migration.performed_at`);
+  - lookup idempotente em `messages` por `thread_id` + `metadata->>'system_note_kind'='endpoint_provider_migration'` + `metadata->>'migration_endpoint_id'=<endpoint.id>`;
+  - se não existir, INSERT mensagem de sistema reutilizando o renderer de divisor já existente, texto: "A partir deste ponto, este número passou a operar via Meta Cloud API. Todo o histórico anterior via Twilio foi preservado.";
+  - `metadata = { system_note_kind:'endpoint_provider_migration', migration_endpoint_id, migration_version:1, from_provider, to_provider }`.
+
+### 7. Não alterado — Twilio pós-cutover
+
+Sem alterações em: dispatcher, composer, Railway, regras de roteamento, templates, schema do banco, `meta-whatsapp-webhook`, `twilio-whatsapp-*`.
+
+- `twilio-whatsapp-webhook` continua deployado e **aceita callbacks residuais** (status `delivered/read/failed` de mensagens enviadas antes do cutover, retries Twilio). Resolução por `sender_sid=XE…` deixa de achar o endpoint (agora o `sender_sid` é o PNID Meta); o handler atual **já tolera** isso: loga e segue, sem falhar a requisição nem corromper dados.
+- `twilio-whatsapp-send` mantém a guarda `if endpoint.provider === 'meta_cloud_api' → erro` (fail-closed): nenhum outbound vaza pelo Twilio após a migração.
+
+### 8. Arquivos tocados
+
+- `supabase/functions/meta-whatsapp-connect/index.ts` — branches `mode='migrate'` e `mode='migrate_dry_run'`.
+- `supabase/functions/_shared/endpoint-migration-note.ts` — helper novo, compartilhado.
+- `supabase/functions/meta-whatsapp-send/index.ts` — invoca helper antes do INSERT outbound.
+- `src/services/metaWhatsAppService.ts` — `migrate(payload)` e `migrateDryRun(payload)` + tipo `MigrationResult { migrationApplied, before, after, … }`.
+- `src/components/integrations/meta-whatsapp-cloud/MetaWhatsAppCloudDialog.tsx` — captura do 409 + sub-diálogo "Migrar este número para Meta Cloud" com botões "Simular (dry-run)" e "Migrar", exibindo diff `before/after`.
+
+### 9. Critérios de aceitação
+
+- `mode='migrate_dry_run'` válido: 200, `migrationApplied:false`, before/after preenchidos, **zero writes**.
+- `mode='migrate'` válido: 200, `migrationApplied:true`, 1 UPDATE em `communication_endpoints`. Zero writes em outras tabelas.
+- Qualquer falha de validação: 4xx, zero writes.
+- Migração executada: nenhuma nota criada.
+- Cliente envia mensagens após a migração: nenhuma nota criada.
+- Operador responde pela primeira vez: nota aparece imediatamente antes dessa primeira mensagem outbound.
+- Respostas seguintes: nenhuma nota adicional.
+- Threads criadas após a migração: nunca recebem essa nota.
+- Próximo envio em qualquer thread do endpoint roteia automaticamente para `meta-whatsapp-send` (dispatcher lê `provider` ao vivo).
+- Callbacks Twilio residuais pós-cutover não geram erro nem corromper dados.
