@@ -39,12 +39,20 @@ interface NewConversationDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   onSelectContact: (contactId: string, threadId: string, endpointId: string | null) => void | Promise<void>;
+  /** Restringe os endpoints elegíveis por `purpose`. Quando definido, o
+   *  EndpointSelector é ocultado e o endpoint é escolhido automaticamente
+   *  dentro do subconjunto. Usado em /inbox para forçar Atendimento. */
+  forcePurposes?: Array<'customer_service' | 'other' | 'commercial' | 'vendor_personal'>;
+  /** Título customizado (default: "Nova Conversa"). */
+  title?: string;
 }
 
 export function NewConversationDialog({
   open,
   onOpenChange,
   onSelectContact,
+  forcePurposes,
+  title,
 }: NewConversationDialogProps) {
   const { organization, locale } = useOrganization();
   const { t } = useTranslation(locale as 'pt-BR' | 'en-US');
