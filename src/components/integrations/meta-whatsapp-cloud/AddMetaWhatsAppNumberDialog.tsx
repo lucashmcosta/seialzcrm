@@ -10,7 +10,12 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { ArrowsClockwise } from "@phosphor-icons/react";
-import { MetaWhatsAppValidationError, metaWhatsAppService } from "@/services/metaWhatsAppService";
+import {
+  EndpointAlreadyRegisteredError,
+  MetaWhatsAppValidationError,
+  metaWhatsAppService,
+} from "@/services/metaWhatsAppService";
+import { MigrateEndpointDialog } from "./MigrateEndpointDialog";
 
 interface Props {
   open: boolean;
