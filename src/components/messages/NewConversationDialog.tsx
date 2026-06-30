@@ -45,6 +45,9 @@ interface NewConversationDialogProps {
   forcePurposes?: Array<'customer_service' | 'other' | 'commercial' | 'vendor_personal'>;
   /** Título customizado (default: "Nova Conversa"). */
   title?: string;
+  /** Marcador jsonb gravado em message_threads.last_routing_decision quando
+   *  uma thread NOVA é criada. Não é aplicado em thread já existente. */
+  routingDecision?: Record<string, unknown>;
 }
 
 export function NewConversationDialog({
