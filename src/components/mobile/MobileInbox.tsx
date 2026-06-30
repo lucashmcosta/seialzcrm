@@ -131,8 +131,9 @@ export function MobileInbox() {
 
   const orgTimezone = organization?.timezone ?? null;
   const organizationId = organization?.id ?? null;
-  const { counts, refreshDebounced: refreshCounts } = useInboxQueueCounts(internalUserId, onlyMine, orgTimezone);
-  const { threads, loading, refresh: refreshThreads } = useInboxThreads(tab, onlyMine, internalUserId, orgTimezone, organizationId);
+  const csIncludesServiceEndpoints = organization?.cs_inbox_includes_service_endpoints ?? false;
+  const { counts, refreshDebounced: refreshCounts } = useInboxQueueCounts(internalUserId, onlyMine, orgTimezone, csIncludesServiceEndpoints);
+  const { threads, loading, refresh: refreshThreads } = useInboxThreads(tab, onlyMine, internalUserId, orgTimezone, organizationId, csIncludesServiceEndpoints);
 
   const filtered = useMemo(() => {
     const q = search.trim().toLowerCase();
