@@ -1208,11 +1208,9 @@ function DesktopMessagesList() {
   };
 
   const filteredThreads = threads?.filter((thread) => {
-    // Search filter
-    if (searchQuery && !thread.contact_name.toLowerCase().includes(searchQuery.toLowerCase())) {
-      return false;
-    }
+    // Search is applied server-side via rpc_list_message_threads (p_search).
     // Status filter
+
     // Treat resolved threads with no client reply yet as still "pending" — they
     // were likely auto-resolved or marked too early and the client never replied.
     const isPendingFirstReply = thread.status === 'resolved' && !thread.last_inbound_at && !thread.whatsapp_last_inbound_at;
