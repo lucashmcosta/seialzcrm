@@ -220,5 +220,30 @@ export function AddMetaWhatsAppNumberDialog({
         </DialogFooter>
       </DialogContent>
     </Dialog>
+    {existingInfo && (
+      <MigrateEndpointDialog
+        open={migrateOpen}
+        onOpenChange={setMigrateOpen}
+        existing={existingInfo}
+        payload={{
+          organizationId,
+          wabaId,
+          appId,
+          phoneNumberId: phoneNumberId.trim(),
+          phoneE164: phoneE164.trim(),
+          endpointPurpose: purpose,
+          displayName: displayName.trim() || undefined,
+          migrationReason: "provider_swap",
+        }}
+        onMigrated={() => {
+          qc.invalidateQueries({ queryKey: ["meta-additional-endpoints", organizationId] });
+          qc.invalidateQueries({ queryKey: ["organization-integrations"] });
+          setExistingInfo(null);
+          reset();
+          onOpenChange(false);
+        }}
+      />
+    )}
+    </>
   );
 }
