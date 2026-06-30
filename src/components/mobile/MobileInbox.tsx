@@ -178,8 +178,20 @@ export function MobileInbox() {
           threads={filtered}
           loading={loading}
           onSelect={setSelectedId}
+          onNewConversation={() => setNewConvOpen(true)}
         />
       )}
+
+      <NewConversationDialog
+        open={newConvOpen}
+        onOpenChange={setNewConvOpen}
+        forcePurposes={['customer_service', 'other']}
+        title="Nova Conversa de Atendimento"
+        onSelectContact={(_contactId, threadId) => {
+          setSelectedId(threadId);
+          handleAfterChange();
+        }}
+      />
     </MobileLayout>
   );
 }
