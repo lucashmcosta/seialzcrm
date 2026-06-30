@@ -19,9 +19,16 @@ interface ConnectBody {
   systemUserToken: string;
   appSecret?: string;     // per-integration — obrigatório em conexão nova
   verifyToken?: string;   // per-integration — obrigatório em conexão nova
-  endpointPurpose?: "customer_service" | "other";
+  endpointPurpose?: "commercial" | "customer_service" | "vendor_personal" | "other";
   displayName?: string;
   skipMetaValidation?: boolean;
+  // 'primary' (default): comportamento original — sobrescreve connected_account/config_values
+  //                      da integração com os dados do número informado.
+  // 'additional': adiciona apenas a linha em communication_endpoints na MESMA WABA já conectada.
+  //               Não toca campos phone-level da integração. Requer integração já conectada e
+  //               wabaId idêntico ao já armazenado. systemUserToken/appSecret/verifyToken
+  //               opcionais (reaproveita os já cifrados quando ausentes).
+  mode?: "primary" | "additional";
 }
 
 function err(status: number, message: string, extra: Record<string, unknown> = {}) {
