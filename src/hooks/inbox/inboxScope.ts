@@ -35,6 +35,7 @@ export interface InboxScopedThread {
   resolved_at: string | null;
   last_inbound_at?: string | null;
   whatsapp_last_inbound_at?: string | null;
+  last_routing_decision?: Record<string, unknown> | null;
   organization_id?: string | null;
   primary_endpoint_id: string | null;
   contact?: { id: string; name: string | null; phone: string | null; lifecycle_stage: string | null } | null;

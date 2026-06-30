@@ -1,70 +1,37 @@
-## Problema
+Diagnóstico read-only realizado:
 
-`InboxComposer` bloqueia o envio quando `contact.lifecycle_stage !== 'customer'`. Correto para threads do escopo normal do Inbox, mas quebra o fluxo de **Nova conversa de Atendimento**, onde o atendente escolhe manualmente um contato (lead, sem lifecycle, etc.) com endpoint de Atendimento.
+- Thread selecionada pelo print/Joao Teste mais recente:
+  - `thread_id`: `f235fc05-e995-446d-b8a5-357571823ab4`
+  - `contact.lifecycle_stage`: `lead`
+  - `primary_endpoint_id`: `b303253e-a7f3-49b7-b92f-efdeb12071f4`
+  - `endpoint.purpose`: `other`
+  - `message_threads.last_routing_decision`: `null`
+- Código verificado:
+  - `NewConversationDialog` só grava `last_routing_decision` ao criar thread nova, mas a thread do teste foi criada sem marcador.
+  - `useInboxThread` já traz `last_routing_decision` no select.
+  - `InboxThreadDetail` passa a `thread` completa para o `InboxComposer`.
+  - `InboxComposer` já checa `thread.last_routing_decision?.action === 'inbox_manual_start'` e endpoint `customer_service` ou `other`.
+  - Endpoint da thread é `other`, então deveria liberar se o marcador existisse.
 
-## Solução
+Plano de correção objetiva:
 
-Persistir o marcador na própria thread, no campo já existente `message_threads.last_routing_decision` (jsonb, sem migration), gravando-o no momento em que o `NewConversationDialog` cria a thread pelo botão do Inbox. O `InboxComposer` libera **apenas** o guard de lifecycle quando esse marcador está presente e o endpoint é de Atendimento.
+1. Corrigir `NewConversationDialog` para, quando usado com `routingDecision`, garantir o marcador também em thread existente aberta no mesmo contato + endpoint.
+   - Hoje ele retorna a thread existente sem gravar nada.
+   - Ajuste: se `existingThread` existir e `routingDecision` estiver definido, fazer `update({ last_routing_decision: routingDecision })` nessa thread antes de selecionar.
+   - Isso cobre o caso real: usuário clica Nova conversa, seleciona contato, e o sistema reaproveita thread aberta já existente sem marcador.
 
-Sem mudança de schema, sem alterar `lifecycle_stage`, sem alterar listagem do Inbox, sem afetar `/messages`/Viagi.
+2. Ajustar a query de thread existente no `NewConversationDialog` para buscar também `last_routing_decision`, evitando update desnecessário se já for `inbox_manual_start`.
 
-### Convenção do marcador
+3. Corrigir tipos mínimos:
+   - Incluir `last_routing_decision?: Record<string, unknown> | null` em `ThreadLike`/`InboxScopedThread` se necessário para reduzir casts e garantir que o composer enxergue o campo.
 
-`last_routing_decision` já é usado como jsonb (ex.: `{ action: 'manual_assignment', ... }`). Vamos usar:
+4. Verificação pós-correção:
+   - Confirmar que a thread `f235fc05-e995-446d-b8a5-357571823ab4` passará a receber `last_routing_decision.action = 'inbox_manual_start'` se for reaberta pelo botão Nova conversa do Atendimento.
+   - Confirmar que o guard do composer libera porque: lifecycle `lead` + endpoint `other` + marcador `inbox_manual_start`.
+   - Confirmar que reload preserva a liberação porque o marcador fica persistido em `message_threads.last_routing_decision`.
 
-```json
-{
-  "action": "inbox_manual_start",
-  "by_user_id": "<users.id>",
-  "endpoint_id": "<endpoint>",
-  "at": "<iso>"
-}
-```
-
-### 1. `src/components/messages/NewConversationDialog.tsx`
-- Adicionar prop opcional `routingDecision?: Record<string, unknown>`.
-- Quando definido **e** a dialog está criando uma thread nova (branch do `insert`), incluir `last_routing_decision: routingDecision` no `insertPayload`.
-- Não aplicar em thread já existente (sem update — para não sobrescrever histórico de roteamento).
-
-### 2. `src/pages/inbox/InboxPage.tsx` e `src/components/mobile/MobileInbox.tsx`
-- Passar ao `NewConversationDialog`:
-  ```ts
-  routingDecision={{
-    action: 'inbox_manual_start',
-    by_user_id: internalUserId,
-    at: new Date().toISOString(),
-  }}
-  ```
-
-### 3. `src/hooks/inbox/useInboxThread.ts`
-- Incluir `last_routing_decision` no `THREAD_SELECT` para o composer enxergar o marcador.
-
-### 4. `src/hooks/inbox/useInboxThreads.ts` (lista)
-- Verificar se o tipo `InboxThreadRow` precisa expor `last_routing_decision`. Se a lista não carrega o campo, o `MobileInbox` precisa carregá-lo (a versão mobile usa o mesmo `InboxComposer`). Adicionar o campo ao select da lista se necessário, ou garantir que o thread passado ao composer venha de `useInboxThread` (que já carrega tudo).
-
-### 5. `src/components/inbox/InboxComposer.tsx`
-- Ler `(thread as any).last_routing_decision?.action` (tipo jsonb).
-- Ajustar o guard de lifecycle (linhas 156-167):
-  ```ts
-  const isManualInboxStart =
-    (thread as any).last_routing_decision?.action === 'inbox_manual_start'
-    && (endpointPurpose === 'customer_service' || endpointPurpose === 'other');
-
-  if (!passesCustomerRule && !passesServiceEndpointRule && !isManualInboxStart) {
-    return <DisabledBar ... />;
-  }
-  ```
-- Demais guards inalterados: status `resolved`/`closed` continua bloqueando; endpoint `commercial`/`vendor_personal` continua bloqueando (o `isManualInboxStart` só vale para `customer_service`/`other`).
-
-## Critério de aceite
-
-- `/inbox` (desktop e mobile): "Nova conversa" → buscar contato qualquer (lead/sem lifecycle) → selecionar → composer libera envio.
-- Persiste após reload (marcador está em `message_threads.last_routing_decision`).
-- Threads antigas com lifecycle ≠ customer e sem o marcador permanecem bloqueadas.
-- Envio sai pelo endpoint de Atendimento (já garantido pelo `forcePurposes`).
-- Guards de status e de endpoint `commercial`/`vendor_personal` continuam ativos.
-- `/messages` e Viagi não afetados.
-
-## Observação
-
-O campo `last_routing_decision` também é sobrescrito em reatribuições manuais (`InboxThreadDetail.handleAssign`). Isso é aceitável porque, após uma reatribuição, é razoável reaplicar o guard normal — e, na prática, threads "manual start" só precisam do bypass na primeira mensagem; depois que o contato responde, o caminho `csIncludesServiceEndpoints` + endpoint `customer_service` já cobre. Se o usuário quiser preservar o marcador entre reatribuições, é um ajuste adicional simples (merge ao invés de overwrite), mas fora do escopo deste pedido.
+Escopo mantido:
+- Não mexer na listagem do Inbox.
+- Não liberar threads antigas sem ação explícita via botão Nova conversa.
+- Não alterar endpoint comercial/vendor.
+- Envio continua saindo pelo `primary_endpoint_id` da thread de Atendimento.

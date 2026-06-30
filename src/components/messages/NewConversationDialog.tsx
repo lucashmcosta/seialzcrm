@@ -161,7 +161,7 @@ export function NewConversationDialog({
       // reaproveitadas — elas continuam visíveis na lista separadamente.
       let existingQuery = supabase
         .from('message_threads')
-        .select('id')
+        .select('id, last_routing_decision')
         .eq('organization_id', organization.id)
         .eq('contact_id', contact.id)
         .eq('channel', 'whatsapp')
@@ -178,6 +178,18 @@ export function NewConversationDialog({
       const { data: existingThread } = await existingQuery.maybeSingle();
 
       if (existingThread) {
+        const existingRoutingAction =
+          ((existingThread as any).last_routing_decision as { action?: string } | null)?.action ?? null;
+
+        if (routingDecision && existingRoutingAction !== 'inbox_manual_start') {
+          const { error: markerError } = await supabase
+            .from('message_threads')
+            .update({ last_routing_decision: routingDecision } as any)
+            .eq('id', existingThread.id);
+
+          if (markerError) throw markerError;
+        }
+
         await Promise.resolve(onSelectContact(contact.id, existingThread.id, effectiveEndpointId));
         onOpenChange(false);
         return;
