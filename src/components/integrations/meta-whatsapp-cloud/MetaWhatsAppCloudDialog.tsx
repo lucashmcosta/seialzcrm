@@ -16,7 +16,6 @@ import {
   MetaWhatsAppValidationError,
   EndpointAlreadyRegisteredError,
   metaWhatsAppService,
-  type MigrateResult,
 } from "@/services/metaWhatsAppService";
 import { WhatsAppInboundSettings } from "@/components/settings/WhatsAppInboundSettings";
 import { AddMetaWhatsAppNumberDialog } from "./AddMetaWhatsAppNumberDialog";
