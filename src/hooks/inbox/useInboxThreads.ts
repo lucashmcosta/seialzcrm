@@ -15,6 +15,7 @@ export function useInboxThreads(
   internalUserId: string | null,
   orgTimezone: string | null,
   organizationId: string | null,
+  csIncludesServiceEndpoints: boolean = false,
 ) {
   const [threads, setThreads] = useState<InboxThreadRow[]>([]);
   const [debug, setDebug] = useState<ScopeDebug | null>(null);
@@ -30,17 +31,18 @@ export function useInboxThreads(
         onlyMine,
         internalUserId,
         orgTimezone,
+        csIncludesServiceEndpoints,
       });
       setThreads(rows);
       setDebug(debug);
       // eslint-disable-next-line no-console
-      console.info(`[inbox] tab=${tab} B_raw=${debug.bRaw} B_filtered=${debug.bFiltered} merged=${debug.merged}`);
+      console.info(`[inbox] tab=${tab} B_raw=${debug.bRaw} B_filtered=${debug.bFiltered} C_raw=${debug.cRaw ?? '-'} merged=${debug.merged}`);
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e));
     } finally {
       setLoading(false);
     }
-  }, [tab, onlyMine, internalUserId, orgTimezone]);
+  }, [tab, onlyMine, internalUserId, orgTimezone, csIncludesServiceEndpoints]);
 
   useEffect(() => { fetchThreads(); }, [fetchThreads]);
 
