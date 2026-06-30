@@ -218,6 +218,38 @@ export function MetaWhatsAppCloudDialog({ open, onOpenChange, integration, orgIn
               </Card>
             )}
 
+            {/* ===== Números adicionais da WABA ===== */}
+            {isConnected && organization?.id && orgIntegration?.id && (
+              <Card className="p-4 space-y-3">
+                <div className="flex items-center justify-between gap-2">
+                  <div>
+                    <h4 className="font-medium">Outros números desta WABA</h4>
+                    <p className="text-xs text-muted-foreground">
+                      Mesma WABA, App e tokens da integração principal. Use para roteamento por finalidade
+                      (Atendimento vs Comercial).
+                    </p>
+                  </div>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => setAddNumberOpen(true)}
+                    disabled={!cv.waba_id || !cv.app_id}
+                    title={!cv.waba_id ? "Conecte a integração principal primeiro" : ""}
+                  >
+                    + Adicionar número desta WABA
+                  </Button>
+                </div>
+                <Separator />
+                <MetaAdditionalEndpointsSection
+                  organizationId={organization.id}
+                  organizationIntegrationId={orgIntegration.id}
+                  primaryPhoneNumberId={ca.phone_number_id ?? cv.phone_number_id ?? null}
+                />
+              </Card>
+            )}
+
+
+
             {/* ===== Templates ===== */}
             {isConnected && (
               <Card className="p-4 space-y-3">
