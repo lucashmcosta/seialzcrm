@@ -8017,6 +8017,20 @@ export type Database = {
         Args: { p_job_id: string }
         Returns: undefined
       }
+      rpc_inbox_queue_counts: {
+        Args: {
+          p_assigned_user_id: string
+          p_include_service_endpoints: boolean
+          p_only_mine: boolean
+          p_organization_id: string
+          p_resolved_since: string
+        }
+        Returns: {
+          active: number
+          resolved_today: number
+          waiting: number
+        }[]
+      }
       rpc_kommo_upsert_contact: {
         Args: { p_data: Json; p_existing_id: string }
         Returns: string
@@ -8024,6 +8038,18 @@ export type Database = {
       rpc_kommo_upsert_opportunity: {
         Args: { p_data: Json; p_existing_id: string }
         Returns: string
+      }
+      rpc_list_inbox_threads: {
+        Args: {
+          p_assigned_user_id: string
+          p_include_service_endpoints: boolean
+          p_limit?: number
+          p_only_mine: boolean
+          p_organization_id: string
+          p_resolved_since: string
+          p_tab: string
+        }
+        Returns: Json[]
       }
       rpc_list_message_threads:
         | {
