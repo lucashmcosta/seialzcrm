@@ -551,7 +551,7 @@ function DesktopMessagesList() {
   };
 
   // Fetch threads via RPC (replaces N+1 query)
-  const { threads, loading: threadsLoading, refetchThreads, loadMore, hasMore, loadingMore, markThreadRead } = useMessageThreads({ channels: ['whatsapp'] });
+  const { threads, loading: threadsLoading, refetchThreads, loadMore, hasMore, loadingMore, markThreadRead } = useMessageThreads({ channels: ['whatsapp'], search: debouncedSearch });
 
   const selectedThread = threads?.find((t) => t.id === selectedThreadId)
     ?? (selectedThreadOverride?.id === selectedThreadId ? selectedThreadOverride : undefined);
