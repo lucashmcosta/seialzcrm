@@ -65,6 +65,11 @@ export function NewConversationDialog({
   const { endpoints, officialNumbers, loading: endpointsLoading } =
     useOrgWhatsAppEndpoints(organization?.id);
 
+  const isForcedCustomerServiceFlow = useMemo(() => {
+    if (!forcePurposes?.length) return false;
+    return forcePurposes.some((purpose) => purpose === 'customer_service' || purpose === 'other');
+  }, [forcePurposes]);
+
   /**
    * Endpoint preferido para criar/abrir conversa a partir do botão
    * "Nova Conversa". Regra genérica por tenant:
@@ -102,12 +107,19 @@ export function NewConversationDialog({
   const preferredEndpointId = useMemo<string | null>(() => {
     if (!orderedEndpoints?.length) return null;
     const sorted = orderedEndpoints;
+
+    // Fluxo de Atendimento: Meta Cloud vence qualquer Twilio/transitional.
+    if (isForcedCustomerServiceFlow) {
+      const metaEndpoint = sorted.find((ep) => ep.provider === 'meta_cloud_api');
+      if (metaEndpoint) return metaEndpoint.id;
+    }
+
     const transitional = sorted.filter((ep) => {
       const digits = ep.external_address.replace(/\D/g, '');
       return digits && !officialNumbers.has(digits);
     });
     return (transitional[0] ?? sorted[0]).id;
-  }, [orderedEndpoints, officialNumbers]);
+  }, [orderedEndpoints, officialNumbers, isForcedCustomerServiceFlow]);
 
   const noEndpointForPurpose = !endpointsLoading && !!forcePurposes && (orderedEndpoints?.length ?? 0) === 0;
 
