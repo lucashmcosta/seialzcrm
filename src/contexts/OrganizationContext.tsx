@@ -88,7 +88,7 @@ export function OrganizationProvider({ children }: { children: React.ReactNode }
       // Step 2: Fetch organization membership (needs user_id from step 1)
       const { data: membershipData, error: membershipError } = await supabase
         .from('user_organizations')
-        .select('organization:organizations(id, name, slug, logo_url, logo_size, default_currency, default_locale, timezone, enable_companies_module, onboarding_step, onboarding_completed_at, duplicate_check_mode, duplicate_enforce_block, theme_primary_color, theme_sidebar_color, theme_dark_mode)')
+        .select('organization:organizations(id, name, slug, logo_url, logo_size, default_currency, default_locale, timezone, enable_companies_module, onboarding_step, onboarding_completed_at, duplicate_check_mode, duplicate_enforce_block, theme_primary_color, theme_sidebar_color, theme_dark_mode, cs_inbox_includes_service_endpoints)')
         .eq('user_id', profileData.id)
         .eq('is_active', true)
         .maybeSingle();
