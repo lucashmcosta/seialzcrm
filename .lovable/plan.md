@@ -1,59 +1,50 @@
-## Execução aprovada (com salvaguarda extra) — aguardando build mode
+## Execução aprovada — backfill 30 threads Lead Ads 7020
 
-### 1. Patch `supabase/functions/meta-whatsapp-send/index.ts` (após linha 433)
-
-```ts
-// Self-heal: carimba primary_endpoint_id em threads pré-existentes que nunca
-// foram carimbadas. Idempotente — só atualiza quando ainda está NULL.
-if (currentThreadId && endpoint?.id) {
-  try {
-    await supabase
-      .from("message_threads")
-      .update({ primary_endpoint_id: endpoint.id })
-      .eq("id", currentThreadId)
-      .eq("organization_id", organizationId)   // ← salvaguarda adicional
-      .is("primary_endpoint_id", null);
-  } catch (healErr) {
-    console.warn("[meta-whatsapp-send] primary_endpoint_id self-heal failed", healErr);
-  }
-}
-```
-
-### 2. SELECT de conferência (gate)
-
+### 1. Gate SELECT (esperando 30)
 ```sql
-SELECT COUNT(DISTINCT t.id) AS will_update
-FROM public.message_threads t
-JOIN public.messages m
-  ON m.thread_id = t.id
- AND m.direction = 'outbound'
- AND m.endpoint_id = '407ff93d-4860-49cd-82ae-beda456c1774'
-WHERE t.organization_id = '40ae935c-a7f7-4ad7-8ea4-91be6404a95f'
-  AND t.primary_endpoint_id IS NULL;
-```
-
-**Se ≠ 29 → PARO e reporto. Sem UPDATE.**
-
-### 3. UPDATE idempotente (somente se count = 29)
-
-```sql
-UPDATE public.message_threads t
-SET primary_endpoint_id = '407ff93d-4860-49cd-82ae-beda456c1774'
-WHERE t.organization_id = '40ae935c-a7f7-4ad7-8ea4-91be6404a95f'
+SELECT COUNT(DISTINCT t.id)
+FROM message_threads t
+WHERE t.organization_id = '40ae935c-...'
   AND t.primary_endpoint_id IS NULL
   AND EXISTS (
-    SELECT 1 FROM public.messages m
+    SELECT 1 FROM messages m
     WHERE m.thread_id = t.id
       AND m.direction = 'outbound'
       AND m.endpoint_id = '407ff93d-4860-49cd-82ae-beda456c1774'
   );
 ```
+- `= 30` → segue para passo 2
+- `≠ 30` → **PARA** e reporta
 
-### 4. Validação
+### 2. UPDATE idempotente (somente se gate = 30)
+```sql
+UPDATE message_threads t
+SET primary_endpoint_id = '407ff93d-4860-49cd-82ae-beda456c1774'
+WHERE t.organization_id = '40ae935c-...'
+  AND t.primary_endpoint_id IS NULL
+  AND EXISTS (
+    SELECT 1 FROM messages m
+    WHERE m.thread_id = t.id
+      AND m.direction = 'outbound'
+      AND m.endpoint_id = '407ff93d-4860-49cd-82ae-beda456c1774'
+  );
+```
+A cláusula `primary_endpoint_id IS NULL` garante zero sobrescrita.
 
-- Re-rodar SELECT → 0.
-- Conferir badge **Novo · 7020** nas 29 threads em `/messages`.
+### 3. Validações
+- **Re-SELECT gate** → deve retornar `0`.
+- **Contagem de UPDATE** → deve ser `30` (linhas afetadas).
+- **Sanity 7027 intacto**: `SELECT COUNT(*) FROM message_threads WHERE organization_id='40ae935c-...' AND primary_endpoint_id='c09bd713-...'` antes/depois → idêntico.
+- **Sanity legado**: `SELECT COUNT(*) WHERE primary_endpoint_id IS NULL AND NOT EXISTS(outbound com endpoint_id)` antes/depois → idêntico (2.452 não tocadas).
+- **UI**: abrir `/messages`, confirmar badge **Novo · 7020** nas threads Lead Ads afetadas.
 
-Salvaguardas mantidas: não toca 2.452 legadas, não mexe 7027, não altera UI, nunca sobrescreve carimbo existente, não toca mensagens/contatos/oportunidades.
+### Salvaguardas mantidas
+- Escopo restrito à org Central (`40ae935c-...`).
+- Não toca 7027 (`c09bd713-...`).
+- Não toca 2.452 threads legadas sem outbound `endpoint_id`.
+- Não altera `messages`, `contacts`, `opportunities`, status ou timestamps.
+- Patch self-heal já ativo em `meta-whatsapp-send` cobre envios futuros.
 
-**Troca para build mode para eu prosseguir.**
+### Abort conditions
+- Gate `≠ 30` → para sem UPDATE, reporta delta.
+- UPDATE retorna `≠ 30` linhas → reporta e investiga antes de qualquer ação adicional.
