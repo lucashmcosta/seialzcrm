@@ -99,7 +99,7 @@ export function AddMetaWhatsAppNumberDialog({
         onOpenChange(o);
       }}
     >
-      <DialogContent>
+      <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle>Adicionar número desta WABA</DialogTitle>
           <DialogDescription>
