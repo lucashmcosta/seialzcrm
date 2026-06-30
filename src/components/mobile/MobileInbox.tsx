@@ -198,7 +198,7 @@ export function MobileInbox() {
 
 // ─── List view ───────────────────────────────────────────────────
 function ListView({
-  tab, setTab, counts, onlyMine, setOnlyMine, search, setSearch, threads, loading, onSelect,
+  tab, setTab, counts, onlyMine, setOnlyMine, search, setSearch, threads, loading, onSelect, onNewConversation,
 }: {
   tab: InboxTab;
   setTab: (t: InboxTab) => void;
@@ -210,19 +210,29 @@ function ListView({
   threads: InboxThreadRow[];
   loading: boolean;
   onSelect: (id: string) => void;
+  onNewConversation: () => void;
 }) {
   return (
     <div className="flex flex-col h-full min-h-0 bg-background">
       {/* Search + filters */}
       <div className="px-4 py-3 border-b border-border space-y-3 flex-shrink-0 bg-card">
-        <div className="relative">
-          <MagnifyingGlass size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" />
-          <Input
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-            placeholder="Buscar conversa…"
-            className="pl-9 h-10 rounded-full"
-          />
+        <div className="flex items-center gap-2">
+          <div className="relative flex-1">
+            <MagnifyingGlass size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" />
+            <Input
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              placeholder="Buscar conversa…"
+              className="pl-9 h-10 rounded-full"
+            />
+          </div>
+          <button
+            onClick={onNewConversation}
+            className="h-10 w-10 rounded-full bg-primary text-primary-foreground flex items-center justify-center flex-shrink-0 active:opacity-80"
+            aria-label="Nova conversa"
+          >
+            <Plus size={18} weight="bold" />
+          </button>
         </div>
         <div className="flex items-center gap-2 overflow-x-auto scrollbar-hide -mx-1 px-1">
           {TABS.map((t) => {
