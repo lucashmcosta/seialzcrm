@@ -499,6 +499,16 @@ export function MetaWhatsAppCloudDialog({ open, onOpenChange, integration, orgIn
         onConfirm={() => disconnectMutation.mutate()}
         loading={disconnectMutation.isPending}
       />
+
+      {organization?.id && cv.waba_id && cv.app_id && (
+        <AddMetaWhatsAppNumberDialog
+          open={addNumberOpen}
+          onOpenChange={setAddNumberOpen}
+          organizationId={organization.id}
+          wabaId={cv.waba_id}
+          appId={cv.app_id}
+        />
+      )}
     </>
   );
 }
