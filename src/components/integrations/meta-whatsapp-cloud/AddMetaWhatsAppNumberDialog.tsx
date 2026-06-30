@@ -78,6 +78,18 @@ export function AddMetaWhatsAppNumberDialog({
       onOpenChange(false);
     },
     onError: (e: any) => {
+      if (e instanceof EndpointAlreadyRegisteredError) {
+        setExistingInfo({
+          endpointId: e.info.existing_endpoint_id,
+          provider: e.info.existing_provider,
+          senderSid: e.info.existing_sender_sid,
+        });
+        setMigrateOpen(true);
+        toast.message("Número já existe nesta organização", {
+          description: `Provider atual: ${e.info.existing_provider}. Use o diálogo de migração para trocar o provider preservando o histórico.`,
+        });
+        return;
+      }
       if (e instanceof MetaWhatsAppValidationError) {
         toast.error("A Meta recusou a validação", {
           description: "Confira phone_number_id e WABA. Se necessário, use 'Salvar sem validar'.",
