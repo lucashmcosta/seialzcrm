@@ -39,12 +39,20 @@ interface NewConversationDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   onSelectContact: (contactId: string, threadId: string, endpointId: string | null) => void | Promise<void>;
+  /** Restringe os endpoints elegíveis por `purpose`. Quando definido, o
+   *  EndpointSelector é ocultado e o endpoint é escolhido automaticamente
+   *  dentro do subconjunto. Usado em /inbox para forçar Atendimento. */
+  forcePurposes?: Array<'customer_service' | 'other' | 'commercial' | 'vendor_personal'>;
+  /** Título customizado (default: "Nova Conversa"). */
+  title?: string;
 }
 
 export function NewConversationDialog({
   open,
   onOpenChange,
   onSelectContact,
+  forcePurposes,
+  title,
 }: NewConversationDialogProps) {
   const { organization, locale } = useOrganization();
   const { t } = useTranslation(locale as 'pt-BR' | 'en-US');
@@ -67,6 +75,10 @@ export function NewConversationDialog({
    */
   const orderedEndpoints = useMemo(() => {
     if (!endpoints.length) return null;
+    const pool = forcePurposes && forcePurposes.length > 0
+      ? endpoints.filter((ep) => ep.purpose && (forcePurposes as string[]).includes(ep.purpose))
+      : endpoints;
+    if (!pool.length) return [];
     const endpointRank = (ep: typeof endpoints[number]) => {
       const digits = ep.external_address.replace(/\D/g, '');
       const isBrazil = digits.startsWith('55');
@@ -76,12 +88,12 @@ export function NewConversationDialog({
       if (isMeta) return 2;
       return 3;
     };
-    return [...endpoints].sort((a, b) => {
+    return [...pool].sort((a, b) => {
       const byRank = endpointRank(a) - endpointRank(b);
       if (byRank !== 0) return byRank;
       return new Date(b.created_at).getTime() - new Date(a.created_at).getTime();
     });
-  }, [endpoints]);
+  }, [endpoints, forcePurposes]);
 
   const preferredEndpointId = useMemo<string | null>(() => {
     if (!orderedEndpoints?.length) return null;
@@ -92,6 +104,8 @@ export function NewConversationDialog({
     });
     return (transitional[0] ?? sorted[0]).id;
   }, [orderedEndpoints, officialNumbers]);
+
+  const noEndpointForPurpose = !endpointsLoading && !!forcePurposes && (orderedEndpoints?.length ?? 0) === 0;
 
   // Endpoint efetivamente usado para abrir/criar a thread. Inicia no
   // preferido (heurística) e pode ser sobrescrito pelo usuário via
@@ -199,7 +213,7 @@ export function NewConversationDialog({
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
             <ChatCircle className="w-5 h-5" />
-            {locale === 'pt-BR' ? 'Nova Conversa' : 'New Conversation'}
+            {title ?? (locale === 'pt-BR' ? 'Nova Conversa' : 'New Conversation')}
           </DialogTitle>
         </DialogHeader>
 
@@ -216,14 +230,26 @@ export function NewConversationDialog({
             />
           </div>
 
-          {/* Endpoint selector (only when org has 2+ active endpoints) */}
-          <EndpointSelector
-            endpoints={orderedEndpoints ?? endpoints}
-            value={selectedEndpointId}
-            onChange={setSelectedEndpointId}
-            disabled={selecting !== null || endpointsLoading}
-            locale={locale as 'pt-BR' | 'en-US'}
-          />
+          {/* Endpoint selector — escondido quando forcePurposes está definido */}
+          {!forcePurposes && (
+            <EndpointSelector
+              endpoints={orderedEndpoints ?? endpoints}
+              value={selectedEndpointId}
+              onChange={setSelectedEndpointId}
+              disabled={selecting !== null || endpointsLoading}
+              locale={locale as 'pt-BR' | 'en-US'}
+            />
+          )}
+
+          {noEndpointForPurpose && (
+            <div className="rounded-md border border-border bg-muted/40 px-3 py-2 text-xs text-muted-foreground">
+              {locale === 'pt-BR'
+                ? 'Nenhum número de Atendimento configurado para esta organização.'
+                : 'No service number configured for this organization.'}
+            </div>
+          )}
+
+
 
 
 
@@ -256,7 +282,7 @@ export function NewConversationDialog({
                     <button
                       key={contact.id}
                       onClick={() => handleSelect(contact)}
-                      disabled={selecting !== null || endpointsLoading}
+                      disabled={selecting !== null || endpointsLoading || noEndpointForPurpose}
                       className="w-full flex items-center gap-3 p-3 rounded-lg hover:bg-accent transition-colors text-left disabled:opacity-50"
                     >
                       <Avatar fallbackText={displayName} size="md" />

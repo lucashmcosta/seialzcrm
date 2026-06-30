@@ -1,30 +1,45 @@
-# Busca server-side em /messages
+## Objetivo
 
-A migration que adiciona `p_search` à `rpc_list_message_threads` já foi aplicada (filtra por `full_name`, `phone` e `phone_normalized` por dígitos; mantém cursor, permissões, lifecycle ≠ customer e todos os demais filtros intactos).
+Adicionar botão "Nova Conversa" na tela `/inbox` (Atendimento) que abre o mesmo diálogo de busca de contato já usado em `/messages`, mas forçando o endpoint do **Atendimento** em vez do endpoint preferido genérico.
 
-Falta apenas a parte de frontend — preciso de **build mode** para editar.
+## Validação no banco (feita)
 
-## Mudanças de código previstas
+Endpoints da org `Central Trabalhista` (`40ae935c-…`):
 
-### 1. `src/hooks/useMessageThreads.ts`
-- Aceitar `search?: string` em `UseMessageThreadsOptions`.
-- Passar `p_search` na chamada inicial e no `loadMore` da RPC.
-- Quando `search` muda, resetar `threads`, `hasMore` e refazer a query (sem cursor).
-- Incluir `search` na `channelKey`/deps para forçar refetch.
+| number | purpose |
+|---|---|
+| +551150287020 (Comercial) | `commercial` |
+| +551150287027 (Atendimento) | **`other`** |
 
-### 2. `src/pages/messages/MessagesList.tsx`
-- Debounce de `searchQuery` (~300 ms) → `debouncedSearch`.
-- Passar `debouncedSearch` em `useMessageThreads({ channels: ['whatsapp'], search: debouncedSearch })`.
-- Remover o filtro client-side por `searchQuery` em `filteredThreads` (linha 1207) — agora vem do servidor.
-- Manter intactos os filtros locais de tab (`all_open`/`mine`/`unassigned`/`resolved`), `endpointFilter` e `isHidden`.
+Ou seja: o endpoint de Atendimento **não** usa `purpose = 'customer_service'`. O conjunto correto para "Atendimento" é `purpose IN ('customer_service', 'other')` — exatamente o mesmo conjunto que `inboxScope.ts` já considera (`NOT IN ('commercial','vendor_personal')`).
 
-### 3. Comportamento esperado
-- Sem busca: paginação cursor de 50 igual hoje.
-- Com busca: nova RPC com `p_search`, reseta cursor, `loadMore` continua funcionando dentro do conjunto filtrado.
-- Busca "Fineias" retorna `276726e0-…` mesmo estando na posição 96.
-- Busca por telefone (com ou sem máscara) também funciona via `phone_normalized` (dígitos).
+## Mudanças
 
-### 4. Inbox (`/inbox`)
-Auditoria rápida depois: `InboxThreadList` também filtra client-side sobre lista carregada via `fetchInboxScopedThreads`. Mesma classe de bug, será tratado em PR separado após validação do /messages.
+### 1. `src/components/messages/NewConversationDialog.tsx`
+- Adicionar prop opcional `forcePurposes?: Array<'customer_service' | 'other' | 'commercial' | 'vendor_personal'>` (default: comportamento atual).
+- Quando `forcePurposes` definido:
+  - `preferredEndpointId` = endpoint ativo da org cujo `purpose ∈ forcePurposes`, escolhendo o mais recente (mantendo a regra atual de transicional > oficial **dentro** do subconjunto filtrado).
+  - Esconder o `EndpointSelector` (lock no endpoint forçado) para não permitir trocar para outro purpose.
+  - Se não houver endpoint nesse conjunto, mostrar estado vazio: "Nenhum número de Atendimento configurado".
+- Aceitar prop opcional `title?: string` (ex.: "Nova Conversa de Atendimento").
 
-Pode aprovar para eu aplicar as duas edições de frontend.
+### 2. `src/pages/inbox/InboxPage.tsx`
+- Importar `NewConversationDialog` e adicionar estado `newConvOpen`.
+- Botão "Nova Conversa" no header (próximo ao toggle "Apenas minhas") — `forcePurposes={['customer_service','other']}`.
+- Ao selecionar contato/criar thread: setar `selectedId` com o `threadId` retornado e disparar `refreshThreads()` + `refreshCounts()`.
+
+### 3. Mobile (`MobileInbox`)
+- Mesmo botão "Nova Conversa" no header da lista, reusando `NewConversationDialog` com `forcePurposes={['customer_service','other']}`.
+
+## Critérios de aceite
+
+- Botão "Nova Conversa" visível em `/inbox` (desktop e mobile).
+- Busca por nome/telefone idêntica à de `/messages`.
+- Thread criada/aberta sempre fica vinculada a um endpoint com `purpose IN ('customer_service','other')` — nunca cai no Comercial (7020).
+- Se contato já tem thread no Atendimento, abre a existente; senão cria nova com `primary_endpoint_id = <endpoint de atendimento>`.
+- `/messages` continua usando o comportamento atual (endpoint preferido genérico, com seletor).
+- Sem mudanças em RPC, RLS, migrations, ou regras de purpose/lifecycle.
+
+## Observação
+
+`inboxScope.ts` já inclui threads cujo `primary_endpoint.purpose` é `customer_service`, `other`, ou NULL, então toda thread criada via este botão aparecerá automaticamente em `/inbox`.

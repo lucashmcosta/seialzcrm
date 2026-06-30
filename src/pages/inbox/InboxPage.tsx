@@ -12,6 +12,7 @@ import { InboxMetricsBar } from '@/components/inbox/InboxMetricsBar';
 import { useInboxQueueCounts } from '@/hooks/inbox/useInboxQueueCounts';
 import { useInboxThreads } from '@/hooks/inbox/useInboxThreads';
 import type { InboxTab } from '@/hooks/inbox/inboxScope';
+import { NewConversationDialog } from '@/components/messages/NewConversationDialog';
 
 export default function InboxPage() {
   const isMobile = useIsMobile();
@@ -21,6 +22,7 @@ export default function InboxPage() {
   const [tab, setTab] = useState<InboxTab>('active');
   const [onlyMine, setOnlyMine] = useState(false);
   const [selectedId, setSelectedId] = useState<string | null>(null);
+  const [newConvOpen, setNewConvOpen] = useState(false);
 
   // Resolve internal users.id from auth.uid (Core rule: relational tables use users.id)
   useEffect(() => {
@@ -57,6 +59,7 @@ export default function InboxPage() {
           onChange={(t) => { setTab(t); setSelectedId(null); }}
           onlyMine={onlyMine}
           onOnlyMineChange={(v) => { setOnlyMine(v); setSelectedId(null); }}
+          onNewConversation={() => setNewConvOpen(true)}
         />
         <div className="flex-1 flex min-h-0 overflow-hidden">
           <InboxThreadList
@@ -71,6 +74,18 @@ export default function InboxPage() {
           />
         </div>
       </div>
+
+      <NewConversationDialog
+        open={newConvOpen}
+        onOpenChange={setNewConvOpen}
+        forcePurposes={['customer_service', 'other']}
+        title="Nova Conversa de Atendimento"
+        onSelectContact={(_contactId, threadId) => {
+          setSelectedId(threadId);
+          refreshCounts();
+          refreshThreads();
+        }}
+      />
     </Layout>
   );
 }
