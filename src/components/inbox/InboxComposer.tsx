@@ -41,7 +41,6 @@ import { audioBlobToFile } from '@/lib/audioBlobToFile';
 import { WhatsAppTemplateSelector } from '@/components/whatsapp/WhatsAppTemplateSelector';
 import { ReplyPreview } from '@/components/whatsapp/ReplyPreview';
 import { inboxUploadMedia } from '@/lib/inboxMediaUpload';
-import { useWhatsAppProvider } from '@/hooks/useWhatsAppProvider';
 import type { InboxMessageRow } from '@/hooks/inbox/useInboxThreadMessages';
 
 interface ThreadLike {
@@ -54,7 +53,7 @@ interface ThreadLike {
   whatsapp_last_inbound_at?: string | null;
   last_routing_decision?: { action?: string } | null;
   contact?: { lifecycle_stage: string | null; name?: string | null } | null;
-  primary_endpoint?: { purpose: string | null } | null;
+  primary_endpoint?: { purpose: string | null; provider?: string | null } | null;
 }
 
 interface Props {
@@ -139,9 +138,13 @@ export function InboxComposer({ thread, replyTo, onClearReply, onSent, onThreadM
     return diffMs >= 0 && diffMs < 24 * 60 * 60 * 1000;
   }, [lastInboundIso]);
 
-  // Resolve provider para escolher quais templates listar (default = Twilio).
-  const waProvider = useWhatsAppProvider({ threadId: thread?.id ?? null });
-  const templateSelectorProvider = waProvider === 'meta_cloud_api' ? 'meta_cloud_api' : undefined;
+  // Provider do endpoint da thread → escolhe filtro de templates.
+  // Derivado de forma síncrona do próprio fetch da thread (sem race).
+  const endpointProvider = thread?.primary_endpoint?.provider ?? null;
+  const templateSelectorProvider: 'twilio' | 'meta_cloud_api' | undefined =
+    endpointProvider === 'meta_cloud_api' ? 'meta_cloud_api'
+    : endpointProvider === 'twilio' ? 'twilio'
+    : undefined;
 
   // --- Guards ---------------------------------------------------------------
 

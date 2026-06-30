@@ -29,7 +29,7 @@ const THREAD_SELECT = `
   last_inbound_at, whatsapp_last_inbound_at,
   primary_endpoint_id, last_routing_decision,
   contact:contacts ( id, name:full_name, phone, lifecycle_stage ),
-  primary_endpoint:communication_endpoints ( id, purpose, external_address )
+  primary_endpoint:communication_endpoints ( id, purpose, external_address, provider )
 `;
 
 export function useInboxThread(threadId: string | null) {
