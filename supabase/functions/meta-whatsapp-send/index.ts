@@ -165,17 +165,46 @@ serve(async (req) => {
       }
     }
     if (!endpoint) {
-      // Fallback: primeiro endpoint meta-cloud ativo da org
-      const { data } = await supabase
+      // Fallback purpose-aware: escolhe endpoint cuja purpose case com o senderContext.
+      // - senderContext='inbox'    → customer_service (default geral também é customer_service)
+      // - senderContext='messages' → commercial
+      const desiredPurpose: string =
+        senderContext === "messages" ? "commercial" : "customer_service";
+
+      const { data: candidates } = await supabase
         .from("communication_endpoints")
-        .select("id, organization_id, organization_integration_id, sender_sid, external_address, provider, is_active")
+        .select("id, organization_id, organization_integration_id, sender_sid, external_address, provider, is_active, purpose, status, created_at")
         .eq("organization_id", organizationId)
         .eq("provider", "meta_cloud_api")
         .eq("is_active", true)
-        .order("created_at", { ascending: false })
-        .limit(1)
-        .maybeSingle();
-      endpoint = data;
+        .order("created_at", { ascending: true });
+
+      const rows = (candidates ?? []) as any[];
+      // Tie-break determinístico:
+      // 1) purpose === desiredPurpose
+      // 2) status === 'online'
+      // 3) created_at ASC (mais antigo primeiro)
+      const score = (r: any) => {
+        let s = 0;
+        if (r.purpose === desiredPurpose) s += 100;
+        if (r.status === "online") s += 10;
+        return s;
+      };
+      rows.sort((a, b) => {
+        const ds = score(b) - score(a);
+        if (ds !== 0) return ds;
+        return String(a.created_at).localeCompare(String(b.created_at));
+      });
+      endpoint = rows[0] ?? null;
+      if (endpoint) {
+        console.log("[meta-wa-send] fallback endpoint", {
+          desiredPurpose,
+          chosen_id: endpoint.id,
+          chosen_purpose: endpoint.purpose,
+          chosen_status: endpoint.status,
+          candidates: rows.length,
+        });
+      }
     }
     if (!endpoint) return jsonResponse(400, { error: "no_meta_cloud_endpoint" });
     if (endpoint.organization_id !== organizationId) {
