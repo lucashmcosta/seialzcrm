@@ -52,6 +52,7 @@ interface ThreadLike {
   assigned_user_id: string | null;
   last_inbound_at?: string | null;
   whatsapp_last_inbound_at?: string | null;
+  last_routing_decision?: { action?: string } | null;
   contact?: { lifecycle_stage: string | null; name?: string | null } | null;
   primary_endpoint?: { purpose: string | null } | null;
 }
@@ -152,7 +153,7 @@ export function InboxComposer({ thread, replyTo, onClearReply, onSent, onThreadM
   const endpointPurpose = thread.primary_endpoint?.purpose ?? null;
   const status = thread.status ?? null;
   const csIncludesServiceEndpoints = (organization as any)?.cs_inbox_includes_service_endpoints ?? false;
-  const lastRoutingAction = ((thread as any).last_routing_decision as { action?: string } | null)?.action ?? null;
+  const lastRoutingAction = thread.last_routing_decision?.action ?? null;
 
   const passesCustomerRule = lifecycle === 'customer';
   const passesServiceEndpointRule =
