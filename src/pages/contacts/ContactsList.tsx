@@ -75,7 +75,9 @@ export default function ContactsList() {
   const { t } = useTranslation(locale as 'pt-BR' | 'en-US');
   const { permissions } = usePermissions();
   const [contacts, setContacts] = useState<Contact[]>([]);
-  const [loading, setLoading] = useState(true);
+  const [initialLoading, setInitialLoading] = useState(true);
+  const [refetching, setRefetching] = useState(false);
+  const loading = initialLoading; // for mobile prop compat
   const [searchTerm, setSearchTerm] = useState('');
   const [debouncedSearch, setDebouncedSearch] = useState('');
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
