@@ -83,36 +83,63 @@ serve(async (req) => {
       : { message: String(e) };
   }
 
-  // (b)+(c) rich phone_number_id GET
+  // (b)+(c) list ALL phone numbers of the WABA with rich status
+  const PHONE_FIELDS = [
+    "id",
+    "display_phone_number",
+    "verified_name",
+    "quality_rating",
+    "messaging_limit_tier",
+    "platform_type",
+    "account_mode",
+    "code_verification_status",
+    "name_status",
+    "status",
+    "throughput",
+    "is_official_business_account",
+    "is_pin_enabled",
+    "last_onboarded_time",
+  ].join(",");
+
   try {
-    results.phone_number = await metaWaGet(
-      `/${ca.phone_number_id}`,
-      {
-        fields: [
-          "id",
-          "display_phone_number",
-          "verified_name",
-          "quality_rating",
-          "messaging_limit_tier",
-          "platform_type",
-          "account_mode",
-          "code_verification_status",
-          "name_status",
-          "status",
-          "throughput",
-          "is_official_business_account",
-          "is_pin_enabled",
-          "last_onboarded_time",
-          "eligibility_for_api_business_global_search_listing",
-        ].join(","),
-      },
+    results.waba_phone_numbers = await metaWaGet(
+      `/${ca.waba_id}/phone_numbers`,
+      { fields: PHONE_FIELDS },
       opts,
     );
   } catch (e) {
-    results.phone_number_error = e instanceof MetaWaGraphError
+    results.waba_phone_numbers_error = e instanceof MetaWaGraphError
       ? { status: e.status, error: e.error }
       : { message: String(e) };
   }
+
+  // Target 7027 explicitly
+  const TARGET_PNID = "1285032381352183";
+  try {
+    results.phone_7027 = await metaWaGet(
+      `/${TARGET_PNID}`,
+      { fields: PHONE_FIELDS },
+      opts,
+    );
+  } catch (e) {
+    results.phone_7027_error = e instanceof MetaWaGraphError
+      ? { status: e.status, error: e.error }
+      : { message: String(e) };
+  }
+
+  // Original connected_account phone
+  try {
+    results.phone_connected_account = await metaWaGet(
+      `/${ca.phone_number_id}`,
+      { fields: PHONE_FIELDS },
+      opts,
+    );
+  } catch (e) {
+    results.phone_connected_account_error = e instanceof MetaWaGraphError
+      ? { status: e.status, error: e.error }
+      : { message: String(e) };
+  }
+
 
   // WABA basics (owner, timezone, name)
   try {
