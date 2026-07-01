@@ -543,20 +543,7 @@ export default function ContactsList() {
           />
         </div>
 
-        {loading ? (
-          <div className="space-y-3 py-4">
-            {[...Array(8)].map((_, i) => (
-              <div key={i} className="flex items-center gap-4 px-4 py-3 border rounded-lg">
-                <Skeleton className="h-9 w-9 rounded-full" />
-                <div className="flex-1 space-y-2">
-                  <Skeleton className="h-4 w-40" />
-                  <Skeleton className="h-3 w-56" />
-                </div>
-                <Skeleton className="h-5 w-16 rounded-full" />
-              </div>
-            ))}
-          </div>
-        ) : sortedContacts.length === 0 ? (
+        {!initialLoading && !refetching && sortedContacts.length === 0 ? (
           <Card>
             <CardContent className="py-12 text-center">
               <p className="text-muted-foreground">{t('contacts.noContacts')}</p>
@@ -573,7 +560,7 @@ export default function ContactsList() {
             footer={
               <PaginationWithPageSize
                 currentPage={currentPage}
-                totalPages={totalPages}
+                totalPages={totalPages || 1}
                 totalItems={totalCount}
                 itemsPerPage={itemsPerPage}
                 onPageChange={setCurrentPage}
@@ -582,7 +569,7 @@ export default function ContactsList() {
             }
           >
             {/* Select All Banner */}
-            {allSelected && totalCount > sortedContacts.length && (
+            {!initialLoading && allSelected && totalCount > sortedContacts.length && (
               <div className="px-4 py-2 bg-muted/50 border-b text-sm flex items-center justify-center gap-2">
                 {selectAllMode === 'all' ? (
                   <>
@@ -608,98 +595,140 @@ export default function ContactsList() {
               </div>
             )}
 
-            <Table
-              aria-label="Lista de contatos"
-              sortDescriptor={sortDescriptor}
-              onSortChange={setSortDescriptor}
-            >
-              <TableHeader>
-                <TableCheckboxHeader
-                  isSelected={allSelected}
-                  isIndeterminate={someSelected}
-                  onChange={handleSelectAll}
+            <div className="relative">
+              {refetching && (
+                <div
+                  aria-hidden
+                  className="absolute top-0 left-0 right-0 h-0.5 bg-primary/60 animate-pulse z-10 pointer-events-none"
                 />
-                {activeColumns.map((col) => (
-                  <TableColumn
-                    key={col.id}
-                    id={col.id}
-                    allowsSorting={col.id !== 'phone'}
-                    sortDescriptor={sortDescriptor}
-                  >
-                    {col.label}
-                  </TableColumn>
-                ))}
-                <TableColumn id="actions" className="w-12">
-                  <span className="sr-only">Ações</span>
-                </TableColumn>
-              </TableHeader>
-              <TableBody items={sortedContacts} dependencies={[selectedIds]}>
-                {(contact) => (
-                  <TableRow
-                    key={contact.id}
-                    className="cursor-pointer"
-                    onAction={() => navigate(`/contacts/${contact.id}`)}
-                  >
-                    <TableCheckboxCell
-                      isSelected={selectedIds.includes(contact.id)}
-                      onChange={(checked) => handleSelectOne(contact.id, checked)}
+              )}
+              <div className={refetching ? 'opacity-70 transition-opacity' : 'transition-opacity'}>
+                <Table
+                  aria-label="Lista de contatos"
+                  sortDescriptor={sortDescriptor}
+                  onSortChange={initialLoading ? undefined : setSortDescriptor}
+                >
+                  <TableHeader>
+                    <TableCheckboxHeader
+                      isSelected={!initialLoading && allSelected}
+                      isIndeterminate={!initialLoading && someSelected}
+                      onChange={initialLoading ? () => {} : handleSelectAll}
                     />
-                    {activeColumns.map(col => (
-                      <TableCell key={col.id}>
-                        {col.id === 'full_name' && (
-                          <div className="flex items-center gap-3">
-                            <Avatar fallbackText={contact.full_name} size="sm" />
-                            <div>
-                              <p className="font-medium text-foreground">{contact.full_name}</p>
-                              {contact.email && (
-                                <p className="text-sm text-muted-foreground">{contact.email}</p>
-                              )}
-                            </div>
-                          </div>
-                        )}
-                        {col.id === 'lifecycle_stage' && (
-                          <BadgeWithDot color={lifecycleColors[contact.lifecycle_stage] || 'gray'}>
-                            {getLifecycleLabel(contact.lifecycle_stage)}
-                          </BadgeWithDot>
-                        )}
-                        {col.id === 'phone' && (
-                          <span className="text-muted-foreground">
-                            {contact.phone ? formatPhoneDisplay(contact.phone) : '—'}
-                          </span>
-                        )}
-                        {col.id === 'company_name' && (
-                          <span className="text-muted-foreground">
-                            {contact.company_name || '—'}
-                          </span>
-                        )}
-                        {col.id === 'created_at' && (
-                          <span className="text-muted-foreground">
-                            {contact.created_at
-                              ? format(new Date(contact.created_at), 'dd MMM yyyy', { locale: ptBR })
-                              : '—'}
-                          </span>
-                        )}
-                      </TableCell>
+                    {activeColumns.map((col) => (
+                      <TableColumn
+                        key={col.id}
+                        id={col.id}
+                        allowsSorting={col.id !== 'phone'}
+                        sortDescriptor={sortDescriptor}
+                      >
+                        {col.label}
+                      </TableColumn>
                     ))}
-                    <TableCell>
-                      <TableRowActionsDropdown>
-                        <TableRowAction
-                          label={t('common.edit')}
-                          icon={<PencilSimple size={16} weight="light" />}
-                          onAction={() => navigate(`/contacts/${contact.id}/edit`)}
-                        />
-                        <TableRowAction
-                          label={t('common.delete')}
-                          icon={<TrashSimple size={16} weight="light" />}
-                          variant="destructive"
-                          onAction={() => handleDelete(contact.id)}
-                        />
-                      </TableRowActionsDropdown>
-                    </TableCell>
-                  </TableRow>
-                )}
-              </TableBody>
-            </Table>
+                    <TableColumn id="actions" className="w-12">
+                      <span className="sr-only">Ações</span>
+                    </TableColumn>
+                  </TableHeader>
+                  {initialLoading ? (
+                    <TableBody
+                      items={Array.from({ length: Math.min(itemsPerPage, 10) }, (_, i) => ({ id: `__skel_${i}` }))}
+                    >
+                      {(row) => (
+                        <TableRow key={row.id}>
+                          <TableCheckboxCell isSelected={false} onChange={() => {}} />
+                          {activeColumns.map((col) => (
+                            <TableCell key={col.id}>
+                              {col.id === 'full_name' ? (
+                                <div className="flex items-center gap-3">
+                                  <Skeleton className="h-9 w-9 rounded-full" />
+                                  <div className="space-y-2">
+                                    <Skeleton className="h-4 w-32" />
+                                    <Skeleton className="h-3 w-48" />
+                                  </div>
+                                </div>
+                              ) : col.id === 'lifecycle_stage' ? (
+                                <Skeleton className="h-5 w-20 rounded-full" />
+                              ) : (
+                                <Skeleton className="h-4 w-24" />
+                              )}
+                            </TableCell>
+                          ))}
+                          <TableCell>
+                            <Skeleton className="h-4 w-4" />
+                          </TableCell>
+                        </TableRow>
+                      )}
+                    </TableBody>
+                  ) : (
+                    <TableBody items={sortedContacts} dependencies={[selectedIds]}>
+                      {(contact) => (
+                        <TableRow
+                          key={contact.id}
+                          className="cursor-pointer"
+                          onAction={() => navigate(`/contacts/${contact.id}`)}
+                        >
+                          <TableCheckboxCell
+                            isSelected={selectedIds.includes(contact.id)}
+                            onChange={(checked) => handleSelectOne(contact.id, checked)}
+                          />
+                          {activeColumns.map(col => (
+                            <TableCell key={col.id}>
+                              {col.id === 'full_name' && (
+                                <div className="flex items-center gap-3">
+                                  <Avatar fallbackText={contact.full_name} size="sm" />
+                                  <div>
+                                    <p className="font-medium text-foreground">{contact.full_name}</p>
+                                    {contact.email && (
+                                      <p className="text-sm text-muted-foreground">{contact.email}</p>
+                                    )}
+                                  </div>
+                                </div>
+                              )}
+                              {col.id === 'lifecycle_stage' && (
+                                <BadgeWithDot color={lifecycleColors[contact.lifecycle_stage] || 'gray'}>
+                                  {getLifecycleLabel(contact.lifecycle_stage)}
+                                </BadgeWithDot>
+                              )}
+                              {col.id === 'phone' && (
+                                <span className="text-muted-foreground">
+                                  {contact.phone ? formatPhoneDisplay(contact.phone) : '—'}
+                                </span>
+                              )}
+                              {col.id === 'company_name' && (
+                                <span className="text-muted-foreground">
+                                  {contact.company_name || '—'}
+                                </span>
+                              )}
+                              {col.id === 'created_at' && (
+                                <span className="text-muted-foreground">
+                                  {contact.created_at
+                                    ? format(new Date(contact.created_at), 'dd MMM yyyy', { locale: ptBR })
+                                    : '—'}
+                                </span>
+                              )}
+                            </TableCell>
+                          ))}
+                          <TableCell>
+                            <TableRowActionsDropdown>
+                              <TableRowAction
+                                label={t('common.edit')}
+                                icon={<PencilSimple size={16} weight="light" />}
+                                onAction={() => navigate(`/contacts/${contact.id}/edit`)}
+                              />
+                              <TableRowAction
+                                label={t('common.delete')}
+                                icon={<TrashSimple size={16} weight="light" />}
+                                variant="destructive"
+                                onAction={() => handleDelete(contact.id)}
+                              />
+                            </TableRowActionsDropdown>
+                          </TableCell>
+                        </TableRow>
+                      )}
+                    </TableBody>
+                  )}
+                </Table>
+              </div>
+            </div>
           </TableCard>
         )}
 
