@@ -8027,6 +8027,32 @@ export type Database = {
         Args: { p_job_id: string }
         Returns: undefined
       }
+      rpc_get_message_threads_by_ids: {
+        Args: { p_organization_id: string; p_thread_ids: string[] }
+        Returns: {
+          agent_typing: boolean
+          assigned_user_id: string
+          assigned_user_name: string
+          awaiting_button_response: boolean
+          channel: string
+          contact_id: string
+          contact_name: string
+          contact_phone: string
+          created_at: string
+          id: string
+          is_unread: boolean
+          last_inbound_at: string
+          last_message_at: string
+          last_message_content: string
+          last_message_direction: string
+          last_message_id: string
+          needs_human_attention: boolean
+          status: string
+          subject: string
+          updated_at: string
+          whatsapp_last_inbound_at: string
+        }[]
+      }
       rpc_inbox_queue_counts: {
         Args: {
           p_assigned_user_id: string

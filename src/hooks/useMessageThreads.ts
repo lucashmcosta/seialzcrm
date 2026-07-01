@@ -68,6 +68,9 @@ interface UseMessageThreadsOptions {
   search?: string;
 }
 
+const REALTIME_FLUSH_MS = 400;
+const VISIBILITY_REFETCH_MS = 60_000;
+
 export function useMessageThreads(options: UseMessageThreadsOptions = {}) {
   const { channels = ['whatsapp'], limit = 50, search } = options;
   const searchTerm = search && search.trim().length > 0 ? search.trim() : null;
