@@ -132,10 +132,10 @@ export default function ContactForm() {
     if (checkMode === 'email' && formData.email) {
       conditions.push({ email: formData.email });
     } else if (checkMode === 'phone' && formData.phone) {
-      conditions.push({ phone: formData.phone });
+      conditions.push({ phone_normalized: normalizePhoneBR(formData.phone) });
     } else if (checkMode === 'email_or_phone') {
       if (formData.email) conditions.push({ email: formData.email });
-      if (formData.phone) conditions.push({ phone: formData.phone });
+      if (formData.phone) conditions.push({ phone_normalized: normalizePhoneBR(formData.phone) });
     }
 
     if (conditions.length === 0) return [];
@@ -147,8 +147,8 @@ export default function ContactForm() {
         const { data } = await query.eq('email', condition.email);
         if (data) duplicateResults.push(...data);
       }
-      if (condition.phone) {
-        const { data } = await query.eq('phone', condition.phone);
+      if (condition.phone_normalized) {
+        const { data } = await query.eq('phone_normalized', condition.phone_normalized);
         if (data) duplicateResults.push(...data);
       }
     }
@@ -160,16 +160,19 @@ export default function ContactForm() {
 
   const checkPhoneUniqueness = async () => {
     if (!organization || !formData.phone) return [];
+    const normalized = normalizePhoneBR(formData.phone);
+    if (!normalized) return [];
     let query = supabase
       .from('contacts')
       .select('id, full_name, email, phone')
       .eq('organization_id', organization.id)
-      .eq('phone', formData.phone)
+      .eq('phone_normalized', normalized)
       .is('deleted_at', null);
     if (isEdit && id) query = query.neq('id', id);
     const { data } = await query;
     return data || [];
   };
+
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
