@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo } from 'react';
+import { useState, useEffect, useMemo, useRef } from 'react';
 import { usePersistedFilters } from '@/hooks/usePersistedFilters';
 import { Link, useNavigate } from 'react-router-dom';
 import type { SortDescriptor } from 'react-aria-components';
@@ -84,7 +84,7 @@ export default function ContactsList() {
 
   // Debounce search input (300ms)
   useEffect(() => {
-    const t = setTimeout(() => setDebouncedSearch(searchTerm.trim()), 300);
+    const t = setTimeout(() => setDebouncedSearch(searchTerm.trim()), 250);
     return () => clearTimeout(t);
   }, [searchTerm]);
 
@@ -93,24 +93,38 @@ export default function ContactsList() {
     setCurrentPage(1);
   }, [debouncedSearch]);
 
-  // Build tokenized search filters: each whitespace-separated token must
-  // match in at least one of (full_name, email, phone). Multiple tokens
-  // are ANDed together by chaining .or() calls.
+  // Normalize a term for search: lower-case + strip diacritics (Unicode-safe).
+  // Matches DB column `search_name` = f_unaccent(lower(full_name)).
+  const normalizeTerm = (s: string): string =>
+    s.toLowerCase().normalize('NFD').replace(/\p{Diacritic}/gu, '');
+
+  // Extract only digits from a term (matches DB column `phone_digits`).
+  const onlyDigits = (s: string): string => s.replace(/\D/g, '');
+
+  // Build tokenized search filters against normalized/indexed columns.
+  // Each whitespace-separated token must match at least one of
+  // (search_name, search_email, phone_digits). Tokens are ANDed via
+  // chained .or() calls. Trigram GIN indexes cover all three.
   const applySearchFilters = <T extends { or: (q: string) => T }>(query: T, term: string): T => {
     const tokens = term.split(/\s+/).filter(Boolean);
     let q = query;
-    for (const token of tokens) {
-      const safe = token.replace(/[,()]/g, ' ').trim();
+    for (const raw of tokens) {
+      // PostgREST .or() treats , ( ) as syntax; strip defensively.
+      const safe = raw.replace(/[,()]/g, ' ').trim();
       if (!safe) continue;
-      const digits = safe.replace(/\D/g, '');
-      const parts = [
-        `full_name.ilike.%${safe}%`,
-        `email.ilike.%${safe}%`,
-        `phone.ilike.%${safe}%`,
-      ];
-      if (digits && digits !== safe) {
-        parts.push(`phone.ilike.%${digits}%`);
+      const nTerm = normalizeTerm(safe);
+      const digits = onlyDigits(safe);
+      const parts: string[] = [];
+      if (nTerm) {
+        parts.push(`search_name.ilike.%${nTerm}%`);
+        parts.push(`search_email.ilike.%${nTerm}%`);
       }
+      // Only query phone_digits for tokens with meaningful digit runs
+      // (>=4 digits) to avoid pathological trigram lookups like "1".
+      if (digits.length >= 4) {
+        parts.push(`phone_digits.ilike.%${digits}%`);
+      }
+      if (parts.length === 0) continue;
       q = q.or(parts.join(','));
     }
     return q;
@@ -232,10 +246,15 @@ export default function ContactsList() {
     }
   };
 
+  // Guard against stale fetch responses overwriting a newer one
+  // (typing fast → out-of-order arrivals).
+  const fetchIdRef = useRef(0);
+
   const fetchContacts = async () => {
     if (!organization) return;
 
     const isAppending = isMobile && currentPage > 1;
+    const myFetchId = ++fetchIdRef.current;
 
     if (isAppending) {
       setMobileLoadingMore(true);
@@ -275,6 +294,9 @@ export default function ContactsList() {
     query = query.range(from, to).order('created_at', { ascending: false });
 
     const { data, error, count } = await query;
+
+    // Drop stale responses: another fetch was started after this one.
+    if (myFetchId !== fetchIdRef.current) return;
 
     if (!error && data) {
       setContacts(data);

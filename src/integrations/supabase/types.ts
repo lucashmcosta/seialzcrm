@@ -1654,10 +1654,13 @@ export type Database = {
           organization_id: string
           owner_user_id: string | null
           phone: string | null
+          phone_digits: string | null
           phone_normalized: string | null
           referrer_url: string | null
           rg: string | null
           rg_issuer: string | null
+          search_email: string | null
+          search_name: string | null
           source: string | null
           source_external_id: string | null
           updated_at: string | null
@@ -1716,10 +1719,13 @@ export type Database = {
           organization_id: string
           owner_user_id?: string | null
           phone?: string | null
+          phone_digits?: string | null
           phone_normalized?: string | null
           referrer_url?: string | null
           rg?: string | null
           rg_issuer?: string | null
+          search_email?: string | null
+          search_name?: string | null
           source?: string | null
           source_external_id?: string | null
           updated_at?: string | null
@@ -1778,10 +1784,13 @@ export type Database = {
           organization_id?: string
           owner_user_id?: string | null
           phone?: string | null
+          phone_digits?: string | null
           phone_normalized?: string | null
           referrer_url?: string | null
           rg?: string | null
           rg_issuer?: string | null
+          search_email?: string | null
+          search_name?: string | null
           source?: string | null
           source_external_id?: string | null
           updated_at?: string | null
@@ -7491,6 +7500,7 @@ export type Database = {
       current_user_id: { Args: never; Returns: string }
       current_user_managed_org_ids: { Args: never; Returns: string[] }
       current_user_org_ids: { Args: never; Returns: string[] }
+      f_unaccent: { Args: { "": string }; Returns: string }
       fn_build_opportunity_won_payload: {
         Args: { _opportunity_id: string }
         Returns: Json
