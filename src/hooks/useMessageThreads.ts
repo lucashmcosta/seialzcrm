@@ -82,7 +82,6 @@ export function useMessageThreads(options: UseMessageThreadsOptions = {}) {
   const [hasMore, setHasMore] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
-  const debounceTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const lastFetchRef = useRef<number>(0);
 
   const orgId = organization?.id;
