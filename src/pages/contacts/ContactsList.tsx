@@ -251,11 +251,41 @@ export default function ContactsList() {
   // (typing fast → out-of-order arrivals).
   const fetchIdRef = useRef(0);
 
+  // Guard against stale fetch responses overwriting a newer one
+  // (typing fast → out-of-order arrivals).
+  const fetchIdRef = useRef(0);
+  // Real HTTP cancellation: abort obsolete requests so PostgREST/Postgres
+  // stop working on them instead of just discarding the response client-side.
+  const abortRef = useRef<AbortController | null>(null);
+  // Track the last filter signature so we can reset currentPage to 1 inline
+  // when the user changes a filter, without a separate useEffect that would
+  // cause a double fetch (filter-change → fetch + setCurrentPage(1) → fetch).
+  const lastFilterSigRef = useRef<string>('');
+
   const fetchContacts = async () => {
     if (!organization) return;
 
-    const isAppending = isMobile && currentPage > 1;
+    const filterSig = JSON.stringify([
+      debouncedSearch, ownerFilter, stageFilter, createdFromFilter, createdToFilter, itemsPerPage,
+    ]);
+    let effectivePage = currentPage;
+    if (lastFilterSigRef.current && lastFilterSigRef.current !== filterSig && currentPage !== 1) {
+      // Filters changed while paginated; reset locally and let React commit
+      // the state, but do NOT trigger another fetch — this one already
+      // reflects page 1.
+      effectivePage = 1;
+      setCurrentPage(1);
+    }
+    lastFilterSigRef.current = filterSig;
+
+    const isAppending = isMobile && effectivePage > 1;
     const myFetchId = ++fetchIdRef.current;
+
+    // Cancel any in-flight request. This closes the socket, so PostgREST
+    // aborts and Postgres stops executing the obsolete query.
+    abortRef.current?.abort();
+    const controller = new AbortController();
+    abortRef.current = controller;
 
     if (isAppending) {
       setMobileLoadingMore(true);
@@ -290,19 +320,32 @@ export default function ContactsList() {
     }
     
     // Apply pagination
-    const from = (currentPage - 1) * itemsPerPage;
+    const from = (effectivePage - 1) * itemsPerPage;
     const to = from + itemsPerPage - 1;
-    query = query.range(from, to).order('created_at', { ascending: false });
+    query = query.range(from, to).order('created_at', { ascending: false }).abortSignal(controller.signal);
 
-    const { data, error, count } = await query;
+    let data: Contact[] | null = null;
+    let error: unknown = null;
+    let count: number | null = null;
+    try {
+      const res = await query;
+      data = res.data as Contact[] | null;
+      error = res.error;
+      count = res.count;
+    } catch (e) {
+      // AbortError from supabase-js surfaces here — swallow silently.
+      if (controller.signal.aborted) return;
+      error = e;
+    }
 
-    // Drop stale responses: another fetch was started after this one.
+    // Drop stale responses (belt-and-suspenders alongside abort).
     if (myFetchId !== fetchIdRef.current) return;
+    if (controller.signal.aborted) return;
 
     if (!error && data) {
       setContacts(data);
       if (isMobile) {
-        setMobileContacts(prev => isAppending ? [...prev, ...data] : data);
+        setMobileContacts(prev => isAppending ? [...prev, ...data!] : data!);
       }
       setTotalCount(count || 0);
     }
