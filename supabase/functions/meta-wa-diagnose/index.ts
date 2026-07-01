@@ -20,14 +20,13 @@ serve(async (req) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: corsHeaders });
   if (req.method !== "POST") return json(405, { error: "method_not_allowed" });
 
-  const auth = req.headers.get("Authorization") ?? "";
-  const diagToken = Deno.env.get("META_DIAG_TOKEN") ?? "";
+  const ALLOWED_ORG = "40ae935c-a7f7-4ad7-8ea4-91be6404a95f";
   const serviceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
-  if (!diagToken || auth !== `Bearer ${diagToken}`) return json(401, { error: "unauthorized" });
-
 
   const { organizationId } = await req.json().catch(() => ({}));
   if (!organizationId) return json(400, { error: "missing_organization" });
+  if (organizationId !== ALLOWED_ORG) return json(403, { error: "org_not_allowed" });
+
 
   const admin = createClient(Deno.env.get("SUPABASE_URL")!, serviceKey);
 
