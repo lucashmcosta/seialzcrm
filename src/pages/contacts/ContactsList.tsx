@@ -82,16 +82,13 @@ export default function ContactsList() {
   const [debouncedSearch, setDebouncedSearch] = useState('');
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
 
-  // Debounce search input (300ms)
+  // Debounce search input (250ms). Page reset for search change is handled
+  // inline inside fetchContacts to avoid the cascade
+  //   debouncedSearch → setCurrentPage(1) → second fetch.
   useEffect(() => {
     const t = setTimeout(() => setDebouncedSearch(searchTerm.trim()), 250);
     return () => clearTimeout(t);
   }, [searchTerm]);
-
-  // Reset to page 1 when search changes
-  useEffect(() => {
-    setCurrentPage(1);
-  }, [debouncedSearch]);
 
   // Normalize a term for search: lower-case + strip diacritics (Unicode-safe).
   // Matches DB column `search_name` = f_unaccent(lower(full_name)).
@@ -101,31 +98,30 @@ export default function ContactsList() {
   // Extract only digits from a term (matches DB column `phone_digits`).
   const onlyDigits = (s: string): string => s.replace(/\D/g, '');
 
-  // Build tokenized search filters against normalized/indexed columns.
-  // Each whitespace-separated token must match at least one of
-  // (search_name, search_email, phone_digits). Tokens are ANDed via
-  // chained .or() calls. Trigram GIN indexes cover all three.
-  const applySearchFilters = <T extends { or: (q: string) => T }>(query: T, term: string): T => {
+  // Detect "phone-like" terms: mostly digits + optional +, spaces, dashes, parens.
+  // For those we search ONLY phone_digits (avoids OR against search_name/email
+  // that the planner still has to filter row-by-row).
+  const isPhoneLikeTerm = (s: string): boolean => /^[\d\s()+\-]+$/.test(s) && onlyDigits(s).length >= 4;
+
+  // Build search filters. Two modes:
+  //   phone mode → single `phone_digits.ilike.%digits%` filter.
+  //   text mode  → per-token OR across (search_name, search_email), ANDed.
+  const applySearchFilters = <T extends { or: (q: string) => T; ilike: (col: string, pattern: string) => T }>(
+    query: T,
+    term: string,
+  ): T => {
+    if (isPhoneLikeTerm(term)) {
+      const digits = onlyDigits(term);
+      return query.ilike('phone_digits', `%${digits}%`);
+    }
     const tokens = term.split(/\s+/).filter(Boolean);
     let q = query;
     for (const raw of tokens) {
-      // PostgREST .or() treats , ( ) as syntax; strip defensively.
       const safe = raw.replace(/[,()]/g, ' ').trim();
       if (!safe) continue;
       const nTerm = normalizeTerm(safe);
-      const digits = onlyDigits(safe);
-      const parts: string[] = [];
-      if (nTerm) {
-        parts.push(`search_name.ilike.%${nTerm}%`);
-        parts.push(`search_email.ilike.%${nTerm}%`);
-      }
-      // Only query phone_digits for tokens with meaningful digit runs
-      // (>=4 digits) to avoid pathological trigram lookups like "1".
-      if (digits.length >= 4) {
-        parts.push(`phone_digits.ilike.%${digits}%`);
-      }
-      if (parts.length === 0) continue;
-      q = q.or(parts.join(','));
+      if (!nTerm) continue;
+      q = q.or(`search_name.ilike.%${nTerm}%,search_email.ilike.%${nTerm}%`);
     }
     return q;
   };
