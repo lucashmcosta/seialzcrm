@@ -156,13 +156,61 @@ export function useMessageThreads(options: UseMessageThreadsOptions = {}) {
     }
   }, [orgId, channelKey, limit, hasMore, loadingMore, threads, searchTerm]);
 
-  // Debounced refetch
-  const debouncedRefetch = useCallback(() => {
-    if (debounceTimerRef.current) clearTimeout(debounceTimerRef.current);
-    debounceTimerRef.current = setTimeout(() => {
-      fetchThreads();
-    }, 300);
-  }, [fetchThreads]);
+  // ---------------------------------------------------------------
+  // Realtime: patch-local por thread (sem refetch da lista inteira)
+  // ---------------------------------------------------------------
+  // Cada UPDATE/INSERT em message_threads é coalescido num Set de ids.
+  // Após REALTIME_FLUSH_MS de inatividade, chamamos rpc_get_message_threads_by_ids
+  // uma única vez com todos os ids pendentes e fazemos upsert local no state,
+  // movendo os threads afetados para o topo (ordenados por updated_at desc).
+  const pendingIdsRef = useRef<Set<string>>(new Set());
+  const flushTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  const enrichAndUpsert = useCallback(async () => {
+    if (!orgId) return;
+    const ids = Array.from(pendingIdsRef.current);
+    pendingIdsRef.current.clear();
+    if (ids.length === 0) return;
+
+    try {
+      const { data, error: rpcError } = await supabase.rpc(
+        'rpc_get_message_threads_by_ids',
+        { p_organization_id: orgId, p_thread_ids: ids }
+      );
+      if (rpcError) {
+        console.error('Error enriching threads:', rpcError);
+        return;
+      }
+      const rows = (data as RpcThreadRow[]) || [];
+      if (rows.length === 0) return;
+
+      const enriched = rows.map(mapRpcToChatThread);
+      // Ordena os enriquecidos por updated_at desc antes de prepend.
+      enriched.sort((a, b) => (b.updated_at || '').localeCompare(a.updated_at || ''));
+
+      setThreads((prev) => {
+        const enrichedIds = new Set(enriched.map((t) => t.id));
+        const rest = prev.filter((t) => !enrichedIds.has(t.id));
+        return [...enriched, ...rest];
+      });
+    } catch (err) {
+      console.error('Unexpected error enriching threads:', err);
+    }
+  }, [orgId]);
+
+  const scheduleEnrich = useCallback(
+    (id: string, rowChannel?: string) => {
+      // Ignora eventos de canais que este hook não consome.
+      if (rowChannel && channels.length > 0 && !channels.includes(rowChannel)) return;
+      pendingIdsRef.current.add(id);
+      if (flushTimerRef.current) clearTimeout(flushTimerRef.current);
+      flushTimerRef.current = setTimeout(() => {
+        enrichAndUpsert();
+      }, REALTIME_FLUSH_MS);
+    },
+    // channelKey estável evita re-subscribe
+    [enrichAndUpsert, channelKey] // eslint-disable-line react-hooks/exhaustive-deps
+  );
 
   // Initial load
   useEffect(() => {
@@ -175,83 +223,54 @@ export function useMessageThreads(options: UseMessageThreadsOptions = {}) {
     fetchThreads();
   }, [orgId, userId, fetchThreads]);
 
-  // Realtime: UPDATE on message_threads
+  // Realtime: UPDATE + INSERT em message_threads → enrichment por id
   useEffect(() => {
     if (!orgId) return;
 
     const channel = supabase
       .channel(`rpc-thread-updates-${orgId}`)
-      .on('postgres_changes', {
-        event: 'UPDATE',
-        schema: 'public',
-        table: 'message_threads',
-        filter: `organization_id=eq.${orgId}`,
-      }, (payload) => {
-        const updated = payload.new as any;
-        setThreads((prev) => {
-          const idx = prev.findIndex((t) => t.id === updated.id);
-          if (idx === -1) {
-            debouncedRefetch();
-            return prev;
-          }
-          const existing = prev[idx];
-          const merged: ChatThread = {
-            ...existing,
-            status: updated.status || existing.status,
-            needs_human_attention: updated.needs_human_attention ?? existing.needs_human_attention,
-            assigned_user_id: updated.assigned_user_id ?? existing.assigned_user_id,
-            updated_at: updated.updated_at || existing.updated_at,
-            last_message_direction: updated.last_message_direction ?? existing.last_message_direction,
-            last_inbound_at: updated.last_inbound_at ?? existing.last_inbound_at,
-            whatsapp_last_inbound_at: updated.whatsapp_last_inbound_at ?? existing.whatsapp_last_inbound_at,
-          };
-          // Update last_message_content if trigger populated it
-          if (updated.last_message_content !== undefined) {
-            merged.last_message = updated.last_message_content || '...';
-          }
-          // Recalculate unread locally: mark as unread when new inbound message arrives
-          // and we don't have a reliable last_read_at here — conservative approach:
-          // if direction changed to inbound, mark unread; RPC will reconcile on next full fetch
-          if (updated.last_message_direction === 'inbound') {
-            merged.unread = true;
-          }
-          // Move to top
-          const newList = [merged, ...prev.filter((_, i) => i !== idx)];
-          return newList;
-        });
-      })
-      .on('postgres_changes', {
-        event: 'INSERT',
-        schema: 'public',
-        table: 'message_threads',
-        filter: `organization_id=eq.${orgId}`,
-      }, () => {
-        debouncedRefetch();
-      })
-      .on('postgres_changes', {
-        event: 'UPDATE',
-        schema: 'public',
-        table: 'contacts',
-        filter: `organization_id=eq.${orgId}`,
-      }, (payload) => {
-        const oldStage = (payload.old as any)?.lifecycle_stage;
-        const newStage = (payload.new as any)?.lifecycle_stage;
-        if (oldStage !== newStage) {
-          debouncedRefetch();
+      .on(
+        'postgres_changes',
+        {
+          event: 'UPDATE',
+          schema: 'public',
+          table: 'message_threads',
+          filter: `organization_id=eq.${orgId}`,
+        },
+        (payload) => {
+          const row = payload.new as any;
+          if (row?.id) scheduleEnrich(row.id, row.channel);
         }
-      })
+      )
+      .on(
+        'postgres_changes',
+        {
+          event: 'INSERT',
+          schema: 'public',
+          table: 'message_threads',
+          filter: `organization_id=eq.${orgId}`,
+        },
+        (payload) => {
+          const row = payload.new as any;
+          if (row?.id) scheduleEnrich(row.id, row.channel);
+        }
+      )
       .subscribe();
 
     return () => {
       supabase.removeChannel(channel);
+      if (flushTimerRef.current) {
+        clearTimeout(flushTimerRef.current);
+        flushTimerRef.current = null;
+      }
     };
-  }, [orgId, debouncedRefetch]);
+  }, [orgId, scheduleEnrich]);
 
-  // Visibility change — reconcile when tab becomes visible
+  // Visibility change — reconcile só se ficou oculto por >60s
   useEffect(() => {
     const handleVisibilityChange = () => {
       if (document.visibilityState === 'visible') {
-        if (Date.now() - lastFetchRef.current > 5000) {
+        if (Date.now() - lastFetchRef.current > VISIBILITY_REFETCH_MS) {
           fetchThreads();
         }
       }
