@@ -250,10 +250,6 @@ export default function ContactsList() {
   // Guard against stale fetch responses overwriting a newer one
   // (typing fast → out-of-order arrivals).
   const fetchIdRef = useRef(0);
-
-  // Guard against stale fetch responses overwriting a newer one
-  // (typing fast → out-of-order arrivals).
-  const fetchIdRef = useRef(0);
   // Real HTTP cancellation: abort obsolete requests so PostgREST/Postgres
   // stop working on them instead of just discarding the response client-side.
   const abortRef = useRef<AbortController | null>(null);
