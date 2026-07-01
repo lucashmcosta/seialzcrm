@@ -211,10 +211,15 @@ export default function ContactsList() {
     fetchUsers();
   }, [organization?.id]);
 
+  // Single source of truth for triggering a fetch. Hydration flags are a gate,
+  // not a trigger — they must be true, but once true they never re-fire the
+  // effect. When any filter changes we snap currentPage back to 1 inline in
+  // fetchContacts to avoid the double-fetch cascade.
   useEffect(() => {
     if (!organization) return;
     if (!filtersHydrated || !itemsPerPageHydrated || !sortHydrated) return;
     fetchContacts();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [organization, filtersHydrated, itemsPerPageHydrated, sortHydrated, currentPage, itemsPerPage, debouncedSearch, ownerFilter, stageFilter, createdFromFilter, createdToFilter]);
 
 
