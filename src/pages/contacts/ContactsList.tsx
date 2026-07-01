@@ -193,12 +193,18 @@ export default function ContactsList() {
     }
   }, [debouncedSearch, ownerFilter, stageFilter, createdFromFilter, createdToFilter]);
 
+  // Fetch users only when organization changes (not on every filter change)
+  useEffect(() => {
+    if (!organization?.id) return;
+    fetchUsers();
+  }, [organization?.id]);
+
   useEffect(() => {
     if (!organization) return;
     if (!filtersHydrated || !itemsPerPageHydrated || !sortHydrated) return;
     fetchContacts();
-    fetchUsers();
   }, [organization, filtersHydrated, itemsPerPageHydrated, sortHydrated, currentPage, itemsPerPage, debouncedSearch, ownerFilter, stageFilter, createdFromFilter, createdToFilter]);
+
 
   const mobileHasMore = mobileContacts.length < totalCount;
 
@@ -238,7 +244,7 @@ export default function ContactsList() {
     // Build query with filters
     let query = supabase
       .from('contacts')
-      .select('id, full_name, email, phone, company_name, lifecycle_stage, owner_user_id, created_at', { count: 'exact' })
+      .select('id, full_name, email, phone, company_name, lifecycle_stage, owner_user_id, created_at', { count: 'estimated' })
       .eq('organization_id', organization.id)
       .is('deleted_at', null);
     
