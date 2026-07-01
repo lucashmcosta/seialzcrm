@@ -291,45 +291,29 @@ export default function ContactsList() {
       setRefetching(true);
     }
     
-    // Build query with filters
-    let query = supabase
-      .from('contacts')
-      .select('id, full_name, email, phone, company_name, lifecycle_stage, owner_user_id, created_at', { count: 'planned' })
-      .eq('organization_id', organization.id)
-      .is('deleted_at', null);
-    
-    // Apply filters
-    if (debouncedSearch) {
-      query = applySearchFilters(query, debouncedSearch);
-    }
-    if (ownerFilter !== 'all') {
-      query = query.eq('owner_user_id', ownerFilter);
-    }
-    if (stageFilter !== 'all') {
-      query = query.eq('lifecycle_stage', stageFilter as 'lead' | 'customer' | 'inactive');
-    }
-    if (createdFromFilter) {
-      query = query.gte('created_at', createdFromFilter);
-    }
-    if (createdToFilter) {
-      query = query.lte('created_at', createdToFilter + 'T23:59:59.999Z');
-    }
-    
-    // Apply pagination
+    // Pagination
     const from = (effectivePage - 1) * itemsPerPage;
-    const to = from + itemsPerPage - 1;
-    query = query.range(from, to).order('created_at', { ascending: false }).abortSignal(controller.signal);
 
-    let data: Contact[] | null = null;
+    // Use the dedicated RPC. It picks the right branch (no search / phone /
+    // text) internally, and returns `total_count` on every row via a single
+    // scan. This avoids the PostgREST OR+count wrapper that was making
+    // /contacts requests take 2–4s.
+    let data: (Contact & { total_count: number })[] | null = null;
     let error: unknown = null;
-    let count: number | null = null;
     try {
-      const res = await query;
-      data = res.data as Contact[] | null;
+      const res = await (supabase.rpc as any)('rpc_search_contacts', {
+        p_organization_id: organization.id,
+        p_search: debouncedSearch || null,
+        p_owner_user_id: ownerFilter !== 'all' ? ownerFilter : null,
+        p_lifecycle_stage: stageFilter !== 'all' ? stageFilter : null,
+        p_created_from: createdFromFilter || null,
+        p_created_to: createdToFilter ? createdToFilter + 'T23:59:59.999Z' : null,
+        p_limit: itemsPerPage,
+        p_offset: from,
+      }).abortSignal(controller.signal);
+      data = res.data as (Contact & { total_count: number })[] | null;
       error = res.error;
-      count = res.count;
     } catch (e) {
-      // AbortError from supabase-js surfaces here — swallow silently.
       if (controller.signal.aborted) return;
       error = e;
     }
@@ -339,11 +323,12 @@ export default function ContactsList() {
     if (controller.signal.aborted) return;
 
     if (!error && data) {
-      setContacts(data);
+      const rows = data.map(({ total_count, ...c }) => c as Contact);
+      setContacts(rows);
       if (isMobile) {
-        setMobileContacts(prev => isAppending ? [...prev, ...data!] : data!);
+        setMobileContacts(prev => isAppending ? [...prev, ...rows] : rows);
       }
-      setTotalCount(count || 0);
+      setTotalCount(data.length > 0 ? Number(data[0].total_count) : 0);
     }
     setInitialLoading(false);
     setRefetching(false);
