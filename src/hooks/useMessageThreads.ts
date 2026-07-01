@@ -278,12 +278,7 @@ export function useMessageThreads(options: UseMessageThreadsOptions = {}) {
     return () => document.removeEventListener('visibilitychange', handleVisibilityChange);
   }, [fetchThreads]);
 
-  // Cleanup debounce timer
-  useEffect(() => {
-    return () => {
-      if (debounceTimerRef.current) clearTimeout(debounceTimerRef.current);
-    };
-  }, []);
+
 
   // Mark a thread as read locally (call after opening a thread)
   const markThreadRead = useCallback((threadId: string) => {
