@@ -50,10 +50,11 @@ export function SavedViewsDropdown({
   const [viewName, setViewName] = useState('');
 
   useEffect(() => {
-    if (organization) {
+    if (organization?.id) {
       fetchViews();
     }
-  }, [organization, module]);
+  }, [organization?.id, module]);
+
 
   const fetchViews = async () => {
     if (!organization) return;
