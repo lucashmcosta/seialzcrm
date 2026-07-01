@@ -7817,6 +7817,7 @@ export type Database = {
       is_admin_user: { Args: never; Returns: boolean }
       is_org_admin: { Args: { _org_id: string }; Returns: boolean }
       kairos_db_stats: { Args: never; Returns: Json }
+      kairos_diagnose: { Args: never; Returns: Json }
       normalize_phone_br: { Args: { phone_input: string }; Returns: string }
       populate_communication_endpoints_from_v2_senders: {
         Args: never
@@ -8166,6 +8167,29 @@ export type Database = {
       rpc_retry_integration_job: {
         Args: { p_job_id: string }
         Returns: undefined
+      }
+      rpc_search_contacts: {
+        Args: {
+          p_created_from?: string
+          p_created_to?: string
+          p_lifecycle_stage?: string
+          p_limit?: number
+          p_offset?: number
+          p_organization_id: string
+          p_owner_user_id?: string
+          p_search?: string
+        }
+        Returns: {
+          company_name: string
+          created_at: string
+          email: string
+          full_name: string
+          id: string
+          lifecycle_stage: string
+          owner_user_id: string
+          phone: string
+          total_count: number
+        }[]
       }
       rpc_update_integration_job_payload: {
         Args: { p_job_id: string; p_payload: Json }
