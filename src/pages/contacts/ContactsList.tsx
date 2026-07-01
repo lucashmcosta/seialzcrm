@@ -239,8 +239,10 @@ export default function ContactsList() {
 
     if (isAppending) {
       setMobileLoadingMore(true);
+    } else if (initialLoading) {
+      // keep skeleton visible; do not toggle
     } else {
-      setLoading(true);
+      setRefetching(true);
     }
     
     // Build query with filters
@@ -281,7 +283,8 @@ export default function ContactsList() {
       }
       setTotalCount(count || 0);
     }
-    setLoading(false);
+    setInitialLoading(false);
+    setRefetching(false);
     setMobileLoadingMore(false);
   };
 
