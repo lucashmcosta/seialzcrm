@@ -7818,6 +7818,7 @@ export type Database = {
       is_org_admin: { Args: { _org_id: string }; Returns: boolean }
       kairos_db_stats: { Args: never; Returns: Json }
       kairos_diagnose: { Args: never; Returns: Json }
+      kairos_table_stats: { Args: never; Returns: Json }
       normalize_phone_br: { Args: { phone_input: string }; Returns: string }
       populate_communication_endpoints_from_v2_senders: {
         Args: never
