@@ -246,10 +246,15 @@ export default function ContactsList() {
     }
   };
 
+  // Guard against stale fetch responses overwriting a newer one
+  // (typing fast → out-of-order arrivals).
+  const fetchIdRef = useRef(0);
+
   const fetchContacts = async () => {
     if (!organization) return;
 
     const isAppending = isMobile && currentPage > 1;
+    const myFetchId = ++fetchIdRef.current;
 
     if (isAppending) {
       setMobileLoadingMore(true);
@@ -289,6 +294,9 @@ export default function ContactsList() {
     query = query.range(from, to).order('created_at', { ascending: false });
 
     const { data, error, count } = await query;
+
+    // Drop stale responses: another fetch was started after this one.
+    if (myFetchId !== fetchIdRef.current) return;
 
     if (!error && data) {
       setContacts(data);
