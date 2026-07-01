@@ -8,3 +8,7 @@ verify_jwt = false
 
 [functions.meta-whatsapp-templates-sync]
 verify_jwt = false
+
+[functions.meta-wa-diagnose]
+verify_jwt = false
+
