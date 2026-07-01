@@ -267,7 +267,7 @@ export default function ContactsList() {
     // Build query with filters
     let query = supabase
       .from('contacts')
-      .select('id, full_name, email, phone, company_name, lifecycle_stage, owner_user_id, created_at', { count: 'estimated' })
+      .select('id, full_name, email, phone, company_name, lifecycle_stage, owner_user_id, created_at', { count: 'planned' })
       .eq('organization_id', organization.id)
       .is('deleted_at', null);
     
