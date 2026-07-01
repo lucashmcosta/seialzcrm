@@ -17,6 +17,38 @@ import { ArrowLeft } from '@phosphor-icons/react';
 import { NameInput } from '@/components/NameInput';
 import { OwnerSelector } from '@/components/common/OwnerSelector';
 
+/**
+ * Porta em TS a função public.normalize_phone_br do banco.
+ * Necessário pra checagem de duplicidade encontrar contatos
+ * salvos com/sem o 9º dígito (formato antigo).
+ */
+function normalizePhoneBR(input: string | null | undefined): string | null {
+  if (!input) return null;
+  const digits = input.replace(/\D/g, '');
+  if (digits.length < 10) return digits || null;
+
+  let local: string;
+  if (digits.startsWith('55') && digits.length >= 12) {
+    local = digits.substring(2);
+  } else {
+    return digits;
+  }
+
+  if (local.length !== 10 && local.length !== 11) return digits;
+
+  const ddd = local.substring(0, 2);
+  const rest = local.substring(2);
+
+  if (local.length === 11 && rest.charAt(0) === '9') {
+    return '55' + local;
+  }
+  if (local.length === 10) {
+    return '55' + ddd + '9' + rest;
+  }
+  return '55' + local;
+}
+
+
 export default function ContactForm() {
   const { id } = useParams();
   const navigate = useNavigate();
@@ -132,10 +164,10 @@ export default function ContactForm() {
     if (checkMode === 'email' && formData.email) {
       conditions.push({ email: formData.email });
     } else if (checkMode === 'phone' && formData.phone) {
-      conditions.push({ phone: formData.phone });
+      conditions.push({ phone_normalized: normalizePhoneBR(formData.phone) });
     } else if (checkMode === 'email_or_phone') {
       if (formData.email) conditions.push({ email: formData.email });
-      if (formData.phone) conditions.push({ phone: formData.phone });
+      if (formData.phone) conditions.push({ phone_normalized: normalizePhoneBR(formData.phone) });
     }
 
     if (conditions.length === 0) return [];
@@ -147,8 +179,8 @@ export default function ContactForm() {
         const { data } = await query.eq('email', condition.email);
         if (data) duplicateResults.push(...data);
       }
-      if (condition.phone) {
-        const { data } = await query.eq('phone', condition.phone);
+      if (condition.phone_normalized) {
+        const { data } = await query.eq('phone_normalized', condition.phone_normalized);
         if (data) duplicateResults.push(...data);
       }
     }
@@ -160,16 +192,19 @@ export default function ContactForm() {
 
   const checkPhoneUniqueness = async () => {
     if (!organization || !formData.phone) return [];
+    const normalized = normalizePhoneBR(formData.phone);
+    if (!normalized) return [];
     let query = supabase
       .from('contacts')
       .select('id, full_name, email, phone')
       .eq('organization_id', organization.id)
-      .eq('phone', formData.phone)
+      .eq('phone_normalized', normalized)
       .is('deleted_at', null);
     if (isEdit && id) query = query.neq('id', id);
     const { data } = await query;
     return data || [];
   };
+
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
