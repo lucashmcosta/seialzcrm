@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo } from 'react';
+import { useState, useEffect, useMemo, useRef } from 'react';
 import { usePersistedFilters } from '@/hooks/usePersistedFilters';
 import { Link, useNavigate } from 'react-router-dom';
 import type { SortDescriptor } from 'react-aria-components';
