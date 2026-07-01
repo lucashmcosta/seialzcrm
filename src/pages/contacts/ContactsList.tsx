@@ -82,16 +82,13 @@ export default function ContactsList() {
   const [debouncedSearch, setDebouncedSearch] = useState('');
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
 
-  // Debounce search input (300ms)
+  // Debounce search input (250ms). Page reset for search change is handled
+  // inline inside fetchContacts to avoid the cascade
+  //   debouncedSearch → setCurrentPage(1) → second fetch.
   useEffect(() => {
     const t = setTimeout(() => setDebouncedSearch(searchTerm.trim()), 250);
     return () => clearTimeout(t);
   }, [searchTerm]);
-
-  // Reset to page 1 when search changes
-  useEffect(() => {
-    setCurrentPage(1);
-  }, [debouncedSearch]);
 
   // Normalize a term for search: lower-case + strip diacritics (Unicode-safe).
   // Matches DB column `search_name` = f_unaccent(lower(full_name)).
@@ -101,31 +98,30 @@ export default function ContactsList() {
   // Extract only digits from a term (matches DB column `phone_digits`).
   const onlyDigits = (s: string): string => s.replace(/\D/g, '');
 
-  // Build tokenized search filters against normalized/indexed columns.
-  // Each whitespace-separated token must match at least one of
-  // (search_name, search_email, phone_digits). Tokens are ANDed via
-  // chained .or() calls. Trigram GIN indexes cover all three.
-  const applySearchFilters = <T extends { or: (q: string) => T }>(query: T, term: string): T => {
+  // Detect "phone-like" terms: mostly digits + optional +, spaces, dashes, parens.
+  // For those we search ONLY phone_digits (avoids OR against search_name/email
+  // that the planner still has to filter row-by-row).
+  const isPhoneLikeTerm = (s: string): boolean => /^[\d\s()+\-]+$/.test(s) && onlyDigits(s).length >= 4;
+
+  // Build search filters. Two modes:
+  //   phone mode → single `phone_digits.ilike.%digits%` filter.
+  //   text mode  → per-token OR across (search_name, search_email), ANDed.
+  const applySearchFilters = <T extends { or: (q: string) => T; ilike: (col: string, pattern: string) => T }>(
+    query: T,
+    term: string,
+  ): T => {
+    if (isPhoneLikeTerm(term)) {
+      const digits = onlyDigits(term);
+      return query.ilike('phone_digits', `%${digits}%`);
+    }
     const tokens = term.split(/\s+/).filter(Boolean);
     let q = query;
     for (const raw of tokens) {
-      // PostgREST .or() treats , ( ) as syntax; strip defensively.
       const safe = raw.replace(/[,()]/g, ' ').trim();
       if (!safe) continue;
       const nTerm = normalizeTerm(safe);
-      const digits = onlyDigits(safe);
-      const parts: string[] = [];
-      if (nTerm) {
-        parts.push(`search_name.ilike.%${nTerm}%`);
-        parts.push(`search_email.ilike.%${nTerm}%`);
-      }
-      // Only query phone_digits for tokens with meaningful digit runs
-      // (>=4 digits) to avoid pathological trigram lookups like "1".
-      if (digits.length >= 4) {
-        parts.push(`phone_digits.ilike.%${digits}%`);
-      }
-      if (parts.length === 0) continue;
-      q = q.or(parts.join(','));
+      if (!nTerm) continue;
+      q = q.or(`search_name.ilike.%${nTerm}%,search_email.ilike.%${nTerm}%`);
     }
     return q;
   };
@@ -215,10 +211,15 @@ export default function ContactsList() {
     fetchUsers();
   }, [organization?.id]);
 
+  // Single source of truth for triggering a fetch. Hydration flags are a gate,
+  // not a trigger — they must be true, but once true they never re-fire the
+  // effect. When any filter changes we snap currentPage back to 1 inline in
+  // fetchContacts to avoid the double-fetch cascade.
   useEffect(() => {
     if (!organization) return;
     if (!filtersHydrated || !itemsPerPageHydrated || !sortHydrated) return;
     fetchContacts();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [organization, filtersHydrated, itemsPerPageHydrated, sortHydrated, currentPage, itemsPerPage, debouncedSearch, ownerFilter, stageFilter, createdFromFilter, createdToFilter]);
 
 
@@ -249,12 +250,38 @@ export default function ContactsList() {
   // Guard against stale fetch responses overwriting a newer one
   // (typing fast → out-of-order arrivals).
   const fetchIdRef = useRef(0);
+  // Real HTTP cancellation: abort obsolete requests so PostgREST/Postgres
+  // stop working on them instead of just discarding the response client-side.
+  const abortRef = useRef<AbortController | null>(null);
+  // Track the last filter signature so we can reset currentPage to 1 inline
+  // when the user changes a filter, without a separate useEffect that would
+  // cause a double fetch (filter-change → fetch + setCurrentPage(1) → fetch).
+  const lastFilterSigRef = useRef<string>('');
 
   const fetchContacts = async () => {
     if (!organization) return;
 
-    const isAppending = isMobile && currentPage > 1;
+    const filterSig = JSON.stringify([
+      debouncedSearch, ownerFilter, stageFilter, createdFromFilter, createdToFilter, itemsPerPage,
+    ]);
+    let effectivePage = currentPage;
+    if (lastFilterSigRef.current && lastFilterSigRef.current !== filterSig && currentPage !== 1) {
+      // Filters changed while paginated; reset locally and let React commit
+      // the state, but do NOT trigger another fetch — this one already
+      // reflects page 1.
+      effectivePage = 1;
+      setCurrentPage(1);
+    }
+    lastFilterSigRef.current = filterSig;
+
+    const isAppending = isMobile && effectivePage > 1;
     const myFetchId = ++fetchIdRef.current;
+
+    // Cancel any in-flight request. This closes the socket, so PostgREST
+    // aborts and Postgres stops executing the obsolete query.
+    abortRef.current?.abort();
+    const controller = new AbortController();
+    abortRef.current = controller;
 
     if (isAppending) {
       setMobileLoadingMore(true);
@@ -289,19 +316,32 @@ export default function ContactsList() {
     }
     
     // Apply pagination
-    const from = (currentPage - 1) * itemsPerPage;
+    const from = (effectivePage - 1) * itemsPerPage;
     const to = from + itemsPerPage - 1;
-    query = query.range(from, to).order('created_at', { ascending: false });
+    query = query.range(from, to).order('created_at', { ascending: false }).abortSignal(controller.signal);
 
-    const { data, error, count } = await query;
+    let data: Contact[] | null = null;
+    let error: unknown = null;
+    let count: number | null = null;
+    try {
+      const res = await query;
+      data = res.data as Contact[] | null;
+      error = res.error;
+      count = res.count;
+    } catch (e) {
+      // AbortError from supabase-js surfaces here — swallow silently.
+      if (controller.signal.aborted) return;
+      error = e;
+    }
 
-    // Drop stale responses: another fetch was started after this one.
+    // Drop stale responses (belt-and-suspenders alongside abort).
     if (myFetchId !== fetchIdRef.current) return;
+    if (controller.signal.aborted) return;
 
     if (!error && data) {
       setContacts(data);
       if (isMobile) {
-        setMobileContacts(prev => isAppending ? [...prev, ...data] : data);
+        setMobileContacts(prev => isAppending ? [...prev, ...data!] : data!);
       }
       setTotalCount(count || 0);
     }
