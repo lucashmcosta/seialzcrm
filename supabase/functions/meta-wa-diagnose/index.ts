@@ -21,8 +21,10 @@ serve(async (req) => {
   if (req.method !== "POST") return json(405, { error: "method_not_allowed" });
 
   const auth = req.headers.get("Authorization") ?? "";
+  const diagToken = Deno.env.get("META_DIAG_TOKEN") ?? "";
   const serviceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
-  if (auth !== `Bearer ${serviceKey}`) return json(401, { error: "unauthorized" });
+  if (!diagToken || auth !== `Bearer ${diagToken}`) return json(401, { error: "unauthorized" });
+
 
   const { organizationId } = await req.json().catch(() => ({}));
   if (!organizationId) return json(400, { error: "missing_organization" });
