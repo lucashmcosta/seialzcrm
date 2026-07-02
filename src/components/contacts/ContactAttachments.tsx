@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useOrganization } from '@/hooks/useOrganization';
 import { useTranslation } from '@/lib/i18n';
 import { supabase } from '@/integrations/supabase/client';
@@ -41,6 +41,8 @@ export function ContactAttachments({ contactId, entityId, entityType }: ContactA
   const [previewAttachment, setPreviewAttachment] = useState<Attachment | null>(null);
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
   const [previewLoading, setPreviewLoading] = useState(false);
+  const [isDragging, setIsDragging] = useState(false);
+  const dragCounter = useRef(0);
 
   useEffect(() => {
     fetchAttachments();
@@ -73,8 +75,7 @@ export function ContactAttachments({ contactId, entityId, entityType }: ContactA
     }
   };
 
-  const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
+  const uploadFile = async (file: File) => {
     if (!file || !organization?.id || !userProfile?.id) return;
 
     const finalEntityId = entityId || contactId;
@@ -117,8 +118,46 @@ export function ContactAttachments({ contactId, entityId, entityType }: ContactA
       toast({ variant: 'destructive', description: t('common.error') });
     } finally {
       setUploading(false);
-      e.target.value = '';
     }
+  };
+
+  const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (file) await uploadFile(file);
+    e.target.value = '';
+  };
+
+  const handleDragEnter = (e: React.DragEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    if (uploading) return;
+    dragCounter.current += 1;
+    if (e.dataTransfer.types?.includes('Files')) setIsDragging(true);
+  };
+
+  const handleDragLeave = (e: React.DragEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    dragCounter.current -= 1;
+    if (dragCounter.current <= 0) {
+      dragCounter.current = 0;
+      setIsDragging(false);
+    }
+  };
+
+  const handleDragOver = (e: React.DragEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+  };
+
+  const handleDrop = async (e: React.DragEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    dragCounter.current = 0;
+    setIsDragging(false);
+    if (uploading) return;
+    const file = e.dataTransfer.files?.[0];
+    if (file) await uploadFile(file);
   };
 
   const handleDownload = async (attachment: Attachment) => {
@@ -231,7 +270,13 @@ export function ContactAttachments({ contactId, entityId, entityType }: ContactA
 
   return (
     <>
-      <Card>
+      <Card
+        onDragEnter={handleDragEnter}
+        onDragLeave={handleDragLeave}
+        onDragOver={handleDragOver}
+        onDrop={handleDrop}
+        className={isDragging ? 'border-2 border-dashed border-primary bg-primary/5 transition-colors' : 'transition-colors'}
+      >
         <CardHeader>
           <div className="flex items-center justify-between">
             <CardTitle>{t('attachments.title')}</CardTitle>
@@ -257,9 +302,11 @@ export function ContactAttachments({ contactId, entityId, entityType }: ContactA
           </div>
         </CardHeader>
         <CardContent>
-          <div className="space-y-2">
+          <div className="space-y-2 min-h-[120px]">
             {attachments.length === 0 ? (
-              <p className="text-center text-muted-foreground py-8">No attachments yet</p>
+              <p className="text-center text-muted-foreground py-8">
+                {isDragging ? 'Solte o arquivo para enviar' : 'Arraste um arquivo aqui ou clique em Enviar'}
+              </p>
             ) : (
               attachments.map((attachment) => (
                 <div key={attachment.id} className="flex items-center justify-between p-3 rounded-lg border hover:bg-muted/50 transition-colors">
