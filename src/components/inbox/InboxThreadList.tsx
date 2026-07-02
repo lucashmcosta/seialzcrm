@@ -127,10 +127,9 @@ export function InboxThreadList({ threads, loading, selectedId, onSelect, offici
                       isUnread ? 'font-semibold text-foreground' : 'font-medium text-foreground',
                     )}>{name}</span>
                     <EndpointBadge
-                      tone="amber"
                       size="sm"
                       externalAddress={t.primary_endpoint?.external_address ?? null}
-                      officialNumbers={officialNumbers}
+                      purpose={t.primary_endpoint?.purpose ?? null}
                     />
                     <span className={cn(
                       'font-data text-[10px]',
