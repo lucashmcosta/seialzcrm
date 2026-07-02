@@ -1537,7 +1537,7 @@ function DesktopMessagesList() {
                             {selectedThread.contact_name}
                           </Link>
                           {hasMultipleEndpoints && selectedThreadEndpoint && (
-                            <EndpointBadge externalAddress={selectedThreadEndpoint.external_address} size="lg" officialNumbers={officialNumbers} />
+                            <EndpointBadge externalAddress={selectedThreadEndpoint.external_address} purpose={selectedThreadEndpoint.purpose ?? null} size="lg" />
                           )}
                           {isIn24hWindow && (
                             <BadgeWithDot color="success" size="sm" className="shrink-0">
