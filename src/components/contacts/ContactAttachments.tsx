@@ -270,7 +270,13 @@ export function ContactAttachments({ contactId, entityId, entityType }: ContactA
 
   return (
     <>
-      <Card>
+      <Card
+        onDragEnter={handleDragEnter}
+        onDragLeave={handleDragLeave}
+        onDragOver={handleDragOver}
+        onDrop={handleDrop}
+        className={isDragging ? 'border-2 border-dashed border-primary bg-primary/5 transition-colors' : 'transition-colors'}
+      >
         <CardHeader>
           <div className="flex items-center justify-between">
             <CardTitle>{t('attachments.title')}</CardTitle>
@@ -296,9 +302,11 @@ export function ContactAttachments({ contactId, entityId, entityType }: ContactA
           </div>
         </CardHeader>
         <CardContent>
-          <div className="space-y-2">
+          <div className="space-y-2 min-h-[120px]">
             {attachments.length === 0 ? (
-              <p className="text-center text-muted-foreground py-8">No attachments yet</p>
+              <p className="text-center text-muted-foreground py-8">
+                {isDragging ? 'Solte o arquivo para enviar' : 'Arraste um arquivo aqui ou clique em Enviar'}
+              </p>
             ) : (
               attachments.map((attachment) => (
                 <div key={attachment.id} className="flex items-center justify-between p-3 rounded-lg border hover:bg-muted/50 transition-colors">
