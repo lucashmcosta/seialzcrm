@@ -45,6 +45,7 @@ const Card = React.forwardRef<HTMLDivElement, CardProps>(
         animate={{ opacity: 1, y: 0 }}
         transition={{ type: "spring", stiffness: 300, damping: 30 }}
         onClick={onClick}
+        {...props}
       >
         {children}
       </motion.div>
