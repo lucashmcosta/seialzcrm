@@ -2,6 +2,7 @@ import { useMemo, useState } from 'react';
 import { cn } from '@/lib/utils';
 import { InboxSlaChip } from './InboxSlaChip';
 import { SearchBar } from '@/components/common/SearchBar';
+import { EndpointBadge } from '@/components/messages/EndpointBadge';
 import type { InboxThreadRow } from '@/hooks/inbox/useInboxThreads';
 
 interface Props {
@@ -9,6 +10,7 @@ interface Props {
   loading: boolean;
   selectedId: string | null;
   onSelect: (id: string) => void;
+  officialNumbers?: Set<string>;
 }
 
 function relTime(iso: string | null): string {
@@ -62,7 +64,7 @@ function Pill({ children, cls, dot, pulse }: { children: React.ReactNode; cls: s
   );
 }
 
-export function InboxThreadList({ threads, loading, selectedId, onSelect }: Props) {
+export function InboxThreadList({ threads, loading, selectedId, onSelect, officialNumbers }: Props) {
   const [search, setSearch] = useState('');
 
   const filtered = useMemo(() => {
@@ -121,9 +123,15 @@ export function InboxThreadList({ threads, loading, selectedId, onSelect }: Prop
                 <div className="flex-1 min-w-0">
                   <div className="flex items-center gap-2 mb-1">
                     <span className={cn(
-                      'text-sm truncate flex-1',
+                      'text-sm truncate flex-1 min-w-0',
                       isUnread ? 'font-semibold text-foreground' : 'font-medium text-foreground',
                     )}>{name}</span>
+                    <EndpointBadge
+                      tone="amber"
+                      size="sm"
+                      externalAddress={t.primary_endpoint?.external_address ?? null}
+                      officialNumbers={officialNumbers}
+                    />
                     <span className={cn(
                       'font-data text-[10px]',
                       isUnread ? 'text-emerald-600 dark:text-emerald-400 font-semibold' : 'text-[hsl(var(--sz-t3))]',
