@@ -45,7 +45,7 @@ export default function InboxPage() {
   const csIncludesServiceEndpoints = organization?.cs_inbox_includes_service_endpoints ?? false;
   const { counts, refreshDebounced: refreshCounts } = useInboxQueueCounts(internalUserId, onlyMine, orgTimezone, organizationId, csIncludesServiceEndpoints);
   const { threads, loading, refresh: refreshThreads } = useInboxThreads(tab, onlyMine, internalUserId, orgTimezone, organizationId, csIncludesServiceEndpoints);
-  const { officialNumbers } = useOrgWhatsAppEndpoints(organizationId ?? undefined);
+  
 
   // Mobile uses dedicated MobileInbox (lista + chat fullscreen, padrão /messages)
   if (isMobile) {
