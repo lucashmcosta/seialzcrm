@@ -13,7 +13,7 @@ import { useInboxQueueCounts } from '@/hooks/inbox/useInboxQueueCounts';
 import { useInboxThreads } from '@/hooks/inbox/useInboxThreads';
 import type { InboxTab } from '@/hooks/inbox/inboxScope';
 import { NewConversationDialog } from '@/components/messages/NewConversationDialog';
-import { useOrgWhatsAppEndpoints } from '@/hooks/useOrgWhatsAppEndpoints';
+
 
 export default function InboxPage() {
   const isMobile = useIsMobile();
