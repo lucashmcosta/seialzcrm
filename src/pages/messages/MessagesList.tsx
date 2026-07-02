@@ -173,10 +173,11 @@ interface ChatListItemProps extends ListBoxItemProps<ChatThread> {
   showLastMessage?: boolean;
   onHide?: (threadId: string) => void;
   endpointAddress?: string | null;
+  endpointPurpose?: string | null;
   officialNumbers?: Set<string>;
 }
 
-const ChatListItem = ({ value, locale, className, onHide, endpointAddress, officialNumbers, ...otherProps }: ChatListItemProps) => {
+const ChatListItem = ({ value, locale, className, onHide, endpointAddress, endpointPurpose, officialNumbers, ...otherProps }: ChatListItemProps) => {
   if (!value) return null;
 
   const status = statusConfig[value.status] || statusConfig.open;
@@ -202,7 +203,7 @@ const ChatListItem = ({ value, locale, className, onHide, endpointAddress, offic
             <span className="font-semibold text-sm text-foreground truncate">
               {value.contact_name}
             </span>
-            {endpointAddress && <EndpointBadge externalAddress={endpointAddress} officialNumbers={officialNumbers} />}
+            {endpointAddress && <EndpointBadge externalAddress={endpointAddress} purpose={endpointPurpose ?? null} officialNumbers={endpointPurpose == null ? officialNumbers : undefined} />}
             {(value.unread) && (
               <span className="h-2 w-2 shrink-0 rounded-full bg-primary" />
             )}
@@ -1489,6 +1490,9 @@ function DesktopMessagesList() {
                             ? endpointById[threadEndpointMap[thread.id] ?? (thread.id === selectedThreadOverride?.id ? selectedThreadOverride.primary_endpoint_id ?? '' : '')]?.external_address ?? null
                             : null
                         }
+                        endpointPurpose={
+                          endpointById[threadEndpointMap[thread.id] ?? (thread.id === selectedThreadOverride?.id ? selectedThreadOverride.primary_endpoint_id ?? '' : '')]?.purpose ?? null
+                        }
                         officialNumbers={officialNumbers}
                       />
                     ))}
@@ -1533,7 +1537,7 @@ function DesktopMessagesList() {
                             {selectedThread.contact_name}
                           </Link>
                           {hasMultipleEndpoints && selectedThreadEndpoint && (
-                            <EndpointBadge externalAddress={selectedThreadEndpoint.external_address} size="lg" officialNumbers={officialNumbers} />
+                            <EndpointBadge externalAddress={selectedThreadEndpoint.external_address} purpose={selectedThreadEndpoint.purpose ?? null} size="lg" />
                           )}
                           {isIn24hWindow && (
                             <BadgeWithDot color="success" size="sm" className="shrink-0">

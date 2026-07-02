@@ -1,33 +1,56 @@
 ## Objetivo
 
-Na tela **Atendimento** (`/inbox`), exibir o badge amarelo `Novo · NNNN` (últimos 4 dígitos do endpoint) em **todas** as conversas, não só nas exceções. Assim o usuário tem confirmação visual imediata do número que está atendendo (ex.: `7027` para a esmagadora maioria, e `7067` destacando o caso isolado que trataremos depois).
+Cor do badge `Novo · NNNN` deixa de ser fixa por tela e passa a ser derivada do **propósito do endpoint** (coluna `purpose` de `communication_endpoints`). Regra aplicada tanto em `/inbox` quanto em `/messages`, sempre exibindo o badge quando houver endpoint.
 
-Comportamento da tela **Mensagens** (`/messages`) permanece inalterado (badge azul só aparece quando o número não é o "oficial padrão" — regra atual).
+## Mapa fixo por propósito
+
+| purpose            | Cor         | Uso típico            |
+| ------------------ | ----------- | --------------------- |
+| `customer_service` | Amarelo     | 7027 (Atendimento)    |
+| `sales` / `commercial` | Azul    | 7020 (Comercial)      |
+| `marketing`        | Rosa        |                       |
+| `other` / null / desconhecido | Roxo | 7067 e futuros      |
+
+Cores usam tokens Tailwind já presentes no projeto (`amber`, `blue`, `rose`, `violet`) via classes `border-*/30 bg-*/10 text-*` — sem hardcode hex.
 
 ## Mudanças
 
-### 1. `src/pages/inbox/InboxPage.tsx`
-- Remover a passagem de `officialNumbers` para `InboxThreadList` (ou passar uma lista vazia), de forma que o badge amarelo nunca seja suprimido no Atendimento.
-- Manter o hook `useOrgWhatsAppEndpoints` apenas se ainda for necessário para outras exibições; caso contrário, remover para não carregar dados à toa.
+### 1. `src/components/messages/EndpointBadge.tsx`
+- Adicionar prop `purpose?: string | null`.
+- Adicionar tone `rose` e `violet` ao `TONE_CLASSES`.
+- Nova função interna `toneFromPurpose(purpose)` retornando `'amber' | 'blue' | 'rose' | 'violet'`.
+- Comportamento:
+  - Se `purpose` for passado, ele **prevalece** sobre `tone` (deriva a cor pelo mapa).
+  - Se não vier `purpose`, mantém o `tone` explícito (retrocompatível).
+- Manter `officialNumbers` opcional; nas telas visadas não será mais passado.
 
 ### 2. `src/components/inbox/InboxThreadList.tsx`
-- Ajustar a lógica de renderização do `EndpointBadge` para sempre renderizar quando houver `endpoint_phone_number` na thread, ignorando a checagem "é número oficial".
-- Manter `tone="amber"` e o formato `Novo · <últimos 4>`.
-- Fallback: se a thread não tiver endpoint carregado, não renderiza nada (sem placeholder).
+- Passar `purpose={t.primary_endpoint?.purpose ?? null}` ao `EndpointBadge`, remover `tone="amber"` fixo e `officialNumbers`.
 
-### 3. `src/components/inbox/InboxThreadDetail.tsx` (header da conversa)
-- Garantir que o badge amarelo também apareça no header, seguindo a mesma regra "sempre que houver endpoint". Hoje o header já mostra a identidade textual (`+55 11 5028-7027 · Meta Cloud...`), então esse badge é o reforço visual curto ao lado do nome.
+### 3. `src/components/inbox/InboxThreadDetail.tsx`
+- Passar `purpose={thread.primary_endpoint?.purpose ?? null}` nos dois `EndpointBadge` do header.
 
-### 4. Sem mudanças em
-- `EndpointBadge.tsx` (a variante `tone` já existe).
-- Tela `/messages` e `MessagesList.tsx` (regra "só quando não é oficial" preservada — badge azul).
-- Backend / RPCs / dados.
+### 4. `src/pages/messages/MessagesList.tsx` (e demais call sites em `/messages`)
+- Passar `purpose` do endpoint no lugar de `tone="blue"` fixo. Remover a supressão via `officialNumbers` (o badge passa a aparecer em toda thread com endpoint conhecido).
+- Se algum call site não tiver `purpose` no cache, fazer fallback para `tone="blue"` para não regressar visualmente.
 
-## Fora de escopo (tratamos depois, conforme você pediu)
-- Investigar/normalizar o caso isolado do endpoint **7067** aparecendo no Atendimento.
-- Investigar a thread sem endpoint associado.
+### 5. Sem mudanças
+- Backend, RPCs, schema.
+- Hook `useOrgWhatsAppEndpoints` continua existindo (pode ser usado em outros lugares); apenas deixamos de usar o `officialNumbers` nestes call sites.
 
 ## Validação
-- Abrir `/inbox`: cada item da lista deve mostrar `Novo · 7027` (amarelo) na maioria; o item do Rafael/Wagner deve mostrar `Novo · 7067`.
-- Abrir uma conversa: header exibe o badge amarelo ao lado do nome, além do bloco "Nosso número" no painel direito.
-- Abrir `/messages`: badge azul continua aparecendo apenas para números não-oficiais (comportamento atual, sem regressão).
+
+- `/inbox` lista:
+  - 7027 → badge **amarelo**.
+  - 7020 (infiltrado) → badge **azul**.
+  - 7067 → badge **roxo**.
+- `/inbox` header da conversa: mesma cor da lista.
+- `/messages`:
+  - Threads do 7020 → **azul**.
+  - Threads do 7027 (se aparecerem por regra antiga) → **amarelo**.
+  - Outros → **roxo/rosa** conforme purpose.
+- Legibilidade em dark mode: variantes `dark:text-*-400` já cobertas para os 4 tones.
+
+## Fora de escopo
+- Investigar/rebalancear as 2 exceções detectadas no Atendimento (thread sem endpoint e thread do 7067).
+- Painel de configuração de cores por número (não é pedido).
