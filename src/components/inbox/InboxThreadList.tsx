@@ -2,6 +2,7 @@ import { useMemo, useState } from 'react';
 import { cn } from '@/lib/utils';
 import { InboxSlaChip } from './InboxSlaChip';
 import { SearchBar } from '@/components/common/SearchBar';
+import { EndpointBadge } from '@/components/messages/EndpointBadge';
 import type { InboxThreadRow } from '@/hooks/inbox/useInboxThreads';
 
 interface Props {
@@ -9,6 +10,7 @@ interface Props {
   loading: boolean;
   selectedId: string | null;
   onSelect: (id: string) => void;
+  officialNumbers?: Set<string>;
 }
 
 function relTime(iso: string | null): string {
