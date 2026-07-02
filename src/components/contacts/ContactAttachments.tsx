@@ -271,6 +271,7 @@ export function ContactAttachments({ contactId, entityId, entityType }: ContactA
   return (
     <>
       <Card
+        noAnimation
         onDragEnter={handleDragEnter}
         onDragLeave={handleDragLeave}
         onDragOver={handleDragOver}
