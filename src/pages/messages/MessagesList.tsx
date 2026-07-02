@@ -582,7 +582,7 @@ function DesktopMessagesList() {
     setComposerEndpointByThread((prev) => ({ ...prev, [selectedThreadId]: id }));
   };
   const selectedThreadEndpoint = selectedThreadPrimaryEndpointId
-    ? endpointById[selectedThreadPrimaryEndpointId]
+    ? endpointById[selectedThreadPrimaryEndpointId] ?? selectedEndpointDetails ?? undefined
     : selectedEndpointDetails ?? undefined;
   const selectedEndpointIdentity = formatEndpointIdentity(selectedThreadEndpoint);
 
