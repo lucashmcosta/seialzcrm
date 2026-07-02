@@ -310,7 +310,7 @@ function DesktopMessagesList() {
   const [showNewConversation, setShowNewConversation] = useState(false);
   const [endpointFilter, setEndpointFilter] = useState<string>('all');
   const [endpointFilterOpen, setEndpointFilterOpen] = useState(false);
-  const [selectedEndpointDetails, setSelectedEndpointDetails] = useState<any | null>(null);
+  const [selectedEndpointDetails, setSelectedEndpointDetails] = useState<{ threadId: string; endpoint: any | null } | null>(null);
 
   // Auth token for Twilio media proxy
   const [accessToken, setAccessToken] = useState<string | undefined>(undefined);
@@ -582,8 +582,8 @@ function DesktopMessagesList() {
     setComposerEndpointByThread((prev) => ({ ...prev, [selectedThreadId]: id }));
   };
   const selectedThreadEndpoint = selectedThreadPrimaryEndpointId
-    ? endpointById[selectedThreadPrimaryEndpointId] ?? selectedEndpointDetails ?? undefined
-    : selectedEndpointDetails ?? undefined;
+    ? endpointById[selectedThreadPrimaryEndpointId] ?? (selectedEndpointDetails?.threadId === selectedThreadId ? selectedEndpointDetails.endpoint : null) ?? undefined
+    : (selectedEndpointDetails?.threadId === selectedThreadId ? selectedEndpointDetails.endpoint : null) ?? undefined;
   const selectedEndpointIdentity = formatEndpointIdentity(selectedThreadEndpoint);
 
   useEffect(() => {
@@ -594,7 +594,7 @@ function DesktopMessagesList() {
 
     const knownEndpoint = selectedThreadPrimaryEndpointId ? endpointById[selectedThreadPrimaryEndpointId] : null;
     if (knownEndpoint) {
-      setSelectedEndpointDetails(knownEndpoint);
+      setSelectedEndpointDetails({ threadId: selectedThreadId, endpoint: knownEndpoint });
       return;
     }
 
@@ -609,10 +609,10 @@ function DesktopMessagesList() {
         if (cancelled) return;
         if (error) {
           console.warn('[messages] endpoint detail load failed', error.message);
-          setSelectedEndpointDetails(null);
+          setSelectedEndpointDetails({ threadId: selectedThreadId, endpoint: null });
           return;
         }
-        setSelectedEndpointDetails((data as any)?.primary_endpoint ?? null);
+        setSelectedEndpointDetails({ threadId: selectedThreadId, endpoint: (data as any)?.primary_endpoint ?? null });
       });
 
     return () => {
