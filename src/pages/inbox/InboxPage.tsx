@@ -13,6 +13,7 @@ import { useInboxQueueCounts } from '@/hooks/inbox/useInboxQueueCounts';
 import { useInboxThreads } from '@/hooks/inbox/useInboxThreads';
 import type { InboxTab } from '@/hooks/inbox/inboxScope';
 import { NewConversationDialog } from '@/components/messages/NewConversationDialog';
+import { useOrgWhatsAppEndpoints } from '@/hooks/useOrgWhatsAppEndpoints';
 
 export default function InboxPage() {
   const isMobile = useIsMobile();
@@ -44,6 +45,7 @@ export default function InboxPage() {
   const csIncludesServiceEndpoints = organization?.cs_inbox_includes_service_endpoints ?? false;
   const { counts, refreshDebounced: refreshCounts } = useInboxQueueCounts(internalUserId, onlyMine, orgTimezone, organizationId, csIncludesServiceEndpoints);
   const { threads, loading, refresh: refreshThreads } = useInboxThreads(tab, onlyMine, internalUserId, orgTimezone, organizationId, csIncludesServiceEndpoints);
+  const { officialNumbers } = useOrgWhatsAppEndpoints(organizationId ?? undefined);
 
   // Mobile uses dedicated MobileInbox (lista + chat fullscreen, padrão /messages)
   if (isMobile) {
@@ -67,6 +69,7 @@ export default function InboxPage() {
             loading={loading}
             selectedId={selectedId}
             onSelect={setSelectedId}
+            officialNumbers={officialNumbers}
           />
           <InboxThreadDetail
             threadId={selectedId}
