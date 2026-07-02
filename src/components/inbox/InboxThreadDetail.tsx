@@ -15,6 +15,7 @@ import { Check, ArrowCounterClockwise, SidebarSimple } from '@phosphor-icons/rea
 import { Link } from 'react-router-dom';
 import type { InboxMessageRow } from '@/hooks/inbox/useInboxThreadMessages';
 import { endpointPurposeLabel, formatEndpointIdentity } from '@/lib/whatsappEndpointDisplay';
+import { EndpointBadge } from '@/components/messages/EndpointBadge';
 
 interface Props {
   threadId: string | null;
