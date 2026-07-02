@@ -72,6 +72,7 @@ import { useThreadEndpointMap } from '@/hooks/useThreadEndpointMap';
 import { EndpointBadge } from '@/components/messages/EndpointBadge';
 import { EndpointFilterDialog } from '@/components/messages/EndpointFilterDialog';
 import { FunnelSimple } from '@phosphor-icons/react';
+import { formatEndpointIdentity, formatEndpointMigrationAuditLine } from '@/lib/whatsappEndpointDisplay';
 
 import { useHiddenThreads } from '@/hooks/useHiddenThreads';
 import { EyeSlash } from '@phosphor-icons/react';
@@ -309,6 +310,7 @@ function DesktopMessagesList() {
   const [showNewConversation, setShowNewConversation] = useState(false);
   const [endpointFilter, setEndpointFilter] = useState<string>('all');
   const [endpointFilterOpen, setEndpointFilterOpen] = useState(false);
+  const [selectedEndpointDetails, setSelectedEndpointDetails] = useState<any | null>(null);
 
   // Auth token for Twilio media proxy
   const [accessToken, setAccessToken] = useState<string | undefined>(undefined);
@@ -581,7 +583,42 @@ function DesktopMessagesList() {
   };
   const selectedThreadEndpoint = selectedThreadPrimaryEndpointId
     ? endpointById[selectedThreadPrimaryEndpointId]
-    : undefined;
+    : selectedEndpointDetails ?? undefined;
+  const selectedEndpointIdentity = formatEndpointIdentity(selectedThreadEndpoint);
+
+  useEffect(() => {
+    if (!selectedThreadId || !organization?.id) {
+      setSelectedEndpointDetails(null);
+      return;
+    }
+
+    const knownEndpoint = selectedThreadPrimaryEndpointId ? endpointById[selectedThreadPrimaryEndpointId] : null;
+    if (knownEndpoint) {
+      setSelectedEndpointDetails(knownEndpoint);
+      return;
+    }
+
+    let cancelled = false;
+    supabase
+      .from('message_threads')
+      .select('primary_endpoint:communication_endpoints ( id, external_address, display_name, provider, purpose, is_active, created_at )')
+      .eq('organization_id', organization.id)
+      .eq('id', selectedThreadId)
+      .maybeSingle()
+      .then(({ data, error }) => {
+        if (cancelled) return;
+        if (error) {
+          console.warn('[messages] endpoint detail load failed', error.message);
+          setSelectedEndpointDetails(null);
+          return;
+        }
+        setSelectedEndpointDetails((data as any)?.primary_endpoint ?? null);
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [selectedThreadId, organization?.id, selectedThreadPrimaryEndpointId, orgEndpoints]);
 
   // Set default filter based on assigned threads — only on first load
   // when there's no persisted choice yet. Once the user picks a filter,
@@ -1508,6 +1545,9 @@ function DesktopMessagesList() {
                         </div>
                         <p className="text-xs text-muted-foreground truncate">
                           {selectedThread.contact_phone}
+                          {selectedEndpointIdentity && (
+                            <span> · {selectedEndpointIdentity}</span>
+                          )}
                           {selectedThread.assigned_user_name && (
                             <span> · {locale === 'pt-BR' ? 'Atribuída a' : 'Assigned to'} {selectedThread.assigned_user_name}</span>
                           )}
@@ -1725,10 +1765,16 @@ function DesktopMessagesList() {
                                 _migMetaKind === 'endpoint_provider_migration';
 
                               if (isEndpointMigration) {
+                                const migrationAuditLine = formatEndpointMigrationAuditLine(message.metadata, selectedThreadEndpoint);
                                 return (
                                   <div key={`sys-${message.id}`} className="flex justify-center my-3">
-                                    <div className="max-w-[80%] px-3 py-1.5 rounded-full bg-muted/70 text-muted-foreground text-[11px] font-medium tracking-wide text-center shadow-sm">
-                                      {message.content}
+                                    <div className="max-w-[80%] px-3 py-1.5 rounded-full bg-muted/70 text-muted-foreground text-[11px] font-medium tracking-wide text-center shadow-sm space-y-0.5">
+                                      <div>{message.content}</div>
+                                      {migrationAuditLine && (
+                                        <div className="font-data text-[10px] normal-case tracking-normal">
+                                          {migrationAuditLine}
+                                        </div>
+                                      )}
                                     </div>
                                   </div>
                                 );
