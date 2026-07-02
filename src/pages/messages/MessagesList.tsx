@@ -581,9 +581,12 @@ function DesktopMessagesList() {
     if (!selectedThreadId) return;
     setComposerEndpointByThread((prev) => ({ ...prev, [selectedThreadId]: id }));
   };
+  const selectedEndpointFallback = selectedEndpointDetails?.threadId === selectedThreadId
+    ? selectedEndpointDetails.endpoint
+    : null;
   const selectedThreadEndpoint = selectedThreadPrimaryEndpointId
-    ? endpointById[selectedThreadPrimaryEndpointId] ?? (selectedEndpointDetails?.threadId === selectedThreadId ? selectedEndpointDetails.endpoint : null) ?? undefined
-    : (selectedEndpointDetails?.threadId === selectedThreadId ? selectedEndpointDetails.endpoint : null) ?? undefined;
+    ? endpointById[selectedThreadPrimaryEndpointId] ?? selectedEndpointFallback ?? undefined
+    : selectedEndpointFallback ?? undefined;
   const selectedEndpointIdentity = formatEndpointIdentity(selectedThreadEndpoint);
 
   useEffect(() => {
