@@ -17,6 +17,7 @@ export interface InboxMessageRow {
   sender_name: string | null;
   sender_agent_id: string | null;
   is_internal_note: boolean | null;
+  metadata: Record<string, unknown> | null;
   reply_to_message?: { content: string | null; direction: string | null } | null;
 }
 
@@ -25,7 +26,7 @@ const SELECT = `
   whatsapp_status, media_urls, media_type,
   error_code, error_message,
   reply_to_message_id, sender_type, sender_name, sender_agent_id,
-  is_internal_note,
+  is_internal_note, metadata,
   reply_to_message:reply_to_message_id ( content, direction )
 `;
 

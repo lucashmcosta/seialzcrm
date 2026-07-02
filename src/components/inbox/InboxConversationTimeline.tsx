@@ -9,11 +9,13 @@ import { MessageStatusIndicator, MessageFailureInline } from '@/components/whats
 import { getProxiedMediaUrl } from '@/lib/mediaProxy';
 import { DateSeparator } from '@/components/messages/DateSeparator';
 import { shouldShowDateSeparator } from '@/lib/dateSeparator';
+import { formatEndpointMigrationAuditLine, type EndpointDisplayInfo } from '@/lib/whatsappEndpointDisplay';
 
 interface Props {
   threadId: string;
   organizationId: string | undefined;
   contactName?: string;
+  currentEndpoint?: EndpointDisplayInfo | null;
   onReply?: (msg: InboxMessageRow) => void;
 }
 
@@ -77,7 +79,7 @@ function Media({ msg, orgId, accessToken }: { msg: InboxMessageRow; orgId: strin
   );
 }
 
-export function InboxConversationTimeline({ threadId, organizationId, contactName, onReply }: Props) {
+export function InboxConversationTimeline({ threadId, organizationId, contactName, currentEndpoint, onReply }: Props) {
   const { messages, loading, error } = useInboxThreadMessages(threadId);
   const [accessToken, setAccessToken] = useState<string | undefined>(undefined);
   const scrollRef = useRef<HTMLDivElement>(null);
@@ -148,6 +150,7 @@ export function InboxConversationTimeline({ threadId, organizationId, contactNam
             const dateSep = showDateSep ? <DateSeparator key={`sep-${m.id}`} date={new Date(m.sent_at)} /> : null;
 
             if (isInternal) {
+              const migrationAuditLine = formatEndpointMigrationAuditLine(m.metadata, currentEndpoint);
               return (
                 <div key={m.id}>
                   {dateSep}
@@ -160,6 +163,11 @@ export function InboxConversationTimeline({ threadId, organizationId, contactNam
                       {m.content && (
                         <div className="text-sm text-amber-900 dark:text-amber-100 leading-snug whitespace-pre-wrap break-words">
                           {m.content}
+                        </div>
+                      )}
+                      {migrationAuditLine && (
+                        <div className="mt-1 text-[10px] leading-snug text-muted-foreground">
+                          {migrationAuditLine}
                         </div>
                       )}
                     </div>

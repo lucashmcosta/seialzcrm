@@ -14,6 +14,7 @@ import { ConfirmDialog } from '@/components/ui/confirm-dialog';
 import { Check, ArrowCounterClockwise, SidebarSimple } from '@phosphor-icons/react';
 import { Link } from 'react-router-dom';
 import type { InboxMessageRow } from '@/hooks/inbox/useInboxThreadMessages';
+import { endpointPurposeLabel, formatEndpointIdentity } from '@/lib/whatsappEndpointDisplay';
 
 interface Props {
   threadId: string | null;
@@ -21,14 +22,7 @@ interface Props {
 }
 
 function purposeLabel(purpose: string | null | undefined): string | null {
-  if (!purpose || purpose === 'other') return null;
-  const map: Record<string, string> = {
-    commercial: 'Comercial',
-    vendor_personal: 'Vendedor pessoal',
-    customer_service: 'Atendimento',
-    support: 'Atendimento',
-  };
-  return map[purpose] ?? null;
+  return endpointPurposeLabel(purpose);
 }
 
 function channelLabel(channel: string | null | undefined): string {
@@ -153,6 +147,7 @@ export function InboxThreadDetail({ threadId, onThreadStatusChanged }: Props) {
   const name = thread.contact?.name || thread.contact?.phone || 'Sem contato';
   const lifecycle = thread.contact?.lifecycle_stage;
   const endpointPurpose = thread.primary_endpoint?.purpose;
+  const endpointIdentity = formatEndpointIdentity(thread.primary_endpoint);
 
   return (
     <div className="flex-1 flex bg-background min-w-0">
@@ -171,6 +166,11 @@ export function InboxThreadDetail({ threadId, onThreadStatusChanged }: Props) {
               <h2 className="text-[15px] font-semibold text-foreground truncate leading-tight" title={name}>{name}</h2>
             )}
             <div className="flex items-center gap-1.5 mt-1 min-w-0 overflow-hidden whitespace-nowrap">
+              {endpointIdentity && (
+                <span className="font-data text-[10px] text-muted-foreground truncate" title={endpointIdentity}>
+                  {endpointIdentity}
+                </span>
+              )}
               {lifecycle === 'customer' && (
                 <span className="inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-medium bg-sky-500/15 text-sky-700 dark:text-sky-300">
                   <span className="w-1.5 h-1.5 rounded-full bg-sky-500" />
@@ -239,6 +239,7 @@ export function InboxThreadDetail({ threadId, onThreadStatusChanged }: Props) {
           threadId={thread.id}
           organizationId={organization?.id}
           contactName={thread.contact?.name || undefined}
+          currentEndpoint={thread.primary_endpoint}
           onReply={(m) => setReplyTo(m)}
         />
 
@@ -295,6 +296,10 @@ export function InboxThreadDetail({ threadId, onThreadStatusChanged }: Props) {
               <div>
                 <dt className="text-muted-foreground">Canal</dt>
                 <dd className="text-foreground">{purposeLabel(endpointPurpose) ? `${channelLabel(thread.channel)} · ${purposeLabel(endpointPurpose)}` : channelLabel(thread.channel)}</dd>
+              </div>
+              <div className="col-span-2">
+                <dt className="text-muted-foreground">Nosso número</dt>
+                <dd className="text-foreground truncate" title={endpointIdentity || undefined}>{endpointIdentity || '—'}</dd>
               </div>
               <div>
                 <dt className="text-muted-foreground">Atribuída em</dt>
