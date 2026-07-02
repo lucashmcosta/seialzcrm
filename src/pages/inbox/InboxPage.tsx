@@ -69,7 +69,7 @@ export default function InboxPage() {
             loading={loading}
             selectedId={selectedId}
             onSelect={setSelectedId}
-            officialNumbers={officialNumbers}
+            /* Atendimento: badge amarelo sempre visível para reforçar o número. */
           />
           <InboxThreadDetail
             threadId={selectedId}
