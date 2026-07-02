@@ -167,7 +167,7 @@ export function InboxThreadDetail({ threadId, onThreadStatusChanged }: Props) {
             ) : (
               <div className="flex items-center gap-2 min-w-0">
                 <h2 className="text-[15px] font-semibold text-foreground truncate leading-tight" title={name}>{name}</h2>
-                <EndpointBadge externalAddress={thread.primary_endpoint?.external_address ?? null} tone="amber" size="lg" />
+                <EndpointBadge externalAddress={thread.primary_endpoint?.external_address ?? null} purpose={thread.primary_endpoint?.purpose ?? null} size="lg" />
               </div>
             )}
             <div className="flex items-center gap-1.5 mt-1 min-w-0 overflow-hidden whitespace-nowrap">
