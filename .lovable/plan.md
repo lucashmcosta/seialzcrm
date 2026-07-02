@@ -1,63 +1,62 @@
-## Análise objetiva
 
-A conversa do Rafael na screenshot é a thread `2055f781-3a03-4662-a5dd-8acdb3b2aaf6`.
+## Contexto
 
-No banco ela está assim:
+Duas coisas na mesma resposta:
 
-- Contato: `Rafael`
-- `contact_id`: `576295e9-aaa9-4b55-bab1-790d584828ad`
-- `lifecycle_stage`: `lead`
-- Thread: `awaiting_client`
-- `primary_endpoint_id`: `c09bd713-0225-4533-afe8-20ac07bd3a7c`
-- Nosso número na thread: `+55 11 5028-7027`
-- Provider: `meta_cloud_api`
-- Purpose do endpoint: `customer_service`
+1. **Resposta técnica à sua pergunta** ("100% de certeza que tudo em /inbox passa pelo 7027?").
+2. **Feature de UI**: badge amarelo `Novo · NNNN` na lista do Atendimento, análogo ao azul de /messages.
 
-Portanto: essa conversa aparece no Atendimento porque, para o banco, ela está vinculada ao endpoint `7027/customer_service`, não ao `7020/commercial`.
+---
 
-## Causa raiz
+## Parte 1 — Certeza sobre o 7027 (resposta objetiva)
 
-A regra atual da Inbox é:
+**Não. Hoje eu não posso te garantir 100%.** A regra atual do Atendimento (ver `src/hooks/inbox/inboxScope.ts`) inclui uma thread quando:
 
-```text
-Entra no Atendimento se:
-1. contato é customer e endpoint não é commercial/vendor_personal
-OU
-2. cs_inbox_includes_service_endpoints = true e endpoint.purpose = customer_service
-```
+- `contact.lifecycle_stage = 'customer'` **E** `endpoint.purpose NOT IN ('commercial','vendor_personal')` (endpoint NULL, `other` e `customer_service` passam), **OU**
+- (flag `cs_inbox_includes_service_endpoints` ligada) `endpoint.purpose = 'customer_service'`.
 
-A organização está com `cs_inbox_includes_service_endpoints = true`.
+Ou seja, uma thread pode entrar no Atendimento por dois caminhos:
 
-Como a thread do Rafael está com `primary_endpoint_id` apontando para o endpoint `7027/customer_service`, ela entra corretamente no Atendimento pela regra atual.
+- Endpoint 7027 (purpose `customer_service`) — captura tudo do 7027, cliente ou lead.
+- Contato marcado como `customer` cujo `primary_endpoint` seja qualquer outro que não seja `commercial`/`vendor_personal` (7020, endpoint NULL, endpoint `other`, etc.).
 
-## Observação importante
+Para transformar isso em certeza, o plano abaixo inclui uma **auditoria pontual** que roda no banco e classifica cada thread visível hoje por endpoint real. Sem alterar dado, só leitura.
 
-A minha resposta anterior dizendo que era `7020` estava errada. Eu consultei o contato atualmente aberto na URL (`fb85044c...`), que é outro contato/thread, e não a thread do Rafael da screenshot. A auditoria correta da thread do Rafael mostra `7027`, não `7020`.
+## Parte 2 — Badge amarelo na lista do Atendimento
 
-## O que precisa ser corrigido no produto
+Espelho visual do que já existe em `/messages` (`EndpointBadge`, azul, `Novo · <últimos 4 dígitos>`), mas amarelo, em `InboxThreadList`. Fica ao lado do nome do contato, mesmo tamanho `sm`, e obedece a mesma regra de esconder quando o endpoint bate com um dos "números oficiais" da org (para não poluir).
 
-O problema real não é a regra da Inbox para essa thread específica. O problema é que a UI não mostra de forma explícita qual número nosso está sendo usado na conversa, então é fácil confundir `7020`, `7027`, `7067`, etc.
+### Passos
 
-## Plano mínimo de correção
+1. **Auditoria (read-only, sem migration)**
+   - Rodar via `supabase--read_query` uma consulta que, para o `organization_id` atual, agrupa threads visíveis em cada aba do Atendimento (`active`, `waiting`, `resolved_today`) por:
+     - `primary_endpoint.external_address`
+     - `primary_endpoint.purpose`
+     - `contact.lifecycle_stage`
+   - Entrego a tabela com contagem por bucket. Aí você vê preto no branco quantas conversas do Atendimento hoje não são 7027 e por qual regra entraram.
 
-1. Exibir o número do endpoint ativo no header da conversa do Atendimento.
-   - Exemplo: `Atendimento · +55 11 5028-7027 · Meta Cloud API`
-   - Usar `thread.primary_endpoint.external_address`, `purpose` e `provider`, que já vêm da RPC.
+2. **`EndpointBadge` ganha variante `tone`** (`src/components/messages/EndpointBadge.tsx`)
+   - Prop nova: `tone?: 'blue' | 'amber'` (default `blue`, preserva o comportamento atual em `/messages`).
+   - `amber` usa `border-amber-500/30 bg-amber-500/10 text-amber-700 dark:text-amber-400`.
+   - Nada muda no callsite atual de `MessagesList`.
 
-2. Exibir o mesmo identificador na tela Mensagens.
-   - Isso evita confundir quando uma conversa está no Comercial vs Atendimento.
+3. **Renderizar o badge na lista do Atendimento** (`src/components/inbox/InboxThreadList.tsx`)
+   - A RPC `rpc_list_inbox_threads` já devolve `primary_endpoint.external_address` (confirmado na migration `20260701031205_...sql`), então não precisa tocar backend.
+   - Puxar `useOrgWhatsAppEndpoints(organization?.id)` no `InboxPage` (já usado em `/messages`) e passar `officialNumbers` para o `InboxThreadList`.
+   - No item da lista: `<EndpointBadge tone="amber" size="sm" externalAddress={t.primary_endpoint?.external_address ?? null} officialNumbers={officialNumbers} />`, posicionado ao lado do nome (mesma linha do horário), igual à /messages.
+   - Sem mudanças de roteamento, filtro ou fetch.
 
-3. Adicionar auditoria visual discreta na bolha/nota de migração.
-   - Quando houver mensagem interna de migração de provider, mostrar de qual endpoint veio e para qual foi, quando disponível nos metadados.
+## Fora de escopo
 
-4. Validar a regra de exclusividade atual.
-   - Threads com endpoint `customer_service` ficam no Atendimento.
-   - Threads com endpoint `commercial` ficam em Mensagens.
-   - Threads com `lead + customer_service` continuam no Atendimento enquanto `cs_inbox_includes_service_endpoints = true`.
+- Não vou mudar a regra de escopo do Atendimento nesta etapa. Só depois da auditoria a gente decide se aperta a regra (ex.: só 7027, ou só `customer` + 7027).
+- Sem alteração em RPC, RLS, hooks de fetch, tabela `communication_endpoints` ou header do chat (esse já mostra o endpoint desde a última mudança).
 
-## Fora do escopo deste patch
+## Riscos
 
-- Não alterar roteamento automático.
-- Não mover dados entre threads.
-- Não mudar lifecycle do contato.
-- Não alterar a regra `endpoint manda` sem uma decisão explícita posterior.
+- Baixíssimos. Mudança de UI aditiva; o badge só aparece quando há `external_address` e o número não é "oficial" da org (mesma regra que já usamos em /messages, então não vai poluir a lista de conversas do 7027 quando ele for oficial).
+
+## Detalhes técnicos
+
+- `EndpointBadge` hoje é hard-coded em azul; troco a classe base por um `switch(tone)` mantendo a paleta atual como default.
+- `InboxThreadList` hoje não recebe `officialNumbers`; adiciono a prop e faço `InboxPage` passar via `useOrgWhatsAppEndpoints`.
+- A consulta de auditoria não altera dado; retorna algo como `endpoint_address | purpose | lifecycle | tab | count`.
