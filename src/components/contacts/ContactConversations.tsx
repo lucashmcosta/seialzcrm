@@ -94,12 +94,30 @@ export function ContactConversations({ contactId }: Props) {
               thread={thread}
               dateLocale={dateLocale}
               isPtBr={isPtBr}
-              onOpen={() => thread && navigate(cfg.route(thread.id))}
+              onOpen={async () => {
+                if (!thread) return;
+                // A thread vencedora do card é a fonte da verdade. Se estiver
+                // resolved/closed, reabrimos ela mesma antes de navegar —
+                // nunca criamos/abrimos uma thread paralela.
+                if (thread.status && CLOSED_STATUSES.has(thread.status)) {
+                  const { error } = await supabase
+                    .from('message_threads')
+                    .update({ status: 'open', resolved_at: null } as any)
+                    .eq('id', thread.id);
+                  if (error) {
+                    console.error('[ContactConversations] reopen failed', error);
+                  } else {
+                    await refetch();
+                  }
+                }
+                navigate(cfg.route(thread.id));
+              }}
               onStart={() => setCreatingIntent(cfg.createIntent)}
             />
           );
         })}
       </div>
+
 
       {creatingIntent && (
         <NewConversationDialog
