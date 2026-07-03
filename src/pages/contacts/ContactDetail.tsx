@@ -91,7 +91,7 @@ export default function ContactDetail() {
     { id: "tasks", label: t('contacts.tasksTab') },
     { id: "notes", label: t('contacts.notesTab') },
     { id: "calls", label: t('contacts.callsTab') },
-    ...(!isMobile ? [{ id: "messages", label: t('contacts.messagesTab') }] : []),
+    ...(!isMobile ? [{ id: "messages", label: locale === 'pt-BR' ? 'Conversas' : 'Conversations' }] : []),
     { id: "attachments", label: t('contacts.attachmentsTab') },
     { id: "documents", label: "Documentos" },
   ];
