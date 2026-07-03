@@ -323,10 +323,17 @@ function DesktopMessagesList() {
   }, []);
 
   // Deep-link: ?thread=<id> abre uma thread específica (usado pela aba
-  // Conversas do contato). Se a thread não estiver na página atual da
-  // lista, hidratamos via loadThreadForSelection e injetamos como
-  // selectedThreadOverride (mesmo caminho do "Nova Conversa").
-  const [searchParams, setSearchParams] = useSearchParams();
+  // Conversas do contato). Fluxo:
+  //   1. Hidrata a thread via loadThreadForSelection e injeta como
+  //      selectedThreadOverride (mesmo caminho do "Nova Conversa"),
+  //      garantindo que apareça na lista mesmo fora da página atual.
+  //   2. Seta selectedThreadId — o useEffect abaixo dispara fetchMessages.
+  //   3. Dispara fetchMessages explicitamente também, para blindar contra
+  //      qualquer race em que o efeito com dep [selectedThreadId] não
+  //      re-fire (por já ter sido setado antes do handler concluir).
+  //   4. NÃO removemos o ?thread= da URL para evitar re-render/race que
+  //      antes causava painel vazio no primeiro carregamento.
+  const [searchParams] = useSearchParams();
   const deepLinkThreadId = searchParams.get('thread');
   const deepLinkHandledRef = useRef<string | null>(null);
   useEffect(() => {
@@ -337,13 +344,15 @@ function DesktopMessagesList() {
       const loaded = await loadThreadForSelection(deepLinkThreadId, null);
       if (loaded) setSelectedThreadOverride(loaded);
       setSelectedThreadId(deepLinkThreadId);
-      // Limpa o param para permitir re-navegação futura ao mesmo link.
-      const next = new URLSearchParams(searchParams);
-      next.delete('thread');
-      setSearchParams(next, { replace: true });
+      // Explicit fetch — se o useEffect [selectedThreadId] já rodou com
+      // o mesmo id (ex.: usuário navega para o mesmo link duas vezes),
+      // ele não re-fire; garantimos aqui.
+      fetchMessages(deepLinkThreadId);
     })();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [deepLinkThreadId, organization?.id]);
+
+
 
   
   // Note mode state
