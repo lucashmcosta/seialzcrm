@@ -143,6 +143,7 @@ export function MobileMessagesList() {
   // View state
   const [selectedThreadId, setSelectedThreadId] = useState<string | null>(null);
   const selectedThreadWaProvider = useWhatsAppProvider({ threadId: selectedThreadId });
+  const selectedThreadBusinessContext = useThreadBusinessContext(selectedThreadId);
   const [searchQuery, setSearchQuery] = useState('');
   const [filter, setFilter] = useState<ThreadFilter>('all_open');
 
