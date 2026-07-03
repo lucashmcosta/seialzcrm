@@ -145,7 +145,7 @@ export function NewConversationDialog({
   }, [open, preferredEndpointId]);
 
   const { data: contacts, isLoading } = useQuery({
-    queryKey: ['contacts-with-phone', organization?.id, search],
+    queryKey: ['contacts-with-phone', organization?.id, search, initialContactId ?? null],
     queryFn: async () => {
       if (!organization?.id) return [];
 
@@ -158,7 +158,9 @@ export function NewConversationDialog({
         .order('full_name')
         .limit(50);
 
-      if (search.trim()) {
+      if (initialContactId) {
+        query = query.eq('id', initialContactId);
+      } else if (search.trim()) {
         query = query.or(`full_name.ilike.%${search}%,phone.ilike.%${search}%`);
       }
 
