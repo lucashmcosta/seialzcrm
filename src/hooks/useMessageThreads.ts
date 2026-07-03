@@ -10,6 +10,8 @@ export interface ChatThread {
   last_message: string | null;
   last_message_direction: string | null;
   updated_at: string;
+  last_message_at: string | null;
+  created_at: string;
   whatsapp_last_inbound_at: string | null;
   last_inbound_at: string | null;
   unread: boolean;
@@ -52,6 +54,8 @@ function mapRpcToChatThread(row: RpcThreadRow): ChatThread {
     last_message: row.last_message_content || '...',
     last_message_direction: row.last_message_direction,
     updated_at: row.updated_at,
+    last_message_at: row.last_message_at,
+    created_at: row.created_at,
     whatsapp_last_inbound_at: row.whatsapp_last_inbound_at,
     last_inbound_at: row.last_inbound_at,
     unread: row.is_unread,
@@ -137,7 +141,7 @@ export function useMessageThreads(options: UseMessageThreadsOptions = {}) {
         p_organization_id: orgId,
         p_channels: channels,
         p_limit: limit,
-        p_cursor_updated_at: lastThread.updated_at,
+        p_cursor_updated_at: lastThread.last_message_at ?? lastThread.created_at,
         p_cursor_id: lastThread.id,
         p_search: searchTerm,
       });
@@ -184,8 +188,9 @@ export function useMessageThreads(options: UseMessageThreadsOptions = {}) {
       if (rows.length === 0) return;
 
       const enriched = rows.map(mapRpcToChatThread);
-      // Ordena os enriquecidos por updated_at desc antes de prepend.
-      enriched.sort((a, b) => (b.updated_at || '').localeCompare(a.updated_at || ''));
+      // Ordena os enriquecidos por last_message_at desc (fallback: created_at) antes de prepend.
+      const rankKey = (t: ChatThread) => t.last_message_at || t.created_at || '';
+      enriched.sort((a, b) => rankKey(b).localeCompare(rankKey(a)));
 
       setThreads((prev) => {
         const enrichedIds = new Set(enriched.map((t) => t.id));
