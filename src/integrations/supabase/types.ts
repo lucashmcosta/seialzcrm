@@ -1488,6 +1488,39 @@ export type Database = {
           },
         ]
       }
+      communication_endpoints_purpose_audit: {
+        Row: {
+          changed_at: string
+          endpoint_id: string
+          id: string
+          migration_version: string
+          new_purpose: string
+          old_purpose: string | null
+          organization_id: string
+          reason: string
+        }
+        Insert: {
+          changed_at?: string
+          endpoint_id: string
+          id?: string
+          migration_version: string
+          new_purpose: string
+          old_purpose?: string | null
+          organization_id: string
+          reason: string
+        }
+        Update: {
+          changed_at?: string
+          endpoint_id?: string
+          id?: string
+          migration_version?: string
+          new_purpose?: string
+          old_purpose?: string | null
+          organization_id?: string
+          reason?: string
+        }
+        Relationships: []
+      }
       companies: {
         Row: {
           address: string | null
