@@ -31,20 +31,36 @@ export interface ContactConversationsResult {
 }
 
 /**
- * Escolhe o thread representante para um dado contexto:
- * 1. Prefere threads com mensagens reais no banco.
- * 2. Entre elas, maior last_message_at real/denormalizado.
- * 3. Empate: maior created_at.
- * 4. Se nenhuma com mensagem, retorna a mais recente por created_at.
+ * Regra determinística do card Conversas:
+ *   1. Maior real_message_count.
+ *   2. Empate: maior last_real_message_at (fallback last_message_at).
+ *   3. Empate final: menor created_at (thread mais antiga vence — é a
+ *      "principal", duplicatas costumam ser posteriores).
+ *
+ * Threads vazias (real_message_count = 0) NUNCA vencem threads com
+ * mensagens reais, mesmo que estejam open/mais recentes.
  */
 function pickRepresentative(rows: ContextThreadRow[]): ContextThreadRow | null {
   if (rows.length === 0) return null;
-  const withMsgs = rows.filter((r) => (r.real_message_count ?? 0) > 0);
-  const pool = withMsgs.length > 0 ? withMsgs : rows;
-  return [...pool].sort((a, b) => {
-    const aKey = a.last_real_message_at ?? (withMsgs.length > 0 ? a.last_message_at : null) ?? a.created_at;
-    const bKey = b.last_real_message_at ?? (withMsgs.length > 0 ? b.last_message_at : null) ?? b.created_at;
-    return bKey.localeCompare(aKey);
+
+  const cmpDesc = (a: string | null, b: string | null) => {
+    if (a === b) return 0;
+    if (!a) return 1;
+    if (!b) return -1;
+    return b.localeCompare(a);
+  };
+
+  return [...rows].sort((a, b) => {
+    const ac = a.real_message_count ?? 0;
+    const bc = b.real_message_count ?? 0;
+    if (ac !== bc) return bc - ac;
+
+    const aLast = a.last_real_message_at ?? a.last_message_at ?? null;
+    const bLast = b.last_real_message_at ?? b.last_message_at ?? null;
+    const byLast = cmpDesc(aLast, bLast);
+    if (byLast !== 0) return byLast;
+
+    return a.created_at.localeCompare(b.created_at);
   })[0] ?? null;
 }
 
