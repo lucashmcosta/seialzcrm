@@ -4926,6 +4926,42 @@ export type Database = {
         }
         Relationships: []
       }
+      message_threads_primary_endpoint_backfill: {
+        Row: {
+          confidence_score: number
+          created_at: string
+          id: string
+          method: string
+          migration_version: string
+          new_primary_endpoint_id: string
+          old_primary_endpoint_id: string | null
+          organization_id: string
+          thread_id: string
+        }
+        Insert: {
+          confidence_score: number
+          created_at?: string
+          id?: string
+          method: string
+          migration_version: string
+          new_primary_endpoint_id: string
+          old_primary_endpoint_id?: string | null
+          organization_id: string
+          thread_id: string
+        }
+        Update: {
+          confidence_score?: number
+          created_at?: string
+          id?: string
+          method?: string
+          migration_version?: string
+          new_primary_endpoint_id?: string
+          old_primary_endpoint_id?: string | null
+          organization_id?: string
+          thread_id?: string
+        }
+        Relationships: []
+      }
       messages: {
         Row: {
           ai_analysis_version: string | null
