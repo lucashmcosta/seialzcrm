@@ -188,8 +188,9 @@ export function useMessageThreads(options: UseMessageThreadsOptions = {}) {
       if (rows.length === 0) return;
 
       const enriched = rows.map(mapRpcToChatThread);
-      // Ordena os enriquecidos por updated_at desc antes de prepend.
-      enriched.sort((a, b) => (b.updated_at || '').localeCompare(a.updated_at || ''));
+      // Ordena os enriquecidos por last_message_at desc (fallback: created_at) antes de prepend.
+      const rankKey = (t: ChatThread) => t.last_message_at || t.created_at || '';
+      enriched.sort((a, b) => rankKey(b).localeCompare(rankKey(a)));
 
       setThreads((prev) => {
         const enrichedIds = new Set(enriched.map((t) => t.id));
