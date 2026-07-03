@@ -833,19 +833,125 @@ async function handleInbound(
   return { messageId: insertedMessageId, threadId, error: null };
 }
 
-async function handleStatus(supabase: any, endpoint: any, st: any): Promise<void> {
+async function handleStatus(
+  supabase: any, endpoint: any, st: any,
+): Promise<{ messageId: string | null; error: string | null }> {
   const wamid = st.id;
   const status = st.status;
-  if (!wamid || !status) return;
+  if (!wamid || !status) return { messageId: null, error: "missing_wamid_or_status" };
 
   const update: Record<string, any> = { whatsapp_status: status };
   if (status === "failed" && st.errors?.length) {
     update.error_code = String(st.errors[0]?.code ?? "");
     update.error_message = st.errors[0]?.message ?? "Meta delivery failed";
   }
-  await supabase
+  const { data: updated, error } = await supabase
     .from("messages")
     .update(update)
     .eq("whatsapp_message_sid", wamid)
-    .eq("organization_id", endpoint.organization_id);
+    .eq("organization_id", endpoint.organization_id)
+    .select("id");
+  if (error) return { messageId: null, error: error.message ?? "status_update_error" };
+  return { messageId: updated?.[0]?.id ?? null, error: null };
+}
+
+// ============================================================
+// PR-B: Observabilidade — persistência raw em integration_inbound_events
+// ============================================================
+async function recordInboundEvent(
+  supabase: any,
+  params: {
+    organizationId: string | null;
+    endpointId: string | null;
+    phoneNumberId: string | null;
+    wabaId: string | null;
+    fromE164: string | null;
+    messageType: string | null;
+    wamid: string | null;
+    contextId: string | null;
+    threadId?: string | null;
+    signatureValid: boolean;
+    rawPayload: any;
+    rawHeaders: Record<string, string>;
+    kind: "message" | "status" | "unknown";
+  },
+): Promise<string | null> {
+  try {
+    const idemKey = params.kind === "status"
+      ? `meta:${params.wamid ?? "no-wamid"}:status`
+      : `meta:${params.wamid ?? crypto.randomUUID()}`;
+
+    const { data, error } = await supabase
+      .from("integration_inbound_events")
+      .insert({
+        organization_id: params.organizationId,
+        integration_slug: "meta-whatsapp-cloud",
+        source_event: `${params.kind}:${params.messageType ?? "unknown"}`,
+        external_id: params.wamid,
+        idempotency_key: idemKey,
+        raw_payload: params.rawPayload,
+        raw_headers: {
+          phone_number_id: params.phoneNumberId,
+          waba_id: params.wabaId,
+          from: params.fromE164,
+          endpoint_id: params.endpointId,
+          thread_id: params.threadId ?? null,
+          ...params.rawHeaders,
+        },
+        http_method: "POST",
+        request_path: "/meta-whatsapp-webhook",
+        received_at: new Date().toISOString(),
+        process_status: "pending",
+        signature_valid: params.signatureValid,
+        signature_algo: "sha256",
+        aggregate_type: params.kind === "status" ? "message_status" : "whatsapp_message",
+        aggregate_id: params.threadId ?? null,
+        correlation_id: params.contextId ?? null,
+        handler_key: "meta-whatsapp-webhook",
+        parser_function: "meta-whatsapp-webhook",
+        parser_version: "v1",
+      })
+      .select("id")
+      .single();
+
+    if (error) {
+      console.error("[meta-wa-webhook] audit_insert_error", { error, wamid: params.wamid });
+      return null;
+    }
+    return data?.id ?? null;
+  } catch (e) {
+    // Auditoria nunca deve bloquear o webhook
+    console.error("[meta-wa-webhook] audit_insert_exception", e);
+    return null;
+  }
+}
+
+async function updateInboundEventStatus(
+  supabase: any,
+  auditId: string | null,
+  fields: {
+    processStatus: "processed" | "error" | "skipped";
+    processError?: string | null;
+    resultingMessageId?: string | null;
+    resultingThreadId?: string | null;
+  },
+): Promise<void> {
+  if (!auditId) return;
+  try {
+    const patch: Record<string, any> = {
+      process_status: fields.processStatus,
+      processed_at: new Date().toISOString(),
+    };
+    if (fields.processError) patch.process_error = fields.processError;
+    if (fields.resultingMessageId) patch.resulting_message_id = fields.resultingMessageId;
+    if (fields.resultingThreadId) patch.aggregate_id = fields.resultingThreadId;
+
+    const { error } = await supabase
+      .from("integration_inbound_events")
+      .update(patch)
+      .eq("id", auditId);
+    if (error) console.error("[meta-wa-webhook] audit_update_error", { error, auditId });
+  } catch (e) {
+    console.error("[meta-wa-webhook] audit_update_exception", e);
+  }
 }
