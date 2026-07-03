@@ -21,6 +21,8 @@ export interface ContextThreadRow {
   } | null;
   assigned_user_name?: string | null;
   message_count?: number;
+  real_message_count?: number;
+  last_real_message_at?: string | null;
 }
 
 export interface ContactConversationsResult {
@@ -37,11 +39,11 @@ export interface ContactConversationsResult {
  */
 function pickRepresentative(rows: ContextThreadRow[]): ContextThreadRow | null {
   if (rows.length === 0) return null;
-  const withMsgs = rows.filter((r) => (r.message_count ?? 0) > 0 || !!r.last_message_at);
+  const withMsgs = rows.filter((r) => (r.real_message_count ?? 0) > 0);
   const pool = withMsgs.length > 0 ? withMsgs : rows;
   return [...pool].sort((a, b) => {
-    const aKey = a.last_message_at ?? a.created_at;
-    const bKey = b.last_message_at ?? b.created_at;
+    const aKey = a.last_real_message_at ?? (withMsgs.length > 0 ? a.last_message_at : null) ?? a.created_at;
+    const bKey = b.last_real_message_at ?? (withMsgs.length > 0 ? b.last_message_at : null) ?? b.created_at;
     return bKey.localeCompare(aKey);
   })[0] ?? null;
 }
@@ -76,9 +78,11 @@ export function useContactConversationsByContext(contactId: string | null | unde
       if (threadIds.length > 0) {
         const { data: messageRows, error: msgError } = await supabase
           .from('messages')
-          .select('thread_id, content, direction, sent_at, created_at')
+          .select('thread_id, content, direction, sent_at, created_at, is_internal_note')
           .in('thread_id', threadIds)
           .is('deleted_at', null)
+          .in('direction', ['inbound', 'outbound'])
+          .or('is_internal_note.is.false,is_internal_note.is.null')
           .order('sent_at', { ascending: false });
 
         if (!msgError) {
@@ -109,6 +113,8 @@ export function useContactConversationsByContext(contactId: string | null | unde
           for (const row of rows) {
             const stats = messageStats.get(row.id);
             row.message_count = stats?.count ?? 0;
+            row.real_message_count = stats?.count ?? 0;
+            row.last_real_message_at = stats?.last_at ?? null;
             if (stats?.last_at) {
               row.last_message_at = stats.last_at;
               row.last_message_content = stats.last_content;
