@@ -1,4 +1,5 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import { Layout } from '@/components/Layout';
 import { useIsMobile } from '@/hooks/use-mobile';
 import { useAuth } from '@/hooks/useAuth';
@@ -45,6 +46,24 @@ export default function InboxPage() {
   const csIncludesServiceEndpoints = organization?.cs_inbox_includes_service_endpoints ?? false;
   const { counts, refreshDebounced: refreshCounts } = useInboxQueueCounts(internalUserId, onlyMine, orgTimezone, organizationId, csIncludesServiceEndpoints);
   const { threads, loading, refresh: refreshThreads } = useInboxThreads(tab, onlyMine, internalUserId, orgTimezone, organizationId, csIncludesServiceEndpoints);
+
+  // Deep-link: ?thread=<id> abre uma thread específica (usado pela aba
+  // Conversas do contato). InboxThreadDetail carrega os detalhes por id
+  // independentemente da lista, então basta setar selectedId.
+  const [searchParams, setSearchParams] = useSearchParams();
+  const deepLinkThreadId = searchParams.get('thread');
+  const deepLinkHandledRef = useRef<string | null>(null);
+  useEffect(() => {
+    if (!deepLinkThreadId) return;
+    if (deepLinkHandledRef.current === deepLinkThreadId) return;
+    deepLinkHandledRef.current = deepLinkThreadId;
+    setSelectedId(deepLinkThreadId);
+    const next = new URLSearchParams(searchParams);
+    next.delete('thread');
+    setSearchParams(next, { replace: true });
+  }, [deepLinkThreadId, searchParams, setSearchParams]);
+
+
   
 
   // Mobile uses dedicated MobileInbox (lista + chat fullscreen, padrão /messages)

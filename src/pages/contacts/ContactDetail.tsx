@@ -52,6 +52,7 @@ import { ActivityTimeline } from '@/components/contacts/ActivityTimeline';
 import { ContactTasks } from '@/components/contacts/ContactTasks';
 import { ContactCalls } from '@/components/contacts/ContactCalls';
 import { ContactMessages } from '@/components/contacts/ContactMessages';
+import { ContactConversations } from '@/components/contacts/ContactConversations';
 import { ContactAttachments } from '@/components/contacts/ContactAttachments';
 import { ContactOpportunities } from '@/components/contacts/ContactOpportunities';
 import { ContactNotes } from '@/components/contacts/ContactNotes';
@@ -91,7 +92,7 @@ export default function ContactDetail() {
     { id: "tasks", label: t('contacts.tasksTab') },
     { id: "notes", label: t('contacts.notesTab') },
     { id: "calls", label: t('contacts.callsTab') },
-    ...(!isMobile ? [{ id: "messages", label: t('contacts.messagesTab') }] : []),
+    ...(!isMobile ? [{ id: "messages", label: locale === 'pt-BR' ? 'Conversas' : 'Conversations' }] : []),
     { id: "attachments", label: t('contacts.attachmentsTab') },
     { id: "documents", label: "Documentos" },
   ];
@@ -273,7 +274,7 @@ export default function ContactDetail() {
       case 'tasks': return <ContactTasks contactId={contact!.id} />;
       case 'notes': return <ContactNotes contactId={contact!.id} />;
       case 'calls': return <ContactCalls contactId={contact!.id} contactPhone={contact?.phone} contactName={contact?.full_name} />;
-      case 'messages': return <ContactMessages contactId={contact!.id} />;
+      case 'messages': return <ContactConversations contactId={contact!.id} />;
       case 'attachments': return <ContactAttachments contactId={contact!.id} />;
       default: return null;
     }
@@ -888,8 +889,8 @@ export default function ContactDetail() {
               />
             </Tabs.Panel>
 
-            <Tabs.Panel id="messages" className="flex-1 min-h-0 mt-4 flex flex-col overflow-hidden">
-              <ContactMessages contactId={contact.id} />
+            <Tabs.Panel id="messages" className="mt-4">
+              <ContactConversations contactId={contact.id} />
             </Tabs.Panel>
 
             <Tabs.Panel id="attachments">

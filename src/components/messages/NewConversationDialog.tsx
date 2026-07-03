@@ -49,6 +49,9 @@ interface NewConversationDialogProps {
   /** Marcador jsonb gravado em message_threads.last_routing_decision quando
    *  uma thread NOVA é criada. Não é aplicado em thread já existente. */
   routingDecision?: Record<string, unknown>;
+  /** Pré-seleciona um contato e restringe a lista a ele (usado quando
+   *  o dialog é aberto a partir da tela do contato). */
+  initialContactId?: string | null;
 }
 
 export function NewConversationDialog({
@@ -58,6 +61,7 @@ export function NewConversationDialog({
   intent,
   title,
   routingDecision,
+  initialContactId,
 }: NewConversationDialogProps) {
   const { organization, locale } = useOrganization();
   const { t } = useTranslation(locale as 'pt-BR' | 'en-US');
@@ -141,7 +145,7 @@ export function NewConversationDialog({
   }, [open, preferredEndpointId]);
 
   const { data: contacts, isLoading } = useQuery({
-    queryKey: ['contacts-with-phone', organization?.id, search],
+    queryKey: ['contacts-with-phone', organization?.id, search, initialContactId ?? null],
     queryFn: async () => {
       if (!organization?.id) return [];
 
@@ -154,7 +158,9 @@ export function NewConversationDialog({
         .order('full_name')
         .limit(50);
 
-      if (search.trim()) {
+      if (initialContactId) {
+        query = query.eq('id', initialContactId);
+      } else if (search.trim()) {
         query = query.or(`full_name.ilike.%${search}%,phone.ilike.%${search}%`);
       }
 
@@ -252,17 +258,19 @@ export function NewConversationDialog({
         </DialogHeader>
 
         <div className="space-y-4">
-          {/* Search input */}
-          <div className="relative">
-            <MagnifyingGlass className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
-            <Input
-              placeholder={locale === 'pt-BR' ? 'Buscar contato...' : 'Search contact...'}
-              value={search}
-              onChange={(e) => setSearch(e.target.value)}
-              className="pl-9"
-              autoFocus
-            />
-          </div>
+          {/* Search input — escondido quando o contato já vem pré-selecionado */}
+          {!initialContactId && (
+            <div className="relative">
+              <MagnifyingGlass className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+              <Input
+                placeholder={locale === 'pt-BR' ? 'Buscar contato...' : 'Search contact...'}
+                value={search}
+                onChange={(e) => setSearch(e.target.value)}
+                className="pl-9"
+                autoFocus
+              />
+            </div>
+          )}
 
           {/* Endpoint selector — escondido quando purposes estão restritos */}
           {!effectivePurposes && (
