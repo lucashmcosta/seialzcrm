@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef, Fragment } from 'react';
+import { useState, useEffect, useMemo, useRef, Fragment } from 'react';
 import { dispatchWhatsAppSend } from "@/lib/dispatchWhatsAppSend";
 import { usePersistedFilters } from '@/hooks/usePersistedFilters';
 import { Link } from 'react-router-dom';
