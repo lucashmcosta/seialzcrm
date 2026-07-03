@@ -61,8 +61,7 @@ export function useContactConversationsByContext(contactId: string | null | unde
         )
         .eq('contact_id', contactId)
         .eq('channel', 'whatsapp')
-        .in('business_context', ['sales', 'customer_service'])
-        .is('deleted_at', null);
+        .in('business_context', ['sales', 'customer_service']);
 
       if (error) {
         console.error('[useContactConversationsByContext]', error);
