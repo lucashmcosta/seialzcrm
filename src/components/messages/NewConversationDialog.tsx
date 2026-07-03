@@ -61,6 +61,7 @@ export function NewConversationDialog({
   intent,
   title,
   routingDecision,
+  initialContactId,
 }: NewConversationDialogProps) {
   const { organization, locale } = useOrganization();
   const { t } = useTranslation(locale as 'pt-BR' | 'en-US');
