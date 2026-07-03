@@ -185,7 +185,7 @@ export function MobileInbox() {
       <NewConversationDialog
         open={newConvOpen}
         onOpenChange={setNewConvOpen}
-        forcePurposes={['customer_service', 'other']}
+        intent="customer_service"
         title="Nova Conversa de Atendimento"
         routingDecision={{
           action: 'inbox_manual_start',

@@ -22,6 +22,7 @@ import { supabase } from '@/integrations/supabase/client';
 import { useQuery } from '@tanstack/react-query';
 import { useToast } from '@/hooks/use-toast';
 import { useWhatsAppProvider } from '@/hooks/useWhatsAppProvider';
+import { useThreadBusinessContext } from '@/hooks/useThreadBusinessContext';
 import { resolveComposerProvider } from '@/lib/resolveComposerProvider';
 import {
   SpinnerGap, Check, Checks, Clock, WarningCircle,
@@ -142,6 +143,7 @@ export function MobileMessagesList() {
   // View state
   const [selectedThreadId, setSelectedThreadId] = useState<string | null>(null);
   const selectedThreadWaProvider = useWhatsAppProvider({ threadId: selectedThreadId });
+  const selectedThreadBusinessContext = useThreadBusinessContext(selectedThreadId);
   const [searchQuery, setSearchQuery] = useState('');
   const [filter, setFilter] = useState<ThreadFilter>('all_open');
 
@@ -482,6 +484,7 @@ export function MobileMessagesList() {
           threadId: selectedThreadId, message: savedText,
           userId: userProfile?.id, replyToMessageId: savedReplyTo?.id || null,
           senderContext: 'messages',
+          ...(selectedThreadBusinessContext ? { businessContext: selectedThreadBusinessContext } : {}),
         });
       if (error) throw error;
       if (data.error) {
@@ -522,6 +525,7 @@ export function MobileMessagesList() {
           threadId: selectedThreadId, templateId, templateVariables: variables,
           userId: userProfile?.id,
           senderContext: 'messages',
+          ...(selectedThreadBusinessContext ? { businessContext: selectedThreadBusinessContext } : {}),
         });
       if (error) throw error;
       if (data.error) throw new Error(data.error);
@@ -580,6 +584,7 @@ export function MobileMessagesList() {
           threadId: selectedThreadId, message: caption, mediaUrl: publicUrl, mediaType,
           userId: userProfile?.id, replyToMessageId: savedReplyTo?.id || null,
           senderContext: 'messages',
+          ...(selectedThreadBusinessContext ? { businessContext: selectedThreadBusinessContext } : {}),
         });
       if (error) throw error;
       refetchThreads();
@@ -860,6 +865,7 @@ export function MobileMessagesList() {
                 provider={resolveComposerProvider({
                   organizationId: organization?.id,
                   senderContext: 'messages',
+                  ...(selectedThreadBusinessContext ? { businessContext: selectedThreadBusinessContext } : {}),
                   resolvedProvider: selectedThreadWaProvider,
                 }) === 'meta_cloud_api' ? 'meta_cloud_api' : undefined}
               />

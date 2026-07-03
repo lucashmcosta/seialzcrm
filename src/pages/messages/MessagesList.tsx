@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef, Fragment } from 'react';
+import { useState, useEffect, useMemo, useRef, Fragment } from 'react';
 import { dispatchWhatsAppSend } from "@/lib/dispatchWhatsAppSend";
 import { usePersistedFilters } from '@/hooks/usePersistedFilters';
 import { Link } from 'react-router-dom';
@@ -46,7 +46,10 @@ import { formatDistanceToNow } from 'date-fns';
 import { ptBR, enUS } from 'date-fns/locale';
 import { useToast } from '@/hooks/use-toast';
 import { useWhatsAppProvider } from '@/hooks/useWhatsAppProvider';
+import { useThreadBusinessContext } from '@/hooks/useThreadBusinessContext';
 import { resolveComposerProvider } from '@/lib/resolveComposerProvider';
+import { pickPreferredEndpoint, filterEndpointsByIntent } from '@/lib/composerEndpoint';
+import { isSalesPurpose } from '@/lib/endpointPurpose';
 import { SpinnerGap, Check, Checks, Clock, WarningCircle, Sparkle, Briefcase, Smiley, Robot, ChatCircleDots, FileText, Target, UserCheck, CheckCircle, ArrowCounterClockwise, ArrowsLeftRight, Note, DownloadSimple, NotePencil, TextAa, TrendUp, TrendDown } from '@phosphor-icons/react';
 import { MessageStatusIndicator, MessageFailureInline } from '@/components/whatsapp/MessageStatusIndicator';
 import { ConfirmDialog } from '@/components/ui/confirm-dialog';
@@ -566,15 +569,40 @@ function DesktopMessagesList() {
   const threadEndpointMap = useThreadEndpointMap(threadIdsForEndpointMap, hasMultipleEndpoints);
   const endpointById: Record<string, typeof orgEndpoints[number]> = Object.fromEntries(orgEndpoints.map((e) => [e.id, e]));
 
-  // Per-thread composer endpoint choice. Defaults to the thread's
-  // primary_endpoint_id; falls back to the first active endpoint.
+  // PR4: business_context da thread selecionada. Quando 'sales', o composer
+  // deve preferir endpoint com purpose ∈ SALES_PURPOSES (comercial). Ex.:
+  // thread histórica do 7027 pré-16/06 aparece como sales em /messages e
+  // enviaremos pelo 7020 (comercial), não pelo 7027 (customer_service).
+  const selectedThreadBusinessContext = useThreadBusinessContext(selectedThreadId);
+  const salesEndpoints = useMemo(
+    () => filterEndpointsByIntent(orgEndpoints, 'sales'),
+    [orgEndpoints],
+  );
+
+  // Per-thread composer endpoint choice. Defaults respeitam business_context.
   // Does NOT persist back to the thread — purely a per-send choice.
   const [composerEndpointByThread, setComposerEndpointByThread] = useState<Record<string, string>>({});
   const selectedThreadPrimaryEndpointId = selectedThreadId
     ? threadEndpointMap[selectedThreadId]
       ?? (selectedThreadOverride?.id === selectedThreadId ? selectedThreadOverride.primary_endpoint_id ?? null : null)
     : null;
-  const defaultComposerEndpointId = selectedThreadPrimaryEndpointId ?? orgEndpoints[0]?.id ?? null;
+  const primaryEndpointPurpose = selectedThreadPrimaryEndpointId
+    ? endpointById[selectedThreadPrimaryEndpointId]?.purpose ?? null
+    : null;
+
+  const defaultComposerEndpointId = (() => {
+    // /messages + business_context='sales': se o primary_endpoint atual não
+    // for comercial, escolher o comercial preferido; senão, manter o primary.
+    if (selectedThreadBusinessContext === 'sales' && salesEndpoints.length > 0) {
+      if (selectedThreadPrimaryEndpointId && isSalesPurpose(primaryEndpointPurpose)) {
+        return selectedThreadPrimaryEndpointId;
+      }
+      return pickPreferredEndpoint(salesEndpoints, 'sales')?.id ?? null;
+    }
+    // Demais casos: comportamento legado (primary da thread → primeiro ativo).
+    return selectedThreadPrimaryEndpointId ?? orgEndpoints[0]?.id ?? null;
+  })();
+
   const composerEndpointId = selectedThreadId
     ? composerEndpointByThread[selectedThreadId] ?? defaultComposerEndpointId
     : null;
@@ -1021,7 +1049,8 @@ function DesktopMessagesList() {
           userId: userProfile?.id,
           replyToMessageId: savedReplyTo?.id || null,
           senderContext: 'messages',
-          ...(hasMultipleEndpoints && composerEndpointId ? { endpointId: composerEndpointId } : {}),
+          ...(composerEndpointId ? { endpointId: composerEndpointId } : {}),
+          ...(selectedThreadBusinessContext ? { businessContext: selectedThreadBusinessContext } : {}),
         });
 
       if (error) throw error;
@@ -1091,7 +1120,8 @@ function DesktopMessagesList() {
           templateVariables: variables,
           userId: userProfile?.id,
           senderContext: 'messages',
-          ...(hasMultipleEndpoints && composerEndpointId ? { endpointId: composerEndpointId } : {}),
+          ...(composerEndpointId ? { endpointId: composerEndpointId } : {}),
+          ...(selectedThreadBusinessContext ? { businessContext: selectedThreadBusinessContext } : {}),
         });
 
       if (error) throw error;
@@ -1186,7 +1216,8 @@ function DesktopMessagesList() {
           userId: userProfile?.id,
           replyToMessageId: savedReplyTo?.id || null,
           senderContext: 'messages',
-          ...(hasMultipleEndpoints && composerEndpointId ? { endpointId: composerEndpointId } : {}),
+          ...(composerEndpointId ? { endpointId: composerEndpointId } : {}),
+          ...(selectedThreadBusinessContext ? { businessContext: selectedThreadBusinessContext } : {}),
         });
 
       if (error) throw error;
@@ -1672,6 +1703,8 @@ function DesktopMessagesList() {
                         organizationId: organization?.id,
                         senderContext: 'messages',
                         resolvedProvider: selectedThreadWaProvider,
+                        businessContext: selectedThreadBusinessContext,
+                        threadPrimaryPurpose: primaryEndpointPurpose,
                       }) === 'meta_cloud_api' ? 'meta_cloud_api' : undefined}
                     />
                   </div>
@@ -2202,6 +2235,7 @@ function DesktopMessagesList() {
       <NewConversationDialog
         open={showNewConversation}
         onOpenChange={setShowNewConversation}
+        intent="sales"
         onSelectContact={async (_contactId, threadId, endpointId) => {
           setSearchQuery('');
           if (endpointFilter !== 'all' && endpointFilter !== endpointId) {
