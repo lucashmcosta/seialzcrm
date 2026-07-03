@@ -40,14 +40,9 @@ interface NewConversationDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   onSelectContact: (contactId: string, threadId: string, endpointId: string | null) => void | Promise<void>;
-  /** @deprecated (será removido no PR5) — use `intent`. Restringe os
-   *  endpoints elegíveis por `purpose`. Quando definido, o EndpointSelector
-   *  é ocultado e o endpoint é escolhido automaticamente dentro do subconjunto. */
-  forcePurposes?: Array<'customer_service' | 'other' | 'commercial' | 'vendor_personal'>;
   /** Intenção do send. Filtra o pool de endpoints pelo `purpose`
    *  correspondente (`sales` → commercial|vendor_personal,
-   *  `customer_service` → customer_service|support|other). Precede
-   *  `forcePurposes` quando ambos forem passados. */
+   *  `customer_service` → customer_service|support|other). */
   intent?: ComposerIntent;
   /** Título customizado (default: "Nova Conversa"). */
   title?: string;
@@ -60,7 +55,6 @@ export function NewConversationDialog({
   open,
   onOpenChange,
   onSelectContact,
-  forcePurposes,
   intent,
   title,
   routingDecision,
@@ -72,18 +66,12 @@ export function NewConversationDialog({
   const { endpoints, officialNumbers, loading: endpointsLoading } =
     useOrgWhatsAppEndpoints(organization?.id);
 
-  // `intent` tem precedência sobre `forcePurposes` (compat).
   const effectivePurposes = useMemo<readonly string[] | null>(() => {
     if (intent) return purposesForIntent(intent);
-    if (forcePurposes && forcePurposes.length > 0) return forcePurposes as readonly string[];
     return null;
-  }, [intent, forcePurposes]);
+  }, [intent]);
 
-  const isForcedCustomerServiceFlow = useMemo(() => {
-    if (intent === 'customer_service') return true;
-    if (!forcePurposes?.length) return false;
-    return forcePurposes.some((purpose) => purpose === 'customer_service' || purpose === 'other');
-  }, [intent, forcePurposes]);
+  const isForcedCustomerServiceFlow = intent === 'customer_service';
 
   /**
    * Endpoint preferido para criar/abrir conversa a partir do botão
