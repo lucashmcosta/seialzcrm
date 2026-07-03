@@ -54,6 +54,8 @@ function mapRpcToChatThread(row: RpcThreadRow): ChatThread {
     last_message: row.last_message_content || '...',
     last_message_direction: row.last_message_direction,
     updated_at: row.updated_at,
+    last_message_at: row.last_message_at,
+    created_at: row.created_at,
     whatsapp_last_inbound_at: row.whatsapp_last_inbound_at,
     last_inbound_at: row.last_inbound_at,
     unread: row.is_unread,
