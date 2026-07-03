@@ -1127,6 +1127,15 @@ function DesktopMessagesList() {
     }
 
     try {
+      // TEMP QA PR5.3: instrumentação para validar race condition fix
+      console.info('[composer-send]', {
+        threadId: selectedThreadId,
+        businessContext: selectedThreadBusinessContext,
+        endpointId: composerEndpointId,
+        senderContext: 'messages',
+        kind: 'template',
+        templateId,
+      });
       const { data, error } = await dispatchWhatsAppSend({
           organizationId: organization.id,
           contactId: selectedThread.contact_id,
