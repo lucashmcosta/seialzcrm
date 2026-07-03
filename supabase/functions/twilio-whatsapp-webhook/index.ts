@@ -311,20 +311,27 @@ serve(async (req) => {
       console.error('[integration_inbound_events] exception:', rawErr)
     }
 
-    // Fire-and-forget: validar assinatura HMAC-SHA1 com múltiplos URLs candidatos (opção C).
-    // Não bloqueia o webhook legacy.
+    // =====================================================================
+    // PR 1.1 (Fase 0 Mensagens) — Validação SÍNCRONA de assinatura HMAC-SHA1.
+    // Se TWILIO_SIGNATURE_ENFORCE=true e nenhum candidate bater, retorna 401
+    // ANTES de qualquer escrita em messages/message_threads/contacts/activities/notifications.
+    // O único write permitido antes desta validação é o log em integration_inbound_events
+    // (tabela de segurança, permitida por design).
+    // Rollback: desligar TWILIO_SIGNATURE_ENFORCE (efeito imediato, sem redeploy).
+    // =====================================================================
+    let signatureValid = false
+    let signatureMatched = 'none'
     if (insertedEventId && twilioSignature) {
-      ;(async () => {
-        try {
-          const { data: integ } = await supabase
-            .from('organization_integrations')
-            .select('config_values, admin_integrations!inner(slug)')
-            .eq('organization_id', orgId)
-            .eq('admin_integrations.slug', 'twilio-whatsapp')
-            .eq('is_enabled', true)
-            .maybeSingle()
-          const authToken = (integ?.config_values as any)?.auth_token as string | undefined
-          if (!authToken) return
+      try {
+        const { data: integ } = await supabase
+          .from('organization_integrations')
+          .select('config_values, admin_integrations!inner(slug)')
+          .eq('organization_id', orgId)
+          .eq('admin_integrations.slug', 'twilio-whatsapp')
+          .eq('is_enabled', true)
+          .maybeSingle()
+        const authToken = (integ?.config_values as any)?.auth_token as string | undefined
+        if (authToken) {
           const parsed = new URL(req.url)
           const search = parsed.search || ''
           const pathPart = parsed.pathname.startsWith('/functions/v1/')
@@ -352,14 +359,12 @@ serve(async (req) => {
             { name: 'HMAC', hash: 'SHA-1' }, false, ['sign']
           )
 
-          let matched = 'none'
-          let valid = false
           for (const c of candidates) {
             const sig = await crypto.subtle.sign('HMAC', key, new TextEncoder().encode(c.url + paramsConcat))
             const b64 = btoa(String.fromCharCode(...new Uint8Array(sig)))
             if (b64 === twilioSignature) {
-              valid = true
-              matched = c.label
+              signatureValid = true
+              signatureMatched = c.label
               break
             }
           }
@@ -368,39 +373,69 @@ serve(async (req) => {
             ...rawHeaders,
             _signature_diag: {
               candidate_count: candidates.length,
-              matched_candidate_label: matched,
+              matched_candidate_label: signatureMatched,
               host_used: fwdHost || internalHost,
               path_used: pathPart,
               canonical_env_present: !!publicBase,
+              validation_mode: 'sync',
             },
           }
-          await supabase
+          // Update é fire-and-forget (não bloqueia resposta) mas a decisão já foi tomada.
+          supabase
             .from('integration_inbound_events')
-            .update({ signature_valid: valid, raw_headers: diagHeaders })
+            .update({ signature_valid: signatureValid, raw_headers: diagHeaders })
             .eq('id', insertedEventId)
+            .then(() => {})
+            .catch((e: unknown) => console.error('[signature_valid] update failed:', e))
 
           const logPayload = {
             provider: 'twilio-whatsapp',
             external_id: rawMessageSid,
             trace_id: traceId,
             candidate_count: candidates.length,
-            matched_candidate_label: matched,
+            matched_candidate_label: signatureMatched,
             host_used: fwdHost || internalHost,
             path_used: pathPart,
             canonical_env_present: !!publicBase,
+            enforce: (Deno.env.get('TWILIO_SIGNATURE_ENFORCE') || '').toLowerCase() === 'true',
           }
-          if (!valid) {
+          if (!signatureValid) {
             console.warn('[twilio-signature] no_match ' + JSON.stringify(logPayload))
           } else {
             console.log('[twilio-signature] match ' + JSON.stringify(logPayload))
           }
-        } catch (e) {
-          console.error('[signature_valid] update failed:', e)
+        } else {
+          console.warn('[twilio-signature] no_auth_token — cannot validate signature for org=' + orgId)
         }
-      })().catch(() => {})
+      } catch (e) {
+        console.error('[twilio-signature] validation error:', e)
+      }
+    }
+
+    // Enforce: se flag ligada e assinatura inválida, bloqueia ANTES de qualquer
+    // escrita em tabelas de domínio. O log em integration_inbound_events acima
+    // permanece — é a única gravação segura permitida (auditoria/forensics).
+    const enforceSignature = (Deno.env.get('TWILIO_SIGNATURE_ENFORCE') || '').toLowerCase() === 'true'
+    if (enforceSignature && twilioSignature && !signatureValid) {
+      console.warn('[twilio-signature] BLOCKED 401 — enforce=on, signature invalid', {
+        external_id: rawMessageSid, trace_id: traceId, matched: signatureMatched,
+      })
+      return new Response('Unauthorized: invalid Twilio signature', {
+        status: 401,
+        headers: { ...corsHeaders, 'Content-Type': 'text/plain' },
+      })
+    }
+    if (enforceSignature && !twilioSignature) {
+      console.warn('[twilio-signature] BLOCKED 401 — enforce=on, no signature header', {
+        external_id: rawMessageSid, trace_id: traceId,
+      })
+      return new Response('Unauthorized: missing X-Twilio-Signature', {
+        status: 401,
+        headers: { ...corsHeaders, 'Content-Type': 'text/plain' },
+      })
     }
     // =====================================================================
-    // Fim do raw logging — daqui pra baixo é o código existente, intocado.
+    // Fim da validação de assinatura — daqui pra baixo é o código existente.
     // =====================================================================
 
     // ========== ROUTE: /inbound - Receive incoming WhatsApp messages ==========
