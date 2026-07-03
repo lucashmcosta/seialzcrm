@@ -4684,6 +4684,7 @@ export type Database = {
           assigned_at: string | null
           assigned_user_id: string | null
           awaiting_button_response: boolean | null
+          business_context: string | null
           button_options: Json | null
           category_id: string | null
           channel: string | null
@@ -4720,6 +4721,7 @@ export type Database = {
           assigned_at?: string | null
           assigned_user_id?: string | null
           awaiting_button_response?: boolean | null
+          business_context?: string | null
           button_options?: Json | null
           category_id?: string | null
           channel?: string | null
@@ -4756,6 +4758,7 @@ export type Database = {
           assigned_at?: string | null
           assigned_user_id?: string | null
           awaiting_button_response?: boolean | null
+          business_context?: string | null
           button_options?: Json | null
           category_id?: string | null
           channel?: string | null
@@ -4844,6 +4847,51 @@ export type Database = {
             referencedColumns: ["id"]
           },
         ]
+      }
+      message_threads_business_context_backfill: {
+        Row: {
+          confidence_score: number
+          created_at: string
+          endpoint_id: string | null
+          endpoint_purpose_at_backfill: string | null
+          id: string
+          method: string
+          migration_version: string
+          new_business_context: string
+          old_business_context: string | null
+          organization_id: string
+          thread_created_at: string | null
+          thread_id: string
+        }
+        Insert: {
+          confidence_score: number
+          created_at?: string
+          endpoint_id?: string | null
+          endpoint_purpose_at_backfill?: string | null
+          id?: string
+          method: string
+          migration_version: string
+          new_business_context: string
+          old_business_context?: string | null
+          organization_id: string
+          thread_created_at?: string | null
+          thread_id: string
+        }
+        Update: {
+          confidence_score?: number
+          created_at?: string
+          endpoint_id?: string | null
+          endpoint_purpose_at_backfill?: string | null
+          id?: string
+          method?: string
+          migration_version?: string
+          new_business_context?: string
+          old_business_context?: string | null
+          organization_id?: string
+          thread_created_at?: string | null
+          thread_id?: string
+        }
+        Relationships: []
       }
       messages: {
         Row: {
