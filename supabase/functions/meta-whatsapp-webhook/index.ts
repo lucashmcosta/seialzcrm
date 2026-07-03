@@ -235,6 +235,14 @@ serve(async (req) => {
 
   const payload = peek;
 
+  // Extrai headers relevantes para auditoria (não incluir Authorization/x-hub-signature)
+  const auditHeaders: Record<string, string> = {};
+  for (const [k, v] of req.headers.entries()) {
+    const kl = k.toLowerCase();
+    if (kl === "authorization" || kl === "cookie" || kl === "x-hub-signature-256" || kl === "x-hub-signature") continue;
+    auditHeaders[k] = v;
+  }
+
   try {
     for (const entry of payload?.entry ?? []) {
       for (const change of entry?.changes ?? []) {
@@ -248,16 +256,104 @@ serve(async (req) => {
           .eq("provider", "meta_cloud_api")
           .eq("sender_sid", phoneNumberId)
           .maybeSingle();
+
+        const wabaId = entry?.id ?? null;
+
         if (!endpoint) {
           console.warn("[meta-wa-webhook] no_endpoint", { phoneNumberId });
+          // PR-B: registrar mesmo sem endpoint resolvido, para auditoria
+          await recordInboundEvent(supabase, {
+            organizationId: null,
+            endpointId: null,
+            phoneNumberId,
+            wabaId,
+            fromE164: null,
+            messageType: null,
+            wamid: null,
+            contextId: null,
+            signatureValid: signatureMatch,
+            rawPayload: change,
+            rawHeaders: auditHeaders,
+            kind: "unknown",
+          }).then((auditId) => updateInboundEventStatus(supabase, auditId, {
+            processStatus: "failed",
+            processError: "no_endpoint_for_phone_number_id",
+          }));
           continue;
         }
 
         for (const msg of value?.messages ?? []) {
-          await handleInbound(supabase, endpoint, msg, value);
+          const messageType = msg?.type ?? "unknown";
+          const fromE164 = msg?.from ? "+" + String(msg.from).replace(/^\+/, "") : null;
+          const wamid = msg?.id ?? null;
+          const contextId = msg?.context?.id ?? null;
+
+          // PR-B: registrar ANTES do parse
+          const auditId = await recordInboundEvent(supabase, {
+            organizationId: endpoint.organization_id,
+            endpointId: endpoint.id,
+            phoneNumberId,
+            wabaId,
+            fromE164,
+            messageType,
+            wamid,
+            contextId,
+            signatureValid: signatureMatch,
+            rawPayload: msg,
+            rawHeaders: auditHeaders,
+            kind: "message",
+          });
+
+          try {
+            const result = await handleInbound(supabase, endpoint, msg, value);
+            await updateInboundEventStatus(supabase, auditId, {
+              processStatus: result.error ? "failed" : "processed",
+              processError: result.error ?? null,
+              resultingMessageId: result.messageId,
+              resultingThreadId: result.threadId,
+            });
+          } catch (e) {
+            const errMsg = (e as Error)?.message ?? String(e);
+            console.error("[meta-wa-webhook] handleInbound_exception", { wamid, errMsg });
+            await updateInboundEventStatus(supabase, auditId, {
+              processStatus: "failed",
+              processError: `exception:${errMsg}`,
+            });
+          }
         }
+
         for (const st of value?.statuses ?? []) {
-          await handleStatus(supabase, endpoint, st);
+          const wamid = st?.id ?? null;
+          const auditId = await recordInboundEvent(supabase, {
+            organizationId: endpoint.organization_id,
+            endpointId: endpoint.id,
+            phoneNumberId,
+            wabaId,
+            fromE164: st?.recipient_id ? "+" + String(st.recipient_id).replace(/^\+/, "") : null,
+            messageType: st?.status ?? "unknown",
+            wamid,
+            contextId: null,
+            signatureValid: signatureMatch,
+            rawPayload: st,
+            rawHeaders: auditHeaders,
+            kind: "status",
+          });
+
+          try {
+            const result = await handleStatus(supabase, endpoint, st);
+            await updateInboundEventStatus(supabase, auditId, {
+              processStatus: result.error ? "failed" : "processed",
+              processError: result.error ?? null,
+              resultingMessageId: result.messageId,
+            });
+          } catch (e) {
+            const errMsg = (e as Error)?.message ?? String(e);
+            console.error("[meta-wa-webhook] handleStatus_exception", { wamid, errMsg });
+            await updateInboundEventStatus(supabase, auditId, {
+              processStatus: "failed",
+              processError: `exception:${errMsg}`,
+            });
+          }
         }
       }
     }
@@ -581,7 +677,7 @@ async function triggerAiAgentOrFlagHuman(
 // ============================================================
 async function handleInbound(
   supabase: any, endpoint: any, msg: any, value: any,
-): Promise<void> {
+): Promise<{ messageId: string | null; threadId: string | null; error: string | null }> {
   const fromE164 = "+" + String(msg.from).replace(/^\+/, "");
   const wamid = msg.id as string;
   const profileName = value?.contacts?.[0]?.profile?.name ?? "";
@@ -625,7 +721,7 @@ async function handleInbound(
   );
   if (!contactId) {
     console.log("[meta-wa-webhook] no contactId (auto_create_contact disabled?) — skipping", { fromE164 });
-    return;
+    return { messageId: null, threadId: null, error: "no_contact" };
   }
 
   // 4) Auto-create opportunity quando contato foi recém-criado
@@ -642,17 +738,40 @@ async function handleInbound(
     await saveReferralFields(supabase, contactId, referral);
   }
 
-  // 6) Find or create thread
-  const { data: thread } = await supabase
+  // 6) Find or create thread — determinístico, tolera duplicatas históricas
+  //    (PR-A: substitui .maybeSingle() por lookup ordenado com limit(5))
+  const { data: threads, error: threadLookupErr } = await supabase
     .from("message_threads")
-    .select("id")
+    .select("id, status, last_message_at, created_at")
     .eq("organization_id", endpoint.organization_id)
     .eq("contact_id", contactId)
     .eq("channel", "whatsapp")
     .eq("primary_endpoint_id", endpoint.id)
-    .maybeSingle();
+    .order("last_message_at", { ascending: false, nullsFirst: false })
+    .order("created_at", { ascending: false })
+    .limit(5);
 
-  let threadId = thread?.id;
+  if (threadLookupErr) {
+    console.error("[meta-wa-webhook] thread_lookup_error", {
+      contact_id: contactId,
+      endpoint_id: endpoint.id,
+      error: threadLookupErr,
+    });
+  }
+
+  const threadCount = threads?.length ?? 0;
+  let threadId: string | undefined = threads?.[0]?.id;
+
+  if (threadCount > 1) {
+    console.warn("[meta-wa-webhook] duplicate_thread_detected", JSON.stringify({
+      contact_id: contactId,
+      endpoint_id: endpoint.id,
+      thread_count: threadCount,
+      selected_thread_id: threadId,
+      all_thread_ids: (threads ?? []).map((t: any) => t.id),
+    }));
+  }
+
   if (!threadId) {
     const { data: createdThread, error: threadInsErr } = await supabase
       .from("message_threads")
@@ -667,10 +786,25 @@ async function handleInbound(
       })
       .select("id")
       .single();
-    if (threadInsErr) console.error("[meta-wa-webhook] thread insert error", threadInsErr);
+    if (threadInsErr) console.error("[meta-wa-webhook] thread_insert_error", threadInsErr);
     threadId = createdThread?.id;
+    if (threadId) {
+      console.log("[meta-wa-webhook] thread_created", JSON.stringify({
+        thread_id: threadId, contact_id: contactId, endpoint_id: endpoint.id,
+      }));
+    }
+  } else {
+    console.log("[meta-wa-webhook] thread_selected", JSON.stringify({
+      thread_id: threadId, thread_count: threadCount, contact_id: contactId,
+    }));
   }
-  if (!threadId) { console.error("[meta-wa-webhook] no threadId"); return; }
+
+  if (!threadId) {
+    console.error("[meta-wa-webhook] no_thread_id_after_lookup_and_insert", {
+      contact_id: contactId, endpoint_id: endpoint.id,
+    });
+    return { messageId: null, threadId: null, error: "no_thread_id" };
+  }
 
   // 7) Mídia (inalterado)
   const mediaKind = MEDIA_KINDS.find((k) => msg?.[k]) as MediaKind | undefined;
@@ -746,7 +880,7 @@ async function handleInbound(
   );
 
   // 10) Insert message
-  const { error: msgInsErr } = await supabase.from("messages").insert({
+  const { data: insertedMsg, error: msgInsErr } = await supabase.from("messages").insert({
     organization_id: endpoint.organization_id,
     thread_id: threadId,
     content,
@@ -760,8 +894,12 @@ async function handleInbound(
     reply_to_message_id: replyToMessageId,
     sent_at: new Date().toISOString(),
     metadata: { meta_cloud: { ...mediaInfo, raw: msg, referral } },
-  });
-  if (msgInsErr) console.error("[meta-wa-webhook] message insert error", msgInsErr);
+  }).select("id").single();
+  if (msgInsErr) {
+    console.error("[meta-wa-webhook] message insert error", msgInsErr);
+    return { messageId: null, threadId, error: `message_insert_error:${msgInsErr.message ?? msgInsErr.code ?? "unknown"}` };
+  }
+  const insertedMessageId: string | null = insertedMsg?.id ?? null;
 
   await supabase
     .from("message_threads")
@@ -787,21 +925,129 @@ async function handleInbound(
   await triggerAiAgentOrFlagHuman(
     supabase, endpoint.organization_id, threadId, contactId, content,
   );
+
+  return { messageId: insertedMessageId, threadId, error: null };
 }
 
-async function handleStatus(supabase: any, endpoint: any, st: any): Promise<void> {
+async function handleStatus(
+  supabase: any, endpoint: any, st: any,
+): Promise<{ messageId: string | null; error: string | null }> {
   const wamid = st.id;
   const status = st.status;
-  if (!wamid || !status) return;
+  if (!wamid || !status) return { messageId: null, error: "missing_wamid_or_status" };
 
   const update: Record<string, any> = { whatsapp_status: status };
   if (status === "failed" && st.errors?.length) {
     update.error_code = String(st.errors[0]?.code ?? "");
     update.error_message = st.errors[0]?.message ?? "Meta delivery failed";
   }
-  await supabase
+  const { data: updated, error } = await supabase
     .from("messages")
     .update(update)
     .eq("whatsapp_message_sid", wamid)
-    .eq("organization_id", endpoint.organization_id);
+    .eq("organization_id", endpoint.organization_id)
+    .select("id");
+  if (error) return { messageId: null, error: error.message ?? "status_update_error" };
+  return { messageId: updated?.[0]?.id ?? null, error: null };
+}
+
+// ============================================================
+// PR-B: Observabilidade — persistência raw em integration_inbound_events
+// ============================================================
+async function recordInboundEvent(
+  supabase: any,
+  params: {
+    organizationId: string | null;
+    endpointId: string | null;
+    phoneNumberId: string | null;
+    wabaId: string | null;
+    fromE164: string | null;
+    messageType: string | null;
+    wamid: string | null;
+    contextId: string | null;
+    threadId?: string | null;
+    signatureValid: boolean;
+    rawPayload: any;
+    rawHeaders: Record<string, string>;
+    kind: "message" | "status" | "unknown";
+  },
+): Promise<string | null> {
+  try {
+    const idemKey = params.kind === "status"
+      ? `meta:${params.wamid ?? "no-wamid"}:status`
+      : `meta:${params.wamid ?? crypto.randomUUID()}`;
+
+    const { data, error } = await supabase
+      .from("integration_inbound_events")
+      .insert({
+        organization_id: params.organizationId,
+        integration_slug: "meta-whatsapp-cloud",
+        source_event: `${params.kind}:${params.messageType ?? "unknown"}`,
+        external_id: params.wamid,
+        idempotency_key: idemKey,
+        raw_payload: params.rawPayload,
+        raw_headers: {
+          phone_number_id: params.phoneNumberId,
+          waba_id: params.wabaId,
+          from: params.fromE164,
+          endpoint_id: params.endpointId,
+          thread_id: params.threadId ?? null,
+          ...params.rawHeaders,
+        },
+        http_method: "POST",
+        request_path: "/meta-whatsapp-webhook",
+        received_at: new Date().toISOString(),
+        process_status: "received",
+        signature_valid: params.signatureValid,
+        signature_algo: "sha256",
+        aggregate_type: params.kind === "status" ? "message_status" : "whatsapp_message",
+        aggregate_id: params.threadId ?? null,
+        correlation_id: params.contextId ?? null,
+        handler_key: "meta-whatsapp-webhook",
+        parser_function: "meta-whatsapp-webhook",
+        parser_version: "v1",
+      })
+      .select("id")
+      .single();
+
+    if (error) {
+      console.error("[meta-wa-webhook] audit_insert_error", { error, wamid: params.wamid });
+      return null;
+    }
+    return data?.id ?? null;
+  } catch (e) {
+    // Auditoria nunca deve bloquear o webhook
+    console.error("[meta-wa-webhook] audit_insert_exception", e);
+    return null;
+  }
+}
+
+async function updateInboundEventStatus(
+  supabase: any,
+  auditId: string | null,
+  fields: {
+    processStatus: "processed" | "failed" | "skipped";
+    processError?: string | null;
+    resultingMessageId?: string | null;
+    resultingThreadId?: string | null;
+  },
+): Promise<void> {
+  if (!auditId) return;
+  try {
+    const patch: Record<string, any> = {
+      process_status: fields.processStatus,
+      processed_at: new Date().toISOString(),
+    };
+    if (fields.processError) patch.process_error = fields.processError;
+    if (fields.resultingMessageId) patch.resulting_message_id = fields.resultingMessageId;
+    if (fields.resultingThreadId) patch.aggregate_id = fields.resultingThreadId;
+
+    const { error } = await supabase
+      .from("integration_inbound_events")
+      .update(patch)
+      .eq("id", auditId);
+    if (error) console.error("[meta-wa-webhook] audit_update_error", { error, auditId });
+  } catch (e) {
+    console.error("[meta-wa-webhook] audit_update_exception", e);
+  }
 }
