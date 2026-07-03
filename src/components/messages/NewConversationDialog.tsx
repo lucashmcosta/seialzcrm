@@ -176,47 +176,84 @@ export function NewConversationDialog({
 
     setSelecting(contact.id);
     try {
-      // "Nova Conversa" sempre abre/cria thread no endpoint preferido
-      // da org (transicional > oficial). Filtrar por primary_endpoint_id
-      // garante que threads antigas em outros endpoints não sejam
-      // reaproveitadas — elas continuam visíveis na lista separadamente.
+      const effectiveEndpointId = selectedEndpointId ?? preferredEndpointId;
+
+      // business_context alvo derivado do intent do dialog.
+      // Threads são únicas por (org, contact, endpoint, business_context) —
+      // buscamos em TODOS os status para evitar criar duplicatas quando a
+      // thread ativa/histórica está resolved/closed. Se estiver fechada,
+      // reabrimos ao invés de criar uma nova.
+      const targetBusinessContext: 'sales' | 'customer_service' | null =
+        intent === 'sales' || intent === 'customer_service' ? intent : null;
+
+      const ACTIVE = new Set(['open', 'awaiting_client', 'in_progress']);
+      const CLOSED = new Set(['resolved', 'closed']);
+
+      type ExistingRow = {
+        id: string;
+        status: string | null;
+        last_message_at: string | null;
+        created_at: string;
+        last_routing_decision: unknown;
+      };
+
       let existingQuery = supabase
         .from('message_threads')
-        .select('id, last_routing_decision')
+        .select('id, status, last_message_at, created_at, last_routing_decision')
         .eq('organization_id', organization.id)
         .eq('contact_id', contact.id)
         .eq('channel', 'whatsapp')
-        .in('status', ['open', 'awaiting_client', 'in_progress'])
-        .order('updated_at', { ascending: false })
-        .limit(1);
-
-      const effectiveEndpointId = selectedEndpointId ?? preferredEndpointId;
+        .order('last_message_at', { ascending: false, nullsFirst: false })
+        .order('created_at', { ascending: false })
+        .limit(10);
 
       if (effectiveEndpointId) {
         existingQuery = existingQuery.eq('primary_endpoint_id', effectiveEndpointId);
       }
+      if (targetBusinessContext) {
+        existingQuery = existingQuery.eq('business_context', targetBusinessContext);
+      }
 
-      const { data: existingThread } = await existingQuery.maybeSingle();
+      const { data: candidatesRaw, error: lookupError } = await existingQuery;
+      if (lookupError) throw lookupError;
 
-      if (existingThread) {
-        const existingRoutingAction =
-          ((existingThread as any).last_routing_decision as { action?: string } | null)?.action ?? null;
+      const candidates = (candidatesRaw ?? []) as ExistingRow[];
 
-        if (routingDecision && existingRoutingAction !== 'inbox_manual_start') {
-          const { error: markerError } = await supabase
-            .from('message_threads')
-            .update({ last_routing_decision: routingDecision } as any)
-            .eq('id', existingThread.id);
+      // Preferência: ativa > fechada com atividade mais recente.
+      const active = candidates.find((r) => r.status && ACTIVE.has(r.status));
+      const closed = candidates.find((r) => r.status && CLOSED.has(r.status));
+      const chosen = active ?? closed ?? candidates[0] ?? null;
 
-          if (markerError) throw markerError;
+      if (chosen) {
+        const patch: Record<string, unknown> = {};
+
+        // Reabrir se estiver resolved/closed. Mesma semântica do
+        // trg_messages_smart_reopen (evita criar thread paralela).
+        if (chosen.status && CLOSED.has(chosen.status)) {
+          patch.status = 'open';
+          patch.resolved_at = null;
         }
 
-        await Promise.resolve(onSelectContact(contact.id, existingThread.id, effectiveEndpointId));
+        const existingRoutingAction =
+          ((chosen.last_routing_decision as { action?: string } | null) ?? null)?.action ?? null;
+        if (routingDecision && existingRoutingAction !== 'inbox_manual_start') {
+          patch.last_routing_decision = routingDecision;
+        }
+
+        if (Object.keys(patch).length > 0) {
+          const { error: updErr } = await supabase
+            .from('message_threads')
+            .update(patch as any)
+            .eq('id', chosen.id);
+          if (updErr) throw updErr;
+        }
+
+        await Promise.resolve(onSelectContact(contact.id, chosen.id, effectiveEndpointId));
         onOpenChange(false);
         return;
       }
 
-      // Create new thread anchored to the chosen endpoint (when known).
+      // Nenhuma thread existente no (endpoint, business_context). Criar nova.
       const insertPayload: Record<string, unknown> = {
         organization_id: organization.id,
         contact_id: contact.id,
@@ -224,6 +261,9 @@ export function NewConversationDialog({
       };
       if (effectiveEndpointId) {
         insertPayload.primary_endpoint_id = effectiveEndpointId;
+      }
+      if (targetBusinessContext) {
+        insertPayload.business_context = targetBusinessContext;
       }
       if (routingDecision) {
         insertPayload.last_routing_decision = routingDecision;
