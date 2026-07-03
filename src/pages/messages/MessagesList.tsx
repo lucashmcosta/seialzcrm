@@ -1230,6 +1230,15 @@ function DesktopMessagesList() {
         .from('whatsapp-media')
         .getPublicUrl(filePath);
 
+      // TEMP QA PR5.3: instrumentação para validar race condition fix
+      console.info('[composer-send]', {
+        threadId: selectedThreadId,
+        businessContext: selectedThreadBusinessContext,
+        endpointId: composerEndpointId,
+        senderContext: 'messages',
+        kind: 'media',
+        mediaType,
+      });
       const { error } = await dispatchWhatsAppSend({
           organizationId: organization.id,
           contactId: selectedThread.contact_id,
