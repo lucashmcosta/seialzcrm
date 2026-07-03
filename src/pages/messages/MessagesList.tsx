@@ -1049,7 +1049,8 @@ function DesktopMessagesList() {
           userId: userProfile?.id,
           replyToMessageId: savedReplyTo?.id || null,
           senderContext: 'messages',
-          ...(hasMultipleEndpoints && composerEndpointId ? { endpointId: composerEndpointId } : {}),
+          ...(composerEndpointId ? { endpointId: composerEndpointId } : {}),
+          ...(selectedThreadBusinessContext ? { businessContext: selectedThreadBusinessContext } : {}),
         });
 
       if (error) throw error;
@@ -1119,7 +1120,8 @@ function DesktopMessagesList() {
           templateVariables: variables,
           userId: userProfile?.id,
           senderContext: 'messages',
-          ...(hasMultipleEndpoints && composerEndpointId ? { endpointId: composerEndpointId } : {}),
+          ...(composerEndpointId ? { endpointId: composerEndpointId } : {}),
+          ...(selectedThreadBusinessContext ? { businessContext: selectedThreadBusinessContext } : {}),
         });
 
       if (error) throw error;
@@ -1214,7 +1216,8 @@ function DesktopMessagesList() {
           userId: userProfile?.id,
           replyToMessageId: savedReplyTo?.id || null,
           senderContext: 'messages',
-          ...(hasMultipleEndpoints && composerEndpointId ? { endpointId: composerEndpointId } : {}),
+          ...(composerEndpointId ? { endpointId: composerEndpointId } : {}),
+          ...(selectedThreadBusinessContext ? { businessContext: selectedThreadBusinessContext } : {}),
         });
 
       if (error) throw error;
