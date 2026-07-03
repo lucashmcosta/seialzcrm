@@ -235,6 +235,14 @@ serve(async (req) => {
 
   const payload = peek;
 
+  // Extrai headers relevantes para auditoria (não incluir Authorization/x-hub-signature)
+  const auditHeaders: Record<string, string> = {};
+  for (const [k, v] of req.headers.entries()) {
+    const kl = k.toLowerCase();
+    if (kl === "authorization" || kl === "cookie" || kl === "x-hub-signature-256" || kl === "x-hub-signature") continue;
+    auditHeaders[k] = v;
+  }
+
   try {
     for (const entry of payload?.entry ?? []) {
       for (const change of entry?.changes ?? []) {
@@ -248,16 +256,104 @@ serve(async (req) => {
           .eq("provider", "meta_cloud_api")
           .eq("sender_sid", phoneNumberId)
           .maybeSingle();
+
+        const wabaId = entry?.id ?? null;
+
         if (!endpoint) {
           console.warn("[meta-wa-webhook] no_endpoint", { phoneNumberId });
+          // PR-B: registrar mesmo sem endpoint resolvido, para auditoria
+          await recordInboundEvent(supabase, {
+            organizationId: null,
+            endpointId: null,
+            phoneNumberId,
+            wabaId,
+            fromE164: null,
+            messageType: null,
+            wamid: null,
+            contextId: null,
+            signatureValid: signatureMatch,
+            rawPayload: change,
+            rawHeaders: auditHeaders,
+            kind: "unknown",
+          }).then((auditId) => updateInboundEventStatus(supabase, auditId, {
+            processStatus: "error",
+            processError: "no_endpoint_for_phone_number_id",
+          }));
           continue;
         }
 
         for (const msg of value?.messages ?? []) {
-          await handleInbound(supabase, endpoint, msg, value);
+          const messageType = msg?.type ?? "unknown";
+          const fromE164 = msg?.from ? "+" + String(msg.from).replace(/^\+/, "") : null;
+          const wamid = msg?.id ?? null;
+          const contextId = msg?.context?.id ?? null;
+
+          // PR-B: registrar ANTES do parse
+          const auditId = await recordInboundEvent(supabase, {
+            organizationId: endpoint.organization_id,
+            endpointId: endpoint.id,
+            phoneNumberId,
+            wabaId,
+            fromE164,
+            messageType,
+            wamid,
+            contextId,
+            signatureValid: signatureMatch,
+            rawPayload: msg,
+            rawHeaders: auditHeaders,
+            kind: "message",
+          });
+
+          try {
+            const result = await handleInbound(supabase, endpoint, msg, value);
+            await updateInboundEventStatus(supabase, auditId, {
+              processStatus: result.error ? "error" : "processed",
+              processError: result.error ?? null,
+              resultingMessageId: result.messageId,
+              resultingThreadId: result.threadId,
+            });
+          } catch (e) {
+            const errMsg = (e as Error)?.message ?? String(e);
+            console.error("[meta-wa-webhook] handleInbound_exception", { wamid, errMsg });
+            await updateInboundEventStatus(supabase, auditId, {
+              processStatus: "error",
+              processError: `exception:${errMsg}`,
+            });
+          }
         }
+
         for (const st of value?.statuses ?? []) {
-          await handleStatus(supabase, endpoint, st);
+          const wamid = st?.id ?? null;
+          const auditId = await recordInboundEvent(supabase, {
+            organizationId: endpoint.organization_id,
+            endpointId: endpoint.id,
+            phoneNumberId,
+            wabaId,
+            fromE164: st?.recipient_id ? "+" + String(st.recipient_id).replace(/^\+/, "") : null,
+            messageType: st?.status ?? "unknown",
+            wamid,
+            contextId: null,
+            signatureValid: signatureMatch,
+            rawPayload: st,
+            rawHeaders: auditHeaders,
+            kind: "status",
+          });
+
+          try {
+            const result = await handleStatus(supabase, endpoint, st);
+            await updateInboundEventStatus(supabase, auditId, {
+              processStatus: result.error ? "error" : "processed",
+              processError: result.error ?? null,
+              resultingMessageId: result.messageId,
+            });
+          } catch (e) {
+            const errMsg = (e as Error)?.message ?? String(e);
+            console.error("[meta-wa-webhook] handleStatus_exception", { wamid, errMsg });
+            await updateInboundEventStatus(supabase, auditId, {
+              processStatus: "error",
+              processError: `exception:${errMsg}`,
+            });
+          }
         }
       }
     }
