@@ -484,6 +484,7 @@ export function MobileMessagesList() {
           threadId: selectedThreadId, message: savedText,
           userId: userProfile?.id, replyToMessageId: savedReplyTo?.id || null,
           senderContext: 'messages',
+          ...(selectedThreadBusinessContext ? { businessContext: selectedThreadBusinessContext } : {}),
         });
       if (error) throw error;
       if (data.error) {
@@ -524,6 +525,7 @@ export function MobileMessagesList() {
           threadId: selectedThreadId, templateId, templateVariables: variables,
           userId: userProfile?.id,
           senderContext: 'messages',
+          ...(selectedThreadBusinessContext ? { businessContext: selectedThreadBusinessContext } : {}),
         });
       if (error) throw error;
       if (data.error) throw new Error(data.error);
@@ -582,6 +584,7 @@ export function MobileMessagesList() {
           threadId: selectedThreadId, message: caption, mediaUrl: publicUrl, mediaType,
           userId: userProfile?.id, replyToMessageId: savedReplyTo?.id || null,
           senderContext: 'messages',
+          ...(selectedThreadBusinessContext ? { businessContext: selectedThreadBusinessContext } : {}),
         });
       if (error) throw error;
       refetchThreads();
@@ -862,6 +865,7 @@ export function MobileMessagesList() {
                 provider={resolveComposerProvider({
                   organizationId: organization?.id,
                   senderContext: 'messages',
+                  ...(selectedThreadBusinessContext ? { businessContext: selectedThreadBusinessContext } : {}),
                   resolvedProvider: selectedThreadWaProvider,
                 }) === 'meta_cloud_api' ? 'meta_cloud_api' : undefined}
               />
