@@ -1321,7 +1321,7 @@ function DesktopMessagesList() {
 
     const { data: row, error } = await supabase
       .from('message_threads')
-      .select('id, contact_id, status, updated_at, whatsapp_last_inbound_at, last_inbound_at, needs_human_attention, assigned_user_id, primary_endpoint_id, last_message_content, last_message_direction')
+      .select('id, contact_id, status, updated_at, created_at, last_message_at, whatsapp_last_inbound_at, last_inbound_at, needs_human_attention, assigned_user_id, primary_endpoint_id, last_message_content, last_message_direction')
       .eq('organization_id', organization.id)
       .eq('id', threadId)
       .maybeSingle();
@@ -1346,6 +1346,8 @@ function DesktopMessagesList() {
       last_message: (row as any).last_message_content || '...',
       last_message_direction: (row as any).last_message_direction ?? null,
       updated_at: (row as any).updated_at,
+      last_message_at: (row as any).last_message_at ?? null,
+      created_at: (row as any).created_at,
       whatsapp_last_inbound_at: (row as any).whatsapp_last_inbound_at ?? null,
       last_inbound_at: (row as any).last_inbound_at ?? null,
       unread: false,
