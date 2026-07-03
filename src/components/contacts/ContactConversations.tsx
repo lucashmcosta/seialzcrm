@@ -4,6 +4,7 @@ import { useNavigate } from 'react-router-dom';
 import { formatDistanceToNow } from 'date-fns';
 import { ptBR, enUS } from 'date-fns/locale';
 import { ChatCircle, Headset, ArrowUpRight, User, SpinnerGap } from '@phosphor-icons/react';
+import { supabase } from '@/integrations/supabase/client';
 import { useOrganization } from '@/hooks/useOrganization';
 import { useTranslation } from '@/lib/i18n';
 import {
@@ -14,6 +15,8 @@ import {
 import { NewConversationDialog } from '@/components/messages/NewConversationDialog';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
+
+const CLOSED_STATUSES = new Set(['resolved', 'closed']);
 
 interface Props {
   contactId: string;
