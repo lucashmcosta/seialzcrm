@@ -276,7 +276,7 @@ serve(async (req) => {
             rawHeaders: auditHeaders,
             kind: "unknown",
           }).then((auditId) => updateInboundEventStatus(supabase, auditId, {
-            processStatus: "error",
+            processStatus: "failed",
             processError: "no_endpoint_for_phone_number_id",
           }));
           continue;
@@ -307,7 +307,7 @@ serve(async (req) => {
           try {
             const result = await handleInbound(supabase, endpoint, msg, value);
             await updateInboundEventStatus(supabase, auditId, {
-              processStatus: result.error ? "error" : "processed",
+              processStatus: result.error ? "failed" : "processed",
               processError: result.error ?? null,
               resultingMessageId: result.messageId,
               resultingThreadId: result.threadId,
@@ -316,7 +316,7 @@ serve(async (req) => {
             const errMsg = (e as Error)?.message ?? String(e);
             console.error("[meta-wa-webhook] handleInbound_exception", { wamid, errMsg });
             await updateInboundEventStatus(supabase, auditId, {
-              processStatus: "error",
+              processStatus: "failed",
               processError: `exception:${errMsg}`,
             });
           }
@@ -342,7 +342,7 @@ serve(async (req) => {
           try {
             const result = await handleStatus(supabase, endpoint, st);
             await updateInboundEventStatus(supabase, auditId, {
-              processStatus: result.error ? "error" : "processed",
+              processStatus: result.error ? "failed" : "processed",
               processError: result.error ?? null,
               resultingMessageId: result.messageId,
             });
@@ -350,7 +350,7 @@ serve(async (req) => {
             const errMsg = (e as Error)?.message ?? String(e);
             console.error("[meta-wa-webhook] handleStatus_exception", { wamid, errMsg });
             await updateInboundEventStatus(supabase, auditId, {
-              processStatus: "error",
+              processStatus: "failed",
               processError: `exception:${errMsg}`,
             });
           }
@@ -997,7 +997,7 @@ async function recordInboundEvent(
         http_method: "POST",
         request_path: "/meta-whatsapp-webhook",
         received_at: new Date().toISOString(),
-        process_status: "pending",
+        process_status: "received",
         signature_valid: params.signatureValid,
         signature_algo: "sha256",
         aggregate_type: params.kind === "status" ? "message_status" : "whatsapp_message",
@@ -1026,7 +1026,7 @@ async function updateInboundEventStatus(
   supabase: any,
   auditId: string | null,
   fields: {
-    processStatus: "processed" | "error" | "skipped";
+    processStatus: "processed" | "failed" | "skipped";
     processError?: string | null;
     resultingMessageId?: string | null;
     resultingThreadId?: string | null;
