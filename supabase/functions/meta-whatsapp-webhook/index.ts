@@ -707,7 +707,7 @@ async function handleInbound(
     console.error("[meta-wa-webhook] no_thread_id_after_lookup_and_insert", {
       contact_id: contactId, endpoint_id: endpoint.id,
     });
-    return;
+    return { messageId: null, threadId: null, error: "no_thread_id" };
   }
 
   // 7) Mídia (inalterado)
