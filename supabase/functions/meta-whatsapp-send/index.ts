@@ -259,19 +259,44 @@ serve(async (req) => {
         in24h = (Date.now() - new Date(t.whatsapp_last_inbound_at).getTime()) / 3.6e6 < 24;
       }
     } else {
-      const { data: existing } = await supabase
+      // P1 fix (2026-07-03): antes reusava qualquer thread por (org,contact,channel),
+      // sem filtrar `primary_endpoint_id`, sem excluir losers consolidados e sem
+      // reabrir threads `resolved`/`closed` — o que fazia o fluxo de template
+      // criar thread nova a cada envio quando a existente estava resolvida.
+      // Agora:
+      //   1. exige match por primary_endpoint_id (quando temos o endpoint resolvido)
+      //   2. exclui losers (merged_into_thread_id IS NULL)
+      //   3. inclui resolved/closed e reabre
+      //   4. só cria nova se nada existir
+      let existingQuery = supabase
         .from("message_threads")
-        .select("id, whatsapp_last_inbound_at")
+        .select("id, whatsapp_last_inbound_at, status")
         .eq("organization_id", organizationId)
         .eq("contact_id", contactId)
         .eq("channel", "whatsapp")
+        .is("merged_into_thread_id", null)
+        .eq("primary_endpoint_id", endpoint.id)
         .order("updated_at", { ascending: false })
-        .limit(1)
-        .maybeSingle();
+        .limit(1);
+      const { data: existing } = await existingQuery.maybeSingle();
       if (existing) {
         currentThreadId = existing.id;
         if (existing.whatsapp_last_inbound_at) {
           in24h = (Date.now() - new Date(existing.whatsapp_last_inbound_at).getTime()) / 3.6e6 < 24;
+        }
+        if (existing.status === "resolved" || existing.status === "closed") {
+          const { error: reopenErr } = await supabase
+            .from("message_threads")
+            .update({ status: "open", resolved_at: null })
+            .eq("id", existing.id);
+          if (reopenErr) {
+            console.warn("[meta-wa-send] thread_reopen_failed", {
+              threadId: existing.id,
+              err: reopenErr.message,
+            });
+          } else {
+            console.log("[meta-wa-send] thread_reopened", { threadId: existing.id });
+          }
         }
       } else {
         const { data: created, error: tErr } = await supabase
