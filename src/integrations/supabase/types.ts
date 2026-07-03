@@ -4965,6 +4965,45 @@ export type Database = {
         }
         Relationships: []
       }
+      message_threads_business_context_backfill_null_20260703: {
+        Row: {
+          applied_at: string
+          id: string
+          inferred_from: string
+          msg_endpoint_purpose: string | null
+          new_business_context: string
+          old_business_context: string | null
+          organization_id: string
+          primary_endpoint_id: string | null
+          primary_endpoint_purpose: string | null
+          thread_id: string
+        }
+        Insert: {
+          applied_at?: string
+          id?: string
+          inferred_from: string
+          msg_endpoint_purpose?: string | null
+          new_business_context: string
+          old_business_context?: string | null
+          organization_id: string
+          primary_endpoint_id?: string | null
+          primary_endpoint_purpose?: string | null
+          thread_id: string
+        }
+        Update: {
+          applied_at?: string
+          id?: string
+          inferred_from?: string
+          msg_endpoint_purpose?: string | null
+          new_business_context?: string
+          old_business_context?: string | null
+          organization_id?: string
+          primary_endpoint_id?: string | null
+          primary_endpoint_purpose?: string | null
+          thread_id?: string
+        }
+        Relationships: []
+      }
       message_threads_primary_endpoint_backfill: {
         Row: {
           confidence_score: number
