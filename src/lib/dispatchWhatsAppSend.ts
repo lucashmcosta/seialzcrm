@@ -9,6 +9,7 @@
 // de cair silenciosamente para Twilio.
 
 import { supabase } from "@/integrations/supabase/client";
+import { isSalesPurpose } from "./endpointPurpose";
 
 // === Re-rota Comercial → Meta 7020 (Central Trabalhista) ===
 // Lazy: somente quando a tela /messages enviar em thread cujo provider
@@ -44,6 +45,12 @@ export interface WhatsAppSendPayload {
   agentId?: string;
   senderName?: string;
   senderContext?: "inbox" | "messages" | string;
+  /**
+   * message_threads.business_context da thread — usado para decidir a re-rota
+   * "Comercial → endpoint comercial" de forma genérica (sem hardcode de org).
+   * Opcional: quando ausente, cai na regra legada (senderContext + org).
+   */
+  businessContext?: "sales" | "customer_service" | "other" | null;
   dryRun?: boolean;
   endpointId?: string;
   migrationContext?: MigrationContext;
@@ -64,10 +71,15 @@ class DispatchResolveError extends Error {
   }
 }
 
-async function loadEndpointProvider(endpointId: string): Promise<Provider> {
+interface EndpointInfo {
+  provider: Provider;
+  purpose: string | null;
+}
+
+async function loadEndpointInfo(endpointId: string): Promise<EndpointInfo> {
   const { data, error } = await supabase
     .from("communication_endpoints")
-    .select("provider")
+    .select("provider, purpose")
     .eq("id", endpointId)
     .maybeSingle();
   if (error) {
@@ -82,22 +94,27 @@ async function loadEndpointProvider(endpointId: string): Promise<Provider> {
       `Endpoint ${endpointId} não encontrado ou sem permissão de leitura.`,
     );
   }
-  const provider = (data as any).provider as string | null;
-  if (provider === "meta_cloud_api") return "meta_cloud_api";
-  if (provider === "twilio" || provider == null) return "twilio";
-  throw new DispatchResolveError(
-    "unknown_provider",
-    `Provider desconhecido para endpoint ${endpointId}: ${provider}`,
-  );
+  const providerRaw = (data as any).provider as string | null;
+  const purpose = ((data as any).purpose as string | null) ?? null;
+  let provider: Provider;
+  if (providerRaw === "meta_cloud_api") provider = "meta_cloud_api";
+  else if (providerRaw === "twilio" || providerRaw == null) provider = "twilio";
+  else {
+    throw new DispatchResolveError(
+      "unknown_provider",
+      `Provider desconhecido para endpoint ${endpointId}: ${providerRaw}`,
+    );
+  }
+  return { provider, purpose };
 }
 
 async function resolveProvider(
   payload: WhatsAppSendPayload,
-): Promise<{ provider: Provider; source: ResolveSource }> {
+): Promise<{ provider: Provider; purpose: string | null; source: ResolveSource }> {
   // 1. endpointId explícito → obrigatório existir
   if (payload.endpointId) {
-    const provider = await loadEndpointProvider(payload.endpointId);
-    return { provider, source: "endpoint_explicit" };
+    const info = await loadEndpointInfo(payload.endpointId);
+    return { ...info, source: "endpoint_explicit" };
   }
 
   // 2. threadId → primary_endpoint_id → provider
@@ -115,8 +132,8 @@ async function resolveProvider(
     }
     const pid = (thread as any)?.primary_endpoint_id as string | null | undefined;
     if (pid) {
-      const provider = await loadEndpointProvider(pid);
-      return { provider, source: "thread_primary_endpoint" };
+      const info = await loadEndpointInfo(pid);
+      return { ...info, source: "thread_primary_endpoint" };
     }
 
     // 2b. Fallback: última mensagem da thread com endpoint_id
@@ -130,13 +147,13 @@ async function resolveProvider(
       .maybeSingle();
     const lastEndpointId = (lastMsg as any)?.endpoint_id as string | null | undefined;
     if (lastEndpointId) {
-      const provider = await loadEndpointProvider(lastEndpointId);
-      return { provider, source: "thread_last_message_endpoint" };
+      const info = await loadEndpointInfo(lastEndpointId);
+      return { ...info, source: "thread_last_message_endpoint" };
     }
   }
 
-  // 3. Default: legado Twilio
-  return { provider: "twilio", source: "default" };
+  // 3. Default: legado Twilio, purpose desconhecido
+  return { provider: "twilio", purpose: null, source: "default" };
 }
 
 /**
@@ -144,7 +161,7 @@ async function resolveProvider(
  * Retorna o mesmo shape de `supabase.functions.invoke(...)`: `{ data, error }`.
  */
 export async function dispatchWhatsAppSend(payload: WhatsAppSendPayload) {
-  let resolved: { provider: Provider; source: ResolveSource };
+  let resolved: { provider: Provider; purpose: string | null; source: ResolveSource };
   try {
     resolved = await resolveProvider(payload);
   } catch (e) {
@@ -158,11 +175,17 @@ export async function dispatchWhatsAppSend(payload: WhatsAppSendPayload) {
     return { data: null, error: { message: err.message, name: err.code } as any };
   }
 
-  // Re-rota lazy Comercial → Meta 7020 (Central Trabalhista)
-  // Dispara quando: (a) o provider resolvido ainda é Twilio/default, OU
-  // (b) a thread já contém a nota de migração mas o endpoint resolvido não é o
-  // alvo Meta 7020 (caso de threads migradas antes da persistência do
-  // primary_endpoint_id ter sido adicionada à edge function).
+  // Re-rota lazy Comercial → endpoint comercial atual.
+  //
+  // Duas ramas:
+  //   (a) PR4 — genérica: thread.business_context = 'sales' e o endpoint
+  //       resolvido NÃO é comercial (purpose ∉ SALES_PURPOSES).
+  //   (b) Legado — hardcode Central Trabalhista (`REROUTE_ORG_ID`) mantido
+  //       como salvaguarda enquanto o front não passa `businessContext` em
+  //       todos os pontos de envio. Será removido no PR5.
+  //
+  // Ambas as ramas só valem em `senderContext === 'messages'` e nunca em
+  // `/inbox`.
   let alreadyMigratedThread = false;
   if (
     payload.senderContext === "messages" &&
@@ -182,18 +205,33 @@ export async function dispatchWhatsAppSend(payload: WhatsAppSendPayload) {
     alreadyMigratedThread = !!noteRow;
   }
 
-  const shouldReroute =
+  const salesContextMismatch =
+    payload.senderContext === "messages" &&
+    payload.businessContext === "sales" &&
+    !isSalesPurpose(resolved.purpose);
+
+  const legacyCentralTrabalhista =
     payload.senderContext === "messages" &&
     payload.organizationId === REROUTE_ORG_ID &&
-    (resolved.provider === "twilio" || resolved.source === "default" || alreadyMigratedThread) &&
+    (resolved.provider === "twilio" || resolved.source === "default" || alreadyMigratedThread);
+
+  const shouldReroute =
+    !!payload.threadId &&
     payload.endpointId !== REROUTE_TARGET_ENDPOINT_ID &&
-    !!payload.threadId;
+    (salesContextMismatch || legacyCentralTrabalhista);
 
   if (shouldReroute) {
+    const reason = salesContextMismatch
+      ? "sales_context_non_commercial_endpoint"
+      : alreadyMigratedThread
+        ? "thread_already_migrated"
+        : "provider_twilio_or_default";
     console.log("[dispatch-wa] re-route commercial → meta 7020", {
       threadId: payload.threadId,
       previousSource: resolved.source,
-      reason: alreadyMigratedThread ? "thread_already_migrated" : "provider_twilio_or_default",
+      previousPurpose: resolved.purpose,
+      businessContext: payload.businessContext ?? null,
+      reason,
     });
     payload = {
       ...payload,
@@ -206,7 +244,7 @@ export async function dispatchWhatsAppSend(payload: WhatsAppSendPayload) {
         noteText: REROUTE_NOTE_TEXT,
       },
     };
-    resolved = { provider: "meta_cloud_api", source: "endpoint_explicit" };
+    resolved = { provider: "meta_cloud_api", purpose: "commercial", source: "endpoint_explicit" };
   }
 
   const fnName = resolved.provider === "meta_cloud_api"

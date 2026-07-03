@@ -4,6 +4,7 @@ import { EndpointSelector } from './EndpointSelector';
 import { useOrgWhatsAppEndpoints } from '@/hooks/useOrgWhatsAppEndpoints';
 import { supabase } from '@/integrations/supabase/client';
 import { useOrganization } from '@/hooks/useOrganization';
+import { purposesForIntent, type ComposerIntent } from '@/lib/endpointPurpose';
 import { useTranslation } from '@/lib/i18n';
 import {
   Dialog,
@@ -39,10 +40,15 @@ interface NewConversationDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   onSelectContact: (contactId: string, threadId: string, endpointId: string | null) => void | Promise<void>;
-  /** Restringe os endpoints elegíveis por `purpose`. Quando definido, o
-   *  EndpointSelector é ocultado e o endpoint é escolhido automaticamente
-   *  dentro do subconjunto. Usado em /inbox para forçar Atendimento. */
+  /** @deprecated (será removido no PR5) — use `intent`. Restringe os
+   *  endpoints elegíveis por `purpose`. Quando definido, o EndpointSelector
+   *  é ocultado e o endpoint é escolhido automaticamente dentro do subconjunto. */
   forcePurposes?: Array<'customer_service' | 'other' | 'commercial' | 'vendor_personal'>;
+  /** Intenção do send. Filtra o pool de endpoints pelo `purpose`
+   *  correspondente (`sales` → commercial|vendor_personal,
+   *  `customer_service` → customer_service|support|other). Precede
+   *  `forcePurposes` quando ambos forem passados. */
+  intent?: ComposerIntent;
   /** Título customizado (default: "Nova Conversa"). */
   title?: string;
   /** Marcador jsonb gravado em message_threads.last_routing_decision quando
@@ -55,6 +61,7 @@ export function NewConversationDialog({
   onOpenChange,
   onSelectContact,
   forcePurposes,
+  intent,
   title,
   routingDecision,
 }: NewConversationDialogProps) {
@@ -65,10 +72,18 @@ export function NewConversationDialog({
   const { endpoints, officialNumbers, loading: endpointsLoading } =
     useOrgWhatsAppEndpoints(organization?.id);
 
+  // `intent` tem precedência sobre `forcePurposes` (compat).
+  const effectivePurposes = useMemo<readonly string[] | null>(() => {
+    if (intent) return purposesForIntent(intent);
+    if (forcePurposes && forcePurposes.length > 0) return forcePurposes as readonly string[];
+    return null;
+  }, [intent, forcePurposes]);
+
   const isForcedCustomerServiceFlow = useMemo(() => {
+    if (intent === 'customer_service') return true;
     if (!forcePurposes?.length) return false;
     return forcePurposes.some((purpose) => purpose === 'customer_service' || purpose === 'other');
-  }, [forcePurposes]);
+  }, [intent, forcePurposes]);
 
   /**
    * Endpoint preferido para criar/abrir conversa a partir do botão
@@ -84,8 +99,8 @@ export function NewConversationDialog({
    */
   const orderedEndpoints = useMemo(() => {
     if (!endpoints.length) return null;
-    const pool = forcePurposes && forcePurposes.length > 0
-      ? endpoints.filter((ep) => ep.purpose && (forcePurposes as string[]).includes(ep.purpose))
+    const pool = effectivePurposes
+      ? endpoints.filter((ep) => ep.purpose && effectivePurposes.includes(ep.purpose))
       : endpoints;
     if (!pool.length) return [];
     const endpointRank = (ep: typeof endpoints[number]) => {
@@ -102,7 +117,7 @@ export function NewConversationDialog({
       if (byRank !== 0) return byRank;
       return new Date(b.created_at).getTime() - new Date(a.created_at).getTime();
     });
-  }, [endpoints, forcePurposes]);
+  }, [endpoints, effectivePurposes]);
 
   const preferredEndpointId = useMemo<string | null>(() => {
     if (!orderedEndpoints?.length) return null;
@@ -121,7 +136,7 @@ export function NewConversationDialog({
     return (transitional[0] ?? sorted[0]).id;
   }, [orderedEndpoints, officialNumbers, isForcedCustomerServiceFlow]);
 
-  const noEndpointForPurpose = !endpointsLoading && !!forcePurposes && (orderedEndpoints?.length ?? 0) === 0;
+  const noEndpointForPurpose = !endpointsLoading && !!effectivePurposes && (orderedEndpoints?.length ?? 0) === 0;
 
   // Endpoint efetivamente usado para abrir/criar a thread. Inicia no
   // preferido (heurística) e pode ser sobrescrito pelo usuário via
@@ -261,8 +276,8 @@ export function NewConversationDialog({
             />
           </div>
 
-          {/* Endpoint selector — escondido quando forcePurposes está definido */}
-          {!forcePurposes && (
+          {/* Endpoint selector — escondido quando purposes estão restritos */}
+          {!effectivePurposes && (
             <EndpointSelector
               endpoints={orderedEndpoints ?? endpoints}
               value={selectedEndpointId}
