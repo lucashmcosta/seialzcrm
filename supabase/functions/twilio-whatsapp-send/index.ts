@@ -630,38 +630,68 @@ serve(async (req) => {
         isIn24hWindow = hoursDiff < 24
       }
     } else {
-      // Legacy fallback: threadId not provided. Multiple threads per
-      // (org, contact, channel) are now allowed when separated by
-      // primary_endpoint_id, so .single() would throw — pick most recent.
-      const { data: existingThread } = await supabase
+      // P1 fix (2026-07-03): antes reusava qualquer thread por (org,contact,channel),
+      // sem filtrar `primary_endpoint_id`, sem excluir losers consolidados e sem
+      // reabrir threads `resolved`/`closed` — o fluxo de template criava thread
+      // nova a cada envio quando a existente estava resolvida.
+      let existingQuery = supabase
         .from('message_threads')
-        .select('id, whatsapp_last_inbound_at')
+        .select('id, whatsapp_last_inbound_at, status')
         .eq('organization_id', organizationId)
         .eq('contact_id', contactId)
         .eq('channel', 'whatsapp')
+        .is('merged_into_thread_id', null)
         .order('updated_at', { ascending: false })
         .limit(1)
-        .maybeSingle()
+
+      // Quando o caller passou um endpointId explícito (`messagesEndpointIdOverride`),
+      // exigimos match por primary_endpoint_id para não colapsar threads de
+      // endpoints diferentes do mesmo contato.
+      if (messagesEndpointIdOverride) {
+        existingQuery = existingQuery.eq('primary_endpoint_id', messagesEndpointIdOverride)
+      }
+
+      const { data: existingThread } = await existingQuery.maybeSingle()
 
       if (existingThread) {
         currentThreadId = existingThread.id
-        
+
         if (existingThread.whatsapp_last_inbound_at) {
           const lastInbound = new Date(existingThread.whatsapp_last_inbound_at)
           const now = new Date()
           const hoursDiff = (now.getTime() - lastInbound.getTime()) / (1000 * 60 * 60)
           isIn24hWindow = hoursDiff < 24
         }
+
+        if (existingThread.status === 'resolved' || existingThread.status === 'closed') {
+          const { error: reopenErr } = await supabase
+            .from('message_threads')
+            .update({ status: 'open', resolved_at: null })
+            .eq('id', existingThread.id)
+          if (reopenErr) {
+            console.warn('[twilio-wa-send] thread_reopen_failed', {
+              threadId: existingThread.id,
+              err: reopenErr.message,
+            })
+          } else {
+            console.log('[twilio-wa-send] thread_reopened', { threadId: existingThread.id })
+          }
+        }
       } else {
-        // Create new thread
+        // Create new thread — inclui primary_endpoint_id quando disponível
+        // para evitar duplicatas silenciosas em envios seguintes.
+        const insertPayload: Record<string, unknown> = {
+          organization_id: organizationId,
+          contact_id: contactId,
+          channel: 'whatsapp',
+          subject: 'WhatsApp',
+        }
+        if (messagesEndpointIdOverride) {
+          insertPayload.primary_endpoint_id = messagesEndpointIdOverride
+        }
         const { data: newThread, error: threadError } = await supabase
           .from('message_threads')
-          .insert({
-            organization_id: organizationId,
-            contact_id: contactId,
-            channel: 'whatsapp',
-            subject: 'WhatsApp',
-          })
+          .insert(insertPayload)
           .select('id')
           .single()
 
