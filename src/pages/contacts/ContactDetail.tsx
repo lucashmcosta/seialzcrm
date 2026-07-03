@@ -274,7 +274,7 @@ export default function ContactDetail() {
       case 'tasks': return <ContactTasks contactId={contact!.id} />;
       case 'notes': return <ContactNotes contactId={contact!.id} />;
       case 'calls': return <ContactCalls contactId={contact!.id} contactPhone={contact?.phone} contactName={contact?.full_name} />;
-      case 'messages': return <ContactMessages contactId={contact!.id} />;
+      case 'messages': return <ContactConversations contactId={contact!.id} />;
       case 'attachments': return <ContactAttachments contactId={contact!.id} />;
       default: return null;
     }
