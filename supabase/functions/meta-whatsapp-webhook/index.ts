@@ -784,7 +784,7 @@ async function handleInbound(
   );
 
   // 10) Insert message
-  const { error: msgInsErr } = await supabase.from("messages").insert({
+  const { data: insertedMsg, error: msgInsErr } = await supabase.from("messages").insert({
     organization_id: endpoint.organization_id,
     thread_id: threadId,
     content,
@@ -798,8 +798,12 @@ async function handleInbound(
     reply_to_message_id: replyToMessageId,
     sent_at: new Date().toISOString(),
     metadata: { meta_cloud: { ...mediaInfo, raw: msg, referral } },
-  });
-  if (msgInsErr) console.error("[meta-wa-webhook] message insert error", msgInsErr);
+  }).select("id").single();
+  if (msgInsErr) {
+    console.error("[meta-wa-webhook] message insert error", msgInsErr);
+    return { messageId: null, threadId, error: `message_insert_error:${msgInsErr.message ?? msgInsErr.code ?? "unknown"}` };
+  }
+  const insertedMessageId: string | null = insertedMsg?.id ?? null;
 
   await supabase
     .from("message_threads")
@@ -825,6 +829,8 @@ async function handleInbound(
   await triggerAiAgentOrFlagHuman(
     supabase, endpoint.organization_id, threadId, contactId, content,
   );
+
+  return { messageId: insertedMessageId, threadId, error: null };
 }
 
 async function handleStatus(supabase: any, endpoint: any, st: any): Promise<void> {
