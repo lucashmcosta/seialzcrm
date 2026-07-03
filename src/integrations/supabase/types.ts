@@ -4677,6 +4677,78 @@ export type Database = {
         }
         Relationships: []
       }
+      message_thread_merge_audit: {
+        Row: {
+          batch_id: string
+          business_context: string | null
+          contact_id: string
+          executed_at: string
+          id: string
+          loser_prev_status: string | null
+          loser_snapshot: Json
+          loser_thread_id: string
+          moved_ai_agent_logs: number
+          moved_ai_inter_logs: number
+          moved_assign_hist: number
+          moved_messages: number
+          moved_reads: number
+          moved_response_times: number
+          moved_scheduled: number
+          moved_tasks: number
+          organization_id: string
+          primary_endpoint_id: string | null
+          unmerged_at: string | null
+          winner_snapshot: Json
+          winner_thread_id: string
+        }
+        Insert: {
+          batch_id: string
+          business_context?: string | null
+          contact_id: string
+          executed_at?: string
+          id?: string
+          loser_prev_status?: string | null
+          loser_snapshot: Json
+          loser_thread_id: string
+          moved_ai_agent_logs?: number
+          moved_ai_inter_logs?: number
+          moved_assign_hist?: number
+          moved_messages?: number
+          moved_reads?: number
+          moved_response_times?: number
+          moved_scheduled?: number
+          moved_tasks?: number
+          organization_id: string
+          primary_endpoint_id?: string | null
+          unmerged_at?: string | null
+          winner_snapshot: Json
+          winner_thread_id: string
+        }
+        Update: {
+          batch_id?: string
+          business_context?: string | null
+          contact_id?: string
+          executed_at?: string
+          id?: string
+          loser_prev_status?: string | null
+          loser_snapshot?: Json
+          loser_thread_id?: string
+          moved_ai_agent_logs?: number
+          moved_ai_inter_logs?: number
+          moved_assign_hist?: number
+          moved_messages?: number
+          moved_reads?: number
+          moved_response_times?: number
+          moved_scheduled?: number
+          moved_tasks?: number
+          organization_id?: string
+          primary_endpoint_id?: string | null
+          unmerged_at?: string | null
+          winner_snapshot?: Json
+          winner_thread_id?: string
+        }
+        Relationships: []
+      }
       message_thread_reads: {
         Row: {
           last_read_at: string
@@ -4733,6 +4805,7 @@ export type Database = {
           last_message_direction: string | null
           last_message_id: string | null
           last_routing_decision: Json | null
+          merged_into_thread_id: string | null
           needs_human_attention: boolean | null
           opportunity_id: string | null
           organization_id: string
@@ -4770,6 +4843,7 @@ export type Database = {
           last_message_direction?: string | null
           last_message_id?: string | null
           last_routing_decision?: Json | null
+          merged_into_thread_id?: string | null
           needs_human_attention?: boolean | null
           opportunity_id?: string | null
           organization_id: string
@@ -4807,6 +4881,7 @@ export type Database = {
           last_message_direction?: string | null
           last_message_id?: string | null
           last_routing_decision?: Json | null
+          merged_into_thread_id?: string | null
           needs_human_attention?: boolean | null
           opportunity_id?: string | null
           organization_id?: string
@@ -4842,6 +4917,13 @@ export type Database = {
             columns: ["contact_id"]
             isOneToOne: false
             referencedRelation: "contacts"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "message_threads_merged_into_thread_id_fkey"
+            columns: ["merged_into_thread_id"]
+            isOneToOne: false
+            referencedRelation: "message_threads"
             referencedColumns: ["id"]
           },
           {
@@ -5058,6 +5140,7 @@ export type Database = {
           is_sample: boolean | null
           media_type: string | null
           media_urls: Json | null
+          merged_from_thread_id: string | null
           metadata: Json | null
           organization_id: string
           reply_to_message_id: string | null
@@ -5091,6 +5174,7 @@ export type Database = {
           is_sample?: boolean | null
           media_type?: string | null
           media_urls?: Json | null
+          merged_from_thread_id?: string | null
           metadata?: Json | null
           organization_id: string
           reply_to_message_id?: string | null
@@ -5124,6 +5208,7 @@ export type Database = {
           is_sample?: boolean | null
           media_type?: string | null
           media_urls?: Json | null
+          merged_from_thread_id?: string | null
           metadata?: Json | null
           organization_id?: string
           reply_to_message_id?: string | null
@@ -8047,6 +8132,10 @@ export type Database = {
       kairos_db_stats: { Args: never; Returns: Json }
       kairos_diagnose: { Args: never; Returns: Json }
       kairos_table_stats: { Args: never; Returns: Json }
+      merge_message_threads: {
+        Args: { p_batch: string; p_loser: string; p_winner: string }
+        Returns: undefined
+      }
       normalize_phone_br: { Args: { phone_input: string }; Returns: string }
       populate_communication_endpoints_from_v2_senders: {
         Args: never
@@ -8525,6 +8614,7 @@ export type Database = {
         Args: { p_lead_form_id: string }
         Returns: boolean
       }
+      unmerge_message_thread: { Args: { p_loser: string }; Returns: undefined }
       update_organization_usage_metrics: {
         Args: { org_id: string }
         Returns: undefined
