@@ -141,7 +141,7 @@ export function useMessageThreads(options: UseMessageThreadsOptions = {}) {
         p_organization_id: orgId,
         p_channels: channels,
         p_limit: limit,
-        p_cursor_updated_at: lastThread.updated_at,
+        p_cursor_updated_at: lastThread.last_message_at ?? lastThread.created_at,
         p_cursor_id: lastThread.id,
         p_search: searchTerm,
       });
