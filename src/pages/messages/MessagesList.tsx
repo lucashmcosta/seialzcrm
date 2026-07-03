@@ -46,7 +46,7 @@ import { formatDistanceToNow } from 'date-fns';
 import { ptBR, enUS } from 'date-fns/locale';
 import { useToast } from '@/hooks/use-toast';
 import { useWhatsAppProvider } from '@/hooks/useWhatsAppProvider';
-import { useThreadBusinessContext } from '@/hooks/useThreadBusinessContext';
+import { useThreadBusinessContext, type ThreadBusinessContext } from '@/hooks/useThreadBusinessContext';
 import { resolveComposerProvider } from '@/lib/resolveComposerProvider';
 import { pickPreferredEndpoint, filterEndpointsByIntent } from '@/lib/composerEndpoint';
 import { isSalesPurpose } from '@/lib/endpointPurpose';
@@ -573,7 +573,14 @@ function DesktopMessagesList() {
   // deve preferir endpoint com purpose ∈ SALES_PURPOSES (comercial). Ex.:
   // thread histórica do 7027 pré-16/06 aparece como sales em /messages e
   // enviaremos pelo 7020 (comercial), não pelo 7027 (customer_service).
-  const selectedThreadBusinessContext = useThreadBusinessContext(selectedThreadId);
+  // PR5.3 pré-req: /messages já filtra business_context='sales' na RPC de
+  // listagem. Enquanto o hook async está loading (ou retorna null para threads
+  // legadas sem coluna preenchida), assumimos 'sales' como fallback determinístico.
+  // Isso elimina a race em que um send rápido (template/texto/mídia) sairia sem
+  // businessContext no payload e cairia no path legado do primary_endpoint.
+  const hookedThreadBusinessContext = useThreadBusinessContext(selectedThreadId);
+  const selectedThreadBusinessContext: ThreadBusinessContext =
+    hookedThreadBusinessContext ?? 'sales';
   const salesEndpoints = useMemo(
     () => filterEndpointsByIntent(orgEndpoints, 'sales'),
     [orgEndpoints],
