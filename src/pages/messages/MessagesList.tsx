@@ -321,6 +321,30 @@ function DesktopMessagesList() {
   useEffect(() => {
     supabase.auth.getSession().then(({ data }) => setAccessToken(data.session?.access_token));
   }, []);
+
+  // Deep-link: ?thread=<id> abre uma thread específica (usado pela aba
+  // Conversas do contato). Se a thread não estiver na página atual da
+  // lista, hidratamos via loadThreadForSelection e injetamos como
+  // selectedThreadOverride (mesmo caminho do "Nova Conversa").
+  const [searchParams, setSearchParams] = useSearchParams();
+  const deepLinkThreadId = searchParams.get('thread');
+  const deepLinkHandledRef = useRef<string | null>(null);
+  useEffect(() => {
+    if (!deepLinkThreadId || !organization?.id) return;
+    if (deepLinkHandledRef.current === deepLinkThreadId) return;
+    deepLinkHandledRef.current = deepLinkThreadId;
+    (async () => {
+      const loaded = await loadThreadForSelection(deepLinkThreadId, null);
+      if (loaded) setSelectedThreadOverride(loaded);
+      setSelectedThreadId(deepLinkThreadId);
+      // Limpa o param para permitir re-navegação futura ao mesmo link.
+      const next = new URLSearchParams(searchParams);
+      next.delete('thread');
+      setSearchParams(next, { replace: true });
+    })();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [deepLinkThreadId, organization?.id]);
+
   
   // Note mode state
   const [isNoteMode, setIsNoteMode] = useState(false);
