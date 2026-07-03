@@ -1703,6 +1703,8 @@ function DesktopMessagesList() {
                         organizationId: organization?.id,
                         senderContext: 'messages',
                         resolvedProvider: selectedThreadWaProvider,
+                        businessContext: selectedThreadBusinessContext,
+                        threadPrimaryPurpose: primaryEndpointPurpose,
                       }) === 'meta_cloud_api' ? 'meta_cloud_api' : undefined}
                     />
                   </div>
