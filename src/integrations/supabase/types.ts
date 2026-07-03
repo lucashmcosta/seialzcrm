@@ -4997,6 +4997,39 @@ export type Database = {
           },
         ]
       }
+      messages_endpoint_backfill_2b: {
+        Row: {
+          backfilled_at: string
+          id: number
+          message_id: string
+          method: string
+          migration_version: string
+          new_endpoint_id: string
+          old_endpoint_id: string | null
+          thread_id: string | null
+        }
+        Insert: {
+          backfilled_at?: string
+          id?: number
+          message_id: string
+          method: string
+          migration_version?: string
+          new_endpoint_id: string
+          old_endpoint_id?: string | null
+          thread_id?: string | null
+        }
+        Update: {
+          backfilled_at?: string
+          id?: number
+          message_id?: string
+          method?: string
+          migration_version?: string
+          new_endpoint_id?: string
+          old_endpoint_id?: string | null
+          thread_id?: string | null
+        }
+        Relationships: []
+      }
       meta_lead_pages: {
         Row: {
           created_at: string
