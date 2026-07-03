@@ -50,7 +50,9 @@ export default function InboxPage() {
   // Deep-link: ?thread=<id> abre uma thread específica (usado pela aba
   // Conversas do contato). InboxThreadDetail carrega os detalhes por id
   // independentemente da lista, então basta setar selectedId.
-  const [searchParams, setSearchParams] = useSearchParams();
+  // Mantemos o ?thread= na URL (não removemos) para evitar race de
+  // re-render que poderia limpar seleção no primeiro carregamento.
+  const [searchParams] = useSearchParams();
   const deepLinkThreadId = searchParams.get('thread');
   const deepLinkHandledRef = useRef<string | null>(null);
   useEffect(() => {
@@ -58,10 +60,8 @@ export default function InboxPage() {
     if (deepLinkHandledRef.current === deepLinkThreadId) return;
     deepLinkHandledRef.current = deepLinkThreadId;
     setSelectedId(deepLinkThreadId);
-    const next = new URLSearchParams(searchParams);
-    next.delete('thread');
-    setSearchParams(next, { replace: true });
-  }, [deepLinkThreadId, searchParams, setSearchParams]);
+  }, [deepLinkThreadId]);
+
 
 
   
