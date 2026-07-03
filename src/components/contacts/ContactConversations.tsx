@@ -1,4 +1,5 @@
 import { useMemo, useState } from 'react';
+import type { Locale } from 'date-fns';
 import { useNavigate } from 'react-router-dom';
 import { formatDistanceToNow } from 'date-fns';
 import { ptBR, enUS } from 'date-fns/locale';
