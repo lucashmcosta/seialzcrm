@@ -20,6 +20,7 @@ export interface ContextThreadRow {
     purpose: string | null;
   } | null;
   assigned_user_name?: string | null;
+  message_count?: number;
 }
 
 export interface ContactConversationsResult {
@@ -29,14 +30,14 @@ export interface ContactConversationsResult {
 
 /**
  * Escolhe o thread representante para um dado contexto:
- * 1. Prefere threads com mensagens (last_message_at != null).
- * 2. Entre elas, maior last_message_at.
+ * 1. Prefere threads com mensagens reais no banco.
+ * 2. Entre elas, maior last_message_at real/denormalizado.
  * 3. Empate: maior created_at.
  * 4. Se nenhuma com mensagem, retorna a mais recente por created_at.
  */
 function pickRepresentative(rows: ContextThreadRow[]): ContextThreadRow | null {
   if (rows.length === 0) return null;
-  const withMsgs = rows.filter((r) => !!r.last_message_at);
+  const withMsgs = rows.filter((r) => (r.message_count ?? 0) > 0 || !!r.last_message_at);
   const pool = withMsgs.length > 0 ? withMsgs : rows;
   return [...pool].sort((a, b) => {
     const aKey = a.last_message_at ?? a.created_at;
@@ -69,6 +70,57 @@ export function useContactConversationsByContext(contactId: string | null | unde
       }
 
       const rows = (threadRows ?? []) as ContextThreadRow[];
+
+      // Blindagem contra duplicatas vazias: a escolha do card deve ser guiada
+      // pelas mensagens reais, não só por updated_at/status da thread.
+      const threadIds = rows.map((r) => r.id);
+      if (threadIds.length > 0) {
+        const { data: messageRows, error: msgError } = await supabase
+          .from('messages')
+          .select('thread_id, content, direction, sent_at, created_at')
+          .in('thread_id', threadIds)
+          .is('deleted_at', null)
+          .order('sent_at', { ascending: false });
+
+        if (!msgError) {
+          const messageStats = new Map<
+            string,
+            { count: number; last_at: string | null; last_content: string | null; last_direction: string | null }
+          >();
+
+          for (const msg of (messageRows ?? []) as any[]) {
+            const threadId = msg.thread_id as string;
+            const current = messageStats.get(threadId) ?? {
+              count: 0,
+              last_at: null,
+              last_content: null,
+              last_direction: null,
+            };
+            current.count += 1;
+
+            const msgAt = (msg.sent_at ?? msg.created_at ?? null) as string | null;
+            if (msgAt && (!current.last_at || msgAt > current.last_at)) {
+              current.last_at = msgAt;
+              current.last_content = (msg.content ?? null) as string | null;
+              current.last_direction = (msg.direction ?? null) as string | null;
+            }
+            messageStats.set(threadId, current);
+          }
+
+          for (const row of rows) {
+            const stats = messageStats.get(row.id);
+            row.message_count = stats?.count ?? 0;
+            if (stats?.last_at) {
+              row.last_message_at = stats.last_at;
+              row.last_message_content = stats.last_content;
+              row.last_message_direction = stats.last_direction;
+            }
+          }
+        } else {
+          console.error('[useContactConversationsByContext] messages lookup', msgError);
+        }
+      }
+
       const sales = pickRepresentative(rows.filter((r) => r.business_context === 'sales'));
       const cs = pickRepresentative(rows.filter((r) => r.business_context === 'customer_service'));
 
