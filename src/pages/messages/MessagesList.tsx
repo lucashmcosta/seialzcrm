@@ -46,7 +46,7 @@ import { formatDistanceToNow } from 'date-fns';
 import { ptBR, enUS } from 'date-fns/locale';
 import { useToast } from '@/hooks/use-toast';
 import { useWhatsAppProvider } from '@/hooks/useWhatsAppProvider';
-import { useThreadBusinessContext } from '@/hooks/useThreadBusinessContext';
+import { useThreadBusinessContext, type ThreadBusinessContext } from '@/hooks/useThreadBusinessContext';
 import { resolveComposerProvider } from '@/lib/resolveComposerProvider';
 import { pickPreferredEndpoint, filterEndpointsByIntent } from '@/lib/composerEndpoint';
 import { isSalesPurpose } from '@/lib/endpointPurpose';
