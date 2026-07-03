@@ -49,6 +49,9 @@ interface NewConversationDialogProps {
   /** Marcador jsonb gravado em message_threads.last_routing_decision quando
    *  uma thread NOVA é criada. Não é aplicado em thread já existente. */
   routingDecision?: Record<string, unknown>;
+  /** Pré-seleciona um contato e restringe a lista a ele (usado quando
+   *  o dialog é aberto a partir da tela do contato). */
+  initialContactId?: string | null;
 }
 
 export function NewConversationDialog({
