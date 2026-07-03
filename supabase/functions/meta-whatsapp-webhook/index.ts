@@ -625,7 +625,7 @@ async function handleInbound(
   );
   if (!contactId) {
     console.log("[meta-wa-webhook] no contactId (auto_create_contact disabled?) — skipping", { fromE164 });
-    return;
+    return { messageId: null, threadId: null, error: "no_contact" };
   }
 
   // 4) Auto-create opportunity quando contato foi recém-criado
