@@ -581,7 +581,7 @@ async function triggerAiAgentOrFlagHuman(
 // ============================================================
 async function handleInbound(
   supabase: any, endpoint: any, msg: any, value: any,
-): Promise<void> {
+): Promise<{ messageId: string | null; threadId: string | null; error: string | null }> {
   const fromE164 = "+" + String(msg.from).replace(/^\+/, "");
   const wamid = msg.id as string;
   const profileName = value?.contacts?.[0]?.profile?.name ?? "";
