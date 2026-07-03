@@ -2235,6 +2235,7 @@ function DesktopMessagesList() {
       <NewConversationDialog
         open={showNewConversation}
         onOpenChange={setShowNewConversation}
+        intent="sales"
         onSelectContact={async (_contactId, threadId, endpointId) => {
           setSearchQuery('');
           if (endpointFilter !== 'all' && endpointFilter !== endpointId) {
