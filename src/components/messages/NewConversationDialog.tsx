@@ -258,17 +258,19 @@ export function NewConversationDialog({
         </DialogHeader>
 
         <div className="space-y-4">
-          {/* Search input */}
-          <div className="relative">
-            <MagnifyingGlass className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
-            <Input
-              placeholder={locale === 'pt-BR' ? 'Buscar contato...' : 'Search contact...'}
-              value={search}
-              onChange={(e) => setSearch(e.target.value)}
-              className="pl-9"
-              autoFocus
-            />
-          </div>
+          {/* Search input — escondido quando o contato já vem pré-selecionado */}
+          {!initialContactId && (
+            <div className="relative">
+              <MagnifyingGlass className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+              <Input
+                placeholder={locale === 'pt-BR' ? 'Buscar contato...' : 'Search contact...'}
+                value={search}
+                onChange={(e) => setSearch(e.target.value)}
+                className="pl-9"
+                autoFocus
+              />
+            </div>
+          )}
 
           {/* Endpoint selector — escondido quando purposes estão restritos */}
           {!effectivePurposes && (
