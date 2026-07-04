@@ -252,6 +252,22 @@ export async function dispatchWhatsAppSend(payload: WhatsAppSendPayload) {
     ? "meta-whatsapp-send"
     : "twilio-whatsapp-send";
 
+  // Compliance defense-in-depth: bloqueia templates proibidos por endpoint
+  // (regra LOW hardcoded — ver src/lib/complianceGuards.ts). Aplica-se ao
+  // endpointId final (após re-rota), garantindo que qualquer caminho de UI
+  // que esqueça o guard não vaze envio.
+  if (payload.templateId && payload.endpointId) {
+    const block = assertTemplateAllowedForEndpoint(payload.templateId, payload.endpointId);
+    if (block) {
+      console.warn("[dispatch-wa] blocked by endpoint-template rule", {
+        endpointId: payload.endpointId,
+        templateId: payload.templateId,
+        reason: block,
+      });
+      return { data: null, error: { message: block, name: "template_blocked_by_endpoint" } as any };
+    }
+  }
+
   console.log("[dispatch-wa] route", {
     provider: resolved.provider,
     source: resolved.source,
