@@ -19,6 +19,8 @@ interface Template {
   variables: unknown;
   status: string;
   category: string | null;
+  allowed_purposes: string[] | null;
+  meta_template_name?: string | null;
 }
 
 interface WhatsAppTemplateSelectorProps {
