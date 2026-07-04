@@ -1571,6 +1571,51 @@ export type Database = {
           },
         ]
       }
+      compliance_blocks: {
+        Row: {
+          attempted_by_user_id: string | null
+          block_reason: string
+          contact_id: string | null
+          created_at: string
+          endpoint_id: string | null
+          id: string
+          organization_id: string
+          source_component: string | null
+          template_id: string | null
+          template_name: string | null
+          thread_id: string | null
+          window_state: Json | null
+        }
+        Insert: {
+          attempted_by_user_id?: string | null
+          block_reason: string
+          contact_id?: string | null
+          created_at?: string
+          endpoint_id?: string | null
+          id?: string
+          organization_id: string
+          source_component?: string | null
+          template_id?: string | null
+          template_name?: string | null
+          thread_id?: string | null
+          window_state?: Json | null
+        }
+        Update: {
+          attempted_by_user_id?: string | null
+          block_reason?: string
+          contact_id?: string | null
+          created_at?: string
+          endpoint_id?: string | null
+          id?: string
+          organization_id?: string
+          source_component?: string | null
+          template_id?: string | null
+          template_name?: string | null
+          thread_id?: string | null
+          window_state?: Json | null
+        }
+        Relationships: []
+      }
       contact_memories: {
         Row: {
           contact_id: string
