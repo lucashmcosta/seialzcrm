@@ -102,24 +102,28 @@ export interface TemplateRateLimitCheck {
 }
 
 /**
- * Bloqueia envio de qualquer template para o mesmo `contact_id`
- * se um template já foi enviado nas últimas 24h. Fail-open no erro
- * (registra warning e libera) para não travar UI em incidente do banco.
+ * Bloqueia envio de qualquer template para a mesma thread (proxy do contato
+ * dentro do canal WhatsApp) se um template já foi enviado nas últimas 24h.
+ * Fail-open em erro do banco para não travar a UI em incidente.
+ *
+ * Observação: `messages` não tem `contact_id` (a chave de conversa é `thread_id`).
+ * Como cada contato tem uma thread WhatsApp por endpoint, checar por thread já
+ * cobre a regra "1 template / contato / 24h" no mesmo canal.
  */
 export async function checkTemplateRateLimit(
-  contactId: string | null | undefined,
+  threadId: string | null | undefined,
   organizationId: string | null | undefined,
   now = Date.now(),
 ): Promise<TemplateRateLimitCheck> {
-  if (!contactId || !organizationId) {
+  if (!threadId || !organizationId) {
     return { allowed: true, lastSentAt: null, reason: null };
   }
   const since = new Date(now - TEMPLATE_RATE_LIMIT_WINDOW_MS).toISOString();
   try {
     const { data, error } = await supabase
       .from('messages')
-      .select('sent_at, template_id, contact_id, organization_id, direction')
-      .eq('contact_id', contactId)
+      .select('sent_at, template_id, thread_id, organization_id, direction')
+      .eq('thread_id', threadId)
       .eq('organization_id', organizationId)
       .eq('direction', 'outbound')
       .not('template_id', 'is', null)
@@ -135,7 +139,7 @@ export async function checkTemplateRateLimit(
     return {
       allowed: false,
       lastSentAt: (data as any).sent_at ?? null,
-      reason: 'Rate limit: já foi enviado 1 template para este contato nas últimas 24h.',
+      reason: 'Rate limit: já foi enviado 1 template nesta conversa nas últimas 24h.',
     };
   } catch (e) {
     console.warn('[compliance] rate-limit unexpected error, fail-open', e);
