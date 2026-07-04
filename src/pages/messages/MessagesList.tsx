@@ -280,7 +280,8 @@ function DesktopMessagesList() {
   const [messagesLoading, setMessagesLoading] = useState(false);
   const [messageText, setMessageText] = useState('');
   const [submitting, setSubmitting] = useState(false);
-  const [isIn24hWindow, setIsIn24hWindow] = useState(false);
+  // Janela de atendimento (24h/CTWA 72h) — hoisted for use nos handlers e UI.
+  // Substitui o antigo state `isIn24hWindow` + `hoursDiff<24` local.
   const [showTemplates, setShowTemplates] = useState(false);
   const [searchQuery, setSearchQuery] = usePersistedFilters<string>('messages.search', '');
   const [debouncedSearch, setDebouncedSearch] = useState<string>(searchQuery || '');
