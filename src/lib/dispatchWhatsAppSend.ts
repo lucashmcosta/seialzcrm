@@ -11,6 +11,7 @@
 import { supabase } from "@/integrations/supabase/client";
 import { isSalesPurpose } from "./endpointPurpose";
 import { assertTemplateAllowedForEndpoint } from "./complianceGuards";
+import { logComplianceBlock } from "./complianceLog";
 
 // === Re-rota Comercial → Meta 7020 (Central Trabalhista) ===
 // Lazy: somente quando a tela /messages enviar em thread cujo provider
