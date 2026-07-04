@@ -23,6 +23,7 @@ import { shouldShowDateSeparator } from '@/lib/dateSeparator';
 import { useWhatsAppProvider } from '@/hooks/useWhatsAppProvider';
 import { useServiceWindow } from '@/hooks/useServiceWindow';
 import { assertTemplateAllowedForEndpoint, checkTemplateRateLimit } from '@/lib/complianceGuards';
+import { logComplianceBlock } from '@/lib/complianceLog';
 
 interface Message {
   id: string;
