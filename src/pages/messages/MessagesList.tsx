@@ -1762,11 +1762,14 @@ function DesktopMessagesList() {
 
 
                 {/* Messages Area */}
+                <LowQualityEndpointBanner endpointId={composerEndpointId} />
                 {showTemplates ? (
                   <div className="flex-1 flex flex-col min-h-0 overflow-hidden">
                     <WhatsAppTemplateSelector
                       onSelect={handleSendTemplate}
                       onCancel={() => setShowTemplates(false)}
+                      endpointId={composerEndpointId}
+                      windowIsOpen={serviceWindow.isOpen}
                       provider={resolveComposerProvider({
                         organizationId: organization?.id,
                         senderContext: 'messages',
