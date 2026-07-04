@@ -266,8 +266,24 @@ export function WhatsAppChat({ contactId, threadId: initialThreadId, onThreadCre
   const handleSendTemplate = async (templateId: string, variables: Record<string, string>) => {
     if (!organization?.id) return;
 
+    // Guard: template bloqueado por endpoint (LOW)
+    const endpointBlock = assertTemplateAllowedForEndpoint(templateId, endpointId);
+    if (endpointBlock) {
+      toast({ variant: 'destructive', description: endpointBlock });
+      return;
+    }
+    // Guard: rate limit 1 template / thread / 24h
+    if (threadId) {
+      const rate = await checkTemplateRateLimit(threadId, organization.id);
+      if (!rate.allowed) {
+        toast({ variant: 'destructive', description: rate.reason ?? 'Rate limit atingido.' });
+        return;
+      }
+    }
+
     setSubmitting(true);
     setShowTemplates(false);
+
 
     try {
       const { data, error } = await dispatchWhatsAppSend({
