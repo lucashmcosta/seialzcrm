@@ -190,6 +190,7 @@ export function InboxThreadDetail({ threadId, onThreadStatusChanged }: Props) {
               <WhatsAppWindowChip
                 channel={thread.channel}
                 lastInboundAt={thread.last_inbound_at || thread.whatsapp_last_inbound_at || null}
+                contactId={thread.contact_id ?? null}
               />
               <InboxSlaChip targetAt={thread.sla_first_response_target_at} firstResponseAt={thread.first_response_at} />
             </div>
