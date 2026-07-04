@@ -53,11 +53,14 @@ export function WhatsAppChat({ contactId, threadId: initialThreadId, onThreadCre
   const [loading, setLoading] = useState(true);
   const [messageText, setMessageText] = useState('');
   const [submitting, setSubmitting] = useState(false);
-  const [isIn24hWindow, setIsIn24hWindow] = useState(false);
+  const [lastInboundAt, setLastInboundAt] = useState<string | null>(null);
+  const [endpointId, setEndpointId] = useState<string | null>(null);
   const [showTemplates, setShowTemplates] = useState(false);
   const [accessToken, setAccessToken] = useState<string | undefined>(undefined);
   const waProvider = useWhatsAppProvider({ threadId });
   const templateSelectorProvider = waProvider === 'meta_cloud_api' ? 'meta_cloud_api' : undefined;
+  const serviceWindow = useServiceWindow({ contactId, lastInboundAt });
+  const isIn24hWindow = serviceWindow.isOpen;
 
   const dateLocale = locale === 'pt-BR' ? ptBR : enUS;
 
