@@ -68,6 +68,11 @@ import { ReplyPreview } from '@/components/whatsapp/ReplyPreview';
 import { OwnerSelector } from '@/components/common/OwnerSelector';
 import EmojiPicker, { EmojiClickData, Theme } from 'emoji-picker-react';
 import { cn } from '@/lib/utils';
+import { useServiceWindow } from '@/hooks/useServiceWindow';
+import { WhatsAppWindowChip } from '@/components/inbox/WhatsAppWindowChip';
+import { LowQualityEndpointBanner } from '@/components/inbox/LowQualityEndpointBanner';
+import { assertTemplateAllowedForEndpoint, checkTemplateRateLimit } from '@/lib/complianceGuards';
+import { logComplianceBlock } from '@/lib/complianceLog';
 import { useAI } from '@/hooks/useAI';
 import { useMessageThreads, type ChatThread } from '@/hooks/useMessageThreads';
 import { useOrgWhatsAppEndpoints } from '@/hooks/useOrgWhatsAppEndpoints';
@@ -275,7 +280,8 @@ function DesktopMessagesList() {
   const [messagesLoading, setMessagesLoading] = useState(false);
   const [messageText, setMessageText] = useState('');
   const [submitting, setSubmitting] = useState(false);
-  const [isIn24hWindow, setIsIn24hWindow] = useState(false);
+  // Janela de atendimento (24h/CTWA 72h) — hoisted for use nos handlers e UI.
+  // Substitui o antigo state `isIn24hWindow` + `hoursDiff<24` local.
   const [showTemplates, setShowTemplates] = useState(false);
   const [searchQuery, setSearchQuery] = usePersistedFilters<string>('messages.search', '');
   const [debouncedSearch, setDebouncedSearch] = useState<string>(searchQuery || '');
@@ -658,6 +664,19 @@ function DesktopMessagesList() {
     : selectedEndpointFallback ?? undefined;
   const selectedEndpointIdentity = formatEndpointIdentity(selectedThreadEndpoint);
 
+  // Compliance: janela de atendimento unificada (24h clássica + CTWA 72h).
+  // Fonte da verdade: `getServiceWindow` via `useServiceWindow`. Substitui a
+  // lógica antiga `isIn24hWindow = hoursDiff < 24` que ignorava CTWA.
+  const composerLastInboundAt = (() => {
+    const t = getLastInboundTime(selectedThread as any, messages);
+    return t ? t.toISOString() : null;
+  })();
+  const serviceWindow = useServiceWindow({
+    contactId: selectedThread?.contact_id ?? null,
+    lastInboundAt: composerLastInboundAt,
+  });
+
+
   useEffect(() => {
     if (!selectedThreadId || !organization?.id) {
       setSelectedEndpointDetails(null);
@@ -905,23 +924,9 @@ function DesktopMessagesList() {
     return () => { supabase.removeChannel(channel); };
   }, [organization?.id, selectedThreadId]);
 
-  // 60s timer to recalculate 24h window
-  useEffect(() => {
-    if (!selectedThread) return;
-    
-    const checkWindow = () => {
-      const lastInboundTime = getLastInboundTime(selectedThread, messages);
-      if (lastInboundTime) {
-        const hoursDiff = (Date.now() - lastInboundTime.getTime()) / (1000 * 60 * 60);
-        setIsIn24hWindow(hoursDiff < 24);
-      } else {
-        setIsIn24hWindow(false);
-      }
-    };
-    
-    const interval = setInterval(checkWindow, 60000);
-    return () => clearInterval(interval);
-  }, [selectedThread?.id, selectedThread?.last_inbound_at, selectedThread?.whatsapp_last_inbound_at, messages]);
+  // (removido) Timer 60s de `isIn24hWindow` — agora `useServiceWindow`
+  // recalcula sozinho e cobre janela CTWA 72h além da sessão 24h.
+
 
   const scrollToBottom = () => {
     setTimeout(() => {
@@ -974,14 +979,8 @@ function DesktopMessagesList() {
         setInlineNotes([]);
       }
 
-      // Check 24h window with 3-level fallback
-      const lastInboundTime = getLastInboundTime(thread, (data as Message[]) || []);
-      if (lastInboundTime) {
-        const hoursDiff = (Date.now() - lastInboundTime.getTime()) / (1000 * 60 * 60);
-        setIsIn24hWindow(hoursDiff < 24);
-      } else {
-        setIsIn24hWindow(false);
-      }
+      // (removido) recomputo local de 24h; `useServiceWindow` cuida disso.
+
 
       // Upsert last_read_at for current user
       if (userProfile?.id) {
@@ -1044,7 +1043,7 @@ function DesktopMessagesList() {
     }
     if (!organization?.id || !messageText.trim() || !selectedThread) return;
 
-    if (!isIn24hWindow) {
+    if (!serviceWindow.isOpen) {
       setShowTemplates(true);
       return;
     }
@@ -1129,6 +1128,44 @@ function DesktopMessagesList() {
 
   const handleSendTemplate = async (templateId: string, variables: Record<string, string>) => {
     if (!organization?.id || !selectedThread) return;
+
+    // Guard: template bloqueado por endpoint (regra LOW hardcoded — 7020).
+    const endpointBlock = assertTemplateAllowedForEndpoint(templateId, composerEndpointId);
+    if (endpointBlock) {
+      logComplianceBlock({
+        organizationId: organization.id,
+        blockReason: 'template_blocked_7020_policy',
+        endpointId: composerEndpointId,
+        threadId: selectedThreadId,
+        contactId: selectedThread.contact_id,
+        templateId,
+        attemptedByUserId: userProfile?.id ?? null,
+        sourceComponent: 'messages_list',
+        window: serviceWindow,
+      });
+      toast({ variant: 'destructive', description: endpointBlock });
+      return;
+    }
+    // Guard: rate limit 1 template / thread / 24h.
+    if (selectedThreadId) {
+      const rate = await checkTemplateRateLimit(selectedThreadId, organization.id);
+      if (!rate.allowed) {
+        logComplianceBlock({
+          organizationId: organization.id,
+          blockReason: 'template_blocked_rate_limit',
+          endpointId: composerEndpointId,
+          threadId: selectedThreadId,
+          contactId: selectedThread.contact_id,
+          templateId,
+          attemptedByUserId: userProfile?.id ?? null,
+          sourceComponent: 'messages_list',
+          window: serviceWindow,
+          extra: { last_template_sent_at: rate.lastSentAt },
+        });
+        toast({ variant: 'destructive', description: rate.reason ?? 'Rate limit atingido.' });
+        return;
+      }
+    }
 
     setShowTemplates(false);
 
@@ -1638,11 +1675,12 @@ function DesktopMessagesList() {
                           {hasMultipleEndpoints && selectedThreadEndpoint && (
                             <EndpointBadge externalAddress={selectedThreadEndpoint.external_address} purpose={selectedThreadEndpoint.purpose ?? null} size="lg" />
                           )}
-                          {isIn24hWindow && (
-                            <BadgeWithDot color="success" size="sm" className="shrink-0">
-                              {locale === 'pt-BR' ? 'Online' : 'Online'}
-                            </BadgeWithDot>
-                          )}
+                          <WhatsAppWindowChip
+                            channel="whatsapp"
+                            lastInboundAt={composerLastInboundAt}
+                            contactId={selectedThread.contact_id}
+                          />
+
                           {selectedThread.status && statusConfig[selectedThread.status] && (
                             <span className={cn('text-xs font-medium shrink-0', statusConfig[selectedThread.status].color)}>
                               {locale === 'pt-BR' ? statusConfig[selectedThread.status].label : statusConfig[selectedThread.status].labelEn}
@@ -1762,11 +1800,14 @@ function DesktopMessagesList() {
 
 
                 {/* Messages Area */}
+                <LowQualityEndpointBanner endpointId={composerEndpointId} />
                 {showTemplates ? (
                   <div className="flex-1 flex flex-col min-h-0 overflow-hidden">
                     <WhatsAppTemplateSelector
                       onSelect={handleSendTemplate}
                       onCancel={() => setShowTemplates(false)}
+                      endpointId={composerEndpointId}
+                      windowIsOpen={serviceWindow.isOpen}
                       provider={resolveComposerProvider({
                         organizationId: organization?.id,
                         senderContext: 'messages',
@@ -2062,7 +2103,8 @@ function DesktopMessagesList() {
                     {/* Input Area */}
                     <div className="border-t border-border p-4 bg-card">
                       {(() => {
-                        const outOfWindow = !isIn24hWindow && messages.length > 0;
+                        const outOfWindow = !serviceWindow.isOpen && messages.length > 0;
+                        const outOfWindowCopy = serviceWindow.reason || (locale === 'pt-BR' ? 'Fora da janela — selecione um template' : 'Outside window — select a template');
                         return (
                           <>
                           {/* Note Mode Indicator */}
@@ -2099,7 +2141,7 @@ function DesktopMessagesList() {
                                   variant="outline"
                                   size="icon"
                                   onClick={() => setShowTemplates(true)}
-                                  title={locale === 'pt-BR' ? 'Selecionar template (fora da janela de 24h)' : 'Select template (outside 24h window)'}
+                                  title={outOfWindowCopy}
                                   className="h-10 w-10"
                                 >
                                   <FileText className="h-5 w-5" />
@@ -2136,7 +2178,7 @@ function DesktopMessagesList() {
                               <Textarea
                                 ref={textareaRef}
                                 placeholder={outOfWindow
-                                  ? (locale === 'pt-BR' ? 'Fora da janela de 24h — selecione um template' : 'Outside 24h window — select a template')
+                                  ? outOfWindowCopy
                                   : isNoteMode
                                     ? (locale === 'pt-BR' ? 'Escreva uma nota interna...' : 'Write an internal note...')
                                     : (locale === 'pt-BR' ? 'Digite uma mensagem...' : 'Type a message...')}
