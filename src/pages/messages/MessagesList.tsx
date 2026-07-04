@@ -2137,7 +2137,7 @@ function DesktopMessagesList() {
                               <Textarea
                                 ref={textareaRef}
                                 placeholder={outOfWindow
-                                  ? (locale === 'pt-BR' ? 'Fora da janela de 24h — selecione um template' : 'Outside 24h window — select a template')
+                                  ? outOfWindowCopy
                                   : isNoteMode
                                     ? (locale === 'pt-BR' ? 'Escreva uma nota interna...' : 'Write an internal note...')
                                     : (locale === 'pt-BR' ? 'Digite uma mensagem...' : 'Type a message...')}
