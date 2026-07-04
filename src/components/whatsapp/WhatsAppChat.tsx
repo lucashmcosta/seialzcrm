@@ -155,15 +155,9 @@ export function WhatsAppChat({ contactId, threadId: initialThreadId, onThreadCre
       if (thread) {
         setThreadId(thread.id);
         onThreadCreated?.(thread.id);
-        
-        // Check 24h window
-        const lastInboundAt = (thread as any).last_inbound_at || thread.whatsapp_last_inbound_at;
-        if (lastInboundAt) {
-          const lastInbound = new Date(lastInboundAt);
-          const now = new Date();
-          const hoursDiff = (now.getTime() - lastInbound.getTime()) / (1000 * 60 * 60);
-          setIsIn24hWindow(hoursDiff < 24);
-        }
+
+        const inbound = (thread as any).last_inbound_at || (thread as any).whatsapp_last_inbound_at || null;
+        setLastInboundAt(inbound);
 
         await fetchMessages(thread.id);
       } else {
