@@ -55,7 +55,7 @@ export function logComplianceBlock(input: ComplianceBlockInput): void {
       template_id: input.templateId ?? null,
       template_name: input.templateName ?? null,
       block_reason: input.blockReason,
-      window_state,
+      window_state: window_state as any,
       attempted_by_user_id: input.attemptedByUserId ?? null,
       source_component: input.sourceComponent ?? null,
     })
