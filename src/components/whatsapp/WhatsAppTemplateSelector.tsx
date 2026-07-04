@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { useOrganization } from '@/hooks/useOrganization';
 import { supabase } from '@/integrations/supabase/client';
 import { Button } from '@/components/ui/button';
@@ -6,7 +6,11 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { ScrollArea } from '@/components/ui/scroll-area';
-import { SpinnerGap, ArrowLeft, Check } from '@phosphor-icons/react';
+import { SpinnerGap, ArrowLeft, Check, LockSimple } from '@phosphor-icons/react';
+import {
+  getLowEndpointConfig,
+  isMarketingBlockedWhenWindowOpen,
+} from '@/lib/complianceGuards';
 
 interface Template {
   id: string;
@@ -27,19 +31,34 @@ interface WhatsAppTemplateSelectorProps {
    * (provider 'twilio' ou rows antigas sem provider).
    */
   provider?: 'twilio' | 'meta_cloud_api';
+  /**
+   * Compliance: endpoint de envio, usado para bloquear templates específicos
+   * do endpoint (ex: 7020 em LOW → esconde primeiro_contato/tentativa_de_contato).
+   */
+  endpointId?: string | null;
+  /**
+   * Compliance: se a janela de atendimento (24h/CTWA 72h) está aberta,
+   * bloqueia templates categoria MARKETING — o correto é responder freeform.
+   */
+  windowIsOpen?: boolean;
 }
 
-export function WhatsAppTemplateSelector({ 
-  onSelect, 
+export function WhatsAppTemplateSelector({
+  onSelect,
   onCancel,
   loading,
-  provider
+  provider,
+  endpointId,
+  windowIsOpen = false,
 }: WhatsAppTemplateSelectorProps) {
   const { organization } = useOrganization();
   const [templates, setTemplates] = useState<Template[]>([]);
   const [loadingTemplates, setLoadingTemplates] = useState(true);
   const [selectedTemplate, setSelectedTemplate] = useState<Template | null>(null);
   const [variables, setVariables] = useState<Record<string, string>>({});
+
+  const lowCfg = useMemo(() => getLowEndpointConfig(endpointId ?? null), [endpointId]);
+  const blockedIds = useMemo(() => new Set(lowCfg?.blockedTemplateIds ?? []), [lowCfg]);
 
   useEffect(() => {
     fetchTemplates();
@@ -72,6 +91,15 @@ export function WhatsAppTemplateSelector({
     } finally {
       setLoadingTemplates(false);
     }
+  };
+
+  /** Retorna motivo de bloqueio ou null se liberado. */
+  const blockedReason = (t: Template): string | null => {
+    if (blockedIds.has(t.id)) return lowCfg?.reason ?? 'Template bloqueado para este número.';
+    if (isMarketingBlockedWhenWindowOpen(t.category, windowIsOpen)) {
+      return 'Janela aberta — responda em texto livre. Marketing só fora da janela.';
+    }
+    return null;
   };
 
   const extractVariables = (body: string): string[] => {
