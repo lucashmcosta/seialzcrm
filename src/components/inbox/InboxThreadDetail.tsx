@@ -239,8 +239,7 @@ export function InboxThreadDetail({ threadId, onThreadStatusChanged }: Props) {
           </div>
         </div>
 
-
-
+        <LowQualityEndpointBanner endpointId={thread.primary_endpoint?.id ?? null} />
 
         <InboxConversationTimeline
           threadId={thread.id}
