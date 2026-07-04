@@ -1043,7 +1043,7 @@ function DesktopMessagesList() {
     }
     if (!organization?.id || !messageText.trim() || !selectedThread) return;
 
-    if (!isIn24hWindow) {
+    if (!serviceWindow.isOpen) {
       setShowTemplates(true);
       return;
     }
