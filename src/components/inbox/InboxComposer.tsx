@@ -333,6 +333,18 @@ export function InboxComposer({ thread, replyTo, onClearReply, onSent, onThreadM
   }
 
   async function handleSendTemplate(templateId: string, variables: Record<string, string>) {
+    // Guard: template bloqueado no endpoint (regra LOW)
+    const endpointBlock = assertTemplateAllowedForEndpoint(templateId, endpointId);
+    if (endpointBlock) {
+      toast({ variant: 'destructive', description: endpointBlock });
+      return;
+    }
+    // Guard: rate limit 1 template / thread / 24h
+    const rate = await checkTemplateRateLimit(thread!.id, thread!.organization_id || organization?.id || null);
+    if (!rate.allowed) {
+      toast({ variant: 'destructive', description: rate.reason ?? 'Rate limit atingido.' });
+      return;
+    }
     setSubmitting(true);
     try {
       await invokeSend({ templateId, templateVariables: variables });
