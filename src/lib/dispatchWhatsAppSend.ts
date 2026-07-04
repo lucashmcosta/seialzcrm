@@ -265,6 +265,16 @@ export async function dispatchWhatsAppSend(payload: WhatsAppSendPayload) {
         templateId: payload.templateId,
         reason: block,
       });
+      logComplianceBlock({
+        organizationId: payload.organizationId,
+        blockReason: 'template_blocked_7020_policy',
+        endpointId: payload.endpointId,
+        threadId: payload.threadId ?? null,
+        contactId: payload.contactId ?? null,
+        templateId: payload.templateId,
+        attemptedByUserId: payload.userId ?? null,
+        sourceComponent: `dispatch_defense:${payload.senderContext ?? 'unknown'}`,
+      });
       return { data: null, error: { message: block, name: "template_blocked_by_endpoint" } as any };
     }
   }
