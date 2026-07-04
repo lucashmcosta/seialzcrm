@@ -449,6 +449,8 @@ export function WhatsAppChat({ contactId, threadId: initialThreadId, onThreadCre
         onCancel={() => setShowTemplates(false)}
         loading={submitting}
         provider={templateSelectorProvider}
+        endpointId={endpointId}
+        windowIsOpen={isIn24hWindow}
       />
     );
   }
