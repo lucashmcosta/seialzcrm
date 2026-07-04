@@ -924,23 +924,9 @@ function DesktopMessagesList() {
     return () => { supabase.removeChannel(channel); };
   }, [organization?.id, selectedThreadId]);
 
-  // 60s timer to recalculate 24h window
-  useEffect(() => {
-    if (!selectedThread) return;
-    
-    const checkWindow = () => {
-      const lastInboundTime = getLastInboundTime(selectedThread, messages);
-      if (lastInboundTime) {
-        const hoursDiff = (Date.now() - lastInboundTime.getTime()) / (1000 * 60 * 60);
-        setIsIn24hWindow(hoursDiff < 24);
-      } else {
-        setIsIn24hWindow(false);
-      }
-    };
-    
-    const interval = setInterval(checkWindow, 60000);
-    return () => clearInterval(interval);
-  }, [selectedThread?.id, selectedThread?.last_inbound_at, selectedThread?.whatsapp_last_inbound_at, messages]);
+  // (removido) Timer 60s de `isIn24hWindow` — agora `useServiceWindow`
+  // recalcula sozinho e cobre janela CTWA 72h além da sessão 24h.
+
 
   const scrollToBottom = () => {
     setTimeout(() => {
