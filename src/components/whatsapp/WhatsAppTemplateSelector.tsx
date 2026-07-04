@@ -19,6 +19,8 @@ interface Template {
   variables: unknown;
   status: string;
   category: string | null;
+  allowed_purposes: string[] | null;
+  meta_template_name?: string | null;
 }
 
 interface WhatsAppTemplateSelectorProps {
@@ -53,6 +55,7 @@ export function WhatsAppTemplateSelector({
 }: WhatsAppTemplateSelectorProps) {
   const { organization } = useOrganization();
   const [templates, setTemplates] = useState<Template[]>([]);
+  const [endpointPurpose, setEndpointPurpose] = useState<string | null>(null);
   const [loadingTemplates, setLoadingTemplates] = useState(true);
   const [selectedTemplate, setSelectedTemplate] = useState<Template | null>(null);
   const [variables, setVariables] = useState<Record<string, string>>({});
@@ -62,12 +65,27 @@ export function WhatsAppTemplateSelector({
 
   useEffect(() => {
     fetchTemplates();
-  }, [organization?.id, provider]);
+  }, [organization?.id, provider, endpointId]);
 
   const fetchTemplates = async () => {
     if (!organization?.id) return;
+    setLoadingTemplates(true);
 
     try {
+      // Resolve o purpose do endpoint (governança interna)
+      let purpose: string | null = null;
+      if (endpointId) {
+        const { data: ep } = await supabase
+          .from('communication_endpoints')
+          .select('purpose')
+          .eq('id', endpointId)
+          .maybeSingle();
+        purpose = (ep?.purpose as string | null) ?? null;
+        setEndpointPurpose(purpose);
+      } else {
+        setEndpointPurpose(null);
+      }
+
       let query = supabase
         .from('whatsapp_templates')
         .select('*')
@@ -85,7 +103,19 @@ export function WhatsAppTemplateSelector({
       const { data, error } = await query.order('friendly_name');
 
       if (error) throw error;
-      setTemplates(data || []);
+      const all = (data || []) as Template[];
+
+      // PR2: filtro por endpoint.purpose (governança Seialz)
+      // - templates com allowed_purposes vazio/null ficam ocultos
+      // - se endpoint tem purpose, mostrar só templates cujo allowed_purposes contém o purpose
+      // - se sem endpointId, aplicar filtro conservador: ocultar {}/null
+      const filtered = all.filter((t) => {
+        const ap = t.allowed_purposes;
+        if (!ap || ap.length === 0) return false;
+        if (purpose) return ap.includes(purpose);
+        return true;
+      });
+      setTemplates(filtered);
     } catch (error) {
       console.error('Error fetching templates:', error);
     } finally {
