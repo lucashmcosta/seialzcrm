@@ -48,6 +48,7 @@ import {
   checkTemplateRateLimit,
   getLowEndpointConfig,
 } from '@/lib/complianceGuards';
+import { logComplianceBlock } from '@/lib/complianceLog';
 
 interface ThreadLike {
   id: string;
@@ -333,15 +334,39 @@ export function InboxComposer({ thread, replyTo, onClearReply, onSent, onThreadM
   }
 
   async function handleSendTemplate(templateId: string, variables: Record<string, string>) {
+    const orgId = thread!.organization_id || organization?.id || null;
     // Guard: template bloqueado no endpoint (regra LOW)
     const endpointBlock = assertTemplateAllowedForEndpoint(templateId, endpointId);
     if (endpointBlock) {
+      logComplianceBlock({
+        organizationId: orgId,
+        blockReason: 'template_blocked_7020_policy',
+        endpointId,
+        threadId: thread?.id ?? null,
+        contactId: thread?.contact_id ?? null,
+        templateId,
+        attemptedByUserId: myId,
+        sourceComponent: 'inbox_composer',
+        window: serviceWindow,
+      });
       toast({ variant: 'destructive', description: endpointBlock });
       return;
     }
     // Guard: rate limit 1 template / thread / 24h
-    const rate = await checkTemplateRateLimit(thread!.id, thread!.organization_id || organization?.id || null);
+    const rate = await checkTemplateRateLimit(thread!.id, orgId);
     if (!rate.allowed) {
+      logComplianceBlock({
+        organizationId: orgId,
+        blockReason: 'template_blocked_rate_limit',
+        endpointId,
+        threadId: thread?.id ?? null,
+        contactId: thread?.contact_id ?? null,
+        templateId,
+        attemptedByUserId: myId,
+        sourceComponent: 'inbox_composer',
+        window: serviceWindow,
+        extra: { last_template_sent_at: rate.lastSentAt },
+      });
       toast({ variant: 'destructive', description: rate.reason ?? 'Rate limit atingido.' });
       return;
     }

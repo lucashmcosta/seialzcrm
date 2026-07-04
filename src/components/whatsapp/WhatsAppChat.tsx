@@ -23,6 +23,7 @@ import { shouldShowDateSeparator } from '@/lib/dateSeparator';
 import { useWhatsAppProvider } from '@/hooks/useWhatsAppProvider';
 import { useServiceWindow } from '@/hooks/useServiceWindow';
 import { assertTemplateAllowedForEndpoint, checkTemplateRateLimit } from '@/lib/complianceGuards';
+import { logComplianceBlock } from '@/lib/complianceLog';
 
 interface Message {
   id: string;
@@ -269,6 +270,17 @@ export function WhatsAppChat({ contactId, threadId: initialThreadId, onThreadCre
     // Guard: template bloqueado por endpoint (LOW)
     const endpointBlock = assertTemplateAllowedForEndpoint(templateId, endpointId);
     if (endpointBlock) {
+      logComplianceBlock({
+        organizationId: organization.id,
+        blockReason: 'template_blocked_7020_policy',
+        endpointId,
+        threadId,
+        contactId,
+        templateId,
+        attemptedByUserId: userProfile?.id ?? null,
+        sourceComponent: 'whatsapp_chat',
+        window: serviceWindow,
+      });
       toast({ variant: 'destructive', description: endpointBlock });
       return;
     }
@@ -276,6 +288,18 @@ export function WhatsAppChat({ contactId, threadId: initialThreadId, onThreadCre
     if (threadId) {
       const rate = await checkTemplateRateLimit(threadId, organization.id);
       if (!rate.allowed) {
+        logComplianceBlock({
+          organizationId: organization.id,
+          blockReason: 'template_blocked_rate_limit',
+          endpointId,
+          threadId,
+          contactId,
+          templateId,
+          attemptedByUserId: userProfile?.id ?? null,
+          sourceComponent: 'whatsapp_chat',
+          window: serviceWindow,
+          extra: { last_template_sent_at: rate.lastSentAt },
+        });
         toast({ variant: 'destructive', description: rate.reason ?? 'Rate limit atingido.' });
         return;
       }
