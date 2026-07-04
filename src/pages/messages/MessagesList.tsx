@@ -979,14 +979,8 @@ function DesktopMessagesList() {
         setInlineNotes([]);
       }
 
-      // Check 24h window with 3-level fallback
-      const lastInboundTime = getLastInboundTime(thread, (data as Message[]) || []);
-      if (lastInboundTime) {
-        const hoursDiff = (Date.now() - lastInboundTime.getTime()) / (1000 * 60 * 60);
-        setIsIn24hWindow(hoursDiff < 24);
-      } else {
-        setIsIn24hWindow(false);
-      }
+      // (removido) recomputo local de 24h; `useServiceWindow` cuida disso.
+
 
       // Upsert last_read_at for current user
       if (userProfile?.id) {
