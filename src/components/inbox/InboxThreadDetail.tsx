@@ -8,6 +8,7 @@ import { InboxAssignmentHistory } from './InboxAssignmentHistory';
 import { InboxConversationTimeline } from './InboxConversationTimeline';
 import { InboxComposer } from './InboxComposer';
 import { WhatsAppWindowChip } from './WhatsAppWindowChip';
+import { LowQualityEndpointBanner } from './LowQualityEndpointBanner';
 import { OwnerSelector } from '@/components/common/OwnerSelector';
 import { Button } from '@/components/ui/button';
 import { ConfirmDialog } from '@/components/ui/confirm-dialog';
