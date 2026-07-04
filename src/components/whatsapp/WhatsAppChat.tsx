@@ -104,27 +104,26 @@ export function WhatsAppChat({ contactId, threadId: initialThreadId, onThreadCre
     };
   }, [threadId]);
 
-  // 60s timer to recalculate 24h window
+  // 60s refresh: recomputa last_inbound_at + endpoint da thread.
   useEffect(() => {
     if (!threadId) return;
-    
-    const checkWindow = async () => {
+
+    const refresh = async () => {
       const { data: thread } = await supabase
         .from('message_threads')
-        .select('last_inbound_at, whatsapp_last_inbound_at')
+        .select('last_inbound_at, whatsapp_last_inbound_at, primary_endpoint_id')
         .eq('id', threadId)
         .single();
-      
+
       if (thread) {
-        const lastInboundAt = (thread as any).last_inbound_at || thread.whatsapp_last_inbound_at;
-        if (lastInboundAt) {
-          const hoursDiff = (Date.now() - new Date(lastInboundAt).getTime()) / (1000 * 60 * 60);
-          setIsIn24hWindow(hoursDiff < 24);
-        }
+        const inbound = (thread as any).last_inbound_at || (thread as any).whatsapp_last_inbound_at || null;
+        setLastInboundAt(inbound);
+        setEndpointId(((thread as any).primary_endpoint_id as string | null) ?? null);
       }
     };
-    
-    const interval = setInterval(checkWindow, 60000);
+
+    refresh();
+    const interval = setInterval(refresh, 60000);
     return () => clearInterval(interval);
   }, [threadId]);
 
