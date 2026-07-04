@@ -2100,7 +2100,7 @@ function DesktopMessagesList() {
                                   variant="outline"
                                   size="icon"
                                   onClick={() => setShowTemplates(true)}
-                                  title={locale === 'pt-BR' ? 'Selecionar template (fora da janela de 24h)' : 'Select template (outside 24h window)'}
+                                  title={outOfWindowCopy}
                                   className="h-10 w-10"
                                 >
                                   <FileText className="h-5 w-5" />
