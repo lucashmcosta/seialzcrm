@@ -108,8 +108,8 @@ export function WhatsAppTemplateSelector({
   };
 
   const handleSelectTemplate = (template: Template) => {
+    if (blockedReason(template)) return; // guarda dupla; card já vem disabled
     setSelectedTemplate(template);
-    // Initialize variables
     const vars = extractVariables(template.body);
     const initialVars: Record<string, string> = {};
     vars.forEach(v => { initialVars[v] = ''; });
