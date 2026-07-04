@@ -6,7 +6,7 @@
 // Client-side guards mirror server-side guards as defense-in-depth.
 // Authoritative guards live in supabase/functions/twilio-whatsapp-send/index.ts.
 
-import { useMemo, useState } from 'react';
+import { useState } from 'react';
 import { dispatchWhatsAppSend } from "@/lib/dispatchWhatsAppSend";
 import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
