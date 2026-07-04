@@ -21,6 +21,8 @@ import { audioBlobToFile } from '@/lib/audioBlobToFile';
 import { DateSeparator } from '@/components/messages/DateSeparator';
 import { shouldShowDateSeparator } from '@/lib/dateSeparator';
 import { useWhatsAppProvider } from '@/hooks/useWhatsAppProvider';
+import { useServiceWindow } from '@/hooks/useServiceWindow';
+import { assertTemplateAllowedForEndpoint, checkTemplateRateLimit } from '@/lib/complianceGuards';
 
 interface Message {
   id: string;
