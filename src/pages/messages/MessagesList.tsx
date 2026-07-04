@@ -1129,6 +1129,44 @@ function DesktopMessagesList() {
   const handleSendTemplate = async (templateId: string, variables: Record<string, string>) => {
     if (!organization?.id || !selectedThread) return;
 
+    // Guard: template bloqueado por endpoint (regra LOW hardcoded — 7020).
+    const endpointBlock = assertTemplateAllowedForEndpoint(templateId, composerEndpointId);
+    if (endpointBlock) {
+      logComplianceBlock({
+        organizationId: organization.id,
+        blockReason: 'template_blocked_7020_policy',
+        endpointId: composerEndpointId,
+        threadId: selectedThreadId,
+        contactId: selectedThread.contact_id,
+        templateId,
+        attemptedByUserId: userProfile?.id ?? null,
+        sourceComponent: 'messages_list',
+        window: serviceWindow,
+      });
+      toast({ variant: 'destructive', description: endpointBlock });
+      return;
+    }
+    // Guard: rate limit 1 template / thread / 24h.
+    if (selectedThreadId) {
+      const rate = await checkTemplateRateLimit(selectedThreadId, organization.id);
+      if (!rate.allowed) {
+        logComplianceBlock({
+          organizationId: organization.id,
+          blockReason: 'template_blocked_rate_limit',
+          endpointId: composerEndpointId,
+          threadId: selectedThreadId,
+          contactId: selectedThread.contact_id,
+          templateId,
+          attemptedByUserId: userProfile?.id ?? null,
+          sourceComponent: 'messages_list',
+          window: serviceWindow,
+          extra: { last_template_sent_at: rate.lastSentAt },
+        });
+        toast({ variant: 'destructive', description: rate.reason ?? 'Rate limit atingido.' });
+        return;
+      }
+    }
+
     setShowTemplates(false);
 
     const tempId = `temp-${Date.now()}`;
