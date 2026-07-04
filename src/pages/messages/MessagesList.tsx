@@ -664,6 +664,19 @@ function DesktopMessagesList() {
     : selectedEndpointFallback ?? undefined;
   const selectedEndpointIdentity = formatEndpointIdentity(selectedThreadEndpoint);
 
+  // Compliance: janela de atendimento unificada (24h clássica + CTWA 72h).
+  // Fonte da verdade: `getServiceWindow` via `useServiceWindow`. Substitui a
+  // lógica antiga `isIn24hWindow = hoursDiff < 24` que ignorava CTWA.
+  const composerLastInboundAt = (() => {
+    const t = getLastInboundTime(selectedThread as any, messages);
+    return t ? t.toISOString() : null;
+  })();
+  const serviceWindow = useServiceWindow({
+    contactId: selectedThread?.contact_id ?? null,
+    lastInboundAt: composerLastInboundAt,
+  });
+
+
   useEffect(() => {
     if (!selectedThreadId || !organization?.id) {
       setSelectedEndpointDetails(null);
