@@ -42,6 +42,12 @@ import { WhatsAppTemplateSelector } from '@/components/whatsapp/WhatsAppTemplate
 import { ReplyPreview } from '@/components/whatsapp/ReplyPreview';
 import { inboxUploadMedia } from '@/lib/inboxMediaUpload';
 import type { InboxMessageRow } from '@/hooks/inbox/useInboxThreadMessages';
+import { useServiceWindow } from '@/hooks/useServiceWindow';
+import {
+  assertTemplateAllowedForEndpoint,
+  checkTemplateRateLimit,
+  getLowEndpointConfig,
+} from '@/lib/complianceGuards';
 
 interface ThreadLike {
   id: string;
