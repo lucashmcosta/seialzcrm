@@ -1637,11 +1637,12 @@ function DesktopMessagesList() {
                           {hasMultipleEndpoints && selectedThreadEndpoint && (
                             <EndpointBadge externalAddress={selectedThreadEndpoint.external_address} purpose={selectedThreadEndpoint.purpose ?? null} size="lg" />
                           )}
-                          {isIn24hWindow && (
-                            <BadgeWithDot color="success" size="sm" className="shrink-0">
-                              {locale === 'pt-BR' ? 'Online' : 'Online'}
-                            </BadgeWithDot>
-                          )}
+                          <WhatsAppWindowChip
+                            channel="whatsapp"
+                            lastInboundAt={composerLastInboundAt}
+                            contactId={selectedThread.contact_id}
+                          />
+
                           {selectedThread.status && statusConfig[selectedThread.status] && (
                             <span className={cn('text-xs font-medium shrink-0', statusConfig[selectedThread.status].color)}>
                               {locale === 'pt-BR' ? statusConfig[selectedThread.status].label : statusConfig[selectedThread.status].labelEn}
