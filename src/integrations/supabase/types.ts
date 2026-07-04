@@ -7434,6 +7434,7 @@ export type Database = {
       }
       whatsapp_templates: {
         Row: {
+          allowed_purposes: string[]
           body: string
           category: string | null
           components: Json | null
@@ -7460,6 +7461,7 @@ export type Database = {
           variables: Json | null
         }
         Insert: {
+          allowed_purposes?: string[]
           body: string
           category?: string | null
           components?: Json | null
@@ -7486,6 +7488,7 @@ export type Database = {
           variables?: Json | null
         }
         Update: {
+          allowed_purposes?: string[]
           body?: string
           category?: string | null
           components?: Json | null
