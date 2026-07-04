@@ -138,15 +138,16 @@ export function InboxComposer({ thread, replyTo, onClearReply, onSent, onThreadM
 
   // Hooks must run unconditionally — compute before guards.
   const lastInboundIso = thread?.last_inbound_at || thread?.whatsapp_last_inbound_at || null;
-  const isIn24hWindow = useMemo(() => {
-    if (!lastInboundIso) return false;
-    const diffMs = Date.now() - new Date(lastInboundIso).getTime();
-    return diffMs >= 0 && diffMs < 24 * 60 * 60 * 1000;
-  }, [lastInboundIso]);
+  const serviceWindow = useServiceWindow({
+    contactId: thread?.contact_id ?? null,
+    lastInboundAt: lastInboundIso,
+  });
+  const isIn24hWindow = serviceWindow.isOpen;
 
   // Provider do endpoint da thread → escolhe filtro de templates.
   // Derivado de forma síncrona do próprio fetch da thread (sem race).
   const endpointProvider = thread?.primary_endpoint?.provider ?? null;
+  const endpointId = (thread as any)?.primary_endpoint_id ?? (thread as any)?.primary_endpoint?.id ?? null;
   const templateSelectorProvider: 'twilio' | 'meta_cloud_api' | undefined =
     endpointProvider === 'meta_cloud_api' ? 'meta_cloud_api'
     : endpointProvider === 'twilio' ? 'twilio'
