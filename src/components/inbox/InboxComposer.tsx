@@ -48,6 +48,7 @@ import {
   checkTemplateRateLimit,
   getLowEndpointConfig,
 } from '@/lib/complianceGuards';
+import { logComplianceBlock } from '@/lib/complianceLog';
 
 interface ThreadLike {
   id: string;
