@@ -681,6 +681,8 @@ export function InboxComposer({ thread, replyTo, onClearReply, onSent, onThreadM
             onCancel={() => setShowTemplates(false)}
             loading={submitting}
             provider={templateSelectorProvider}
+            endpointId={endpointId}
+            windowIsOpen={isIn24hWindow}
           />
         </DialogContent>
       </Dialog>
