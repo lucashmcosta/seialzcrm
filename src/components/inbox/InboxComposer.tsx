@@ -6,7 +6,7 @@
 // Client-side guards mirror server-side guards as defense-in-depth.
 // Authoritative guards live in supabase/functions/twilio-whatsapp-send/index.ts.
 
-import { useMemo, useState } from 'react';
+import { useState } from 'react';
 import { dispatchWhatsAppSend } from "@/lib/dispatchWhatsAppSend";
 import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
@@ -42,6 +42,12 @@ import { WhatsAppTemplateSelector } from '@/components/whatsapp/WhatsAppTemplate
 import { ReplyPreview } from '@/components/whatsapp/ReplyPreview';
 import { inboxUploadMedia } from '@/lib/inboxMediaUpload';
 import type { InboxMessageRow } from '@/hooks/inbox/useInboxThreadMessages';
+import { useServiceWindow } from '@/hooks/useServiceWindow';
+import {
+  assertTemplateAllowedForEndpoint,
+  checkTemplateRateLimit,
+  getLowEndpointConfig,
+} from '@/lib/complianceGuards';
 
 interface ThreadLike {
   id: string;
@@ -132,15 +138,16 @@ export function InboxComposer({ thread, replyTo, onClearReply, onSent, onThreadM
 
   // Hooks must run unconditionally — compute before guards.
   const lastInboundIso = thread?.last_inbound_at || thread?.whatsapp_last_inbound_at || null;
-  const isIn24hWindow = useMemo(() => {
-    if (!lastInboundIso) return false;
-    const diffMs = Date.now() - new Date(lastInboundIso).getTime();
-    return diffMs >= 0 && diffMs < 24 * 60 * 60 * 1000;
-  }, [lastInboundIso]);
+  const serviceWindow = useServiceWindow({
+    contactId: thread?.contact_id ?? null,
+    lastInboundAt: lastInboundIso,
+  });
+  const isIn24hWindow = serviceWindow.isOpen;
 
   // Provider do endpoint da thread → escolhe filtro de templates.
   // Derivado de forma síncrona do próprio fetch da thread (sem race).
   const endpointProvider = thread?.primary_endpoint?.provider ?? null;
+  const endpointId = (thread as any)?.primary_endpoint_id ?? (thread as any)?.primary_endpoint?.id ?? null;
   const templateSelectorProvider: 'twilio' | 'meta_cloud_api' | undefined =
     endpointProvider === 'meta_cloud_api' ? 'meta_cloud_api'
     : endpointProvider === 'twilio' ? 'twilio'
@@ -326,6 +333,18 @@ export function InboxComposer({ thread, replyTo, onClearReply, onSent, onThreadM
   }
 
   async function handleSendTemplate(templateId: string, variables: Record<string, string>) {
+    // Guard: template bloqueado no endpoint (regra LOW)
+    const endpointBlock = assertTemplateAllowedForEndpoint(templateId, endpointId);
+    if (endpointBlock) {
+      toast({ variant: 'destructive', description: endpointBlock });
+      return;
+    }
+    // Guard: rate limit 1 template / thread / 24h
+    const rate = await checkTemplateRateLimit(thread!.id, thread!.organization_id || organization?.id || null);
+    if (!rate.allowed) {
+      toast({ variant: 'destructive', description: rate.reason ?? 'Rate limit atingido.' });
+      return;
+    }
     setSubmitting(true);
     try {
       await invokeSend({ templateId, templateVariables: variables });
@@ -502,6 +521,8 @@ export function InboxComposer({ thread, replyTo, onClearReply, onSent, onThreadM
               onSelect={handleSendTemplate}
               onCancel={() => setShowTemplates(false)}
               provider={templateSelectorProvider}
+              endpointId={endpointId}
+              windowIsOpen={isIn24hWindow}
             />
           </DialogContent>
         </Dialog>
@@ -660,6 +681,8 @@ export function InboxComposer({ thread, replyTo, onClearReply, onSent, onThreadM
             onCancel={() => setShowTemplates(false)}
             loading={submitting}
             provider={templateSelectorProvider}
+            endpointId={endpointId}
+            windowIsOpen={isIn24hWindow}
           />
         </DialogContent>
       </Dialog>

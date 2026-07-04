@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { useOrganization } from '@/hooks/useOrganization';
 import { supabase } from '@/integrations/supabase/client';
 import { Button } from '@/components/ui/button';
@@ -6,7 +6,11 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { ScrollArea } from '@/components/ui/scroll-area';
-import { SpinnerGap, ArrowLeft, Check } from '@phosphor-icons/react';
+import { SpinnerGap, ArrowLeft, Check, LockSimple } from '@phosphor-icons/react';
+import {
+  getLowEndpointConfig,
+  isMarketingBlockedWhenWindowOpen,
+} from '@/lib/complianceGuards';
 
 interface Template {
   id: string;
@@ -27,19 +31,34 @@ interface WhatsAppTemplateSelectorProps {
    * (provider 'twilio' ou rows antigas sem provider).
    */
   provider?: 'twilio' | 'meta_cloud_api';
+  /**
+   * Compliance: endpoint de envio, usado para bloquear templates específicos
+   * do endpoint (ex: 7020 em LOW → esconde primeiro_contato/tentativa_de_contato).
+   */
+  endpointId?: string | null;
+  /**
+   * Compliance: se a janela de atendimento (24h/CTWA 72h) está aberta,
+   * bloqueia templates categoria MARKETING — o correto é responder freeform.
+   */
+  windowIsOpen?: boolean;
 }
 
-export function WhatsAppTemplateSelector({ 
-  onSelect, 
+export function WhatsAppTemplateSelector({
+  onSelect,
   onCancel,
   loading,
-  provider
+  provider,
+  endpointId,
+  windowIsOpen = false,
 }: WhatsAppTemplateSelectorProps) {
   const { organization } = useOrganization();
   const [templates, setTemplates] = useState<Template[]>([]);
   const [loadingTemplates, setLoadingTemplates] = useState(true);
   const [selectedTemplate, setSelectedTemplate] = useState<Template | null>(null);
   const [variables, setVariables] = useState<Record<string, string>>({});
+
+  const lowCfg = useMemo(() => getLowEndpointConfig(endpointId ?? null), [endpointId]);
+  const blockedIds = useMemo(() => new Set(lowCfg?.blockedTemplateIds ?? []), [lowCfg]);
 
   useEffect(() => {
     fetchTemplates();
@@ -74,14 +93,23 @@ export function WhatsAppTemplateSelector({
     }
   };
 
+  /** Retorna motivo de bloqueio ou null se liberado. */
+  const blockedReason = (t: Template): string | null => {
+    if (blockedIds.has(t.id)) return lowCfg?.reason ?? 'Template bloqueado para este número.';
+    if (isMarketingBlockedWhenWindowOpen(t.category, windowIsOpen)) {
+      return 'Janela aberta — responda em texto livre. Marketing só fora da janela.';
+    }
+    return null;
+  };
+
   const extractVariables = (body: string): string[] => {
     const matches = body.match(/\{\{(\d+)\}\}/g) || [];
     return [...new Set(matches.map(m => m.replace(/[{}]/g, '')))];
   };
 
   const handleSelectTemplate = (template: Template) => {
+    if (blockedReason(template)) return; // guarda dupla; card já vem disabled
     setSelectedTemplate(template);
-    // Initialize variables
     const vars = extractVariables(template.body);
     const initialVars: Record<string, string> = {};
     vars.forEach(v => { initialVars[v] = ''; });
@@ -187,6 +215,15 @@ export function WhatsAppTemplateSelector({
         </Button>
       </div>
 
+      {lowCfg && (
+        <div className="mx-4 mb-2 rounded border border-destructive/30 bg-destructive/10 px-3 py-2 text-[11px] text-destructive">
+          <div className="flex items-start gap-1.5">
+            <LockSimple size={12} weight="fill" className="mt-0.5 flex-shrink-0" />
+            <span>{lowCfg.reason}</span>
+          </div>
+        </div>
+      )}
+
       {templates.length === 0 ? (
         <Card className="mx-4">
           <CardContent className="py-8 text-center">
@@ -199,31 +236,45 @@ export function WhatsAppTemplateSelector({
       ) : (
         <div className="flex-1 min-h-0 overflow-y-auto px-4 pb-4">
           <div className="space-y-2">
-            {templates.map((template) => (
-              <Card
-                key={template.id}
-                className="cursor-pointer hover:border-primary transition-colors"
-                onClick={() => handleSelectTemplate(template)}
-              >
-                <CardContent className="p-3">
-                  <div className="flex items-start justify-between gap-2">
-                    <div className="flex-1 min-w-0">
-                      <p className="font-medium text-sm truncate">
-                        {template.friendly_name}
-                      </p>
-                      <p className="text-xs text-muted-foreground line-clamp-2 mt-1">
-                        {template.body}
-                      </p>
+            {templates.map((template) => {
+              const reason = blockedReason(template);
+              const blocked = !!reason;
+              return (
+                <Card
+                  key={template.id}
+                  className={`transition-colors ${
+                    blocked
+                      ? 'opacity-50 cursor-not-allowed border-dashed'
+                      : 'cursor-pointer hover:border-primary'
+                  }`}
+                  onClick={() => !blocked && handleSelectTemplate(template)}
+                  title={reason ?? undefined}
+                  aria-disabled={blocked}
+                >
+                  <CardContent className="p-3">
+                    <div className="flex items-start justify-between gap-2">
+                      <div className="flex-1 min-w-0">
+                        <p className="font-medium text-sm truncate flex items-center gap-1.5">
+                          {blocked && <LockSimple size={12} weight="fill" className="text-destructive flex-shrink-0" />}
+                          {template.friendly_name}
+                        </p>
+                        <p className="text-xs text-muted-foreground line-clamp-2 mt-1">
+                          {template.body}
+                        </p>
+                        {blocked && (
+                          <p className="text-[10px] text-destructive mt-1">{reason}</p>
+                        )}
+                      </div>
+                      {template.category && (
+                        <span className="text-xs bg-muted px-2 py-0.5 rounded shrink-0 uppercase">
+                          {template.category}
+                        </span>
+                      )}
                     </div>
-                    {template.category && (
-                      <span className="text-xs bg-muted px-2 py-0.5 rounded shrink-0">
-                        {template.category}
-                      </span>
-                    )}
-                  </div>
-                </CardContent>
-              </Card>
-            ))}
+                  </CardContent>
+                </Card>
+              );
+            })}
           </div>
         </div>
       )}

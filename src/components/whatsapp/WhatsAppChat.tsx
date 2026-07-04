@@ -21,6 +21,8 @@ import { audioBlobToFile } from '@/lib/audioBlobToFile';
 import { DateSeparator } from '@/components/messages/DateSeparator';
 import { shouldShowDateSeparator } from '@/lib/dateSeparator';
 import { useWhatsAppProvider } from '@/hooks/useWhatsAppProvider';
+import { useServiceWindow } from '@/hooks/useServiceWindow';
+import { assertTemplateAllowedForEndpoint, checkTemplateRateLimit } from '@/lib/complianceGuards';
 
 interface Message {
   id: string;
@@ -51,11 +53,14 @@ export function WhatsAppChat({ contactId, threadId: initialThreadId, onThreadCre
   const [loading, setLoading] = useState(true);
   const [messageText, setMessageText] = useState('');
   const [submitting, setSubmitting] = useState(false);
-  const [isIn24hWindow, setIsIn24hWindow] = useState(false);
+  const [lastInboundAt, setLastInboundAt] = useState<string | null>(null);
+  const [endpointId, setEndpointId] = useState<string | null>(null);
   const [showTemplates, setShowTemplates] = useState(false);
   const [accessToken, setAccessToken] = useState<string | undefined>(undefined);
   const waProvider = useWhatsAppProvider({ threadId });
   const templateSelectorProvider = waProvider === 'meta_cloud_api' ? 'meta_cloud_api' : undefined;
+  const serviceWindow = useServiceWindow({ contactId, lastInboundAt });
+  const isIn24hWindow = serviceWindow.isOpen;
 
   const dateLocale = locale === 'pt-BR' ? ptBR : enUS;
 
@@ -99,27 +104,26 @@ export function WhatsAppChat({ contactId, threadId: initialThreadId, onThreadCre
     };
   }, [threadId]);
 
-  // 60s timer to recalculate 24h window
+  // 60s refresh: recomputa last_inbound_at + endpoint da thread.
   useEffect(() => {
     if (!threadId) return;
-    
-    const checkWindow = async () => {
+
+    const refresh = async () => {
       const { data: thread } = await supabase
         .from('message_threads')
-        .select('last_inbound_at, whatsapp_last_inbound_at')
+        .select('last_inbound_at, whatsapp_last_inbound_at, primary_endpoint_id')
         .eq('id', threadId)
         .single();
-      
+
       if (thread) {
-        const lastInboundAt = (thread as any).last_inbound_at || thread.whatsapp_last_inbound_at;
-        if (lastInboundAt) {
-          const hoursDiff = (Date.now() - new Date(lastInboundAt).getTime()) / (1000 * 60 * 60);
-          setIsIn24hWindow(hoursDiff < 24);
-        }
+        const inbound = (thread as any).last_inbound_at || (thread as any).whatsapp_last_inbound_at || null;
+        setLastInboundAt(inbound);
+        setEndpointId(((thread as any).primary_endpoint_id as string | null) ?? null);
       }
     };
-    
-    const interval = setInterval(checkWindow, 60000);
+
+    refresh();
+    const interval = setInterval(refresh, 60000);
     return () => clearInterval(interval);
   }, [threadId]);
 
@@ -151,15 +155,9 @@ export function WhatsAppChat({ contactId, threadId: initialThreadId, onThreadCre
       if (thread) {
         setThreadId(thread.id);
         onThreadCreated?.(thread.id);
-        
-        // Check 24h window
-        const lastInboundAt = (thread as any).last_inbound_at || thread.whatsapp_last_inbound_at;
-        if (lastInboundAt) {
-          const lastInbound = new Date(lastInboundAt);
-          const now = new Date();
-          const hoursDiff = (now.getTime() - lastInbound.getTime()) / (1000 * 60 * 60);
-          setIsIn24hWindow(hoursDiff < 24);
-        }
+
+        const inbound = (thread as any).last_inbound_at || (thread as any).whatsapp_last_inbound_at || null;
+        setLastInboundAt(inbound);
 
         await fetchMessages(thread.id);
       } else {
@@ -268,8 +266,24 @@ export function WhatsAppChat({ contactId, threadId: initialThreadId, onThreadCre
   const handleSendTemplate = async (templateId: string, variables: Record<string, string>) => {
     if (!organization?.id) return;
 
+    // Guard: template bloqueado por endpoint (LOW)
+    const endpointBlock = assertTemplateAllowedForEndpoint(templateId, endpointId);
+    if (endpointBlock) {
+      toast({ variant: 'destructive', description: endpointBlock });
+      return;
+    }
+    // Guard: rate limit 1 template / thread / 24h
+    if (threadId) {
+      const rate = await checkTemplateRateLimit(threadId, organization.id);
+      if (!rate.allowed) {
+        toast({ variant: 'destructive', description: rate.reason ?? 'Rate limit atingido.' });
+        return;
+      }
+    }
+
     setSubmitting(true);
     setShowTemplates(false);
+
 
     try {
       const { data, error } = await dispatchWhatsAppSend({
@@ -435,6 +449,8 @@ export function WhatsAppChat({ contactId, threadId: initialThreadId, onThreadCre
         onCancel={() => setShowTemplates(false)}
         loading={submitting}
         provider={templateSelectorProvider}
+        endpointId={endpointId}
+        windowIsOpen={isIn24hWindow}
       />
     );
   }
