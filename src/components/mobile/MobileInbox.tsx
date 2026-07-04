@@ -466,6 +466,7 @@ function ChatView({
             <WhatsAppWindowChip
               channel={thread.channel}
               lastInboundAt={thread.last_inbound_at || thread.whatsapp_last_inbound_at || null}
+              contactId={thread.contact_id ?? null}
             />
           </div>
         </div>
