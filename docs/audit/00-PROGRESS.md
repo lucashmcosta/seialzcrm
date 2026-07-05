@@ -67,18 +67,18 @@ Legenda: ⬜ pendente · 🟡 em andamento · ✅ concluído
 - [x] ct-backfill-once
 - [x] backfill-attribution
 
-### Bloco D — AI Agent, knowledge, wizard, BYOK
-- [ ] ai-agent-respond
-- [ ] ai-generate
-- [ ] analyze-message
-- [ ] classify-agent-feedback
-- [ ] generate-embedding
-- [ ] enhance-knowledge
-- [ ] import-knowledge
-- [ ] import-from-url
-- [ ] process-knowledge
-- [ ] process-knowledge-item
-- [ ] reprocess-knowledge
+### Bloco D — AI Agent, knowledge, wizard, BYOK (parcial)
+- [x] ai-agent-respond
+- [x] ai-generate
+- [x] analyze-message
+- [x] classify-agent-feedback
+- [x] generate-embedding
+- [x] enhance-knowledge
+- [x] import-knowledge
+- [x] import-from-url
+- [x] process-knowledge
+- [x] process-knowledge-item
+- [x] reprocess-knowledge
 - [ ] synthesize-knowledge
 - [ ] apply-knowledge-edit
 - [ ] knowledge-edit
