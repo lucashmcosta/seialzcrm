@@ -2,9 +2,9 @@
 
 **Last updated: January 1, 2026**
 
-This Privacy Policy describes how **Kairos Labs LLC**, a limited liability company organized under the laws of the State of Florida, United States ("**Kairos Labs**," "**we**," "**us**," or "**our**"), owner and operator of the **Seialz** brand and platform, collects, uses, stores, shares, and protects personal information in connection with the Seialz platform, a customer relationship management (CRM) software offered as a Software-as-a-Service (SaaS) solution for businesses, available at **[https://seialz.com]** and related domains (the "**Platform**").
+This Privacy Policy describes how **Kairos Labs LLC**, a limited liability company organized under the laws of the State of Florida, United States ("**Kairos Labs**," "**we**," "**us**," or "**our**"), owner and operator of the **Seialz** brand and platform, collects, uses, stores, shares, and protects personal information in connection with the Seialz platform, a customer relationship management (CRM) software offered as a Software-as-a-Service (SaaS) solution for businesses, available at **https://seialz.com** and related domains (the "**Platform**").
 
-By using the Platform, you acknowledge that you have read and understood this Privacy Policy. If you have any questions, please contact us at **[privacy@seialz.com]**.
+By using the Platform, you acknowledge that you have read and understood this Privacy Policy. If you have any questions, please contact us at **privacy@seialz.com**.
 
 ---
 
@@ -95,7 +95,7 @@ We process personal information for the following purposes:
 
 **c) Business transfers**, such as a merger, acquisition, financing, or sale of assets, in which case the data will remain protected by this Policy and affected individuals will be notified of any material changes.
 
-An updated list of subprocessors is available upon request at **[privacy@seialz.com]**.
+An updated list of subprocessors is available upon request at **privacy@seialz.com**.
 
 ---
 
@@ -107,11 +107,11 @@ Kairos Labs is headquartered in the United States, and our infrastructure provid
 
 ## 7. DATA DELETION
 
-**Requests by Clients.** Clients may delete data directly within the Platform or request deletion of their account and all associated data by emailing **[privacy@seialz.com]**. Upon confirmation, we will delete the data within **30 days**, except for data we are required to retain by law (for example, tax and billing records and access logs).
+**Requests by Clients.** Clients may delete data directly within the Platform or request deletion of their account and all associated data by emailing **privacy@seialz.com**. Upon confirmation, we will delete the data within **30 days**, except for data we are required to retain by law (for example, tax and billing records and access logs).
 
 **Requests by individuals (End Users).** Individuals whose data is processed by a Client through the Platform should direct their request to that Client (the controller of their data). If we receive such a request directly, we will forward it to the responsible Client and cooperate with its fulfillment.
 
-**Data from Meta platforms.** If you have interacted with the Platform through Meta products and wish to request deletion of your data, send your request to **[privacy@seialz.com]** with the subject line "Data Deletion — Meta," identifying the phone number or identifier used. We will confirm once the deletion is complete.
+**Data from Meta platforms.** If you have interacted with the Platform through Meta products and wish to request deletion of your data, send your request to **privacy@seialz.com** with the subject line "Data Deletion — Meta," identifying the phone number or identifier used. We will confirm once the deletion is complete.
 
 **Disconnecting integrations.** Clients may revoke the permissions granted to the Platform at any time in their Meta Business Manager settings, which stops the receipt of new data.
 
@@ -161,7 +161,7 @@ Depending on your state of residence (including California, Colorado, Connecticu
 - The right to non-discrimination for exercising your rights;
 - The right to appeal a decision regarding your request.
 
-**How to exercise your rights.** Submit a request to **[privacy@seialz.com]**. We will verify your identity before responding and will respond within the timeframes required by applicable law. You may designate an authorized agent to submit a request on your behalf, subject to proof of valid authorization. If we deny your request, you may appeal by replying to our decision; if your appeal is denied, you may contact your state Attorney General.
+**How to exercise your rights.** Submit a request to **privacy@seialz.com**. We will verify your identity before responding and will respond within the timeframes required by applicable law. You may designate an authorized agent to submit a request on your behalf, subject to proof of valid authorization. If we deny your request, you may appeal by replying to our decision; if your appeal is denied, you may contact your state Attorney General.
 
 **Note for End Users:** if your data is processed by us on behalf of one of our Clients, we will refer your request to that Client, who is responsible for responding as the controller of your data.
 
@@ -175,7 +175,7 @@ Depending on your state of residence (including California, Colorado, Connecticu
 
 ## 12. CHILDREN'S PRIVACY
 
-The Platform is intended for business use and is not directed to individuals under 18 years of age. We do not knowingly collect personal information from children. If we learn that we have collected personal information from a child in violation of applicable law, we will delete it promptly. If you believe a child has provided us with personal information, please contact us at **[privacy@seialz.com]**.
+The Platform is intended for business use and is not directed to individuals under 18 years of age. We do not knowingly collect personal information from children. If we learn that we have collected personal information from a child in violation of applicable law, we will delete it promptly. If you believe a child has provided us with personal information, please contact us at **privacy@seialz.com**.
 
 ---
 
@@ -189,5 +189,4 @@ We may update this Privacy Policy from time to time. The current version will al
 
 **Kairos Labs LLC**
 Seialz is a brand of Kairos Labs LLC, a Florida limited liability company.
-[Full registered address]
-**Email:** [privacy@seialz.com]
+**Email:** privacy@seialz.com
