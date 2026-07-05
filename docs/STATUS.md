@@ -1,6 +1,6 @@
 # Status da Documentação
 
-Snapshot: **2026-07-05** (pós-refinamento — ver [`audit/09-documentation-refinement.md`](audit/09-documentation-refinement.md)).
+Snapshot: **2026-07-05** (pós-refinamento — ver [`audit/09-documentation-refinement.md`](audit/09-documentation-refinement.md) — e pós-rodada P0/P1/P2 do mesmo dia).
 Fonte de verdade: código-fonte + banco vivo + `docs/audit/` (congelada em 2026-07-04).
 
 ---
@@ -32,20 +32,25 @@ Fonte de verdade: código-fonte + banco vivo + `docs/audit/` (congelada em 2026-
 
 ### Plataforma (`docs/platform/`)
 database, security, observability, performance, infrastructure, deployment.
+- `security/verify-jwt-review.md` — matriz das 93 edge functions × mecanismo de auth (drift #5 resolvido como análise; correções de código pendentes).
 
 ### Operations (`docs/operations/`)
 - `README.md` — Regra do Drift + runbooks + cron (15 jobs).
-- `drift/2026-07-04.md` — pendências P0–P2 ativas.
+- `drift/2026-07-04.md` — pendências P0–P2 ativas (com progresso de 2026-07-05 anotado por item).
 - `conflicts.md` — divergências descoberta ↔ repo.
 - `audits/` — auditorias pontuais read-only (saúde do número 7020, janela CTWA 72h).
+- `proposals/` — SQL corretivo pronto para revisão, **não aplicado** (dedup de audit triggers; cron órfã).
+- `shadow-functions/` — código recuperado das 3 functions deployadas fora do repo.
 
 ### Decisions (`docs/decisions/`)
 9 ADRs (multi-tenancy, admin+MFA, BYOK, inbound queue, design system, idempotência, drift rule, catálogo de ownership, separação Inbox×Messages).
 
 ### Referência (`docs/reference/`)
 - `catalog.md` — ownership por domínio + **mapa domínio técnico ↔ módulo de produto**.
-- `database/database-full.md` — 117 tabelas, 107 triggers, 232 policies, 15 crons, 88 edge fns.
+- `database/database-full.md` — 117 tabelas, 107 triggers, 232 policies, 15 crons, 88 edge fns (contagem real em 2026-07-05: **93** deployadas — regenerar no próximo ciclo).
 - `database/trigger-functions.sql` — 48 funções.
+- `api/` — superfície HTTP (93 functions por chamador/auth) — parcial, contratos `[TODO]`.
+- `events/` — outbox (7 event_types com volumes), fila inbound, webhooks, CAPI, realtime — parcial, schemas `[TODO]`.
 
 ### Mobile (`docs/mobile/`)
 Contexto arquitetural, referência de backend e spec do dashboard para o app React Native/Expo.
@@ -71,8 +76,8 @@ Tudo mais é mantido manualmente com base em evidência (código, banco, auditor
 
 ## 3. Pendências de documentação
 
-- `reference/api/` — vazio, aguardando geração a partir dos edge functions.
-- `reference/events/` — vazio, aguardando catálogo de eventos (`integration_inbound_events`, webhook payloads).
+- `reference/api/` — índice criado (2026-07-05); faltam contratos input/output por função `[TODO]`.
+- `reference/events/` — catálogo criado (2026-07-05); faltam schemas de payload `[TODO]`.
 - `reference/generated/` — vazio, reservado para OpenAPI e diagramas gerados.
 - Runbooks específicos por incidente (hoje só `operations/README.md` genérico).
 - Diagramas visuais dos fluxos de `architecture/event-flow.md` (hoje só texto).
@@ -85,17 +90,17 @@ Tudo mais é mantido manualmente com base em evidência (código, banco, auditor
 
 ## 4. Drift ativo (repo ≠ prod)
 
-**Fonte única:** [`operations/drift/2026-07-04.md`](operations/drift/2026-07-04.md) — 8 pendências (2× P0: audit triggers duplicadas / 3 edge functions shadow; 3× P1; 3× P2). Este arquivo não replica a lista para não divergir dela.
+**Fonte única:** [`operations/drift/2026-07-04.md`](operations/drift/2026-07-04.md) (+ [`2026-07-05.md`](operations/drift/2026-07-05.md)) — este arquivo não replica a lista para não divergir dela. Estado em 2026-07-05: **P0 #1** proposta de SQL pronta (revisão pendente); **P0 #2** código recuperado e versionado (redeploy/remoção pendentes); **P1 #3** investigada, decisão de produto pendente; **P1 #5** matriz concluída (correções de código pendentes); **P1 #4, P2 #6–#8, #9** sem alteração.
 
 ---
 
 ## 5. Próxima onda recomendada
 
-Nesta ordem:
+Tudo abaixo exige banco, deploy ou decisão — nada é só repo:
 
-1. **Resolver P0 #1** — consolidar triggers de audit duplicados e vacuum de `audit_logs`. Documentar no mesmo commit sob `operations/drift/`.
-2. **Resolver P0 #2** — trazer as 3 edge functions shadow para o repo (ou removê-las do dashboard). Sem isso, `audit/` e `reference/` mentem sobre a superfície real.
-3. **Gerar `reference/events/`** — catalogar payloads de webhook (Twilio, Meta, Kommo, SuvSign) e eventos internos. Maior lacuna entre `architecture/event-flow.md` e o código real.
-4. **Gerar `reference/api/`** — extrair contratos das 88 edge functions (input/output + mecanismo de auth), resolvendo parcialmente o drift #5.
-5. **Sincronizar migrations (drift #4)** — reconciliar 261 ↔ 184 antes de qualquer refactor grande.
-6. **Runbooks reais** — só depois de 1–5, escrever runbook por incidente concreto observado (não hipotético).
+1. **Aplicar P0 #1** — revisar e executar [`operations/proposals/2026-07-05-audit-trigger-dedup.sql`](operations/proposals/2026-07-05-audit-trigger-dedup.sql) em janela; fase 2 (expurgo + vacuum de 463 MB) separada.
+2. **Fechar P0 #2** — push/redeploy da `marketing-campaign-enrich` via pipeline (⚠️ push = deploy) e remoção das 2 functions de debug do dashboard.
+3. **Decidir P1 #3** — opção A (reativar cron) ou B (aposentar feature) em [`operations/proposals/2026-07-05-scheduled-messages-cron.sql`](operations/proposals/2026-07-05-scheduled-messages-cron.sql); Passo 0 obrigatório antes de qualquer reativação.
+4. **Corrigir grupo 🔴 do verify_jwt** — propor patches para `twilio-whatsapp-send`, `meta-whatsapp-send`, `ai-agent-respond`, `twilio-webhook` ([`platform/security/verify-jwt-review.md`](platform/security/verify-jwt-review.md)).
+5. **Sincronizar migrations (drift #4)** — `supabase db diff` + `migration repair` (inclui as duas de abril, item #9); pré-requisito para refactors grandes.
+6. **P2 #6–#8 e runbooks reais** — depois de 1–5.
