@@ -4,7 +4,7 @@ Registro das 3 edge functions que existiam deployadas **fora do repo** (drift P0
 
 | Função | Versão deployada | Destino | Justificativa |
 |---|---|---|---|
-| `marketing-campaign-enrich` | v14 (2026-05-04) | **Adicionada ao repo** em [`supabase/functions/marketing-campaign-enrich/`](../../../supabase/functions/marketing-campaign-enrich/index.ts) | Código de produção: roda em cron a cada 6h (`marketing-campaign-enrich-cron`) e por trigger (`fn_marketing_campaign_enrich_async`). Auth interna via `validateServiceRoleAuth`. |
+| `marketing-campaign-enrich` | v14 (2026-05-04) | **Versionada** em `supabase/functions/marketing-campaign-enrich/` (commit local em espera — publica junto com o deploy aprovado) | Código de produção: roda em cron a cada 6h (`marketing-campaign-enrich-cron`) e por trigger (`fn_marketing_campaign_enrich_async`). Auth interna via `validateServiceRoleAuth`. |
 | `meta-capi-raw-test` | v14 (2026-05-05) | **Órfã — arquivada aqui** ([`meta-capi-raw-test.index.ts`](meta-capi-raw-test.index.ts)); remover do dashboard futuramente | Ferramenta de debug que envia payload arbitrário ao Meta CAPI. ⚠️ **Auth fraca**: só checa a existência de header `Bearer` — qualquer chamada com a anon key passa e consegue disparar eventos CAPI arbitrários com o token/pixel da org. Não deve voltar como produção sem correção de auth. |
 | `twilio-message-debug` | v14 (2026-05-04) | **Órfã — arquivada aqui** ([`twilio-message-debug.index.ts`](twilio-message-debug.index.ts)); remover do dashboard futuramente | O próprio cabeçalho diz "DESCARTÁVEL… pode ser DELETADA depois do uso". Investigação CTWA já concluída (ver [`../audits/2026-07-ctwa-janela-72h.md`](../audits/2026-07-ctwa-janela-72h.md)). Única função do projeto com `verify_jwt = true`. |
 

@@ -1,0 +1,35 @@
+name: CI
+
+# CI leve — somente validações que passam localmente (2026-07-05).
+#
+# Excluídos de propósito (reavaliar quando passarem localmente):
+#   - npm run lint      → 826 erros pré-existentes no codebase
+#   - npm run typecheck → script não existe
+#   - npm ci            → repo não tem package-lock.json (lockfile é bun.lock,
+#                         usado pela Vercel); docs:validate não requer deps
+# Proibido neste workflow: deploy (Supabase/Vercel), migrations, secrets,
+# chamadas ao banco, edge functions.
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+jobs:
+  docs-validate:
+    name: Validar documentação (links e refs)
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+
+      # Sem npm install: scripts/docs-validate.mjs usa apenas node:fs/node:path.
+      - name: docs:validate
+        run: npm run docs:validate
