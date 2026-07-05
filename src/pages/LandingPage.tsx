@@ -4,6 +4,8 @@ import { LandingNavbar } from "@/components/landing/LandingNavbar";
 import { LandingFooter } from "@/components/landing/LandingFooter";
 import linhasMedia from "@/assets/brand/linhas-media-light.svg.asset.json";
 import linhasSutil from "@/assets/brand/linhas-sutil-light.svg.asset.json";
+import { useSiteT } from "@/i18n/SiteI18nProvider";
+import { SiteSeo } from "@/i18n/SiteSeo";
 
 /* Brand tokens (Manual da Marca) */
 const C = {
@@ -23,24 +25,13 @@ const fadeUp = {
 };
 const stagger = { visible: { transition: { staggerChildren: 0.1 } } };
 
-function CtaButton({ full = false, children = "Falar com a Seialz" }: { full?: boolean; children?: string }) {
-  return (
-    <a
-      href="#cta"
-      className={`${full ? "w-full" : "px-8"} py-4 rounded-[10px] text-base font-semibold inline-flex items-center justify-center transition-all hover:scale-105`}
-      style={{
-        backgroundColor: C.green,
-        color: C.ink,
-        fontFamily: "'Sora', sans-serif",
-        boxShadow: "0 8px 24px rgba(50,205,50,0.25)",
-      }}
-    >
-      {children}
-    </a>
-  );
+interface LoopStep {
+  title: string;
+  description: string;
 }
 
 export default function LandingPage() {
+  const { t, locale } = useSiteT("home");
   const [form, setForm] = useState({ nome: "", email: "", empresa: "" });
   const [submitted, setSubmitted] = useState(false);
 
@@ -49,11 +40,27 @@ export default function LandingPage() {
     setSubmitted(true);
   };
 
+  const steps = t<LoopStep[]>("loop.steps");
+  const labels = t<{ name: string; email: string; company: string }>("cta.labels");
+
+  const fields: { k: keyof typeof form; label: string; type: string }[] = [
+    { k: "nome", label: labels.name, type: "text" },
+    { k: "email", label: labels.email, type: "email" },
+    { k: "empresa", label: labels.company, type: "text" },
+  ];
+
   return (
     <div
       className="overflow-x-hidden overflow-y-auto"
       style={{ backgroundColor: C.paper, color: C.ink, fontFamily: "'Sora', sans-serif", height: "100dvh" }}
     >
+      <SiteSeo
+        locale={locale}
+        title={t("seo.title")}
+        description={t("seo.description")}
+        pathWithoutLocale=""
+      />
+
       <LandingNavbar />
 
       {/* HERO */}
@@ -80,19 +87,29 @@ export default function LandingPage() {
               className="font-semibold text-4xl md:text-6xl lg:text-7xl leading-[1.05] mb-8"
               style={{ color: C.ink, letterSpacing: "-0.02em" }}
             >
-              Marketing e vendas,{" "}
-              <span style={{ color: C.green }}>em um único sistema.</span>
+              {t("hero.titleLead")}{" "}
+              <span style={{ color: C.green }}>{t("hero.titleAccent")}</span>
             </motion.h1>
             <motion.p
               variants={fadeUp}
               className="text-lg md:text-xl max-w-3xl mx-auto mb-12 leading-relaxed"
               style={{ color: C.soft }}
             >
-              O Seialz conecta os dados de marketing e vendas desde o primeiro clique até a receita. Uma plataforma
-              onde as duas áreas operam sobre a mesma informação — sem integrações, sem planilhas, sem ruído.
+              {t("hero.subtitle")}
             </motion.p>
             <motion.div variants={fadeUp}>
-              <CtaButton />
+              <a
+                href="#cta"
+                className="px-8 py-4 rounded-[10px] text-base font-semibold inline-flex items-center justify-center transition-all hover:scale-105"
+                style={{
+                  backgroundColor: C.green,
+                  color: C.ink,
+                  fontFamily: "'Sora', sans-serif",
+                  boxShadow: "0 8px 24px rgba(50,205,50,0.25)",
+                }}
+              >
+                {t("hero.cta")}
+              </a>
             </motion.div>
           </motion.div>
         </div>
@@ -107,23 +124,17 @@ export default function LandingPage() {
               className="font-semibold text-3xl md:text-5xl leading-tight mb-8"
               style={{ color: C.ink, letterSpacing: "-0.02em" }}
             >
-              Quando marketing e vendas operam separados,{" "}
-              <span style={{ color: C.green }}>a receita perde clareza.</span>
+              {t("problem.titleLead")}{" "}
+              <span style={{ color: C.green }}>{t("problem.titleAccent")}</span>
             </motion.h2>
-            <motion.p
-              variants={fadeUp}
-              className="text-lg leading-relaxed"
-              style={{ color: C.soft }}
-            >
-              Uma área acompanha o custo por lead, a outra acompanha a conversão, e os dados raramente conversam
-              entre si. Sem uma visão única, fica difícil saber o que realmente gera resultado — e as decisões
-              passam a depender mais de percepção do que de dados.
+            <motion.p variants={fadeUp} className="text-lg leading-relaxed" style={{ color: C.soft }}>
+              {t("problem.body")}
             </motion.p>
           </motion.div>
         </div>
       </section>
 
-      {/* A SOLUÇÃO — ponto alto */}
+      {/* A SOLUÇÃO */}
       <section
         id="solucao"
         className="py-28 md:py-36 relative"
@@ -140,17 +151,11 @@ export default function LandingPage() {
               className="font-semibold text-3xl md:text-5xl leading-tight mb-8"
               style={{ color: C.ink, letterSpacing: "-0.02em" }}
             >
-              Uma operação comercial sobre{" "}
-              <span style={{ color: C.green }}>o mesmo dado.</span>
+              {t("solution.titleLead")}{" "}
+              <span style={{ color: C.green }}>{t("solution.titleAccent")}</span>
             </motion.h2>
-            <motion.p
-              variants={fadeUp}
-              className="text-lg leading-relaxed"
-              style={{ color: C.soft }}
-            >
-              O Seialz trata marketing e vendas como uma operação única. Cada lead entra com a origem registrada,
-              avança pelo pipeline e tem sua receita conectada à campanha que o gerou. O resultado é uma fonte de
-              verdade em tempo real, em que marketing e vendas enxergam exatamente a mesma informação.
+            <motion.p variants={fadeUp} className="text-lg leading-relaxed" style={{ color: C.soft }}>
+              {t("solution.body")}
             </motion.p>
           </motion.div>
         </div>
@@ -165,38 +170,25 @@ export default function LandingPage() {
               className="font-semibold text-3xl md:text-5xl leading-tight mb-8"
               style={{ color: C.ink, letterSpacing: "-0.02em" }}
             >
-              Um ciclo que evolui{" "}
-              <span style={{ color: C.green }}>a cada venda.</span>
+              {t("loop.titleLead")}{" "}
+              <span style={{ color: C.green }}>{t("loop.titleAccent")}</span>
             </motion.h2>
-            <motion.p
-              variants={fadeUp}
-              className="text-lg leading-relaxed mb-12"
-              style={{ color: C.soft }}
-            >
-              Com marketing e vendas sobre o mesmo dado, cada negócio fechado retorna como informação para a
-              operação. O marketing entende quais campanhas geram receita, atrai leads mais qualificados, e a
-              equipe comercial converte com mais consistência. A cada ciclo, a operação fica mais precisa.
+            <motion.p variants={fadeUp} className="text-lg leading-relaxed mb-12" style={{ color: C.soft }}>
+              {t("loop.body")}
             </motion.p>
 
             <motion.div variants={fadeUp} className="space-y-0">
-              {[
-                { t: "Origem", d: "o lead entra com a campanha de origem registrada." },
-                { t: "Conversão", d: "cada interação é acompanhada até o fechamento." },
-                { t: "Aprendizado", d: "o resultado retorna e orienta as próximas campanhas." },
-              ].map((s) => (
+              {steps.map((s) => (
                 <div
-                  key={s.t}
+                  key={s.title}
                   className="flex items-baseline gap-5 py-5"
                   style={{ borderTop: `1px solid ${C.line}` }}
                 >
-                  <span
-                    className="font-semibold text-base flex-shrink-0 w-32"
-                    style={{ color: C.ink }}
-                  >
-                    {s.t}
+                  <span className="font-semibold text-base flex-shrink-0 w-32" style={{ color: C.ink }}>
+                    {s.title}
                   </span>
                   <p className="leading-relaxed text-base" style={{ color: C.soft }}>
-                    {s.d}
+                    {s.description}
                   </p>
                 </div>
               ))}
@@ -225,15 +217,11 @@ export default function LandingPage() {
               className="font-semibold text-3xl md:text-5xl leading-tight mb-6 text-center"
               style={{ color: C.ink, letterSpacing: "-0.02em" }}
             >
-              Vamos conversar sobre{" "}
-              <span style={{ color: C.green }}>sua operação.</span>
+              {t("cta.titleLead")}{" "}
+              <span style={{ color: C.green }}>{t("cta.titleAccent")}</span>
             </motion.h2>
-            <motion.p
-              variants={fadeUp}
-              className="text-lg leading-relaxed mb-10 text-center"
-              style={{ color: C.soft }}
-            >
-              Conte um pouco sobre sua empresa e nosso time entra em contato.
+            <motion.p variants={fadeUp} className="text-lg leading-relaxed mb-10 text-center" style={{ color: C.soft }}>
+              {t("cta.subtitle")}
             </motion.p>
 
             <motion.form
@@ -249,15 +237,11 @@ export default function LandingPage() {
             >
               {submitted ? (
                 <p className="text-center py-8 text-base" style={{ color: C.ink }}>
-                  Recebemos seu contato. Retornamos em até 24h.
+                  {t("cta.success")}
                 </p>
               ) : (
                 <>
-                  {[
-                    { k: "nome", label: "Nome", type: "text" },
-                    { k: "email", label: "E-mail", type: "email" },
-                    { k: "empresa", label: "Empresa", type: "text" },
-                  ].map((f) => (
+                  {fields.map((f) => (
                     <div key={f.k}>
                       <label className="block text-xs mb-2 font-medium" style={{ color: C.soft }}>
                         {f.label}
@@ -265,7 +249,7 @@ export default function LandingPage() {
                       <input
                         required
                         type={f.type}
-                        value={(form as any)[f.k]}
+                        value={form[f.k]}
                         onChange={(e) => setForm({ ...form, [f.k]: e.target.value })}
                         className="w-full px-4 py-3 text-base outline-none transition-colors"
                         style={{
@@ -291,10 +275,10 @@ export default function LandingPage() {
                         boxShadow: "0 8px 24px rgba(50,205,50,0.25)",
                       }}
                     >
-                      Falar com a Seialz
+                      {t("cta.submit")}
                     </button>
                     <p className="text-xs text-center mt-4" style={{ color: C.ash }}>
-                      Retornamos em até 24h.
+                      {t("cta.disclaimer")}
                     </p>
                   </div>
                 </>
