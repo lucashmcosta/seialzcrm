@@ -67,7 +67,7 @@ Legenda: ⬜ pendente · 🟡 em andamento · ✅ concluído
 - [x] ct-backfill-once
 - [x] backfill-attribution
 
-### Bloco D — AI Agent, knowledge, wizard, BYOK (parcial)
+### Bloco D — AI Agent, knowledge, wizard, BYOK ✅ 2026-07-05
 - [x] ai-agent-respond
 - [x] ai-generate
 - [x] analyze-message
@@ -79,18 +79,18 @@ Legenda: ⬜ pendente · 🟡 em andamento · ✅ concluído
 - [x] process-knowledge
 - [x] process-knowledge-item
 - [x] reprocess-knowledge
-- [ ] synthesize-knowledge
-- [ ] apply-knowledge-edit
-- [ ] knowledge-edit
-- [ ] knowledge-wizard
-- [ ] wizard-generate-content
-- [ ] wizard-next-question
-- [ ] byok-set-key
-- [ ] byok-rotate-key
-- [ ] byok-revoke-key
-- [ ] byok-test-key
-- [ ] byok-update-policy
-- [ ] migrate-legacy-ai-key
+- [x] synthesize-knowledge
+- [x] apply-knowledge-edit
+- [x] knowledge-edit
+- [x] knowledge-wizard
+- [x] wizard-generate-content
+- [x] wizard-next-question
+- [x] byok-set-key
+- [x] byok-rotate-key
+- [x] byok-revoke-key
+- [x] byok-test-key
+- [x] byok-update-policy
+- [x] migrate-legacy-ai-key
 
 ### Bloco E — Intelligence, admin, kommo, misc
 - [ ] intelligence-worker
