@@ -127,6 +127,9 @@ export function WhatsAppTemplateSelector({
 
   /** Retorna motivo de bloqueio ou null se liberado. */
   const blockedReason = (t: Template): string | null => {
+    if (isLowEndpointWindowBlocked(endpointId ?? null, windowIsOpen)) {
+      return LOW_ENDPOINT_WINDOW_OPEN_MESSAGE;
+    }
     if (blockedIds.has(t.id)) return lowCfg?.reason ?? 'Template bloqueado para este número.';
     if (isMarketingBlockedWhenWindowOpen(t.category, windowIsOpen)) {
       return 'Janela aberta — responda em texto livre. Marketing só fora da janela.';
