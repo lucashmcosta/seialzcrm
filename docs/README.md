@@ -1,54 +1,71 @@
-# Documentação Seialz CRM
+# Documentação do Seialz
 
-Esta pasta é a fonte oficial de documentação do projeto. Ela é construída sobre a auditoria técnica completa em `docs/audit/` (registro histórico, imutável) e organizada por área de leitura.
+| Pergunta | Onde |
+|---|---|
+| O que é o sistema? | [`product/`](product/) |
+| Como funciona? | [`architecture/`](architecture/) |
+| Onde fica determinada funcionalidade? | [`modules/`](modules/) |
+| Como uma integração funciona? | [`integrations/`](integrations/) |
+| Como a plataforma foi construída? | [`platform/`](platform/) |
+| O que fazer quando algo quebra? | [`operations/`](operations/) |
+| Por que as coisas são assim? | [`decisions/`](decisions/) — ADRs |
+| Referência técnica bruta | [`reference/`](reference/) — **gerado do banco** |
+| Histórico congelado | [`audit/`](audit/) — **não modificar** |
 
 ## Filosofia
 
 > Pastas podem nascer vazias. Arquivos só nascem quando existe conteúdo verdadeiro.
 
-Nada aqui é inventado. Todo conteúdo é derivado de: código-fonte (`src/`, `supabase/functions/`, `supabase/migrations/`), banco de dados, rotas registradas em `src/App.tsx`, hooks, integrações reais e da auditoria em `docs/audit/`.
+Nada aqui é inventado. Todo conteúdo é derivado de: código-fonte (`src/`, `supabase/functions/`), banco de dados vivo (`docs/reference/database/`), rotas em `src/App.tsx`, integrações reais e da auditoria em `docs/audit/`.
 
-## Mapa das pastas
+## Regras
+1. Pastas de nível raiz existem todas; arquivo só nasce com conteúdo real (proibido stub vazio).
+2. Cada fato mora em UM lugar; os demais linkam.
+3. Mudança de schema/trigger/RPC → regenerar `reference/database/` no mesmo PR (queries no rodapé dos arquivos). Ver [ADR-0007](decisions/0007-drift-rule.md).
+4. Mudança manual no banco → migration no repo no mesmo dia ([`operations/README.md`](operations/README.md)).
+5. Decisão arquitetural → ADR em [`decisions/`](decisions/) (numeração `NNNN`, índice em `decisions/README.md`).
+6. `audit/` é histórico datado — **congela, não atualiza**. Drift ativo: [`operations/drift/`](operations/drift/).
 
-| Pasta | Propósito | Origem do conteúdo |
-|---|---|---|
-| `product/` | Terminologia, módulos, mapa de navegação, permissões | Rotas + páginas + `permission_profiles` |
-| `architecture/` | Visão de alto nível, fluxo de eventos | `docs/audit/01-overview.md`, `03-frontend-*`, `05-multi-tenancy.md` |
-| `modules/<modulo>/` | Um README + `data-model.md` por módulo real do sistema | Rotas, tabelas, hooks e componentes por domínio |
-| `integrations/<integracao>/` | Uma ficha por integração externa | `docs/audit/04-integracoes/` |
-| `platform/` | Database, security, observability, performance, infra, deploy | `docs/audit/05-multi-tenancy.md`, `06-cron-automacoes.md`, `07-divida-tecnica.md` |
-| `operations/` | Runbooks operacionais | Incidentes reais identificados na auditoria |
-| `decisions/` | ADRs (Architecture Decision Records) | Decisões evidentes no código |
-| `audit/` | **Registro histórico da auditoria — NÃO MODIFICAR** | Congelado |
-| `reference/` | Material regenerável (schema, API, eventos) | Gerado a partir do Supabase / código |
+## Estado atual (2026-07-04)
 
-## Como navegar
+### Gerado do banco vivo
+- ✅ `reference/database/database-full.md` (117 tabelas, 107 triggers, 232 policies, 15 crons, 88 edge fns)
+- ✅ `reference/database/trigger-functions.sql` (48 trigger functions)
+- ✅ `reference/catalog.md` — ownership de cada objeto por domínio
 
-- **Novo no projeto?** Comece por `architecture/overview.md`, depois `product/modules.md`.
-- **Trabalhando em um módulo?** Vá para `modules/<modulo>/README.md`.
-- **Integrando com um sistema externo?** `integrations/<nome>/README.md`.
-- **Investigando incidente ou dívida?** `operations/` + `docs/audit/07-divida-tecnica.md`.
-- **Precisa de schema ou payload?** `reference/`.
+### Mantido manualmente
+- ✅ `product/` — módulos, navegação, permissões, terminologia PT↔EN
+- ✅ `architecture/` — visão + fluxos de evento
+- ✅ `modules/` — 14 módulos × (README + data-model)
+- ✅ `integrations/` — 12 integrações
+- ✅ `platform/` — database, security, observability, performance, infrastructure, deployment
+- ✅ `operations/` — Regra do Drift, runbook, cron, arquitetura de filas
+- ✅ `decisions/` — 8 ADRs
+- ✅ `operations/drift/2026-07-04.md` — 8 pendências P0–P2
+- ✅ `operations/conflicts.md` — divergências descoberta ↔ repo
+
+### Congelado
+- `audit/` — 90 fichas de edge functions, 13 de integrações, análises de dívida e cron.
 
 ## Convenções
 
 - Marcadores `[INCERTO]` sinalizam afirmações não 100% confirmadas — herdado da auditoria.
 - Priorização de dívida técnica: 🔴 alta, 🟡 média, 🟢 baixa.
-- Toda tabela `public.*` obedece a política RLS `organization_id = ANY(current_user_org_ids())` salvo exceção documentada.
 - Nomes de arquivos e pastas em `kebab-case`.
+- Toda tabela `public.*` obedece a política RLS `organization_id = ANY(current_user_org_ids())` salvo exceção documentada.
 
 ## Gerado vs mantido manualmente
 
 | Tipo | Modo |
 |---|---|
-| `docs/audit/**` | Congelado (registro histórico) |
-| `docs/reference/generated/**` | Regenerável automaticamente a partir do Supabase/código |
-| `docs/reference/database/**` | Regenerável (schema, RLS, RPCs) |
+| `audit/**` | Congelado (registro histórico da auditoria manual) |
+| `reference/database/**` | **Regenerado** do banco vivo (queries no rodapé dos arquivos) |
+| `reference/catalog.md` | Mantido manualmente com base no banco (ADR-0008) |
+| `operations/drift/**` | Datado por descoberta — some quando o item é resolvido |
 | Tudo o mais | Mantido manualmente com base em evidência |
 
 ## Referências rápidas
-
-- Auditoria completa: [`audit/00-PROGRESS.md`](audit/00-PROGRESS.md)
-- Visão geral do stack: [`audit/01-overview.md`](audit/01-overview.md)
+- Auditoria congelada: [`audit/00-PROGRESS.md`](audit/00-PROGRESS.md)
 - Design system: [`DESIGN_SYSTEM.md`](DESIGN_SYSTEM.md)
 - Ícones: [`ICON_SYSTEM.md`](ICON_SYSTEM.md)
+- Regras para agentes/devs: ver [ADR-0007](decisions/0007-drift-rule.md) e [`operations/README.md`](operations/README.md).
