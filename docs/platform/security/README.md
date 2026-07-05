@@ -35,7 +35,7 @@
 
 Pode ser intencional (auth própria em `_shared/auth.ts`, webhooks externos precisam de `false`), mas exige confirmação function por function. Prioridade: `admin-impersonate*`, `create-user`, `byok-*`.
 
-**Ação pendente:** matriz "function × mecanismo de auth" (JWT próprio / assinatura de webhook / token interno do Vault / aberta). Qualquer "aberta" sem justificativa = fechar.
+**Matriz criada (2026-07-05):** [`verify-jwt-review.md`](verify-jwt-review.md) — 93 functions classificadas em 5 grupos. Resultado: 🔴 grupo "sem autenticação de chamador" inclui `twilio-whatsapp-send`, `meta-whatsapp-send`, `ai-agent-respond` e `twilio-webhook` (sem assinatura). Correções de código pendentes de proposta/revisão.
 
 ## Dívida crítica (🔴)
 
