@@ -259,7 +259,7 @@ ${bodyHtml}
   <div class="row">
     <span>© ${new Date().getFullYear()} Kairos Labs LLC · Seialz</span>
     <span>
-      <a href="${p.alternates[p.lang]}">${escapeHtml(p.footer.privacy)}</a>
+      <a href="${p.lang === "en" ? "/en/privacy-policy" : "/politica-de-privacidade"}">${escapeHtml(p.footer.privacy)}</a>
       &nbsp;·&nbsp;
       <a href="${p.lang === "en" ? "/en/terms-of-service" : "/termos-de-servico"}">${escapeHtml(p.footer.terms)}</a>
       &nbsp;·&nbsp;
@@ -274,27 +274,54 @@ ${bodyHtml}
 
 function main() {
   if (!existsSync(DIST)) {
-    console.error(`[build-legal-pages] dist/ not found at ${DIST}. Run 'vite build' first.`);
+    console.error(`[build-legal-pages] FATAL: dist/ not found at ${DIST}. Run 'vite build' first.`);
     process.exit(1);
   }
+  const errors = [];
   let ok = 0;
   for (const p of PAGES) {
-    const mdPath = resolve(LOCALES, p.mdFile);
-    if (!existsSync(mdPath)) {
-      console.error(`[build-legal-pages] missing markdown: ${mdPath}`);
-      process.exit(1);
+    try {
+      const mdPath = resolve(LOCALES, p.mdFile);
+      if (!existsSync(mdPath)) {
+        throw new Error(`missing markdown source: ${mdPath}`);
+      }
+      const md = readFileSync(mdPath, "utf8");
+      if (md.trim().length < 200) {
+        throw new Error(`markdown source suspiciously short (${md.length} bytes): ${mdPath}`);
+      }
+      const bodyHtml = renderMarkdown(md);
+      if (!bodyHtml || bodyHtml.trim().length < 200) {
+        throw new Error(`marked returned empty/short HTML for ${p.mdFile} (${bodyHtml?.length ?? 0} bytes)`);
+      }
+      const updatedAt = extractUpdatedAt(md);
+      const html = pageTemplate(p, bodyHtml, updatedAt);
+      const outDir = resolve(DIST, "." + p.url);
+      mkdirSync(outDir, { recursive: true });
+      const outFile = resolve(outDir, "index.html");
+      writeFileSync(outFile, html, "utf8");
+      // Post-write sanity check: file exists, non-trivial size, contains the page title.
+      const written = readFileSync(outFile, "utf8");
+      if (written.length < 2000) {
+        throw new Error(`output too small (${written.length} bytes): ${outFile}`);
+      }
+      if (!written.includes(`<title>${p.seoTitle}</title>`)) {
+        throw new Error(`output missing expected <title> for ${p.url}`);
+      }
+      console.log(`[build-legal-pages] wrote ${p.url}/index.html (${written.length} bytes)`);
+      ok++;
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
+      console.error(`[build-legal-pages] FAILED ${p.url}: ${msg}`);
+      errors.push({ url: p.url, msg });
     }
-    const md = readFileSync(mdPath, "utf8");
-    const bodyHtml = renderMarkdown(md);
-    const updatedAt = extractUpdatedAt(md);
-    const html = pageTemplate(p, bodyHtml, updatedAt);
-    const outDir = resolve(DIST, "." + p.url);
-    mkdirSync(outDir, { recursive: true });
-    writeFileSync(resolve(outDir, "index.html"), html, "utf8");
-    console.log(`[build-legal-pages] wrote ${p.url}/index.html`);
-    ok++;
   }
-  console.log(`[build-legal-pages] done — ${ok} pages generated`);
+  if (errors.length > 0 || ok !== PAGES.length) {
+    console.error(`[build-legal-pages] FATAL: ${errors.length} page(s) failed, ${ok}/${PAGES.length} generated`);
+    for (const e of errors) console.error(`  - ${e.url}: ${e.msg}`);
+    process.exit(1);
+  }
+  console.log(`[build-legal-pages] done — ${ok}/${PAGES.length} pages generated`);
 }
 
 main();
+

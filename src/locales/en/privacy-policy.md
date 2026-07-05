@@ -187,6 +187,7 @@ We may update this Privacy Policy from time to time. The current version will al
 
 ## 14. HOW TO CONTACT US
 
-**Kairos Labs LLC**
 Seialz is a brand of Kairos Labs LLC, a Florida limited liability company.
-**Email:** privacy@seialz.com
+
+Email: privacy@seialz.com
+

@@ -118,6 +118,7 @@ Estes Termos são regidos pelas leis do Estado da Flórida, Estados Unidos da Am
 
 ## 16. CONTATO
 
-**Kairos Labs LLC**
 Seialz é uma marca da Kairos Labs LLC, empresa constituída no Estado da Flórida, Estados Unidos da América.
-**E-mail:** privacidade@seialz.com
+
+E-mail: privacidade@seialz.com
+

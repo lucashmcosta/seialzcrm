@@ -23,5 +23,7 @@ Mediante solicitação válida de exclusão, os dados recebidos pelas APIs da Me
 
 ## Contato
 
-**Kairos Labs LLC** — Seialz
-**E-mail:** privacidade@seialz.com
+Seialz é uma marca da Kairos Labs LLC, empresa constituída no Estado da Flórida, Estados Unidos da América.
+
+E-mail: privacidade@seialz.com
+
