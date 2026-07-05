@@ -2250,33 +2250,70 @@ function DesktopMessagesList() {
                               )}
                             </div>
                             <div className="relative flex-1">
+                              {/* Snippets — painel flutuante, controlado pelo slash command */}
+                              {serviceWindow.isOpen && snippets.length > 0 && snippetPickerOpen && (
+                                <SnippetsPickerPanel
+                                  snippets={snippets}
+                                  query={snippetShortcutQuery ?? ''}
+                                  onSelect={(s) => {
+                                    applySnippet(s);
+                                    setSnippetPickerOpen(false);
+                                    setSnippetShortcutQuery(undefined);
+                                  }}
+                                  onClose={() => {
+                                    setSnippetPickerOpen(false);
+                                    setSnippetShortcutQuery(undefined);
+                                  }}
+                                />
+                              )}
                               <Textarea
                                 ref={textareaRef}
                                 placeholder={outOfWindow
                                   ? outOfWindowCopy
                                   : isNoteMode
                                     ? (locale === 'pt-BR' ? 'Escreva uma nota interna...' : 'Write an internal note...')
-                                    : (locale === 'pt-BR' ? 'Digite uma mensagem... (/ abre snippets)' : 'Type a message... (/ opens snippets)')}
+                                    : (locale === 'pt-BR' ? "Digite uma mensagem ou '/' para respostas rápidas" : "Type a message or '/' for quick replies")}
                                 value={messageText}
                                 onChange={(e) => {
                                   const v = e.target.value;
                                   setMessageText(v);
                                   adjustTextareaHeight();
-                                  // Atalho: `/` no início abre picker de snippets
-                                  if (serviceWindow.isOpen && snippets.length > 0 && v.startsWith('/')) {
-                                    setSnippetShortcutQuery(v.slice(1));
+                                  // Slash command: abre picker enquanto o texto começar com "/"
+                                  const q = extractSnippetQuery(v);
+                                  if (serviceWindow.isOpen && snippets.length > 0 && q !== null) {
+                                    setSnippetShortcutQuery(q);
                                     setSnippetPickerOpen(true);
-                                  } else if (snippetPickerOpen && !v.startsWith('/')) {
+                                  } else if (snippetPickerOpen) {
                                     setSnippetPickerOpen(false);
+                                    setSnippetShortcutQuery(undefined);
                                   }
                                 }}
                                 onKeyDown={(e) => {
+                                  if (e.key === 'Escape' && snippetPickerOpen) {
+                                    e.preventDefault();
+                                    setSnippetPickerOpen(false);
+                                    setSnippetShortcutQuery(undefined);
+                                    return;
+                                  }
                                   if (e.key === 'Enter' && !e.shiftKey) {
+                                    e.preventDefault();
                                     if (snippetPickerOpen) {
-                                      // Deixa o picker capturar Enter (seleciona 1º item)
+                                      // Seleciona o primeiro snippet visível
+                                      const q = (snippetShortcutQuery ?? '').trim().toLowerCase();
+                                      const list = q
+                                        ? snippets.filter((s) => (
+                                            s.title.toLowerCase().includes(q) ||
+                                            (s.shortcut ?? '').toLowerCase().includes(q) ||
+                                            s.body.toLowerCase().includes(q)
+                                          ))
+                                        : snippets;
+                                      if (list.length > 0) {
+                                        applySnippet(list[0]);
+                                        setSnippetPickerOpen(false);
+                                        setSnippetShortcutQuery(undefined);
+                                      }
                                       return;
                                     }
-                                    e.preventDefault();
                                     handleSendMessage();
                                     if (textareaRef.current) {
                                       textareaRef.current.style.height = 'auto';
@@ -2288,6 +2325,7 @@ function DesktopMessagesList() {
                                 disabled={outOfWindow}
                                 className={`w-full resize-none min-h-[40px] max-h-[150px] pr-10 ${textareaOverflow ? 'overflow-y-auto' : 'overflow-hidden'}`}
                               />
+
 
 
                               {/* AI Improve Button */}
