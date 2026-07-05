@@ -448,6 +448,7 @@ const App = () => (
             <Route path="integrations" element={<IntegrationsSettings />} />
             <Route path="customer-service" element={<CustomerServiceSettings />} />
             <Route path="whatsapp-templates" element={<WhatsAppTemplatesPage />} />
+            <Route path="whatsapp-snippets" element={<WhatsAppSnippetsPage />} />
             <Route path="ai-agent" element={<AIAgentSettings />} />
             <Route path="ai-providers" element={<AIProvidersSettings />} />
             <Route path="intelligence" element={<IntelligenceSettings />} />
