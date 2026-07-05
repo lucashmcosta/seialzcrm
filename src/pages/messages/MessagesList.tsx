@@ -2178,7 +2178,15 @@ function DesktopMessagesList() {
                               onClose={() => setReplyingTo(null)}
                             />
                           )}
-
+                          {/* LOW + janela aberta: banner protetivo do número */}
+                          {!outOfWindow && lowEndpointWindowBlocked && (
+                            <div className="mb-2 flex items-start gap-2 rounded-md border border-amber-300 bg-amber-50 px-3 py-2 text-xs text-amber-900 dark:border-amber-700 dark:bg-amber-950/40 dark:text-amber-200">
+                              <span aria-hidden>⚡</span>
+                              <span>
+                                Para proteger este número, utilize Snippets ou mensagem livre. Templates estão temporariamente desativados.
+                              </span>
+                            </div>
+                          )}
 
 
                           <div className={cn(
@@ -2199,8 +2207,29 @@ function DesktopMessagesList() {
                                 </Button>
                               ) : (
                                 <>
-                                  <MediaUploadButton onFileSelected={handleFileSelected} onTemplateClick={() => setShowTemplates(true)} onNoteClick={() => setIsNoteMode(true)} disabled={submitting || mediaUploading} />
+                                  <MediaUploadButton
+                                    onFileSelected={handleFileSelected}
+                                    onTemplateClick={lowEndpointWindowBlocked ? undefined : () => setShowTemplates(true)}
+                                    onNoteClick={() => setIsNoteMode(true)}
+                                    disabled={submitting || mediaUploading}
+                                  />
                                   <AudioRecorder onSend={handleAudioSend} disabled={submitting || mediaUploading} />
+
+                                  {/* Snippets internos — só na janela aberta */}
+                                  {serviceWindow.isOpen && snippets.length > 0 && (
+                                    <SnippetsPicker
+                                      snippets={snippets}
+                                      onSelect={applySnippet}
+                                      disabled={submitting}
+                                      highlighted={lowEndpointWindowBlocked}
+                                      open={snippetPickerOpen}
+                                      onOpenChange={(v) => {
+                                        setSnippetPickerOpen(v);
+                                        if (!v) setSnippetShortcutQuery(undefined);
+                                      }}
+                                      initialQuery={snippetShortcutQuery}
+                                    />
+                                  )}
 
                                   {/* Emoji Picker */}
                                   <Popover open={showEmojiPicker} onOpenChange={setShowEmojiPicker}>
@@ -2232,14 +2261,26 @@ function DesktopMessagesList() {
                                   ? outOfWindowCopy
                                   : isNoteMode
                                     ? (locale === 'pt-BR' ? 'Escreva uma nota interna...' : 'Write an internal note...')
-                                    : (locale === 'pt-BR' ? 'Digite uma mensagem...' : 'Type a message...')}
+                                    : (locale === 'pt-BR' ? 'Digite uma mensagem... (/ abre snippets)' : 'Type a message... (/ opens snippets)')}
                                 value={messageText}
                                 onChange={(e) => {
-                                  setMessageText(e.target.value);
+                                  const v = e.target.value;
+                                  setMessageText(v);
                                   adjustTextareaHeight();
+                                  // Atalho: `/` no início abre picker de snippets
+                                  if (serviceWindow.isOpen && snippets.length > 0 && v.startsWith('/')) {
+                                    setSnippetShortcutQuery(v.slice(1));
+                                    setSnippetPickerOpen(true);
+                                  } else if (snippetPickerOpen && !v.startsWith('/')) {
+                                    setSnippetPickerOpen(false);
+                                  }
                                 }}
                                 onKeyDown={(e) => {
                                   if (e.key === 'Enter' && !e.shiftKey) {
+                                    if (snippetPickerOpen) {
+                                      // Deixa o picker capturar Enter (seleciona 1º item)
+                                      return;
+                                    }
                                     e.preventDefault();
                                     handleSendMessage();
                                     if (textareaRef.current) {
@@ -2252,6 +2293,7 @@ function DesktopMessagesList() {
                                 disabled={outOfWindow}
                                 className={`w-full resize-none min-h-[40px] max-h-[150px] pr-10 ${textareaOverflow ? 'overflow-y-auto' : 'overflow-hidden'}`}
                               />
+
 
                               {/* AI Improve Button */}
                               {!outOfWindow && hasAIIntegration && (
