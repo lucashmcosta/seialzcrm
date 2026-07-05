@@ -2199,17 +2199,6 @@ function DesktopMessagesList() {
                               onClose={() => setReplyingTo(null)}
                             />
                           )}
-                          {/* LOW + janela aberta: banner protetivo do número */}
-                          {!outOfWindow && lowEndpointWindowBlocked && (
-                            <div className="mb-2 flex items-start gap-2 rounded-md border border-amber-300 bg-amber-50 px-3 py-2 text-xs text-amber-900 dark:border-amber-700 dark:bg-amber-950/40 dark:text-amber-200">
-                              <span aria-hidden>⚡</span>
-                              <span>
-                                Para proteger este número, utilize Snippets ou mensagem livre. Templates estão temporariamente desativados.
-                              </span>
-                            </div>
-                          )}
-
-
                           <div className={cn(
                             "flex gap-2",
                             !outOfWindow && replyingTo && !isNoteMode && "border border-t-0 border-border rounded-b-lg p-2 bg-card",
@@ -2236,21 +2225,6 @@ function DesktopMessagesList() {
                                   />
                                   <AudioRecorder onSend={handleAudioSend} disabled={submitting || mediaUploading} />
 
-                                  {/* Snippets internos — só na janela aberta */}
-                                  {serviceWindow.isOpen && snippets.length > 0 && (
-                                    <SnippetsPicker
-                                      snippets={snippets}
-                                      onSelect={applySnippet}
-                                      disabled={submitting}
-                                      highlighted={lowEndpointWindowBlocked}
-                                      open={snippetPickerOpen}
-                                      onOpenChange={(v) => {
-                                        setSnippetPickerOpen(v);
-                                        if (!v) setSnippetShortcutQuery(undefined);
-                                      }}
-                                      initialQuery={snippetShortcutQuery}
-                                    />
-                                  )}
 
                                   {/* Emoji Picker */}
                                   <Popover open={showEmojiPicker} onOpenChange={setShowEmojiPicker}>
