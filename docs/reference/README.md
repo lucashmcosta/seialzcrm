@@ -5,8 +5,8 @@ Conteúdo regenerável a partir do sistema real.
 | Subpasta | Fonte |
 |---|---|
 | [`database/`](database/) | Schema Supabase — **regenerado do banco vivo** (queries no rodapé de cada arquivo) |
-| `api/` | Rotas REST do PostgREST + edge functions HTTP (a gerar) |
-| `events/` | Eventos de webhook consumidos e emitidos (a gerar) |
+| [`api/`](api/) | Superfície HTTP: edge functions por chamador/auth + PostgREST (índice parcial 2026-07-05; contratos `[TODO]`) |
+| [`events/`](events/) | Eventos emitidos (outbox/CAPI/realtime) e consumidos (webhooks/fila inbound), com volumes reais (parcial 2026-07-05) |
 | `generated/` | Artefatos gerados automaticamente (ex.: `src/integrations/supabase/types.ts`) |
 
 ## Ownership por domínio
