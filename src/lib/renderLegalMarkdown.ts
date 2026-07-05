@@ -2,12 +2,14 @@ import { marked } from "marked";
 
 marked.setOptions({ gfm: true, breaks: false });
 
-/** Slugifica em ASCII com hífens, remove diacríticos e caracteres não alfanuméricos. */
+/** Slugifica em ASCII com hífens, remove diacríticos e numeração de seção. */
 export function slugify(input: string): string {
   return input
     .normalize("NFD")
     .replace(/[\u0300-\u036f]/g, "")
     .toLowerCase()
+    // Remove numeração tipo "7. " ou "12.1. " no início do heading.
+    .replace(/^\s*\d+(?:\.\d+)*\.?\s*/, "")
     .replace(/[^a-z0-9\s-]/g, "")
     .trim()
     .replace(/\s+/g, "-")

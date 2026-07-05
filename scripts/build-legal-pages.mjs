@@ -28,6 +28,8 @@ function slugify(input) {
     .normalize("NFD")
     .replace(/[\u0300-\u036f]/g, "")
     .toLowerCase()
+    // Remove numeração de seção tipo "7. " ou "12.1. " no início.
+    .replace(/^\s*\d+(?:\.\d+)*\.?\s*/, "")
     .replace(/[^a-z0-9\s-]/g, "")
     .trim()
     .replace(/\s+/g, "-")
