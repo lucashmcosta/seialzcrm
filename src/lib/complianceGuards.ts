@@ -91,6 +91,24 @@ export function isMarketingBlockedWhenWindowOpen(
   return String(category).toUpperCase() === 'MARKETING';
 }
 
+/**
+ * Regra reforçada p/ endpoints LOW (ex.: 7020): enquanto a janela WhatsApp
+ * estiver aberta, bloquear TODOS os templates — inclusive UTILITY — para
+ * proteger a qualidade do número. Fora da janela segue o fluxo normal
+ * (allowed_purposes + rate limit + blockedTemplateIds).
+ */
+export const LOW_ENDPOINT_WINDOW_OPEN_MESSAGE =
+  'Janela WhatsApp aberta. Use mensagem livre para proteger a qualidade do número.';
+
+export function isLowEndpointWindowBlocked(
+  endpointId: string | null | undefined,
+  windowIsOpen: boolean,
+  now = Date.now(),
+): boolean {
+  if (!windowIsOpen) return false;
+  return isEndpointLow(endpointId, now);
+}
+
 // ------------------------- Rate limit: 1 template / contato / 24h -----------
 
 export const TEMPLATE_RATE_LIMIT_WINDOW_MS = 24 * 60 * 60 * 1000;

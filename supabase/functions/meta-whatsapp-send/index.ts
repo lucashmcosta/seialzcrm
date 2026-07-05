@@ -342,6 +342,40 @@ serve(async (req) => {
       if (tpl.provider !== "meta_cloud_api") return jsonResponse(400, { error: "template_not_meta_cloud" });
       if (tpl.status !== "approved") return jsonResponse(400, { error: "template_not_approved" });
 
+      // Guard LOW + janela aberta: 7020 (Central Trabalhista) enquanto em modo LOW
+      // não pode disparar NENHUM template — nem UTILITY — se a janela 24h está aberta.
+      // Mantido em paralelo ao guard cliente (complianceGuards.isLowEndpointWindowBlocked).
+      const LOW_WINDOW_BLOCKED_ENDPOINTS = new Set<string>([
+        "407ff93d-4860-49cd-82ae-beda456c1774", // 7020 Meta Cloud
+      ]);
+      if (in24h && LOW_WINDOW_BLOCKED_ENDPOINTS.has(endpoint.id)) {
+        console.warn("[meta-wa-send] template_blocked_window_open_low_endpoint", {
+          endpointId: endpoint.id,
+          templateId: tpl.id,
+          templateName: tpl.meta_template_name,
+        });
+        try {
+          await supabase.from("compliance_blocks").insert({
+            organization_id: organizationId,
+            endpoint_id: endpoint.id,
+            thread_id: currentThreadId ?? null,
+            contact_id: contactId,
+            template_id: tpl.id,
+            template_name: tpl.meta_template_name ?? tpl.friendly_name ?? null,
+            block_reason: "template_blocked_window_open_low_endpoint",
+            source_component: "meta-whatsapp-send",
+            window_state: { is_open: true, endpoint_low: true } as any,
+          });
+        } catch (e) {
+          console.warn("[meta-wa-send] compliance_blocks insert failed", (e as Error).message);
+        }
+        return jsonResponse(403, {
+          error: "template_blocked_window_open_low_endpoint",
+          details: "Janela WhatsApp aberta. Use mensagem livre para proteger a qualidade do número.",
+        });
+      }
+
+
       // PR3: purpose guard — bloqueia envio se o purpose do endpoint não estiver em allowed_purposes.
       const allowedPurposes: string[] = Array.isArray((tpl as any).allowed_purposes)
         ? ((tpl as any).allowed_purposes as string[])
