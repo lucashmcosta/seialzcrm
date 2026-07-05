@@ -12,3 +12,8 @@ verify_jwt = false
 [functions.meta-wa-diagnose]
 verify_jwt = false
 
+# Auth propria via _shared/auth.ts (validateServiceRoleAuth) — chamada por
+# pg_cron/pg_net com service_role. Igual ao estado deployado (drift P0 #2).
+[functions.marketing-campaign-enrich]
+verify_jwt = false
+
