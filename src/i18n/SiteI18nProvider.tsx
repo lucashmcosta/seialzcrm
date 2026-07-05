@@ -52,17 +52,16 @@ export function SiteI18nProvider({ children }: { children: ReactNode }) {
     [locale, location, navigate],
   );
 
-  const t = useCallback(<T,>(ns: Namespace, key: string): T => {
+  const tRaw = useCallback((ns: Namespace, key: string): unknown => {
     const value = resolveKey(getDict(locale, ns), key);
     if (value === undefined) {
-      // Fallback silencioso para PT-BR se a chave faltar no idioma atual.
       const fallback = resolveKey(getDict(DEFAULT_LOCALE, ns), key);
-      return (fallback ?? key) as T;
+      return fallback ?? key;
     }
-    return value as T;
+    return value;
   }, [locale]);
 
-  const value = useMemo(() => ({ locale, setLocale, t }), [locale, setLocale, t]);
+  const value = useMemo(() => ({ locale, setLocale, tRaw }), [locale, setLocale, tRaw]);
 
   return <SiteI18nContext.Provider value={value}>{children}</SiteI18nContext.Provider>;
 }
@@ -73,14 +72,18 @@ export function useSiteI18n(): SiteI18nContextValue {
   return ctx;
 }
 
-/** Açúcar: hook por namespace (equivalente a `useTranslation('home')`). */
+/**
+ * Açúcar por namespace. `t(key)` retorna string por padrão; use `t<T>(key)`
+ * (ex.: `t<Step[]>('loop.steps')`) para valores estruturados.
+ */
 export function useSiteT(ns: Namespace) {
-  const { t, locale, setLocale } = useSiteI18n();
-  return {
-    locale,
-    setLocale,
-    t: <T = string,>(key: string) => t<T>(ns, key),
-  };
+  const { tRaw, locale, setLocale } = useSiteI18n();
+  function t(key: string): string;
+  function t<T>(key: string): T;
+  function t(key: string): unknown {
+    return tRaw(ns, key);
+  }
+  return { locale, setLocale, t };
 }
 
 export { detectLocale };
