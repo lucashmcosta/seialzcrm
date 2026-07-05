@@ -85,6 +85,7 @@ Tudo mais é mantido manualmente com base em evidência (código, banco, auditor
 - `[INCERTO]` regra exata de grandfathering de preço/trial — [`modules/billing/README.md`](modules/billing/README.md); validar no código antes de alterar billing.
 - `[INCERTO]` detalhe do loop de recálculo entre triggers de `messages`/`message_threads` corrigido no passado — [`platform/performance/README.md`](platform/performance/README.md); revalidar antes de mexer nas triggers de denormalização.
 - Buckets de Storage listados como "prováveis" (`attachments`, `logos`, `call-recordings`, `voice-audio`) sem verificação formal — [`platform/infrastructure/README.md`](platform/infrastructure/README.md).
+- ⚠️ **Risco a revisar: bump major de `zod` 3.x → 4.x** feito pelo bot da Lovable em 2026-07-05 (commits `00fc045a`/`12bb4a94`, junto com `@lovable.dev/mcp-js`). Zod 4 muda comportamento de schemas/`.parse`/mensagens de erro — revisar todos os usos de zod no frontend (react-hook-form resolvers inclusive) e confirmar que o build/preview funciona antes de confiar em produção. Nenhuma ação tomada ainda.
 
 ---
 
