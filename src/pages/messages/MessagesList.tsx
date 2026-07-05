@@ -75,7 +75,7 @@ import { assertTemplateAllowedForEndpoint, checkTemplateRateLimit, isLowEndpoint
 import { logComplianceBlock } from '@/lib/complianceLog';
 import { useSnippets, bumpSnippetUsage, type MessageSnippet } from '@/hooks/useSnippets';
 import { interpolateSnippet, buildSnippetVars } from '@/lib/interpolateSnippet';
-import { SnippetsPicker } from '@/components/whatsapp/SnippetsPicker';
+import { SnippetsPickerPanel, extractSnippetQuery } from '@/components/whatsapp/SnippetsPicker';
 import { useAI } from '@/hooks/useAI';
 import { useMessageThreads, type ChatThread } from '@/hooks/useMessageThreads';
 import { useOrgWhatsAppEndpoints } from '@/hooks/useOrgWhatsAppEndpoints';
