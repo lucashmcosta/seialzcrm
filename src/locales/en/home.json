@@ -1,0 +1,41 @@
+{
+  "seo": {
+    "title": "Seialz — Marketing and sales in a single system",
+    "description": "Seialz connects marketing and sales on the same data, from the first click to revenue. No integrations, no spreadsheets, no noise."
+  },
+  "hero": {
+    "titleLead": "Marketing and sales,",
+    "titleAccent": "in a single system.",
+    "subtitle": "Seialz connects marketing and sales data from the first click to revenue. One platform where both teams operate on the same information — no integrations, no spreadsheets, no noise.",
+    "cta": "Talk to Seialz"
+  },
+  "problem": {
+    "titleLead": "When marketing and sales run apart,",
+    "titleAccent": "revenue loses clarity.",
+    "body": "One team tracks cost per lead, the other tracks conversion, and the data rarely lines up. Without a single view it's hard to tell what actually drives results — and decisions start relying more on gut feel than on data."
+  },
+  "solution": {
+    "titleLead": "One commercial operation on",
+    "titleAccent": "the same data.",
+    "body": "Seialz treats marketing and sales as a single operation. Every lead enters with its source recorded, moves through the pipeline, and has its revenue tied back to the campaign that generated it. The result is a real-time source of truth where marketing and sales see exactly the same information."
+  },
+  "loop": {
+    "titleLead": "A cycle that improves",
+    "titleAccent": "with every sale.",
+    "body": "With marketing and sales on the same data, every closed deal feeds information back into the operation. Marketing learns which campaigns actually drive revenue, attracts better-qualified leads, and the sales team converts more consistently. Every cycle sharpens the operation.",
+    "steps": [
+      { "title": "Source", "description": "the lead enters with its originating campaign recorded." },
+      { "title": "Conversion", "description": "every interaction is tracked up to close." },
+      { "title": "Learning", "description": "results flow back and guide the next campaigns." }
+    ]
+  },
+  "cta": {
+    "titleLead": "Let's talk about",
+    "titleAccent": "your operation.",
+    "subtitle": "Tell us a bit about your company and our team will be in touch.",
+    "labels": { "name": "Name", "email": "Email", "company": "Company" },
+    "submit": "Talk to Seialz",
+    "disclaimer": "We reply within 24h.",
+    "success": "Got it. We'll reply within 24h."
+  }
+}
