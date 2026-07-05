@@ -64,6 +64,7 @@
     "framer-motion": "^12.24.10",
     "input-otp": "^1.4.2",
     "lucide-react": "^0.462.0",
+    "marked": "^18.0.5",
     "next-themes": "^0.3.0",
     "opus-media-recorder": "^0.8.0",
     "react": "^18.3.1",
