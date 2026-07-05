@@ -679,6 +679,54 @@ function DesktopMessagesList() {
     lastInboundAt: composerLastInboundAt,
   });
 
+  // ---- Snippets internos (mensagens pré-prontas, freeform) --------------
+  // Só aparecem quando a janela WhatsApp está aberta. Filtrados pelo
+  // `purpose` do endpoint atual do composer (commercial | customer_service).
+  const composerEndpointPurpose = composerEndpointId
+    ? endpointById[composerEndpointId]?.purpose ?? null
+    : null;
+  const { snippets } = useSnippets({
+    organizationId: serviceWindow.isOpen ? organization?.id : null,
+    purpose: composerEndpointPurpose,
+  });
+  const [snippetPickerOpen, setSnippetPickerOpen] = useState(false);
+  const [snippetShortcutQuery, setSnippetShortcutQuery] = useState<string | undefined>(undefined);
+  const pendingSnippetIdRef = useRef<string | null>(null);
+  const lowEndpointWindowBlocked = isLowEndpointWindowBlocked(composerEndpointId, serviceWindow.isOpen);
+
+  // Derived numbers for interpolation (numero_comercial / numero_atendimento).
+  const commercialEndpointNumber = useMemo(() => {
+    const ep = orgEndpoints.find((e) => isSalesPurpose(e.purpose ?? null));
+    return ep?.external_address ?? '';
+  }, [orgEndpoints]);
+  const serviceEndpointNumber = useMemo(() => {
+    const ep = orgEndpoints.find((e) => (e.purpose ?? null) === 'customer_service');
+    return ep?.external_address ?? '';
+  }, [orgEndpoints]);
+
+  const applySnippet = (snippet: MessageSnippet) => {
+    const body = interpolateSnippet(snippet.body, buildSnippetVars({
+      contactName: selectedThread?.contact_name ?? null,
+      companyName: (selectedThread as any)?.company_name ?? null,
+      agentName: userProfile?.full_name ?? null,
+      commercialNumber: commercialEndpointNumber,
+      serviceNumber: serviceEndpointNumber,
+    }));
+    setMessageText(body);
+    pendingSnippetIdRef.current = snippet.id;
+    // devolver foco ao textarea
+    setTimeout(() => {
+      const el = textareaRef.current;
+      if (el) {
+        el.focus();
+        el.setSelectionRange(body.length, body.length);
+        adjustTextareaHeight();
+      }
+    }, 0);
+  };
+
+
+
 
   useEffect(() => {
     if (!selectedThreadId || !organization?.id) {
