@@ -1164,6 +1164,27 @@ function DesktopMessagesList() {
       }
 
       refetchThreads();
+
+      // Auditoria de snippet: grava metadata.snippet_id + incrementa usage_count.
+      const snippetId = pendingSnippetIdRef.current;
+      const sentMessageId = (data as any)?.messageId as string | undefined;
+      pendingSnippetIdRef.current = null;
+      if (snippetId && sentMessageId) {
+        (async () => {
+          try {
+            const { data: existing } = await supabase
+              .from('messages')
+              .select('metadata')
+              .eq('id', sentMessageId)
+              .maybeSingle();
+            const nextMeta = { ...((existing as any)?.metadata ?? {}), snippet_id: snippetId };
+            await supabase.from('messages').update({ metadata: nextMeta }).eq('id', sentMessageId);
+          } catch (e) {
+            console.warn('[snippet-audit] metadata update failed', (e as Error).message);
+          }
+          bumpSnippetUsage(snippetId);
+        })();
+      }
     } catch (error: any) {
       console.error('Error sending message:', error);
       setMessages((prev) =>
