@@ -38,13 +38,13 @@ Legenda: ⬜ pendente · 🟡 em andamento · ✅ concluído
 - [x] integration-worker
 - [x] scheduled-messages-cron
 
-### Bloco B — Twilio Voice + áudio + mídia
-- [ ] twilio-call
-- [ ] twilio-webhook
-- [ ] twilio-token
-- [ ] twilio-setup
-- [ ] twilio-media-proxy
-- [ ] transcribe-audio
+### Bloco B — Twilio Voice + áudio + mídia ✅ 2026-07-05
+- [x] twilio-call
+- [x] twilio-webhook
+- [x] twilio-token
+- [x] twilio-setup
+- [x] twilio-media-proxy
+- [x] transcribe-audio
 
 ### Bloco C — Meta Ads, CAPI, Lead Ads
 - [ ] meta-ads-manager-save
