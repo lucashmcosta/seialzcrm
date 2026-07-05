@@ -75,7 +75,7 @@ import { assertTemplateAllowedForEndpoint, checkTemplateRateLimit, isLowEndpoint
 import { logComplianceBlock } from '@/lib/complianceLog';
 import { useSnippets, bumpSnippetUsage, type MessageSnippet } from '@/hooks/useSnippets';
 import { interpolateSnippet, buildSnippetVars } from '@/lib/interpolateSnippet';
-import { SnippetsPicker } from '@/components/whatsapp/SnippetsPicker';
+import { SnippetsPickerPanel, extractSnippetQuery } from '@/components/whatsapp/SnippetsPicker';
 import { useAI } from '@/hooks/useAI';
 import { useMessageThreads, type ChatThread } from '@/hooks/useMessageThreads';
 import { useOrgWhatsAppEndpoints } from '@/hooks/useOrgWhatsAppEndpoints';
@@ -2199,17 +2199,6 @@ function DesktopMessagesList() {
                               onClose={() => setReplyingTo(null)}
                             />
                           )}
-                          {/* LOW + janela aberta: banner protetivo do número */}
-                          {!outOfWindow && lowEndpointWindowBlocked && (
-                            <div className="mb-2 flex items-start gap-2 rounded-md border border-amber-300 bg-amber-50 px-3 py-2 text-xs text-amber-900 dark:border-amber-700 dark:bg-amber-950/40 dark:text-amber-200">
-                              <span aria-hidden>⚡</span>
-                              <span>
-                                Para proteger este número, utilize Snippets ou mensagem livre. Templates estão temporariamente desativados.
-                              </span>
-                            </div>
-                          )}
-
-
                           <div className={cn(
                             "flex gap-2",
                             !outOfWindow && replyingTo && !isNoteMode && "border border-t-0 border-border rounded-b-lg p-2 bg-card",
@@ -2236,21 +2225,6 @@ function DesktopMessagesList() {
                                   />
                                   <AudioRecorder onSend={handleAudioSend} disabled={submitting || mediaUploading} />
 
-                                  {/* Snippets internos — só na janela aberta */}
-                                  {serviceWindow.isOpen && snippets.length > 0 && (
-                                    <SnippetsPicker
-                                      snippets={snippets}
-                                      onSelect={applySnippet}
-                                      disabled={submitting}
-                                      highlighted={lowEndpointWindowBlocked}
-                                      open={snippetPickerOpen}
-                                      onOpenChange={(v) => {
-                                        setSnippetPickerOpen(v);
-                                        if (!v) setSnippetShortcutQuery(undefined);
-                                      }}
-                                      initialQuery={snippetShortcutQuery}
-                                    />
-                                  )}
 
                                   {/* Emoji Picker */}
                                   <Popover open={showEmojiPicker} onOpenChange={setShowEmojiPicker}>
@@ -2276,33 +2250,70 @@ function DesktopMessagesList() {
                               )}
                             </div>
                             <div className="relative flex-1">
+                              {/* Snippets — painel flutuante, controlado pelo slash command */}
+                              {serviceWindow.isOpen && snippets.length > 0 && snippetPickerOpen && (
+                                <SnippetsPickerPanel
+                                  snippets={snippets}
+                                  query={snippetShortcutQuery ?? ''}
+                                  onSelect={(s) => {
+                                    applySnippet(s);
+                                    setSnippetPickerOpen(false);
+                                    setSnippetShortcutQuery(undefined);
+                                  }}
+                                  onClose={() => {
+                                    setSnippetPickerOpen(false);
+                                    setSnippetShortcutQuery(undefined);
+                                  }}
+                                />
+                              )}
                               <Textarea
                                 ref={textareaRef}
                                 placeholder={outOfWindow
                                   ? outOfWindowCopy
                                   : isNoteMode
                                     ? (locale === 'pt-BR' ? 'Escreva uma nota interna...' : 'Write an internal note...')
-                                    : (locale === 'pt-BR' ? 'Digite uma mensagem... (/ abre snippets)' : 'Type a message... (/ opens snippets)')}
+                                    : (locale === 'pt-BR' ? "Digite uma mensagem ou '/' para respostas rápidas" : "Type a message or '/' for quick replies")}
                                 value={messageText}
                                 onChange={(e) => {
                                   const v = e.target.value;
                                   setMessageText(v);
                                   adjustTextareaHeight();
-                                  // Atalho: `/` no início abre picker de snippets
-                                  if (serviceWindow.isOpen && snippets.length > 0 && v.startsWith('/')) {
-                                    setSnippetShortcutQuery(v.slice(1));
+                                  // Slash command: abre picker enquanto o texto começar com "/"
+                                  const q = extractSnippetQuery(v);
+                                  if (serviceWindow.isOpen && snippets.length > 0 && q !== null) {
+                                    setSnippetShortcutQuery(q);
                                     setSnippetPickerOpen(true);
-                                  } else if (snippetPickerOpen && !v.startsWith('/')) {
+                                  } else if (snippetPickerOpen) {
                                     setSnippetPickerOpen(false);
+                                    setSnippetShortcutQuery(undefined);
                                   }
                                 }}
                                 onKeyDown={(e) => {
+                                  if (e.key === 'Escape' && snippetPickerOpen) {
+                                    e.preventDefault();
+                                    setSnippetPickerOpen(false);
+                                    setSnippetShortcutQuery(undefined);
+                                    return;
+                                  }
                                   if (e.key === 'Enter' && !e.shiftKey) {
+                                    e.preventDefault();
                                     if (snippetPickerOpen) {
-                                      // Deixa o picker capturar Enter (seleciona 1º item)
+                                      // Seleciona o primeiro snippet visível
+                                      const q = (snippetShortcutQuery ?? '').trim().toLowerCase();
+                                      const list = q
+                                        ? snippets.filter((s) => (
+                                            s.title.toLowerCase().includes(q) ||
+                                            (s.shortcut ?? '').toLowerCase().includes(q) ||
+                                            s.body.toLowerCase().includes(q)
+                                          ))
+                                        : snippets;
+                                      if (list.length > 0) {
+                                        applySnippet(list[0]);
+                                        setSnippetPickerOpen(false);
+                                        setSnippetShortcutQuery(undefined);
+                                      }
                                       return;
                                     }
-                                    e.preventDefault();
                                     handleSendMessage();
                                     if (textareaRef.current) {
                                       textareaRef.current.style.height = 'auto';
@@ -2314,6 +2325,7 @@ function DesktopMessagesList() {
                                 disabled={outOfWindow}
                                 className={`w-full resize-none min-h-[40px] max-h-[150px] pr-10 ${textareaOverflow ? 'overflow-y-auto' : 'overflow-hidden'}`}
                               />
+
 
 
                               {/* AI Improve Button */}

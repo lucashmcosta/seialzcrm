@@ -31,6 +31,7 @@ const tabToRoute: Record<string, string> = {
 // Routes that require feature flags
 const flagProtectedRoutes: Record<string, 'hasWhatsApp' | 'showAIFeatures'> = {
   'whatsapp-templates': 'hasWhatsApp',
+  'whatsapp-snippets': 'hasWhatsApp',
   'ai-agent': 'showAIFeatures',
   'products': 'showAIFeatures',
   'knowledge-base': 'showAIFeatures',

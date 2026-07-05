@@ -97,6 +97,7 @@ const KnowledgeBaseSettings = lazy(() => import("./components/settings/Knowledge
 const KnowledgeEditChat = lazy(() => import("./components/settings/KnowledgeEditChat").then(m => ({ default: m.KnowledgeEditChat })));
 const ProductsSettings = lazy(() => import("./components/settings/ProductsSettings").then(m => ({ default: m.ProductsSettings })));
 const WhatsAppTemplatesPage = lazy(() => import("./pages/settings/WhatsAppTemplates"));
+const WhatsAppSnippetsPage = lazy(() => import("./pages/settings/WhatsAppSnippets"));
 const AuditLogs = lazy(() => import("./pages/settings/AuditLogs").then(m => ({ default: m.AuditLogs })));
 const RoundRobinSettings = lazy(() => import("./components/settings/RoundRobinSettings").then(m => ({ default: m.RoundRobinSettings })));
 const Trash = lazy(() => import("./pages/settings/Trash").then(m => ({ default: m.Trash })));
@@ -447,6 +448,7 @@ const App = () => (
             <Route path="integrations" element={<IntegrationsSettings />} />
             <Route path="customer-service" element={<CustomerServiceSettings />} />
             <Route path="whatsapp-templates" element={<WhatsAppTemplatesPage />} />
+            <Route path="whatsapp-snippets" element={<WhatsAppSnippetsPage />} />
             <Route path="ai-agent" element={<AIAgentSettings />} />
             <Route path="ai-providers" element={<AIProvidersSettings />} />
             <Route path="intelligence" element={<IntelligenceSettings />} />
