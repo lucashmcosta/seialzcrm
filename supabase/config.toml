@@ -17,3 +17,15 @@ verify_jwt = false
 [functions.marketing-campaign-enrich]
 verify_jwt = false
 
+# Preserva o estado atual de producao (verify_jwt=false) no deploy via CLI.
+# Auth real: EDGE_AUTH (validateCallerAuth, modo log) / assinatura Twilio.
+# CLI default seria true — quebraria o webhook Twilio (sem JWT) no gateway.
+[functions.twilio-whatsapp-send]
+verify_jwt = false
+
+[functions.ai-agent-respond]
+verify_jwt = false
+
+[functions.twilio-webhook]
+verify_jwt = false
+
