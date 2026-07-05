@@ -9,7 +9,7 @@ Legenda: ⬜ pendente · 🟡 em andamento · ✅ concluído
 | # | Arquivo | Status | Atualizado |
 |---|---------|--------|------------|
 | 1 | `01-overview.md` | ✅ | 2026-07-05 |
-| 2 | `02-edge-functions/` (90 fichas) | 🟡 | 2026-07-05 |
+| 2 | `02-edge-functions/` (90 fichas) | ✅ | 2026-07-05 |
 | 3a | `03-frontend-rotas.md` | ⬜ | — |
 | 3b | `03-frontend-hooks.md` | ⬜ | — |
 | 3c | `03-frontend-estado.md` | ⬜ | — |
@@ -92,30 +92,32 @@ Legenda: ⬜ pendente · 🟡 em andamento · ✅ concluído
 - [x] byok-update-policy
 - [x] migrate-legacy-ai-key
 
-### Bloco E — Intelligence, admin, kommo, misc
-- [ ] intelligence-worker
-- [ ] intelligence-backfill-runner
-- [ ] intelligence-ghosting-detector
-- [ ] intelligence-retention-cron
-- [ ] intelligence-rollup-cron
-- [ ] admin-impersonate
-- [ ] admin-impersonate-end
-- [ ] admin-impersonate-switch
-- [ ] admin-list-orgs-for-switch
-- [ ] create-user
-- [ ] kommo-fetch-pipelines
-- [ ] kommo-fix-owners
-- [ ] kommo-media-download
-- [ ] kommo-migrate
-- [ ] kommo-preview
-- [ ] kommo-rollback
-- [ ] kommo-validate
-- [ ] nammux-audit
-- [ ] nammux-download-attachment
-- [ ] nammux-replay-opportunity
-- [ ] nammux-test-connection
-- [ ] suvsign-webhook
-- [ ] export-conversations
-- [ ] fix-orphan-opportunities
-- [ ] outbox-health
-- [ ] health
+### Bloco E — Intelligence, admin, kommo, misc ✅ 2026-07-05
+- [x] intelligence-worker
+- [x] intelligence-backfill-runner
+- [x] intelligence-ghosting-detector
+- [x] intelligence-retention-cron
+- [x] intelligence-rollup-cron
+- [x] admin-impersonate
+- [x] admin-impersonate-end
+- [x] admin-impersonate-switch
+- [x] admin-list-orgs-for-switch
+- [x] create-user
+- [x] kommo-fetch-pipelines
+- [x] kommo-fix-owners
+- [x] kommo-media-download
+- [x] kommo-migrate
+- [x] kommo-preview
+- [x] kommo-rollback
+- [x] kommo-validate
+- [x] nammux-audit
+- [x] nammux-download-attachment
+- [x] nammux-replay-opportunity
+- [x] nammux-test-connection
+- [x] suvsign-webhook
+- [x] export-conversations
+- [x] fix-orphan-opportunities
+- [x] outbox-health
+- [x] health
+
+**Seção 2 (Edge Functions — 90 fichas) concluída.**
