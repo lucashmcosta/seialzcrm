@@ -14,7 +14,7 @@ import { Namespace, getDict, resolveKey } from "./dictionaries";
 interface SiteI18nContextValue {
   locale: Locale;
   setLocale: (locale: Locale) => void;
-  t: (ns: Namespace, key: string) => unknown;
+  tRaw: (ns: Namespace, key: string) => unknown;
 }
 
 const SiteI18nContext = createContext<SiteI18nContextValue | null>(null);
