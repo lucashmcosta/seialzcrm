@@ -8,8 +8,10 @@ import { OutboundCallProvider } from "@/contexts/OutboundCallContext";
 import { ThemeProvider } from "@/contexts/ThemeContext";
 import { AuthProvider, useAuthContext } from "@/contexts/AuthContext";
 import { OrganizationProvider } from "@/contexts/OrganizationContext";
-import { BrowserRouter, Routes, Route, Navigate, useLocation } from "react-router-dom";
+import { BrowserRouter, Routes, Route, Navigate, useLocation, useParams } from "react-router-dom";
 import { PageLoader } from "./components/common/PageLoader";
+import { SiteI18nProvider, detectLocale } from "@/i18n/SiteI18nProvider";
+import { DEFAULT_LOCALE, LOCALE_TO_SLUG, SLUG_TO_LOCALE } from "@/i18n/config";
 function reloadForChunkRecovery() {
   if (typeof window === "undefined") return;
 
