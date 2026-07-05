@@ -146,7 +146,7 @@ serve(async (req) => {
     if (explicitEndpointId) {
       const { data } = await supabase
         .from("communication_endpoints")
-        .select("id, organization_id, organization_integration_id, sender_sid, external_address, provider, is_active")
+        .select("id, organization_id, organization_integration_id, sender_sid, external_address, provider, is_active, purpose")
         .eq("id", explicitEndpointId)
         .maybeSingle();
       endpoint = data;
@@ -159,7 +159,7 @@ serve(async (req) => {
       if (thread?.primary_endpoint_id) {
         const { data: ep } = await supabase
           .from("communication_endpoints")
-          .select("id, organization_id, organization_integration_id, sender_sid, external_address, provider, is_active")
+          .select("id, organization_id, organization_integration_id, sender_sid, external_address, provider, is_active, purpose")
           .eq("id", thread.primary_endpoint_id)
           .maybeSingle();
         endpoint = ep;
@@ -334,13 +334,57 @@ serve(async (req) => {
     if (isTemplateSend && templateId) {
       const { data: tpl, error: tplErr } = await supabase
         .from("whatsapp_templates")
-        .select("id, organization_id, provider, status, meta_template_name, language, body, components, friendly_name")
+        .select("id, organization_id, provider, status, meta_template_name, language, body, components, friendly_name, allowed_purposes")
         .eq("id", templateId)
         .maybeSingle();
       if (tplErr || !tpl) return jsonResponse(404, { error: "template_not_found" });
       if (tpl.organization_id !== organizationId) return jsonResponse(403, { error: "template_org_mismatch" });
       if (tpl.provider !== "meta_cloud_api") return jsonResponse(400, { error: "template_not_meta_cloud" });
       if (tpl.status !== "approved") return jsonResponse(400, { error: "template_not_approved" });
+
+      // PR3: purpose guard — bloqueia envio se o purpose do endpoint não estiver em allowed_purposes.
+      const allowedPurposes: string[] = Array.isArray((tpl as any).allowed_purposes)
+        ? ((tpl as any).allowed_purposes as string[])
+        : [];
+      const endpointPurpose: string | null = (endpoint as any).purpose ?? null;
+      const purposeAllowed =
+        !!endpointPurpose &&
+        allowedPurposes.length > 0 &&
+        allowedPurposes.includes(endpointPurpose);
+      if (!purposeAllowed) {
+        console.warn("[meta-wa-send] template_purpose_mismatch", {
+          endpointId: endpoint.id,
+          endpointPurpose,
+          templateId: tpl.id,
+          templateName: tpl.meta_template_name,
+          allowedPurposes,
+        });
+        try {
+          await supabase.from("compliance_blocks").insert({
+            organization_id: organizationId,
+            endpoint_id: endpoint.id,
+            thread_id: currentThreadId ?? null,
+            contact_id: contactId,
+            template_id: tpl.id,
+            template_name: tpl.meta_template_name ?? tpl.friendly_name ?? null,
+            block_reason: "template_purpose_mismatch",
+            source_component: "meta-whatsapp-send",
+            window_state: {
+              endpoint_purpose: endpointPurpose,
+              allowed_purposes: allowedPurposes,
+            } as any,
+          });
+        } catch (e) {
+          console.warn("[meta-wa-send] compliance_blocks insert failed", (e as Error).message);
+        }
+        return jsonResponse(403, {
+          error: "template_purpose_mismatch",
+          details: `Template '${tpl.meta_template_name ?? tpl.friendly_name}' não é permitido para endpoints do tipo '${endpointPurpose ?? "?"}'.`,
+          endpointPurpose,
+          allowedPurposes,
+        });
+      }
+
       templateRow = tpl;
       templateName = tpl.meta_template_name || tpl.friendly_name;
       templateLanguage = tpl.language;
