@@ -1,58 +1,31 @@
-// Snippets picker — popover with search + category groups.
-// Selecting a snippet fills the composer via `onSelect` (does NOT send).
+// Snippets picker — panel with search + category groups.
+// Usado como painel flutuante controlado (sem botão trigger visível).
+// A abertura é feita pelo composer via slash command.
 
-import { useMemo, useState, useEffect } from 'react';
-import { Lightning, MagnifyingGlass } from '@phosphor-icons/react';
-import { Button } from '@/components/ui/button';
-import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
+import { useMemo, useState, useEffect, useRef } from 'react';
+import { MagnifyingGlass } from '@phosphor-icons/react';
 import { ScrollArea } from '@/components/ui/scroll-area';
-import { cn } from '@/lib/utils';
 import type { MessageSnippet } from '@/hooks/useSnippets';
 
 interface Props {
   snippets: MessageSnippet[];
   onSelect: (snippet: MessageSnippet) => void;
-  disabled?: boolean;
-  highlighted?: boolean;
-  /** External open control (used by `/` shortcut in composer). */
-  open?: boolean;
-  onOpenChange?: (open: boolean) => void;
-  /** Initial search query when opened via shortcut. */
-  initialQuery?: string;
+  onClose: () => void;
+  query?: string;
+  className?: string;
 }
 
-export function SnippetsPicker({
-  snippets,
-  onSelect,
-  disabled,
-  highlighted,
-  open: openProp,
-  onOpenChange,
-  initialQuery,
-}: Props) {
-  const [internalOpen, setInternalOpen] = useState(false);
-  const open = openProp ?? internalOpen;
-  const setOpen = (v: boolean) => {
-    setInternalOpen(v);
-    onOpenChange?.(v);
-  };
-
-  const [query, setQuery] = useState('');
-
-  useEffect(() => {
-    if (open) setQuery(initialQuery ?? '');
-  }, [open, initialQuery]);
+export function SnippetsPickerPanel({ snippets, onSelect, onClose, query = '', className }: Props) {
+  const containerRef = useRef<HTMLDivElement>(null);
 
   const filtered = useMemo(() => {
     const q = query.trim().toLowerCase();
     if (!q) return snippets;
-    return snippets.filter((s) => {
-      return (
-        s.title.toLowerCase().includes(q) ||
-        (s.shortcut ?? '').toLowerCase().includes(q) ||
-        s.body.toLowerCase().includes(q)
-      );
-    });
+    return snippets.filter((s) => (
+      s.title.toLowerCase().includes(q) ||
+      (s.shortcut ?? '').toLowerCase().includes(q) ||
+      s.body.toLowerCase().includes(q)
+    ));
   }, [snippets, query]);
 
   const groups = useMemo(() => {
@@ -66,90 +39,75 @@ export function SnippetsPicker({
     return Array.from(map.entries());
   }, [filtered]);
 
-  const handleSelect = (s: MessageSnippet) => {
-    onSelect(s);
-    setOpen(false);
-  };
-
-  const handleKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
-    if (e.key === 'Enter' && filtered.length > 0) {
-      e.preventDefault();
-      handleSelect(filtered[0]);
-    } else if (e.key === 'Escape') {
-      setOpen(false);
-    }
-  };
+  useEffect(() => {
+    const onDown = (e: MouseEvent) => {
+      if (containerRef.current && !containerRef.current.contains(e.target as Node)) {
+        onClose();
+      }
+    };
+    document.addEventListener('mousedown', onDown);
+    return () => document.removeEventListener('mousedown', onDown);
+  }, [onClose]);
 
   return (
-    <Popover open={open} onOpenChange={setOpen}>
-      <PopoverTrigger asChild>
-        <Button
-          type="button"
-          variant={highlighted ? 'default' : 'ghost'}
-          size="icon"
-          disabled={disabled}
-          className={cn(
-            'h-10 w-10',
-            highlighted && 'bg-primary text-primary-foreground hover:bg-primary/90 ring-2 ring-primary/40',
-          )}
-          title="Snippets (respostas prontas)"
-        >
-          <Lightning className="h-5 w-5" weight={highlighted ? 'fill' : 'regular'} />
-        </Button>
-      </PopoverTrigger>
-      <PopoverContent align="start" side="top" className="w-[360px] p-0">
-        <div className="flex items-center gap-2 border-b border-border px-3 py-2">
-          <MagnifyingGlass className="h-4 w-4 text-muted-foreground" />
-          <input
-            autoFocus
-            value={query}
-            onChange={(e) => setQuery(e.target.value)}
-            onKeyDown={handleKeyDown}
-            placeholder="Buscar por título, atalho ou texto..."
-            className="flex-1 bg-transparent text-sm outline-none placeholder:text-muted-foreground"
-          />
-        </div>
-        <ScrollArea className="max-h-[320px]">
-          {groups.length === 0 ? (
-            <div className="p-6 text-center text-sm text-muted-foreground">
-              Nenhum snippet encontrado.
-            </div>
-          ) : (
-            <div className="p-1">
-              {groups.map(([category, items]) => (
-                <div key={category} className="mb-1">
-                  <div className="px-2 py-1 text-[11px] font-medium uppercase tracking-wide text-muted-foreground">
-                    {category}
-                  </div>
-                  {items.map((s) => (
-                    <button
-                      key={s.id}
-                      type="button"
-                      onClick={() => handleSelect(s)}
-                      className="w-full rounded-md px-2 py-2 text-left hover:bg-accent focus:bg-accent focus:outline-none"
-                    >
-                      <div className="flex items-center justify-between gap-2">
-                        <span className="text-sm font-medium text-foreground">{s.title}</span>
-                        {s.shortcut && (
-                          <span className="rounded bg-muted px-1.5 py-0.5 font-mono text-[11px] text-muted-foreground">
-                            {s.shortcut}
-                          </span>
-                        )}
-                      </div>
-                      <div className="mt-0.5 line-clamp-2 text-xs text-muted-foreground whitespace-pre-line">
-                        {s.body}
-                      </div>
-                    </button>
-                  ))}
+    <div
+      ref={containerRef}
+      className={
+        (className ? className + ' ' : '') +
+        'absolute bottom-full left-0 right-0 mb-1 z-30 rounded-md border border-border bg-popover text-popover-foreground shadow-lg'
+      }
+    >
+      <div className="flex items-center gap-2 border-b border-border px-3 py-2">
+        <MagnifyingGlass className="h-4 w-4 text-muted-foreground" />
+        <span className="text-xs text-muted-foreground">
+          {query ? `Buscando "/${query}"` : 'Digite para filtrar snippets · Enter seleciona o primeiro · Esc fecha'}
+        </span>
+      </div>
+      <ScrollArea className="max-h-[320px]">
+        {groups.length === 0 ? (
+          <div className="p-6 text-center text-sm text-muted-foreground">
+            Nenhum snippet encontrado.
+          </div>
+        ) : (
+          <div className="p-1">
+            {groups.map(([category, items]) => (
+              <div key={category} className="mb-1">
+                <div className="px-2 py-1 text-[11px] font-medium uppercase tracking-wide text-muted-foreground">
+                  {category}
                 </div>
-              ))}
-            </div>
-          )}
-        </ScrollArea>
-        <div className="border-t border-border px-3 py-1.5 text-[11px] text-muted-foreground">
-          Enter seleciona o primeiro · variáveis são preenchidas ao inserir
-        </div>
-      </PopoverContent>
-    </Popover>
+                {items.map((s) => (
+                  <button
+                    key={s.id}
+                    type="button"
+                    onClick={() => onSelect(s)}
+                    className="w-full rounded-md px-2 py-2 text-left hover:bg-accent focus:bg-accent focus:outline-none"
+                  >
+                    <div className="flex items-center justify-between gap-2">
+                      <span className="text-sm font-medium text-foreground">{s.title}</span>
+                      {s.shortcut && (
+                        <span className="rounded bg-muted px-1.5 py-0.5 font-mono text-[11px] text-muted-foreground">
+                          {s.shortcut}
+                        </span>
+                      )}
+                    </div>
+                    <div className="mt-0.5 line-clamp-2 text-xs text-muted-foreground whitespace-pre-line">
+                      {s.body}
+                    </div>
+                  </button>
+                ))}
+              </div>
+            ))}
+          </div>
+        )}
+      </ScrollArea>
+    </div>
   );
+}
+
+/** Utilitário: dado texto do composer, retorna a query de snippet ou null. */
+export function extractSnippetQuery(text: string): string | null {
+  if (!text.startsWith('/')) return null;
+  // Não abrir com barra dupla / etc — se contém quebra de linha, cancela.
+  if (text.includes('\n')) return null;
+  return text.slice(1);
 }
