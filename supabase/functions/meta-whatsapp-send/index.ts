@@ -146,7 +146,7 @@ serve(async (req) => {
     if (explicitEndpointId) {
       const { data } = await supabase
         .from("communication_endpoints")
-        .select("id, organization_id, organization_integration_id, sender_sid, external_address, provider, is_active")
+        .select("id, organization_id, organization_integration_id, sender_sid, external_address, provider, is_active, purpose")
         .eq("id", explicitEndpointId)
         .maybeSingle();
       endpoint = data;
@@ -159,7 +159,7 @@ serve(async (req) => {
       if (thread?.primary_endpoint_id) {
         const { data: ep } = await supabase
           .from("communication_endpoints")
-          .select("id, organization_id, organization_integration_id, sender_sid, external_address, provider, is_active")
+          .select("id, organization_id, organization_integration_id, sender_sid, external_address, provider, is_active, purpose")
           .eq("id", thread.primary_endpoint_id)
           .maybeSingle();
         endpoint = ep;
