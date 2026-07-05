@@ -4,11 +4,11 @@
 
 ## Finalidade
 - Embeddings de knowledge base (`generate-embedding`, `process-knowledge*`).
-- Reranker no pipeline RAG do agente (top 30 → top 5, memory `reranking-and-anti-hallucination-logic`).
+- Reranker no pipeline RAG do agente (top 30 → top 5).
 
 ## Autenticação
 - `VOYAGE_API_KEY` global como fallback.
-- Override por org via `organization_integrations` (memory `organization-specific-voyage-ai`).
+- Override por org via `organization_integrations`.
 
 ## Tabelas
 `knowledge_items`, `knowledge_chunks`, `knowledge_embeddings`.

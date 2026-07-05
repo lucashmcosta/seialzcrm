@@ -10,10 +10,10 @@ Custo LLM significativo. Diferentes orgs preferem diferentes providers (Claude/O
 - Chaves cifradas em `organization_integrations` (JSONB) via `_shared/crypto.ts`.
 - Edge functions finas (`byok-set-key` = 84 LOC) delegando para `_shared/intelligence/byok-shared.ts`.
 - Autz por `requireOrgAdmin`.
-- Voyage AI também overridable por org (memory `organization-specific-voyage-ai`).
+- Voyage AI também overridable por org via `organization_integrations` (fallback global `VOYAGE_API_KEY`).
 - Fallback global: `LOVABLE_API_KEY` (Lovable AI Gateway) + `VOYAGE_API_KEY`.
 
 ## Consequências
-- UI condicional dependendo do provider ativo (memory `ai-agent/ui-visibility-logic`).
-- Multi-model duplication com uniqueness por org (memory `multi-model-duplication`).
+- UI condicional dependendo do provider ativo.
+- Multi-model com uniqueness por org.
 - Padrão de "edge function fina + `_shared` grosso" adotado como referência para novas features.

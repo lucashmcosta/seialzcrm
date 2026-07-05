@@ -3,7 +3,7 @@
 // Escopo curto: rodar hoje, sem migration. Revisitar em 7 dias.
 //
 // Fontes de verdade:
-//   - Auditoria: docs/AUDITORIA_7020.md + docs/AUDITORIA_CTWA.md
+//   - Auditoria: docs/operations/audits/2026-07-whatsapp-7020.md + docs/operations/audits/2026-07-ctwa-janela-72h.md
 //   - Templates: whatsapp_templates (query rodada em 2026-07-04)
 //
 // Se algum destes IDs mudar, atualize aqui + remova o hardcode assim que

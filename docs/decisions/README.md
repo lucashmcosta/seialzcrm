@@ -12,3 +12,4 @@ Numeração `NNNN`. Cada ADR captura contexto → decisão → consequências. N
 | [0006](0006-event-idempotency.md) | Idempotência obrigatória em publicação de eventos | Aceito |
 | [0007](0007-drift-rule.md) | Regra do Drift (banco vs repo) | Aceito |
 | [0008](0008-domain-ownership-catalog.md) | Ownership por domínio em `reference/catalog.md` | Aceito (markdown por decisão consciente) |
+| [0009](0009-inbox-messages-separation.md) | Separação Inbox e Messages (decisão de negócio) | Aceito |

@@ -14,5 +14,5 @@ Webhooks Meta/Twilio precisavam ser processados rapidamente para não estourar t
 
 ## Consequências
 - Retry natural, sem perda em picos.
-- Duas trilhas de código convivem — remover legado após Inbox v2 estável (memory `features/inbox-v2/status-2026-06-11`).
+- Duas trilhas de código convivem — remover a trilha legada de ingest quando o pipeline novo estiver estável (specs e status em `docs/inbox-v2/`). Nota: "legado" aqui é o caminho técnico de ingestão, não o módulo Messages — ver [`product/channel-boundaries.md`](../product/channel-boundaries.md).
 - Handlers de ingest concentrados em `_shared/integration-handlers/registry.ts`.

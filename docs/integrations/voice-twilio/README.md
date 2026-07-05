@@ -19,8 +19,8 @@ Chamadas outbound e inbound via WebRTC direto no cliente usando `@twilio/voice-s
 - Gravações: `call_recordings`.
 
 ## Isolamento crítico
-- **`OutboundCallProvider` desativa Voice em `/admin/*`** — memory `integrations/twilio-voice-security-isolation` — para não vazar device entre orgs durante impersonação.
-- Estado independente do WhatsApp (memory `outbound-call-provider-isolation`).
+- **`OutboundCallProvider` desativa Voice em `/admin/*`** — para não vazar device entre orgs durante impersonação.
+- Estado do provider de voz é independente do canal WhatsApp.
 
 ## Falhas comuns
 - Microfone não permitido no navegador.

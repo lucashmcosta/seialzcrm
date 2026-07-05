@@ -3,7 +3,7 @@
 **Referência técnica:** `docs/audit/04-integracoes/suvsign.md`.
 
 ## Finalidade
-Geração e assinatura de contratos vinculados a oportunidades (memory `integrations/suvsign-electronic-signature`).
+Geração e assinatura eletrônica de contratos vinculados a oportunidades.
 
 ## Webhook
 - `suvsign-webhook` — recebe callback de assinatura.

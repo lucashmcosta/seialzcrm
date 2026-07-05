@@ -1,13 +1,13 @@
 # Módulo: Settings
 
-Rotas aninhadas em `/settings/*` com `SettingsLayout` (breadcrumbs, sem headers próprios — memory `architecture/settings-nested-routes-and-breadcrumbs`).
+Rotas aninhadas em `/settings/*` com `SettingsLayout` (breadcrumbs, sem headers próprios).
 
 Sub-áreas:
 
 | Sub-rota | Propósito |
 |---|---|
 | `general` | Config geral da org |
-| `theme` | Preset de tema (memory `seialz-theme-persistence`) |
+| `theme` | Preset de tema (persistido em `organizations.theme_preset`) |
 | `users` | Usuários e vínculos |
 | `permissions` | Perfis de permissão |
 | `billing` | Plano/assinatura |

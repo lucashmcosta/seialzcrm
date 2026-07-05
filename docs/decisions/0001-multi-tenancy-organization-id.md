@@ -1,7 +1,7 @@
 # ADR 0001 — Multi-tenancy via `organization_id` + RLS `ANY(current_user_org_ids())`
 
 **Status:** Aceito (em produção).
-**Evidência:** `docs/audit/05-multi-tenancy.md`, `<supabase-tables>`, memory Core.
+**Evidência:** `docs/audit/05-multi-tenancy.md`, `docs/reference/database/database-full.md` (banco vivo).
 
 ## Contexto
 Modelo SaaS multi-org. Um usuário pode pertencer a várias organizações via `user_organizations`.

@@ -2,20 +2,19 @@
 
 Configurável em `/settings/ai-agent` e `/settings/ai-providers`.
 
-## Comportamento (memories)
-- Wizard behavioral em 5 passos + RAG estrito (`ai-agent/wizard-architecture-and-versioning`).
-- Multi-model: Claude, OpenAI, Gemini — uniqueness por org (`multi-model-duplication`).
-- Suporte a modelos de raciocínio + recuperação de resposta vazia (`model-compatibility-consolidated`).
-- Limite de mensagens por agente por thread via `ai_agent_logs` (`message-limits-per-agent`).
-- Memória de longo prazo + flow classifier (`memory-and-feedback-system`).
-- Regras de segurança conversacional: sem botões numerados no texto, apenas templates nativos (`conversational-behavior-and-safety`).
-- Regras anti-alucinação para pagamento PIX/link (`payment-tool-hardening`).
-- Rerank Voyage top 30 → top 5 (`reranking-and-anti-hallucination-logic`).
-- Visibilidade UI depende do provider ativo (`ui-visibility-logic`).
-- Tools disponíveis: `create_task`, `schedule_follow_up` (via cron), `mark_name_asked`, memory writes.
-- Retry exponencial em falhas Claude (`service-reliability-retry-logic`).
-- Confirmação de nome via tool `mark_name_asked` (`name-confirmation-system`).
-- Melhoria persuasiva de texto (`text-improvement-persuasive`).
+## Comportamento
+- Wizard behavioral em 5 passos + RAG estrito (versões em `ai_agent_versions`).
+- Multi-model: Claude, OpenAI, Gemini — uniqueness por org.
+- Suporte a modelos de raciocínio + recuperação de resposta vazia.
+- Limite de mensagens por agente por thread via `ai_agent_logs`.
+- Memória de longo prazo por contato (`contact_memories`) + flow classifier de feedback (`classify-agent-feedback`).
+- Regras de segurança conversacional: sem botões numerados no texto, apenas templates nativos.
+- Regras anti-alucinação para pagamento PIX/link.
+- Rerank Voyage top 30 → top 5 no pipeline RAG.
+- Visibilidade UI depende do provider ativo.
+- Tools disponíveis: `create_task`, `schedule_follow_up` (via cron), `mark_name_asked` (confirmação de nome), escrita em `contact_memories`.
+- Retry exponencial em falhas de provider.
+- Melhoria persuasiva de texto (`ai-generate`).
 
 ## Edge functions
 - Principal: `ai-agent-respond` (2372 LOC — 🔴 candidato a decomposição, ver dívida técnica).

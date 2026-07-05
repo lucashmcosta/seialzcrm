@@ -9,9 +9,9 @@
 Páginas em `src/pages/whatsapp/`. Também `/settings/whatsapp-templates` e `/settings/whatsapp-snippets`.
 
 ## Comportamentos
-- Admin only por design (memory `whatsapp/template-management-system-v3`).
+- Gestão admin-only por design (usuários comuns apenas usam templates aprovados).
 - Sync bidirecional com Twilio/Meta — mapping de status Twilio.
-- Metadata JSONB para renderizar quick-replies na history (memory `template-metadata-extraction`, `template-message-rendering-history`).
+- Metadata JSONB (`whatsapp_templates` + `whatsapp_template_actions`) para renderizar quick-replies/botões no histórico da conversa.
 
 ## Edge functions
 - `meta-whatsapp-templates-create`, `meta-whatsapp-templates-sync`

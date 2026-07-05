@@ -172,7 +172,7 @@ export default function CRMPage() {
 - [ ] Header SEM subtítulo?
 - [ ] SEM padding extra dentro do layout?
 - [ ] Cores via tokens semânticos?
-- [ ] Leu este DESIGN_SYSTEM.md?
+- [ ] Leu este design-system.md?
 
 ---
 

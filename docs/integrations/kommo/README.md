@@ -3,7 +3,7 @@
 **Referência técnica:** `docs/audit/04-integracoes/kommo.md`.
 
 ## Finalidade
-Migração one-shot de dados do Kommo + espelhamento unidirecional (memory `integrations/kommo-mirror-system-v2`).
+Migração one-shot de dados do Kommo + espelhamento unidirecional (Seialz → Kommo, via outbox `integration_jobs`).
 
 ## Fluxo
 1. `kommo-validate` — credenciais.
@@ -24,7 +24,7 @@ Credenciais (long-lived token + subdomain) fornecidas no body — não há env g
 `src/components/settings/Kommo*`, hook `useKommoMigration`.
 
 ## Falhas / dívida
-- 🔴 Falta sanitização de subdomínio em `kommo-fetch-pipelines`, `kommo-preview`, `kommo-migrate` (memory `development/edge-function-subdomain-sanitization`).
+- 🔴 Falta sanitização de subdomínio em `kommo-fetch-pipelines`, `kommo-preview`, `kommo-migrate`.
 - 🔴 SSRF em `kommo-media-download` (baixa URL sem allowlist).
 - 🟡 `kommo-rollback` não apaga contatos/oportunidades diretamente — verificar completude.
 - 🟡 `kommo-migrate` monolítico — quebrar por entidade.

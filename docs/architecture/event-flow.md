@@ -10,20 +10,20 @@ Meta Cloud
       OU enfileira em integration_inbound_events (caminho novo)
     → dispara ai-agent-respond (se AI ativa)
       → busca RAG (search_knowledge_*), rerank Voyage, Claude/OpenAI/Gemini
-      → executa tools (create_task, schedule_follow_up, memory writes)
+      → executa tools (create_task, schedule_follow_up, escrita em contact_memories)
       → dispatch-whatsapp-send.ts → meta-whatsapp-send
 Realtime Supabase → Frontend (useInboxThreads, useMessageThreads)
 ```
 
 ## 2. Mensagem WhatsApp inbound (Twilio)
 
-Análogo, porém `twilio-whatsapp-webhook` → resolve org via `messaging_service_sid`. Idem cross-org routing (memory `integrations/twilio-whatsapp-cross-org-routing`).
+Análogo, porém `twilio-whatsapp-webhook` → resolve org via `messaging_service_sid` antes de qualquer gravação (cross-org routing).
 
 ## 3. Envio outbound WhatsApp
 
 ```
 Frontend → dispatchWhatsAppSend (src/lib/dispatchWhatsAppSend.ts)
-  → escolhe provider ativo (memory whatsapp-outbound-number-prioritization)
+  → escolhe provider/endpoint ativo (prefere sender online; regras de re-rota em product/channel-boundaries.md)
     → meta-whatsapp-send  OU  twilio-whatsapp-send
       → Meta Graph / Twilio API
       → registra em messages (status pending → sent → delivered)
@@ -36,7 +36,7 @@ Templates: caminho separado (`meta-whatsapp-templates-*` / `twilio-whatsapp-temp
 ```
 pg_cron */3min → meta-lead-ads-poll
   → Meta Graph (leadgen forms) → meta-lead-ads-process-lead
-    → dedupe (memory leads/webhook-duplicate-prevention-logic)
+    → dedupe (descarta leads já processados)
     → cria contact + opportunity
     → registra atribuição (marketing_attribution_*)
 ```

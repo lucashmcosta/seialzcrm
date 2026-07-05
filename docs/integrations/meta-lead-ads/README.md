@@ -11,7 +11,7 @@ Polling de leadgen forms Meta → cria contatos/oportunidades.
 
 ## Polling
 - Cron `meta-lead-ads-poll` (`*/3 * * * *`, autenticado via vault + service_role).
-- Processamento: `meta-lead-ads-process-lead` — dedupe (memory `leads/webhook-duplicate-prevention-logic`).
+- Processamento: `meta-lead-ads-process-lead` — dedupe de leads já processados antes de criar contato/oportunidade.
 
 ## Saúde
 - `meta-lead-ads-token-health` (diário 08:00 UTC) — diagnóstico + `admin_notifications` em caso de erro.

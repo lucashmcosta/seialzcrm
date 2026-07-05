@@ -1,6 +1,6 @@
 # Mobile Dashboard — Tela "Início"
 
-Dump técnico literal para replicar a tela **Início** (dashboard inicial) no app React Native / Expo. Complementa `docs/MOBILE_APP_BACKEND.md` (credenciais Supabase, auth, RLS).
+Dump técnico literal para replicar a tela **Início** (dashboard inicial) no app React Native / Expo. Complementa `docs/mobile/backend-reference.md` (credenciais Supabase, auth, RLS).
 
 ---
 
@@ -370,7 +370,7 @@ Os arquivos abaixo são a fonte da verdade. Para não duplicar o dump, ler diret
 | `src/lib/fetchAllPagedRows.ts`                        | Paginação 1000/página + `dedupeRowsById`. **Copiar 1:1.** |
 | `src/hooks/usePersistedFilters.ts`                    | Trocar `localStorage` por `AsyncStorage`.          |
 | `src/hooks/usePermissions.ts`                         | Copiar 1:1 (usa Supabase JS + React Query).        |
-| `src/contexts/OrganizationContext.tsx`                | Ver `docs/MOBILE_APP_BACKEND.md` para port.        |
+| `src/contexts/OrganizationContext.tsx`                | Ver `docs/mobile/backend-reference.md` para port.        |
 | `src/contexts/ThemeContext.tsx`                       | Adaptar conforme seção 5.                          |
 
 ### 6.1 `src/lib/fetchAllPagedRows.ts` (literal, copiar 1:1)
@@ -429,4 +429,4 @@ const toDayStr = (d: Date) =>
 - `useNavigate('/opportunities/:id')` → `navigation.navigate('OpportunityDetail', { id })` (React Navigation).
 - `<Dialog>` do shadcn (detalhe de "entered/closed") → `Modal` nativo do RN ou `@gorhom/bottom-sheet`.
 - **NUNCA** parsear `close_date` com `new Date('YYYY-MM-DD')` — vira UTC e shifta 1 dia em BRT. Use `parseLocalDate` acima.
-- Manter uso de `users.id` (interno) em todos os filtros por owner — **jamais** usar `auth.uid()` direto. Ver `docs/MOBILE_APP_BACKEND.md` seção "SQL Helpers".
+- Manter uso de `users.id` (interno) em todos os filtros por owner — **jamais** usar `auth.uid()` direto. Ver `docs/mobile/backend-reference.md` seção "SQL Helpers".

@@ -1,7 +1,7 @@
 # ADR 0005 — Design System Seialz v1
 
 **Status:** Aceito.
-**Evidência:** `docs/DESIGN_SYSTEM.md`, memories `design-system/seialz-*`, `src/index.css`, `tailwind.config.ts`.
+**Evidência:** `docs/product/design/design-system.md`, `src/index.css`, `tailwind.config.ts`.
 
 ## Decisão
 - Peso máximo de fonte: 600.

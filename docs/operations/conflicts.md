@@ -29,7 +29,7 @@ Este arquivo registra divergências entre a documentação que existia no reposi
 - **Ação:** drift P0 #2. `docs/integrations/meta-*` e `docs/modules/marketing/` marcam a fn com ⚠️.
 
 ### 3. `scheduled-messages-cron` órfã
-- Repo trata como cron ativo (memories mencionam scheduled follow-ups).
+- Repo trata como cron ativo (documentação anterior mencionava scheduled follow-ups).
 - Banco vivo: function deployada (v275) mas **nenhum job de pg_cron a invoca**.
 - **Ação:** drift P1 #3. `docs/modules/ai-agent/` e `docs/audit/06-cron-automacoes.md` já sinalizavam como `[INCERTO]`.
 

@@ -3,7 +3,7 @@
 Rotas: `/settings/knowledge-base`, `/settings/edit-kb`.
 
 ## Comportamento
-- Schema hierárquico + edição conversacional (memory `knowledge-base/unified-rag-and-wizard-system`).
+- Schema hierárquico (`knowledge_items` → `knowledge_chunks`) + edição conversacional via `knowledge-edit` / `apply-knowledge-edit`.
 - Chunking + embeddings via Voyage AI.
 - Rerank top 30 → top 5 antes de entregar ao modelo.
 - Wizard de importação e enhancement.

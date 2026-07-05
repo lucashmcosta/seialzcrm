@@ -14,7 +14,7 @@
 - Roles em tabela dedicada (`permission_profiles` + `user_organizations`).
 
 ## Sessão
-- Sessão única por device (memory `integrations/single-session-device-based`).
+- Sessão única por device.
 - Hook `useSingleSession` invalida sessões concorrentes.
 
 ## Compliance

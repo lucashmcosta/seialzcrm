@@ -8,12 +8,12 @@
 | Frontend SPA | Vercel (`vercel.json`) |
 | Backend BaaS | Supabase (Postgres + Auth + Storage + Edge Functions Deno) |
 | Cron | `pg_cron` + `pg_net` no próprio Postgres |
-| Mensageria externa | Railway (memory `whatsapp-railway-migration-v2`) |
+| Mensageria externa | Railway (processa mensageria WhatsApp; edge functions Twilio focam em templates) |
 | Erro tracking | Sentry (frontend) |
 | CDN de mídia WhatsApp | Twilio + `twilio-media-proxy` |
 
-## Cron jobs (14)
-Ver `docs/audit/06-cron-automacoes.md`.
+## Cron jobs (15)
+Tabela atual em [`operations/README.md`](../../operations/README.md); histórico em `docs/audit/06-cron-automacoes.md`.
 
 ## Configurações
 - `supabase/config.toml` — Supabase config.

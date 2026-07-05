@@ -1,9 +1,15 @@
-# Módulo: Inbox v2
+# Módulo: Inbox (Atendimento / Pós-venda)
 
-Nova interface unificada — memory `features/inbox-v2/status-2026-06-11`.
+Superfície de conversas da **equipe de atendimento / customer success**: suporte, coleta de documentos, acompanhamento de processos e relacionamento pós-venda com clientes ativos. **Não confundir com Messages** (comercial/pré-venda) — a separação é decisão de negócio, ver [`product/channel-boundaries.md`](../../product/channel-boundaries.md).
 
-Status: shadow match 150/150, flag off. Pendências: backfill de 26k, cutover, Meta Cloud.
+## Rotas
+- **`/inbox`** (`src/pages/inbox/InboxPage.tsx`) — feature-flag off, rollout em curso.
+- Threads de atendimento falam por endpoints com `purpose ∈ {customer_service, support, other}` (`src/lib/endpointPurpose.ts`); SLAs configurados em `/settings/customer-service`.
 
-Rota: `/inbox` (`src/pages/inbox/InboxPage.tsx`). Hooks em `src/hooks/inbox/`.
+## Status do rollout (Inbox v2)
+- Shadow match 150/150 contra a listagem antiga; flag off.
+- Pendências: backfill de ~26k eventos, cutover do pipeline de ingest, canal Meta Cloud.
+- Especificações e SQL de Fase 0/1: [`docs/inbox-v2/`](../../inbox-v2/README.md).
 
-Especificações e SQL de fase 0: `docs/inbox-v2/*`.
+## Hooks
+`src/hooks/inbox/` — `useInboxThreads`, `useInboxThread`, `useInboxThreadMessages`, `useInboxQueueCounts`. RPCs `rpc_list_inbox_threads`, `rpc_inbox_queue_counts`.

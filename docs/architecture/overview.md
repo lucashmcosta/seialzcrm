@@ -6,7 +6,7 @@ Fonte: `docs/audit/01-overview.md`, `03-frontend-*`, `05-multi-tenancy.md`.
 
 - **Frontend**: React 18 + Vite 5 + TypeScript, Tailwind + shadcn/Radix, react-router v6, `@tanstack/react-query` (subutilizada), Sentry.
 - **Backend as a service**: Supabase (Postgres + Auth + Storage + Edge Functions Deno).
-- **Realtime/pipeline externo**: Railway (mensageria WhatsApp — memory `architecture/whatsapp-railway-migration-v2`).
+- **Realtime/pipeline externo**: Railway (mensageria WhatsApp).
 - **Voz**: Twilio WebRTC (`@twilio/voice-sdk`) direto no cliente.
 - **Deploy**: Vercel (frontend) + Supabase (functions/DB).
 
@@ -53,7 +53,7 @@ Webhooks só enfileiram em `integration_inbound_events`; `integration-inbound-di
 
 ## Design system
 
-Seialz v1 — ver `docs/DESIGN_SYSTEM.md` e memories `design-system/seialz-*`.
+Seialz v1 — ver `docs/product/design/design-system.md` e [ADR-0005](../decisions/0005-design-system-seialz-v1.md).
 
 ## Pontos de dívida arquitetural
 

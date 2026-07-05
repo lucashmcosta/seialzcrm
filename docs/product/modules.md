@@ -11,8 +11,8 @@ Extraído das rotas registradas em `src/App.tsx` e das páginas em `src/pages/`.
 | Empresas | `/companies`, `/companies/new`, `/companies/:id`, `/companies/:id/edit` | `src/pages/companies/` |
 | Oportunidades | `/opportunities` (Kanban), `/opportunities/:id` | `src/pages/opportunities/` |
 | Tarefas | `/tasks` | `src/pages/tasks/TasksList.tsx` |
-| Mensagens (legacy) | `/messages` | `src/pages/` (MessagesList) |
-| Inbox v2 | `/inbox` — flag off até cutover (memory `features/inbox-v2/status-2026-06-11`) | `src/pages/inbox/InboxPage.tsx` |
+| Mensagens (comercial / pré-venda) | `/messages` — ver [`channel-boundaries.md`](channel-boundaries.md) | `src/pages/` (MessagesList) |
+| Inbox (atendimento / pós-venda) | `/inbox` — feature-flag off, rollout em curso (specs em `docs/inbox-v2/`); ver [`channel-boundaries.md`](channel-boundaries.md) | `src/pages/inbox/InboxPage.tsx` |
 | Marketing | `/marketing`, `/marketing/ads`, `/marketing/ads/:id`, `/marketing/funnel`, `/marketing/timeline` | `src/pages/marketing/` |
 | WhatsApp Templates | `/whatsapp/templates[/new|/:id|/:id/edit]` | `src/pages/whatsapp/` |
 | Perfil | `/profile` | `src/pages/Profile.tsx` |

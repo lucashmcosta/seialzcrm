@@ -35,8 +35,8 @@ Regra Core: **nunca usar `auth.uid()` diretamente em relacionamentos** — sempr
 
 ## Isolamento por canal
 
-- `communication_endpoints` scopeada por org. Webhooks Meta/Twilio precisam olhar `waba_id`/`messaging_service_sid` para descobrir a org destino (memory `integrations/twilio-whatsapp-cross-org-routing`).
-- Twilio Voice: `OutboundCallProvider` desativa Voice em `/admin/*` (memory `integrations/twilio-voice-security-isolation`).
+- `communication_endpoints` scopeada por org. Webhooks Meta/Twilio precisam olhar `waba_id`/`messaging_service_sid` para descobrir a org destino antes de qualquer gravação.
+- Twilio Voice: `OutboundCallProvider` desativa Voice em `/admin/*` — evita vazar device Twilio entre orgs durante impersonação.
 - WhatsApp Templates: admin only por design.
 
 ## Grants padrão em tabelas de negócio

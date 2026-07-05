@@ -12,7 +12,7 @@ Canal WhatsApp via Twilio (mensagens + templates). Coexiste com Meta Cloud.
 
 ## Webhooks
 - `twilio-whatsapp-webhook` — inbound.
-- Resolve org por `messaging_service_sid` — cross-org routing conforme memory.
+- Resolve org por `messaging_service_sid` — quando várias orgs compartilham conta Twilio, a org destino é resolvida pelo identificador antes de qualquer gravação (cross-org routing).
 - Assinatura HMAC Twilio validada.
 
 ## Envio
@@ -21,10 +21,10 @@ Canal WhatsApp via Twilio (mensagens + templates). Coexiste com Meta Cloud.
 - Media proxy: `twilio-media-proxy` (evita expor URLs assinadas Twilio ao cliente).
 
 ## Priorização de sender
-Memory `whatsapp-outbound-number-prioritization`: prefere ONLINE senders. Se número offline, cai para próximo válido.
+Prefere senders ONLINE. Se número offline, cai para o próximo válido (`src/lib/dispatchWhatsAppSend.ts`).
 
 ## Migração para Railway
-Memory `architecture/whatsapp-railway-migration-v2`: Railway agora processa mensageria; edge functions Twilio focam em templates.
+Railway processa a mensageria; edge functions Twilio focam em templates.
 
 ## Falhas comuns
 - Assinatura HMAC inválida → verificar Auth Token correto.

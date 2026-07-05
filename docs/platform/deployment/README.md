@@ -24,4 +24,4 @@
 
 ## PWA
 - `public/manifest.webmanifest`, `public/service-worker.js`, `public/sw.js`.
-- Update notification: memory `architecture/pwa-update-notification-system`.
+- Notificação de update de versão: `src/hooks/useVersionCheck.ts` + service worker.

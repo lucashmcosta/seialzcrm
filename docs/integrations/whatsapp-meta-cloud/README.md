@@ -15,7 +15,7 @@ Canal WhatsApp oficial via Meta Cloud API — envio, templates e recepção.
 - Endpoint: edge function `meta-whatsapp-webhook`.
 - Verificação Meta com `hub.verify_token`.
 - Resolve org via `waba_id` → `communication_endpoints`.
-- Cross-org routing: quando várias orgs compartilham WABA/phone_number_id — memory `integrations/twilio-whatsapp-cross-org-routing` (mesmo princípio).
+- Cross-org routing: quando várias orgs compartilham WABA/phone_number_id, a org destino é resolvida pelo identificador do canal antes de qualquer gravação (mesmo princípio do canal Twilio).
 
 ## Envio
 - `meta-whatsapp-send` — chamada por `dispatchWhatsAppSend`.
@@ -23,7 +23,7 @@ Canal WhatsApp oficial via Meta Cloud API — envio, templates e recepção.
 
 ## Diagnósticos
 - `meta-wa-diagnose` — checagem de saúde da integração.
-- Ver memories `integrations/twilio-whatsapp-configuration-and-diagnostics`, `whatsapp-outbound-number-prioritization`.
+- Priorização de sender outbound: prefere senders online; se o número estiver offline, cai para o próximo válido (`src/lib/dispatchWhatsAppSend.ts`).
 
 ## Falhas comuns
 - Token expirado → renovar em Settings → Integrations.
