@@ -10,8 +10,9 @@
   },
   "footer": {
     "tagline": "Sales Ops Nativo",
-    "terms": "Termos",
-    "privacy": "Privacidade",
+    "terms": "Termos de Serviço",
+    "privacy": "Política de Privacidade",
+    "dataDeletion": "Exclusão de Dados",
     "contact": "Contato"
   },
   "language": {

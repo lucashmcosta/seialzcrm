@@ -32,6 +32,46 @@ export const HREFLANG: Record<Locale, string> = {
   en: "en",
 };
 
+/**
+ * URLs canônicas das páginas legais (registradas no painel da Meta).
+ * PT usa slugs em português no top-level; EN mantém o prefixo /en/.
+ */
+export type LegalPage = "privacy-policy" | "terms-of-service" | "data-deletion";
+
+export const LEGAL_ROUTES: Record<LegalPage, Record<Locale, string>> = {
+  "privacy-policy": {
+    "pt-BR": "/politica-de-privacidade",
+    en: "/en/privacy-policy",
+  },
+  "terms-of-service": {
+    "pt-BR": "/termos-de-servico",
+    en: "/en/terms-of-service",
+  },
+  "data-deletion": {
+    "pt-BR": "/exclusao-de-dados",
+    en: "/en/data-deletion",
+  },
+};
+
+export function getLegalUrl(page: LegalPage, locale: Locale): string {
+  return LEGAL_ROUTES[page][locale];
+}
+
+export function otherLocale(locale: Locale): Locale {
+  return locale === "pt-BR" ? "en" : "pt-BR";
+}
+
+/** Mapa reverso: pathname → { page, locale } para as rotas legais canônicas. */
+function findLegalMatch(pathname: string): { page: LegalPage; locale: Locale } | null {
+  const clean = pathname.replace(/\/+$/, "") || "/";
+  for (const page of Object.keys(LEGAL_ROUTES) as LegalPage[]) {
+    for (const locale of SUPPORTED_LOCALES) {
+      if (LEGAL_ROUTES[page][locale] === clean) return { page, locale };
+    }
+  }
+  return null;
+}
+
 export function isLocaleSlug(slug: string | undefined): slug is keyof typeof SLUG_TO_LOCALE {
   return !!slug && slug in SLUG_TO_LOCALE;
 }
@@ -60,8 +100,18 @@ export function persistLocale(locale: Locale) {
   }
 }
 
-/** Substitui o primeiro segmento de path pelo slug do novo locale. */
+/**
+ * Substitui o primeiro segmento de path pelo slug do novo locale.
+ * Casos especiais:
+ *  - Se o pathname atual corresponder a uma URL legal canônica, redireciona
+ *    para a URL equivalente no outro idioma.
+ *  - Se o path já começar com um slug de locale, troca esse slug.
+ *  - Caso contrário, prepend o slug (comportamento padrão).
+ */
 export function swapLocaleInPath(pathname: string, locale: Locale): string {
+  const legal = findLegalMatch(pathname);
+  if (legal) return LEGAL_ROUTES[legal.page][locale];
+
   const parts = pathname.split("/").filter(Boolean);
   const newSlug = LOCALE_TO_SLUG[locale];
   if (parts.length === 0) return `/${newSlug}`;

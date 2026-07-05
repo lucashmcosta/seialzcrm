@@ -1,7 +1,7 @@
 import { Link } from 'react-router-dom';
 import logoBlack from '@/assets/brand/seialz-logo-color.png.asset.json';
 import { useSiteT } from '@/i18n/SiteI18nProvider';
-import { LOCALE_TO_SLUG } from '@/i18n/config';
+import { getLegalUrl, LOCALE_TO_SLUG } from '@/i18n/config';
 import { LanguageSwitcher } from './LanguageSwitcher';
 
 const SNOW = '#F6F7F6';
@@ -20,6 +20,10 @@ export function LandingFooter() {
   const onLeave = (e: React.MouseEvent<HTMLElement>) => {
     (e.currentTarget as HTMLElement).style.color = ASH;
   };
+
+  const privacyUrl = getLegalUrl('privacy-policy', locale);
+  const termsUrl = getLegalUrl('terms-of-service', locale);
+  const dataDeletionUrl = getLegalUrl('data-deletion', locale);
 
   return (
     <footer
@@ -41,21 +45,14 @@ export function LandingFooter() {
         </div>
 
         <div className="flex flex-wrap items-center gap-x-6 gap-y-3 text-sm" style={{ color: ASH }}>
-          <Link
-            to={`/${slug}/privacy-policy`}
-            style={linkStyle}
-            onMouseEnter={onEnter}
-            onMouseLeave={onLeave}
-          >
+          <Link to={privacyUrl} style={linkStyle} onMouseEnter={onEnter} onMouseLeave={onLeave}>
             {t('footer.privacy')}
           </Link>
-          <Link
-            to={`/${slug}/terms-of-service`}
-            style={linkStyle}
-            onMouseEnter={onEnter}
-            onMouseLeave={onLeave}
-          >
+          <Link to={termsUrl} style={linkStyle} onMouseEnter={onEnter} onMouseLeave={onLeave}>
             {t('footer.terms')}
+          </Link>
+          <Link to={dataDeletionUrl} style={linkStyle} onMouseEnter={onEnter} onMouseLeave={onLeave}>
+            {t('footer.dataDeletion')}
           </Link>
           <a
             href={`/${slug}#cta`}

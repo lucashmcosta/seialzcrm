@@ -10,8 +10,9 @@
   },
   "footer": {
     "tagline": "Native Sales Ops",
-    "terms": "Terms",
-    "privacy": "Privacy",
+    "terms": "Terms of Service",
+    "privacy": "Privacy Policy",
+    "dataDeletion": "Data Deletion",
     "contact": "Contact"
   },
   "language": {
