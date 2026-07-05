@@ -21,7 +21,7 @@ export function LegalLayout({ title, updatedLabel, updatedAt, children }: LegalL
   return (
     <div
       className="overflow-x-hidden overflow-y-auto"
-      style={{ backgroundColor: C.paper, color: C.ink, fontFamily: "'Sora', sans-serif", minHeight: "100dvh" }}
+      style={{ backgroundColor: C.paper, color: C.ink, fontFamily: "'Sora', sans-serif", height: "100dvh" }}
     >
       <LandingNavbar />
 
