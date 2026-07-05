@@ -46,14 +46,14 @@ Legenda: ⬜ pendente · 🟡 em andamento · ✅ concluído
 - [x] twilio-media-proxy
 - [x] transcribe-audio
 
-### Bloco C — Meta Ads, CAPI, Lead Ads
-- [ ] meta-ads-manager-save
-- [ ] meta-capi-connect
-- [ ] meta-capi-connect-from-existing
-- [ ] meta-capi-retry-cron
-- [ ] meta-capi-send-event
-- [ ] meta-discover-ad-accounts
-- [ ] meta-discover-ads-cron
+### Bloco C — Meta Ads, CAPI, Lead Ads (parcial ✅ / continua)
+- [x] meta-ads-manager-save
+- [x] meta-capi-connect
+- [x] meta-capi-connect-from-existing
+- [x] meta-capi-retry-cron
+- [x] meta-capi-send-event
+- [x] meta-discover-ad-accounts
+- [x] meta-discover-ads-cron
 - [ ] meta-lead-ads-connect
 - [ ] meta-lead-ads-discover
 - [ ] meta-lead-ads-poll
@@ -64,8 +64,8 @@ Legenda: ⬜ pendente · 🟡 em andamento · ✅ concluído
 - [ ] meta-lead-ads-viagi-token-probe
 - [ ] marketing-insights-sync-daily
 - [ ] viagi-staging-loader
-- [ ] ct-backfill-once
-- [ ] backfill-attribution
+- [x] ct-backfill-once
+- [x] backfill-attribution
 
 ### Bloco D — AI Agent, knowledge, wizard, BYOK
 - [ ] ai-agent-respond
