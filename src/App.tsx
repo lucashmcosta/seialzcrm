@@ -192,7 +192,7 @@ function GlobalCallHandler() {
 }
 
 // Fallback for impersonation magic links that land on "/" instead of /impersonate/callback
-function LandingOrImpersonationFallback() {
+function RootRedirect() {
   const search = window.location.search;
   const hash = window.location.hash;
   const hasImp =
@@ -204,7 +204,18 @@ function LandingOrImpersonationFallback() {
     window.location.replace('/impersonate/callback' + search + hash);
     return null;
   }
-  return <LandingPage />;
+  const locale = detectLocale();
+  const slug = LOCALE_TO_SLUG[locale];
+  return <Navigate to={`/${slug}`} replace />;
+}
+
+// Guard for /:locale/* — valida o slug e redireciona para PT-BR se inválido
+function LocaleGuard({ children }: { children: React.ReactNode }) {
+  const { locale } = useParams<{ locale: string }>();
+  if (!locale || !(locale in SLUG_TO_LOCALE)) {
+    return <Navigate to={`/${LOCALE_TO_SLUG[DEFAULT_LOCALE]}`} replace />;
+  }
+  return <>{children}</>;
 }
 
 const App = () => (
@@ -220,7 +231,40 @@ const App = () => (
         <GlobalCallHandler />
         <Suspense fallback={<PageLoader />}>
         <Routes>
-          <Route path="/" element={<LandingOrImpersonationFallback />} />
+          <Route path="/" element={<RootRedirect />} />
+
+          {/* Site institucional público (i18n) */}
+          <Route
+            path="/:locale"
+            element={
+              <LocaleGuard>
+                <SiteI18nProvider>
+                  <LandingPage />
+                </SiteI18nProvider>
+              </LocaleGuard>
+            }
+          />
+          <Route
+            path="/:locale/privacy-policy"
+            element={
+              <LocaleGuard>
+                <SiteI18nProvider>
+                  <PrivacyPolicyPage />
+                </SiteI18nProvider>
+              </LocaleGuard>
+            }
+          />
+          <Route
+            path="/:locale/terms-of-service"
+            element={
+              <LocaleGuard>
+                <SiteI18nProvider>
+                  <TermsOfServicePage />
+                </SiteI18nProvider>
+              </LocaleGuard>
+            }
+          />
+
 
           {/* Health / monitoring */}
           <Route path="/health" element={<Health />} />
