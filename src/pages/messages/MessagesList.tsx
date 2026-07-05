@@ -71,8 +71,11 @@ import { cn } from '@/lib/utils';
 import { useServiceWindow } from '@/hooks/useServiceWindow';
 import { WhatsAppWindowChip } from '@/components/inbox/WhatsAppWindowChip';
 import { LowQualityEndpointBanner } from '@/components/inbox/LowQualityEndpointBanner';
-import { assertTemplateAllowedForEndpoint, checkTemplateRateLimit } from '@/lib/complianceGuards';
+import { assertTemplateAllowedForEndpoint, checkTemplateRateLimit, isLowEndpointWindowBlocked, LOW_ENDPOINT_WINDOW_OPEN_MESSAGE } from '@/lib/complianceGuards';
 import { logComplianceBlock } from '@/lib/complianceLog';
+import { useSnippets, bumpSnippetUsage, type MessageSnippet } from '@/hooks/useSnippets';
+import { interpolateSnippet, buildSnippetVars } from '@/lib/interpolateSnippet';
+import { SnippetsPicker } from '@/components/whatsapp/SnippetsPicker';
 import { useAI } from '@/hooks/useAI';
 import { useMessageThreads, type ChatThread } from '@/hooks/useMessageThreads';
 import { useOrgWhatsAppEndpoints } from '@/hooks/useOrgWhatsAppEndpoints';
@@ -676,6 +679,54 @@ function DesktopMessagesList() {
     lastInboundAt: composerLastInboundAt,
   });
 
+  // ---- Snippets internos (mensagens pré-prontas, freeform) --------------
+  // Só aparecem quando a janela WhatsApp está aberta. Filtrados pelo
+  // `purpose` do endpoint atual do composer (commercial | customer_service).
+  const composerEndpointPurpose = composerEndpointId
+    ? endpointById[composerEndpointId]?.purpose ?? null
+    : null;
+  const { snippets } = useSnippets({
+    organizationId: serviceWindow.isOpen ? organization?.id : null,
+    purpose: composerEndpointPurpose,
+  });
+  const [snippetPickerOpen, setSnippetPickerOpen] = useState(false);
+  const [snippetShortcutQuery, setSnippetShortcutQuery] = useState<string | undefined>(undefined);
+  const pendingSnippetIdRef = useRef<string | null>(null);
+  const lowEndpointWindowBlocked = isLowEndpointWindowBlocked(composerEndpointId, serviceWindow.isOpen);
+
+  // Derived numbers for interpolation (numero_comercial / numero_atendimento).
+  const commercialEndpointNumber = useMemo(() => {
+    const ep = orgEndpoints.find((e) => isSalesPurpose(e.purpose ?? null));
+    return ep?.external_address ?? '';
+  }, [orgEndpoints]);
+  const serviceEndpointNumber = useMemo(() => {
+    const ep = orgEndpoints.find((e) => (e.purpose ?? null) === 'customer_service');
+    return ep?.external_address ?? '';
+  }, [orgEndpoints]);
+
+  const applySnippet = (snippet: MessageSnippet) => {
+    const body = interpolateSnippet(snippet.body, buildSnippetVars({
+      contactName: selectedThread?.contact_name ?? null,
+      companyName: (selectedThread as any)?.company_name ?? null,
+      agentName: userProfile?.full_name ?? null,
+      commercialNumber: commercialEndpointNumber,
+      serviceNumber: serviceEndpointNumber,
+    }));
+    setMessageText(body);
+    pendingSnippetIdRef.current = snippet.id;
+    // devolver foco ao textarea
+    setTimeout(() => {
+      const el = textareaRef.current;
+      if (el) {
+        el.focus();
+        el.setSelectionRange(body.length, body.length);
+        adjustTextareaHeight();
+      }
+    }, 0);
+  };
+
+
+
 
   useEffect(() => {
     if (!selectedThreadId || !organization?.id) {
@@ -1113,6 +1164,27 @@ function DesktopMessagesList() {
       }
 
       refetchThreads();
+
+      // Auditoria de snippet: grava metadata.snippet_id + incrementa usage_count.
+      const snippetId = pendingSnippetIdRef.current;
+      const sentMessageId = (data as any)?.messageId as string | undefined;
+      pendingSnippetIdRef.current = null;
+      if (snippetId && sentMessageId) {
+        (async () => {
+          try {
+            const { data: existing } = await supabase
+              .from('messages')
+              .select('metadata')
+              .eq('id', sentMessageId)
+              .maybeSingle();
+            const nextMeta = { ...((existing as any)?.metadata ?? {}), snippet_id: snippetId };
+            await supabase.from('messages').update({ metadata: nextMeta }).eq('id', sentMessageId);
+          } catch (e) {
+            console.warn('[snippet-audit] metadata update failed', (e as Error).message);
+          }
+          bumpSnippetUsage(snippetId);
+        })();
+      }
     } catch (error: any) {
       console.error('Error sending message:', error);
       setMessages((prev) =>
@@ -2127,7 +2199,15 @@ function DesktopMessagesList() {
                               onClose={() => setReplyingTo(null)}
                             />
                           )}
-
+                          {/* LOW + janela aberta: banner protetivo do número */}
+                          {!outOfWindow && lowEndpointWindowBlocked && (
+                            <div className="mb-2 flex items-start gap-2 rounded-md border border-amber-300 bg-amber-50 px-3 py-2 text-xs text-amber-900 dark:border-amber-700 dark:bg-amber-950/40 dark:text-amber-200">
+                              <span aria-hidden>⚡</span>
+                              <span>
+                                Para proteger este número, utilize Snippets ou mensagem livre. Templates estão temporariamente desativados.
+                              </span>
+                            </div>
+                          )}
 
 
                           <div className={cn(
@@ -2148,8 +2228,29 @@ function DesktopMessagesList() {
                                 </Button>
                               ) : (
                                 <>
-                                  <MediaUploadButton onFileSelected={handleFileSelected} onTemplateClick={() => setShowTemplates(true)} onNoteClick={() => setIsNoteMode(true)} disabled={submitting || mediaUploading} />
+                                  <MediaUploadButton
+                                    onFileSelected={handleFileSelected}
+                                    onTemplateClick={lowEndpointWindowBlocked ? undefined : () => setShowTemplates(true)}
+                                    onNoteClick={() => setIsNoteMode(true)}
+                                    disabled={submitting || mediaUploading}
+                                  />
                                   <AudioRecorder onSend={handleAudioSend} disabled={submitting || mediaUploading} />
+
+                                  {/* Snippets internos — só na janela aberta */}
+                                  {serviceWindow.isOpen && snippets.length > 0 && (
+                                    <SnippetsPicker
+                                      snippets={snippets}
+                                      onSelect={applySnippet}
+                                      disabled={submitting}
+                                      highlighted={lowEndpointWindowBlocked}
+                                      open={snippetPickerOpen}
+                                      onOpenChange={(v) => {
+                                        setSnippetPickerOpen(v);
+                                        if (!v) setSnippetShortcutQuery(undefined);
+                                      }}
+                                      initialQuery={snippetShortcutQuery}
+                                    />
+                                  )}
 
                                   {/* Emoji Picker */}
                                   <Popover open={showEmojiPicker} onOpenChange={setShowEmojiPicker}>
@@ -2181,14 +2282,26 @@ function DesktopMessagesList() {
                                   ? outOfWindowCopy
                                   : isNoteMode
                                     ? (locale === 'pt-BR' ? 'Escreva uma nota interna...' : 'Write an internal note...')
-                                    : (locale === 'pt-BR' ? 'Digite uma mensagem...' : 'Type a message...')}
+                                    : (locale === 'pt-BR' ? 'Digite uma mensagem... (/ abre snippets)' : 'Type a message... (/ opens snippets)')}
                                 value={messageText}
                                 onChange={(e) => {
-                                  setMessageText(e.target.value);
+                                  const v = e.target.value;
+                                  setMessageText(v);
                                   adjustTextareaHeight();
+                                  // Atalho: `/` no início abre picker de snippets
+                                  if (serviceWindow.isOpen && snippets.length > 0 && v.startsWith('/')) {
+                                    setSnippetShortcutQuery(v.slice(1));
+                                    setSnippetPickerOpen(true);
+                                  } else if (snippetPickerOpen && !v.startsWith('/')) {
+                                    setSnippetPickerOpen(false);
+                                  }
                                 }}
                                 onKeyDown={(e) => {
                                   if (e.key === 'Enter' && !e.shiftKey) {
+                                    if (snippetPickerOpen) {
+                                      // Deixa o picker capturar Enter (seleciona 1º item)
+                                      return;
+                                    }
                                     e.preventDefault();
                                     handleSendMessage();
                                     if (textareaRef.current) {
@@ -2201,6 +2314,7 @@ function DesktopMessagesList() {
                                 disabled={outOfWindow}
                                 className={`w-full resize-none min-h-[40px] max-h-[150px] pr-10 ${textareaOverflow ? 'overflow-y-auto' : 'overflow-hidden'}`}
                               />
+
 
                               {/* AI Improve Button */}
                               {!outOfWindow && hasAIIntegration && (
