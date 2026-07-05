@@ -186,9 +186,10 @@ Podemos atualizar esta Política periodicamente. A versão vigente estará sempr
 
 ## 14. ENCARREGADO DE DADOS (DPO) E CONTATO
 
-**Encarregado pelo Tratamento de Dados Pessoais:** [NOME DO ENCARREGADO]
-**E-mail:** [privacidade@seialz.com]
+**Encarregado pelo Tratamento de Dados Pessoais:** Departamento de Privacidade — Kairos Labs LLC
+**E-mail:** privacidade@seialz.com
 
-**Kairos Labs LLC**
 Seialz é uma marca da Kairos Labs LLC, empresa constituída no Estado da Flórida, Estados Unidos da América.
-[Endereço completo]
+
+E-mail: privacidade@seialz.com
+

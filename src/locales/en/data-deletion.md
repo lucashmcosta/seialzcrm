@@ -23,5 +23,7 @@ Upon a valid deletion request, data received through Meta's APIs (including What
 
 ## Contact
 
-**Kairos Labs LLC** — Seialz
-**Email:** privacy@seialz.com
+Seialz is a brand of Kairos Labs LLC, a Florida limited liability company.
+
+Email: privacy@seialz.com
+

@@ -118,6 +118,7 @@ These Terms are governed by the laws of the State of Florida, United States, wit
 
 ## 16. CONTACT
 
-**Kairos Labs LLC**
 Seialz is a brand of Kairos Labs LLC, a Florida limited liability company.
-**Email:** privacy@seialz.com
+
+Email: privacy@seialz.com
+
