@@ -1,0 +1,41 @@
+{
+  "seo": {
+    "title": "Seialz — Marketing e vendas em um único sistema",
+    "description": "O Seialz conecta marketing e vendas sobre o mesmo dado, do primeiro clique até a receita. Sem integrações, sem planilhas, sem ruído."
+  },
+  "hero": {
+    "titleLead": "Marketing e vendas,",
+    "titleAccent": "em um único sistema.",
+    "subtitle": "O Seialz conecta os dados de marketing e vendas desde o primeiro clique até a receita. Uma plataforma onde as duas áreas operam sobre a mesma informação — sem integrações, sem planilhas, sem ruído.",
+    "cta": "Falar com a Seialz"
+  },
+  "problem": {
+    "titleLead": "Quando marketing e vendas operam separados,",
+    "titleAccent": "a receita perde clareza.",
+    "body": "Uma área acompanha o custo por lead, a outra acompanha a conversão, e os dados raramente conversam entre si. Sem uma visão única, fica difícil saber o que realmente gera resultado — e as decisões passam a depender mais de percepção do que de dados."
+  },
+  "solution": {
+    "titleLead": "Uma operação comercial sobre",
+    "titleAccent": "o mesmo dado.",
+    "body": "O Seialz trata marketing e vendas como uma operação única. Cada lead entra com a origem registrada, avança pelo pipeline e tem sua receita conectada à campanha que o gerou. O resultado é uma fonte de verdade em tempo real, em que marketing e vendas enxergam exatamente a mesma informação."
+  },
+  "loop": {
+    "titleLead": "Um ciclo que evolui",
+    "titleAccent": "a cada venda.",
+    "body": "Com marketing e vendas sobre o mesmo dado, cada negócio fechado retorna como informação para a operação. O marketing entende quais campanhas geram receita, atrai leads mais qualificados, e a equipe comercial converte com mais consistência. A cada ciclo, a operação fica mais precisa.",
+    "steps": [
+      { "title": "Origem", "description": "o lead entra com a campanha de origem registrada." },
+      { "title": "Conversão", "description": "cada interação é acompanhada até o fechamento." },
+      { "title": "Aprendizado", "description": "o resultado retorna e orienta as próximas campanhas." }
+    ]
+  },
+  "cta": {
+    "titleLead": "Vamos conversar sobre",
+    "titleAccent": "sua operação.",
+    "subtitle": "Conte um pouco sobre sua empresa e nosso time entra em contato.",
+    "labels": { "name": "Nome", "email": "E-mail", "company": "Empresa" },
+    "submit": "Falar com a Seialz",
+    "disclaimer": "Retornamos em até 24h.",
+    "success": "Recebemos seu contato. Retornamos em até 24h."
+  }
+}

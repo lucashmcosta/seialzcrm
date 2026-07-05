@@ -1,0 +1,22 @@
+{
+  "nav": {
+    "problem": "O PROBLEMA",
+    "solution": "SOLUÇÃO",
+    "loop": "O LOOP",
+    "signIn": "Entrar",
+    "talkToSeialz": "Falar com a Seialz",
+    "talkToSeialzMobile": "FALAR COM A SEIALZ",
+    "menu": "Menu"
+  },
+  "footer": {
+    "tagline": "Sales Ops Nativo",
+    "terms": "Termos",
+    "privacy": "Privacidade",
+    "contact": "Contato"
+  },
+  "language": {
+    "label": "Idioma",
+    "pt": "PT",
+    "en": "EN"
+  }
+}
