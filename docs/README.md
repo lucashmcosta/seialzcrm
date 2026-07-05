@@ -1,5 +1,9 @@
 # Documentação do Seialz
 
+> 📍 **Estado atual da documentação:** [`STATUS.md`](STATUS.md)
+
+
+
 | Pergunta | Onde |
 |---|---|
 | O que é o sistema? | [`product/`](product/) |
