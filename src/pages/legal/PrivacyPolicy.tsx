@@ -13,12 +13,12 @@ export default function PrivacyPolicyPage() {
 
   const html = useMemo(() => {
     const md = getLegalBody(locale, "privacy-policy");
-    // Estratégia: extraímos o primeiro H1 (já renderizado no cabeçalho) e
-    // convertemos o resto do markdown para HTML sanitizado pelo próprio
-    // markdown-it/marked (não usamos innerHTML de fonte externa — o conteúdo
-    // vem de arquivos versionados no repositório).
-    const withoutH1 = md.replace(/^#\s+[^\n]*\n+/, "");
-    return marked.parse(withoutH1) as string;
+    // Remove o H1 e a linha "Última atualização"/"Last updated" — ambos já
+    // aparecem no cabeçalho renderizado por LegalLayout.
+    const stripped = md
+      .replace(/^#\s+[^\n]*\n+/, "")
+      .replace(/^\*\*(?:Última atualização|Last updated)[^*]+\*\*\s*\n+/im, "");
+    return marked.parse(stripped) as string;
   }, [locale]);
 
   // Tenta capturar a data de última atualização da primeira linha do MD
