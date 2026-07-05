@@ -1,6 +1,8 @@
 # Proposta — hardening de auth nas edge functions críticas (2026-07-05)
 
-Plano de correção para o grupo 🔴 de [`platform/security/verify-jwt-review.md`](../../platform/security/verify-jwt-review.md). **Nada aplicado, nada deployado.** Cada fase abaixo vira commit + deploy só com aprovação explícita.
+Plano de correção para o grupo 🔴 de [`platform/security/verify-jwt-review.md`](../../platform/security/verify-jwt-review.md). Cada fase vira commit + deploy só com aprovação explícita.
+
+> **Estado:** Fase 0 **implementada no repo** (commit local, não deployado): helper `validateCallerAuth`/`edgeAuthMode`/`logAuthObservation` em `_shared/auth.ts`, `_shared/twilio-signature.ts` novo, blocos de observação nas 4 funções. Default `EDGE_AUTH_ENFORCE=log` — **zero mudança de comportamento** até alguém setar `enforce`. Aguarda deploy aprovado para iniciar a janela de observação.
 
 ## Contexto que reduz o risco
 

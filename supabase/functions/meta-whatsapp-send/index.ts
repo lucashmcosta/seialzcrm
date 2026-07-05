@@ -12,6 +12,7 @@ import {
 } from "../_shared/meta-whatsapp/graph.ts";
 import { resolveAppSecretForIntegration } from "../_shared/meta-whatsapp/credentials.ts";
 import { ensureEndpointMigrationNote } from "../_shared/endpoint-migration-note.ts";
+import { validateCallerAuth, edgeAuthMode, logAuthObservation } from "../_shared/auth.ts";
 
 function jsonResponse(status: number, body: Record<string, unknown>) {
   return new Response(JSON.stringify(body), {
@@ -93,6 +94,19 @@ serve(async (req) => {
 
     if (!organizationId) return jsonResponse(400, { error: "missing_organization" });
     if (!contactId) return jsonResponse(400, { error: "missing_contact" });
+
+    // EDGE_AUTH Fase 0 (observação) — off | log (default) | enforce.
+    // Plano: docs/operations/proposals/2026-07-05-edge-auth-hardening.md
+    const edgeAuth = edgeAuthMode();
+    if (edgeAuth !== "off") {
+      const callerAuth = await validateCallerAuth(req, organizationId);
+      if (!callerAuth.ok) {
+        logAuthObservation("meta-whatsapp-send", req, callerAuth.error);
+        if (edgeAuth === "enforce") {
+          return jsonResponse(401, { error: "unauthorized", reason: callerAuth.error });
+        }
+      }
+    }
 
     const isTemplateSend = !!templateId || payloadType === "template";
 

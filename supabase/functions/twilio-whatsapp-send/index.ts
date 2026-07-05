@@ -1,5 +1,6 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "npm:@supabase/supabase-js@2";
+import { validateCallerAuth, edgeAuthMode, logAuthObservation } from "../_shared/auth.ts";
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -39,6 +40,26 @@ serve(async (req) => {
       // with it. Does NOT alter message_threads.primary_endpoint_id.
       endpointId: messagesEndpointIdInput,
     } = body as Record<string, any>
+
+    // ============================================================
+    // EDGE_AUTH Fase 0 (observação): valida o chamador (service_role
+    // OU JWT de usuário com vínculo na org) sem rejeitar em modo "log".
+    // EDGE_AUTH_ENFORCE: off | log (default) | enforce.
+    // Plano: docs/operations/proposals/2026-07-05-edge-auth-hardening.md
+    // ============================================================
+    const edgeAuth = edgeAuthMode()
+    if (edgeAuth !== 'off' && organizationId) {
+      const callerAuth = await validateCallerAuth(req, organizationId)
+      if (!callerAuth.ok) {
+        logAuthObservation('twilio-whatsapp-send', req, callerAuth.error)
+        if (edgeAuth === 'enforce') {
+          return new Response(
+            JSON.stringify({ error: 'unauthorized', reason: callerAuth.error }),
+            { status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+          )
+        }
+      }
+    }
 
     // ============================================================
     // Phase 1.3A — Dry-run branch (read-only, zero side effects)

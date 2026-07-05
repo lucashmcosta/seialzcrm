@@ -1,5 +1,7 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "npm:@supabase/supabase-js@2";
+import { edgeAuthMode } from "../_shared/auth.ts";
+import { validateTwilioRequestSignature } from "../_shared/twilio-signature.ts";
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -105,6 +107,59 @@ serve(async (req) => {
     const orgId = url.searchParams.get('orgId')
 
     console.log(`Webhook ${path}:`, JSON.stringify(params, null, 2))
+
+    // ============================================================
+    // EDGE_AUTH Fase 0 (observação): valida X-Twilio-Signature sem
+    // rejeitar em modo "log". Auth Token resolvido pela org (query
+    // param) ou pelo AccountSid do POST. off | log (default) | enforce.
+    // Plano: docs/operations/proposals/2026-07-05-edge-auth-hardening.md
+    // ============================================================
+    const edgeAuth = edgeAuthMode()
+    if (edgeAuth !== 'off') {
+      let twilioAuthToken: string | null = null
+      try {
+        const { data: adminInt } = await supabase
+          .from('admin_integrations')
+          .select('id')
+          .eq('slug', 'twilio-voice')
+          .single()
+        if (adminInt) {
+          let q = supabase
+            .from('organization_integrations')
+            .select('config_values')
+            .eq('integration_id', adminInt.id)
+            .eq('is_enabled', true)
+          if (orgId) {
+            q = q.eq('organization_id', orgId)
+          } else if (params.AccountSid) {
+            q = q.eq('config_values->>account_sid', params.AccountSid)
+          }
+          const { data: integ } = await q.limit(1).maybeSingle()
+          twilioAuthToken = (integ?.config_values as Record<string, string> | null)?.auth_token ?? null
+        }
+      } catch (e) {
+        console.warn('[AUTH-OBSERVE] twilio-webhook: token lookup failed:', (e as Error)?.message)
+      }
+
+      const sig = await validateTwilioRequestSignature({ req, params, authToken: twilioAuthToken })
+      if (!sig.valid) {
+        console.warn('[AUTH-OBSERVE] would-deny', JSON.stringify({
+          fn: 'twilio-webhook',
+          reason: sig.reason ?? 'no_candidate_matched',
+          checked: sig.checked,
+          candidate_count: sig.candidateCount,
+          path,
+          org_id: orgId,
+          account_sid_prefix: params.AccountSid ? params.AccountSid.slice(0, 8) + '…' : null,
+        }))
+        if (edgeAuth === 'enforce' && sig.checked) {
+          return new Response(
+            JSON.stringify({ error: 'invalid_twilio_signature' }),
+            { status: 403, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+          )
+        }
+      }
+    }
 
     // ========== ROUTE: /voice (Browser WebRTC calls & Inbound calls) ==========
     if (path === 'voice') {

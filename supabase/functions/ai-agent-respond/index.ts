@@ -1,6 +1,7 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "npm:@supabase/supabase-js@2";
 import { dispatchWhatsAppSend } from "../_shared/dispatch-whatsapp-send.ts";
+import { validateCallerAuth, edgeAuthMode, logAuthObservation } from "../_shared/auth.ts";
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -1513,6 +1514,24 @@ serve(async (req) => {
     }
 
     const organizationId = agent.organization_id;
+
+    // EDGE_AUTH Fase 0 (observação) — valida o chamador contra a org DO
+    // AGENTE (não confia em org vinda do body). off | log (default) | enforce.
+    // Plano: docs/operations/proposals/2026-07-05-edge-auth-hardening.md
+    const edgeAuth = edgeAuthMode();
+    if (edgeAuth !== 'off') {
+      const callerAuth = await validateCallerAuth(req, organizationId);
+      if (!callerAuth.ok) {
+        logAuthObservation('ai-agent-respond', req, callerAuth.error);
+        if (edgeAuth === 'enforce') {
+          return new Response(
+            JSON.stringify({ error: 'unauthorized', reason: callerAuth.error }),
+            { status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+          );
+        }
+      }
+    }
+
     // Include mark_name_asked automatically when update_contact is enabled
     const baseTools = (agent.enabled_tools as string[]) || ['update_contact', 'transfer_to_human'];
     const enabledTools = baseTools.includes('update_contact') && !baseTools.includes('mark_name_asked')
