@@ -10,6 +10,8 @@ import { SpinnerGap, ArrowLeft, Check, LockSimple } from '@phosphor-icons/react'
 import {
   getLowEndpointConfig,
   isMarketingBlockedWhenWindowOpen,
+  isLowEndpointWindowBlocked,
+  LOW_ENDPOINT_WINDOW_OPEN_MESSAGE,
 } from '@/lib/complianceGuards';
 
 interface Template {
