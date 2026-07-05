@@ -49,6 +49,8 @@ import SignIn from "./pages/auth/SignIn";
 import ConfirmEmail from "./pages/auth/ConfirmEmail";
 import AcceptInvitation from "./pages/invite/AcceptInvitation";
 import LandingPage from "./pages/LandingPage";
+const PrivacyPolicyPage = lazy(() => retryImport(() => import("./pages/legal/PrivacyPolicy")));
+const TermsOfServicePage = lazy(() => retryImport(() => import("./pages/legal/TermsOfService")));
 import Onboarding from "./pages/Onboarding";
 import Dashboard from "./pages/Dashboard";
 import ReportsPage from "./pages/reports/ReportsPage";
