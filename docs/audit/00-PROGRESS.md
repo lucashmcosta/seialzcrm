@@ -46,7 +46,7 @@ Legenda: ⬜ pendente · 🟡 em andamento · ✅ concluído
 - [x] twilio-media-proxy
 - [x] transcribe-audio
 
-### Bloco C — Meta Ads, CAPI, Lead Ads (parcial ✅ / continua)
+### Bloco C — Meta Ads, CAPI, Lead Ads ✅ 2026-07-05
 - [x] meta-ads-manager-save
 - [x] meta-capi-connect
 - [x] meta-capi-connect-from-existing
@@ -54,16 +54,16 @@ Legenda: ⬜ pendente · 🟡 em andamento · ✅ concluído
 - [x] meta-capi-send-event
 - [x] meta-discover-ad-accounts
 - [x] meta-discover-ads-cron
-- [ ] meta-lead-ads-connect
-- [ ] meta-lead-ads-discover
-- [ ] meta-lead-ads-poll
-- [ ] meta-lead-ads-process-lead
-- [ ] meta-lead-ads-token-health
-- [ ] meta-lead-ads-backfill-viagi
-- [ ] meta-lead-ads-recovery-viagi
-- [ ] meta-lead-ads-viagi-token-probe
-- [ ] marketing-insights-sync-daily
-- [ ] viagi-staging-loader
+- [x] meta-lead-ads-connect
+- [x] meta-lead-ads-discover
+- [x] meta-lead-ads-poll
+- [x] meta-lead-ads-process-lead
+- [x] meta-lead-ads-token-health
+- [x] meta-lead-ads-backfill-viagi
+- [x] meta-lead-ads-recovery-viagi
+- [x] meta-lead-ads-viagi-token-probe
+- [x] marketing-insights-sync-daily
+- [x] viagi-staging-loader
 - [x] ct-backfill-once
 - [x] backfill-attribution
 
