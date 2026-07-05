@@ -97,6 +97,7 @@ const KnowledgeBaseSettings = lazy(() => import("./components/settings/Knowledge
 const KnowledgeEditChat = lazy(() => import("./components/settings/KnowledgeEditChat").then(m => ({ default: m.KnowledgeEditChat })));
 const ProductsSettings = lazy(() => import("./components/settings/ProductsSettings").then(m => ({ default: m.ProductsSettings })));
 const WhatsAppTemplatesPage = lazy(() => import("./pages/settings/WhatsAppTemplates"));
+const WhatsAppSnippetsPage = lazy(() => import("./pages/settings/WhatsAppSnippets"));
 const AuditLogs = lazy(() => import("./pages/settings/AuditLogs").then(m => ({ default: m.AuditLogs })));
 const RoundRobinSettings = lazy(() => import("./components/settings/RoundRobinSettings").then(m => ({ default: m.RoundRobinSettings })));
 const Trash = lazy(() => import("./pages/settings/Trash").then(m => ({ default: m.Trash })));
