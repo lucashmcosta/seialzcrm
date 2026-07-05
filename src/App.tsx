@@ -51,6 +51,7 @@ import AcceptInvitation from "./pages/invite/AcceptInvitation";
 import LandingPage from "./pages/LandingPage";
 const PrivacyPolicyPage = lazy(() => retryImport(() => import("./pages/legal/PrivacyPolicy")));
 const TermsOfServicePage = lazy(() => retryImport(() => import("./pages/legal/TermsOfService")));
+const DataDeletionPage = lazy(() => retryImport(() => import("./pages/legal/DataDeletion")));
 import Onboarding from "./pages/Onboarding";
 import Dashboard from "./pages/Dashboard";
 import ReportsPage from "./pages/reports/ReportsPage";
@@ -268,6 +269,32 @@ const App = () => (
               </LocaleGuard>
             }
           />
+          <Route
+            path="/:locale/data-deletion"
+            element={
+              <LocaleGuard>
+                <SiteI18nProvider>
+                  <DataDeletionPage />
+                </SiteI18nProvider>
+              </LocaleGuard>
+            }
+          />
+
+          {/* URLs canônicas PT (top-level, registradas no painel da Meta) */}
+          <Route
+            path="/politica-de-privacidade"
+            element={<SiteI18nProvider><PrivacyPolicyPage /></SiteI18nProvider>}
+          />
+          <Route
+            path="/termos-de-servico"
+            element={<SiteI18nProvider><TermsOfServicePage /></SiteI18nProvider>}
+          />
+          <Route
+            path="/exclusao-de-dados"
+            element={<SiteI18nProvider><DataDeletionPage /></SiteI18nProvider>}
+          />
+
+
 
 
           {/* Health / monitoring */}
