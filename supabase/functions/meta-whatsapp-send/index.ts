@@ -16,6 +16,14 @@ import { validateCallerAuth, edgeAuthMode, logAuthObservation } from "../_shared
 import { getServiceWindow, type ContactCtwaInputs } from "../_shared/service-window.ts";
 
 function jsonResponse(status: number, body: Record<string, unknown>) {
+  if (status >= 400) {
+    console.warn("[meta-wa-send] response_error", {
+      status,
+      branch: typeof body.error === "string" ? body.error : "unknown_error",
+      responseBody: body,
+    });
+  }
+
   return new Response(JSON.stringify(body), {
     status,
     headers: { ...corsHeaders, "Content-Type": "application/json" },
@@ -92,6 +100,17 @@ serve(async (req) => {
       migrationContext,
       senderContext,
     } = body as Record<string, any>;
+
+    console.log("[meta-wa-send] request_payload", {
+      receivedAt: new Date().toISOString(),
+      endpoint_id: explicitEndpointId ?? null,
+      thread_id: threadId ?? null,
+      contact_id: contactId ?? null,
+      organization_id: organizationId ?? null,
+      senderContext: senderContext ?? null,
+      is_template_send: !!templateId || payloadType === "template",
+      requestPayload: body,
+    });
 
     if (!organizationId) return jsonResponse(400, { error: "missing_organization" });
     if (!contactId) return jsonResponse(400, { error: "missing_contact" });
@@ -332,16 +351,41 @@ serve(async (req) => {
     });
     const in24h = serviceWindow.isOpen;
 
+    console.log("[meta-wa-send] service_window", {
+      threadId: currentThreadId,
+      contactId,
+      endpointId: endpoint.id,
+      originType: serviceWindow.originType,
+      isCtwaContact: serviceWindow.isCtwaContact,
+      isOpen: serviceWindow.isOpen,
+      expiresAt: serviceWindow.expiresAt,
+      expiresAtIso: serviceWindow.expiresAt ? new Date(serviceWindow.expiresAt).toISOString() : null,
+      now: Date.now(),
+      nowIso: new Date().toISOString(),
+      lastInboundAt,
+      ad_referral_captured_at: contactCtwa.ad_referral_captured_at,
+      source: contactCtwa.source,
+      utm_medium: contactCtwa.utm_medium,
+      ad_referral_ctwa_clid: contactCtwa.ad_referral_ctwa_clid,
+    });
+
     // Fora da janela (sessão 24h + CTWA 72h) só permite envio de template
     if (!in24h && !isTemplateSend) {
       console.log("[meta-wa-send] outside_service_window", {
         threadId: currentThreadId,
         contactId,
         endpointId: endpoint.id,
-        origin: serviceWindow.originType,
-        is_ctwa: serviceWindow.isCtwaContact,
-        expires_at: serviceWindow.expiresAt,
-        last_inbound_at: lastInboundAt,
+        originType: serviceWindow.originType,
+        isCtwaContact: serviceWindow.isCtwaContact,
+        expiresAt: serviceWindow.expiresAt,
+        expiresAtIso: serviceWindow.expiresAt ? new Date(serviceWindow.expiresAt).toISOString() : null,
+        now: Date.now(),
+        nowIso: new Date().toISOString(),
+        lastInboundAt,
+        ad_referral_captured_at: contactCtwa.ad_referral_captured_at,
+        source: contactCtwa.source,
+        utm_medium: contactCtwa.utm_medium,
+        ad_referral_ctwa_clid: contactCtwa.ad_referral_ctwa_clid,
       });
       return jsonResponse(400, {
         error: "outside_service_window",
