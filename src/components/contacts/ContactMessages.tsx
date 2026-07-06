@@ -428,10 +428,10 @@ export function ContactMessages({ contactId, opportunityId }: ContactMessagesPro
         if (data.requiresTemplate) {
           setShowTemplates(true);
           setMessages((prev) => prev.filter((m) => m.id !== tempId));
-          toast({ description: locale === 'pt-BR' ? 'Fora da janela de 24h. Selecione um template aprovado.' : 'Outside 24h window. Select an approved template.' });
+          toast({ description: data.message || (locale === 'pt-BR' ? 'Fora da janela WhatsApp. Selecione um template aprovado.' : 'Outside WhatsApp window. Select an approved template.') });
           return;
         }
-        throw new Error(data.error);
+        throw new Error(data.message || data.error);
       }
 
       if (data.threadId && data.threadId !== threadId) {
