@@ -14,8 +14,8 @@ import { assertTemplateAllowedForEndpoint } from "./complianceGuards";
 import { logComplianceBlock } from "./complianceLog";
 
 const SUPABASE_FUNCTIONS_URL = "https://qvmtzfvkhkhkhdpclzua.supabase.co/functions/v1";
-const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJxdl" +
-  "10emZ2a2hra2hoZHBjbHpjbHp1YSIsInJvbGUiOiJhbm9uIiwiaWF0IjoxNzY0MzgzNzMyLCJleHAiOjIwNzk5NTk3MzJ9.7uhE97klvxSwYrJMu_NYIaNCLBaIUhFNtcF2oRLYRUE";
+const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzd" +
+  "XBhYmFzZSIsInJlZiI6InF2bXR6ZnZraGtoa2hkcGNsenVhIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjQzODM3MzIsImV4cCI6MjA3OTk1OTczMn0.7uhE97klvxSwYrJMu_NYIaNCLBaIUhFNtcF2oRLYRUE";
 
 // === Re-rota Comercial → Meta 7020 (Central Trabalhista) ===
 // Lazy: somente quando a tela /messages enviar em thread cujo provider
