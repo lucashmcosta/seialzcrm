@@ -442,20 +442,35 @@ serve(async (req) => {
         utm_medium: contactCtwa.utm_medium,
         ad_referral_ctwa_clid: contactCtwa.ad_referral_ctwa_clid,
       });
+      const billingHint = serviceWindow.billing.isOpen
+        ? ` Templates ainda estão gratuitos por mais ${Math.max(1, Math.round(serviceWindow.billing.remainingMs / 3600000))}h (janela CTWA).`
+        : "";
       return errorResponse(400, {
-        error: "outside_service_window",
+        error: "conversation_window_closed",
         requiresTemplate: true,
         isIn24hWindow: false,
         isServiceWindowOpen: false,
+        conversationWindow: {
+          isOpen: serviceWindow.conversation.isOpen,
+          expiresAt: serviceWindow.conversation.expiresAt,
+          status: serviceWindow.conversation.status,
+        },
+        billingWindow: {
+          type: serviceWindow.billing.type,
+          isOpen: serviceWindow.billing.isOpen,
+          expiresAt: serviceWindow.billing.expiresAt,
+          isCtwaContact: serviceWindow.billing.isCtwaContact,
+        },
+        // compat legado
         serviceWindow: {
           originType: serviceWindow.originType,
           isCtwaContact: serviceWindow.isCtwaContact,
           expiresAt: serviceWindow.expiresAt,
         },
-        message: "Fora da janela WhatsApp. Selecione um template aprovado.",
+        message: `Janela de conversa (24h) fechada. Selecione um template aprovado.${billingHint}`,
       }, {
-        branch: "outside_service_window",
-        reason: "Mensagem livre fora da janela WhatsApp unificada",
+        branch: "conversation_window_closed",
+        reason: "Freeform bloqueado — conversationWindow fechada",
         serviceWindow: serviceWindowForLog,
       });
     }
