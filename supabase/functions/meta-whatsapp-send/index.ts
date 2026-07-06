@@ -247,42 +247,40 @@ serve(async (req) => {
     const accessToken = decryptedAccessToken.trim();
     const appSecret = resolvedAppSecret;
 
-    // Contato + telefone
+    // Contato + telefone + campos CTWA (para janela de atendimento unificada)
     const { data: contact } = await supabase
       .from("contacts")
-      .select("phone, full_name")
+      .select("phone, full_name, source, utm_medium, ad_referral_ctwa_clid, ad_referral_captured_at, created_at")
       .eq("id", contactId)
       .eq("organization_id", organizationId)
       .maybeSingle();
     if (!contact?.phone) return jsonResponse(404, { error: "contact_phone_missing" });
+
+    const contactCtwa: ContactCtwaInputs = {
+      source: (contact as any).source ?? null,
+      utm_medium: (contact as any).utm_medium ?? null,
+      ad_referral_ctwa_clid: (contact as any).ad_referral_ctwa_clid ?? null,
+      ad_referral_captured_at: (contact as any).ad_referral_captured_at ?? null,
+      created_at: (contact as any).created_at ?? null,
+    };
 
     // Formato E.164 sem '+'
     let to = String(contact.phone).replace(/[^\d+]/g, "");
     if (to.startsWith("+")) to = to.slice(1);
     if (!/^\d{8,15}$/.test(to)) return jsonResponse(400, { error: "invalid_contact_phone" });
 
-    // Janela 24h
+    // Janela de atendimento unificada (sessão 24h ∪ CTWA 72h)
     let currentThreadId = threadId as string | undefined;
-    let in24h = false;
+    let lastInboundAt: string | null = null;
     if (currentThreadId) {
       const { data: t } = await supabase
         .from("message_threads")
         .select("whatsapp_last_inbound_at")
         .eq("id", currentThreadId)
         .maybeSingle();
-      if (t?.whatsapp_last_inbound_at) {
-        in24h = (Date.now() - new Date(t.whatsapp_last_inbound_at).getTime()) / 3.6e6 < 24;
-      }
+      lastInboundAt = (t?.whatsapp_last_inbound_at as string | null) ?? null;
     } else {
-      // P1 fix (2026-07-03): antes reusava qualquer thread por (org,contact,channel),
-      // sem filtrar `primary_endpoint_id`, sem excluir losers consolidados e sem
-      // reabrir threads `resolved`/`closed` — o que fazia o fluxo de template
-      // criar thread nova a cada envio quando a existente estava resolvida.
-      // Agora:
-      //   1. exige match por primary_endpoint_id (quando temos o endpoint resolvido)
-      //   2. exclui losers (merged_into_thread_id IS NULL)
-      //   3. inclui resolved/closed e reabre
-      //   4. só cria nova se nada existir
+      // P1 fix (2026-07-03): reuso de thread por (org,contact,channel,primary_endpoint_id).
       let existingQuery = supabase
         .from("message_threads")
         .select("id, whatsapp_last_inbound_at, status")
@@ -296,9 +294,7 @@ serve(async (req) => {
       const { data: existing } = await existingQuery.maybeSingle();
       if (existing) {
         currentThreadId = existing.id;
-        if (existing.whatsapp_last_inbound_at) {
-          in24h = (Date.now() - new Date(existing.whatsapp_last_inbound_at).getTime()) / 3.6e6 < 24;
-        }
+        lastInboundAt = (existing.whatsapp_last_inbound_at as string | null) ?? null;
         if (existing.status === "resolved" || existing.status === "closed") {
           const { error: reopenErr } = await supabase
             .from("message_threads")
@@ -330,15 +326,37 @@ serve(async (req) => {
       }
     }
 
-    // Fora da janela 24h só permite envio de template
+    const serviceWindow = getServiceWindow({
+      lastInboundAt,
+      contact: contactCtwa,
+    });
+    const in24h = serviceWindow.isOpen;
+
+    // Fora da janela (sessão 24h + CTWA 72h) só permite envio de template
     if (!in24h && !isTemplateSend) {
+      console.log("[meta-wa-send] outside_service_window", {
+        threadId: currentThreadId,
+        contactId,
+        endpointId: endpoint.id,
+        origin: serviceWindow.originType,
+        is_ctwa: serviceWindow.isCtwaContact,
+        expires_at: serviceWindow.expiresAt,
+        last_inbound_at: lastInboundAt,
+      });
       return jsonResponse(400, {
-        error: "outside_24h_window",
+        error: "outside_service_window",
         requiresTemplate: true,
         isIn24hWindow: false,
-        message: "Fora da janela de 24h. Use um template aprovado.",
+        isServiceWindowOpen: false,
+        serviceWindow: {
+          originType: serviceWindow.originType,
+          isCtwaContact: serviceWindow.isCtwaContact,
+          expiresAt: serviceWindow.expiresAt,
+        },
+        message: "Fora da janela WhatsApp. Selecione um template aprovado.",
       });
     }
+
 
     // === Template: carrega do banco e monta payload ===
     let templateRow: any = null;
