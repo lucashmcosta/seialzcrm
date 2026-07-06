@@ -85,9 +85,43 @@ serve(async (req) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: corsHeaders });
   if (req.method !== "POST") return jsonResponse(405, { error: "method_not_allowed" });
 
+  let payloadForLog: Record<string, unknown> | null = null;
+  let threadIdForLog: string | null = null;
+  let contactIdForLog: string | null = null;
+  let endpointIdForLog: string | null = null;
+  let serviceWindowForLog: Record<string, unknown> | null = null;
+
+  const errorResponse = (
+    status: number,
+    body: Record<string, unknown>,
+    options?: { branch?: string; reason?: string; serviceWindow?: Record<string, unknown> | null },
+  ) => {
+    if (status === 400) {
+      console.error("[meta-wa-send] returning_400", {
+        branch: options?.branch ?? (typeof body.error === "string" ? body.error : "unknown_error"),
+        payload: payloadForLog,
+        threadId: threadIdForLog,
+        contactId: contactIdForLog,
+        endpointId: endpointIdForLog,
+        serviceWindow: options?.serviceWindow ?? serviceWindowForLog,
+        reason: options?.reason ?? (typeof body.message === "string"
+          ? body.message
+          : typeof body.details === "string"
+            ? body.details
+            : typeof body.error === "string"
+              ? body.error
+              : null),
+        responseBody: body,
+      });
+    }
+
+    return jsonResponse(status, body);
+  };
+
   try {
     const body = await req.json().catch(() => null);
-    if (!body) return jsonResponse(400, { error: "invalid_json" });
+    if (!body) return errorResponse(400, { error: "invalid_json" }, { branch: "invalid_json", reason: "Request body is not valid JSON" });
+    payloadForLog = body as Record<string, unknown>;
 
     const {
       organizationId, contactId, threadId, message,
@@ -101,6 +135,10 @@ serve(async (req) => {
       senderContext,
     } = body as Record<string, any>;
 
+    threadIdForLog = typeof threadId === "string" ? threadId : null;
+    contactIdForLog = typeof contactId === "string" ? contactId : null;
+    endpointIdForLog = typeof explicitEndpointId === "string" ? explicitEndpointId : null;
+
     console.log("[meta-wa-send] request_payload", {
       receivedAt: new Date().toISOString(),
       endpoint_id: explicitEndpointId ?? null,
@@ -112,8 +150,8 @@ serve(async (req) => {
       requestPayload: body,
     });
 
-    if (!organizationId) return jsonResponse(400, { error: "missing_organization" });
-    if (!contactId) return jsonResponse(400, { error: "missing_contact" });
+    if (!organizationId) return errorResponse(400, { error: "missing_organization" }, { branch: "missing_organization", reason: "organizationId ausente no payload" });
+    if (!contactId) return errorResponse(400, { error: "missing_contact" }, { branch: "missing_contact", reason: "contactId ausente no payload" });
 
     // EDGE_AUTH Fase 0 (observação) — off | log (default) | enforce.
     // Plano: docs/operations/proposals/2026-07-05-edge-auth-hardening.md
@@ -140,33 +178,33 @@ serve(async (req) => {
     if (isTemplateSend) {
       // Validação leve aqui — restante após carregar o template do banco.
       if (!templateId && (!directTemplateName || !directLanguageCode)) {
-        return jsonResponse(400, { error: "missing_template_payload" });
+        return errorResponse(400, { error: "missing_template_payload" }, { branch: "missing_template_payload", reason: "templateId ou templateName/languageCode ausentes" });
       }
     } else if (hasMedia) {
       if (mediaType === "sticker") {
-        return jsonResponse(400, {
+        return errorResponse(400, {
           error: "sticker_not_supported_yet",
           details: "Envio de sticker via Meta Cloud ainda não está habilitado.",
-        });
+        }, { branch: "sticker_not_supported_yet", reason: "Envio de sticker via Meta Cloud ainda não está habilitado." });
       }
       if (!mediaType || !SUPPORTED_MEDIA.includes(mediaType as MediaKind)) {
-        return jsonResponse(400, {
+        return errorResponse(400, {
           error: "unsupported_media_type",
           details: "Tipos suportados: image, audio, video, document.",
-        });
+        }, { branch: "unsupported_media_type", reason: `mediaType inválido: ${mediaType ?? "null"}` });
       }
       if (mediaUrlsArr.length === 0) {
-        return jsonResponse(400, { error: "missing_media_url" });
+        return errorResponse(400, { error: "missing_media_url" }, { branch: "missing_media_url", reason: "mediaType informado sem URL de mídia" });
       }
       if (trimmedMessage.length > 1024) {
-        return jsonResponse(400, { error: "caption_too_long", max: 1024 });
+        return errorResponse(400, { error: "caption_too_long", max: 1024 }, { branch: "caption_too_long", reason: "caption acima de 1024 caracteres" });
       }
     } else {
       if (!trimmedMessage.trim()) {
-        return jsonResponse(400, { error: "empty_message", details: "Digite uma mensagem antes de enviar." });
+        return errorResponse(400, { error: "empty_message", details: "Digite uma mensagem antes de enviar." }, { branch: "empty_message", reason: "Mensagem livre vazia" });
       }
       if (trimmedMessage.length > 4096) {
-        return jsonResponse(400, { error: "message_too_long", max: 4096 });
+        return errorResponse(400, { error: "message_too_long", max: 4096 }, { branch: "message_too_long", reason: "Mensagem livre acima de 4096 caracteres" });
       }
     }
 
@@ -241,14 +279,15 @@ serve(async (req) => {
         });
       }
     }
-    if (!endpoint) return jsonResponse(400, { error: "no_meta_cloud_endpoint" });
+    if (!endpoint) return errorResponse(400, { error: "no_meta_cloud_endpoint" }, { branch: "no_meta_cloud_endpoint", reason: "Nenhum endpoint Meta Cloud ativo encontrado" });
+    endpointIdForLog = endpoint.id;
     if (endpoint.organization_id !== organizationId) {
       return jsonResponse(403, { error: "endpoint_org_mismatch" });
     }
     if (endpoint.provider !== "meta_cloud_api") {
-      return jsonResponse(400, { error: "endpoint_not_meta_cloud" });
+      return errorResponse(400, { error: "endpoint_not_meta_cloud" }, { branch: "endpoint_not_meta_cloud", reason: `Endpoint provider inválido: ${endpoint.provider ?? "null"}` });
     }
-    if (!endpoint.sender_sid) return jsonResponse(400, { error: "missing_phone_number_id" });
+    if (!endpoint.sender_sid) return errorResponse(400, { error: "missing_phone_number_id" }, { branch: "missing_phone_number_id", reason: "Endpoint sem phone_number_id/sender_sid" });
 
     // Busca integration credentials
     const { data: oi } = await supabase
@@ -256,9 +295,9 @@ serve(async (req) => {
       .select("connected_account, config_values")
       .eq("id", endpoint.organization_integration_id)
       .maybeSingle();
-    if (!oi) return jsonResponse(400, { error: "integration_not_found" });
+    if (!oi) return errorResponse(400, { error: "integration_not_found" }, { branch: "integration_not_found", reason: "organization_integrations não encontrada para o endpoint" });
     const ca = oi.connected_account as any;
-    if (!ca?.access_token_encrypted) return jsonResponse(400, { error: "missing_access_token" });
+    if (!ca?.access_token_encrypted) return errorResponse(400, { error: "missing_access_token" }, { branch: "missing_access_token", reason: "connected_account sem access_token_encrypted" });
 
     const decryptedAccessToken = await decryptSecret(ca.access_token_encrypted);
     // App Secret per-integration (fallback global durante Fase 1).
@@ -286,7 +325,7 @@ serve(async (req) => {
     // Formato E.164 sem '+'
     let to = String(contact.phone).replace(/[^\d+]/g, "");
     if (to.startsWith("+")) to = to.slice(1);
-    if (!/^\d{8,15}$/.test(to)) return jsonResponse(400, { error: "invalid_contact_phone" });
+    if (!/^\d{8,15}$/.test(to)) return errorResponse(400, { error: "invalid_contact_phone" }, { branch: "invalid_contact_phone", reason: "Telefone do contato inválido para E.164 sem +" });
 
     // Janela de atendimento unificada (sessão 24h ∪ CTWA 72h)
     let currentThreadId = threadId as string | undefined;
@@ -345,11 +384,27 @@ serve(async (req) => {
       }
     }
 
+    threadIdForLog = currentThreadId ?? threadIdForLog;
+
     const serviceWindow = getServiceWindow({
       lastInboundAt,
       contact: contactCtwa,
     });
     const in24h = serviceWindow.isOpen;
+    serviceWindowForLog = {
+      originType: serviceWindow.originType,
+      isCtwaContact: serviceWindow.isCtwaContact,
+      isOpen: serviceWindow.isOpen,
+      expiresAt: serviceWindow.expiresAt,
+      expiresAtIso: serviceWindow.expiresAt ? new Date(serviceWindow.expiresAt).toISOString() : null,
+      now: Date.now(),
+      nowIso: new Date().toISOString(),
+      lastInboundAt,
+      ad_referral_captured_at: contactCtwa.ad_referral_captured_at,
+      source: contactCtwa.source,
+      utm_medium: contactCtwa.utm_medium,
+      ad_referral_ctwa_clid: contactCtwa.ad_referral_ctwa_clid,
+    };
 
     console.log("[meta-wa-send] service_window", {
       threadId: currentThreadId,
@@ -387,7 +442,7 @@ serve(async (req) => {
         utm_medium: contactCtwa.utm_medium,
         ad_referral_ctwa_clid: contactCtwa.ad_referral_ctwa_clid,
       });
-      return jsonResponse(400, {
+      return errorResponse(400, {
         error: "outside_service_window",
         requiresTemplate: true,
         isIn24hWindow: false,
@@ -398,6 +453,10 @@ serve(async (req) => {
           expiresAt: serviceWindow.expiresAt,
         },
         message: "Fora da janela WhatsApp. Selecione um template aprovado.",
+      }, {
+        branch: "outside_service_window",
+        reason: "Mensagem livre fora da janela WhatsApp unificada",
+        serviceWindow: serviceWindowForLog,
       });
     }
 
@@ -416,8 +475,8 @@ serve(async (req) => {
         .maybeSingle();
       if (tplErr || !tpl) return jsonResponse(404, { error: "template_not_found" });
       if (tpl.organization_id !== organizationId) return jsonResponse(403, { error: "template_org_mismatch" });
-      if (tpl.provider !== "meta_cloud_api") return jsonResponse(400, { error: "template_not_meta_cloud" });
-      if (tpl.status !== "approved") return jsonResponse(400, { error: "template_not_approved" });
+      if (tpl.provider !== "meta_cloud_api") return errorResponse(400, { error: "template_not_meta_cloud" }, { branch: "template_not_meta_cloud", reason: `Template provider inválido: ${tpl.provider ?? "null"}` });
+      if (tpl.status !== "approved") return errorResponse(400, { error: "template_not_approved" }, { branch: "template_not_approved", reason: `Template não aprovado: ${tpl.status ?? "null"}` });
 
       // Guard LOW + janela aberta: 7020 (Central Trabalhista) enquanto em modo LOW
       // não pode disparar NENHUM template — nem UTILITY — se a janela 24h está aberta.
