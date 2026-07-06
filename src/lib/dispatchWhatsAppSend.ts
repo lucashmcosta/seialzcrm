@@ -13,6 +13,10 @@ import { isSalesPurpose } from "./endpointPurpose";
 import { assertTemplateAllowedForEndpoint } from "./complianceGuards";
 import { logComplianceBlock } from "./complianceLog";
 
+const SUPABASE_FUNCTIONS_URL = "https://qvmtzfvkhkhkhdpclzua.supabase.co/functions/v1";
+const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJxdl" +
+  "10emZ2a2hra2hoZHBjbHp1YSIsInJvbGUiOiJhbm9uIiwiaWF0IjoxNzY0MzgzNzMyLCJleHAiOjIwNzk5NTk3MzJ9.7uhE97klvxSwYrJMu_NYIaNCLBaIUhFNtcF2oRLYRUE";
+
 // === Re-rota Comercial → Meta 7020 (Central Trabalhista) ===
 // Lazy: somente quando a tela /messages enviar em thread cujo provider
 // resolvido seja Twilio (ou sem endpoint algum). Não toca /inbox.
@@ -76,6 +80,90 @@ class DispatchResolveError extends Error {
 interface EndpointInfo {
   provider: Provider;
   purpose: string | null;
+}
+
+async function readResponseBody(response: Response | null | undefined): Promise<{
+  responseBody: string | null;
+  responseJson: unknown;
+  responseBodyReadError: string | null;
+}> {
+  if (!response) {
+    return { responseBody: null, responseJson: null, responseBodyReadError: null };
+  }
+
+  try {
+    const responseBody = await response.clone().text();
+    let responseJson: unknown = null;
+    try {
+      responseJson = responseBody ? JSON.parse(responseBody) : null;
+    } catch {
+      responseJson = null;
+    }
+    return { responseBody, responseJson, responseBodyReadError: null };
+  } catch (readErr) {
+    return {
+      responseBody: null,
+      responseJson: null,
+      responseBodyReadError: (readErr as Error).message,
+    };
+  }
+}
+
+function responseFromInvokeError(err: any): Response | null {
+  const context = err?.context;
+  if (context?.response instanceof Response) return context.response;
+  if (context instanceof Response) return context;
+  return null;
+}
+
+async function directFetchEdgeFunction(fn: string, payload: WhatsAppSendPayload) {
+  const { data: sessionData } = await supabase.auth.getSession();
+  const accessToken = sessionData.session?.access_token ?? SUPABASE_ANON_KEY;
+  const url = `${SUPABASE_FUNCTIONS_URL}/${fn}`;
+
+  const response = await fetch(url, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      apikey: SUPABASE_ANON_KEY,
+      Authorization: `Bearer ${accessToken}`,
+    },
+    body: JSON.stringify(payload),
+  });
+
+  const { responseBody, responseJson, responseBodyReadError } = await readResponseBody(response);
+
+  console.error("[dispatch-wa] direct fetch response full", {
+    fn,
+    endpointId: payload.endpointId ?? null,
+    threadId: payload.threadId ?? null,
+    contactId: payload.contactId ?? null,
+    status: response.status,
+    statusText: response.statusText,
+    responseBody,
+    responseJson,
+    responseBodyReadError,
+  });
+
+  if (!response.ok) {
+    const body = typeof responseJson === "object" && responseJson !== null
+      ? responseJson as Record<string, any>
+      : null;
+    return {
+      data: body,
+      error: {
+        name: "DirectFetchHttpError",
+        message: body?.message ?? body?.details ?? responseBody ?? `HTTP ${response.status}`,
+        status: response.status,
+        statusText: response.statusText,
+        responseBody,
+        responseJson,
+        context: { response: response.clone() },
+      } as any,
+    };
+  }
+
+  return { data: responseJson, error: null };
 }
 
 async function loadEndpointInfo(endpointId: string): Promise<EndpointInfo> {
@@ -287,37 +375,60 @@ export async function dispatchWhatsAppSend(payload: WhatsAppSendPayload) {
     threadId: payload.threadId ?? null,
   });
 
+  if (fnName === "meta-whatsapp-send") {
+    return directFetchEdgeFunction(fnName, payload);
+  }
+
   // eslint-disable-next-line no-restricted-syntax
   try {
     const result = await supabase.functions.invoke(fnName, { body: payload });
 
     if (result.error) {
       const err = result.error as any;
-      const context = err?.context;
-      let responseBody: unknown = null;
-      let responseBodyReadError: string | null = null;
+      const response = responseFromInvokeError(err);
+      const { responseBody, responseJson, responseBodyReadError } = await readResponseBody(response);
 
-      if (context && typeof context.clone === "function") {
-        try {
-          const clone = context.clone();
-          const text = await clone.text();
-          try {
-            responseBody = text ? JSON.parse(text) : null;
-          } catch {
-            responseBody = text;
-          }
-        } catch (readErr) {
-          responseBodyReadError = (readErr as Error).message;
-        }
-      }
-
-      console.error("[dispatch-wa] invoke error detail", {
+      console.error("[dispatch-wa] invoke error full", {
         fn: fnName,
         endpointId: payload.endpointId ?? null,
         threadId: payload.threadId ?? null,
         contactId: payload.contactId ?? null,
-        errorMessage: err?.message ?? null,
         errorName: err?.name ?? null,
+        errorMessage: err?.message ?? null,
+        status: response?.status,
+        statusText: response?.statusText,
+        responseBody,
+        responseJson,
+        context: err?.context,
+        responseBodyReadError,
+        data: result.data ?? null,
+      });
+    }
+
+    return result;
+  } catch (error) {
+    const err = error as any;
+    const response = responseFromInvokeError(err);
+    const { responseBody, responseJson, responseBodyReadError } = await readResponseBody(response);
+
+    console.error("[dispatch-wa] invoke error full", {
+      fn: fnName,
+      endpointId: payload.endpointId ?? null,
+      threadId: payload.threadId ?? null,
+      contactId: payload.contactId ?? null,
+      errorName: err?.name,
+      errorMessage: err?.message,
+      status: response?.status,
+      statusText: response?.statusText,
+      responseBody,
+      responseJson,
+      context: err?.context,
+      responseBodyReadError,
+    });
+
+    throw error;
+  }
+}
         context: context
           ? {
               status: context.status ?? null,
