@@ -1,16 +1,14 @@
-// Janela de atendimento WhatsApp — versão edge (mirror de src/lib/serviceWindow.ts).
+// Janelas WhatsApp — versão edge (mirror de src/lib/serviceWindow.ts).
 //
-// Regra:
-//   expiresAt = max(last_inbound_at + 24h, first_ctwa_at + 72h)
+// Duas janelas independentes:
+//   - conversationWindow (24h) — gate de freeform.
+//   - billingWindow (72h CTWA) — gate de gratuidade de templates.
 //
-// CTWA se qualquer um:
-//   - contact.source = 'ctwa'
-//   - contact.utm_medium = 'ctwa'
-//   - contact.ad_referral_ctwa_clid IS NOT NULL
-//
-// Âncora CTWA: contact.ad_referral_captured_at || contact.created_at.
+// A antiga `serviceWindow = max(24h, 72h)` foi removida. `getServiceWindow`
+// segue exportada, mas `isOpen` = conversationWindow.isOpen.
 
-export type ServiceWindowOrigin = "ctwa" | "session" | "none";
+export type ConversationWindowStatus = "open" | "closed" | "never";
+export type BillingWindowType = "ctwa" | "normal";
 
 export interface ContactCtwaInputs {
   source?: string | null;
@@ -20,17 +18,34 @@ export interface ContactCtwaInputs {
   created_at?: string | null;
 }
 
-export interface ServiceWindowInput {
+export interface WindowInput {
   lastInboundAt?: string | null;
   contact?: ContactCtwaInputs | null;
   now?: number;
 }
 
-export interface ServiceWindow {
-  originType: ServiceWindowOrigin;
+export interface ConversationWindow {
+  status: ConversationWindowStatus;
   expiresAt: number | null;
   isOpen: boolean;
   remainingMs: number;
+}
+
+export interface BillingWindow {
+  type: BillingWindowType;
+  expiresAt: number | null;
+  isOpen: boolean;
+  remainingMs: number;
+  isCtwaContact: boolean;
+}
+
+export interface ServiceWindow {
+  conversation: ConversationWindow;
+  billing: BillingWindow;
+  isOpen: boolean;
+  expiresAt: number | null;
+  remainingMs: number;
+  originType: "ctwa" | "session" | "none";
   isCtwaContact: boolean;
 }
 
@@ -50,39 +65,48 @@ export function getFirstCtwaAt(contact: ContactCtwaInputs | null | undefined): s
   return contact.ad_referral_captured_at || contact.created_at || null;
 }
 
-export function getServiceWindow(input: ServiceWindowInput): ServiceWindow {
+export function getConversationWindow(input: WindowInput): ConversationWindow {
+  const now = input.now ?? Date.now();
+  if (!input.lastInboundAt) {
+    return { status: "never", expiresAt: null, isOpen: false, remainingMs: 0 };
+  }
+  const expiresAt = new Date(input.lastInboundAt).getTime() + 24 * HOUR_MS;
+  const remainingMs = Math.max(0, expiresAt - now);
+  const isOpen = remainingMs > 0;
+  return { status: isOpen ? "open" : "closed", expiresAt, isOpen, remainingMs };
+}
+
+export function getBillingWindow(input: WindowInput): BillingWindow {
   const now = input.now ?? Date.now();
   const contact = input.contact ?? null;
   const isCtwa = isCtwaContact(contact);
-  const firstCtwaAtIso = getFirstCtwaAt(contact);
-
-  const sessionExpires = input.lastInboundAt
-    ? new Date(input.lastInboundAt).getTime() + 24 * HOUR_MS
-    : null;
-  const ctwaExpires = firstCtwaAtIso
-    ? new Date(firstCtwaAtIso).getTime() + 72 * HOUR_MS
-    : null;
-
-  let expiresAt: number | null = null;
-  let originType: ServiceWindowOrigin = "none";
-
-  if (sessionExpires && (!ctwaExpires || sessionExpires >= ctwaExpires)) {
-    expiresAt = sessionExpires;
-    originType = "session";
+  const anchor = getFirstCtwaAt(contact);
+  if (!isCtwa || !anchor) {
+    return { type: "normal", expiresAt: null, isOpen: false, remainingMs: 0, isCtwaContact: isCtwa };
   }
-  if (ctwaExpires && (!sessionExpires || ctwaExpires > sessionExpires)) {
-    expiresAt = ctwaExpires;
-    originType = "ctwa";
-  }
-
-  const remainingMs = expiresAt ? Math.max(0, expiresAt - now) : 0;
-  const isOpen = remainingMs > 0;
-
+  const expiresAt = new Date(anchor).getTime() + 72 * HOUR_MS;
+  const remainingMs = Math.max(0, expiresAt - now);
   return {
-    originType,
+    type: "ctwa",
     expiresAt,
-    isOpen,
+    isOpen: remainingMs > 0,
     remainingMs,
-    isCtwaContact: isCtwa,
+    isCtwaContact: true,
+  };
+}
+
+export function getServiceWindow(input: WindowInput): ServiceWindow {
+  const conversation = getConversationWindow(input);
+  const billing = getBillingWindow(input);
+  const originType: ServiceWindow["originType"] =
+    billing.isOpen ? "ctwa" : conversation.isOpen ? "session" : "none";
+  return {
+    conversation,
+    billing,
+    isOpen: conversation.isOpen,
+    expiresAt: conversation.expiresAt,
+    remainingMs: conversation.remainingMs,
+    originType,
+    isCtwaContact: billing.isCtwaContact,
   };
 }
