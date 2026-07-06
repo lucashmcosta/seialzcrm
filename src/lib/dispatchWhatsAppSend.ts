@@ -288,5 +288,88 @@ export async function dispatchWhatsAppSend(payload: WhatsAppSendPayload) {
   });
 
   // eslint-disable-next-line no-restricted-syntax
-  return await supabase.functions.invoke(fnName, { body: payload });
+  try {
+    const result = await supabase.functions.invoke(fnName, { body: payload });
+
+    if (result.error) {
+      const err = result.error as any;
+      const context = err?.context;
+      let responseBody: unknown = null;
+      let responseBodyReadError: string | null = null;
+
+      if (context && typeof context.clone === "function") {
+        try {
+          const clone = context.clone();
+          const text = await clone.text();
+          try {
+            responseBody = text ? JSON.parse(text) : null;
+          } catch {
+            responseBody = text;
+          }
+        } catch (readErr) {
+          responseBodyReadError = (readErr as Error).message;
+        }
+      }
+
+      console.error("[dispatch-wa] invoke error detail", {
+        fn: fnName,
+        endpointId: payload.endpointId ?? null,
+        threadId: payload.threadId ?? null,
+        contactId: payload.contactId ?? null,
+        errorMessage: err?.message ?? null,
+        errorName: err?.name ?? null,
+        context: context
+          ? {
+              status: context.status ?? null,
+              statusText: context.statusText ?? null,
+              url: context.url ?? null,
+            }
+          : null,
+        responseBody,
+        responseBodyReadError,
+        data: result.data ?? null,
+      });
+    }
+
+    return result;
+  } catch (error) {
+    const err = error as any;
+    const context = err?.context;
+    let responseBody: unknown = null;
+    let responseBodyReadError: string | null = null;
+
+    if (context && typeof context.clone === "function") {
+      try {
+        const clone = context.clone();
+        const text = await clone.text();
+        try {
+          responseBody = text ? JSON.parse(text) : null;
+        } catch {
+          responseBody = text;
+        }
+      } catch (readErr) {
+        responseBodyReadError = (readErr as Error).message;
+      }
+    }
+
+    console.error("[dispatch-wa] invoke thrown detail", {
+      fn: fnName,
+      endpointId: payload.endpointId ?? null,
+      threadId: payload.threadId ?? null,
+      contactId: payload.contactId ?? null,
+      errorMessage: err?.message ?? null,
+      errorName: err?.name ?? null,
+      context: context
+        ? {
+            status: context.status ?? null,
+            statusText: context.statusText ?? null,
+            url: context.url ?? null,
+          }
+        : null,
+      responseBody,
+      responseBodyReadError,
+    });
+
+    throw error;
+  }
 }
