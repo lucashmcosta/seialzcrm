@@ -13,6 +13,7 @@ import {
 import { resolveAppSecretForIntegration } from "../_shared/meta-whatsapp/credentials.ts";
 import { ensureEndpointMigrationNote } from "../_shared/endpoint-migration-note.ts";
 import { validateCallerAuth, edgeAuthMode, logAuthObservation } from "../_shared/auth.ts";
+import { getServiceWindow, type ContactCtwaInputs } from "../_shared/service-window.ts";
 
 function jsonResponse(status: number, body: Record<string, unknown>) {
   return new Response(JSON.stringify(body), {
