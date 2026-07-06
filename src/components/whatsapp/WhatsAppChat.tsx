@@ -243,11 +243,11 @@ export function WhatsAppChat({ contactId, threadId: initialThreadId, onThreadCre
         if (data.requiresTemplate) {
           setShowTemplates(true);
           toast({
-            description: 'Fora da janela de 24h. Selecione um template aprovado.',
+            description: data.message || 'Fora da janela WhatsApp. Selecione um template aprovado.',
           });
           return;
         }
-        throw new Error(data.error);
+        throw new Error(data.message || data.error);
       }
 
       if (data.threadId && data.threadId !== threadId) {
