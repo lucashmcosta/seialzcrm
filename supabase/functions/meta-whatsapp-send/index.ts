@@ -85,9 +85,43 @@ serve(async (req) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: corsHeaders });
   if (req.method !== "POST") return jsonResponse(405, { error: "method_not_allowed" });
 
+  let payloadForLog: Record<string, unknown> | null = null;
+  let threadIdForLog: string | null = null;
+  let contactIdForLog: string | null = null;
+  let endpointIdForLog: string | null = null;
+  let serviceWindowForLog: Record<string, unknown> | null = null;
+
+  const errorResponse = (
+    status: number,
+    body: Record<string, unknown>,
+    options?: { branch?: string; reason?: string; serviceWindow?: Record<string, unknown> | null },
+  ) => {
+    if (status === 400) {
+      console.error("[meta-wa-send] returning_400", {
+        branch: options?.branch ?? (typeof body.error === "string" ? body.error : "unknown_error"),
+        payload: payloadForLog,
+        threadId: threadIdForLog,
+        contactId: contactIdForLog,
+        endpointId: endpointIdForLog,
+        serviceWindow: options?.serviceWindow ?? serviceWindowForLog,
+        reason: options?.reason ?? (typeof body.message === "string"
+          ? body.message
+          : typeof body.details === "string"
+            ? body.details
+            : typeof body.error === "string"
+              ? body.error
+              : null),
+        responseBody: body,
+      });
+    }
+
+    return jsonResponse(status, body);
+  };
+
   try {
     const body = await req.json().catch(() => null);
-    if (!body) return jsonResponse(400, { error: "invalid_json" });
+    if (!body) return errorResponse(400, { error: "invalid_json" }, { branch: "invalid_json", reason: "Request body is not valid JSON" });
+    payloadForLog = body as Record<string, unknown>;
 
     const {
       organizationId, contactId, threadId, message,
@@ -101,6 +135,10 @@ serve(async (req) => {
       senderContext,
     } = body as Record<string, any>;
 
+    threadIdForLog = typeof threadId === "string" ? threadId : null;
+    contactIdForLog = typeof contactId === "string" ? contactId : null;
+    endpointIdForLog = typeof explicitEndpointId === "string" ? explicitEndpointId : null;
+
     console.log("[meta-wa-send] request_payload", {
       receivedAt: new Date().toISOString(),
       endpoint_id: explicitEndpointId ?? null,
@@ -112,8 +150,8 @@ serve(async (req) => {
       requestPayload: body,
     });
 
-    if (!organizationId) return jsonResponse(400, { error: "missing_organization" });
-    if (!contactId) return jsonResponse(400, { error: "missing_contact" });
+    if (!organizationId) return errorResponse(400, { error: "missing_organization" }, { branch: "missing_organization", reason: "organizationId ausente no payload" });
+    if (!contactId) return errorResponse(400, { error: "missing_contact" }, { branch: "missing_contact", reason: "contactId ausente no payload" });
 
     // EDGE_AUTH Fase 0 (observação) — off | log (default) | enforce.
     // Plano: docs/operations/proposals/2026-07-05-edge-auth-hardening.md
@@ -140,33 +178,33 @@ serve(async (req) => {
     if (isTemplateSend) {
       // Validação leve aqui — restante após carregar o template do banco.
       if (!templateId && (!directTemplateName || !directLanguageCode)) {
-        return jsonResponse(400, { error: "missing_template_payload" });
+        return errorResponse(400, { error: "missing_template_payload" }, { branch: "missing_template_payload", reason: "templateId ou templateName/languageCode ausentes" });
       }
     } else if (hasMedia) {
       if (mediaType === "sticker") {
-        return jsonResponse(400, {
+        return errorResponse(400, {
           error: "sticker_not_supported_yet",
           details: "Envio de sticker via Meta Cloud ainda não está habilitado.",
-        });
+        }, { branch: "sticker_not_supported_yet", reason: "Envio de sticker via Meta Cloud ainda não está habilitado." });
       }
       if (!mediaType || !SUPPORTED_MEDIA.includes(mediaType as MediaKind)) {
-        return jsonResponse(400, {
+        return errorResponse(400, {
           error: "unsupported_media_type",
           details: "Tipos suportados: image, audio, video, document.",
-        });
+        }, { branch: "unsupported_media_type", reason: `mediaType inválido: ${mediaType ?? "null"}` });
       }
       if (mediaUrlsArr.length === 0) {
-        return jsonResponse(400, { error: "missing_media_url" });
+        return errorResponse(400, { error: "missing_media_url" }, { branch: "missing_media_url", reason: "mediaType informado sem URL de mídia" });
       }
       if (trimmedMessage.length > 1024) {
-        return jsonResponse(400, { error: "caption_too_long", max: 1024 });
+        return errorResponse(400, { error: "caption_too_long", max: 1024 }, { branch: "caption_too_long", reason: "caption acima de 1024 caracteres" });
       }
     } else {
       if (!trimmedMessage.trim()) {
-        return jsonResponse(400, { error: "empty_message", details: "Digite uma mensagem antes de enviar." });
+        return errorResponse(400, { error: "empty_message", details: "Digite uma mensagem antes de enviar." }, { branch: "empty_message", reason: "Mensagem livre vazia" });
       }
       if (trimmedMessage.length > 4096) {
-        return jsonResponse(400, { error: "message_too_long", max: 4096 });
+        return errorResponse(400, { error: "message_too_long", max: 4096 }, { branch: "message_too_long", reason: "Mensagem livre acima de 4096 caracteres" });
       }
     }
 
