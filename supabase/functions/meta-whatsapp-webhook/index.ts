@@ -867,11 +867,52 @@ async function handleInbound(
     else if (mediaKind === "document") content = cap || fname || placeholderForInbound(mediaKind);
     else content = placeholderForInbound(mediaKind);
   } else {
+    // Reaction: emoji + (reação). reaction.message_id fica preservado em metadata.raw.
+    const reactionText = msg?.reaction?.emoji
+      ? `${msg.reaction.emoji} (reação)`
+      : undefined;
+
+    // Location: nome > endereço > lat,lng
+    let locationText: string | undefined;
+    if (msg?.location) {
+      const loc = msg.location as { name?: string; address?: string; latitude?: number; longitude?: number };
+      const label = loc.name
+        || loc.address
+        || (loc.latitude != null && loc.longitude != null ? `${loc.latitude},${loc.longitude}` : null);
+      locationText = `📍 Localização${label ? `: ${label}` : ""}`;
+    }
+
+    // Contacts: lista de formatted_name (singular/plural)
+    let contactsText: string | undefined;
+    if (Array.isArray(msg?.contacts) && msg.contacts.length > 0) {
+      const names = (msg.contacts as Array<{ name?: { formatted_name?: string } }>)
+        .map((c) => c?.name?.formatted_name)
+        .filter((n): n is string => !!n);
+      const label = names.length > 0 ? names.join(", ") : "";
+      const prefix = msg.contacts.length > 1 ? "👤 Contatos compartilhados" : "👤 Contato compartilhado";
+      contactsText = label ? `${prefix}: ${label}` : prefix;
+    }
+
+    // Sticker
+    const stickerText = msg?.type === "sticker" || msg?.sticker ? "🏷️ Sticker" : undefined;
+
+    // WhatsApp Flows / nfm_reply
+    let flowReplyText: string | undefined;
+    const nfm = msg?.interactive?.nfm_reply as { name?: string } | undefined;
+    if (nfm) {
+      flowReplyText = `📋 Resposta de formulário: ${nfm.name || "WhatsApp Flow"}`;
+    }
+
     content = msg?.text?.body
       ?? msg?.button?.text
       ?? msg?.interactive?.button_reply?.title
       ?? msg?.interactive?.list_reply?.title
-      ?? "[mensagem não-textual]";
+      ?? reactionText
+      ?? locationText
+      ?? contactsText
+      ?? stickerText
+      ?? flowReplyText
+      ?? `[mensagem não suportada: ${msg?.type ?? "desconhecido"}]`;
   }
 
   // 9) Reply context
