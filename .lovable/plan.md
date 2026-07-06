@@ -1,148 +1,77 @@
-## Objetivo
+# Plano — `docs/MOBILE_CONTACTS.md`
 
-Criar `docs/MOBILE_DASHBOARD.md` — dump técnico único e literal para replicar a tela "Início" no app React Native/Expo. Sem resumir código: colar o conteúdo direto dos arquivos web e o SQL das tabelas envolvidas.
+Criar um único documento de referência, no mesmo formato de `docs/mobile/backend-reference.md` e `docs/mobile/dashboard-spec.md`, para o agente que vai implementar o módulo de Contatos no app mobile (React Native / Expo consumindo o mesmo Supabase).
+
+Localização: `docs/mobile/contacts-spec.md` (para ficar alinhado ao padrão da pasta `docs/mobile/`; posso salvar como `docs/MOBILE_CONTACTS.md` na raiz de `docs/` se você preferir — me diga na aprovação).
+
+## Fontes de verdade que vou consultar antes de escrever
+
+- Banco (via `supabase--read_query`): `information_schema.columns` de `contacts`, `companies`, `communication_endpoints`, `tags`, `tag_assignments`, `custom_field_definitions`, `custom_field_values`, `organizations` (colunas `duplicate_check_mode`, `duplicate_enforce_block`, `view_all_contacts`).
+- RLS/policies das mesmas tabelas + RPC `rpc_search_contacts` (assinatura e retorno reais).
+- Código web (fonte da UX): `src/pages/contacts/ContactsList.tsx` (795 linhas), `ContactDetail.tsx` (908), `ContactForm.tsx` (588), `src/hooks/contacts/useContactConversationsByContext.ts`, `src/components/mobile/MobileContactsList.tsx`, `src/lib/phoneUtils.ts`.
+- Docs existentes: `docs/modules/contacts/README.md`, `docs/modules/contacts/data-model.md`, `docs/modules/companies/data-model.md`, `docs/decisions/0001-multi-tenancy-organization-id.md`, ADRs sobre `view_all_*` e atribuição.
+
+Se algo divergir entre código e docs, marco `[INCERTO]` conforme regra do projeto — não invento regra de negócio.
 
 ## Estrutura do documento
 
-### 1. Visão geral rápida
-- A tela **NÃO usa RPC**. Todos os KPIs, gráfico e donut são calculados **client-side** a partir de duas queries diretas em `public.opportunities`.
-- Filtros persistidos em `localStorage` via `usePersistedFilters` (no mobile, trocar por `AsyncStorage`).
-- Tema por organização vem de 4 colunas em `public.organizations` (`theme_primary_color`, `theme_sidebar_color`, `theme_dark_mode`, `theme_preset`) + `logo_url`.
+1. **Contexto e escopo mobile v1**
+   - O que entra no v1 (lista, detalhe, criação, edição, busca, filtros) e o que fica fora (merge, custom fields avançados, import).
 
-### 2. Código-fonte (colado literal)
+2. **Schema completo** — uma subseção por tabela, com tabela markdown `coluna | tipo | nullable | default | observação`:
+   - `contacts` (61 colunas — identificação, contato, endereço, docs legais BR: CPF/RG/nascimento, lifecycle, atribuição `owner_user_id`, marketing attribution, timestamps, soft-delete).
+   - `companies` (11 colunas + relação `contacts.company_id`).
+   - `communication_endpoints` (22 colunas — canal, endereço, `purpose`, status, `is_primary`).
+   - `tags` (6) + `tag_assignments` (6).
+   - `custom_field_definitions` (12) + `custom_field_values` (8) — como o mobile deve ler/gravar.
+   - Trecho relevante de `organizations`: `view_all_contacts`, `duplicate_check_mode`, `duplicate_enforce_block`, `default_owner_user_id`, round-robin flags.
 
-Colar na íntegra, sem reescrever:
-- `src/pages/Dashboard.tsx` (430 linhas — a página completa, inclusive versão desktop e o branch mobile que renderiza `MobileDashboard`)
-- `src/components/mobile/MobileDashboard.tsx` (versão mobile atual do web — referência direta para porting Expo)
-- `src/components/reports/ReportFilters.tsx` (filtros de período + owner)
-- `src/lib/report-period.ts` (`computeRange`, `PeriodPreset`, `CustomRange`)
-- `src/components/reports/DashboardTrendChart.tsx` (gráfico linha Entradas x Fechamentos, agregação diária/semanal)
-- `src/components/reports/DashboardStatusDonut.tsx` (donut Abertas/Ganhas/Perdidas)
-- `src/lib/fetchAllPagedRows.ts` + `dedupeRowsById` (paginação usada pelas queries)
-- `src/hooks/usePersistedFilters.ts` (com nota: no Expo trocar `localStorage` por `AsyncStorage`)
-- `src/hooks/usePermissions.ts` (controle de `viewAllOpportunities`)
-- `src/contexts/OrganizationContext.tsx` (trecho do select que traz `theme_*` e `logo_url`) — referenciar `docs/MOBILE_APP_BACKEND.md` para o resto
-- `src/contexts/ThemeContext.tsx` (como as CSS vars são aplicadas — no Expo virar objeto de estilos ou styled tokens)
+3. **RLS e multi-tenancy**
+   - Padrão `organization_id = ANY(current_user_org_ids())`, uso obrigatório de `users.id` (nunca `auth.uid()`) em `owner_user_id` etc.
+   - Regras específicas por tabela (5 policies em `contacts`, 5 em `communication_endpoints` etc.).
 
-### 3. Fonte dos dados dos cards e gráficos
+4. **Tela de listagem**
+   - Paginação: cursor vs offset — vou confirmar no código (`ContactsList.tsx` + `fetchAllPagedRows`) e documentar exatamente o que hoje é usado; recomendação mobile: infinite scroll por offset de 50, como `MobileContactsList` já faz.
+   - Campos no card (nome, telefone primário via `communication_endpoints`, empresa, tags, dono, lifecycle badge).
+   - Filtros disponíveis (lifecycle stage, dono, tags, empresa, data) e ordenação.
+   - Busca: assinatura real de `rpc_search_contacts` (parâmetros e colunas retornadas). Fallback `ilike` quando aplicável.
+   - Regra `viewAllContacts`: confirmar leitura no código; documentar “se `organizations.view_all_contacts = false`, aplicar `owner_user_id = <users.id do usuário logado>` no filtro cliente, mesmo padrão de Oportunidades”. Marcar `[INCERTO]` se o código não confirmar.
 
-Documentação explícita das duas queries em `Dashboard.tsx > fetchStats()`:
+5. **Tela de detalhe**
+   - Seções: identificação, endereço, docs legais, canais (`communication_endpoints`), tags, empresa, dono, campos personalizados, atividade.
+   - Relacionamentos exibidos: oportunidades (`opportunities.contact_id`), tarefas (`tasks.contact_id`), atividades (`activities.contact_id`), threads/mensagens (via `useContactConversationsByContext`), documentos (`useContactDocuments`) — com a query real de cada um.
+   - Quais campos são editáveis inline (owner, tags, lifecycle) vs. apenas via form (dados legais, endereço, canais).
 
-**Query A — "entradas" (opportunities criadas no período)**
-```ts
-supabase
-  .from('opportunities')
-  .select('id, title, status, created_at, updated_at, close_date, amount, contact_id, owner_user_id, contacts:contact_id(full_name), users:owner_user_id(full_name)')
-  .eq('organization_id', organization.id)
-  .is('deleted_at', null)
-  // se !canViewAll: .eq('owner_user_id', userProfile.id)
-  // senão se ownerId != 'all': .eq('owner_user_id', ownerId)
-  .gte('created_at', from.toISOString())
-  .lte('created_at', to.toISOString())
-```
+6. **Criação / edição**
+   - Campos mínimos obrigatórios (extraídos de `ContactForm.tsx` + NOT NULL do schema).
+   - Fluxo de duplicidade: leitura de `organizations.duplicate_check_mode` (`off | warn | block`) e `duplicate_enforce_block`; matching por `phone_normalized` (usa `normalize_phone_br`) e email; UX mobile: warn = confirmação, block = bloqueia com CTA “abrir contato existente”.
+   - Validações: telefone via `phoneUtils.ts` (normalização + 9º dígito BR). Para CPF/RG: vou verificar se existe helper equivalente; se não existir, documentar como `[TODO]` sem inventar.
+   - Triggers relevantes que o mobile precisa saber (round-robin, `phone_normalized`, marketing FK, audit) — só citar impacto no cliente.
 
-**Query B — "fechamentos" (status=won com close_date no período)**
-```ts
-  .eq('status', 'won')
-  .gte('close_date', toDayStr(from))   // YYYY-MM-DD local
-  .lte('close_date', toDayStr(to))
-```
+7. **Hooks e serviços a implementar no mobile** (espelho do web)
+   - `useContactsList({ search, filters, page })`, `useContact(id)`, `useContactMutations()`, `useContactRelations(id)`, `useContactEndpoints(id)`, `useContactTags(id)`.
+   - Assinaturas TypeScript, tratamento de erro, invalidação de cache.
 
-As duas rodam em paralelo, resultado é deduplicado por `id`.
+8. **Código de referência (colado integralmente, sem resumo)**
+   - `src/pages/contacts/ContactsList.tsx` (795 linhas)
+   - `src/pages/contacts/ContactDetail.tsx` (908)
+   - `src/pages/contacts/ContactForm.tsx` (588)
+   - `src/hooks/contacts/useContactConversationsByContext.ts` (189)
+   - `src/components/mobile/MobileContactsList.tsx` (209)
+   - `src/lib/phoneUtils.ts`
+   - Total ~2.7k linhas — o documento fica grande, mas é o padrão que você pediu (“cola tudo direto, sem resumir”).
 
-**Fórmulas exatas dos KPIs (`Dashboard.tsx` linhas 236–262):**
-- `entered` = count de linhas com `created_at ∈ [from, to]`
-- `closed` = count de linhas com `status === 'won'` **E** `close_date ∈ [from, to]` (parsing local, não UTC)
-- `conversion` = `entered > 0 ? (closed / entered) * 100 : null` (é `fechadas / entradas` — inclui fechamentos do período mesmo que a oportunidade tenha entrado fora dele)
+9. **Checklist de implementação mobile** (o que o agente do app precisa fazer, em ordem).
 
-**Gráfico "Entradas x Fechamentos" (`DashboardTrendChart.tsx`):**
-- Bucket diário se período ≤ 90 dias, semanal (segunda a domingo) se > 90 dias
-- `Entradas` agrega por `created_at`
-- `Fechamentos` agrega por `close_date` (só `status === 'won'`)
-- `close_date` é `DATE` — parseado como midnight LOCAL para evitar shift de fuso (função `parseLocalDate`)
+10. **Incertezas e pendências** — lista consolidada de tudo que marquei `[INCERTO]` ou `[TODO]` durante a redação.
 
-**Donut de status (`DashboardStatusDonut.tsx`):**
-- Considera apenas oportunidades com `created_at ∈ [from, to]`
-- Buckets: `open`, `won`, `lost`. Qualquer outro status colapsa em `open`.
+## Fora de escopo deste plano
 
-**Valores de `opportunities.status`:**
-- `'open'` → Abertas
-- `'won'` → Ganhas
-- `'lost'` → Perdidas
-(Confirmar via `SELECT DISTINCT status FROM opportunities` no Supabase se necessário — o web trata só esses três.)
+- Nenhuma alteração em código, schema ou RLS.
+- Nenhum novo endpoint/edge function.
+- Não vou tocar em `src/lib/i18n.ts`, CRM autenticado, nem no app web.
 
-### 4. Filtros
+## Perguntas antes de implementar
 
-**Presets de período (`report-period.ts`):**
-Colar o `computeRange` inteiro. Lista:
-- `today`, `yesterday`
-- `this_week`, `last_week` (semana começa segunda)
-- `this_month`, `last_month`
-- `last_7`, `last_30`, `last_90`, `last_365` (janelas móveis inclusivas)
-- `custom` (usuário escolhe `from`/`to`)
-
-Cada preset produz `{ from: Date, to: Date }` com `from` em `00:00:00.000` local e `to` em `23:59:59.999` local. Convertidos para ISO na query de `created_at` e para `YYYY-MM-DD` local na query de `close_date`.
-
-**Seletor de vendedor:**
-- Só renderiza se `permissions.viewAllOpportunities === true`
-- Query que popula (`Dashboard.tsx` linhas 97–111):
-  ```ts
-  supabase
-    .from('user_organizations')
-    .select('user_id, users(id, full_name)')
-    .eq('organization_id', organization.id)
-    .eq('is_active', true)
-  ```
-- `ownerId = 'all'` → sem filtro; `ownerId = <uuid>` → `.eq('owner_user_id', ownerId)`
-- Usuário sem `viewAllOpportunities` é forçado a `owner_user_id = userProfile.id` (sempre vê só o próprio).
-
-### 5. Tema por organização
-
-Colunas em `public.organizations` (source of truth):
-- `theme_primary_color` — string HSL "H S% L%" (ex.: `"142 71% 45%"` verde, `"206 50% 29%"` azul). **NÃO é hex.**
-- `theme_sidebar_color` — mesmo formato HSL
-- `theme_dark_mode` — boolean
-- `theme_preset` — `'default' | 'seialz'` (quando `seialz`, o preset assume as cores próprias e ignora `theme_primary_color`)
-- `logo_url` — URL absoluta (Supabase Storage ou externa)
-- `logo_size` — inteiro opcional (tamanho renderizado)
-
-Como o web aplica (colar `ThemeContext.tsx` inteiro). Defaults:
-- `DEFAULT_PRIMARY = '206 50% 29%'`
-- `DEFAULT_SIDEBAR = '0 0% 98%'`
-- `primary-foreground` calculado por luminosidade: `L > 65 → '217 33% 17%'` (dark text), senão `'0 0% 100%'` (white text).
-
-**Porting para Expo:**
-- Parse do HSL: `const [h, s, l] = str.split(' ').map(v => parseFloat(v))` → passar para `hsl(h, s%, l%)` em `StyleSheet` ou styled-components.
-- Sem CSS vars — expor via `ThemeContext` do RN e consumir com `useTheme()`.
-
-### 6. Schema SQL das colunas relevantes
-
-Rodar via `supabase--read_query` e colar o resultado:
-```sql
-SELECT column_name, data_type, is_nullable, column_default
-FROM information_schema.columns
-WHERE table_schema = 'public'
-  AND table_name IN ('opportunities', 'organizations', 'user_organizations', 'users', 'contacts')
-  AND column_name IN (
-    'id','title','status','created_at','updated_at','close_date','amount',
-    'contact_id','owner_user_id','organization_id','deleted_at',
-    'theme_primary_color','theme_sidebar_color','theme_dark_mode','theme_preset',
-    'logo_url','logo_size','full_name','is_active','user_id'
-  )
-ORDER BY table_name, column_name;
-```
-
-Mais: `SELECT DISTINCT status FROM public.opportunities WHERE organization_id IS NOT NULL LIMIT 20;` para confirmar valores reais.
-
-### 7. Notas de porting Expo (curto)
-
-- `localStorage` → `@react-native-async-storage/async-storage`
-- `recharts` → `victory-native` ou `react-native-svg-charts`
-- CSS vars → objeto `theme` no context
-- `useNavigate` → `useNavigation` (React Navigation)
-- Sem `<Dialog>` — usar `Modal` do RN ou `@gorhom/bottom-sheet`
-- Datas: manter parsing local exato de `close_date` (evitar `new Date('YYYY-MM-DD')` que shifta para UTC)
-
-## Entregável
-- Um arquivo: `docs/MOBILE_DASHBOARD.md`
-- Sem alterar código do projeto web.
+1. Confirma o caminho `docs/mobile/contacts-spec.md` (padrão da pasta) ou prefere mesmo `docs/MOBILE_CONTACTS.md` na raiz de `docs/`?
+2. Ok colar os ~2.700 linhas de código integralmente no doc (arquivo ficará grande, ~120 KB)?
