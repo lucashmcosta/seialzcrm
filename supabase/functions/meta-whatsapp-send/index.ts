@@ -279,14 +279,15 @@ serve(async (req) => {
         });
       }
     }
-    if (!endpoint) return jsonResponse(400, { error: "no_meta_cloud_endpoint" });
+    if (!endpoint) return errorResponse(400, { error: "no_meta_cloud_endpoint" }, { branch: "no_meta_cloud_endpoint", reason: "Nenhum endpoint Meta Cloud ativo encontrado" });
+    endpointIdForLog = endpoint.id;
     if (endpoint.organization_id !== organizationId) {
       return jsonResponse(403, { error: "endpoint_org_mismatch" });
     }
     if (endpoint.provider !== "meta_cloud_api") {
-      return jsonResponse(400, { error: "endpoint_not_meta_cloud" });
+      return errorResponse(400, { error: "endpoint_not_meta_cloud" }, { branch: "endpoint_not_meta_cloud", reason: `Endpoint provider inválido: ${endpoint.provider ?? "null"}` });
     }
-    if (!endpoint.sender_sid) return jsonResponse(400, { error: "missing_phone_number_id" });
+    if (!endpoint.sender_sid) return errorResponse(400, { error: "missing_phone_number_id" }, { branch: "missing_phone_number_id", reason: "Endpoint sem phone_number_id/sender_sid" });
 
     // Busca integration credentials
     const { data: oi } = await supabase
@@ -294,9 +295,9 @@ serve(async (req) => {
       .select("connected_account, config_values")
       .eq("id", endpoint.organization_integration_id)
       .maybeSingle();
-    if (!oi) return jsonResponse(400, { error: "integration_not_found" });
+    if (!oi) return errorResponse(400, { error: "integration_not_found" }, { branch: "integration_not_found", reason: "organization_integrations não encontrada para o endpoint" });
     const ca = oi.connected_account as any;
-    if (!ca?.access_token_encrypted) return jsonResponse(400, { error: "missing_access_token" });
+    if (!ca?.access_token_encrypted) return errorResponse(400, { error: "missing_access_token" }, { branch: "missing_access_token", reason: "connected_account sem access_token_encrypted" });
 
     const decryptedAccessToken = await decryptSecret(ca.access_token_encrypted);
     // App Secret per-integration (fallback global durante Fase 1).
@@ -324,7 +325,7 @@ serve(async (req) => {
     // Formato E.164 sem '+'
     let to = String(contact.phone).replace(/[^\d+]/g, "");
     if (to.startsWith("+")) to = to.slice(1);
-    if (!/^\d{8,15}$/.test(to)) return jsonResponse(400, { error: "invalid_contact_phone" });
+    if (!/^\d{8,15}$/.test(to)) return errorResponse(400, { error: "invalid_contact_phone" }, { branch: "invalid_contact_phone", reason: "Telefone do contato inválido para E.164 sem +" });
 
     // Janela de atendimento unificada (sessão 24h ∪ CTWA 72h)
     let currentThreadId = threadId as string | undefined;
@@ -383,11 +384,27 @@ serve(async (req) => {
       }
     }
 
+    threadIdForLog = currentThreadId ?? threadIdForLog;
+
     const serviceWindow = getServiceWindow({
       lastInboundAt,
       contact: contactCtwa,
     });
     const in24h = serviceWindow.isOpen;
+    serviceWindowForLog = {
+      originType: serviceWindow.originType,
+      isCtwaContact: serviceWindow.isCtwaContact,
+      isOpen: serviceWindow.isOpen,
+      expiresAt: serviceWindow.expiresAt,
+      expiresAtIso: serviceWindow.expiresAt ? new Date(serviceWindow.expiresAt).toISOString() : null,
+      now: Date.now(),
+      nowIso: new Date().toISOString(),
+      lastInboundAt,
+      ad_referral_captured_at: contactCtwa.ad_referral_captured_at,
+      source: contactCtwa.source,
+      utm_medium: contactCtwa.utm_medium,
+      ad_referral_ctwa_clid: contactCtwa.ad_referral_ctwa_clid,
+    };
 
     console.log("[meta-wa-send] service_window", {
       threadId: currentThreadId,
@@ -425,7 +442,7 @@ serve(async (req) => {
         utm_medium: contactCtwa.utm_medium,
         ad_referral_ctwa_clid: contactCtwa.ad_referral_ctwa_clid,
       });
-      return jsonResponse(400, {
+      return errorResponse(400, {
         error: "outside_service_window",
         requiresTemplate: true,
         isIn24hWindow: false,
@@ -436,6 +453,10 @@ serve(async (req) => {
           expiresAt: serviceWindow.expiresAt,
         },
         message: "Fora da janela WhatsApp. Selecione um template aprovado.",
+      }, {
+        branch: "outside_service_window",
+        reason: "Mensagem livre fora da janela WhatsApp unificada",
+        serviceWindow: serviceWindowForLog,
       });
     }
 
@@ -454,8 +475,8 @@ serve(async (req) => {
         .maybeSingle();
       if (tplErr || !tpl) return jsonResponse(404, { error: "template_not_found" });
       if (tpl.organization_id !== organizationId) return jsonResponse(403, { error: "template_org_mismatch" });
-      if (tpl.provider !== "meta_cloud_api") return jsonResponse(400, { error: "template_not_meta_cloud" });
-      if (tpl.status !== "approved") return jsonResponse(400, { error: "template_not_approved" });
+      if (tpl.provider !== "meta_cloud_api") return errorResponse(400, { error: "template_not_meta_cloud" }, { branch: "template_not_meta_cloud", reason: `Template provider inválido: ${tpl.provider ?? "null"}` });
+      if (tpl.status !== "approved") return errorResponse(400, { error: "template_not_approved" }, { branch: "template_not_approved", reason: `Template não aprovado: ${tpl.status ?? "null"}` });
 
       // Guard LOW + janela aberta: 7020 (Central Trabalhista) enquanto em modo LOW
       // não pode disparar NENHUM template — nem UTILITY — se a janela 24h está aberta.
