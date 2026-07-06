@@ -15,6 +15,7 @@ import { AudioRecorder } from './AudioRecorder';
 import { AudioMessagePlayer } from './AudioMessagePlayer';
 import { MediaUploadButton } from './MediaUploadButton';
 import { WhatsAppFormattedText } from './WhatsAppFormattedText';
+import { MetaRichMessageContent } from '@/components/messages/MetaRichMessageContent';
 import { MessageStatusIndicator, MessageFailureInline } from './MessageStatusIndicator';
 import { getProxiedMediaUrl } from '@/lib/mediaProxy';
 import { audioBlobToFile } from '@/lib/audioBlobToFile';
@@ -36,6 +37,7 @@ interface Message {
   media_type: string | null;
   error_code: string | null;
   error_message: string | null;
+  metadata?: Record<string, unknown> | null;
 }
 
 interface WhatsAppChatProps {
@@ -519,7 +521,12 @@ export function WhatsAppChat({ contactId, threadId: initialThreadId, onThreadCre
 
                     {/* Content */}
                     {message.content && !(message.media_urls && message.media_urls.length > 0 && ['[Áudio]', '[Imagem]', '[Vídeo]', '[Documento]', '[Sticker]'].includes(message.content)) && (
-                      <WhatsAppFormattedText content={message.content} />
+                      <MetaRichMessageContent
+                        metadata={message.metadata}
+                        content={message.content}
+                        isOutbound={isOutbound}
+                        fallback={(c) => <WhatsAppFormattedText content={c} />}
+                      />
                     )}
 
                     {/* Inline failure reason (substitui o error_message bruto) */}

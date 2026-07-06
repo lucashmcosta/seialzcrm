@@ -34,6 +34,7 @@ import {
 } from '@phosphor-icons/react';
 import { WhatsAppTemplateSelector } from '@/components/whatsapp/WhatsAppTemplateSelector';
 import { MessageStatusIndicator, MessageFailureInline } from '@/components/whatsapp/MessageStatusIndicator';
+import { MetaRichMessageContent } from '@/components/messages/MetaRichMessageContent';
 import { AudioRecorder } from '@/components/whatsapp/AudioRecorder';
 import { audioBlobToFile } from '@/lib/audioBlobToFile';
 import { MediaUploadButton } from '@/components/whatsapp/MediaUploadButton';
@@ -1013,7 +1014,12 @@ export function MobileMessagesList() {
 
                               {/* Content */}
                               {message.content && !(message.media_urls && message.media_urls.length > 0 && ['📎 Mídia', '📷 Imagem', '🎵 Áudio', '🎬 Vídeo', '[Áudio]', '[Imagem]', '[Vídeo]', '[Documento]', '[Sticker]'].includes(message.content)) && (
-                                <p className="text-sm whitespace-pre-wrap break-all">{message.content}</p>
+                                <MetaRichMessageContent
+                                  metadata={message.metadata}
+                                  content={message.content}
+                                  isOutbound={message.direction === 'outbound'}
+                                  fallback={(c) => <p className="text-sm whitespace-pre-wrap break-all">{c}</p>}
+                                />
                               )}
 
                               {message.whatsapp_status === 'failed' && (

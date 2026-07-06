@@ -81,6 +81,7 @@ import { useMessageThreads, type ChatThread } from '@/hooks/useMessageThreads';
 import { useOrgWhatsAppEndpoints } from '@/hooks/useOrgWhatsAppEndpoints';
 import { useThreadEndpointMap } from '@/hooks/useThreadEndpointMap';
 import { EndpointBadge } from '@/components/messages/EndpointBadge';
+import { MetaRichMessageContent } from '@/components/messages/MetaRichMessageContent';
 import { EndpointFilterDialog } from '@/components/messages/EndpointFilterDialog';
 import { FunnelSimple } from '@phosphor-icons/react';
 import { formatEndpointIdentity, formatEndpointMigrationAuditLine } from '@/lib/whatsappEndpointDisplay';
@@ -2115,9 +2116,14 @@ function DesktopMessagesList() {
                                      !(message.media_urls && message.media_urls.length > 0 && 
                                        ['📎 Mídia', '📷 Imagem', '🎵 Áudio', '🎬 Vídeo', '📎 Media', '📷 Image', '🎵 Audio', '🎬 Video',
                                         '[Áudio]', '[Imagem]', '[Vídeo]', '[Documento]', '[Sticker]'].includes(message.content)) && (
-                                      <p className="text-sm whitespace-pre-wrap break-all">
-                                        {message.content}
-                                      </p>
+                                      <MetaRichMessageContent
+                                        metadata={message.metadata}
+                                        content={message.content}
+                                        isOutbound={message.direction === 'outbound'}
+                                        fallback={(c) => (
+                                          <p className="text-sm whitespace-pre-wrap break-all">{c}</p>
+                                        )}
+                                      />
                                     )}
 
                                     {/* Inline failure reason */}

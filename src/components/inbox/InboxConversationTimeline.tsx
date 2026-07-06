@@ -4,6 +4,7 @@ import { supabase } from '@/integrations/supabase/client';
 import { useInboxThreadMessages, type InboxMessageRow } from '@/hooks/inbox/useInboxThreadMessages';
 import { AudioMessagePlayer } from '@/components/whatsapp/AudioMessagePlayer';
 import { WhatsAppFormattedText } from '@/components/whatsapp/WhatsAppFormattedText';
+import { MetaRichMessageContent } from '@/components/messages/MetaRichMessageContent';
 import { QuotedMessage } from '@/components/whatsapp/QuotedMessage';
 import { MessageStatusIndicator, MessageFailureInline } from '@/components/whatsapp/MessageStatusIndicator';
 import { getProxiedMediaUrl } from '@/lib/mediaProxy';
@@ -207,7 +208,14 @@ export function InboxConversationTimeline({ threadId, organizationId, contactNam
                     <Media msg={m} orgId={organizationId} accessToken={accessToken} />
 
                     {m.content && !isAudioOnly && !isMediaPlaceholder && (
-                      <WhatsAppFormattedText content={m.content} className={isOutbound ? 'text-primary-foreground' : ''} />
+                      <MetaRichMessageContent
+                        metadata={m.metadata}
+                        content={m.content}
+                        isOutbound={isOutbound}
+                        fallback={(c) => (
+                          <WhatsAppFormattedText content={c} className={isOutbound ? 'text-primary-foreground' : ''} />
+                        )}
+                      />
                     )}
 
                     {!isAudioOnly && (
