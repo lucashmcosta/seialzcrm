@@ -718,30 +718,34 @@ serve(async (req) => {
     }
 
     const serviceWindow = getServiceWindow({ lastInboundAt, contact: contactCtwa })
-    const isIn24hWindow = serviceWindow.isOpen
+    const isIn24hWindow = serviceWindow.conversation.isOpen
 
-    // Fora da janela (sessão 24h + CTWA 72h) só permite envio de template
+    // Freeform exige conversationWindow (24h) aberta.
     if (!isIn24hWindow && !templateId) {
-      console.log('[twilio-wa-send] outside_service_window', {
+      console.log('[twilio-wa-send] conversation_window_closed', {
         threadId: currentThreadId,
         contactId,
-        origin: serviceWindow.originType,
-        is_ctwa: serviceWindow.isCtwaContact,
-        expires_at: serviceWindow.expiresAt,
+        conversation: serviceWindow.conversation,
+        billing: serviceWindow.billing,
         last_inbound_at: lastInboundAt,
       })
+      const billingHint = serviceWindow.billing.isOpen
+        ? ` Templates ainda estão gratuitos por mais ${Math.max(1, Math.round(serviceWindow.billing.remainingMs / 3600000))}h (janela CTWA).`
+        : ''
       return new Response(
         JSON.stringify({
-          error: 'outside_service_window',
+          error: 'conversation_window_closed',
           requiresTemplate: true,
           isIn24hWindow: false,
           isServiceWindowOpen: false,
+          conversationWindow: serviceWindow.conversation,
+          billingWindow: serviceWindow.billing,
           serviceWindow: {
             originType: serviceWindow.originType,
             isCtwaContact: serviceWindow.isCtwaContact,
             expiresAt: serviceWindow.expiresAt,
           },
-          message: 'Fora da janela WhatsApp. Selecione um template aprovado.',
+          message: `Janela de conversa (24h) fechada. Selecione um template aprovado.${billingHint}`,
         }),
         { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       )
