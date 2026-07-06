@@ -506,11 +506,39 @@ serve(async (req) => {
     )
 
     // ============================================================
+    // Defense-in-depth (P0 anti cross-number send):
+    // Se a thread já tem primary_endpoint_id, o envio SEMPRE usa esse
+    // endpoint. Qualquer messagesEndpointIdInput divergente é ignorado
+    // (log endpoint_override_ignored). Vale só para /messages — /inbox
+    // já resolve endpoint via thread.primary_endpoint_id em outra branch.
+    // ============================================================
+    if (senderContext !== 'inbox' && typeof threadId === 'string' && threadId) {
+      const { data: threadPre } = await supabase
+        .from('message_threads')
+        .select('primary_endpoint_id')
+        .eq('id', threadId)
+        .maybeSingle()
+      const primaryPid = ((threadPre as any)?.primary_endpoint_id as string | null) ?? null
+      if (primaryPid) {
+        if (typeof messagesEndpointIdInput === 'string' && messagesEndpointIdInput && messagesEndpointIdInput !== primaryPid) {
+          console.warn('[twilio-wa-send] endpoint_override_ignored', {
+            threadId,
+            requestedEndpointId: messagesEndpointIdInput,
+            threadPrimaryEndpointId: primaryPid,
+            reason: 'reply_must_use_thread_primary_endpoint',
+          })
+        }
+        messagesEndpointIdInput = primaryPid
+      }
+    }
+
+    // ============================================================
     // /messages path — optional explicit endpoint override
     // Used during the temporary period where an org operates more than one
     // WhatsApp number on /messages. Validates strict ownership and channel.
     // Does NOT mutate message_threads.primary_endpoint_id.
     // ============================================================
+
     let messagesFromOverride: string | null = null
     let messagesEndpointIdOverride: string | null = null
     let manualEndpointOverride = false

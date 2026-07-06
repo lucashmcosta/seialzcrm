@@ -251,6 +251,42 @@ async function resolveProvider(
  * Retorna o mesmo shape de `supabase.functions.invoke(...)`: `{ data, error }`.
  */
 export async function dispatchWhatsAppSend(payload: WhatsAppSendPayload) {
+  // ============================================================
+  // REGRA DURA (P0 anti cross-number send):
+  // Se a thread já existe e tem `primary_endpoint_id`, o envio DEVE
+  // usar exatamente esse endpoint. Ignoramos qualquer `endpointId`
+  // divergente vindo da UI e desligamos toda re-rota (sales /
+  // Central Trabalhista). Re-rota só para novas conversas via
+  // `pickPreferredEndpoint`, nunca em reply.
+  // ============================================================
+  let threadPrimaryEndpointId: string | null = null;
+  if (payload.threadId) {
+    const { data: threadRow, error: threadErr } = await supabase
+      .from("message_threads")
+      .select("primary_endpoint_id")
+      .eq("id", payload.threadId)
+      .maybeSingle();
+    if (threadErr) {
+      console.error("[dispatch-wa] thread lookup failed (pre-resolve)", {
+        threadId: payload.threadId,
+        message: threadErr.message,
+      });
+    }
+    threadPrimaryEndpointId = ((threadRow as any)?.primary_endpoint_id as string | null) ?? null;
+
+    if (threadPrimaryEndpointId) {
+      if (payload.endpointId && payload.endpointId !== threadPrimaryEndpointId) {
+        console.warn("[dispatch-wa] endpoint_override_ignored", {
+          threadId: payload.threadId,
+          requestedEndpointId: payload.endpointId,
+          threadPrimaryEndpointId,
+          reason: "reply_must_use_thread_primary_endpoint",
+        });
+      }
+      payload = { ...payload, endpointId: threadPrimaryEndpointId };
+    }
+  }
+
   let resolved: { provider: Provider; purpose: string | null; source: ResolveSource };
   try {
     resolved = await resolveProvider(payload);
@@ -265,19 +301,12 @@ export async function dispatchWhatsAppSend(payload: WhatsAppSendPayload) {
     return { data: null, error: { message: err.message, name: err.code } as any };
   }
 
-  // Re-rota lazy Comercial → endpoint comercial atual.
-  //
-  // Duas ramas:
-  //   (a) PR4 — genérica: thread.business_context = 'sales' e o endpoint
-  //       resolvido NÃO é comercial (purpose ∉ SALES_PURPOSES).
-  //   (b) Legado — hardcode Central Trabalhista (`REROUTE_ORG_ID`) mantido
-  //       como salvaguarda enquanto o front não passa `businessContext` em
-  //       todos os pontos de envio. Será removido no PR5.
-  //
-  // Ambas as ramas só valem em `senderContext === 'messages'` e nunca em
-  // `/inbox`.
+  // Re-rota lazy Comercial → Meta 7020. SOMENTE quando a thread NÃO tem
+  // primary_endpoint_id (nova conversa / thread legada sem carimbo).
+  // Em reply a thread existente com primary_endpoint_id, jamais re-rotamos.
   let alreadyMigratedThread = false;
   if (
+    !threadPrimaryEndpointId &&
     payload.senderContext === "messages" &&
     payload.organizationId === REROUTE_ORG_ID &&
     payload.threadId &&
@@ -296,16 +325,19 @@ export async function dispatchWhatsAppSend(payload: WhatsAppSendPayload) {
   }
 
   const salesContextMismatch =
+    !threadPrimaryEndpointId &&
     payload.senderContext === "messages" &&
     payload.businessContext === "sales" &&
     !isSalesPurpose(resolved.purpose);
 
   const legacyCentralTrabalhista =
+    !threadPrimaryEndpointId &&
     payload.senderContext === "messages" &&
     payload.organizationId === REROUTE_ORG_ID &&
     (resolved.provider === "twilio" || resolved.source === "default" || alreadyMigratedThread);
 
   const shouldReroute =
+    !threadPrimaryEndpointId &&
     !!payload.threadId &&
     payload.endpointId !== REROUTE_TARGET_ENDPOINT_ID &&
     (salesContextMismatch || legacyCentralTrabalhista);
@@ -316,7 +348,7 @@ export async function dispatchWhatsAppSend(payload: WhatsAppSendPayload) {
       : alreadyMigratedThread
         ? "thread_already_migrated"
         : "provider_twilio_or_default";
-    console.log("[dispatch-wa] re-route commercial → meta 7020", {
+    console.log("[dispatch-wa] re-route commercial → meta 7020 (new thread only)", {
       threadId: payload.threadId,
       previousSource: resolved.source,
       previousPurpose: resolved.purpose,
@@ -336,6 +368,7 @@ export async function dispatchWhatsAppSend(payload: WhatsAppSendPayload) {
     };
     resolved = { provider: "meta_cloud_api", purpose: "commercial", source: "endpoint_explicit" };
   }
+
 
   const fnName = resolved.provider === "meta_cloud_api"
     ? "meta-whatsapp-send"

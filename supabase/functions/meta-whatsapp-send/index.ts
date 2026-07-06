@@ -214,29 +214,39 @@ serve(async (req) => {
     );
 
     // Resolve endpoint (provider='meta-cloud')
+    // Defense-in-depth: se a thread já tem primary_endpoint_id, ele SEMPRE
+    // manda. Qualquer endpointId divergente vindo do payload é substituído
+    // (e logado como endpoint_override_ignored). Evita cross-number send.
     let endpoint: any = null;
-    if (explicitEndpointId) {
-      const { data } = await supabase
-        .from("communication_endpoints")
-        .select("id, organization_id, organization_integration_id, sender_sid, external_address, provider, is_active, purpose")
-        .eq("id", explicitEndpointId)
-        .maybeSingle();
-      endpoint = data;
-    } else if (threadId) {
+    let effectiveEndpointId: string | null = typeof explicitEndpointId === "string" ? explicitEndpointId : null;
+    if (threadId) {
       const { data: thread } = await supabase
         .from("message_threads")
         .select("primary_endpoint_id")
         .eq("id", threadId)
         .maybeSingle();
-      if (thread?.primary_endpoint_id) {
-        const { data: ep } = await supabase
-          .from("communication_endpoints")
-          .select("id, organization_id, organization_integration_id, sender_sid, external_address, provider, is_active, purpose")
-          .eq("id", thread.primary_endpoint_id)
-          .maybeSingle();
-        endpoint = ep;
+      const pid = (thread as any)?.primary_endpoint_id as string | null | undefined;
+      if (pid) {
+        if (effectiveEndpointId && effectiveEndpointId !== pid) {
+          console.warn("[meta-wa-send] endpoint_override_ignored", {
+            threadId,
+            requestedEndpointId: effectiveEndpointId,
+            threadPrimaryEndpointId: pid,
+            reason: "reply_must_use_thread_primary_endpoint",
+          });
+        }
+        effectiveEndpointId = pid;
       }
     }
+    if (effectiveEndpointId) {
+      const { data } = await supabase
+        .from("communication_endpoints")
+        .select("id, organization_id, organization_integration_id, sender_sid, external_address, provider, is_active, purpose")
+        .eq("id", effectiveEndpointId)
+        .maybeSingle();
+      endpoint = data;
+    }
+
     if (!endpoint) {
       // Fallback purpose-aware: escolhe endpoint cuja purpose case com o senderContext.
       // - senderContext='inbox'    → customer_service (default geral também é customer_service)
