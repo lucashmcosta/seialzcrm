@@ -634,8 +634,16 @@ serve(async (req) => {
     }
     const whatsappTo = `whatsapp:${toPhone}`
 
-    // Check 24h window
-    let isIn24hWindow = false
+    // Janela de atendimento unificada (sessão 24h ∪ CTWA 72h)
+    const contactCtwa: ContactCtwaInputs = {
+      source: (contact as any).source ?? null,
+      utm_medium: (contact as any).utm_medium ?? null,
+      ad_referral_ctwa_clid: (contact as any).ad_referral_ctwa_clid ?? null,
+      ad_referral_captured_at: (contact as any).ad_referral_captured_at ?? null,
+      created_at: (contact as any).created_at ?? null,
+    }
+
+    let lastInboundAt: string | null = null
     let currentThreadId = threadId
 
     if (currentThreadId) {
@@ -645,17 +653,9 @@ serve(async (req) => {
         .eq('id', currentThreadId)
         .single()
 
-      if (thread?.whatsapp_last_inbound_at) {
-        const lastInbound = new Date(thread.whatsapp_last_inbound_at)
-        const now = new Date()
-        const hoursDiff = (now.getTime() - lastInbound.getTime()) / (1000 * 60 * 60)
-        isIn24hWindow = hoursDiff < 24
-      }
+      lastInboundAt = (thread?.whatsapp_last_inbound_at as string | null) ?? null
     } else {
-      // P1 fix (2026-07-03): antes reusava qualquer thread por (org,contact,channel),
-      // sem filtrar `primary_endpoint_id`, sem excluir losers consolidados e sem
-      // reabrir threads `resolved`/`closed` — o fluxo de template criava thread
-      // nova a cada envio quando a existente estava resolvida.
+      // P1 fix (2026-07-03): reuso de thread por (org,contact,channel,primary_endpoint_id).
       let existingQuery = supabase
         .from('message_threads')
         .select('id, whatsapp_last_inbound_at, status')
@@ -666,9 +666,6 @@ serve(async (req) => {
         .order('updated_at', { ascending: false })
         .limit(1)
 
-      // Quando o caller passou um endpointId explícito (`messagesEndpointIdOverride`),
-      // exigimos match por primary_endpoint_id para não colapsar threads de
-      // endpoints diferentes do mesmo contato.
       if (messagesEndpointIdOverride) {
         existingQuery = existingQuery.eq('primary_endpoint_id', messagesEndpointIdOverride)
       }
@@ -677,13 +674,7 @@ serve(async (req) => {
 
       if (existingThread) {
         currentThreadId = existingThread.id
-
-        if (existingThread.whatsapp_last_inbound_at) {
-          const lastInbound = new Date(existingThread.whatsapp_last_inbound_at)
-          const now = new Date()
-          const hoursDiff = (now.getTime() - lastInbound.getTime()) / (1000 * 60 * 60)
-          isIn24hWindow = hoursDiff < 24
-        }
+        lastInboundAt = (existingThread.whatsapp_last_inbound_at as string | null) ?? null
 
         if (existingThread.status === 'resolved' || existingThread.status === 'closed') {
           const { error: reopenErr } = await supabase
@@ -700,8 +691,6 @@ serve(async (req) => {
           }
         }
       } else {
-        // Create new thread — inclui primary_endpoint_id quando disponível
-        // para evitar duplicatas silenciosas em envios seguintes.
         const insertPayload: Record<string, unknown> = {
           organization_id: organizationId,
           contact_id: contactId,
@@ -728,17 +717,36 @@ serve(async (req) => {
       }
     }
 
-    // If outside 24h window and no template, return error
+    const serviceWindow = getServiceWindow({ lastInboundAt, contact: contactCtwa })
+    const isIn24hWindow = serviceWindow.isOpen
+
+    // Fora da janela (sessão 24h + CTWA 72h) só permite envio de template
     if (!isIn24hWindow && !templateId) {
+      console.log('[twilio-wa-send] outside_service_window', {
+        threadId: currentThreadId,
+        contactId,
+        origin: serviceWindow.originType,
+        is_ctwa: serviceWindow.isCtwaContact,
+        expires_at: serviceWindow.expiresAt,
+        last_inbound_at: lastInboundAt,
+      })
       return new Response(
-        JSON.stringify({ 
-          error: 'Outside 24h window. Must use a template.',
+        JSON.stringify({
+          error: 'outside_service_window',
           requiresTemplate: true,
-          isIn24hWindow: false
+          isIn24hWindow: false,
+          isServiceWindowOpen: false,
+          serviceWindow: {
+            originType: serviceWindow.originType,
+            isCtwaContact: serviceWindow.isCtwaContact,
+            expiresAt: serviceWindow.expiresAt,
+          },
+          message: 'Fora da janela WhatsApp. Selecione um template aprovado.',
         }),
         { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       )
     }
+
 
     // Get template if using one
     let contentSid: string | null = null
