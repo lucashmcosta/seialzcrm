@@ -37,6 +37,7 @@ import { RetryableImage, RetryableVideo } from '@/components/whatsapp/RetryableM
 import { getProxiedMediaUrl } from '@/lib/mediaProxy';
 import { MediaUploadButton } from '@/components/whatsapp/MediaUploadButton';
 import { WhatsAppFormattedText } from '@/components/whatsapp/WhatsAppFormattedText';
+import { MetaRichMessageContent } from '@/components/messages/MetaRichMessageContent';
 import { MessageStatusIndicator, MessageFailureInline } from '@/components/whatsapp/MessageStatusIndicator';
 import EmojiPicker, { EmojiClickData, Theme } from 'emoji-picker-react';
 import { DateSeparator } from '@/components/messages/DateSeparator';
@@ -56,6 +57,7 @@ interface Message {
   sender_type: 'user' | 'agent' | 'system' | null;
   sender_name: string | null;
   sender_agent_id: string | null;
+  metadata?: Record<string, unknown> | null;
 }
 
 interface ContactMessagesProps {
@@ -325,7 +327,7 @@ export function ContactMessages({ contactId, opportunityId }: ContactMessagesPro
       const active = activeThread || threadList[0];
       const { data, error } = await supabase
         .from('messages')
-        .select('id, thread_id, content, direction, sent_at, whatsapp_status, whatsapp_message_sid, media_urls, media_type, error_message, error_code, sender_type, sender_name, sender_agent_id')
+        .select('id, thread_id, content, direction, sent_at, whatsapp_status, whatsapp_message_sid, media_urls, media_type, error_message, error_code, sender_type, sender_name, sender_agent_id, metadata')
         .in('thread_id', threadList)
         .is('deleted_at', null)
         .order('sent_at', { ascending: true });
@@ -641,7 +643,12 @@ export function ContactMessages({ contactId, opportunityId }: ContactMessagesPro
 
                       {/* Content - hide media placeholders */}
                       {message.content && !(message.media_urls && message.media_urls.length > 0 && ['[Áudio]', '[Imagem]', '[Vídeo]', '[Documento]', '[Sticker]'].includes(message.content)) && (
-                        <WhatsAppFormattedText content={message.content} />
+                        <MetaRichMessageContent
+                          metadata={message.metadata}
+                          content={message.content}
+                          isOutbound={message.direction === 'outbound'}
+                          fallback={(c) => <WhatsAppFormattedText content={c} />}
+                        />
                       )}
 
                       {/* Inline failure reason */}
