@@ -611,7 +611,7 @@ serve(async (req) => {
     // Get contact phone number
     const { data: contact, error: contactError } = await supabase
       .from('contacts')
-      .select('phone, full_name')
+      .select('phone, full_name, source, utm_medium, ad_referral_ctwa_clid, ad_referral_captured_at, created_at')
       .eq('id', contactId)
       .eq('organization_id', organizationId)
       .single()
