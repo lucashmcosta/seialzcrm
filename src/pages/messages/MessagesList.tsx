@@ -1158,9 +1158,10 @@ function DesktopMessagesList() {
           setMessages((prev) => prev.filter((m) => m.id !== tempId));
           setMessageText(savedText);
           setShowTemplates(true);
+          toast({ description: data.message || 'Fora da janela WhatsApp. Selecione um template aprovado.' });
           return;
         }
-        throw new Error(data.error);
+        throw new Error(data.message || data.error);
       }
 
       refetchThreads();
