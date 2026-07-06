@@ -492,9 +492,10 @@ export function MobileMessagesList() {
           setMessages(prev => prev.filter(m => m.id !== tempId));
           setMessageText(savedText);
           setShowTemplates(true);
+          toast({ description: data.message || (locale === 'pt-BR' ? 'Fora da janela WhatsApp. Selecione um template aprovado.' : 'Outside WhatsApp window. Select an approved template.') });
           return;
         }
-        throw new Error(data.error);
+        throw new Error(data.message || data.error);
       }
       refetchThreads();
     } catch (error: any) {
