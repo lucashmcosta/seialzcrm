@@ -5,138 +5,171 @@ import { Microphone, Square, PaperPlaneTilt, TrashSimple, SpinnerGap } from '@ph
 import OpusMediaRecorder from 'opus-media-recorder';
 
 // Worker options for opus-media-recorder.
-// IMPORTANT: encoderWorker.umd.js is a CLASSIC UMD worker — instantiating it
-// with `{ type: 'module' }` produces a broken OGG (no OpusHead, ~1-4 KB) that
-// Meta rejects with error 131053 "Media upload error".
+// encoderWorker.umd.js is a CLASSIC UMD worker — never instantiate with `{ type: 'module' }`.
 const OMR_CDN = 'https://cdn.jsdelivr.net/npm/opus-media-recorder@latest';
+const WORKER_URL = `${OMR_CDN}/encoderWorker.umd.js`;
+const OGG_WASM_URL = `${OMR_CDN}/OggOpusEncoder.wasm`;
+const WEBM_WASM_URL = `${OMR_CDN}/WebMOpusEncoder.wasm`;
 const workerOptions = {
-  encoderWorkerFactory: () => new Worker(`${OMR_CDN}/encoderWorker.umd.js`),
-  OggOpusEncoderWasmPath: `${OMR_CDN}/OggOpusEncoder.wasm`,
-  WebMOpusEncoderWasmPath: `${OMR_CDN}/WebMOpusEncoder.wasm`,
+  encoderWorkerFactory: () => new Worker(WORKER_URL),
+  OggOpusEncoderWasmPath: OGG_WASM_URL,
+  WebMOpusEncoderWasmPath: WEBM_WASM_URL,
 };
 
-// Validate the recorded blob before allowing send.
-// Meta requires a real OGG Opus stream (OggS container + OpusHead identification header).
-async function validateOggOpus(blob: Blob): Promise<{ ok: true } | { ok: false; reason: string }> {
-  if (!blob || blob.size < 2048) {
-    return { ok: false, reason: 'muito curto' };
-  }
-  const head = new Uint8Array(await blob.slice(0, 256).arrayBuffer());
-  // "OggS" magic
-  const hasOggS = head[0] === 0x4f && head[1] === 0x67 && head[2] === 0x67 && head[3] === 0x53;
-  if (!hasOggS) return { ok: false, reason: 'sem cabeçalho OggS' };
-  // "OpusHead" anywhere in first page
-  const needle = [0x4f, 0x70, 0x75, 0x73, 0x48, 0x65, 0x61, 0x64];
-  let found = false;
-  outer: for (let i = 0; i <= head.length - needle.length; i++) {
-    for (let j = 0; j < needle.length; j++) {
-      if (head[i + j] !== needle[j]) continue outer;
+// Cache preload promises so we only warm the CDN once per session.
+let warmupPromise: Promise<void> | null = null;
+function warmupOpusPolyfill(): Promise<void> {
+  if (warmupPromise) return warmupPromise;
+  warmupPromise = (async () => {
+    try {
+      await Promise.all([
+        fetch(WORKER_URL, { mode: 'cors', cache: 'force-cache' }).then((r) => r.ok),
+        fetch(OGG_WASM_URL, { mode: 'cors', cache: 'force-cache' }).then((r) => r.ok),
+      ]);
+    } catch (err) {
+      console.warn('[AudioRecorder] polyfill warmup fetch failed (will retry on record)', err);
+      // Don't cache the failure — allow retry on real recording.
+      warmupPromise = null;
     }
-    found = true;
-    break;
-  }
-  if (!found) return { ok: false, reason: 'sem OpusHead' };
-  return { ok: true };
+  })();
+  return warmupPromise;
 }
 
+// The warmup window during which we let the encoder emit its BOS/OpusHead page
+// before the user's "real" recording clock starts. Chunks captured during this
+// window ARE kept in the final blob (removing them would break the OGG container),
+// but recordingTime is only counted after this delay.
+const ENCODER_WARMUP_MS = 300;
+
+// Validate the recorded blob before allowing send.
+// Meta requires a real OGG Opus stream (OggS + OpusHead identification header).
+async function validateOggOpus(blob: Blob): Promise<{ ok: true } | { ok: false; reason: string }> {
+  if (!blob || blob.size < 2048) return { ok: false, reason: 'muito curto' };
+  // OpusHead should be in the first Ogg page — scan a generous 4KB window.
+  const head = new Uint8Array(await blob.slice(0, 4096).arrayBuffer());
+  const hasOggS = head[0] === 0x4f && head[1] === 0x67 && head[2] === 0x67 && head[3] === 0x53;
+  if (!hasOggS) return { ok: false, reason: 'sem cabeçalho OggS' };
+  const needle = [0x4f, 0x70, 0x75, 0x73, 0x48, 0x65, 0x61, 0x64]; // "OpusHead"
+  outer: for (let i = 0; i <= head.length - needle.length; i++) {
+    for (let j = 0; j < needle.length; j++) if (head[i + j] !== needle[j]) continue outer;
+    return { ok: true };
+  }
+  return { ok: false, reason: 'sem OpusHead' };
+}
+
+type RecorderKind = 'opus-ogg' | 'native-ogg' | 'native-mp4' | 'native-webm';
+
+function pickNativeMime(): { mime: string; kind: RecorderKind } | null {
+  if (typeof MediaRecorder === 'undefined') return null;
+  if (MediaRecorder.isTypeSupported('audio/ogg;codecs=opus')) return { mime: 'audio/ogg;codecs=opus', kind: 'native-ogg' };
+  if (MediaRecorder.isTypeSupported('audio/mp4')) return { mime: 'audio/mp4', kind: 'native-mp4' };
+  if (MediaRecorder.isTypeSupported('audio/mp4;codecs=mp4a.40.2')) return { mime: 'audio/mp4;codecs=mp4a.40.2', kind: 'native-mp4' };
+  if (MediaRecorder.isTypeSupported('audio/webm;codecs=opus')) return { mime: 'audio/webm;codecs=opus', kind: 'native-webm' };
+  return null;
+}
 
 interface AudioRecorderProps {
   onSend: (audioBlob: Blob) => Promise<void>;
+  /** Optional escape hatch when the browser can only produce WebM. When provided,
+   *  we offer to upload as a document instead of failing. */
+  onSendAsDocument?: (audioBlob: Blob) => Promise<void>;
   disabled?: boolean;
 }
 
-export function AudioRecorder({ onSend, disabled }: AudioRecorderProps) {
+export function AudioRecorder({ onSend, onSendAsDocument, disabled }: AudioRecorderProps) {
   const { toast } = useToast();
   const [isRecording, setIsRecording] = useState(false);
-  const [isPaused, setIsPaused] = useState(false);
   const [recordingTime, setRecordingTime] = useState(0);
   const [audioBlob, setAudioBlob] = useState<Blob | null>(null);
+  const [recordedKind, setRecordedKind] = useState<RecorderKind | null>(null);
   const [isSending, setIsSending] = useState(false);
+  const [needsDocumentConfirm, setNeedsDocumentConfirm] = useState(false);
 
   const mediaRecorderRef = useRef<any>(null);
   const chunksRef = useRef<Blob[]>([]);
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const warmupTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const streamRef = useRef<MediaStream | null>(null);
+  const recorderKindRef = useRef<RecorderKind | null>(null);
+
+  // Step 1 — Warmup polyfill (worker + WASM) on mount so first click is fast and deterministic.
+  useEffect(() => {
+    void warmupOpusPolyfill();
+  }, []);
 
   useEffect(() => {
     return () => {
-      // Cleanup on unmount
-      if (timerRef.current) {
-        clearInterval(timerRef.current);
-      }
-      if (streamRef.current) {
-        streamRef.current.getTracks().forEach(track => track.stop());
-      }
+      if (timerRef.current) clearInterval(timerRef.current);
+      if (warmupTimerRef.current) clearTimeout(warmupTimerRef.current);
+      if (streamRef.current) streamRef.current.getTracks().forEach((t) => t.stop());
     };
   }, []);
 
   const startRecording = async () => {
     try {
-      const stream = await navigator.mediaDevices.getUserMedia({ 
-        audio: {
-          echoCancellation: true,
-          noiseSuppression: true,
-          sampleRate: 48000, // Opus works best with 48kHz
-        }
+      // Best-effort warmup before touching the mic (usually already cached from mount).
+      await warmupOpusPolyfill();
+
+      const stream = await navigator.mediaDevices.getUserMedia({
+        audio: { echoCancellation: true, noiseSuppression: true, sampleRate: 48000 },
       });
       streamRef.current = stream;
 
-      // Use OpusMediaRecorder to record directly in OGG Opus format (WhatsApp compatible)
-      const mimeType = 'audio/ogg;codecs=opus';
-      
-      let mediaRecorder: any;
-      
+      let mediaRecorder: any = null;
+      let kind: RecorderKind | null = null;
+
+      // Preferred path: opus-media-recorder polyfill → real OGG/Opus.
       try {
-        // Try to use OpusMediaRecorder (polyfill for OGG Opus — required by Meta Cloud API)
-        mediaRecorder = new OpusMediaRecorder(stream, { mimeType }, workerOptions);
+        mediaRecorder = new OpusMediaRecorder(stream, { mimeType: 'audio/ogg;codecs=opus' }, workerOptions);
+        kind = 'opus-ogg';
       } catch (polyfillError) {
-        console.warn('OpusMediaRecorder failed, trying native OGG Opus:', polyfillError);
-        // Only fall back to native if it supports OGG Opus. Meta rejects audio/webm.
-        if (MediaRecorder.isTypeSupported('audio/ogg;codecs=opus')) {
-          mediaRecorder = new MediaRecorder(stream, { mimeType: 'audio/ogg;codecs=opus' });
-        } else {
-          stream.getTracks().forEach((t) => t.stop());
-          toast({
-            variant: 'destructive',
-            description: 'Formato de áudio não suportado neste navegador. Use Chrome/Firefox atualizado.',
-          });
-          return;
+        console.warn('[AudioRecorder] OpusMediaRecorder failed, trying native', polyfillError);
+        const native = pickNativeMime();
+        if (native) {
+          mediaRecorder = new MediaRecorder(stream, { mimeType: native.mime });
+          kind = native.kind;
         }
       }
 
-      
+      if (!mediaRecorder || !kind) {
+        stream.getTracks().forEach((t) => t.stop());
+        toast({
+          variant: 'destructive',
+          description: 'Seu navegador não suporta gravação de áudio. Envie um arquivo pelo anexo.',
+        });
+        return;
+      }
+
+      recorderKindRef.current = kind;
       mediaRecorderRef.current = mediaRecorder;
       chunksRef.current = [];
 
       mediaRecorder.ondataavailable = (event: BlobEvent) => {
-        if (event.data.size > 0) {
-          chunksRef.current.push(event.data);
-        }
+        if (event.data.size > 0) chunksRef.current.push(event.data);
       };
 
       mediaRecorder.onstop = () => {
-        // Use the recorder's actual mimeType — never relabel WebM bytes as OGG.
-        // Falls back to the requested ogg/opus if the recorder doesn't expose it.
         const actualType: string =
           (mediaRecorder && typeof mediaRecorder.mimeType === 'string' && mediaRecorder.mimeType) ||
           (chunksRef.current[0] && (chunksRef.current[0] as Blob).type) ||
           'audio/ogg;codecs=opus';
         const blob = new Blob(chunksRef.current, { type: actualType });
         setAudioBlob(blob);
-
-        // Stop all tracks
-        stream.getTracks().forEach(track => track.stop());
+        setRecordedKind(recorderKindRef.current);
+        stream.getTracks().forEach((t) => t.stop());
       };
 
-      mediaRecorder.start(100); // Collect data every 100ms
+      mediaRecorder.start(100);
       setIsRecording(true);
       setRecordingTime(0);
 
-      // Start timer
-      timerRef.current = setInterval(() => {
-        setRecordingTime(prev => prev + 1);
-      }, 1000);
-
+      // Step 2 — Encoder warmup: let the recorder run silently for a short window so
+      // the OGG BOS/OpusHead page is definitely emitted before the user's clock starts.
+      // Chunks captured during this window are KEPT (removing them would corrupt the container).
+      if (warmupTimerRef.current) clearTimeout(warmupTimerRef.current);
+      warmupTimerRef.current = setTimeout(() => {
+        timerRef.current = setInterval(() => setRecordingTime((prev) => prev + 1), 1000);
+      }, ENCODER_WARMUP_MS);
     } catch (error: any) {
       console.error('Error starting recording:', error);
       toast({
@@ -150,78 +183,96 @@ export function AudioRecorder({ onSend, disabled }: AudioRecorderProps) {
     if (mediaRecorderRef.current && isRecording) {
       mediaRecorderRef.current.stop();
       setIsRecording(false);
-      
-      if (timerRef.current) {
-        clearInterval(timerRef.current);
-        timerRef.current = null;
-      }
+      if (timerRef.current) { clearInterval(timerRef.current); timerRef.current = null; }
+      if (warmupTimerRef.current) { clearTimeout(warmupTimerRef.current); warmupTimerRef.current = null; }
     }
+  };
+
+  const resetRecording = () => {
+    if (streamRef.current) streamRef.current.getTracks().forEach((t) => t.stop());
+    if (timerRef.current) { clearInterval(timerRef.current); timerRef.current = null; }
+    if (warmupTimerRef.current) { clearTimeout(warmupTimerRef.current); warmupTimerRef.current = null; }
+    setIsRecording(false);
+    setRecordingTime(0);
+    setAudioBlob(null);
+    setRecordedKind(null);
+    setNeedsDocumentConfirm(false);
+    chunksRef.current = [];
   };
 
   const cancelRecording = () => {
     if (mediaRecorderRef.current && isRecording) {
-      mediaRecorderRef.current.stop();
+      try { mediaRecorderRef.current.stop(); } catch { /* noop */ }
     }
-    
-    if (streamRef.current) {
-      streamRef.current.getTracks().forEach(track => track.stop());
-    }
-    
-    if (timerRef.current) {
-      clearInterval(timerRef.current);
-      timerRef.current = null;
-    }
-    
-    setIsRecording(false);
-    setRecordingTime(0);
-    setAudioBlob(null);
-    chunksRef.current = [];
+    resetRecording();
   };
 
   const handleSend = async () => {
     if (!audioBlob) return;
 
-    // Guardas contra 131053: duração mínima, tamanho mínimo, cabeçalho OGG/Opus válido.
-    if (recordingTime < 1) {
-      toast({ variant: 'destructive', description: 'Áudio muito curto. Grave pelo menos 1 segundo.' });
+    // Duration guard.
+    if (recordingTime < 2) {
+      toast({
+        variant: 'destructive',
+        description: 'Falha ao gerar áudio. Tente gravar novamente com pelo menos 2 segundos.',
+      });
       return;
     }
+
     const type = (audioBlob.type || '').toLowerCase();
-    // Meta Cloud API rejeita WebM. Nunca enviar áudio nesse container.
-    if (type.includes('webm')) {
-      console.error('[AudioRecorder] blocked webm audio', { size: audioBlob.size, type });
-      toast({ variant: 'destructive', description: 'Formato de áudio não suportado. Grave novamente.' });
-      setAudioBlob(null);
-      setRecordingTime(0);
-      chunksRef.current = [];
-      return;
-    }
-    if (type.includes('ogg')) {
+    const kind = recordedKind;
+
+    // Step 3a — OGG path: validate container. Meta requires OggS + OpusHead.
+    if (kind === 'opus-ogg' || kind === 'native-ogg' || type.includes('ogg')) {
       const check = await validateOggOpus(audioBlob);
       if (!check.ok) {
-        console.error('[AudioRecorder] invalid OGG Opus blob', { size: audioBlob.size, type, reason: (check as { reason: string }).reason });
-        toast({ variant: 'destructive', description: 'Áudio inválido. Grave novamente.' });
-        setAudioBlob(null);
-        setRecordingTime(0);
-        chunksRef.current = [];
+        console.error('[AudioRecorder] invalid OGG Opus blob', {
+          size: audioBlob.size, type, reason: (check as { reason: string }).reason,
+        });
+        toast({
+          variant: 'destructive',
+          description: 'Falha ao gerar áudio. Tente gravar novamente com pelo menos 2 segundos.',
+        });
+        resetRecording();
         return;
       }
-    } else {
-      // Qualquer outro container que não seja OGG é bloqueado — Meta só aceita OGG/Opus, MP3, MP4, AAC, AMR.
-      console.error('[AudioRecorder] unsupported audio mime', { size: audioBlob.size, type });
-      toast({ variant: 'destructive', description: 'Formato de áudio não suportado. Grave novamente.' });
-      setAudioBlob(null);
-      setRecordingTime(0);
-      chunksRef.current = [];
+      await doSendAudio();
       return;
     }
 
+    // Step 3b — MP4 path: Meta accepts audio/mp4 directly.
+    if (kind === 'native-mp4' || type.includes('mp4') || type.includes('m4a') || type.includes('aac')) {
+      await doSendAudio();
+      return;
+    }
 
+    // Step 3c — WebM: Meta rejects as audio. Offer send-as-document if caller supports it.
+    if (kind === 'native-webm' || type.includes('webm')) {
+      console.warn('[AudioRecorder] webm produced; offering document fallback', { size: audioBlob.size, type });
+      if (onSendAsDocument) {
+        setNeedsDocumentConfirm(true);
+        return;
+      }
+      toast({
+        variant: 'destructive',
+        description: 'Seu navegador só gera áudio em formato WebM, que a Meta não aceita. Envie um arquivo de áudio pelo anexo.',
+      });
+      resetRecording();
+      return;
+    }
+
+    // Unknown container.
+    console.error('[AudioRecorder] unsupported audio mime', { size: audioBlob.size, type });
+    toast({ variant: 'destructive', description: 'Formato de áudio não suportado. Grave novamente.' });
+    resetRecording();
+  };
+
+  const doSendAudio = async () => {
+    if (!audioBlob) return;
     setIsSending(true);
     try {
       await onSend(audioBlob);
-      setAudioBlob(null);
-      setRecordingTime(0);
+      resetRecording();
     } catch (error) {
       console.error('Error sending audio:', error);
     } finally {
@@ -229,6 +280,18 @@ export function AudioRecorder({ onSend, disabled }: AudioRecorderProps) {
     }
   };
 
+  const doSendAsDocument = async () => {
+    if (!audioBlob || !onSendAsDocument) return;
+    setIsSending(true);
+    try {
+      await onSendAsDocument(audioBlob);
+      resetRecording();
+    } catch (error) {
+      console.error('Error sending audio as document:', error);
+    } finally {
+      setIsSending(false);
+    }
+  };
 
   const formatTime = (seconds: number) => {
     const mins = Math.floor(seconds / 60);
@@ -236,7 +299,25 @@ export function AudioRecorder({ onSend, disabled }: AudioRecorderProps) {
     return `${mins}:${secs.toString().padStart(2, '0')}`;
   };
 
-  // If we have a recorded audio, show send/delete options
+  // WebM → document confirmation banner
+  if (audioBlob && needsDocumentConfirm) {
+    return (
+      <div className="flex flex-col gap-2 bg-muted rounded-lg px-3 py-2 w-full">
+        <p className="text-xs text-muted-foreground">
+          Seu navegador só gera áudio WebM (não aceito pelo WhatsApp). Enviar como <strong>arquivo</strong>?
+          O destinatário verá um anexo em vez do player de áudio.
+        </p>
+        <div className="flex items-center gap-2 justify-end">
+          <Button variant="ghost" size="sm" onClick={resetRecording} disabled={isSending}>Cancelar</Button>
+          <Button size="sm" onClick={doSendAsDocument} disabled={isSending}>
+            {isSending ? <SpinnerGap className="w-4 h-4 animate-spin" /> : 'Enviar como arquivo'}
+          </Button>
+        </div>
+      </div>
+    );
+  }
+
+  // Recorded — send/delete
   if (audioBlob) {
     return (
       <div className="flex items-center gap-2 bg-muted rounded-lg px-3 py-2">
@@ -244,38 +325,21 @@ export function AudioRecorder({ onSend, disabled }: AudioRecorderProps) {
           <div className="w-2 h-2 rounded-full bg-green-500" />
           <span className="text-sm font-medium">{formatTime(recordingTime)}</span>
           <div className="flex-1 h-1 bg-green-200 dark:bg-green-800 rounded-full overflow-hidden">
-            <div 
-              className="h-full bg-green-500" 
-              style={{ width: '100%' }}
-            />
+            <div className="h-full bg-green-500" style={{ width: '100%' }} />
           </div>
         </div>
-        <Button
-          variant="ghost"
-          size="icon"
-          onClick={cancelRecording}
-          disabled={isSending}
-          className="text-destructive hover:text-destructive"
-        >
-           <TrashSimple className="w-4 h-4" />
+        <Button variant="ghost" size="icon" onClick={cancelRecording} disabled={isSending}
+          className="text-destructive hover:text-destructive">
+          <TrashSimple className="w-4 h-4" />
         </Button>
-        <Button
-          size="icon"
-          onClick={handleSend}
-          disabled={isSending}
-          className="bg-green-600 hover:bg-green-700"
-        >
-          {isSending ? (
-            <SpinnerGap className="w-4 h-4 animate-spin" />
-          ) : (
-            <PaperPlaneTilt className="w-4 h-4" />
-          )}
+        <Button size="icon" onClick={handleSend} disabled={isSending}
+          className="bg-green-600 hover:bg-green-700">
+          {isSending ? <SpinnerGap className="w-4 h-4 animate-spin" /> : <PaperPlaneTilt className="w-4 h-4" />}
         </Button>
       </div>
     );
   }
 
-  // If recording, show stop button and timer
   if (isRecording) {
     return (
       <div className="flex items-center gap-2 bg-destructive/10 rounded-lg px-3 py-2">
@@ -284,34 +348,18 @@ export function AudioRecorder({ onSend, disabled }: AudioRecorderProps) {
           <span className="text-sm font-medium text-destructive">{formatTime(recordingTime)}</span>
           <span className="text-xs text-muted-foreground">Gravando...</span>
         </div>
-        <Button
-          variant="ghost"
-          size="icon"
-          onClick={cancelRecording}
-          className="text-muted-foreground"
-        >
+        <Button variant="ghost" size="icon" onClick={cancelRecording} className="text-muted-foreground">
           <TrashSimple className="w-4 h-4" />
         </Button>
-        <Button
-          size="icon"
-          onClick={stopRecording}
-          variant="destructive"
-        >
+        <Button size="icon" onClick={stopRecording} variant="destructive">
           <Square className="w-4 h-4" />
         </Button>
       </div>
     );
   }
 
-  // Default: show mic button
   return (
-    <Button
-      variant="outline"
-      size="icon"
-      onClick={startRecording}
-      disabled={disabled}
-      title="Gravar áudio"
-    >
+    <Button variant="outline" size="icon" onClick={startRecording} disabled={disabled} title="Gravar áudio">
       <Microphone className="w-4 h-4" />
     </Button>
   );

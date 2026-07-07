@@ -370,6 +370,21 @@ export function WhatsAppChat({ contactId, threadId: initialThreadId, onThreadCre
     }
   };
 
+  // Fallback when the browser only produces WebM (Meta rejects as audio).
+  // Uploads the recording as a document so nothing is lost.
+  const handleAudioSendAsDocument = async (audioBlob: Blob) => {
+    if (!organization?.id) return;
+    try {
+      const audioFile = audioBlobToFile(audioBlob, `gravacao-${Date.now()}`);
+      const { url } = await uploadMediaToStorage(audioFile);
+      await handleSendMessage(url, 'document');
+      toast({ description: 'Áudio enviado como arquivo.' });
+    } catch (error: any) {
+      console.error('Error sending audio as document:', error);
+      toast({ variant: 'destructive', description: error.message || 'Erro ao enviar arquivo' });
+    }
+  };
+
   const renderStatusIcon = (message: Message) => (
     <MessageStatusIndicator
       status={message.whatsapp_status}
@@ -578,7 +593,7 @@ export function WhatsAppChat({ contactId, threadId: initialThreadId, onThreadCre
                 ) : (
                   <>
                     <MediaUploadButton onFileSelected={handleMediaUpload} onTemplateClick={() => setShowTemplates(true)} disabled={submitting} />
-                    <AudioRecorder onSend={handleAudioSend} disabled={submitting} />
+                    <AudioRecorder onSend={handleAudioSend} onSendAsDocument={handleAudioSendAsDocument} disabled={submitting} />
                   </>
                 )}
               </div>
