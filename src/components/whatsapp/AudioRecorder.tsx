@@ -256,22 +256,30 @@ export function AudioRecorder({ onSend, onSendAsDocument, disabled, endpointId, 
       return;
     }
 
-    // Step 3b — MP4 path: Meta accepts audio/mp4 directly.
-    if (kind === 'native-mp4' || type.includes('mp4') || type.includes('m4a') || type.includes('aac')) {
-      await doSendAudio();
-      return;
-    }
-
-    // Step 3c — WebM: Meta rejects as audio. Offer send-as-document if caller supports it.
-    if (kind === 'native-webm' || type.includes('webm')) {
-      console.warn('[AudioRecorder] webm produced; offering document fallback', { size: audioBlob.size, type });
+    // MP4: Meta accepts audio/mp4 only when it's AAC. Browsers frequently emit
+    // MP4/Opus (Safari, Chrome-Android) which Meta rejects async with 131053.
+    // Do NOT send MP4 as audio — offer document fallback instead.
+    // WebM: Meta rejects as audio (code 100). Same fallback.
+    const isMp4  = kind === 'native-mp4'  || type.includes('mp4') || type.includes('m4a') || type.includes('aac');
+    const isWebm = kind === 'native-webm' || type.includes('webm');
+    if (isMp4 || isWebm) {
+      console.warn('[AudioRecorder] non-ogg container; offering document fallback', {
+        size: audioBlob.size, type, kind,
+      });
+      logAudioEvent(isMp4 ? 'audio_record_fallback_mp4' : 'audio_record_invalid_ogg', {
+        ...telemetryCtx,
+        mimeType: type || null,
+        durationMs: recordingTime * 1000,
+        sizeBytes: audioBlob.size,
+        error: isMp4 ? 'mp4_not_sent_as_audio' : 'webm_not_sent_as_audio',
+      });
       if (onSendAsDocument) {
         setNeedsDocumentConfirm(true);
         return;
       }
       toast({
         variant: 'destructive',
-        description: 'Seu navegador só gera áudio em formato WebM, que a Meta não aceita. Envie um arquivo de áudio pelo anexo.',
+        description: 'Seu navegador gerou um áudio em formato não compatível com WhatsApp. Envie um arquivo de áudio pelo anexo.',
       });
       resetRecording();
       return;
@@ -282,6 +290,7 @@ export function AudioRecorder({ onSend, onSendAsDocument, disabled, endpointId, 
     toast({ variant: 'destructive', description: 'Formato de áudio não suportado. Grave novamente.' });
     resetRecording();
   };
+
 
   const doSendAudio = async () => {
     if (!audioBlob) return;
