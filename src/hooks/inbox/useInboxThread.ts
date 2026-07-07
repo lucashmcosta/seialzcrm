@@ -27,7 +27,7 @@ const THREAD_SELECT = `
   sla_first_response_target_at, sla_resolution_target_at,
   last_message_at, last_message_content, last_message_direction, resolved_at,
   last_inbound_at, whatsapp_last_inbound_at,
-  primary_endpoint_id, last_routing_decision,
+  primary_endpoint_id, last_routing_decision, business_context,
   contact:contacts ( id, name:full_name, phone, lifecycle_stage ),
   primary_endpoint:communication_endpoints ( id, purpose, external_address, provider )
 `;

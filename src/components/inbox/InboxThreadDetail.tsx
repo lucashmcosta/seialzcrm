@@ -90,20 +90,19 @@ export function InboxThreadDetail({ threadId, onThreadStatusChanged }: Props) {
     try {
       // Detecta thread aberta concorrente para o mesmo (contact, endpoint, business_context)
       // que bloquearia a unique constraint message_threads_unique_open_per_contact_endpoint.
-      const { data: conflicting, error: confErr } = await supabase
+      const currentBc = (thread as any).business_context ?? null;
+      let q = supabase
         .from('message_threads')
         .select('id, business_context')
         .eq('contact_id', (thread as any).contact_id)
         .eq('primary_endpoint_id', (thread as any).primary_endpoint_id)
         .eq('status', 'open')
         .neq('id', thread.id);
+      q = currentBc === null ? q.is('business_context', null) : q.eq('business_context', currentBc);
+      const { data: conflicting, error: confErr } = await q;
       if (confErr) throw confErr;
 
-      const sameContext = (conflicting || []).filter(
-        (t: any) => (t.business_context ?? null) === ((thread as any).business_context ?? null),
-      );
-
-      for (const other of sameContext) {
+      for (const other of (conflicting || [])) {
         const { count, error: cntErr } = await supabase
           .from('messages')
           .select('id', { head: true, count: 'exact' })
