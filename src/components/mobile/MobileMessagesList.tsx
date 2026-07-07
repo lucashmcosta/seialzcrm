@@ -1094,7 +1094,15 @@ export function MobileMessagesList() {
                     <div className="flex items-end gap-1.5">
                       <div className="flex gap-0.5 shrink-0">
                         <MediaUploadButton onFileSelected={handleFileSelected} onTemplateClick={() => setShowTemplates(true)} onNoteClick={() => setIsNoteMode(true)} disabled={submitting || mediaUploading} />
-                        <AudioRecorder onSend={handleAudioSend} disabled={submitting || mediaUploading} />
+                        <AudioRecorder
+                          onSend={handleAudioSend}
+                          onSendAsDocument={handleAudioSendAsDocument}
+                          disabled={submitting || mediaUploading}
+                          endpointId={null}
+                          threadId={selectedThreadId}
+                          organizationId={organization?.id ?? null}
+                        />
+
                       </div>
                       <Textarea
                         ref={textareaRef}
