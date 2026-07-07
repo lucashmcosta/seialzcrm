@@ -3,6 +3,7 @@ import { Button } from '@/components/ui/button';
 import { useToast } from '@/hooks/use-toast';
 import { Microphone, Square, PaperPlaneTilt, TrashSimple, SpinnerGap } from '@phosphor-icons/react';
 import OpusMediaRecorder from 'opus-media-recorder';
+import { logAudioEvent, type AudioTelemetryContext } from '@/lib/audioTelemetry';
 
 // Worker options for opus-media-recorder.
 // encoderWorker.umd.js is a CLASSIC UMD worker — never instantiate with `{ type: 'module' }`.
