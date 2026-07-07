@@ -597,10 +597,11 @@ export function WhatsAppChat({ contactId, threadId: initialThreadId, onThreadCre
                       onSend={handleAudioSend}
                       onSendAsDocument={handleAudioSendAsDocument}
                       disabled={submitting}
-                      endpointId={(thread as any)?.primary_endpoint_id ?? null}
-                      threadId={thread?.id ?? null}
+                      endpointId={endpointId ?? null}
+                      threadId={threadId ?? null}
                       organizationId={organization?.id ?? null}
                     />
+
 
                   </>
                 )}
