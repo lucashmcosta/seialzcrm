@@ -760,21 +760,25 @@ serve(async (req) => {
           ? payloadFilename
           : filenameFromUrl(sourceUrl, `file-${Date.now()}`);
 
-        // Guard: Meta Cloud API rejeita audio/webm ("Received file of type 'audio/webm'").
-        // Rejeitar antes do upload para não gastar Graph call e dar erro claro ao cliente.
+        // Guard: Meta Cloud API só aceita como áudio: ogg/opus, aac, mpeg, amr.
+        // audio/webm e audio/mp4 (que costuma vir com codec Opus) são rejeitados
+        // pela Meta assincronamente (100 / 131053). Bloquear antes do upload.
         if (kind === "audio") {
           const effectiveCt = (mimeUsed || headerCt || "").toLowerCase();
-          if (effectiveCt.includes("webm")) {
+          const ALLOWED_AUDIO = ["audio/ogg", "audio/opus", "audio/aac", "audio/mpeg", "audio/mp3", "audio/amr"];
+          const isAllowed = ALLOWED_AUDIO.some((m) => effectiveCt.startsWith(m));
+          if (!isAllowed) {
             return new Response(
               JSON.stringify({
                 error: "unsupported_audio_mime",
-                message: "Áudio WebM não é aceito pela Meta. Grave novamente.",
+                message: "Formato de áudio não suportado pela Meta. Envie como arquivo ou grave novamente.",
                 details: { received: effectiveCt },
               }),
               { status: 415, headers: { ...corsHeaders, "Content-Type": "application/json" } },
             );
           }
         }
+
 
 
         // 2) Upload para Graph
