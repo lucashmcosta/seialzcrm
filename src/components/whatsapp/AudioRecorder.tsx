@@ -260,11 +260,14 @@ export function AudioRecorder({ onSend, onSendAsDocument, disabled, endpointId, 
     if (streamRef.current) streamRef.current.getTracks().forEach((t) => t.stop());
     if (timerRef.current) { clearInterval(timerRef.current); timerRef.current = null; }
     setIsRecording(false);
+    setIsProcessing(false);
     setRecordingTime(0);
     setAudioBlob(null);
     setRecordedKind(null);
     setNeedsDocumentConfirm(false);
     chunksRef.current = [];
+    isStartingRef.current = false;
+    isStoppingRef.current = false;
   };
 
   const cancelRecording = () => {
