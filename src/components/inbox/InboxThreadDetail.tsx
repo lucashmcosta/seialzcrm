@@ -88,6 +88,44 @@ export function InboxThreadDetail({ threadId, onThreadStatusChanged }: Props) {
     if (!thread) return;
     setResolving(true);
     try {
+      // Detecta thread aberta concorrente para o mesmo (contact, endpoint, business_context)
+      // que bloquearia a unique constraint message_threads_unique_open_per_contact_endpoint.
+      const { data: conflicting, error: confErr } = await supabase
+        .from('message_threads')
+        .select('id, business_context')
+        .eq('contact_id', (thread as any).contact_id)
+        .eq('primary_endpoint_id', (thread as any).primary_endpoint_id)
+        .eq('status', 'open')
+        .neq('id', thread.id);
+      if (confErr) throw confErr;
+
+      const sameContext = (conflicting || []).filter(
+        (t: any) => (t.business_context ?? null) === ((thread as any).business_context ?? null),
+      );
+
+      for (const other of sameContext) {
+        const { count, error: cntErr } = await supabase
+          .from('messages')
+          .select('id', { head: true, count: 'exact' })
+          .eq('thread_id', other.id);
+        if (cntErr) throw cntErr;
+        if ((count ?? 0) === 0) {
+          // Thread fantasma vazia — remove para liberar o slot
+          const { error: delErr } = await supabase
+            .from('message_threads')
+            .delete()
+            .eq('id', other.id);
+          if (delErr) throw delErr;
+        } else {
+          toast({
+            variant: 'destructive',
+            description: 'Já existe uma conversa aberta com este contato neste número. Abra a existente em vez de reabrir esta.',
+          });
+          setResolving(false);
+          return;
+        }
+      }
+
       const { error } = await supabase
         .from('message_threads')
         .update({ status: 'open', resolved_at: null })
@@ -103,6 +141,7 @@ export function InboxThreadDetail({ threadId, onThreadStatusChanged }: Props) {
       setResolving(false);
     }
   }
+
 
   async function handleAssign(userId: string | null) {
     if (!thread) return;
