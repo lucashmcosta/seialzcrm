@@ -71,7 +71,9 @@ export function MetaWhatsAppCloudDialog({ open, onOpenChange, integration, orgIn
       systemUserToken: "",
       appSecret: "",
       verifyToken: "",
+      purpose: (ca.default_purpose as Purpose) ?? "customer_service",
     });
+
   }, [open, orgIntegration]);
 
 
