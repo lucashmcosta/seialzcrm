@@ -28,6 +28,8 @@ interface Props {
   orgIntegration: any;
 }
 
+type Purpose = "customer_service" | "commercial";
+
 const empty = {
   appId: "",
   wabaId: "",
@@ -36,6 +38,7 @@ const empty = {
   systemUserToken: "",
   appSecret: "",
   verifyToken: "",
+  purpose: "customer_service" as Purpose,
 };
 
 export function MetaWhatsAppCloudDialog({ open, onOpenChange, integration, orgIntegration }: Props) {
