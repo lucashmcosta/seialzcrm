@@ -564,19 +564,10 @@ export function MobileMessagesList() {
     else if (file.type.startsWith('video/')) mediaType = 'video';
     if (opts?.forceMediaType) mediaType = opts.forceMediaType;
 
-    if (!organization?.id || !selectedThread) return;
-    setMediaUploading(true);
     setShowMediaPreview(false);
     setPreviewFile(null);
 
-    const fileExt = file.name.split('.').pop()?.toLowerCase() || 'bin';
-    const fileName = `${Date.now()}-${Math.random().toString(36).substring(7)}.${fileExt}`;
-    const filePath = `${organization.id}/${fileName}`;
 
-    let mediaType = 'document';
-    if (file.type.startsWith('image/')) mediaType = 'image';
-    else if (file.type.startsWith('audio/')) mediaType = 'audio';
-    else if (file.type.startsWith('video/')) mediaType = 'video';
 
     const tempId = `temp-${Date.now()}`;
     const displayContent = caption || (mediaType === 'image' ? '📷 Imagem' : mediaType === 'audio' ? '🎵 Áudio' : mediaType === 'video' ? '🎬 Vídeo' : '📎 Mídia');
