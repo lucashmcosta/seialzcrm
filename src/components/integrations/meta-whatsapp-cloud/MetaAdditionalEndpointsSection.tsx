@@ -1,14 +1,18 @@
-// Lista todos os endpoints Meta Cloud da org que NÃO são o "principal"
-// (i.e. cujo sender_sid difere do phone_number_id armazenado em
-// organization_integrations.connected_account.phone_number_id).
-//
-// READ-ONLY por contrato desta etapa: nenhum botão de editar/remover/desativar.
-// Endpoints pré-existentes (ex.: +16893077491) aparecem aqui marcados como
-// "não gerenciado por esta tela".
-import { useQuery } from "@tanstack/react-query";
+// Lista todos os endpoints Meta Cloud da org (incluindo o principal),
+// permitindo alterar o "purpose" (destino de roteamento: /inbox ou /messages)
+// inline, direto na UI.
+import { useQuery, useQueryClient, useMutation } from "@tanstack/react-query";
 import { Phone, SpinnerGap } from "@phosphor-icons/react";
+import { toast } from "sonner";
 import { Badge } from "@/components/ui/badge";
 import { Label } from "@/components/ui/label";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { supabase } from "@/integrations/supabase/client";
 import { formatPhoneDisplay } from "@/lib/phoneUtils";
 
@@ -18,11 +22,21 @@ interface Props {
   primaryPhoneNumberId?: string | null;
 }
 
+type Purpose = "customer_service" | "commercial" | "vendor_personal" | "other";
+
+const PURPOSE_ROUTE: Record<Purpose, string> = {
+  customer_service: "/inbox",
+  commercial: "/messages",
+  vendor_personal: "/messages",
+  other: "—",
+};
+
 export function MetaAdditionalEndpointsSection({
   organizationId,
   organizationIntegrationId,
   primaryPhoneNumberId,
 }: Props) {
+  const qc = useQueryClient();
   const { data: endpoints, isLoading } = useQuery({
     queryKey: ["meta-additional-endpoints", organizationId, organizationIntegrationId],
     enabled: !!organizationId && !!organizationIntegrationId,
@@ -39,6 +53,28 @@ export function MetaAdditionalEndpointsSection({
     },
   });
 
+  const updatePurpose = useMutation({
+    mutationFn: async ({ id, purpose }: { id: string; purpose: Purpose }) => {
+      const { error } = await supabase
+        .from("communication_endpoints")
+        .update({ purpose })
+        .eq("id", id);
+      if (error) throw error;
+    },
+    onSuccess: (_d, vars) => {
+      toast.success(
+        vars.purpose === "commercial"
+          ? "Número roteado para /messages"
+          : vars.purpose === "customer_service"
+          ? "Número roteado para /inbox"
+          : "Destino atualizado",
+      );
+      qc.invalidateQueries({ queryKey: ["meta-additional-endpoints"] });
+      qc.invalidateQueries({ queryKey: ["org-whatsapp-endpoints"] });
+    },
+    onError: (e: any) => toast.error(`Falha ao atualizar: ${e?.message ?? e}`),
+  });
+
   if (isLoading) {
     return (
       <div className="flex items-center justify-center py-4">
@@ -47,14 +83,12 @@ export function MetaAdditionalEndpointsSection({
     );
   }
 
-  const additional = (endpoints || []).filter(
-    (ep) => !primaryPhoneNumberId || ep.sender_sid !== primaryPhoneNumberId,
-  );
+  const all = endpoints || [];
 
-  if (additional.length === 0) {
+  if (all.length === 0) {
     return (
       <p className="text-xs text-muted-foreground">
-        Nenhum número adicional cadastrado nesta WABA.
+        Nenhum número cadastrado nesta WABA.
       </p>
     );
   }
@@ -62,15 +96,12 @@ export function MetaAdditionalEndpointsSection({
   return (
     <div className="space-y-2">
       <Label className="text-xs text-muted-foreground">
-        Números adicionais ({additional.length})
+        Números desta WABA ({all.length})
       </Label>
-      {additional.map((ep) => {
+      {all.map((ep) => {
         const formatted = formatPhoneDisplay(ep.external_address) || ep.external_address;
-        const purposeLabel =
-          ep.purpose === "commercial" ? "Comercial"
-          : ep.purpose === "customer_service" ? "Atendimento"
-          : ep.purpose === "vendor_personal" ? "Pessoal"
-          : "Outro";
+        const isPrimary = primaryPhoneNumberId && ep.sender_sid === primaryPhoneNumberId;
+        const currentPurpose = (ep.purpose ?? "customer_service") as Purpose;
         return (
           <div
             key={ep.id}
@@ -80,6 +111,9 @@ export function MetaAdditionalEndpointsSection({
             <div className="min-w-0 flex-1">
               <div className="flex items-center gap-2">
                 <span className="font-medium truncate">{formatted}</span>
+                {isPrimary && (
+                  <Badge variant="secondary" className="text-[10px]">principal</Badge>
+                )}
                 {ep.display_name && (
                   <span className="text-xs text-muted-foreground truncate">
                     — {ep.display_name}
@@ -87,12 +121,26 @@ export function MetaAdditionalEndpointsSection({
                 )}
               </div>
               <div className="text-[11px] text-muted-foreground font-mono">
-                pid …{String(ep.sender_sid || "").slice(-8)}
+                pid …{String(ep.sender_sid || "").slice(-8)} · destino {PURPOSE_ROUTE[currentPurpose]}
               </div>
             </div>
-            <Badge variant="outline" className="text-[10px]">
-              {purposeLabel}
-            </Badge>
+            <Select
+              value={currentPurpose}
+              disabled={updatePurpose.isPending}
+              onValueChange={(v) =>
+                updatePurpose.mutate({ id: ep.id, purpose: v as Purpose })
+              }
+            >
+              <SelectTrigger className="h-8 w-[170px] text-xs">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="customer_service">Atendimento (/inbox)</SelectItem>
+                <SelectItem value="commercial">Comercial (/messages)</SelectItem>
+                <SelectItem value="vendor_personal">Pessoal (/messages)</SelectItem>
+                <SelectItem value="other">Outro</SelectItem>
+              </SelectContent>
+            </Select>
             <Badge
               variant={ep.is_active ? (ep.status === "online" ? "default" : "secondary") : "outline"}
               className="text-[10px]"
@@ -102,9 +150,6 @@ export function MetaAdditionalEndpointsSection({
           </div>
         );
       })}
-      <p className="text-[11px] text-muted-foreground italic">
-        Endpoints existentes não são editáveis por esta tela. Para alterar, use o gerenciamento direto do banco.
-      </p>
     </div>
   );
 }
