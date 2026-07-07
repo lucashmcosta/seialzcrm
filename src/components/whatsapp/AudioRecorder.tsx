@@ -3,6 +3,7 @@ import { Button } from '@/components/ui/button';
 import { useToast } from '@/hooks/use-toast';
 import { Microphone, Square, PaperPlaneTilt, TrashSimple, SpinnerGap } from '@phosphor-icons/react';
 import OpusMediaRecorder from 'opus-media-recorder';
+import { logAudioEvent, type AudioTelemetryContext } from '@/lib/audioTelemetry';
 
 // Worker options for opus-media-recorder.
 // encoderWorker.umd.js is a CLASSIC UMD worker — never instantiate with `{ type: 'module' }`.
@@ -68,7 +69,7 @@ function pickNativeMime(): { mime: string; kind: RecorderKind } | null {
   return null;
 }
 
-interface AudioRecorderProps {
+interface AudioRecorderProps extends AudioTelemetryContext {
   onSend: (audioBlob: Blob) => Promise<void>;
   /** Optional escape hatch when the browser can only produce WebM. When provided,
    *  we offer to upload as a document instead of failing. */
@@ -76,7 +77,8 @@ interface AudioRecorderProps {
   disabled?: boolean;
 }
 
-export function AudioRecorder({ onSend, onSendAsDocument, disabled }: AudioRecorderProps) {
+export function AudioRecorder({ onSend, onSendAsDocument, disabled, endpointId, threadId, organizationId }: AudioRecorderProps) {
+  const telemetryCtx: AudioTelemetryContext = { endpointId, threadId, organizationId };
   const { toast } = useToast();
   const [isRecording, setIsRecording] = useState(false);
   const [recordingTime, setRecordingTime] = useState(0);
@@ -124,10 +126,17 @@ export function AudioRecorder({ onSend, onSendAsDocument, disabled }: AudioRecor
         kind = 'opus-ogg';
       } catch (polyfillError) {
         console.warn('[AudioRecorder] OpusMediaRecorder failed, trying native', polyfillError);
+        logAudioEvent('audio_record_polyfill_init_error', {
+          ...telemetryCtx,
+          error: (polyfillError as Error)?.message ?? String(polyfillError),
+        });
         const native = pickNativeMime();
         if (native) {
           mediaRecorder = new MediaRecorder(stream, { mimeType: native.mime });
           kind = native.kind;
+          if (kind === 'native-mp4') {
+            logAudioEvent('audio_record_fallback_mp4', { ...telemetryCtx, mimeType: native.mime });
+          }
         }
       }
 
@@ -229,6 +238,13 @@ export function AudioRecorder({ onSend, onSendAsDocument, disabled }: AudioRecor
         console.error('[AudioRecorder] invalid OGG Opus blob', {
           size: audioBlob.size, type, reason: (check as { reason: string }).reason,
         });
+        logAudioEvent('audio_record_invalid_ogg', {
+          ...telemetryCtx,
+          mimeType: type,
+          durationMs: recordingTime * 1000,
+          sizeBytes: audioBlob.size,
+          error: (check as { reason: string }).reason,
+        });
         toast({
           variant: 'destructive',
           description: 'Falha ao gerar áudio. Tente gravar novamente com pelo menos 2 segundos.',
@@ -272,6 +288,12 @@ export function AudioRecorder({ onSend, onSendAsDocument, disabled }: AudioRecor
     setIsSending(true);
     try {
       await onSend(audioBlob);
+      logAudioEvent('audio_record_success', {
+        ...telemetryCtx,
+        mimeType: audioBlob.type || null,
+        durationMs: recordingTime * 1000,
+        sizeBytes: audioBlob.size,
+      });
       resetRecording();
     } catch (error) {
       console.error('Error sending audio:', error);
@@ -285,6 +307,12 @@ export function AudioRecorder({ onSend, onSendAsDocument, disabled }: AudioRecor
     setIsSending(true);
     try {
       await onSendAsDocument(audioBlob);
+      logAudioEvent('audio_record_fallback_webm_document', {
+        ...telemetryCtx,
+        mimeType: audioBlob.type || null,
+        durationMs: recordingTime * 1000,
+        sizeBytes: audioBlob.size,
+      });
       resetRecording();
     } catch (error) {
       console.error('Error sending audio as document:', error);

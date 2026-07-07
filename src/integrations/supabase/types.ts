@@ -1006,6 +1006,57 @@ export type Database = {
           },
         ]
       }
+      audio_record_events: {
+        Row: {
+          browser: string | null
+          created_at: string
+          duration_ms: number | null
+          endpoint_id: string | null
+          error: string | null
+          event: string
+          id: string
+          metadata: Json | null
+          mime_type: string | null
+          organization_id: string | null
+          size_bytes: number | null
+          thread_id: string | null
+          user_agent: string | null
+          user_id: string | null
+        }
+        Insert: {
+          browser?: string | null
+          created_at?: string
+          duration_ms?: number | null
+          endpoint_id?: string | null
+          error?: string | null
+          event: string
+          id?: string
+          metadata?: Json | null
+          mime_type?: string | null
+          organization_id?: string | null
+          size_bytes?: number | null
+          thread_id?: string | null
+          user_agent?: string | null
+          user_id?: string | null
+        }
+        Update: {
+          browser?: string | null
+          created_at?: string
+          duration_ms?: number | null
+          endpoint_id?: string | null
+          error?: string | null
+          event?: string
+          id?: string
+          metadata?: Json | null
+          mime_type?: string | null
+          organization_id?: string | null
+          size_bytes?: number | null
+          thread_id?: string | null
+          user_agent?: string | null
+          user_id?: string | null
+        }
+        Relationships: []
+      }
       audio_transcriptions: {
         Row: {
           created_at: string
