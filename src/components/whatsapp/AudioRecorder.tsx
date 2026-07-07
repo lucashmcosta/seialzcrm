@@ -210,6 +210,8 @@ export function AudioRecorder({ onSend, onSendAsDocument, disabled, endpointId, 
         const blob = new Blob(chunksRef.current, { type: actualType });
         setAudioBlob(blob);
         setRecordedKind(recorderKindRef.current);
+        setIsProcessing(false); // P4 — end spinner
+        isStoppingRef.current = false;
         stream.getTracks().forEach((t) => t.stop());
       };
 
@@ -230,16 +232,28 @@ export function AudioRecorder({ onSend, onSendAsDocument, disabled, endpointId, 
         variant: 'destructive',
         description: 'Não foi possível acessar o microfone. Verifique as permissões.',
       });
+    } finally {
+      isStartingRef.current = false;
     }
   };
 
   const stopRecording = () => {
+    // P3 — reentrancy guard
+    if (isStoppingRef.current) return;
     if (!mediaRecorderRef.current || !isRecording) return;
     // Guard: never let the user stop before the encoder had time to emit BOS/OpusHead.
     if (Date.now() - startedAtRef.current < MIN_RECORD_MS) return;
-    mediaRecorderRef.current.stop();
+    isStoppingRef.current = true;
+    setIsProcessing(true); // P4 — immediate visual feedback while worker flushes
     setIsRecording(false);
     if (timerRef.current) { clearInterval(timerRef.current); timerRef.current = null; }
+    try {
+      mediaRecorderRef.current.stop();
+    } catch (err) {
+      console.error('[AudioRecorder] stop() threw', err);
+      setIsProcessing(false);
+      isStoppingRef.current = false;
+    }
   };
 
   const resetRecording = () => {
