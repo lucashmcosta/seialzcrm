@@ -47,7 +47,7 @@ export function logAudioEvent(event: AudioTelemetryEvent, payload: AudioTelemetr
       thread_id: payload.threadId ?? null,
       organization_id: payload.organizationId ?? null,
       error: payload.error ?? null,
-      metadata: payload.metadata ?? null,
+      metadata: (payload.metadata ?? null) as never,
     };
     // Fire-and-forget: no await, swallow errors.
     void supabase.from('audio_record_events').insert(row).then(({ error }) => {
