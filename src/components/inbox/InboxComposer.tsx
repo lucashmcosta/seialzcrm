@@ -705,7 +705,15 @@ export function InboxComposer({ thread, replyTo, onClearReply, onSent, onThreadM
           )}
 
           {!isNote && (
-            <AudioRecorder onSend={handleSendAudio} disabled={inputDisabled || !isIn24hWindow} />
+            <AudioRecorder
+              onSend={handleSendAudio}
+              onSendAsDocument={handleSendAudioAsDocument}
+              disabled={inputDisabled || !isIn24hWindow}
+              endpointId={endpointId}
+              threadId={thread?.id ?? null}
+              organizationId={thread?.organization_id ?? organization?.id ?? null}
+            />
+
           )}
           <Button
             onClick={isNote ? handleSaveNote : handleSendText}
