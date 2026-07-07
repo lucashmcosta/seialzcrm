@@ -715,7 +715,15 @@ export function ContactMessages({ contactId, opportunityId }: ContactMessagesPro
                 ) : (
                   <>
                     <MediaUploadButton onFileSelected={handleMediaUpload} onTemplateClick={() => setShowTemplates(true)} disabled={submitting} />
-                    <AudioRecorder onSend={handleAudioSend} disabled={submitting} />
+                    <AudioRecorder
+                      onSend={handleAudioSend}
+                      onSendAsDocument={handleAudioSendAsDocument}
+                      disabled={submitting}
+                      endpointId={(selectedThread as any)?.primary_endpoint_id ?? null}
+                      threadId={selectedThreadId}
+                      organizationId={organization?.id ?? null}
+                    />
+
 
                     {/* Emoji Picker */}
                     <Popover open={showEmojiPicker} onOpenChange={setShowEmojiPicker}>
