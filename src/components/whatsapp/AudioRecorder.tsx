@@ -86,7 +86,7 @@ export function AudioRecorder({ onSend, onSendAsDocument, disabled, endpointId, 
   const mediaRecorderRef = useRef<any>(null);
   const chunksRef = useRef<Blob[]>([]);
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
-  const warmupTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const startedAtRef = useRef<number>(0);
   const streamRef = useRef<MediaStream | null>(null);
   const recorderKindRef = useRef<RecorderKind | null>(null);
 
