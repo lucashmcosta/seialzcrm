@@ -333,6 +333,28 @@ export function InboxComposer({ thread, replyTo, onClearReply, onSent, onThreadM
     }
   }
 
+  async function handleSendAudioAsDocument(blob: Blob) {
+    if (!organization?.id) return;
+    const audioFile = audioBlobToFile(blob, `gravacao-${Date.now()}`);
+    setSubmitting(true);
+    try {
+      const { url } = await inboxUploadMedia(supabase, audioFile, organization.id);
+      await invokeSend({
+        message: '',
+        mediaUrl: url,
+        mediaType: 'document',
+        replyToMessageId: replyTo?.id ?? null,
+      });
+      onSent?.();
+    } catch (e: any) {
+      console.error('[inbox-composer] audio-as-document send failed', e);
+      toast({ variant: 'destructive', description: friendlyError(e?.message) });
+    } finally {
+      setSubmitting(false);
+    }
+  }
+
+
   async function handleSendTemplate(templateId: string, variables: Record<string, string>) {
     const orgId = thread!.organization_id || organization?.id || null;
     // Guard: template bloqueado no endpoint (regra LOW)
