@@ -1321,7 +1321,11 @@ function DesktopMessagesList() {
     }
   };
 
-  const handleMediaUpload = async (file: File, caption: string | null = null) => {
+  const handleMediaUpload = async (
+    file: File,
+    caption: string | null = null,
+    opts?: { forceMediaType?: 'document' | 'image' | 'audio' | 'video' },
+  ) => {
     if (!organization?.id || !selectedThread) return;
 
     setMediaUploading(true);
@@ -1336,6 +1340,8 @@ function DesktopMessagesList() {
     if (file.type.startsWith('image/')) mediaType = 'image';
     else if (file.type.startsWith('audio/')) mediaType = 'audio';
     else if (file.type.startsWith('video/')) mediaType = 'video';
+    if (opts?.forceMediaType) mediaType = opts.forceMediaType;
+
 
     const tempId = `temp-${Date.now()}`;
     const displayContent = caption || (mediaType === 'image' ? '📷 Imagem' : mediaType === 'audio' ? '🎵 Áudio' : mediaType === 'video' ? '🎬 Vídeo' : '📎 Mídia');
