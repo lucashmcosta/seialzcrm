@@ -508,6 +508,19 @@ export function ContactMessages({ contactId, opportunityId }: ContactMessagesPro
     }
   };
 
+  const handleAudioSendAsDocument = async (audioBlob: Blob) => {
+    if (!organization?.id) return;
+    try {
+      const audioFile = audioBlobToFile(audioBlob, `gravacao-${Date.now()}`);
+      const { url } = await uploadMediaToStorage(audioFile);
+      await handleSendMessage(url, 'document');
+    } catch (error: any) {
+      console.error('Error sending audio as document:', error);
+      toast({ variant: 'destructive', description: error.message || 'Erro ao enviar arquivo' });
+    }
+  };
+
+
   const handleImproveText = async (mode: 'grammar' | 'professional' | 'friendly' | 'persuasive') => {
     if (!messageText.trim()) return;
 
