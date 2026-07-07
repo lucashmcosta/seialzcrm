@@ -1426,6 +1426,19 @@ function DesktopMessagesList() {
     }
   };
 
+  const handleAudioSendAsDocument = async (audioBlob: Blob) => {
+    if (!organization?.id || !selectedThread) return;
+    try {
+      const audioFile = audioBlobToFile(audioBlob, `gravacao-${Date.now()}`);
+      // Force upload+send as document (bypasses audio classification).
+      await handleMediaUpload(audioFile, null, { forceMediaType: 'document' });
+    } catch (error: any) {
+      console.error('Error sending audio as document:', error);
+      toast({ variant: 'destructive', description: error.message });
+    }
+  };
+
+
   const adjustTextareaHeight = () => {
     const textarea = textareaRef.current;
     if (textarea) {
