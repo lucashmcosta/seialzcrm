@@ -31,7 +31,8 @@ export async function inboxUploadMedia(
 
   const { error: uploadError } = await supabase.storage
     .from('whatsapp-media')
-    .upload(filePath, file as any);
+    .upload(filePath, file as any, { contentType: (file as File).type || undefined });
+
   if (uploadError) throw uploadError;
 
   const { data } = supabase.storage.from('whatsapp-media').getPublicUrl(filePath);
