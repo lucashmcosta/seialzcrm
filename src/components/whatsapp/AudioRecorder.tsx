@@ -126,10 +126,17 @@ export function AudioRecorder({ onSend, onSendAsDocument, disabled, endpointId, 
         kind = 'opus-ogg';
       } catch (polyfillError) {
         console.warn('[AudioRecorder] OpusMediaRecorder failed, trying native', polyfillError);
+        logAudioEvent('audio_record_polyfill_init_error', {
+          ...telemetryCtx,
+          error: (polyfillError as Error)?.message ?? String(polyfillError),
+        });
         const native = pickNativeMime();
         if (native) {
           mediaRecorder = new MediaRecorder(stream, { mimeType: native.mime });
           kind = native.kind;
+          if (kind === 'native-mp4') {
+            logAudioEvent('audio_record_fallback_mp4', { ...telemetryCtx, mimeType: native.mime });
+          }
         }
       }
 
