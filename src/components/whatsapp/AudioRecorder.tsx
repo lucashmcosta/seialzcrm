@@ -383,7 +383,13 @@ export function AudioRecorder({ onSend, onSendAsDocument, disabled, endpointId, 
         <Button variant="ghost" size="icon" onClick={cancelRecording} className="text-muted-foreground">
           <TrashSimple className="w-4 h-4" />
         </Button>
-        <Button size="icon" onClick={stopRecording} variant="destructive">
+        <Button
+          size="icon"
+          onClick={stopRecording}
+          variant="destructive"
+          disabled={recordingTime < 1}
+          title={recordingTime < 1 ? 'Segure por pelo menos 1 segundo' : 'Parar'}
+        >
           <Square className="w-4 h-4" />
         </Button>
       </div>
