@@ -145,14 +145,22 @@ export function AudioRecorder({ onSend, onSendAsDocument, disabled, endpointId, 
   }, []);
 
   const startRecording = async () => {
+    // P3 — prevent double-click storming getUserMedia
+    if (isStartingRef.current || isRecording || audioBlob) return;
+    isStartingRef.current = true;
     try {
-      // Best-effort warmup before touching the mic (usually already cached from mount).
-      await warmupOpusPolyfill();
+      // P2 — do NOT await warmup; run it in parallel with getUserMedia so the
+      // 1st click is not serialized behind fetch()es.
+      void warmupOpusPolyfill();
 
       const stream = await navigator.mediaDevices.getUserMedia({
         audio: { echoCancellation: true, noiseSuppression: true, sampleRate: 48000 },
       });
       streamRef.current = stream;
+
+      // P0 — after first successful getUserMedia, kick off the encoder warm
+      // (fire-and-forget) so subsequent recordings skip Worker/WASM init cost.
+      void warmEncoder();
 
       let mediaRecorder: any = null;
       let kind: RecorderKind | null = null;
