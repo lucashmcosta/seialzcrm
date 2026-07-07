@@ -3,44 +3,40 @@ import { Button } from '@/components/ui/button';
 import { useToast } from '@/hooks/use-toast';
 import { Microphone, Square, PaperPlaneTilt, TrashSimple, SpinnerGap } from '@phosphor-icons/react';
 import OpusMediaRecorder from 'opus-media-recorder';
+// Serve worker + WASM from the local bundle — NO CDN.
+// encoderWorker.umd.js is a CLASSIC UMD worker; instantiate WITHOUT `{ type: 'module' }`.
+import workerUrl from 'opus-media-recorder/encoderWorker.umd.js?url';
+import oggWasmUrl from 'opus-media-recorder/OggOpusEncoder.wasm?url';
+import webmWasmUrl from 'opus-media-recorder/WebMOpusEncoder.wasm?url';
 import { logAudioEvent, type AudioTelemetryContext } from '@/lib/audioTelemetry';
 
-// Worker options for opus-media-recorder.
-// encoderWorker.umd.js is a CLASSIC UMD worker — never instantiate with `{ type: 'module' }`.
-const OMR_CDN = 'https://cdn.jsdelivr.net/npm/opus-media-recorder@latest';
-const WORKER_URL = `${OMR_CDN}/encoderWorker.umd.js`;
-const OGG_WASM_URL = `${OMR_CDN}/OggOpusEncoder.wasm`;
-const WEBM_WASM_URL = `${OMR_CDN}/WebMOpusEncoder.wasm`;
 const workerOptions = {
-  encoderWorkerFactory: () => new Worker(WORKER_URL),
-  OggOpusEncoderWasmPath: OGG_WASM_URL,
-  WebMOpusEncoderWasmPath: WEBM_WASM_URL,
+  encoderWorkerFactory: () => new Worker(workerUrl),
+  OggOpusEncoderWasmPath: oggWasmUrl,
+  WebMOpusEncoderWasmPath: webmWasmUrl,
 };
 
-// Cache preload promises so we only warm the CDN once per session.
+// Warm worker + WASM on mount so first click is fast and deterministic.
 let warmupPromise: Promise<void> | null = null;
 function warmupOpusPolyfill(): Promise<void> {
   if (warmupPromise) return warmupPromise;
   warmupPromise = (async () => {
     try {
       await Promise.all([
-        fetch(WORKER_URL, { mode: 'cors', cache: 'force-cache' }).then((r) => r.ok),
-        fetch(OGG_WASM_URL, { mode: 'cors', cache: 'force-cache' }).then((r) => r.ok),
+        fetch(workerUrl, { cache: 'force-cache' }).then((r) => r.ok),
+        fetch(oggWasmUrl, { cache: 'force-cache' }).then((r) => r.ok),
       ]);
     } catch (err) {
       console.warn('[AudioRecorder] polyfill warmup fetch failed (will retry on record)', err);
-      // Don't cache the failure — allow retry on real recording.
       warmupPromise = null;
     }
   })();
   return warmupPromise;
 }
 
-// The warmup window during which we let the encoder emit its BOS/OpusHead page
-// before the user's "real" recording clock starts. Chunks captured during this
-// window ARE kept in the final blob (removing them would break the OGG container),
-// but recordingTime is only counted after this delay.
-const ENCODER_WARMUP_MS = 300;
+// Minimum recording duration (ms) before the stop button is enabled.
+// Guarantees the encoder has time to emit BOS + OpusHead + at least one data page.
+const MIN_RECORD_MS = 1000;
 
 // Validate the recorded blob before allowing send.
 // Meta requires a real OGG Opus stream (OggS + OpusHead identification header).
@@ -90,7 +86,7 @@ export function AudioRecorder({ onSend, onSendAsDocument, disabled, endpointId, 
   const mediaRecorderRef = useRef<any>(null);
   const chunksRef = useRef<Blob[]>([]);
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
-  const warmupTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const startedAtRef = useRef<number>(0);
   const streamRef = useRef<MediaStream | null>(null);
   const recorderKindRef = useRef<RecorderKind | null>(null);
 
@@ -102,7 +98,6 @@ export function AudioRecorder({ onSend, onSendAsDocument, disabled, endpointId, 
   useEffect(() => {
     return () => {
       if (timerRef.current) clearInterval(timerRef.current);
-      if (warmupTimerRef.current) clearTimeout(warmupTimerRef.current);
       if (streamRef.current) streamRef.current.getTracks().forEach((t) => t.stop());
     };
   }, []);
@@ -168,17 +163,17 @@ export function AudioRecorder({ onSend, onSendAsDocument, disabled, endpointId, 
         stream.getTracks().forEach((t) => t.stop());
       };
 
-      mediaRecorder.start(100);
+      // Start WITHOUT timeslice — we want a single blob on stop() containing the
+      // full OGG stream (BOS + OpusHead + data pages). Passing a timeslice caused
+      // premature ondataavailable emissions that lacked identification headers.
+      mediaRecorder.start();
+      startedAtRef.current = Date.now();
       setIsRecording(true);
       setRecordingTime(0);
-
-      // Step 2 — Encoder warmup: let the recorder run silently for a short window so
-      // the OGG BOS/OpusHead page is definitely emitted before the user's clock starts.
-      // Chunks captured during this window are KEPT (removing them would corrupt the container).
-      if (warmupTimerRef.current) clearTimeout(warmupTimerRef.current);
-      warmupTimerRef.current = setTimeout(() => {
-        timerRef.current = setInterval(() => setRecordingTime((prev) => prev + 1), 1000);
-      }, ENCODER_WARMUP_MS);
+      if (timerRef.current) clearInterval(timerRef.current);
+      timerRef.current = setInterval(() => {
+        setRecordingTime(Math.floor((Date.now() - startedAtRef.current) / 1000));
+      }, 250);
     } catch (error: any) {
       console.error('Error starting recording:', error);
       toast({
@@ -189,18 +184,17 @@ export function AudioRecorder({ onSend, onSendAsDocument, disabled, endpointId, 
   };
 
   const stopRecording = () => {
-    if (mediaRecorderRef.current && isRecording) {
-      mediaRecorderRef.current.stop();
-      setIsRecording(false);
-      if (timerRef.current) { clearInterval(timerRef.current); timerRef.current = null; }
-      if (warmupTimerRef.current) { clearTimeout(warmupTimerRef.current); warmupTimerRef.current = null; }
-    }
+    if (!mediaRecorderRef.current || !isRecording) return;
+    // Guard: never let the user stop before the encoder had time to emit BOS/OpusHead.
+    if (Date.now() - startedAtRef.current < MIN_RECORD_MS) return;
+    mediaRecorderRef.current.stop();
+    setIsRecording(false);
+    if (timerRef.current) { clearInterval(timerRef.current); timerRef.current = null; }
   };
 
   const resetRecording = () => {
     if (streamRef.current) streamRef.current.getTracks().forEach((t) => t.stop());
     if (timerRef.current) { clearInterval(timerRef.current); timerRef.current = null; }
-    if (warmupTimerRef.current) { clearTimeout(warmupTimerRef.current); warmupTimerRef.current = null; }
     setIsRecording(false);
     setRecordingTime(0);
     setAudioBlob(null);
@@ -389,7 +383,13 @@ export function AudioRecorder({ onSend, onSendAsDocument, disabled, endpointId, 
         <Button variant="ghost" size="icon" onClick={cancelRecording} className="text-muted-foreground">
           <TrashSimple className="w-4 h-4" />
         </Button>
-        <Button size="icon" onClick={stopRecording} variant="destructive">
+        <Button
+          size="icon"
+          onClick={stopRecording}
+          variant="destructive"
+          disabled={recordingTime < 1}
+          title={recordingTime < 1 ? 'Segure por pelo menos 1 segundo' : 'Parar'}
+        >
           <Square className="w-4 h-4" />
         </Button>
       </div>
