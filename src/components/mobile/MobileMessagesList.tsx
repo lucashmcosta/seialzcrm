@@ -547,12 +547,13 @@ export function MobileMessagesList() {
     }
   };
 
-  const handleMediaUpload = async (file: File, caption: string | null = null) => {
+  const handleMediaUpload = async (
+    file: File,
+    caption: string | null = null,
+    opts?: { forceMediaType?: 'document' | 'image' | 'audio' | 'video' },
+  ) => {
     if (!organization?.id || !selectedThread) return;
     setMediaUploading(true);
-    setShowMediaPreview(false);
-    setPreviewFile(null);
-
     const fileExt = file.name.split('.').pop()?.toLowerCase() || 'bin';
     const fileName = `${Date.now()}-${Math.random().toString(36).substring(7)}.${fileExt}`;
     const filePath = `${organization.id}/${fileName}`;
@@ -561,6 +562,12 @@ export function MobileMessagesList() {
     if (file.type.startsWith('image/')) mediaType = 'image';
     else if (file.type.startsWith('audio/')) mediaType = 'audio';
     else if (file.type.startsWith('video/')) mediaType = 'video';
+    if (opts?.forceMediaType) mediaType = opts.forceMediaType;
+
+    setShowMediaPreview(false);
+    setPreviewFile(null);
+
+
 
     const tempId = `temp-${Date.now()}`;
     const displayContent = caption || (mediaType === 'image' ? '📷 Imagem' : mediaType === 'audio' ? '🎵 Áudio' : mediaType === 'video' ? '🎬 Vídeo' : '📎 Mídia');
@@ -607,6 +614,17 @@ export function MobileMessagesList() {
       toast({ variant: 'destructive', description: error.message });
     }
   };
+
+  const handleAudioSendAsDocument = async (audioBlob: Blob) => {
+    if (!organization?.id || !selectedThread) return;
+    try {
+      const audioFile = audioBlobToFile(audioBlob, `gravacao-${Date.now()}`);
+      await handleMediaUpload(audioFile, null, { forceMediaType: 'document' });
+    } catch (error: any) {
+      toast({ variant: 'destructive', description: error.message });
+    }
+  };
+
 
   const handleImproveText = async (mode: 'grammar' | 'professional' | 'friendly' | 'persuasive') => {
     if (!messageText.trim()) return;
@@ -1076,7 +1094,15 @@ export function MobileMessagesList() {
                     <div className="flex items-end gap-1.5">
                       <div className="flex gap-0.5 shrink-0">
                         <MediaUploadButton onFileSelected={handleFileSelected} onTemplateClick={() => setShowTemplates(true)} onNoteClick={() => setIsNoteMode(true)} disabled={submitting || mediaUploading} />
-                        <AudioRecorder onSend={handleAudioSend} disabled={submitting || mediaUploading} />
+                        <AudioRecorder
+                          onSend={handleAudioSend}
+                          onSendAsDocument={handleAudioSendAsDocument}
+                          disabled={submitting || mediaUploading}
+                          endpointId={null}
+                          threadId={selectedThreadId}
+                          organizationId={organization?.id ?? null}
+                        />
+
                       </div>
                       <Textarea
                         ref={textareaRef}

@@ -1321,7 +1321,11 @@ function DesktopMessagesList() {
     }
   };
 
-  const handleMediaUpload = async (file: File, caption: string | null = null) => {
+  const handleMediaUpload = async (
+    file: File,
+    caption: string | null = null,
+    opts?: { forceMediaType?: 'document' | 'image' | 'audio' | 'video' },
+  ) => {
     if (!organization?.id || !selectedThread) return;
 
     setMediaUploading(true);
@@ -1336,6 +1340,8 @@ function DesktopMessagesList() {
     if (file.type.startsWith('image/')) mediaType = 'image';
     else if (file.type.startsWith('audio/')) mediaType = 'audio';
     else if (file.type.startsWith('video/')) mediaType = 'video';
+    if (opts?.forceMediaType) mediaType = opts.forceMediaType;
+
 
     const tempId = `temp-${Date.now()}`;
     const displayContent = caption || (mediaType === 'image' ? '📷 Imagem' : mediaType === 'audio' ? '🎵 Áudio' : mediaType === 'video' ? '🎬 Vídeo' : '📎 Mídia');
@@ -1425,6 +1431,19 @@ function DesktopMessagesList() {
       toast({ variant: 'destructive', description: error.message });
     }
   };
+
+  const handleAudioSendAsDocument = async (audioBlob: Blob) => {
+    if (!organization?.id || !selectedThread) return;
+    try {
+      const audioFile = audioBlobToFile(audioBlob, `gravacao-${Date.now()}`);
+      // Force upload+send as document (bypasses audio classification).
+      await handleMediaUpload(audioFile, null, { forceMediaType: 'document' });
+    } catch (error: any) {
+      console.error('Error sending audio as document:', error);
+      toast({ variant: 'destructive', description: error.message });
+    }
+  };
+
 
   const adjustTextareaHeight = () => {
     const textarea = textareaRef.current;
@@ -2230,7 +2249,15 @@ function DesktopMessagesList() {
                                     onNoteClick={() => setIsNoteMode(true)}
                                     disabled={submitting || mediaUploading}
                                   />
-                                  <AudioRecorder onSend={handleAudioSend} disabled={submitting || mediaUploading} />
+                                  <AudioRecorder
+                                    onSend={handleAudioSend}
+                                    onSendAsDocument={handleAudioSendAsDocument}
+                                    disabled={submitting || mediaUploading}
+                                    endpointId={composerEndpointId ?? null}
+                                    threadId={selectedThreadId}
+                                    organizationId={organization?.id ?? null}
+                                  />
+
 
 
                                   {/* Emoji Picker */}

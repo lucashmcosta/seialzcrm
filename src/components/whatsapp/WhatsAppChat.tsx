@@ -593,7 +593,16 @@ export function WhatsAppChat({ contactId, threadId: initialThreadId, onThreadCre
                 ) : (
                   <>
                     <MediaUploadButton onFileSelected={handleMediaUpload} onTemplateClick={() => setShowTemplates(true)} disabled={submitting} />
-                    <AudioRecorder onSend={handleAudioSend} onSendAsDocument={handleAudioSendAsDocument} disabled={submitting} />
+                    <AudioRecorder
+                      onSend={handleAudioSend}
+                      onSendAsDocument={handleAudioSendAsDocument}
+                      disabled={submitting}
+                      endpointId={endpointId ?? null}
+                      threadId={threadId ?? null}
+                      organizationId={organization?.id ?? null}
+                    />
+
+
                   </>
                 )}
               </div>
