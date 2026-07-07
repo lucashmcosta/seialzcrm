@@ -185,7 +185,7 @@ export function AudioRecorder({ onSend, disabled }: AudioRecorderProps) {
     if (type.includes('ogg')) {
       const check = await validateOggOpus(audioBlob);
       if (!check.ok) {
-        console.error('[AudioRecorder] invalid OGG Opus blob', { size: audioBlob.size, type, reason: check.reason });
+        console.error('[AudioRecorder] invalid OGG Opus blob', { size: audioBlob.size, type, reason: (check as { reason: string }).reason });
         toast({ variant: 'destructive', description: 'Áudio inválido. Grave novamente.' });
         setAudioBlob(null);
         setRecordingTime(0);
