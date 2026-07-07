@@ -119,6 +119,7 @@ export function AudioRecorder({ onSend, onSendAsDocument, disabled, endpointId, 
   const [audioBlob, setAudioBlob] = useState<Blob | null>(null);
   const [recordedKind, setRecordedKind] = useState<RecorderKind | null>(null);
   const [isSending, setIsSending] = useState(false);
+  const [isProcessing, setIsProcessing] = useState(false); // P4 — stop→onstop feedback
   const [needsDocumentConfirm, setNeedsDocumentConfirm] = useState(false);
 
   const mediaRecorderRef = useRef<any>(null);
@@ -127,6 +128,9 @@ export function AudioRecorder({ onSend, onSendAsDocument, disabled, endpointId, 
   const startedAtRef = useRef<number>(0);
   const streamRef = useRef<MediaStream | null>(null);
   const recorderKindRef = useRef<RecorderKind | null>(null);
+  // P3 — reentrancy locks
+  const isStartingRef = useRef(false);
+  const isStoppingRef = useRef(false);
 
   // Step 1 — Warmup polyfill (worker + WASM) on mount so first click is fast and deterministic.
   useEffect(() => {
