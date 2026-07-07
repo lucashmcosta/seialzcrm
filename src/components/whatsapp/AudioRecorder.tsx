@@ -4,14 +4,41 @@ import { useToast } from '@/hooks/use-toast';
 import { Microphone, Square, PaperPlaneTilt, TrashSimple, SpinnerGap } from '@phosphor-icons/react';
 import OpusMediaRecorder from 'opus-media-recorder';
 
-// Worker options for opus-media-recorder
+// Worker options for opus-media-recorder.
+// IMPORTANT: encoderWorker.umd.js is a CLASSIC UMD worker — instantiating it
+// with `{ type: 'module' }` produces a broken OGG (no OpusHead, ~1-4 KB) that
+// Meta rejects with error 131053 "Media upload error".
+const OMR_CDN = 'https://cdn.jsdelivr.net/npm/opus-media-recorder@latest';
 const workerOptions = {
-  encoderWorkerFactory: () => new Worker(
-    new URL('opus-media-recorder/encoderWorker.umd.js', import.meta.url),
-    { type: 'module' }
-  ),
-  OggOpusEncoderWasmPath: 'https://cdn.jsdelivr.net/npm/opus-media-recorder@latest/OggOpusEncoder.wasm',
+  encoderWorkerFactory: () => new Worker(`${OMR_CDN}/encoderWorker.umd.js`),
+  OggOpusEncoderWasmPath: `${OMR_CDN}/OggOpusEncoder.wasm`,
+  WebMOpusEncoderWasmPath: `${OMR_CDN}/WebMOpusEncoder.wasm`,
 };
+
+// Validate the recorded blob before allowing send.
+// Meta requires a real OGG Opus stream (OggS container + OpusHead identification header).
+async function validateOggOpus(blob: Blob): Promise<{ ok: true } | { ok: false; reason: string }> {
+  if (!blob || blob.size < 2048) {
+    return { ok: false, reason: 'muito curto' };
+  }
+  const head = new Uint8Array(await blob.slice(0, 256).arrayBuffer());
+  // "OggS" magic
+  const hasOggS = head[0] === 0x4f && head[1] === 0x67 && head[2] === 0x67 && head[3] === 0x53;
+  if (!hasOggS) return { ok: false, reason: 'sem cabeçalho OggS' };
+  // "OpusHead" anywhere in first page
+  const needle = [0x4f, 0x70, 0x75, 0x73, 0x48, 0x65, 0x61, 0x64];
+  let found = false;
+  outer: for (let i = 0; i <= head.length - needle.length; i++) {
+    for (let j = 0; j < needle.length; j++) {
+      if (head[i + j] !== needle[j]) continue outer;
+    }
+    found = true;
+    break;
+  }
+  if (!found) return { ok: false, reason: 'sem OpusHead' };
+  return { ok: true };
+}
+
 
 interface AudioRecorderProps {
   onSend: (audioBlob: Blob) => Promise<void>;
