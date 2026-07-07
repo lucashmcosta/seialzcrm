@@ -402,7 +402,38 @@ export function MetaWhatsAppCloudDialog({ open, onOpenChange, integration, orgIn
                 </p>
               </div>
 
+              <div className="space-y-2">
+                <Label>Destino das conversas deste número</Label>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                  <button
+                    type="button"
+                    onClick={() => setForm((f) => ({ ...f, purpose: "customer_service" }))}
+                    className={`text-left rounded-md border p-3 transition ${
+                      form.purpose === "customer_service"
+                        ? "border-primary bg-primary/5"
+                        : "border-border hover:border-muted-foreground/40"
+                    }`}
+                  >
+                    <p className="text-sm font-medium">Atendimento / CS</p>
+                    <p className="text-xs text-muted-foreground">Roteia para <code>/inbox</code></p>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setForm((f) => ({ ...f, purpose: "commercial" }))}
+                    className={`text-left rounded-md border p-3 transition ${
+                      form.purpose === "commercial"
+                        ? "border-primary bg-primary/5"
+                        : "border-border hover:border-muted-foreground/40"
+                    }`}
+                  >
+                    <p className="text-sm font-medium">Comercial</p>
+                    <p className="text-xs text-muted-foreground">Roteia para <code>/messages</code></p>
+                  </button>
+                </div>
+              </div>
+
               <div className="flex justify-between items-center pt-1 gap-2 flex-wrap">
+
                 <a
                   href="https://developers.facebook.com/docs/whatsapp/cloud-api/get-started"
                   target="_blank" rel="noreferrer"
