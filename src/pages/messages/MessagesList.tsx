@@ -2249,7 +2249,15 @@ function DesktopMessagesList() {
                                     onNoteClick={() => setIsNoteMode(true)}
                                     disabled={submitting || mediaUploading}
                                   />
-                                  <AudioRecorder onSend={handleAudioSend} disabled={submitting || mediaUploading} />
+                                  <AudioRecorder
+                                    onSend={handleAudioSend}
+                                    onSendAsDocument={handleAudioSendAsDocument}
+                                    disabled={submitting || mediaUploading}
+                                    endpointId={composerEndpointId ?? null}
+                                    threadId={selectedThreadId}
+                                    organizationId={organization?.id ?? null}
+                                  />
+
 
 
                                   {/* Emoji Picker */}
