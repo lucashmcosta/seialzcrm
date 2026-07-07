@@ -719,10 +719,11 @@ export function ContactMessages({ contactId, opportunityId }: ContactMessagesPro
                       onSend={handleAudioSend}
                       onSendAsDocument={handleAudioSendAsDocument}
                       disabled={submitting}
-                      endpointId={(selectedThread as any)?.primary_endpoint_id ?? null}
-                      threadId={selectedThreadId}
+                      endpointId={null}
+                      threadId={threadId}
                       organizationId={organization?.id ?? null}
                     />
+
 
 
                     {/* Emoji Picker */}
