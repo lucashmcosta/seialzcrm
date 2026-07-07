@@ -163,17 +163,17 @@ export function AudioRecorder({ onSend, onSendAsDocument, disabled, endpointId, 
         stream.getTracks().forEach((t) => t.stop());
       };
 
-      mediaRecorder.start(100);
+      // Start WITHOUT timeslice — we want a single blob on stop() containing the
+      // full OGG stream (BOS + OpusHead + data pages). Passing a timeslice caused
+      // premature ondataavailable emissions that lacked identification headers.
+      mediaRecorder.start();
+      startedAtRef.current = Date.now();
       setIsRecording(true);
       setRecordingTime(0);
-
-      // Step 2 — Encoder warmup: let the recorder run silently for a short window so
-      // the OGG BOS/OpusHead page is definitely emitted before the user's clock starts.
-      // Chunks captured during this window are KEPT (removing them would corrupt the container).
-      if (warmupTimerRef.current) clearTimeout(warmupTimerRef.current);
-      warmupTimerRef.current = setTimeout(() => {
-        timerRef.current = setInterval(() => setRecordingTime((prev) => prev + 1), 1000);
-      }, ENCODER_WARMUP_MS);
+      if (timerRef.current) clearInterval(timerRef.current);
+      timerRef.current = setInterval(() => {
+        setRecordingTime(Math.floor((Date.now() - startedAtRef.current) / 1000));
+      }, 250);
     } catch (error: any) {
       console.error('Error starting recording:', error);
       toast({
@@ -184,18 +184,17 @@ export function AudioRecorder({ onSend, onSendAsDocument, disabled, endpointId, 
   };
 
   const stopRecording = () => {
-    if (mediaRecorderRef.current && isRecording) {
-      mediaRecorderRef.current.stop();
-      setIsRecording(false);
-      if (timerRef.current) { clearInterval(timerRef.current); timerRef.current = null; }
-      if (warmupTimerRef.current) { clearTimeout(warmupTimerRef.current); warmupTimerRef.current = null; }
-    }
+    if (!mediaRecorderRef.current || !isRecording) return;
+    // Guard: never let the user stop before the encoder had time to emit BOS/OpusHead.
+    if (Date.now() - startedAtRef.current < MIN_RECORD_MS) return;
+    mediaRecorderRef.current.stop();
+    setIsRecording(false);
+    if (timerRef.current) { clearInterval(timerRef.current); timerRef.current = null; }
   };
 
   const resetRecording = () => {
     if (streamRef.current) streamRef.current.getTracks().forEach((t) => t.stop());
     if (timerRef.current) { clearInterval(timerRef.current); timerRef.current = null; }
-    if (warmupTimerRef.current) { clearTimeout(warmupTimerRef.current); warmupTimerRef.current = null; }
     setIsRecording(false);
     setRecordingTime(0);
     setAudioBlob(null);
