@@ -3,44 +3,40 @@ import { Button } from '@/components/ui/button';
 import { useToast } from '@/hooks/use-toast';
 import { Microphone, Square, PaperPlaneTilt, TrashSimple, SpinnerGap } from '@phosphor-icons/react';
 import OpusMediaRecorder from 'opus-media-recorder';
+// Serve worker + WASM from the local bundle — NO CDN.
+// encoderWorker.umd.js is a CLASSIC UMD worker; instantiate WITHOUT `{ type: 'module' }`.
+import workerUrl from 'opus-media-recorder/encoderWorker.umd.js?url';
+import oggWasmUrl from 'opus-media-recorder/OggOpusEncoder.wasm?url';
+import webmWasmUrl from 'opus-media-recorder/WebMOpusEncoder.wasm?url';
 import { logAudioEvent, type AudioTelemetryContext } from '@/lib/audioTelemetry';
 
-// Worker options for opus-media-recorder.
-// encoderWorker.umd.js is a CLASSIC UMD worker — never instantiate with `{ type: 'module' }`.
-const OMR_CDN = 'https://cdn.jsdelivr.net/npm/opus-media-recorder@latest';
-const WORKER_URL = `${OMR_CDN}/encoderWorker.umd.js`;
-const OGG_WASM_URL = `${OMR_CDN}/OggOpusEncoder.wasm`;
-const WEBM_WASM_URL = `${OMR_CDN}/WebMOpusEncoder.wasm`;
 const workerOptions = {
-  encoderWorkerFactory: () => new Worker(WORKER_URL),
-  OggOpusEncoderWasmPath: OGG_WASM_URL,
-  WebMOpusEncoderWasmPath: WEBM_WASM_URL,
+  encoderWorkerFactory: () => new Worker(workerUrl),
+  OggOpusEncoderWasmPath: oggWasmUrl,
+  WebMOpusEncoderWasmPath: webmWasmUrl,
 };
 
-// Cache preload promises so we only warm the CDN once per session.
+// Warm worker + WASM on mount so first click is fast and deterministic.
 let warmupPromise: Promise<void> | null = null;
 function warmupOpusPolyfill(): Promise<void> {
   if (warmupPromise) return warmupPromise;
   warmupPromise = (async () => {
     try {
       await Promise.all([
-        fetch(WORKER_URL, { mode: 'cors', cache: 'force-cache' }).then((r) => r.ok),
-        fetch(OGG_WASM_URL, { mode: 'cors', cache: 'force-cache' }).then((r) => r.ok),
+        fetch(workerUrl, { cache: 'force-cache' }).then((r) => r.ok),
+        fetch(oggWasmUrl, { cache: 'force-cache' }).then((r) => r.ok),
       ]);
     } catch (err) {
       console.warn('[AudioRecorder] polyfill warmup fetch failed (will retry on record)', err);
-      // Don't cache the failure — allow retry on real recording.
       warmupPromise = null;
     }
   })();
   return warmupPromise;
 }
 
-// The warmup window during which we let the encoder emit its BOS/OpusHead page
-// before the user's "real" recording clock starts. Chunks captured during this
-// window ARE kept in the final blob (removing them would break the OGG container),
-// but recordingTime is only counted after this delay.
-const ENCODER_WARMUP_MS = 300;
+// Minimum recording duration (ms) before the stop button is enabled.
+// Guarantees the encoder has time to emit BOS + OpusHead + at least one data page.
+const MIN_RECORD_MS = 1000;
 
 // Validate the recorded blob before allowing send.
 // Meta requires a real OGG Opus stream (OggS + OpusHead identification header).
