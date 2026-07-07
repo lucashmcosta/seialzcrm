@@ -341,9 +341,10 @@ export function AudioRecorder({ onSend, onSendAsDocument, disabled, endpointId, 
     return (
       <div className="flex flex-col gap-2 bg-muted rounded-lg px-3 py-2 w-full">
         <p className="text-xs text-muted-foreground">
-          Seu navegador só gera áudio WebM (não aceito pelo WhatsApp). Enviar como <strong>arquivo</strong>?
+          Seu navegador gerou um áudio em formato não compatível com WhatsApp. Enviar como <strong>arquivo</strong>?
           O destinatário verá um anexo em vez do player de áudio.
         </p>
+
         <div className="flex items-center gap-2 justify-end">
           <Button variant="ghost" size="sm" onClick={resetRecording} disabled={isSending}>Cancelar</Button>
           <Button size="sm" onClick={doSendAsDocument} disabled={isSending}>
