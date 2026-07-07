@@ -80,9 +80,11 @@ export function MetaWhatsAppCloudDialog({ open, onOpenChange, integration, orgIn
   const connectMutation = useMutation({
     mutationFn: async (opts: { skipMetaValidation?: boolean } = {}) => {
       if (!organization?.id) throw new Error("Organização indisponível");
+      const { purpose, ...rest } = form;
       return await metaWhatsAppService.connect({
         organizationId: organization.id,
-        ...form,
+        ...rest,
+        endpointPurpose: purpose,
         skipMetaValidation: opts.skipMetaValidation,
       });
     },
