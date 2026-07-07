@@ -397,6 +397,16 @@ export function AudioRecorder({ onSend, onSendAsDocument, disabled, endpointId, 
     return `${mins}:${secs.toString().padStart(2, '0')}`;
   };
 
+  // P4 — Processing state (stop clicked, waiting for onstop → blob)
+  if (isProcessing && !audioBlob) {
+    return (
+      <div className="flex items-center gap-2 bg-muted rounded-lg px-3 py-2">
+        <SpinnerGap className="w-4 h-4 animate-spin text-muted-foreground" />
+        <span className="text-sm font-medium text-muted-foreground">Processando áudio...</span>
+      </div>
+    );
+  }
+
   // WebM → document confirmation banner
   if (audioBlob && needsDocumentConfirm) {
     return (
