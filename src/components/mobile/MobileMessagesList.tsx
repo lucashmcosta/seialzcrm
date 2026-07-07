@@ -615,6 +615,17 @@ export function MobileMessagesList() {
     }
   };
 
+  const handleAudioSendAsDocument = async (audioBlob: Blob) => {
+    if (!organization?.id || !selectedThread) return;
+    try {
+      const audioFile = audioBlobToFile(audioBlob, `gravacao-${Date.now()}`);
+      await handleMediaUpload(audioFile, null, { forceMediaType: 'document' });
+    } catch (error: any) {
+      toast({ variant: 'destructive', description: error.message });
+    }
+  };
+
+
   const handleImproveText = async (mode: 'grammar' | 'professional' | 'friendly' | 'persuasive') => {
     if (!messageText.trim()) return;
     setAiImproving(true);
