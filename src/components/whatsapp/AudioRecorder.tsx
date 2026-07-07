@@ -38,6 +38,44 @@ function warmupOpusPolyfill(): Promise<void> {
 // Guarantees the encoder has time to emit BOS + OpusHead + at least one data page.
 const MIN_RECORD_MS = 1000;
 
+// P0 — Encoder warmup. After the first successful getUserMedia we instantiate a
+// throwaway OpusMediaRecorder against a silent AudioContext stream, run start/stop,
+// and discard the blob. This forces the browser to parse the Worker JS + compile
+// the WASM once, so the user's *next* recording starts near-instantly.
+let encoderWarmed = false;
+async function warmEncoder(): Promise<void> {
+  if (encoderWarmed) return;
+  encoderWarmed = true;
+  try {
+    const AC: typeof AudioContext =
+      (window as any).AudioContext || (window as any).webkitAudioContext;
+    if (!AC) { encoderWarmed = false; return; }
+    const ctx = new AC();
+    const dst = ctx.createMediaStreamDestination();
+    const gain = ctx.createGain();
+    gain.gain.value = 0; // silent
+    const osc = ctx.createOscillator();
+    osc.connect(gain).connect(dst);
+    osc.start();
+    const rec: any = new OpusMediaRecorder(
+      dst.stream,
+      { mimeType: 'audio/ogg;codecs=opus' },
+      workerOptions,
+    );
+    rec.ondataavailable = () => { /* discard */ };
+    rec.onstop = () => {
+      try { osc.stop(); osc.disconnect(); gain.disconnect(); } catch { /* noop */ }
+      try { dst.stream.getTracks().forEach((t) => t.stop()); } catch { /* noop */ }
+      try { ctx.close(); } catch { /* noop */ }
+    };
+    rec.start();
+    setTimeout(() => { try { rec.stop(); } catch { /* noop */ } }, 120);
+  } catch (err) {
+    console.warn('[AudioRecorder] encoder warm failed', err);
+    encoderWarmed = false;
+  }
+}
+
 // Validate the recorded blob before allowing send.
 // Meta requires a real OGG Opus stream (OggS + OpusHead identification header).
 async function validateOggOpus(blob: Blob): Promise<{ ok: true } | { ok: false; reason: string }> {
