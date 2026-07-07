@@ -238,6 +238,13 @@ export function AudioRecorder({ onSend, onSendAsDocument, disabled, endpointId, 
         console.error('[AudioRecorder] invalid OGG Opus blob', {
           size: audioBlob.size, type, reason: (check as { reason: string }).reason,
         });
+        logAudioEvent('audio_record_invalid_ogg', {
+          ...telemetryCtx,
+          mimeType: type,
+          durationMs: recordingTime * 1000,
+          sizeBytes: audioBlob.size,
+          error: (check as { reason: string }).reason,
+        });
         toast({
           variant: 'destructive',
           description: 'Falha ao gerar áudio. Tente gravar novamente com pelo menos 2 segundos.',
@@ -281,6 +288,12 @@ export function AudioRecorder({ onSend, onSendAsDocument, disabled, endpointId, 
     setIsSending(true);
     try {
       await onSend(audioBlob);
+      logAudioEvent('audio_record_success', {
+        ...telemetryCtx,
+        mimeType: audioBlob.type || null,
+        durationMs: recordingTime * 1000,
+        sizeBytes: audioBlob.size,
+      });
       resetRecording();
     } catch (error) {
       console.error('Error sending audio:', error);
@@ -294,6 +307,12 @@ export function AudioRecorder({ onSend, onSendAsDocument, disabled, endpointId, 
     setIsSending(true);
     try {
       await onSendAsDocument(audioBlob);
+      logAudioEvent('audio_record_fallback_webm_document', {
+        ...telemetryCtx,
+        mimeType: audioBlob.type || null,
+        durationMs: recordingTime * 1000,
+        sizeBytes: audioBlob.size,
+      });
       resetRecording();
     } catch (error) {
       console.error('Error sending audio as document:', error);
