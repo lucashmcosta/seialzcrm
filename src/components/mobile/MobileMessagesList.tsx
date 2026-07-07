@@ -547,7 +547,23 @@ export function MobileMessagesList() {
     }
   };
 
-  const handleMediaUpload = async (file: File, caption: string | null = null) => {
+  const handleMediaUpload = async (
+    file: File,
+    caption: string | null = null,
+    opts?: { forceMediaType?: 'document' | 'image' | 'audio' | 'video' },
+  ) => {
+    if (!organization?.id || !selectedThread) return;
+    setMediaUploading(true);
+    const fileExt = file.name.split('.').pop()?.toLowerCase() || 'bin';
+    const fileName = `${Date.now()}-${Math.random().toString(36).substring(7)}.${fileExt}`;
+    const filePath = `${organization.id}/${fileName}`;
+
+    let mediaType = 'document';
+    if (file.type.startsWith('image/')) mediaType = 'image';
+    else if (file.type.startsWith('audio/')) mediaType = 'audio';
+    else if (file.type.startsWith('video/')) mediaType = 'video';
+    if (opts?.forceMediaType) mediaType = opts.forceMediaType;
+
     if (!organization?.id || !selectedThread) return;
     setMediaUploading(true);
     setShowMediaPreview(false);
