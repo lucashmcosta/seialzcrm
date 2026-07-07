@@ -98,7 +98,6 @@ export function AudioRecorder({ onSend, onSendAsDocument, disabled, endpointId, 
   useEffect(() => {
     return () => {
       if (timerRef.current) clearInterval(timerRef.current);
-      if (warmupTimerRef.current) clearTimeout(warmupTimerRef.current);
       if (streamRef.current) streamRef.current.getTracks().forEach((t) => t.stop());
     };
   }, []);
