@@ -176,6 +176,30 @@ export function AudioRecorder({ onSend, disabled }: AudioRecorderProps) {
   const handleSend = async () => {
     if (!audioBlob) return;
 
+    // Guardas contra 131053: duração mínima, tamanho mínimo, cabeçalho OGG/Opus válido.
+    if (recordingTime < 1) {
+      toast({ variant: 'destructive', description: 'Áudio muito curto. Grave pelo menos 1 segundo.' });
+      return;
+    }
+    const type = (audioBlob.type || '').toLowerCase();
+    if (type.includes('ogg')) {
+      const check = await validateOggOpus(audioBlob);
+      if (!check.ok) {
+        console.error('[AudioRecorder] invalid OGG Opus blob', { size: audioBlob.size, type, reason: check.reason });
+        toast({ variant: 'destructive', description: 'Áudio inválido. Grave novamente.' });
+        setAudioBlob(null);
+        setRecordingTime(0);
+        chunksRef.current = [];
+        return;
+      }
+    } else if (audioBlob.size < 2048) {
+      toast({ variant: 'destructive', description: 'Áudio inválido. Grave novamente.' });
+      setAudioBlob(null);
+      setRecordingTime(0);
+      chunksRef.current = [];
+      return;
+    }
+
     setIsSending(true);
     try {
       await onSend(audioBlob);
@@ -187,6 +211,7 @@ export function AudioRecorder({ onSend, disabled }: AudioRecorderProps) {
       setIsSending(false);
     }
   };
+
 
   const formatTime = (seconds: number) => {
     const mins = Math.floor(seconds / 60);
