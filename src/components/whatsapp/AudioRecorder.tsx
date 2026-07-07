@@ -69,7 +69,7 @@ function pickNativeMime(): { mime: string; kind: RecorderKind } | null {
   return null;
 }
 
-interface AudioRecorderProps {
+interface AudioRecorderProps extends AudioTelemetryContext {
   onSend: (audioBlob: Blob) => Promise<void>;
   /** Optional escape hatch when the browser can only produce WebM. When provided,
    *  we offer to upload as a document instead of failing. */
@@ -77,7 +77,8 @@ interface AudioRecorderProps {
   disabled?: boolean;
 }
 
-export function AudioRecorder({ onSend, onSendAsDocument, disabled }: AudioRecorderProps) {
+export function AudioRecorder({ onSend, onSendAsDocument, disabled, endpointId, threadId, organizationId }: AudioRecorderProps) {
+  const telemetryCtx: AudioTelemetryContext = { endpointId, threadId, organizationId };
   const { toast } = useToast();
   const [isRecording, setIsRecording] = useState(false);
   const [recordingTime, setRecordingTime] = useState(0);
