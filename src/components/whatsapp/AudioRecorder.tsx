@@ -38,6 +38,44 @@ function warmupOpusPolyfill(): Promise<void> {
 // Guarantees the encoder has time to emit BOS + OpusHead + at least one data page.
 const MIN_RECORD_MS = 1000;
 
+// P0 — Encoder warmup. After the first successful getUserMedia we instantiate a
+// throwaway OpusMediaRecorder against a silent AudioContext stream, run start/stop,
+// and discard the blob. This forces the browser to parse the Worker JS + compile
+// the WASM once, so the user's *next* recording starts near-instantly.
+let encoderWarmed = false;
+async function warmEncoder(): Promise<void> {
+  if (encoderWarmed) return;
+  encoderWarmed = true;
+  try {
+    const AC: typeof AudioContext =
+      (window as any).AudioContext || (window as any).webkitAudioContext;
+    if (!AC) { encoderWarmed = false; return; }
+    const ctx = new AC();
+    const dst = ctx.createMediaStreamDestination();
+    const gain = ctx.createGain();
+    gain.gain.value = 0; // silent
+    const osc = ctx.createOscillator();
+    osc.connect(gain).connect(dst);
+    osc.start();
+    const rec: any = new OpusMediaRecorder(
+      dst.stream,
+      { mimeType: 'audio/ogg;codecs=opus' },
+      workerOptions,
+    );
+    rec.ondataavailable = () => { /* discard */ };
+    rec.onstop = () => {
+      try { osc.stop(); osc.disconnect(); gain.disconnect(); } catch { /* noop */ }
+      try { dst.stream.getTracks().forEach((t) => t.stop()); } catch { /* noop */ }
+      try { ctx.close(); } catch { /* noop */ }
+    };
+    rec.start();
+    setTimeout(() => { try { rec.stop(); } catch { /* noop */ } }, 120);
+  } catch (err) {
+    console.warn('[AudioRecorder] encoder warm failed', err);
+    encoderWarmed = false;
+  }
+}
+
 // Validate the recorded blob before allowing send.
 // Meta requires a real OGG Opus stream (OggS + OpusHead identification header).
 async function validateOggOpus(blob: Blob): Promise<{ ok: true } | { ok: false; reason: string }> {
@@ -81,6 +119,7 @@ export function AudioRecorder({ onSend, onSendAsDocument, disabled, endpointId, 
   const [audioBlob, setAudioBlob] = useState<Blob | null>(null);
   const [recordedKind, setRecordedKind] = useState<RecorderKind | null>(null);
   const [isSending, setIsSending] = useState(false);
+  const [isProcessing, setIsProcessing] = useState(false); // P4 — stop→onstop feedback
   const [needsDocumentConfirm, setNeedsDocumentConfirm] = useState(false);
 
   const mediaRecorderRef = useRef<any>(null);
@@ -89,6 +128,9 @@ export function AudioRecorder({ onSend, onSendAsDocument, disabled, endpointId, 
   const startedAtRef = useRef<number>(0);
   const streamRef = useRef<MediaStream | null>(null);
   const recorderKindRef = useRef<RecorderKind | null>(null);
+  // P3 — reentrancy locks
+  const isStartingRef = useRef(false);
+  const isStoppingRef = useRef(false);
 
   // Step 1 — Warmup polyfill (worker + WASM) on mount so first click is fast and deterministic.
   useEffect(() => {
@@ -103,14 +145,22 @@ export function AudioRecorder({ onSend, onSendAsDocument, disabled, endpointId, 
   }, []);
 
   const startRecording = async () => {
+    // P3 — prevent double-click storming getUserMedia
+    if (isStartingRef.current || isRecording || audioBlob) return;
+    isStartingRef.current = true;
     try {
-      // Best-effort warmup before touching the mic (usually already cached from mount).
-      await warmupOpusPolyfill();
+      // P2 — do NOT await warmup; run it in parallel with getUserMedia so the
+      // 1st click is not serialized behind fetch()es.
+      void warmupOpusPolyfill();
 
       const stream = await navigator.mediaDevices.getUserMedia({
         audio: { echoCancellation: true, noiseSuppression: true, sampleRate: 48000 },
       });
       streamRef.current = stream;
+
+      // P0 — after first successful getUserMedia, kick off the encoder warm
+      // (fire-and-forget) so subsequent recordings skip Worker/WASM init cost.
+      void warmEncoder();
 
       let mediaRecorder: any = null;
       let kind: RecorderKind | null = null;
@@ -160,6 +210,8 @@ export function AudioRecorder({ onSend, onSendAsDocument, disabled, endpointId, 
         const blob = new Blob(chunksRef.current, { type: actualType });
         setAudioBlob(blob);
         setRecordedKind(recorderKindRef.current);
+        setIsProcessing(false); // P4 — end spinner
+        isStoppingRef.current = false;
         stream.getTracks().forEach((t) => t.stop());
       };
 
@@ -180,27 +232,42 @@ export function AudioRecorder({ onSend, onSendAsDocument, disabled, endpointId, 
         variant: 'destructive',
         description: 'Não foi possível acessar o microfone. Verifique as permissões.',
       });
+    } finally {
+      isStartingRef.current = false;
     }
   };
 
   const stopRecording = () => {
+    // P3 — reentrancy guard
+    if (isStoppingRef.current) return;
     if (!mediaRecorderRef.current || !isRecording) return;
     // Guard: never let the user stop before the encoder had time to emit BOS/OpusHead.
     if (Date.now() - startedAtRef.current < MIN_RECORD_MS) return;
-    mediaRecorderRef.current.stop();
+    isStoppingRef.current = true;
+    setIsProcessing(true); // P4 — immediate visual feedback while worker flushes
     setIsRecording(false);
     if (timerRef.current) { clearInterval(timerRef.current); timerRef.current = null; }
+    try {
+      mediaRecorderRef.current.stop();
+    } catch (err) {
+      console.error('[AudioRecorder] stop() threw', err);
+      setIsProcessing(false);
+      isStoppingRef.current = false;
+    }
   };
 
   const resetRecording = () => {
     if (streamRef.current) streamRef.current.getTracks().forEach((t) => t.stop());
     if (timerRef.current) { clearInterval(timerRef.current); timerRef.current = null; }
     setIsRecording(false);
+    setIsProcessing(false);
     setRecordingTime(0);
     setAudioBlob(null);
     setRecordedKind(null);
     setNeedsDocumentConfirm(false);
     chunksRef.current = [];
+    isStartingRef.current = false;
+    isStoppingRef.current = false;
   };
 
   const cancelRecording = () => {
@@ -329,6 +396,16 @@ export function AudioRecorder({ onSend, onSendAsDocument, disabled, endpointId, 
     const secs = seconds % 60;
     return `${mins}:${secs.toString().padStart(2, '0')}`;
   };
+
+  // P4 — Processing state (stop clicked, waiting for onstop → blob)
+  if (isProcessing && !audioBlob) {
+    return (
+      <div className="flex items-center gap-2 bg-muted rounded-lg px-3 py-2">
+        <SpinnerGap className="w-4 h-4 animate-spin text-muted-foreground" />
+        <span className="text-sm font-medium text-muted-foreground">Processando áudio...</span>
+      </div>
+    );
+  }
 
   // WebM → document confirmation banner
   if (audioBlob && needsDocumentConfirm) {
