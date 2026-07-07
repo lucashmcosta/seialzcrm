@@ -87,18 +87,23 @@ export function AudioRecorder({ onSend, disabled }: AudioRecorderProps) {
       let mediaRecorder: any;
       
       try {
-        // Try to use OpusMediaRecorder (polyfill for OGG Opus)
+        // Try to use OpusMediaRecorder (polyfill for OGG Opus — required by Meta Cloud API)
         mediaRecorder = new OpusMediaRecorder(stream, { mimeType }, workerOptions);
       } catch (polyfillError) {
-        console.warn('OpusMediaRecorder failed, trying native:', polyfillError);
-        // Fallback to native MediaRecorder
-        const nativeMimeType = MediaRecorder.isTypeSupported('audio/ogg;codecs=opus')
-          ? 'audio/ogg;codecs=opus'
-          : MediaRecorder.isTypeSupported('audio/webm;codecs=opus')
-          ? 'audio/webm;codecs=opus'
-          : 'audio/webm';
-        mediaRecorder = new MediaRecorder(stream, { mimeType: nativeMimeType });
+        console.warn('OpusMediaRecorder failed, trying native OGG Opus:', polyfillError);
+        // Only fall back to native if it supports OGG Opus. Meta rejects audio/webm.
+        if (MediaRecorder.isTypeSupported('audio/ogg;codecs=opus')) {
+          mediaRecorder = new MediaRecorder(stream, { mimeType: 'audio/ogg;codecs=opus' });
+        } else {
+          stream.getTracks().forEach((t) => t.stop());
+          toast({
+            variant: 'destructive',
+            description: 'Formato de áudio não suportado neste navegador. Use Chrome/Firefox atualizado.',
+          });
+          return;
+        }
       }
+
       
       mediaRecorderRef.current = mediaRecorder;
       chunksRef.current = [];
@@ -182,6 +187,15 @@ export function AudioRecorder({ onSend, disabled }: AudioRecorderProps) {
       return;
     }
     const type = (audioBlob.type || '').toLowerCase();
+    // Meta Cloud API rejeita WebM. Nunca enviar áudio nesse container.
+    if (type.includes('webm')) {
+      console.error('[AudioRecorder] blocked webm audio', { size: audioBlob.size, type });
+      toast({ variant: 'destructive', description: 'Formato de áudio não suportado. Grave novamente.' });
+      setAudioBlob(null);
+      setRecordingTime(0);
+      chunksRef.current = [];
+      return;
+    }
     if (type.includes('ogg')) {
       const check = await validateOggOpus(audioBlob);
       if (!check.ok) {
@@ -192,13 +206,16 @@ export function AudioRecorder({ onSend, disabled }: AudioRecorderProps) {
         chunksRef.current = [];
         return;
       }
-    } else if (audioBlob.size < 2048) {
-      toast({ variant: 'destructive', description: 'Áudio inválido. Grave novamente.' });
+    } else {
+      // Qualquer outro container que não seja OGG é bloqueado — Meta só aceita OGG/Opus, MP3, MP4, AAC, AMR.
+      console.error('[AudioRecorder] unsupported audio mime', { size: audioBlob.size, type });
+      toast({ variant: 'destructive', description: 'Formato de áudio não suportado. Grave novamente.' });
       setAudioBlob(null);
       setRecordingTime(0);
       chunksRef.current = [];
       return;
     }
+
 
     setIsSending(true);
     try {

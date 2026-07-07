@@ -760,6 +760,23 @@ serve(async (req) => {
           ? payloadFilename
           : filenameFromUrl(sourceUrl, `file-${Date.now()}`);
 
+        // Guard: Meta Cloud API rejeita audio/webm ("Received file of type 'audio/webm'").
+        // Rejeitar antes do upload para não gastar Graph call e dar erro claro ao cliente.
+        if (kind === "audio") {
+          const effectiveCt = (mimeUsed || headerCt || "").toLowerCase();
+          if (effectiveCt.includes("webm")) {
+            return new Response(
+              JSON.stringify({
+                error: "unsupported_audio_mime",
+                message: "Áudio WebM não é aceito pela Meta. Grave novamente.",
+                details: { received: effectiveCt },
+              }),
+              { status: 415, headers: { ...corsHeaders, "Content-Type": "application/json" } },
+            );
+          }
+        }
+
+
         // 2) Upload para Graph
         const uploaded = await metaWaUploadMedia(
           endpoint.sender_sid,
