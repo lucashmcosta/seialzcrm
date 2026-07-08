@@ -1,8 +1,10 @@
 import { useState, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { useQueryClient } from '@tanstack/react-query';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
+import { Checkbox } from '@/components/ui/checkbox';
 import {
   Select,
   SelectContent,
@@ -48,6 +50,8 @@ import {
 } from '@/hooks/useWhatsAppTemplates';
 import { useOrganization } from '@/hooks/useOrganization';
 import { useActiveWhatsAppProviders } from '@/hooks/useActiveWhatsAppProviders';
+import { supabase } from '@/integrations/supabase/client';
+import { useToast } from '@/hooks/use-toast';
 import {
   Plus,
   ArrowsClockwise,
@@ -59,6 +63,8 @@ import {
   ChatCircle,
   SpinnerGap,
   CaretDown,
+  Tag,
+  Warning,
 } from '@phosphor-icons/react';
 import { formatDistanceToNow } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
@@ -67,13 +73,31 @@ type FilterStatus = 'all' | 'approved' | 'pending' | 'rejected' | 'not_submitted
 type FilterType = 'all' | 'text' | 'quick-reply' | 'list-picker' | 'call-to-action' | 'media';
 type FilterLanguage = 'all' | 'pt_BR' | 'pt-BR' | 'en' | 'es';
 type FilterProvider = 'all' | 'twilio' | 'meta_cloud_api';
+type FilterPurpose = 'all' | 'unclassified' | 'commercial' | 'customer_service' | 'vendor_personal' | 'other';
+
+const PURPOSE_OPTIONS: Array<{ value: string; label: string }> = [
+  { value: 'commercial', label: 'Comercial' },
+  { value: 'customer_service', label: 'Atendimento' },
+  { value: 'vendor_personal', label: 'Pessoal/Vendedor' },
+  { value: 'other', label: 'Outros' },
+];
+
+const PURPOSE_LABEL: Record<string, string> = Object.fromEntries(
+  PURPOSE_OPTIONS.map((o) => [o.value, o.label]),
+);
 
 function isMetaTemplate(t: { provider?: string }) {
   return t.provider === 'meta_cloud_api';
 }
 
+function getPurposes(t: { allowed_purposes?: string[] | null }): string[] {
+  return Array.isArray(t.allowed_purposes) ? t.allowed_purposes : [];
+}
+
 export default function WhatsAppTemplates() {
   const navigate = useNavigate();
+  const queryClient = useQueryClient();
+  const { toast } = useToast();
   const { organization } = useOrganization();
   const { data: templates, isLoading } = useTemplates(organization?.id);
   const deleteMutation = useDeleteTemplate();
@@ -86,11 +110,21 @@ export default function WhatsAppTemplates() {
   const [filterType, setFilterType] = useState<FilterType>('all');
   const [filterLanguage, setFilterLanguage] = useState<FilterLanguage>('all');
   const [filterProvider, setFilterProvider] = useState<FilterProvider>('all');
+  const [filterPurpose, setFilterPurpose] = useState<FilterPurpose>('all');
   const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false);
   const [selectedTemplateId, setSelectedTemplateId] = useState<string | null>(null);
   const [selectedTemplateName, setSelectedTemplateName] = useState<string>('');
   const [submitDialogOpen, setSubmitDialogOpen] = useState(false);
   const [selectedCategory, setSelectedCategory] = useState<string>('UTILITY');
+
+  // Bulk selection
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+
+  // Purpose classification dialog
+  const [purposeDialogOpen, setPurposeDialogOpen] = useState(false);
+  const [purposeTargets, setPurposeTargets] = useState<string[]>([]);
+  const [purposeForm, setPurposeForm] = useState<string[]>([]);
+  const [savingPurposes, setSavingPurposes] = useState(false);
 
   const filteredTemplates = useMemo(() => {
     return templates?.filter(template => {
@@ -101,9 +135,105 @@ export default function WhatsAppTemplates() {
         const p = isMetaTemplate(template) ? 'meta_cloud_api' : 'twilio';
         if (p !== filterProvider) return false;
       }
+      if (filterPurpose !== 'all') {
+        const ap = getPurposes(template);
+        if (filterPurpose === 'unclassified') {
+          if (ap.length > 0) return false;
+        } else if (!ap.includes(filterPurpose)) {
+          return false;
+        }
+      }
       return true;
     }) || [];
-  }, [templates, filterStatus, filterType, filterLanguage, filterProvider]);
+  }, [templates, filterStatus, filterType, filterLanguage, filterProvider, filterPurpose]);
+
+  const unclassifiedCount = useMemo(
+    () => (templates ?? []).filter((t) => getPurposes(t).length === 0).length,
+    [templates],
+  );
+
+  const allVisibleSelected =
+    filteredTemplates.length > 0 &&
+    filteredTemplates.every((t) => selectedIds.has(t.id));
+
+  const toggleAllVisible = (checked: boolean) => {
+    setSelectedIds((prev) => {
+      const next = new Set(prev);
+      if (checked) filteredTemplates.forEach((t) => next.add(t.id));
+      else filteredTemplates.forEach((t) => next.delete(t.id));
+      return next;
+    });
+  };
+
+  const toggleOne = (id: string, checked: boolean) => {
+    setSelectedIds((prev) => {
+      const next = new Set(prev);
+      if (checked) next.add(id);
+      else next.delete(id);
+      return next;
+    });
+  };
+
+  const openPurposeDialogForOne = (id: string) => {
+    const tpl = templates?.find((t) => t.id === id);
+    setPurposeTargets([id]);
+    setPurposeForm(getPurposes(tpl ?? { allowed_purposes: [] }));
+    setPurposeDialogOpen(true);
+  };
+
+  const openPurposeDialogForSelection = () => {
+    const ids = Array.from(selectedIds);
+    if (ids.length === 0) return;
+    // Se todos os selecionados têm o mesmo conjunto → prefill; senão vazio.
+    const first = getPurposes(templates?.find((t) => t.id === ids[0]) ?? { allowed_purposes: [] })
+      .slice()
+      .sort()
+      .join(',');
+    const allSame = ids.every((id) => {
+      const p = getPurposes(templates?.find((t) => t.id === id) ?? { allowed_purposes: [] })
+        .slice()
+        .sort()
+        .join(',');
+      return p === first;
+    });
+    setPurposeTargets(ids);
+    setPurposeForm(allSame && first ? first.split(',') : []);
+    setPurposeDialogOpen(true);
+  };
+
+  const togglePurposeInForm = (value: string, checked: boolean) => {
+    setPurposeForm((prev) => {
+      if (checked) return Array.from(new Set([...prev, value]));
+      return prev.filter((p) => p !== value);
+    });
+  };
+
+  const savePurposes = async () => {
+    if (purposeTargets.length === 0 || !organization?.id) return;
+    setSavingPurposes(true);
+    const { error } = await supabase
+      .from('whatsapp_templates')
+      .update({ allowed_purposes: purposeForm })
+      .in('id', purposeTargets)
+      .eq('organization_id', organization.id);
+    setSavingPurposes(false);
+    if (error) {
+      toast({ variant: 'destructive', description: `Falha ao classificar: ${error.message}` });
+      return;
+    }
+    toast({
+      description:
+        purposeTargets.length === 1
+          ? 'Classificação salva.'
+          : `${purposeTargets.length} templates classificados.`,
+    });
+    setPurposeDialogOpen(false);
+    setPurposeTargets([]);
+    setPurposeForm([]);
+    setSelectedIds(new Set());
+    queryClient.invalidateQueries({ queryKey: ['whatsapp-templates', organization.id] });
+    queryClient.invalidateQueries({ queryKey: ['whatsapp-template'] });
+  };
 
   const handleDelete = (templateId: string, templateName: string) => {
     setSelectedTemplateId(templateId);
@@ -122,11 +252,33 @@ export default function WhatsAppTemplates() {
     }
   };
 
+  const notifyUnclassifiedAfterSync = () => {
+    // Aguarda invalidação/refetch e checa quantos ficam sem purpose.
+    setTimeout(async () => {
+      if (!organization?.id) return;
+      const { count } = await supabase
+        .from('whatsapp_templates')
+        .select('id', { count: 'exact', head: true })
+        .eq('organization_id', organization.id)
+        .eq('is_active', true)
+        .or('allowed_purposes.is.null,allowed_purposes.eq.{}');
+      if ((count ?? 0) > 0) {
+        toast({
+          description: `${count} template(s) precisam ser classificados antes de aparecer no composer.`,
+        });
+      }
+    }, 800);
+  };
+
   const handleSyncTwilio = () => {
-    if (organization?.id) syncMutation.mutate(organization.id);
+    if (organization?.id) {
+      syncMutation.mutate(organization.id, { onSuccess: notifyUnclassifiedAfterSync });
+    }
   };
   const handleSyncMeta = () => {
-    if (organization?.id) syncMetaMutation.mutate(organization.id);
+    if (organization?.id) {
+      syncMetaMutation.mutate(organization.id, { onSuccess: notifyUnclassifiedAfterSync });
+    }
   };
 
   const openSubmitDialog = (templateId: string) => {
@@ -257,6 +409,29 @@ export default function WhatsAppTemplates() {
         </div>
       </div>
 
+      {/* Unclassified banner */}
+      {unclassifiedCount > 0 && (
+        <div className="rounded-md border border-amber-500/40 bg-amber-500/10 px-4 py-3 text-sm flex items-start gap-3">
+          <Warning size={18} weight="fill" className="text-amber-600 mt-0.5 shrink-0" />
+          <div className="flex-1">
+            <p className="font-medium text-amber-900 dark:text-amber-200">
+              {unclassifiedCount} template(s) não classificados
+            </p>
+            <p className="text-xs text-amber-800/80 dark:text-amber-200/80 mt-0.5">
+              Templates sem "Usar em" não aparecem no composer de /messages ou /inbox.
+              Classifique abaixo para liberar o envio.
+            </p>
+          </div>
+          <Button
+            size="sm"
+            variant="outline"
+            onClick={() => setFilterPurpose('unclassified')}
+          >
+            Ver não classificados
+          </Button>
+        </div>
+      )}
+
       {/* Filters */}
       <div className="flex flex-wrap gap-3">
         <Select value={filterStatus} onValueChange={(v) => setFilterStatus(v as FilterStatus)}>
@@ -309,7 +484,36 @@ export default function WhatsAppTemplates() {
             <SelectItem value="meta_cloud_api">Meta Cloud</SelectItem>
           </SelectContent>
         </Select>
+
+        <Select value={filterPurpose} onValueChange={(v) => setFilterPurpose(v as FilterPurpose)}>
+          <SelectTrigger className="w-[180px]">
+            <SelectValue placeholder="Uso" />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="all">Todos os Usos</SelectItem>
+            <SelectItem value="unclassified">Não classificados</SelectItem>
+            {PURPOSE_OPTIONS.map((o) => (
+              <SelectItem key={o.value} value={o.value}>{o.label}</SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
       </div>
+
+      {/* Bulk action bar */}
+      {selectedIds.size > 0 && (
+        <div className="flex items-center justify-between gap-3 rounded-md border bg-muted/40 px-4 py-2 text-sm">
+          <span>{selectedIds.size} selecionado(s)</span>
+          <div className="flex gap-2">
+            <Button size="sm" variant="ghost" onClick={() => setSelectedIds(new Set())}>
+              Limpar
+            </Button>
+            <Button size="sm" onClick={openPurposeDialogForSelection}>
+              <Tag className="w-4 h-4 mr-2" />
+              Classificar uso
+            </Button>
+          </div>
+        </div>
+      )}
 
       {/* Content */}
       {isLoading ? (
@@ -318,8 +522,10 @@ export default function WhatsAppTemplates() {
             <Table>
               <TableHeader>
                 <TableRow>
+                  <TableHead className="w-10"></TableHead>
                   <TableHead>Nome</TableHead>
                   <TableHead>Provider</TableHead>
+                  <TableHead>Usar em</TableHead>
                   <TableHead>Tipo</TableHead>
                   <TableHead>Idioma</TableHead>
                   <TableHead>Status</TableHead>
@@ -330,8 +536,10 @@ export default function WhatsAppTemplates() {
               <TableBody>
                 {[1, 2, 3].map((i) => (
                   <TableRow key={i}>
+                    <TableCell></TableCell>
                     <TableCell><Skeleton className="h-4 w-40" /></TableCell>
                     <TableCell><Skeleton className="h-6 w-20" /></TableCell>
+                    <TableCell><Skeleton className="h-4 w-24" /></TableCell>
                     <TableCell><Skeleton className="h-4 w-24" /></TableCell>
                     <TableCell><Skeleton className="h-4 w-20" /></TableCell>
                     <TableCell><Skeleton className="h-6 w-24" /></TableCell>
@@ -366,8 +574,16 @@ export default function WhatsAppTemplates() {
             <Table>
               <TableHeader>
                 <TableRow>
+                  <TableHead className="w-10">
+                    <Checkbox
+                      checked={allVisibleSelected}
+                      onCheckedChange={(v) => toggleAllVisible(!!v)}
+                      aria-label="Selecionar todos"
+                    />
+                  </TableHead>
                   <TableHead>Nome</TableHead>
                   <TableHead>Provider</TableHead>
+                  <TableHead>Usar em</TableHead>
                   <TableHead>Tipo</TableHead>
                   <TableHead>Idioma</TableHead>
                   <TableHead>Status</TableHead>
@@ -378,8 +594,17 @@ export default function WhatsAppTemplates() {
               <TableBody>
                 {filteredTemplates.map((template) => {
                   const isMeta = isMetaTemplate(template);
+                  const purposes = getPurposes(template);
+                  const unclassified = purposes.length === 0;
                   return (
-                    <TableRow key={template.id}>
+                    <TableRow key={template.id} data-state={selectedIds.has(template.id) ? 'selected' : undefined}>
+                      <TableCell>
+                        <Checkbox
+                          checked={selectedIds.has(template.id)}
+                          onCheckedChange={(v) => toggleOne(template.id, !!v)}
+                          aria-label={`Selecionar ${template.friendly_name}`}
+                        />
+                      </TableCell>
                       <TableCell>
                         <div className="font-medium">{template.friendly_name}</div>
                         <div className="text-xs text-muted-foreground truncate max-w-xs">
@@ -395,6 +620,35 @@ export default function WhatsAppTemplates() {
                           <Badge className="bg-sky-500/15 text-sky-700 dark:text-sky-400 border border-sky-500/30 hover:bg-sky-500/15">
                             Twilio
                           </Badge>
+                        )}
+                      </TableCell>
+                      <TableCell>
+                        {unclassified ? (
+                          <TooltipProvider>
+                            <Tooltip>
+                              <TooltipTrigger asChild>
+                                <button
+                                  type="button"
+                                  onClick={() => openPurposeDialogForOne(template.id)}
+                                  className="inline-flex items-center gap-1 rounded border border-amber-500/40 bg-amber-500/10 px-2 py-0.5 text-[11px] font-medium text-amber-800 dark:text-amber-300 hover:bg-amber-500/20"
+                                >
+                                  <Warning size={11} weight="fill" />
+                                  Não classificado
+                                </button>
+                              </TooltipTrigger>
+                              <TooltipContent className="max-w-xs">
+                                Este template não aparecerá no envio até ser classificado.
+                              </TooltipContent>
+                            </Tooltip>
+                          </TooltipProvider>
+                        ) : (
+                          <div className="flex flex-wrap gap-1">
+                            {purposes.map((p) => (
+                              <Badge key={p} variant="outline" className="text-[10px]">
+                                {PURPOSE_LABEL[p] ?? p}
+                              </Badge>
+                            ))}
+                          </div>
                         )}
                       </TableCell>
                       <TableCell>
@@ -437,6 +691,10 @@ export default function WhatsAppTemplates() {
                             <DropdownMenuItem onClick={() => navigate(`/whatsapp/templates/${template.id}`)}>
                               <Eye className="w-4 h-4 mr-2" />
                               Ver Detalhes
+                            </DropdownMenuItem>
+                            <DropdownMenuItem onClick={() => openPurposeDialogForOne(template.id)}>
+                              <Tag className="w-4 h-4 mr-2" />
+                              Classificar uso
                             </DropdownMenuItem>
                             {template.status !== 'approved' && (
                               <DropdownMenuItem onClick={() => navigate(`/whatsapp/templates/${template.id}/edit`)}>
@@ -486,6 +744,57 @@ export default function WhatsAppTemplates() {
         onConfirm={confirmDelete}
         loading={deleteMutation.isPending}
       />
+
+      {/* Purpose classification dialog */}
+      <Dialog open={purposeDialogOpen} onOpenChange={setPurposeDialogOpen}>
+        <DialogContent size="sm">
+          <DialogHeader>
+            <DialogTitle>Classificar uso</DialogTitle>
+            <DialogDescription>
+              Escolha em quais contextos {purposeTargets.length > 1 ? `estes ${purposeTargets.length} templates` : 'este template'} pode ser enviado.
+              O composer só mostra templates cujo uso corresponde ao endpoint da conversa.
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="space-y-2 py-2">
+            {PURPOSE_OPTIONS.map((opt) => {
+              const checked = purposeForm.includes(opt.value);
+              return (
+                <label
+                  key={opt.value}
+                  className="flex items-center gap-3 rounded border px-3 py-2 cursor-pointer hover:bg-muted/40"
+                >
+                  <Checkbox
+                    checked={checked}
+                    onCheckedChange={(v) => togglePurposeInForm(opt.value, !!v)}
+                  />
+                  <span className="text-sm">{opt.label}</span>
+                </label>
+              );
+            })}
+            {purposeForm.length === 0 && (
+              <p className="text-xs text-amber-700 dark:text-amber-300 flex items-center gap-1 pt-1">
+                <Warning size={12} weight="fill" />
+                Sem seleção o template continuará oculto no composer.
+              </p>
+            )}
+          </div>
+
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setPurposeDialogOpen(false)}>
+              Cancelar
+            </Button>
+            <Button onClick={savePurposes} disabled={savingPurposes}>
+              {savingPurposes ? (
+                <SpinnerGap className="w-4 h-4 mr-2 animate-spin" />
+              ) : (
+                <Tag className="w-4 h-4 mr-2" />
+              )}
+              Salvar
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       {/* Submit for Approval Dialog */}
       <Dialog open={submitDialogOpen} onOpenChange={setSubmitDialogOpen}>
