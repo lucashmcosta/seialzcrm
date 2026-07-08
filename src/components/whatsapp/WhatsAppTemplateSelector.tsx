@@ -298,6 +298,31 @@ export function WhatsAppTemplateSelector({
         </div>
       )}
 
+      {/* PR0.5: aviso admin — templates não classificados nesta WABA */}
+      {permissions.canManageSettings && unclassifiedCount > 0 && endpointIntegrationId && (
+        <div className="mx-4 mb-2 rounded border border-amber-500/40 bg-amber-500/10 px-3 py-2 text-[11px] flex items-start gap-2">
+          <Warning size={14} weight="fill" className="text-amber-600 mt-0.5 flex-shrink-0" />
+          <div className="flex-1 min-w-0">
+            <p className="font-medium text-amber-900 dark:text-amber-200">
+              {unclassifiedCount} template(s) precisam ser classificados para aparecer no envio
+            </p>
+          </div>
+          <Button
+            size="sm"
+            variant="outline"
+            className="h-6 px-2 text-[11px]"
+            onClick={() =>
+              navigate(
+                `/settings/whatsapp-templates?filter=unclassified&integration=${endpointIntegrationId}`,
+              )
+            }
+          >
+            Classificar agora
+          </Button>
+        </div>
+      )}
+
+
       {templates.length === 0 ? (
         <Card className="mx-4">
           <CardContent className="py-8 text-center">
