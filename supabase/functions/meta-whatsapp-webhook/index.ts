@@ -270,7 +270,7 @@ serve(async (req) => {
             contextId: null,
             signatureValid: signatureMatch,
             rawPayload: change,
-            rawHeaders: headersForAudit,
+            rawHeaders: auditHeaders,
             kind: "unknown",
           }).then((auditId) => updateInboundEventStatus(supabase, auditId, {
             processStatus: "failed",
