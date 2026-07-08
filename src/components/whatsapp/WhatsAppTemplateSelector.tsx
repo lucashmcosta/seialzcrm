@@ -74,18 +74,31 @@ export function WhatsAppTemplateSelector({
     setLoadingTemplates(true);
 
     try {
-      // Resolve o purpose do endpoint (governança interna)
+      // Resolve purpose + organization_integration_id do endpoint (isolamento por WABA)
       let purpose: string | null = null;
+      let endpointIntegrationId: string | null = null;
       if (endpointId) {
         const { data: ep } = await supabase
           .from('communication_endpoints')
-          .select('purpose')
+          .select('purpose, organization_integration_id')
           .eq('id', endpointId)
           .maybeSingle();
         purpose = (ep?.purpose as string | null) ?? null;
+        endpointIntegrationId = (ep?.organization_integration_id as string | null) ?? null;
         setEndpointPurpose(purpose);
       } else {
         setEndpointPurpose(null);
+      }
+
+      // PR0 multi-WABA: fail-closed para Meta Cloud sem integration_id resolvido.
+      // Evita mistura de templates entre WABAs distintas na mesma org.
+      if (provider === 'meta_cloud_api' && !endpointIntegrationId) {
+        console.warn(
+          '[WhatsAppTemplateSelector] Meta Cloud sem organization_integration_id resolvido — ocultando templates (fail-closed).',
+          { endpointId },
+        );
+        setTemplates([]);
+        return;
       }
 
       let query = supabase
@@ -96,9 +109,12 @@ export function WhatsAppTemplateSelector({
         .eq('is_active', true);
 
       if (provider === 'meta_cloud_api') {
-        query = query.eq('provider', 'meta_cloud_api');
+        query = query
+          .eq('provider', 'meta_cloud_api')
+          .eq('organization_integration_id', endpointIntegrationId as string);
       } else {
         // Default Twilio: inclui rows antigas (provider IS NULL) e provider='twilio'.
+        // Twilio não é multi-WABA — mantém comportamento atual.
         query = query.or('provider.is.null,provider.eq.twilio');
       }
 
@@ -107,10 +123,9 @@ export function WhatsAppTemplateSelector({
       if (error) throw error;
       const all = (data || []) as Template[];
 
-      // PR2: filtro por endpoint.purpose (governança Seialz)
+      // Filtro por endpoint.purpose (governança Seialz)
       // - templates com allowed_purposes vazio/null ficam ocultos
       // - se endpoint tem purpose, mostrar só templates cujo allowed_purposes contém o purpose
-      // - se sem endpointId, aplicar filtro conservador: ocultar {}/null
       const filtered = all.filter((t) => {
         const ap = t.allowed_purposes;
         if (!ap || ap.length === 0) return false;
