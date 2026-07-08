@@ -19,7 +19,9 @@ import {
 import { WhatsAppInboundSettings } from "@/components/settings/WhatsAppInboundSettings";
 import { AddMetaWhatsAppNumberDialog } from "./AddMetaWhatsAppNumberDialog";
 import { MetaAdditionalEndpointsSection } from "./MetaAdditionalEndpointsSection";
+import { MetaWabasSection } from "./MetaWabasSection";
 import { MigrateEndpointDialog } from "./MigrateEndpointDialog";
+import { useMetaMultiWabaFlag } from "@/hooks/useMetaMultiWabaFlag";
 
 interface Props {
   open: boolean;
