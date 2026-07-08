@@ -88,14 +88,17 @@ serve(async (req) => {
     const body = (await req.json().catch(() => null)) as ConnectBody | null;
     if (!body) return err(400, "invalid_json");
 
-    const mode: "primary" | "additional" | "migrate" | "migrate_dry_run" | "add_waba" =
-      body.mode === "additional" || body.mode === "migrate" || body.mode === "migrate_dry_run" || body.mode === "add_waba"
+    const mode: "primary" | "additional" | "migrate" | "migrate_dry_run" | "add_waba" | "resubscribe_webhook" =
+      body.mode === "additional" || body.mode === "migrate" || body.mode === "migrate_dry_run" || body.mode === "add_waba" || body.mode === "resubscribe_webhook"
         ? body.mode
         : "primary";
 
     const isMigrateMode = mode === "migrate" || mode === "migrate_dry_run";
+    const isResubscribeMode = mode === "resubscribe_webhook";
 
-    const required: (keyof ConnectBody)[] = isMigrateMode
+    const required: (keyof ConnectBody)[] = isResubscribeMode
+      ? ["organizationId", "organizationIntegrationId"]
+      : isMigrateMode
       ? ["organizationId", "wabaId", "phoneNumberId", "phoneE164"]
       : mode === "additional" || mode === "add_waba"
         ? ["organizationId", "wabaId", "phoneNumberId", "phoneE164"]
@@ -111,7 +114,8 @@ serve(async (req) => {
         return err(400, "unsupported_target_provider", { received: body.provider });
       }
     }
-    if (!/^\+\d{8,15}$/.test(body.phoneE164)) return err(400, "invalid_phone_e164");
+    if (!isResubscribeMode && !/^\+\d{8,15}$/.test(body.phoneE164)) return err(400, "invalid_phone_e164");
+
 
     const admin = createClient(supabaseUrl, serviceKey);
 
