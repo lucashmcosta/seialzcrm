@@ -5493,6 +5493,57 @@ export type Database = {
         }
         Relationships: []
       }
+      meta_app_credentials: {
+        Row: {
+          access_token_encrypted: string
+          app_id: string
+          app_secret_encrypted: string
+          created_at: string
+          created_by_user_id: string | null
+          id: string
+          organization_id: string
+          updated_at: string
+          verify_token_encrypted: string | null
+        }
+        Insert: {
+          access_token_encrypted: string
+          app_id: string
+          app_secret_encrypted: string
+          created_at?: string
+          created_by_user_id?: string | null
+          id?: string
+          organization_id: string
+          updated_at?: string
+          verify_token_encrypted?: string | null
+        }
+        Update: {
+          access_token_encrypted?: string
+          app_id?: string
+          app_secret_encrypted?: string
+          created_at?: string
+          created_by_user_id?: string | null
+          id?: string
+          organization_id?: string
+          updated_at?: string
+          verify_token_encrypted?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "meta_app_credentials_created_by_user_id_fkey"
+            columns: ["created_by_user_id"]
+            isOneToOne: false
+            referencedRelation: "users"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "meta_app_credentials_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: true
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       meta_lead_pages: {
         Row: {
           created_at: string
@@ -5962,9 +6013,12 @@ export type Database = {
           connected_at: string | null
           connected_by_user_id: string | null
           created_at: string | null
+          display_name: string | null
           id: string
           integration_id: string | null
           is_enabled: boolean | null
+          meta_credentials_id: string | null
+          meta_waba_id: string | null
           organization_id: string | null
           secret_payload: Json | null
           updated_at: string | null
@@ -5976,9 +6030,12 @@ export type Database = {
           connected_at?: string | null
           connected_by_user_id?: string | null
           created_at?: string | null
+          display_name?: string | null
           id?: string
           integration_id?: string | null
           is_enabled?: boolean | null
+          meta_credentials_id?: string | null
+          meta_waba_id?: string | null
           organization_id?: string | null
           secret_payload?: Json | null
           updated_at?: string | null
@@ -5990,9 +6047,12 @@ export type Database = {
           connected_at?: string | null
           connected_by_user_id?: string | null
           created_at?: string | null
+          display_name?: string | null
           id?: string
           integration_id?: string | null
           is_enabled?: boolean | null
+          meta_credentials_id?: string | null
+          meta_waba_id?: string | null
           organization_id?: string | null
           secret_payload?: Json | null
           updated_at?: string | null
@@ -6011,6 +6071,13 @@ export type Database = {
             columns: ["integration_id"]
             isOneToOne: false
             referencedRelation: "admin_integrations"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "organization_integrations_meta_credentials_id_fkey"
+            columns: ["meta_credentials_id"]
+            isOneToOne: false
+            referencedRelation: "meta_app_credentials"
             referencedColumns: ["id"]
           },
           {
