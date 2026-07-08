@@ -92,8 +92,10 @@ export function WhatsAppTemplateSelector({
         purpose = (ep?.purpose as string | null) ?? null;
         endpointIntegrationId = (ep?.organization_integration_id as string | null) ?? null;
         setEndpointPurpose(purpose);
+        setEndpointIntegrationIdState(endpointIntegrationId);
       } else {
         setEndpointPurpose(null);
+        setEndpointIntegrationIdState(null);
       }
 
       // PR0 multi-WABA: fail-closed para Meta Cloud sem integration_id resolvido.
