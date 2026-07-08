@@ -296,6 +296,7 @@ export const metaWhatsAppService = {
       throw new Error(msg);
     }
     return data as any;
+  },
 
   async createTemplate(input: {
     organizationId: string;
