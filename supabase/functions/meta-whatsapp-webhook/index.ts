@@ -199,15 +199,13 @@ serve(async (req) => {
       .eq("sender_sid", peekedPhoneIds[0])
       .maybeSingle();
     if (ep?.organization_integration_id) {
-      const { data: oi } = await supabase
-        .from("organization_integrations")
-        .select("connected_account")
-        .eq("id", ep.organization_integration_id)
-        .maybeSingle();
-      appSecret = await resolveAppSecretForIntegration(
-        (oi?.connected_account as any) ?? null,
-      );
       matchedIntegrationId = ep.organization_integration_id;
+      try {
+        const resolved = await resolveMetaCredentials(supabase, ep.organization_integration_id);
+        appSecret = resolved.appSecret;
+      } catch (e) {
+        console.warn("[meta-wa-webhook] resolve_credentials_failed", (e as Error).message);
+      }
     }
   }
 
