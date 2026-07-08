@@ -299,21 +299,22 @@ serve(async (req) => {
     }
     if (!endpoint.sender_sid) return errorResponse(400, { error: "missing_phone_number_id" }, { branch: "missing_phone_number_id", reason: "Endpoint sem phone_number_id/sender_sid" });
 
-    // Busca integration credentials
-    const { data: oi } = await supabase
-      .from("organization_integrations")
-      .select("connected_account, config_values")
-      .eq("id", endpoint.organization_integration_id)
-      .maybeSingle();
-    if (!oi) return errorResponse(400, { error: "integration_not_found" }, { branch: "integration_not_found", reason: "organization_integrations não encontrada para o endpoint" });
-    const ca = oi.connected_account as any;
-    if (!ca?.access_token_encrypted) return errorResponse(400, { error: "missing_access_token" }, { branch: "missing_access_token", reason: "connected_account sem access_token_encrypted" });
-
-    const decryptedAccessToken = await decryptSecret(ca.access_token_encrypted);
-    // App Secret per-integration (fallback global durante Fase 1).
-    const resolvedAppSecret = await resolveAppSecretForIntegration(ca);
-    const accessToken = decryptedAccessToken.trim();
-    const appSecret = resolvedAppSecret;
+    // Busca credenciais Meta (nova fonte: meta_app_credentials; fallback: connected_account)
+    let resolvedCreds;
+    try {
+      resolvedCreds = await resolveMetaCredentials(supabase, endpoint.organization_integration_id);
+    } catch (e) {
+      const code = (e as MetaCredentialsError)?.code ?? "credentials_resolve_failed";
+      if (code === "integration_not_found") {
+        return errorResponse(400, { error: "integration_not_found" }, { branch: "integration_not_found", reason: "organization_integrations não encontrada para o endpoint" });
+      }
+      if (code === "missing_access_token") {
+        return errorResponse(400, { error: "missing_access_token" }, { branch: "missing_access_token", reason: "credenciais Meta sem access_token" });
+      }
+      return errorResponse(500, { error: code }, { branch: code, reason: (e as Error).message });
+    }
+    const accessToken = resolvedCreds.accessToken;
+    const appSecret = resolvedCreds.appSecret;
 
     // Contato + telefone + campos CTWA (para janela de atendimento unificada)
     const { data: contact } = await supabase
