@@ -65,6 +65,59 @@ function validationResult(message: string, extra: Record<string, unknown> = {}) 
   });
 }
 
+/**
+ * Chama POST/GET /{waba_id}/subscribed_apps e persiste em
+ * organization_integrations.config_values.
+ * Retorna { ok:true, result } em sucesso ou { ok:false, error, details } em falha.
+ */
+async function subscribeAndPersist(
+  admin: ReturnType<typeof createClient>,
+  params: {
+    organizationIntegrationId: string;
+    wabaId: string;
+    accessToken: string;
+    appSecret?: string;
+    priorConfigValues?: Record<string, unknown> | null;
+  },
+): Promise<
+  | { ok: true; app_ids: string[]; subscribed_apps: unknown[]; post_response: unknown }
+  | { ok: false; error: string; details?: unknown }
+> {
+  try {
+    const result = await metaWaSubscribeAppToWaba(params.wabaId, {
+      accessToken: params.accessToken,
+      appSecret: params.appSecret,
+    });
+    const nowIso = new Date().toISOString();
+    const nextConfig = {
+      ...(params.priorConfigValues ?? {}),
+      webhook_subscribed: true,
+      webhook_subscribed_at: nowIso,
+      subscribed_app_ids: result.app_ids,
+      subscribe_response: {
+        post: result.post_response,
+        apps: result.subscribed_apps,
+        at: nowIso,
+      },
+    };
+    const { error: updErr } = await admin
+      .from("organization_integrations")
+      .update({ config_values: nextConfig })
+      .eq("id", params.organizationIntegrationId);
+    if (updErr) {
+      console.error("[meta-whatsapp-connect] subscribe persist failed", updErr.message);
+      return { ok: false, error: "subscribe_persist_failed", details: updErr.message };
+    }
+    return { ok: true, ...result };
+  } catch (e) {
+    if (e instanceof MetaWaGraphError) {
+      return { ok: false, error: "waba_subscribe_failed", details: e.error };
+    }
+    return { ok: false, error: "waba_subscribe_failed", details: (e as Error).message };
+  }
+}
+
+
 serve(async (req) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: corsHeaders });
   if (req.method !== "POST") return err(405, "method_not_allowed");
