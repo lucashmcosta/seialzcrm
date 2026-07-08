@@ -273,6 +273,31 @@ export const metaWhatsAppService = {
     return data as any;
   },
 
+  async resubscribeWebhook(input: { organizationId: string; organizationIntegrationId: string }): Promise<{
+    ok: true;
+    webhook_subscribed: true;
+    subscribed_app_ids: string[];
+    subscribed_apps: unknown[];
+    meta_waba_id: string;
+  }> {
+    const { data, error } = await supabase.functions.invoke("meta-whatsapp-connect", {
+      body: { ...input, mode: "resubscribe_webhook" },
+    });
+    if (error) {
+      const fnError = await readFunctionError(error, data);
+      const msg = fnError?.message || fnError?.error || error.message || "resubscribe_failed";
+      const e = new Error(msg) as Error & { details?: unknown; code?: string };
+      e.code = fnError?.error;
+      e.details = fnError?.meta_error;
+      throw e;
+    }
+    if ((data as any)?.error) {
+      const msg = (data as any).message || (data as any).error;
+      throw new Error(msg);
+    }
+    return data as any;
+  },
+
   async createTemplate(input: {
     organizationId: string;
     name: string;

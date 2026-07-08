@@ -8,7 +8,7 @@ import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "npm:@supabase/supabase-js@2";
 import { corsHeaders } from "../_shared/cors.ts";
 import { encryptSecret, decryptSecret } from "../_shared/crypto.ts";
-import { validateCredentials, MetaWaGraphError } from "../_shared/meta-whatsapp/graph.ts";
+import { validateCredentials, metaWaSubscribeAppToWaba, MetaWaGraphError } from "../_shared/meta-whatsapp/graph.ts";
 
 interface ConnectBody {
   organizationId: string;
@@ -39,10 +39,16 @@ interface ConnectBody {
   //               reutilizando as credenciais compartilhadas em meta_app_credentials
   //               (populadas no M2). NÃO recebe app_id/systemUserToken/appSecret/verifyToken.
   //               Requer M3 (drop do unique antigo) para inserir a 2ª WABA da org.
-  mode?: "primary" | "additional" | "migrate" | "migrate_dry_run" | "add_waba";
+  // 'resubscribe_webhook': PR2. Reinscreve o App atual na WABA existente
+  //                        (POST /{waba_id}/subscribed_apps + GET de confirmação)
+  //                        e atualiza config_values.webhook_subscribed*. Não altera
+  //                        endpoints, credenciais nem envia mensagens.
+  mode?: "primary" | "additional" | "migrate" | "migrate_dry_run" | "add_waba" | "resubscribe_webhook";
   existingEndpointId?: string;
   provider?: "meta_cloud_api"; // destino da migração
   migrationReason?: string;
+  /** resubscribe_webhook: id da organization_integrations alvo. */
+  organizationIntegrationId?: string;
 }
 
 function err(status: number, message: string, extra: Record<string, unknown> = {}) {
@@ -58,6 +64,59 @@ function validationResult(message: string, extra: Record<string, unknown> = {}) 
     headers: { ...corsHeaders, "Content-Type": "application/json" },
   });
 }
+
+/**
+ * Chama POST/GET /{waba_id}/subscribed_apps e persiste em
+ * organization_integrations.config_values.
+ * Retorna { ok:true, result } em sucesso ou { ok:false, error, details } em falha.
+ */
+async function subscribeAndPersist(
+  admin: ReturnType<typeof createClient>,
+  params: {
+    organizationIntegrationId: string;
+    wabaId: string;
+    accessToken: string;
+    appSecret?: string;
+    priorConfigValues?: Record<string, unknown> | null;
+  },
+): Promise<
+  | { ok: true; app_ids: string[]; subscribed_apps: unknown[]; post_response: unknown }
+  | { ok: false; error: string; details?: unknown }
+> {
+  try {
+    const result = await metaWaSubscribeAppToWaba(params.wabaId, {
+      accessToken: params.accessToken,
+      appSecret: params.appSecret,
+    });
+    const nowIso = new Date().toISOString();
+    const nextConfig = {
+      ...(params.priorConfigValues ?? {}),
+      webhook_subscribed: true,
+      webhook_subscribed_at: nowIso,
+      subscribed_app_ids: result.app_ids,
+      subscribe_response: {
+        post: result.post_response,
+        apps: result.subscribed_apps,
+        at: nowIso,
+      },
+    };
+    const { error: updErr } = await admin
+      .from("organization_integrations")
+      .update({ config_values: nextConfig })
+      .eq("id", params.organizationIntegrationId);
+    if (updErr) {
+      console.error("[meta-whatsapp-connect] subscribe persist failed", updErr.message);
+      return { ok: false, error: "subscribe_persist_failed", details: updErr.message };
+    }
+    return { ok: true, ...result };
+  } catch (e) {
+    if (e instanceof MetaWaGraphError) {
+      return { ok: false, error: "waba_subscribe_failed", details: e.error };
+    }
+    return { ok: false, error: "waba_subscribe_failed", details: (e as Error).message };
+  }
+}
+
 
 serve(async (req) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: corsHeaders });
@@ -82,14 +141,17 @@ serve(async (req) => {
     const body = (await req.json().catch(() => null)) as ConnectBody | null;
     if (!body) return err(400, "invalid_json");
 
-    const mode: "primary" | "additional" | "migrate" | "migrate_dry_run" | "add_waba" =
-      body.mode === "additional" || body.mode === "migrate" || body.mode === "migrate_dry_run" || body.mode === "add_waba"
+    const mode: "primary" | "additional" | "migrate" | "migrate_dry_run" | "add_waba" | "resubscribe_webhook" =
+      body.mode === "additional" || body.mode === "migrate" || body.mode === "migrate_dry_run" || body.mode === "add_waba" || body.mode === "resubscribe_webhook"
         ? body.mode
         : "primary";
 
     const isMigrateMode = mode === "migrate" || mode === "migrate_dry_run";
+    const isResubscribeMode = mode === "resubscribe_webhook";
 
-    const required: (keyof ConnectBody)[] = isMigrateMode
+    const required: (keyof ConnectBody)[] = isResubscribeMode
+      ? ["organizationId", "organizationIntegrationId"]
+      : isMigrateMode
       ? ["organizationId", "wabaId", "phoneNumberId", "phoneE164"]
       : mode === "additional" || mode === "add_waba"
         ? ["organizationId", "wabaId", "phoneNumberId", "phoneE164"]
@@ -105,7 +167,8 @@ serve(async (req) => {
         return err(400, "unsupported_target_provider", { received: body.provider });
       }
     }
-    if (!/^\+\d{8,15}$/.test(body.phoneE164)) return err(400, "invalid_phone_e164");
+    if (!isResubscribeMode && !/^\+\d{8,15}$/.test(body.phoneE164)) return err(400, "invalid_phone_e164");
+
 
     const admin = createClient(supabaseUrl, serviceKey);
 
@@ -582,6 +645,41 @@ serve(async (req) => {
         return err(500, "endpoint_insert_failed", { details: epErr?.message });
       }
 
+
+      // 9) Subscribe do App na nova WABA (POST /{waba_id}/subscribed_apps + GET de confirmação).
+      //    Falha aqui faz rollback do endpoint e da organization_integration recém-criados.
+      let subAccessToken: string;
+      let subAppSecret: string | undefined;
+      try {
+        subAccessToken = (await decryptSecret(cred.access_token_encrypted)).trim();
+      } catch (e) {
+        await admin.from("communication_endpoints").delete().eq("id", ep.id);
+        await admin.from("organization_integrations").delete().eq("id", newOi.id);
+        return err(500, "credentials_decrypt_failed", { details: (e as Error).message });
+      }
+      try {
+        subAppSecret = cred.app_secret_encrypted
+          ? (await decryptSecret(cred.app_secret_encrypted)).trim() || undefined
+          : undefined;
+      } catch (_e) { /* opcional */ }
+
+      const sub = await subscribeAndPersist(admin, {
+        organizationIntegrationId: newOi.id,
+        wabaId: body.wabaId,
+        accessToken: subAccessToken,
+        appSecret: subAppSecret,
+        priorConfigValues: configValues,
+      });
+      if (!sub.ok) {
+        console.error("[meta-whatsapp-connect] add_waba subscribe failed → rollback", sub.details);
+        await admin.from("communication_endpoints").delete().eq("id", ep.id);
+        await admin.from("organization_integrations").delete().eq("id", newOi.id);
+        return err(502, "waba_subscribe_failed", {
+          message: "Não foi possível inscrever o app Meta nesta WABA. Verifique permissões do token.",
+          meta_error: sub.details,
+        });
+      }
+
       return new Response(JSON.stringify({
         ok: true,
         mode: "add_waba",
@@ -590,6 +688,8 @@ serve(async (req) => {
         meta_credentials_id: cred.id,
         meta_waba_id: body.wabaId,
         display_name: displayName,
+        webhook_subscribed: true,
+        subscribed_app_ids: sub.app_ids,
         meta: {
           display_phone_number: meta.display_phone_number,
           verified_name: meta.verified_name,
@@ -602,8 +702,78 @@ serve(async (req) => {
     // === FIM modo add_waba ====================================================
     // ==========================================================================
 
+    // ==========================================================================
+    // === MODE = 'resubscribe_webhook' =========================================
+    // Reinscreve o App atual na WABA de uma organization_integrations existente.
+    // Não altera endpoints, credenciais nem envia mensagens.
+    // ==========================================================================
+    if (isResubscribeMode) {
+      const oiId = body.organizationIntegrationId!;
+      const { data: oiRow, error: oiLookupErr } = await admin
+        .from("organization_integrations")
+        .select("id, organization_id, meta_waba_id, meta_credentials_id, connected_account, config_values")
+        .eq("id", oiId)
+        .maybeSingle();
+      if (oiLookupErr) return err(500, "oi_lookup_failed", { details: oiLookupErr.message });
+      if (!oiRow) return err(404, "organization_integration_not_found");
+      if (oiRow.organization_id !== body.organizationId) return err(403, "org_mismatch");
 
+      const ca = (oiRow.connected_account ?? {}) as any;
+      const wabaId = (oiRow.meta_waba_id as string | null) ?? (ca.waba_id as string | undefined) ?? null;
+      if (!wabaId) return err(400, "missing_waba_id");
 
+      // Resolve token: prefere meta_app_credentials (M2 shared); fallback para connected_account.
+      let encToken: string | null = null;
+      let encSecret: string | null = null;
+      if (oiRow.meta_credentials_id) {
+        const { data: cred } = await admin
+          .from("meta_app_credentials")
+          .select("access_token_encrypted, app_secret_encrypted")
+          .eq("id", oiRow.meta_credentials_id)
+          .maybeSingle();
+        encToken = cred?.access_token_encrypted ?? null;
+        encSecret = cred?.app_secret_encrypted ?? null;
+      }
+      if (!encToken) {
+        encToken = (ca.access_token_encrypted as string | undefined) ?? null;
+        encSecret = encSecret ?? (ca.app_secret_encrypted as string | undefined) ?? null;
+      }
+      if (!encToken) return err(400, "integration_missing_token");
+
+      let accessToken: string;
+      let appSecret: string | undefined;
+      try {
+        accessToken = (await decryptSecret(encToken)).trim();
+      } catch (e) {
+        return err(500, "credentials_decrypt_failed", { details: (e as Error).message });
+      }
+      try {
+        appSecret = encSecret ? (await decryptSecret(encSecret)).trim() || undefined : undefined;
+      } catch (_e) { /* opcional */ }
+
+      const sub = await subscribeAndPersist(admin, {
+        organizationIntegrationId: oiRow.id,
+        wabaId,
+        accessToken,
+        appSecret,
+        priorConfigValues: (oiRow.config_values ?? {}) as Record<string, unknown>,
+      });
+      if (!sub.ok) {
+        return err(502, "waba_subscribe_failed", {
+          message: "Não foi possível inscrever o app Meta nesta WABA. Verifique permissões do token.",
+          meta_error: sub.details,
+        });
+      }
+      return new Response(JSON.stringify({
+        ok: true,
+        mode: "resubscribe_webhook",
+        organization_integration_id: oiRow.id,
+        meta_waba_id: wabaId,
+        webhook_subscribed: true,
+        subscribed_app_ids: sub.app_ids,
+        subscribed_apps: sub.subscribed_apps,
+      }), { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } });
+    }
 
 
     // Busca integration_id e estado anterior cedo para validar credenciais per-tenant.
