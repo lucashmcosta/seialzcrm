@@ -821,16 +821,9 @@ async function handleInbound(
 
     if (mediaId) {
       try {
-        const { data: oi } = await supabase
-          .from("organization_integrations")
-          .select("connected_account")
-          .eq("id", endpoint.organization_integration_id)
-          .maybeSingle();
-        const ca = (oi?.connected_account as any) ?? null;
-        const enc = ca?.access_token_encrypted;
-        if (!enc) throw new Error("missing_access_token");
-        const accessToken = (await decryptSecret(enc)).trim();
-        const appSecret = await resolveAppSecretForIntegration(ca);
+        const resolved = await resolveMetaCredentials(supabase, endpoint.organization_integration_id);
+        const accessToken = resolved.accessToken;
+        const appSecret = resolved.appSecret;
 
         const meta = await metaWaGetMediaUrl(mediaId, { accessToken, appSecret });
         const mime = meta.mime_type || initialMime || "application/octet-stream";
