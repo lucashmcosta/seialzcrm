@@ -52,6 +52,7 @@ import {
 import { useOrganization } from '@/hooks/useOrganization';
 import { useActiveWhatsAppProviders } from '@/hooks/useActiveWhatsAppProviders';
 import { supabase } from '@/integrations/supabase/client';
+import { metaWhatsAppService } from '@/services/metaWhatsAppService';
 import { useToast } from '@/hooks/use-toast';
 import {
   Plus,
