@@ -35,7 +35,11 @@ interface ConnectBody {
   //                'meta_cloud_api'. Requer existingEndpointId + provider de destino.
   // 'migrate_dry_run': roda exatamente as mesmas validações de 'migrate', mas NÃO faz UPDATE.
   //                    Retorna before/after para preview.
-  mode?: "primary" | "additional" | "migrate" | "migrate_dry_run";
+  // 'add_waba'  : PR1-B. Cria uma NOVA organization_integrations Meta para a mesma org,
+  //               reutilizando as credenciais compartilhadas em meta_app_credentials
+  //               (populadas no M2). NÃO recebe app_id/systemUserToken/appSecret/verifyToken.
+  //               Requer M3 (drop do unique antigo) para inserir a 2ª WABA da org.
+  mode?: "primary" | "additional" | "migrate" | "migrate_dry_run" | "add_waba";
   existingEndpointId?: string;
   provider?: "meta_cloud_api"; // destino da migração
   migrationReason?: string;
