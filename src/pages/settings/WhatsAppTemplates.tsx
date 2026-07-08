@@ -275,9 +275,16 @@ export default function WhatsAppTemplates() {
         .eq('is_active', true)
         .or('allowed_purposes.is.null,allowed_purposes.eq.{}');
       if ((count ?? 0) > 0) {
-        toast({
-          description: `${count} template(s) precisam ser classificados antes de aparecer no composer.`,
-        });
+        sonnerToast.warning(
+          `${count} template(s) precisam ser classificados para aparecer no envio`,
+          {
+            duration: 10000,
+            action: {
+              label: 'Classificar agora',
+              onClick: () => setFilterPurpose('unclassified'),
+            },
+          },
+        );
       }
     }, 800);
   };
