@@ -225,7 +225,15 @@ export function MetaWhatsAppCloudDialog({ open, onOpenChange, integration, orgIn
               </Card>
             )}
 
-            {/* ===== Números adicionais da WABA ===== */}
+            {/* ===== PR1-B: Multi-WABA (atrás de feature flag) ===== */}
+            {multiWabaEnabled && isConnected && organization?.id && integration?.id && (
+              <MetaWabasSection
+                organizationId={organization.id}
+                metaIntegrationId={integration.id}
+              />
+            )}
+
+            {/* ===== Números adicionais da WABA (visão legada por WABA principal) ===== */}
             {isConnected && organization?.id && orgIntegration?.id && (
               <Card className="p-4 space-y-3">
                 <div className="flex items-center justify-between gap-2">
