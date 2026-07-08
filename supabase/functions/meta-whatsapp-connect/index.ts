@@ -645,6 +645,41 @@ serve(async (req) => {
         return err(500, "endpoint_insert_failed", { details: epErr?.message });
       }
 
+
+      // 9) Subscribe do App na nova WABA (POST /{waba_id}/subscribed_apps + GET de confirmação).
+      //    Falha aqui faz rollback do endpoint e da organization_integration recém-criados.
+      let subAccessToken: string;
+      let subAppSecret: string | undefined;
+      try {
+        subAccessToken = (await decryptSecret(cred.access_token_encrypted)).trim();
+      } catch (e) {
+        await admin.from("communication_endpoints").delete().eq("id", ep.id);
+        await admin.from("organization_integrations").delete().eq("id", newOi.id);
+        return err(500, "credentials_decrypt_failed", { details: (e as Error).message });
+      }
+      try {
+        subAppSecret = cred.app_secret_encrypted
+          ? (await decryptSecret(cred.app_secret_encrypted)).trim() || undefined
+          : undefined;
+      } catch (_e) { /* opcional */ }
+
+      const sub = await subscribeAndPersist(admin, {
+        organizationIntegrationId: newOi.id,
+        wabaId: body.wabaId,
+        accessToken: subAccessToken,
+        appSecret: subAppSecret,
+        priorConfigValues: configValues,
+      });
+      if (!sub.ok) {
+        console.error("[meta-whatsapp-connect] add_waba subscribe failed → rollback", sub.details);
+        await admin.from("communication_endpoints").delete().eq("id", ep.id);
+        await admin.from("organization_integrations").delete().eq("id", newOi.id);
+        return err(502, "waba_subscribe_failed", {
+          message: "Não foi possível inscrever o app Meta nesta WABA. Verifique permissões do token.",
+          meta_error: sub.details,
+        });
+      }
+
       return new Response(JSON.stringify({
         ok: true,
         mode: "add_waba",
@@ -653,6 +688,8 @@ serve(async (req) => {
         meta_credentials_id: cred.id,
         meta_waba_id: body.wabaId,
         display_name: displayName,
+        webhook_subscribed: true,
+        subscribed_app_ids: sub.app_ids,
         meta: {
           display_phone_number: meta.display_phone_number,
           verified_name: meta.verified_name,
