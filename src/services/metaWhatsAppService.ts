@@ -17,11 +17,57 @@ export interface ConnectInput {
   /**
    * 'primary' (default) → comportamento original (configura/atualiza a integração).
    * 'additional' → adiciona apenas um novo endpoint na MESMA WABA já conectada.
+   * 'add_waba' → PR1-B: cria NOVA integração Meta reutilizando meta_app_credentials.
    */
-  mode?: "primary" | "additional";
+  mode?: "primary" | "additional" | "add_waba";
   endpointPurpose?: "commercial" | "customer_service" | "vendor_personal" | "other";
   displayName?: string;
 }
+
+export interface AddWabaInput {
+  organizationId: string;
+  wabaId: string;
+  phoneNumberId: string;
+  phoneE164: string;
+  displayName: string;
+  endpointPurpose?: "commercial" | "customer_service" | "vendor_personal" | "other";
+  skipMetaValidation?: boolean;
+}
+
+export interface AddWabaResult {
+  ok: true;
+  mode: "add_waba";
+  organization_integration_id: string;
+  endpoint_id: string;
+  meta_credentials_id: string;
+  meta_waba_id: string;
+  display_name: string;
+  meta: {
+    display_phone_number: string;
+    verified_name?: string | null;
+    quality_rating?: string | null;
+    messaging_limit_tier?: string | null;
+  };
+}
+
+export class WabaAlreadyRegisteredError extends Error {
+  code = "waba_already_registered";
+  info: { existing_organization_integration_id: string; existing_display_name?: string | null };
+  constructor(info: WabaAlreadyRegisteredError["info"]) {
+    super("Esta WABA já está cadastrada nesta organização.");
+    this.name = "WabaAlreadyRegisteredError";
+    this.info = info;
+  }
+}
+
+export class UniqueConstraintBlockedError extends Error {
+  code = "unique_constraint_blocked";
+  constructor() {
+    super("Multi-WABA está pronto no backend, mas requer M3 (remoção do unique legado) para inserir a 2ª WABA da organização.");
+    this.name = "UniqueConstraintBlockedError";
+  }
+}
+
 
 export interface MigrateInput {
   organizationId: string;
@@ -156,6 +202,37 @@ export const metaWhatsAppService = {
       throw new Error((data as any).error);
     }
     return data as ConnectResult;
+  },
+
+  async addWaba(input: AddWabaInput): Promise<AddWabaResult> {
+    const { data, error } = await supabase.functions.invoke("meta-whatsapp-connect", {
+      body: { ...input, mode: "add_waba", appId: "", systemUserToken: "" },
+    });
+    if (error) {
+      const fnError = await readFunctionError(error, data);
+      if (fnError?.error === "meta_validation_failed") {
+        throw new MetaWhatsAppValidationError(fnError.meta_error);
+      }
+      if (fnError?.error === "endpoint_address_already_registered") {
+        throw new EndpointAlreadyRegisteredError({
+          existing_endpoint_id: fnError.existing_endpoint_id,
+          existing_provider: fnError.existing_provider,
+          existing_sender_sid: fnError.existing_sender_sid ?? null,
+        });
+      }
+      if (fnError?.error === "waba_already_registered") {
+        throw new WabaAlreadyRegisteredError({
+          existing_organization_integration_id: fnError.existing_organization_integration_id,
+          existing_display_name: fnError.existing_display_name ?? null,
+        });
+      }
+      if (fnError?.error === "unique_constraint_blocked") {
+        throw new UniqueConstraintBlockedError();
+      }
+      throw new Error(fnError?.message || fnError?.error || error.message || "add_waba_failed");
+    }
+    if ((data as any)?.error) throw new Error((data as any).message || (data as any).error);
+    return data as AddWabaResult;
   },
 
   async migrate(input: MigrateInput): Promise<MigrateResult> {

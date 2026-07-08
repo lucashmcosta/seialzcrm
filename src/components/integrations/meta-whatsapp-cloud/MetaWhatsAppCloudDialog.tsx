@@ -19,7 +19,9 @@ import {
 import { WhatsAppInboundSettings } from "@/components/settings/WhatsAppInboundSettings";
 import { AddMetaWhatsAppNumberDialog } from "./AddMetaWhatsAppNumberDialog";
 import { MetaAdditionalEndpointsSection } from "./MetaAdditionalEndpointsSection";
+import { MetaWabasSection } from "./MetaWabasSection";
 import { MigrateEndpointDialog } from "./MigrateEndpointDialog";
+import { useMetaMultiWabaFlag } from "@/hooks/useMetaMultiWabaFlag";
 
 interface Props {
   open: boolean;
@@ -43,6 +45,7 @@ const empty = {
 
 export function MetaWhatsAppCloudDialog({ open, onOpenChange, integration, orgIntegration }: Props) {
   const { organization } = useOrganization();
+  const multiWabaEnabled = useMetaMultiWabaFlag(organization?.id);
   const qc = useQueryClient();
   const [form, setForm] = useState(empty);
   const [showToken, setShowToken] = useState(false);
@@ -222,7 +225,15 @@ export function MetaWhatsAppCloudDialog({ open, onOpenChange, integration, orgIn
               </Card>
             )}
 
-            {/* ===== Números adicionais da WABA ===== */}
+            {/* ===== PR1-B: Multi-WABA (atrás de feature flag) ===== */}
+            {multiWabaEnabled && isConnected && organization?.id && integration?.id && (
+              <MetaWabasSection
+                organizationId={organization.id}
+                metaIntegrationId={integration.id}
+              />
+            )}
+
+            {/* ===== Números adicionais da WABA (visão legada por WABA principal) ===== */}
             {isConnected && organization?.id && orgIntegration?.id && (
               <Card className="p-4 space-y-3">
                 <div className="flex items-center justify-between gap-2">

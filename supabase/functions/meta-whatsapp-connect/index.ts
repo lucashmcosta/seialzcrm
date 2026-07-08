@@ -35,7 +35,11 @@ interface ConnectBody {
   //                'meta_cloud_api'. Requer existingEndpointId + provider de destino.
   // 'migrate_dry_run': roda exatamente as mesmas validações de 'migrate', mas NÃO faz UPDATE.
   //                    Retorna before/after para preview.
-  mode?: "primary" | "additional" | "migrate" | "migrate_dry_run";
+  // 'add_waba'  : PR1-B. Cria uma NOVA organization_integrations Meta para a mesma org,
+  //               reutilizando as credenciais compartilhadas em meta_app_credentials
+  //               (populadas no M2). NÃO recebe app_id/systemUserToken/appSecret/verifyToken.
+  //               Requer M3 (drop do unique antigo) para inserir a 2ª WABA da org.
+  mode?: "primary" | "additional" | "migrate" | "migrate_dry_run" | "add_waba";
   existingEndpointId?: string;
   provider?: "meta_cloud_api"; // destino da migração
   migrationReason?: string;
@@ -78,8 +82,8 @@ serve(async (req) => {
     const body = (await req.json().catch(() => null)) as ConnectBody | null;
     if (!body) return err(400, "invalid_json");
 
-    const mode: "primary" | "additional" | "migrate" | "migrate_dry_run" =
-      body.mode === "additional" || body.mode === "migrate" || body.mode === "migrate_dry_run"
+    const mode: "primary" | "additional" | "migrate" | "migrate_dry_run" | "add_waba" =
+      body.mode === "additional" || body.mode === "migrate" || body.mode === "migrate_dry_run" || body.mode === "add_waba"
         ? body.mode
         : "primary";
 
@@ -87,7 +91,7 @@ serve(async (req) => {
 
     const required: (keyof ConnectBody)[] = isMigrateMode
       ? ["organizationId", "wabaId", "phoneNumberId", "phoneE164"]
-      : mode === "additional"
+      : mode === "additional" || mode === "add_waba"
         ? ["organizationId", "wabaId", "phoneNumberId", "phoneE164"]
         : ["organizationId", "appId", "wabaId", "phoneNumberId", "phoneE164", "systemUserToken"];
     for (const f of required) {
@@ -359,6 +363,247 @@ serve(async (req) => {
     // ==========================================================================
     // === FIM modo migrate =====================================================
     // ==========================================================================
+
+
+    // ==========================================================================
+    // === MODE = 'add_waba' ====================================================
+    // Cria nova organization_integrations Meta para a mesma org, reutilizando
+    // meta_app_credentials (M2). Requer M3 (drop do unique antigo) para o 2º WABA.
+    // ==========================================================================
+    if (mode === "add_waba") {
+      // 1) Localiza integration meta
+      const { data: integMeta } = await admin
+        .from("admin_integrations")
+        .select("id")
+        .eq("slug", "meta-whatsapp-cloud")
+        .maybeSingle();
+      if (!integMeta?.id) return err(500, "integration_not_seeded");
+
+      // 2) Credenciais compartilhadas da org
+      const { data: cred, error: credErr } = await admin
+        .from("meta_app_credentials")
+        .select("id, app_id, app_secret_encrypted, access_token_encrypted, verify_token_encrypted")
+        .eq("organization_id", body.organizationId)
+        .maybeSingle();
+      if (credErr) return err(500, "credentials_lookup_failed", { details: credErr.message });
+      if (!cred?.id) {
+        return err(400, "credentials_not_found", {
+          message: "Nenhuma credencial Meta cadastrada para esta organização. Conecte a integração principal antes.",
+        });
+      }
+
+      // 3) Guard duplicidade WABA na mesma org
+      const { data: dupWaba } = await admin
+        .from("organization_integrations")
+        .select("id, display_name")
+        .eq("organization_id", body.organizationId)
+        .eq("integration_id", integMeta.id)
+        .eq("meta_waba_id", body.wabaId)
+        .maybeSingle();
+      if (dupWaba?.id) {
+        return err(409, "waba_already_registered", {
+          message: "Esta WABA já está cadastrada nesta organização.",
+          existing_organization_integration_id: dupWaba.id,
+          existing_display_name: dupWaba.display_name,
+        });
+      }
+
+      // 4) Guard duplicidade phone_number_id (qualquer endpoint da org)
+      const { data: dupPnid } = await admin
+        .from("communication_endpoints")
+        .select("id, provider, external_address")
+        .eq("organization_id", body.organizationId)
+        .eq("sender_sid", body.phoneNumberId)
+        .maybeSingle();
+      if (dupPnid?.id) {
+        return err(409, "phone_number_id_already_registered", {
+          message: "Este Phone Number ID já está em uso por outro endpoint desta organização.",
+          existing_endpoint_id: dupPnid.id,
+          existing_provider: dupPnid.provider,
+          existing_external_address: dupPnid.external_address,
+        });
+      }
+
+      // 5) Guard colisão E.164
+      const { data: dupAddr } = await admin
+        .from("communication_endpoints")
+        .select("id, provider, sender_sid")
+        .eq("organization_id", body.organizationId)
+        .eq("channel", "whatsapp")
+        .eq("external_address", body.phoneE164)
+        .maybeSingle();
+      if (dupAddr?.id) {
+        return err(409, "endpoint_address_already_registered", {
+          message: "Já existe um endpoint WhatsApp com este número nesta organização.",
+          existing_endpoint_id: dupAddr.id,
+          existing_provider: dupAddr.provider,
+          existing_sender_sid: dupAddr.sender_sid,
+        });
+      }
+
+      // 6) Valida credenciais na Graph API (opcional via skipMetaValidation)
+      let meta: {
+        display_phone_number: string;
+        verified_name?: string | null;
+        quality_rating?: string | null;
+        messaging_limit_tier?: string | null;
+        belongs_to_waba: boolean;
+      };
+      if (body.skipMetaValidation) {
+        meta = {
+          display_phone_number: body.phoneE164,
+          verified_name: null,
+          quality_rating: null,
+          messaging_limit_tier: null,
+          belongs_to_waba: true,
+        };
+      } else {
+        let accessToken: string;
+        let appSecret: string | undefined;
+        try {
+          accessToken = (await decryptSecret(cred.access_token_encrypted)).trim();
+        } catch (e) {
+          return err(500, "credentials_decrypt_failed", { details: (e as Error).message });
+        }
+        try {
+          appSecret = cred.app_secret_encrypted
+            ? (await decryptSecret(cred.app_secret_encrypted)).trim() || undefined
+            : undefined;
+        } catch (_e) { /* app_secret é opcional para o appsecret_proof */ }
+
+        try {
+          meta = await validateCredentials({
+            phoneNumberId: body.phoneNumberId,
+            wabaId: body.wabaId,
+            accessToken,
+            appSecret,
+          });
+        } catch (e) {
+          if (e instanceof MetaWaGraphError) {
+            return validationResult("meta_validation_failed", { meta_error: e.error, step: "graph_api" });
+          }
+          throw e;
+        }
+        if (!meta.belongs_to_waba) {
+          return validationResult("phone_not_in_waba", {
+            message: "O Phone Number ID informado não pertence ao WABA informado.",
+          });
+        }
+      }
+
+      // 7) Insere nova organization_integrations (bloqueado pelo unique antigo até M3)
+      const displayName = body.displayName?.trim() || `WABA ${body.wabaId}`;
+      const connectedAccount = {
+        app_id: cred.app_id,
+        waba_id: body.wabaId,
+        phone_number_id: body.phoneNumberId,
+        display_phone_number: meta.display_phone_number,
+        verified_name: meta.verified_name ?? null,
+        // Tokens ficam em meta_app_credentials; espelhamos referência para o fallback continuar operando.
+        access_token_encrypted: cred.access_token_encrypted,
+        app_secret_encrypted: cred.app_secret_encrypted,
+        verify_token_encrypted: cred.verify_token_encrypted,
+        token_stored_at: new Date().toISOString(),
+        source: "add_waba",
+      };
+      const configValues = {
+        app_id: cred.app_id,
+        waba_id: body.wabaId,
+        phone_number_id: body.phoneNumberId,
+        phone_e164: body.phoneE164,
+        display_phone_number: meta.display_phone_number,
+        verified_name: meta.verified_name ?? null,
+        quality_rating: meta.quality_rating ?? null,
+        messaging_limit_tier: meta.messaging_limit_tier ?? null,
+        last_validated_at: new Date().toISOString(),
+      };
+
+      const { data: newOi, error: oiErr } = await admin
+        .from("organization_integrations")
+        .insert({
+          organization_id: body.organizationId,
+          integration_id: integMeta.id,
+          is_enabled: true,
+          meta_credentials_id: cred.id,
+          meta_waba_id: body.wabaId,
+          display_name: displayName,
+          connected_account: connectedAccount,
+          config_values: configValues,
+          connected_at: new Date().toISOString(),
+          connected_by_user_id: userRow.id,
+        })
+        .select("id")
+        .single();
+      if (oiErr || !newOi?.id) {
+        // 23505 = unique_violation → provavelmente unique antigo (org, integration)
+        const isUnique = (oiErr as any)?.code === "23505";
+        return err(isUnique ? 409 : 500, isUnique ? "unique_constraint_blocked" : "oi_insert_failed", {
+          message: isUnique
+            ? "O unique legado (organization_id, integration_id) ainda está ativo. Este PR só é totalmente funcional após M3."
+            : oiErr?.message,
+          details: oiErr?.message,
+        });
+      }
+
+      // 8) Cria primeiro endpoint
+      const currentTierVal = typeof meta.messaging_limit_tier === "string"
+        ? Number(String(meta.messaging_limit_tier).replace(/\D/g, "")) || null
+        : null;
+      const { data: ep, error: epErr } = await admin
+        .from("communication_endpoints")
+        .insert({
+          organization_id: body.organizationId,
+          organization_integration_id: newOi.id,
+          channel: "whatsapp",
+          provider: "meta_cloud_api",
+          external_account_id: body.wabaId,
+          sender_sid: body.phoneNumberId,
+          external_address: body.phoneE164,
+          display_name: body.displayName ?? meta.verified_name ?? meta.display_phone_number,
+          purpose: body.endpointPurpose ?? "customer_service",
+          is_active: true,
+          status: "online",
+          quality_rating: meta.quality_rating ?? null,
+          current_tier: currentTierVal,
+          metadata: {
+            meta: {
+              verified_name: meta.verified_name ?? null,
+              display_phone_number: meta.display_phone_number,
+              last_validated_at: new Date().toISOString(),
+            },
+            source: "add_waba",
+          },
+        })
+        .select("id")
+        .single();
+      if (epErr || !ep?.id) {
+        // Rollback: remove org_integration criada
+        await admin.from("organization_integrations").delete().eq("id", newOi.id);
+        return err(500, "endpoint_insert_failed", { details: epErr?.message });
+      }
+
+      return new Response(JSON.stringify({
+        ok: true,
+        mode: "add_waba",
+        organization_integration_id: newOi.id,
+        endpoint_id: ep.id,
+        meta_credentials_id: cred.id,
+        meta_waba_id: body.wabaId,
+        display_name: displayName,
+        meta: {
+          display_phone_number: meta.display_phone_number,
+          verified_name: meta.verified_name,
+          quality_rating: meta.quality_rating,
+          messaging_limit_tier: meta.messaging_limit_tier,
+        },
+      }), { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } });
+    }
+    // ==========================================================================
+    // === FIM modo add_waba ====================================================
+    // ==========================================================================
+
+
+
 
 
     // Busca integration_id e estado anterior cedo para validar credenciais per-tenant.
