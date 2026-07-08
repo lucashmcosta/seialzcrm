@@ -33,6 +33,7 @@ interface WabaRow {
 export function MetaWabasSection({ organizationId, metaIntegrationId }: Props) {
   const [addOpen, setAddOpen] = useState(false);
   const [resubscribingId, setResubscribingId] = useState<string | null>(null);
+  const [syncingId, setSyncingId] = useState<string | null>(null);
   const queryClient = useQueryClient();
 
   const { data: wabas, isLoading } = useQuery({
@@ -76,6 +77,30 @@ export function MetaWabasSection({ organizationId, metaIntegrationId }: Props) {
       });
     } finally {
       setResubscribingId(null);
+    }
+  }
+
+  async function handleSyncTemplates(oiId: string) {
+    setSyncingId(oiId);
+    try {
+      const res = await metaWhatsAppService.syncTemplates({
+        organizationId,
+        organizationIntegrationId: oiId,
+      });
+      toast({
+        title: "Templates sincronizados",
+        description: `${res.synced}/${res.total} templates (aprovados: ${res.approved ?? 0}).`,
+      });
+      await queryClient.invalidateQueries({ queryKey: ["whatsapp-templates"] });
+    } catch (e) {
+      const err = e as Error & { code?: string };
+      toast({
+        variant: "destructive",
+        title: "Falha ao sincronizar templates",
+        description: err.message,
+      });
+    } finally {
+      setSyncingId(null);
     }
   }
 
