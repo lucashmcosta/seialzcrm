@@ -14,11 +14,10 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "npm:@supabase/supabase-js@2";
 import { corsHeaders } from "../_shared/cors.ts";
-import { decryptSecret } from "../_shared/crypto.ts";
 import { metaWaGetMediaUrl, metaWaDownloadMedia, MetaWaGraphError } from "../_shared/meta-whatsapp/graph.ts";
 import {
-  resolveAppSecretForIntegration,
-  resolveVerifyTokenForIntegration,
+  resolveVerifyTokenForOi,
+  resolveMetaCredentials,
 } from "../_shared/meta-whatsapp/credentials.ts";
 
 type MediaKind = "image" | "audio" | "video" | "document" | "sticker";
@@ -141,14 +140,14 @@ serve(async (req) => {
 
     const { data: rows } = await supabase
       .from("organization_integrations")
-      .select("id, connected_account, admin_integrations!inner(slug)")
+      .select("id, connected_account, meta_credentials_id, admin_integrations!inner(slug)")
       .eq("is_enabled", true)
       .eq("admin_integrations.slug", "meta-whatsapp-cloud");
 
     let matched = false;
     let matchedIntegrationId: string | null = null;
     for (const row of rows ?? []) {
-      const expected = await resolveVerifyTokenForIntegration((row as any).connected_account);
+      const expected = await resolveVerifyTokenForOi(supabase, row as any);
       if (expected && timingSafeEqual(token, expected)) {
         matched = true;
         matchedIntegrationId = (row as any).id;
@@ -200,15 +199,13 @@ serve(async (req) => {
       .eq("sender_sid", peekedPhoneIds[0])
       .maybeSingle();
     if (ep?.organization_integration_id) {
-      const { data: oi } = await supabase
-        .from("organization_integrations")
-        .select("connected_account")
-        .eq("id", ep.organization_integration_id)
-        .maybeSingle();
-      appSecret = await resolveAppSecretForIntegration(
-        (oi?.connected_account as any) ?? null,
-      );
       matchedIntegrationId = ep.organization_integration_id;
+      try {
+        const resolved = await resolveMetaCredentials(supabase, ep.organization_integration_id);
+        appSecret = resolved.appSecret;
+      } catch (e) {
+        console.warn("[meta-wa-webhook] resolve_credentials_failed", (e as Error).message);
+      }
     }
   }
 
@@ -824,16 +821,9 @@ async function handleInbound(
 
     if (mediaId) {
       try {
-        const { data: oi } = await supabase
-          .from("organization_integrations")
-          .select("connected_account")
-          .eq("id", endpoint.organization_integration_id)
-          .maybeSingle();
-        const ca = (oi?.connected_account as any) ?? null;
-        const enc = ca?.access_token_encrypted;
-        if (!enc) throw new Error("missing_access_token");
-        const accessToken = (await decryptSecret(enc)).trim();
-        const appSecret = await resolveAppSecretForIntegration(ca);
+        const resolved = await resolveMetaCredentials(supabase, endpoint.organization_integration_id);
+        const accessToken = resolved.accessToken;
+        const appSecret = resolved.appSecret;
 
         const meta = await metaWaGetMediaUrl(mediaId, { accessToken, appSecret });
         const mime = meta.mime_type || initialMime || "application/octet-stream";
