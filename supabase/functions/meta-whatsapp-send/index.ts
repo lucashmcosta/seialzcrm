@@ -10,7 +10,7 @@ import {
   metaWaUploadMedia,
   MetaWaGraphError,
 } from "../_shared/meta-whatsapp/graph.ts";
-import { resolveAppSecretForIntegration, resolveMetaCredentials, MetaCredentialsError } from "../_shared/meta-whatsapp/credentials.ts";
+import { resolveMetaCredentials, MetaCredentialsError } from "../_shared/meta-whatsapp/credentials.ts";
 import { ensureEndpointMigrationNote } from "../_shared/endpoint-migration-note.ts";
 import { validateCallerAuth, edgeAuthMode, logAuthObservation } from "../_shared/auth.ts";
 import { getServiceWindow, type ContactCtwaInputs } from "../_shared/service-window.ts";
