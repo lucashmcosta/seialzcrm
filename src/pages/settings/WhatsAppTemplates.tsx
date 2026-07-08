@@ -107,11 +107,17 @@ export default function WhatsAppTemplates() {
   const submitMutation = useSubmitForApproval();
   const { hasTwilio, hasMeta } = useActiveWhatsAppProviders(organization?.id);
 
+  const [searchParams, setSearchParams] = useSearchParams();
+  const initialFilterPurpose = (searchParams.get('filter') === 'unclassified'
+    ? 'unclassified'
+    : 'all') as FilterPurpose;
+  const deepLinkIntegrationId = searchParams.get('integration');
+
   const [filterStatus, setFilterStatus] = useState<FilterStatus>('all');
   const [filterType, setFilterType] = useState<FilterType>('all');
   const [filterLanguage, setFilterLanguage] = useState<FilterLanguage>('all');
   const [filterProvider, setFilterProvider] = useState<FilterProvider>('all');
-  const [filterPurpose, setFilterPurpose] = useState<FilterPurpose>('all');
+  const [filterPurpose, setFilterPurpose] = useState<FilterPurpose>(initialFilterPurpose);
   const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false);
   const [selectedTemplateId, setSelectedTemplateId] = useState<string | null>(null);
   const [selectedTemplateName, setSelectedTemplateName] = useState<string>('');
