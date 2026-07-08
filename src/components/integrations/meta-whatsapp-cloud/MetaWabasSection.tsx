@@ -4,7 +4,7 @@
 // PR2 (P0 webhook): botão "Reinscrever webhook" por WABA + badge de estado.
 import { useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { Buildings, Plus, SpinnerGap, ArrowClockwise, CheckCircle, Warning } from "@phosphor-icons/react";
+import { Buildings, Plus, SpinnerGap, ArrowClockwise, CheckCircle, Warning, ArrowsClockwise } from "@phosphor-icons/react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
@@ -33,6 +33,7 @@ interface WabaRow {
 export function MetaWabasSection({ organizationId, metaIntegrationId }: Props) {
   const [addOpen, setAddOpen] = useState(false);
   const [resubscribingId, setResubscribingId] = useState<string | null>(null);
+  const [syncingId, setSyncingId] = useState<string | null>(null);
   const queryClient = useQueryClient();
 
   const { data: wabas, isLoading } = useQuery({
@@ -79,6 +80,30 @@ export function MetaWabasSection({ organizationId, metaIntegrationId }: Props) {
     }
   }
 
+  async function handleSyncTemplates(oiId: string) {
+    setSyncingId(oiId);
+    try {
+      const res = await metaWhatsAppService.syncTemplates({
+        organizationId,
+        organizationIntegrationId: oiId,
+      });
+      toast({
+        title: "Templates sincronizados",
+        description: `${res.synced}/${res.total} templates (aprovados: ${res.approved ?? 0}).`,
+      });
+      await queryClient.invalidateQueries({ queryKey: ["whatsapp-templates"] });
+    } catch (e) {
+      const err = e as Error & { code?: string };
+      toast({
+        variant: "destructive",
+        title: "Falha ao sincronizar templates",
+        description: err.message,
+      });
+    } finally {
+      setSyncingId(null);
+    }
+  }
+
   return (
     <>
       <Card className="p-4 space-y-3">
@@ -117,6 +142,7 @@ export function MetaWabasSection({ organizationId, metaIntegrationId }: Props) {
               const subscribed = cv.webhook_subscribed === true;
               const subscribedAt = typeof cv.webhook_subscribed_at === "string" ? cv.webhook_subscribed_at : null;
               const busy = resubscribingId === w.id;
+              const syncing = syncingId === w.id;
               return (
                 <div key={w.id} className="rounded-md border p-3 space-y-2">
                   <div className="flex items-center justify-between gap-2">
@@ -149,19 +175,34 @@ export function MetaWabasSection({ organizationId, metaIntegrationId }: Props) {
                         </div>
                       )}
                     </div>
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      disabled={busy || !w.meta_waba_id}
-                      onClick={() => handleResubscribe(w.id)}
-                    >
-                      {busy ? (
-                        <SpinnerGap className="h-3.5 w-3.5 animate-spin mr-1" />
-                      ) : (
-                        <ArrowClockwise className="h-3.5 w-3.5 mr-1" />
-                      )}
-                      Reinscrever webhook
-                    </Button>
+                    <div className="flex items-center gap-1.5 flex-shrink-0">
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        disabled={syncing || !w.meta_waba_id}
+                        onClick={() => handleSyncTemplates(w.id)}
+                      >
+                        {syncing ? (
+                          <SpinnerGap className="h-3.5 w-3.5 animate-spin mr-1" />
+                        ) : (
+                          <ArrowsClockwise className="h-3.5 w-3.5 mr-1" />
+                        )}
+                        Sincronizar templates
+                      </Button>
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        disabled={busy || !w.meta_waba_id}
+                        onClick={() => handleResubscribe(w.id)}
+                      >
+                        {busy ? (
+                          <SpinnerGap className="h-3.5 w-3.5 animate-spin mr-1" />
+                        ) : (
+                          <ArrowClockwise className="h-3.5 w-3.5 mr-1" />
+                        )}
+                        Reinscrever webhook
+                      </Button>
+                    </div>
                   </div>
                   <MetaAdditionalEndpointsSection
                     organizationId={organizationId}

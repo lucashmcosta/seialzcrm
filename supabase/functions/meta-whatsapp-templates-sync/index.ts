@@ -63,6 +63,7 @@ serve(async (req) => {
   try {
     const body = await req.json().catch(() => null);
     const organizationId = body?.organizationId as string | undefined;
+    const organizationIntegrationId = body?.organizationIntegrationId as string | undefined;
     if (!organizationId) return json(400, { error: "missing_organization" });
 
     const supabase = createClient(
@@ -70,17 +71,52 @@ serve(async (req) => {
       Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!,
     );
 
-    // Localiza organization_integration ativa do slug meta-whatsapp-cloud
-    const { data: oi, error: oiErr } = await supabase
-      .from("organization_integrations")
-      .select("id, is_enabled, admin_integrations!inner(slug)")
-      .eq("organization_id", organizationId)
-      .eq("is_enabled", true)
-      .eq("admin_integrations.slug", "meta-whatsapp-cloud")
-      .maybeSingle();
+    // Resolve which organization_integration (WABA) to sync.
+    // Multi-WABA (M3): an org may have several active Meta Cloud integrations.
+    // - If organizationIntegrationId is provided → sync that WABA only
+    //   (after validating it belongs to the org and is Meta Cloud).
+    // - Otherwise → look up active Meta Cloud integrations for the org:
+    //     0 → integration_not_found
+    //     1 → sync it (legacy single-WABA behaviour preserved)
+    //     >1 → multiple_wabas_disambiguation_required (client must pick one)
+    let oi: { id: string } | null = null;
 
-    if (oiErr) return json(500, { error: "integration_lookup_failed", details: oiErr.message });
-    if (!oi) return json(404, { error: "integration_not_found" });
+    if (organizationIntegrationId) {
+      const { data, error } = await supabase
+        .from("organization_integrations")
+        .select("id, organization_id, is_enabled, admin_integrations!inner(slug)")
+        .eq("id", organizationIntegrationId)
+        .maybeSingle();
+      if (error) return json(500, { error: "integration_lookup_failed", details: error.message });
+      if (!data) return json(404, { error: "integration_not_found" });
+      if (data.organization_id !== organizationId) {
+        return json(403, { error: "integration_org_mismatch" });
+      }
+      if ((data as any).admin_integrations?.slug !== "meta-whatsapp-cloud") {
+        return json(400, { error: "integration_not_meta_cloud" });
+      }
+      if (!data.is_enabled) return json(400, { error: "integration_disabled" });
+      oi = { id: data.id };
+    } else {
+      const { data, error } = await supabase
+        .from("organization_integrations")
+        .select("id, admin_integrations!inner(slug)")
+        .eq("organization_id", organizationId)
+        .eq("is_enabled", true)
+        .eq("admin_integrations.slug", "meta-whatsapp-cloud");
+      if (error) return json(500, { error: "integration_lookup_failed", details: error.message });
+      const rows = data ?? [];
+      if (rows.length === 0) return json(404, { error: "integration_not_found" });
+      if (rows.length > 1) {
+        return json(409, {
+          error: "multiple_wabas_disambiguation_required",
+          message:
+            "Esta organização tem múltiplas WABAs. Informe qual WABA deseja sincronizar (organizationIntegrationId).",
+          candidates: rows.map((r) => r.id),
+        });
+      }
+      oi = { id: rows[0].id };
+    }
 
     // Credenciais Meta (nova fonte: meta_app_credentials; fallback: connected_account)
     let resolved;
@@ -94,6 +130,13 @@ serve(async (req) => {
     if (!wabaId) return json(400, { error: "missing_waba_id" });
     const accessToken = resolved.accessToken;
     const appSecret = resolved.appSecret;
+
+    console.log("[meta-wa-templates-sync] resolved", {
+      organization_id: organizationId,
+      organization_integration_id: oi.id,
+      meta_waba_id: wabaId,
+      source: (resolved as any)?.source ?? null,
+    });
 
     // Paginação
     const all: MetaTemplate[] = [];
