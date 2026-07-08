@@ -305,6 +305,16 @@ serve(async (req) => {
           }
         }
 
+        const headersForAudit: Record<string, string> = wabaMismatch
+          ? {
+              ...auditHeaders,
+              waba_shadow_mismatch: "true",
+              waba_shadow_expected: wabaMismatch.expected ?? "",
+              waba_shadow_received: wabaMismatch.received ?? "",
+            }
+          : auditHeaders;
+
+
 
         for (const msg of value?.messages ?? []) {
           const messageType = msg?.type ?? "unknown";
