@@ -45,6 +45,7 @@ const empty = {
 
 export function MetaWhatsAppCloudDialog({ open, onOpenChange, integration, orgIntegration }: Props) {
   const { organization } = useOrganization();
+  const multiWabaEnabled = useMetaMultiWabaFlag(organization?.id);
   const qc = useQueryClient();
   const [form, setForm] = useState(empty);
   const [showToken, setShowToken] = useState(false);
