@@ -279,6 +279,33 @@ serve(async (req) => {
           continue;
         }
 
+        // Hardening (SHADOW): valida phone_number_id + waba_id (entry.id)
+        // Não bloqueia — apenas loga. Depois de N dias sem mismatch podemos
+        // trocar para bloqueio explícito.
+        let wabaMismatch: { expected: string | null; received: string | null } | null = null;
+        if (endpoint.organization_integration_id) {
+          const { data: oiWaba } = await supabase
+            .from("organization_integrations")
+            .select("meta_waba_id, connected_account")
+            .eq("id", endpoint.organization_integration_id)
+            .maybeSingle();
+          const expectedWaba =
+            (oiWaba?.meta_waba_id as string | null | undefined) ??
+            ((oiWaba?.connected_account as any)?.waba_id as string | null | undefined) ??
+            null;
+          if (expectedWaba && wabaId && String(expectedWaba) !== String(wabaId)) {
+            wabaMismatch = { expected: String(expectedWaba), received: String(wabaId) };
+            console.warn("[meta-wa-webhook][shadow] waba_mismatch (não-bloqueante)", {
+              phoneNumberId,
+              endpoint_id: endpoint.id,
+              organization_integration_id: endpoint.organization_integration_id,
+              expected_waba_id: expectedWaba,
+              received_waba_id: wabaId,
+            });
+          }
+        }
+
+
         for (const msg of value?.messages ?? []) {
           const messageType = msg?.type ?? "unknown";
           const fromE164 = msg?.from ? "+" + String(msg.from).replace(/^\+/, "") : null;
