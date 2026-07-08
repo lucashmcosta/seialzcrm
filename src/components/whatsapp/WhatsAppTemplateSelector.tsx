@@ -1,12 +1,14 @@
 import { useState, useEffect, useMemo } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { useOrganization } from '@/hooks/useOrganization';
+import { usePermissions } from '@/hooks/usePermissions';
 import { supabase } from '@/integrations/supabase/client';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { ScrollArea } from '@/components/ui/scroll-area';
-import { SpinnerGap, ArrowLeft, Check, LockSimple } from '@phosphor-icons/react';
+import { SpinnerGap, ArrowLeft, Check, LockSimple, Warning } from '@phosphor-icons/react';
 import {
   getLowEndpointConfig,
   isMarketingBlockedWhenWindowOpen,
