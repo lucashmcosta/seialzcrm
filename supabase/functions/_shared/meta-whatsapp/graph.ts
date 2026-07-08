@@ -191,3 +191,25 @@ export async function validateCredentials(input: {
     belongs_to_waba: belongs,
   };
 }
+
+/**
+ * Inscreve o App atual (dono do access_token) para receber webhooks da WABA.
+ * Executa POST /{wabaId}/subscribed_apps e confirma com GET /{wabaId}/subscribed_apps.
+ * Retorna a resposta bruta do POST e a lista de apps inscritos após a operação.
+ */
+export async function metaWaSubscribeAppToWaba(
+  wabaId: string,
+  opts: MetaWaCallOpts,
+): Promise<{
+  post_response: any;
+  subscribed_apps: Array<{ whatsapp_business_api_data?: { id?: string; name?: string; link?: string } }>;
+  app_ids: string[];
+}> {
+  const postResponse = await metaWaPostJson(`/${wabaId}/subscribed_apps`, {}, opts);
+  const listResponse = await metaWaGet(`/${wabaId}/subscribed_apps`, {}, opts);
+  const apps: any[] = Array.isArray(listResponse?.data) ? listResponse.data : [];
+  const appIds = apps
+    .map((a) => a?.whatsapp_business_api_data?.id)
+    .filter((v): v is string => typeof v === "string" && v.length > 0);
+  return { post_response: postResponse, subscribed_apps: apps, app_ids: appIds };
+}
