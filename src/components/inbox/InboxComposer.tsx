@@ -60,6 +60,7 @@ interface ThreadLike {
   last_inbound_at?: string | null;
   whatsapp_last_inbound_at?: string | null;
   last_routing_decision?: { action?: string } | null;
+  business_context?: string | null;
   contact?: { lifecycle_stage: string | null; name?: string | null } | null;
   primary_endpoint?: { purpose: string | null; provider?: string | null } | null;
 }
@@ -164,39 +165,39 @@ export function InboxComposer({ thread, replyTo, onClearReply, onSent, onThreadM
   const lifecycle = thread.contact?.lifecycle_stage ?? null;
   const endpointPurpose = thread.primary_endpoint?.purpose ?? null;
   const status = thread.status ?? null;
-  const csIncludesServiceEndpoints = (organization as any)?.cs_inbox_includes_service_endpoints ?? false;
-  const lastRoutingAction = thread.last_routing_decision?.action ?? null;
+  const businessContext = (thread as any).business_context ?? null;
 
-  const passesCustomerRule = lifecycle === 'customer';
-  const passesServiceEndpointRule =
-    csIncludesServiceEndpoints && endpointPurpose === 'customer_service';
-  // Thread iniciada manualmente pelo botão "Nova conversa de Atendimento":
-  // libera o guard de lifecycle quando o endpoint é de Atendimento.
-  const isManualInboxStart =
-    lastRoutingAction === 'inbox_manual_start'
-    && (endpointPurpose === 'customer_service' || endpointPurpose === 'other');
+  const replyDecision = canReplyInInbox({
+    endpointPurpose,
+    businessContext,
+    lifecycleStage: lifecycle,
+    isIn24hWindow,
+    threadStatus: status,
+    orgSettings: organization as any,
+    routingDecision: thread.last_routing_decision ?? null,
+  });
 
-  if (!passesCustomerRule && !passesServiceEndpointRule && !isManualInboxStart) {
+  if (!replyDecision.allowed) {
+    if (replyDecision.reason === 'thread_closed') {
+      return (
+        <DisabledBar
+          title={`Conversa ${status === 'resolved' ? 'resolvida' : 'fechada'}.`}
+          hint="Reabra a conversa para voltar a enviar mensagens."
+        />
+      );
+    }
+    if (replyDecision.reason === 'commercial_endpoint') {
+      return (
+        <DisabledBar
+          title={`Envio bloqueado: endpoint purpose=${endpointPurpose}.`}
+          hint="Este número é de uso comercial/vendedor — fora do escopo de Atendimento."
+        />
+      );
+    }
     return (
       <DisabledBar
         title="Envio bloqueado: contato não é cliente (lifecycle_stage ≠ customer)."
         hint="A Inbox só envia para contatos com lifecycle_stage = customer (ou, se habilitado, threads do endpoint dedicado de Atendimento)."
-      />
-    );
-  }
-  if (status === 'resolved' || status === 'closed') {
-    return (
-      <DisabledBar
-        title={`Conversa ${status === 'resolved' ? 'resolvida' : 'fechada'}.`}
-        hint="Reabra a conversa para voltar a enviar mensagens."
-      />
-    );
-  }
-  if (endpointPurpose === 'commercial' || endpointPurpose === 'vendor_personal') {
-    return (
-      <DisabledBar
-        title={`Envio bloqueado: endpoint purpose=${endpointPurpose}.`}
-        hint="Este número é de uso comercial/vendedor — fora do escopo de Atendimento."
       />
     );
   }
