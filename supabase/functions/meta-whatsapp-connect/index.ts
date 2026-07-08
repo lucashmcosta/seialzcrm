@@ -82,8 +82,8 @@ serve(async (req) => {
     const body = (await req.json().catch(() => null)) as ConnectBody | null;
     if (!body) return err(400, "invalid_json");
 
-    const mode: "primary" | "additional" | "migrate" | "migrate_dry_run" =
-      body.mode === "additional" || body.mode === "migrate" || body.mode === "migrate_dry_run"
+    const mode: "primary" | "additional" | "migrate" | "migrate_dry_run" | "add_waba" =
+      body.mode === "additional" || body.mode === "migrate" || body.mode === "migrate_dry_run" || body.mode === "add_waba"
         ? body.mode
         : "primary";
 
@@ -91,7 +91,7 @@ serve(async (req) => {
 
     const required: (keyof ConnectBody)[] = isMigrateMode
       ? ["organizationId", "wabaId", "phoneNumberId", "phoneE164"]
-      : mode === "additional"
+      : mode === "additional" || mode === "add_waba"
         ? ["organizationId", "wabaId", "phoneNumberId", "phoneE164"]
         : ["organizationId", "appId", "wabaId", "phoneNumberId", "phoneE164", "systemUserToken"];
     for (const f of required) {
