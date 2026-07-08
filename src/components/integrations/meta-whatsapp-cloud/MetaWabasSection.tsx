@@ -4,7 +4,7 @@
 // PR2 (P0 webhook): botão "Reinscrever webhook" por WABA + badge de estado.
 import { useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { Buildings, Plus, SpinnerGap, ArrowClockwise, CheckCircle, Warning } from "@phosphor-icons/react";
+import { Buildings, Plus, SpinnerGap, ArrowClockwise, CheckCircle, Warning, ArrowsClockwise } from "@phosphor-icons/react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";

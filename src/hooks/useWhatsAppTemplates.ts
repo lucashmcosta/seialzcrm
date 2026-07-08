@@ -224,12 +224,22 @@ export function useSyncMetaTemplates() {
   const { toast } = useToast();
 
   return useMutation({
-    mutationFn: (orgId: string) => metaWhatsAppService.syncTemplates(orgId),
+    mutationFn: (
+      input: string | { organizationId: string; organizationIntegrationId?: string },
+    ) => metaWhatsAppService.syncTemplates(input),
     onSuccess: (data) => {
       queryClient.invalidateQueries({ queryKey: ['whatsapp-templates'] });
       toast({ description: `${data.synced} templates Meta sincronizados!` });
     },
-    onError: (error: Error) => {
+    onError: (error: Error & { code?: string }) => {
+      if (error.code === 'multiple_wabas_disambiguation_required') {
+        toast({
+          variant: 'destructive',
+          description:
+            'Esta organização tem múltiplas WABAs. Sincronize cada WABA individualmente em Configurações → Integrações → Meta WhatsApp Cloud.',
+        });
+        return;
+      }
       toast({ variant: 'destructive', description: error.message });
     },
   });
