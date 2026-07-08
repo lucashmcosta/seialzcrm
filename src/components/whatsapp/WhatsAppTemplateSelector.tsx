@@ -141,6 +141,22 @@ export function WhatsAppTemplateSelector({
         return true;
       });
       setTemplates(filtered);
+
+      // PR0.5: contagem de templates não classificados nesta WABA (admin banner)
+      if (provider === 'meta_cloud_api' && endpointIntegrationId) {
+        const { count } = await supabase
+          .from('whatsapp_templates')
+          .select('id', { count: 'exact', head: true })
+          .eq('organization_id', organization.id)
+          .eq('organization_integration_id', endpointIntegrationId)
+          .eq('provider', 'meta_cloud_api')
+          .eq('status', 'approved')
+          .eq('is_active', true)
+          .or('allowed_purposes.is.null,allowed_purposes.eq.{}');
+        setUnclassifiedCount(count ?? 0);
+      } else {
+        setUnclassifiedCount(0);
+      }
     } catch (error) {
       console.error('Error fetching templates:', error);
     } finally {
