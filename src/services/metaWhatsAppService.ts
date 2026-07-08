@@ -258,18 +258,42 @@ export const metaWhatsAppService = {
     return data;
   },
 
-  async syncTemplates(organizationId: string): Promise<{
+  async syncTemplates(
+    input: string | { organizationId: string; organizationIntegrationId?: string },
+  ): Promise<{
     success: boolean;
     synced: number;
     total: number;
     approved: number;
     by_status: Record<string, number>;
   }> {
+    const body = typeof input === "string"
+      ? { organizationId: input }
+      : {
+          organizationId: input.organizationId,
+          ...(input.organizationIntegrationId
+            ? { organizationIntegrationId: input.organizationIntegrationId }
+            : {}),
+        };
     const { data, error } = await supabase.functions.invoke("meta-whatsapp-templates-sync", {
-      body: { organizationId },
+      body,
     });
-    if (error) throw error;
-    if ((data as any)?.error) throw new Error((data as any).error);
+    if (error) {
+      // Preserve structured error info (code/message) coming from the edge.
+      const fnError = await readFunctionError(error, data);
+      const msg = fnError?.message || fnError?.error || error.message || "sync_failed";
+      const err = new Error(msg) as Error & { code?: string; details?: unknown };
+      err.code = fnError?.error;
+      err.details = fnError;
+      throw err;
+    }
+    if ((data as any)?.error) {
+      const err = new Error((data as any).message || (data as any).error) as Error & {
+        code?: string;
+      };
+      err.code = (data as any).error;
+      throw err;
+    }
     return data as any;
   },
 
