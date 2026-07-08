@@ -150,9 +150,14 @@ export default function WhatsAppTemplates() {
           return false;
         }
       }
+      // Deep-link: filtro por integração (WABA) específica
+      if (deepLinkIntegrationId) {
+        const oiId = (template as any).organization_integration_id;
+        if (oiId !== deepLinkIntegrationId) return false;
+      }
       return true;
     }) || [];
-  }, [templates, filterStatus, filterType, filterLanguage, filterProvider, filterPurpose]);
+  }, [templates, filterStatus, filterType, filterLanguage, filterProvider, filterPurpose, deepLinkIntegrationId]);
 
   const unclassifiedCount = useMemo(
     () => (templates ?? []).filter((t) => getPurposes(t).length === 0).length,
