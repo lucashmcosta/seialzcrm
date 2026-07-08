@@ -204,6 +204,37 @@ export const metaWhatsAppService = {
     return data as ConnectResult;
   },
 
+  async addWaba(input: AddWabaInput): Promise<AddWabaResult> {
+    const { data, error } = await supabase.functions.invoke("meta-whatsapp-connect", {
+      body: { ...input, mode: "add_waba", appId: "", systemUserToken: "" },
+    });
+    if (error) {
+      const fnError = await readFunctionError(error, data);
+      if (fnError?.error === "meta_validation_failed") {
+        throw new MetaWhatsAppValidationError(fnError.meta_error);
+      }
+      if (fnError?.error === "endpoint_address_already_registered") {
+        throw new EndpointAlreadyRegisteredError({
+          existing_endpoint_id: fnError.existing_endpoint_id,
+          existing_provider: fnError.existing_provider,
+          existing_sender_sid: fnError.existing_sender_sid ?? null,
+        });
+      }
+      if (fnError?.error === "waba_already_registered") {
+        throw new WabaAlreadyRegisteredError({
+          existing_organization_integration_id: fnError.existing_organization_integration_id,
+          existing_display_name: fnError.existing_display_name ?? null,
+        });
+      }
+      if (fnError?.error === "unique_constraint_blocked") {
+        throw new UniqueConstraintBlockedError();
+      }
+      throw new Error(fnError?.message || fnError?.error || error.message || "add_waba_failed");
+    }
+    if ((data as any)?.error) throw new Error((data as any).message || (data as any).error);
+    return data as AddWabaResult;
+  },
+
   async migrate(input: MigrateInput): Promise<MigrateResult> {
     return await invokeMigrate({ ...input, mode: "migrate" });
   },
