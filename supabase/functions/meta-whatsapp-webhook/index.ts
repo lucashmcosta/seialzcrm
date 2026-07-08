@@ -140,14 +140,14 @@ serve(async (req) => {
 
     const { data: rows } = await supabase
       .from("organization_integrations")
-      .select("id, connected_account, admin_integrations!inner(slug)")
+      .select("id, connected_account, meta_credentials_id, admin_integrations!inner(slug)")
       .eq("is_enabled", true)
       .eq("admin_integrations.slug", "meta-whatsapp-cloud");
 
     let matched = false;
     let matchedIntegrationId: string | null = null;
     for (const row of rows ?? []) {
-      const expected = await resolveVerifyTokenForIntegration((row as any).connected_account);
+      const expected = await resolveVerifyTokenForOi(supabase, row as any);
       if (expected && timingSafeEqual(token, expected)) {
         matched = true;
         matchedIntegrationId = (row as any).id;
