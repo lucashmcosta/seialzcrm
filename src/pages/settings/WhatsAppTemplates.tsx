@@ -294,9 +294,53 @@ export default function WhatsAppTemplates() {
       syncMutation.mutate(organization.id, { onSuccess: notifyUnclassifiedAfterSync });
     }
   };
-  const handleSyncMeta = () => {
-    if (organization?.id) {
-      syncMetaMutation.mutate(organization.id, { onSuccess: notifyUnclassifiedAfterSync });
+  const handleSyncMeta = async () => {
+    if (!organization?.id) return;
+    // Multi-WABA: fetch every active Meta Cloud integration for this org and
+    // sync each one serially. Passes organizationIntegrationId so the edge
+    // targets that specific WABA (avoids multiple_wabas_disambiguation_required).
+    const { data: rows, error } = await supabase
+      .from('organization_integrations')
+      .select('id, admin_integrations!inner(slug)')
+      .eq('organization_id', organization.id)
+      .eq('is_enabled', true)
+      .eq('admin_integrations.slug', 'meta-whatsapp-cloud');
+    if (error) {
+      toast({ variant: 'destructive', description: `Falha ao listar WABAs: ${error.message}` });
+      return;
+    }
+    const wabas = rows ?? [];
+    if (wabas.length === 0) {
+      toast({ variant: 'destructive', description: 'Nenhuma WABA ativa para sincronizar.' });
+      return;
+    }
+    if (wabas.length === 1) {
+      syncMetaMutation.mutate(
+        { organizationId: organization.id, organizationIntegrationId: wabas[0].id },
+        { onSuccess: notifyUnclassifiedAfterSync },
+      );
+      return;
+    }
+    // Serial sync across WABAs; toasts come from the mutation.
+    let ranAny = false;
+    for (const w of wabas) {
+      try {
+        await metaWhatsAppService.syncTemplates({
+          organizationId: organization.id,
+          organizationIntegrationId: w.id,
+        });
+        ranAny = true;
+      } catch (e) {
+        toast({
+          variant: 'destructive',
+          description: `Falha na WABA ${w.id}: ${(e as Error).message}`,
+        });
+      }
+    }
+    queryClient.invalidateQueries({ queryKey: ['whatsapp-templates'] });
+    if (ranAny) {
+      toast({ description: `Sincronização concluída (${wabas.length} WABAs).` });
+      notifyUnclassifiedAfterSync();
     }
   };
 
