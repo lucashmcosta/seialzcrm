@@ -17,6 +17,7 @@ export interface WhatsAppTemplate {
   status: string;
   rejection_reason?: string;
   category?: string;
+  allowed_purposes?: string[] | null;
   is_active: boolean;
   last_synced_at?: string;
   created_at: string;
