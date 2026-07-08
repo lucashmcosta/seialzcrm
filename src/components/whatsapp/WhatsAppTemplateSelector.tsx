@@ -58,8 +58,12 @@ export function WhatsAppTemplateSelector({
   windowIsOpen = false,
 }: WhatsAppTemplateSelectorProps) {
   const { organization } = useOrganization();
+  const { permissions } = usePermissions();
+  const navigate = useNavigate();
   const [templates, setTemplates] = useState<Template[]>([]);
   const [endpointPurpose, setEndpointPurpose] = useState<string | null>(null);
+  const [endpointIntegrationId, setEndpointIntegrationIdState] = useState<string | null>(null);
+  const [unclassifiedCount, setUnclassifiedCount] = useState(0);
   const [loadingTemplates, setLoadingTemplates] = useState(true);
   const [selectedTemplate, setSelectedTemplate] = useState<Template | null>(null);
   const [variables, setVariables] = useState<Record<string, string>>({});
