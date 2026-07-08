@@ -5,9 +5,8 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "npm:@supabase/supabase-js@2";
 import { corsHeaders } from "../_shared/cors.ts";
-import { decryptSecret } from "../_shared/crypto.ts";
 import { metaWaGet, MetaWaGraphError } from "../_shared/meta-whatsapp/graph.ts";
-import { resolveAppSecretForIntegration } from "../_shared/meta-whatsapp/credentials.ts";
+import { resolveMetaCredentials, MetaCredentialsError } from "../_shared/meta-whatsapp/credentials.ts";
 
 function json(status: number, body: Record<string, unknown>) {
   return new Response(JSON.stringify(body), {
