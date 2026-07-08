@@ -73,7 +73,7 @@ serve(async (req) => {
     // Localiza organization_integration ativa do slug meta-whatsapp-cloud
     const { data: oi, error: oiErr } = await supabase
       .from("organization_integrations")
-      .select("id, connected_account, config_values, is_enabled, admin_integrations!inner(slug)")
+      .select("id, is_enabled, admin_integrations!inner(slug)")
       .eq("organization_id", organizationId)
       .eq("is_enabled", true)
       .eq("admin_integrations.slug", "meta-whatsapp-cloud")
@@ -82,14 +82,18 @@ serve(async (req) => {
     if (oiErr) return json(500, { error: "integration_lookup_failed", details: oiErr.message });
     if (!oi) return json(404, { error: "integration_not_found" });
 
-    const ca = (oi.connected_account ?? {}) as any;
-    const cv = (oi.config_values ?? {}) as any;
-    const wabaId = ca.waba_id || cv.waba_id;
+    // Credenciais Meta (nova fonte: meta_app_credentials; fallback: connected_account)
+    let resolved;
+    try {
+      resolved = await resolveMetaCredentials(supabase, oi.id);
+    } catch (e) {
+      const code = (e as MetaCredentialsError)?.code ?? "credentials_resolve_failed";
+      return json(400, { error: code });
+    }
+    const wabaId = resolved.wabaId;
     if (!wabaId) return json(400, { error: "missing_waba_id" });
-    if (!ca.access_token_encrypted) return json(400, { error: "missing_access_token" });
-
-    const accessToken = (await decryptSecret(ca.access_token_encrypted)).trim();
-    const appSecret = await resolveAppSecretForIntegration(ca);
+    const accessToken = resolved.accessToken;
+    const appSecret = resolved.appSecret;
 
     // Paginação
     const all: MetaTemplate[] = [];
