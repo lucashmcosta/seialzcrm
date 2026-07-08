@@ -702,8 +702,78 @@ serve(async (req) => {
     // === FIM modo add_waba ====================================================
     // ==========================================================================
 
+    // ==========================================================================
+    // === MODE = 'resubscribe_webhook' =========================================
+    // Reinscreve o App atual na WABA de uma organization_integrations existente.
+    // Não altera endpoints, credenciais nem envia mensagens.
+    // ==========================================================================
+    if (isResubscribeMode) {
+      const oiId = body.organizationIntegrationId!;
+      const { data: oiRow, error: oiLookupErr } = await admin
+        .from("organization_integrations")
+        .select("id, organization_id, meta_waba_id, meta_credentials_id, connected_account, config_values")
+        .eq("id", oiId)
+        .maybeSingle();
+      if (oiLookupErr) return err(500, "oi_lookup_failed", { details: oiLookupErr.message });
+      if (!oiRow) return err(404, "organization_integration_not_found");
+      if (oiRow.organization_id !== body.organizationId) return err(403, "org_mismatch");
 
+      const ca = (oiRow.connected_account ?? {}) as any;
+      const wabaId = (oiRow.meta_waba_id as string | null) ?? (ca.waba_id as string | undefined) ?? null;
+      if (!wabaId) return err(400, "missing_waba_id");
 
+      // Resolve token: prefere meta_app_credentials (M2 shared); fallback para connected_account.
+      let encToken: string | null = null;
+      let encSecret: string | null = null;
+      if (oiRow.meta_credentials_id) {
+        const { data: cred } = await admin
+          .from("meta_app_credentials")
+          .select("access_token_encrypted, app_secret_encrypted")
+          .eq("id", oiRow.meta_credentials_id)
+          .maybeSingle();
+        encToken = cred?.access_token_encrypted ?? null;
+        encSecret = cred?.app_secret_encrypted ?? null;
+      }
+      if (!encToken) {
+        encToken = (ca.access_token_encrypted as string | undefined) ?? null;
+        encSecret = encSecret ?? (ca.app_secret_encrypted as string | undefined) ?? null;
+      }
+      if (!encToken) return err(400, "integration_missing_token");
+
+      let accessToken: string;
+      let appSecret: string | undefined;
+      try {
+        accessToken = (await decryptSecret(encToken)).trim();
+      } catch (e) {
+        return err(500, "credentials_decrypt_failed", { details: (e as Error).message });
+      }
+      try {
+        appSecret = encSecret ? (await decryptSecret(encSecret)).trim() || undefined : undefined;
+      } catch (_e) { /* opcional */ }
+
+      const sub = await subscribeAndPersist(admin, {
+        organizationIntegrationId: oiRow.id,
+        wabaId,
+        accessToken,
+        appSecret,
+        priorConfigValues: (oiRow.config_values ?? {}) as Record<string, unknown>,
+      });
+      if (!sub.ok) {
+        return err(502, "waba_subscribe_failed", {
+          message: "Não foi possível inscrever o app Meta nesta WABA. Verifique permissões do token.",
+          meta_error: sub.details,
+        });
+      }
+      return new Response(JSON.stringify({
+        ok: true,
+        mode: "resubscribe_webhook",
+        organization_integration_id: oiRow.id,
+        meta_waba_id: wabaId,
+        webhook_subscribed: true,
+        subscribed_app_ids: sub.app_ids,
+        subscribed_apps: sub.subscribed_apps,
+      }), { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } });
+    }
 
 
     // Busca integration_id e estado anterior cedo para validar credenciais per-tenant.
