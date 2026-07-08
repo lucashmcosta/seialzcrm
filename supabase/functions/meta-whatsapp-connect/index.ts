@@ -39,10 +39,16 @@ interface ConnectBody {
   //               reutilizando as credenciais compartilhadas em meta_app_credentials
   //               (populadas no M2). NÃO recebe app_id/systemUserToken/appSecret/verifyToken.
   //               Requer M3 (drop do unique antigo) para inserir a 2ª WABA da org.
-  mode?: "primary" | "additional" | "migrate" | "migrate_dry_run" | "add_waba";
+  // 'resubscribe_webhook': PR2. Reinscreve o App atual na WABA existente
+  //                        (POST /{waba_id}/subscribed_apps + GET de confirmação)
+  //                        e atualiza config_values.webhook_subscribed*. Não altera
+  //                        endpoints, credenciais nem envia mensagens.
+  mode?: "primary" | "additional" | "migrate" | "migrate_dry_run" | "add_waba" | "resubscribe_webhook";
   existingEndpointId?: string;
   provider?: "meta_cloud_api"; // destino da migração
   migrationReason?: string;
+  /** resubscribe_webhook: id da organization_integrations alvo. */
+  organizationIntegrationId?: string;
 }
 
 function err(status: number, message: string, extra: Record<string, unknown> = {}) {
