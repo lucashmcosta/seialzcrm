@@ -1,12 +1,14 @@
 import { useState, useEffect, useMemo } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { useOrganization } from '@/hooks/useOrganization';
+import { usePermissions } from '@/hooks/usePermissions';
 import { supabase } from '@/integrations/supabase/client';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { ScrollArea } from '@/components/ui/scroll-area';
-import { SpinnerGap, ArrowLeft, Check, LockSimple } from '@phosphor-icons/react';
+import { SpinnerGap, ArrowLeft, Check, LockSimple, Warning } from '@phosphor-icons/react';
 import {
   getLowEndpointConfig,
   isMarketingBlockedWhenWindowOpen,
@@ -56,8 +58,12 @@ export function WhatsAppTemplateSelector({
   windowIsOpen = false,
 }: WhatsAppTemplateSelectorProps) {
   const { organization } = useOrganization();
+  const { permissions } = usePermissions();
+  const navigate = useNavigate();
   const [templates, setTemplates] = useState<Template[]>([]);
   const [endpointPurpose, setEndpointPurpose] = useState<string | null>(null);
+  const [endpointIntegrationId, setEndpointIntegrationIdState] = useState<string | null>(null);
+  const [unclassifiedCount, setUnclassifiedCount] = useState(0);
   const [loadingTemplates, setLoadingTemplates] = useState(true);
   const [selectedTemplate, setSelectedTemplate] = useState<Template | null>(null);
   const [variables, setVariables] = useState<Record<string, string>>({});
@@ -86,8 +92,10 @@ export function WhatsAppTemplateSelector({
         purpose = (ep?.purpose as string | null) ?? null;
         endpointIntegrationId = (ep?.organization_integration_id as string | null) ?? null;
         setEndpointPurpose(purpose);
+        setEndpointIntegrationIdState(endpointIntegrationId);
       } else {
         setEndpointPurpose(null);
+        setEndpointIntegrationIdState(null);
       }
 
       // PR0 multi-WABA: fail-closed para Meta Cloud sem integration_id resolvido.
@@ -133,6 +141,22 @@ export function WhatsAppTemplateSelector({
         return true;
       });
       setTemplates(filtered);
+
+      // PR0.5: contagem de templates não classificados nesta WABA (admin banner)
+      if (provider === 'meta_cloud_api' && endpointIntegrationId) {
+        const { count } = await supabase
+          .from('whatsapp_templates')
+          .select('id', { count: 'exact', head: true })
+          .eq('organization_id', organization.id)
+          .eq('organization_integration_id', endpointIntegrationId)
+          .eq('provider', 'meta_cloud_api')
+          .eq('status', 'approved')
+          .eq('is_active', true)
+          .or('allowed_purposes.is.null,allowed_purposes.eq.{}');
+        setUnclassifiedCount(count ?? 0);
+      } else {
+        setUnclassifiedCount(0);
+      }
     } catch (error) {
       console.error('Error fetching templates:', error);
     } finally {
@@ -273,6 +297,31 @@ export function WhatsAppTemplateSelector({
           </div>
         </div>
       )}
+
+      {/* PR0.5: aviso admin — templates não classificados nesta WABA */}
+      {permissions.canManageSettings && unclassifiedCount > 0 && endpointIntegrationId && (
+        <div className="mx-4 mb-2 rounded border border-amber-500/40 bg-amber-500/10 px-3 py-2 text-[11px] flex items-start gap-2">
+          <Warning size={14} weight="fill" className="text-amber-600 mt-0.5 flex-shrink-0" />
+          <div className="flex-1 min-w-0">
+            <p className="font-medium text-amber-900 dark:text-amber-200">
+              {unclassifiedCount} template(s) precisam ser classificados para aparecer no envio
+            </p>
+          </div>
+          <Button
+            size="sm"
+            variant="outline"
+            className="h-6 px-2 text-[11px]"
+            onClick={() =>
+              navigate(
+                `/settings/whatsapp-templates?filter=unclassified&integration=${endpointIntegrationId}`,
+              )
+            }
+          >
+            Classificar agora
+          </Button>
+        </div>
+      )}
+
 
       {templates.length === 0 ? (
         <Card className="mx-4">

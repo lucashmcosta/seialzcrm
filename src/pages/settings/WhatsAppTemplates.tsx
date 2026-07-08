@@ -1,5 +1,6 @@
-import { useState, useMemo } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useState, useMemo, useEffect } from 'react';
+import { useNavigate, useSearchParams } from 'react-router-dom';
+import { toast as sonnerToast } from 'sonner';
 import { useQueryClient } from '@tanstack/react-query';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
@@ -106,11 +107,17 @@ export default function WhatsAppTemplates() {
   const submitMutation = useSubmitForApproval();
   const { hasTwilio, hasMeta } = useActiveWhatsAppProviders(organization?.id);
 
+  const [searchParams, setSearchParams] = useSearchParams();
+  const initialFilterPurpose = (searchParams.get('filter') === 'unclassified'
+    ? 'unclassified'
+    : 'all') as FilterPurpose;
+  const deepLinkIntegrationId = searchParams.get('integration');
+
   const [filterStatus, setFilterStatus] = useState<FilterStatus>('all');
   const [filterType, setFilterType] = useState<FilterType>('all');
   const [filterLanguage, setFilterLanguage] = useState<FilterLanguage>('all');
   const [filterProvider, setFilterProvider] = useState<FilterProvider>('all');
-  const [filterPurpose, setFilterPurpose] = useState<FilterPurpose>('all');
+  const [filterPurpose, setFilterPurpose] = useState<FilterPurpose>(initialFilterPurpose);
   const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false);
   const [selectedTemplateId, setSelectedTemplateId] = useState<string | null>(null);
   const [selectedTemplateName, setSelectedTemplateName] = useState<string>('');
@@ -143,9 +150,14 @@ export default function WhatsAppTemplates() {
           return false;
         }
       }
+      // Deep-link: filtro por integração (WABA) específica
+      if (deepLinkIntegrationId) {
+        const oiId = (template as any).organization_integration_id;
+        if (oiId !== deepLinkIntegrationId) return false;
+      }
       return true;
     }) || [];
-  }, [templates, filterStatus, filterType, filterLanguage, filterProvider, filterPurpose]);
+  }, [templates, filterStatus, filterType, filterLanguage, filterProvider, filterPurpose, deepLinkIntegrationId]);
 
   const unclassifiedCount = useMemo(
     () => (templates ?? []).filter((t) => getPurposes(t).length === 0).length,
@@ -263,9 +275,16 @@ export default function WhatsAppTemplates() {
         .eq('is_active', true)
         .or('allowed_purposes.is.null,allowed_purposes.eq.{}');
       if ((count ?? 0) > 0) {
-        toast({
-          description: `${count} template(s) precisam ser classificados antes de aparecer no composer.`,
-        });
+        sonnerToast.warning(
+          `${count} template(s) precisam ser classificados para aparecer no envio`,
+          {
+            duration: 10000,
+            action: {
+              label: 'Classificar agora',
+              onClick: () => setFilterPurpose('unclassified'),
+            },
+          },
+        );
       }
     }, 800);
   };
