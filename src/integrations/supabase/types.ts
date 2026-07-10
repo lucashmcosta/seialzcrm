@@ -3634,8 +3634,11 @@ export type Database = {
         Row: {
           circuit_breaker_reason: string | null
           circuit_breaker_tripped: boolean
+          claimed: number
           created_at: string
+          deferred: number
           duration_ms: number
+          effective_concurrency: number | null
           final_concurrency: number
           finished_at: string
           http_429: number
@@ -3644,11 +3647,15 @@ export type Database = {
           jobs_per_min: number
           latency_avg_ms: number
           latency_p95_ms: number
+          max_batches: number | null
           network_error: number
           no_handler: number
+          overlap_prevented: boolean
           permanent: number
+          platform_rate_limit: number
           processed: number
           retryable: number
+          runtime_ms: number | null
           started_at: string
           status: string
           success: number
@@ -3656,8 +3663,11 @@ export type Database = {
         Insert: {
           circuit_breaker_reason?: string | null
           circuit_breaker_tripped?: boolean
+          claimed?: number
           created_at?: string
+          deferred?: number
           duration_ms: number
+          effective_concurrency?: number | null
           final_concurrency?: number
           finished_at: string
           http_429?: number
@@ -3666,11 +3676,15 @@ export type Database = {
           jobs_per_min?: number
           latency_avg_ms?: number
           latency_p95_ms?: number
+          max_batches?: number | null
           network_error?: number
           no_handler?: number
+          overlap_prevented?: boolean
           permanent?: number
+          platform_rate_limit?: number
           processed?: number
           retryable?: number
+          runtime_ms?: number | null
           started_at: string
           status?: string
           success?: number
@@ -3678,8 +3692,11 @@ export type Database = {
         Update: {
           circuit_breaker_reason?: string | null
           circuit_breaker_tripped?: boolean
+          claimed?: number
           created_at?: string
+          deferred?: number
           duration_ms?: number
+          effective_concurrency?: number | null
           final_concurrency?: number
           finished_at?: string
           http_429?: number
@@ -3688,11 +3705,15 @@ export type Database = {
           jobs_per_min?: number
           latency_avg_ms?: number
           latency_p95_ms?: number
+          max_batches?: number | null
           network_error?: number
           no_handler?: number
+          overlap_prevented?: boolean
           permanent?: number
+          platform_rate_limit?: number
           processed?: number
           retryable?: number
+          runtime_ms?: number | null
           started_at?: string
           status?: string
           success?: number
