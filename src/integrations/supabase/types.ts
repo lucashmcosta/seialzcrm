@@ -3630,6 +3630,27 @@ export type Database = {
           },
         ]
       }
+      intelligence_worker_leases: {
+        Row: {
+          acquired_at: string
+          expires_at: string
+          holder: string
+          name: string
+        }
+        Insert: {
+          acquired_at?: string
+          expires_at: string
+          holder: string
+          name: string
+        }
+        Update: {
+          acquired_at?: string
+          expires_at?: string
+          holder?: string
+          name?: string
+        }
+        Relationships: []
+      }
       intelligence_worker_runs: {
         Row: {
           circuit_breaker_reason: string | null
@@ -8663,6 +8684,10 @@ export type Database = {
           recovered: number
         }[]
       }
+      release_worker_lease: {
+        Args: { p_holder: string; p_name: string }
+        Returns: undefined
+      }
       reset_admin_login_attempts: {
         Args: { p_admin_id: string }
         Returns: undefined
@@ -9112,6 +9137,10 @@ export type Database = {
       trigger_intelligence_backfill: {
         Args: { payload: Json }
         Returns: number
+      }
+      try_acquire_worker_lease: {
+        Args: { p_holder: string; p_name: string; p_ttl_seconds?: number }
+        Returns: boolean
       }
       try_lead_form_polling_lock: {
         Args: { p_lead_form_id: string }
