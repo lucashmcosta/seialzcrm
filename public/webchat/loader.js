@@ -34,6 +34,9 @@
 
   var HOST = selfSrc.replace(/\/webchat\/loader\.js.*$/, "");
   var APP = HOST + "/webchat/app.html";
+  // Origem do backend (edge functions) — usada só pra preconnect (esquenta
+  // DNS/TLS antes do 1º clique; ganho relevante em 4G). Default = prod.
+  var SUPA = cfg.fn ? String(cfg.fn).replace(/\/functions\/v1.*$/, "") : "https://qvmtzfvkhkhkhdpclzua.supabase.co";
   var open = false, iframe = null;
   var hasBubble = cfg.bubble !== false; // window.SeialzWidget.bubble=false esconde a bolha
 
@@ -71,29 +74,25 @@
 
   function isMobile() { return window.matchMedia("(max-width:480px)").matches; }
 
-  // No mobile, redimensiona o iframe pra área visível acima do teclado.
-  // Feito AQUI (página pai) porque dentro do iframe o visualViewport do iOS
-  // não reflete o teclado. Header fica no topo, composer sobe junto.
-  function syncViewport() {
-    if (!iframe || !open || !isMobile()) return;
+  // No mobile o iframe fica SEMPRE em tela cheia (nunca encolhe) — assim a LP
+  // nunca "vaza" por baixo mesmo que a medida do teclado saia imprecisa. Quando
+  // o teclado abre, medimos a altura dele pela visualViewport da janela PAI
+  // (dentro do iframe o iOS não reporta o teclado) e avisamos o app por
+  // postMessage; o app sobe só o campo de digitar acima do teclado.
+  function syncKb() {
+    if (!iframe || !iframe.contentWindow || !open || !isMobile()) return;
     var vv = window.visualViewport; if (!vv) return;
-    iframe.style.top = vv.offsetTop + "px";
-    iframe.style.left = vv.offsetLeft + "px";
-    iframe.style.right = "auto";
-    iframe.style.bottom = "auto";
-    iframe.style.width = vv.width + "px";
-    iframe.style.height = vv.height + "px";
-    iframe.style.borderRadius = "0";
+    var kb = Math.max(0, Math.round(window.innerHeight - vv.height - vv.offsetTop));
+    iframe.contentWindow.postMessage({ __seialz: "kb", height: kb }, HOST || "*");
   }
-  function resetViewport() {
-    if (!iframe) return;
-    ["top", "left", "right", "bottom", "width", "height", "borderRadius"].forEach(function (k) { iframe.style[k] = ""; });
+  function resetKb() {
+    if (iframe && iframe.contentWindow) iframe.contentWindow.postMessage({ __seialz: "kb", height: 0 }, HOST || "*");
   }
   // re-sincroniza após a animação do teclado (iOS reporta a altura em etapas)
-  function onVV() { syncViewport(); setTimeout(syncViewport, 120); setTimeout(syncViewport, 350); }
+  function onVV() { syncKb(); setTimeout(syncKb, 120); setTimeout(syncKb, 350); }
   if (window.visualViewport) {
     window.visualViewport.addEventListener("resize", onVV);
-    window.visualViewport.addEventListener("scroll", syncViewport);
+    window.visualViewport.addEventListener("scroll", syncKb);
   }
 
   function toggle() {
@@ -101,7 +100,7 @@
     open = !open;
     iframe.style.display = open ? "block" : "none";
     if (hasBubble) btn.style.display = open ? "none" : "flex";
-    if (open) syncViewport(); else resetViewport();
+    if (open) syncKb(); else resetKb();
   }
   function openChat() { if (!open) toggle(); }
   function closeChat() { if (open) toggle(); }
@@ -125,6 +124,8 @@
   function mount() {
     // prefetch do app do chat: 1ª abertura fica rápida (não abre nem cria sessão)
     try { var lk = document.createElement("link"); lk.rel = "prefetch"; lk.href = APP; document.head.appendChild(lk); } catch (e) { /* noop */ }
+    // preconnect ao backend: DNS+TLS já quentes quando o visitante abrir o chat
+    try { var pc = document.createElement("link"); pc.rel = "preconnect"; pc.href = SUPA; pc.crossOrigin = "anonymous"; document.head.appendChild(pc); } catch (e) { /* noop */ }
     if (hasBubble) document.body.appendChild(btn);
     // (4) auto-abrir após N segundos (window.SeialzWidget.autoOpen = segundos)
     var ao = parseFloat(cfg.autoOpen);

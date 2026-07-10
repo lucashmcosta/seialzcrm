@@ -2,7 +2,7 @@
 <html lang="pt-BR">
 <head>
 <meta charset="utf-8" />
-<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, interactive-widget=resizes-content" />
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no" />
 <title>Chat</title>
 <style>
   * { box-sizing: border-box; margin: 0; padding: 0; -webkit-tap-highlight-color: transparent; }
@@ -79,7 +79,20 @@
 
   var log = document.getElementById("log"),
       composer = document.getElementById("composer"), input = document.getElementById("input"),
-      hdr = document.getElementById("hdr"), sendBtn = document.getElementById("send");
+      hdr = document.getElementById("hdr"), sendBtn = document.getElementById("send"),
+      appEl = document.getElementById("app");
+
+  // Teclado no mobile: o loader (janela pai) mede a altura do teclado e manda
+  // por postMessage. O iframe fica em tela cheia; aqui só encolhemos o #app pra
+  // o campo de digitar subir acima do teclado (a LP nunca aparece por baixo).
+  function setKb(h) {
+    appEl.style.height = h > 0 ? "calc(100% - " + h + "px)" : "100%";
+    log.scrollTop = log.scrollHeight;
+  }
+  window.addEventListener("message", function (e) {
+    var d = e.data;
+    if (d && d.__seialz === "kb") setKb(d.height || 0);
+  });
   function clearChips() { var c = log.querySelector(".chips"); if (c) c.remove(); }
   function applyColor(c) { primary = c; hdr.style.background = c; sendBtn.style.background = c; document.documentElement.style.setProperty("--wc-primary", c); }
   applyColor(primary); // cor instantânea (do snippet), atualizada pela config se preciso
@@ -182,26 +195,24 @@
   // Heartbeat
   setInterval(function () { if (sessionToken) api("webchat-heartbeat", { body: {} }).catch(function () {}); }, 30000);
 
-  // Boot: mostra "digitando..." na hora, enquanto carrega config + inicia o fluxo
+  // Boot: 1 única chamada (o start já devolve marca/tema junto). Menos um
+  // round-trip e menos um cold-start de edge function → abre bem mais rápido
+  // no 4G. Mostra "digitando..." na hora enquanto a sessão inicia.
   typing(true);
-  api("webchat-config?key=" + encodeURIComponent(WIDGET_KEY) + "&origin=" + encodeURIComponent(PARENT_ORIGIN), { method: "GET" })
-    .then(function (cfg) {
-      // a cor do snippet (P.color) tem prioridade; senão usa a config
-      if (!P.color && cfg && cfg.theme && cfg.theme.primary_color) applyColor(cfg.theme.primary_color);
-      var brand = (cfg && cfg.brand) || {};
+  api("webchat-message", { body: { widget_key: WIDGET_KEY, parent_origin: PARENT_ORIGIN, landing_url: LANDING, referrer: REFERRER, utm: {} } })
+    .then(function (res) {
+      if (!res || res.error) { typing(false); addMsg("bot", "Não consegui iniciar o chat agora. Tenta recarregar a página."); return; }
+      // a cor do snippet (P.color) tem prioridade; senão usa o tema da config
+      if (!P.color && res.theme && res.theme.primary_color) applyColor(res.theme.primary_color);
+      var brand = res.brand || {};
       document.getElementById("brand").textContent = brand.display_name || "Atendimento";
       var av = document.getElementById("avatar");
       if (brand.avatar_url) { av.textContent = ""; var im = document.createElement("img"); im.src = brand.avatar_url; im.alt = ""; av.appendChild(im); }
       else { av.textContent = (brand.display_name || "S").slice(0, 1).toUpperCase(); }
-      // inicia a sessão
-      return api("webchat-message", { body: { widget_key: WIDGET_KEY, parent_origin: PARENT_ORIGIN, landing_url: LANDING, referrer: REFERRER, utm: {} } });
-    })
-    .then(function (res) {
-      if (!res) return;
       sessionToken = res.session_token || null;
       if (res.bot && res.bot.length) renderTurns(res.bot);
     })
-    .catch(function () { addMsg("bot", "Não consegui iniciar o chat agora. Tenta recarregar a página."); });
+    .catch(function () { typing(false); addMsg("bot", "Não consegui iniciar o chat agora. Tenta recarregar a página."); });
 })();
 </script>
 </body>

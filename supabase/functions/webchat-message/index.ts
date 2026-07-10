@@ -84,7 +84,13 @@ Deno.serve(async (req) => {
         raw_payload: { landing_url: body.landing_url, utm: body.utm },
       });
 
-      return json({ session_token: sessionToken, session_id: session.id, bot: first.bot, done: false });
+      // Marca/tema vão junto no start pra o app renderizar com 1 só round-trip
+      // (dispensa o GET /webchat-config no boot). Só o subconjunto visual.
+      const s = widget.inbound_settings || {};
+      return json({
+        session_token: sessionToken, session_id: session.id, bot: first.bot, done: false,
+        brand: s.brand ?? { display_name: widget.display_name }, theme: s.theme ?? {},
+      });
     }
 
     // ============ AVANÇO DE FLUXO ============
