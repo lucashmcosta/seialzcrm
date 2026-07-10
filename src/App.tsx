@@ -108,6 +108,7 @@ const RoundRobinSettings = lazy(() => import("./components/settings/RoundRobinSe
 const Trash = lazy(() => import("./pages/settings/Trash").then(m => ({ default: m.Trash })));
 const DocumentsSettings = lazy(() => import("./components/settings/DocumentsSettings").then(m => ({ default: m.DocumentsSettings })));
 const CustomerServiceSettings = lazy(() => import("./components/settings/CustomerServiceSettings").then(m => ({ default: m.CustomerServiceSettings })));
+const WebchatSettings = lazy(() => import("./components/settings/WebchatSettings").then(m => ({ default: m.WebchatSettings })));
 const Profile = lazy(() => import("./pages/Profile"));
 const NotFound = lazy(() => import("./pages/NotFound"));
 
@@ -522,6 +523,7 @@ const App = () => (
             <Route path="documents" element={<DocumentsSettings />} />
             <Route path="integrations" element={<IntegrationsSettings />} />
             <Route path="customer-service" element={<CustomerServiceSettings />} />
+            <Route path="webchat" element={<WebchatSettings />} />
             <Route path="whatsapp-templates" element={<WhatsAppTemplatesPage />} />
             <Route path="whatsapp-snippets" element={<WhatsAppSnippetsPage />} />
             <Route path="ai-agent" element={<AIAgentSettings />} />

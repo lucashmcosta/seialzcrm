@@ -1,0 +1,208 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, interactive-widget=resizes-content" />
+<title>Chat</title>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; -webkit-tap-highlight-color: transparent; }
+  html, body { height: 100%; font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; overflow: hidden; }
+  /* o app apenas preenche o iframe; no mobile é o LOADER (pai) que redimensiona
+     o iframe conforme o teclado (visualViewport da janela topo). */
+  #app { display: flex; flex-direction: column; height: 100%; background: #fff; border-radius: 16px; overflow: hidden; }
+  header { flex-shrink: 0; }
+  #composer { flex-shrink: 0; }
+  @media (max-width: 480px) {
+    #app { border-radius: 0; }
+    header { padding-top: max(14px, env(safe-area-inset-top)); }
+    #composer { padding-bottom: max(12px, env(safe-area-inset-bottom)); }
+    header button { font-size: 26px; padding: 4px 8px; }
+  }
+  header { display: flex; align-items: center; gap: 10px; padding: 14px 16px; color: #fff; }
+  header .avatar { width: 36px; height: 36px; border-radius: 9999px; background: rgba(255,255,255,.25); display: flex; align-items: center; justify-content: center; font-weight: 600; }
+  header .title { font-weight: 600; font-size: 15px; flex: 1; }
+  header button { background: transparent; border: none; color: #fff; font-size: 22px; cursor: pointer; opacity: .85; }
+  #log { flex: 1; overflow-y: auto; padding: 16px; display: flex; flex-direction: column; gap: 8px; background: #f5f6f8; }
+  .msg { max-width: 82%; padding: 9px 13px; border-radius: 14px; font-size: 14px; line-height: 1.4; word-wrap: break-word; white-space: pre-wrap; }
+  .bot { align-self: flex-start; background: #fff; color: #1a1a1a; border-bottom-left-radius: 4px; box-shadow: 0 1px 2px rgba(0,0,0,.08); }
+  .visitor { align-self: flex-end; color: #fff; border-bottom-right-radius: 4px; }
+  .typing { align-self: flex-start; background: #fff; color: #999; font-style: italic; box-shadow: 0 1px 2px rgba(0,0,0,.08); }
+  /* quick-replies aparecem logo abaixo da última mensagem do bot */
+  .chips { display: flex; flex-wrap: wrap; gap: 8px; align-self: flex-start; max-width: 92%; margin-top: 2px; margin-bottom: 4px; }
+  .chips button { border: 1px solid var(--wc-primary, #d9dce1); background: #fff; border-radius: 9999px; padding: 9px 15px; font-size: 14px; cursor: pointer; transition: background .12s; color: var(--wc-primary, #1a1a1a); }
+  .chips button:active { background: #eef0f3; }
+  #avatar img { width: 100%; height: 100%; border-radius: 9999px; object-fit: cover; display: block; }
+  #composer { display: flex; gap: 8px; padding: 12px; border-top: 1px solid #e7e9ee; background: #fff; }
+  /* font-size >= 16px evita o zoom automático do navegador ao focar no mobile */
+  #composer input { flex: 1; border: 1px solid #d9dce1; border-radius: 9999px; padding: 10px 14px; font-size: 16px; outline: none; }
+  #composer input:focus { border-color: #999; }
+  #composer button { border: none; border-radius: 9999px; width: 42px; height: 42px; color: #fff; font-size: 18px; cursor: pointer; }
+  #composer[hidden], #buttons[hidden] { display: none; }
+  .powered { text-align: center; font-size: 11px; color: #9aa0a6; padding: 6px; background: #fff; }
+</style>
+</head>
+<body>
+<div id="app">
+  <header id="hdr">
+    <div class="avatar" id="avatar">S</div>
+    <div class="title" id="brand">Atendimento</div>
+    <button id="close" aria-label="Fechar">&times;</button>
+  </header>
+  <div id="log"></div>
+  <form id="composer" hidden>
+    <input id="input" type="text" autocomplete="off" placeholder="Digite aqui..." />
+    <button type="submit" id="send" aria-label="Enviar">&#10148;</button>
+  </form>
+  <div class="powered">Seialz</div>
+</div>
+<script>
+(function () {
+  "use strict";
+  // ⚠️ Chave pública (anon/publishable) do Supabase — segura para expor (mesma do frontend).
+  // Preencher no deploy com VITE_SUPABASE_PUBLISHABLE_KEY. [TODO deploy]
+  var SUPABASE_URL = "https://qvmtzfvkhkhkhdpclzua.supabase.co";
+  var ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InF2bXR6ZnZraGtoa2hkcGNsenVhIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjQzODM3MzIsImV4cCI6MjA3OTk1OTczMn0.7uhE97klvxSwYrJMu_NYIaNCLBaIUhFNtcF2oRLYRUE";
+
+  function hashParams() {
+    var p = {}, h = (location.hash || "").replace(/^#/, "");
+    h.split("&").forEach(function (kv) { var i = kv.indexOf("="); if (i > 0) p[kv.slice(0, i)] = decodeURIComponent(kv.slice(i + 1)); });
+    return p;
+  }
+  var P = hashParams();
+  // FN base: override via #fn=... (preview local); default = Supabase de produção.
+  var FN = P.fn || (SUPABASE_URL + "/functions/v1");
+  var WIDGET_KEY = P.key;
+  var PARENT_ORIGIN = P.origin || "";
+  var LANDING = P.landing || "";
+  var REFERRER = P.ref || "";
+  var sessionToken = null, currentInput = null, primary = P.color || "#0E7C5A", polling = null, lastCursor = null;
+
+  var log = document.getElementById("log"),
+      composer = document.getElementById("composer"), input = document.getElementById("input"),
+      hdr = document.getElementById("hdr"), sendBtn = document.getElementById("send");
+  function clearChips() { var c = log.querySelector(".chips"); if (c) c.remove(); }
+  function applyColor(c) { primary = c; hdr.style.background = c; sendBtn.style.background = c; document.documentElement.style.setProperty("--wc-primary", c); }
+  applyColor(primary); // cor instantânea (do snippet), atualizada pela config se preciso
+
+  document.getElementById("close").onclick = function () { parent.postMessage("seialz:close", "*"); };
+
+  // O redimensionamento pelo teclado é feito no loader (pai). Aqui só
+  // garantimos que o log role até o fim quando o input recebe foco.
+  input.addEventListener("focus", function () { setTimeout(function () { log.scrollTop = log.scrollHeight; }, 300); });
+
+  function api(fn, opts) {
+    opts = opts || {};
+    var headers = { "Content-Type": "application/json", "apikey": ANON_KEY, "Authorization": "Bearer " + ANON_KEY };
+    if (WIDGET_KEY) headers["x-webchat-key"] = WIDGET_KEY;
+    if (sessionToken) headers["x-webchat-token"] = sessionToken;
+    if (PARENT_ORIGIN) headers["x-webchat-origin"] = PARENT_ORIGIN;
+    return fetch(FN + "/" + fn, { method: opts.method || "POST", headers: headers, body: opts.body ? JSON.stringify(opts.body) : undefined })
+      .then(function (r) { return r.json().catch(function () { return {}; }); });
+  }
+
+  function esc(s) { return String(s).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;"); }
+  // markdown mínimo e seguro: *negrito* / **negrito** + quebras de linha
+  function fmt(s) { return esc(s).replace(/\*\*([^*\n]+)\*\*/g, "<strong>$1</strong>").replace(/\*([^*\n]+)\*/g, "<strong>$1</strong>").replace(/\n/g, "<br>"); }
+  function addMsg(role, text) {
+    var d = document.createElement("div");
+    d.className = "msg " + (role === "visitor" ? "visitor" : "bot");
+    if (role === "visitor") { d.style.background = primary; d.textContent = text; }
+    else { d.innerHTML = fmt(text); }
+    log.appendChild(d);
+    log.scrollTop = log.scrollHeight;
+    return d;
+  }
+  function typing(on) {
+    var ex = document.getElementById("t");
+    if (on && !ex) { var d = document.createElement("div"); d.id = "t"; d.className = "msg typing"; d.textContent = "digitando..."; log.appendChild(d); log.scrollTop = log.scrollHeight; }
+    if (!on && ex) ex.remove();
+  }
+
+  function renderTurns(turns) {
+    clearChips(); composer.hidden = true; currentInput = null;
+    var i = 0;
+    (function next() {
+      if (i >= turns.length) return;
+      var t = turns[i++];
+      typing(true);
+      setTimeout(function () {
+        typing(false);
+        addMsg("bot", t.text);
+        if (i < turns.length) { next(); return; }
+        // último turno define o input aguardado
+        if (t.buttons && t.buttons.length) {
+          currentInput = { step_id: t.step_id, kind: "buttons" };
+          var chips = document.createElement("div");
+          chips.className = "chips";
+          t.buttons.forEach(function (label) {
+            var b = document.createElement("button"); b.textContent = label;
+            b.onclick = function () { submit(label, t.step_id); };
+            chips.appendChild(b);
+          });
+          log.appendChild(chips);
+          log.scrollTop = log.scrollHeight;
+        } else if (t.input) {
+          currentInput = { step_id: t.step_id, kind: t.input };
+          input.placeholder = t.input === "phone" ? "(11) 91234-5678" : "Digite aqui...";
+          input.type = t.input === "phone" ? "tel" : "text";
+          composer.hidden = false; input.focus();
+        }
+      }, Math.min(900, 300 + t.text.length * 12));
+    })();
+  }
+
+  function submit(value, stepId) {
+    if (!value || !value.trim()) return;
+    clearChips();
+    addMsg("visitor", value);
+    composer.hidden = true;
+    var clientMsgId = "c_" + Date.now() + "_" + Math.random().toString(36).slice(2, 8);
+    api("webchat-message", { body: { step_id: stepId, value: value, client_message_id: clientMsgId } })
+      .then(function (res) {
+        if (res.error === "invalid_phone" && res.bot) { renderTurns(res.bot); return; }
+        if (res.bot && res.bot.length) renderTurns(res.bot);
+        if (res.done) { onDone(res.promoted); }
+      })
+      .catch(function () { addMsg("bot", "Ops, tive um problema de conexão. Tenta de novo?"); if (currentInput && currentInput.kind !== "buttons") composer.hidden = false; });
+  }
+
+  function onDone() {
+    // v1: lead capturado — encerra limpo. Sem chat livre nem polling
+    // (conversa pós-captura com atendente fica pra v1.1).
+    clearChips(); composer.hidden = true; currentInput = null;
+  }
+
+  // Composer só serve para os steps de input do roteiro (texto/telefone).
+  composer.addEventListener("submit", function (e) {
+    e.preventDefault();
+    var v = input.value; input.value = "";
+    if (currentInput) submit(v, currentInput.step_id);
+  });
+
+  // Heartbeat
+  setInterval(function () { if (sessionToken) api("webchat-heartbeat", { body: {} }).catch(function () {}); }, 30000);
+
+  // Boot: mostra "digitando..." na hora, enquanto carrega config + inicia o fluxo
+  typing(true);
+  api("webchat-config?key=" + encodeURIComponent(WIDGET_KEY) + "&origin=" + encodeURIComponent(PARENT_ORIGIN), { method: "GET" })
+    .then(function (cfg) {
+      // a cor do snippet (P.color) tem prioridade; senão usa a config
+      if (!P.color && cfg && cfg.theme && cfg.theme.primary_color) applyColor(cfg.theme.primary_color);
+      var brand = (cfg && cfg.brand) || {};
+      document.getElementById("brand").textContent = brand.display_name || "Atendimento";
+      var av = document.getElementById("avatar");
+      if (brand.avatar_url) { av.textContent = ""; var im = document.createElement("img"); im.src = brand.avatar_url; im.alt = ""; av.appendChild(im); }
+      else { av.textContent = (brand.display_name || "S").slice(0, 1).toUpperCase(); }
+      // inicia a sessão
+      return api("webchat-message", { body: { widget_key: WIDGET_KEY, parent_origin: PARENT_ORIGIN, landing_url: LANDING, referrer: REFERRER, utm: {} } });
+    })
+    .then(function (res) {
+      if (!res) return;
+      sessionToken = res.session_token || null;
+      if (res.bot && res.bot.length) renderTurns(res.bot);
+    })
+    .catch(function () { addMsg("bot", "Não consegui iniciar o chat agora. Tenta recarregar a página."); });
+})();
+</script>
+</body>
+</html>

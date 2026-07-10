@@ -23,6 +23,7 @@ import {
   Sparkle,
   Files,
   Headset,
+  ChatCircleDots,
 } from '@phosphor-icons/react';
 import { usePermissions } from '@/hooks/usePermissions';
 import { useWhatsAppIntegration } from '@/hooks/useWhatsAppIntegration';
@@ -83,6 +84,7 @@ const settingsGroups: SettingsGroup[] = [
       { icon: Sparkle, label: 'Provedores de IA (BYOK)', description: 'Use suas próprias chaves OpenAI, Anthropic, Gemini ou ElevenLabs', to: 'ai-providers', permission: 'canManageIntegrations' },
       { icon: Code, label: 'API & Webhooks', description: 'Acesse a API e configure webhooks', to: 'api-webhooks', permission: 'canManageIntegrations' },
       { icon: Headset, label: 'Atendimento', description: 'Regras de escopo da Inbox de Atendimento (CS)', to: 'customer-service', permission: 'canManageSettings' },
+      { icon: ChatCircleDots, label: 'Webchat', description: 'Chat de captação para landing pages — leads caem direto no pipeline', to: 'webchat', badge: 'Novo', badgeVariant: 'info', permission: 'canManageIntegrations' },
     ],
   },
   {

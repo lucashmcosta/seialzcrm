@@ -29,3 +29,17 @@ verify_jwt = false
 [functions.twilio-webhook]
 verify_jwt = false
 
+# Webchat v1: chamadas por visitante anonimo (widget key publica + session token).
+# Sem JWT de usuario/service_role; auth propria via _shared/webchat.ts (widget
+# key + Origin allowlist). Precisa de verify_jwt=false (CLI default seria true).
+[functions.webchat-config]
+verify_jwt = false
+
+[functions.webchat-message]
+verify_jwt = false
+
+[functions.webchat-messages]
+verify_jwt = false
+
+[functions.webchat-heartbeat]
+verify_jwt = false

@@ -14,4 +14,5 @@ Especificações de features/mudanças **ainda não concluídas** (ou concluída
 | Plano | Status |
 |---|---|
 | [`2026-07-snippets-internos.md`](2026-07-snippets-internos.md) | Snippets internos (respostas rápidas no composer) — em implementação; tabela `message_snippets` já existe |
+| [`2026-07-webchat-v1.md`](2026-07-webchat-v1.md) | Webchat v1 — canal de captação próprio (hedge de Meta). Implementado no repo (branch `feat/webchat-v1`), aguardando passos gated (migration/deploy/seed) |
 | [`../inbox-v2/`](../inbox-v2/) | Inbox v2 — Fase 0/1 (SQLs versionados não aplicados + specs de cutover). Mantido em pasta própria por conter SQL numerado |
