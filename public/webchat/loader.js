@@ -6,11 +6,33 @@
  */
 (function () {
   "use strict";
-  var cfg = window.SeialzWidget || {};
-  var key = cfg.key;
-  if (!key) { console.warn("[SeialzWidget] faltando window.SeialzWidget.key"); return; }
+  // Captura o próprio <script> (currentScript vale durante a execução do async).
+  var self = document.currentScript;
+  if (!self) { // fallback: acha pelo src caso currentScript não esteja disponível
+    var ss = document.getElementsByTagName("script");
+    for (var i = ss.length - 1; i >= 0; i--) { if (/\/webchat\/loader\.js/.test(ss[i].src)) { self = ss[i]; break; } }
+  }
+  var selfSrc = (self && self.src) || "";
 
-  var HOST = (document.currentScript && document.currentScript.src || "").replace(/\/webchat\/loader\.js.*$/, "");
+  // Config: aceita window.SeialzWidget={...} E/OU query string na URL do loader
+  // (?key=wgt_xxx&color=%230E7C5A&bubble=false&autoopen=8). A query string é o
+  // caminho robusto — sobrevive a builders de LP que removem <script> inline ou
+  // isolam blocos "embed" em iframes separados. Basta UMA tag:
+  //   <script src="https://HOST/webchat/loader.js?key=wgt_xxx" async></script>
+  var cfg = window.SeialzWidget || {};
+  try {
+    var qs = new URLSearchParams(selfSrc.split("?")[1] || "");
+    if (!cfg.key && qs.get("key")) cfg.key = qs.get("key");
+    if (!cfg.color && qs.get("color")) cfg.color = qs.get("color");
+    if (cfg.bubble === undefined && qs.get("bubble") === "false") cfg.bubble = false;
+    if (cfg.autoOpen === undefined && qs.get("autoopen")) cfg.autoOpen = qs.get("autoopen");
+    if (!cfg.fn && qs.get("fn")) cfg.fn = qs.get("fn");
+  } catch (e) { /* noop */ }
+
+  var key = cfg.key;
+  if (!key) { console.warn("[SeialzWidget] faltando a chave do widget (window.SeialzWidget.key ou ?key= na URL do loader)"); return; }
+
+  var HOST = selfSrc.replace(/\/webchat\/loader\.js.*$/, "");
   var APP = HOST + "/webchat/app.html";
   var open = false, iframe = null;
   var hasBubble = cfg.bubble !== false; // window.SeialzWidget.bubble=false esconde a bolha
