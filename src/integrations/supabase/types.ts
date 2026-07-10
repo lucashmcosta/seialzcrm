@@ -3630,6 +3630,75 @@ export type Database = {
           },
         ]
       }
+      intelligence_worker_runs: {
+        Row: {
+          circuit_breaker_reason: string | null
+          circuit_breaker_tripped: boolean
+          created_at: string
+          duration_ms: number
+          final_concurrency: number
+          finished_at: string
+          http_429: number
+          http_5xx: number
+          id: string
+          jobs_per_min: number
+          latency_avg_ms: number
+          latency_p95_ms: number
+          network_error: number
+          no_handler: number
+          permanent: number
+          processed: number
+          retryable: number
+          started_at: string
+          status: string
+          success: number
+        }
+        Insert: {
+          circuit_breaker_reason?: string | null
+          circuit_breaker_tripped?: boolean
+          created_at?: string
+          duration_ms: number
+          final_concurrency?: number
+          finished_at: string
+          http_429?: number
+          http_5xx?: number
+          id?: string
+          jobs_per_min?: number
+          latency_avg_ms?: number
+          latency_p95_ms?: number
+          network_error?: number
+          no_handler?: number
+          permanent?: number
+          processed?: number
+          retryable?: number
+          started_at: string
+          status?: string
+          success?: number
+        }
+        Update: {
+          circuit_breaker_reason?: string | null
+          circuit_breaker_tripped?: boolean
+          created_at?: string
+          duration_ms?: number
+          final_concurrency?: number
+          finished_at?: string
+          http_429?: number
+          http_5xx?: number
+          id?: string
+          jobs_per_min?: number
+          latency_avg_ms?: number
+          latency_p95_ms?: number
+          network_error?: number
+          no_handler?: number
+          permanent?: number
+          processed?: number
+          retryable?: number
+          started_at?: string
+          status?: string
+          success?: number
+        }
+        Relationships: []
+      }
       invitations: {
         Row: {
           accepted_at: string | null
@@ -8557,6 +8626,7 @@ export type Database = {
         Args: { p_session_id: string }
         Returns: string
       }
+      prune_intelligence_worker_runs: { Args: never; Returns: undefined }
       reassign_thread: {
         Args: { _reason?: string; _thread_id: string; _to_user_id: string }
         Returns: Json
