@@ -172,9 +172,23 @@ Deno.serve(async (req) => {
       deferredTotal = 0; // não sabemos quantos ficaram na fila; métrica cheia é populada pelo cron seguinte
     }
   } finally {
-    await supabase.rpc("release_worker_lease", { p_name: LEASE_NAME, p_holder: holder }).catch((e) => {
-      console.error("[intelligence-worker] release lease failed", e);
-    });
+    try {
+      const { error: releaseErr } = await supabase.rpc("release_worker_lease", {
+        p_name: LEASE_NAME,
+        p_holder: holder,
+      });
+      if (releaseErr) {
+        console.error("[intelligence-worker] worker_lease_release_failed", {
+          error: releaseErr.message,
+          holderId: holder,
+        });
+      }
+    } catch (e) {
+      console.error("[intelligence-worker] worker_lease_release_exception", {
+        error: e instanceof Error ? e.message : String(e),
+        holderId: holder,
+      });
+    }
   }
 
   const runFinishedAt = new Date();
