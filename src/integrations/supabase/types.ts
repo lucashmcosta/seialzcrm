@@ -7543,6 +7543,161 @@ export type Database = {
         }
         Relationships: []
       }
+      webchat_session_messages: {
+        Row: {
+          content: string
+          created_at: string
+          id: string
+          metadata: Json
+          organization_id: string
+          role: string
+          session_id: string
+        }
+        Insert: {
+          content: string
+          created_at?: string
+          id?: string
+          metadata?: Json
+          organization_id: string
+          role: string
+          session_id: string
+        }
+        Update: {
+          content?: string
+          created_at?: string
+          id?: string
+          metadata?: Json
+          organization_id?: string
+          role?: string
+          session_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "webchat_session_messages_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "webchat_session_messages_session_id_fkey"
+            columns: ["session_id"]
+            isOneToOne: false
+            referencedRelation: "webchat_sessions"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      webchat_sessions: {
+        Row: {
+          contact_id: string | null
+          created_at: string
+          endpoint_id: string
+          expires_at: string
+          fbc: string | null
+          fbclid: string | null
+          fbp: string | null
+          flow_state: Json
+          id: string
+          ip: unknown
+          landing_url: string | null
+          last_seen_at: string
+          organization_id: string
+          phone_verified: boolean
+          promoted_at: string | null
+          referrer: string | null
+          status: string
+          thread_id: string | null
+          token_hash: string
+          updated_at: string
+          user_agent: string | null
+          utm: Json
+          visitor_name: string | null
+          visitor_phone: string | null
+        }
+        Insert: {
+          contact_id?: string | null
+          created_at?: string
+          endpoint_id: string
+          expires_at?: string
+          fbc?: string | null
+          fbclid?: string | null
+          fbp?: string | null
+          flow_state?: Json
+          id?: string
+          ip?: unknown
+          landing_url?: string | null
+          last_seen_at?: string
+          organization_id: string
+          phone_verified?: boolean
+          promoted_at?: string | null
+          referrer?: string | null
+          status?: string
+          thread_id?: string | null
+          token_hash: string
+          updated_at?: string
+          user_agent?: string | null
+          utm?: Json
+          visitor_name?: string | null
+          visitor_phone?: string | null
+        }
+        Update: {
+          contact_id?: string | null
+          created_at?: string
+          endpoint_id?: string
+          expires_at?: string
+          fbc?: string | null
+          fbclid?: string | null
+          fbp?: string | null
+          flow_state?: Json
+          id?: string
+          ip?: unknown
+          landing_url?: string | null
+          last_seen_at?: string
+          organization_id?: string
+          phone_verified?: boolean
+          promoted_at?: string | null
+          referrer?: string | null
+          status?: string
+          thread_id?: string | null
+          token_hash?: string
+          updated_at?: string
+          user_agent?: string | null
+          utm?: Json
+          visitor_name?: string | null
+          visitor_phone?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "webchat_sessions_contact_id_fkey"
+            columns: ["contact_id"]
+            isOneToOne: false
+            referencedRelation: "contacts"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "webchat_sessions_endpoint_id_fkey"
+            columns: ["endpoint_id"]
+            isOneToOne: false
+            referencedRelation: "communication_endpoints"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "webchat_sessions_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "webchat_sessions_thread_id_fkey"
+            columns: ["thread_id"]
+            isOneToOne: false
+            referencedRelation: "message_threads"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       webhook_field_mappings: {
         Row: {
           created_at: string | null
@@ -8397,6 +8552,10 @@ export type Database = {
           scanned_integrations: number
           updated: number
         }[]
+      }
+      promote_session_to_contact: {
+        Args: { p_session_id: string }
+        Returns: string
       }
       reassign_thread: {
         Args: { _reason?: string; _thread_id: string; _to_user_id: string }
