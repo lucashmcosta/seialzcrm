@@ -18,7 +18,7 @@ export function serviceClient(): SupabaseClient {
 // (checkAllowedOrigin sobre o parent_origin reportado pelo loader).
 export const webchatCors = {
   "Access-Control-Allow-Origin": "*",
-  "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type, x-webchat-key, x-webchat-token",
+  "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type, x-webchat-key, x-webchat-token, x-webchat-origin",
   "Access-Control-Allow-Methods": "POST, GET, OPTIONS",
 };
 
