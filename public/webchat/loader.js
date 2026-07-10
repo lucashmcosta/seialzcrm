@@ -108,7 +108,7 @@
   btn.onclick = toggle;
   window.addEventListener("message", function (e) {
     if (e.origin !== HOST) return;
-    if (e.data === "seialz:close") { open = false; if (iframe) iframe.style.display = "none"; resetViewport(); if (hasBubble) btn.style.display = "flex"; }
+    if (e.data === "seialz:close") { open = false; if (iframe) iframe.style.display = "none"; resetKb(); if (hasBubble) btn.style.display = "flex"; }
   });
 
   // (2) Botão próprio do cliente: qualquer elemento com [data-seialz-chat] abre o chat.
