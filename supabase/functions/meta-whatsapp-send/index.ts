@@ -496,13 +496,51 @@ serve(async (req) => {
     if (isTemplateSend && templateId) {
       const { data: tpl, error: tplErr } = await supabase
         .from("whatsapp_templates")
-        .select("id, organization_id, provider, status, meta_template_name, language, body, components, friendly_name, allowed_purposes")
+        .select("id, organization_id, organization_integration_id, meta_waba_id, provider, status, meta_template_name, language, body, components, friendly_name, allowed_purposes")
         .eq("id", templateId)
         .maybeSingle();
       if (tplErr || !tpl) return jsonResponse(404, { error: "template_not_found" });
       if (tpl.organization_id !== organizationId) return jsonResponse(403, { error: "template_org_mismatch" });
       if (tpl.provider !== "meta_cloud_api") return errorResponse(400, { error: "template_not_meta_cloud" }, { branch: "template_not_meta_cloud", reason: `Template provider inválido: ${tpl.provider ?? "null"}` });
       if (tpl.status !== "approved") return errorResponse(400, { error: "template_not_approved" }, { branch: "template_not_approved", reason: `Template não aprovado: ${tpl.status ?? "null"}` });
+
+      // Guard WABA: o template precisa pertencer à MESMA WABA/integração do
+      // endpoint. Um template aprovado na WABA A não existe na WABA B — enviar
+      // geraria 132001 ("template não existe") de forma assíncrona e confusa.
+      // Barramos cedo, com erro claro, e registramos em compliance_blocks.
+      if (tpl.organization_integration_id && tpl.organization_integration_id !== endpoint.organization_integration_id) {
+        console.warn("[meta-wa-send] template_waba_mismatch", {
+          endpointId: endpoint.id,
+          endpointIntegration: endpoint.organization_integration_id,
+          templateId: tpl.id,
+          templateName: tpl.meta_template_name,
+          templateIntegration: tpl.organization_integration_id,
+          templateWaba: tpl.meta_waba_id,
+        });
+        try {
+          await supabase.from("compliance_blocks").insert({
+            organization_id: organizationId,
+            endpoint_id: endpoint.id,
+            thread_id: currentThreadId ?? null,
+            contact_id: contactId,
+            template_id: tpl.id,
+            template_name: tpl.meta_template_name ?? tpl.friendly_name ?? null,
+            block_reason: "template_waba_mismatch",
+            source_component: "meta-whatsapp-send",
+            window_state: {
+              endpoint_integration: endpoint.organization_integration_id,
+              template_integration: tpl.organization_integration_id,
+              template_waba: tpl.meta_waba_id,
+            } as any,
+          });
+        } catch (e) {
+          console.warn("[meta-wa-send] compliance_blocks insert failed", (e as Error).message);
+        }
+        return jsonResponse(403, {
+          error: "template_waba_mismatch",
+          details: "Este template pertence a outra conta WhatsApp (WABA) e não pode ser enviado por este número. Use um template desta WABA.",
+        });
+      }
 
       // Guard LOW + janela aberta: 7020 (Central Trabalhista) enquanto em modo LOW
       // não pode disparar NENHUM template — nem UTILITY — se a janela 24h está aberta.

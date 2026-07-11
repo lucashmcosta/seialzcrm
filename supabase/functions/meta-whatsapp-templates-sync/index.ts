@@ -252,9 +252,36 @@ serve(async (req) => {
       synced++;
     }
 
+    // Reconciliação: desativa templates DESTA WABA que o Meta não devolveu mais
+    // (deletados/removidos no Meta). Só chega aqui se o fetch foi completo — erro
+    // de página já teria retornado 502 acima. Escopo restrito a esta integração.
+    // Reversível (is_active=false, não deleta).
+    let archived = 0;
+    {
+      const activeKeys = new Set(all.map((t) => `${t.name}|${t.language}`));
+      const { data: current } = await supabase
+        .from("whatsapp_templates")
+        .select("id, meta_template_name, language")
+        .eq("provider", "meta_cloud_api")
+        .eq("organization_integration_id", oi.id)
+        .eq("is_active", true);
+      const stale = (current ?? []).filter(
+        (t: any) => !activeKeys.has(`${t.meta_template_name}|${t.language}`),
+      );
+      if (stale.length) {
+        const { error } = await supabase
+          .from("whatsapp_templates")
+          .update({ is_active: false, updated_at: new Date().toISOString() })
+          .in("id", stale.map((t: any) => t.id));
+        if (error) console.error("[meta-wa-templates-sync] archive stale failed", error.message);
+        else archived = stale.length;
+      }
+    }
+
     return json(200, {
       success: true,
       synced,
+      archived,
       total: all.length,
       by_status: byStatus,
       approved: byStatus.approved || 0,
