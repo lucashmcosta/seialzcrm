@@ -25,6 +25,7 @@ import { useToast } from '@/hooks/use-toast';
 import { useQuery } from '@tanstack/react-query';
 import { useAI } from '@/hooks/useAI';
 import { useWhatsAppProvider } from '@/hooks/useWhatsAppProvider';
+import { useThreadEndpointId } from '@/hooks/useThreadEndpointId';
 import { SpinnerGap, PaperPlaneTilt, Clock, Check, Checks, WarningCircle, Robot, Sparkle, SealCheck, Briefcase, Smiley, Target, FileText } from '@phosphor-icons/react';
 import { FaceSmile } from '@untitledui/icons';
 import { formatDistanceToNow } from 'date-fns';
@@ -89,6 +90,7 @@ export function ContactMessages({ contactId, opportunityId }: ContactMessagesPro
   const [threadId, setThreadId] = useState<string | null>(null);
   const [threadIds, setThreadIds] = useState<string[]>([]);
   const waProvider = useWhatsAppProvider({ threadId });
+  const threadEndpointId = useThreadEndpointId(threadId);
   const [resolvedContactId, setResolvedContactId] = useState<string | null>(contactId || null);
   const [loading, setLoading] = useState(true);
   const [messageText, setMessageText] = useState('');
@@ -834,6 +836,7 @@ export function ContactMessages({ contactId, opportunityId }: ContactMessagesPro
             onSelect={handleSendTemplate}
             onCancel={() => setShowTemplates(false)}
             loading={submitting}
+            endpointId={threadEndpointId}
             provider={waProvider === 'meta_cloud_api' ? 'meta_cloud_api' : undefined}
           />
         </DialogContent>

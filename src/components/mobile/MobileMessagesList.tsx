@@ -22,6 +22,7 @@ import { supabase } from '@/integrations/supabase/client';
 import { useQuery } from '@tanstack/react-query';
 import { useToast } from '@/hooks/use-toast';
 import { useWhatsAppProvider } from '@/hooks/useWhatsAppProvider';
+import { useThreadEndpointId } from '@/hooks/useThreadEndpointId';
 import { useThreadBusinessContext } from '@/hooks/useThreadBusinessContext';
 import { resolveComposerProvider } from '@/lib/resolveComposerProvider';
 import {
@@ -144,6 +145,7 @@ export function MobileMessagesList() {
   // View state
   const [selectedThreadId, setSelectedThreadId] = useState<string | null>(null);
   const selectedThreadWaProvider = useWhatsAppProvider({ threadId: selectedThreadId });
+  const selectedThreadEndpointId = useThreadEndpointId(selectedThreadId);
   const selectedThreadBusinessContext = useThreadBusinessContext(selectedThreadId);
   const [searchQuery, setSearchQuery] = useState('');
   const [filter, setFilter] = useState<ThreadFilter>('all_open');
@@ -882,6 +884,7 @@ export function MobileMessagesList() {
               <WhatsAppTemplateSelector
                 onSelect={handleSendTemplate}
                 onCancel={() => setShowTemplates(false)}
+                endpointId={selectedThreadEndpointId}
                 provider={resolveComposerProvider({
                   organizationId: organization?.id,
                   senderContext: 'messages',

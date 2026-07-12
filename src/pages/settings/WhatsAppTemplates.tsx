@@ -119,6 +119,11 @@ export default function WhatsAppTemplates() {
   const [filterLanguage, setFilterLanguage] = useState<FilterLanguage>('all');
   const [filterProvider, setFilterProvider] = useState<FilterProvider>('all');
   const [filterPurpose, setFilterPurpose] = useState<FilterPurpose>(initialFilterPurpose);
+  // Multi-WABA: filtro por integração (WABA). Inicializa do deep-link ?integration=.
+  const [filterWaba, setFilterWaba] = useState<string>(deepLinkIntegrationId ?? 'all');
+  const [integrations, setIntegrations] = useState<
+    Array<{ id: string; display_name: string | null; meta_waba_id: string | null }>
+  >([]);
   const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false);
   const [selectedTemplateId, setSelectedTemplateId] = useState<string | null>(null);
   const [selectedTemplateName, setSelectedTemplateName] = useState<string>('');
@@ -133,6 +138,52 @@ export default function WhatsAppTemplates() {
   const [purposeTargets, setPurposeTargets] = useState<string[]>([]);
   const [purposeForm, setPurposeForm] = useState<string[]>([]);
   const [savingPurposes, setSavingPurposes] = useState(false);
+
+  // Carrega as WABAs (organization_integrations) da org para rotular os templates.
+  useEffect(() => {
+    if (!organization?.id) return;
+    let cancelled = false;
+    supabase
+      .from('organization_integrations')
+      .select('id, display_name, meta_waba_id')
+      .eq('organization_id', organization.id)
+      .then(({ data }) => {
+        if (!cancelled) {
+          setIntegrations(
+            (data as Array<{ id: string; display_name: string | null; meta_waba_id: string | null }> | null) ?? [],
+          );
+        }
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [organization?.id]);
+
+  const integrationById = useMemo(() => {
+    const m = new Map<string, { display_name: string | null; meta_waba_id: string | null }>();
+    for (const i of integrations) m.set(i.id, { display_name: i.display_name, meta_waba_id: i.meta_waba_id });
+    return m;
+  }, [integrations]);
+
+  const shortWaba = (waba: string | null | undefined) =>
+    waba ? `WABA ${waba.slice(-4)}` : 'WABA';
+
+  const wabaLabelFor = (oiId: string | null | undefined, metaWabaId: string | null | undefined) => {
+    const info = oiId ? integrationById.get(oiId) : undefined;
+    return info?.display_name || shortWaba(info?.meta_waba_id ?? metaWabaId);
+  };
+
+  // Opções do filtro: uma por organization_integration_id distinto entre templates Meta.
+  const wabaOptions = useMemo(() => {
+    const seen = new Map<string, string>();
+    for (const t of templates ?? []) {
+      if (!isMetaTemplate(t)) continue;
+      const oiId = (t as any).organization_integration_id as string | null;
+      if (!oiId || seen.has(oiId)) continue;
+      seen.set(oiId, wabaLabelFor(oiId, (t as any).meta_waba_id ?? null));
+    }
+    return Array.from(seen.entries()).map(([id, label]) => ({ id, label }));
+  }, [templates, integrationById]);
 
   const filteredTemplates = useMemo(() => {
     return templates?.filter(template => {
@@ -151,14 +202,14 @@ export default function WhatsAppTemplates() {
           return false;
         }
       }
-      // Deep-link: filtro por integração (WABA) específica
-      if (deepLinkIntegrationId) {
+      // Filtro por integração (WABA) específica
+      if (filterWaba !== 'all') {
         const oiId = (template as any).organization_integration_id;
-        if (oiId !== deepLinkIntegrationId) return false;
+        if (oiId !== filterWaba) return false;
       }
       return true;
     }) || [];
-  }, [templates, filterStatus, filterType, filterLanguage, filterProvider, filterPurpose, deepLinkIntegrationId]);
+  }, [templates, filterStatus, filterType, filterLanguage, filterProvider, filterPurpose, filterWaba]);
 
   const unclassifiedCount = useMemo(
     () => (templates ?? []).filter((t) => getPurposes(t).length === 0).length,
@@ -549,6 +600,20 @@ export default function WhatsAppTemplates() {
           </SelectContent>
         </Select>
 
+        {wabaOptions.length > 0 && (
+          <Select value={filterWaba} onValueChange={setFilterWaba}>
+            <SelectTrigger className="w-[200px]">
+              <SelectValue placeholder="WABA" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">Todas as WABAs</SelectItem>
+              {wabaOptions.map((o) => (
+                <SelectItem key={o.id} value={o.id}>{o.label}</SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        )}
+
         <Select value={filterPurpose} onValueChange={(v) => setFilterPurpose(v as FilterPurpose)}>
           <SelectTrigger className="w-[180px]">
             <SelectValue placeholder="Uso" />
@@ -589,6 +654,7 @@ export default function WhatsAppTemplates() {
                   <TableHead className="w-10"></TableHead>
                   <TableHead>Nome</TableHead>
                   <TableHead>Provider</TableHead>
+                  <TableHead>WABA</TableHead>
                   <TableHead>Usar em</TableHead>
                   <TableHead>Tipo</TableHead>
                   <TableHead>Idioma</TableHead>
@@ -603,6 +669,7 @@ export default function WhatsAppTemplates() {
                     <TableCell></TableCell>
                     <TableCell><Skeleton className="h-4 w-40" /></TableCell>
                     <TableCell><Skeleton className="h-6 w-20" /></TableCell>
+                    <TableCell><Skeleton className="h-5 w-24" /></TableCell>
                     <TableCell><Skeleton className="h-4 w-24" /></TableCell>
                     <TableCell><Skeleton className="h-4 w-24" /></TableCell>
                     <TableCell><Skeleton className="h-4 w-20" /></TableCell>
@@ -647,6 +714,7 @@ export default function WhatsAppTemplates() {
                   </TableHead>
                   <TableHead>Nome</TableHead>
                   <TableHead>Provider</TableHead>
+                  <TableHead>WABA</TableHead>
                   <TableHead>Usar em</TableHead>
                   <TableHead>Tipo</TableHead>
                   <TableHead>Idioma</TableHead>
@@ -683,6 +751,20 @@ export default function WhatsAppTemplates() {
                         ) : (
                           <Badge className="bg-sky-500/15 text-sky-700 dark:text-sky-400 border border-sky-500/30 hover:bg-sky-500/15">
                             Twilio
+                          </Badge>
+                        )}
+                      </TableCell>
+                      <TableCell>
+                        {isMeta ? (
+                          <Badge variant="outline" className="text-[11px] font-normal">
+                            {wabaLabelFor(
+                              (template as any).organization_integration_id ?? null,
+                              (template as any).meta_waba_id ?? null,
+                            )}
+                          </Badge>
+                        ) : (
+                          <Badge variant="outline" className="text-[11px] font-normal text-muted-foreground">
+                            Twilio/legado
                           </Badge>
                         )}
                       </TableCell>
