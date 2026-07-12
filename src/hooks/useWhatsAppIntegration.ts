@@ -47,10 +47,34 @@ export function useWhatsAppIntegration() {
     gcTime: 1000 * 60 * 30,
   });
 
+  // hasWhatsApp deve refletir QUALQUER WhatsApp ativo (Twilio OU Meta Cloud).
+  // Antes checava só 'twilio-whatsapp', então ao migrar pro Meta Cloud e desligar
+  // o Twilio, os menus Mensagens/Templates/Respostas Rápidas sumiam indevidamente.
+  const { data: anyWaEnabled } = useQuery({
+    queryKey: ['whatsapp-any-enabled', organization?.id],
+    enabled: !!organization?.id,
+    staleTime: 1000 * 60 * 10,
+    gcTime: 1000 * 60 * 30,
+    queryFn: async () => {
+      if (!organization?.id) return false;
+      const { data: rows, error } = await supabase
+        .from('organization_integrations')
+        .select('id, admin_integrations!inner(slug)')
+        .eq('organization_id', organization.id)
+        .eq('is_enabled', true)
+        .in('admin_integrations.slug', ['twilio-whatsapp', 'meta-whatsapp-cloud']);
+      if (error) {
+        console.error('Error checking WhatsApp integrations:', error);
+        return false;
+      }
+      return (rows?.length ?? 0) > 0;
+    },
+  });
+
   const config = data?.config_values as unknown as WhatsAppConfig | null;
 
   return {
-    hasWhatsApp: !!data && data.is_enabled,
+    hasWhatsApp: !!anyWaEnabled,
     whatsappNumber: config?.whatsapp_number || null,
     whatsappFrom: config?.whatsapp_from || null,
     useSandbox: config?.use_sandbox || false,
