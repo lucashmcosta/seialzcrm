@@ -16,6 +16,27 @@ function normalizePhoneToE164(phone: string): string {
   return `+55${cleaned}`;
 }
 
+// Normaliza chave de campo p/ comparação tolerante ("Full name" -> "full_name").
+function normKey(k: string): string {
+  return String(k ?? "").toLowerCase().trim().replace(/[\s\-]+/g, "_");
+}
+
+// Chaves canônicas que a Meta usa no lead REAL para campos padrão. Fallback para
+// quando a field_key sincronizada (formulários localizados em pt-BR, ex.:
+// "nome_completo"/"telefone") não bate com o field_data[].name do lead
+// ("full_name"/"phone_number"). O email costuma coincidir e por isso mapeava.
+function canonicalStandardKeys(q: { field_type?: string | null; mapped_to_contact_field?: string | null }): string[] {
+  const t = String(q?.field_type ?? "").toUpperCase();
+  const m = String(q?.mapped_to_contact_field ?? "").toLowerCase();
+  const out: string[] = [];
+  if (t === "FULL_NAME" || m === "full_name") out.push("full_name");
+  if (t === "FIRST_NAME" || m === "first_name") out.push("first_name");
+  if (t === "LAST_NAME" || m === "last_name") out.push("last_name");
+  if (t === "PHONE" || t === "PHONE_NUMBER" || m === "phone" || m === "phone_number") out.push("phone_number", "phone");
+  if (t === "EMAIL" || m === "email") out.push("email");
+  return out;
+}
+
 serve(async (req) => {
   if (req.method === "OPTIONS") return new Response(null, { headers: corsHeaders });
 
@@ -72,8 +93,23 @@ serve(async (req) => {
     const handled = new Set<string>();
 
     for (const q of questions || []) {
-      const value = fieldMap.get(q.field_key);
+      let value = fieldMap.get(q.field_key);
       handled.add(q.field_key);
+      // Fallback p/ campos padrão: se a field_key configurada não bate com a
+      // chave do lead real, procura pela chave canônica da Meta (por tipo/campo).
+      // Marca a chave REAL como tratada para não duplicar como "pergunta nova".
+      if ((value === undefined || value === "") && q.mapping_strategy === "standard_field") {
+        const canon = canonicalStandardKeys(q);
+        if (canon.length) {
+          for (const [rawKey, rawVal] of fieldMap.entries()) {
+            if (canon.includes(normKey(rawKey)) && rawVal !== undefined && rawVal !== "") {
+              value = rawVal;
+              handled.add(rawKey);
+              break;
+            }
+          }
+        }
+      }
       if (value === undefined || value === "") continue;
 
       const isOpp = (q.target_entity || "contact") === "opportunity";
