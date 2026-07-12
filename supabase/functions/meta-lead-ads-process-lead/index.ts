@@ -156,6 +156,27 @@ serve(async (req) => {
       }
     }
 
+    // Sinal de verificação de telefone (Meta "verified lead"): é um METADADO do
+    // lead (phone_number_verified), não uma pergunta. Detecta, marca como tratado
+    // (p/ não virar "pergunta nova"), e sinaliza o formulário como "verifica telefone".
+    let phoneVerified = false;
+    let hasVerificationField = false;
+    for (const [k, v] of fieldMap.entries()) {
+      if (normKey(k) === "phone_number_verified") {
+        hasVerificationField = true;
+        phoneVerified = ["true", "1", "yes", "sim"].includes(String(v).trim().toLowerCase());
+        handled.add(k);
+        break;
+      }
+    }
+    if (hasVerificationField && lead_form_id) {
+      const { error: fErr } = await admin
+        .from("lead_forms")
+        .update({ has_phone_verification: true })
+        .eq("id", lead_form_id);
+      if (fErr) console.warn("[process-lead] mark has_phone_verification failed:", fErr.message);
+    }
+
     // Detect unmapped (new) fields
     for (const [k, v] of fieldMap.entries()) {
       if (!handled.has(k)) {
@@ -252,6 +273,8 @@ serve(async (req) => {
           source_external_id: lead.id,
           ...(phone ? { phone } : {}),
           ...(email ? { email } : {}),
+          // Só promove para verificado; nunca rebaixa um contato já verificado.
+          ...(phoneVerified ? { phone_verified: true, phone_verified_at: new Date().toISOString() } : {}),
         })
         .eq("id", contactId);
     } else {
@@ -264,6 +287,8 @@ serve(async (req) => {
           last_name: lastName,
           email,
           phone,
+          phone_verified: phoneVerified,
+          phone_verified_at: phoneVerified ? new Date().toISOString() : null,
           source: "meta_lead_ads",
           source_external_id: lead.id,
           lifecycle_stage: settings?.default_lifecycle_stage || "lead",
