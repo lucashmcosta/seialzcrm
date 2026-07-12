@@ -201,7 +201,49 @@ content: ${(msg.content ?? "").slice(0, 2000)}`;
   // Hard-enforce: buying_signals only for inbound (defense in depth vs prompt drift)
   const buyingSignals = msg.direction === "inbound" ? (analysis.buying_signals ?? []) : [];
 
-  await admin.from("message_analyses").upsert({
+  // Normalize conversation_stage against the DB enum. Values outside the enum
+  // (e.g. "scheduling", "confirmation", "follow_up", "greeting", "small_talk")
+  // are intents/interaction types, not funnel stages. Coerce to "unknown" so
+  // the trigger validate_message_analysis_v21 does not silently reject the
+  // insert and leave the job marked success without a persisted analysis row.
+  const ALLOWED_STAGES = new Set([
+    "discovery",
+    "qualification",
+    "objection",
+    "negotiation",
+    "closing",
+    "post_sale",
+    "abandoned",
+    "unknown",
+  ]);
+  const originalStage = analysis.conversation_stage as string | null | undefined;
+  let normalizedStage: string = originalStage ?? "unknown";
+  let stageNormalized = false;
+  if (!ALLOWED_STAGES.has(normalizedStage)) {
+    stageNormalized = true;
+    normalizedStage = "unknown";
+    safeLog("analysis_stage_normalized", {
+      message_id: msg.id,
+      original_stage: originalStage,
+      normalized_stage: "unknown",
+      analysis_version: ANALYSIS_VERSION,
+      reason: "stage_out_of_enum",
+    });
+  }
+
+  const rawResponseAugmented = stageNormalized
+    ? {
+        ...aiJson,
+        _stage_normalization: {
+          original_stage: originalStage,
+          normalized_stage: "unknown",
+          reason: "stage_out_of_enum",
+          analysis_version: ANALYSIS_VERSION,
+        },
+      }
+    : aiJson;
+
+  const { error: analysisError } = await admin.from("message_analyses").upsert({
     message_id: msg.id,
     organization_id: msg.organization_id,
     analysis_version: ANALYSIS_VERSION,
@@ -209,7 +251,7 @@ content: ${(msg.content ?? "").slice(0, 2000)}`;
     sentiment: analysis.sentiment,
     intent: analysis.intent,
     objection_type: analysis.objection_type,
-    conversation_stage: analysis.conversation_stage,
+    conversation_stage: normalizedStage,
     urgency_score: analysis.urgency_score,
     buying_signals: buyingSignals,
     requires_human: analysis.requires_human,
@@ -220,8 +262,27 @@ content: ${(msg.content ?? "").slice(0, 2000)}`;
     message_quality_score: analysis.message_quality_score,
     reasoning: analysis.reasoning,
     tokens_used: totalTokens,
-    raw_response: aiJson,
+    raw_response: rawResponseAugmented,
   }, { onConflict: "message_id,analysis_version" });
+
+  if (analysisError) {
+    safeLog("[analyze-message] persistence_failed", {
+      message_id: msg.id,
+      code: (analysisError as any).code,
+      message: analysisError.message,
+      normalized_stage: normalizedStage,
+      original_stage: originalStage,
+    });
+    // Never let the job be marked success without a persisted analysis row.
+    return json({
+      error: "analysis_persistence_failed",
+      code: (analysisError as any).code ?? null,
+      detail: analysisError.message,
+      message_id: msg.id,
+      original_stage: originalStage,
+      normalized_stage: normalizedStage,
+    }, 500);
+  }
 
   await admin.from("messages").update({
     sentiment: analysis.sentiment,
