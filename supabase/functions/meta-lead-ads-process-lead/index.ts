@@ -79,7 +79,9 @@ serve(async (req) => {
     const { data: questions } = await admin
       .from("lead_form_questions")
       .select("*")
-      .eq("lead_form_id", lead_form_id);
+      .eq("lead_form_id", lead_form_id)
+      // Respeita a ordem do formulário na nota (antes vinha em ordem arbitrária do banco).
+      .order("field_order", { ascending: true, nullsFirst: false });
 
     // === Buckets per entity ===
     const contactStandard: Record<string, any> = {};
