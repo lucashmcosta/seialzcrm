@@ -1785,6 +1785,8 @@ export type Database = {
           phone: string | null
           phone_digits: string | null
           phone_normalized: string | null
+          phone_verified: boolean
+          phone_verified_at: string | null
           referrer_url: string | null
           rg: string | null
           rg_issuer: string | null
@@ -1850,6 +1852,8 @@ export type Database = {
           phone?: string | null
           phone_digits?: string | null
           phone_normalized?: string | null
+          phone_verified?: boolean
+          phone_verified_at?: string | null
           referrer_url?: string | null
           rg?: string | null
           rg_issuer?: string | null
@@ -1915,6 +1919,8 @@ export type Database = {
           phone?: string | null
           phone_digits?: string | null
           phone_normalized?: string | null
+          phone_verified?: boolean
+          phone_verified_at?: string | null
           referrer_url?: string | null
           rg?: string | null
           rg_issuer?: string | null
@@ -4297,6 +4303,7 @@ export type Database = {
           consecutive_errors: number
           created_at: string
           discovered_at: string
+          has_phone_verification: boolean
           id: string
           is_mapping_configured: boolean
           is_monitored: boolean
@@ -4320,6 +4327,7 @@ export type Database = {
           consecutive_errors?: number
           created_at?: string
           discovered_at?: string
+          has_phone_verification?: boolean
           id?: string
           is_mapping_configured?: boolean
           is_monitored?: boolean
@@ -4343,6 +4351,7 @@ export type Database = {
           consecutive_errors?: number
           created_at?: string
           discovered_at?: string
+          has_phone_verification?: boolean
           id?: string
           is_mapping_configured?: boolean
           is_monitored?: boolean
