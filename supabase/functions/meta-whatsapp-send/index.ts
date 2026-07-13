@@ -247,6 +247,43 @@ serve(async (req) => {
       endpoint = data;
     }
 
+    // Fase 0 — rotação por LINHA: se o endpoint da thread (primary) está INATIVO
+    // (número desconectado/rotacionado), NÃO enviar por ele. Resolver o número
+    // ATIVO da linha (por purpose) em messaging_lines. Se a linha não tem número
+    // ativo, bloquear com ação clara — nunca tentar o número morto (evita Meta 100/133010).
+    // Threads com endpoint ATIVO não entram aqui (comportamento inalterado).
+    if (endpoint && endpoint.is_active === false) {
+      const lineKey = endpoint.purpose === "commercial" ? "commercial" : "customer_service";
+      const { data: line } = await supabase
+        .from("messaging_lines")
+        .select("active_endpoint_id")
+        .eq("organization_id", organizationId)
+        .eq("key", lineKey)
+        .eq("channel", "whatsapp")
+        .maybeSingle();
+      const activeId = (line as any)?.active_endpoint_id as string | null | undefined;
+      if (activeId && activeId !== endpoint.id) {
+        const { data: activeEp } = await supabase
+          .from("communication_endpoints")
+          .select("id, organization_id, organization_integration_id, sender_sid, external_address, provider, is_active, purpose")
+          .eq("id", activeId)
+          .maybeSingle();
+        if (activeEp && (activeEp as any).is_active) {
+          console.log("[meta-wa-send] line_rotation_resolved", {
+            threadId, deadEndpoint: endpoint.id, lineKey, activeEndpoint: (activeEp as any).id,
+          });
+          endpoint = activeEp;
+          effectiveEndpointId = (activeEp as any).id;
+        }
+      }
+      if (endpoint && endpoint.is_active === false) {
+        return errorResponse(409, {
+          error: "line_endpoint_disconnected",
+          details: `O número desta conversa (${endpoint.external_address ?? "?"}) foi desconectado e a linha ${lineKey === "commercial" ? "Comercial" : "Atendimento"} não tem número ativo. Designe um número para continuar.`,
+        }, { branch: "line_endpoint_disconnected", reason: "primary inactive and no active line endpoint" });
+      }
+    }
+
     if (!endpoint) {
       // Fallback purpose-aware: escolhe endpoint cuja purpose case com o senderContext.
       // - senderContext='inbox'    → customer_service (default geral também é customer_service)
