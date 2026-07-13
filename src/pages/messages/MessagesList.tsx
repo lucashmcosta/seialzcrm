@@ -49,6 +49,7 @@ import { useWhatsAppProvider } from '@/hooks/useWhatsAppProvider';
 import { useThreadBusinessContext, type ThreadBusinessContext } from '@/hooks/useThreadBusinessContext';
 import { resolveComposerProvider } from '@/lib/resolveComposerProvider';
 import { useThreadSendEndpoint } from '@/hooks/useThreadSendEndpoint';
+import { useEndpointNumbers } from '@/hooks/useEndpointNumbers';
 import { pickPreferredEndpoint, filterEndpointsByIntent } from '@/lib/composerEndpoint';
 import { isSalesPurpose } from '@/lib/endpointPurpose';
 import { SpinnerGap, Check, Checks, Clock, WarningCircle, Sparkle, Briefcase, Smiley, Robot, ChatCircleDots, FileText, Target, UserCheck, CheckCircle, ArrowCounterClockwise, ArrowsLeftRight, Note, DownloadSimple, NotePencil, TextAa, TrendUp, TrendDown } from '@phosphor-icons/react';
@@ -677,6 +678,14 @@ function DesktopMessagesList() {
     ? endpointById[selectedThreadPrimaryEndpointId] ?? selectedEndpointFallback ?? undefined
     : selectedEndpointFallback ?? undefined;
   const selectedEndpointIdentity = formatEndpointIdentity(selectedThreadEndpoint);
+
+  // Números dos endpoints usados nas mensagens (inclui inativos) — para o
+  // divisor de "Número alterado" quando a conversa passou por mais de um número.
+  const messageEndpointIds = useMemo(
+    () => Array.from(new Set(messages.map((m: any) => m.endpoint_id).filter(Boolean))) as string[],
+    [messages],
+  );
+  const endpointNumbers = useEndpointNumbers(messageEndpointIds);
 
   // Compliance: janela de atendimento unificada (24h clássica + CTWA 72h).
   // Fonte da verdade: `getServiceWindow` via `useServiceWindow`. Substitui a
@@ -1963,6 +1972,7 @@ function DesktopMessagesList() {
                             };
 
                             let lastDateKey: string | null = null;
+                            let lastEndpointId: string | null = null;
 
                             return chatItems.map((item) => {
                               const itemDate = item._type === 'message' ? item.data.sent_at : item.data.occurred_at;
@@ -1977,6 +1987,28 @@ function DesktopMessagesList() {
                                   </div>
                                 </div>
                               ) : null;
+
+                              // Divisor de "Número alterado": aparece quando a mensagem
+                              // passou por um endpoint diferente do anterior (rotação de número).
+                              let rotationSeparator: JSX.Element | null = null;
+                              if (item._type === 'message') {
+                                const epId = (item.data as any).endpoint_id ?? null;
+                                if (epId && lastEndpointId && epId !== lastEndpointId) {
+                                  const fromAddr = endpointNumbers[lastEndpointId]?.address ?? null;
+                                  const toAddr = endpointNumbers[epId]?.address ?? null;
+                                  if (fromAddr && toAddr && fromAddr !== toAddr) {
+                                    const last4 = (a: string) => a.replace(/\D/g, '').slice(-4);
+                                    rotationSeparator = (
+                                      <div key={`rot-${item.data.id}`} className="flex justify-center my-3">
+                                        <div className="px-3 py-1 rounded-full bg-muted/70 text-muted-foreground text-[11px] font-medium tracking-wide shadow-sm">
+                                          📞 Número alterado: {last4(fromAddr)} → {last4(toAddr)}
+                                        </div>
+                                      </div>
+                                    );
+                                  }
+                                }
+                                if (epId) lastEndpointId = epId;
+                              }
 
                               const renderItem = (() => {
                               if (item._type === 'note') {
@@ -2198,6 +2230,7 @@ function DesktopMessagesList() {
                               return (
                                 <Fragment key={item._type === 'message' ? `m-${item.data.id}` : `n-${item.data.id}`}>
                                   {separator}
+                                  {rotationSeparator}
                                   {renderItem}
                                 </Fragment>
                               );
