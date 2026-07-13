@@ -48,6 +48,7 @@ import { useToast } from '@/hooks/use-toast';
 import { useWhatsAppProvider } from '@/hooks/useWhatsAppProvider';
 import { useThreadBusinessContext, type ThreadBusinessContext } from '@/hooks/useThreadBusinessContext';
 import { resolveComposerProvider } from '@/lib/resolveComposerProvider';
+import { useThreadSendEndpoint } from '@/hooks/useThreadSendEndpoint';
 import { pickPreferredEndpoint, filterEndpointsByIntent } from '@/lib/composerEndpoint';
 import { isSalesPurpose } from '@/lib/endpointPurpose';
 import { SpinnerGap, Check, Checks, Clock, WarningCircle, Sparkle, Briefcase, Smiley, Robot, ChatCircleDots, FileText, Target, UserCheck, CheckCircle, ArrowCounterClockwise, ArrowsLeftRight, Note, DownloadSimple, NotePencil, TextAa, TrendUp, TrendDown } from '@phosphor-icons/react';
@@ -279,6 +280,13 @@ function DesktopMessagesList() {
   const [selectedThreadId, setSelectedThreadId] = useState<string | null>(null);
   const [selectedThreadOverride, setSelectedThreadOverride] = useState<(ChatThread & { primary_endpoint_id?: string | null }) | null>(null);
   const selectedThreadWaProvider = useWhatsAppProvider({ threadId: selectedThreadId });
+  // Endpoint EFETIVO de envio: se o primary da thread está desconectado, resolve
+  // o número ativo da linha (messaging_lines) — igual ao dispatcher (Fase 0).
+  // Usado para escopar composer + seletor de templates no número que de fato envia.
+  const sendEp = useThreadSendEndpoint(selectedThreadId);
+  const effectiveWaProvider = (sendEp.isRotated && sendEp.provider)
+    ? sendEp.provider
+    : selectedThreadWaProvider;
   const [textareaOverflow, setTextareaOverflow] = useState(false);
   const [messages, setMessages] = useState<Message[]>([]);
   const [messagesLoading, setMessagesLoading] = useState(false);
@@ -654,7 +662,9 @@ function DesktopMessagesList() {
   })();
 
   const composerEndpointId = selectedThreadId
-    ? composerEndpointByThread[selectedThreadId] ?? defaultComposerEndpointId
+    ? composerEndpointByThread[selectedThreadId]
+        ?? (sendEp.isRotated ? sendEp.endpointId : null)
+        ?? defaultComposerEndpointId
     : null;
   const setComposerEndpointId = (id: string) => {
     if (!selectedThreadId) return;
@@ -1904,9 +1914,9 @@ function DesktopMessagesList() {
                       provider={resolveComposerProvider({
                         organizationId: organization?.id,
                         senderContext: 'messages',
-                        resolvedProvider: selectedThreadWaProvider,
+                        resolvedProvider: effectiveWaProvider,
                         businessContext: selectedThreadBusinessContext,
-                        threadPrimaryPurpose: primaryEndpointPurpose,
+                        threadPrimaryPurpose: sendEp.isRotated ? sendEp.purpose : primaryEndpointPurpose,
                       }) === 'meta_cloud_api' ? 'meta_cloud_api' : undefined}
                     />
                   </div>
