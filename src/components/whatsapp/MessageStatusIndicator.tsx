@@ -71,9 +71,16 @@ export function MessageStatusIndicator({
                 <div>
                   <div className="font-semibold text-destructive">Não entregue</div>
                   <div className="text-foreground mt-0.5">{info.reason}</div>
+                  {info.action && (
+                    <div className="mt-1.5 text-foreground">
+                      <span className="font-medium">O que fazer:</span> {info.action}
+                    </div>
+                  )}
                 </div>
               </div>
-              <div className="border-t pt-2 space-y-1 text-muted-foreground font-data">
+              <details className="border-t pt-2">
+                <summary className="cursor-pointer text-muted-foreground select-none">Detalhes técnicos</summary>
+                <div className="mt-1 space-y-1 text-muted-foreground font-data">
                 {errorCode && (
                   <div><span className="opacity-70">Código:</span> {errorCode}</div>
                 )}
@@ -94,7 +101,8 @@ export function MessageStatusIndicator({
                 {!errorCode && !errorMessage && !sid && (
                   <div className="italic">Sem detalhes técnicos disponíveis.</div>
                 )}
-              </div>
+                </div>
+              </details>
             </PopoverContent>
           </Popover>
         </Tooltip>
