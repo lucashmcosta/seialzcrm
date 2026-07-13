@@ -222,6 +222,67 @@ const MAP: Record<string, WhatsAppErrorInfo> = {
   '63005': { short: 'Mensagem não pôde ser entregue.', reason: 'O WhatsApp não conseguiu entregar a mensagem.', action: 'Confirme o número e a janela de conversa.', category: 'invalid_number' },
   '63007': { short: 'Número de origem WhatsApp não encontrado.', reason: 'Não há um número WhatsApp de origem válido configurado.', action: 'Verifique a configuração do número de envio.', category: 'technical' },
   '63013': { short: 'Mensagem bloqueada por política do WhatsApp.', reason: 'O conteúdo foi bloqueado pelas políticas do WhatsApp.', action: 'Revise o conteúdo da mensagem/template.', category: 'account' },
+
+  // ============ INTERNOS (bloqueios do próprio Seialz, antes de chegar no provedor) ============
+  'line_endpoint_disconnected': {
+    short: 'O número desta conversa foi desconectado.',
+    reason: 'O número que atendia esta conversa foi desconectado/rotacionado, e a linha ainda não tem um número ativo.',
+    action: 'Designe um número ativo para a linha em Configurações e continue pelo número novo.',
+    category: 'account',
+  },
+  'template_waba_mismatch': {
+    short: 'Este template é de outra conta (WABA).',
+    reason: 'O template escolhido pertence a outra conta WhatsApp (WABA), diferente do número que envia esta conversa.',
+    action: 'Use um template da conta atual (a WABA do número ativo).',
+    category: 'template',
+  },
+  'template_purpose_mismatch': {
+    short: 'Template não permitido para este número.',
+    reason: 'Este template não está liberado para a finalidade deste número (comercial/atendimento).',
+    action: 'Use um template classificado para este tipo de número.',
+    category: 'template',
+  },
+  'template_blocked_window_open_low_endpoint': {
+    short: 'Template bloqueado — responda com mensagem livre.',
+    reason: 'Este número está em recuperação de qualidade e a janela de 24h está aberta. Nesse caso o correto é responder com mensagem livre, não template.',
+    action: 'Responda com mensagem livre (texto), sem template.',
+    category: 'quality',
+  },
+  'template_not_approved': {
+    short: 'Template ainda não aprovado.',
+    reason: 'O template selecionado ainda não foi aprovado pela Meta.',
+    action: 'Aguarde a aprovação da Meta ou use outro template já aprovado.',
+    category: 'template',
+  },
+  'template_not_found': {
+    short: 'Template não encontrado.',
+    reason: 'O template selecionado não foi encontrado no sistema.',
+    action: 'Sincronize os templates em Configurações ou escolha outro.',
+    category: 'template',
+  },
+  'conversation_window_closed': {
+    short: 'Fora da janela de 24h — use um template.',
+    reason: 'Passou mais de 24h desde a última mensagem do cliente. Só dá para reabrir com um template aprovado.',
+    action: 'Envie um template aprovado.',
+    category: 'window',
+  },
+  'requiresTemplate': {
+    short: 'Fora da janela de 24h — use um template.',
+    reason: 'A janela de 24h está fechada; mensagem livre não é permitida.',
+    action: 'Envie um template aprovado.',
+    category: 'window',
+  },
+  'no_meta_cloud_endpoint': {
+    short: 'Nenhum número WhatsApp ativo.',
+    reason: 'Não há número Meta Cloud ativo para enviar esta mensagem.',
+    action: 'Conecte/ative um número em Configurações.',
+    category: 'account',
+  },
+  'session_closed': {
+    short: 'Conversa encerrada.',
+    reason: 'Esta sessão/conversa foi encerrada ou bloqueada.',
+    category: 'account',
+  },
 };
 
 // Fallback por família de código quando não há entrada exata.
