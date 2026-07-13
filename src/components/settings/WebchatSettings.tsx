@@ -152,7 +152,16 @@ export function WebchatSettings() {
     if (c) opts.push(`color:"${c}"`);
     if (l.bubble === false) opts.push("bubble:false");
     if (l.autoOpen > 0) opts.push(`autoOpen:${l.autoOpen}`);
-    return `<script>window.SeialzWidget={${opts.join(",")}}</script>\n<script src="${WIDGET_HOST}/webchat/loader.js" async></script>`;
+    const base = `<script>window.SeialzWidget={${opts.join(",")}}</script>\n<script src="${WIDGET_HOST}/webchat/loader.js" async></script>`;
+    // Sem balão flutuante: o chat só abre por um botão/link seu. Já entregamos o
+    // exemplo pronto no snippet (com comentário), pra não ficar dúvida de "o que chamar".
+    if (l.bubble === false) {
+      return base +
+        `\n\n<!-- Sem balao: coloque data-seialz-chat em QUALQUER botao/link da sua pagina para abrir o chat -->\n` +
+        `<button data-seialz-chat>Falar com um especialista</button>\n` +
+        `<!-- Ou, via codigo, chame: SeialzWidget.open() -->`;
+    }
+    return base;
   }
   function copySnippet(w: Widget) {
     navigator.clipboard.writeText(snippet(w));
@@ -198,6 +207,11 @@ export function WebchatSettings() {
                     <span className="text-muted-foreground">Leads: <span className="font-data text-foreground">{m.promoted}</span></span>
                     <span className="text-muted-foreground">Conversão: <span className="font-data text-foreground">{m.sessions ? Math.round((m.promoted / m.sessions) * 100) : 0}%</span></span>
                   </div>
+                  <p className="text-xs text-muted-foreground">
+                    {w.inbound_settings?.launcher?.bubble === false
+                      ? "🔘 Modo botão — sem balão flutuante. O chat abre por um botão/link seu (já incluído no snippet)."
+                      : "💬 Modo balão — aparece flutuando no canto da página."}
+                  </p>
                   <div className="flex items-center gap-2">
                     <code className="flex-1 text-xs bg-muted rounded px-3 py-2 overflow-x-auto whitespace-pre">{snippet(w)}</code>
                     <Button variant="outline" size="icon" onClick={() => copySnippet(w)}><Copy className="w-4 h-4" /></Button>
