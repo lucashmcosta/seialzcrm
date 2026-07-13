@@ -5613,6 +5613,123 @@ export type Database = {
         }
         Relationships: []
       }
+      messaging_line_rotations: {
+        Row: {
+          from_endpoint_id: string | null
+          id: string
+          line_id: string
+          organization_id: string
+          reason: string | null
+          rotated_at: string
+          rotated_by_user_id: string | null
+          to_endpoint_id: string | null
+        }
+        Insert: {
+          from_endpoint_id?: string | null
+          id?: string
+          line_id: string
+          organization_id: string
+          reason?: string | null
+          rotated_at?: string
+          rotated_by_user_id?: string | null
+          to_endpoint_id?: string | null
+        }
+        Update: {
+          from_endpoint_id?: string | null
+          id?: string
+          line_id?: string
+          organization_id?: string
+          reason?: string | null
+          rotated_at?: string
+          rotated_by_user_id?: string | null
+          to_endpoint_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "messaging_line_rotations_from_endpoint_id_fkey"
+            columns: ["from_endpoint_id"]
+            isOneToOne: false
+            referencedRelation: "communication_endpoints"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "messaging_line_rotations_line_id_fkey"
+            columns: ["line_id"]
+            isOneToOne: false
+            referencedRelation: "messaging_lines"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "messaging_line_rotations_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "messaging_line_rotations_rotated_by_user_id_fkey"
+            columns: ["rotated_by_user_id"]
+            isOneToOne: false
+            referencedRelation: "users"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "messaging_line_rotations_to_endpoint_id_fkey"
+            columns: ["to_endpoint_id"]
+            isOneToOne: false
+            referencedRelation: "communication_endpoints"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      messaging_lines: {
+        Row: {
+          active_endpoint_id: string | null
+          channel: string
+          created_at: string
+          id: string
+          key: string
+          name: string
+          organization_id: string
+          updated_at: string
+        }
+        Insert: {
+          active_endpoint_id?: string | null
+          channel?: string
+          created_at?: string
+          id?: string
+          key: string
+          name: string
+          organization_id: string
+          updated_at?: string
+        }
+        Update: {
+          active_endpoint_id?: string | null
+          channel?: string
+          created_at?: string
+          id?: string
+          key?: string
+          name?: string
+          organization_id?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "messaging_lines_active_endpoint_id_fkey"
+            columns: ["active_endpoint_id"]
+            isOneToOne: false
+            referencedRelation: "communication_endpoints"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "messaging_lines_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       meta_app_credentials: {
         Row: {
           access_token_encrypted: string
