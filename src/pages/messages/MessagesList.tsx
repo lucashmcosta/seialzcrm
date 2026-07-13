@@ -1923,7 +1923,7 @@ function DesktopMessagesList() {
                       provider={resolveComposerProvider({
                         organizationId: organization?.id,
                         senderContext: 'messages',
-                        resolvedProvider: effectiveWaProvider,
+                        resolvedProvider: (effectiveWaProvider === 'twilio' || effectiveWaProvider === 'meta_cloud_api') ? effectiveWaProvider : null,
                         businessContext: selectedThreadBusinessContext,
                         threadPrimaryPurpose: sendEp.isRotated ? sendEp.purpose : primaryEndpointPurpose,
                       }) === 'meta_cloud_api' ? 'meta_cloud_api' : undefined}
