@@ -301,6 +301,52 @@ export async function dispatchWhatsAppSend(payload: WhatsAppSendPayload) {
     return { data: null, error: { message: err.message, name: err.code } as any };
   }
 
+  // Fase 0 — rotação por LINHA (reply em thread de número MORTO):
+  // se o endpoint primário da thread está INATIVO (número desconectado/rotacionado),
+  // resolve o número ATIVO da linha (por purpose) em messaging_lines e re-roteia —
+  // inclusive cross-provider (ex.: Twilio morto → Meta ativo). Diferente da re-rota
+  // legada abaixo, ESTE caso é justamente para thread COM primary_endpoint_id.
+  if (threadPrimaryEndpointId && payload.organizationId) {
+    const { data: primEp } = await supabase
+      .from("communication_endpoints")
+      .select("is_active, purpose")
+      .eq("id", threadPrimaryEndpointId)
+      .maybeSingle();
+    if (primEp && (primEp as any).is_active === false) {
+      const lineKey = (primEp as any).purpose === "commercial" ? "commercial" : "customer_service";
+      const { data: line } = await supabase
+        .from("messaging_lines")
+        .select("active_endpoint_id")
+        .eq("organization_id", payload.organizationId)
+        .eq("key", lineKey)
+        .eq("channel", "whatsapp")
+        .maybeSingle();
+      const activeId = (line as any)?.active_endpoint_id as string | null | undefined;
+      if (activeId && activeId !== threadPrimaryEndpointId) {
+        const { data: activeEp } = await supabase
+          .from("communication_endpoints")
+          .select("id, provider, purpose, is_active")
+          .eq("id", activeId)
+          .maybeSingle();
+        if (activeEp && (activeEp as any).is_active) {
+          console.log("[dispatch-wa] line_rotation_resolved", {
+            threadId: payload.threadId,
+            deadEndpoint: threadPrimaryEndpointId,
+            lineKey,
+            activeEndpoint: (activeEp as any).id,
+            provider: (activeEp as any).provider,
+          });
+          payload = { ...payload, endpointId: (activeEp as any).id };
+          resolved = {
+            provider: (activeEp as any).provider as Provider,
+            purpose: ((activeEp as any).purpose as string | null) ?? null,
+            source: "endpoint_explicit",
+          };
+        }
+      }
+    }
+  }
+
   // Re-rota lazy Comercial → Meta 7020. SOMENTE quando a thread NÃO tem
   // primary_endpoint_id (nova conversa / thread legada sem carimbo).
   // Em reply a thread existente com primary_endpoint_id, jamais re-rotamos.
