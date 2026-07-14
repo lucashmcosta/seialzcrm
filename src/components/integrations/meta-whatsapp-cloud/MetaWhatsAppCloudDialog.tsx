@@ -167,7 +167,7 @@ export function MetaWhatsAppCloudDialog({ open, onOpenChange, integration, orgIn
   return (
     <>
       <Dialog open={open} onOpenChange={onOpenChange}>
-        <DialogContent size="lg" className="max-h-[90vh] overflow-y-auto">
+        <DialogContent size="xl" className="w-[95vw] max-h-[90vh] overflow-y-auto overflow-x-hidden">
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
               <Plug className="h-5 w-5" />
@@ -184,12 +184,13 @@ export function MetaWhatsAppCloudDialog({ open, onOpenChange, integration, orgIn
             {/* ===== Painel quando já conectado ===== */}
             {isConnected && (
               <Card className="p-4 space-y-3">
-                <div className="flex items-center justify-between">
-                  <h4 className="font-medium flex items-center gap-2">
-                    <CheckCircle className="h-4 w-4 text-green-600" />
-                    Número conectado
+                <div className="flex items-center justify-between gap-2 flex-wrap">
+                  <h4 className="font-medium flex items-center gap-2 min-w-0">
+                    <CheckCircle className="h-4 w-4 text-green-600 shrink-0" />
+                    <span className="truncate">Número conectado</span>
                   </h4>
-                  <div className="flex gap-2">
+                  <div className="flex gap-2 flex-wrap">
+
                     <Button
                       variant="outline"
                       size="sm"
