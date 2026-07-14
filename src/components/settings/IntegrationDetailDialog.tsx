@@ -645,7 +645,7 @@ export function IntegrationDetailDialog({
 
   return (
     <Dialog open={open} onOpenChange={(v) => { if (!v) handleCancelEditing(); onOpenChange(v); }}>
-      <DialogContent className="max-w-2xl max-h-[85vh] overflow-y-auto">
+      <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto overflow-x-hidden">
         <DialogHeader>
           <div className="flex items-center gap-3">
             {integration?.logo_url ? (

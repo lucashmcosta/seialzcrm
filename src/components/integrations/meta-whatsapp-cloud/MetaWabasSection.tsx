@@ -14,6 +14,8 @@ import { toast } from "@/hooks/use-toast";
 import { metaWhatsAppService } from "@/services/metaWhatsAppService";
 import { MetaAdditionalEndpointsSection } from "./MetaAdditionalEndpointsSection";
 import { AddMetaWabaDialog } from "./AddMetaWabaDialog";
+import { WhatsAppInboundSettings } from "@/components/settings/WhatsAppInboundSettings";
+
 
 interface Props {
   organizationId: string;
@@ -28,7 +30,9 @@ interface WabaRow {
   meta_credentials_id: string | null;
   connected_account: Record<string, unknown> | null;
   config_values: Record<string, unknown> | null;
+  whatsapp_inbound_settings: Record<string, unknown> | null;
 }
+
 
 export function MetaWabasSection({ organizationId, metaIntegrationId }: Props) {
   const [addOpen, setAddOpen] = useState(false);
@@ -42,7 +46,7 @@ export function MetaWabasSection({ organizationId, metaIntegrationId }: Props) {
     queryFn: async () => {
       const { data, error } = await supabase
         .from("organization_integrations")
-        .select("id, meta_waba_id, display_name, meta_credentials_id, connected_account, config_values")
+        .select("id, meta_waba_id, display_name, meta_credentials_id, connected_account, config_values, whatsapp_inbound_settings")
         .eq("organization_id", organizationId)
         .eq("integration_id", metaIntegrationId)
         .order("created_at", { ascending: true });
@@ -208,8 +212,11 @@ export function MetaWabasSection({ organizationId, metaIntegrationId }: Props) {
                     organizationId={organizationId}
                     organizationIntegrationId={w.id}
                     primaryPhoneNumberId={primaryPnid}
+                    integrationFallback={w.whatsapp_inbound_settings}
                   />
+                  <WhatsAppInboundSettings integrationId={w.id} />
                 </div>
+
               );
             })}
           </div>
