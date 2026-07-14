@@ -212,8 +212,11 @@ export function MetaWabasSection({ organizationId, metaIntegrationId }: Props) {
                     organizationId={organizationId}
                     organizationIntegrationId={w.id}
                     primaryPhoneNumberId={primaryPnid}
+                    integrationFallback={w.whatsapp_inbound_settings}
                   />
+                  <WhatsAppInboundSettings integrationId={w.id} />
                 </div>
+
               );
             })}
           </div>
