@@ -14,6 +14,8 @@ import { toast } from "@/hooks/use-toast";
 import { metaWhatsAppService } from "@/services/metaWhatsAppService";
 import { MetaAdditionalEndpointsSection } from "./MetaAdditionalEndpointsSection";
 import { AddMetaWabaDialog } from "./AddMetaWabaDialog";
+import { WhatsAppInboundSettings } from "@/components/settings/WhatsAppInboundSettings";
+
 
 interface Props {
   organizationId: string;
