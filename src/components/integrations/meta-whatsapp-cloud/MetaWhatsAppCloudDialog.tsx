@@ -167,7 +167,7 @@ export function MetaWhatsAppCloudDialog({ open, onOpenChange, integration, orgIn
   return (
     <>
       <Dialog open={open} onOpenChange={onOpenChange}>
-        <DialogContent size="lg" className="max-h-[90vh] overflow-y-auto">
+        <DialogContent size="xl" className="w-[95vw] max-h-[90vh] overflow-y-auto overflow-x-hidden">
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
               <Plug className="h-5 w-5" />
