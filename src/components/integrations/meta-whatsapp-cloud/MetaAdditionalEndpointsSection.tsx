@@ -1,11 +1,18 @@
 // Lista todos os endpoints Meta Cloud da org (incluindo o principal),
 // permitindo alterar o "purpose" (destino de roteamento: /inbox ou /messages)
-// inline, direto na UI.
+// inline, direto na UI. Cada endpoint pode ser expandido para configurar
+// as "Regras de Entrada" (override por número sobre a regra da WABA).
 import { useQuery, useQueryClient, useMutation } from "@tanstack/react-query";
 import { Phone, SpinnerGap } from "@phosphor-icons/react";
 import { toast } from "sonner";
 import { Badge } from "@/components/ui/badge";
 import { Label } from "@/components/ui/label";
+import {
+  Accordion,
+  AccordionContent,
+  AccordionItem,
+  AccordionTrigger,
+} from "@/components/ui/accordion";
 import {
   Select,
   SelectContent,
@@ -15,11 +22,14 @@ import {
 } from "@/components/ui/select";
 import { supabase } from "@/integrations/supabase/client";
 import { formatPhoneDisplay } from "@/lib/phoneUtils";
+import { EndpointInboundSettings } from "@/components/settings/EndpointInboundSettings";
 
 interface Props {
   organizationId: string;
   organizationIntegrationId: string;
   primaryPhoneNumberId?: string | null;
+  /** whatsapp_inbound_settings da WABA (usado como fallback quando o endpoint não tem override). */
+  integrationFallback?: Record<string, unknown> | null;
 }
 
 type Purpose = "customer_service" | "commercial" | "vendor_personal" | "other";
@@ -35,6 +45,7 @@ export function MetaAdditionalEndpointsSection({
   organizationId,
   organizationIntegrationId,
   primaryPhoneNumberId,
+  integrationFallback,
 }: Props) {
   const qc = useQueryClient();
   const { data: endpoints, isLoading } = useQuery({
@@ -98,58 +109,68 @@ export function MetaAdditionalEndpointsSection({
       <Label className="text-xs text-muted-foreground">
         Números desta WABA ({all.length})
       </Label>
-      {all.map((ep) => {
-        const formatted = formatPhoneDisplay(ep.external_address) || ep.external_address;
-        const isPrimary = primaryPhoneNumberId && ep.sender_sid === primaryPhoneNumberId;
-        const currentPurpose = (ep.purpose ?? "customer_service") as Purpose;
-        return (
-          <div
-            key={ep.id}
-            className="flex items-center gap-2 border rounded-md px-3 py-2 text-sm"
-          >
-            <Phone className="h-4 w-4 text-muted-foreground shrink-0" />
-            <div className="min-w-0 flex-1">
-              <div className="flex items-center gap-2">
-                <span className="font-medium truncate">{formatted}</span>
-                {isPrimary && (
-                  <Badge variant="secondary" className="text-[10px]">principal</Badge>
-                )}
-                {ep.display_name && (
-                  <span className="text-xs text-muted-foreground truncate">
-                    — {ep.display_name}
-                  </span>
-                )}
+      <Accordion type="multiple" className="space-y-2">
+        {all.map((ep) => {
+          const formatted = formatPhoneDisplay(ep.external_address) || ep.external_address;
+          const isPrimary = primaryPhoneNumberId && ep.sender_sid === primaryPhoneNumberId;
+          const currentPurpose = (ep.purpose ?? "customer_service") as Purpose;
+          return (
+            <AccordionItem key={ep.id} value={ep.id} className="border rounded-md px-3">
+              <div className="flex items-center gap-2 py-2 text-sm">
+                <Phone className="h-4 w-4 text-muted-foreground shrink-0" />
+                <div className="min-w-0 flex-1">
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <span className="font-medium truncate">{formatted}</span>
+                    {isPrimary && (
+                      <Badge variant="secondary" className="text-[10px]">principal</Badge>
+                    )}
+                    {ep.display_name && (
+                      <span className="text-xs text-muted-foreground truncate">
+                        — {ep.display_name}
+                      </span>
+                    )}
+                  </div>
+                  <div className="text-[11px] text-muted-foreground font-mono">
+                    pid …{String(ep.sender_sid || "").slice(-8)} · destino {PURPOSE_ROUTE[currentPurpose]}
+                  </div>
+                </div>
+                <Select
+                  value={currentPurpose}
+                  disabled={updatePurpose.isPending}
+                  onValueChange={(v) =>
+                    updatePurpose.mutate({ id: ep.id, purpose: v as Purpose })
+                  }
+                >
+                  <SelectTrigger className="h-8 w-[170px] text-xs">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="customer_service">Atendimento (/inbox)</SelectItem>
+                    <SelectItem value="commercial">Comercial (/messages)</SelectItem>
+                    <SelectItem value="vendor_personal">Pessoal (/messages)</SelectItem>
+                    <SelectItem value="other">Outro</SelectItem>
+                  </SelectContent>
+                </Select>
+                <Badge
+                  variant={ep.is_active ? (ep.status === "online" ? "default" : "secondary") : "outline"}
+                  className="text-[10px]"
+                >
+                  {ep.is_active ? (ep.status || "ativo") : "inativo"}
+                </Badge>
               </div>
-              <div className="text-[11px] text-muted-foreground font-mono">
-                pid …{String(ep.sender_sid || "").slice(-8)} · destino {PURPOSE_ROUTE[currentPurpose]}
-              </div>
-            </div>
-            <Select
-              value={currentPurpose}
-              disabled={updatePurpose.isPending}
-              onValueChange={(v) =>
-                updatePurpose.mutate({ id: ep.id, purpose: v as Purpose })
-              }
-            >
-              <SelectTrigger className="h-8 w-[170px] text-xs">
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="customer_service">Atendimento (/inbox)</SelectItem>
-                <SelectItem value="commercial">Comercial (/messages)</SelectItem>
-                <SelectItem value="vendor_personal">Pessoal (/messages)</SelectItem>
-                <SelectItem value="other">Outro</SelectItem>
-              </SelectContent>
-            </Select>
-            <Badge
-              variant={ep.is_active ? (ep.status === "online" ? "default" : "secondary") : "outline"}
-              className="text-[10px]"
-            >
-              {ep.is_active ? (ep.status || "ativo") : "inativo"}
-            </Badge>
-          </div>
-        );
-      })}
+              <AccordionTrigger className="hover:no-underline py-1 text-xs text-muted-foreground">
+                Regras deste número
+              </AccordionTrigger>
+              <AccordionContent className="pb-3">
+                <EndpointInboundSettings
+                  endpointId={ep.id}
+                  integrationFallback={integrationFallback ?? null}
+                />
+              </AccordionContent>
+            </AccordionItem>
+          );
+        })}
+      </Accordion>
     </div>
   );
 }
