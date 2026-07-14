@@ -30,7 +30,9 @@ interface WabaRow {
   meta_credentials_id: string | null;
   connected_account: Record<string, unknown> | null;
   config_values: Record<string, unknown> | null;
+  whatsapp_inbound_settings: Record<string, unknown> | null;
 }
+
 
 export function MetaWabasSection({ organizationId, metaIntegrationId }: Props) {
   const [addOpen, setAddOpen] = useState(false);
