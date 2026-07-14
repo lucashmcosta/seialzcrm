@@ -46,7 +46,7 @@ export function MetaWabasSection({ organizationId, metaIntegrationId }: Props) {
     queryFn: async () => {
       const { data, error } = await supabase
         .from("organization_integrations")
-        .select("id, meta_waba_id, display_name, meta_credentials_id, connected_account, config_values")
+        .select("id, meta_waba_id, display_name, meta_credentials_id, connected_account, config_values, whatsapp_inbound_settings")
         .eq("organization_id", organizationId)
         .eq("integration_id", metaIntegrationId)
         .order("created_at", { ascending: true });
