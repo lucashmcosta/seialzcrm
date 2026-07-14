@@ -111,17 +111,18 @@ export function MetaWabasSection({ organizationId, metaIntegrationId }: Props) {
   return (
     <>
       <Card className="p-4 space-y-3">
-        <div className="flex items-center justify-between gap-2">
-          <div>
+        <div className="flex items-center justify-between gap-2 flex-wrap">
+          <div className="min-w-0">
             <h4 className="font-medium flex items-center gap-2">
-              <Buildings className="h-4 w-4" />
-              WABAs conectadas
+              <Buildings className="h-4 w-4 shrink-0" />
+              <span className="truncate">WABAs conectadas</span>
             </h4>
             <p className="text-xs text-muted-foreground">
               Uma organização pode ter múltiplas WABAs compartilhando as mesmas credenciais Meta
               (app_id, token, app_secret).
             </p>
           </div>
+
           <Button variant="outline" size="sm" onClick={() => setAddOpen(true)}>
             <Plus className="h-4 w-4 mr-1" />
             Adicionar WABA
