@@ -868,6 +868,7 @@ export type Database = {
         Row: {
           action: string
           completion_tokens: number | null
+          cost_meta: Json | null
           created_at: string | null
           entity_id: string | null
           entity_type: string | null
@@ -886,6 +887,7 @@ export type Database = {
         Insert: {
           action: string
           completion_tokens?: number | null
+          cost_meta?: Json | null
           created_at?: string | null
           entity_id?: string | null
           entity_type?: string | null
@@ -904,6 +906,7 @@ export type Database = {
         Update: {
           action?: string
           completion_tokens?: number | null
+          cost_meta?: Json | null
           created_at?: string | null
           entity_id?: string | null
           entity_type?: string | null
@@ -3805,6 +3808,88 @@ export type Database = {
           },
         ]
       }
+      journey_stage_history: {
+        Row: {
+          changed_by_user_id: string | null
+          created_at: string
+          from_stage_id: string | null
+          id: string
+          occurred_at: string
+          opportunity_id: string
+          organization_id: string
+          source: string
+          source_event_id: string | null
+          to_stage_id: string | null
+        }
+        Insert: {
+          changed_by_user_id?: string | null
+          created_at?: string
+          from_stage_id?: string | null
+          id?: string
+          occurred_at: string
+          opportunity_id: string
+          organization_id: string
+          source: string
+          source_event_id?: string | null
+          to_stage_id?: string | null
+        }
+        Update: {
+          changed_by_user_id?: string | null
+          created_at?: string
+          from_stage_id?: string | null
+          id?: string
+          occurred_at?: string
+          opportunity_id?: string
+          organization_id?: string
+          source?: string
+          source_event_id?: string | null
+          to_stage_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "journey_stage_history_changed_by_user_id_fkey"
+            columns: ["changed_by_user_id"]
+            isOneToOne: false
+            referencedRelation: "users"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "journey_stage_history_from_stage_id_fkey"
+            columns: ["from_stage_id"]
+            isOneToOne: false
+            referencedRelation: "pipeline_stages"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "journey_stage_history_opportunity_id_fkey"
+            columns: ["opportunity_id"]
+            isOneToOne: false
+            referencedRelation: "opportunities"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "journey_stage_history_opportunity_id_fkey"
+            columns: ["opportunity_id"]
+            isOneToOne: false
+            referencedRelation: "vw_intel_won_vs_lost_30d"
+            referencedColumns: ["opportunity_id"]
+          },
+          {
+            foreignKeyName: "journey_stage_history_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "journey_stage_history_to_stage_id_fkey"
+            columns: ["to_stage_id"]
+            isOneToOne: false
+            referencedRelation: "pipeline_stages"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       knowledge_chunks: {
         Row: {
           chunk_index: number
@@ -5920,6 +6005,8 @@ export type Database = {
           health_score: number | null
           id: string
           is_sample: boolean | null
+          lost_at: string | null
+          lost_at_source: string | null
           marketing_campaign_id: string | null
           organization_id: string
           owner_user_id: string | null
@@ -5935,6 +6022,8 @@ export type Database = {
           utm_medium: string | null
           utm_source: string | null
           utm_term: string | null
+          won_at: string | null
+          won_at_source: string | null
         }
         Insert: {
           amount?: number | null
@@ -5951,6 +6040,8 @@ export type Database = {
           health_score?: number | null
           id?: string
           is_sample?: boolean | null
+          lost_at?: string | null
+          lost_at_source?: string | null
           marketing_campaign_id?: string | null
           organization_id: string
           owner_user_id?: string | null
@@ -5966,6 +6057,8 @@ export type Database = {
           utm_medium?: string | null
           utm_source?: string | null
           utm_term?: string | null
+          won_at?: string | null
+          won_at_source?: string | null
         }
         Update: {
           amount?: number | null
@@ -5982,6 +6075,8 @@ export type Database = {
           health_score?: number | null
           id?: string
           is_sample?: boolean | null
+          lost_at?: string | null
+          lost_at_source?: string | null
           marketing_campaign_id?: string | null
           organization_id?: string
           owner_user_id?: string | null
@@ -5997,6 +6092,8 @@ export type Database = {
           utm_medium?: string | null
           utm_source?: string | null
           utm_term?: string | null
+          won_at?: string | null
+          won_at_source?: string | null
         }
         Relationships: [
           {
@@ -6600,6 +6697,189 @@ export type Database = {
           },
         ]
       }
+      pilot_audio_insights: {
+        Row: {
+          analysis: Json | null
+          analysis_version: string
+          created_at: string
+          direction: string | null
+          duration_seconds: number | null
+          failure_reason: string | null
+          feature_sources: Json | null
+          message_id: string
+          mime_type: string | null
+          model: string | null
+          opportunity_id: string
+          organization_id: string
+          size_bytes: number | null
+          speaker_role: string | null
+          status: string
+          transcript_chars: number | null
+          updated_at: string
+        }
+        Insert: {
+          analysis?: Json | null
+          analysis_version?: string
+          created_at?: string
+          direction?: string | null
+          duration_seconds?: number | null
+          failure_reason?: string | null
+          feature_sources?: Json | null
+          message_id: string
+          mime_type?: string | null
+          model?: string | null
+          opportunity_id: string
+          organization_id: string
+          size_bytes?: number | null
+          speaker_role?: string | null
+          status?: string
+          transcript_chars?: number | null
+          updated_at?: string
+        }
+        Update: {
+          analysis?: Json | null
+          analysis_version?: string
+          created_at?: string
+          direction?: string | null
+          duration_seconds?: number | null
+          failure_reason?: string | null
+          feature_sources?: Json | null
+          message_id?: string
+          mime_type?: string | null
+          model?: string | null
+          opportunity_id?: string
+          organization_id?: string
+          size_bytes?: number | null
+          speaker_role?: string | null
+          status?: string
+          transcript_chars?: number | null
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "pilot_audio_insights_message_id_fkey"
+            columns: ["message_id"]
+            isOneToOne: true
+            referencedRelation: "messages"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      pilot_journey_analyses: {
+        Row: {
+          analysis: Json | null
+          analysis_version: string
+          cohort: string | null
+          confidence: string | null
+          created_at: string
+          evidence_audio_ids: string[] | null
+          evidence_message_ids: string[] | null
+          failure_reason: string | null
+          model: string | null
+          opportunity_id: string
+          organization_id: string
+          status: string
+          tokens_used: number | null
+          updated_at: string
+        }
+        Insert: {
+          analysis?: Json | null
+          analysis_version?: string
+          cohort?: string | null
+          confidence?: string | null
+          created_at?: string
+          evidence_audio_ids?: string[] | null
+          evidence_message_ids?: string[] | null
+          failure_reason?: string | null
+          model?: string | null
+          opportunity_id: string
+          organization_id: string
+          status?: string
+          tokens_used?: number | null
+          updated_at?: string
+        }
+        Update: {
+          analysis?: Json | null
+          analysis_version?: string
+          cohort?: string | null
+          confidence?: string | null
+          created_at?: string
+          evidence_audio_ids?: string[] | null
+          evidence_message_ids?: string[] | null
+          failure_reason?: string | null
+          model?: string | null
+          opportunity_id?: string
+          organization_id?: string
+          status?: string
+          tokens_used?: number | null
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "pilot_journey_analyses_opportunity_id_fkey"
+            columns: ["opportunity_id"]
+            isOneToOne: true
+            referencedRelation: "opportunities"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "pilot_journey_analyses_opportunity_id_fkey"
+            columns: ["opportunity_id"]
+            isOneToOne: true
+            referencedRelation: "vw_intel_won_vs_lost_30d"
+            referencedColumns: ["opportunity_id"]
+          },
+        ]
+      }
+      pilot_journeys: {
+        Row: {
+          cohort: string
+          opportunity_id: string
+          organization_id: string
+          owner_user_id: string | null
+          selected_at: string
+          selection_criteria: Json | null
+        }
+        Insert: {
+          cohort: string
+          opportunity_id: string
+          organization_id: string
+          owner_user_id?: string | null
+          selected_at?: string
+          selection_criteria?: Json | null
+        }
+        Update: {
+          cohort?: string
+          opportunity_id?: string
+          organization_id?: string
+          owner_user_id?: string | null
+          selected_at?: string
+          selection_criteria?: Json | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "pilot_journeys_opportunity_id_fkey"
+            columns: ["opportunity_id"]
+            isOneToOne: true
+            referencedRelation: "opportunities"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "pilot_journeys_opportunity_id_fkey"
+            columns: ["opportunity_id"]
+            isOneToOne: true
+            referencedRelation: "vw_intel_won_vs_lost_30d"
+            referencedColumns: ["opportunity_id"]
+          },
+          {
+            foreignKeyName: "pilot_journeys_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       pipeline_stages: {
         Row: {
           created_at: string | null
@@ -6813,6 +7093,153 @@ export type Database = {
           user_id?: string | null
         }
         Relationships: []
+      }
+      sales_journeys: {
+        Row: {
+          boundary_version: number
+          computed_at: string
+          contact_id: string | null
+          contract_signed_at: string | null
+          end_reason: string
+          ended_at: string | null
+          first_human_response_at: string | null
+          first_inbound_at: string | null
+          first_message_at: string | null
+          first_outbound_at: string | null
+          last_inbound_at: string | null
+          last_message_at: string | null
+          lost_at: string | null
+          opportunity_id: string
+          organization_id: string
+          owner_user_id: string | null
+          stage_path: Json | null
+          started_at: string
+          won_at: string | null
+        }
+        Insert: {
+          boundary_version?: number
+          computed_at?: string
+          contact_id?: string | null
+          contract_signed_at?: string | null
+          end_reason?: string
+          ended_at?: string | null
+          first_human_response_at?: string | null
+          first_inbound_at?: string | null
+          first_message_at?: string | null
+          first_outbound_at?: string | null
+          last_inbound_at?: string | null
+          last_message_at?: string | null
+          lost_at?: string | null
+          opportunity_id: string
+          organization_id: string
+          owner_user_id?: string | null
+          stage_path?: Json | null
+          started_at: string
+          won_at?: string | null
+        }
+        Update: {
+          boundary_version?: number
+          computed_at?: string
+          contact_id?: string | null
+          contract_signed_at?: string | null
+          end_reason?: string
+          ended_at?: string | null
+          first_human_response_at?: string | null
+          first_inbound_at?: string | null
+          first_message_at?: string | null
+          first_outbound_at?: string | null
+          last_inbound_at?: string | null
+          last_message_at?: string | null
+          lost_at?: string | null
+          opportunity_id?: string
+          organization_id?: string
+          owner_user_id?: string | null
+          stage_path?: Json | null
+          started_at?: string
+          won_at?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "sales_journeys_contact_id_fkey"
+            columns: ["contact_id"]
+            isOneToOne: false
+            referencedRelation: "contacts"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "sales_journeys_opportunity_id_fkey"
+            columns: ["opportunity_id"]
+            isOneToOne: true
+            referencedRelation: "opportunities"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "sales_journeys_opportunity_id_fkey"
+            columns: ["opportunity_id"]
+            isOneToOne: true
+            referencedRelation: "vw_intel_won_vs_lost_30d"
+            referencedColumns: ["opportunity_id"]
+          },
+          {
+            foreignKeyName: "sales_journeys_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "sales_journeys_owner_user_id_fkey"
+            columns: ["owner_user_id"]
+            isOneToOne: false
+            referencedRelation: "users"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      sales_roster: {
+        Row: {
+          active: boolean
+          created_at: string
+          notes: string | null
+          organization_id: string
+          role: string
+          source: string
+          user_id: string
+        }
+        Insert: {
+          active?: boolean
+          created_at?: string
+          notes?: string | null
+          organization_id: string
+          role?: string
+          source?: string
+          user_id: string
+        }
+        Update: {
+          active?: boolean
+          created_at?: string
+          notes?: string | null
+          organization_id?: string
+          role?: string
+          source?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "sales_roster_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "sales_roster_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "users"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       saved_views: {
         Row: {
@@ -8252,6 +8679,25 @@ export type Database = {
           },
         ]
       }
+      vw_journey_timeline: {
+        Row: {
+          actor_type: string | null
+          actor_user_id: string | null
+          direction: string | null
+          event_at: string | null
+          event_id: string | null
+          event_type: string | null
+          journey_included: boolean | null
+          metadata: Json | null
+          opportunity_id: string | null
+          organization_id: string | null
+          post_boundary: boolean | null
+          source_entity_id: string | null
+          source_entity_type: string | null
+          thread_id: string | null
+        }
+        Relationships: []
+      }
       vw_marketing_ad_performance: {
         Row: {
           ad_id: string | null
@@ -8573,6 +9019,10 @@ export type Database = {
       }
       fn_reap_stuck_jobs: {
         Args: { p_threshold_minutes?: number }
+        Returns: number
+      }
+      fn_refresh_sales_journeys: {
+        Args: { p_ghost_days?: number; p_organization_id: string }
         Returns: number
       }
       fn_resolve_marketing_campaign_id: {
