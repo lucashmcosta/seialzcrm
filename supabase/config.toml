@@ -43,3 +43,12 @@ verify_jwt = false
 
 [functions.webchat-heartbeat]
 verify_jwt = false
+
+# Evolution API (Fase 3 — Backend aditivo, INERTE em produção).
+# Webhook publico chamado pelo servidor Evolution (Vultr). Auth em codigo
+# via token compartilhado (EVOLUTION_GLOBAL_API_KEY) no header apikey/
+# x-evolution-token/querystring token. Feature flag evolution_api_enabled
+# bloqueia qualquer processamento enquanto desligada.
+[functions.evolution-webhook]
+verify_jwt = false
+
