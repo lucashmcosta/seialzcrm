@@ -38,6 +38,8 @@ const iconMap: Record<string, any> = {
   telephony: Phone,
   'twilio-voice': Phone,
   'twilio-whatsapp': ChatCircle,
+  'meta-whatsapp-cloud': ChatCircle,
+  'evolution-whatsapp': ChatCircle,
   email: EnvelopeSimple,
   webhooks: Plugs,
   ai: Robot,
