@@ -1,60 +1,56 @@
-# Fase 0 — Discovery Evolution API (revisado com correções obrigatórias)
+## Objetivo
 
-Objetivo: mapear contratos reais da Evolution v2.3.7 no servidor Vultr. Sem tocar em Meta/Twilio, sem alterar banco, sem persistir credencial, sem código residual — exceto `docs/integrations/evolution-api/DISCOVERY.md`.
+Ao receber um inbound Evolution de um contato que já tem thread WhatsApp (Twilio/Meta) na mesma organização, **reutilizar** a thread existente ao invés de criar uma nova. Atualizar `primary_endpoint_id` para o endpoint Evolution, preservando todo o histórico. O divisor visual "📞 Número alterado" aparece automaticamente, pois é derivado da mudança de `messages.endpoint_id` entre mensagens consecutivas (renderizado em `MessagesList.tsx`, sem helper server-side).
 
-## Guardrails
+## Diagnóstico
 
-- Secrets só via `Deno.env.get(...)`. Nunca ecoados, logados ou escritos em disco.
-- Zero escrita no banco Seialz.
-- Nenhuma instância pré-existente é lida por nome, alterada ou apagada.
-- Uma única instância temporária: `evo_discovery_<unix_ts>_<6charRand>`.
-- Sem envio de mensagem, sem número real.
-- Cleanup tolerante a erro (logout pode falhar sem sessão — segue para delete).
-- Critério final de sucesso: instância ausente no segundo `fetchInstances` **e** função remota apagada **e** diff limpo.
+- **`supabase/functions/evolution-webhook/index.ts` linhas 488-522** (`findOrCreateThread`): filtra por `primary_endpoint_id = endpointId`. Como a thread histórica da Viagi aponta para o endpoint Twilio, o webhook nunca encontra e sempre cria thread nova.
+- **Divisor "Número alterado"**: existe apenas como renderer em `src/pages/messages/MessagesList.tsx` (linhas ~683 e ~1991-2004). Não há helper de "trocar número" — o divisor aparece sozinho quando o `endpoint_id` da mensagem N difere do da N-1 na mesma thread. Portanto não é preciso inserir mensagem de sistema; basta que a nova mensagem inbound seja inserida na thread histórica com o `endpoint_id` Evolution.
+- **Twilio/Meta webhooks** aplicam o mesmo filtro por `primary_endpoint_id`, o que significa que a regra "1 thread por número" é o padrão atual. A mudança será exclusiva do Evolution (o pedido é explicitamente para migração de provider, não para unificar todo o comportamento inbound do CRM).
 
-## Correções aplicadas (vs plano anterior)
+## Mudança única — `evolution-webhook/index.ts` `findOrCreateThread`
 
-1. **CORS**: sem `npm:@supabase/supabase-js@2/cors`. Uso o helper local já presente no projeto (`supabase/functions/_shared/cors.ts` se existir) ou defino headers inline na própria função — sem nova dependência.
-2. **Webhook não é "confirmado" em runtime**. `set`/`find` provam apenas o contrato de configuração e campos aceitos. Eventos `CONNECTION_UPDATE`, `QRCODE_UPDATED`, `MESSAGES_UPSERT`, `MESSAGES_UPDATE` serão classificados no doc como **"configuráveis (aceitos pela API); entrega real não confirmada nesta fase"**.
-3. **TTL do QR**: sem afirmação sem observação. Faço duas leituras de `connect` com intervalo controlado (~35s) e comparo. Se inconclusivo, doc registra literal `TTL não confirmado nesta fase`.
-4. **Webhook não é revertido por suposição**. Após `set`, consulto o contrato real. Se não houver operação de remoção clara e documentada pela resposta, não invento payload vazio — a exclusão da instância temporária logo em seguida garante a limpeza.
-5. **Cleanup tolerante**: `logout` provavelmente 4xx (sem sessão); registro status e sigo para `delete`. Sucesso = ausência da instância no `fetchInstances` final.
-6. **Sem proxy genérico**. Cada op é um case fechado com: método HTTP fixo, path montado internamente, `instanceName` validado por regex `^evo_discovery_\d+_[a-z0-9]{6}$`, body permitido por schema mínimo. **Nunca** aceitar `url`, `path` ou `method` vindos do cliente.
-7. **QR não vaza**. Retornado ao caller apenas para inspeção da estrutura; **nunca** `console.log` do body; no `DISCOVERY.md` só entra: nome do campo, encoding, tamanho aproximado, prefixo redigido (`data:image/png;base64,iVBORw***REDACTED***`).
-8. **Diff verificado de verdade**: `git status`/`git diff --stat` reais ao final; único caminho novo permitido é `docs/integrations/evolution-api/DISCOVERY.md`.
-9. **Proteção de execução**: mantenho `verify_jwt` como está e invoco autenticado via `supabase--curl_edge_functions` (que injeta o token da sessão). Adicionalmente, a função valida um header próprio `x-discovery-token` cujo valor vem de um secret temporário `EVOLUTION_DISCOVERY_TOKEN` (gerado via `secrets--generate_secret` no início, revogado via `secrets--delete_secret` no cleanup). Defense-in-depth: mesmo que a config efetiva do deploy não exija JWT, o token adicional bloqueia execução externa.
+Substituir a busca escopada por endpoint por uma busca em duas camadas:
 
-## Sequência
+1. **Match preferencial** (comportamento atual): thread `(org, contact, channel='whatsapp', primary_endpoint_id = endpointId Evolution)`. Cobre o caso já-migrado / conversas Evolution puras.
+2. **Match de migração** (novo): se não achou, procurar a thread WhatsApp mais recente `(org, contact, channel='whatsapp')` **ignorando `primary_endpoint_id`**, ordenada por `last_message_at desc, created_at desc`. Se encontrar:
+   - `UPDATE message_threads SET primary_endpoint_id = <endpoint Evolution>, whatsapp_last_inbound_at = <ts>, last_inbound_at = <ts>` para a thread encontrada.
+   - Retornar o `id` dessa thread.
+3. **Fallback**: se nenhuma thread WhatsApp existir para o contato, criar uma nova como hoje.
 
-1. Confirmar helper CORS existente no repo antes de escrever a função.
-2. `secrets--generate_secret` → `EVOLUTION_DISCOVERY_TOKEN` (32 chars).
-3. Criar `supabase/functions/evolution-discovery/index.ts` com switch fechado de ops.
-4. `supabase--deploy_edge_functions(["evolution-discovery"])`.
-5. Executar via `supabase--curl_edge_functions` (POST `/evolution-discovery`, header `x-discovery-token`, body `{ op, args }`), na ordem:
-   1. `serverInfo` → `GET /` (versão).
-   2. `fetchInstancesBefore` → `GET /instance/fetchInstances` (snapshot pré).
-   3. Gera `instanceName` e valida ausência de colisão no snapshot.
-   4. `create` → `POST /instance/create` com `{ instanceName, integration: "WHATSAPP-BAILEYS", qrcode: true }`.
-   5. `connectionState` → `GET /instance/connectionState/{instanceName}`.
-   6. `fetchInstanceOne` → `GET /instance/fetchInstances?instanceName=...`.
-   7. `webhookFind` → `GET /webhook/find/{instanceName}`.
-   8. `webhookSet` → `POST /webhook/set/{instanceName}` com URL `https://example.invalid/discovery` (mutação; sem reversão especulativa).
-   9. `connectAgain` → `GET /instance/connect/{instanceName}` (~35s depois) para inspecionar rotação do QR.
-   10. `logout` → `DELETE /instance/logout/{instanceName}` (tolerar erro).
-   11. `delete` → `DELETE /instance/delete/{instanceName}`.
-   12. `fetchInstancesAfter` → `GET /instance/fetchInstances` (prova de remoção).
-6. Redigir `docs/integrations/evolution-api/DISCOVERY.md`: versão, cada op com método/path/status/shape (redigidos), estrutura do QR (sem base64), contrato do webhook, classificação explícita de eventos como "configuráveis / entrega não confirmada", nota sobre TTL, resultado de logout+delete, diff dos snapshots.
-7. Cleanup:
-   - `supabase--delete_edge_functions(["evolution-discovery"])`.
-   - `rm -rf supabase/functions/evolution-discovery`.
-   - `secrets--delete_secret("EVOLUTION_DISCOVERY_TOKEN")`.
-   - `git status` real: aceitar apenas `docs/integrations/evolution-api/DISCOVERY.md` como novo.
+Nada mais muda: a inserção da mensagem inbound (linhas ~940-960) já usa o `endpoint_id` Evolution, então o divisor visual "Número alterado: 5098 → 8439" aparece automaticamente entre a última mensagem Twilio e a primeira mensagem Evolution.
 
-## Entregáveis
+## Outbound
 
-- `docs/integrations/evolution-api/DISCOVERY.md` (único diff).
-- Confirmação textual de: função remota deletada, diretório local removido, secret temporário revogado, snapshot pós == snapshot pré (menos a temporária, que deve estar ausente).
+Nenhuma alteração necessária. `dispatchWhatsAppSend` já resolve pelo `message_threads.primary_endpoint_id` — como o passo 2 acima atualizou o campo, o próximo envio pelo Composer sai naturalmente pela Evolution, com `endpoint_id` Evolution persistido apenas na mensagem nova. Mensagens antigas permanecem intocadas.
 
-## Fora do escopo
+## Segurança / guardas (já cobertas, apenas confirmar no código)
 
-Envio de mensagens, migrations, mudanças em Meta/Twilio, dispatcher, UI, qualquer escrita em `communication_endpoints` / `messaging_lines` / `organization_integrations`.
+- Endpoint Evolution resolvido a partir do `instance_name` recebido no webhook → garante mesma organização.
+- Contato localizado por normalização BR já existente (`normalizePhoneBR`) dentro da mesma org → impossibilita cross-tenant.
+- Feature flag `evolution_api_enabled` continua bloqueando execução no topo do handler.
+- A troca só é disparada em inbound real (dentro do fluxo `MESSAGES_UPSERT`), nunca em callback de status.
+
+## Restrições respeitadas
+
+- Sem alterar Meta ou Twilio.
+- Sem tocar `endpoint_id` de mensagens históricas.
+- Sem apagar/copiar histórico.
+- Sem criar helper paralelo (reaproveita o divisor já renderizado em `MessagesList.tsx`).
+- Escopo cirúrgico: 1 função (`findOrCreateThread`) em 1 arquivo.
+
+## Validação (cenário Junior Teste `5511964298621` via `dev-int` / `5511936198439`)
+
+Executar via SQL/logs, sem novo código de teste:
+
+1. `SELECT count(*) FROM message_threads WHERE contact_id = <junior>` — antes.
+2. Enviar mensagem real do celular `5511964298621` para o número Evolution.
+3. Repetir contagem — deve permanecer igual.
+4. `SELECT id, primary_endpoint_id FROM message_threads WHERE contact_id = <junior>` — `primary_endpoint_id` migrou para o endpoint Evolution da Viagi.
+5. Últimas 5 linhas de `messages` da thread: mostrar histórico Twilio + a nova linha inbound Evolution com `endpoint_id` diferente.
+6. Abrir `/messages` na thread: confirmar divisor "📞 Número alterado: 5098 → 8439" entre o bloco Twilio e a nova mensagem.
+7. Responder pelo Composer: nova outbound persistida na mesma thread, `endpoint_id` Evolution, status `sent → delivered → read` via callbacks já implementados na Fase 6.
+
+## Entrega final (após execução)
+
+Relatório curto no chat com: thread_id antes/depois (igual), `primary_endpoint_id` antes/depois, contagem de threads do contato antes/depois (igual), ID da mensagem inbound, ID da mensagem outbound, screenshot/print do divisor. Sem novo arquivo de auditoria — atualização em `docs/integrations/evolution-api/UX_FINAL_AUDIT.md` se você pedir.
