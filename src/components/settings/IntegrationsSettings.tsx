@@ -517,7 +517,7 @@ export function IntegrationsSettings() {
         )}
       </div>
 
-      {selectedIntegration && !['meta-lead-ads', 'meta-capi', 'nammux', 'meta-whatsapp-cloud'].includes(selectedIntegration.slug) && (
+      {selectedIntegration && !['meta-lead-ads', 'meta-capi', 'nammux', 'meta-whatsapp-cloud', 'evolution-whatsapp'].includes(selectedIntegration.slug) && (
         <IntegrationConnectDialog
           open={connectDialogOpen}
           onOpenChange={setConnectDialogOpen}
@@ -525,7 +525,7 @@ export function IntegrationsSettings() {
         />
       )}
 
-      {selectedIntegration && selectedOrgIntegration && !['meta-lead-ads', 'meta-capi', 'nammux', 'meta-whatsapp-cloud'].includes(selectedIntegration.slug) && (
+      {selectedIntegration && selectedOrgIntegration && !['meta-lead-ads', 'meta-capi', 'nammux', 'meta-whatsapp-cloud', 'evolution-whatsapp'].includes(selectedIntegration.slug) && (
         <IntegrationDetailDialog
           open={detailDialogOpen}
           onOpenChange={setDetailDialogOpen}
