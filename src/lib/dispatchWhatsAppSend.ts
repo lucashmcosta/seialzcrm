@@ -457,7 +457,7 @@ export async function dispatchWhatsAppSend(payload: WhatsAppSendPayload) {
     threadId: payload.threadId ?? null,
   });
 
-  if (fnName === "meta-whatsapp-send") {
+  if (fnName === "meta-whatsapp-send" || fnName === "evolution-whatsapp-send") {
     return directFetchEdgeFunction(fnName, payload);
   }
 
