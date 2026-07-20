@@ -492,7 +492,8 @@ async function findOrCreateThread(
   endpointId: string,
   inboundAt: string,
 ): Promise<string | null> {
-  const { data: threads } = await service
+  // 1) Match preferencial: thread já vinculada a este endpoint Evolution.
+  const { data: sameEndpoint } = await service
     .from("message_threads")
     .select("id")
     .eq("organization_id", organizationId)
@@ -501,10 +502,54 @@ async function findOrCreateThread(
     .eq("primary_endpoint_id", endpointId)
     .order("last_message_at", { ascending: false, nullsFirst: false })
     .order("created_at", { ascending: false })
-    .limit(5);
-  const existing = (threads as Array<{ id: string }> | null)?.[0]?.id;
-  if (existing) return existing;
+    .limit(1);
+  const existingSame = (sameEndpoint as Array<{ id: string }> | null)?.[0]?.id;
+  if (existingSame) return existingSame;
 
+  // 2) Match de migração de provider: reutilizar a thread WhatsApp mais recente
+  //    do contato na mesma org, mesmo que aponte pra Twilio/Meta. Migra
+  //    primary_endpoint_id para o endpoint Evolution — histórico intacto.
+  //    O divisor "📞 Número alterado" é renderizado automaticamente em
+  //    MessagesList.tsx quando o endpoint_id da nova mensagem difere do
+  //    da última mensagem anterior. Nada de mensagem de sistema aqui.
+  const { data: anyThread } = await service
+    .from("message_threads")
+    .select("id, primary_endpoint_id")
+    .eq("organization_id", organizationId)
+    .eq("contact_id", contactId)
+    .eq("channel", "whatsapp")
+    .order("last_message_at", { ascending: false, nullsFirst: false })
+    .order("created_at", { ascending: false })
+    .limit(1);
+  const migratable = (anyThread as Array<{ id: string; primary_endpoint_id: string | null }> | null)?.[0];
+  if (migratable) {
+    const prevEndpoint = migratable.primary_endpoint_id;
+    const { error: updErr } = await service
+      .from("message_threads")
+      .update({
+        primary_endpoint_id: endpointId,
+        whatsapp_last_inbound_at: inboundAt,
+        last_inbound_at: inboundAt,
+      })
+      .eq("id", migratable.id);
+    if (!updErr) {
+      logEvolution("info", {
+        fn: "evolution-webhook",
+        op: "findOrCreateThread",
+        code: "THREAD_PROVIDER_MIGRATED",
+        message: "reused existing whatsapp thread; migrated primary_endpoint_id",
+        orgId: organizationId,
+        ctx: {
+          threadId: migratable.id,
+          previousEndpointId: prevEndpoint,
+          newEndpointId: endpointId,
+        },
+      });
+    }
+    return migratable.id;
+  }
+
+  // 3) Fallback: nenhuma thread WhatsApp existente — criar nova.
   const { data: created } = await service
     .from("message_threads")
     .insert({
