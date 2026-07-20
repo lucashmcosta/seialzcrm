@@ -411,9 +411,6 @@ serve(async (req) => {
       default:
         return json(400, { error: "INVALID_INPUT", message: "unknown op" });
     }
-      default:
-        return json(400, { error: "INVALID_INPUT", message: "unknown op" });
-    }
   } catch (err) {
     logEvolution("error", {
       fn: FN,
