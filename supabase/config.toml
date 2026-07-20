@@ -49,6 +49,9 @@ verify_jwt = false
 # via token compartilhado (EVOLUTION_GLOBAL_API_KEY) no header apikey/
 # x-evolution-token/querystring token. Feature flag evolution_api_enabled
 # bloqueia qualquer processamento enquanto desligada.
+[functions.evolution-reconcile-viagi]
+verify_jwt = false
+
 [functions.evolution-webhook]
 verify_jwt = false
 
