@@ -286,17 +286,17 @@ export default function AdminEvolution() {
         <div>
           <h1 className="text-3xl font-bold">Evolution API</h1>
           <p className="text-sm text-muted-foreground mt-1">
-            Provider WhatsApp adicional. Nesta fase a UI é administrativa; nenhum tenant utiliza Evolution em produção.
+            Superfície administrativa (Production Ready). Provisionamento, troubleshooting e observabilidade das instâncias Evolution. Tenants conectam o WhatsApp pela área de Integrações.
           </p>
         </div>
 
         {!flagOn && (
           <Alert>
             <WarningCircle className="h-4 w-4" />
-            <AlertTitle>Feature flag desligada</AlertTitle>
+            <AlertTitle>Feature flag global desligada</AlertTitle>
             <AlertDescription>
-              <span className="font-mono">evolution_api_enabled</span> está OFF. Todas as operações no manager retornarão
-              <span className="font-mono"> FEATURE_DISABLED</span> até que a flag seja ligada. Isso é intencional na Fase 4.
+              <span className="font-mono">evolution_api_enabled</span> está OFF neste ambiente. As organizações listadas em
+              <span className="font-mono"> organization_ids</span> continuam operando; novas organizações só usarão Evolution após serem incluídas.
             </AlertDescription>
           </Alert>
         )}
@@ -318,7 +318,7 @@ export default function AdminEvolution() {
             </Alert>
           ) : (instances.data ?? []).length === 0 ? (
             <Card><CardContent className="py-8 text-center text-sm text-muted-foreground">
-              Nenhuma instância registrada em <span className="font-mono">evolution_instances</span>. Na Fase 4 isso é esperado.
+              Nenhuma instância registrada em <span className="font-mono">evolution_instances</span>.
             </CardContent></Card>
           ) : (
             <div className="grid gap-3">
