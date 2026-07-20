@@ -188,6 +188,7 @@ async function loadEndpointInfo(endpointId: string): Promise<EndpointInfo> {
   const purpose = ((data as any).purpose as string | null) ?? null;
   let provider: Provider;
   if (providerRaw === "meta_cloud_api") provider = "meta_cloud_api";
+  else if (providerRaw === "evolution_api") provider = "evolution_api";
   else if (providerRaw === "twilio" || providerRaw == null) provider = "twilio";
   else {
     throw new DispatchResolveError(
