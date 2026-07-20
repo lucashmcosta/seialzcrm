@@ -2489,6 +2489,63 @@ export type Database = {
           },
         ]
       }
+      evolution_instances: {
+        Row: {
+          created_at: string
+          endpoint_id: string
+          id: string
+          instance_id_remote: string | null
+          instance_name: string
+          integration: string
+          last_known_state: string | null
+          last_qr_expires_at: string | null
+          last_state_checked_at: string | null
+          organization_id: string
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          endpoint_id: string
+          id?: string
+          instance_id_remote?: string | null
+          instance_name: string
+          integration?: string
+          last_known_state?: string | null
+          last_qr_expires_at?: string | null
+          last_state_checked_at?: string | null
+          organization_id: string
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          endpoint_id?: string
+          id?: string
+          instance_id_remote?: string | null
+          instance_name?: string
+          integration?: string
+          last_known_state?: string | null
+          last_qr_expires_at?: string | null
+          last_state_checked_at?: string | null
+          organization_id?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "evolution_instances_endpoint_id_fkey"
+            columns: ["endpoint_id"]
+            isOneToOne: true
+            referencedRelation: "communication_endpoints"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "evolution_instances_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       external_mappings: {
         Row: {
           created_at: string
