@@ -24,7 +24,7 @@ serve(async (req) => {
     return new Response("ok", { headers: corsHeaders });
   }
   const token = req.headers.get("x-reconcile-token") ?? "";
-  const expected = Deno.env.get("EVOLUTION_WEBHOOK_SECRET") ?? "";
+  const expected = Deno.env.get("RECONCILE_VIAGI_TOKEN") ?? "";
   if (!token || token !== expected) {
     return new Response(JSON.stringify({ error: "UNAUTHORIZED" }), {
       status: 401,
