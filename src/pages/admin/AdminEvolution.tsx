@@ -139,7 +139,7 @@ function InstanceRow({ instance }: { instance: EvolutionInstanceRow }) {
             <span className="ml-2">Atualizar estado</span>
           </Button>
           <Button size="sm" variant="outline" onClick={onWebhook} disabled={webhook.isPending}>
-            {webhook.isPending ? <SpinnerGap className="h-4 w-4 animate-spin" /> : <Webhook className="h-4 w-4" />}
+            {webhook.isPending ? <SpinnerGap className="h-4 w-4 animate-spin" /> : <Broadcast className="h-4 w-4" />}
             <span className="ml-2">Atualizar webhook</span>
           </Button>
           <Button size="sm" variant="outline" onClick={onLogout} disabled={logout.isPending}>
