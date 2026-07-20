@@ -366,13 +366,15 @@ serve(async (req) => {
 
   // Self-heal primary_endpoint_id.
   if (currentThreadId) {
-    await supabase.from("message_threads")
-      .update({ primary_endpoint_id: endpoint.id })
-      .eq("id", currentThreadId)
-      .eq("organization_id", organizationId)
-      .is("primary_endpoint_id", null)
-      .catch(() => {});
+    try {
+      await supabase.from("message_threads")
+        .update({ primary_endpoint_id: endpoint.id })
+        .eq("id", currentThreadId)
+        .eq("organization_id", organizationId)
+        .is("primary_endpoint_id", null);
+    } catch { /* best-effort */ }
   }
+
 
   // Reply context (quoted).
   let quoted: Record<string, unknown> | undefined;
