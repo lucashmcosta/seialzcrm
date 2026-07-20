@@ -173,15 +173,35 @@ Deno.serve(async (req) => {
     }
   }
 
+  // Redact large base64/pairingCode fields recursively before returning.
+  const redact = (v: unknown): unknown => {
+    if (v && typeof v === "object") {
+      if (Array.isArray(v)) return v.map(redact);
+      const out: Record<string, unknown> = {};
+      for (const [k, val] of Object.entries(v)) {
+        if (typeof val === "string" && val.length > 120) {
+          out[k] = {
+            __redacted: true,
+            length: val.length,
+            prefix: val.slice(0, 40),
+          };
+        } else {
+          out[k] = redact(val);
+        }
+      }
+      return out;
+    }
+    return v;
+  };
+
   return json(200, {
     op: opName,
     method: spec.method,
-    // Path only (never full URL with host).
     path: spec.path(args),
     upstream_status: upstreamStatus,
     upstream_content_type: upstreamCT,
     body_length: upstreamText.length,
-    body_json: parsed,
-    body_text: parsed === null ? upstreamText.slice(0, 4000) : null,
+    body_json: parsed ? redact(parsed) : null,
+    body_text: parsed === null ? upstreamText.slice(0, 2000) : null,
   });
 });
