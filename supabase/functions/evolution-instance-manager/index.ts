@@ -348,19 +348,54 @@ serve(async (req) => {
         if (!name) {
           return json(400, { error: "INVALID_INPUT", message: "instanceName" });
         }
+        let state: "open" | "connecting" | "close" | "unknown" | null = null;
+        let remoteId: string | null = null;
+        let missing = false;
+
         const r = await provider.connectionState(name);
-        if (typeof r !== "string") return errFromEvolution(r);
-        if (instanceRow) {
+        if (typeof r === "string") {
+          state = r;
+        } else if (r.status === 404) {
+          // Evolution respondeu 404 — instância pode não existir mais com esse
+          // nome. Reconciliar via fetchInstances antes de propagar erro.
+          missing = true;
+        } else {
+          return errFromEvolution(r);
+        }
+
+        if (missing || state === null) {
+          const f = await provider.fetch(name);
+          if (Array.isArray(f)) {
+            const found = f.find((i) => i.name === name || i.id === name);
+            if (found) {
+              state = (found.connectionStatus ?? "unknown") as typeof state;
+              remoteId = found.id ?? null;
+              missing = false;
+            } else {
+              state = "close";
+            }
+          } else if (state === null) {
+            return errFromEvolution(f);
+          }
+        }
+
+        if (instanceRow && state) {
+          const patch: Record<string, unknown> = {
+            last_known_state: state,
+            last_state_checked_at: new Date().toISOString(),
+            updated_at: new Date().toISOString(),
+          };
+          if (remoteId) patch.instance_id_remote = remoteId;
           await service
             .from("evolution_instances")
-            .update({
-              last_known_state: r,
-              last_state_checked_at: new Date().toISOString(),
-              updated_at: new Date().toISOString(),
-            })
+            .update(patch)
             .eq("id", instanceRow.id);
         }
-        return json(200, { instanceName: name, state: r });
+        return json(200, {
+          instanceName: name,
+          state: state ?? "unknown",
+          missing,
+        });
       }
       case "webhookFind": {
         const name = validateInstanceName(body.instanceName);
