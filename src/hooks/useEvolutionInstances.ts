@@ -29,6 +29,8 @@ export interface EndpointLite {
 }
 
 // ---- Query: list instances (admin scope) ----
+// Auto-refresh a cada 5s para refletir atualizações vindas pelo webhook
+// (last_known_state, last_qr_expires_at) sem intervenção manual.
 export function useEvolutionInstances() {
   return useQuery({
     queryKey: ["evolution", "instances"],
@@ -40,6 +42,8 @@ export function useEvolutionInstances() {
       if (error) throw error;
       return (data ?? []) as EvolutionInstanceRow[];
     },
+    refetchInterval: 5000,
+    refetchOnWindowFocus: true,
   });
 }
 
