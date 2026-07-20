@@ -292,16 +292,15 @@ serve(async (req) => {
   if (!endpoint) return json(400, { error: "no_evolution_endpoint" });
   if (endpoint.organization_id !== organizationId) return json(403, { error: "endpoint_org_mismatch" });
   if (endpoint.provider !== PROVIDER) return json(400, { error: "endpoint_not_evolution" });
-  if (!endpoint.sender_sid) return json(400, { error: "endpoint_missing_instance_name" });
-
-  // Recupera instance_name da tabela evolution_instances
+  // Recupera instance_name da tabela evolution_instances (fonte de verdade),
+  // com fallback para endpoint.sender_sid caso o registro não exista.
   const { data: instRow } = await supabase
     .from("evolution_instances")
     .select("instance_name, last_known_state")
     .eq("endpoint_id", endpoint.id)
     .maybeSingle();
   const instanceName = (instRow as any)?.instance_name ?? endpoint.sender_sid;
-  if (!instanceName) return json(400, { error: "instance_not_found_for_endpoint" });
+  if (!instanceName) return json(400, { error: "endpoint_missing_instance_name" });
 
   // -------------------------------------------------------------------------
   // Normaliza payload
