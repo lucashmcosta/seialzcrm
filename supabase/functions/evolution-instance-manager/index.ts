@@ -250,8 +250,22 @@ serve(async (req) => {
           qrcode: body.qrcode ?? true,
         });
         if ("code" in r) return errFromEvolution(r);
-        // Redigimos o hash antes de devolver ao caller: nesta fase o cliente
-        // não tem consumidor legítimo para o token da instância.
+
+        // Se existe uma linha em evolution_instances para essa `name`,
+        // persistimos `instance_id_remote` e `last_state_checked_at`.
+        // NUNCA criamos endpoints/linhas/instâncias novos aqui.
+        if (instanceRow && r.instanceId) {
+          await service
+            .from("evolution_instances")
+            .update({
+              instance_id_remote: r.instanceId,
+              integration: r.integration ?? "WHATSAPP-BAILEYS",
+              last_state_checked_at: new Date().toISOString(),
+              updated_at: new Date().toISOString(),
+            })
+            .eq("id", instanceRow.id);
+        }
+
         return json(200, {
           instanceName: r.instanceName,
           instanceId: r.instanceId,
@@ -273,6 +287,17 @@ serve(async (req) => {
         }
         const r = await provider.delete(name);
         if (r !== true) return errFromEvolution(r);
+        if (instanceRow) {
+          await service
+            .from("evolution_instances")
+            .update({
+              last_known_state: "close",
+              instance_id_remote: null,
+              last_state_checked_at: new Date().toISOString(),
+              updated_at: new Date().toISOString(),
+            })
+            .eq("id", instanceRow.id);
+        }
         return json(200, { ok: true });
       }
       case "logout": {
@@ -282,6 +307,16 @@ serve(async (req) => {
         }
         const r = await provider.logout(name);
         if (r !== true) return errFromEvolution(r);
+        if (instanceRow) {
+          await service
+            .from("evolution_instances")
+            .update({
+              last_known_state: "close",
+              last_state_checked_at: new Date().toISOString(),
+              updated_at: new Date().toISOString(),
+            })
+            .eq("id", instanceRow.id);
+        }
         return json(200, { ok: true });
       }
       case "connect": {
@@ -291,6 +326,17 @@ serve(async (req) => {
         }
         const r = await provider.connect(name);
         if ("code" in r) return errFromEvolution(r);
+        if (instanceRow) {
+          await service
+            .from("evolution_instances")
+            .update({
+              last_known_state: "connecting",
+              last_qr_expires_at: new Date(Date.now() + 60_000).toISOString(),
+              last_state_checked_at: new Date().toISOString(),
+              updated_at: new Date().toISOString(),
+            })
+            .eq("id", instanceRow.id);
+        }
         return json(200, {
           pairingCode: r.pairingCode,
           base64: r.base64,
@@ -304,6 +350,16 @@ serve(async (req) => {
         }
         const r = await provider.connectionState(name);
         if (typeof r !== "string") return errFromEvolution(r);
+        if (instanceRow) {
+          await service
+            .from("evolution_instances")
+            .update({
+              last_known_state: r,
+              last_state_checked_at: new Date().toISOString(),
+              updated_at: new Date().toISOString(),
+            })
+            .eq("id", instanceRow.id);
+        }
         return json(200, { instanceName: name, state: r });
       }
       case "webhookFind": {
@@ -322,14 +378,39 @@ serve(async (req) => {
         if (!name) {
           return json(400, { error: "INVALID_INPUT", message: "instanceName" });
         }
-        const cfg = validateWebhook(body.webhook);
-        if (!cfg) {
-          return json(400, { error: "INVALID_INPUT", message: "webhook" });
+        // Segurança: a UI NÃO passa mais o token. Construímos a URL do
+        // webhook no servidor injetando o `EVOLUTION_WEBHOOK_SECRET`,
+        // evitando expor o secret ao frontend.
+        const webhookSecret = Deno.env.get("EVOLUTION_WEBHOOK_SECRET");
+        const supabaseUrl = Deno.env.get("SUPABASE_URL");
+        if (!webhookSecret || !supabaseUrl) {
+          return json(503, { error: "MISSING_SECRET" });
         }
+        const requested = body.webhook;
+        const events = (requested?.events && requested.events.length > 0)
+          ? requested.events
+          : ALLOWED_EVENTS;
+        for (const ev of events) {
+          if (!ALLOWED_EVENTS.includes(ev)) {
+            return json(400, { error: "INVALID_INPUT", message: "webhook.events" });
+          }
+        }
+        const url = `${supabaseUrl.replace(/\/$/, "")}/functions/v1/evolution-webhook?token=${encodeURIComponent(webhookSecret)}`;
+        const cfg = {
+          enabled: true,
+          url,
+          events,
+          webhookByEvents: !!requested?.webhookByEvents,
+          webhookBase64: !!requested?.webhookBase64,
+        };
         const r = await provider.webhookSet(name, cfg);
         if (r !== true) return errFromEvolution(r);
-        return json(200, { ok: true });
+        // Não devolvemos a URL para o cliente (contém o secret).
+        return json(200, { ok: true, events });
       }
+      default:
+        return json(400, { error: "INVALID_INPUT", message: "unknown op" });
+    }
       default:
         return json(400, { error: "INVALID_INPUT", message: "unknown op" });
     }
