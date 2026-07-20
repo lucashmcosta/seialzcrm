@@ -151,7 +151,7 @@ async function recordInboundEvent(
     orgId: string | null;
     req: Request;
     handlerKey: string;
-    processStatus: "ignored" | "processed";
+    processStatus: "received" | "processed";
   },
 ): Promise<
   | { duplicate: true }
@@ -355,7 +355,7 @@ serve(async (req) => {
     orgId,
     req,
     handlerKey: `evolution:${event ?? "unknown"}`,
-    processStatus: willProcess ? "processed" : "ignored",
+    processStatus: willProcess ? "processed" : "received",
   });
 
   if ("error" in recorded) {
