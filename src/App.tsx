@@ -142,6 +142,7 @@ const AdminDocumentationEdit = lazy(() => import("./pages/admin/AdminDocumentati
 const ObservabilityPage = lazy(() => retryImport(() => import("./pages/admin/ObservabilityPage")));
 const AdminProtectedRoute = lazy(() => import("./components/admin/AdminProtectedRoute").then(m => ({ default: m.AdminProtectedRoute })));
 const ImpersonateCallback = lazy(() => import("./pages/admin/ImpersonateCallback"));
+const AdminEvolution = lazy(() => import("./pages/admin/AdminEvolution"));
 
 
 const queryClient = new QueryClient({
@@ -398,6 +399,11 @@ const App = () => (
           <Route path="/obs" element={
             <AdminProtectedRoute>
               <ObservabilityPage />
+            </AdminProtectedRoute>
+          } />
+          <Route path="/admin/evolution" element={
+            <AdminProtectedRoute>
+              <AdminEvolution />
             </AdminProtectedRoute>
           } />
           <Route path="/admin/obs" element={
