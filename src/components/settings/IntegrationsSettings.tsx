@@ -597,6 +597,18 @@ export function IntegrationsSettings() {
         />
       )}
 
+      {selectedIntegration?.slug === 'evolution-whatsapp' && (
+        <EvolutionWhatsAppDialog
+          open={detailDialogOpen || connectDialogOpen}
+          onOpenChange={(o) => {
+            if (!o) {
+              setDetailDialogOpen(false);
+              setConnectDialogOpen(false);
+            }
+          }}
+        />
+      )}
+
       <ConfirmDialog
         open={disconnectConfirmOpen}
         onOpenChange={setDisconnectConfirmOpen}
