@@ -1,0 +1,1 @@
+UPDATE public.communication_endpoints SET sender_sid = 'dev-int' WHERE id = '11111111-e701-4a01-8000-000000000001' AND provider = 'evolution_api' AND sender_sid IS NULL;
