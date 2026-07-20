@@ -62,7 +62,7 @@ export interface WhatsAppSendPayload {
   migrationContext?: MigrationContext;
 }
 
-type Provider = "twilio" | "meta_cloud_api";
+type Provider = "twilio" | "meta_cloud_api" | "evolution_api";
 type ResolveSource =
   | "endpoint_explicit"
   | "thread_primary_endpoint"
@@ -188,6 +188,7 @@ async function loadEndpointInfo(endpointId: string): Promise<EndpointInfo> {
   const purpose = ((data as any).purpose as string | null) ?? null;
   let provider: Provider;
   if (providerRaw === "meta_cloud_api") provider = "meta_cloud_api";
+  else if (providerRaw === "evolution_api") provider = "evolution_api";
   else if (providerRaw === "twilio" || providerRaw == null) provider = "twilio";
   else {
     throw new DispatchResolveError(
@@ -418,7 +419,9 @@ export async function dispatchWhatsAppSend(payload: WhatsAppSendPayload) {
 
   const fnName = resolved.provider === "meta_cloud_api"
     ? "meta-whatsapp-send"
-    : "twilio-whatsapp-send";
+    : resolved.provider === "evolution_api"
+      ? "evolution-whatsapp-send"
+      : "twilio-whatsapp-send";
 
   // Compliance defense-in-depth: bloqueia templates proibidos por endpoint
   // (regra LOW hardcoded — ver src/lib/complianceGuards.ts). Aplica-se ao
@@ -454,7 +457,7 @@ export async function dispatchWhatsAppSend(payload: WhatsAppSendPayload) {
     threadId: payload.threadId ?? null,
   });
 
-  if (fnName === "meta-whatsapp-send") {
+  if (fnName === "meta-whatsapp-send" || fnName === "evolution-whatsapp-send") {
     return directFetchEdgeFunction(fnName, payload);
   }
 

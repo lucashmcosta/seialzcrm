@@ -1,11 +1,19 @@
-// Resolve qual provider WhatsApp (twilio | meta_cloud_api) atende uma thread
-// ou endpoint. Usado pelo composer para escolher quais templates listar.
+// Resolve qual provider WhatsApp (twilio | meta_cloud_api | evolution_api)
+// atende uma thread ou endpoint. Usado pelo composer para escolher quais
+// templates listar e para exibir capacidades específicas do provider.
 //
 // Default = null (caller deve tratar como Twilio para preservar comportamento legado).
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 
-type Provider = "twilio" | "meta_cloud_api";
+type Provider = "twilio" | "meta_cloud_api" | "evolution_api";
+
+function normalize(p: unknown): Provider | null {
+  if (p === "meta_cloud_api") return "meta_cloud_api";
+  if (p === "evolution_api") return "evolution_api";
+  if (p === "twilio") return "twilio";
+  return null;
+}
 
 interface Args {
   threadId?: string | null;
@@ -24,8 +32,7 @@ export function useWhatsAppProvider({ threadId, endpointId }: Args): Provider | 
           .select("provider")
           .eq("id", endpointId)
           .maybeSingle();
-        const p = (data as any)?.provider;
-        return p === "meta_cloud_api" ? "meta_cloud_api" : p === "twilio" ? "twilio" : null;
+        return normalize((data as any)?.provider);
       }
       if (threadId) {
         const { data: thread } = await supabase
@@ -40,8 +47,7 @@ export function useWhatsAppProvider({ threadId, endpointId }: Args): Provider | 
           .select("provider")
           .eq("id", pid)
           .maybeSingle();
-        const p = (ep as any)?.provider;
-        return p === "meta_cloud_api" ? "meta_cloud_api" : p === "twilio" ? "twilio" : null;
+        return normalize((ep as any)?.provider);
       }
       return null;
     },

@@ -36,8 +36,8 @@ export default tseslint.config(
       // Force every WhatsApp send to go through src/lib/dispatchWhatsAppSend.ts.
       // The dispatcher file itself is excluded via the override below.
       "no-restricted-syntax": ["error", {
-        selector: "CallExpression[callee.object.property.name='functions'][callee.property.name='invoke'] > Literal:first-child[value=/^(twilio|meta)-whatsapp-send$/]",
-        message: "Não invoque twilio-whatsapp-send/meta-whatsapp-send diretamente. Use dispatchWhatsAppSend de @/lib/dispatchWhatsAppSend.",
+        selector: "CallExpression[callee.object.property.name='functions'][callee.property.name='invoke'] > Literal:first-child[value=/^(twilio|meta|evolution)-whatsapp-send$/]",
+        message: "Não invoque twilio-whatsapp-send/meta-whatsapp-send/evolution-whatsapp-send diretamente. Use dispatchWhatsAppSend de @/lib/dispatchWhatsAppSend.",
       }],
     },
   },

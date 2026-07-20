@@ -10,7 +10,7 @@ import { isCsPurpose } from "./endpointPurpose";
 
 export const REROUTE_ORG_ID = "40ae935c-a7f7-4ad7-8ea4-91be6404a95f";
 
-type Provider = "twilio" | "meta_cloud_api";
+type Provider = "twilio" | "meta_cloud_api" | "evolution_api";
 
 interface Args {
   organizationId?: string | null;
