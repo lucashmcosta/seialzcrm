@@ -62,7 +62,7 @@ export interface WhatsAppSendPayload {
   migrationContext?: MigrationContext;
 }
 
-type Provider = "twilio" | "meta_cloud_api";
+type Provider = "twilio" | "meta_cloud_api" | "evolution_api";
 type ResolveSource =
   | "endpoint_explicit"
   | "thread_primary_endpoint"
