@@ -23,7 +23,7 @@ import {
   type EvolutionConnectionState,
   type EvolutionInstanceRow,
 } from "@/hooks/useEvolutionInstances";
-import { WarningCircle, Plug, PlugsConnected, ArrowsClockwise, Trash, QrCode, SpinnerGap, Webhook } from "@phosphor-icons/react";
+import { WarningCircle, Plug, PlugsConnected, ArrowsClockwise, Trash, QrCode, SpinnerGap, Broadcast } from "@phosphor-icons/react";
 
 // Fase 4 — Admin UI do provider Evolution API.
 // A UI é apenas administrativa. Enquanto `evolution_api_enabled` estiver
