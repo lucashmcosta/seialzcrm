@@ -25,10 +25,10 @@ import {
 } from "@/hooks/useEvolutionInstances";
 import { WarningCircle, Plug, PlugsConnected, ArrowsClockwise, Trash, QrCode, SpinnerGap, Broadcast } from "@phosphor-icons/react";
 
-// Fase 4 — Admin UI do provider Evolution API.
-// A UI é apenas administrativa. Enquanto `evolution_api_enabled` estiver
-// desligada (default), toda operação retorna FEATURE_DISABLED e a UI
-// exibe esse estado. Nenhum tenant é ativado por esta tela.
+// Admin — Evolution API (Production Ready).
+// Superfície reservada à equipe Seialz para provisionar e monitorar
+// instâncias Evolution. Tenants conectam o WhatsApp pela tela de
+// Configurações → Integrações → Evolution WhatsApp (dialog do tenant).
 
 function StateBadge({ state }: { state: EvolutionConnectionState | null }) {
   const s = state ?? "unknown";
@@ -203,10 +203,10 @@ function CreateInstanceCard() {
       <CardHeader>
         <CardTitle className="text-base font-medium">Criar instância</CardTitle>
         <CardDescription>
-          Fase 4: cria a instância remota no servidor Evolution. Ainda não cria
-          <span className="font-mono"> communication_endpoints</span> nem
-          <span className="font-mono"> evolution_instances</span> automaticamente
-          (isso é feito na Fase 5, protegido pela feature flag).
+          Provisiona uma nova instância no servidor Evolution. O vínculo com
+          <span className="font-mono"> communication_endpoints</span> e
+          <span className="font-mono"> evolution_instances</span> é feito
+          manualmente pela equipe Seialz durante o onboarding do tenant.
         </CardDescription>
       </CardHeader>
       <CardContent className="flex flex-col sm:flex-row gap-2 items-end">
@@ -286,17 +286,17 @@ export default function AdminEvolution() {
         <div>
           <h1 className="text-3xl font-bold">Evolution API</h1>
           <p className="text-sm text-muted-foreground mt-1">
-            Provider WhatsApp adicional. Nesta fase a UI é administrativa; nenhum tenant utiliza Evolution em produção.
+            Superfície administrativa (Production Ready). Provisionamento, troubleshooting e observabilidade das instâncias Evolution. Tenants conectam o WhatsApp pela área de Integrações.
           </p>
         </div>
 
         {!flagOn && (
           <Alert>
             <WarningCircle className="h-4 w-4" />
-            <AlertTitle>Feature flag desligada</AlertTitle>
+            <AlertTitle>Feature flag global desligada</AlertTitle>
             <AlertDescription>
-              <span className="font-mono">evolution_api_enabled</span> está OFF. Todas as operações no manager retornarão
-              <span className="font-mono"> FEATURE_DISABLED</span> até que a flag seja ligada. Isso é intencional na Fase 4.
+              <span className="font-mono">evolution_api_enabled</span> está OFF neste ambiente. As organizações listadas em
+              <span className="font-mono"> organization_ids</span> continuam operando; novas organizações só usarão Evolution após serem incluídas.
             </AlertDescription>
           </Alert>
         )}
@@ -318,7 +318,7 @@ export default function AdminEvolution() {
             </Alert>
           ) : (instances.data ?? []).length === 0 ? (
             <Card><CardContent className="py-8 text-center text-sm text-muted-foreground">
-              Nenhuma instância registrada em <span className="font-mono">evolution_instances</span>. Na Fase 4 isso é esperado.
+              Nenhuma instância registrada em <span className="font-mono">evolution_instances</span>.
             </CardContent></Card>
           ) : (
             <div className="grid gap-3">

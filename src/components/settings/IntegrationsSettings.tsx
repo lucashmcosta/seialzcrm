@@ -24,6 +24,7 @@ import { MetaLeadAdsDialog } from '@/components/integrations/meta-lead-ads/MetaL
 import { MetaCapiDialog } from '@/components/integrations/meta-capi/MetaCapiDialog';
 import { NammuxDialog } from '@/components/integrations/nammux/NammuxDialog';
 import { MetaWhatsAppCloudDialog } from '@/components/integrations/meta-whatsapp-cloud/MetaWhatsAppCloudDialog';
+import { EvolutionWhatsAppDialog } from '@/components/integrations/evolution-whatsapp/EvolutionWhatsAppDialog';
 import { AIProviderCard } from './AIProviderCard';
 import { useAIProviders } from '@/hooks/useAIProviders';
 import { usePermissions } from '@/hooks/usePermissions';
@@ -37,6 +38,8 @@ const iconMap: Record<string, any> = {
   telephony: Phone,
   'twilio-voice': Phone,
   'twilio-whatsapp': ChatCircle,
+  'meta-whatsapp-cloud': ChatCircle,
+  'evolution-whatsapp': ChatCircle,
   email: EnvelopeSimple,
   webhooks: Plugs,
   ai: Robot,
@@ -514,7 +517,7 @@ export function IntegrationsSettings() {
         )}
       </div>
 
-      {selectedIntegration && !['meta-lead-ads', 'meta-capi', 'nammux', 'meta-whatsapp-cloud'].includes(selectedIntegration.slug) && (
+      {selectedIntegration && !['meta-lead-ads', 'meta-capi', 'nammux', 'meta-whatsapp-cloud', 'evolution-whatsapp'].includes(selectedIntegration.slug) && (
         <IntegrationConnectDialog
           open={connectDialogOpen}
           onOpenChange={setConnectDialogOpen}
@@ -522,7 +525,7 @@ export function IntegrationsSettings() {
         />
       )}
 
-      {selectedIntegration && selectedOrgIntegration && !['meta-lead-ads', 'meta-capi', 'nammux', 'meta-whatsapp-cloud'].includes(selectedIntegration.slug) && (
+      {selectedIntegration && selectedOrgIntegration && !['meta-lead-ads', 'meta-capi', 'nammux', 'meta-whatsapp-cloud', 'evolution-whatsapp'].includes(selectedIntegration.slug) && (
         <IntegrationDetailDialog
           open={detailDialogOpen}
           onOpenChange={setDetailDialogOpen}
@@ -591,6 +594,18 @@ export function IntegrationsSettings() {
           }}
           integration={selectedIntegration}
           orgIntegration={selectedOrgIntegration}
+        />
+      )}
+
+      {selectedIntegration?.slug === 'evolution-whatsapp' && (
+        <EvolutionWhatsAppDialog
+          open={detailDialogOpen || connectDialogOpen}
+          onOpenChange={(o) => {
+            if (!o) {
+              setDetailDialogOpen(false);
+              setConnectDialogOpen(false);
+            }
+          }}
         />
       )}
 
