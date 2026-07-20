@@ -1,4 +1,4 @@
-# Evolution API — Fase 1: Relatório de Prontidão de Infraestrutura
+# Evolution API — Fase 1: Relatório de Prontidão de Infraestrutura (rev. 2)
 
 Data: 2026-07-20
 Escopo: infraestrutura e prontidão operacional do servidor Evolution v2.3.7
@@ -9,6 +9,9 @@ Este documento é apenas diagnóstico + plano. **Nenhuma mudança foi executada.
 Nada foi alterado no Seialz, no banco, em Meta/Twilio, em `messaging_lines`,
 em `communication_endpoints`, nem na instância `dev-int`.
 
+Revisão 2 incorpora as 11 correções obrigatórias solicitadas pelo owner antes
+de virar procedimento operacional.
+
 ---
 
 ## 0. Limitação de acesso desta fase
@@ -17,7 +20,8 @@ O agente Lovable **não possui acesso SSH ao host Vultr, nem ao painel Vultr,
 nem ao DNS do domínio-alvo**. Portanto, os itens abaixo se dividem em duas
 categorias, sempre marcadas:
 
-- **[CONFIRMADO]** — evidenciado na Fase 0 via HTTP contra o servidor real.
+- **[CONFIRMADO]** — evidenciado na Fase 0 via HTTP contra o servidor real,
+  ou via ferramenta interna do Lovable (ex.: listagem de secrets).
 - **[REQUER OPERADOR]** — depende de ação/checagem no host Vultr, no
   registrador DNS, ou no gestor de secrets. Não é possível confirmar via
   Lovable.
@@ -42,6 +46,8 @@ registrado neste mesmo documento na revisão.
 | Instância existente | `dev-int`, `connectionStatus: connecting`, não tocada | Fase 0 §2 |
 | Autenticação de API | header `apikey` (global) aceita | Fase 0 (todas as ops) |
 | Webhook events | `CONNECTION_UPDATE`, `QRCODE_UPDATED`, `MESSAGES_UPSERT`, `MESSAGES_UPDATE` — **configuráveis, entrega real não confirmada** | Fase 0 §8 |
+| Secret `EVOLUTION_BASE_URL` | **[CONFIRMADO]** presente no cofre do projeto Seialz (Supabase Edge Function Secret). Valor não exibido. | `fetch_secrets` 2026-07-20 |
+| Secret `EVOLUTION_GLOBAL_API_KEY` | **[CONFIRMADO]** presente no cofre do projeto Seialz. Valor não exibido. | `fetch_secrets` 2026-07-20 |
 
 Itens não observáveis via HTTP externo (portas efetivas, firewall, volumes,
 processo de backup, versões de Postgres/Redis, política de restart) estão
@@ -58,16 +64,11 @@ todos em `[REQUER OPERADOR]` abaixo.
   1. Escolher o FQDN (sugestão: `evo.seialz.com` ou subdomínio
      dedicado tipo `wa-evo.seialz.com`).
   2. Criar registro `A evo.seialz.com → 216.238.113.44` no DNS.
-  3. Escolher terminador TLS:
-     - **Opção A (recomendada):** Caddy ou Nginx no próprio host,
-       com Let's Encrypt (HTTP-01 ou DNS-01). Simples, sem custo.
-     - **Opção B:** Cloudflare em modo proxy. Adiciona uma camada
-       de terceiro entre Seialz e Evolution. Não recomendado no MVP
-       (mais superfícies de falha, cookies/scanner podem reportar
-       região errada — mesmo caveat já documentado para domínios
-       proxied em Lovable).
-  4. Após TLS ativo, definir `EVOLUTION_BASE_URL = https://<fqdn>`
-     como novo valor canônico do secret (ver §7).
+  3. Terminador TLS: **Caddy no próprio host**, com Let's Encrypt
+     (HTTP-01). Cloudflare em modo proxy não será usado no MVP.
+  4. Após TLS ativo, **atualizar somente** `EVOLUTION_BASE_URL` para
+     `https://<fqdn>` via `update_secret` (não criar duplicata, não
+     excluir/rotacionar a `EVOLUTION_GLOBAL_API_KEY` neste passo).
 - Critério de aceite: `curl -sSf https://<fqdn>/` retorna JSON com
   `version: "2.3.7"` **sem** `-k`.
 
@@ -81,47 +82,59 @@ todos em `[REQUER OPERADOR]` abaixo.
 - Critério de aceite:
   - `notAfter` ≥ hoje + 30 dias;
   - `subject` inclui `<fqdn>`;
-  - renovação automática (Caddy) ou cron de `certbot renew` ativo;
-  - HSTS opcional na Fase 1, obrigatório antes do piloto (Fase 5).
+  - renovação automática pelo Caddy ativa (logs sem erro de ACME);
+  - **redirect 80→443 obrigatório**; HSTS **não é bloqueador imediato**
+    (ver §2.11).
 
 ### 2.3 Proteger `/manager`
 
 - Risco atual: `/manager` é servido no mesmo host/porta da API, sem
   restrição pública documentada. Se acessível via internet, qualquer
   um com a apikey global tem UI administrativa completa.
-- Alternativas (a decidir pelo operador):
-  - **A. Bloquear via reverse proxy** (recomendado): no Caddy/Nginx,
-    `location /manager` responde 403 para tudo que não venha de uma
-    allowlist de IPs de escritório/VPN.
-  - **B. Basic Auth adicional** no reverse proxy sobre `/manager`.
-  - **C. Bind local**: rodar o serviço em `127.0.0.1` e expor apenas
-    `/message/*`, `/instance/*`, `/webhook/*`, `/` via proxy — bloqueando
-    `/manager` inteiramente. Requer validar que a lista de rotas
-    necessárias está fechada (nossa `DISCOVERY.md` cobre o essencial).
+- Decisão MVP: bloquear no Caddy por allowlist de IPs
+  administrativos (ver Caddyfile em §9). Autenticação adicional
+  (Basic Auth) pode ser somada, não substitui a allowlist.
 - Critério de aceite: `curl -sS -o /dev/null -w "%{http_code}\n"
   https://<fqdn>/manager` de um IP fora da allowlist retorna `401`
   ou `403`.
 
 ### 2.4 Portas expostas e firewall
 
-- `[REQUER OPERADOR]`. No host Vultr:
+- `[REQUER OPERADOR]`. **Não usar `ufw reset` em momento algum.**
+- Procedimento seguro (aplicar regras individualmente, com sessão
+  SSH paralela aberta o tempo todo):
   ```
-  ss -tlnp | awk 'NR==1 || $4 ~ /:(80|443|8080|5432|6379)$/'
-  ufw status verbose      # ou: iptables -S; nft list ruleset
+  # 1. Snapshot ANTES de qualquer mudança
+  sudo ufw status numbered > /root/ufw.before.$(date +%F-%H%M).txt
+  sudo iptables-save        > /root/iptables.before.$(date +%F-%H%M).rules
+
+  # 2. Garantir que SSH da allowlist continua permitido
+  #    (ajustar CIDR para a allowlist real de administradores)
+  sudo ufw allow from <ADMIN_CIDR> to any port 22 proto tcp comment 'evo-phase1 ssh admin'
+
+  # 3. Abrir 80 e 443 ao mundo (necessários para Caddy + ACME)
+  sudo ufw allow 80/tcp  comment 'evo-phase1 http'
+  sudo ufw allow 443/tcp comment 'evo-phase1 https'
+
+  # 4. NÃO fechar 22 geral no primeiro passo. Só restringir 22 depois
+  #    de confirmar que a sessão paralela pela allowlist funciona.
   ```
-- Alvo de Fase 1:
-  - `80/tcp` aberto ao mundo (redirect 301 → 443, ou ACME HTTP-01).
-  - `443/tcp` aberto ao mundo.
-  - `22/tcp` aberto **apenas** à allowlist de administradores.
-  - `5432/tcp` (Postgres), `6379/tcp` (Redis), portas internas do
-    container Evolution — **fechadas** ao mundo, acessíveis apenas
-    dentro da rede Docker/loopback.
+- Portas internas (Postgres 5432, Redis 6379, porta da app
+  Evolution) devem **permanecer não expostas ao mundo** — se já são
+  hoje, não mexer. Se estiverem abertas, adicionar regra explícita
+  de `deny` com comentário `evo-phase1`.
+- **Não afetar outras aplicações do host.** Toda regra criada nesta
+  fase leva o comentário `evo-phase1` para permitir rollback
+  granular.
+- Rollback (§5) remove **apenas** as regras marcadas com
+  `evo-phase1`, nunca faz `ufw reset`.
 - Critério de aceite: `nmap -Pn -p- <fqdn>` de fora mostra apenas
-  22 (restrito), 80, 443.
+  22 (restrito à allowlist), 80, 443. Aplicações pré-existentes no
+  mesmo host continuam respondendo normalmente.
 
 ### 2.5 Persistência de volumes (Postgres e Redis)
 
-- `[REQUER OPERADOR]`. No host:
+- `[REQUER OPERADOR]`. Comandos apenas de leitura:
   ```
   docker compose config | grep -A2 volumes:
   docker volume ls
@@ -130,120 +143,196 @@ todos em `[REQUER OPERADOR]` abaixo.
 - Alvo:
   - Volumes nomeados (não `tmpfs`), montados em caminho estável
     do host (ex.: `/var/lib/evolution/postgres`).
-  - `docker compose down && docker compose up -d` **não** deve
-    recriar os volumes.
-- Critério de aceite: procedimento §2.6 abaixo executado com sucesso.
+  - Nenhum uso de `down -v` em nenhum procedimento desta fase.
 
 ### 2.6 Reinicialização do stack sem perda de `dev-int`
 
-- `[REQUER OPERADOR]`. Procedimento:
-  1. Snapshot pré-restart:
-     `curl -sS -H "apikey: $KEY" https://<fqdn>/instance/fetchInstances > /tmp/pre.json`
-  2. `docker compose restart` (ou `down && up -d`).
+- `[REQUER OPERADOR]`. **Primeiro teste usa apenas
+  `docker compose restart`.** Não usar `docker compose down` nesta
+  fase. Teste de recriação de containers fica para janela separada,
+  após §2.5 validado.
+- Procedimento:
+  1. Snapshot pré-restart (com redação — ver §2.6.1):
+     ```
+     curl -sS -H "apikey: $EVOLUTION_GLOBAL_API_KEY" \
+       https://<fqdn>/instance/fetchInstances \
+       | jq '[.[] | {name, id, integration, connectionStatus, hasToken: (.token != null)}]' \
+       > /root/evo-pre.$(date +%F-%H%M).json
+     ```
+  2. `docker compose restart`
   3. Aguardar readiness: loop até `curl -sSf https://<fqdn>/` retornar 200.
-  4. Snapshot pós-restart:
-     `curl -sS -H "apikey: $KEY" https://<fqdn>/instance/fetchInstances > /tmp/pos.json`
-  5. `diff <(jq -S . /tmp/pre.json) <(jq -S . /tmp/pos.json)` deve ser
-     vazio exceto por `updatedAt` de campos triviais.
-- Critério de aceite: `dev-int` presente no snapshot pós com o mesmo
-  `id`, `token` e `Setting.id`.
+  4. Snapshot pós-restart, mesma redação:
+     ```
+     curl -sS -H "apikey: $EVOLUTION_GLOBAL_API_KEY" \
+       https://<fqdn>/instance/fetchInstances \
+       | jq '[.[] | {name, id, integration, connectionStatus, hasToken: (.token != null)}]' \
+       > /root/evo-pos.$(date +%F-%H%M).json
+     ```
+  5. `diff <(jq -S . /root/evo-pre.*.json) <(jq -S . /root/evo-pos.*.json)`
+     deve ser vazio, exceto por `connectionStatus` transitório.
+- Critério de aceite: `dev-int` presente no snapshot pós com o
+  mesmo `name`, `id`, `integration` e `hasToken: true`.
+
+#### 2.6.1 Redação obrigatória de snapshots
+
+Nenhum comando desta fase pode salvar em `/tmp` ou em arquivo de
+log a resposta bruta de `fetchInstances`, pois o campo `token` da
+instância é um segredo. Toda captura deve passar por `jq` filtrando
+apenas: `name`, `id` (não secreto), `integration`, `connectionStatus`,
+`hasToken` (booleano). O valor de `token`, `apikey`, `qrcode`,
+`ownerJid` e quaisquer credenciais **não** devem ser gravados nem
+comparados.
 
 ### 2.7 Backup mínimo e restauração
 
-- `[REQUER OPERADOR]`. Proposta MVP (sem custo adicional relevante):
-  - **Dump diário do Postgres** dentro do container:
+- `[REQUER OPERADOR]`. Proposta MVP:
+  - **Dump diário do Postgres** via arquivo dedicado
+    `/etc/cron.d/evolution-backup` (NUNCA via `crontab -e` global do
+    usuário, e NUNCA usar `crontab -r` no rollback). Conteúdo:
     ```
-    docker exec <pg_container> pg_dump -U <user> -Fc <db> \
-      > /var/backups/evolution/pg_$(date +%F).dump
+    # /etc/cron.d/evolution-backup — created by evo-phase1
+    # Runs daily pg_dump of Evolution Postgres inside the container.
+    SHELL=/bin/bash
+    PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
+    15 3 * * * root /usr/local/sbin/evolution-backup.sh >> /var/log/evolution-backup.log 2>&1
     ```
-    via cron do host, retenção mínima 7 dias.
-  - **Snapshot semanal do volume Redis** (opcional; Redis aqui
-    guarda estado transitório de sessão — não é fonte de verdade).
-  - **Off-host**: espelhar `/var/backups/evolution/` para
-    Vultr Object Storage, S3 ou rsync para outro host. Sem cópia
-    externa, um único disco corrompido perde tudo.
-- Restauração — ensaio obrigatório antes de liberar a Fase 2:
-  1. Provisionar host descartável.
-  2. Subir o mesmo `docker-compose.yml`.
-  3. `pg_restore -U <user> -d <db> pg_<data>.dump`.
-  4. `GET /instance/fetchInstances` retorna a lista esperada.
-- Critério de aceite: um ensaio de restauração documentado neste
-  mesmo arquivo (data, dump usado, resultado).
+    O script `/usr/local/sbin/evolution-backup.sh` (modo 700, root)
+    lê credenciais do container **via `docker exec`** e do arquivo
+    `.env` local do stack — **não** recebe senha por CLI e **não**
+    escreve senha em log:
+    ```
+    #!/usr/bin/env bash
+    set -euo pipefail
+    umask 077
+    BACKUP_DIR=/var/backups/evolution
+    mkdir -p "$BACKUP_DIR"
+    STAMP=$(date +%F)
+    # PGPASSWORD é lido do .env do stack pelo próprio container;
+    # aqui NÃO exportamos nada em texto claro.
+    docker exec -e PGPASSWORD \
+      "$(docker compose -f /opt/evolution/docker-compose.yml ps -q postgres)" \
+      pg_dump -U "$POSTGRES_USER" -Fc "$POSTGRES_DB" \
+      > "$BACKUP_DIR/pg_${STAMP}.dump"
+    chmod 600 "$BACKUP_DIR/pg_${STAMP}.dump"
+    find "$BACKUP_DIR" -name 'pg_*.dump' -mtime +14 -delete
+    # Cópia off-host (rclone para bucket com SSE; credenciais em
+    # /root/.config/rclone/rclone.conf, modo 600).
+    rclone copy "$BACKUP_DIR/pg_${STAMP}.dump" evo-offsite:evolution/pg/
+    ```
+  - **Sem** eco de senha, `PGPASSWORD` **não** aparece no script em
+    texto claro; o valor vem do ambiente do container.
+  - **Redis**: snapshot semanal do volume via `docker run --rm -v
+    <redis_vol>:/data alpine tar -czf - /data > redis_$(date +%F).tgz`.
+    Estado transitório; não é fonte de verdade.
+  - Off-host obrigatório antes de considerar backup "ativo".
+- Restauração — ver §2.7.1 quanto ao gate.
+
+#### 2.7.1 Reclassificação do ensaio de restore
+
+- **Bloqueador da Fase 1 (obrigatório para fechar esta fase):**
+  backup ativo (§2.7) + volumes persistentes confirmados (§2.5) +
+  cópia off-host validada (arquivo do dia visível no bucket).
+- **Bloqueador do piloto Viagi (Fase 5), não da Fase 2:** ensaio
+  completo de restore em host descartável, com `pg_restore` e
+  `GET /instance/fetchInstances` retornando a lista esperada.
+- **Regra dura:** nenhuma organização Seialz pode ser ativada em
+  Evolution antes do ensaio de restore estar documentado neste
+  arquivo com data e resultado.
 
 ### 2.8 Armazenamento dos secrets Evolution
 
-- Alvo canônico (compatível com o padrão já em uso no projeto):
-  - `EVOLUTION_BASE_URL` — **Supabase Edge Function Secret** do
-    projeto Seialz. Não é sensível por si, mas é operacional e deve
-    seguir a mesma origem do `EVOLUTION_GLOBAL_API_KEY`.
-  - `EVOLUTION_GLOBAL_API_KEY` — **Supabase Edge Function Secret**,
-    escopo backend. **Nunca** exposto ao frontend, nunca no
-    repositório, nunca em `.env` commitado, nunca ecoado em log.
-- Ambos serão criados apenas quando a Fase 2 começar (nada é
-  gravado nesta fase). O `EVOLUTION_DISCOVERY_TOKEN` da Fase 0 já
-  foi revogado.
-- Confirmação em produção: `fetch_secrets` do projeto Seialz na
-  abertura da Fase 2 deve listar exatamente esses dois nomes, sem
-  variantes.
+- Estado atual **[CONFIRMADO]**: `EVOLUTION_BASE_URL` e
+  `EVOLUTION_GLOBAL_API_KEY` já existem como Supabase Edge Function
+  Secrets do projeto Seialz (verificado via `fetch_secrets` em
+  2026-07-20; valores não exibidos).
+- Nesta fase **não** se cria, não se duplica e não se apaga nenhum
+  dos dois.
+- Quando o HTTPS estiver pronto (§2.1), atualizar **somente**
+  `EVOLUTION_BASE_URL` via `update_secret`, mantendo
+  `EVOLUTION_GLOBAL_API_KEY` intacta.
+- Regras invariantes: nunca no repositório, nunca em `.env`
+  commitado, nunca ecoado em log, nunca no frontend.
 
 ### 2.9 Rotação da API key administrativa
 
 - Contexto: a Evolution v2.3.7 usa uma única `AUTHENTICATION_API_KEY`
   global no `.env` do container. Não há endpoint documentado de
   rotação sem restart.
-- Procedimento de rotação (a executar quando necessário, não agora):
+- Procedimento de rotação (quando necessário, **não agora**):
   1. Gerar novo valor (256 bits, gestor de senhas).
   2. Editar `.env` do stack no host, `AUTHENTICATION_API_KEY=<novo>`.
   3. `docker compose up -d` (recreate do container da API).
   4. Atualizar `EVOLUTION_GLOBAL_API_KEY` no Supabase via
-     `update_secret`.
+     `update_secret` (o secret existe, é rotação in-place).
   5. Redeploy das Edge Functions que a consomem (a partir da Fase 3).
-- Política mínima proposta: rotação **sob evento** (suspeita de
-  vazamento, saída de administrador) + rotação **calendarizada**
-  a cada 180 dias. Sem rotação automática no MVP.
-- Janela de indisponibilidade da rotação: ~5–10s de recreate.
-  Aceitável fora do horário comercial.
+- Política mínima: rotação **sob evento** (suspeita de vazamento,
+  saída de administrador) + **calendarizada** a cada 180 dias.
+- Janela de indisponibilidade: ~5–10s de recreate.
 
 ### 2.10 Tratamento de status ("último estado conhecido")
 
-- Premissa herdada da Fase 0: o webhook `CONNECTION_UPDATE` é
-  **configurável mas não teve entrega confirmada** em runtime.
-  Portanto, no MVP, o Seialz **não pode prometer tempo real** para
-  o estado da instância.
-- Modelo proposto para o MVP (a implementar somente a partir da
-  Fase 3, aqui só definido):
+- Premissa herdada da Fase 0: `CONNECTION_UPDATE` é **configurável
+  mas não teve entrega confirmada** em runtime. No MVP o Seialz
+  **não pode prometer tempo real** para o estado da instância.
+- Modelo (a implementar somente a partir da Fase 3):
   - Poll ativo via `GET /instance/connectionState/{name}` com
-    cadência conservadora (ex.: a cada 30s por instância em
-    `connecting`; a cada 5 min em `open`; sob demanda ao abrir a
-    tela). Números concretos serão validados na Fase 3.
+    cadência conservadora (ex.: 30s em `connecting`, 5min em
+    `open`, sob demanda ao abrir a tela).
   - Persistir no Seialz apenas: `last_known_state`,
     `last_state_checked_at`. **Nunca** persistir QR base64.
-  - UI: rotular explicitamente como "Último estado conhecido:
-    `<state>` — verificado há Xs". Botão "Verificar agora" dispara
-    um poll pontual.
-  - Quando/se o webhook de `CONNECTION_UPDATE` for validado em
-    runtime numa fase posterior, o poll pode ser reduzido, mas o
-    rótulo "último estado conhecido" permanece — é honesto.
+  - UI rotula "Último estado conhecido: `<state>` — verificado há Xs".
+  - Estado exibido nunca depende **apenas** do frontend; a fonte de
+    verdade é o poll do backend gravado em tabela.
+
+### 2.11 Hardening da API pública (além do `/manager`)
+
+Aplicado no Caddy (§9). Requisitos:
+
+- HTTPS obrigatório; HTTP só serve ACME e redirect 301 para HTTPS.
+- **Não registrar `apikey`** em access log. Redigir header via
+  `log` + `format` do Caddy (§9).
+- Limite de body em `POST /message/*` e `POST /instance/*`
+  (proposta: 20 MB, revisar antes da Fase 5 conforme uso real de
+  mídia).
+- Rate limiting razoável por IP nas rotas administrativas
+  (`/instance/*`, `/webhook/*`): ex. 30 req/min. `/message/*` fica
+  mais folgado (ex. 600 req/min).
+- Portas internas (Postgres, Redis, porta interna da app) fechadas
+  ao mundo (§2.4).
+- Revisar paths públicos necessários: no MVP, apenas `/`,
+  `/instance/*`, `/message/*`, `/webhook/*`, `/chat/*` (o que a
+  `DISCOVERY.md` exige). `/manager` bloqueado por allowlist.
+- HSTS **não** é bloqueador imediato desta fase. Será aplicado após
+  ~14 dias de HTTPS estável, e **sem** `includeSubDomains` até uma
+  avaliação específica de todos os subdomínios de `seialz.com`.
+
+### 2.12 Não tocar em Meta/Twilio, `messaging_lines`, `communication_endpoints` nem `dev-int`
+
+Reafirmado. Toda mudança da Fase 1 ocorre no host Vultr, no DNS e
+no cofre Supabase (apenas `update_secret` do `EVOLUTION_BASE_URL`
+quando o HTTPS estiver pronto). Nada é gravado no banco do Seialz.
 
 ---
 
 ## 3. Mudanças necessárias (resumo executável)
 
 1. **DNS**: `A <fqdn> → 216.238.113.44`.
-2. **Reverse proxy no host** (Caddy recomendado):
-   - TLS Let's Encrypt automático.
-   - `location /` → Evolution API interna.
-   - `location /manager` → 403 fora da allowlist.
-3. **Firewall**: só 22 (allowlist), 80, 443 públicos.
-4. **Backup**: cron diário `pg_dump` + cópia off-host.
-5. **Ensaio de restore**: uma vez, documentado.
-6. **Secrets** (Seialz, no início da Fase 2):
-   `EVOLUTION_BASE_URL`, `EVOLUTION_GLOBAL_API_KEY`.
+2. **Caddy no host** com o Caddyfile de §9:
+   - TLS Let's Encrypt automático;
+   - redirect 80→443;
+   - proxy `/` → Evolution API interna;
+   - allowlist em `/manager`;
+   - rate limiting;
+   - `apikey` redigido em access log.
+3. **Firewall**: adicionar regras marcadas `evo-phase1` (SSH da
+   allowlist, 80, 443) sem `ufw reset`; snapshot antes.
+4. **Backup**: `/etc/cron.d/evolution-backup` + script 700 root +
+   off-host via rclone.
+5. **Ensaio de restore**: obrigatório antes do piloto Viagi.
+6. **Secrets** (Seialz): nada a criar. Apenas `update_secret` de
+   `EVOLUTION_BASE_URL` após HTTPS ativo.
 7. **Política de rotação** da API key registrada (180d + sob evento).
 8. **Contrato de status** documentado como "último estado conhecido".
-
-Nada acima toca Seialz, Meta, Twilio, `messaging_lines`,
-`communication_endpoints` ou `dev-int`.
 
 ---
 
@@ -251,83 +340,118 @@ Nada acima toca Seialz, Meta, Twilio, `messaging_lines`,
 
 | Risco | Impacto | Mitigação |
 |---|---|---|
-| Migrar de `http://IP` para `https://fqdn` quebra clientes que ainda usem o IP | Alto | Nenhum cliente Seialz consome Evolution hoje; a Fase 0 usou um secret temporário que foi revogado. Baixo risco efetivo. |
-| `/manager` exposto durante a janela de configuração | Alto | Aplicar bloqueio no proxy **antes** de publicar o FQDN no DNS público, ou publicar DNS já com regra ativa. |
-| Volume Postgres em `tmpfs` ou path efêmero | Crítico (perde `dev-int`) | Item 2.5: inspecionar antes de qualquer restart. |
-| Renovação Let's Encrypt falha silenciosa | Médio | Monitorar `notAfter` semanalmente; alerta ≤ 14 dias. |
-| Rotação de API key sem redeploy das funções | Alto | Checklist §2.9 exige update do secret + redeploy no mesmo procedimento. |
-| Webhook de status assumido como confiável cedo demais | Médio | Contrato "último estado conhecido" fixado desde já (§2.10). |
-| Dump com senha em texto claro em `/var/backups` | Médio | Backup off-host em bucket com SSE + acesso restrito; permissões 600 no host. |
+| Migrar de `http://IP` para `https://fqdn` quebra clientes | Baixo | Nenhum cliente Seialz consome Evolution hoje. |
+| `/manager` exposto na janela de configuração | Alto | Publicar allowlist no Caddyfile **antes** do DNS. |
+| Perda de sessão SSH ao mexer no firewall | Alto | Sessão paralela obrigatória; regras adicionadas uma a uma; sem `ufw reset`. |
+| Volume Postgres em `tmpfs` | Crítico | §2.5 — inspecionar antes de qualquer restart. |
+| Renovação Let's Encrypt falha | Médio | Alertar sobre `notAfter` semanal. |
+| Rotação de API key sem redeploy | Alto | Checklist §2.9. |
+| Webhook de status assumido como confiável | Médio | Contrato §2.10 fixado. |
+| Credencial de backup em log | Médio | Script sem `-W`/senha CLI; PGPASSWORD só no ambiente do container; permissões 600. |
+| Regra de firewall afetar outra app do host | Alto | Toda regra leva `comment 'evo-phase1'`; rollback filtra por esse comentário. |
+| `crontab -r` acidental | Alto | Cron sempre em `/etc/cron.d/evolution-backup`; nunca no crontab do usuário. |
 
 ---
 
-## 5. Rollback
+## 5. Rollback (granular)
 
-Cada mudança da Fase 1 é reversível de forma independente:
+Cada mudança é revertida sem afetar o resto do host.
 
-- **DNS**: remover o registro A do FQDN. Retorna ao estado "sem
-  domínio". Seialz continua sem consumir Evolution (Fases 3+ não
-  começaram).
-- **Reverse proxy**: `docker compose stop caddy` (ou `systemctl stop
-  caddy`) e reabrir a porta original. Volta a servir HTTP direto.
-- **Firewall**: `ufw reset` para o estado prévio, documentado no
-  snapshot pré-mudança do `ufw status verbose`.
-- **Backup cron**: `crontab -r` da entrada específica.
-- **Secrets Seialz**: nesta fase nada é gravado; nada a reverter.
-- **Rotação de API key**: manter o valor antigo em cofre por 24h
-  para reverter `.env` + `docker compose up -d` se necessário.
+- **DNS**: remover o registro A do FQDN. Estado volta a "sem
+  domínio". Nada mais é tocado.
+- **Caddy**:
+  - `sudo cp /etc/caddy/Caddyfile.evo-phase1.bak /etc/caddy/Caddyfile`
+  - `sudo caddy validate --config /etc/caddy/Caddyfile`
+  - `sudo systemctl reload caddy`
+  - A Evolution **continua atrás do Caddy**. Em nenhum caso o
+    rollback reabre a porta interna da Evolution diretamente à
+    internet.
+- **Firewall**: remover **apenas** as regras marcadas `evo-phase1`
+  (não usar `ufw reset`):
+  ```
+  sudo ufw status numbered
+  # para cada regra listada com 'evo-phase1':
+  sudo ufw --force delete <N>
+  # em último caso, restaurar snapshot iptables:
+  # sudo iptables-restore < /root/iptables.before.<STAMP>.rules
+  ```
+- **Backup cron**: remover **somente** o arquivo dedicado:
+  ```
+  sudo rm /etc/cron.d/evolution-backup
+  sudo rm /usr/local/sbin/evolution-backup.sh
+  ```
+  Nunca `crontab -r`. Nunca editar o crontab de outro usuário.
+- **Secrets Seialz**: nada foi criado nesta fase; a única mudança
+  possível é o `update_secret` de `EVOLUTION_BASE_URL` de volta ao
+  valor anterior (o valor pré-mudança fica registrado em cofre do
+  operador antes do update).
+- **Rotação de API key** (quando aplicada, fora desta fase):
+  manter o valor antigo em cofre por 24h para reverter `.env` +
+  `docker compose up -d` se necessário.
 
-Nenhuma dessas ações afeta `dev-int` desde que o item §2.5 esteja
-confirmado.
-
----
-
-## 6. Bloqueadores para iniciar a Fase 2
-
-Fase 2 (banco/aditivo) só pode começar quando **todos** os itens
-abaixo estiverem verdes:
-
-- [ ] FQDN definido e publicado (`A` no DNS resolve para o IP).
-- [ ] `https://<fqdn>/` responde 200 com JSON `version 2.3.7`,
-      certificado válido, sem `-k`.
-- [ ] `https://<fqdn>/manager` responde 401/403 de um IP fora da
-      allowlist.
-- [ ] `nmap -Pn <fqdn>` mostra apenas 80/443 (+ 22 restrito).
-- [ ] Volumes de Postgres e Redis confirmados como persistentes
-      (paths nomeados, inspeção documentada).
-- [ ] Restart do stack executado e `dev-int` intacta no snapshot
-      pós.
-- [ ] Backup diário rodando, com pelo menos um ensaio de restore
-      documentado.
-- [ ] `EVOLUTION_BASE_URL` e `EVOLUTION_GLOBAL_API_KEY` prontos
-      para serem gravados como Supabase Edge Function Secrets
-      (valores em cofre, ainda não gravados — a gravação abre a
-      Fase 2).
-- [ ] Procedimento de rotação da API key registrado neste
-      documento e aceito pelo owner.
-- [ ] Contrato de status "último estado conhecido" aceito pelo
-      owner como comportamento oficial do MVP.
+Nenhuma ação afeta `dev-int` desde que §2.5 esteja confirmado.
 
 ---
 
-## 7. Checklist objetivo de liberação
+## 6. Gates de liberação — separados
+
+### 6.1 Gate para iniciar a Fase 2 (banco aditivo)
+
+- [ ] Migrations revisadas, **aditivas e não destrutivas**
+      (sem `DROP`, sem alterar tabelas de Meta/Twilio).
+- [ ] Secrets `EVOLUTION_BASE_URL` e `EVOLUTION_GLOBAL_API_KEY`
+      confirmados no cofre (já `[CONFIRMADO]`).
+- [ ] **Nenhum tenant habilitado** para Evolution.
+- [ ] **Nenhuma `messaging_line`** criada ou alterada apontando para
+      Evolution.
+- [ ] **Nenhuma Edge Function produtiva** consumindo Evolution
+      (dispatcher permanece Twilio/Meta only).
+- [ ] Volumes Postgres/Redis confirmados persistentes (§2.5).
+- [ ] Restart do stack testado com `docker compose restart`
+      preservando `dev-int` (§2.6).
+
+Observação: HTTPS/Caddy/firewall **não** são bloqueadores desta
+gate específica, porque a Fase 2 só toca no banco do Seialz e não
+publica Evolution para nenhum tenant. Mas são bloqueadores da Fase
+5 (piloto).
+
+### 6.2 Gate para o piloto Viagi (Fase 5)
+
+- [ ] Domínio HTTPS ativo, certificado válido, redirect 80→443.
+- [ ] `/manager` protegido por allowlist.
+- [ ] Firewall com regras `evo-phase1` aplicadas; portas internas
+      fechadas; `nmap` externo mostra apenas 22 (restrito), 80, 443.
+- [ ] Volumes persistentes confirmados.
+- [ ] Restart do stack testado (§2.6).
+- [ ] Backup diário ativo + cópia off-host verificada.
+- [ ] **Ensaio completo de restore** documentado com data,
+      arquivo usado e resultado (§2.7.1).
+- [ ] Status/health-check: endpoint `/` respondendo 200 e poll de
+      `connectionState` em produção validado.
+- [ ] Rollback operacional validado ao menos uma vez (dry-run do
+      procedimento §5, sem afetar `dev-int`).
+
+---
+
+## 7. Checklist objetivo — Fase 1 fechada
 
 ```
 [  ] DNS A <fqdn> → 216.238.113.44
-[  ] TLS válido (issuer LE, notAfter ≥ +30d)
-[  ] /manager bloqueado publicamente
-[  ] Firewall: 22 restrito, 80/443 abertos, resto fechado
+[  ] TLS válido (issuer LE, notAfter ≥ +30d), redirect 80→443
+[  ] /manager bloqueado por allowlist (403/401 fora dela)
+[  ] Firewall: regras 'evo-phase1' aplicadas; 22 restrito; 80/443 abertos;
+     apps existentes intactas; sem ufw reset
 [  ] Volumes Postgres/Redis persistentes confirmados
-[  ] Restart do stack sem perda de dev-int (evidência anexada)
-[  ] Backup diário ativo + 1 ensaio de restore documentado
-[  ] Secrets prontos para serem gravados na Fase 2
-[  ] Política de rotação da API key registrada
-[  ] "Último estado conhecido" aceito como contrato do MVP
+[  ] docker compose restart sem perda de dev-int (snapshots redigidos anexados)
+[  ] Backup diário via /etc/cron.d/evolution-backup + off-host ativo
+[  ] EVOLUTION_BASE_URL atualizado para HTTPS via update_secret
+     (EVOLUTION_GLOBAL_API_KEY inalterada)
+[  ] Rate limit e limite de body ativos no Caddy; apikey redigido no log
+[  ] Rollback dry-run validado
 ```
 
-Quando os 10 itens estiverem marcados, este documento deve ser
-atualizado com data, autor da verificação e evidências (saídas de
-comando redigidas). Só então a Fase 2 pode ser aberta.
+HSTS e ensaio completo de restore ficam no checklist do piloto
+(§6.2), não deste.
 
 ---
 
@@ -339,3 +463,202 @@ comando redigidas). Só então a Fase 2 pode ser aberta.
 - Piloto Viagi.
 - Qualquer alteração em Meta, Twilio, `messaging_lines`,
   `communication_endpoints` ou na instância `dev-int`.
+
+---
+
+## 9. Caddyfile proposto
+
+Sintaxe real de Caddy v2. **Não usa `location`** (isso é Nginx).
+Antes de qualquer reload:
+
+```
+sudo cp /etc/caddy/Caddyfile /etc/caddy/Caddyfile.evo-phase1.bak
+sudo tee /etc/caddy/Caddyfile.evo-phase1 > /dev/null <<'CADDY'
+# ... conteúdo abaixo ...
+CADDY
+sudo caddy validate --config /etc/caddy/Caddyfile.evo-phase1
+# só depois:
+sudo cp /etc/caddy/Caddyfile.evo-phase1 /etc/caddy/Caddyfile
+sudo systemctl reload caddy
+```
+
+Conteúdo proposto (substituir `<FQDN>`, `<ADMIN_CIDR_1>`,
+`<ADMIN_CIDR_2>` e a porta interna real da Evolution, hoje servida
+localmente pelo container; ajustar `127.0.0.1:8080` para a porta
+efetiva descoberta em §2.4):
+
+```caddyfile
+{
+    # Global options
+    email ops@seialz.com
+    servers {
+        # Não confiar em X-Forwarded-* de origem desconhecida.
+        trusted_proxies static private_ranges
+    }
+}
+
+# Redirect explícito HTTP → HTTPS (Caddy já faz por padrão, mas
+# deixamos explícito para clareza operacional).
+http://<FQDN> {
+    redir https://<FQDN>{uri} permanent
+}
+
+<FQDN> {
+    encode zstd gzip
+
+    # ---- Access log com apikey redigido ----
+    log {
+        output file /var/log/caddy/evolution.access.log {
+            roll_size 50MiB
+            roll_keep 10
+        }
+        format json
+        # Remove o header sensível antes de qualquer serialização.
+        # (Caddy não loga request headers por padrão no formato json
+        # base; esta diretiva garante que, se um plugin/log custom
+        # tentar incluir, o valor venha vazio.)
+    }
+    request_header -apikey
+    # Reinsere internamente para o upstream — o header original é
+    # preservado para a app; apenas o log não o vê.
+    # (Ver nota operacional §9.1.)
+
+    # ---- Limite de body ----
+    request_body {
+        max_size 20MB
+    }
+
+    # ---- Rate limiting ----
+    # Requer plugin caddy-ratelimit compilado no binário.
+    # Se ainda não estiver, instalar com xcaddy antes do reload.
+    rate_limit {
+        zone evo_admin {
+            key    {remote_host}
+            events 30
+            window 1m
+            match {
+                path /instance/* /webhook/* /manager*
+            }
+        }
+        zone evo_msg {
+            key    {remote_host}
+            events 600
+            window 1m
+            match {
+                path /message/* /chat/*
+            }
+        }
+    }
+
+    # ---- /manager: allowlist administrativa ----
+    @manager path /manager /manager/*
+    @not_admin {
+        not remote_ip <ADMIN_CIDR_1> <ADMIN_CIDR_2>
+    }
+    handle @manager {
+        @deny {
+            expression `{http.request.remote.host} != ""`
+        }
+        # Nega tudo que não esteja na allowlist.
+        route {
+            @allowed remote_ip <ADMIN_CIDR_1> <ADMIN_CIDR_2>
+            handle @allowed {
+                reverse_proxy 127.0.0.1:8080
+            }
+            respond 403
+        }
+    }
+
+    # ---- API pública mínima necessária ----
+    @api path /  /instance/* /message/* /webhook/* /chat/*
+    handle @api {
+        reverse_proxy 127.0.0.1:8080 {
+            header_up Host {host}
+            header_up X-Forwarded-For {remote_host}
+            header_up X-Forwarded-Proto {scheme}
+        }
+    }
+
+    # Qualquer outro path: 404 explícito (não vaza estrutura interna).
+    handle {
+        respond 404
+    }
+}
+```
+
+### 9.1 Nota operacional sobre `request_header -apikey`
+
+A diretiva `request_header -apikey` do bloco acima remove o header
+`apikey` **da requisição encaminhada ao upstream**, o que quebraria
+a autenticação. **Não aplicar essa linha como está.** A forma
+correta, dependendo da versão do Caddy, é:
+
+- Preferida: configurar o formatador do access log para não
+  serializar headers de request (comportamento padrão do
+  `format json` do Caddy — nenhum header vai ao log a menos que
+  explicitamente pedido). Neste caso, a linha
+  `request_header -apikey` deve ser **removida** do Caddyfile
+  antes do `caddy validate`.
+- Alternativa (se um plugin de log custom for adicionado no
+  futuro): usar `log_skip` ou máscara específica de header no
+  formatador, nunca remover o header da requisição.
+
+Este documento deixa a linha marcada acima para tornar explícita a
+decisão. O procedimento de aplicação **remove essa linha** antes de
+rodar `caddy validate`.
+
+---
+
+## 10. Comandos seguros (ainda não executados)
+
+Todos rodam no host Vultr como root, na ordem indicada, com sessão
+SSH paralela aberta.
+
+```
+# --- Snapshots pré-mudança ---
+sudo cp /etc/caddy/Caddyfile /etc/caddy/Caddyfile.evo-phase1.bak
+sudo ufw status numbered > /root/ufw.before.$(date +%F-%H%M).txt
+sudo iptables-save        > /root/iptables.before.$(date +%F-%H%M).rules
+
+# --- Firewall (regras marcadas para rollback granular) ---
+sudo ufw allow from <ADMIN_CIDR> to any port 22 proto tcp comment 'evo-phase1 ssh admin'
+sudo ufw allow 80/tcp  comment 'evo-phase1 http'
+sudo ufw allow 443/tcp comment 'evo-phase1 https'
+
+# --- Caddy ---
+sudo install -m 0644 /tmp/Caddyfile.evo-phase1 /etc/caddy/Caddyfile.evo-phase1
+sudo caddy validate --config /etc/caddy/Caddyfile.evo-phase1
+sudo cp /etc/caddy/Caddyfile.evo-phase1 /etc/caddy/Caddyfile
+sudo systemctl reload caddy
+
+# --- Backup: instalar script e cron ---
+sudo install -m 0700 -o root -g root /tmp/evolution-backup.sh /usr/local/sbin/evolution-backup.sh
+sudo install -m 0644 -o root -g root /tmp/evolution-backup.cron /etc/cron.d/evolution-backup
+
+# --- Verificação de persistência ---
+curl -sSf https://<FQDN>/ | jq '{version, clientName}'
+curl -sS -H "apikey: $EVOLUTION_GLOBAL_API_KEY" https://<FQDN>/instance/fetchInstances \
+  | jq '[.[] | {name, id, integration, connectionStatus, hasToken:(.token!=null)}]' \
+  > /root/evo-pre.$(date +%F-%H%M).json
+sudo docker compose -f /opt/evolution/docker-compose.yml restart
+until curl -sSf https://<FQDN>/ > /dev/null; do sleep 2; done
+curl -sS -H "apikey: $EVOLUTION_GLOBAL_API_KEY" https://<FQDN>/instance/fetchInstances \
+  | jq '[.[] | {name, id, integration, connectionStatus, hasToken:(.token!=null)}]' \
+  > /root/evo-pos.$(date +%F-%H%M).json
+diff <(jq -S . /root/evo-pre.*.json) <(jq -S . /root/evo-pos.*.json) || true
+```
+
+Nenhum dos comandos acima foi executado.
+
+---
+
+## 11. Confirmação de secrets (sem exibir valores)
+
+- `EVOLUTION_BASE_URL` — presente. **[CONFIRMADO]** via
+  `fetch_secrets` em 2026-07-20.
+- `EVOLUTION_GLOBAL_API_KEY` — presente. **[CONFIRMADO]** via
+  `fetch_secrets` em 2026-07-20.
+
+Nenhuma duplicata será criada. A `EVOLUTION_GLOBAL_API_KEY` não
+será excluída nesta fase. O `EVOLUTION_BASE_URL` só é atualizado
+via `update_secret` **depois** que o HTTPS estiver validado (§2.1).
