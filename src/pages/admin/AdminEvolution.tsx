@@ -203,10 +203,10 @@ function CreateInstanceCard() {
       <CardHeader>
         <CardTitle className="text-base font-medium">Criar instância</CardTitle>
         <CardDescription>
-          Fase 4: cria a instância remota no servidor Evolution. Ainda não cria
-          <span className="font-mono"> communication_endpoints</span> nem
-          <span className="font-mono"> evolution_instances</span> automaticamente
-          (isso é feito na Fase 5, protegido pela feature flag).
+          Provisiona uma nova instância no servidor Evolution. O vínculo com
+          <span className="font-mono"> communication_endpoints</span> e
+          <span className="font-mono"> evolution_instances</span> é feito
+          manualmente pela equipe Seialz durante o onboarding do tenant.
         </CardDescription>
       </CardHeader>
       <CardContent className="flex flex-col sm:flex-row gap-2 items-end">
