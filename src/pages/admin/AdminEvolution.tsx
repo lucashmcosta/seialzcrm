@@ -25,10 +25,10 @@ import {
 } from "@/hooks/useEvolutionInstances";
 import { WarningCircle, Plug, PlugsConnected, ArrowsClockwise, Trash, QrCode, SpinnerGap, Broadcast } from "@phosphor-icons/react";
 
-// Fase 4 — Admin UI do provider Evolution API.
-// A UI é apenas administrativa. Enquanto `evolution_api_enabled` estiver
-// desligada (default), toda operação retorna FEATURE_DISABLED e a UI
-// exibe esse estado. Nenhum tenant é ativado por esta tela.
+// Admin — Evolution API (Production Ready).
+// Superfície reservada à equipe Seialz para provisionar e monitorar
+// instâncias Evolution. Tenants conectam o WhatsApp pela tela de
+// Configurações → Integrações → Evolution WhatsApp (dialog do tenant).
 
 function StateBadge({ state }: { state: EvolutionConnectionState | null }) {
   const s = state ?? "unknown";
