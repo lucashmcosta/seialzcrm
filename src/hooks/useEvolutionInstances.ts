@@ -29,6 +29,8 @@ export interface EndpointLite {
 }
 
 // ---- Query: list instances (admin scope) ----
+// Auto-refresh a cada 5s para refletir atualizações vindas pelo webhook
+// (last_known_state, last_qr_expires_at) sem intervenção manual.
 export function useEvolutionInstances() {
   return useQuery({
     queryKey: ["evolution", "instances"],
@@ -40,6 +42,8 @@ export function useEvolutionInstances() {
       if (error) throw error;
       return (data ?? []) as EvolutionInstanceRow[];
     },
+    refetchInterval: 5000,
+    refetchOnWindowFocus: true,
   });
 }
 
@@ -151,17 +155,15 @@ export function useConnectionState() {
 
 export function useWebhookSet() {
   return useMutation({
-    mutationFn: (args: {
-      instanceName: string;
-      url: string;
-      events?: string[];
-    }) =>
-      callManager<{ ok: true }>({
+    mutationFn: (args: { instanceName: string; events?: string[] }) =>
+      callManager<{ ok: true; events: string[] }>({
         op: "webhookSet",
         instanceName: args.instanceName,
+        // A URL do webhook é construída no servidor com o secret injetado;
+        // o frontend nunca vê nem transmite o secret.
         webhook: {
           enabled: true,
-          url: args.url,
+          url: "server-managed",
           events: args.events ?? [
             "CONNECTION_UPDATE",
             "QRCODE_UPDATED",
