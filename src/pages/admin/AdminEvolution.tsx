@@ -95,10 +95,10 @@ function InstanceRow({ instance }: { instance: EvolutionInstanceRow }) {
   };
 
   const onWebhook = async () => {
-    const url = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/evolution-webhook`;
     try {
-      await webhook.mutateAsync({ instanceName: instance.instance_name, url });
-      toast({ title: "Webhook atualizado", description: url });
+      // A URL do webhook (com o secret) é construída no servidor.
+      await webhook.mutateAsync({ instanceName: instance.instance_name });
+      toast({ title: "Webhook atualizado", description: "URL registrada no servidor Evolution." });
     } catch (e) {
       toast({ title: "Erro", description: (e as Error).message, variant: "destructive" });
     }
