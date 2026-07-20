@@ -419,7 +419,9 @@ export async function dispatchWhatsAppSend(payload: WhatsAppSendPayload) {
 
   const fnName = resolved.provider === "meta_cloud_api"
     ? "meta-whatsapp-send"
-    : "twilio-whatsapp-send";
+    : resolved.provider === "evolution_api"
+      ? "evolution-whatsapp-send"
+      : "twilio-whatsapp-send";
 
   // Compliance defense-in-depth: bloqueia templates proibidos por endpoint
   // (regra LOW hardcoded — ver src/lib/complianceGuards.ts). Aplica-se ao
