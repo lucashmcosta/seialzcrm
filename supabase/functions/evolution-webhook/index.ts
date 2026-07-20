@@ -1,10 +1,13 @@
 // Edge Function: evolution-webhook
-// Fase 3 — Backend aditivo (INERTE em produção).
+// Fase 4 — Backend aditivo (INERTE em produção).
 //
 // Recebe webhooks do servidor Evolution API. Nesta fase:
-//   • Autentica a origem por token compartilhado no header ou querystring.
+//   • Autentica a origem EXCLUSIVAMENTE por `EVOLUTION_WEBHOOK_SECRET`
+//     (secret independente, NUNCA reutiliza `EVOLUTION_GLOBAL_API_KEY`).
+//   • Aplica rate limiting básico por IP.
 //   • Valida estrutura mínima do envelope.
-//   • Registra idempotência lógica (chave = instance + event + id).
+//   • Deduplica em memória (Fase 5 migrará para persistência em banco —
+//     ver bloco "PREP: Idempotência persistente" abaixo).
 //   • NÃO grava mensagens, contatos, threads, endpoints ou instâncias.
 //   • Enquanto `evolution_api_enabled` estiver desligada (global e por org),
 //     responde 202 imediatamente e não executa nada além de log informativo.
@@ -16,6 +19,7 @@ import { createClient } from "npm:@supabase/supabase-js@2";
 import { corsHeaders } from "../_shared/cors.ts";
 import { featureFlagEnabled } from "../_shared/feature-flags.ts";
 import { logEvolution, newRequestId } from "../_shared/evolution/logger.ts";
+import { callerKey, rateLimit } from "../_shared/evolution/rate-limit.ts";
 import {
   EVOLUTION_WEBHOOK_CONTRACT_VERSION,
   EvolutionWebhookEnvelope,
@@ -24,14 +28,26 @@ import {
 const FN = "evolution-webhook" as const;
 const FLAG = "evolution_api_enabled";
 
-// Idempotência em memória do isolate. Fase 3 não persiste em tabela para não
-// introduzir dependência de schema adicional. TTL 5 minutos.
+// ---- Rate limit ----
+// 120 requisições / 60s por IP. Suficiente para bursts legítimos do
+// servidor Evolution; corta floods triviais sem alterar comportamento.
+const RL_LIMIT = 120;
+const RL_WINDOW_MS = 60_000;
+
+// ---- Idempotência (Fase 4: memória) ----
+// PREP: Idempotência persistente (Fase 5)
+// ---------------------------------------
+// Na próxima fase, quando o consumo real do webhook for ligado, esta
+// verificação deve ser substituída por uma inserção em
+// `public.integration_inbound_events` (tabela já existente) com uma
+// UNIQUE constraint sobre (provider, event_key). Conflito = duplicata.
+// O contrato da `idempotencyKey()` abaixo já produz a chave estável que
+// será persistida. Nada mais precisa mudar no restante do handler.
 const IDEMP_TTL_MS = 5 * 60_000;
 const idempotency = new Map<string, number>();
 
 function seenRecently(key: string): boolean {
   const now = Date.now();
-  // GC oportunístico
   if (idempotency.size > 5000) {
     for (const [k, t] of idempotency) {
       if (t < now - IDEMP_TTL_MS) idempotency.delete(k);
@@ -50,14 +66,13 @@ const KNOWN_EVENTS = new Set([
   "MESSAGES_UPDATE",
 ]);
 
-function json(status: number, body: Record<string, unknown>): Response {
+function json(status: number, body: Record<string, unknown>, extra?: HeadersInit): Response {
   return new Response(JSON.stringify(body), {
     status,
-    headers: { ...corsHeaders, "content-type": "application/json" },
+    headers: { ...corsHeaders, "content-type": "application/json", ...(extra ?? {}) },
   });
 }
 
-// Comparação em tempo constante para o token compartilhado.
 function safeEqual(a: string, b: string): boolean {
   if (a.length !== b.length) return false;
   let diff = 0;
@@ -66,11 +81,12 @@ function safeEqual(a: string, b: string): boolean {
 }
 
 function extractInboundToken(req: Request): string | null {
-  // Prioridade: header customizado > apikey (contrato Evolution) > querystring.
-  const h1 = req.headers.get("x-evolution-token");
+  const h1 = req.headers.get("x-evolution-webhook-secret");
   if (h1) return h1;
-  const h2 = req.headers.get("apikey");
+  const h2 = req.headers.get("x-evolution-token");
   if (h2) return h2;
+  const h3 = req.headers.get("apikey");
+  if (h3) return h3;
   try {
     const url = new URL(req.url);
     const q = url.searchParams.get("token");
@@ -103,17 +119,23 @@ serve(async (req) => {
 
   const requestId = newRequestId();
 
-  // ---- 1. Auth (token compartilhado) ----
-  // O token é o mesmo `EVOLUTION_GLOBAL_API_KEY` que a instância remota
-  // envia no header `apikey` ao chamar seu próprio webhook. Nesta fase,
-  // exigimos que ele esteja configurado e seja apresentado.
-  const expected = Deno.env.get("EVOLUTION_GLOBAL_API_KEY");
+  // ---- 0. Rate limit ----
+  const rl = rateLimit(callerKey(req, "evo-wh"), RL_LIMIT, RL_WINDOW_MS);
+  if (!rl.allowed) {
+    logEvolution("warn", { fn: FN, requestId, code: "RATE_LIMITED" });
+    return json(429, { error: "RATE_LIMITED" }, {
+      "retry-after": String(rl.retryAfterSec),
+    });
+  }
+
+  // ---- 1. Auth (secret exclusivo do webhook) ----
+  const expected = Deno.env.get("EVOLUTION_WEBHOOK_SECRET");
   if (!expected) {
     logEvolution("error", {
       fn: FN,
       requestId,
       code: "MISSING_SECRET",
-      message: "EVOLUTION_GLOBAL_API_KEY not set",
+      message: "EVOLUTION_WEBHOOK_SECRET not set",
     });
     return json(503, { error: "MISSING_SECRET" });
   }
@@ -140,7 +162,7 @@ serve(async (req) => {
     : null;
   const knownEvent = event ? KNOWN_EVENTS.has(event.toUpperCase()) : false;
 
-  // ---- 3. Idempotência ----
+  // ---- 3. Idempotência (memória; Fase 5 → banco) ----
   const idKey = idempotencyKey(envelope);
   if (seenRecently(idKey)) {
     logEvolution("info", {
@@ -158,13 +180,10 @@ serve(async (req) => {
   }
 
   // ---- 4. Feature flag (BLOQUEADORA nesta fase) ----
-  // Sem tocar em contatos/threads/mensagens. Log informativo e 202.
   const service = createClient(
     Deno.env.get("SUPABASE_URL")!,
     Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!,
   );
-  // Nesta fase avaliamos apenas o gate global. Mapeamento
-  // instance→organization_id será feito na Fase 4/5.
   const enabled = await featureFlagEnabled(service, FLAG, null);
   if (!enabled) {
     logEvolution("info", {
@@ -184,10 +203,6 @@ serve(async (req) => {
   }
 
   // ---- 5. Feature ligada: mesmo assim NÃO grava nada nesta fase ----
-  // O consumo real de webhook (persistir mensagens, atualizar
-  // connection_state em `evolution_instances`, etc.) fica para a Fase 4.
-  // Aqui apenas registramos que o evento foi visto e (se aplicável) que
-  // seu formato é conhecido.
   logEvolution("info", {
     fn: FN,
     requestId,
