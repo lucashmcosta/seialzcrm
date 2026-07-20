@@ -151,17 +151,15 @@ export function useConnectionState() {
 
 export function useWebhookSet() {
   return useMutation({
-    mutationFn: (args: {
-      instanceName: string;
-      url: string;
-      events?: string[];
-    }) =>
-      callManager<{ ok: true }>({
+    mutationFn: (args: { instanceName: string; events?: string[] }) =>
+      callManager<{ ok: true; events: string[] }>({
         op: "webhookSet",
         instanceName: args.instanceName,
+        // A URL do webhook é construída no servidor com o secret injetado;
+        // o frontend nunca vê nem transmite o secret.
         webhook: {
           enabled: true,
-          url: args.url,
+          url: "server-managed",
           events: args.events ?? [
             "CONNECTION_UPDATE",
             "QRCODE_UPDATED",
