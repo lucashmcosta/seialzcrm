@@ -27,9 +27,14 @@ import {
 import { readEvolutionEnv } from "../_shared/evolution/client.ts";
 import { makeEvolutionProvider } from "../_shared/evolution/provider.ts";
 import { logEvolution, newRequestId } from "../_shared/evolution/logger.ts";
+import { callerKey, rateLimit } from "../_shared/evolution/rate-limit.ts";
 
 const FN = "evolution-instance-manager" as const;
 const FLAG = "evolution_api_enabled";
+
+// Rate limit: 30 operações administrativas / 60s por IP.
+const RL_LIMIT = 30;
+const RL_WINDOW_MS = 60_000;
 
 // Regex conservador para nomes de instância — evita path injection.
 // Aceita apenas [a-zA-Z0-9_-], comprimento 3..64.
