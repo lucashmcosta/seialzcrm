@@ -120,6 +120,21 @@ serve(async (req) => {
 
   const requestId = newRequestId();
 
+  // ---- 0. Rate limit ----
+  const rl = rateLimit(callerKey(req, "evo-mgr"), RL_LIMIT, RL_WINDOW_MS);
+  if (!rl.allowed) {
+    logEvolution("warn", { fn: FN, requestId, code: "RATE_LIMITED" });
+    return new Response(JSON.stringify({ error: "RATE_LIMITED" }), {
+      status: 429,
+      headers: {
+        ...corsHeaders,
+        "content-type": "application/json",
+        "retry-after": String(rl.retryAfterSec),
+      },
+    });
+  }
+
+
   // ---- 1. Auth: JWT obrigatório ----
   const authHeader = req.headers.get("Authorization") ?? "";
   if (!authHeader.startsWith("Bearer ")) {
