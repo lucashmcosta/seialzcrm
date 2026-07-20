@@ -166,23 +166,44 @@ serve(async (req) => {
     return json(400, { error: "INVALID_INPUT", message: "missing op" });
   }
 
-  const orgId = typeof body.organizationId === "string"
+  const orgIdBody = typeof body.organizationId === "string"
     ? body.organizationId
     : null;
 
   // ---- 3. Feature flag (BLOQUEADORA nesta fase) ----
-  // Nenhuma operação executa enquanto a flag estiver desligada.
+  // Resolvemos a organização pela `instance_name` quando possível, para que
+  // a UI admin não precise conhecer/enviar o org_id. Se a instância não
+  // existir ainda em `evolution_instances`, caímos no body.organizationId.
   const service = createClient(
     Deno.env.get("SUPABASE_URL")!,
     Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!,
   );
-  const enabled = await featureFlagEnabled(service, FLAG, orgId);
+
+  let resolvedOrgId: string | null = orgIdBody;
+  let instanceRow: {
+    id: string;
+    organization_id: string;
+    endpoint_id: string;
+  } | null = null;
+  if (typeof body.instanceName === "string" && body.instanceName.length > 0) {
+    const { data } = await service
+      .from("evolution_instances")
+      .select("id,organization_id,endpoint_id")
+      .eq("instance_name", body.instanceName)
+      .maybeSingle();
+    if (data) {
+      instanceRow = data as typeof instanceRow;
+      resolvedOrgId = instanceRow!.organization_id;
+    }
+  }
+
+  const enabled = await featureFlagEnabled(service, FLAG, resolvedOrgId);
   if (!enabled) {
     logEvolution("info", {
       fn: FN,
       op: body.op,
       requestId,
-      orgId,
+      orgId: resolvedOrgId,
       code: "FEATURE_DISABLED",
       message: "evolution_api_enabled is off — no-op",
     });
