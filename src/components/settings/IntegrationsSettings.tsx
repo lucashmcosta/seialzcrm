@@ -24,6 +24,7 @@ import { MetaLeadAdsDialog } from '@/components/integrations/meta-lead-ads/MetaL
 import { MetaCapiDialog } from '@/components/integrations/meta-capi/MetaCapiDialog';
 import { NammuxDialog } from '@/components/integrations/nammux/NammuxDialog';
 import { MetaWhatsAppCloudDialog } from '@/components/integrations/meta-whatsapp-cloud/MetaWhatsAppCloudDialog';
+import { EvolutionWhatsAppDialog } from '@/components/integrations/evolution-whatsapp/EvolutionWhatsAppDialog';
 import { AIProviderCard } from './AIProviderCard';
 import { useAIProviders } from '@/hooks/useAIProviders';
 import { usePermissions } from '@/hooks/usePermissions';
