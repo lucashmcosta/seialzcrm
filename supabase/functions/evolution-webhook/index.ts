@@ -534,12 +534,16 @@ async function findOrCreateThread(
       .eq("id", migratable.id);
     if (!updErr) {
       logEvolution("info", {
-        fn: "findOrCreateThread",
+        fn: "evolution-webhook",
+        op: "findOrCreateThread",
         code: "THREAD_PROVIDER_MIGRATED",
         message: "reused existing whatsapp thread; migrated primary_endpoint_id",
-        threadId: migratable.id,
-        previousEndpointId: prevEndpoint,
-        newEndpointId: endpointId,
+        orgId: organizationId,
+        ctx: {
+          threadId: migratable.id,
+          previousEndpointId: prevEndpoint,
+          newEndpointId: endpointId,
+        },
       });
     }
     return migratable.id;
