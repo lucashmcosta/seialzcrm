@@ -159,21 +159,10 @@ serve(async (req) => {
   });
 
   // ---------------------------------------------------------------------
-  // Flip primary → target (para permitir envio; rollback em caso de falha)
-  // ---------------------------------------------------------------------
-  if (!isNoop) {
-    const { error: upErr } = await supabase
-      .from("message_threads")
-      .update({ primary_endpoint_id: targetEndpointId, updated_at: new Date().toISOString() })
-      .eq("id", threadId)
-      .eq("organization_id", organizationId);
-    if (upErr) {
-      return json(500, { error: "thread_primary_update_failed", details: upErr.message });
-    }
-  }
-
-  // ---------------------------------------------------------------------
-  // Envio via evolution-whatsapp-send
+  // STEP 1: SEND FIRST via evolution-whatsapp-send.
+  // We pass allowExplicitEndpointMigration=true so the sender honors the
+  // target endpoint without falling back to thread.primary_endpoint_id.
+  // NOTHING is written to message_threads before we confirm the send.
   // ---------------------------------------------------------------------
   let sendOk = false;
   let sendJson: any = null;
@@ -194,6 +183,7 @@ serve(async (req) => {
         replyToMessageId: replyToMessageId ?? undefined,
         endpointId: targetEndpointId,
         senderContext: "messages",
+        allowExplicitEndpointMigration: true,
       }),
     });
     sendStatus = res.status;
@@ -205,20 +195,12 @@ serve(async (req) => {
   }
 
   if (!sendOk) {
-    // Rollback do primary
-    if (!isNoop) {
-      await supabase
-        .from("message_threads")
-        .update({ primary_endpoint_id: originalPrimaryId, updated_at: new Date().toISOString() })
-        .eq("id", threadId)
-        .eq("organization_id", organizationId);
-      console.warn(`[${FN}] send failed, primary rolled back`, {
-        threadId,
-        restored: originalPrimaryId,
-        sendStatus,
-        sendError: sendJson?.error,
-      });
-    }
+    console.warn(`[${FN}] send failed — thread untouched`, {
+      threadId,
+      sendStatus,
+      sendError: sendJson?.error,
+    });
+    // Fail fast. NO UPDATE to message_threads. NO note inserted.
     return json(sendStatus && sendStatus >= 400 ? sendStatus : 502, {
       error: sendJson?.error || "send_failed",
       message: sendJson?.message || sendJson?.details || `HTTP ${sendStatus}`,
@@ -227,10 +209,33 @@ serve(async (req) => {
   }
 
   // ---------------------------------------------------------------------
-  // Nota interna idempotente
+  // STEP 2: Send confirmed OK. Now (and only now) migrate the thread and
+  // insert the system note. Both operations are idempotent so repeated
+  // invocations converge to the same terminal state.
   // ---------------------------------------------------------------------
   let noteInserted = false;
   if (!isNoop) {
+    const { error: upErr } = await supabase
+      .from("message_threads")
+      .update({ primary_endpoint_id: targetEndpointId, updated_at: new Date().toISOString() })
+      .eq("id", threadId)
+      .eq("organization_id", organizationId);
+    if (upErr) {
+      // Send already went out; surface the update failure but do NOT retry send.
+      console.error(`[${FN}] send ok but thread update failed`, {
+        threadId,
+        error: upErr.message,
+        messageId: sendJson?.messageId,
+      });
+      return json(500, {
+        error: "thread_primary_update_failed",
+        message: upErr.message,
+        migrated: false,
+        messageId: sendJson?.messageId,
+      });
+    }
+
+    // Idempotent note lookup: (thread, from, to) → single note.
     const { data: existingNote } = await supabase
       .from("messages")
       .select("id")
