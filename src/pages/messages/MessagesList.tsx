@@ -2313,16 +2313,31 @@ function DesktopMessagesList() {
                                   >
                                     <FileText className="h-5 w-5" />
                                   </Button>
-                                  {canBypassWindow && (
-                                    <button
-                                      type="button"
-                                      onClick={() => setBypassWindow(true)}
-                                      title={locale === 'pt-BR' ? 'Este número (Evolution) não exige template — digitar livre' : 'This number (Evolution) does not require a template'}
-                                      className="self-center text-[10px] text-muted-foreground/70 hover:text-foreground underline underline-offset-2 px-1"
-                                    >
-                                      {locale === 'pt-BR' ? 'digitar livre' : 'type free'}
-                                    </button>
-                                  )}
+                                  {canBypassWindow && (() => {
+                                    const targetNum = composerIsEvolution
+                                      ? (composerEndpoint as any)?.external_address
+                                      : (evolutionEndpoint as any)?.external_address;
+                                    const label = composerIsEvolution
+                                      ? (locale === 'pt-BR' ? 'digitar livre' : 'type free')
+                                      : (locale === 'pt-BR'
+                                          ? `digitar livre pelo ${targetNum ?? 'Evolution'}`
+                                          : `type free via ${targetNum ?? 'Evolution'}`);
+                                    const tip = composerIsEvolution
+                                      ? (locale === 'pt-BR' ? 'Este número (Evolution) não exige template — digitar livre' : 'This number (Evolution) does not require a template')
+                                      : (locale === 'pt-BR'
+                                          ? `A mensagem sairá pelo número Evolution ${targetNum ?? ''} (sem template)`
+                                          : `Message will be sent via Evolution number ${targetNum ?? ''} (no template)`);
+                                    return (
+                                      <button
+                                        type="button"
+                                        onClick={handleBypassWindow}
+                                        title={tip}
+                                        className="self-center text-[10px] text-muted-foreground/70 hover:text-foreground underline underline-offset-2 px-1"
+                                      >
+                                        {label}
+                                      </button>
+                                    );
+                                  })()}
                                 </>
                               ) : (
                                 <>
