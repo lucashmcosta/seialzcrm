@@ -1179,6 +1179,153 @@ async function ingestInboundMessage(
 }
 
 // ---------------------------------------------------------------------------
+// Ingest outbound eco (MESSAGES_UPSERT com fromMe=true)
+// ---------------------------------------------------------------------------
+// Mensagens enviadas pelo próprio operador — seja pelo celular pareado à
+// instância Evolution, seja pelo CRM (via evolution-whatsapp-send). O
+// segundo caso é dedupado pelo whatsapp_message_sid já persistido.
+async function ingestOutboundEchoMessage(
+  service: SupabaseClient,
+  ctx: InstanceContext,
+  envelope: EvolutionWebhookEnvelope,
+  parsed: ParsedMessage,
+): Promise<{ messageId: string | null; threadId: string | null; error: string | null; echo?: boolean }> {
+  const toE164 = jidToE164(parsed.remoteJid);
+  if (!toE164) {
+    return { messageId: null, threadId: null, error: "skipped_group_or_broadcast" };
+  }
+
+  // 1) Dedup absoluta por wamid — cobre eco de envio pelo CRM.
+  const { data: existingMsg } = await service
+    .from("messages")
+    .select("id, thread_id")
+    .eq("organization_id", ctx.organizationId)
+    .eq("whatsapp_message_sid", parsed.waMessageId)
+    .maybeSingle();
+  if (existingMsg) {
+    return {
+      messageId: (existingMsg as any).id,
+      threadId: (existingMsg as any).thread_id ?? null,
+      error: null,
+      echo: true,
+    };
+  }
+
+  // 2) Inbound settings (para respeitar auto_create_contact).
+  const { settings } = await resolveInboundSettings(service, ctx.endpointId);
+
+  // 3) Contato (destinatário da mensagem).
+  const { contactId, contactOwnerId: _owner, created: _created } = await findOrCreateContact(
+    service, ctx.organizationId, toE164, "", settings,
+  );
+  if (!contactId) {
+    return { messageId: null, threadId: null, error: "no_contact" };
+  }
+
+  // 4) Thread — mesma lógica de reuso do inbound.
+  const sentAtIso = new Date(parsed.timestampMs).toISOString();
+  const threadId = await findOrCreateThread(
+    service, ctx.organizationId, contactId, ctx.endpointId, sentAtIso,
+  );
+  if (!threadId) {
+    return { messageId: null, threadId: null, error: "no_thread_id" };
+  }
+
+  // 5) Mídia (best-effort, mesmo bucket/prefixo do inbound).
+  let mediaUrls: string[] | null = null;
+  const mediaInfo: Record<string, unknown> = {};
+  if (parsed.mediaKind) {
+    mediaInfo.media_kind = parsed.mediaKind;
+    mediaInfo.mime_type = parsed.mediaMime;
+    mediaInfo.file_name = parsed.mediaFileName;
+    mediaInfo.caption = parsed.mediaCaption;
+    try {
+      const dl = await downloadEvolutionMedia(
+        (envelope.instance as string), envelope.data,
+      );
+      if (dl) {
+        const mime = dl.mimetype || parsed.mediaMime || "application/octet-stream";
+        const bytes = base64ToBytes(dl.base64);
+        const ext = extFromMime(mime);
+        const path = `${ctx.organizationId}/evolution-inbound/${parsed.waMessageId}.${ext}`;
+        const { error: upErr } = await service.storage
+          .from("whatsapp-media")
+          .upload(path, bytes, { contentType: mime, upsert: true });
+        if (!upErr) {
+          const { data: pub } = service.storage.from("whatsapp-media").getPublicUrl(path);
+          if (pub?.publicUrl) mediaUrls = [pub.publicUrl];
+          mediaInfo.storage_path = path;
+          mediaInfo.mime_type = mime;
+        } else {
+          mediaInfo.media_upload_error = upErr.message;
+        }
+      } else {
+        mediaInfo.media_download_error = "download_failed";
+      }
+    } catch (e) {
+      mediaInfo.media_download_error = (e as Error).message;
+    }
+  }
+
+  // 6) Reply-to.
+  const replyToId = await resolveReplyToMessageId(service, ctx.organizationId, parsed.quotedId);
+
+  // 7) Insert outbound.
+  const { data: inserted, error: insErr } = await service
+    .from("messages")
+    .insert({
+      organization_id: ctx.organizationId,
+      thread_id: threadId,
+      content: parsed.content,
+      direction: "outbound",
+      whatsapp_message_sid: parsed.waMessageId,
+      whatsapp_status: "sent",
+      endpoint_id: ctx.endpointId,
+      sender_type: "agent",
+      sender_name: parsed.pushName ?? null,
+      media_urls: mediaUrls,
+      media_type: parsed.mediaKind,
+      reply_to_message_id: replyToId,
+      sent_at: sentAtIso,
+      metadata: {
+        evolution: {
+          ...mediaInfo,
+          from_me: true,
+          origin: "device",
+          push_name: parsed.pushName,
+          remote_jid: parsed.remoteJid,
+          participant_jid: parsed.participantJid,
+          raw: parsed.rawMessage,
+        },
+        ...(parsed.richMessage ? { rich_message: parsed.richMessage } : {}),
+      },
+    })
+    .select("id")
+    .single();
+
+  if (insErr) {
+    if ((insErr as { code?: string }).code === "23505") {
+      const { data: raced } = await service
+        .from("messages").select("id")
+        .eq("organization_id", ctx.organizationId)
+        .eq("whatsapp_message_sid", parsed.waMessageId)
+        .maybeSingle();
+      return { messageId: (raced as any)?.id ?? null, threadId, error: null, echo: true };
+    }
+    return { messageId: null, threadId, error: `message_insert:${insErr.message}` };
+  }
+  const messageId = (inserted as { id: string }).id;
+
+  // 8) Bump thread updated_at só — NÃO tocar last_inbound_at.
+  await service.from("message_threads").update({
+    updated_at: new Date().toISOString(),
+  }).eq("id", threadId);
+
+  // Sem notify / activity inbound / AI trigger — é fala do próprio operador.
+  return { messageId, threadId, error: null };
+}
+
+// ---------------------------------------------------------------------------
 // Status update (MESSAGES_UPDATE / MESSAGE_RECEIPT_UPDATE)
 // ---------------------------------------------------------------------------
 
@@ -1339,9 +1486,24 @@ serve(async (req) => {
         return json(200, { ok: true, processed: false, kind: "message", reason: "PARSE_FAILED" });
       }
       if (parsed.fromMe) {
-        // Fase 6A não processa outbound. Também não persiste — só loga.
-        await markInboundEvent(service, auditId, { processStatus: "skipped", processError: "fromMe_true_outbound_ignored_phase6a" });
-        return json(200, { ok: true, processed: false, kind: "message", reason: "FROM_ME_SKIPPED" });
+        const result = await ingestOutboundEchoMessage(service, ctx, envelope, parsed);
+        await markInboundEvent(service, auditId, {
+          processStatus: result.error ? "failed" : "processed",
+          processError: result.error ?? (result.echo ? "echo_of_crm_send" : null),
+          resultingMessageId: result.messageId,
+          resultingThreadId: result.threadId,
+        });
+        logEvolution("info", { fn: FN, requestId, event: eventRaw ?? undefined, instanceName: instance ?? undefined, orgId, message: result.error ? `outbound_echo_failed:${result.error}` : (result.echo ? "outbound_echo_dedup" : "outbound_echo_ingested") });
+        return json(200, {
+          ok: true,
+          processed: !result.error,
+          kind: "message",
+          direction: "outbound",
+          echo: result.echo === true,
+          message_id: result.messageId,
+          thread_id: result.threadId,
+          contract: EVOLUTION_WEBHOOK_CONTRACT_VERSION,
+        });
       }
       const result = await ingestInboundMessage(service, ctx, envelope, parsed);
       await markInboundEvent(service, auditId, {
