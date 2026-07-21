@@ -2281,15 +2281,27 @@ function DesktopMessagesList() {
                           )}>
                             <div className="flex gap-1">
                               {outOfWindow ? (
-                                <Button
-                                  variant="outline"
-                                  size="icon"
-                                  onClick={() => setShowTemplates(true)}
-                                  title={outOfWindowCopy}
-                                  className="h-10 w-10"
-                                >
-                                  <FileText className="h-5 w-5" />
-                                </Button>
+                                <>
+                                  <Button
+                                    variant="outline"
+                                    size="icon"
+                                    onClick={() => setShowTemplates(true)}
+                                    title={outOfWindowCopy}
+                                    className="h-10 w-10"
+                                  >
+                                    <FileText className="h-5 w-5" />
+                                  </Button>
+                                  {canBypassWindow && (
+                                    <button
+                                      type="button"
+                                      onClick={() => setBypassWindow(true)}
+                                      title={locale === 'pt-BR' ? 'Este número (Evolution) não exige template — digitar livre' : 'This number (Evolution) does not require a template'}
+                                      className="self-center text-[10px] text-muted-foreground/70 hover:text-foreground underline underline-offset-2 px-1"
+                                    >
+                                      {locale === 'pt-BR' ? 'digitar livre' : 'type free'}
+                                    </button>
+                                  )}
+                                </>
                               ) : (
                                 <>
                                   <MediaUploadButton
