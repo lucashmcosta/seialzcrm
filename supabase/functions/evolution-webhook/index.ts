@@ -1281,7 +1281,7 @@ async function ingestOutboundEchoMessage(
       whatsapp_message_sid: parsed.waMessageId,
       whatsapp_status: "sent",
       endpoint_id: ctx.endpointId,
-      sender_type: "agent",
+      sender_type: "user",
       sender_name: parsed.pushName ?? null,
       media_urls: mediaUrls,
       media_type: parsed.mediaKind,

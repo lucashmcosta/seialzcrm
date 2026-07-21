@@ -1,91 +1,76 @@
+## Diagnóstico confirmado
 
-## Diagnóstico
+Comparei uma mensagem de documento outbound Meta (que renderiza) com as duas mensagens outbound backfilled da Marlisa (`[Documento] OAB kaik.pdf`, `[Documento] CNPJ REBIZZI.pdf`, thread Ralis, endpoint Evolution 8439).
 
-Em `supabase/functions/evolution-webhook/index.ts` (linhas 1341–1345), todo `MESSAGES_UPSERT` com `key.fromMe === true` é descartado explicitamente:
+### Bug 1 — Chip roxo "Marlisa Mano"
 
-```
-if (parsed.fromMe) {
-  await markInboundEvent(..., "fromMe_true_outbound_ignored_phase6a");
-  return json(200, { ..., reason: "FROM_ME_SKIPPED" });
-}
-```
+Origem: `MessagesList.tsx` linha 2212-2215 mostra `<Badge color="purple" icon={<Robot />}>{sender_name || 'Agente IA'}</Badge>` sempre que `sender_type === 'agent'` numa mensagem outbound.
 
-Isso significa que **qualquer mensagem enviada pela Marlisa direto no celular do 8439** (ou eco de mensagens enviadas via CRM) nunca é gravada. A UI só recebe os `fromMe=false`. É esse o motivo do histórico "meio faltando".
+- Outbound CRM Meta/Twilio: `sender_type = 'user'` (nenhum badge).
+- Outbound Evolution device echo (novo e backfilled): `sender_type = 'agent'` → cai no badge de IA.
 
-O parser (`parseMessagesUpsert`) já extrai `fromMe`, `waMessageId (key.id)`, `remoteJid`, `pushName`, mídia, quoted, etc. — tudo que precisamos. `ingestInboundMessage` já resolve org, contato, thread (com merge/reuso), mídia, reply-to, idempotência por `whatsapp_message_sid`.
+Fonte do defeito: `ingestOutboundEchoMessage` em `supabase/functions/evolution-webhook/index.ts` linha 1284 grava `sender_type: "agent"`. O backfill SQL replicou o mesmo valor. `evolution-whatsapp-send` (envio pelo CRM) usa `sender_type: 'user'` — é esse o contrato correto.
 
-## Correção (escopo mínimo)
+Correção: gravar `sender_type = 'user'` no echo. Preservar a informação de origem apenas em `metadata.evolution.origin='device'` (já existe). `sender_agent_id` fica `null` (já é o padrão).
 
-### 1. Remover o short-circuit de `fromMe`
+### Bug 2 — Documento como texto puro
 
-Substituir o `if (parsed.fromMe) return SKIP` por uma bifurcação: chamar um novo `ingestOutboundEchoMessage(...)` quando `fromMe=true`, e manter `ingestInboundMessage(...)` para o resto.
+Renderer (`InboxConversationTimeline.tsx` linhas 43-77 e `WhatsAppChat.tsx`) só desenha o card "Ver documento" quando `msg.media_urls` tem pelo menos 1 URL. Se `media_urls` está vazio, o `<Media>` retorna `null` e o texto `[Documento] X.pdf` cai no bloco de conteúdo normal.
 
-### 2. Novo caminho outbound (device echo)
+Estado real das duas linhas backfilled:
+- `media_type = 'document'` ✓
+- `media_urls = []` ✗ (vazio — SQL de backfill não baixou mídia)
+- `metadata.evolution.file_name`, `mime_type`, `storage_path` = ausentes
+- `content = '[Documento] OAB kaik.pdf'`
 
-Reutilizar 100% dos helpers existentes (`jidToE164`, `resolveInboundSettings`, `findOrCreateContact`, `findOrCreateThread`, `downloadEvolutionMedia`, `resolveReplyToMessageId`). Diferenças em relação ao inbound:
+Contrato mínimo que o renderer exige: `media_type = 'document'` + `media_urls` com pelo menos 1 URL válida (o próprio código já detecta PDF por extensão ou por `media_type='document'` → fallback "Ver documento").
 
-- **Dedup primeiro, sempre.** Antes de qualquer efeito colateral, `SELECT id, direction FROM messages WHERE organization_id=? AND whatsapp_message_sid=key.id`. Se existir → no-op (é eco de envio pelo CRM, já persistido pelo `evolution-whatsapp-send`); apenas marcar `integration_inbound_events.process_status='processed'` com `processError='echo_of_crm_send'` para observabilidade. Nunca inserir duplicata.
-- **Se não existir:** inserir com
-  - `direction='outbound'`
-  - `sender_type='agent'` (padrão usado por `evolution-whatsapp-send`; confirmar no arquivo antes de gravar)
-  - `sender_name = parsed.pushName ?? null`
-  - `endpoint_id = ctx.endpointId` (Evolution 8439)
-  - `whatsapp_message_sid = parsed.waMessageId`
-  - `whatsapp_status = 'sent'` (o próprio aparelho já enviou; `MESSAGES_UPDATE` posterior sobe para delivered/read via `applyMessageStatus`, que já casa por wamid)
-  - `sent_at` derivado de `messageTimestamp`
-  - `metadata.evolution.from_me = true`
-  - `metadata.evolution.origin = 'device'`
-  - `reply_to_message_id` via `resolveReplyToMessageId`
-  - mídia via `downloadEvolutionMedia` no mesmo bucket/prefixo (`.../evolution-inbound/` — reaproveitar path atual; não vale criar prefixo novo neste patch).
-- **Thread:** exatamente o mesmo `findOrCreateThread(org, contact, endpointId, ts)` usado no inbound — mesma lógica de reuso e respeito a `merged_into_thread_id`. Não criar thread duplicada, não mexer em `primary_endpoint_id`.
-- **Contato:** `findOrCreateContact` igual ao inbound. Se `auto_create_contact=false` retornar `null`, marcar `process_status='failed'` com `no_contact` e sair sem persistir.
-- **Sem side-effects extras que só fazem sentido para inbound:**
-  - **Não** chamar `notifyContactOwner` (é mensagem do próprio operador).
-  - **Não** chamar `insertActivity` do tipo "message" com direção inbound.
-  - **Não** disparar `triggerAiAgentOrFlagHuman` (não é fala do cliente; evita o SDR responder ao próprio agente).
-  - Atualizar apenas `updated_at` no thread; **não** mexer em `last_inbound_at` / `whatsapp_last_inbound_at`. (A janela 24h só deve andar quando o cliente fala.)
+Além disso, o próprio `ingestOutboundEchoMessage` já monta o mesmo contrato do inbound (`media_urls = [publicUrl]`, `metadata.evolution.file_name/mime_type/storage_path`) — se o download Evolution funcionar, mensagens novas já nascem corretas. Não há mudança de contrato necessária no path novo; só a correção do `sender_type` acima.
 
-### 3. Idempotência por wamid — regra única
+Não existe estado "mídia indisponível" nos renderers atuais (`InboxConversationTimeline` e `WhatsAppChat`). Confirmado: os dois só têm dois caminhos — tem URL → card; não tem URL → nada. Vou reportar essa limitação sem inventar componente novo.
 
-`whatsapp_message_sid = key.id` continua sendo a fonte de verdade. Serve para três cenários:
-1. Inbound reprocessado → já era coberto.
-2. Outbound do CRM ecoando via webhook → agora coberto pelo SELECT prévio.
-3. Outbound do celular chegando duas vezes → coberto pelo mesmo SELECT + captura de `23505` no insert.
+## Correções
 
-Nunca deduplicar por `fromMe`.
+### 1. `supabase/functions/evolution-webhook/index.ts`
+- `ingestOutboundEchoMessage`: trocar `sender_type: "agent"` por `sender_type: "user"`.
+- Nenhuma outra mudança de contrato (o path já popula media_urls, file_name, mime_type, storage_path quando o download funciona).
+- Redeploy da função.
 
-### 4. `MESSAGES_UPDATE` / `MESSAGE_RECEIPT_UPDATE`
+### 2. Backfill corretivo — chip roxo (idempotente, escopo estreito)
 
-`applyMessageStatus` já casa por `whatsapp_message_sid` e faz `UPDATE messages SET whatsapp_status=...`. Como agora persistimos o outbound do device, os acks (delivered/read) que a Evolution envia para esses wamids passam a atualizar linhas reais em vez de virarem no-op. Nenhuma mudança nesse caminho.
+`UPDATE public.messages SET sender_type='user' WHERE organization_id IN (Viagi) AND endpoint_id = <Evolution 8439> AND direction='outbound' AND sender_type='agent' AND (metadata->'evolution'->>'origin') = 'device' AND sender_agent_id IS NULL;`
 
-## Escopo do diff
+Impacto esperado: ~110 linhas (todas as backfilled + qualquer echo novo pré-fix). Não toca mensagens de IA reais (essas têm `sender_agent_id` populado).
 
-Apenas `supabase/functions/evolution-webhook/index.ts`:
-- Remover o early-return `FROM_ME_SKIPPED`.
-- Adicionar `ingestOutboundEchoMessage(...)` (fatoração leve a partir de `ingestInboundMessage`, sem duplicar helpers).
-- Ajustar o roteamento de `MESSAGES_UPSERT` para escolher inbound vs outbound.
+### 3. Backfill corretivo — documentos
 
-Sem tocar em: Meta webhook, Twilio webhook, `dispatchWhatsAppSend`, `evolution-whatsapp-send`, `thread-migrate-endpoint-send`, composer, UI, migrations, outros tenants, feature flag. Sem componente novo — os renderers atuais já pintam `direction='outbound'` corretamente.
+Alvo estrito: linhas com `organization_id ∈ Viagi`, `endpoint_id = Evolution 8439`, `direction='outbound'`, `origin='device'`, `media_type='document'`, `media_urls` vazio/null, sem duplicata por `whatsapp_message_sid`. Contagem esperada: 2 linhas visíveis (OAB kaik.pdf, CNPJ REBIZZI.pdf) — confirmar total antes de escrever.
 
-## Validação em produção (piloto Viagi, thread da Ralis/cliente da Marlisa)
+Para cada uma:
+1. Ler `integration_inbound_events` da instância `dev-int` pelo `whatsapp_message_sid` e recuperar o payload `documentMessage` (mediaKey, directPath, url, mimetype, fileName).
+2. Tentar `downloadEvolutionMedia` (endpoint `/chat/getBase64FromMediaMessage` da Evolution, mesmo que o `ingestOutboundEcho` usa).
+3. **Se o download funcionar** (mídia ainda disponível):
+   - Upload no bucket `whatsapp-media` em `<org>/evolution-inbound/<wamid>.<ext>` (mesmo prefixo do inbound, conforme o path novo já faz).
+   - `UPDATE messages SET media_urls = ARRAY[publicUrl], metadata = jsonb_set(metadata,'{evolution}', metadata->'evolution' || jsonb_build_object('file_name', fileName, 'mime_type', mime, 'storage_path', path))` só naquela linha.
+   - Renderer volta a mostrar "Ver documento" com o filename real (via `content` já existente).
+4. **Se o download falhar** (mídia expirada):
+   - Não alterar essa linha. `media_urls` continua vazio, renderer continua mostrando o texto `[Documento] OAB kaik.pdf`.
+   - Reportar quantas ficaram sem recuperação e explicar a limitação (renderers atuais não têm estado "mídia indisponível"; introduzir esse estado seria feature nova, fora do escopo).
 
-Antes: `SELECT id, whatsapp_status FROM messages WHERE thread_id=<thread> ORDER BY sent_at DESC LIMIT 10` para snapshot.
+Execução via Edge Function pontual `evolution-doc-backfill` (efêmera; excluída após rodar), porque precisa falar com a Evolution API. Não migração, não cron, não feature flag.
 
-Passos manuais com a Marlisa:
-1. Enviar **texto** pelo celular do 8439 → conferir aparece como outbound no `/messages` e no `atendimento`, mesma thread, endpoint Evolution.
-2. Cliente responde texto → inbound aparece; mesma thread; sem duplicata.
-3. Enviar **imagem** pelo celular → outbound com `media_urls` populado.
-4. F5 na thread → tudo permanece.
-5. Enviar **áudio/PTT** e **documento** — repetir asserções.
-6. Enviar uma mensagem pelo **CRM** (composer Evolution) → conferir que o eco do webhook **não** cria linha duplicada (mesmo `whatsapp_message_sid`, uma linha só). Checar `integration_inbound_events` para o `processError='echo_of_crm_send'`.
-7. SQL final:
-   ```
-   SELECT direction, whatsapp_message_sid, endpoint_id, sender_type, metadata->'evolution'->>'origin'
-   FROM messages WHERE thread_id=<thread> ORDER BY sent_at DESC LIMIT 20;
-   ```
-   Confirmar mix inbound/outbound, wamids únicos, endpoint = Evolution 8439, `origin='device'` nos envios pelo aparelho.
+### 4. Validação em produção (piloto Viagi, thread da Ralis)
 
-## Fora do escopo
+1. Antes: `SELECT id, sender_type, media_type, media_urls FROM messages WHERE id IN ('43810741...','a16d0dbd...')` — snapshot.
+2. Rodar backfill.
+3. Depois: mesmas duas linhas com `sender_type='user'`, `media_urls` com URL do storage (se recuperado).
+4. F5 na thread → card "Ver documento" nas duas mensagens de PDF (ou pelo menos naquelas com download bem-sucedido).
+5. Chip roxo "Marlisa Mano" desaparece de todas as mensagens da Marlisa na Ralis e nas outras threads afetadas.
+6. Marlisa envia **novo** PDF pelo celular → chega já sem chip e com card "Ver documento" na primeira renderização (path novo já correto após a mudança do `sender_type`).
+7. Repetir a checagem em `/atendimento` (mesmo renderer com nuances) confirmando os dois pontos.
 
-- Sticker/vCard/location outbound: os parsers já existem no arquivo (usados no inbound); o outbound-echo herda automaticamente. Sem trabalho extra além de conferir no teste manual.
-- Marcador visual "enviado pelo aparelho" na bolha: só metadata por ora, sem chip novo, conforme pedido.
+## Fora de escopo
+
+- Componente/estado "mídia indisponível" nos renderers (feature nova).
+- Backfill de mensagens que não sejam documentos ou que não sejam device echo Viagi.
+- Alteração em Meta/Twilio ou em `evolution-whatsapp-send`.
