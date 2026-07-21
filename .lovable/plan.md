@@ -1,54 +1,46 @@
-## Execução aprovada
+## Objetivo
 
-### 1. Corrigir endpoint Evolution `dev-int` (Viagi)
+Permitir digitar mensagem livre em `/messages` mesmo com a "janela 24h" fechada, quando a thread vai sair pela Evolution API (número `+5511936198439`, `dev-int`) — que não tem restrição de template.
 
-O `CHECK` de `communication_endpoints.purpose` só aceita `commercial | customer_service | vendor_personal | other`. O trigger `fn_message_threads_autofill_business_context` já mapeia `commercial → sales`. Portanto o valor correto no endpoint é `commercial`:
+## Onde mora o bloqueio
 
-```sql
-UPDATE communication_endpoints
-   SET purpose = 'commercial', updated_at = now()
- WHERE id = '11111111-e701-4a01-8000-000000000001'
-   AND provider = 'evolution_api'
-   AND purpose = 'other';
+`src/pages/messages/MessagesList.tsx` linha 2247:
+
+```ts
+const outOfWindow = !serviceWindow.isOpen && messages.length > 0;
 ```
 
-### 2. Backfill das 23 threads
+Quando `outOfWindow=true` o composer troca o textarea por `WhatsAppTemplateSelector`, desabilita send/AI e mostra "Fora da janela — selecione um template".
 
-```sql
-UPDATE message_threads
-   SET business_context = 'sales', updated_at = now()
- WHERE organization_id = '40ae935c-a7f7-4ad7-8ea4-91be6404a95f'
-   AND primary_endpoint_id = '11111111-e701-4a01-8000-000000000001'
-   AND business_context = 'other';
-```
+`serviceWindow` vem de `useServiceWindow` (janela oficial WhatsApp Meta/Twilio, correta para provedores oficiais).
 
-### 3. Corrigir a origem em `evolution-instance-manager`
+## Proposta (mínima, escondida, sem mexer em regra de negócio)
 
-O arquivo hoje **não cria endpoints** (comentário linhas 253-256: "NUNCA criamos endpoints/linhas/instâncias novos aqui"). A criação de `communication_endpoints` para Evolution acontece manualmente ou por outra função. Auditar quem criou o endpoint `11111111-...` com `purpose='other'` antes de mudar código:
+1. **Detectar provider do endpoint de envio** da thread:
+   - `useThreadSendEndpoint` já existe e devolve o endpoint efetivo (com re-rota). Ler `provider` dele.
+   - Chamar de "override permitido" quando `provider === 'evolution_api'`.
 
-- Buscar em `supabase/functions/` por `provider: 'evolution_api'` combinado com `insert` em `communication_endpoints`.
-- Se encontrado: alterar default de `purpose` para `commercial` (não `other`), aceitando override explícito via parâmetro. Nunca default silencioso para `other`.
-- Se não encontrado (endpoint foi criado manualmente por SQL/UI admin): documentar no `docs/integrations/evolution-api/` a regra "endpoints Evolution devem nascer com `purpose='commercial'` salvo escolha explícita" e adicionar validação na UI de admin (`/admin/evolution`) que force a escolha.
+2. **Botão minúsculo escondido** no composer, renderizado só quando `outOfWindow && overrideAllowed`:
+   - Aparece como um linkzinho de 10px (ex.: um ícone `Lock`/`LockOpen` + texto "Digitar sem template") na barra do placeholder "Fora da janela", ao lado do seletor de template.
+   - Ao clicar: seta estado local `bypassWindow=true` (não persiste, escopo do thread aberto — reseta ao trocar de thread).
 
-### 4. Validação pós-aplicação
+3. **Aplicar bypass**:
+   - `const outOfWindow = !serviceWindow.isOpen && messages.length > 0 && !bypassWindow;`
+   - Nada mais muda — textarea/AI/send voltam a funcionar normalmente.
+   - `dispatchWhatsAppSend` já roteia por endpoint ativo, então o envio sai pela Evolution sem regra adicional.
 
-```sql
--- Deve retornar 0 linhas
-SELECT COUNT(*) FROM message_threads
- WHERE primary_endpoint_id = '11111111-e701-4a01-8000-000000000001'
-   AND business_context <> 'sales';
+4. **Reset**: `useEffect` zera `bypassWindow` quando `selectedThreadId` muda.
 
--- Endpoint corrigido
-SELECT id, purpose FROM communication_endpoints
- WHERE id = '11111111-e701-4a01-8000-000000000001';
-```
+5. **Guarda de segurança**: se `overrideAllowed` for false (Meta/Twilio), o botão nem aparece — não é possível burlar janela em provedor oficial (evita erro 63016 e degradação de qualidade do número).
 
-- Confirmar visualmente em `/messages` (Viagi) que `evairferreiradesouza11` e `Junior Teste` permanecem após F5.
-- Pedir ao usuário enviar 1 nova mensagem pela Evolution → conferir `SELECT business_context FROM message_threads ORDER BY created_at DESC LIMIT 1` → esperado `sales`.
+## Escopo do que NÃO muda
 
-### Restrições respeitadas
+- `useServiceWindow`, `WhatsAppWindowChip`, `serviceWindow.reason`, RPCs, dispatcher, edge functions, mobile (`MobileMessagesList`), Inbox composer, contact drawer.
+- Regras de compliance (`complianceGuards`) permanecem intactas.
+- Nenhum backend/migration.
 
-- **Não** altero `rpc_list_message_threads`.
-- **Não** altero `rpc_get_message_threads_by_ids`.
-- **Não** modifico o trigger para tratar todo `evolution_api` como sales.
-- Correção estritamente escopada ao endpoint `dev-int` da Viagi + prevenção na criação futura.
+## Arquivos afetados
+
+- `src/pages/messages/MessagesList.tsx` — estado `bypassWindow`, leitura de `provider` do send endpoint, botão discreto, ajuste da constante `outOfWindow`.
+
+Uma única mudança de UI, ~30 linhas.
