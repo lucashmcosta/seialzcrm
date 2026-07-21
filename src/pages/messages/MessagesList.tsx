@@ -289,6 +289,12 @@ function DesktopMessagesList() {
     ? sendEp.provider
     : selectedThreadWaProvider;
   const [textareaOverflow, setTextareaOverflow] = useState(false);
+  // Bypass de janela 24h — só permitido quando o envio sai por Evolution API
+  // (Baileys, não-oficial, sem restrição de template). Estado local, reseta
+  // ao trocar de thread. Não persiste.
+  const [bypassWindow, setBypassWindow] = useState(false);
+  const canBypassWindow = sendEp.provider === 'evolution_api';
+  useEffect(() => { setBypassWindow(false); }, [selectedThreadId]);
   const [messages, setMessages] = useState<Message[]>([]);
   const [messagesLoading, setMessagesLoading] = useState(false);
   const [messageText, setMessageText] = useState('');
@@ -2244,7 +2250,7 @@ function DesktopMessagesList() {
                     {/* Input Area */}
                     <div className="border-t border-border p-4 bg-card">
                       {(() => {
-                        const outOfWindow = !serviceWindow.isOpen && messages.length > 0;
+                        const outOfWindow = !serviceWindow.isOpen && messages.length > 0 && !bypassWindow;
                         const outOfWindowCopy = serviceWindow.reason || (locale === 'pt-BR' ? 'Fora da janela — selecione um template' : 'Outside window — select a template');
                         return (
                           <>
@@ -2275,15 +2281,27 @@ function DesktopMessagesList() {
                           )}>
                             <div className="flex gap-1">
                               {outOfWindow ? (
-                                <Button
-                                  variant="outline"
-                                  size="icon"
-                                  onClick={() => setShowTemplates(true)}
-                                  title={outOfWindowCopy}
-                                  className="h-10 w-10"
-                                >
-                                  <FileText className="h-5 w-5" />
-                                </Button>
+                                <>
+                                  <Button
+                                    variant="outline"
+                                    size="icon"
+                                    onClick={() => setShowTemplates(true)}
+                                    title={outOfWindowCopy}
+                                    className="h-10 w-10"
+                                  >
+                                    <FileText className="h-5 w-5" />
+                                  </Button>
+                                  {canBypassWindow && (
+                                    <button
+                                      type="button"
+                                      onClick={() => setBypassWindow(true)}
+                                      title={locale === 'pt-BR' ? 'Este número (Evolution) não exige template — digitar livre' : 'This number (Evolution) does not require a template'}
+                                      className="self-center text-[10px] text-muted-foreground/70 hover:text-foreground underline underline-offset-2 px-1"
+                                    >
+                                      {locale === 'pt-BR' ? 'digitar livre' : 'type free'}
+                                    </button>
+                                  )}
+                                </>
                               ) : (
                                 <>
                                   <MediaUploadButton
