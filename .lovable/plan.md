@@ -1,36 +1,54 @@
-## Homologação real Evolution `dev-int` — loop de verificação e correção
+## Execução aprovada
 
-Você envia os 10 tipos do seu celular para o número da instância `dev-int` (Viagi). Eu executo, para cada mensagem, o ciclo abaixo até tudo passar.
+### 1. Corrigir endpoint Evolution `dev-int` (Viagi)
 
-### Protocolo por mensagem
+O `CHECK` de `communication_endpoints.purpose` só aceita `commercial | customer_service | vendor_personal | other`. O trigger `fn_message_threads_autofill_business_context` já mapeia `commercial → sales`. Portanto o valor correto no endpoint é `commercial`:
 
-1. Consultar `integration_inbound_events` (últimos ~2 min) → confirmar ingestão pelo webhook.
-2. Consultar `messages` do thread do contato → validar `content`, `message_type`, `metadata.rich_message`, `metadata.evolution.raw`, `attachment_url`.
-3. Se mídia: validar objeto em `storage.objects` (bucket, path `<org>/evolution-inbound/<waMessageId>.<ext>`, mime).
-4. Abrir `/messages` e `/inbox` do thread → validar render (ContactsCard, LocationCard, ReactionContent, FlowReplyCard, áudio player, quoted preview).
-5. Falha → ler logs de `evolution-webhook`, ajustar `supabase/functions/evolution-webhook/index.ts` ou `_shared/evolution/vcard.ts` ou `src/components/messages/MetaRichMessageContent.tsx`, deploy da função, pedir reenvio, revalidar.
+```sql
+UPDATE communication_endpoints
+   SET purpose = 'commercial', updated_at = now()
+ WHERE id = '11111111-e701-4a01-8000-000000000001'
+   AND provider = 'evolution_api'
+   AND purpose = 'other';
+```
 
-### Ordem sugerida de envio (pode enviar todos de uma vez)
+### 2. Backfill das 23 threads
 
-1. Contato único (`contactMessage`)
-2. Múltiplos contatos (`contactsArrayMessage`)
-3. Localização estática
-4. Live location
-5. Sticker
-6. Imagem (com e sem caption se possível)
-7. Áudio/PTT
-8. Vídeo
-9. Documento (PDF)
-10. Reply/quoted em cima de qualquer mensagem anterior
+```sql
+UPDATE message_threads
+   SET business_context = 'sales', updated_at = now()
+ WHERE organization_id = '40ae935c-a7f7-4ad7-8ea4-91be6404a95f'
+   AND primary_endpoint_id = '11111111-e701-4a01-8000-000000000001'
+   AND business_context = 'other';
+```
 
-### Documentação
+### 3. Corrigir a origem em `evolution-instance-manager`
 
-Ao final, `docs/integrations/evolution-api/MEDIA_AND_VCARD_AUDIT.md` seção 6 recebe: JSON abreviado do `metadata.rich_message` real de cada tipo, path de storage quando aplicável, e status final (OK / corrigido / limitação).
+O arquivo hoje **não cria endpoints** (comentário linhas 253-256: "NUNCA criamos endpoints/linhas/instâncias novos aqui"). A criação de `communication_endpoints` para Evolution acontece manualmente ou por outra função. Auditar quem criou o endpoint `11111111-...` com `purpose='other'` antes de mudar código:
 
-### Entrega final
+- Buscar em `supabase/functions/` por `provider: 'evolution_api'` combinado com `insert` em `communication_endpoints`.
+- Se encontrado: alterar default de `purpose` para `commercial` (não `other`), aceitando override explícito via parâmetro. Nunca default silencioso para `other`.
+- Se não encontrado (endpoint foi criado manualmente por SQL/UI admin): documentar no `docs/integrations/evolution-api/` a regra "endpoints Evolution devem nascer com `purpose='commercial'` salvo escolha explícita" e adicionar validação na UI de admin (`/admin/evolution`) que force a escolha.
 
-Tabela objetiva: tipo → testado / falha encontrada / correção aplicada / resultado final / limitação restante.
+### 4. Validação pós-aplicação
 
-### Como sinalizar
+```sql
+-- Deve retornar 0 linhas
+SELECT COUNT(*) FROM message_threads
+ WHERE primary_endpoint_id = '11111111-e701-4a01-8000-000000000001'
+   AND business_context <> 'sales';
 
-Responda "enviei" (ou liste os tipos que já foram) e eu inicio a verificação imediatamente. Se quiser, envie em lotes — cada lote dispara um ciclo completo de verificação e correção.
+-- Endpoint corrigido
+SELECT id, purpose FROM communication_endpoints
+ WHERE id = '11111111-e701-4a01-8000-000000000001';
+```
+
+- Confirmar visualmente em `/messages` (Viagi) que `evairferreiradesouza11` e `Junior Teste` permanecem após F5.
+- Pedir ao usuário enviar 1 nova mensagem pela Evolution → conferir `SELECT business_context FROM message_threads ORDER BY created_at DESC LIMIT 1` → esperado `sales`.
+
+### Restrições respeitadas
+
+- **Não** altero `rpc_list_message_threads`.
+- **Não** altero `rpc_get_message_threads_by_ids`.
+- **Não** modifico o trigger para tratar todo `evolution_api` como sales.
+- Correção estritamente escopada ao endpoint `dev-int` da Viagi + prevenção na criação futura.
