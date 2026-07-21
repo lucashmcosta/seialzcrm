@@ -32,6 +32,11 @@ import {
   EVOLUTION_WEBHOOK_CONTRACT_VERSION,
   EvolutionWebhookEnvelope,
 } from "../_shared/evolution/types.ts";
+import {
+  normalizeBaileysContact,
+  normalizeBaileysContactsArray,
+  RichContact,
+} from "../_shared/evolution/vcard.ts";
 
 const FN = "evolution-webhook" as const;
 const FLAG = "evolution_api_enabled";
