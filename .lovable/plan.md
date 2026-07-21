@@ -1,32 +1,88 @@
-## Diagnóstico
+## Objetivo
 
-As mensagens "[mensagem não suportada]" na thread da Alba são de dois tipos que o parser do `evolution-webhook` não trata:
+Permitir enviar a primeira mensagem pelo Evolution `8439` em uma thread hoje ligada ao Meta `2890` (fora da janela 24h). Após sucesso confirmado, a mesma thread migra permanentemente para o endpoint Evolution, preservando o histórico. Falha de envio não migra nada.
 
-1. **`secretEncryptedMessage` (secretEncType=2)** — payloads Signal-criptografados que o WhatsApp usa para votos de enquete e reações/edições em versões novas do app. Não são texto do cliente; o WhatsApp oficial não os exibe. Hoje caem no fallback `[mensagem não suportada]`.
-2. **`contactsArrayMessage`** — vCards múltiplos. O handler **já existe** no código atual (`normalizeBaileysContactsArray`); a ocorrência isolada de ontem entrou antes do deploy desse handler. Não é regressão nova.
+## 1. Novo Edge Function: `thread-migrate-endpoint-send`
 
-Confirmado via inspeção de `messages.metadata->'evolution'->'raw'` (últimas 24h: 2× `secretEncryptedMessage`, 1× `contactsArrayMessage`).
+Ponto único que faz **envio + migração atômica** com validação server-side. Frontend não toca em `message_threads` nem cria nota.
 
-## Correção
+### Entrada
+```
+{
+  organizationId: string,
+  threadId: string,
+  targetEndpointId: string,   // endpoint Evolution
+  message: string,
+  userId?: string,
+  replyToMessageId?: string,
+}
+```
 
-Editar apenas `supabase/functions/evolution-webhook/index.ts` no parser `parseMessagesUpsert`:
+### Fluxo
 
-1. Antes do fallback final `content = '[mensagem não suportada]'`, detectar `message.secretEncryptedMessage` (ou raiz da mensagem com apenas `messageContextInfo` + `secretEncryptedMessage`).
-2. Nesse caso, **retornar `null` do parser** — o webhook descarta o evento silenciosamente, igual ao comportamento do WhatsApp oficial. Registrar `console.log('[evolution-webhook] secretEncrypted skipped', { secretEncType, remoteJid })` para auditoria.
-3. Deploy da função.
+1. **Auth**: valida JWT do usuário (`Authorization: Bearer`), resolve `organization_id` via `user_organizations`.
+2. **Validações do targetEndpoint** (fail-closed):
+   - existe;
+   - `organization_id === payload.organizationId`;
+   - `channel = 'whatsapp'`;
+   - `provider = 'evolution_api'`;
+   - `is_active = true`;
+   - `status != 'offline'`;
+   - `purpose` compatível com o `business_context` da thread (ou fallback: qualquer Evolution ativo da org quando ambíguo — mesma regra usada hoje em `useOrgWhatsAppEndpoints`).
+3. **Validação da thread**: existe, `organization_id` bate, `channel = 'whatsapp'`, carrega `primary_endpoint_id` atual (para nota + fallback em caso de erro).
+4. **Envio primeiro**: chama `evolution-whatsapp-send` via fetch direto (mesmo padrão do dispatcher), passando `endpointId = targetEndpointId`. **Não** invoca `dispatchWhatsAppSend` para não bater na regra dura.
+5. **Se envio falhou** (`!res.ok` ou body com `error`): retorna `{ error, migrated: false }`. Nada muda no banco.
+6. **Se envio ok**: dentro do mesmo request, executa em sequência (idempotente):
+   - `UPDATE message_threads SET primary_endpoint_id = <target>, updated_at = now() WHERE id = <thread> AND organization_id = <org>`.
+   - Insere uma **única** mensagem `direction='internal'`, `sender_type='system'`, `metadata.kind='THREAD_PROVIDER_MIGRATED'`, com lookup idempotente prévio (`.contains('metadata', { kind: 'THREAD_PROVIDER_MIGRATED', from_endpoint_id, to_endpoint_id })`). Texto:
+     > `Conversa migrada do número Meta ••••<last4Meta> para o Evolution ••••<last4Evo> após envio explícito pelo novo número.`
+   - Metadata da nota inclui `from_endpoint_id`, `to_endpoint_id`, `from_provider`, `to_provider`, `migrated_at`, `migration_kind='explicit_free_type_via_evolution'`, `migrated_by_user_id`.
+7. Retorna `{ migrated: true, messageId, newPrimaryEndpointId }`.
 
-Cleanup pontual das mensagens fantasmas já persistidas na thread da Alba (e demais das últimas 24h que casem exatamente com o mesmo padrão), via `DELETE` escopado:
-- `content = '[mensagem não suportada]'`
-- `metadata->'evolution'->'raw' ? 'secretEncryptedMessage'`
-- `created_at > now() - interval '24 hours'`
+### Segurança
+- `verify_jwt` validado em código; sem service role no browser.
+- Nenhum `endpointId` do frontend é aceito sem passar por toda a whitelist acima.
+- Falha em qualquer validação → 4xx com mensagem clara, sem envio.
 
-## Não faz parte
+## 2. `src/lib/dispatchWhatsAppSend.ts`
 
-- Não altera UI, dispatcher, `MetaRichMessageContent`, banco, RLS.
-- Não toca Meta Cloud (esse tipo só vem via Baileys/Evolution).
-- Não tenta decodificar Signal para exibir "reagiu 👍" — sem chaves, é inviável e o próprio WhatsApp oficial esconde esses eventos.
-- Não reprocessa `contactsArrayMessage` antigo (handler já cobre novos envios); posso incluir no cleanup se pedir.
+Nenhuma nova flag "genérica". A regra dura anti cross-number (linhas 263–289) permanece **intocada**. O caminho de migração é uma função **separada**, não um bypass do dispatcher.
+
+Adicionar apenas um wrapper de conveniência exportado (novo arquivo `src/lib/migrateThreadAndSend.ts`) que invoca a nova Edge Function acima e devolve `{ data, error }` no mesmo shape usado pela UI.
+
+## 3. `src/pages/messages/MessagesList.tsx`
+
+- **Label do botão**: trocar `"digitar livre pelo <num>"` por:
+  - pt-BR: `Enviar pelo <last4> e migrar conversa`
+  - en: `Send via <last4> and migrate thread`
+  - Tooltip explica: "A conversa passará a operar pelo número Evolution. Histórico preservado."
+- **Handler de envio**: quando `bypassWindow === true` **e** a thread não é nativamente Evolution:
+  - chamar `migrateThreadAndSend({ organizationId, threadId, targetEndpointId: evolutionEndpoint.id, message, userId, replyToMessageId })` em vez de `dispatchWhatsAppSend`.
+  - Em sucesso: `refetchThreads()`, limpar `bypassWindow`, limpar `composerEndpointId` (a próxima resolução por `primary_endpoint_id` já apontará para Evolution naturalmente), limpar `messageText` e `replyingTo`.
+  - Em erro: manter tudo como está (mensagem no composer, thread intocada), exibir toast com o erro real.
+- Quando a thread **já é** Evolution nativa (Alba etc.), continuar chamando `dispatchWhatsAppSend` normal — sem migração.
+- Não mudar mais nada no arquivo.
+
+## 4. Escopo restrito
+
+**Não alterar**: `MobileMessagesList`, `ContactMessages`, `WhatsAppChat`, `InboxComposer`, `meta-whatsapp-send`, `twilio-whatsapp-send`, `evolution-whatsapp-send`, `evolution-webhook`, comportamento padrão de `dispatchWhatsAppSend`, nenhuma migration de banco, nenhuma RLS.
+
+## 5. Deploy e validação no piloto Viagi
+
+Após deploy da Edge Function e do frontend, validar em uma thread real Viagi ligada ao Meta `2890`, fora da janela 24h:
+
+1. Clicar em "Enviar pelo 8439 e migrar conversa".
+2. Confirmar entrega no WhatsApp do destinatário via +8439.
+3. Confirmar que o seletor de templates **não** abriu.
+4. `supabase--read_query` em `message_threads`: `primary_endpoint_id` = endpoint Evolution.
+5. Histórico permanece na mesma `thread_id` (sem duplicação).
+6. `supabase--read_query` em `messages`: exatamente uma nota `metadata.kind = 'THREAD_PROVIDER_MIGRATED'` para o par (thread, endpoints).
+7. Após reload da página, o cabeçalho da thread mostra `8439 / evolution_api`.
+8. Segundo envio livre (sem clicar em nada) sai pelo Evolution.
+9. Simular falha (payload inválido no Edge): confirmar que `primary_endpoint_id` **não** muda, nota **não** é criada, UI mostra erro.
 
 ## Arquivos tocados
 
-- `supabase/functions/evolution-webhook/index.ts` — bloco final do `parseMessagesUpsert` (~linhas 419–432).
+- `supabase/functions/thread-migrate-endpoint-send/index.ts` — novo.
+- `src/lib/migrateThreadAndSend.ts` — novo (wrapper client-side).
+- `src/pages/messages/MessagesList.tsx` — label do botão + roteamento do handler.
