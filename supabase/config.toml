@@ -52,3 +52,10 @@ verify_jwt = false
 [functions.evolution-webhook]
 verify_jwt = false
 
+# Migração explícita de thread para outro endpoint (hoje: Evolution API)
+# junto com o primeiro envio livre. verify_jwt=false porque validamos o JWT
+# em código (getUser + user_organizations) para dar mensagens de erro claras.
+[functions.thread-migrate-endpoint-send]
+verify_jwt = false
+
+

@@ -1,5 +1,6 @@
 import { useState, useEffect, useMemo, useRef, Fragment } from 'react';
 import { dispatchWhatsAppSend } from "@/lib/dispatchWhatsAppSend";
+import { migrateThreadAndSend } from "@/lib/migrateThreadAndSend";
 import { usePersistedFilters } from '@/hooks/usePersistedFilters';
 import { Link, useSearchParams } from 'react-router-dom';
 import { useIsMobile } from '@/hooks/use-mobile';
@@ -1142,8 +1143,84 @@ function DesktopMessagesList() {
     }
     if (!organization?.id || !messageText.trim() || !selectedThread) return;
 
-    if (!serviceWindow.isOpen) {
+    // Bypass explícito: usuário optou por enviar/migrar via Evolution.
+    // Ignora a checagem de janela 24h (Evolution/Baileys não é oficial).
+    if (!serviceWindow.isOpen && !bypassWindow) {
       setShowTemplates(true);
+      return;
+    }
+
+    // Caminho de MIGRAÇÃO explícita: bypass ativo + thread não é nativamente
+    // Evolution + existe endpoint Evolution disponível. Roteia para o Edge
+    // Function que valida, envia e migra o primary_endpoint_id atomicamente.
+    const shouldMigrate =
+      bypassWindow &&
+      !composerIsEvolution &&
+      !!evolutionEndpoint?.id &&
+      !!selectedThreadId;
+
+    if (shouldMigrate) {
+      const savedText = messageText.trim();
+      const savedReplyTo = replyingTo;
+      const tempId = `temp-mig-${Date.now()}`;
+      const tempMessage: Message = {
+        id: tempId,
+        content: savedText,
+        direction: 'outbound',
+        sent_at: new Date().toISOString(),
+        whatsapp_status: 'sending',
+        media_urls: null,
+        media_type: null,
+        error_message: null,
+        error_code: null,
+        whatsapp_message_sid: null,
+        reply_to_message_id: savedReplyTo?.id || null,
+        reply_to_message: savedReplyTo
+          ? { content: savedReplyTo.content, direction: savedReplyTo.direction }
+          : null,
+        sender_type: 'user',
+        sender_name: userProfile?.full_name || null,
+        sender_agent_id: null,
+      };
+      setMessages((prev) => [...prev, tempMessage]);
+      setMessageText('');
+      setReplyingTo(null);
+      scrollToBottom();
+      if (selectedThreadId && selectedThread) {
+        autoAssignOnSend(selectedThreadId, selectedThread);
+      }
+      try {
+        const { data, error } = await migrateThreadAndSend({
+          organizationId: organization.id,
+          threadId: selectedThreadId!,
+          targetEndpointId: (evolutionEndpoint as any).id,
+          message: savedText,
+          userId: userProfile?.id,
+          replyToMessageId: savedReplyTo?.id || null,
+        });
+        if (error) throw new Error(error.message);
+        if (!data?.migrated && !data?.messageId) {
+          throw new Error('Falha ao migrar/enviar');
+        }
+        setBypassWindow(false);
+        setComposerEndpointId(null);
+        refetchThreads();
+      } catch (err: any) {
+        console.error('[migrate-and-send] failed', err);
+        setMessages((prev) =>
+          prev.map((m) =>
+            m.id === tempId
+              ? { ...m, whatsapp_status: 'failed', error_message: err?.message }
+              : m,
+          ),
+        );
+        setMessageText(savedText);
+        setReplyingTo(savedReplyTo);
+        toast({
+          variant: 'destructive',
+          description: err?.message || 'Erro ao migrar e enviar pela Evolution',
+        });
+      }
       return;
     }
 
@@ -2317,16 +2394,17 @@ function DesktopMessagesList() {
                                     const targetNum = composerIsEvolution
                                       ? (composerEndpoint as any)?.external_address
                                       : (evolutionEndpoint as any)?.external_address;
+                                    const last4 = (targetNum ?? '').replace(/\D/g, '').slice(-4) || 'Evolution';
                                     const label = composerIsEvolution
                                       ? (locale === 'pt-BR' ? 'digitar livre' : 'type free')
                                       : (locale === 'pt-BR'
-                                          ? `digitar livre pelo ${targetNum ?? 'Evolution'}`
-                                          : `type free via ${targetNum ?? 'Evolution'}`);
+                                          ? `Enviar pelo ${last4} e migrar conversa`
+                                          : `Send via ${last4} and migrate thread`);
                                     const tip = composerIsEvolution
                                       ? (locale === 'pt-BR' ? 'Este número (Evolution) não exige template — digitar livre' : 'This number (Evolution) does not require a template')
                                       : (locale === 'pt-BR'
-                                          ? `A mensagem sairá pelo número Evolution ${targetNum ?? ''} (sem template)`
-                                          : `Message will be sent via Evolution number ${targetNum ?? ''} (no template)`);
+                                          ? `A conversa passará a operar pelo número Evolution ${targetNum ?? ''}. Histórico preservado.`
+                                          : `Thread will move to Evolution number ${targetNum ?? ''}. History preserved.`);
                                     return (
                                       <button
                                         type="button"
