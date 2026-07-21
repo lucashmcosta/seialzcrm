@@ -41,6 +41,21 @@ interface Props {
 function readRaw(metadata: unknown): MetaRaw {
   if (!metadata || typeof metadata !== 'object') return null;
   const meta = metadata as Record<string, unknown>;
+
+  // Provider-neutral shape (used by Evolution API and any future provider).
+  const rich = meta.rich_message as Record<string, unknown> | undefined;
+  if (rich && typeof rich === 'object' && typeof rich.type === 'string') {
+    const r = rich as Record<string, unknown>;
+    return {
+      type: r.type as string,
+      reaction: r.reaction as MetaRaw extends null ? never : NonNullable<MetaRaw>['reaction'],
+      location: r.location as NonNullable<MetaRaw>['location'],
+      contacts: r.contacts as NonNullable<MetaRaw>['contacts'],
+      interactive: r.interactive as NonNullable<MetaRaw>['interactive'],
+    } as MetaRaw;
+  }
+
+  // Meta Cloud native shape.
   const mc = meta.meta_cloud as Record<string, unknown> | undefined;
   if (!mc || typeof mc !== 'object') return null;
   const raw = mc.raw;
