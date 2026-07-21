@@ -2356,10 +2356,29 @@ function DesktopMessagesList() {
                     {/* Input Area */}
                     <div className="border-t border-border p-4 bg-card">
                       {(() => {
-                        const outOfWindow = !serviceWindow.isOpen && messages.length > 0 && !bypassWindow;
+                        // Evolution API não exige janela 24h (não é canal oficial).
+                        // Se o composer já opera via Evolution (thread nativa ou
+                        // pós-migração), não bloqueamos por serviceWindow — o envio
+                        // livre é sempre permitido.
+                        const composerBypassesWindow = composerIsEvolution;
+                        const outOfWindow =
+                          !serviceWindow.isOpen && messages.length > 0 && !bypassWindow && !composerBypassesWindow;
                         const outOfWindowCopy = serviceWindow.reason || (locale === 'pt-BR' ? 'Fora da janela — selecione um template' : 'Outside window — select a template');
+                        const showNoInboundHint =
+                          !outOfWindow && composerBypassesWindow && !serviceWindow.isOpen && messages.length > 0;
+                        const evolutionLast4 = (() => {
+                          const addr = (composerEndpoint as any)?.external_address ?? '';
+                          return String(addr).replace(/\D/g, '').slice(-4);
+                        })();
                         return (
                           <>
+                          {showNoInboundHint && (
+                            <div className="px-1 pb-1 text-[11px] text-muted-foreground">
+                              {locale === 'pt-BR'
+                                ? `Sem inbound recente — envio livre pelo Evolution ••••${evolutionLast4}`
+                                : `No recent inbound — free send via Evolution ••••${evolutionLast4}`}
+                            </div>
+                          )}
                           {/* Note Mode Indicator */}
                           {!outOfWindow && isNoteMode && (
                             <div className="flex items-center gap-2 px-3 py-1.5 bg-yellow-100 dark:bg-yellow-900/30 border border-yellow-300 dark:border-yellow-700 rounded-t-lg">

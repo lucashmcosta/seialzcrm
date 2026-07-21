@@ -1,88 +1,43 @@
-## Objetivo
 
-Permitir enviar a primeira mensagem pelo Evolution `8439` em uma thread hoje ligada ao Meta `2890` (fora da janela 24h). Após sucesso confirmado, a mesma thread migra permanentemente para o endpoint Evolution, preservando o histórico. Falha de envio não migra nada.
+## Contexto verificado
 
-## 1. Novo Edge Function: `thread-migrate-endpoint-send`
+- A timeline já renderiza um divisor visual `📞 Número alterado: XXXX → YYYY` de forma automática, comparando `endpoint_id` entre mensagens consecutivas (`src/pages/messages/MessagesList.tsx` linhas 2103–2123, via `useEndpointNumbers`).
+- A Edge Function `thread-migrate-endpoint-send` insere hoje uma mensagem com `direction='internal'`, `sender_type='system'` e `metadata.kind='THREAD_PROVIDER_MIGRATED'`. Esse `kind` **não é reconhecido** pelo renderer de migração (que só trata `endpoint_migration_meta_7020` e `endpoint_provider_migration`), então ela cai no fluxo padrão de mensagem e aparece como o segundo balão redundante que o usuário reclamou.
+- Após a migração, `bypassWindow` já é limpo e `composerEndpointId` é resetado. O `primary_endpoint_id` da thread passa a ser o Evolution (via `refetchThreads()`), então `composerIsEvolution` fica `true`. Porém o gate `outOfWindow = !serviceWindow.isOpen && messages.length>0 && !bypassWindow` (linha 2359) continua verdadeiro enquanto o cliente não responder, forçando novamente o botão de template + botão "digitar livre" — exatamente o comportamento que o usuário quer eliminar.
 
-Ponto único que faz **envio + migração atômica** com validação server-side. Frontend não toca em `message_threads` nem cria nota.
+## Mudanças
 
-### Entrada
-```
-{
-  organizationId: string,
-  threadId: string,
-  targetEndpointId: string,   // endpoint Evolution
-  message: string,
-  userId?: string,
-  replyToMessageId?: string,
-}
-```
+### 1. Backend — `supabase/functions/thread-migrate-endpoint-send/index.ts`
+- Remover o bloco que insere a nota `THREAD_PROVIDER_MIGRATED` na tabela `messages` (e o lookup idempotente associado).
+- Manter todo o resto: envio primeiro, `UPDATE primary_endpoint_id` só após sucesso, validações, logs `console.log` de auditoria (`[thread-migrate-endpoint-send] migrate done { from, to, messageId }`) — esse log já é o "registro técnico" pedido.
+- Retornar `noteInserted: false` fixo (ou remover o campo do payload; o wrapper client-side já tolera ausência).
+- Nenhuma outra Edge Function é tocada. O divisor visual continua funcionando porque depende apenas de `endpoint_id` das mensagens reais.
 
-### Fluxo
+### 2. Frontend — `src/pages/messages/MessagesList.tsx`
+- Alterar a derivação do gate no bloco de input (linha 2359) para não considerar fora da janela quando o composer já opera via Evolution:
 
-1. **Auth**: valida JWT do usuário (`Authorization: Bearer`), resolve `organization_id` via `user_organizations`.
-2. **Validações do targetEndpoint** (fail-closed):
-   - existe;
-   - `organization_id === payload.organizationId`;
-   - `channel = 'whatsapp'`;
-   - `provider = 'evolution_api'`;
-   - `is_active = true`;
-   - `status != 'offline'`;
-   - `purpose` compatível com o `business_context` da thread (ou fallback: qualquer Evolution ativo da org quando ambíguo — mesma regra usada hoje em `useOrgWhatsAppEndpoints`).
-3. **Validação da thread**: existe, `organization_id` bate, `channel = 'whatsapp'`, carrega `primary_endpoint_id` atual (para nota + fallback em caso de erro).
-4. **Envio primeiro**: chama `evolution-whatsapp-send` via fetch direto (mesmo padrão do dispatcher), passando `endpointId = targetEndpointId`. **Não** invoca `dispatchWhatsAppSend` para não bater na regra dura.
-5. **Se envio falhou** (`!res.ok` ou body com `error`): retorna `{ error, migrated: false }`. Nada muda no banco.
-6. **Se envio ok**: dentro do mesmo request, executa em sequência (idempotente):
-   - `UPDATE message_threads SET primary_endpoint_id = <target>, updated_at = now() WHERE id = <thread> AND organization_id = <org>`.
-   - Insere uma **única** mensagem `direction='internal'`, `sender_type='system'`, `metadata.kind='THREAD_PROVIDER_MIGRATED'`, com lookup idempotente prévio (`.contains('metadata', { kind: 'THREAD_PROVIDER_MIGRATED', from_endpoint_id, to_endpoint_id })`). Texto:
-     > `Conversa migrada do número Meta ••••<last4Meta> para o Evolution ••••<last4Evo> após envio explícito pelo novo número.`
-   - Metadata da nota inclui `from_endpoint_id`, `to_endpoint_id`, `from_provider`, `to_provider`, `migrated_at`, `migration_kind='explicit_free_type_via_evolution'`, `migrated_by_user_id`.
-7. Retorna `{ migrated: true, messageId, newPrimaryEndpointId }`.
+  ```
+  const composerBypassesWindow = composerIsEvolution; // Evolution não exige janela 24h
+  const outOfWindow =
+    !serviceWindow.isOpen && messages.length > 0 && !bypassWindow && !composerBypassesWindow;
+  ```
 
-### Segurança
-- `verify_jwt` validado em código; sem service role no browser.
-- Nenhum `endpointId` do frontend é aceito sem passar por toda a whitelist acima.
-- Falha em qualquer validação → 4xx com mensagem clara, sem envio.
+  Efeito: após a migração, `primary_endpoint_id` = Evolution → `composerIsEvolution=true` → `outOfWindow=false` → composer normal habilitado (MediaUpload, AudioRecorder, textarea), sem seletor de template e sem botão "Enviar pelo … e migrar conversa".
 
-## 2. `src/lib/dispatchWhatsAppSend.ts`
+- Adicionar um aviso informativo discreto acima do input quando `composerIsEvolution && !serviceWindow.isOpen && messages.length > 0`: uma linha pequena tipo `Sem inbound recente — envio livre pelo Evolution ••••{last4}`. Reaproveita o mesmo estilo `text-[11px] text-muted-foreground` já usado no header, sem bloquear nada.
 
-Nenhuma nova flag "genérica". A regra dura anti cross-number (linhas 263–289) permanece **intocada**. O caminho de migração é uma função **separada**, não um bypass do dispatcher.
+- Nenhuma mudança em `dispatchWhatsAppSend`, no path de envio nativo (Evolution já é o `primary_endpoint_id` → dispatcher envia por ele naturalmente).
 
-Adicionar apenas um wrapper de conveniência exportado (novo arquivo `src/lib/migrateThreadAndSend.ts`) que invoca a nova Edge Function acima e devolve `{ data, error }` no mesmo shape usado pela UI.
+## Validação
 
-## 3. `src/pages/messages/MessagesList.tsx`
+Após o deploy, com F5 na thread da Ralis já migrada:
+- Não deve haver mais o balão "Conversa migrada do número Meta ••••2890 para o Evolution ••••8439…" (mensagens antigas continuam, mas nenhuma nova é criada).
+- O divisor `📞 Número alterado: 2890 → 8439` permanece na timeline.
+- Cabeçalho mostra o número Evolution 8439.
+- Composer aparece habilitado, sem botão de template obrigatório e sem botão de migração, com o aviso "Sem inbound recente — envio livre pelo Evolution ••••8439".
+- Enviar mensagem sai diretamente pelo dispatcher normal via Evolution.
 
-- **Label do botão**: trocar `"digitar livre pelo <num>"` por:
-  - pt-BR: `Enviar pelo <last4> e migrar conversa`
-  - en: `Send via <last4> and migrate thread`
-  - Tooltip explica: "A conversa passará a operar pelo número Evolution. Histórico preservado."
-- **Handler de envio**: quando `bypassWindow === true` **e** a thread não é nativamente Evolution:
-  - chamar `migrateThreadAndSend({ organizationId, threadId, targetEndpointId: evolutionEndpoint.id, message, userId, replyToMessageId })` em vez de `dispatchWhatsAppSend`.
-  - Em sucesso: `refetchThreads()`, limpar `bypassWindow`, limpar `composerEndpointId` (a próxima resolução por `primary_endpoint_id` já apontará para Evolution naturalmente), limpar `messageText` e `replyingTo`.
-  - Em erro: manter tudo como está (mensagem no composer, thread intocada), exibir toast com o erro real.
-- Quando a thread **já é** Evolution nativa (Alba etc.), continuar chamando `dispatchWhatsAppSend` normal — sem migração.
-- Não mudar mais nada no arquivo.
+## Fora de escopo
 
-## 4. Escopo restrito
-
-**Não alterar**: `MobileMessagesList`, `ContactMessages`, `WhatsAppChat`, `InboxComposer`, `meta-whatsapp-send`, `twilio-whatsapp-send`, `evolution-whatsapp-send`, `evolution-webhook`, comportamento padrão de `dispatchWhatsAppSend`, nenhuma migration de banco, nenhuma RLS.
-
-## 5. Deploy e validação no piloto Viagi
-
-Após deploy da Edge Function e do frontend, validar em uma thread real Viagi ligada ao Meta `2890`, fora da janela 24h:
-
-1. Clicar em "Enviar pelo 8439 e migrar conversa".
-2. Confirmar entrega no WhatsApp do destinatário via +8439.
-3. Confirmar que o seletor de templates **não** abriu.
-4. `supabase--read_query` em `message_threads`: `primary_endpoint_id` = endpoint Evolution.
-5. Histórico permanece na mesma `thread_id` (sem duplicação).
-6. `supabase--read_query` em `messages`: exatamente uma nota `metadata.kind = 'THREAD_PROVIDER_MIGRATED'` para o par (thread, endpoints).
-7. Após reload da página, o cabeçalho da thread mostra `8439 / evolution_api`.
-8. Segundo envio livre (sem clicar em nada) sai pelo Evolution.
-9. Simular falha (payload inválido no Edge): confirmar que `primary_endpoint_id` **não** muda, nota **não** é criada, UI mostra erro.
-
-## Arquivos tocados
-
-- `supabase/functions/thread-migrate-endpoint-send/index.ts` — novo.
-- `src/lib/migrateThreadAndSend.ts` — novo (wrapper client-side).
-- `src/pages/messages/MessagesList.tsx` — label do botão + roteamento do handler.
+- Limpeza histórica das notas `THREAD_PROVIDER_MIGRATED` já persistidas (opcional; posso propor DELETE seletivo depois se você quiser sumir com o balão antigo da Ralis).
+- Qualquer alteração em Inbox, mobile, ContactMessages ou no fluxo de outros providers.

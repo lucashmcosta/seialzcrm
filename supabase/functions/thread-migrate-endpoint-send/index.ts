@@ -209,11 +209,12 @@ serve(async (req) => {
   }
 
   // ---------------------------------------------------------------------
-  // STEP 2: Send confirmed OK. Now (and only now) migrate the thread and
-  // insert the system note. Both operations are idempotent so repeated
-  // invocations converge to the same terminal state.
+  // STEP 2: Send confirmed OK. Migrate the thread. NO visible system note
+  // is inserted: the timeline already renders a "Número alterado" divider
+  // automatically by comparing endpoint_id between consecutive messages
+  // (see MessagesList.tsx). A second bubble would be redundant. Technical
+  // audit lives in this function's console.log below.
   // ---------------------------------------------------------------------
-  let noteInserted = false;
   if (!isNoop) {
     const { error: upErr } = await supabase
       .from("message_threads")
@@ -234,76 +235,19 @@ serve(async (req) => {
         messageId: sendJson?.messageId,
       });
     }
-
-    // Idempotent note lookup: (thread, from, to) → single note.
-    const { data: existingNote } = await supabase
-      .from("messages")
-      .select("id")
-      .eq("thread_id", threadId)
-      .contains("metadata", {
-        kind: NOTE_KIND,
-        from_endpoint_id: originalPrimaryId,
-        to_endpoint_id: targetEndpointId,
-      })
-      .limit(1)
-      .maybeSingle();
-
-    if (!existingNote) {
-      const fromProvider = (originalEndpoint as any)?.provider ?? "unknown";
-      const fromAddr = (originalEndpoint as any)?.external_address ?? null;
-      const toAddr = t.external_address ?? null;
-      const providerLabel = fromProvider === "meta_cloud_api" ? "Meta"
-        : fromProvider === "twilio" ? "Twilio"
-        : fromProvider === "evolution_api" ? "Evolution"
-        : "número anterior";
-      const noteText =
-        `Conversa migrada do número ${providerLabel} ••••${last4(fromAddr)} ` +
-        `para o Evolution ••••${last4(toAddr)} após envio explícito pelo novo número.`;
-
-      const ts = new Date().toISOString();
-      const { error: noteErr } = await supabase
-        .from("messages")
-        .insert({
-          organization_id: organizationId,
-          thread_id: threadId,
-          content: noteText,
-          direction: "internal",
-          sender_type: "system",
-          sender_name: "Sistema",
-          sent_at: ts,
-          created_at: ts,
-          endpoint_id: targetEndpointId,
-          metadata: {
-            kind: NOTE_KIND,
-            system_note_kind: NOTE_KIND,
-            migration_kind: "explicit_free_type_via_evolution",
-            from_endpoint_id: originalPrimaryId,
-            to_endpoint_id: targetEndpointId,
-            from_provider: fromProvider,
-            to_provider: "evolution_api",
-            from_address: fromAddr,
-            to_address: toAddr,
-            migrated_at: ts,
-            migrated_by_user_id: appUserId,
-          },
-        });
-      if (noteErr) {
-        console.warn(`[${FN}] note insert failed (non-fatal)`, {
-          threadId,
-          error: noteErr.message,
-        });
-      } else {
-        noteInserted = true;
-      }
-    }
   }
 
   console.log(`[${FN}] migrate done`, {
     threadId,
     from: originalPrimaryId,
     to: targetEndpointId,
+    fromProvider: (originalEndpoint as any)?.provider ?? null,
+    toProvider: "evolution_api",
+    fromAddress: (originalEndpoint as any)?.external_address ?? null,
+    toAddress: t.external_address ?? null,
     messageId: sendJson?.messageId,
-    noteInserted,
+    migratedByUserId: appUserId,
+    noteKind: NOTE_KIND,
     isNoop,
   });
 
@@ -311,6 +255,6 @@ serve(async (req) => {
     migrated: !isNoop,
     messageId: sendJson?.messageId,
     newPrimaryEndpointId: targetEndpointId,
-    noteInserted,
+    noteInserted: false,
   });
 });
