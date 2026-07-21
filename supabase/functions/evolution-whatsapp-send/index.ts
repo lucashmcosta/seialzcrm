@@ -226,7 +226,17 @@ serve(async (req) => {
   // Resolve endpoint (defense-in-depth: thread.primary_endpoint_id sempre vence)
   // -------------------------------------------------------------------------
   let effectiveEndpointId: string | null = typeof explicitEndpointId === "string" ? explicitEndpointId : null;
-  if (threadId) {
+  // Migration path: caller (thread-migrate-endpoint-send) explicitly asked
+  // to honor the provided endpointId without falling back to the thread's
+  // current primary_endpoint_id. Only trust this flag when the request comes
+  // in with the service-role key (i.e. server-to-server).
+  const svcKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") || "";
+  const authHdr = req.headers.get("Authorization") || "";
+  const isServiceRoleCaller = !!svcKey && authHdr === `Bearer ${svcKey}`;
+  const skipPrimaryOverride =
+    allowExplicitEndpointMigration === true && isServiceRoleCaller && !!effectiveEndpointId;
+
+  if (threadId && !skipPrimaryOverride) {
     const { data: t } = await supabase
       .from("message_threads")
       .select("primary_endpoint_id")
