@@ -80,8 +80,8 @@ export function MetaRichMessageContent({
   if (type === 'reaction' && raw?.reaction?.emoji) {
     return <ReactionContent emoji={raw.reaction.emoji} isOutbound={isOutbound} />;
   }
-  if (type === 'location' && raw?.location) {
-    return <LocationCard location={raw.location} isOutbound={isOutbound} />;
+  if ((type === 'location' || type === 'live_location') && raw?.location) {
+    return <LocationCard location={raw.location} isOutbound={isOutbound} live={type === 'live_location'} />;
   }
   if (type === 'contacts' && Array.isArray(raw?.contacts) && raw.contacts.length > 0) {
     return <ContactsCard contacts={raw.contacts} isOutbound={isOutbound} />;
