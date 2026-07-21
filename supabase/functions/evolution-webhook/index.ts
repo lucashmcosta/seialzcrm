@@ -32,6 +32,11 @@ import {
   EVOLUTION_WEBHOOK_CONTRACT_VERSION,
   EvolutionWebhookEnvelope,
 } from "../_shared/evolution/types.ts";
+import {
+  normalizeBaileysContact,
+  normalizeBaileysContactsArray,
+  RichContact,
+} from "../_shared/evolution/vcard.ts";
 
 const FN = "evolution-webhook" as const;
 const FLAG = "evolution_api_enabled";
@@ -173,6 +178,20 @@ function extFromMime(mime: string): string {
 // Interpretação da mensagem Baileys/Evolution
 // ---------------------------------------------------------------------------
 
+interface RichMessagePayload {
+  type: "contacts" | "location" | "live_location" | "reaction" | "sticker" | "poll" | "interactive_reply";
+  contacts?: RichContact[];
+  location?: {
+    latitude?: number;
+    longitude?: number;
+    name?: string;
+    address?: string;
+  };
+  reaction?: { emoji?: string; message_id?: string };
+  interactive?: { name?: string; kind?: string; selected?: string };
+  poll?: { name?: string; options?: string[] };
+}
+
 interface ParsedMessage {
   waMessageId: string;      // key.id
   remoteJid: string;        // key.remoteJid
@@ -187,6 +206,7 @@ interface ParsedMessage {
   mediaCaption: string | null;
   quotedId: string | null;  // contextInfo.stanzaId
   rawMessage: Record<string, unknown>;
+  richMessage: RichMessagePayload | null;
 }
 
 // Extrai o payload Baileys real de dentro de `data.message`.
@@ -196,7 +216,7 @@ function unwrapMessage(msg: Record<string, unknown> | null | undefined):
 {
   if (!msg || typeof msg !== "object") return null;
   let cur = msg as Record<string, unknown>;
-  for (let i = 0; i < 4; i++) {
+  for (let i = 0; i < 6; i++) {
     if ("ephemeralMessage" in cur && typeof (cur.ephemeralMessage as any)?.message === "object") {
       cur = ((cur.ephemeralMessage as any).message) as Record<string, unknown>;
       continue;
@@ -207,6 +227,14 @@ function unwrapMessage(msg: Record<string, unknown> | null | undefined):
     }
     if ("viewOnceMessageV2" in cur && typeof (cur.viewOnceMessageV2 as any)?.message === "object") {
       cur = ((cur.viewOnceMessageV2 as any).message) as Record<string, unknown>;
+      continue;
+    }
+    if ("viewOnceMessageV2Extension" in cur && typeof (cur.viewOnceMessageV2Extension as any)?.message === "object") {
+      cur = ((cur.viewOnceMessageV2Extension as any).message) as Record<string, unknown>;
+      continue;
+    }
+    if ("documentWithCaptionMessage" in cur && typeof (cur.documentWithCaptionMessage as any)?.message === "object") {
+      cur = ((cur.documentWithCaptionMessage as any).message) as Record<string, unknown>;
       continue;
     }
     break;
@@ -239,6 +267,8 @@ function parseMessagesUpsert(data: unknown): ParsedMessage | null {
   let mediaFileName: string | null = null;
   let mediaCaption: string | null = null;
   let quotedId: string | null = null;
+
+  let richMessage: RichMessagePayload | null = null;
 
   if (message) {
     // Texto simples
@@ -274,6 +304,9 @@ function parseMessagesUpsert(data: unknown): ParsedMessage | null {
           else if (kind === "document" && mediaFileName) content = mediaFileName;
           else content = placeholderForInbound(kind);
         }
+        if (kind === "sticker") {
+          richMessage = { type: "sticker" };
+        }
         break;
       }
     }
@@ -282,34 +315,115 @@ function parseMessagesUpsert(data: unknown): ParsedMessage | null {
     const reaction = message.reactionMessage as Record<string, unknown> | undefined;
     if (!mediaKind && reaction && isString(reaction.text)) {
       content = `${reaction.text} (reação)`;
+      const rKey = (reaction.key ?? {}) as Record<string, unknown>;
+      richMessage = {
+        type: "reaction",
+        reaction: {
+          emoji: reaction.text as string,
+          message_id: isString(rKey.id) ? (rKey.id as string) : undefined,
+        },
+      };
     }
 
-    // Location
+    // Location (static)
     const loc = message.locationMessage as Record<string, unknown> | undefined;
     if (!mediaKind && loc) {
-      const name = isString(loc.name) ? loc.name : null;
-      const addr = isString(loc.address) ? loc.address : null;
-      const lat = typeof loc.degreesLatitude === "number" ? loc.degreesLatitude : null;
-      const lng = typeof loc.degreesLongitude === "number" ? loc.degreesLongitude : null;
+      const name = isString(loc.name) ? (loc.name as string) : undefined;
+      const addr = isString(loc.address) ? (loc.address as string) : undefined;
+      const lat = typeof loc.degreesLatitude === "number" ? loc.degreesLatitude as number : undefined;
+      const lng = typeof loc.degreesLongitude === "number" ? loc.degreesLongitude as number : undefined;
       const label = name || addr || (lat != null && lng != null ? `${lat},${lng}` : null);
       content = `📍 Localização${label ? `: ${label}` : ""}`;
+      richMessage = {
+        type: "location",
+        location: { latitude: lat, longitude: lng, name, address: addr },
+      };
     }
 
-    // Contact card
+    // Live location
+    const live = message.liveLocationMessage as Record<string, unknown> | undefined;
+    if (!mediaKind && !richMessage && live) {
+      const lat = typeof live.degreesLatitude === "number" ? live.degreesLatitude as number : undefined;
+      const lng = typeof live.degreesLongitude === "number" ? live.degreesLongitude as number : undefined;
+      content = "[Localização ao vivo]";
+      richMessage = {
+        type: "live_location",
+        location: { latitude: lat, longitude: lng },
+      };
+    }
+
+    // Contact card (single)
     const contact = message.contactMessage as Record<string, unknown> | undefined;
-    if (!mediaKind && !content && contact) {
-      const dn = isString(contact.displayName) ? contact.displayName : "";
-      content = `👤 Contato compartilhado${dn ? `: ${dn}` : ""}`;
+    if (!mediaKind && contact) {
+      const normalized = normalizeBaileysContact(contact);
+      const contacts = normalized ? [normalized] : [];
+      if (contacts.length > 0) {
+        const label = contacts[0].name?.formatted_name || "";
+        content = `[Contato compartilhado${label ? `: ${label}` : ""}]`;
+        richMessage = { type: "contacts", contacts };
+      } else if (!content) {
+        content = "[Contato compartilhado]";
+      }
+    }
+
+    // Contact cards array
+    const contactsArr = message.contactsArrayMessage as Record<string, unknown> | undefined;
+    if (!mediaKind && !richMessage && contactsArr) {
+      const contacts = normalizeBaileysContactsArray(contactsArr);
+      if (contacts.length > 0) {
+        const first = contacts[0].name?.formatted_name || "";
+        const extra = contacts.length > 1 ? ` (+${contacts.length - 1})` : "";
+        content = `[Contato compartilhado${first ? `: ${first}` : ""}${extra}]`;
+        richMessage = { type: "contacts", contacts };
+      } else if (!content) {
+        content = "[Contatos compartilhados]";
+      }
     }
 
     // Button/list reply
     const btn = message.buttonsResponseMessage as Record<string, unknown> | undefined;
     if (!content && btn && isString(btn.selectedDisplayText)) {
       content = btn.selectedDisplayText as string;
+      richMessage = richMessage ?? {
+        type: "interactive_reply",
+        interactive: { kind: "button_reply", selected: btn.selectedDisplayText as string },
+      };
     }
     const list = message.listResponseMessage as Record<string, unknown> | undefined;
     if (!content && list && isString(list.title)) {
       content = list.title as string;
+      richMessage = richMessage ?? {
+        type: "interactive_reply",
+        interactive: { kind: "list_reply", selected: list.title as string },
+      };
+    }
+    const tplBtn = message.templateButtonReplyMessage as Record<string, unknown> | undefined;
+    if (!content && tplBtn) {
+      const txt = isString(tplBtn.selectedDisplayText) ? tplBtn.selectedDisplayText as string : "[Resposta do template]";
+      content = txt;
+      richMessage = richMessage ?? {
+        type: "interactive_reply",
+        interactive: { kind: "template_button_reply", selected: txt },
+      };
+    }
+    const iResp = message.interactiveResponseMessage as Record<string, unknown> | undefined;
+    if (!content && iResp) {
+      content = "[Resposta interativa]";
+      richMessage = richMessage ?? {
+        type: "interactive_reply",
+        interactive: { kind: "interactive_response" },
+      };
+    }
+
+    // Poll
+    const poll = message.pollCreationMessage as Record<string, unknown> | undefined;
+    if (!content && poll) {
+      const name = isString(poll.name) ? poll.name as string : "";
+      const opts = Array.isArray(poll.options)
+        ? (poll.options as Array<Record<string, unknown>>).map((o) => isString(o.optionName) ? o.optionName as string : "").filter(Boolean)
+        : [];
+      content = `[Enquete${name ? `: ${name}` : ""}]`;
+      richMessage = { type: "poll", poll: { name, options: opts } };
     }
   }
 
@@ -331,6 +445,7 @@ function parseMessagesUpsert(data: unknown): ParsedMessage | null {
     mediaCaption,
     quotedId,
     rawMessage: (message ?? (d.message as Record<string, unknown>) ?? {}) as Record<string, unknown>,
+    richMessage,
   };
 }
 
@@ -1008,6 +1123,7 @@ async function ingestInboundMessage(
           participant_jid: parsed.participantJid,
           raw: parsed.rawMessage,
         },
+        ...(parsed.richMessage ? { rich_message: parsed.richMessage } : {}),
       },
     })
     .select("id")

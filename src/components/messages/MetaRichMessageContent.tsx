@@ -41,6 +41,21 @@ interface Props {
 function readRaw(metadata: unknown): MetaRaw {
   if (!metadata || typeof metadata !== 'object') return null;
   const meta = metadata as Record<string, unknown>;
+
+  // Provider-neutral shape (used by Evolution API and any future provider).
+  const rich = meta.rich_message as Record<string, unknown> | undefined;
+  if (rich && typeof rich === 'object' && typeof rich.type === 'string') {
+    const r = rich as Record<string, unknown>;
+    return {
+      type: r.type as string,
+      reaction: r.reaction as MetaRaw extends null ? never : NonNullable<MetaRaw>['reaction'],
+      location: r.location as NonNullable<MetaRaw>['location'],
+      contacts: r.contacts as NonNullable<MetaRaw>['contacts'],
+      interactive: r.interactive as NonNullable<MetaRaw>['interactive'],
+    } as MetaRaw;
+  }
+
+  // Meta Cloud native shape.
   const mc = meta.meta_cloud as Record<string, unknown> | undefined;
   if (!mc || typeof mc !== 'object') return null;
   const raw = mc.raw;
@@ -65,8 +80,8 @@ export function MetaRichMessageContent({
   if (type === 'reaction' && raw?.reaction?.emoji) {
     return <ReactionContent emoji={raw.reaction.emoji} isOutbound={isOutbound} />;
   }
-  if (type === 'location' && raw?.location) {
-    return <LocationCard location={raw.location} isOutbound={isOutbound} />;
+  if ((type === 'location' || type === 'live_location') && raw?.location) {
+    return <LocationCard location={raw.location} isOutbound={isOutbound} live={type === 'live_location'} />;
   }
   if (type === 'contacts' && Array.isArray(raw?.contacts) && raw.contacts.length > 0) {
     return <ContactsCard contacts={raw.contacts} isOutbound={isOutbound} />;
@@ -108,9 +123,11 @@ function ReactionContent({ emoji, isOutbound }: { emoji: string; isOutbound: boo
 function LocationCard({
   location,
   isOutbound,
+  live = false,
 }: {
   location: NonNullable<NonNullable<MetaRaw>['location']>;
   isOutbound: boolean;
+  live?: boolean;
 }) {
   const { name, address, latitude, longitude } = location;
   const hasCoords = latitude != null && longitude != null;
@@ -142,6 +159,7 @@ function LocationCard({
       <div className="p-2 flex items-start gap-2">
         <MapPin size={18} weight="fill" className={isOutbound ? 'text-white/80' : 'text-primary'} />
         <div className="flex-1 min-w-0">
+          {live && <div className={`text-[11px] uppercase tracking-wide ${subText}`}>Localização ao vivo</div>}
           {name && <div className="text-sm font-medium truncate">{name}</div>}
           {address && <div className={`text-xs truncate ${subText}`}>{address}</div>}
           {hasCoords && (

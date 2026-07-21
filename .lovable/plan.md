@@ -1,56 +1,119 @@
+# Evolution API — Paridade de tipos de mensagem (vCard e mídias)
+
 ## Objetivo
+Paridade do provider Evolution com o comportamento já existente da Meta Cloud API para tipos especiais, reutilizando ao máximo a infraestrutura atual e mantendo **zero regressão** em Meta, Twilio e demais tenants.
 
-Ao receber um inbound Evolution de um contato que já tem thread WhatsApp (Twilio/Meta) na mesma organização, **reutilizar** a thread existente ao invés de criar uma nova. Atualizar `primary_endpoint_id` para o endpoint Evolution, preservando todo o histórico. O divisor visual "📞 Número alterado" aparece automaticamente, pois é derivado da mudança de `messages.endpoint_id` entre mensagens consecutivas (renderizado em `MessagesList.tsx`, sem helper server-side).
+## Escopo desta entrega
+Inclui: vCard inbound, múltiplos contatos, localização, live location, reply/quoted, fallbacks para tipos especiais, auditoria real de imagem/áudio/vídeo/documento/sticker.
 
-## Diagnóstico
+**Não implementar outbound de vCard.** A UI atual não expõe ação de enviar contato. Se a Evolution suportar `/message/sendContact/{instance}`, apenas documentar no relatório.
 
-- **`supabase/functions/evolution-webhook/index.ts` linhas 488-522** (`findOrCreateThread`): filtra por `primary_endpoint_id = endpointId`. Como a thread histórica da Viagi aponta para o endpoint Twilio, o webhook nunca encontra e sempre cria thread nova.
-- **Divisor "Número alterado"**: existe apenas como renderer em `src/pages/messages/MessagesList.tsx` (linhas ~683 e ~1991-2004). Não há helper de "trocar número" — o divisor aparece sozinho quando o `endpoint_id` da mensagem N difere do da N-1 na mesma thread. Portanto não é preciso inserir mensagem de sistema; basta que a nova mensagem inbound seja inserida na thread histórica com o `endpoint_id` Evolution.
-- **Twilio/Meta webhooks** aplicam o mesmo filtro por `primary_endpoint_id`, o que significa que a regra "1 thread por número" é o padrão atual. A mudança será exclusiva do Evolution (o pedido é explicitamente para migração de provider, não para unificar todo o comportamento inbound do CRM).
+## Passo 1 — Auditoria do contrato `metadata.meta_cloud.raw`
+Grep completo no repo (`src/**`, `supabase/functions/**`, SQL, triggers) confirmando que o namespace é usado **apenas** como contrato visual pelos renderers (`MetaRichMessageContent` + consumidores). Verificar ausência em: identificação de provider, métricas, billing, automações, regras de negócio, auditoria, analytics.
 
-## Mudança única — `evolution-webhook/index.ts` `findOrCreateThread`
+- **Se contrato puramente visual:** reutilizar `metadata.meta_cloud.raw` diretamente no Evolution.
+- **Se existir semântica de provider:** criar contrato neutro `metadata.rich_message` com mesmo shape `{ type, contacts, location, reaction }` e alterar o renderer para consumir na ordem `metadata.rich_message → fallback metadata.meta_cloud.raw`. Meta e Twilio permanecem intocados. Provider da mensagem continua determinado exclusivamente por `endpoint_id`, `communication_endpoints.provider` e `metadata.evolution` — nunca por `metadata.meta_cloud`.
 
-Substituir a busca escopada por endpoint por uma busca em duas camadas:
+Decisão documentada no relatório final.
 
-1. **Match preferencial** (comportamento atual): thread `(org, contact, channel='whatsapp', primary_endpoint_id = endpointId Evolution)`. Cobre o caso já-migrado / conversas Evolution puras.
-2. **Match de migração** (novo): se não achou, procurar a thread WhatsApp mais recente `(org, contact, channel='whatsapp')` **ignorando `primary_endpoint_id`**, ordenada por `last_message_at desc, created_at desc`. Se encontrar:
-   - `UPDATE message_threads SET primary_endpoint_id = <endpoint Evolution>, whatsapp_last_inbound_at = <ts>, last_inbound_at = <ts>` para a thread encontrada.
-   - Retornar o `id` dessa thread.
-3. **Fallback**: se nenhuma thread WhatsApp existir para o contato, criar uma nova como hoje.
+## Passo 2 — vCard real
+Capturar payloads reais da instância `dev-int` para `contactMessage` e `contactsArrayMessage`. Zero payload sintético. Redigir números no relatório.
 
-Nada mais muda: a inserção da mensagem inbound (linhas ~940-960) já usa o `endpoint_id` Evolution, então o divisor visual "Número alterado: 5098 → 8439" aparece automaticamente entre a última mensagem Twilio e a primeira mensagem Evolution.
+Extrair: `FN`, `N`, `ORG`, `EMAIL`, múltiplos `TEL`, `TEL;waid=`. Preservar vCard original. Normalizar telefones com a mesma regra E.164/BR já usada no CRM.
 
-## Outbound
+Criar `supabase/functions/_shared/evolution/vcard.ts` centralizando o parser.
 
-Nenhuma alteração necessária. `dispatchWhatsAppSend` já resolve pelo `message_threads.primary_endpoint_id` — como o passo 2 acima atualizou o campo, o próximo envio pelo Composer sai naturalmente pela Evolution, com `endpoint_id` Evolution persistido apenas na mensagem nova. Mensagens antigas permanecem intocadas.
+## Passo 3 — Parser
+Expandir `supabase/functions/evolution-webhook/index.ts` para suportar:
+- `contactMessage`, `contactsArrayMessage`
+- `locationMessage`, `liveLocationMessage`
+- `pollCreationMessage`
+- `templateButtonReplyMessage`, `interactiveResponseMessage`
+- `reactionMessage`, `stickerMessage`
+- `viewOnceMessage`, `viewOnceMessageV2`, `viewOnceMessageV2Extension` (desembrulhar **antes** do parser principal)
 
-## Segurança / guardas (já cobertas, apenas confirmar no código)
+Nunca cair em `[mensagem não suportada]` quando o tipo puder ser identificado.
 
-- Endpoint Evolution resolvido a partir do `instance_name` recebido no webhook → garante mesma organização.
-- Contato localizado por normalização BR já existente (`normalizePhoneBR`) dentro da mesma org → impossibilita cross-tenant.
-- Feature flag `evolution_api_enabled` continua bloqueando execução no topo do handler.
-- A troca só é disparada em inbound real (dentro do fluxo `MESSAGES_UPSERT`), nunca em callback de status.
+## Passo 4 — Persistência
+Continuar preservando `metadata.evolution.raw` íntegro. Adicionar a estrutura normalizada consumida pelo renderer compartilhado.
 
-## Restrições respeitadas
+Contatos:
+```json
+{
+  "type": "contacts",
+  "contacts": [
+    {
+      "name": { "formatted_name": "...", "first_name": "...", "last_name": "..." },
+      "phones": [{ "phone": "...", "wa_id": "...", "type": "CELL" }],
+      "emails": [{ "email": "...", "type": "HOME" }]
+    }
+  ]
+}
+```
 
-- Sem alterar Meta ou Twilio.
-- Sem tocar `endpoint_id` de mensagens históricas.
-- Sem apagar/copiar histórico.
-- Sem criar helper paralelo (reaproveita o divisor já renderizado em `MessagesList.tsx`).
-- Escopo cirúrgico: 1 função (`findOrCreateThread`) em 1 arquivo.
+Localização:
+```json
+{
+  "type": "location",
+  "location": { "latitude": 0, "longitude": 0, "name": "...", "address": "..." }
+}
+```
 
-## Validação (cenário Junior Teste `5511964298621` via `dev-int` / `5511936198439`)
+Exatamente o contrato Meta.
 
-Executar via SQL/logs, sem novo código de teste:
+## Passo 5 — Comportamento esperado
+Ao compartilhar um contato real, nunca aparecer `[mensagem não suportada]`. Card deve mostrar nome, telefone, "Abrir contato" (quando existir) ou "Salvar contato" (quando não existir), idêntico ao Meta hoje. Não criar contato automaticamente pela vCard, salvo se já for regra global do CRM.
 
-1. `SELECT count(*) FROM message_threads WHERE contact_id = <junior>` — antes.
-2. Enviar mensagem real do celular `5511964298621` para o número Evolution.
-3. Repetir contagem — deve permanecer igual.
-4. `SELECT id, primary_endpoint_id FROM message_threads WHERE contact_id = <junior>` — `primary_endpoint_id` migrou para o endpoint Evolution da Viagi.
-5. Últimas 5 linhas de `messages` da thread: mostrar histórico Twilio + a nova linha inbound Evolution com `endpoint_id` diferente.
-6. Abrir `/messages` na thread: confirmar divisor "📞 Número alterado: 5098 → 8439" entre o bloco Twilio e a nova mensagem.
-7. Responder pelo Composer: nova outbound persistida na mesma thread, `endpoint_id` Evolution, status `sent → delivered → read` via callbacks já implementados na Fase 6.
+Mensagem deve: permanecer na thread histórica; aparecer em Mensagens e Atendimento; funcionar após refresh e cold start.
 
-## Entrega final (após execução)
+## Passo 6 — Múltiplos contatos
+`contactsArrayMessage` renderiza todos os contatos via componente existente. Nenhum componente novo.
 
-Relatório curto no chat com: thread_id antes/depois (igual), `primary_endpoint_id` antes/depois, contagem de threads do contato antes/depois (igual), ID da mensagem inbound, ID da mensagem outbound, screenshot/print do divisor. Sem novo arquivo de auditoria — atualização em `docs/integrations/evolution-api/UX_FINAL_AUDIT.md` se você pedir.
+## Passo 7 — Localização
+Location → renderer existente. LiveLocation → placeholder `[Localização ao vivo]` com payload bruto preservado.
+
+## Passo 8 — Reply
+Confirmar com testes reais: `quotedId` capturado, `reply_to_message_id` persistido, `QuotedMessage` renderiza, lookup por `whatsapp_message_sid`. Corrigir apenas se houver falha comprovada.
+
+## Passo 9 — Auditoria de mídias
+Testes reais para imagem, áudio, vídeo, documento e sticker (inbound e outbound). Validar: `media_type`, `media_urls`, MIME, filename, caption, duration (áudio), storage path, bucket, reload, cold start, render em Mensagens e em Atendimento. Corrigir apenas gaps comprovados. Sem refactor especulativo.
+
+## Passo 10 — Outbound vCard
+Não implementar. Se `/message/sendContact/{instance}` existir, documentar no relatório. Não alterar Composer, botão, dispatcher.
+
+## Não regressão
+Não alterar: Meta webhook, Twilio webhook, dispatcher, Composer, Inbox, regras de troca de endpoint, lógica de migração de thread, feature flags, demais tenants. Apenas Evolution é afetada.
+
+## Testes obrigatórios (instância `dev-int`, tenant Viagi)
+Para cada tipo registrar: Event ID, Message ID, Thread ID, tipo normalizado, metadata persistida, storage path, screenshot em Mensagens, screenshot em Atendimento.
+
+Para vCard confirmar adicionalmente: webhook recebido, parser executado, mensagem persistida, metadata correta, renderer correto, reload funcionando, nenhuma thread nova criada, nenhum contato duplicado. Entrega não fecha sem essa validação.
+
+## Arquivos previstos
+Modificar apenas:
+- `supabase/functions/evolution-webhook/index.ts`
+
+Criar:
+- `supabase/functions/_shared/evolution/vcard.ts`
+- (opcional, somente se Passo 1 exigir contrato neutro) alteração no renderer compartilhado para aceitar `metadata.rich_message`
+
+Nenhuma migration. Nenhuma alteração em Meta, Twilio ou telas (salvo a exceção acima).
+
+## Entrega
+`docs/integrations/evolution-api/MEDIA_AND_VCARD_AUDIT.md` contendo:
+1. Payload real de `contactMessage` (redigido)
+2. Payload real de `contactsArrayMessage` (redigido)
+3. Decisão documentada sobre `metadata.meta_cloud.raw` vs `metadata.rich_message`
+4. Parser implementado
+5. Estrutura persistida
+6. Evidências visuais em Mensagens
+7. Evidências visuais em Atendimento
+8. Matriz completa de tipos suportados
+9. Event IDs
+10. Message IDs
+11. Thread IDs
+12. Storage paths
+13. Limitações restantes
+14. Evidências de não-regressão
+
+Não declarar concluído sem validar em produção piloto (Viagi).
