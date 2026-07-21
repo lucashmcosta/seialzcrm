@@ -670,7 +670,9 @@ function DesktopMessagesList() {
       );
       const primaryIsSales =
         selectedThreadPrimaryEndpointId && isSalesPurpose(primaryEndpointPurpose);
-      if (primaryIsSales && lastInboundTime) {
+      const lastInbound = getLastInboundTime(selectedThread as any, []);
+      const withinWindow = !!lastInbound && Date.now() - lastInbound.getTime() < 24 * 60 * 60 * 1000;
+      if (primaryIsSales && withinWindow) {
         return selectedThreadPrimaryEndpointId;
       }
       if (evolutionSalesEndpoint) return evolutionSalesEndpoint.id;
