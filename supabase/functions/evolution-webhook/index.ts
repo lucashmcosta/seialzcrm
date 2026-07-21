@@ -216,7 +216,7 @@ function unwrapMessage(msg: Record<string, unknown> | null | undefined):
 {
   if (!msg || typeof msg !== "object") return null;
   let cur = msg as Record<string, unknown>;
-  for (let i = 0; i < 4; i++) {
+  for (let i = 0; i < 6; i++) {
     if ("ephemeralMessage" in cur && typeof (cur.ephemeralMessage as any)?.message === "object") {
       cur = ((cur.ephemeralMessage as any).message) as Record<string, unknown>;
       continue;
@@ -227,6 +227,14 @@ function unwrapMessage(msg: Record<string, unknown> | null | undefined):
     }
     if ("viewOnceMessageV2" in cur && typeof (cur.viewOnceMessageV2 as any)?.message === "object") {
       cur = ((cur.viewOnceMessageV2 as any).message) as Record<string, unknown>;
+      continue;
+    }
+    if ("viewOnceMessageV2Extension" in cur && typeof (cur.viewOnceMessageV2Extension as any)?.message === "object") {
+      cur = ((cur.viewOnceMessageV2Extension as any).message) as Record<string, unknown>;
+      continue;
+    }
+    if ("documentWithCaptionMessage" in cur && typeof (cur.documentWithCaptionMessage as any)?.message === "object") {
+      cur = ((cur.documentWithCaptionMessage as any).message) as Record<string, unknown>;
       continue;
     }
     break;
