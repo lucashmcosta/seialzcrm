@@ -1153,11 +1153,18 @@ function DesktopMessagesList() {
     // Caminho de MIGRAÇÃO explícita: bypass ativo + thread não é nativamente
     // Evolution + existe endpoint Evolution disponível. Roteia para o Edge
     // Function que valida, envia e migra o primary_endpoint_id atomicamente.
+    // Alvo Evolution: composer explícito OU fallback para evolutionEndpoint da org.
+    const targetEvolutionId =
+      (composerIsEvolution ? (composerEndpoint as any)?.id : null) ??
+      (evolutionEndpoint as any)?.id ??
+      null;
+    // Migrar quando bypass ativo, alvo Evolution existe e é diferente do
+    // primary_endpoint_id atual da thread (senão é envio nativo normal).
     const shouldMigrate =
       bypassWindow &&
-      !composerIsEvolution &&
-      !!evolutionEndpoint?.id &&
-      !!selectedThreadId;
+      !!targetEvolutionId &&
+      !!selectedThreadId &&
+      selectedThreadPrimaryEndpointId !== targetEvolutionId;
 
     if (shouldMigrate) {
       const savedText = messageText.trim();
@@ -1193,7 +1200,7 @@ function DesktopMessagesList() {
         const { data, error } = await migrateThreadAndSend({
           organizationId: organization.id,
           threadId: selectedThreadId!,
-          targetEndpointId: (evolutionEndpoint as any).id,
+          targetEndpointId: targetEvolutionId,
           message: savedText,
           userId: userProfile?.id,
           replyToMessageId: savedReplyTo?.id || null,
