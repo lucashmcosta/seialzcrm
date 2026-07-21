@@ -677,6 +677,28 @@ function DesktopMessagesList() {
     if (!selectedThreadId) return;
     setComposerEndpointByThread((prev) => ({ ...prev, [selectedThreadId]: id }));
   };
+  // Bypass da janela 24h: disponível quando o composer já é Evolution ou
+  // quando existe um endpoint Evolution ativo na org (permitindo trocar o
+  // envio dessa mensagem pelo número não-oficial sem exigir template).
+  const composerEndpoint = composerEndpointId ? endpointById[composerEndpointId] : null;
+  const composerIsEvolution = (composerEndpoint as any)?.provider === 'evolution_api';
+  const evolutionEndpoint = useMemo(() => {
+    const actives = (orgEndpoints ?? []).filter(
+      (e: any) => e?.provider === 'evolution_api' && e?.is_active,
+    );
+    if (actives.length === 0) return null;
+    const purposeMatch = actives.find(
+      (e: any) => e?.purpose && primaryEndpointPurpose && e.purpose === primaryEndpointPurpose,
+    );
+    return purposeMatch ?? actives[0];
+  }, [orgEndpoints, primaryEndpointPurpose]);
+  const canBypassWindow = composerIsEvolution || !!evolutionEndpoint;
+  const handleBypassWindow = () => {
+    if (!composerIsEvolution && evolutionEndpoint?.id) {
+      setComposerEndpointId(evolutionEndpoint.id);
+    }
+    setBypassWindow(true);
+  };
   const selectedEndpointFallback = selectedEndpointDetails?.threadId === selectedThreadId
     ? selectedEndpointDetails.endpoint
     : null;
