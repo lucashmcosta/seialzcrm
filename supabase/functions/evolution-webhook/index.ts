@@ -427,6 +427,22 @@ function parseMessagesUpsert(data: unknown): ParsedMessage | null {
     }
   }
 
+  // Silent-drop: eventos criptografados de voto/reação/edição (Signal). O
+  // WhatsApp oficial não exibe esses payloads — decodificá-los exige as
+  // chaves Signal do device, que não temos. Descartamos igual ao cliente
+  // oficial em vez de poluir a thread com "[mensagem não suportada]".
+  if (!content && message) {
+    const secretEnc = message.secretEncryptedMessage as Record<string, unknown> | undefined;
+    if (secretEnc) {
+      console.log("[evolution-webhook] secretEncrypted skipped", {
+        secretEncType: (secretEnc as any)?.secretEncType ?? null,
+        remoteJid,
+        waMessageId,
+      });
+      return null;
+    }
+  }
+
   if (!content) {
     content = `[mensagem não suportada]`;
   }
