@@ -2394,16 +2394,17 @@ function DesktopMessagesList() {
                                     const targetNum = composerIsEvolution
                                       ? (composerEndpoint as any)?.external_address
                                       : (evolutionEndpoint as any)?.external_address;
+                                    const last4 = (targetNum ?? '').replace(/\D/g, '').slice(-4) || 'Evolution';
                                     const label = composerIsEvolution
                                       ? (locale === 'pt-BR' ? 'digitar livre' : 'type free')
                                       : (locale === 'pt-BR'
-                                          ? `digitar livre pelo ${targetNum ?? 'Evolution'}`
-                                          : `type free via ${targetNum ?? 'Evolution'}`);
+                                          ? `Enviar pelo ${last4} e migrar conversa`
+                                          : `Send via ${last4} and migrate thread`);
                                     const tip = composerIsEvolution
                                       ? (locale === 'pt-BR' ? 'Este número (Evolution) não exige template — digitar livre' : 'This number (Evolution) does not require a template')
                                       : (locale === 'pt-BR'
-                                          ? `A mensagem sairá pelo número Evolution ${targetNum ?? ''} (sem template)`
-                                          : `Message will be sent via Evolution number ${targetNum ?? ''} (no template)`);
+                                          ? `A conversa passará a operar pelo número Evolution ${targetNum ?? ''}. Histórico preservado.`
+                                          : `Thread will move to Evolution number ${targetNum ?? ''}. History preserved.`);
                                     return (
                                       <button
                                         type="button"
