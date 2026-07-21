@@ -289,6 +289,12 @@ function DesktopMessagesList() {
     ? sendEp.provider
     : selectedThreadWaProvider;
   const [textareaOverflow, setTextareaOverflow] = useState(false);
+  // Bypass de janela 24h — só permitido quando o envio sai por Evolution API
+  // (Baileys, não-oficial, sem restrição de template). Estado local, reseta
+  // ao trocar de thread. Não persiste.
+  const [bypassWindow, setBypassWindow] = useState(false);
+  const canBypassWindow = sendEp.provider === 'evolution_api';
+  useEffect(() => { setBypassWindow(false); }, [selectedThreadId]);
   const [messages, setMessages] = useState<Message[]>([]);
   const [messagesLoading, setMessagesLoading] = useState(false);
   const [messageText, setMessageText] = useState('');
