@@ -159,6 +159,7 @@ function LocationCard({
       <div className="p-2 flex items-start gap-2">
         <MapPin size={18} weight="fill" className={isOutbound ? 'text-white/80' : 'text-primary'} />
         <div className="flex-1 min-w-0">
+          {live && <div className={`text-[11px] uppercase tracking-wide ${subText}`}>Localização ao vivo</div>}
           {name && <div className="text-sm font-medium truncate">{name}</div>}
           {address && <div className={`text-xs truncate ${subText}`}>{address}</div>}
           {hasCoords && (
