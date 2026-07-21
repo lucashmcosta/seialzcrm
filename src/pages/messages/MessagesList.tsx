@@ -289,11 +289,11 @@ function DesktopMessagesList() {
     ? sendEp.provider
     : selectedThreadWaProvider;
   const [textareaOverflow, setTextareaOverflow] = useState(false);
-  // Bypass de janela 24h — só permitido quando o envio sai por Evolution API
+  // Bypass de janela 24h — permitido quando o envio pode sair por Evolution API
   // (Baileys, não-oficial, sem restrição de template). Estado local, reseta
-  // ao trocar de thread. Não persiste.
+  // ao trocar de thread. Não persiste. `canBypassWindow` é calculado abaixo
+  // com base no composer/endpoint Evolution disponível na org.
   const [bypassWindow, setBypassWindow] = useState(false);
-  const canBypassWindow = sendEp.provider === 'evolution_api';
   useEffect(() => { setBypassWindow(false); }, [selectedThreadId]);
   const [messages, setMessages] = useState<Message[]>([]);
   const [messagesLoading, setMessagesLoading] = useState(false);
@@ -676,6 +676,28 @@ function DesktopMessagesList() {
   const setComposerEndpointId = (id: string) => {
     if (!selectedThreadId) return;
     setComposerEndpointByThread((prev) => ({ ...prev, [selectedThreadId]: id }));
+  };
+  // Bypass da janela 24h: disponível quando o composer já é Evolution ou
+  // quando existe um endpoint Evolution ativo na org (permitindo trocar o
+  // envio dessa mensagem pelo número não-oficial sem exigir template).
+  const composerEndpoint = composerEndpointId ? endpointById[composerEndpointId] : null;
+  const composerIsEvolution = (composerEndpoint as any)?.provider === 'evolution_api';
+  const evolutionEndpoint = useMemo(() => {
+    const actives = (orgEndpoints ?? []).filter(
+      (e: any) => e?.provider === 'evolution_api' && e?.is_active,
+    );
+    if (actives.length === 0) return null;
+    const purposeMatch = actives.find(
+      (e: any) => e?.purpose && primaryEndpointPurpose && e.purpose === primaryEndpointPurpose,
+    );
+    return purposeMatch ?? actives[0];
+  }, [orgEndpoints, primaryEndpointPurpose]);
+  const canBypassWindow = composerIsEvolution || !!evolutionEndpoint;
+  const handleBypassWindow = () => {
+    if (!composerIsEvolution && evolutionEndpoint?.id) {
+      setComposerEndpointId(evolutionEndpoint.id);
+    }
+    setBypassWindow(true);
   };
   const selectedEndpointFallback = selectedEndpointDetails?.threadId === selectedThreadId
     ? selectedEndpointDetails.endpoint
@@ -2291,16 +2313,31 @@ function DesktopMessagesList() {
                                   >
                                     <FileText className="h-5 w-5" />
                                   </Button>
-                                  {canBypassWindow && (
-                                    <button
-                                      type="button"
-                                      onClick={() => setBypassWindow(true)}
-                                      title={locale === 'pt-BR' ? 'Este número (Evolution) não exige template — digitar livre' : 'This number (Evolution) does not require a template'}
-                                      className="self-center text-[10px] text-muted-foreground/70 hover:text-foreground underline underline-offset-2 px-1"
-                                    >
-                                      {locale === 'pt-BR' ? 'digitar livre' : 'type free'}
-                                    </button>
-                                  )}
+                                  {canBypassWindow && (() => {
+                                    const targetNum = composerIsEvolution
+                                      ? (composerEndpoint as any)?.external_address
+                                      : (evolutionEndpoint as any)?.external_address;
+                                    const label = composerIsEvolution
+                                      ? (locale === 'pt-BR' ? 'digitar livre' : 'type free')
+                                      : (locale === 'pt-BR'
+                                          ? `digitar livre pelo ${targetNum ?? 'Evolution'}`
+                                          : `type free via ${targetNum ?? 'Evolution'}`);
+                                    const tip = composerIsEvolution
+                                      ? (locale === 'pt-BR' ? 'Este número (Evolution) não exige template — digitar livre' : 'This number (Evolution) does not require a template')
+                                      : (locale === 'pt-BR'
+                                          ? `A mensagem sairá pelo número Evolution ${targetNum ?? ''} (sem template)`
+                                          : `Message will be sent via Evolution number ${targetNum ?? ''} (no template)`);
+                                    return (
+                                      <button
+                                        type="button"
+                                        onClick={handleBypassWindow}
+                                        title={tip}
+                                        className="self-center text-[10px] text-muted-foreground/70 hover:text-foreground underline underline-offset-2 px-1"
+                                      >
+                                        {label}
+                                      </button>
+                                    );
+                                  })()}
                                 </>
                               ) : (
                                 <>

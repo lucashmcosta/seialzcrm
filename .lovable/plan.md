@@ -1,46 +1,44 @@
-## Objetivo
+## Contexto
 
-Permitir digitar mensagem livre em `/messages` mesmo com a "janela 24h" fechada, quando a thread vai sair pela Evolution API (número `+5511936198439`, `dev-int`) — que não tem restrição de template.
+O botão "digitar livre" existe (`MessagesList.tsx` linhas 2294–2303), mas só aparece quando o endpoint de envio **da própria thread** já é Evolution (`sendEp.provider === 'evolution_api'`). Na thread da MORENAH o envio sai pelo Meta Cloud 2890, então a condição é falsa e o botão não renderiza — mesmo a org tendo o número Evolution 8439 disponível.
 
-## Onde mora o bloqueio
+Como o composer já suporta escolha de endpoint por thread (`composerEndpointByThread` / `composerEndpointId`) sem persistir na thread, dá pra unir as duas coisas: o botão passa a ser **"digitar livre pelo 8439"** e, ao clicar, troca o endpoint do composer pro Evolution + libera o bypass da janela 24h.
 
-`src/pages/messages/MessagesList.tsx` linha 2247:
+## O que muda (apenas UI/estado local, sem tocar backend/dispatcher)
 
-```ts
-const outOfWindow = !serviceWindow.isOpen && messages.length > 0;
-```
+1. **Novo cálculo do endpoint Evolution disponível na org**
+   - Em `MessagesList.tsx`, derivar `evolutionEndpoint` a partir de `orgEndpoints` filtrando `provider === 'evolution_api'` e `is_active`. Preferência: mesmo `purpose` da thread; senão, primeiro ativo.
 
-Quando `outOfWindow=true` o composer troca o textarea por `WhatsAppTemplateSelector`, desabilita send/AI e mostra "Fora da janela — selecione um template".
+2. **Nova condição de exibição do botão**
+   - Substituir `canBypassWindow = sendEp.provider === 'evolution_api'` por:
+     - `composerIsEvolution` = provider do `composerEndpointId` é Evolution.
+     - `canBypassWindow` = `composerIsEvolution || !!evolutionEndpoint`.
+   - Assim o botão aparece na thread da MORENAH (Meta) porque a org tem o 8439.
 
-`serviceWindow` vem de `useServiceWindow` (janela oficial WhatsApp Meta/Twilio, correta para provedores oficiais).
+3. **Ação do botão "digitar livre"**
+   - Se `composerIsEvolution`: apenas `setBypassWindow(true)` (comportamento atual).
+   - Se não: `setComposerEndpointId(evolutionEndpoint.id)` **e** `setBypassWindow(true)`. Isso já faz o `dispatchWhatsAppSend` sair pelo 8439 (o handler usa `composerEndpointId`).
+   - Texto/tooltip do botão passa a mostrar o número Evolution alvo (ex.: "digitar livre pelo +55 11 93619-8439") pra deixar claro que a mensagem vai sair de outro número.
 
-## Proposta (mínima, escondida, sem mexer em regra de negócio)
+4. **Reset ao trocar de thread**
+   - `bypassWindow` já reseta no `useEffect([selectedThreadId])`. Manter.
+   - `composerEndpointByThread` é keyed por thread, então a troca fica escopada e não vaza pra outras conversas.
 
-1. **Detectar provider do endpoint de envio** da thread:
-   - `useThreadSendEndpoint` já existe e devolve o endpoint efetivo (com re-rota). Ler `provider` dele.
-   - Chamar de "override permitido" quando `provider === 'evolution_api'`.
+5. **Aviso visual mínimo**
+   - Enquanto o composer estiver no modo bypass + endpoint trocado, mostrar um badge discreto acima do input tipo "Enviando por Evolution · +55 11 93619-8439" (usa `formatEndpointIdentity` que já existe). Sem alterar layout maior.
 
-2. **Botão minúsculo escondido** no composer, renderizado só quando `outOfWindow && overrideAllowed`:
-   - Aparece como um linkzinho de 10px (ex.: um ícone `Lock`/`LockOpen` + texto "Digitar sem template") na barra do placeholder "Fora da janela", ao lado do seletor de template.
-   - Ao clicar: seta estado local `bypassWindow=true` (não persiste, escopo do thread aberto — reseta ao trocar de thread).
+## O que **não** muda
 
-3. **Aplicar bypass**:
-   - `const outOfWindow = !serviceWindow.isOpen && messages.length > 0 && !bypassWindow;`
-   - Nada mais muda — textarea/AI/send voltam a funcionar normalmente.
-   - `dispatchWhatsAppSend` já roteia por endpoint ativo, então o envio sai pela Evolution sem regra adicional.
+- `dispatchWhatsAppSend`, `evolution-whatsapp-send`, `useThreadSendEndpoint`, RPCs, tabelas, triggers, `primary_endpoint_id` da thread. É estritamente UI/estado local do composer.
+- Regras de janela 24h continuam iguais para envios via Meta/Twilio.
+- Templates continuam disponíveis normalmente pra quem estiver em Meta.
 
-4. **Reset**: `useEffect` zera `bypassWindow` quando `selectedThreadId` muda.
+## Riscos / bordas
 
-5. **Guarda de segurança**: se `overrideAllowed` for false (Meta/Twilio), o botão nem aparece — não é possível burlar janela em provedor oficial (evita erro 63016 e degradação de qualidade do número).
+- Só habilita bypass se existir Evolution endpoint ativo na org — orgs sem Evolution continuam com o comportamento atual (só template).
+- O endpoint trocado é por-thread e não persiste no banco; próxima abertura volta ao padrão (Meta), evitando surpresa em envios futuros.
+- A thread continua Meta no `primary_endpoint_id`; apenas essa mensagem sairá pela Evolution. Se você quiser depois "migrar" a thread pro 8439 de forma permanente, isso é outro passo (não incluído aqui).
 
-## Escopo do que NÃO muda
+## Arquivo tocado
 
-- `useServiceWindow`, `WhatsAppWindowChip`, `serviceWindow.reason`, RPCs, dispatcher, edge functions, mobile (`MobileMessagesList`), Inbox composer, contact drawer.
-- Regras de compliance (`complianceGuards`) permanecem intactas.
-- Nenhum backend/migration.
-
-## Arquivos afetados
-
-- `src/pages/messages/MessagesList.tsx` — estado `bypassWindow`, leitura de `provider` do send endpoint, botão discreto, ajuste da constante `outOfWindow`.
-
-Uma única mudança de UI, ~30 linhas.
+- `src/pages/messages/MessagesList.tsx` (bloco do bypass, ~linhas 292–302 e 2283–2303, mais leitura de `orgEndpoints`).
