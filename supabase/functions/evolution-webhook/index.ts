@@ -1123,6 +1123,7 @@ async function ingestInboundMessage(
           participant_jid: parsed.participantJid,
           raw: parsed.rawMessage,
         },
+        ...(parsed.richMessage ? { rich_message: parsed.richMessage } : {}),
       },
     })
     .select("id")
