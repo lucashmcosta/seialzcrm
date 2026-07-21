@@ -2250,7 +2250,7 @@ function DesktopMessagesList() {
                     {/* Input Area */}
                     <div className="border-t border-border p-4 bg-card">
                       {(() => {
-                        const outOfWindow = !serviceWindow.isOpen && messages.length > 0;
+                        const outOfWindow = !serviceWindow.isOpen && messages.length > 0 && !bypassWindow;
                         const outOfWindowCopy = serviceWindow.reason || (locale === 'pt-BR' ? 'Fora da janela — selecione um template' : 'Outside window — select a template');
                         return (
                           <>
