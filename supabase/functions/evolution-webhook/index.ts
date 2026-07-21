@@ -178,6 +178,20 @@ function extFromMime(mime: string): string {
 // Interpretação da mensagem Baileys/Evolution
 // ---------------------------------------------------------------------------
 
+interface RichMessagePayload {
+  type: "contacts" | "location" | "live_location" | "reaction" | "sticker" | "poll" | "interactive_reply";
+  contacts?: RichContact[];
+  location?: {
+    latitude?: number;
+    longitude?: number;
+    name?: string;
+    address?: string;
+  };
+  reaction?: { emoji?: string; message_id?: string };
+  interactive?: { name?: string; kind?: string; selected?: string };
+  poll?: { name?: string; options?: string[] };
+}
+
 interface ParsedMessage {
   waMessageId: string;      // key.id
   remoteJid: string;        // key.remoteJid
@@ -192,6 +206,7 @@ interface ParsedMessage {
   mediaCaption: string | null;
   quotedId: string | null;  // contextInfo.stanzaId
   rawMessage: Record<string, unknown>;
+  richMessage: RichMessagePayload | null;
 }
 
 // Extrai o payload Baileys real de dentro de `data.message`.
