@@ -123,9 +123,11 @@ function ReactionContent({ emoji, isOutbound }: { emoji: string; isOutbound: boo
 function LocationCard({
   location,
   isOutbound,
+  live = false,
 }: {
   location: NonNullable<NonNullable<MetaRaw>['location']>;
   isOutbound: boolean;
+  live?: boolean;
 }) {
   const { name, address, latitude, longitude } = location;
   const hasCoords = latitude != null && longitude != null;
