@@ -1142,8 +1142,84 @@ function DesktopMessagesList() {
     }
     if (!organization?.id || !messageText.trim() || !selectedThread) return;
 
-    if (!serviceWindow.isOpen) {
+    // Bypass explícito: usuário optou por enviar/migrar via Evolution.
+    // Ignora a checagem de janela 24h (Evolution/Baileys não é oficial).
+    if (!serviceWindow.isOpen && !bypassWindow) {
       setShowTemplates(true);
+      return;
+    }
+
+    // Caminho de MIGRAÇÃO explícita: bypass ativo + thread não é nativamente
+    // Evolution + existe endpoint Evolution disponível. Roteia para o Edge
+    // Function que valida, envia e migra o primary_endpoint_id atomicamente.
+    const shouldMigrate =
+      bypassWindow &&
+      !composerIsEvolution &&
+      !!evolutionEndpoint?.id &&
+      !!selectedThreadId;
+
+    if (shouldMigrate) {
+      const savedText = messageText.trim();
+      const savedReplyTo = replyingTo;
+      const tempId = `temp-mig-${Date.now()}`;
+      const tempMessage: Message = {
+        id: tempId,
+        content: savedText,
+        direction: 'outbound',
+        sent_at: new Date().toISOString(),
+        whatsapp_status: 'sending',
+        media_urls: null,
+        media_type: null,
+        error_message: null,
+        error_code: null,
+        whatsapp_message_sid: null,
+        reply_to_message_id: savedReplyTo?.id || null,
+        reply_to_message: savedReplyTo
+          ? { content: savedReplyTo.content, direction: savedReplyTo.direction }
+          : null,
+        sender_type: 'user',
+        sender_name: userProfile?.full_name || null,
+        sender_agent_id: null,
+      };
+      setMessages((prev) => [...prev, tempMessage]);
+      setMessageText('');
+      setReplyingTo(null);
+      scrollToBottom();
+      if (selectedThreadId && selectedThread) {
+        autoAssignOnSend(selectedThreadId, selectedThread);
+      }
+      try {
+        const { data, error } = await migrateThreadAndSend({
+          organizationId: organization.id,
+          threadId: selectedThreadId!,
+          targetEndpointId: (evolutionEndpoint as any).id,
+          message: savedText,
+          userId: userProfile?.id,
+          replyToMessageId: savedReplyTo?.id || null,
+        });
+        if (error) throw new Error(error.message);
+        if (!data?.migrated && !data?.messageId) {
+          throw new Error('Falha ao migrar/enviar');
+        }
+        setBypassWindow(false);
+        setComposerEndpointId(null);
+        refetchThreads();
+      } catch (err: any) {
+        console.error('[migrate-and-send] failed', err);
+        setMessages((prev) =>
+          prev.map((m) =>
+            m.id === tempId
+              ? { ...m, whatsapp_status: 'failed', error_message: err?.message }
+              : m,
+          ),
+        );
+        setMessageText(savedText);
+        setReplyingTo(savedReplyTo);
+        toast({
+          variant: 'destructive',
+          description: err?.message || 'Erro ao migrar e enviar pela Evolution',
+        });
+      }
       return;
     }
 
