@@ -185,6 +185,7 @@ serve(async (req) => {
     endpointId: explicitEndpointId,
     templateId,
     senderContext,
+    allowExplicitEndpointMigration,
   } = body as Record<string, any>;
 
   if (!organizationId) return json(400, { error: "missing_organization" });
