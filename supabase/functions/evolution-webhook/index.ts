@@ -1486,9 +1486,24 @@ serve(async (req) => {
         return json(200, { ok: true, processed: false, kind: "message", reason: "PARSE_FAILED" });
       }
       if (parsed.fromMe) {
-        // Fase 6A não processa outbound. Também não persiste — só loga.
-        await markInboundEvent(service, auditId, { processStatus: "skipped", processError: "fromMe_true_outbound_ignored_phase6a" });
-        return json(200, { ok: true, processed: false, kind: "message", reason: "FROM_ME_SKIPPED" });
+        const result = await ingestOutboundEchoMessage(service, ctx, envelope, parsed);
+        await markInboundEvent(service, auditId, {
+          processStatus: result.error ? "failed" : "processed",
+          processError: result.error ?? (result.echo ? "echo_of_crm_send" : null),
+          resultingMessageId: result.messageId,
+          resultingThreadId: result.threadId,
+        });
+        logEvolution("info", { fn: FN, requestId, event: eventRaw ?? undefined, instanceName: instance ?? undefined, orgId, message: result.error ? `outbound_echo_failed:${result.error}` : (result.echo ? "outbound_echo_dedup" : "outbound_echo_ingested") });
+        return json(200, {
+          ok: true,
+          processed: !result.error,
+          kind: "message",
+          direction: "outbound",
+          echo: result.echo === true,
+          message_id: result.messageId,
+          thread_id: result.threadId,
+          contract: EVOLUTION_WEBHOOK_CONTRACT_VERSION,
+        });
       }
       const result = await ingestInboundMessage(service, ctx, envelope, parsed);
       await markInboundEvent(service, auditId, {
