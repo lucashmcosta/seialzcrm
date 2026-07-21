@@ -1,67 +1,53 @@
 
-## Escopo
+## Diagnóstico
 
-Corrigir apenas o roteamento no frontend. Manter `thread-migrate-endpoint-send` como está (Evolution-only). Não tocar em `dispatchWhatsAppSend`, `meta-whatsapp-send`, `twilio-whatsapp-send`.
+Auditei `src/pages/messages/MessagesList.tsx` e o gate visual (`outOfWindow`, seletor de template, campo desabilitado) já é calculado a partir do `composerEndpoint`, não do `primary_endpoint_id`:
 
-## Bug
+- Linha 685: `composerIsEvolution = composerEndpoint?.provider === 'evolution_api'`
+- Linha 2370-2372: `composerBypassesWindow = composerIsEvolution` e `outOfWindow = !serviceWindow.isOpen && messages.length > 0 && !bypassWindow && !composerBypassesWindow`
+- O `WhatsAppTemplateSelector` só é renderizado dentro do bloco `outOfWindow`, portanto some automaticamente quando `composerIsEvolution` for verdadeiro.
 
-`ContactConversations.tsx` → **Abrir conversa comercial** navega para `/messages?thread=<id>`. No `MessagesList`, `defaultComposerEndpointId` (linhas 659-670) já resolve corretamente para o endpoint comercial ativo (Evolution `8439` no piloto). Porém, ao enviar, o branch atual só chama `migrateThreadAndSend` quando `bypassWindow=true`. Sem bypass, cai no `dispatchWhatsAppSend`, cuja "REGRA DURA" (linhas 262-289) reescreve `endpointId` para `primary_endpoint_id` (`2890`) e o envio vai pelo número errado.
+**A causa real do bug** está em `defaultComposerEndpointId` (linhas 659-670):
 
-## Mudança única
-
-Arquivo: `src/pages/messages/MessagesList.tsx`, dentro de `handleSendMessage` (branch `shouldMigrate` ~linhas 1153-1169).
-
-Substituir a condição atual por uma regra semântica que não depende de `bypassWindow` nem de "alvo Evolution explícito", mas mantém o alvo sempre Evolution (porque a edge function só aceita Evolution):
-
-```
-const composerEndpoint = composerEndpointId ? endpointById[composerEndpointId] : null;
-const composerIsEvolution = composerEndpoint?.provider === 'evolution_api';
-const composerPurpose = composerEndpoint?.purpose ?? null;
-
-const contextPurposeMatches =
-  (selectedThreadBusinessContext === 'sales' && isSalesPurpose(composerPurpose)) ||
-  (selectedThreadBusinessContext === 'customer_service' && composerPurpose === 'customer_service');
-
-const shouldMigrate =
-  !!selectedThreadId &&
-  !!composerEndpointId &&
-  composerIsEvolution &&                                     // alvo Evolution (limitação da edge fn atual)
-  !!selectedThreadPrimaryEndpointId &&
-  composerEndpointId !== selectedThreadPrimaryEndpointId &&
-  contextPurposeMatches;
-
-const targetEvolutionId = shouldMigrate ? composerEndpointId : null;
+```ts
+if (selectedThreadBusinessContext === 'sales' && salesEndpoints.length > 0) {
+  if (selectedThreadPrimaryEndpointId && isSalesPurpose(primaryEndpointPurpose)) {
+    return selectedThreadPrimaryEndpointId;   // ← trava aqui
+  }
+  return pickPreferredEndpoint(salesEndpoints, 'sales')?.id ?? null;
+}
 ```
 
-Quando `shouldMigrate=true`:
-- chamar `migrateThreadAndSend({ organizationId, threadId, targetEndpointId: composerEndpointId, message, userId, replyToMessageId })` — exatamente como o branch atual;
-- após sucesso: `setBypassWindow(false)`, limpar `composerEndpointByThread[threadId]`, `refetchThreads()`;
-- **não** passar pelo `dispatchWhatsAppSend`.
+Como o `primary_endpoint_id` do Roberto Dexheimer é Meta 2890 e tem `purpose='commercial'` (sales-purpose), a função retorna o próprio 2890. Resultado: composer resolve Meta, `serviceWindow.isOpen=false`, `outOfWindow=true`, seletor de template abre. O branch `shouldMigrate` de fato nunca é avaliado, porque o envio livre já foi bloqueado antes.
 
-Quando `shouldMigrate=false`: comportamento atual (dispatcher normal).
+## Correção proposta (frontend-only, escopo Evolution)
 
-Nenhum hardcode de número, org ou endpoint id — a decisão é derivada de `composerEndpoint.provider`, `composerEndpoint.purpose` e `business_context` da thread.
+Ajustar apenas a resolução do `defaultComposerEndpointId` em `MessagesList.tsx`. Nada mais muda: dispatcher, edge functions, Meta e Twilio ficam intactos.
 
-## Efeitos colaterais controlados
+Nova regra dentro do branch `business_context === 'sales'`:
 
-- Se o composer resolver um endpoint comercial **não-Evolution** (ex.: Meta) diferente do primary → `composerIsEvolution=false` → `shouldMigrate=false` → cai no dispatcher legado (comportamento atual, sem regressão). A migração cross-provider para Meta/Twilio fica para a fase pós-piloto, como pedido.
-- Se o composer resolver o mesmo endpoint do primary → `shouldMigrate=false` → envio direto pelo dispatcher (caminho quente inalterado).
-- Se o contexto for `customer_service` e o composer resolver o endpoint CS Evolution diverso do primary → também migra corretamente (regra é semântica, não hardcoded Comercial).
+1. Selecionar `evolutionSalesEndpoint` = primeiro endpoint ativo com `provider === 'evolution_api'` e purpose em `SALES_PURPOSES` (usar `filterEndpointsByIntent(orgEndpoints, 'sales')`).
+2. Selecionar `preferredSales` = `pickPreferredEndpoint(salesEndpoints, 'sales')`.
+3. Decisão:
+   - Se `primary` é sales-purpose **e** `serviceWindow.isOpen` → manter `primary` (comportamento atual, preserva continuidade dentro da janela).
+   - Senão, se existe `evolutionSalesEndpoint` → retorná-lo (permite envio livre + migração no primeiro send via `shouldMigrate`, que já detecta `composerEndpointId !== primary` e `composerIsEvolution`).
+   - Senão, fallback atual: `preferredSales?.id ?? primary ?? null`.
 
-## Fora do escopo (explícito)
+Efeito colateral esperado: quando a thread está dentro da janela 24h, continua respondendo pelo Meta 2890 original (sem migração indesejada). Quando está fora da janela e há Evolution comercial ativo, o composer nasce Evolution e o primeiro envio migra a thread — exatamente o fluxo pedido para o Roberto Dexheimer.
 
-- `thread-migrate-endpoint-send/index.ts` — permanece Evolution-only.
-- `dispatchWhatsAppSend.ts` — permanece inalterado (regra dura anti cross-number continua protegendo os demais caminhos).
-- `meta-whatsapp-send`, `twilio-whatsapp-send` — não tocar.
-- `ContactConversations.tsx` — não tocar.
+Nenhuma mudança em: `dispatchWhatsAppSend`, `thread-migrate-endpoint-send`, `meta-whatsapp-send`, `twilio-whatsapp-send`, `resolveComposerProvider`, `useThreadSendEndpoint`, `serviceWindow`, gate `outOfWindow`, seletor de template.
 
-## Validação (Sarto Rodrigues, org Viagi)
+## Arquivo tocado
 
-1. `/contacts/<id>` → aba **Conversas** → **Abrir conversa comercial**.
-2. Composer exibe endpoint `8439` (Evolution).
-3. Enviar "teste 1" → console mostra `[thread-migrate-endpoint-send] migrate done`; a mensagem aparece na thread; `whatsapp_status='sent'`.
-4. `select primary_endpoint_id from message_threads where id=<thread>` → agora aponta para o endpoint do `8439`.
-5. Divisor `Número alterado: 2890 → 8439` renderiza entre o histórico antigo e a nova mensagem (já feito por `MessagesList` comparando `endpoint_id`).
-6. F5 na thread → composer permanece no `8439`; próximo envio segue direto pelo `dispatchWhatsAppSend` (agora `composerEndpointId == primary_endpoint_id`, `shouldMigrate=false`).
-7. Abrir a mesma thread por `/messages` direto: comportamento idêntico.
-8. Repetir com **Abrir atendimento** em outro contato: composer resolve endpoint `customer_service`; se divergir do primary e for Evolution, migra pelo mesmo caminho; se for Meta/Twilio, dispatcher legado (sem regressão).
+- `src/pages/messages/MessagesList.tsx` — reescrever apenas o bloco `defaultComposerEndpointId` (linhas 659-670). ~10 linhas.
+
+## Validação manual (Roberto Dexheimer)
+
+1. Contato → Conversas → Abrir conversa comercial.
+2. Composer deve resolver Evolution 8439 (badge do endpoint no header).
+3. Não deve aparecer o seletor de template; campo de texto habilitado.
+4. Aviso "Sem inbound recente — envio livre pelo Evolution" visível.
+5. Primeiro envio chama `migrateThreadAndSend` (log no console + evento `THREAD_PROVIDER_MIGRATED`).
+6. F5 mantém composer no 8439 (agora é o novo `primary_endpoint_id`).
+7. Abrir outra thread comercial **dentro** da janela 24h com primary Meta: composer deve continuar Meta (não migrar espontaneamente).
+8. Aba Atendimento não muda: continua usando endpoint customer_service.
