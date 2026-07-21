@@ -94,7 +94,7 @@ serve(async (req) => {
   const { data: appUser } = await supabase
     .from("users")
     .select("id")
-    .eq("auth_id", authUserId)
+    .eq("auth_user_id", authUserId)
     .maybeSingle();
   const appUserId = (appUser as any)?.id as string | undefined;
   if (!appUserId) return json(403, { error: "user_not_provisioned" });
