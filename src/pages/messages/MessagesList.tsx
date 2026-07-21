@@ -657,13 +657,28 @@ function DesktopMessagesList() {
     : null;
 
   const defaultComposerEndpointId = (() => {
-    // /messages + business_context='sales': se o primary_endpoint atual não
-    // for comercial, escolher o comercial preferido; senão, manter o primary.
+    // /messages + business_context='sales':
+    //  - Dentro da janela 24h e primary comercial: mantém o primary (sem
+    //    migração espontânea, respostas continuam pelo mesmo número).
+    //  - Fora da janela: se existir Evolution comercial ativo, prefere ele
+    //    para permitir envio livre; o primeiro send chama
+    //    `migrateThreadAndSend` e migra a thread definitivamente.
+    //  - Sem Evolution: cai no preferido comercial (Meta+BR > BR > Meta > ...).
     if (selectedThreadBusinessContext === 'sales' && salesEndpoints.length > 0) {
-      if (selectedThreadPrimaryEndpointId && isSalesPurpose(primaryEndpointPurpose)) {
+      const evolutionSalesEndpoint = salesEndpoints.find(
+        (e: any) => e?.provider === 'evolution_api' && e?.is_active,
+      );
+      const primaryIsSales =
+        selectedThreadPrimaryEndpointId && isSalesPurpose(primaryEndpointPurpose);
+      if (primaryIsSales && lastInboundTime) {
         return selectedThreadPrimaryEndpointId;
       }
-      return pickPreferredEndpoint(salesEndpoints, 'sales')?.id ?? null;
+      if (evolutionSalesEndpoint) return evolutionSalesEndpoint.id;
+      return (
+        pickPreferredEndpoint(salesEndpoints, 'sales')?.id
+        ?? selectedThreadPrimaryEndpointId
+        ?? null
+      );
     }
     // Demais casos: comportamento legado (primary da thread → primeiro ativo).
     return selectedThreadPrimaryEndpointId ?? orgEndpoints[0]?.id ?? null;
