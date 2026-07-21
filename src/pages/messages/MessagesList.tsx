@@ -1143,28 +1143,35 @@ function DesktopMessagesList() {
     }
     if (!organization?.id || !messageText.trim() || !selectedThread) return;
 
-    // Bypass explícito: usuário optou por enviar/migrar via Evolution.
-    // Ignora a checagem de janela 24h (Evolution/Baileys não é oficial).
-    if (!serviceWindow.isOpen && !bypassWindow) {
+    // Caminho de MIGRAÇÃO explícita (Evolution-only por ora): quando o
+    // composer resolveu um endpoint Evolution cujo `purpose` bate com o
+    // `business_context` da tela e ele diverge do `primary_endpoint_id` da
+    // thread, roteamos por `thread-migrate-endpoint-send` (envia primeiro,
+    // migra depois). Não passa pelo `dispatchWhatsAppSend`, que reescreveria
+    // o endpoint para o primary antigo (regra dura anti cross-number).
+    //
+    // Independe de `bypassWindow`: a UI abrir pelo contexto Comercial ou
+    // Atendimento já implica intenção de usar o endpoint daquele contexto.
+    // Também dispara com bypass explícito (compat. botão "digitar livre").
+    const composerPurposeForMigrate = (composerEndpoint as any)?.purpose ?? null;
+    const contextPurposeMatches =
+      (selectedThreadBusinessContext === 'sales' && isSalesPurpose(composerPurposeForMigrate)) ||
+      (selectedThreadBusinessContext === 'customer_service' && composerPurposeForMigrate === 'customer_service');
+    const shouldMigrate =
+      !!selectedThreadId &&
+      !!composerEndpointId &&
+      composerIsEvolution &&
+      !!selectedThreadPrimaryEndpointId &&
+      composerEndpointId !== selectedThreadPrimaryEndpointId &&
+      (contextPurposeMatches || bypassWindow);
+    const targetEvolutionId = shouldMigrate ? composerEndpointId : null;
+
+    // Gate janela 24h: só bloqueia envio direto (dispatcher legado). Migração
+    // via Evolution não exige janela aberta.
+    if (!shouldMigrate && !serviceWindow.isOpen && !bypassWindow) {
       setShowTemplates(true);
       return;
     }
-
-    // Caminho de MIGRAÇÃO explícita: bypass ativo + thread não é nativamente
-    // Evolution + existe endpoint Evolution disponível. Roteia para o Edge
-    // Function que valida, envia e migra o primary_endpoint_id atomicamente.
-    // Alvo Evolution: composer explícito OU fallback para evolutionEndpoint da org.
-    const targetEvolutionId =
-      (composerIsEvolution ? (composerEndpoint as any)?.id : null) ??
-      (evolutionEndpoint as any)?.id ??
-      null;
-    // Migrar quando bypass ativo, alvo Evolution existe e é diferente do
-    // primary_endpoint_id atual da thread (senão é envio nativo normal).
-    const shouldMigrate =
-      bypassWindow &&
-      !!targetEvolutionId &&
-      !!selectedThreadId &&
-      selectedThreadPrimaryEndpointId !== targetEvolutionId;
 
     if (shouldMigrate) {
       const savedText = messageText.trim();
