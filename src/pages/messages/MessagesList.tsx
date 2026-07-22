@@ -1,6 +1,6 @@
 import { useState, useEffect, useMemo, useRef, Fragment } from 'react';
 import { dispatchWhatsAppSend } from "@/lib/dispatchWhatsAppSend";
-import { migrateThreadAndSend } from "@/lib/migrateThreadAndSend";
+
 import { usePersistedFilters } from '@/hooks/usePersistedFilters';
 import { Link, useSearchParams } from 'react-router-dom';
 import { useIsMobile } from '@/hooks/use-mobile';
