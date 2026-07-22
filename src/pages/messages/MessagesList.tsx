@@ -1,6 +1,6 @@
 import { useState, useEffect, useMemo, useRef, Fragment } from 'react';
 import { dispatchWhatsAppSend } from "@/lib/dispatchWhatsAppSend";
-import { migrateThreadAndSend } from "@/lib/migrateThreadAndSend";
+
 import { usePersistedFilters } from '@/hooks/usePersistedFilters';
 import { Link, useSearchParams } from 'react-router-dom';
 import { useIsMobile } from '@/hooks/use-mobile';
@@ -290,12 +290,6 @@ function DesktopMessagesList() {
     ? sendEp.provider
     : selectedThreadWaProvider;
   const [textareaOverflow, setTextareaOverflow] = useState(false);
-  // Bypass de janela 24h — permitido quando o envio pode sair por Evolution API
-  // (Baileys, não-oficial, sem restrição de template). Estado local, reseta
-  // ao trocar de thread. Não persiste. `canBypassWindow` é calculado abaixo
-  // com base no composer/endpoint Evolution disponível na org.
-  const [bypassWindow, setBypassWindow] = useState(false);
-  useEffect(() => { setBypassWindow(false); }, [selectedThreadId]);
   const [messages, setMessages] = useState<Message[]>([]);
   const [messagesLoading, setMessagesLoading] = useState(false);
   const [messageText, setMessageText] = useState('');
@@ -657,33 +651,12 @@ function DesktopMessagesList() {
     : null;
 
   const defaultComposerEndpointId = (() => {
-    // /messages + business_context='sales':
-    //  - Dentro da janela 24h e primary comercial: mantém o primary (sem
-    //    migração espontânea, respostas continuam pelo mesmo número).
-    //  - Fora da janela: se existir Evolution comercial ativo, prefere ele
-    //    para permitir envio livre; o primeiro send chama
-    //    `migrateThreadAndSend` e migra a thread definitivamente.
-    //  - Sem Evolution: cai no preferido comercial (Meta+BR > BR > Meta > ...).
-    if (selectedThreadBusinessContext === 'sales' && salesEndpoints.length > 0) {
-      const evolutionSalesEndpoint = salesEndpoints.find(
-        (e: any) => e?.provider === 'evolution_api' && e?.is_active,
-      );
-      const primaryIsSales =
-        selectedThreadPrimaryEndpointId && isSalesPurpose(primaryEndpointPurpose);
-      const lastInbound = getLastInboundTime(selectedThread as any, []);
-      const withinWindow = !!lastInbound && Date.now() - lastInbound.getTime() < 24 * 60 * 60 * 1000;
-      if (primaryIsSales && withinWindow) {
-        return selectedThreadPrimaryEndpointId;
-      }
-      if (evolutionSalesEndpoint) return evolutionSalesEndpoint.id;
-      return (
-        pickPreferredEndpoint(salesEndpoints, 'sales')?.id
-        ?? selectedThreadPrimaryEndpointId
-        ?? null
-      );
-    }
-    // Demais casos: comportamento legado (primary da thread → primeiro ativo).
-    return selectedThreadPrimaryEndpointId ?? orgEndpoints[0]?.id ?? null;
+    // O endpoint efetivo de envio é resolvido pelo dispatcher a partir da
+    // linha ativa do purpose (`messaging_lines.active_endpoint_id`). Aqui
+    // apenas escolhemos o *default visual* do composer:
+    //  - `sendEp.endpointId` quando resolvido (reflete a linha ativa);
+    //  - senão, fallback pro primary da thread ou o primeiro ativo da org.
+    return sendEp.endpointId ?? selectedThreadPrimaryEndpointId ?? orgEndpoints[0]?.id ?? null;
   })();
 
   const composerEndpointId = selectedThreadId
@@ -695,28 +668,14 @@ function DesktopMessagesList() {
     if (!selectedThreadId) return;
     setComposerEndpointByThread((prev) => ({ ...prev, [selectedThreadId]: id }));
   };
-  // Bypass da janela 24h: disponível quando o composer já é Evolution ou
-  // quando existe um endpoint Evolution ativo na org (permitindo trocar o
-  // envio dessa mensagem pelo número não-oficial sem exigir template).
+  // Capacidade declarada do endpoint efetivo — única fonte de verdade para
+  // decidir se o composer libera texto livre fora da janela 24h. NÃO
+  // participa da *escolha* do endpoint (isso é responsabilidade da linha
+  // ativa via `useThreadSendEndpoint`); apenas informa se aquele endpoint
+  // exige template.
   const composerEndpoint = composerEndpointId ? endpointById[composerEndpointId] : null;
-  const composerIsEvolution = (composerEndpoint as any)?.provider === 'evolution_api';
-  const evolutionEndpoint = useMemo(() => {
-    const actives = (orgEndpoints ?? []).filter(
-      (e: any) => e?.provider === 'evolution_api' && e?.is_active,
-    );
-    if (actives.length === 0) return null;
-    const purposeMatch = actives.find(
-      (e: any) => e?.purpose && primaryEndpointPurpose && e.purpose === primaryEndpointPurpose,
-    );
-    return purposeMatch ?? actives[0];
-  }, [orgEndpoints, primaryEndpointPurpose]);
-  const canBypassWindow = composerIsEvolution || !!evolutionEndpoint;
-  const handleBypassWindow = () => {
-    if (!composerIsEvolution && evolutionEndpoint?.id) {
-      setComposerEndpointId(evolutionEndpoint.id);
-    }
-    setBypassWindow(true);
-  };
+  const composerAllowsFreeformOutsideWindow =
+    sendEp.requiresTemplateOutsideWindow === false;
   const selectedEndpointFallback = selectedEndpointDetails?.threadId === selectedThreadId
     ? selectedEndpointDetails.endpoint
     : null;
@@ -1160,100 +1119,20 @@ function DesktopMessagesList() {
     }
     if (!organization?.id || !messageText.trim() || !selectedThread) return;
 
-    // Caminho de MIGRAÇÃO explícita (Evolution-only por ora): quando o
-    // composer resolveu um endpoint Evolution cujo `purpose` bate com o
-    // `business_context` da tela e ele diverge do `primary_endpoint_id` da
-    // thread, roteamos por `thread-migrate-endpoint-send` (envia primeiro,
-    // migra depois). Não passa pelo `dispatchWhatsAppSend`, que reescreveria
-    // o endpoint para o primary antigo (regra dura anti cross-number).
-    //
-    // Independe de `bypassWindow`: a UI abrir pelo contexto Comercial ou
-    // Atendimento já implica intenção de usar o endpoint daquele contexto.
-    // Também dispara com bypass explícito (compat. botão "digitar livre").
-    const composerPurposeForMigrate = (composerEndpoint as any)?.purpose ?? null;
-    const contextPurposeMatches =
-      (selectedThreadBusinessContext === 'sales' && isSalesPurpose(composerPurposeForMigrate)) ||
-      (selectedThreadBusinessContext === 'customer_service' && composerPurposeForMigrate === 'customer_service');
-    const shouldMigrate =
-      !!selectedThreadId &&
-      !!composerEndpointId &&
-      composerIsEvolution &&
-      !!selectedThreadPrimaryEndpointId &&
-      composerEndpointId !== selectedThreadPrimaryEndpointId &&
-      (contextPurposeMatches || bypassWindow);
-    const targetEvolutionId = shouldMigrate ? composerEndpointId : null;
-
-    // Gate janela 24h: só bloqueia envio direto (dispatcher legado). Migração
-    // via Evolution não exige janela aberta.
-    if (!shouldMigrate && !serviceWindow.isOpen && !bypassWindow) {
+    // Gate janela 24h: bloqueia envio livre APENAS quando o endpoint efetivo
+    // exige template fora da janela (capacidade declarada em
+    // `communication_endpoints.requires_template_outside_window`). Endpoints
+    // que declaram `false` (ex.: Evolution) permitem envio livre sempre —
+    // sem migração explícita, o dispatcher já roteia pela linha ativa.
+    if (
+      !serviceWindow.isOpen &&
+      !composerAllowsFreeformOutsideWindow &&
+      messages.length > 0
+    ) {
       setShowTemplates(true);
       return;
     }
 
-    if (shouldMigrate) {
-      const savedText = messageText.trim();
-      const savedReplyTo = replyingTo;
-      const tempId = `temp-mig-${Date.now()}`;
-      const tempMessage: Message = {
-        id: tempId,
-        content: savedText,
-        direction: 'outbound',
-        sent_at: new Date().toISOString(),
-        whatsapp_status: 'sending',
-        media_urls: null,
-        media_type: null,
-        error_message: null,
-        error_code: null,
-        whatsapp_message_sid: null,
-        reply_to_message_id: savedReplyTo?.id || null,
-        reply_to_message: savedReplyTo
-          ? { content: savedReplyTo.content, direction: savedReplyTo.direction }
-          : null,
-        sender_type: 'user',
-        sender_name: userProfile?.full_name || null,
-        sender_agent_id: null,
-      };
-      setMessages((prev) => [...prev, tempMessage]);
-      setMessageText('');
-      setReplyingTo(null);
-      scrollToBottom();
-      if (selectedThreadId && selectedThread) {
-        autoAssignOnSend(selectedThreadId, selectedThread);
-      }
-      try {
-        const { data, error } = await migrateThreadAndSend({
-          organizationId: organization.id,
-          threadId: selectedThreadId!,
-          targetEndpointId: targetEvolutionId,
-          message: savedText,
-          userId: userProfile?.id,
-          replyToMessageId: savedReplyTo?.id || null,
-        });
-        if (error) throw new Error(error.message);
-        if (!data?.migrated && !data?.messageId) {
-          throw new Error('Falha ao migrar/enviar');
-        }
-        setBypassWindow(false);
-        setComposerEndpointId(null);
-        refetchThreads();
-      } catch (err: any) {
-        console.error('[migrate-and-send] failed', err);
-        setMessages((prev) =>
-          prev.map((m) =>
-            m.id === tempId
-              ? { ...m, whatsapp_status: 'failed', error_message: err?.message }
-              : m,
-          ),
-        );
-        setMessageText(savedText);
-        setReplyingTo(savedReplyTo);
-        toast({
-          variant: 'destructive',
-          description: err?.message || 'Erro ao migrar e enviar pela Evolution',
-        });
-      }
-      return;
-    }
 
     const tempId = `temp-${Date.now()}`;
     const tempMessage: Message = {
@@ -2380,17 +2259,16 @@ function DesktopMessagesList() {
                     {/* Input Area */}
                     <div className="border-t border-border p-4 bg-card">
                       {(() => {
-                        // Evolution API não exige janela 24h (não é canal oficial).
-                        // Se o composer já opera via Evolution (thread nativa ou
-                        // pós-migração), não bloqueamos por serviceWindow — o envio
-                        // livre é sempre permitido.
-                        const composerBypassesWindow = composerIsEvolution;
+                        // Gate de janela é decidido pela capacidade declarada
+                        // do endpoint efetivo (`requires_template_outside_window`).
+                        // Nenhum override por provider aqui.
+                        const composerBypassesWindow = composerAllowsFreeformOutsideWindow;
                         const outOfWindow =
-                          !serviceWindow.isOpen && messages.length > 0 && !bypassWindow && !composerBypassesWindow;
+                          !serviceWindow.isOpen && messages.length > 0 && !composerBypassesWindow;
                         const outOfWindowCopy = serviceWindow.reason || (locale === 'pt-BR' ? 'Fora da janela — selecione um template' : 'Outside window — select a template');
                         const showNoInboundHint =
                           !outOfWindow && composerBypassesWindow && !serviceWindow.isOpen && messages.length > 0;
-                        const evolutionLast4 = (() => {
+                        const composerLast4 = (() => {
                           const addr = (composerEndpoint as any)?.external_address ?? '';
                           return String(addr).replace(/\D/g, '').slice(-4);
                         })();
@@ -2399,8 +2277,8 @@ function DesktopMessagesList() {
                           {showNoInboundHint && (
                             <div className="px-1 pb-1 text-[11px] text-muted-foreground">
                               {locale === 'pt-BR'
-                                ? `Sem inbound recente — envio livre pelo Evolution ••••${evolutionLast4}`
-                                : `No recent inbound — free send via Evolution ••••${evolutionLast4}`}
+                                ? `Sem inbound recente — envio livre pelo número ••••${composerLast4}`
+                                : `No recent inbound — free send via number ••••${composerLast4}`}
                             </div>
                           )}
                           {/* Note Mode Indicator */}
@@ -2440,32 +2318,6 @@ function DesktopMessagesList() {
                                   >
                                     <FileText className="h-5 w-5" />
                                   </Button>
-                                  {canBypassWindow && (() => {
-                                    const targetNum = composerIsEvolution
-                                      ? (composerEndpoint as any)?.external_address
-                                      : (evolutionEndpoint as any)?.external_address;
-                                    const last4 = (targetNum ?? '').replace(/\D/g, '').slice(-4) || 'Evolution';
-                                    const label = composerIsEvolution
-                                      ? (locale === 'pt-BR' ? 'digitar livre' : 'type free')
-                                      : (locale === 'pt-BR'
-                                          ? `Enviar pelo ${last4} e migrar conversa`
-                                          : `Send via ${last4} and migrate thread`);
-                                    const tip = composerIsEvolution
-                                      ? (locale === 'pt-BR' ? 'Este número (Evolution) não exige template — digitar livre' : 'This number (Evolution) does not require a template')
-                                      : (locale === 'pt-BR'
-                                          ? `A conversa passará a operar pelo número Evolution ${targetNum ?? ''}. Histórico preservado.`
-                                          : `Thread will move to Evolution number ${targetNum ?? ''}. History preserved.`);
-                                    return (
-                                      <button
-                                        type="button"
-                                        onClick={handleBypassWindow}
-                                        title={tip}
-                                        className="self-center text-[10px] text-muted-foreground/70 hover:text-foreground underline underline-offset-2 px-1"
-                                      >
-                                        {label}
-                                      </button>
-                                    );
-                                  })()}
                                 </>
                               ) : (
                                 <>

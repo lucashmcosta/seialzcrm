@@ -9,6 +9,7 @@ export interface OrgEndpoint {
   is_active: boolean;
   created_at: string;
   purpose: string | null;
+  requires_template_outside_window: boolean;
 }
 
 /**
@@ -60,7 +61,7 @@ export function useOrgWhatsAppEndpoints(organizationId: string | undefined) {
 
       const { data, error } = await supabase
         .from('communication_endpoints')
-        .select('id, external_address, display_name, provider, is_active, created_at, purpose')
+        .select('id, external_address, display_name, provider, is_active, created_at, purpose, requires_template_outside_window')
         .eq('organization_id', organizationId)
         .eq('channel', 'whatsapp')
         .eq('is_active', true)

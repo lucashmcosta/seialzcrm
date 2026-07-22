@@ -24,11 +24,18 @@ export interface ThreadSendEndpoint {
   /** true quando o endpoint efetivo difere do primary_endpoint_id da thread */
   isRotated: boolean;
   primaryEndpointId: string | null;
+  /**
+   * Capacidade declarada do endpoint efetivo. Quando `false`, o composer pode
+   * enviar texto livre mesmo fora da janela de 24h (sem exigir template).
+   * Default seguro `true` — bloqueia envio livre até resolver endpoint real.
+   */
+  requiresTemplateOutsideWindow: boolean;
 }
 
 const EMPTY: ThreadSendEndpoint = {
   endpointId: null, provider: null, purpose: null,
   organizationIntegrationId: null, isRotated: false, primaryEndpointId: null,
+  requiresTemplateOutsideWindow: true,
 };
 
 function purposeToLineKey(purpose: string | null | undefined): "commercial" | "customer_service" | null {
@@ -60,7 +67,7 @@ export function useThreadSendEndpoint(threadId?: string | null): ThreadSendEndpo
       if (primaryId) {
         const { data: prim } = await supabase
           .from("communication_endpoints")
-          .select("id, is_active, provider, purpose, organization_integration_id, organization_id")
+          .select("id, is_active, provider, purpose, organization_integration_id, organization_id, requires_template_outside_window")
           .eq("id", primaryId)
           .maybeSingle();
         primary = prim ?? null;
@@ -83,7 +90,7 @@ export function useThreadSendEndpoint(threadId?: string | null): ThreadSendEndpo
         if (activeId) {
           const { data: act } = await supabase
             .from("communication_endpoints")
-            .select("id, is_active, provider, purpose, organization_integration_id")
+            .select("id, is_active, provider, purpose, organization_integration_id, requires_template_outside_window")
             .eq("id", activeId)
             .maybeSingle();
           if (act && (act as any).is_active) {
@@ -94,6 +101,8 @@ export function useThreadSendEndpoint(threadId?: string | null): ThreadSendEndpo
               organizationIntegrationId: (act as any).organization_integration_id ?? null,
               isRotated: !!primaryId && (act as any).id !== primaryId,
               primaryEndpointId: primaryId,
+              requiresTemplateOutsideWindow:
+                (act as any).requires_template_outside_window !== false,
             };
           }
         }
@@ -108,6 +117,8 @@ export function useThreadSendEndpoint(threadId?: string | null): ThreadSendEndpo
           organizationIntegrationId: primary.organization_integration_id ?? null,
           isRotated: false,
           primaryEndpointId: primaryId,
+          requiresTemplateOutsideWindow:
+            (primary as any).requires_template_outside_window !== false,
         };
       }
 
