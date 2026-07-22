@@ -91,6 +91,7 @@ async function loadEndpointProvider(
   }
   const provider = (data as any).provider as string | null;
   if (provider === "meta_cloud_api") return "meta_cloud_api";
+  if (provider === "evolution_api") return "evolution_api";
   if (provider === "twilio" || provider == null) return "twilio";
   throw new DispatchResolveError(
     "unknown_provider",
