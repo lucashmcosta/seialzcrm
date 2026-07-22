@@ -1,7 +1,14 @@
 # Linhas de mensageria + rotação de número (WhatsApp)
 
-**Status:** desenho aprovado conceitualmente — pendente aprovação de implementação por fase.
+**Status:** Fase 0 implementada (2026-07-22). Envio por linha ativa vale nas 3 send functions (Evolution/Meta/Twilio) e no dispatcher; composer neutro por capacidade do endpoint. Fase 1 (timeline com marcador) e Fase 2 (painel de rotação + desconectar por-número) pendentes.
 **Contexto:** números WhatsApp caem (bans Meta). O modelo atual amarra a conversa ao número físico, então trocar de número quebra envio, histórico e UI. Este doc separa **conversa** (do contato) de **número de envio** (rotacionável), com rotação como recurso de primeira classe.
+
+## O que mudou desde o desenho (2026-07-22)
+
+- **Resolução de envio server-side** vive também nas próprias send functions, não só no dispatcher client. `evolution-whatsapp-send`, `meta-whatsapp-send` e `twilio-whatsapp-send` honram o `endpointId` explícito passado pelo dispatcher (após validar `organization_id`, `provider` e `is_active`) e só caem no `thread.primary_endpoint_id` quando nenhum endpoint explícito vier no payload. A antiga trava "primary sempre vence" foi removida e o log `endpoint_override_ignored` (warn) virou `line_routing_honored` (info).
+- **Gate de janela 24h no composer** deixou de testar `provider === 'evolution_api'`. Agora lê `communication_endpoints.requires_template_outside_window` (bool, default `true`; `false` para Evolution) do endpoint efetivo resolvido pela linha ativa. Contrato de resolução consolidado: `business_context → purpose → messaging_lines.active_endpoint_id → communication_endpoint → requires_template_outside_window`. **Nunca** procurar endpoint onde `requires_template_outside_window = false`; a capacidade vem do endpoint que a linha já designou.
+- **UX de migração manual removida.** Botão "Enviar pelo 8439 e migrar conversa", edge function `thread-migrate-endpoint-send`, wrapper `migrateThreadAndSend` e estado `bypassWindow` no `MessagesList` foram apagados. Trocar `active_endpoint_id` da linha basta — o histórico da thread continua intacto e o próximo envio sai pelo novo número automaticamente.
+- **Pendência conhecida:** inserts das edge functions Evolution que criam novos endpoints ainda não gravam `requires_template_outside_window = false` explicitamente — hoje depende do backfill inicial. Ver `docs/integrations/evolution-api/ENDPOINT_PURPOSE_RULE.md`.
 
 ## Problema (causa-raiz)
 `message_threads.primary_endpoint_id` faz **dois papéis ao mesmo tempo**: (1) dono do histórico e (2) número de envio. Quando o número cai, os papéis conflitam → replies vão pro número morto e falham (Meta 100/133010); a UI mostra 7020 no header, templates do 7067 no seletor e envia pelo 7020. Ver auditoria P0 de 2026-07-13.

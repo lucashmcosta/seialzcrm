@@ -24,13 +24,18 @@ A separação **não é apenas de UI** — está materializada no modelo de dado
 
 ## Regras de roteamento
 
-Fonte: `src/lib/dispatchWhatsAppSend.ts` e `src/lib/resolveComposerProvider.ts`.
+Fonte: `src/lib/dispatchWhatsAppSend.ts`, `src/hooks/useThreadSendEndpoint.ts`, `src/lib/resolveComposerProvider.ts` e as send functions `meta-whatsapp-send` / `twilio-whatsapp-send` / `evolution-whatsapp-send`.
 
-1. **Resolução de endpoint de envio** (ordem): `endpoint_explicit` (endpoint passado pelo caller) → `thread_primary_endpoint` → `thread_last_message_endpoint` → `default`.
-2. **Re-rota lazy "Comercial → endpoint comercial"**: se o envio parte de `/messages`, a thread tem `business_context = 'sales'` e o endpoint resolvido **não** é comercial (`purpose ∉ SALES_PURPOSES`), o dispatcher re-rota para o endpoint comercial atual. Regra genérica (PR4), sem hardcode de org.
-3. **Fallback legado Central Trabalhista**: enquanto o front não passa `businessContext` em todos os pontos de envio, existe um hardcode (`REROUTE_ORG_ID`, org Central Trabalhista) que força Meta Cloud em `/messages`. Previsto para remoção no PR5.
-4. **UI de templates alinhada**: `resolveComposerProvider` antecipa a mesma regra para listar templates do provider correto antes do envio.
-5. **Inbound**: webhooks resolvem a org via `waba_id` (Meta) / `messaging_service_sid` (Twilio) → `communication_endpoints`; o propósito do endpoint que recebeu determina o contexto de negócio da thread.
+Contrato de resolução (atualizado em 2026-07-22, ver [`plans/2026-07-endpoint-lines-rotation.md`](../plans/2026-07-endpoint-lines-rotation.md)):
+
+`business_context` da thread → `purpose` correspondente (`sales`→`commercial`, `customer_service`→`customer_service`) → `messaging_lines.active_endpoint_id` da org para aquele `purpose` → `communication_endpoint` efetivo → capacidades (`requires_template_outside_window`, `is_active`, etc.).
+
+1. **Linha ativa manda no envio.** O dispatcher escolhe o endpoint pela linha ativa do `purpose` correspondente ao `business_context` da thread — independente do provider do `primary_endpoint_id` histórico da thread. Trocar `active_endpoint_id` (ex.: Meta 2890 → Evolution 8439 na linha comercial da Viagi) faz toda a superfície comercial passar a enviar pelo novo número sem migrar threads e sem perder histórico.
+2. **Thread é histórico, não roteador.** `message_threads.primary_endpoint_id` guarda a origem/primeiro número da conversa e serve para leitura visual do histórico (marcador "número trocado" na timeline). Não é mais consultado pelo dispatcher quando a linha ativa está resolvida.
+3. **Send functions honram o endpoint explícito.** `meta-whatsapp-send`, `twilio-whatsapp-send` e `evolution-whatsapp-send` usam o `endpointId` recebido do dispatcher após validar `organization_id`, `provider` e `is_active`. Log `line_routing_honored` (info) quando o endpoint efetivo diverge do primary. Fallback ao `primary_endpoint_id` só acontece quando o payload não traz `endpointId`.
+4. **Capacidade "digitar livre fora da janela 24h"** vem de `communication_endpoints.requires_template_outside_window` do endpoint efetivo — nunca deduzida do provider no frontend. Default `true`; `false` no provisionamento Evolution.
+5. **UI de templates alinhada:** `resolveComposerProvider` segue o provider do endpoint efetivo resolvido pela linha ativa.
+6. **Inbound:** webhooks resolvem a org via `waba_id` (Meta) / `messaging_service_sid` (Twilio) / `instance_name` (Evolution) → `communication_endpoints`; o propósito do endpoint que recebeu determina o `business_context` da thread (trigger `trg_message_threads_autofill_business_context`).
 
 ## Fluxo de vida de uma conversa
 

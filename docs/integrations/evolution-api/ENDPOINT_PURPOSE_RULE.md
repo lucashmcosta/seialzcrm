@@ -51,3 +51,21 @@ na Fase 5 do piloto com `purpose='other'`.
   (finalidade de negócio) é intencional — provider Evolution pode ser usado
   para vendas OU atendimento, e não deve ser inferido automaticamente pelo
   trigger.
+
+## Capacidade "envio livre fora da janela 24h" (2026-07-22)
+
+A partir de 2026-07-22 essa capacidade é declarada por coluna, não deduzida
+do provider no frontend:
+
+- `communication_endpoints.requires_template_outside_window boolean NOT NULL DEFAULT true`.
+- Endpoints Evolution existentes foram backfillados para `false`.
+- O composer (`useThreadSendEndpoint` → `MessagesList.tsx`) lê essa flag do
+  endpoint efetivo resolvido pela **linha ativa** (`messaging_lines.active_endpoint_id`),
+  seguindo o contrato: `business_context → purpose → messaging_lines.active_endpoint_id → communication_endpoint → requires_template_outside_window`.
+- **Nunca** procurar um endpoint qualquer onde `requires_template_outside_window = false`.
+  A capacidade vem do endpoint que a linha já designou.
+
+**[TODO]** Os inserts de novos endpoints feitos pelas edge functions Evolution
+(hoje só `evolution-instance-manager` e correlatas, quando/se assumirem
+provisionamento) devem gravar `requires_template_outside_window = false`
+explicitamente no INSERT. Hoje isso depende do backfill inicial.

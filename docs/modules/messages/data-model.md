@@ -14,8 +14,10 @@
 | `scheduled_messages` | 3 | ⚠️ Fn deployada mas sem cron (drift #3) |
 | `thread_assignment_history` | 2.096 | Histórico de responsável |
 | `thread_routing_rules` | 0 | Regras de roteamento |
-| `communication_endpoints` | 20 | Número/canal remetente por org |
+| `communication_endpoints` | 20 | Número/canal remetente por org. Coluna `requires_template_outside_window boolean NOT NULL DEFAULT true` (2026-07-22) declara se o endpoint exige template fora da janela 24h — `false` para provider `evolution_api`, `true` para Meta/Twilio. Consumida pelo composer via `useThreadSendEndpoint` a partir do endpoint efetivo (linha ativa). |
 | `communication_endpoints_purpose_audit` | 4 | Mudanças de propósito |
+| `messaging_lines` | — | Papel de linha por org (`commercial`, `customer_service`) → `active_endpoint_id` atual. Fonte de verdade do número de envio. Ver [`plans/2026-07-endpoint-lines-rotation.md`](../../plans/2026-07-endpoint-lines-rotation.md). |
+| `messaging_line_rotations` | — | Log auditável de trocas de `active_endpoint_id` (de/para/quem/quando/motivo). |
 | `attachments` | 2.425 | Anexos |
 | `audio_transcriptions` | 3.096 | Transcrições (`transcribe-audio`) |
 | `calls` | 5.082 | Chamadas Twilio |
