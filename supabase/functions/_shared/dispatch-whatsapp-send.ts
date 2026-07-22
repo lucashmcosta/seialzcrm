@@ -53,7 +53,7 @@ export interface WhatsAppSendResult {
   error: { message: string; name?: string; details?: any } | null;
 }
 
-type Provider = "twilio" | "meta_cloud_api";
+type Provider = "twilio" | "meta_cloud_api" | "evolution_api";
 type ResolveSource =
   | "endpoint_explicit"
   | "thread_primary_endpoint"
@@ -91,6 +91,7 @@ async function loadEndpointProvider(
   }
   const provider = (data as any).provider as string | null;
   if (provider === "meta_cloud_api") return "meta_cloud_api";
+  if (provider === "evolution_api") return "evolution_api";
   if (provider === "twilio" || provider == null) return "twilio";
   throw new DispatchResolveError(
     "unknown_provider",
@@ -110,7 +111,7 @@ async function resolveProvider(
   if (payload.threadId) {
     const { data: thread, error: tErr } = await supabase
       .from("message_threads")
-      .select("primary_endpoint_id")
+      .select("primary_endpoint_id, business_context, organization_id, channel")
       .eq("id", payload.threadId)
       .maybeSingle();
     if (tErr) {
@@ -120,6 +121,63 @@ async function resolveProvider(
       );
     }
     const pid = (thread as any)?.primary_endpoint_id as string | null | undefined;
+    const orgId = (thread as any)?.organization_id as string | null | undefined;
+    const channel = ((thread as any)?.channel as string | null) ?? "whatsapp";
+    const bContext = (thread as any)?.business_context as string | null | undefined;
+
+    // Roteamento por LINHA (restaurado). Deriva purpose do primary (se houver)
+    // ou do business_context; consulta messaging_lines.active_endpoint_id.
+    let refPurpose: string | null = null;
+    if (pid) {
+      const { data: primEp } = await supabase
+        .from("communication_endpoints")
+        .select("purpose")
+        .eq("id", pid)
+        .maybeSingle();
+      refPurpose = ((primEp as any)?.purpose as string | null) ?? null;
+    }
+    if (!refPurpose) {
+      refPurpose = bContext === "sales" ? "commercial" : "customer_service";
+    }
+    const lineKey =
+      refPurpose === "commercial" || refPurpose === "vendor_personal" ? "commercial"
+      : refPurpose ? "customer_service"
+      : null;
+    if (orgId && lineKey) {
+      const { data: line } = await supabase
+        .from("messaging_lines")
+        .select("active_endpoint_id")
+        .eq("organization_id", orgId)
+        .eq("key", lineKey)
+        .eq("channel", channel)
+        .maybeSingle();
+      const activeId = (line as any)?.active_endpoint_id as string | null | undefined;
+      if (activeId) {
+        const { data: activeEp } = await supabase
+          .from("communication_endpoints")
+          .select("id, is_active, provider")
+          .eq("id", activeId)
+          .maybeSingle();
+        if (activeEp && (activeEp as any).is_active) {
+          payload.endpointId = activeId;
+          const providerRaw = (activeEp as any).provider as string | null;
+          const provider: Provider = providerRaw === "meta_cloud_api"
+            ? "meta_cloud_api"
+            : providerRaw === "evolution_api"
+              ? ("evolution_api" as any)
+              : "twilio";
+          console.log("[dispatch-wa] line_routing_resolved (server)", {
+            threadId: payload.threadId,
+            lineKey,
+            primary: pid,
+            active: activeId,
+            provider,
+          });
+          return { provider: provider as any, source: "endpoint_explicit" };
+        }
+      }
+    }
+
     if (pid) {
       const provider = await loadEndpointProvider(supabase, pid);
       return { provider, source: "thread_primary_endpoint" };
@@ -142,6 +200,7 @@ async function resolveProvider(
 
   return { provider: "twilio", source: "default" };
 }
+
 
 export async function dispatchWhatsAppSend(
   payload: WhatsAppSendPayload,
@@ -195,7 +254,9 @@ export async function dispatchWhatsAppSend(
 
   const fnName = resolved.provider === "meta_cloud_api"
     ? "meta-whatsapp-send"
-    : "twilio-whatsapp-send";
+    : resolved.provider === "evolution_api"
+      ? "evolution-whatsapp-send"
+      : "twilio-whatsapp-send";
 
   console.log("[dispatch-wa] route", {
     provider: resolved.provider,

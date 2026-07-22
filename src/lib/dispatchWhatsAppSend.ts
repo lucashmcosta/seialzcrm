@@ -253,18 +253,27 @@ async function resolveProvider(
  */
 export async function dispatchWhatsAppSend(payload: WhatsAppSendPayload) {
   // ============================================================
-  // REGRA DURA (P0 anti cross-number send):
-  // Se a thread já existe e tem `primary_endpoint_id`, o envio DEVE
-  // usar exatamente esse endpoint. Ignoramos qualquer `endpointId`
-  // divergente vindo da UI e desligamos toda re-rota (sales /
-  // Central Trabalhista). Re-rota só para novas conversas via
-  // `pickPreferredEndpoint`, nunca em reply.
+  // Roteamento por LINHA (restaurado):
+  // A thread é o histórico do contato. O número/provider de envio é
+  // resolvido pela linha ativa do purpose (messaging_lines), permitindo
+  // trocar Twilio↔Meta↔Evolution sem migrar threads manualmente.
+  //
+  // Ordem:
+  //   (a) endpointId explícito do caller → respeitado.
+  //   (b) senão: derivar purpose (primary.purpose || business_context)
+  //       → messaging_lines.active_endpoint_id da org para aquele purpose.
+  //   (c) senão: cair no primary_endpoint_id se ainda ativo.
+  //   (d) senão: resolveProvider legado (fallbacks).
   // ============================================================
   let threadPrimaryEndpointId: string | null = null;
-  if (payload.threadId) {
+  let threadBusinessContext: string | null = payload.businessContext ?? null;
+  let threadOrgId: string | null = payload.organizationId ?? null;
+  let threadChannel: string = "whatsapp";
+
+  if (payload.threadId && !payload.endpointId) {
     const { data: threadRow, error: threadErr } = await supabase
       .from("message_threads")
-      .select("primary_endpoint_id")
+      .select("primary_endpoint_id, business_context, organization_id, channel")
       .eq("id", payload.threadId)
       .maybeSingle();
     if (threadErr) {
@@ -274,18 +283,58 @@ export async function dispatchWhatsAppSend(payload: WhatsAppSendPayload) {
       });
     }
     threadPrimaryEndpointId = ((threadRow as any)?.primary_endpoint_id as string | null) ?? null;
+    threadBusinessContext = threadBusinessContext ?? ((threadRow as any)?.business_context as string | null) ?? null;
+    threadOrgId = threadOrgId ?? ((threadRow as any)?.organization_id as string | null) ?? null;
+    threadChannel = ((threadRow as any)?.channel as string | null) ?? "whatsapp";
 
+    // Descobre purpose de referência a partir do primary (ou do business_context).
+    let refPurpose: string | null = null;
     if (threadPrimaryEndpointId) {
-      if (payload.endpointId && payload.endpointId !== threadPrimaryEndpointId) {
-        console.warn("[dispatch-wa] endpoint_override_ignored", {
-          threadId: payload.threadId,
-          requestedEndpointId: payload.endpointId,
-          threadPrimaryEndpointId,
-          reason: "reply_must_use_thread_primary_endpoint",
-        });
-      }
-      payload = { ...payload, endpointId: threadPrimaryEndpointId };
+      const { data: primEp } = await supabase
+        .from("communication_endpoints")
+        .select("purpose, is_active, provider")
+        .eq("id", threadPrimaryEndpointId)
+        .maybeSingle();
+      refPurpose = ((primEp as any)?.purpose as string | null) ?? null;
     }
+    if (!refPurpose) {
+      refPurpose = threadBusinessContext === "sales" ? "commercial" : "customer_service";
+    }
+    const lineKey =
+      refPurpose === "commercial" || refPurpose === "vendor_personal" ? "commercial"
+      : refPurpose ? "customer_service"
+      : null;
+
+    if (threadOrgId && lineKey) {
+      const { data: line } = await supabase
+        .from("messaging_lines")
+        .select("active_endpoint_id")
+        .eq("organization_id", threadOrgId)
+        .eq("key", lineKey)
+        .eq("channel", threadChannel)
+        .maybeSingle();
+      const activeId = (line as any)?.active_endpoint_id as string | null | undefined;
+      if (activeId) {
+        const { data: activeEp } = await supabase
+          .from("communication_endpoints")
+          .select("id, is_active")
+          .eq("id", activeId)
+          .maybeSingle();
+        if (activeEp && (activeEp as any).is_active) {
+          if (activeId !== threadPrimaryEndpointId) {
+            console.log("[dispatch-wa] line_routing_resolved", {
+              threadId: payload.threadId,
+              lineKey,
+              primary: threadPrimaryEndpointId,
+              active: activeId,
+            });
+          }
+          payload = { ...payload, endpointId: activeId };
+        }
+      }
+    }
+    // Se nada resolveu e o primary ainda está ativo, resolveProvider abaixo
+    // cairá naturalmente em thread_primary_endpoint (comportamento antigo).
   }
 
   let resolved: { provider: Provider; purpose: string | null; source: ResolveSource };
@@ -302,51 +351,6 @@ export async function dispatchWhatsAppSend(payload: WhatsAppSendPayload) {
     return { data: null, error: { message: err.message, name: err.code } as any };
   }
 
-  // Fase 0 — rotação por LINHA (reply em thread de número MORTO):
-  // se o endpoint primário da thread está INATIVO (número desconectado/rotacionado),
-  // resolve o número ATIVO da linha (por purpose) em messaging_lines e re-roteia —
-  // inclusive cross-provider (ex.: Twilio morto → Meta ativo). Diferente da re-rota
-  // legada abaixo, ESTE caso é justamente para thread COM primary_endpoint_id.
-  if (threadPrimaryEndpointId && payload.organizationId) {
-    const { data: primEp } = await supabase
-      .from("communication_endpoints")
-      .select("is_active, purpose")
-      .eq("id", threadPrimaryEndpointId)
-      .maybeSingle();
-    if (primEp && (primEp as any).is_active === false) {
-      const lineKey = (primEp as any).purpose === "commercial" ? "commercial" : "customer_service";
-      const { data: line } = await supabase
-        .from("messaging_lines")
-        .select("active_endpoint_id")
-        .eq("organization_id", payload.organizationId)
-        .eq("key", lineKey)
-        .eq("channel", "whatsapp")
-        .maybeSingle();
-      const activeId = (line as any)?.active_endpoint_id as string | null | undefined;
-      if (activeId && activeId !== threadPrimaryEndpointId) {
-        const { data: activeEp } = await supabase
-          .from("communication_endpoints")
-          .select("id, provider, purpose, is_active")
-          .eq("id", activeId)
-          .maybeSingle();
-        if (activeEp && (activeEp as any).is_active) {
-          console.log("[dispatch-wa] line_rotation_resolved", {
-            threadId: payload.threadId,
-            deadEndpoint: threadPrimaryEndpointId,
-            lineKey,
-            activeEndpoint: (activeEp as any).id,
-            provider: (activeEp as any).provider,
-          });
-          payload = { ...payload, endpointId: (activeEp as any).id };
-          resolved = {
-            provider: (activeEp as any).provider as Provider,
-            purpose: ((activeEp as any).purpose as string | null) ?? null,
-            source: "endpoint_explicit",
-          };
-        }
-      }
-    }
-  }
 
   // Re-rota lazy Comercial → Meta 7020. SOMENTE quando a thread NÃO tem
   // primary_endpoint_id (nova conversa / thread legada sem carimbo).
