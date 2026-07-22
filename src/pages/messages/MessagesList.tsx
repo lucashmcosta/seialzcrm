@@ -657,33 +657,12 @@ function DesktopMessagesList() {
     : null;
 
   const defaultComposerEndpointId = (() => {
-    // /messages + business_context='sales':
-    //  - Dentro da janela 24h e primary comercial: mantém o primary (sem
-    //    migração espontânea, respostas continuam pelo mesmo número).
-    //  - Fora da janela: se existir Evolution comercial ativo, prefere ele
-    //    para permitir envio livre; o primeiro send chama
-    //    `migrateThreadAndSend` e migra a thread definitivamente.
-    //  - Sem Evolution: cai no preferido comercial (Meta+BR > BR > Meta > ...).
-    if (selectedThreadBusinessContext === 'sales' && salesEndpoints.length > 0) {
-      const evolutionSalesEndpoint = salesEndpoints.find(
-        (e: any) => e?.provider === 'evolution_api' && e?.is_active,
-      );
-      const primaryIsSales =
-        selectedThreadPrimaryEndpointId && isSalesPurpose(primaryEndpointPurpose);
-      const lastInbound = getLastInboundTime(selectedThread as any, []);
-      const withinWindow = !!lastInbound && Date.now() - lastInbound.getTime() < 24 * 60 * 60 * 1000;
-      if (primaryIsSales && withinWindow) {
-        return selectedThreadPrimaryEndpointId;
-      }
-      if (evolutionSalesEndpoint) return evolutionSalesEndpoint.id;
-      return (
-        pickPreferredEndpoint(salesEndpoints, 'sales')?.id
-        ?? selectedThreadPrimaryEndpointId
-        ?? null
-      );
-    }
-    // Demais casos: comportamento legado (primary da thread → primeiro ativo).
-    return selectedThreadPrimaryEndpointId ?? orgEndpoints[0]?.id ?? null;
+    // O endpoint efetivo de envio é resolvido pelo dispatcher a partir da
+    // linha ativa do purpose (`messaging_lines.active_endpoint_id`). Aqui
+    // apenas escolhemos o *default visual* do composer:
+    //  - `sendEp.endpointId` quando resolvido (reflete a linha ativa);
+    //  - senão, fallback pro primary da thread ou o primeiro ativo da org.
+    return sendEp.endpointId ?? selectedThreadPrimaryEndpointId ?? orgEndpoints[0]?.id ?? null;
   })();
 
   const composerEndpointId = selectedThreadId
@@ -695,28 +674,14 @@ function DesktopMessagesList() {
     if (!selectedThreadId) return;
     setComposerEndpointByThread((prev) => ({ ...prev, [selectedThreadId]: id }));
   };
-  // Bypass da janela 24h: disponível quando o composer já é Evolution ou
-  // quando existe um endpoint Evolution ativo na org (permitindo trocar o
-  // envio dessa mensagem pelo número não-oficial sem exigir template).
+  // Capacidade declarada do endpoint efetivo — única fonte de verdade para
+  // decidir se o composer libera texto livre fora da janela 24h. NÃO
+  // participa da *escolha* do endpoint (isso é responsabilidade da linha
+  // ativa via `useThreadSendEndpoint`); apenas informa se aquele endpoint
+  // exige template.
   const composerEndpoint = composerEndpointId ? endpointById[composerEndpointId] : null;
-  const composerIsEvolution = (composerEndpoint as any)?.provider === 'evolution_api';
-  const evolutionEndpoint = useMemo(() => {
-    const actives = (orgEndpoints ?? []).filter(
-      (e: any) => e?.provider === 'evolution_api' && e?.is_active,
-    );
-    if (actives.length === 0) return null;
-    const purposeMatch = actives.find(
-      (e: any) => e?.purpose && primaryEndpointPurpose && e.purpose === primaryEndpointPurpose,
-    );
-    return purposeMatch ?? actives[0];
-  }, [orgEndpoints, primaryEndpointPurpose]);
-  const canBypassWindow = composerIsEvolution || !!evolutionEndpoint;
-  const handleBypassWindow = () => {
-    if (!composerIsEvolution && evolutionEndpoint?.id) {
-      setComposerEndpointId(evolutionEndpoint.id);
-    }
-    setBypassWindow(true);
-  };
+  const composerAllowsFreeformOutsideWindow =
+    sendEp.requiresTemplateOutsideWindow === false;
   const selectedEndpointFallback = selectedEndpointDetails?.threadId === selectedThreadId
     ? selectedEndpointDetails.endpoint
     : null;
