@@ -506,11 +506,12 @@ serve(async (req) => {
     )
 
     // ============================================================
-    // Defense-in-depth (P0 anti cross-number send):
-    // Se a thread já tem primary_endpoint_id, o envio SEMPRE usa esse
-    // endpoint. Qualquer messagesEndpointIdInput divergente é ignorado
-    // (log endpoint_override_ignored). Vale só para /messages — /inbox
-    // já resolve endpoint via thread.primary_endpoint_id em outra branch.
+    // Roteamento por LINHA (restaurado):
+    // Se o dispatcher injetou `endpointId` explícito no payload
+    // (`messagesEndpointIdInput`), ele é a fonte de verdade — reflete a
+    // linha ativa (messaging_lines.active_endpoint_id) do purpose da thread.
+    // Só caímos em `thread.primary_endpoint_id` quando não veio override.
+    // Vale só para /messages — /inbox resolve em outra branch.
     // ============================================================
     if (senderContext !== 'inbox' && typeof threadId === 'string' && threadId) {
       const { data: threadPre } = await supabase
@@ -520,15 +521,15 @@ serve(async (req) => {
         .maybeSingle()
       const primaryPid = ((threadPre as any)?.primary_endpoint_id as string | null) ?? null
       if (primaryPid) {
-        if (typeof messagesEndpointIdInput === 'string' && messagesEndpointIdInput && messagesEndpointIdInput !== primaryPid) {
-          console.warn('[twilio-wa-send] endpoint_override_ignored', {
+        if (!(typeof messagesEndpointIdInput === 'string' && messagesEndpointIdInput)) {
+          messagesEndpointIdInput = primaryPid
+        } else if (messagesEndpointIdInput !== primaryPid) {
+          console.log('[twilio-wa-send] line_routing_honored', {
             threadId,
             requestedEndpointId: messagesEndpointIdInput,
             threadPrimaryEndpointId: primaryPid,
-            reason: 'reply_must_use_thread_primary_endpoint',
           })
         }
-        messagesEndpointIdInput = primaryPid
       }
     }
 
