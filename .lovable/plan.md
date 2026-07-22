@@ -1,59 +1,84 @@
 
-# Plano — Voltar ao roteamento por `business_context + purpose + messaging_lines`
+## Objetivo
 
-Objetivo: reestabelecer o comportamento antigo em que **a thread é o histórico do contato** e o **envio é resolvido dinamicamente pela linha ativa do purpose**, sem exigir migração manual entre providers (Twilio ↔ Meta ↔ Evolution) e sem perder histórico.
+Remover do frontend a decisão baseada em provider (`provider === 'evolution_api'`) para liberar texto livre fora da janela 24h. Passar essa capacidade para o **endpoint efetivo de envio**, via nova coluna booleana em `communication_endpoints`.
 
-## Princípios (não negociáveis)
+## Regra de negócio (nova, única fonte)
 
-1. `message_threads.primary_endpoint_id` = **origem histórica**. Nunca é reescrito por troca de provider.
-2. Endpoint efetivo de envio é resolvido em runtime por:
-   `thread.business_context` → `purpose` (sales→commercial, support→customer_service) → `messaging_lines.active_endpoint_id` da org.
-3. Histórico permanece contínuo por contato; a troca de número aparece como marcador visual, não como thread nova.
-4. UI (composer, seletor de template, gate de janela 24h) usa **o mesmo endpoint que o dispatcher usaria**. Uma única fonte de verdade.
+Composer libera texto livre fora da janela 24h ⇔ o **endpoint efetivo de envio** (resolvido por `messaging_lines.active_endpoint_id` do purpose) tem `requires_template_outside_window = false`.
 
-## Mudanças
+Sem exceção por provider. Twilio/Meta ficam `true` (default). Evolution fica `false` via backfill. Qualquer novo provider é configurável no cadastro do endpoint.
 
-### 1. `supabase/functions/_shared/dispatch-whatsapp-send.ts` e `src/lib/dispatchWhatsAppSend.ts`
-- Remover a “regra dura” que força `primary_endpoint_id` em replies.
-- Nova ordem de resolução:
-  1. `endpointId` explícito do caller (ex.: envio via botão de rotação manual) → respeita.
-  2. Caso contrário: resolver por `messaging_lines.active_endpoint_id` da linha correspondente a `business_context` da thread.
-  3. Fallback: `primary_endpoint_id` **apenas se** estiver `is_active=true` e pertencer ao mesmo `purpose`.
-  4. Sem endpoint ativo na linha → **bloquear com mensagem clara** (“Linha Comercial sem número ativo”), não cair em provider default.
-- Remover o bloco de “re-rota lazy Comercial → Meta 7020” hardcoded por `organizationId`. Substituído pela resolução por linha.
+**Regra dura**: `requires_template_outside_window` **nunca participa da escolha do endpoint**. A ordem de resolução permanece:
 
-### 2. `src/hooks/useThreadSendEndpoint.ts`
-- Simplificar: sempre resolver pela linha ativa do purpose da thread, independentemente do estado do primary. O primary só é usado como *tie-breaker* quando ainda está ativo e é o próprio endpoint da linha.
-- Retornar `provider`, `purpose`, `organizationIntegrationId` já com base na linha.
+```text
+business_context
+   ↓
+purpose
+   ↓
+messaging_lines.active_endpoint_id
+   ↓
+communication_endpoint
+   ↓
+requires_template_outside_window   ← só é lido depois de resolver
+```
 
-### 3. `src/pages/messages/MessagesList.tsx`
-- Remover a lógica atual de “Enviar pelo 8439 e migrar conversa” como fluxo especial. O composer passa a usar automaticamente o endpoint retornado por `useThreadSendEndpoint`.
-- Remover overrides manuais de `composerEndpointId` / `bypassWindow` introduzidos no fluxo Evolution.
-- Gate de janela 24h passa a ser calculado sobre o endpoint efetivo (não sobre o primary). Se a linha ativa é Evolution, sem janela; se é Meta/Twilio, aplica janela normalmente.
-- Manter apenas um botão discreto **“Trocar número desta linha”** (admin/operacional) que altera `messaging_lines.active_endpoint_id`, não a thread.
+Nunca "procurar endpoint onde `requires_template_outside_window = false`".
 
-### 4. `thread-migrate-endpoint-send` (edge)
-- Deprecar. Substituído por: alterar `messaging_lines.active_endpoint_id` → todas as threads daquela linha passam a enviar pelo novo número automaticamente, sem tocar em `primary_endpoint_id`.
-- Nenhuma nota interna redundante; o evento visual de “número alterado” vem do marcador (ver item 6).
+## Mudanças propostas
 
-### 5. Backfill mínimo (sem migration nova)
-- Garantir que `messaging_lines` da org piloto (Viagi e Central Trabalhista) tenha `active_endpoint_id` apontando para o endpoint correto de cada linha (Comercial=Evolution 8439 onde aplicável; Atendimento conforme já configurado).
-- Garantir `business_context` correto nas threads recém-criadas por Evolution (script já existe; validar).
+### 1. Banco — `communication_endpoints`
 
-### 6. Marcador visual de rotação (UI, opcional nesta fase)
-- Já suportado pelo `messages.endpoint_id` diferente entre mensagens consecutivas. Renderizar divisor “📞 Número alterado: X → Y” quando `endpoint_id` muda. Sem alteração de dados.
+Novo campo:
 
-## Verificação
+```text
+requires_template_outside_window boolean NOT NULL DEFAULT true
+```
 
-1. Thread antiga Meta/Twilio da Viagi: enviar mensagem → dispatcher resolve Evolution 8439 pela linha Comercial → mensagem sai, histórico continua na mesma thread, sem migração de `primary_endpoint_id`.
-2. Alterar `messaging_lines.active_endpoint_id` da linha Comercial para outro endpoint → próximo envio em qualquer thread comercial sai pelo novo número, sem intervenção na thread.
-3. Thread de Atendimento nunca resolve para endpoint Comercial (isolamento por purpose).
-4. Se `active_endpoint_id` for null → envio bloqueia com mensagem clara, sem cair em provider default.
-5. `useThreadSendEndpoint` e o dispatcher retornam o **mesmo** endpoint para a mesma thread (composer, seletor de templates e envio consistentes).
-6. F5 na thread após envio: continua visível na lista, `business_context` intacto, `primary_endpoint_id` inalterado.
+Backfill único na mesma migration:
 
-## Fora de escopo
+- `UPDATE ... SET requires_template_outside_window = false WHERE provider = 'evolution_api';`
+- Demais linhas ficam `true` pelo DEFAULT.
 
-- Múltiplas linhas por tela (diluição de risco de ban) — fica para depois.
-- Nova UI de painel de rotação — apenas o botão discreto do item 3.
-- Qualquer mudança em Inbox (linha Atendimento continua como está).
+Sem alteração em RLS/GRANT (coluna adicionada à tabela existente).
+
+### 2. Hook `useThreadSendEndpoint` — única fonte de verdade
+
+Adicionar `requiresTemplateOutsideWindow: boolean` ao retorno (`ThreadSendEndpoint`), lido junto com os demais campos do endpoint efetivo (o que já é resolvido por linha ativa hoje). Default seguro `true` quando o endpoint não puder ser resolvido.
+
+Todo consumidor (composer, gate de janela, banner) deve ler **exclusivamente** `sendEndpoint.requiresTemplateOutsideWindow`. Nenhum outro hook ou componente calcula essa capacidade por conta própria.
+
+### 3. `MessagesList.tsx` — remover hardcodes de `evolution_api`
+
+- **Linha 669** (varredura `evolutionEndpoint` para override de composer): **remover**. Esse override existia para forçar o composer a apontar para Evolution em threads Meta/Twilio antigas — hoje isso já é feito automaticamente pelo dispatcher/`useThreadSendEndpoint` via linha ativa. Sem substituto: o composer usa o endpoint resolvido pela linha; ponto.
+- **Linha 702** (`composerIsEvolution`): renomear para `composerAllowsFreeformOutsideWindow`, derivado de `sendEndpoint.requiresTemplateOutsideWindow === false`.
+- **Linhas 705/713/715/1180** (`canBypassWindow`, `shouldMigrate`, evolutionEndpoint na org): trocar toda a lógica de "existe Evolution na org" pela flag do endpoint efetivo. O fluxo `shouldMigrate` deixa de existir como caminho especial — se a linha ativa aponta pra endpoint que não exige template, envio livre; se não, gate de template normal.
+- **Linhas 2387–2453** (gate `outOfWindow` + banner):
+  - `composerBypassesWindow = composerAllowsFreeformOutsideWindow`.
+  - Copy: "Envio livre pelo número ••••{last4}" (neutro, sem citar provider).
+
+### 4. `useOrgWhatsAppEndpoints` — expor a flag no tipo
+
+Adicionar `requires_template_outside_window: boolean` ao `select` e ao tipo `OrgEndpoint`. Não é consumido por lógica de seleção; apenas fica disponível para telas de admin/diagnóstico eventuais.
+
+### 5. Escopo intencionalmente fora deste plano
+
+- **Servidor** (`_shared/dispatch-whatsapp-send.ts`, `meta-whatsapp-send`, `twilio-whatsapp-send`): não muda. Compliance de janela no backend continua igual — provider rejeita se aplicável. A flag é puramente **capacidade declarada** consumida pela UI.
+- **UI de admin** para editar a flag por endpoint: fora. Backfill cobre existentes.
+- **Provisionamento Evolution** (`evolution-*` edge functions): inserts de novos endpoints precisam gravar `requires_template_outside_window = false` explicitamente, senão caem no DEFAULT `true` e o composer bloqueia. Item pequeno mas obrigatório — **confirmar se entra no mesmo PR** (recomendo sim, se não vira dívida silenciosa).
+- **Dispatcher/roteamento por linha**: intocado.
+- **Inbox** (`/inbox`): não usa esse gate; nada a alterar.
+
+## Arquivos afetados
+
+- 1 migration (schema + backfill).
+- `src/hooks/useThreadSendEndpoint.ts` — expor flag.
+- `src/hooks/useOrgWhatsAppEndpoints.ts` — select + tipo.
+- `src/pages/messages/MessagesList.tsx` — remover 3 hardcodes + copy neutra.
+- (Opcional/recomendado) inserts nas edge functions de provisionamento Evolution.
+
+## Riscos / pontos a validar antes de codar
+
+1. **Copy do banner** — hoje: "pelo Evolution ••••8439". Proposta: "pelo número ••••8439". Confirmar se você quer 100% neutro ou manter menção ao provider como texto informativo (nesse caso, ler `sendEndpoint.provider` só para exibição — nunca para lógica).
+2. **Inserts de provisionamento Evolution** — incluir a flag `false` no mesmo PR? Se ficar fora, novos números Evolution vão bloquear composer até ajuste manual.
+3. **Threads legadas Twilio/Meta** — permanecem `true`; comportamento idêntico ao atual, sem regressão esperada.
