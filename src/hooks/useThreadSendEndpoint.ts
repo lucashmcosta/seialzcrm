@@ -24,11 +24,18 @@ export interface ThreadSendEndpoint {
   /** true quando o endpoint efetivo difere do primary_endpoint_id da thread */
   isRotated: boolean;
   primaryEndpointId: string | null;
+  /**
+   * Capacidade declarada do endpoint efetivo. Quando `false`, o composer pode
+   * enviar texto livre mesmo fora da janela de 24h (sem exigir template).
+   * Default seguro `true` — bloqueia envio livre até resolver endpoint real.
+   */
+  requiresTemplateOutsideWindow: boolean;
 }
 
 const EMPTY: ThreadSendEndpoint = {
   endpointId: null, provider: null, purpose: null,
   organizationIntegrationId: null, isRotated: false, primaryEndpointId: null,
+  requiresTemplateOutsideWindow: true,
 };
 
 function purposeToLineKey(purpose: string | null | undefined): "commercial" | "customer_service" | null {

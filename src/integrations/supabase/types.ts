@@ -1466,6 +1466,7 @@ export type Database = {
           provider: string
           purpose: string
           quality_rating: string | null
+          requires_template_outside_window: boolean
           sender_sid: string | null
           status: string
           updated_at: string
@@ -1490,6 +1491,7 @@ export type Database = {
           provider?: string
           purpose?: string
           quality_rating?: string | null
+          requires_template_outside_window?: boolean
           sender_sid?: string | null
           status?: string
           updated_at?: string
@@ -1514,6 +1516,7 @@ export type Database = {
           provider?: string
           purpose?: string
           quality_rating?: string | null
+          requires_template_outside_window?: boolean
           sender_sid?: string | null
           status?: string
           updated_at?: string
