@@ -67,7 +67,7 @@ export function useThreadSendEndpoint(threadId?: string | null): ThreadSendEndpo
       if (primaryId) {
         const { data: prim } = await supabase
           .from("communication_endpoints")
-          .select("id, is_active, provider, purpose, organization_integration_id, organization_id")
+          .select("id, is_active, provider, purpose, organization_integration_id, organization_id, requires_template_outside_window")
           .eq("id", primaryId)
           .maybeSingle();
         primary = prim ?? null;
