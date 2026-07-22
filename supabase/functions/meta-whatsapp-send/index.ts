@@ -213,10 +213,16 @@ serve(async (req) => {
       Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!,
     );
 
-    // Resolve endpoint (provider='meta-cloud')
-    // Defense-in-depth: se a thread já tem primary_endpoint_id, ele SEMPRE
-    // manda. Qualquer endpointId divergente vindo do payload é substituído
-    // (e logado como endpoint_override_ignored). Evita cross-number send.
+    // Resolve endpoint.
+    //
+    // Contrato pós-restauração do roteamento por LINHA:
+    //   - Thread = histórico do contato.
+    //   - Linha ativa (messaging_lines.active_endpoint_id) = número/provider de envio.
+    //   - O dispatcher (`src/lib/dispatchWhatsAppSend.ts`) resolve a linha e
+    //     injeta `endpointId` explícito ao rotear para esta função.
+    //
+    // Se veio `endpointId` explícito no payload, ele é fonte de verdade.
+    // Só caímos no `thread.primary_endpoint_id` quando não veio endpointId.
     let endpoint: any = null;
     let effectiveEndpointId: string | null = typeof explicitEndpointId === "string" ? explicitEndpointId : null;
     if (threadId) {
@@ -227,15 +233,15 @@ serve(async (req) => {
         .maybeSingle();
       const pid = (thread as any)?.primary_endpoint_id as string | null | undefined;
       if (pid) {
-        if (effectiveEndpointId && effectiveEndpointId !== pid) {
-          console.warn("[meta-wa-send] endpoint_override_ignored", {
+        if (!effectiveEndpointId) {
+          effectiveEndpointId = pid;
+        } else if (effectiveEndpointId !== pid) {
+          console.log("[meta-wa-send] line_routing_honored", {
             threadId,
             requestedEndpointId: effectiveEndpointId,
             threadPrimaryEndpointId: pid,
-            reason: "reply_must_use_thread_primary_endpoint",
           });
         }
-        effectiveEndpointId = pid;
       }
     }
     if (effectiveEndpointId) {
