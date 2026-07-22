@@ -53,7 +53,7 @@ export interface WhatsAppSendResult {
   error: { message: string; name?: string; details?: any } | null;
 }
 
-type Provider = "twilio" | "meta_cloud_api";
+type Provider = "twilio" | "meta_cloud_api" | "evolution_api";
 type ResolveSource =
   | "endpoint_explicit"
   | "thread_primary_endpoint"
@@ -253,7 +253,9 @@ export async function dispatchWhatsAppSend(
 
   const fnName = resolved.provider === "meta_cloud_api"
     ? "meta-whatsapp-send"
-    : "twilio-whatsapp-send";
+    : resolved.provider === "evolution_api"
+      ? "evolution-whatsapp-send"
+      : "twilio-whatsapp-send";
 
   console.log("[dispatch-wa] route", {
     provider: resolved.provider,
