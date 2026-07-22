@@ -223,20 +223,23 @@ serve(async (req) => {
   if (!evo) return json(503, { error: "evolution_env_missing" });
 
   // -------------------------------------------------------------------------
-  // Resolve endpoint (defense-in-depth: thread.primary_endpoint_id sempre vence)
+  // Resolve endpoint.
+  //
+  // Contrato pós-restauração do roteamento por LINHA:
+  //   - Thread = histórico do contato.
+  //   - Linha ativa (messaging_lines.active_endpoint_id) = número/provider de envio.
+  //   - O dispatcher (`src/lib/dispatchWhatsAppSend.ts`) resolve a linha e
+  //     injeta `endpointId` explícito quando roteia para esta função.
+  //
+  // Por isso, se um `endpointId` explícito veio no payload E aponta para um
+  // endpoint desta org, deste provider e ativo, ele é a fonte de verdade —
+  // mesmo que difira do `thread.primary_endpoint_id`. Só caímos no primary
+  // quando NÃO houver endpointId explícito válido (compat legado + migração
+  // explícita via allowExplicitEndpointMigration continua funcionando).
   // -------------------------------------------------------------------------
   let effectiveEndpointId: string | null = typeof explicitEndpointId === "string" ? explicitEndpointId : null;
-  // Migration path: caller (thread-migrate-endpoint-send) explicitly asked
-  // to honor the provided endpointId without falling back to the thread's
-  // current primary_endpoint_id. Only trust this flag when the request comes
-  // in with the service-role key (i.e. server-to-server).
-  const svcKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") || "";
-  const authHdr = req.headers.get("Authorization") || "";
-  const isServiceRoleCaller = !!svcKey && authHdr === `Bearer ${svcKey}`;
-  const skipPrimaryOverride =
-    allowExplicitEndpointMigration === true && isServiceRoleCaller && !!effectiveEndpointId;
 
-  if (threadId && !skipPrimaryOverride) {
+  if (threadId) {
     const { data: t } = await supabase
       .from("message_threads")
       .select("primary_endpoint_id")
@@ -244,10 +247,18 @@ serve(async (req) => {
       .maybeSingle();
     const pid = (t as any)?.primary_endpoint_id as string | null;
     if (pid) {
-      if (effectiveEndpointId && effectiveEndpointId !== pid) {
-        logEvolution("warn", { fn: FN, requestId, message: "endpoint_override_ignored", threadId });
+      if (!effectiveEndpointId) {
+        effectiveEndpointId = pid;
+      } else if (effectiveEndpointId !== pid) {
+        logEvolution("info", {
+          fn: FN,
+          requestId,
+          message: "line_routing_honored",
+          threadId,
+          requestedEndpointId: effectiveEndpointId,
+          threadPrimaryEndpointId: pid,
+        });
       }
-      effectiveEndpointId = pid;
     }
   }
 
