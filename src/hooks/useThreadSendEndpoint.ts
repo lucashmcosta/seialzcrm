@@ -90,7 +90,7 @@ export function useThreadSendEndpoint(threadId?: string | null): ThreadSendEndpo
         if (activeId) {
           const { data: act } = await supabase
             .from("communication_endpoints")
-            .select("id, is_active, provider, purpose, organization_integration_id")
+            .select("id, is_active, provider, purpose, organization_integration_id, requires_template_outside_window")
             .eq("id", activeId)
             .maybeSingle();
           if (act && (act as any).is_active) {
@@ -101,6 +101,8 @@ export function useThreadSendEndpoint(threadId?: string | null): ThreadSendEndpo
               organizationIntegrationId: (act as any).organization_integration_id ?? null,
               isRotated: !!primaryId && (act as any).id !== primaryId,
               primaryEndpointId: primaryId,
+              requiresTemplateOutsideWindow:
+                (act as any).requires_template_outside_window !== false,
             };
           }
         }
@@ -115,6 +117,8 @@ export function useThreadSendEndpoint(threadId?: string | null): ThreadSendEndpo
           organizationIntegrationId: primary.organization_integration_id ?? null,
           isRotated: false,
           primaryEndpointId: primaryId,
+          requiresTemplateOutsideWindow:
+            (primary as any).requires_template_outside_window !== false,
         };
       }
 
