@@ -2265,17 +2265,16 @@ function DesktopMessagesList() {
                     {/* Input Area */}
                     <div className="border-t border-border p-4 bg-card">
                       {(() => {
-                        // Evolution API não exige janela 24h (não é canal oficial).
-                        // Se o composer já opera via Evolution (thread nativa ou
-                        // pós-migração), não bloqueamos por serviceWindow — o envio
-                        // livre é sempre permitido.
-                        const composerBypassesWindow = composerIsEvolution;
+                        // Gate de janela é decidido pela capacidade declarada
+                        // do endpoint efetivo (`requires_template_outside_window`).
+                        // Nenhum override por provider aqui.
+                        const composerBypassesWindow = composerAllowsFreeformOutsideWindow;
                         const outOfWindow =
-                          !serviceWindow.isOpen && messages.length > 0 && !bypassWindow && !composerBypassesWindow;
+                          !serviceWindow.isOpen && messages.length > 0 && !composerBypassesWindow;
                         const outOfWindowCopy = serviceWindow.reason || (locale === 'pt-BR' ? 'Fora da janela — selecione um template' : 'Outside window — select a template');
                         const showNoInboundHint =
                           !outOfWindow && composerBypassesWindow && !serviceWindow.isOpen && messages.length > 0;
-                        const evolutionLast4 = (() => {
+                        const composerLast4 = (() => {
                           const addr = (composerEndpoint as any)?.external_address ?? '';
                           return String(addr).replace(/\D/g, '').slice(-4);
                         })();
@@ -2284,8 +2283,8 @@ function DesktopMessagesList() {
                           {showNoInboundHint && (
                             <div className="px-1 pb-1 text-[11px] text-muted-foreground">
                               {locale === 'pt-BR'
-                                ? `Sem inbound recente — envio livre pelo Evolution ••••${evolutionLast4}`
-                                : `No recent inbound — free send via Evolution ••••${evolutionLast4}`}
+                                ? `Sem inbound recente — envio livre pelo número ••••${composerLast4}`
+                                : `No recent inbound — free send via number ••••${composerLast4}`}
                             </div>
                           )}
                           {/* Note Mode Indicator */}
@@ -2325,32 +2324,6 @@ function DesktopMessagesList() {
                                   >
                                     <FileText className="h-5 w-5" />
                                   </Button>
-                                  {canBypassWindow && (() => {
-                                    const targetNum = composerIsEvolution
-                                      ? (composerEndpoint as any)?.external_address
-                                      : (evolutionEndpoint as any)?.external_address;
-                                    const last4 = (targetNum ?? '').replace(/\D/g, '').slice(-4) || 'Evolution';
-                                    const label = composerIsEvolution
-                                      ? (locale === 'pt-BR' ? 'digitar livre' : 'type free')
-                                      : (locale === 'pt-BR'
-                                          ? `Enviar pelo ${last4} e migrar conversa`
-                                          : `Send via ${last4} and migrate thread`);
-                                    const tip = composerIsEvolution
-                                      ? (locale === 'pt-BR' ? 'Este número (Evolution) não exige template — digitar livre' : 'This number (Evolution) does not require a template')
-                                      : (locale === 'pt-BR'
-                                          ? `A conversa passará a operar pelo número Evolution ${targetNum ?? ''}. Histórico preservado.`
-                                          : `Thread will move to Evolution number ${targetNum ?? ''}. History preserved.`);
-                                    return (
-                                      <button
-                                        type="button"
-                                        onClick={handleBypassWindow}
-                                        title={tip}
-                                        className="self-center text-[10px] text-muted-foreground/70 hover:text-foreground underline underline-offset-2 px-1"
-                                      >
-                                        {label}
-                                      </button>
-                                    );
-                                  })()}
                                 </>
                               ) : (
                                 <>
