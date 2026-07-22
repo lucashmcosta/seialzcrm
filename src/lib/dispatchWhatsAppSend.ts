@@ -153,7 +153,16 @@ async function directFetchEdgeFunction(fn: string, payload: WhatsAppSendPayload)
       data: body,
       error: {
         name: "DirectFetchHttpError",
-        message: body?.message ?? body?.details ?? responseBody ?? `HTTP ${response.status}`,
+        message: (() => {
+          const m = body?.message ?? body?.error ?? body?.details;
+          if (typeof m === "string") return m;
+          if (m && typeof m === "object") {
+            const inner = (m as any).message ?? (m as any).error;
+            if (typeof inner === "string") return inner;
+            try { return JSON.stringify(m); } catch { /* noop */ }
+          }
+          return responseBody ?? `HTTP ${response.status}`;
+        })(),
         status: response.status,
         statusText: response.statusText,
         responseBody,
