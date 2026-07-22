@@ -288,6 +288,42 @@ Todos executados na org piloto Viagi com instância `viagi-pilot`:
 
 ---
 
+## 18. Atualização 2026-07-22 — roteamento por linha ativa + capacidade por endpoint
+
+Depois desta auditoria, duas mudanças complementares entraram em produção e
+alinharam dispatcher, send functions e composer:
+
+- **Send functions honram `endpointId` explícito.** As 3 send functions
+  (`evolution-whatsapp-send`, `meta-whatsapp-send`, `twilio-whatsapp-send`)
+  passaram a honrar o `endpointId` recebido do dispatcher após validar
+  `organization_id`, `provider` e `is_active`. A antiga trava "primary da
+  thread sempre vence" foi removida — o fallback a `primary_endpoint_id`
+  só ocorre quando o payload não traz `endpointId`. Log
+  `endpoint_override_ignored` (warn) foi substituído por
+  `line_routing_honored` (info). Isso permite que uma thread com histórico
+  Meta 2890 envie pela linha comercial ativa apontando para Evolution 8439
+  sem migrar threads e sem `endpoint_not_evolution`.
+- **`communication_endpoints.requires_template_outside_window`** (bool,
+  default `true`; `false` para Evolution) substitui o hardcode
+  `provider === 'evolution_api'` no gate de "digitar livre fora da janela
+  24h". O composer lê essa flag do endpoint efetivo resolvido pela linha
+  ativa. UX de migração manual (botão "Enviar pelo 8439 e migrar conversa",
+  edge function `thread-migrate-endpoint-send`, wrapper
+  `migrateThreadAndSend`, estado `bypassWindow`) foi removida.
+
+Contrato consolidado:
+`business_context → purpose → messaging_lines.active_endpoint_id → communication_endpoint → requires_template_outside_window`.
+
+**[TODO]** Inserts das edge functions Evolution que criam novos endpoints
+ainda não gravam `requires_template_outside_window = false` explicitamente
+— hoje depende do backfill inicial. Ver
+[`ENDPOINT_PURPOSE_RULE.md`](./ENDPOINT_PURPOSE_RULE.md).
+
+Racional completo:
+[`docs/plans/2026-07-endpoint-lines-rotation.md`](../../plans/2026-07-endpoint-lines-rotation.md).
+
+---
+
 **Projeto de integração da Evolution API — concluído.** Aguardando
 validação final para rollout gradual (adicionar orgs à
 `feature_flags.organization_ids` uma a uma).

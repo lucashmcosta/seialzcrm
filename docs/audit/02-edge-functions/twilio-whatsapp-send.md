@@ -35,3 +35,5 @@ Path: `supabase/functions/twilio-whatsapp-send/index.ts` (1037 LOC)
 ## Observações
 - Espelho de `meta-whatsapp-send` com duplicação massiva da lógica de compliance/guards, resolução de endpoint e persistência.
 - Sem `compliance_blocks` no scan → [INCERTO] se guards de bloqueio estão aplicados no caminho Twilio ou só no Meta.
+
+> **Atualização 2026-07-22** (fora da auditoria congelada de 2026-07-04): mesma mudança aplicada em `meta-whatsapp-send` — a função passou a honrar o `endpointId` explícito do dispatcher após validar `organization_id`, `provider = twilio_whatsapp` e `is_active`. Fallback a `thread.primary_endpoint_id` só quando o payload não traz `endpointId`. Log `endpoint_override_ignored` (warn) → `line_routing_honored` (info). Ver [`docs/plans/2026-07-endpoint-lines-rotation.md`](../../plans/2026-07-endpoint-lines-rotation.md).

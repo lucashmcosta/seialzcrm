@@ -1,6 +1,6 @@
 # Status da Documentação
 
-Snapshot: **2026-07-05** (pós-refinamento — ver [`audit/09-documentation-refinement.md`](audit/09-documentation-refinement.md) — e pós-rodada P0/P1/P2 do mesmo dia).
+Snapshot: **2026-07-05** (pós-refinamento — ver [`audit/09-documentation-refinement.md`](audit/09-documentation-refinement.md) — e pós-rodada P0/P1/P2 do mesmo dia). Delta 2026-07-22: roteamento por linha ativa restaurado nas 3 send functions (Evolution/Meta/Twilio honram `endpointId` explícito do dispatcher; log `endpoint_override_ignored` → `line_routing_honored`); coluna `communication_endpoints.requires_template_outside_window` em produção substituindo o hardcode `provider === 'evolution_api'` no gate de janela 24h do composer; UX de migração manual de thread removida. Ver [`plans/2026-07-endpoint-lines-rotation.md`](plans/2026-07-endpoint-lines-rotation.md).
 Fonte de verdade: código-fonte + banco vivo + `docs/audit/` (congelada em 2026-07-04).
 
 ---

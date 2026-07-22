@@ -23,11 +23,17 @@ Análogo, porém `twilio-whatsapp-webhook` → resolve org via `messaging_servic
 
 ```
 Frontend → dispatchWhatsAppSend (src/lib/dispatchWhatsAppSend.ts)
-  → escolhe provider/endpoint ativo (prefere sender online; regras de re-rota em product/channel-boundaries.md)
-    → meta-whatsapp-send  OU  twilio-whatsapp-send
-      → Meta Graph / Twilio API
-      → registra em messages (status pending → sent → delivered)
+  → resolve linha ativa por business_context/purpose:
+     messaging_lines.active_endpoint_id → communication_endpoint efetivo
+  → invoca send function do provider (meta | twilio | evolution)
+    → validação server-side: endpoint pertence à org, provider bate, is_active
+       (log line_routing_honored quando endpoint efetivo ≠ primary da thread)
+       fallback a thread.primary_endpoint_id só se payload não trouxer endpointId
+    → Meta Graph / Twilio API / Evolution API
+    → registra em messages (status queued → sent → delivered → read)
 ```
+
+Contrato consolidado: `business_context → purpose → messaging_lines.active_endpoint_id → communication_endpoint → capacidades` (inclui `requires_template_outside_window` para o gate de janela 24h no composer). Ver [`plans/2026-07-endpoint-lines-rotation.md`](../plans/2026-07-endpoint-lines-rotation.md) e [`product/channel-boundaries.md`](../product/channel-boundaries.md).
 
 Templates: caminho separado (`meta-whatsapp-templates-*` / `twilio-whatsapp-templates`).
 
