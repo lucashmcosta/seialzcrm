@@ -9,6 +9,7 @@ export interface OrgEndpoint {
   is_active: boolean;
   created_at: string;
   purpose: string | null;
+  requires_template_outside_window: boolean;
 }
 
 /**
