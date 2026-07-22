@@ -1125,100 +1125,20 @@ function DesktopMessagesList() {
     }
     if (!organization?.id || !messageText.trim() || !selectedThread) return;
 
-    // Caminho de MIGRAÇÃO explícita (Evolution-only por ora): quando o
-    // composer resolveu um endpoint Evolution cujo `purpose` bate com o
-    // `business_context` da tela e ele diverge do `primary_endpoint_id` da
-    // thread, roteamos por `thread-migrate-endpoint-send` (envia primeiro,
-    // migra depois). Não passa pelo `dispatchWhatsAppSend`, que reescreveria
-    // o endpoint para o primary antigo (regra dura anti cross-number).
-    //
-    // Independe de `bypassWindow`: a UI abrir pelo contexto Comercial ou
-    // Atendimento já implica intenção de usar o endpoint daquele contexto.
-    // Também dispara com bypass explícito (compat. botão "digitar livre").
-    const composerPurposeForMigrate = (composerEndpoint as any)?.purpose ?? null;
-    const contextPurposeMatches =
-      (selectedThreadBusinessContext === 'sales' && isSalesPurpose(composerPurposeForMigrate)) ||
-      (selectedThreadBusinessContext === 'customer_service' && composerPurposeForMigrate === 'customer_service');
-    const shouldMigrate =
-      !!selectedThreadId &&
-      !!composerEndpointId &&
-      composerIsEvolution &&
-      !!selectedThreadPrimaryEndpointId &&
-      composerEndpointId !== selectedThreadPrimaryEndpointId &&
-      (contextPurposeMatches || bypassWindow);
-    const targetEvolutionId = shouldMigrate ? composerEndpointId : null;
-
-    // Gate janela 24h: só bloqueia envio direto (dispatcher legado). Migração
-    // via Evolution não exige janela aberta.
-    if (!shouldMigrate && !serviceWindow.isOpen && !bypassWindow) {
+    // Gate janela 24h: bloqueia envio livre APENAS quando o endpoint efetivo
+    // exige template fora da janela (capacidade declarada em
+    // `communication_endpoints.requires_template_outside_window`). Endpoints
+    // que declaram `false` (ex.: Evolution) permitem envio livre sempre —
+    // sem migração explícita, o dispatcher já roteia pela linha ativa.
+    if (
+      !serviceWindow.isOpen &&
+      !composerAllowsFreeformOutsideWindow &&
+      messages.length > 0
+    ) {
       setShowTemplates(true);
       return;
     }
 
-    if (shouldMigrate) {
-      const savedText = messageText.trim();
-      const savedReplyTo = replyingTo;
-      const tempId = `temp-mig-${Date.now()}`;
-      const tempMessage: Message = {
-        id: tempId,
-        content: savedText,
-        direction: 'outbound',
-        sent_at: new Date().toISOString(),
-        whatsapp_status: 'sending',
-        media_urls: null,
-        media_type: null,
-        error_message: null,
-        error_code: null,
-        whatsapp_message_sid: null,
-        reply_to_message_id: savedReplyTo?.id || null,
-        reply_to_message: savedReplyTo
-          ? { content: savedReplyTo.content, direction: savedReplyTo.direction }
-          : null,
-        sender_type: 'user',
-        sender_name: userProfile?.full_name || null,
-        sender_agent_id: null,
-      };
-      setMessages((prev) => [...prev, tempMessage]);
-      setMessageText('');
-      setReplyingTo(null);
-      scrollToBottom();
-      if (selectedThreadId && selectedThread) {
-        autoAssignOnSend(selectedThreadId, selectedThread);
-      }
-      try {
-        const { data, error } = await migrateThreadAndSend({
-          organizationId: organization.id,
-          threadId: selectedThreadId!,
-          targetEndpointId: targetEvolutionId,
-          message: savedText,
-          userId: userProfile?.id,
-          replyToMessageId: savedReplyTo?.id || null,
-        });
-        if (error) throw new Error(error.message);
-        if (!data?.migrated && !data?.messageId) {
-          throw new Error('Falha ao migrar/enviar');
-        }
-        setBypassWindow(false);
-        setComposerEndpointId(null);
-        refetchThreads();
-      } catch (err: any) {
-        console.error('[migrate-and-send] failed', err);
-        setMessages((prev) =>
-          prev.map((m) =>
-            m.id === tempId
-              ? { ...m, whatsapp_status: 'failed', error_message: err?.message }
-              : m,
-          ),
-        );
-        setMessageText(savedText);
-        setReplyingTo(savedReplyTo);
-        toast({
-          variant: 'destructive',
-          description: err?.message || 'Erro ao migrar e enviar pela Evolution',
-        });
-      }
-      return;
-    }
 
     const tempId = `temp-${Date.now()}`;
     const tempMessage: Message = {
