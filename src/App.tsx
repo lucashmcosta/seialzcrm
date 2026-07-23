@@ -486,12 +486,16 @@ const App = () => (
             }
           />
           <Route
-            path="/messages"
+            path="/commercial"
             element={
               <ProtectedRoute>
                 <MessagesList />
               </ProtectedRoute>
             }
+          />
+          <Route
+            path="/messages"
+            element={<RedirectPreserveQuery to="/commercial" />}
           />
           <Route
             path="/inbox"
