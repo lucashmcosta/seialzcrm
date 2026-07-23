@@ -25,7 +25,7 @@ import { ActivityTimeline } from '@/components/contacts/ActivityTimeline';
 import { ContactTasks } from '@/components/contacts/ContactTasks';
 import { ContactAttachments } from '@/components/contacts/ContactAttachments';
 import { ContactCalls } from '@/components/contacts/ContactCalls';
-import { ContactMessages } from '@/components/contacts/ContactMessages';
+import { ContactConversations } from '@/components/contacts/ContactConversations';
 import { ContactNotes } from '@/components/contacts/ContactNotes';
 import { DocumentChecklist } from '@/components/documents/DocumentChecklist';
 import { OpportunityDialog } from '@/components/opportunities/OpportunityDialog';
@@ -76,7 +76,7 @@ export default function OpportunityDetail() {
     { id: 'overview', label: t('opportunities.overviewTab') },
     { id: 'timeline', label: t('contacts.timeline') },
     { id: 'calls', label: t('contacts.callsTab') },
-    { id: 'messages', label: t('contacts.messagesTab') },
+    { id: 'conversations', label: t('contacts.conversationsTab') },
     { id: 'tasks', label: t('contacts.tasksTab') },
     { id: 'attachments', label: t('attachments.title') },
     { id: 'documents', label: 'Documentos' },
@@ -412,7 +412,13 @@ export default function OpportunityDetail() {
                 contactName={contactName || undefined}
               />
             )}
-            {selectedTab === 'messages' && <ContactMessages opportunityId={opportunity.id} />}
+            {selectedTab === 'conversations' && (
+              opportunity.contact_id ? (
+                <ContactConversations contactId={opportunity.contact_id} />
+              ) : (
+                <div className="text-sm text-muted-foreground p-4">Oportunidade sem contato vinculado.</div>
+              )
+            )}
             {selectedTab === 'tasks' && <ContactTasks opportunityId={opportunity.id} />}
             {selectedTab === 'attachments' && <ContactAttachments entityId={opportunity.id} entityType="opportunity" />}
             {selectedTab === 'notes' && <ContactNotes opportunityId={opportunity.id} />}
@@ -742,8 +748,12 @@ export default function OpportunityDetail() {
               )}
             </Tabs.Panel>
 
-            <Tabs.Panel id="messages">
-              <ContactMessages opportunityId={opportunity.id} />
+            <Tabs.Panel id="conversations">
+              {opportunity.contact_id ? (
+                <ContactConversations contactId={opportunity.contact_id} />
+              ) : (
+                <div className="text-sm text-muted-foreground p-4">Oportunidade sem contato vinculado.</div>
+              )}
             </Tabs.Panel>
 
             <Tabs.Panel id="tasks">
