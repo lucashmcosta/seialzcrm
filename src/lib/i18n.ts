@@ -615,6 +615,7 @@ export const translations = {
     'contacts.notesTab': 'Notes',
     'contacts.callsTab': 'Calls',
     'contacts.messagesTab': 'Messages',
+    'contacts.conversationsTab': 'Conversations',
     'contacts.attachmentsTab': 'Attachments',
     'contacts.doNotContact': 'Do Not Contact',
     'contacts.deleteConfirm': 'Are you sure you want to delete this contact?',
