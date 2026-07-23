@@ -117,6 +117,7 @@ export const translations = {
     'contacts.notesTab': 'Notas',
     'contacts.callsTab': 'Chamadas',
     'contacts.messagesTab': 'Mensagens',
+    'contacts.conversationsTab': 'Conversas',
     'contacts.attachmentsTab': 'Anexos',
     'contacts.doNotContact': 'Não Contactar',
     'contacts.deleteConfirm': 'Tem certeza que deseja excluir este contato?',
