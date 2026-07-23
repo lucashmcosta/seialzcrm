@@ -14,6 +14,30 @@ export type Database = {
   }
   public: {
     Tables: {
+      _backup_ct_inbox_cleanup_2026_07: {
+        Row: {
+          id: string | null
+          planned_reason: string | null
+          prev_resolved_at: string | null
+          prev_status: string | null
+          prev_updated_at: string | null
+        }
+        Insert: {
+          id?: string | null
+          planned_reason?: string | null
+          prev_resolved_at?: string | null
+          prev_status?: string | null
+          prev_updated_at?: string | null
+        }
+        Update: {
+          id?: string | null
+          planned_reason?: string | null
+          prev_resolved_at?: string | null
+          prev_status?: string | null
+          prev_updated_at?: string | null
+        }
+        Relationships: []
+      }
       activities: {
         Row: {
           activity_type: Database["public"]["Enums"]["activity_type"]
