@@ -1,53 +1,29 @@
-## Objetivo
+## Diagnóstico: badge "2890" x envio real pelo 8439
 
-Atualizar a documentação existente para refletir duas mudanças que já estão em produção:
+Thread analisada: Maria Julia Almeida (`+5512981591764`).
 
-1. **Roteamento por linha ativa restaurado nas 3 send functions** (Evolution/Meta/Twilio): honram `endpointId` explícito do dispatcher em vez de forçar `primary_endpoint_id` da thread. Log `endpoint_override_ignored` (warn) virou `line_routing_honored` (info).
-2. **Nova capacidade `communication_endpoints.requires_template_outside_window`** (bool, default `true`; `false` para Evolution). O gate de "digitar livre fora da janela 24h" no composer passou a ler essa flag do endpoint efetivo resolvido pela linha ativa — não mais hardcode `provider === 'evolution_api'`. Botão "digitar livre / migrar" e rota `migrateThreadAndSend` removidos do frontend.
+### Estado da thread
+- `primary_endpoint_id` = endpoint Meta Cloud `+551150262890` (histórico original)
+- Nenhuma migração de `primary_endpoint_id` foi feita — é isso que faz o header/badge continuar mostrando "2890".
 
-Contrato consolidado a documentar em todos os lugares:
-`business_context → purpose → messaging_lines.active_endpoint_id → communication_endpoint → requires_template_outside_window`
-A thread guarda histórico (`primary_endpoint_id` = origem); a linha ativa define o número de envio. Nenhuma migração de thread é necessária ao trocar de provedor/número.
+### Últimas 4 mensagens outbound (todas do template "Boa tarde…")
 
-## Arquivos a atualizar
+| Horário (UTC) | `endpoint_id` da mensagem | Número real de envio | Provider real | Status | wamid |
+|---|---|---|---|---|---|
+| 22/07 20:41 | `11111111-…-0001` | **+5511936198439** | **evolution_api** | sent | `3EB0B01BD101397074CCD0` |
+| 22/07 19:55 | `11111111-…-0001` | **+5511936198439** | **evolution_api** | failed (Connection Closed) | — |
+| 22/07 19:39 | `11111111-…-0001` | **+5511936198439** | **evolution_api** | failed (Connection Closed) | — |
+| 22/07 19:35 | `11111111-…-0001` | **+5511936198439** | **evolution_api** | failed (Connection Closed) | — |
 
-### 1. `docs/plans/2026-07-endpoint-lines-rotation.md`
-Marcar **Status: Fase 0 implementada** (envio por linha ativa nas 3 send functions + composer neutro por capacidade). Adicionar seção curta "O que mudou desde o desenho":
-- resolução de envio server-side agora vive nas próprias send functions (honram `endpointId` explícito) além do dispatcher;
-- `requires_template_outside_window` é a evolução natural do gate de janela — substitui o teste por provider.
+### Conclusões
 
-### 2. `docs/modules/messages/README.md` e `docs/modules/messages/data-model.md`
-- Atualizar bullet de envio: `dispatchWhatsAppSend` resolve pela linha ativa (`messaging_lines.active_endpoint_id` por `purpose` derivado de `business_context`); send functions honram o `endpointId` explícito.
-- Substituir menção a botão "digitar livre" / migração manual por: gate de janela 24h lê `requires_template_outside_window` do endpoint efetivo.
-- Em `data-model.md`, documentar a coluna `requires_template_outside_window` em `communication_endpoints` (default `true`, `false` para Evolution) e o papel de `messaging_lines` / `messaging_line_rotations`.
+1. **As mensagens saíram (ou tentaram sair) pelo 8439 via Evolution API.** O `endpoint_id` gravado na linha de cada mensagem aponta para o endpoint Evolution `+5511936198439`, e o `whatsapp_message_sid` da que foi entregue é um `wamid` do Baileys (`3EB0…`), não um SID Twilio nem um `wamid` da Meta Cloud. Isso é consistente com o roteamento por linha ativa (Comercial → Evolution) que restauramos.
+2. **O badge "Novo · 2890" da lista e o header "Meta Cloud API · 2890" refletem apenas o `primary_endpoint_id` histórico da thread**, que continua apontando para o Meta. Não é indicador de por onde a mensagem saiu.
+3. **As 3 falhas de 19:35–19:55 têm o mesmo padrão do incidente da instância Evolution travada** (upstream 500 "Connection Closed"). A de 20:41, após você ter reiniciado no Evolution, foi entregue com sucesso pelo 8439.
+4. **Divergência de UI, não de envio.** Do ponto de vista de dados, o comportamento está correto conforme a regra aprovada (thread mantém histórico no endpoint original; envio segue a linha ativa da tela). O que confunde visualmente é o badge/header ainda mostrarem o endpoint histórico sem indicar o endpoint efetivo de envio.
+5. **A mensagem "Não entregue: Falha no envio"** exibida no chat corresponde exatamente às 3 linhas com `whatsapp_status='failed'` acima — falha do 8439 (Evolution), não do 2890.
 
-### 3. `docs/modules/inbox/README.md`
-Mesmo ajuste do item 2, escopo Atendimento (linha `customer_service`).
+### O que ainda depende de verificação externa
+- Confirmar recebimento no aparelho da cliente para bater o `wamid` `3EB0B01BD101397074CCD0` (única forma independente do banco de garantir entrega real pelo 8439).
 
-### 4. `docs/product/channel-boundaries.md`
-Substituir a regra "sales → endpoint comercial" por descrição precisa: rota comercial vai pela **linha ativa comercial da org**, independente do provider do `primary_endpoint_id` histórico da thread. Idem para atendimento.
-
-### 5. `docs/architecture/event-flow.md` (§3 Envio outbound)
-Reescrever o bloco: dispatcher escolhe linha ativa por `business_context/purpose` → send function (Evolution/Meta/Twilio) valida endpoint explícito (org, provider, `is_active`) → envia. Fallback a `primary_endpoint_id` só quando nenhum `endpointId` vier no payload.
-
-### 6. `docs/audit/02-edge-functions/meta-whatsapp-send.md`, `.../twilio-whatsapp-send.md`, `.../evolution-whatsapp-send.md` (se existir; senão criar entrada mínima)
-Atualizar seção "Observações": remover descrição da trava "primary sempre vence"; documentar nova ordem (endpointId explícito > primary), validação (org + provider + is_active), e o log `line_routing_honored`.
-
-### 7. `docs/integrations/evolution-api/ENDPOINT_PURPOSE_RULE.md`
-Anexar nota curta: capacidade "envio livre fora da janela" agora é declarada por `communication_endpoints.requires_template_outside_window = false` (setado no provisionamento Evolution), não mais deduzida do provider no frontend.
-
-### 8. `docs/integrations/evolution-api/PRODUCTION_READY_AUDIT.md` (ou UX_FINAL_AUDIT)
-Nota de fechamento: dispatcher + send functions + composer alinhados; UX de migração manual desativada.
-
-### 9. `docs/STATUS.md`
-Uma linha datada 2026-07-22: roteamento por linha ativa restaurado (3 send functions), `requires_template_outside_window` em produção, migração manual de thread removida.
-
-## Pendência conhecida a registrar (não implementar)
-
-Inserts das edge functions Evolution que criam novos endpoints ainda não gravam `requires_template_outside_window = false` explicitamente — hoje depende do backfill inicial. Registrar como TODO em `ENDPOINT_PURPOSE_RULE.md` e em `PRODUCTION_READY_AUDIT.md`.
-
-## Fora de escopo
-
-- Nenhum código, migration, edge function ou teste.
-- Nenhum arquivo novo de doc além do TODO acima (só edições nos existentes).
-- Não mexer em `docs/inbox-v2/*`, mobile docs, nem auditorias históricas datadas.
+Sem alterações propostas neste plano — é apenas o diagnóstico solicitado.
