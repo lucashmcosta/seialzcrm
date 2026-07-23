@@ -12,6 +12,11 @@ import { BrowserRouter, Routes, Route, Navigate, useLocation, useParams } from "
 import { PageLoader } from "./components/common/PageLoader";
 import { SiteI18nProvider, detectLocale } from "@/i18n/SiteI18nProvider";
 import { DEFAULT_LOCALE, LOCALE_TO_SLUG, SLUG_TO_LOCALE } from "@/i18n/config";
+function RedirectPreserveQuery({ to }: { to: string }) {
+  const { search, hash } = useLocation();
+  return <Navigate to={`${to}${search}${hash}`} replace />;
+}
+
 function reloadForChunkRecovery() {
   if (typeof window === "undefined") return;
 
@@ -486,12 +491,16 @@ const App = () => (
             }
           />
           <Route
-            path="/messages"
+            path="/commercial"
             element={
               <ProtectedRoute>
                 <MessagesList />
               </ProtectedRoute>
             }
+          />
+          <Route
+            path="/messages"
+            element={<RedirectPreserveQuery to="/commercial" />}
           />
           <Route
             path="/inbox"

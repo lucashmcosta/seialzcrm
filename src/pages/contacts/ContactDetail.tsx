@@ -328,7 +328,7 @@ export default function ContactDetail() {
 
           {/* Action buttons */}
           <div className="flex items-center justify-center gap-2 px-4 pb-4">
-            <Button color="secondary" size="sm" onClick={() => navigate(`/messages?contact=${contact.id}`)}>
+            <Button color="secondary" size="sm" onClick={() => navigate(`/commercial?contact=${contact.id}`)}>
               <ChatCircle className="h-4 w-4 mr-1.5" />
               Mensagens
             </Button>

@@ -127,7 +127,7 @@ export function Notifications() {
       } else if (notification.entity_type === 'task') {
         navigate('/tasks');
       } else if (notification.entity_type === 'message_thread' || notification.entity_type === 'message') {
-        navigate('/messages');
+        navigate('/commercial');
       }
     }
   };

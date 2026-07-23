@@ -1,44 +1,42 @@
-# Auditoria — Replicar aba "Conversas" na tela de Oportunidade
+# Renomear Mensagens → Comercial
 
-## Estado atual (verificado)
+## Escopo
+- Trocar o rótulo do item do menu (Sidebar desktop e mobile) de "Mensagens" para "Comercial".
+- Renomear a rota de `/messages` para `/commercial` (padrão inglês, consistente com `/contacts`, `/opportunities`, `/inbox`).
+- Manter `/messages` como redirect permanente para não quebrar bookmarks, links em notificações antigas, docs internos e a UI de integrações Meta que menciona `/messages` como referência textual.
+- Não renomeamos arquivos/pastas (`src/pages/messages/`, `src/components/messages/`, hooks `useMessageThreads`, tabelas `message_threads`, etc.) — o domínio de dados continua sendo "messages" no backend. Só o path público e o label mudam.
 
-**Contato (`/contacts/:id`)** — aba **Conversas** renderiza `src/components/contacts/ContactConversations.tsx`, que:
-- Chama o hook `useContactConversationsByContext(contactId)` (`src/hooks/contacts/useContactConversationsByContext.ts`).
-- Consulta `message_threads` do contato, filtra `channel = 'whatsapp'` e `business_context IN ('sales','customer_service')`.
-- Enriquece com mensagens reais (dedup contra threads vazias), endpoint e responsável.
-- Renderiza dois cards lado a lado: **Comercial** (`sales`) e **Atendimento** (`customer_service`), cada um com estado vazio + CTA de iniciar (`NewConversationDialog`) e ação "Abrir" que reabre thread `resolved/closed` antes de navegar para `/messages?thread=…` ou `/inbox?thread=…`.
+## Mudanças de código
 
-**Oportunidade (`/opportunities/:id`)** — hoje, em `src/pages/opportunities/OpportunityDetail.tsx`:
-- Tab id `messages`, label `t('contacts.messagesTab')` (linha 79).
-- Renderizado 2x (mobile linha 415, desktop `<Tabs.Panel id="messages">` linha 745).
-- Componente atual: `<ContactMessages opportunityId={opportunity.id} />` (recebe `opportunityId`, não `contactId`).
-- A oportunidade tem `contact_id` disponível no objeto (já usado em várias outras tabs: `calls`, `documents`, etc.).
+1. **Rota** — `src/App.tsx`
+   - Novo `<Route path="/commercial" element={<MessagesList />} />`.
+   - Manter `<Route path="/messages" element={<Navigate to="/commercial?...preserva query..." replace />} />` usando um pequeno wrapper que preserva `search` (params `?thread=`, `?contact=`).
 
-## O que precisa mudar
+2. **Sidebar desktop** — `src/components/Layout.tsx` (linhas 82 e 156-160)
+   - Trocar `t('nav.messages')` → `t('nav.commercial')` e `href: '/messages'` → `href: '/commercial'` nos dois blocos (Seialz sidebar e default layout).
 
-Escopo puramente de UI/apresentação — nenhuma alteração em banco, RLS, edge functions, hooks de dados ou regras de negócio.
+3. **Sidebar mobile / drawer** — `src/components/mobile/MobileLayout.tsx` (linhas 61 e 77)
+   - Mesmo ajuste de label e href.
 
-1. **Renomear a aba**: `id: 'messages'` → `id: 'conversations'`, label → `t('contacts.conversationsTab')` (mesma chave já usada na tela de contato; se a chave não existir para a Oportunidade, usar a mesma do módulo Contatos ou string literal "Conversas"/"Conversations" — verificar em `src/locales/*/common.json` no momento da implementação).
-2. **Trocar o componente** nas duas ocorrências (mobile linha 415 e desktop linha 745/746):
-   - De: `<ContactMessages opportunityId={opportunity.id} />`
-   - Para: `<ContactConversations contactId={opportunity.contact_id} />`, com guard para `opportunity.contact_id` (fallback: mensagem "Oportunidade sem contato vinculado", seguindo o padrão já usado nas tabs `calls`/`documents`).
-3. **Import**: remover `ContactMessages`, adicionar `ContactConversations` de `@/components/contacts/ContactConversations`.
+4. **i18n** — `src/lib/i18n.ts`
+   - Adicionar `nav.commercial`: `'Comercial'` (pt-BR) / `'Sales'` (en-US) — manter `nav.messages` existente por enquanto (usado só como fallback).
 
-## Ponto importante para o produto decidir (não implementar sem confirmação)
+5. **Navegações internas** — atualizar para `/commercial`:
+   - `src/components/Notifications.tsx:130` (`navigate('/messages')`).
+   - `src/components/contacts/ContactDetail.tsx:331` (`navigate('/messages?contact=...')`).
+   - `src/components/contacts/ContactConversations.tsx:53,151` (rotas para thread comercial).
+   - Isso garante que novos links já usem a rota canônica; o redirect protege links antigos.
 
-O card `ContactConversations` é **por contato**, não por oportunidade. Ele sempre mostra a thread comercial "representativa" do contato inteiro (regra determinística em `pickRepresentative`: maior nº de mensagens reais → última mensagem real → thread mais antiga).
+## O que NÃO muda (intencional)
+- Textos de referência em telas de integração Meta (`AddMetaWhatsAppNumberDialog`, `AddMetaWabaDialog`, `MetaWhatsAppCloudDialog`, `MetaAdditionalEndpointsSection`) que exibem literalmente `/messages` como pista para admins — trocar para `/commercial` no mesmo PR seguindo o padrão, mas isso é só string cosmética.
+- Comentários em código que citam `/messages` para descrever o módulo histórico — deixados como estão (o módulo interno continua sendo "messages"). Podem ser atualizados de forma incremental.
+- Nomes de arquivos, pastas, hooks, tabelas, edge functions, `senderContext`, `business_context='sales'`, chaves de query cache — nada disso é rota, então fica.
+- Rota `/inbox` (Atendimento) — não é afetada.
 
-Consequência: se um contato tiver **mais de uma oportunidade**, todas verão a **mesma** thread comercial. Isto está alinhado com a arquitetura atual (Messages = domínio Comercial por contato, thread única viva), mas é diferente do comportamento atual do `ContactMessages` que recebe `opportunityId`. Se a intenção for manter a visão "conversas específicas desta oportunidade", precisamos discutir antes — hoje o modelo de dados não amarra `message_threads` a `opportunity_id`, então replicar 1:1 o card do contato é a leitura correta do pedido.
+## Verificação
+- Após aplicar: `rg -n "'/messages'|\"/messages\"" src/` deve mostrar apenas o Route de redirect em `App.tsx` e strings cosméticas (comentários / textos de UI de integração se optarmos por deixar).
+- Abrir `/messages?thread=<id>` deve redirecionar para `/commercial?thread=<id>` sem perder o thread aberto.
+- Sidebar exibe "Comercial" no lugar de "Mensagens" nas duas telas (desktop + mobile).
 
-## Detalhes técnicos
-
-- Arquivos tocados: **apenas** `src/pages/opportunities/OpportunityDetail.tsx` (2 pontos de render + 1 definição de tab + imports).
-- Sem migrations, sem edge functions, sem alterações de hook.
-- i18n: reaproveitar chave `contacts.conversationsTab` (a mesma usada no ContactDetail). Confirmar existência ao implementar; caso ausente, adicionar em `pt-BR` e `en-US`.
-- Navegação: mantida a mesma do card do contato — cliques levam a `/messages?thread=…` (comercial) e `/inbox?thread=…` (atendimento).
-
-## Fora de escopo
-
-- Não remover/alterar `ContactMessages` (ainda usado em `ContactDetail` de acordo com o hint, e não faz parte do pedido).
-- Não mudar comportamento do card por oportunidade.
-- Não mexer em roteamento por linha ativa, endpoints, capabilities.
+## Riscos
+- Baixo. Todos os call sites de `/messages` estão inventariados acima; o redirect cobre qualquer link que eu não tenha encontrado (notificações persistidas, links em e-mails, bookmarks).

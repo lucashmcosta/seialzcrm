@@ -58,7 +58,7 @@ export function MobileLayout({ children, hideBottomBar = false }: MobileLayoutPr
   ];
 
   if (hasWhatsApp) {
-    tabs.push({ label: t('nav.messages'), href: '/messages', icon: ChatCircleText });
+    tabs.push({ label: t('nav.commercial'), href: '/commercial', icon: ChatCircleText });
     tabs.push({ label: 'Atendimento', href: '/inbox', icon: Headset });
   }
 
@@ -74,7 +74,7 @@ export function MobileLayout({ children, hideBottomBar = false }: MobileLayoutPr
     drawerItems.push({ label: t('nav.companies'), href: '/companies', icon: Buildings });
   }
   if (hasWhatsApp) {
-    drawerItems.push({ label: t('nav.messages'), href: '/messages', icon: ChatCircleText });
+    drawerItems.push({ label: t('nav.commercial'), href: '/commercial', icon: ChatCircleText });
     drawerItems.push({ label: 'Atendimento', href: '/inbox', icon: Headset });
   }
 

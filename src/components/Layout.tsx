@@ -79,7 +79,7 @@ export function Layout({ children }: LayoutProps) {
     // Communication group
     const commItems: SeialzNavGroup['items'] = [];
     if (hasWhatsApp) {
-      commItems.push({ label: t('nav.messages'), href: '/messages', icon: ChatCircleText });
+      commItems.push({ label: t('nav.commercial'), href: '/commercial', icon: ChatCircleText });
     }
     if (commItems.length > 0) {
       groups.push({ label: 'COMUNICAÇÃO', items: commItems });
@@ -154,8 +154,8 @@ export function Layout({ children }: LayoutProps) {
   // Add Messages menu if WhatsApp is enabled
   if (hasWhatsApp) {
     navItems.push({ 
-      label: t('nav.messages'), 
-      href: '/messages', 
+      label: t('nav.commercial'), 
+      href: '/commercial', 
       icon: ChatCircleText 
     });
   }

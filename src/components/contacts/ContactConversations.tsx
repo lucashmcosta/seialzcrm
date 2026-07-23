@@ -50,7 +50,7 @@ export function ContactConversations({ contactId }: Props) {
         context: 'sales',
         title: isPtBr ? 'Comercial' : 'Sales',
         icon: <ChatCircle className="h-5 w-5" weight="duotone" />,
-        route: (threadId) => `/messages?thread=${threadId}`,
+        route: (threadId) => `/commercial?thread=${threadId}`,
         createIntent: 'sales',
         dialogTitle: isPtBr ? 'Nova Conversa Comercial' : 'New Sales Conversation',
         emptyLabel: isPtBr
@@ -148,7 +148,7 @@ export function ContactConversations({ contactId }: Props) {
             const intent = creatingIntent;
             setCreatingIntent(null);
             await refetch();
-            if (intent === 'sales') navigate(`/messages?thread=${threadId}`);
+            if (intent === 'sales') navigate(`/commercial?thread=${threadId}`);
             else navigate(`/inbox?thread=${threadId}`);
           }}
         />
