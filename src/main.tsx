@@ -4,10 +4,18 @@ import React from 'react';
 import { createRoot } from "react-dom/client";
 import * as Sentry from "@sentry/react";
 import { HelmetProvider } from "react-helmet-async";
-import App from "./App.tsx";
+import App, { isStaleChunkError } from "./App.tsx";
+import { PageLoader } from "./components/common/PageLoader";
 import "./index.css";
 
-function SentryFallback() {
+function SentryFallback({ error }: { error: unknown }) {
+  // Belt-and-suspenders: some lazy() imports don't go through retryImport
+  // (e.g. Settings sub-pages). If we still land here because of a stale
+  // chunk after deploy, show a spinner instead of a scary error message —
+  // the app will typically already be reloading in the background.
+  if (isStaleChunkError(error)) {
+    return <PageLoader />;
+  }
   return (
     <div style={{ padding: 24, fontFamily: "system-ui, sans-serif" }}>
       <h1>Algo deu errado</h1>
@@ -15,6 +23,7 @@ function SentryFallback() {
     </div>
   );
 }
+
 
 
 
