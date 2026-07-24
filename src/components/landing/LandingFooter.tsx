@@ -1,5 +1,5 @@
 import { Link } from 'react-router-dom';
-import logoBlack from '@/assets/brand/seialz-logo-color.png.asset.json';
+const logoBlack = { url: '/brand/seialz-logo-color.png' };
 import { useSiteT } from '@/i18n/SiteI18nProvider';
 import { getLegalUrl, LOCALE_TO_SLUG } from '@/i18n/config';
 import { LanguageSwitcher } from './LanguageSwitcher';

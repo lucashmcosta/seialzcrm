@@ -1,7 +1,7 @@
 import { motion } from 'framer-motion';
 import { Lightning, ChartBar, Shield } from '@phosphor-icons/react';
-import logoColor from '@/assets/brand/seialz-logo-color.png.asset.json';
-import linhasSutil from '@/assets/brand/linhas-sutil-light.svg.asset.json';
+const logoColor = { url: '/brand/seialz-logo-color.png' };
+const linhasSutil = { url: '/brand/linhas-sutil-light.svg' };
 
 const GREEN = '#32CD32';
 const FOREST = '#1E7A1E';
