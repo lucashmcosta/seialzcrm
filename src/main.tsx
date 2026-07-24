@@ -4,17 +4,32 @@ import React from 'react';
 import { createRoot } from "react-dom/client";
 import * as Sentry from "@sentry/react";
 import { HelmetProvider } from "react-helmet-async";
-import App, { isStaleChunkError } from "./App.tsx";
+import App, { isStaleChunkError, reloadForChunkRecovery } from "./App.tsx";
 import { PageLoader } from "./components/common/PageLoader";
+import { hardRefreshApp } from "./hooks/useVersionCheck";
 import "./index.css";
 
 function SentryFallback({ error }: { error: unknown }) {
-  // Belt-and-suspenders: some lazy() imports don't go through retryImport
-  // (e.g. Settings sub-pages). If we still land here because of a stale
-  // chunk after deploy, show a spinner instead of a scary error message —
-  // the app will typically already be reloading in the background.
+  // Belt-and-suspenders: some lazy() imports may still surface here despite
+  // retryImport. If we land here because of a stale chunk after deploy,
+  // actively trigger the reload (throttled) and show a spinner instead of
+  // the scary error UI. If the throttle blocked us, offer a manual button.
   if (isStaleChunkError(error)) {
-    return <PageLoader />;
+    const reloadTriggered = reloadForChunkRecovery();
+    if (reloadTriggered) {
+      return <PageLoader />;
+    }
+    return (
+      <div style={{ padding: 24, fontFamily: "system-ui, sans-serif" }}>
+        <p>Atualizando para a versão mais recente…</p>
+        <button
+          onClick={() => { hardRefreshApp().catch(() => window.location.reload()); }}
+          style={{ marginTop: 12, padding: "8px 16px", cursor: "pointer" }}
+        >
+          Recarregar agora
+        </button>
+      </div>
+    );
   }
   return (
     <div style={{ padding: 24, fontFamily: "system-ui, sans-serif" }}>
