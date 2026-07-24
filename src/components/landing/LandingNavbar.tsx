@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { Link, useLocation } from 'react-router-dom';
-import logoBlack from '@/assets/brand/seialz-logo-color.png.asset.json';
+const logoBlack = { url: '/brand/seialz-logo-color.png' };
 import { List, X } from '@phosphor-icons/react';
 import { useSiteT } from '@/i18n/SiteI18nProvider';
 import { LOCALE_TO_SLUG } from '@/i18n/config';
