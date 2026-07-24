@@ -17,6 +17,20 @@ declare const __SENTRY_RELEASE__: string;
 const release =
   typeof __SENTRY_RELEASE__ !== "undefined" ? __SENTRY_RELEASE__ : "seialz-crm@dev";
 
+const STALE_CHUNK_PATTERNS = [
+  "failed to fetch dynamically imported module",
+  "importing a module script failed",
+  "loading chunk",
+  "chunkloaderror",
+  "module script",
+];
+
+function isStaleChunkMessage(message: unknown): boolean {
+  if (typeof message !== "string") return false;
+  const normalized = message.toLowerCase();
+  return STALE_CHUNK_PATTERNS.some((entry) => normalized.includes(entry));
+}
+
 if (dsn) {
   Sentry.init({
     dsn,
@@ -49,5 +63,19 @@ if (dsn) {
     // Session Replay
     replaysSessionSampleRate: 0.1,
     replaysOnErrorSampleRate: 1.0,
+
+    // Drop stale-chunk errors: these fire after a deploy when a user's tab
+    // references an asset hash that no longer exists on the CDN. The app
+    // handles them (silent reload via retryImport, spinner fallback in the
+    // ErrorBoundary); they are not real bugs.
+    beforeSend(event, hint) {
+      const originalMessage =
+        (hint?.originalException as { message?: unknown } | undefined)?.message ??
+        event.exception?.values?.[0]?.value ??
+        event.message;
+      if (isStaleChunkMessage(originalMessage)) return null;
+      return event;
+    },
   });
 }
+

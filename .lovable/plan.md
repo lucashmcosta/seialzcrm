@@ -1,71 +1,64 @@
+# Recovery silencioso para chunk stale — análise de segurança e plano
 
-# Limpeza manual do Atendimento — Central Trabalhista
+## Diagnóstico (reconfirmado no código)
 
-Org `40ae935c-…-91be6404a95f`. Janela de inatividade: **20 dias** (nada mexido nas regras/RPCs).
+Rastro do erro do Sentry:
+- Usuário clica em `/inbox` → `React.lazy(() => retryImport(() => import("./pages/inbox/InboxPage")))` em `src/App.tsx:83`.
+- `import()` rejeita com `Failed to fetch dynamically imported module` (hash `Y9lwkk7P` foi substituído por deploy).
+- `retryImport` (`src/App.tsx:33-41`) tenta 2× em 1s, chama `reloadForChunkRecovery()` e **re-lança** o erro.
+- `reload()` é assíncrono; o throw sobe antes → `Sentry.ErrorBoundary` (`src/main.tsx:78`) captura, reporta e mostra `SentryFallback`.
+- ~500ms depois o reload materializa e o usuário nem lê a mensagem — mas o Sentry já registrou.
 
-## Números do escopo do Inbox hoje
+## Auditoria de segurança da mudança proposta
 
-Escopo = a mesma regra do `rpc_inbox_queue_counts` (business_context='customer_service' OU customer/CS-endpoint), status `open + in_progress + awaiting_client`.
+Objetivo: para o caso **chunk stale + reload disparado**, `retryImport` retorna uma Promise pendente em vez de lançar. Antes de apresentar o plano final, verifiquei cada risco plausível:
 
-| Bucket | Total |
-|---|---:|
-| Total no escopo | **5.156** |
-| Sem mensagem há 20+ dias | **5.021** |
-|  ↳ `awaiting_client` | 3.480 |
-|  ↳ `open` | 1.541 |
-|  ↳ lifecycle = `lead` | 5.000 |
-|  ↳ lifecycle = `customer` | 21 |
-|  ↳ contato com oportunidade **won** | 21 |
-|  ↳ contato **sem** oportunidade won | 5.000 |
-| Órfãs sem endpoint (`purpose/provider NULL`) | 2 (1 já stale) |
+### 1. Promise pendente "vaza" memória?
+Não relevante. Assim que o reload dispara (`location.reload()`), a página inteira é descartada. A Promise pendente só existe pelos ~200–1000 ms entre o disparo do reload e o novo carregamento. Sem GC pressure, sem handles residuais.
 
-Verificação separada: os **569 contatos com oportunidade `won` já estão com `lifecycle_stage = 'customer'`** — 0 precisam promoção. Ou seja, não há reclassificação de contato a fazer nesta rodada.
+### 2. E se o reload for bloqueado pelo throttle de 10s (`reloadForChunkRecovery` linha 26)?
+Cenário: dois chunks falham em sequência. O segundo `reloadForChunkRecovery` retorna sem recarregar. Se nesse caso retornássemos Promise pendente, a UI ficaria com spinner **para sempre**.
+Mitigação obrigatória no plano: só retornar Promise pendente quando o reload for **efetivamente disparado**. Se o throttle bloqueou, manter o `throw err` atual (ErrorBoundary continua sendo rede de segurança). Isso preserva 100% do comportamento atual no cenário degenerado.
 
-## O que vai ser limpo (manual, uma execução, sem tocar em regras)
+### 3. E o `retryImport` usado por `InboundCallHandler`/`OutboundCallHandler` dentro de `<Suspense fallback={null}>` (`src/App.tsx:199-202`)?
+Esses componentes ficam em Suspense com fallback `null` (não bloqueiam a UI, são side-effect handlers). Retornar Promise pendente aqui simplesmente adia a montagem deles até o reload — comportamento aceitável (a página inteira vai recarregar em <1s de qualquer forma). Sem regressão.
 
-Duas ações independentes, aplicadas em ordem:
+### 4. Erros que **não** são chunk stale (bug real de runtime)?
+A mudança usa exatamente a heurística já validada em `src/hooks/useVersionCheck.ts:83-92` (`isStaleChunkError`). Se o erro não casar com o padrão, cai no `throw err` de sempre → ErrorBoundary continua reportando. Nenhum bug real é escondido.
 
-### Ação 1 — Preservar clientes reais
-- Alvo: threads em escopo, stale 20d, cujo contato **tem `won`** (21 threads, todas já `customer`).
-- **Não** resolver. Ficam como estão — são histórico de cliente ativo. Apenas registradas no log de auditoria como "mantidas".
+### 5. `lazy()` sem `retryImport` (17 imports de Settings + alguns outros — vide grep)
+Essas rotas hoje **não** têm retry nem reload automático. A camada 2 do plano (filtro no `Sentry.ErrorBoundary`) apenas silencia o **relatório** para chunk stale; ainda mostra `SentryFallback` porque não há reload. Isso é **estritamente melhor que hoje** (só remove ruído do Sentry) e não muda UX visível dessas rotas. Não vou envolver essas rotas em `retryImport` neste plano (fora de escopo, mudança maior).
 
-### Ação 2 — Resolver threads inativas de lead
-- Alvo: threads em escopo, `status IN ('open','in_progress','awaiting_client')`, `last_message_at < now() - interval '20 days'`, contato **sem** oportunidade `won`.
-- Quantidade estimada: **5.000 threads** (3.459 awaiting_client + 1.541 open).
-- Update aplicado:
-  - `status = 'resolved'`
-  - `resolved_at = now()`
-  - `resolved_reason = 'auto_cleanup_inactivity_20d_2026_07'`
-  - `resolved_by_user_id = NULL` (limpeza de sistema)
-- Efeito na UI: some da aba "Ativos/Aguardando"; não aparece em "Concluídos hoje" só por causa do fuso? Aparece sim (`resolved_at = now()`), mas some no dia seguinte. Contato mantém o histórico completo.
+### 6. Filtro do Sentry pode esconder erros reais?
+O filtro casa apenas mensagens `Failed to fetch dynamically imported module`, `importing a module script failed`, `loading chunk`, `chunkloaderror`, `module script`. Todos são falhas de carga de asset, nunca bugs de código executado. Nenhum stack trace de lógica de app cai nesse padrão.
 
-### Ação 3 — Órfãs sem endpoint
-- 2 threads sem `primary_endpoint_id` válido; 1 delas já stale.
-- Mesmo tratamento da Ação 2, motivo `auto_cleanup_orphan_endpoint_2026_07`.
+### 7. Isso quebra a ErrorBoundary do Sentry para outros erros?
+Não. `beforeCapture` só decide se **reporta**; o fallback e a árvore React continuam iguais. Uso o hook oficial documentado do `@sentry/react`.
 
-## Execução
+### 8. Impacto em SSR/build/tsgo?
+Zero. `location.reload`, `Promise`, `beforeCapture` já são usados no projeto (`useVersionCheck.ts`, `main.tsx`). Sem novas dependências.
 
-1. **Snapshot pré-limpeza** para rollback:
-   ```sql
-   CREATE TABLE _backup_ct_inbox_cleanup_2026_07 AS
-   SELECT id, status, resolved_at, resolved_reason, resolved_by_user_id, updated_at
-   FROM message_threads WHERE id IN (<alvos>);
-   ```
-2. **Dry-run**: rodar o `SELECT` que gera a lista de IDs e conferir a contagem (5.000 + 1 + 21-de-controle).
-3. **Update em lote** (em transação, uma única query com `IN (SELECT …)`).
-4. **Verificação pós**: recontar `rpc_inbox_queue_counts` — esperado `waiting` cair de ~5.1k para a ordem de ~140–180 (as ~135 threads com atividade nos últimos 20 dias + os 21 clientes com won preservados).
-5. **Rollback pronto**: `UPDATE message_threads SET status=b.status, resolved_at=b.resolved_at, resolved_reason=b.resolved_reason FROM _backup_ct_inbox_cleanup_2026_07 b WHERE message_threads.id=b.id;`
+## Plano final (2 arquivos, ~20 linhas)
 
-## O que NÃO estamos fazendo agora (intencional)
+### `src/App.tsx`
+- Adicionar helper `isStaleChunkError(err)` (idêntico ao de `useVersionCheck.ts`) OU importar do próprio hook para não duplicar.
+- Fazer `reloadForChunkRecovery()` **retornar boolean** (`true` se disparou reload, `false` se throttle bloqueou).
+- Ajustar `retryImport`: no `catch` final, se `isStaleChunkError(err) && reloadForChunkRecovery() === true`, retornar `new Promise(() => {})` (nunca resolve). Caso contrário, manter `throw err` como está hoje.
 
-- Não alterar `business_context` de nenhuma thread (fica como está no histórico).
-- Não mudar `lifecycle_stage` de contato — os 569 won já são `customer`, e leads ficam como lead.
-- Não alterar o RPC de escopo do Inbox, nem definição das abas.
-- Não criar cron/regra de auto-resolve. Isso é conversa separada, depois desta limpeza.
-- Não tocar em threads com atividade nos últimos 20 dias, mesmo que pareçam órfãs — ficam para revisão manual pontual.
+### `src/main.tsx`
+- Passar `beforeCapture` para `Sentry.ErrorBoundary` (ou usar `Sentry.init({ beforeSend })` — vou usar `beforeCapture` no boundary, escopo menor). Se `error.message` casar com `isStaleChunkError`, não capturar. Como belt-and-suspenders, envolver `SentryFallback` para mostrar `PageLoader` em vez do texto "Algo deu errado" quando o motivo for stale — assim mesmo os `lazy()` sem `retryImport` deixam de flashar mensagem de erro.
 
-## Perguntas de confirmação antes de rodar
+## Verificação pós-implementação
 
-1. Confirma janela **20 dias** medida por `last_message_at` (e não por `updated_at`/`assigned_at`)?
-2. Ok usar `resolved_reason = 'auto_cleanup_inactivity_20d_2026_07'` como marcador? Facilita rollback e auditoria depois.
-3. Quer que eu gere um **CSV com os 5.000 IDs alvo** em `/mnt/documents/` antes do update, para você conferir uma amostra?
+1. `bun run build` limpo (tsgo roda automaticamente).
+2. Teste manual: `bun build`, servir `dist/`, renomear `assets/InboxPage-*.js` e clicar `/inbox`. Esperado: spinner + reload silencioso, sem "Algo deu errado", sem evento no Sentry.
+3. Teste negativo: forçar `throw new Error("boom")` dentro de `InboxPage` — ErrorBoundary deve continuar mostrando fallback e Sentry deve capturar.
+4. Monitorar Sentry por 24-48h: taxa de `Failed to fetch dynamically imported module` deve cair a 0.
+
+## Fora de escopo (explícito)
+
+- Envolver os `lazy()` de Settings em `retryImport` (mudança larga, adiada).
+- Prompt de "nova versão disponível" (já existe em `useVersionCheck.ts`).
+- Alterar chunking do Vite, service worker, ou release naming.
+
+Aprovar para implementar?
