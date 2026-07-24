@@ -29,14 +29,16 @@ export function isStaleChunkError(error: unknown): boolean {
   const normalized = msg.toLowerCase();
   return [
     "failed to fetch dynamically imported module",
+    "error loading dynamically imported module",
     "importing a module script failed",
+    "unable to preload css",
     "loading chunk",
     "chunkloaderror",
     "module script",
   ].some((entry) => normalized.includes(entry));
 }
 
-function reloadForChunkRecovery(): boolean {
+export function reloadForChunkRecovery(): boolean {
   if (typeof window === "undefined") return false;
 
   const reloadKey = "__seialz_chunk_recovery_at";
