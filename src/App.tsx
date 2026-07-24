@@ -38,8 +38,14 @@ export function isStaleChunkError(error: unknown): boolean {
   ].some((entry) => normalized.includes(entry));
 }
 
+let reloadInFlight = false;
+
 export function reloadForChunkRecovery(): boolean {
   if (typeof window === "undefined") return false;
+
+  // Second/N-th stale chunk failing in the same tick: reload already scheduled,
+  // signal recovery so the caller suspends silently instead of throwing.
+  if (reloadInFlight) return true;
 
   const reloadKey = "__seialz_chunk_recovery_at";
   const lastReloadAt = Number(window.sessionStorage.getItem(reloadKey) ?? "0");
@@ -47,6 +53,7 @@ export function reloadForChunkRecovery(): boolean {
   if (Date.now() - lastReloadAt < 10_000) return false;
 
   window.sessionStorage.setItem(reloadKey, Date.now().toString());
+  reloadInFlight = true;
   window.location.reload();
   return true;
 }
