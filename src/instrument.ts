@@ -94,6 +94,36 @@ if (dsn) {
         return null;
       }
 
+      // Drop Twilio Voice SDK setSinkId rejections. When a call connects the
+      // SDK tries to route the ringback/incoming audio to a specific output
+      // device via HTMLMediaElement.setSinkId, which browsers gate behind a
+      // user gesture. The call itself still works (audio falls back to the
+      // default device); the rejection is cosmetic and comes through as an
+      // unhandledrejection from Twilio's own bundle. Predicate is strict:
+      // message must mention the gesture requirement AND the frame must be
+      // inside a Twilio SDK file (setSinkId/insetSinkId/twilio/voice-sdk) or
+      // the mechanism must be the global unhandledrejection handler.
+      const exceptionType = firstException?.type;
+      const exceptionValue =
+        typeof firstException?.value === "string" ? firstException.value : "";
+      const frames = firstException?.stacktrace?.frames ?? [];
+      const isSetSinkIdFrame = frames.some((frame) => {
+        const fn = typeof frame?.function === "string" ? frame.function.toLowerCase() : "";
+        const file = typeof frame?.filename === "string" ? frame.filename.toLowerCase() : "";
+        return (
+          fn.includes("setsinkid") ||
+          file.includes("twilio") ||
+          file.includes("voice-sdk")
+        );
+      });
+      if (
+        exceptionType === "NotAllowedError" &&
+        /user gesture is required/i.test(exceptionValue) &&
+        (isSetSinkIdFrame || mechanismType === "onunhandledrejection")
+      ) {
+        return null;
+      }
+
       return event;
     },
   });
