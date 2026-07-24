@@ -1,47 +1,31 @@
-## Diagnóstico (verificado no código atual)
+## Diagnóstico
 
-Evento antigo (14/jul), mas a causa raiz **continua no `src/App.tsx`** (linhas 41‑68). O Sentry capturou `Failed to fetch dynamically imported module` para **dois chunks no mesmo tick** (12:37:14.987 InboundCallHandler; 12:37:14.991 OutboundCallHandler) — os dois são montados juntos pelo `GlobalCallHandler` dentro do mesmo `Suspense`.
+Erro: `cannot add postgres_changes callbacks for realtime:inbox-threads-active-<orgId> after subscribe()`.
 
-`reloadForChunkRecovery()` hoje:
+Em `src/hooks/inbox/useInboxThreads.ts` o canal Realtime usa um nome determinístico (`inbox-threads-${tab}-${organizationId}`). Sob StrictMode em dev ou remounts rápidos (troca de aba/onlyMine que muda deps do effect), o `supabase.removeChannel` da limpeza anterior ainda está em voo quando o novo effect roda `supabase.channel(nomeIgual)`. O supabase-js reaproveita a instância já existente para o mesmo `topic` — e essa instância já teve `.subscribe()` chamado, então os `.on('postgres_changes', ...)` do segundo mount estouram exatamente com a mensagem acima. Como o hook está dentro do `InboxPage`, o erro sobe até o `ErrorBoundary` e derruba a tela do Atendimento.
 
-```ts
-if (Date.now() - lastReloadAt < 10_000) return false;
-window.sessionStorage.setItem(reloadKey, Date.now().toString());
-window.location.reload();
-return true;
-```
-
-Fluxo do erro:
-1. Deploy invalida os chunks. `InboundCallHandler` e `OutboundCallHandler` disparam `import()` em paralelo e falham em ~4ms de diferença.
-2. Primeiro `retryImport` esgota retries → `reloadForChunkRecovery()` grava timestamp, chama `location.reload()`, retorna `true` → devolve Promise pendente (silencia).
-3. Segundo `retryImport` esgota retries no mesmo tick → `reloadForChunkRecovery()` cai no `Date.now() - lastReloadAt < 10_000` → retorna `false` → `throw err`.
-4. Erro sobe por `React.lazy` → `Suspense` não trata → `Sentry.ErrorBoundary` do `main.tsx` reporta.
-
-A correção anterior (jul/17) só cobriu chunk único; concorrência ficou de fora.
+O mesmo padrão de nome determinístico existe em `src/hooks/useMessageThreads.ts` (`rpc-thread-updates-${orgId}`), mas ali só há um effect por org e sem `tab`/`onlyMine` mudando as deps, então não reproduz na prática. Mantemos o foco no ponto que está quebrando.
 
 ## Correção
 
-Separar duas responsabilidades hoje acopladas no mesmo booleano:
+Tornar o `topic` do canal único por instância do hook, de forma que um remount nunca colida com um canal ainda pendente de remoção.
 
-- **Disparar `location.reload()`** — mantém throttle de 10 s + sessionStorage para não haver loop se o reload trouxer chunks stale de novo.
-- **Sinalizar "recovery em andamento"** para suspender lazies restantes — precisa ser `true` para *todo* `retryImport` que falhar entre o `reload()` e o unload real, mesmo dentro da janela de throttle.
+### Alterações em `src/hooks/inbox/useInboxThreads.ts`
 
-Ajuste em `src/App.tsx`:
+- Gerar um sufixo único por montagem do effect (ex.: `crypto.randomUUID()` calculado dentro do próprio `useEffect`, guardado em variável local).
+- Compor o nome como `inbox-threads-${tab}-${organizationId}-${uid}`.
+- Manter o restante do effect igual: os dois `.on('postgres_changes', ...)` continuam sendo chamados **antes** do `.subscribe()`, e a cleanup segue chamando `supabase.removeChannel(channel)` + `clearTimeout` do debounce.
 
-- Flag em escopo de módulo `let reloadInFlight = false` (síncrono, mesmo runtime — sessionStorage não serve aqui).
-- `reloadForChunkRecovery()`: se `reloadInFlight` já for `true`, retorna `true` imediatamente (sem tocar em throttle nem `location.reload()`). Caso contrário, aplica o throttle atual; ao disparar o reload com sucesso, marca `reloadInFlight = true`.
-- `retryImport`: comportamento inalterado — se `isStaleChunkError(err)` e `reloadForChunkRecovery()` retornar `true`, suspende com Promise pendente; senão, `throw`.
+Nenhuma mudança de comportamento funcional: o debounce de 1500 ms, os filtros por `organization_id` e o refetch permanecem idênticos. A única diferença é que cada ciclo de subscribe usa um `topic` novo, evitando o reuse interno do supabase-js.
 
-Resultado: o segundo/N‑ésimo chunk stale a falhar entre o `location.reload()` e o unload da página passa a ser suspenso silenciosamente. O evento não chega ao `Sentry.ErrorBoundary` — nada é escondido por `beforeSend`; a recuperação real passa a cobrir concorrência.
+## Fora de escopo
 
-Efeito colateral considerado: se o reload for bloqueado pelo navegador, lazies subsequentes ficam suspensos indefinidamente. O `SentryFallback` em `main.tsx` já tem o botão "Recarregar agora" (`hardRefreshApp()`) como escape manual.
+- Não mexer em `useMessageThreads.ts` (não há sintoma e o risco de regressão no Comercial não se justifica).
+- Não alterar lógica de fetch, filtros de aba, contagem de filas ou UI da Inbox.
+- Sem migrations, sem edge functions, sem docs.
 
-## Arquivo tocado
+## Verificação
 
-- `src/App.tsx` — apenas `reloadForChunkRecovery` (linhas 41‑52). `retryImport` fica igual. ~6 linhas alteradas.
-
-## Fora do escopo
-
-- Não altera `main.tsx`, `instrument.ts`, providers, rotas, `Suspense`, nem os call handlers.
-- Não adiciona filtro no Sentry.
-- Cenário single-chunk stale continua idêntico ao atual.
+1. Build passa.
+2. Abrir `/inbox`, alternar entre abas (`active` / `waiting` / etc.) e o toggle "Somente meus" várias vezes seguidas — não deve mais aparecer o erro no console nem tela branca via ErrorBoundary.
+3. Ao chegar uma nova mensagem, a lista continua atualizando após o debounce de 1,5s.

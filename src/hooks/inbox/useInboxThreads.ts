@@ -59,8 +59,12 @@ export function useInboxThreads(
         fetchThreads();
       }, 1500);
     };
+    const uid =
+      typeof crypto !== 'undefined' && 'randomUUID' in crypto
+        ? crypto.randomUUID()
+        : `${Date.now()}-${Math.random().toString(36).slice(2)}`;
     const channel = supabase
-      .channel(`inbox-threads-${tab}-${organizationId}`)
+      .channel(`inbox-threads-${tab}-${organizationId}-${uid}`)
       .on(
         'postgres_changes',
         {
