@@ -1,110 +1,111 @@
+# QA: Tela branca "Algo deu errado" após deploy — plano cirúrgico
 
-## Contexto do erro
+Entendido. Vou tratar isso com o mesmo nível de cuidado de uma cirurgia: escopo mínimo, invariantes duras, zero mudança em qualquer caminho crítico (ligações, gravação de áudio, envio de WhatsApp, autenticação).
 
-Sentry capturou `Uncaught TypeError: Cannot read properties of undefined (reading 'close')` originado **dentro** de `opus-media-recorder/encoderWorker.umd.js`, com mecanismo `auto.browser.global_handlers.onerror` (`handled: false`). O throw acontece dentro do Web Worker do codificador Opus — não no nosso código React — e escapa direto para `window.onerror` porque nenhum handler acima do worker captura.
+## Diagnóstico (verificado read-only nesta auditoria)
 
-O timing do replay (clique em "Gravar áudio" → 1,25 s → erro) casa com o `warmEncoder()` em `src/components/whatsapp/AudioRecorder.tsx` (linhas 46-77): logo após o `getUserMedia` do clique real, disparamos um **segundo `OpusMediaRecorder` descartável** contra um `AudioContext` silencioso e chamamos `rec.stop()` num `setTimeout` fixo de **120 ms** (linha 72). Se em 120 ms o worker ainda não terminou de bootar (Worker JS parseado + WASM compilada), o `stop()` chega antes de o worker ter `encoder`/`context` prontos e ele tenta `.close()` em `undefined`.
+**Sintoma**: tela branca com "Algo deu errado" no canto superior esquerdo. Acontece quando um usuário está com aba aberta há um tempo, o app é republicado, e ao navegar para uma rota lazy o chunk (ex.: `ContactsList-XXXX.js`) não existe mais no CDN. React cai no `Sentry.ErrorBoundary`.
 
-Por que **não é** o `stopRecording()` real do usuário:
-- `stopRecording()` já bloqueia stop antes de `MIN_RECORD_MS = 1000 ms` (linha 245), então na gravação real o worker sempre teve ≥1 s de boot.
-- O warmup usa 120 ms fixos, independente da máquina.
-- O `try/catch` externo em `warmEncoder` **não pega** throws que ocorrem dentro do worker (são assíncronos, cross-thread).
+**Estado atual do sistema**:
 
-## Impacto
+1. `src/App.tsx` — tem `retryImport` + `reloadForChunkRecovery` + `isStaleChunkError`. Falha de chunk retorna Promise pendente e recarrega em silêncio. ✅
+2. `src/main.tsx` — `SentryFallback` reconhece stale chunk e mostra `<PageLoader />` em vez do texto de erro. ✅
+3. `src/instrument.ts` — `beforeSend` filtra eventos de stale chunk e os do `encoderWorker.umd.js`. ✅
+4. `src/hooks/useVersionCheck.ts` — já existe polling de nova versão e helper `hardRefreshApp()`. ✅ (não vou tocar)
 
-- **Gravação real do usuário:** o warmup é fire-and-forget, roda numa instância separada de `OpusMediaRecorder`, contra um `AudioContext` diferente do stream do microfone. Um erro do warmup **não interfere** no `mediaRecorder` real (referência distinta em `mediaRecorderRef`). O áudio do usuário continua sendo gravado e enviado. Confirmado por leitura das linhas 46-77 vs 156-238.
-- **Sentry:** como `handled: false`, o alerta é escalado como crítico e polui o painel.
+**Lacunas reais que causam a tela branca persistir**:
 
-Portanto, esta correção é **primariamente higiene do Sentry** — não é para "consertar a gravação", que está funcionando. A meta é parar o vazamento do worker vendor sem tocar em uma linha sequer do caminho crítico da gravação real.
+- **Lacuna A** — Nem todo `lazy()` em `src/App.tsx` passa por `retryImport`. Áreas descobertas:
+  - Todos os `./components/settings/*` (22 arquivos)
+  - Todos os `./pages/admin/*` (20 arquivos)
+  - `pages/companies/*` (3), `pages/whatsapp/*` (3), `pages/settings/*` restantes (4)
+  - `Profile`, `NotFound` (2)
+- **Lacuna B** — `SentryFallback` mostra `PageLoader` no stale chunk, mas **não dispara reload**. Se `retryImport` não estava no caminho (Lacuna A), o usuário fica com spinner infinito.
+- **Lacuna C** — Padrões de mensagem cobertos hoje não incluem: `error loading dynamically imported module` (Firefox), `unable to preload css` (Vite CSS preload).
 
-## Princípio de segurança do plano
+Nada disso toca ligações, áudio, WhatsApp, Supabase, RLS ou edge functions.
 
-Este plano é **cirúrgico** e obedece a três invariantes duras:
+## Invariantes duras (o que **NÃO** vai ser mexido)
 
-1. **Zero mudança no fluxo real de gravação.** Não tocamos em `startRecording`, `stopRecording`, `resetRecording`, `cancelRecording`, `handleSend`, `doSendAudio`, `doSendAsDocument`, nem em `mediaRecorderRef`, `chunksRef`, `streamRef`, `MIN_RECORD_MS`, `validateOggOpus`, `pickNativeMime`, `workerOptions`. Nada dessa cadeia entra na diff.
-2. **Zero mudança no vendor.** Não patchamos `opus-media-recorder` nem tocamos em `encoderWorker.umd.js`, `OggOpusEncoder.wasm`, `WebMOpusEncoder.wasm`, imports do worker, ou opções passadas ao construtor.
-3. **`warmEncoder` só fica mais tolerante — nunca mais agressivo.** Mudamos o gatilho do `stop()` do warmup para depender de um evento observável (`ondataavailable` do próprio warmup) com fallback de tempo **maior** que os 120 ms atuais. Se o evento não vier, cai no fallback; se vier, para com segurança. Em nenhum cenário o warmup fica mais rápido ou mais frágil do que hoje.
+1. **Zero mudança em ligações.** `InboundCallHandler`, `OutboundCallHandler`, `OutboundCallContext`, Twilio Voice SDK, hooks `useVoiceIntegration`, `useInboundCalls` — intocados. O `lazy()` desses dois handlers já usa `retryImport` desde antes, e permanece igual.
+2. **Zero mudança em áudio/gravação.** `AudioRecorder.tsx`, `warmEncoder`, `opus-media-recorder`, workerOptions — intocados. O plano anterior (`.lovable/plan.md`) já foi aplicado e não é reaberto aqui.
+3. **Zero mudança em envio de mensagens.** `dispatchWhatsAppSend`, `migrateThreadAndSend`, `evolution-whatsapp-send`, `useThreadSendEndpoint`, edge functions — intocados.
+4. **Zero mudança em auth/context.** `AuthContext`, `OrganizationContext`, `AuthProvider`, sessão — intocados.
+5. **Zero mudança em rotas.** Nenhum path muda; nenhum componente muda. Só o wrapper de import do `lazy()`.
+6. **Zero mudança de dependência.** Nenhum `bun add`; nenhum lockfile alterado.
+7. **Zero mudança em banco, edge functions, RLS, cron.**
+8. **Reversível em um único revert.** Todas as mudanças ficam em 3 arquivos.
 
-## Mudanças propostas (curtas e isoladas)
+## Plano
 
-### Mudança 1 — `warmEncoder()` em `src/components/whatsapp/AudioRecorder.tsx` (linhas 46-77)
+### Arquivos tocados (só estes 3)
 
-Substituir o `setTimeout(() => rec.stop(), 120)` fixo por:
+- `src/App.tsx` — declarações `const X = lazy(...)`. Nenhum uso do componente muda.
+- `src/main.tsx` — só o corpo do `SentryFallback`.
+- `src/instrument.ts` — só a lista `STALE_CHUNK_PATTERNS`.
 
-- Um `rec.ondataavailable` que, ao receber o primeiro chunk (prova de que encoder+WASM estão vivos), chama `rec.stop()`.
-- Um fallback com `setTimeout` **maior** (proposta: 1500 ms) que só dispara se o evento não vier — e mesmo assim, dentro de `try/catch`, e só se `rec.state === 'recording'` (evita chamar stop em estado inválido).
-- Adicionar `rec.onerror = () => { /* swallow */ }` para engolir localmente qualquer erro que o polyfill exponha via API. Não substitui o `window.onerror` do worker, mas cobre o caminho documentado.
+### Mudança 1 — Wrap universal com `retryImport` (Lacuna A)
 
-Diff conceitual (não é o código final):
+Em `src/App.tsx`, para cada `const X = lazy(() => import("...").then(...))` que **ainda não** usa `retryImport`, envolver o `import(...)` interno com `retryImport(...)`. A cadeia `.then(m => ({ default: m.X }))` que já existe é preservada literalmente. Rotas e componentes finais não mudam.
 
+Antes:
 ```
-- rec.start();
-- setTimeout(() => { try { rec.stop(); } catch { /* noop */ } }, 120);
-+ let stopped = false;
-+ const safeStop = () => {
-+   if (stopped) return;
-+   stopped = true;
-+   try { if (rec.state === 'recording') rec.stop(); } catch { /* noop */ }
-+ };
-+ rec.onerror = () => { /* swallow warmup errors */ };
-+ const originalOnData = rec.ondataavailable;
-+ rec.ondataavailable = (ev) => {
-+   try { originalOnData?.(ev); } catch { /* noop */ }
-+   safeStop();
-+ };
-+ rec.start();
-+ setTimeout(safeStop, 1500); // fallback bem acima do boot time
+const UsersSettings = lazy(() => import("./components/settings/UsersSettings").then(m => ({ default: m.UsersSettings })));
+```
+Depois:
+```
+const UsersSettings = lazy(() => retryImport(() => import("./components/settings/UsersSettings")).then(m => ({ default: m.UsersSettings })));
 ```
 
-Nada nessa mudança altera o warmup do worker/WASM (`warmupOpusPolyfill`) nem o construtor de `OpusMediaRecorder`. Só muda **quando** o warmup chama `stop()` e adiciona um handler local de erro.
+Lista exaustiva: todos os 22 `settings/*`, 20 `admin/*`, 3 `companies/*`, 3 `whatsapp/*`, 4 `settings/*` restantes, `Profile`, `NotFound`. Total: ~54 linhas modificadas, cada uma mecanicamente idêntica.
 
-**Por que é seguro:**
-- O warmup permanece fire-and-forget, contido em `try/catch`.
-- Se o novo caminho falhar, `encoderWarmed` volta a `false` no `catch`, exatamente como hoje.
-- Não afeta `mediaRecorderRef` (recorder real usa outra instância).
-- Se por acaso `ondataavailable` nunca disparar, o fallback de 1500 ms garante que não vazamos o `AudioContext` — o `onstop` existente já limpa `osc`, `dst.stream` e `ctx`.
+Por que é seguro: `retryImport` é passthrough em caminho feliz (`fn().catch(...)`). Se o import resolve, o comportamento é o mesmo. Só muda o caso de erro — que hoje é "explode" e passa a ser "reload silencioso". Zero impacto em qualquer coisa que não seja falha de rede em chunk.
 
-### Mudança 2 — Filtro adicional em `src/instrument.ts` `beforeSend`
+### Mudança 2 — `SentryFallback` dispara reload (Lacuna B)
 
-Estender o `beforeSend` existente para também dropar eventos cujo primeiro frame venha de `encoderWorker.umd.js` **E** mecanismo seja `auto.browser.global_handlers.onerror`. A checagem é aditiva ao filtro atual de chunks stale — não muda nem remove o filtro que já existe.
+Em `src/main.tsx`, o `SentryFallback` passa a chamar `reloadForChunkRecovery()` (exportar de `App.tsx`) dentro de um `useEffect` quando detectar stale chunk. `PageLoader` continua sendo renderizado. Se o throttle (10s) bloquear o reload, cai num pequeno UI com botão "Recarregar agora" que chama `hardRefreshApp()` do `useVersionCheck.ts` (helper já existente, não vou reescrever).
 
-Regra explícita para não silenciar demais:
-- **Só drop** quando o `filename` do stacktrace top-frame contém `encoderWorker.umd.js` **E** o mechanism type é `onerror`.
-- Erros nossos que apenas *usem* `opus-media-recorder` (ex.: `logAudioEvent('audio_record_polyfill_init_error', ...)`) **não** são filtrados — passam pelo Sentry normalmente.
+Por que é seguro: `useEffect` só roda no branch `isStaleChunkError`. Nada muda para erros reais — continuam renderizando "Algo deu errado".
 
-**Por que é seguro:**
-- Filtro é de saída (`beforeSend`), não altera nenhum runtime.
-- Não remove nada; só amplia o predicado atual.
-- Se um dia o warmup for reescrito, o filtro segue inerte para tudo que não venha desse arquivo específico.
+### Mudança 3 — Padrões adicionais (Lacuna C)
 
-## O que este plano **não** faz
+Em `src/App.tsx` (`isStaleChunkError`) e `src/instrument.ts` (`STALE_CHUNK_PATTERNS`), adicionar as duas strings:
+- `error loading dynamically imported module`
+- `unable to preload css`
 
-- Não anexa `onerror` no `mediaRecorder` real da linha 198 (originalmente pensei nisso, mas retirei — mudar handlers no caminho crítico contradiz a invariante 1).
-- Não substitui `opus-media-recorder` por outra lib.
-- Não muda `MIN_RECORD_MS`, timeslice, MIME, validação OGG, fallback MP4/WebM.
-- Não muda `workerOptions`, imports do worker, ou paths de WASM.
-- Não adiciona dependência.
-- Não muda telemetria (`logAudioEvent`).
+As duas listas continuam sendo mantidas iguais (já é o padrão hoje).
 
-## Validação depois de implementar
+Por que é seguro: só amplia o predicado de detecção. Não remove nada, não altera nenhum runtime.
 
-1. **Smoke manual do fluxo real** (obrigatório antes de considerar feito):
-   - Clicar em "Gravar áudio" no Comercial → gravar 3 s → parar → botão "Enviar" aparece → enviar. Precisa funcionar idêntico a hoje.
-   - Segundo clique consecutivo (encoder já quente): mesmo fluxo, ainda funcional.
-   - Cancelar durante gravação: `cancelRecording` limpa estado sem erro.
-2. **Console limpo:** após o clique de gravar, nenhum `TypeError` do worker deve aparecer.
-3. **Sentry (24-48 h de observação):** o alerta com `encoderWorker.umd.js` + `handled: false` para de vir. Alertas de outras origens continuam chegando normalmente.
-4. **Se um erro do worker escapar por outra via**, ele continua chegando ao Sentry (nosso filtro é estrito no `filename` + `mechanism`).
+## Validação (checklist obrigatório antes de considerar feito)
 
-## Arquivos tocados
+Vou executar cada item explicitamente:
 
-- `src/components/whatsapp/AudioRecorder.tsx` — apenas o bloco `warmEncoder` (linhas 46-77). Nenhuma outra linha do arquivo é alterada.
-- `src/instrument.ts` — apenas o predicado interno do `beforeSend` existente.
+1. `rg` para confirmar que todo `lazy(` em `src/App.tsx` tem `retryImport` embrulhando o `import(`. Contagem esperada: 0 `lazy(() => import(` sem `retryImport`.
+2. `tsgo` para garantir que os wraps não quebraram nenhum tipo.
+3. Build de produção sobe sem erro (o harness roda automaticamente).
+4. **Smoke manual read-only dos caminhos críticos** (sem mexer): abrir a preview, navegar para uma rota que **antes** não tinha wrap (ex.: `/settings/users`, `/admin/organizations`), confirmar que abre normalmente. Nada muda no caminho feliz — a mudança só age em erro de fetch.
+5. **Confirmação explícita de que não toquei em**:
+   - `src/components/calls/*`
+   - `src/contexts/OutboundCallContext.tsx`, `src/contexts/outbound-call/*`
+   - `src/components/whatsapp/AudioRecorder.tsx`
+   - `src/lib/dispatchWhatsAppSend.ts`, `src/lib/migrateThreadAndSend.ts`
+   - qualquer `supabase/functions/*`
+   - qualquer arquivo de rota/página em si
+
+Se qualquer item da validação falhar, reverto imediatamente.
+
+## Fora de escopo (registrado, não implementado)
+
+- Banner "nova versão disponível" — `useVersionCheck` já existe e pode ser conectado num toast, mas isso é UX e fica para depois.
+- Erros de destructuring `Invalid attempt to spread non-iterable` que aparecem no stack do evento — outra classe de bug, exige repro Sentry separado.
+- Instrumentação Sentry em edge functions (dívida técnica antiga registrada em `docs/audit/04-integracoes/sentry.md`).
 
 ## Reversão
 
-Ambas as mudanças são de baixo risco e triviais de reverter:
-- Reverter `warmEncoder`: restaurar `setTimeout(() => { try { rec.stop(); } catch { /* noop */ } }, 120)`.
-- Reverter filtro: remover a nova condição do `beforeSend`.
+Se algo der errado em produção:
+- Git revert dos 3 arquivos = estado atual (o de agora).
+- Nenhum estado persistido, nenhuma migration, nenhuma mudança de contrato.
+- `sessionStorage["__seialz_chunk_recovery_at"]` é auto-limpo e inofensivo se sobrar.
 
-Sem migrations, sem novo estado, sem novos arquivos.
+Aprova para eu entrar em build mode e aplicar?
