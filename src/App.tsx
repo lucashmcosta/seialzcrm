@@ -61,15 +61,18 @@ export function reloadForChunkRecovery(): boolean {
 // Retry wrapper for dynamic imports (handles stale chunks after deployments)
 function retryImport<T>(fn: () => Promise<T>, retries = 2): Promise<T> {
   return fn().catch((err) => {
+    // Stale chunk after deploy: retrying the same 404 against the CDN is
+    // pointless. Trigger the reload immediately and keep the lazy component
+    // suspended (never-resolving Promise) so nothing surfaces to the
+    // ErrorBoundary while the page reloads. reloadForChunkRecovery is
+    // idempotent (in-flight flag + 10s throttle); even when throttled the
+    // first scheduled reload will land, so suspending is safe.
+    if (isStaleChunkError(err)) {
+      reloadForChunkRecovery();
+      return new Promise<T>(() => {});
+    }
     if (retries > 0) {
       return new Promise<T>((resolve) => setTimeout(() => resolve(retryImport(fn, retries - 1)), 1000));
-    }
-    // Chunk stale after deploy: trigger a silent reload and keep the lazy
-    // component suspended (never-resolving Promise) so no error surfaces to
-    // the ErrorBoundary / Sentry. If the reload throttle blocked us, fall
-    // back to the old behavior so the ErrorBoundary can still render.
-    if (isStaleChunkError(err) && reloadForChunkRecovery()) {
-      return new Promise<T>(() => {});
     }
     throw err;
   });
