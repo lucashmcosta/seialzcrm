@@ -1,35 +1,19 @@
-# Fast-path stale chunk reload
+# Verificação: `InboxPage-DyhNv4IU.js` já resolvido
 
-Ajustar `retryImport` em `src/App.tsx` para tratar chunks stale imediatamente, sem retentativas inúteis contra 404 da CDN.
+## Checagens feitas agora (read-only)
 
-## Mudança única
+- `src/App.tsx:122` — `InboxPage` é carregado via `lazy(() => retryImport(() => import("./pages/inbox/InboxPage")))`. Está sob o mesmo mecanismo dos demais.
+- `src/App.tsx:62-78` — `retryImport` já contém o fast-path aplicado no turno anterior: em qualquer erro que case `isStaleChunkError`, dispara `reloadForChunkRecovery()` e devolve `Promise` pendente (sem retries, sem escapar para o `ErrorBoundary`).
+- `src/App.tsx:20` / `src/instrument.ts:20-34` — `STALE_CHUNK_PATTERNS` inclui `"failed to fetch dynamically imported module"`, que é exatamente a mensagem do evento.
+- `src/main.tsx:12-33` — `SentryFallback` também trata stale chunk como recovery com `PageLoader`, como belt-and-suspenders.
+- `src/instrument.ts:73-78` — `beforeSend` já dropa esse padrão de mensagem antes de subir pro Sentry.
 
-Em `src/App.tsx`, substituir o corpo de `retryImport`:
+## Conclusão
 
-```ts
-function retryImport<T>(fn: () => Promise<T>, retries = 2): Promise<T> {
-  return fn().catch((err) => {
-    // Stale chunk → reload direto, sem retry contra 404.
-    if (isStaleChunkError(err)) {
-      reloadForChunkRecovery();
-      return new Promise<T>(() => {}); // suspende até o reload
-    }
-    if (retries > 0) {
-      return new Promise<T>((resolve) =>
-        setTimeout(() => resolve(retryImport(fn, retries - 1)), 1000)
-      );
-    }
-    throw err;
-  });
-}
-```
+O evento é **mais antigo que o fast-path**. A assinatura é idêntica à do `SettingsLayout` que corrigimos no turno anterior — mesma mensagem, mesma pilha (`Tt` → `nae` → `fae` → Suspense), só muda o nome do chunk. A correção não é por-rota: `retryImport` é o único caminho de carregamento lazy e já cobre `InboxPage` explicitamente.
 
-## Comportamento resultante
+**Nenhuma ação necessária.** Se o mesmo erro reincidir com `hash` de bundle **posterior** ao deploy do fast-path (ver `index-*.js` do evento vs. o atual em produção), aí sim é sinal de regressão e vale investigar — nesse caso, me mande o novo evento com timestamp e eu confirmo pelo hash.
 
-- Chunk stale (pós-deploy): reload em <100ms, sem 2s de latência, sem erro no `ErrorBoundary`, sem evento no Sentry.
-- Erro transitório de rede: mantém 2 retries com 1s de backoff (comportamento atual).
-- Throttle de 10s bloqueou o reload: promise fica pendente; o reload já agendado pelo primeiro chunk stale vai chegar.
+## Próximo passo sugerido
 
-## Fora de escopo
-
-Nenhuma outra alteração: `SentryFallback`, `beforeSend`, hooks, rotas, e os 61 `retryImport` chamados permanecem intactos.
+Seguir para o próximo erro do Sentry (indo do mais novo para o mais antigo, como você definiu).
