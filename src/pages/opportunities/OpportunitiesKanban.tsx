@@ -531,10 +531,11 @@ export default function OpportunitiesKanban() {
     // Optimistically update UI
     setOpportunitiesByStage(prev => {
       const updatedOpp = { ...movedOpp, pipeline_stage_id: newStageId, ...extra };
+      const destBase = (prev[newStageId] || []).filter(o => o.id !== opportunityId);
       return {
         ...prev,
         [oldStageId]: prev[oldStageId]?.filter(o => o.id !== opportunityId) || [],
-        [newStageId]: [...(prev[newStageId] || []), updatedOpp]
+        [newStageId]: [...destBase, updatedOpp]
       };
     });
 
