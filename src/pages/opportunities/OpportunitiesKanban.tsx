@@ -418,7 +418,7 @@ export default function OpportunitiesKanban() {
     const stageOpps = searchResults !== null 
       ? searchResults.filter(opp => opp.pipeline_stage_id === stageId)
       : (opportunitiesByStage[stageId] || []);
-    return stageOpps.filter((opp) => {
+    const filtered = stageOpps.filter((opp) => {
       const matchesOwner =
         filterOwners.length === 0 ||
         filterOwners.includes(opp.owner_user_id ?? 'none');
@@ -440,6 +440,15 @@ export default function OpportunitiesKanban() {
 
       return matchesOwner && matchesMinAmount && matchesMaxAmount && matchesNoCloseDate && matchesDateFrom && matchesDateTo && matchesCreatedFrom && matchesCreatedTo && matchesTag && matchesStage;
     });
+    // Dedupe by opp.id to prevent duplicate Draggable ids (would crash @hello-pangea/dnd with "Invariant failed")
+    const seen = new Set<string>();
+    const deduped: Opportunity[] = [];
+    for (const opp of filtered) {
+      if (seen.has(opp.id)) continue;
+      seen.add(opp.id);
+      deduped.push(opp);
+    }
+    return deduped;
   };
 
   const loadMoreForStage = useCallback(async (stageId: string) => {
