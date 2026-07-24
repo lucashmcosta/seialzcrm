@@ -1,64 +1,110 @@
-# Recovery silencioso para chunk stale — análise de segurança e plano
 
-## Diagnóstico (reconfirmado no código)
+## Contexto do erro
 
-Rastro do erro do Sentry:
-- Usuário clica em `/inbox` → `React.lazy(() => retryImport(() => import("./pages/inbox/InboxPage")))` em `src/App.tsx:83`.
-- `import()` rejeita com `Failed to fetch dynamically imported module` (hash `Y9lwkk7P` foi substituído por deploy).
-- `retryImport` (`src/App.tsx:33-41`) tenta 2× em 1s, chama `reloadForChunkRecovery()` e **re-lança** o erro.
-- `reload()` é assíncrono; o throw sobe antes → `Sentry.ErrorBoundary` (`src/main.tsx:78`) captura, reporta e mostra `SentryFallback`.
-- ~500ms depois o reload materializa e o usuário nem lê a mensagem — mas o Sentry já registrou.
+Sentry capturou `Uncaught TypeError: Cannot read properties of undefined (reading 'close')` originado **dentro** de `opus-media-recorder/encoderWorker.umd.js`, com mecanismo `auto.browser.global_handlers.onerror` (`handled: false`). O throw acontece dentro do Web Worker do codificador Opus — não no nosso código React — e escapa direto para `window.onerror` porque nenhum handler acima do worker captura.
 
-## Auditoria de segurança da mudança proposta
+O timing do replay (clique em "Gravar áudio" → 1,25 s → erro) casa com o `warmEncoder()` em `src/components/whatsapp/AudioRecorder.tsx` (linhas 46-77): logo após o `getUserMedia` do clique real, disparamos um **segundo `OpusMediaRecorder` descartável** contra um `AudioContext` silencioso e chamamos `rec.stop()` num `setTimeout` fixo de **120 ms** (linha 72). Se em 120 ms o worker ainda não terminou de bootar (Worker JS parseado + WASM compilada), o `stop()` chega antes de o worker ter `encoder`/`context` prontos e ele tenta `.close()` em `undefined`.
 
-Objetivo: para o caso **chunk stale + reload disparado**, `retryImport` retorna uma Promise pendente em vez de lançar. Antes de apresentar o plano final, verifiquei cada risco plausível:
+Por que **não é** o `stopRecording()` real do usuário:
+- `stopRecording()` já bloqueia stop antes de `MIN_RECORD_MS = 1000 ms` (linha 245), então na gravação real o worker sempre teve ≥1 s de boot.
+- O warmup usa 120 ms fixos, independente da máquina.
+- O `try/catch` externo em `warmEncoder` **não pega** throws que ocorrem dentro do worker (são assíncronos, cross-thread).
 
-### 1. Promise pendente "vaza" memória?
-Não relevante. Assim que o reload dispara (`location.reload()`), a página inteira é descartada. A Promise pendente só existe pelos ~200–1000 ms entre o disparo do reload e o novo carregamento. Sem GC pressure, sem handles residuais.
+## Impacto
 
-### 2. E se o reload for bloqueado pelo throttle de 10s (`reloadForChunkRecovery` linha 26)?
-Cenário: dois chunks falham em sequência. O segundo `reloadForChunkRecovery` retorna sem recarregar. Se nesse caso retornássemos Promise pendente, a UI ficaria com spinner **para sempre**.
-Mitigação obrigatória no plano: só retornar Promise pendente quando o reload for **efetivamente disparado**. Se o throttle bloqueou, manter o `throw err` atual (ErrorBoundary continua sendo rede de segurança). Isso preserva 100% do comportamento atual no cenário degenerado.
+- **Gravação real do usuário:** o warmup é fire-and-forget, roda numa instância separada de `OpusMediaRecorder`, contra um `AudioContext` diferente do stream do microfone. Um erro do warmup **não interfere** no `mediaRecorder` real (referência distinta em `mediaRecorderRef`). O áudio do usuário continua sendo gravado e enviado. Confirmado por leitura das linhas 46-77 vs 156-238.
+- **Sentry:** como `handled: false`, o alerta é escalado como crítico e polui o painel.
 
-### 3. E o `retryImport` usado por `InboundCallHandler`/`OutboundCallHandler` dentro de `<Suspense fallback={null}>` (`src/App.tsx:199-202`)?
-Esses componentes ficam em Suspense com fallback `null` (não bloqueiam a UI, são side-effect handlers). Retornar Promise pendente aqui simplesmente adia a montagem deles até o reload — comportamento aceitável (a página inteira vai recarregar em <1s de qualquer forma). Sem regressão.
+Portanto, esta correção é **primariamente higiene do Sentry** — não é para "consertar a gravação", que está funcionando. A meta é parar o vazamento do worker vendor sem tocar em uma linha sequer do caminho crítico da gravação real.
 
-### 4. Erros que **não** são chunk stale (bug real de runtime)?
-A mudança usa exatamente a heurística já validada em `src/hooks/useVersionCheck.ts:83-92` (`isStaleChunkError`). Se o erro não casar com o padrão, cai no `throw err` de sempre → ErrorBoundary continua reportando. Nenhum bug real é escondido.
+## Princípio de segurança do plano
 
-### 5. `lazy()` sem `retryImport` (17 imports de Settings + alguns outros — vide grep)
-Essas rotas hoje **não** têm retry nem reload automático. A camada 2 do plano (filtro no `Sentry.ErrorBoundary`) apenas silencia o **relatório** para chunk stale; ainda mostra `SentryFallback` porque não há reload. Isso é **estritamente melhor que hoje** (só remove ruído do Sentry) e não muda UX visível dessas rotas. Não vou envolver essas rotas em `retryImport` neste plano (fora de escopo, mudança maior).
+Este plano é **cirúrgico** e obedece a três invariantes duras:
 
-### 6. Filtro do Sentry pode esconder erros reais?
-O filtro casa apenas mensagens `Failed to fetch dynamically imported module`, `importing a module script failed`, `loading chunk`, `chunkloaderror`, `module script`. Todos são falhas de carga de asset, nunca bugs de código executado. Nenhum stack trace de lógica de app cai nesse padrão.
+1. **Zero mudança no fluxo real de gravação.** Não tocamos em `startRecording`, `stopRecording`, `resetRecording`, `cancelRecording`, `handleSend`, `doSendAudio`, `doSendAsDocument`, nem em `mediaRecorderRef`, `chunksRef`, `streamRef`, `MIN_RECORD_MS`, `validateOggOpus`, `pickNativeMime`, `workerOptions`. Nada dessa cadeia entra na diff.
+2. **Zero mudança no vendor.** Não patchamos `opus-media-recorder` nem tocamos em `encoderWorker.umd.js`, `OggOpusEncoder.wasm`, `WebMOpusEncoder.wasm`, imports do worker, ou opções passadas ao construtor.
+3. **`warmEncoder` só fica mais tolerante — nunca mais agressivo.** Mudamos o gatilho do `stop()` do warmup para depender de um evento observável (`ondataavailable` do próprio warmup) com fallback de tempo **maior** que os 120 ms atuais. Se o evento não vier, cai no fallback; se vier, para com segurança. Em nenhum cenário o warmup fica mais rápido ou mais frágil do que hoje.
 
-### 7. Isso quebra a ErrorBoundary do Sentry para outros erros?
-Não. `beforeCapture` só decide se **reporta**; o fallback e a árvore React continuam iguais. Uso o hook oficial documentado do `@sentry/react`.
+## Mudanças propostas (curtas e isoladas)
 
-### 8. Impacto em SSR/build/tsgo?
-Zero. `location.reload`, `Promise`, `beforeCapture` já são usados no projeto (`useVersionCheck.ts`, `main.tsx`). Sem novas dependências.
+### Mudança 1 — `warmEncoder()` em `src/components/whatsapp/AudioRecorder.tsx` (linhas 46-77)
 
-## Plano final (2 arquivos, ~20 linhas)
+Substituir o `setTimeout(() => rec.stop(), 120)` fixo por:
 
-### `src/App.tsx`
-- Adicionar helper `isStaleChunkError(err)` (idêntico ao de `useVersionCheck.ts`) OU importar do próprio hook para não duplicar.
-- Fazer `reloadForChunkRecovery()` **retornar boolean** (`true` se disparou reload, `false` se throttle bloqueou).
-- Ajustar `retryImport`: no `catch` final, se `isStaleChunkError(err) && reloadForChunkRecovery() === true`, retornar `new Promise(() => {})` (nunca resolve). Caso contrário, manter `throw err` como está hoje.
+- Um `rec.ondataavailable` que, ao receber o primeiro chunk (prova de que encoder+WASM estão vivos), chama `rec.stop()`.
+- Um fallback com `setTimeout` **maior** (proposta: 1500 ms) que só dispara se o evento não vier — e mesmo assim, dentro de `try/catch`, e só se `rec.state === 'recording'` (evita chamar stop em estado inválido).
+- Adicionar `rec.onerror = () => { /* swallow */ }` para engolir localmente qualquer erro que o polyfill exponha via API. Não substitui o `window.onerror` do worker, mas cobre o caminho documentado.
 
-### `src/main.tsx`
-- Passar `beforeCapture` para `Sentry.ErrorBoundary` (ou usar `Sentry.init({ beforeSend })` — vou usar `beforeCapture` no boundary, escopo menor). Se `error.message` casar com `isStaleChunkError`, não capturar. Como belt-and-suspenders, envolver `SentryFallback` para mostrar `PageLoader` em vez do texto "Algo deu errado" quando o motivo for stale — assim mesmo os `lazy()` sem `retryImport` deixam de flashar mensagem de erro.
+Diff conceitual (não é o código final):
 
-## Verificação pós-implementação
+```
+- rec.start();
+- setTimeout(() => { try { rec.stop(); } catch { /* noop */ } }, 120);
++ let stopped = false;
++ const safeStop = () => {
++   if (stopped) return;
++   stopped = true;
++   try { if (rec.state === 'recording') rec.stop(); } catch { /* noop */ }
++ };
++ rec.onerror = () => { /* swallow warmup errors */ };
++ const originalOnData = rec.ondataavailable;
++ rec.ondataavailable = (ev) => {
++   try { originalOnData?.(ev); } catch { /* noop */ }
++   safeStop();
++ };
++ rec.start();
++ setTimeout(safeStop, 1500); // fallback bem acima do boot time
+```
 
-1. `bun run build` limpo (tsgo roda automaticamente).
-2. Teste manual: `bun build`, servir `dist/`, renomear `assets/InboxPage-*.js` e clicar `/inbox`. Esperado: spinner + reload silencioso, sem "Algo deu errado", sem evento no Sentry.
-3. Teste negativo: forçar `throw new Error("boom")` dentro de `InboxPage` — ErrorBoundary deve continuar mostrando fallback e Sentry deve capturar.
-4. Monitorar Sentry por 24-48h: taxa de `Failed to fetch dynamically imported module` deve cair a 0.
+Nada nessa mudança altera o warmup do worker/WASM (`warmupOpusPolyfill`) nem o construtor de `OpusMediaRecorder`. Só muda **quando** o warmup chama `stop()` e adiciona um handler local de erro.
 
-## Fora de escopo (explícito)
+**Por que é seguro:**
+- O warmup permanece fire-and-forget, contido em `try/catch`.
+- Se o novo caminho falhar, `encoderWarmed` volta a `false` no `catch`, exatamente como hoje.
+- Não afeta `mediaRecorderRef` (recorder real usa outra instância).
+- Se por acaso `ondataavailable` nunca disparar, o fallback de 1500 ms garante que não vazamos o `AudioContext` — o `onstop` existente já limpa `osc`, `dst.stream` e `ctx`.
 
-- Envolver os `lazy()` de Settings em `retryImport` (mudança larga, adiada).
-- Prompt de "nova versão disponível" (já existe em `useVersionCheck.ts`).
-- Alterar chunking do Vite, service worker, ou release naming.
+### Mudança 2 — Filtro adicional em `src/instrument.ts` `beforeSend`
 
-Aprovar para implementar?
+Estender o `beforeSend` existente para também dropar eventos cujo primeiro frame venha de `encoderWorker.umd.js` **E** mecanismo seja `auto.browser.global_handlers.onerror`. A checagem é aditiva ao filtro atual de chunks stale — não muda nem remove o filtro que já existe.
+
+Regra explícita para não silenciar demais:
+- **Só drop** quando o `filename` do stacktrace top-frame contém `encoderWorker.umd.js` **E** o mechanism type é `onerror`.
+- Erros nossos que apenas *usem* `opus-media-recorder` (ex.: `logAudioEvent('audio_record_polyfill_init_error', ...)`) **não** são filtrados — passam pelo Sentry normalmente.
+
+**Por que é seguro:**
+- Filtro é de saída (`beforeSend`), não altera nenhum runtime.
+- Não remove nada; só amplia o predicado atual.
+- Se um dia o warmup for reescrito, o filtro segue inerte para tudo que não venha desse arquivo específico.
+
+## O que este plano **não** faz
+
+- Não anexa `onerror` no `mediaRecorder` real da linha 198 (originalmente pensei nisso, mas retirei — mudar handlers no caminho crítico contradiz a invariante 1).
+- Não substitui `opus-media-recorder` por outra lib.
+- Não muda `MIN_RECORD_MS`, timeslice, MIME, validação OGG, fallback MP4/WebM.
+- Não muda `workerOptions`, imports do worker, ou paths de WASM.
+- Não adiciona dependência.
+- Não muda telemetria (`logAudioEvent`).
+
+## Validação depois de implementar
+
+1. **Smoke manual do fluxo real** (obrigatório antes de considerar feito):
+   - Clicar em "Gravar áudio" no Comercial → gravar 3 s → parar → botão "Enviar" aparece → enviar. Precisa funcionar idêntico a hoje.
+   - Segundo clique consecutivo (encoder já quente): mesmo fluxo, ainda funcional.
+   - Cancelar durante gravação: `cancelRecording` limpa estado sem erro.
+2. **Console limpo:** após o clique de gravar, nenhum `TypeError` do worker deve aparecer.
+3. **Sentry (24-48 h de observação):** o alerta com `encoderWorker.umd.js` + `handled: false` para de vir. Alertas de outras origens continuam chegando normalmente.
+4. **Se um erro do worker escapar por outra via**, ele continua chegando ao Sentry (nosso filtro é estrito no `filename` + `mechanism`).
+
+## Arquivos tocados
+
+- `src/components/whatsapp/AudioRecorder.tsx` — apenas o bloco `warmEncoder` (linhas 46-77). Nenhuma outra linha do arquivo é alterada.
+- `src/instrument.ts` — apenas o predicado interno do `beforeSend` existente.
+
+## Reversão
+
+Ambas as mudanças são de baixo risco e triviais de reverter:
+- Reverter `warmEncoder`: restaurar `setTimeout(() => { try { rec.stop(); } catch { /* noop */ } }, 120)`.
+- Reverter filtro: remover a nova condição do `beforeSend`.
+
+Sem migrations, sem novo estado, sem novos arquivos.

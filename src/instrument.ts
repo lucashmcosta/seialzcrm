@@ -74,6 +74,24 @@ if (dsn) {
         event.exception?.values?.[0]?.value ??
         event.message;
       if (isStaleChunkMessage(originalMessage)) return null;
+
+      // Drop uncaught errors originating inside the opus-media-recorder vendor
+      // worker (encoderWorker.umd.js). These escape to window.onerror because
+      // they're thrown across the worker boundary; the app's warmup path is
+      // best-effort and does not affect real recordings. Predicate is strict:
+      // top-frame filename must match AND mechanism must be the global onerror
+      // handler — anything raised by our own code stays visible.
+      const firstException = event.exception?.values?.[0];
+      const topFrame = firstException?.stacktrace?.frames?.slice(-1)[0];
+      const filename = typeof topFrame?.filename === "string" ? topFrame.filename : "";
+      const mechanismType = firstException?.mechanism?.type;
+      if (
+        filename.includes("encoderWorker.umd.js") &&
+        mechanismType === "onerror"
+      ) {
+        return null;
+      }
+
       return event;
     },
   });
