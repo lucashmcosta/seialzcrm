@@ -2,8 +2,8 @@ import { useState } from "react";
 import { motion } from "framer-motion";
 import { LandingNavbar } from "@/components/landing/LandingNavbar";
 import { LandingFooter } from "@/components/landing/LandingFooter";
-import linhasMedia from "@/assets/brand/linhas-media-light.svg.asset.json";
-import linhasSutil from "@/assets/brand/linhas-sutil-light.svg.asset.json";
+const linhasMedia = { url: "/brand/linhas-media-light.svg" };
+const linhasSutil = { url: "/brand/linhas-sutil-light.svg" };
 import { useSiteT } from "@/i18n/SiteI18nProvider";
 import { SiteSeo } from "@/i18n/SiteSeo";
 
