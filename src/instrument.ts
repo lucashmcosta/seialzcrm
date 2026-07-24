@@ -19,7 +19,9 @@ const release =
 
 const STALE_CHUNK_PATTERNS = [
   "failed to fetch dynamically imported module",
+  "error loading dynamically imported module",
   "importing a module script failed",
+  "unable to preload css",
   "loading chunk",
   "chunkloaderror",
   "module script",
