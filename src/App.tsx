@@ -17,16 +17,36 @@ function RedirectPreserveQuery({ to }: { to: string }) {
   return <Navigate to={`${to}${search}${hash}`} replace />;
 }
 
-function reloadForChunkRecovery() {
-  if (typeof window === "undefined") return;
+export function isStaleChunkError(error: unknown): boolean {
+  const msg =
+    typeof error === "string"
+      ? error
+      : error instanceof Error
+        ? error.message
+        : error && typeof error === "object" && "message" in error && typeof (error as any).message === "string"
+          ? (error as any).message
+          : "";
+  const normalized = msg.toLowerCase();
+  return [
+    "failed to fetch dynamically imported module",
+    "importing a module script failed",
+    "loading chunk",
+    "chunkloaderror",
+    "module script",
+  ].some((entry) => normalized.includes(entry));
+}
+
+function reloadForChunkRecovery(): boolean {
+  if (typeof window === "undefined") return false;
 
   const reloadKey = "__seialz_chunk_recovery_at";
   const lastReloadAt = Number(window.sessionStorage.getItem(reloadKey) ?? "0");
 
-  if (Date.now() - lastReloadAt < 10_000) return;
+  if (Date.now() - lastReloadAt < 10_000) return false;
 
   window.sessionStorage.setItem(reloadKey, Date.now().toString());
   window.location.reload();
+  return true;
 }
 
 // Retry wrapper for dynamic imports (handles stale chunks after deployments)
@@ -35,10 +55,17 @@ function retryImport<T>(fn: () => Promise<T>, retries = 2): Promise<T> {
     if (retries > 0) {
       return new Promise<T>((resolve) => setTimeout(() => resolve(retryImport(fn, retries - 1)), 1000));
     }
-    reloadForChunkRecovery();
+    // Chunk stale after deploy: trigger a silent reload and keep the lazy
+    // component suspended (never-resolving Promise) so no error surfaces to
+    // the ErrorBoundary / Sentry. If the reload throttle blocked us, fall
+    // back to the old behavior so the ErrorBoundary can still render.
+    if (isStaleChunkError(err) && reloadForChunkRecovery()) {
+      return new Promise<T>(() => {});
+    }
     throw err;
   });
 }
+
 
 // Lazy load call handlers (heavy Twilio SDK) with retry
 const InboundCallHandler = lazy(() =>
