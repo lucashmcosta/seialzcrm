@@ -84,7 +84,17 @@ if (typeof window !== "undefined" && typeof navigator !== "undefined" && "servic
 
 createRoot(document.getElementById("root")!).render(
   <React.StrictMode>
-    <Sentry.ErrorBoundary fallback={<SentryFallback />} showDialog={false}>
+    <Sentry.ErrorBoundary
+      fallback={({ error }) => <SentryFallback error={error} />}
+      beforeCapture={(scope, error) => {
+        if (isStaleChunkError(error)) {
+          // Prevent Sentry from reporting this event — it's a stale
+          // dynamic-import chunk after deploy, not an app bug.
+          scope.setTag("sentry_ignore", "stale_chunk");
+        }
+      }}
+      showDialog={false}
+    >
       <HelmetProvider>
         <App />
       </HelmetProvider>
