@@ -474,16 +474,21 @@ export default function OpportunitiesKanban() {
       .range(currentOpps.length, currentOpps.length + CARDS_PER_STAGE - 1);
 
     if (data) {
-      setOpportunitiesByStage(prev => ({
-        ...prev,
-        [stageId]: [...currentOpps, ...data]
-      }));
+      setOpportunitiesByStage(prev => {
+        const existing = prev[stageId] || currentOpps;
+        const existingIds = new Set(existing.map(o => o.id));
+        const merged = [...existing, ...data.filter((o: Opportunity) => !existingIds.has(o.id))];
+        return { ...prev, [stageId]: merged };
+      });
       setHasMoreByStage(prev => ({
         ...prev,
         [stageId]: data.length === CARDS_PER_STAGE
       }));
-      // Update flat array too
-      setOpportunities(prev => [...prev, ...data]);
+      // Update flat array too (dedup against existing ids)
+      setOpportunities(prev => {
+        const ids = new Set(prev.map(o => o.id));
+        return [...prev, ...data.filter((o: Opportunity) => !ids.has(o.id))];
+      });
     }
     setLoadingMoreStage(null);
     loadingMoreRef.current = null;
