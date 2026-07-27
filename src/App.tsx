@@ -40,6 +40,15 @@ export function isStaleChunkError(error: unknown): boolean {
 
 let reloadInFlight = false;
 
+// If the browser restores this page from bfcache (back/forward navigation),
+// the in-flight flag would otherwise stick at `true` and prevent future
+// recovery reloads. Clear it whenever the page becomes visible again.
+if (typeof window !== "undefined") {
+  window.addEventListener("pageshow", () => {
+    reloadInFlight = false;
+  });
+}
+
 export function reloadForChunkRecovery(): boolean {
   if (typeof window === "undefined") return false;
 

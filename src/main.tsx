@@ -19,6 +19,13 @@ function SentryFallback({ error }: { error: unknown }) {
     if (reloadTriggered) {
       return <PageLoader />;
     }
+    // Throttle blocked the immediate reload — force one shortly so the user
+    // never gets stuck on the manual-refresh screen.
+    if (typeof window !== "undefined") {
+      window.setTimeout(() => {
+        hardRefreshApp().catch(() => window.location.reload());
+      }, 1500);
+    }
     return (
       <div style={{ padding: 24, fontFamily: "system-ui, sans-serif" }}>
         <p>Atualizando para a versão mais recente…</p>
@@ -95,6 +102,30 @@ if (typeof window !== "undefined" && typeof navigator !== "undefined" && "servic
       await Promise.allSettled(keys.map((key) => caches.delete(key)));
     }
   }).catch(() => {});
+}
+
+// Global stale-chunk guards — registered before React mounts so they cover:
+//  * clients still running an older bundle that never wrapped a given lazy()
+//    with retryImport (the rejection never hits our .catch),
+//  * import() failures dispatched as `vite:preloadError` by the runtime,
+//  * anything that escapes as an uncaught error / unhandled rejection.
+if (typeof window !== "undefined") {
+  const tryRecover = (err: unknown, event?: Event) => {
+    if (!isStaleChunkError(err)) return;
+    event?.preventDefault?.();
+    reloadForChunkRecovery();
+  };
+  window.addEventListener("error", (event) => {
+    tryRecover(event.error ?? event.message, event);
+  });
+  window.addEventListener("unhandledrejection", (event) => {
+    tryRecover(event.reason, event);
+  });
+  // Vite dispatches this before the import() rejection surfaces to React.
+  window.addEventListener("vite:preloadError", (event: Event) => {
+    const payload = (event as Event & { payload?: unknown }).payload;
+    tryRecover(payload ?? event, event);
+  });
 }
 
 createRoot(document.getElementById("root")!).render(
