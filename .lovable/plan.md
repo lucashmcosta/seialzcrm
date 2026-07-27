@@ -1,23 +1,44 @@
-## Diagnóstico
+## Objetivo
 
-O erro `ReferenceError: lastInboundTime is not defined` **não existe no código atual** de `src/pages/messages/MessagesList.tsx`.
+Eliminar o warning `Could not Fast Refresh ("useSiteI18n" export is incompatible)` separando os hooks e utilitários do componente `SiteI18nProvider`, para que o React Fast Refresh do Vite pare de invalidar o módulo e o erro fantasma `useSiteI18n must be used within SiteI18nProvider` deixe de aparecer.
 
-Verificação read-only:
-- `rg lastInboundTime src/pages/messages/MessagesList.tsx` → 0 ocorrências
-- Linha 722 hoje é apenas um comentário (`// Derived numbers for interpolation...`), seguida pelos `useMemo` de `commercialEndpointNumber` e `serviceEndpointNumber`. Nenhum símbolo `lastInboundTime` no arquivo.
+## Alterações
 
-## Causa raiz
+### 1. Novo arquivo: `src/i18n/useSiteI18n.ts`
 
-Ruído transiente de HMR do Vite, mesmo padrão do erro anterior (`useMemo is not defined`). Os logs confirmam:
+Conterá:
+- O `SiteI18nContext` (movido de `SiteI18nProvider.tsx`)
+- O tipo `SiteI18nContextValue`
+- O hook `useSiteI18n`
+- O hook `useSiteT`
 
-- Às 19:11:21.512 chega `[vite] hot updated: /src/pages/messages/MessagesList.tsx`
-- Menos de 1s depois (19:11:22.168) o Sentry captura `ReferenceError: lastInboundTime is not defined`
-- A stack aponta para `performReactRefresh` / `scheduleRefresh` — é o React Refresh reexecutando um módulo com escopo antigo referenciando uma variável que já foi removida numa versão anterior do arquivo
+Sem JSX, sem componentes — arquivo puramente de hooks, compatível com Fast Refresh.
 
-`lastInboundTime` provavelmente foi uma variável usada em iteração anterior do componente (contexto de janela de 24h) e removida quando o roteamento passou a usar `serviceWindow.isOpen` / `messaging_lines.active_endpoint_id`. O bundle em memória do dev server ficou temporariamente inconsistente entre patches HMR.
+### 2. `src/i18n/SiteI18nProvider.tsx` (refatorado)
 
-## Ação
+- Passa a importar `SiteI18nContext` do novo arquivo
+- Exporta **apenas** o componente `SiteI18nProvider`
+- Remove o re-export de `detectLocale` (consumidores importam direto de `@/i18n/config`, que já é a fonte)
 
-**Nenhuma alteração de código necessária.** O erro se resolve com um hard reload (Ctrl+Shift+R). Não reproduz em produção nem após reload completo.
+### 3. Atualizar imports nos 6 arquivos consumidores
 
-Se o padrão continuar recorrente (já são dois erros idênticos de HMR neste mesmo arquivo em turnos consecutivos), a mitigação real seria quebrar `MessagesList.tsx` (2721 linhas hoje) em componentes menores para reduzir a superfície do React Refresh — mas isso é refactor, não fix de bug.
+| Arquivo | Import atual | Novo import |
+|---|---|---|
+| `src/App.tsx` | `{ SiteI18nProvider, detectLocale }` de `@/i18n/SiteI18nProvider` | `{ SiteI18nProvider }` de `@/i18n/SiteI18nProvider` + `{ detectLocale }` de `@/i18n/config` |
+| `src/pages/legal/LegalMarkdownPage.tsx` | `{ useSiteT }` de `@/i18n/SiteI18nProvider` | `{ useSiteT }` de `@/i18n/useSiteI18n` |
+| `src/pages/LandingPage.tsx` | idem | idem |
+| `src/components/landing/LanguageSwitcher.tsx` | idem (provavelmente `useSiteI18n`/`useSiteT`) | de `@/i18n/useSiteI18n` |
+| `src/components/landing/LandingNavbar.tsx` | idem | idem |
+| `src/components/landing/LandingFooter.tsx` | idem | idem |
+
+Confirmarei os símbolos exatos de cada arquivo antes de editar.
+
+## Riscos
+
+Zero de runtime — é reorganização de exports. O `SiteI18nContext` continua sendo a mesma instância singleton (agora criada no novo arquivo). Todos os consumidores passarão a ler do mesmo módulo.
+
+## Validação
+
+- `tsgo` para confirmar que todos os imports resolvem
+- Flush HMR e checar console — o warning `Could not Fast Refresh` deve sumir para `SiteI18nProvider.tsx`
+- Página `/pt-br` continua carregando normalmente
