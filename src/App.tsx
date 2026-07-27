@@ -41,6 +41,11 @@ export function isStaleChunkError(error: unknown): boolean {
     "is not a valid javascript mime type",
     "expected a javascript module script but the server responded",
     "expected a javascript-or-wasm module script",
+    // Variant: module resolved but payload is undefined / missing default export.
+    // React.lazy's mountLazyComponent throws exactly this when payload._result is undefined.
+    "cannot read properties of undefined (reading 'default')",
+    "cannot read property 'default' of undefined",
+    "undefined is not an object (evaluating 'default')",
   ].some((entry) => normalized.includes(entry));
 }
 
