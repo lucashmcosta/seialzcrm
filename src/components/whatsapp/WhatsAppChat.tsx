@@ -408,7 +408,7 @@ export function WhatsAppChat({ contactId, threadId: initialThreadId, onThreadCre
         {message.media_urls.map((rawUrl, i) => {
           const url = getProxiedMediaUrl(rawUrl, organization?.id, accessToken);
           // Check if it's audio
-          if (mediaType === 'audio' || rawUrl.match(/\.(ogg|oga|opus|mp3|mpeg|wav|m4a|mp4|aac|amr|webm)(\?|$)/i)) {
+          if (mediaType === 'audio' || rawUrl.match(/\.(ogg|oga|opus|mp3|mpeg|wav|m4a|aac|amr|webm)(\?|$)/i)) {
             return <AudioMessagePlayer key={i} src={url}
               messageId={message.id}
               threadId={(message as any).thread_id}

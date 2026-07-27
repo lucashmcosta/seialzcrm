@@ -144,8 +144,8 @@ export function isLikelyAudioUrl(src: string | null | undefined): boolean {
   if (!src) return false;
   try {
     const pathname = new URL(src).pathname.toLowerCase();
-    return /\.(ogg|oga|opus|mp3|mpeg|wav|m4a|mp4|aac|amr|webm)$/.test(pathname);
+    return /\.(ogg|oga|opus|mp3|mpeg|wav|m4a|aac|amr|webm)$/.test(pathname);
   } catch {
-    return /\.(ogg|oga|opus|mp3|mpeg|wav|m4a|mp4|aac|amr|webm)(\?|$)/i.test(src);
+    return /\.(ogg|oga|opus|mp3|mpeg|wav|m4a|aac|amr|webm)(\?|$)/i.test(src);
   }
 }
