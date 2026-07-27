@@ -22,14 +22,12 @@ export function AudioMessagePlayer({
 }: AudioMessagePlayerProps) {
   const audioRef = useRef<HTMLAudioElement>(null);
   const animFrameRef = useRef<number>(0);
-  const retryTimerRef = useRef<number | null>(null);
-  const retryCountRef = useRef(0);
-  const MAX_RETRIES = 3;
-  const RETRY_DELAYS = [2000, 5000, 10000];
+  const playbackRequestedRef = useRef(false);
+  const mountedRef = useRef(true);
   const [isPlaying, setIsPlaying] = useState(false);
   const [currentTime, setCurrentTime] = useState(0);
   const [duration, setDuration] = useState(0);
-  const [isLoading, setIsLoading] = useState(true);
+  const [isLoading, setIsLoading] = useState(false);
   const [hasError, setHasError] = useState(false);
   const [playbackRate, setPlaybackRate] = useState(1);
   const [waveformData] = useState(() =>
@@ -38,14 +36,26 @@ export function AudioMessagePlayer({
 
   const srcOk = isValidHttpUrl(src);
 
+  useEffect(() => {
+    mountedRef.current = true;
+    return () => {
+      mountedRef.current = false;
+    };
+  }, []);
+
   const handleManualRetry = useCallback(() => {
-    if (retryTimerRef.current) window.clearTimeout(retryTimerRef.current);
-    retryCountRef.current = 0;
+    playbackRequestedRef.current = false;
     setHasError(false);
-    setIsLoading(true);
+    setIsLoading(false);
+    setCurrentTime(0);
+    setDuration(0);
     const audio = audioRef.current;
     if (audio) {
-      try { audio.load(); } catch { /* noop */ }
+      try {
+        audio.pause();
+        audio.currentTime = 0;
+        audio.load();
+      } catch { /* noop */ }
     }
   }, []);
 
@@ -74,59 +84,84 @@ export function AudioMessagePlayer({
     if (!audio) return;
 
     const onLoaded = () => {
-      setDuration(audio.duration);
+      if (Number.isFinite(audio.duration)) setDuration(audio.duration);
       setIsLoading(false);
-      retryCountRef.current = 0;
     };
     const onEnded = () => {
       setIsPlaying(false);
       setCurrentTime(0);
+      playbackRequestedRef.current = false;
       cancelAnimationFrame(animFrameRef.current);
     };
     const onError = () => {
       cancelAnimationFrame(animFrameRef.current);
       setIsPlaying(false);
-
-      // Retry transient failures (often file not yet uploaded to Storage).
-      if (retryCountRef.current < MAX_RETRIES) {
-        const delay = RETRY_DELAYS[retryCountRef.current] ?? 10000;
-        retryCountRef.current += 1;
-        if (retryTimerRef.current) window.clearTimeout(retryTimerRef.current);
-        retryTimerRef.current = window.setTimeout(() => {
-          try { audio.load(); } catch { /* noop */ }
-        }, delay);
-        return;
-      }
-
       setIsLoading(false);
       setHasError(true);
-      reportAudioFailure({
-        component: 'AudioMessagePlayer',
-        src,
-        audio,
-        error: audio.error ? { name: 'MediaError', message: `code=${audio.error.code}` } : undefined,
-        messageId,
-        threadId,
-        mediaType,
-      });
+      if (playbackRequestedRef.current) {
+        reportAudioFailure({
+          component: 'AudioMessagePlayer',
+          src,
+          audio,
+          error: audio.error ? { name: 'MediaError', message: `code=${audio.error.code}` } : undefined,
+          messageId,
+          threadId,
+          mediaType,
+          phase: 'play',
+        });
+      }
+    };
+    const onPause = () => {
+      if (!audio.ended) setIsPlaying(false);
     };
 
     audio.addEventListener('loadedmetadata', onLoaded);
+    audio.addEventListener('canplay', onLoaded);
     audio.addEventListener('ended', onEnded);
+    audio.addEventListener('pause', onPause);
     audio.addEventListener('error', onError);
 
     return () => {
       audio.removeEventListener('loadedmetadata', onLoaded);
+      audio.removeEventListener('canplay', onLoaded);
       audio.removeEventListener('ended', onEnded);
+      audio.removeEventListener('pause', onPause);
       audio.removeEventListener('error', onError);
       cancelAnimationFrame(animFrameRef.current);
-      if (retryTimerRef.current) window.clearTimeout(retryTimerRef.current);
     };
   }, [src, srcOk, messageId, threadId, mediaType]);
 
+  useEffect(() => {
+    playbackRequestedRef.current = false;
+    setIsPlaying(false);
+    setCurrentTime(0);
+    setDuration(0);
+    setIsLoading(false);
+    setHasError(false);
+    cancelAnimationFrame(animFrameRef.current);
+  }, [src]);
+
+  const startProgress = useCallback((audio: HTMLAudioElement) => {
+    cancelAnimationFrame(animFrameRef.current);
+    const tick = () => {
+      if (!mountedRef.current) return;
+      setCurrentTime(audio.currentTime);
+      if (Number.isFinite(audio.duration)) setDuration(audio.duration);
+      animFrameRef.current = requestAnimationFrame(tick);
+    };
+    tick();
+  }, []);
+
+  const isIgnorablePlayError = (err: unknown) => {
+    const maybe = err as { name?: string; message?: string } | null;
+    const name = maybe?.name ?? '';
+    const message = maybe?.message?.toLowerCase() ?? '';
+    return name === 'AbortError' || message.includes('interrupted by a call to pause') || message.includes('interrupted by a new load request');
+  };
+
   const togglePlay = useCallback(async () => {
     const audio = audioRef.current;
-    if (!audio || isLoading || hasError) return;
+    if (!audio || hasError) return;
 
     if (isPlaying) {
       audio.pause();
@@ -136,16 +171,20 @@ export function AudioMessagePlayer({
     }
 
     try {
+      playbackRequestedRef.current = true;
+      setIsLoading(true);
+      if (audio.readyState === 0) {
+        try { audio.load(); } catch { /* noop */ }
+      }
       await audio.play();
+      setIsLoading(false);
       setIsPlaying(true);
-      const tick = () => {
-        setCurrentTime(audio.currentTime);
-        animFrameRef.current = requestAnimationFrame(tick);
-      };
-      tick();
+      startProgress(audio);
     } catch (err) {
       cancelAnimationFrame(animFrameRef.current);
       setIsPlaying(false);
+      setIsLoading(false);
+      if (isIgnorablePlayError(err)) return;
       setHasError(true);
       reportAudioFailure({
         component: 'AudioMessagePlayer',
@@ -155,9 +194,10 @@ export function AudioMessagePlayer({
         messageId,
         threadId,
         mediaType,
+        phase: 'play',
       });
     }
-  }, [isPlaying, isLoading, hasError, src, messageId, threadId, mediaType]);
+  }, [isPlaying, hasError, src, messageId, threadId, mediaType, startProgress]);
 
   const handleSeek = (e: React.MouseEvent<HTMLDivElement> | React.TouchEvent<HTMLDivElement>) => {
     const audio = audioRef.current;
@@ -206,7 +246,7 @@ export function AudioMessagePlayer({
 
   return (
     <div className={className} style={{ display: 'flex', flexDirection: 'column', gap: 1, padding: 2, maxWidth: 240, minWidth: 200 }}>
-      <audio ref={audioRef} src={src} preload="metadata" />
+      <audio ref={audioRef} src={src} preload="none" />
 
       {/* Row 1: Play + Waveform */}
       <div style={{ display: 'flex', alignItems: 'center', gap: 6, height: 24 }}>
