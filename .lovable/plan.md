@@ -1,41 +1,26 @@
 ## Diagnóstico
 
-O Sentry breadcrumb `Uncaught TypeError: Cannot read properties of undefined (reading 'close')` em `encoderWorker.umd-CIaCbDnT.js:1:10666` vem do worker do pacote `opus-media-recorder`. Sequência do usuário: clicou em **Gravar áudio** e, ~2 s depois, clicou em outro botão do próprio recorder (fluxo confirmado nos breadcrumbs `ui.click` em `13:42:49` e `13:42:51`).
+O erro `Failed to fetch dynamically imported module: .../ContactForm-CoGVV9vg.js` é o clássico **stale chunk após deploy**: a sessão do usuário estava carregada com o bundle `index-Bpp8iGOI.js` desde 03/jul; ao clicar em "Editar contato" em 07/jul, o Vite tentou baixar o chunk do `ContactForm` cujo hash não existe mais no CDN.
 
-O que acontece em `src/components/whatsapp/AudioRecorder.tsx`:
-- No 1º click de "Gravar", `startRecording()` faz `void warmEncoder()` (linha 178). O warmup instancia um `OpusMediaRecorder` throwaway contra um `AudioContext` silencioso, chama `rec.start()` e agenda `safeStop()` — que dispara `rec.stop()`.
-- Dentro do worker (`encoderWorker.umd.js`), o handler de `stop` chama `encoder.close()`. Se a mensagem `stop` chega antes de a WASM ter alocado o encoder (janela de corrida entre `start` e `stop` no warmup), `encoder` é `undefined` e o worker lança — escapa como erro top-level do Worker e sobe para `window.onerror`.
-- O `rec.onerror = () => {}` definido no warmup só cobre erros que o polyfill roteia via `MediaRecorder.onerror`; erros crus do próprio Worker não passam por ali.
+O código atual **já trata isso** em três camadas:
 
-Impactos observados:
-- `src/instrument.ts` (linhas 86-95) já dropa esse evento no Sentry, então **não gera issue**.
-- Nenhum handler global reagirá — `src/main.tsx` só reage a stale-chunk. O ErrorBoundary não é acionado (não é erro de render React).
-- Efeito real: ruído no console + breadcrumb. O fluxo de gravação funciona normalmente.
+1. `retryImport` em `src/App.tsx` detecta stale chunks e chama `reloadForChunkRecovery()`, retornando uma Promise que nunca resolve para o Suspense (não vaza para o ErrorBoundary).
+2. Handlers globais em `src/main.tsx` (`error`, `unhandledrejection`, `vite:preloadError`) interceptam antes do React.
+3. `SentryFallback` em `main.tsx` detecta stale chunk no boundary e dispara reload + spinner.
+4. `beforeSend` em `src/instrument.ts` descarta esses eventos no Sentry.
 
-Ou seja, **hoje o erro já é benigno e filtrado no Sentry**, mas continua poluindo o console e o breadcrumb. A correção é curta e cirúrgica no próprio recorder.
+O motivo do erro ter aparecido mesmo assim: **a sessão estava rodando o bundle de 03/jul**, que é anterior a parte dessas blindagens. Clientes já carregados não recebem o fix — só o próximo carregamento pega o bundle novo. Não há correção server-side possível para sessões antigas além de forçá-las a recarregar.
 
-## Escopo da correção (frontend only)
+Para o bundle **atual** (o que sai agora), o fluxo já é: chunk 404 → reload silencioso (throttle 10s) → app volta funcional. O usuário viu o boundary porque estava numa sessão antiga.
 
-Arquivo único: `src/components/whatsapp/AudioRecorder.tsx`.
+## O que fazer
 
-1. **Prender o erro no próprio Worker do warmup.** Trocar o factory:
-   ```
-   encoderWorkerFactory: () => new Worker(workerUrl)
-   ```
-   por uma factory que registra `worker.onerror` engolindo o evento (chamando `event.preventDefault()`) para que ele não escape para `window.onerror`. Aplica-se a todas as instâncias (warmup e gravação real). Como o polyfill já tem seu próprio protocolo de erro via `postMessage` para o consumidor, capturar `onerror` do Worker não quebra o fluxo — só evita o log cru.
+Duas opções, escolha uma antes de mudar código:
 
-2. **Endurecer o warmup contra a corrida start/stop.** No `warmEncoder()`:
-   - Só chamar `safeStop()` **depois** que o primeiro `ondataavailable` chegar (isso já é a intenção do código, mas o `setTimeout(safeStop, 1500)` fallback continua disparando cedo). Reduzir a chance de corrida: só permitir o `setTimeout` chamar `safeStop` se pelo menos um chunk foi recebido; caso contrário, apenas soltar tracks/ctx sem chamar `rec.stop()`.
-   - Isso remove a causa raiz da corrida em navegadores lentos.
+**A. Nada a fazer (recomendado).** O comportamento já está correto no bundle atual. Sessões antigas se auto-corrigem na próxima navegação/refresh. Fecho aqui.
 
-3. **Nada mais.** Não mexo em `src/instrument.ts` (o filtro do Sentry fica como cinto+suspensório), nem no `dispatchWhatsAppSend`, nem em edge functions.
+**B. Camada extra de garantia** para sessões antigas que ainda estão rodando: adicionar um `Sentry.ErrorBoundary` de fallback que, ao detectar stale chunk, faça `location.reload()` **sem depender do throttle** na primeira ocorrência do boundary (hoje o throttle bloqueia se já reloadou nos últimos 10s, e o `SentryFallback` mostra um botão "Recarregar agora"). Mudaria só o `SentryFallback` de `main.tsx` para forçar reload em 1500ms independentemente do throttle. Impacto: baixo, ~10 linhas.
 
-## Verificação
+## Pergunta
 
-- Abrir uma thread e clicar "Gravar áudio" pela primeira vez na sessão. Console limpo — sem `Uncaught TypeError: ... 'close'`. Sentry breadcrumb `exception` some.
-- Gravar por >1 s e enviar: fluxo continua funcionando (blob OGG/Opus válido, upload OK).
-- Typecheck.
-
-## Fora do escopo
-
-- Reportar o bug upstream para `opus-media-recorder` (o worker deveria checar `encoder != null` antes de `close`). Só listado.
+Quer que eu aplique a opção B (endurecer o fallback do boundary) ou apenas confirme A (nada a fazer, o próximo bundle já cobre)?
