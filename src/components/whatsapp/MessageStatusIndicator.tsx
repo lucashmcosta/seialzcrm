@@ -86,12 +86,12 @@ export function MessageStatusIndicator({
               <details className="border-t pt-2">
                 <summary className="cursor-pointer text-muted-foreground select-none">Detalhes técnicos</summary>
                 <div className="mt-1 space-y-1 text-muted-foreground font-data">
-                {errorCode && (
-                  <div><span className="opacity-70">Código:</span> {errorCode}</div>
+                {safeErrorCode && (
+                  <div><span className="opacity-70">Código:</span> {safeErrorCode}</div>
                 )}
-                {errorMessage && (
+                {safeErrorMessage && (
                   <div className="break-words">
-                    <span className="opacity-70">Mensagem:</span> {errorMessage}
+                    <span className="opacity-70">Mensagem:</span> {safeErrorMessage}
                   </div>
                 )}
                 {sid && (
@@ -103,7 +103,7 @@ export function MessageStatusIndicator({
                     {format(new Date(sentAt), "dd/MM/yyyy HH:mm:ss", { locale: ptBR })}
                   </div>
                 )}
-                {!errorCode && !errorMessage && !sid && (
+                {!safeErrorCode && !safeErrorMessage && !sid && (
                   <div className="italic">Sem detalhes técnicos disponíveis.</div>
                 )}
                 </div>
