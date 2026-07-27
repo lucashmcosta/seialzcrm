@@ -1,39 +1,18 @@
 ## Diagnóstico
 
-O erro `TypeError: undefined is not an object (evaluating 't.close')` reportado no Sentry vem do vendor `encoderWorker.umd-BU_-OxzJ.js` (o worker do `opus-media-recorder`). É o mesmo bug de race no warmup que já tratamos: o worker chama `encoder.close()` antes de a WASM alocar o encoder. Nada no fluxo real de gravação depende disso — o AudioRecorder já:
+Erro: `Failed to fetch dynamically imported module: .../assets/TasksList-BKcatQ5k.js`
 
-- Faz `warmEncoder` best-effort e só chama `stop()` se recebeu chunk.
-- Envolve o Worker com `createSilencedEncoderWorker`, que faz `preventDefault`/`stopImmediatePropagation` no `error` do worker.
+Trata-se do padrão já conhecido de **stale chunk após deploy**: a sessão do usuário carregou o `index.html` antes de um deploy novo, guardou a referência ao chunk `TasksList-BKcatQ5k.js`, e quando ele clicou em `/tasks` (visível no breadcrumb `navigation from /opportunities to /tasks`) o CDN já servia o bundle novo, sem esse hash.
 
-Ou seja, no runtime o usuário não vê nada — o ruído está só no Sentry.
+## Estado da blindagem atual
 
-## Por que o filtro atual não pegou
+Já implementado em turnos anteriores e ainda em vigor:
 
-Em `src/instrument.ts` (linhas 86-95) já existe um `beforeSend` que descarta o crash, mas com dois predicados AND:
+- `retryImport` envolve todos os 61 `lazy()` do `App.tsx` (inclusive `TasksList`).
+- Guards globais em `src/main.tsx` interceptam `Failed to fetch dynamically imported module` antes do React.
+- `SentryFallback` dispara reload resiliente.
+- Reset de flags no `pageshow` para lidar com bfcache.
 
-1. `filename.includes("encoderWorker.umd.js")` — no bundle atual o arquivo vem com hash (`encoderWorker.umd-BU_-OxzJ.js`), então o `.includes("encoderWorker.umd.js")` **não bate** (falta o `.` antes do hash).
-2. `mechanismType === "onerror"` — em Safari/WebKit este erro pode chegar via `generic`/`instrument` (o console mostra `Type: error, Category: exception`, sem indicação de `onerror`), então também falha.
+## Conclusão
 
-Resultado: o evento passa pelo filtro e vira ruído no Sentry, apesar do handler local do worker no `AudioRecorder.tsx` já ter engolido o evento visualmente.
-
-## Mudança proposta (escopo mínimo, sem tocar em UX)
-
-Editar apenas `src/instrument.ts`, no bloco `beforeSend`:
-
-- Trocar o match do filename para `encoderWorker.umd` (sem `.js`) e também procurar em **todos os frames**, não só no topo — hashes tipo `encoderWorker.umd-XXXX.js` continuam batendo.
-- Remover a exigência de `mechanismType === "onerror"`. Em compensação, adicionar uma segunda salvaguarda pelo texto da exceção para não mascarar outros bugs em código próprio: só descarta se a mensagem casar com um dos padrões conhecidos do polyfill (`evaluating 't.close'`, `encoder.close`, `Cannot read propert(y|ies) of undefined (reading 'close')`, `undefined is not an object (evaluating 't.close')`).
-- Manter tudo o resto do arquivo intacto (stale chunk, setSinkId, "Device not found: default").
-
-Resultado: qualquer crash cujo stack passe por `encoderWorker.umd*.js` **e** cuja mensagem seja um dos padrões conhecidos de `close()` em encoder não alocado é descartado antes de ir ao Sentry. Erros fora desse vendor continuam visíveis.
-
-## Fora de escopo
-
-- Não alterar `AudioRecorder.tsx` — o comportamento em runtime já está correto e o usuário não vê o erro.
-- Não substituir `opus-media-recorder` nem mudar warmup.
-- Não mexer em nenhum filtro Sentry existente (stale chunk, Twilio setSinkId, default device).
-
-## Validação
-
-Após aplicar:
-1. Confirmar via `rg` que só `src/instrument.ts` foi tocado.
-2. No próximo deploy, checar no Sentry se o issue de `t.close` para de receber novos eventos (o handler local já silencia no console, então não há verificação visual — a evidência é a ausência do issue novo).
+Nada a fazer no código. O bundle atual já cobre o cenário: em uma nova sessão o hash de `TasksList` é o vigente, e sessões antigas se auto-corrigem no próximo reload disparado pelo fallback. O evento no Sentry é o registro esperado da captura — não uma regressão.
