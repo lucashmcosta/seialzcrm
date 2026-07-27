@@ -98,6 +98,51 @@ function retryImport<T>(fn: () => Promise<T>, retries = 2): Promise<T> {
   });
 }
 
+/**
+ * Wraps `retryImport` + `React.lazy` and hardens the resolved payload.
+ *
+ * If the dynamic import resolves but the module is `undefined` / missing the
+ * expected export, React.lazy would throw `Cannot read properties of
+ * undefined (reading 'default')` inside `mountLazyComponent`, bypassing our
+ * retryImport catch. This helper validates the payload; on a bad payload it
+ * emits a Sentry breadcrumb naming the module, triggers the same silent
+ * reload recovery we use for stale chunks, and returns a never-resolving
+ * Promise so Suspense stays suspended while the page reloads.
+ */
+function lazyWithRetry<T extends ComponentType<any>>(
+  name: string,
+  importer: () => Promise<any>,
+  exportName: string = "default",
+): LazyExoticComponent<T> {
+  return lazy(() =>
+    retryImport(importer).then((mod: any) => {
+      const exported = mod && typeof mod === "object" ? mod[exportName] : undefined;
+      if (exported === undefined) {
+        try {
+          Sentry.addBreadcrumb({
+            category: "lazy",
+            level: "warning",
+            message: "module_missing_export",
+            data: {
+              name,
+              exportName,
+              modType: typeof mod,
+              keys: mod && typeof mod === "object" ? Object.keys(mod).slice(0, 20) : null,
+            },
+          });
+        } catch {
+          // Sentry unavailable: recovery still proceeds.
+        }
+        reloadForChunkRecovery();
+        return new Promise<{ default: T }>(() => {});
+      }
+      return { default: exported as T };
+    }),
+  );
+}
+
+
+
 
 // Lazy load call handlers (heavy Twilio SDK) with retry
 const InboundCallHandler = lazy(() =>
