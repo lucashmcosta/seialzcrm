@@ -19,6 +19,13 @@ function SentryFallback({ error }: { error: unknown }) {
     if (reloadTriggered) {
       return <PageLoader />;
     }
+    // Throttle blocked the immediate reload — force one shortly so the user
+    // never gets stuck on the manual-refresh screen.
+    if (typeof window !== "undefined") {
+      window.setTimeout(() => {
+        hardRefreshApp().catch(() => window.location.reload());
+      }, 1500);
+    }
     return (
       <div style={{ padding: 24, fontFamily: "system-ui, sans-serif" }}>
         <p>Atualizando para a versão mais recente…</p>
