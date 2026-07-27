@@ -1,31 +1,36 @@
 ## Diagnóstico
 
-O evento do Sentry é `UnhandledRejection: Non-Error promise rejection captured with value: undefined`. Nos breadcrumbs imediatamente anteriores há a sequência típica do Twilio Voice SDK reconectando:
+Mesmo padrão já tratado nas rodadas anteriores: **stale chunk pós-deploy**.
 
-- WebSocket fecha com código 1006 → `ConnectionError (31005)` / `AccessTokenExpired (20104)`
-- Device emite `#error` / `#unregistered` e o `WSTransport` reinicia com backoff
+- A sessão do usuário ficou aberta de 16/jul a 23/jul (breadcrumbs cobrindo 7 dias).
+- Bundle carregado era o antigo (`index-DcMBZh5t.js`), com o hash de `InboxPage-Dkblxycs.js` já removido do CDN após deploy.
+- Ao navegar `/opportunities/... → /inbox`, o `React.lazy(InboxPage)` tentou baixar o chunk inexistente e o `SentryFallback` capturou.
 
-O Voice SDK, em alguns caminhos internos de reconexão/register, rejeita uma promise sem valor (`Promise.reject()` cru), o que o Sentry captura como `value: undefined`. Isso é ruído benigno — a reconexão logo em seguida tem sucesso (`WebSocket opened successfully` / `#registered` / `Twilio Device registered and ready` nos logs).
+O bundle atual em produção já contém todas as camadas de defesa:
 
-Os filtros atuais em `src/instrument.ts` (`beforeSend`) não pegam este caso porque todos dependem de inspecionar strings em `firstException.value` — que aqui é `undefined`.
+- `retryImport` envolvendo os 61 `lazy()` em `App.tsx`
+- Guards globais em `src/main.tsx` para `error` e `unhandledrejection` interceptando padrões de importação dinâmica antes do React
+- Matcher ampliado (Chrome, Safari/WebKit, Firefox) — inclui `'text/html' is not a valid javascript mime type`, `is not a valid javascript mime type`, `expected a javascript module script`, etc.
+- `SentryFallback` disparando reload resiliente
+- `beforeSend` do Sentry descartando esses eventos como ruído
 
-## Escopo da correção (somente `src/instrument.ts`)
+Ou seja: uma sessão que abrisse esse mesmo cenário hoje seria auto-recuperada silenciosamente por reload antes de chegar ao ErrorBoundary. O evento reportado é histórico de uma sessão antiga que já ficou órfã do CDN.
 
-Adicionar mais um branch no `beforeSend` para descartar somente esta combinação estrita:
+## Ação recomendada
 
-- `event.exception.values[0].value` é ausente/undefined **ou** a mensagem contém "Non-Error promise rejection captured with value: undefined"
-- **E** `mechanism.type === "onunhandledrejection"`
-- **E** existe pelo menos um breadcrumb recente (últimos ~15) cuja mensagem contenha `TwilioVoice` ou cujo arquivo/logger indique o SDK
+**Nada a alterar no código.** O sistema já cobre este cenário:
 
-A conjunção das três condições garante que só suprimimos rejeições vazias correlacionadas a atividade do Twilio Voice SDK — qualquer `unhandledrejection` de outra origem continua sendo reportado.
+- Sessões novas: `retryImport` + reload silencioso resolvem sem UI de erro.
+- Sessões antigas ainda vivas: no próximo reload buscam o bundle atualizado e passam a herdar toda a blindagem.
+- No Sentry: o evento pode ser resolvido/ignorado — o `beforeSend` já descarta novos eventos idênticos.
 
 ## Fora do escopo
 
-- Não mexer em `useInboundCalls.ts` nem em nenhum código de chamada — os erros funcionais (31005/20104) já são tratados e a reconexão funciona.
-- Não alterar UI, rotas, provider Voice, tokens, ou lógica de negócio.
-- Não adicionar retry/handler novo no Device — o SDK já reconecta sozinho.
+- Não mexer em `App.tsx`, `main.tsx`, `SentryFallback`, `instrument.ts` — a lógica atual já é suficiente.
+- Não adicionar heartbeat de versão / forced reload periódico sem pedido explícito (mudaria comportamento além do reportado).
 
 ## Validação
 
-- Verificar em `src/instrument.ts` que apenas o novo bloco foi acrescentado e retorna `null` só quando as três condições batem.
-- Confirmar no Sentry, após deploy, que o issue `Non-Error promise rejection captured with value: undefined` deixa de aparecer enquanto outras rejeições continuam sendo capturadas.
+- Confirmar em `src/App.tsx` que `InboxPage` está envolvido em `retryImport` (todos os 61 `lazy()` já foram cobertos em rodadas anteriores).
+- Confirmar em `src/instrument.ts` que `beforeSend` filtra "failed to fetch dynamically imported module" (já presente em `STALE_CHUNK_PATTERNS`).
+- Se quiser, marcar o issue como resolvido no Sentry — novas ocorrências não serão mais enviadas.
