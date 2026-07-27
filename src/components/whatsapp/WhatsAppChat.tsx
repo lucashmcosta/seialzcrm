@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef } from 'react';
+import { toErrorMessageString } from '@/lib/errorMessage';
 import { dispatchWhatsAppSend } from "@/lib/dispatchWhatsAppSend";
 import { useOrganization } from '@/hooks/useOrganization';
 import { supabase } from '@/integrations/supabase/client';
@@ -261,7 +262,7 @@ export function WhatsAppChat({ contactId, threadId: initialThreadId, onThreadCre
       setMessageText('');
     } catch (error: any) {
       console.error('Error sending message:', error);
-      toast({ variant: 'destructive', description: error.message || 'Erro ao enviar mensagem' });
+      toast({ variant: 'destructive', description: toErrorMessageString(error, 'Erro ao enviar mensagem') });
     } finally {
       setSubmitting(false);
     }
@@ -336,7 +337,7 @@ export function WhatsAppChat({ contactId, threadId: initialThreadId, onThreadCre
       toast({ description: 'Mensagem enviada com sucesso!' });
     } catch (error: any) {
       console.error('Error sending template:', error);
-      toast({ variant: 'destructive', description: error.message || 'Erro ao enviar template' });
+      toast({ variant: 'destructive', description: toErrorMessageString(error, 'Erro ao enviar template') });
     } finally {
       setSubmitting(false);
     }
@@ -351,7 +352,7 @@ export function WhatsAppChat({ contactId, threadId: initialThreadId, onThreadCre
       toast({ description: 'Mídia enviada com sucesso!' });
     } catch (error: any) {
       console.error('Error uploading media:', error);
-      toast({ variant: 'destructive', description: error.message || 'Erro ao enviar mídia' });
+      toast({ variant: 'destructive', description: toErrorMessageString(error, 'Erro ao enviar mídia') });
     }
   };
 
@@ -366,7 +367,7 @@ export function WhatsAppChat({ contactId, threadId: initialThreadId, onThreadCre
       toast({ description: 'Áudio enviado com sucesso!' });
     } catch (error: any) {
       console.error('Error sending audio:', error);
-      toast({ variant: 'destructive', description: error.message || 'Erro ao enviar áudio' });
+      toast({ variant: 'destructive', description: toErrorMessageString(error, 'Erro ao enviar áudio') });
     }
   };
 
@@ -381,7 +382,7 @@ export function WhatsAppChat({ contactId, threadId: initialThreadId, onThreadCre
       toast({ description: 'Áudio enviado como arquivo.' });
     } catch (error: any) {
       console.error('Error sending audio as document:', error);
-      toast({ variant: 'destructive', description: error.message || 'Erro ao enviar arquivo' });
+      toast({ variant: 'destructive', description: toErrorMessageString(error, 'Erro ao enviar arquivo') });
     }
   };
 

@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef } from 'react';
+import { toErrorMessageString } from '@/lib/errorMessage';
 import { dispatchWhatsAppSend } from "@/lib/dispatchWhatsAppSend";
 import { useOrganization } from '@/hooks/useOrganization';
 import { useTranslation } from '@/lib/i18n';
@@ -447,7 +448,7 @@ export function ContactMessages({ contactId, opportunityId }: ContactMessagesPro
       console.error('Error sending message:', error);
       // Remove temp message on error
       setMessages((prev) => prev.filter((m) => m.id !== tempId));
-      toast({ variant: 'destructive', description: error.message || 'Erro ao enviar mensagem' });
+      toast({ variant: 'destructive', description: toErrorMessageString(error, 'Erro ao enviar mensagem') });
     }
   };
 
@@ -479,7 +480,7 @@ export function ContactMessages({ contactId, opportunityId }: ContactMessagesPro
       toast({ description: locale === 'pt-BR' ? 'Mensagem enviada!' : 'Message sent!' });
     } catch (error: any) {
       console.error('Error sending template:', error);
-      toast({ variant: 'destructive', description: error.message || 'Erro ao enviar template' });
+      toast({ variant: 'destructive', description: toErrorMessageString(error, 'Erro ao enviar template') });
     } finally {
       setSubmitting(false);
     }
@@ -493,7 +494,7 @@ export function ContactMessages({ contactId, opportunityId }: ContactMessagesPro
       await handleSendMessage(url, mediaType);
     } catch (error: any) {
       console.error('Error uploading media:', error);
-      toast({ variant: 'destructive', description: error.message || 'Erro ao enviar mídia' });
+      toast({ variant: 'destructive', description: toErrorMessageString(error, 'Erro ao enviar mídia') });
     }
   };
 
@@ -506,7 +507,7 @@ export function ContactMessages({ contactId, opportunityId }: ContactMessagesPro
       await handleSendMessage(url, 'audio');
     } catch (error: any) {
       console.error('Error sending audio:', error);
-      toast({ variant: 'destructive', description: error.message || 'Erro ao enviar áudio' });
+      toast({ variant: 'destructive', description: toErrorMessageString(error, 'Erro ao enviar áudio') });
     }
   };
 
@@ -518,7 +519,7 @@ export function ContactMessages({ contactId, opportunityId }: ContactMessagesPro
       await handleSendMessage(url, 'document');
     } catch (error: any) {
       console.error('Error sending audio as document:', error);
-      toast({ variant: 'destructive', description: error.message || 'Erro ao enviar arquivo' });
+      toast({ variant: 'destructive', description: toErrorMessageString(error, 'Erro ao enviar arquivo') });
     }
   };
 
