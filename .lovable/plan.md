@@ -1,44 +1,63 @@
-## Objetivo
+## Diagnóstico
 
-Eliminar o warning `Could not Fast Refresh ("useSiteI18n" export is incompatible)` separando os hooks e utilitários do componente `SiteI18nProvider`, para que o React Fast Refresh do Vite pare de invalidar o módulo e o erro fantasma `useSiteI18n must be used within SiteI18nProvider` deixe de aparecer.
+Ao gravar áudio na tela **Messages/Conversas**, o Meta rejeita `audio/webm` (só aceita `ogg/opus`, `mp4`, `aac`, `amr`, `mpeg`). O edge function `meta-whatsapp-send` devolve HTTP 500 com corpo:
 
-## Alterações
+```json
+{"error":"meta_send_failed","details":{"code":100,"message":"(#100) Param file must be a file..."}}
+```
 
-### 1. Novo arquivo: `src/i18n/useSiteI18n.ts`
+O `dispatchWhatsAppSend` monta um `DirectFetchHttpError` e o propaga. No catch de `handleMediaUpload` (`src/pages/messages/MessagesList.tsx:1442-1451`), duas coisas usam `error.message` como **React child**:
 
-Conterá:
-- O `SiteI18nContext` (movido de `SiteI18nProvider.tsx`)
-- O tipo `SiteI18nContextValue`
-- O hook `useSiteI18n`
-- O hook `useSiteT`
+1. `setMessages(... error_message: error.message ...)` → depois é passado para `<MessageStatusIndicator errorMessage={...} />`, que renderiza direto: `<span>...</span> {errorMessage}` (`src/components/whatsapp/MessageStatusIndicator.tsx:89`).
+2. `toast({ description: error.message })`.
 
-Sem JSX, sem componentes — arquivo puramente de hooks, compatível com Fast Refresh.
+Em algum caminho (provavelmente quando o corpo do erro chega com shape aninhada — ex.: `body.details` sendo `{code, message}` — ou quando o fallback `supabase.functions.invoke` do dispatch retorna um `FunctionsHttpError` com `context.message` objeto), `error.message` acaba sendo o objeto `{code, message}`. Ao entrar como children do `<span>` do `MessageStatusIndicator`, React lança:
 
-### 2. `src/i18n/SiteI18nProvider.tsx` (refatorado)
+> Objects are not valid as a React child (found: object with keys {code, message})
 
-- Passa a importar `SiteI18nContext` do novo arquivo
-- Exporta **apenas** o componente `SiteI18nProvider`
-- Remove o re-export de `detectLocale` (consumidores importam direto de `@/i18n/config`, que já é a fonte)
+O mesmo padrão existe nos catches de texto (linhas 1229, 1341) e no `handleAudioSend` / `handleAudioSendAsDocument`, e também em `WhatsAppChat.tsx` / `ContactMessages.tsx`.
 
-### 3. Atualizar imports nos 6 arquivos consumidores
+Além do crash, há um **bug de mídia** separado: o navegador grava `audio/webm` mas o arquivo é enviado ao Meta como está. Mesmo com o crash resolvido, o envio continuaria falhando. Não é o que a pergunta pediu, mas fica registrado como próximo passo — a correção proposta abaixo mira só o crash.
 
-| Arquivo | Import atual | Novo import |
-|---|---|---|
-| `src/App.tsx` | `{ SiteI18nProvider, detectLocale }` de `@/i18n/SiteI18nProvider` | `{ SiteI18nProvider }` de `@/i18n/SiteI18nProvider` + `{ detectLocale }` de `@/i18n/config` |
-| `src/pages/legal/LegalMarkdownPage.tsx` | `{ useSiteT }` de `@/i18n/SiteI18nProvider` | `{ useSiteT }` de `@/i18n/useSiteI18n` |
-| `src/pages/LandingPage.tsx` | idem | idem |
-| `src/components/landing/LanguageSwitcher.tsx` | idem (provavelmente `useSiteI18n`/`useSiteT`) | de `@/i18n/useSiteI18n` |
-| `src/components/landing/LandingNavbar.tsx` | idem | idem |
-| `src/components/landing/LandingFooter.tsx` | idem | idem |
+## Escopo da correção (só o crash)
 
-Confirmarei os símbolos exatos de cada arquivo antes de editar.
+Frontend/presentation apenas. Sem mudança de business logic, sem edge function.
 
-## Riscos
+### 1. Helper de normalização
 
-Zero de runtime — é reorganização de exports. O `SiteI18nContext` continua sendo a mesma instância singleton (agora criada no novo arquivo). Todos os consumidores passarão a ler do mesmo módulo.
+Criar `src/lib/errorMessage.ts` com `toErrorMessageString(err: unknown): string`:
+- string → retorna direto
+- objeto com `.message` string → retorna `.message`
+- objeto com `.message` objeto e `.message.message` string → retorna esse aninhado
+- objeto com `.error` string → retorna
+- fallback → `JSON.stringify(err)` truncado, ou `"Erro desconhecido"`
 
-## Validação
+### 2. Blindar o render do `MessageStatusIndicator`
 
-- `tsgo` para confirmar que todos os imports resolvem
-- Flush HMR e checar console — o warning `Could not Fast Refresh` deve sumir para `SiteI18nProvider.tsx`
-- Página `/pt-br` continua carregando normalmente
+Em `src/components/whatsapp/MessageStatusIndicator.tsx`, coagir `errorMessage` (e `errorCode`) para string antes de renderizar. Assim, mesmo que algum código antigo grave objeto em `messages.error_message`, o bubble não crasha.
+
+### 3. Blindar catches que gravam em estado / toast
+
+Nos catches abaixo, aplicar `toErrorMessageString(error)` antes de:
+- passar para `toast({ description })`
+- persistir em `error_message` do estado local `messages`
+
+Arquivos:
+- `src/pages/messages/MessagesList.tsx` — 3 catches (linhas ~1229, 1341, 1443) + `handleAudioSend`, `handleAudioSendAsDocument`
+- `src/components/whatsapp/WhatsAppChat.tsx` — catches análogos
+- `src/components/contacts/ContactMessages.tsx` — catches análogos
+
+### 4. Nada mais
+
+- Não altero `dispatchWhatsAppSend` (já tenta coagir para string; a mudança acima serve como cinto+suspensório).
+- Não mexo no fluxo de gravação (`audio/webm` continua sendo o problema real do envio, mas está fora deste bug).
+- Sem migration, sem edge function, sem novos endpoints.
+
+## Verificação
+
+- Reproduzir o cenário: gravar áudio numa thread Meta e clicar enviar. Meta ainda devolve 500 (esperado), mas: (a) sem tela branca, (b) toast destrutivo mostra texto legível, (c) bolha marcada como `failed` com mensagem string.
+- Rodar typecheck.
+
+## Fora do escopo (para conversa futura)
+
+Converter/rejeitar `audio/webm` antes de subir para o storage e chamar o send do Meta — resolve o `meta_send_failed` de verdade. Só listado; não faz parte deste plano.
