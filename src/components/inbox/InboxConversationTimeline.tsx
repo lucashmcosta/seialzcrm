@@ -42,7 +42,7 @@ function Media({ msg, orgId, accessToken }: { msg: InboxMessageRow; orgId: strin
     <div className="space-y-2">
       {msg.media_urls.map((raw, i) => {
         const url = getProxiedMediaUrl(raw, orgId, accessToken);
-        if (mediaType === 'audio' || /\.(ogg|mp3|wav|m4a)$/i.test(raw)) {
+        if (mediaType === 'audio' || /\.(ogg|oga|opus|mp3|mpeg|wav|m4a|mp4|aac|amr|webm)(\?|$)/i.test(raw)) {
           return (
             <AudioMessagePlayer
               key={i}
