@@ -1,5 +1,5 @@
 import { useMemo } from "react";
-import { useSiteT } from "@/i18n/SiteI18nProvider";
+import { useSiteT } from "@/i18n/useSiteI18n";
 import { SiteSeo } from "@/i18n/SiteSeo";
 import { getLegalBody, type LegalBodyKey, type Namespace } from "@/i18n/dictionaries";
 import { getLegalUrl, LEGAL_ROUTES, otherLocale, type LegalPage } from "@/i18n/config";

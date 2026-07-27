@@ -1,4 +1,4 @@
-import { useSiteI18n } from "@/i18n/SiteI18nProvider";
+import { useSiteI18n } from "@/i18n/useSiteI18n";
 import { LOCALE_TO_SLUG, Locale, SUPPORTED_LOCALES } from "@/i18n/config";
 
 interface LanguageSwitcherProps {

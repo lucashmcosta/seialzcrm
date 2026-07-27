@@ -4,7 +4,7 @@ import { LandingNavbar } from "@/components/landing/LandingNavbar";
 import { LandingFooter } from "@/components/landing/LandingFooter";
 const linhasMedia = { url: "/brand/linhas-media-light.svg" };
 const linhasSutil = { url: "/brand/linhas-sutil-light.svg" };
-import { useSiteT } from "@/i18n/SiteI18nProvider";
+import { useSiteT } from "@/i18n/useSiteI18n";
 import { SiteSeo } from "@/i18n/SiteSeo";
 
 /* Brand tokens (Manual da Marca) */
