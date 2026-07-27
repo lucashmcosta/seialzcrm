@@ -1,26 +1,33 @@
 ## Diagnóstico
 
-O erro `Failed to fetch dynamically imported module: .../ContactForm-CoGVV9vg.js` é o clássico **stale chunk após deploy**: a sessão do usuário estava carregada com o bundle `index-Bpp8iGOI.js` desde 03/jul; ao clicar em "Editar contato" em 07/jul, o Vite tentou baixar o chunk do `ContactForm` cujo hash não existe mais no CDN.
+O crash é do `react-aria-components` `ListBox` na lista de conversas de `/commercial` (`src/pages/messages/MessagesList.tsx`), disparado depois que o usuário clicou várias vezes em "Carregar mais" e trocou de filtro/endpoint.
 
-O código atual **já trata isso** em três camadas:
+Stack relevante (build): `CollectionRoot` → `useCachedChildren` → `Array.push` → `RangeError: Invalid array length`.
 
-1. `retryImport` em `src/App.tsx` detecta stale chunks e chama `reloadForChunkRecovery()`, retornando uma Promise que nunca resolve para o Suspense (não vaza para o ErrorBoundary).
-2. Handlers globais em `src/main.tsx` (`error`, `unhandledrejection`, `vite:preloadError`) interceptam antes do React.
-3. `SentryFallback` em `main.tsx` detecta stale chunk no boundary e dispara reload + spinner.
-4. `beforeSend` em `src/instrument.ts` descarta esses eventos no Sentry.
+O `ListBox` recebe `visibleThreadsWithSelected`, que é derivado de:
 
-O motivo do erro ter aparecido mesmo assim: **a sessão estava rodando o bundle de 03/jul**, que é anterior a parte dessas blindagens. Clientes já carregados não recebem o fix — só o próximo carregamento pega o bundle novo. Não há correção server-side possível para sessões antigas além de forçá-las a recarregar.
+1. `threads` do hook `useMessageThreads` (paginação por RPC + realtime),
+2. filtros por status e por endpoint,
+3. prepend condicional de `selectedThreadOverride`.
 
-Para o bundle **atual** (o que sai agora), o fluxo já é: chunk 404 → reload silencioso (throttle 10s) → app volta funcional. O usuário viu o boundary porque estava numa sessão antiga.
+Nenhum desses passos deduplica por `thread.id`. O `ListBox` do react-aria monta um keymap linkado usando `id={value.id}`: quando dois itens têm o mesmo `id` (o que acontece quando a paginação/realtime traz uma thread já presente em uma página anterior, ou quando o override coincide com um item que passou a existir na lista após um refetch), o keymap corrompe e a rotina interna que aloca o array de filhos explode com "Invalid array length".
 
-## O que fazer
+Isso é consistente com o rastro de rede no incidente: várias chamadas seguidas a `rpc_list_message_threads` (paginação) intercaladas com aberturas de thread antes do erro.
 
-Duas opções, escolha uma antes de mudar código:
+## Escopo da correção
 
-**A. Nada a fazer (recomendado).** O comportamento já está correto no bundle atual. Sessões antigas se auto-corrigem na próxima navegação/refresh. Fecho aqui.
+Correção mínima, só em frontend/apresentação, sem tocar em hook, RPC ou schema.
 
-**B. Camada extra de garantia** para sessões antigas que ainda estão rodando: adicionar um `Sentry.ErrorBoundary` de fallback que, ao detectar stale chunk, faça `location.reload()` **sem depender do throttle** na primeira ocorrência do boundary (hoje o throttle bloqueia se já reloadou nos últimos 10s, e o `SentryFallback` mostra um botão "Recarregar agora"). Mudaria só o `SentryFallback` de `main.tsx` para forçar reload em 1500ms independentemente do throttle. Impacto: baixo, ~10 linhas.
+1. Em `src/pages/messages/MessagesList.tsx`, deduplicar por `id` a lista final que entra no `ListBox` (`visibleThreadsWithSelected`), preservando a ordem da primeira ocorrência.
+2. Manter `id={value.id}` no `ListBoxItem` (já está correto) e não mudar o contrato do `ChatListItem`.
+3. Nada mais é alterado: filtros, paginação, realtime, override de seleção, badges, contadores continuam iguais.
 
-## Pergunta
+## Validação
 
-Quer que eu aplique a opção B (endurecer o fallback do boundary) ou apenas confirme A (nada a fazer, o próximo bundle já cobre)?
+- Abrir `/commercial`, aplicar filtro por número, clicar em "Carregar mais" várias vezes, abrir uma thread já visível, alternar filtros e voltar. O `ListBox` não deve mais crashar.
+- Conferir no console que não há warning de "duplicate key" para `ChatListItem` mesmo após múltiplas páginas.
+
+## Não incluído
+
+- Não vou investigar/ajustar o merge de páginas dentro de `useMessageThreads` nesta rodada (fica como follow-up se quisermos remover a causa raiz e não só o sintoma).
+- Sem migração, sem mudança de UI, sem alteração de business logic.
