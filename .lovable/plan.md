@@ -1,63 +1,41 @@
 ## Diagnóstico
 
-Ao gravar áudio na tela **Messages/Conversas**, o Meta rejeita `audio/webm` (só aceita `ogg/opus`, `mp4`, `aac`, `amr`, `mpeg`). O edge function `meta-whatsapp-send` devolve HTTP 500 com corpo:
+O Sentry breadcrumb `Uncaught TypeError: Cannot read properties of undefined (reading 'close')` em `encoderWorker.umd-CIaCbDnT.js:1:10666` vem do worker do pacote `opus-media-recorder`. Sequência do usuário: clicou em **Gravar áudio** e, ~2 s depois, clicou em outro botão do próprio recorder (fluxo confirmado nos breadcrumbs `ui.click` em `13:42:49` e `13:42:51`).
 
-```json
-{"error":"meta_send_failed","details":{"code":100,"message":"(#100) Param file must be a file..."}}
-```
+O que acontece em `src/components/whatsapp/AudioRecorder.tsx`:
+- No 1º click de "Gravar", `startRecording()` faz `void warmEncoder()` (linha 178). O warmup instancia um `OpusMediaRecorder` throwaway contra um `AudioContext` silencioso, chama `rec.start()` e agenda `safeStop()` — que dispara `rec.stop()`.
+- Dentro do worker (`encoderWorker.umd.js`), o handler de `stop` chama `encoder.close()`. Se a mensagem `stop` chega antes de a WASM ter alocado o encoder (janela de corrida entre `start` e `stop` no warmup), `encoder` é `undefined` e o worker lança — escapa como erro top-level do Worker e sobe para `window.onerror`.
+- O `rec.onerror = () => {}` definido no warmup só cobre erros que o polyfill roteia via `MediaRecorder.onerror`; erros crus do próprio Worker não passam por ali.
 
-O `dispatchWhatsAppSend` monta um `DirectFetchHttpError` e o propaga. No catch de `handleMediaUpload` (`src/pages/messages/MessagesList.tsx:1442-1451`), duas coisas usam `error.message` como **React child**:
+Impactos observados:
+- `src/instrument.ts` (linhas 86-95) já dropa esse evento no Sentry, então **não gera issue**.
+- Nenhum handler global reagirá — `src/main.tsx` só reage a stale-chunk. O ErrorBoundary não é acionado (não é erro de render React).
+- Efeito real: ruído no console + breadcrumb. O fluxo de gravação funciona normalmente.
 
-1. `setMessages(... error_message: error.message ...)` → depois é passado para `<MessageStatusIndicator errorMessage={...} />`, que renderiza direto: `<span>...</span> {errorMessage}` (`src/components/whatsapp/MessageStatusIndicator.tsx:89`).
-2. `toast({ description: error.message })`.
+Ou seja, **hoje o erro já é benigno e filtrado no Sentry**, mas continua poluindo o console e o breadcrumb. A correção é curta e cirúrgica no próprio recorder.
 
-Em algum caminho (provavelmente quando o corpo do erro chega com shape aninhada — ex.: `body.details` sendo `{code, message}` — ou quando o fallback `supabase.functions.invoke` do dispatch retorna um `FunctionsHttpError` com `context.message` objeto), `error.message` acaba sendo o objeto `{code, message}`. Ao entrar como children do `<span>` do `MessageStatusIndicator`, React lança:
+## Escopo da correção (frontend only)
 
-> Objects are not valid as a React child (found: object with keys {code, message})
+Arquivo único: `src/components/whatsapp/AudioRecorder.tsx`.
 
-O mesmo padrão existe nos catches de texto (linhas 1229, 1341) e no `handleAudioSend` / `handleAudioSendAsDocument`, e também em `WhatsAppChat.tsx` / `ContactMessages.tsx`.
+1. **Prender o erro no próprio Worker do warmup.** Trocar o factory:
+   ```
+   encoderWorkerFactory: () => new Worker(workerUrl)
+   ```
+   por uma factory que registra `worker.onerror` engolindo o evento (chamando `event.preventDefault()`) para que ele não escape para `window.onerror`. Aplica-se a todas as instâncias (warmup e gravação real). Como o polyfill já tem seu próprio protocolo de erro via `postMessage` para o consumidor, capturar `onerror` do Worker não quebra o fluxo — só evita o log cru.
 
-Além do crash, há um **bug de mídia** separado: o navegador grava `audio/webm` mas o arquivo é enviado ao Meta como está. Mesmo com o crash resolvido, o envio continuaria falhando. Não é o que a pergunta pediu, mas fica registrado como próximo passo — a correção proposta abaixo mira só o crash.
+2. **Endurecer o warmup contra a corrida start/stop.** No `warmEncoder()`:
+   - Só chamar `safeStop()` **depois** que o primeiro `ondataavailable` chegar (isso já é a intenção do código, mas o `setTimeout(safeStop, 1500)` fallback continua disparando cedo). Reduzir a chance de corrida: só permitir o `setTimeout` chamar `safeStop` se pelo menos um chunk foi recebido; caso contrário, apenas soltar tracks/ctx sem chamar `rec.stop()`.
+   - Isso remove a causa raiz da corrida em navegadores lentos.
 
-## Escopo da correção (só o crash)
-
-Frontend/presentation apenas. Sem mudança de business logic, sem edge function.
-
-### 1. Helper de normalização
-
-Criar `src/lib/errorMessage.ts` com `toErrorMessageString(err: unknown): string`:
-- string → retorna direto
-- objeto com `.message` string → retorna `.message`
-- objeto com `.message` objeto e `.message.message` string → retorna esse aninhado
-- objeto com `.error` string → retorna
-- fallback → `JSON.stringify(err)` truncado, ou `"Erro desconhecido"`
-
-### 2. Blindar o render do `MessageStatusIndicator`
-
-Em `src/components/whatsapp/MessageStatusIndicator.tsx`, coagir `errorMessage` (e `errorCode`) para string antes de renderizar. Assim, mesmo que algum código antigo grave objeto em `messages.error_message`, o bubble não crasha.
-
-### 3. Blindar catches que gravam em estado / toast
-
-Nos catches abaixo, aplicar `toErrorMessageString(error)` antes de:
-- passar para `toast({ description })`
-- persistir em `error_message` do estado local `messages`
-
-Arquivos:
-- `src/pages/messages/MessagesList.tsx` — 3 catches (linhas ~1229, 1341, 1443) + `handleAudioSend`, `handleAudioSendAsDocument`
-- `src/components/whatsapp/WhatsAppChat.tsx` — catches análogos
-- `src/components/contacts/ContactMessages.tsx` — catches análogos
-
-### 4. Nada mais
-
-- Não altero `dispatchWhatsAppSend` (já tenta coagir para string; a mudança acima serve como cinto+suspensório).
-- Não mexo no fluxo de gravação (`audio/webm` continua sendo o problema real do envio, mas está fora deste bug).
-- Sem migration, sem edge function, sem novos endpoints.
+3. **Nada mais.** Não mexo em `src/instrument.ts` (o filtro do Sentry fica como cinto+suspensório), nem no `dispatchWhatsAppSend`, nem em edge functions.
 
 ## Verificação
 
-- Reproduzir o cenário: gravar áudio numa thread Meta e clicar enviar. Meta ainda devolve 500 (esperado), mas: (a) sem tela branca, (b) toast destrutivo mostra texto legível, (c) bolha marcada como `failed` com mensagem string.
-- Rodar typecheck.
+- Abrir uma thread e clicar "Gravar áudio" pela primeira vez na sessão. Console limpo — sem `Uncaught TypeError: ... 'close'`. Sentry breadcrumb `exception` some.
+- Gravar por >1 s e enviar: fluxo continua funcionando (blob OGG/Opus válido, upload OK).
+- Typecheck.
 
-## Fora do escopo (para conversa futura)
+## Fora do escopo
 
-Converter/rejeitar `audio/webm` antes de subir para o storage e chamar o send do Meta — resolve o `meta_send_failed` de verdade. Só listado; não faz parte deste plano.
+- Reportar o bug upstream para `opus-media-recorder` (o worker deveria checar `encoder != null` antes de `close`). Só listado.
