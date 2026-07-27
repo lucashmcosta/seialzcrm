@@ -1,5 +1,6 @@
 import { useState, useEffect, useMemo, useRef, Fragment } from 'react';
 import { dispatchWhatsAppSend } from "@/lib/dispatchWhatsAppSend";
+import { toErrorMessageString } from "@/lib/errorMessage";
 
 import { usePersistedFilters } from '@/hooks/usePersistedFilters';
 import { Link, useSearchParams } from 'react-router-dom';
