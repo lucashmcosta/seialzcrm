@@ -1,25 +1,31 @@
 ## Diagnóstico
 
-Erro: `TypeError: 'text/html' is not a valid JavaScript MIME type.` disparado logo após navegação `/inbox → /contacts/...`.
+O evento do Sentry é `UnhandledRejection: Non-Error promise rejection captured with value: undefined`. Nos breadcrumbs imediatamente anteriores há a sequência típica do Twilio Voice SDK reconectando:
 
-Esta é uma variante **Safari/WebKit** do mesmo padrão de **stale chunk após deploy** que já tratamos várias vezes:
+- WebSocket fecha com código 1006 → `ConnectionError (31005)` / `AccessTokenExpired (20104)`
+- Device emite `#error` / `#unregistered` e o `WSTransport` reinicia com backoff
 
-- O navegador tentou baixar um chunk `lazy()` cujo hash não existe mais no CDN após o deploy novo.
-- O host respondeu com o `index.html` fallback (SPA rewrite) em vez de 404.
-- Safari, ao receber `Content-Type: text/html` num `import()` dinâmico, rejeita com essa mensagem específica (Chrome mostra `Failed to fetch dynamically imported module`, mesma raiz).
+O Voice SDK, em alguns caminhos internos de reconexão/register, rejeita uma promise sem valor (`Promise.reject()` cru), o que o Sentry captura como `value: undefined`. Isso é ruído benigno — a reconexão logo em seguida tem sucesso (`WebSocket opened successfully` / `#registered` / `Twilio Device registered and ready` nos logs).
 
-## Estado da blindagem atual
+Os filtros atuais em `src/instrument.ts` (`beforeSend`) não pegam este caso porque todos dependem de inspecionar strings em `firstException.value` — que aqui é `undefined`.
 
-Já implementado em turnos anteriores:
+## Escopo da correção (somente `src/instrument.ts`)
 
-- `retryImport` envolve todos os 61 `lazy()` do `App.tsx`.
-- Guards globais em `src/main.tsx` interceptam falhas de import dinâmico.
-- `SentryFallback` dispara reload resiliente.
+Adicionar mais um branch no `beforeSend` para descartar somente esta combinação estrita:
 
-O guard atual em `main.tsx` casa strings tipo `Failed to fetch dynamically imported module`. **A variante `'text/html' is not a valid JavaScript MIME type'` (Safari) precisa ser confirmada como reconhecida pelo mesmo guard** — se ela cair no fallback do Sentry, o reload acontece; se não casar em nenhum matcher, o usuário vê o boundary sem auto-reload.
+- `event.exception.values[0].value` é ausente/undefined **ou** a mensagem contém "Non-Error promise rejection captured with value: undefined"
+- **E** `mechanism.type === "onunhandledrejection"`
+- **E** existe pelo menos um breadcrumb recente (últimos ~15) cuja mensagem contenha `TwilioVoice` ou cujo arquivo/logger indique o SDK
 
-## Próximo passo (apenas verificação, sem implementar)
+A conjunção das três condições garante que só suprimimos rejeições vazias correlacionadas a atividade do Twilio Voice SDK — qualquer `unhandledrejection` de outra origem continua sendo reportado.
 
-Antes de decidir qualquer mudança, preciso confirmar em `src/main.tsx` e no `retryImport` se o matcher inclui a substring `text/html` / `valid JavaScript MIME type`. Se já inclui, nada a fazer. Se não inclui, a única mudança justificada é **adicionar essa substring ao matcher existente** (uma linha).
+## Fora do escopo
 
-Não haverá nenhuma outra alteração: nada de refactor, nada de novos arquivos, nada de mudança em `SentryFallback`.
+- Não mexer em `useInboundCalls.ts` nem em nenhum código de chamada — os erros funcionais (31005/20104) já são tratados e a reconexão funciona.
+- Não alterar UI, rotas, provider Voice, tokens, ou lógica de negócio.
+- Não adicionar retry/handler novo no Device — o SDK já reconecta sozinho.
+
+## Validação
+
+- Verificar em `src/instrument.ts` que apenas o novo bloco foi acrescentado e retorna `null` só quando as três condições batem.
+- Confirmar no Sentry, após deploy, que o issue `Non-Error promise rejection captured with value: undefined` deixa de aparecer enquanto outras rejeições continuam sendo capturadas.
