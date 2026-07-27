@@ -1,54 +1,43 @@
 ## Contexto
 
-Você quer que os 42 leads enviados esta semana pelo webhook da sua LP (anúncio **"1 - Demissao"**, `ad_id = 120251293733850592`) apareçam corretamente atribuídos à campanha no Seialz — hoje eles caíram no CRM como contatos+oportunidades, mas provavelmente sem `contacts.marketing_campaign_id` preenchido, então não aparecem no relatório de performance do ad.
+Sentry captura:
 
-Identificação confirmada:
-- `marketing_campaigns.id` = `b3c0e190-66ab-4cbb-94be-7c8dffa9dc7c`
-- `ad_id` = `120251293733850592`
-- `ad_name` = `1 - Demissao`
-- `campaign_name` = `LEADS > LP`
-- `organization_id` = `40ae935c-...` (Central Trabalhista)
-- criado em 2026-07-14
+```
+InvalidArgumentError: Device not found: default
+  at we.<anonymous> (/assets/twilio-*.js)
+```
 
-## O que vai ser feito (somente dados, sem código)
+Stack aponta 100% para dentro do bundle do `@twilio/voice-sdk`. Nenhum código em `src/` chama `setInputDevice`, `setSinkId` ou toca `MediaDevices` — `rg` confirmou. O erro dispara ~3s depois de `[SDK] Call disconnected`, sem afetar chamadas: pelos próprios logs do console fornecidos, a chamada anterior completou (`status: completed`, `duration_seconds: 26`) e a próxima reinicializou o Device normalmente.
 
-1. **Descoberta read-only** dos 42 telefones da sua lista dentro da Central Trabalhista:
-   - Normalizar cada número no formato `phone_normalized` (E.164 sem `+`, tratando o 9º dígito BR).
-   - Localizar em `contacts` o registro correspondente (`organization_id = 40ae935c...`, `deleted_at IS NULL`).
-   - Anexar `opportunity_id` (mais recente não deletada) e `status` atual.
-   - Anotar quais contatos já estão com `marketing_campaign_id` correto, quais estão com outra campanha, e quais estão nulos.
+Causa: o `AudioHelper` interno do Twilio Voice SDK reavalia o `inputDevice` no teardown; se o dispositivo rotulado `"default"` some momentaneamente (troca de fone, driver piscando, permissão revalidada) ele rejeita com `InvalidArgumentError: Device not found: default` como `unhandledrejection`. É ruído benigno.
 
-2. **Relatório antes/depois** (tabela consolidada):
-   - `# | enviado_sp | nome_lista | telefone | contact_id | opp_id | opp_status | marketing_campaign_id atual | ação`
-   - Ações possíveis por linha:
-     - `set`: preencher `marketing_campaign_id` (estava nulo)
-     - `overwrite?`: já tem outra campanha — **não sobrescreve** sem seu OK explícito
-     - `keep`: já está correto
-     - `missing`: contato não encontrado no CRM (provavelmente parte dos "missing phone")
+Já existe precedente no projeto para silenciar ruído benigno do próprio Twilio SDK dentro do `beforeSend` (bloco atual de `setSinkId`, linhas 97–125 de `src/instrument.ts`).
 
-3. **Backfill controlado** (INSERT/UPDATE — em modo build):
-   - `UPDATE contacts SET marketing_campaign_id = 'b3c0e190-…' WHERE id IN (…lista de contact_ids da ação `set`) AND organization_id = '40ae935c-…' AND marketing_campaign_id IS NULL;`
-   - Restrito a `organization_id` da Central Trabalhista.
-   - Restrito a `marketing_campaign_id IS NULL` no `WHERE` (guarda de segurança contra sobrescrever).
-   - Nenhuma alteração em `opportunities`, `message_threads` ou `activities` — só o link comercial no `contacts`.
+## Mudança
 
-4. **Validação pós-backfill**:
-   - Contar `contacts` com `marketing_campaign_id = 'b3c0e190-…'` antes e depois.
-   - Rodar a mesma consulta que a tela `useAdLeads` / `useAdOpportunities` usa (`marketing_campaign_id = adId`) para confirmar que os 42 aparecem no dashboard do ad.
-   - Listar as oportunidades resultantes (won/open/lost) já atribuídas ao ad.
+Editar somente `src/instrument.ts`, adicionando **um novo predicado** dentro do `beforeSend` existente, seguindo exatamente o mesmo padrão estrito do filtro de `setSinkId` já em produção.
 
-## Fora do escopo (não vou mexer nisso agora)
+O novo bloco descarta o evento se e somente se **todas** as condições forem verdadeiras:
 
-- Alterar `webhook` da LP / lógica de captura CTWA / regras de atribuição futuras.
-- Backfill de outros anúncios ou de leads fora dos 42 da sua lista.
-- Recalcular `marketing_campaign_insights_daily` / spend / CPA.
-- Sobrescrever `marketing_campaign_id` já preenchido com outro valor (só faço se você autorizar caso a caso).
-- Investigação profunda dos "missing phone" (posso fazer em seguida, se quiser).
+1. `firstException.type === "InvalidArgumentError"`
+2. `firstException.value` casa `/device not found:\s*default/i`
+3. **E** alguma das duas:
+   - Algum frame do stack tem `filename` contendo `twilio` ou `voice-sdk`, **ou**
+   - `mechanism.type === "onunhandledrejection"`
 
-## Entradas necessárias de você
+Qualquer `InvalidArgumentError` disparado por código nosso continua reportado — nossos frames não têm `twilio`/`voice-sdk` no filename e não vêm por `onunhandledrejection`.
 
-Preciso da lista completa dos **42 telefones** (ou dos `opportunity_id` que o webhook devolveu, se preferir bater por ID em vez de telefone). Sem isso, o backfill não tem como ser 1‑a‑1 seguro. Se você preferir, também aceita CSV colado no chat.
+## Não vou mexer (segurança do fluxo Twilio)
 
-## Classificação
+- `src/contexts/OutboundCallContext.tsx` — intocado. O ciclo de vida do Device continua o mesmo.
+- `src/hooks/useInboundCalls.ts` — intocado.
+- `@twilio/voice-sdk` — sem bump de versão.
+- Nenhuma edge function, migration, RLS, UI ou breadcrumb muda.
 
-Ação de dados pontual, **reversível** (dá pra despreencher rodando `UPDATE ... SET marketing_campaign_id = NULL WHERE id IN (...)` com a lista salva).
+O filtro é 100% client-side no cliente Sentry; ele apenas descarta o *evento* de telemetria antes de enviar, não altera runtime nem lógica de chamada.
+
+## Validação
+
+1. Discar → tocar → atender → desligar continua funcionando (comportamento idêntico ao atual, código do fluxo Twilio não muda).
+2. Após deploy, o issue `InvalidArgumentError: Device not found: default` no Sentry para de receber eventos novos.
+3. Se surgir um `InvalidArgumentError` diferente (mensagem outra, ou originado fora de frames Twilio e sem ser unhandledrejection), ele continua sendo capturado.
