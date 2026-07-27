@@ -84,6 +84,12 @@ async function warmEncoder(): Promise<void> {
       try { ctx.close(); } catch { /* noop */ }
     };
     let stopped = false;
+    let gotChunk = false;
+    const teardownWithoutStop = () => {
+      try { osc.stop(); osc.disconnect(); gain.disconnect(); } catch { /* noop */ }
+      try { dst.stream.getTracks().forEach((t) => t.stop()); } catch { /* noop */ }
+      try { ctx.close(); } catch { /* noop */ }
+    };
     const safeStop = () => {
       if (stopped) return;
       stopped = true;
@@ -92,14 +98,22 @@ async function warmEncoder(): Promise<void> {
     // Swallow any warmup-only errors surfaced via the polyfill's onerror.
     rec.onerror = () => { /* noop — warmup is best-effort */ };
     // Prefer stopping when the encoder has actually produced a chunk (proves
-    // Worker + WASM are alive). Fallback timer only fires if that never comes.
+    // Worker + WASM are alive). If no chunk ever arrives (slow WASM init),
+    // tear down without calling rec.stop() — sending `stop` before the encoder
+    // is allocated causes the worker to call `.close()` on undefined.
     const originalOnData = rec.ondataavailable;
     rec.ondataavailable = (ev: BlobEvent) => {
+      gotChunk = true;
       try { originalOnData?.(ev); } catch { /* noop */ }
       safeStop();
     };
     rec.start();
-    setTimeout(safeStop, 1500);
+    setTimeout(() => {
+      if (gotChunk) { safeStop(); return; }
+      // Never produced a chunk → skip stop(); just release resources.
+      stopped = true;
+      teardownWithoutStop();
+    }, 1500);
   } catch (err) {
     console.warn('[AudioRecorder] encoder warm failed', err);
     encoderWarmed = false;
