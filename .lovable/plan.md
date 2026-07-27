@@ -1,48 +1,42 @@
-## Diagnóstico
+## Diagnóstico atual
 
-O erro `'text/html' is not a valid JavaScript MIME type.` é a variante Safari/WebKit de **stale chunk pós-deploy** (o servidor entregou `index.html` no lugar de um chunk JS que sumiu do CDN após deploy).
+- **Módulos afetados:** Inbox (`/inbox`) e o player compartilhado de áudio usado também em Messages, contatos e mobile.
+- **Documentação consultada:** `docs/README.md`, `docs/STATUS.md`, `docs/modules/inbox/README.md`, `docs/modules/messages/README.md`, `docs/product/channel-boundaries.md`, `docs/decisions/0009-inbox-messages-separation.md`, `docs/operations/conflicts.md`, documentação Twilio/Evolution.
+- **ADR aplicável:** ADR-0009, porque Inbox e Messages compartilham `messages/message_threads`, mas não podem ter regras de negócio fundidas.
+- **Banco/RLS/schema:** não precisa migration, não precisa alterar RLS, não precisa mexer em schema.
+- **Edge Functions/integrações:** não parece ser falha de envio nem webhook; o warning nasce no frontend. Só revisaria `twilio-media-proxy` se a validação mostrar URLs Twilio expirando.
 
-O sistema já **recupera** esse caso automaticamente:
+## O que encontrei
 
-- `isStaleChunkError` em `src/App.tsx` já reconhece este texto (linhas 39‑40)
-- `retryImport` suspende o lazy() e dispara `reloadForChunkRecovery`
-- Guards globais em `src/main.tsx` (`error`, `unhandledrejection`, `vite:preloadError`) chamam o mesmo recovery
-- `SentryFallback` também detecta e recarrega
+O evento **não é erro de envio de WhatsApp**. Ele é gerado manualmente pelo frontend em `AudioMessagePlayer`, via `Sentry.captureMessage('Audio playback failed')`, quando o `<audio>` dispara erro ou quando `audio.play()` rejeita. No `/inbox`, o player é renderizado por `InboxConversationTimeline` para mensagens com `media_type='audio'`.
 
-O usuário nunca vê tela quebrada. Porém o evento **ainda chega ao Sentry** porque:
+A evidência mais forte é temporal: ao abrir uma conversa, o `<audio preload="metadata">` tenta carregar metadados automaticamente. Se falhar, o componente faz 3 retries com delays de 2s, 5s e 10s e só depois manda o warning. No evento que você mandou, a conversa carregou por volta de `17:39:26` e o warning apareceu em `17:39:46`, exatamente compatível com esse ciclo de retry. Ou seja: hoje o Sentry pode receber “Audio playback failed” mesmo quando o usuário nem tentou reproduzir o áudio.
 
-- `Sentry.ErrorBoundary` reporta o erro **antes** de renderizar o fallback → dispara `React ErrorBoundary TypeError` no dashboard.
-- O filtro `beforeSend` em `src/instrument.ts` tem sua própria lista `STALE_CHUNK_PATTERNS` que **não** inclui as variantes de MIME type:
-  ```
-  "failed to fetch dynamically imported module",
-  "error loading dynamically imported module",
-  "importing a module script failed",
-  "unable to preload css",
-  "loading chunk",
-  "chunkloaderror",
-  "module script",
-  ```
-- A mensagem `"'text/html' is not a valid JavaScript MIME type."` não bate com "module script" nem com nenhum outro item → passa pelo filtro e vira issue.
+No banco, para a org `40ae...`, há **35k+ mensagens de áudio em 90 dias**, quase todas em Storage público `whatsapp-media` com `.ogg`; os objetos conferidos existem e não estão com tamanho zero. Na thread citada no breadcrumb (`d2fc9a23...`) os áudios são `.ogg` válidos em Storage com `audio/ogg`. Portanto a hipótese principal não é “arquivo sumiu”, e sim uma mistura de: preload automático gerando warning em massa, incompatibilidade/instabilidade de codec em alguns browsers, e falta de deduplicação/sampling por mensagem.
 
-## Escopo da correção (somente `src/instrument.ts`)
+## Plano de correção
 
-Alinhar `STALE_CHUNK_PATTERNS` do `beforeSend` do Sentry com a lista já aprovada em `App.tsx#isStaleChunkError`, acrescentando os três padrões que faltam:
+1. **Separar falha de carregamento de falha de reprodução**
+   - `loadedmetadata/error` não deve mais reportar como `Audio playback failed`.
+   - Erro automático de metadata deve virar estado local do player, com retry manual/baixar áudio, mas sem bombardear Sentry.
+   - `Audio playback failed` fica reservado para clique real no play.
 
-- `"'text/html' is not a valid javascript mime type"`
-- `"is not a valid javascript mime type"` (cobre outras variações: `text/plain`, `text/x-server-parsed-html`, etc.)
-- `"expected a javascript module script but the server responded"` (Chromium)
-- `"expected a javascript-or-wasm module script"` (Chromium mais recente)
+2. **Evitar preload agressivo em listas/conversas**
+   - Alterar o player para não depender de `preload="metadata"` para habilitar o botão.
+   - Carregar/reproduzir sob demanda quando o usuário clicar.
+   - Isso reduz eventos em massa ao abrir threads com muitos áudios.
 
-Nada mais muda. O predicado continua sendo simples `includes(...)` sobre a mensagem normalizada em lowercase — os padrões novos são strings estáveis emitidas pelos próprios navegadores, então não geram falso positivo.
+3. **Deduplicar telemetria por áudio e sessão**
+   - Reportar no máximo uma vez por `messageId + src + error_code` na sessão atual.
+   - Adicionar `fingerprint`/tags no Sentry para agrupar por causa, não por cada clique/thread.
+   - Manter dados úteis: `message_id`, `thread_id`, `media_type`, host, extensão, `readyState`, `networkState`, `MediaError.code`, `canPlayType`.
 
-## Fora do escopo
+4. **Melhorar compatibilidade de tipos**
+   - Incluir diagnóstico para `audio/webm`, `audio/amr` e `audio/aac`, além de ogg/mp3/mp4/wav.
+   - Ajustar detecção visual para aceitar URLs `.webm` e `.amr` quando vierem como áudio.
 
-- Não mexer em `App.tsx`, `main.tsx`, `SentryFallback` — a recuperação funcional já está correta.
-- Não alterar throttle, service worker, versão de bundle ou qualquer lógica de deploy.
-- Não adicionar heartbeat de versão.
-
-## Validação
-
-- Reler `src/instrument.ts` e confirmar que os 4 padrões novos aparecem em `STALE_CHUNK_PATTERNS` e que `isStaleChunkMessage` continua sendo o único caller.
-- No Sentry: novas ocorrências deste erro deixam de ser criadas; o issue atual pode ser marcado como resolvido.
-- Comportamento do usuário permanece idêntico (reload silencioso).
+5. **Validar no fluxo real do Inbox**
+   - Abrir `/inbox`, selecionar uma thread com áudios, confirmar que abrir a conversa não dispara warning.
+   - Clicar em áudio válido e confirmar reprodução.
+   - Simular URL inválida e confirmar fallback visual sem spam no Sentry.
+   - Conferir que Messages/contatos/mobile continuam usando o player sem regressão.
