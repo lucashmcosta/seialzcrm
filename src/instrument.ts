@@ -124,6 +124,26 @@ if (dsn) {
         return null;
       }
 
+      // Drop Twilio Voice SDK "Device not found: default" rejections. After a
+      // call disconnects, the SDK's AudioHelper re-enumerates media devices;
+      // if the OS-labelled "default" input momentarily disappears (headset
+      // unplug, driver blip, permission re-check) the SDK rejects with
+      // InvalidArgumentError. Calls are unaffected — the next call recreates
+      // the Device cleanly. Predicate is strict: must be InvalidArgumentError
+      // whose message matches "Device not found: default" AND originate from
+      // a Twilio SDK frame or the global unhandledrejection handler.
+      const isTwilioFrame = frames.some((frame) => {
+        const file = typeof frame?.filename === "string" ? frame.filename.toLowerCase() : "";
+        return file.includes("twilio") || file.includes("voice-sdk");
+      });
+      if (
+        exceptionType === "InvalidArgumentError" &&
+        /device not found:\s*default/i.test(exceptionValue) &&
+        (isTwilioFrame || mechanismType === "onunhandledrejection")
+      ) {
+        return null;
+      }
+
       return event;
     },
   });
