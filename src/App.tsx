@@ -36,6 +36,10 @@ export function isStaleChunkError(error: unknown): boolean {
     "loading chunk",
     "chunkloaderror",
     "module script",
+    "'text/html' is not a valid javascript mime type",
+    "is not a valid javascript mime type",
+    "expected a javascript module script but the server responded",
+    "expected a javascript-or-wasm module script",
   ].some((entry) => normalized.includes(entry));
 }
 
