@@ -42,6 +42,10 @@ export function MessageStatusIndicator({
 
   if (status === 'failed') {
     const info = getWhatsAppErrorInfo(errorCode);
+    const safeErrorMessage =
+      errorMessage == null ? null : toErrorMessageString(errorMessage);
+    const safeErrorCode =
+      errorCode == null ? null : typeof errorCode === 'string' ? errorCode : toErrorMessageString(errorCode);
     return (
       <TooltipProvider delayDuration={150}>
         <Tooltip>
