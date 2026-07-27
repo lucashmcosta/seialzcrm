@@ -25,6 +25,10 @@ const STALE_CHUNK_PATTERNS = [
   "loading chunk",
   "chunkloaderror",
   "module script",
+  "'text/html' is not a valid javascript mime type",
+  "is not a valid javascript mime type",
+  "expected a javascript module script but the server responded",
+  "expected a javascript-or-wasm module script",
 ];
 
 function isStaleChunkMessage(message: unknown): boolean {
