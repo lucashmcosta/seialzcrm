@@ -196,6 +196,32 @@ if (dsn) {
         if (twilioRelated) return null;
       }
 
+      // Drop React DOM reconciliation crashes caused by Google Translate (or
+      // similar page translators) mutating text nodes out from under React.
+      // Translate wraps text in <font> tags, so React's fiber references a
+      // node that is no longer a child of its parent → NotFoundError from
+      // insertBefore/removeChild. The app already recovers via the error
+      // boundary; the crash is not actionable. Predicate is strict: must be
+      // a NotFoundError mentioning insertBefore/removeChild AND the document
+      // shows Translate is active (translated-ltr / translated-rtl class on
+      // <html>, or injected <font> nodes).
+      if (
+        exceptionType === "NotFoundError" &&
+        /(insertbefore|removechild)/i.test(exceptionValue)
+      ) {
+        try {
+          const html = typeof document !== "undefined" ? document.documentElement : null;
+          const isTranslated =
+            !!html &&
+            (html.classList.contains("translated-ltr") ||
+              html.classList.contains("translated-rtl") ||
+              document.querySelector("font > font") !== null);
+          if (isTranslated) return null;
+        } catch {
+          // ignore — fall through to send
+        }
+      }
+
       return event;
     },
   });

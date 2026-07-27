@@ -1,32 +1,58 @@
-## Diagnóstico objetivo
+## Diagnóstico
 
-O erro é a mesma família de **stale chunk pós-deploy**, mas com um detalhe novo confirmado em produção: a URL antiga `https://crm.seialz.com/assets/ContactForm-D98BmYZC.js` hoje responde **200 com `content-type: text/html`**, não 404. Isso acontece porque o rewrite global do Vercel (`/(.*)` → `/index.html`) também captura caminhos inexistentes em `/assets/*`, então o navegador tenta carregar HTML como JavaScript e o React cai no ErrorBoundary.
+O erro `NotFoundError: Failed to execute 'insertBefore' on 'Node'` **não é bug do CloseDatePromptDialog nem do Radix**. Os breadcrumbs do Sentry confirmam a causa real:
 
-O código atual já tem recuperação funcional ampla (`retryImport`, guards globais em `main.tsx`, fallback do Sentry e filtros no `instrument.ts`). A lacuna é de **hosting/configuração**: assets antigos inexistentes deveriam retornar 404/410, não `index.html`. Enquanto `/assets/*` cair no fallback SPA, alguns navegadores/sessões antigas ainda podem gerar esse evento antes do reload silencioso ou continuar poluindo o Sentry.
+- `html.translated-ltr` no `<html>` → **Google Translate ativo** na aba do usuário.
+- Cliques em `font > font` → Google Translate envolve nós de texto em `<font>` tags injetadas fora do controle do React.
+- Erro logo em seguida no reconciliador do React (`Wj`/`ck`/`dk` = commit phase).
 
-## Plano de correção
+Quando o React tenta remover/inserir um nó de texto que o Translate já substituiu por `<font>...</font>`, a referência do fiber aponta para um nó que não é mais filho do pai atual → `insertBefore` falha e o ErrorBoundary sobe.
 
-1. **Ajustar `vercel.json` para não fazer SPA fallback em assets**
-   - Trocar o rewrite global atual por regras que preservem arquivos estáticos.
-   - Garantir que `/assets/<chunk-antigo>.js` inexistente não seja reescrito para `/index.html`.
-   - Manter deep links SPA funcionando para rotas como `/contacts/:id/edit`.
+Isso é um problema conhecido do React 18 + Google Translate (issue facebook/react#11538). Acontece principalmente em Dialogs/Toasts porque montam/desmontam texto dinamicamente. O stack aparece "no CloseDatePromptDialog" só porque foi o Dialog aberto no momento — pode se manifestar em qualquer componente com texto condicional.
 
-2. **Manter a recuperação client-side existente**
-   - Não remover `retryImport`, guards globais ou fallback do Sentry.
-   - Eles continuam necessários quando o navegador recebe 404/410 de um chunk antigo.
+## O que fazer (mudança mínima e cirúrgica)
 
-3. **Alinhar a detecção de erro, se necessário**
-   - Confirmar que tanto `Failed to fetch dynamically imported module` quanto `text/html is not a valid JavaScript MIME type` continuam tratados como stale chunk.
-   - Se houver diferença entre `App.tsx` e `instrument.ts`, alinhar os padrões sem ampliar demais o filtro.
+### 1. Desativar tradução automática no app inteiro
 
-4. **Validar em produção/local por simulação**
-   - Após a alteração, verificar que uma URL fake em `/assets/*.js` não retorna HTML com `content-type: text/html`.
-   - Verificar que uma rota SPA real continua caindo em `index.html`.
+Em `index.html`, dentro de `<head>`:
 
-## Escopo afetado
+```html
+<meta name="google" content="notranslate" />
+```
 
-- **Módulo afetado:** plataforma/deploy/frontend, não Contacts em si.
-- **Docs consultados:** `docs/README.md`, `docs/STATUS.md`, `docs/operations/conflicts.md`, `docs/platform/deployment/README.md`, `docs/platform/performance/README.md`.
-- **ADR aplicável:** nenhuma ADR específica de deploy/chunk recovery foi encontrada nos arquivos consultados.
-- **Não toca:** banco, RLS, Edge Functions, integrações externas ou multi-tenancy.
-- **Descoberta adicional:** não é necessária para corrigir; o comportamento foi confirmado por HEAD público em produção.
+E em `<html lang="pt-BR" translate="no">` adicionar o atributo `translate="no"`.
+
+Isso é o fix oficial recomendado pelo time do React para apps SPA. Não impede o usuário de traduzir manualmente via extensão, mas impede a tradução automática que causa 99% desses crashes.
+
+### 2. Silenciar o ruído no Sentry quando o DOM foi mutado externamente
+
+Em `src/instrument.ts`, adicionar ao `beforeSend` um matcher para:
+
+- `name === 'NotFoundError'` **e** mensagem inclui `insertBefore` ou `removeChild`
+- **e** o documento tem `document.documentElement.classList.contains('translated-ltr' | 'translated-rtl')` ou existe `<font>` injetado.
+
+Nesses casos, retornar `null` (drop) — o crash já não é acionável pelo nosso código.
+
+### 3. (Opcional, defensivo) `translate="no"` nos containers de Dialog
+
+Se após (1) ainda houver ocorrências residuais (usuário forçando tradução manual em cima do CRM), adicionar `translate="no"` na raiz do `DialogContent` em `src/components/ui/dialog.tsx`. Baixo custo, alta cobertura.
+
+## Escopo
+
+Arquivos a editar (3):
+
+- `index.html` — meta tag + atributo `translate="no"` no `<html>`.
+- `src/instrument.ts` — filtro `beforeSend` para `NotFoundError`+`insertBefore/removeChild` quando Translate está ativo.
+- `src/components/ui/dialog.tsx` — `translate="no"` no `DialogContent` (opcional, ativar só se necessário).
+
+Nenhuma migração, nenhuma edge function, nenhuma mudança de layout ou lógica de negócio. Puramente presentation/observability.
+
+## Riscos
+
+- Nenhum funcional. `translate="no"` só afeta tradução automática; usuários que precisam ler em outro idioma podem trocar o idioma do próprio CRM (já suportado em `src/i18n/`).
+- O filtro no Sentry é específico o suficiente para não engolir crashes reais de DOM.
+
+## Validação pós-build
+
+1. Confirmar via Sentry (24-48h) que ocorrências de `NotFoundError: Failed to execute 'insertBefore'` caem para ~0.
+2. Não é reproduzível sem ativar Translate; teste manual no Chrome com "Traduzir esta página" ligado abrindo/fechando o `CloseDatePromptDialog` deve deixar de crashar (ou, no mínimo, o crash não sobe mais para o boundary).
