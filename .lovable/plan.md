@@ -1,42 +1,32 @@
-## Diagnóstico atual
+## Diagnóstico objetivo
 
-- **Módulos afetados:** Inbox (`/inbox`) e o player compartilhado de áudio usado também em Messages, contatos e mobile.
-- **Documentação consultada:** `docs/README.md`, `docs/STATUS.md`, `docs/modules/inbox/README.md`, `docs/modules/messages/README.md`, `docs/product/channel-boundaries.md`, `docs/decisions/0009-inbox-messages-separation.md`, `docs/operations/conflicts.md`, documentação Twilio/Evolution.
-- **ADR aplicável:** ADR-0009, porque Inbox e Messages compartilham `messages/message_threads`, mas não podem ter regras de negócio fundidas.
-- **Banco/RLS/schema:** não precisa migration, não precisa alterar RLS, não precisa mexer em schema.
-- **Edge Functions/integrações:** não parece ser falha de envio nem webhook; o warning nasce no frontend. Só revisaria `twilio-media-proxy` se a validação mostrar URLs Twilio expirando.
+O erro é a mesma família de **stale chunk pós-deploy**, mas com um detalhe novo confirmado em produção: a URL antiga `https://crm.seialz.com/assets/ContactForm-D98BmYZC.js` hoje responde **200 com `content-type: text/html`**, não 404. Isso acontece porque o rewrite global do Vercel (`/(.*)` → `/index.html`) também captura caminhos inexistentes em `/assets/*`, então o navegador tenta carregar HTML como JavaScript e o React cai no ErrorBoundary.
 
-## O que encontrei
-
-O evento **não é erro de envio de WhatsApp**. Ele é gerado manualmente pelo frontend em `AudioMessagePlayer`, via `Sentry.captureMessage('Audio playback failed')`, quando o `<audio>` dispara erro ou quando `audio.play()` rejeita. No `/inbox`, o player é renderizado por `InboxConversationTimeline` para mensagens com `media_type='audio'`.
-
-A evidência mais forte é temporal: ao abrir uma conversa, o `<audio preload="metadata">` tenta carregar metadados automaticamente. Se falhar, o componente faz 3 retries com delays de 2s, 5s e 10s e só depois manda o warning. No evento que você mandou, a conversa carregou por volta de `17:39:26` e o warning apareceu em `17:39:46`, exatamente compatível com esse ciclo de retry. Ou seja: hoje o Sentry pode receber “Audio playback failed” mesmo quando o usuário nem tentou reproduzir o áudio.
-
-No banco, para a org `40ae...`, há **35k+ mensagens de áudio em 90 dias**, quase todas em Storage público `whatsapp-media` com `.ogg`; os objetos conferidos existem e não estão com tamanho zero. Na thread citada no breadcrumb (`d2fc9a23...`) os áudios são `.ogg` válidos em Storage com `audio/ogg`. Portanto a hipótese principal não é “arquivo sumiu”, e sim uma mistura de: preload automático gerando warning em massa, incompatibilidade/instabilidade de codec em alguns browsers, e falta de deduplicação/sampling por mensagem.
+O código atual já tem recuperação funcional ampla (`retryImport`, guards globais em `main.tsx`, fallback do Sentry e filtros no `instrument.ts`). A lacuna é de **hosting/configuração**: assets antigos inexistentes deveriam retornar 404/410, não `index.html`. Enquanto `/assets/*` cair no fallback SPA, alguns navegadores/sessões antigas ainda podem gerar esse evento antes do reload silencioso ou continuar poluindo o Sentry.
 
 ## Plano de correção
 
-1. **Separar falha de carregamento de falha de reprodução**
-   - `loadedmetadata/error` não deve mais reportar como `Audio playback failed`.
-   - Erro automático de metadata deve virar estado local do player, com retry manual/baixar áudio, mas sem bombardear Sentry.
-   - `Audio playback failed` fica reservado para clique real no play.
+1. **Ajustar `vercel.json` para não fazer SPA fallback em assets**
+   - Trocar o rewrite global atual por regras que preservem arquivos estáticos.
+   - Garantir que `/assets/<chunk-antigo>.js` inexistente não seja reescrito para `/index.html`.
+   - Manter deep links SPA funcionando para rotas como `/contacts/:id/edit`.
 
-2. **Evitar preload agressivo em listas/conversas**
-   - Alterar o player para não depender de `preload="metadata"` para habilitar o botão.
-   - Carregar/reproduzir sob demanda quando o usuário clicar.
-   - Isso reduz eventos em massa ao abrir threads com muitos áudios.
+2. **Manter a recuperação client-side existente**
+   - Não remover `retryImport`, guards globais ou fallback do Sentry.
+   - Eles continuam necessários quando o navegador recebe 404/410 de um chunk antigo.
 
-3. **Deduplicar telemetria por áudio e sessão**
-   - Reportar no máximo uma vez por `messageId + src + error_code` na sessão atual.
-   - Adicionar `fingerprint`/tags no Sentry para agrupar por causa, não por cada clique/thread.
-   - Manter dados úteis: `message_id`, `thread_id`, `media_type`, host, extensão, `readyState`, `networkState`, `MediaError.code`, `canPlayType`.
+3. **Alinhar a detecção de erro, se necessário**
+   - Confirmar que tanto `Failed to fetch dynamically imported module` quanto `text/html is not a valid JavaScript MIME type` continuam tratados como stale chunk.
+   - Se houver diferença entre `App.tsx` e `instrument.ts`, alinhar os padrões sem ampliar demais o filtro.
 
-4. **Melhorar compatibilidade de tipos**
-   - Incluir diagnóstico para `audio/webm`, `audio/amr` e `audio/aac`, além de ogg/mp3/mp4/wav.
-   - Ajustar detecção visual para aceitar URLs `.webm` e `.amr` quando vierem como áudio.
+4. **Validar em produção/local por simulação**
+   - Após a alteração, verificar que uma URL fake em `/assets/*.js` não retorna HTML com `content-type: text/html`.
+   - Verificar que uma rota SPA real continua caindo em `index.html`.
 
-5. **Validar no fluxo real do Inbox**
-   - Abrir `/inbox`, selecionar uma thread com áudios, confirmar que abrir a conversa não dispara warning.
-   - Clicar em áudio válido e confirmar reprodução.
-   - Simular URL inválida e confirmar fallback visual sem spam no Sentry.
-   - Conferir que Messages/contatos/mobile continuam usando o player sem regressão.
+## Escopo afetado
+
+- **Módulo afetado:** plataforma/deploy/frontend, não Contacts em si.
+- **Docs consultados:** `docs/README.md`, `docs/STATUS.md`, `docs/operations/conflicts.md`, `docs/platform/deployment/README.md`, `docs/platform/performance/README.md`.
+- **ADR aplicável:** nenhuma ADR específica de deploy/chunk recovery foi encontrada nos arquivos consultados.
+- **Não toca:** banco, RLS, Edge Functions, integrações externas ou multi-tenancy.
+- **Descoberta adicional:** não é necessária para corrigir; o comportamento foi confirmado por HEAD público em produção.
