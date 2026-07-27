@@ -78,19 +78,26 @@ if (dsn) {
       if (isStaleChunkMessage(originalMessage)) return null;
 
       // Drop uncaught errors originating inside the opus-media-recorder vendor
-      // worker (encoderWorker.umd.js). These escape to window.onerror because
-      // they're thrown across the worker boundary; the app's warmup path is
-      // best-effort and does not affect real recordings. Predicate is strict:
-      // top-frame filename must match AND mechanism must be the global onerror
-      // handler — anything raised by our own code stays visible.
+      // worker (encoderWorker.umd*.js — hashed at build time). These escape to
+      // Sentry because they're thrown across the worker boundary; the app's
+      // warmup path is best-effort and does not affect real recordings.
+      // Predicate: ANY frame is inside encoderWorker.umd* AND the message
+      // matches a known encoder-close race pattern — anything raised by our
+      // own code stays visible.
       const firstException = event.exception?.values?.[0];
-      const topFrame = firstException?.stacktrace?.frames?.slice(-1)[0];
-      const filename = typeof topFrame?.filename === "string" ? topFrame.filename : "";
+      const allFrames = firstException?.stacktrace?.frames ?? [];
       const mechanismType = firstException?.mechanism?.type;
-      if (
-        filename.includes("encoderWorker.umd.js") &&
-        mechanismType === "onerror"
-      ) {
+      const inEncoderWorker = allFrames.some((frame) => {
+        const file = typeof frame?.filename === "string" ? frame.filename : "";
+        return file.includes("encoderWorker.umd");
+      });
+      const exceptionMessage =
+        typeof firstException?.value === "string" ? firstException.value : "";
+      const isEncoderCloseRace =
+        /evaluating '[^']*\.close'/i.test(exceptionMessage) ||
+        /reading '?close'?/i.test(exceptionMessage) ||
+        /encoder\.close/i.test(exceptionMessage);
+      if (inEncoderWorker && isEncoderCloseRace) {
         return null;
       }
 
