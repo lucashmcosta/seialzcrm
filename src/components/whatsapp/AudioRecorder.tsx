@@ -10,8 +10,23 @@ import oggWasmUrl from 'opus-media-recorder/OggOpusEncoder.wasm?url';
 import webmWasmUrl from 'opus-media-recorder/WebMOpusEncoder.wasm?url';
 import { logAudioEvent, type AudioTelemetryContext } from '@/lib/audioTelemetry';
 
+// Wrap Worker so vendor errors thrown across the worker boundary (e.g. a
+// race in encoderWorker.umd.js where `encoder.close()` runs before the WASM
+// has allocated the encoder) do NOT escape to window.onerror. The polyfill
+// reports real failures to us via postMessage → MediaRecorder.onerror, so
+// swallowing raw Worker `error` events only suppresses noise.
+function createSilencedEncoderWorker(): Worker {
+  const worker = new Worker(workerUrl);
+  worker.addEventListener('error', (event) => {
+    event.preventDefault?.();
+    event.stopImmediatePropagation?.();
+    console.warn('[AudioRecorder] encoder worker error (swallowed)', event.message);
+  });
+  return worker;
+}
+
 const workerOptions = {
-  encoderWorkerFactory: () => new Worker(workerUrl),
+  encoderWorkerFactory: () => createSilencedEncoderWorker(),
   OggOpusEncoderWasmPath: oggWasmUrl,
   WebMOpusEncoderWasmPath: webmWasmUrl,
 };
