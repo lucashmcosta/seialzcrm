@@ -1541,11 +1541,25 @@ function DesktopMessagesList() {
     ?.filter((t) => !isHidden(t.id, t.last_inbound_at || t.whatsapp_last_inbound_at))
     .filter((t) => endpointFilter === 'all' || threadEndpointMap[t.id] === endpointFilter);
 
-  const visibleThreadsWithSelected = selectedThreadOverride
+  const visibleThreadsWithSelectedRaw = selectedThreadOverride
     && selectedThreadId === selectedThreadOverride.id
     && !(visibleThreads ?? []).some((t) => t.id === selectedThreadOverride.id)
       ? [selectedThreadOverride, ...(visibleThreads ?? [])]
       : visibleThreads;
+  // Dedupe by id (first occurrence wins). Duplicate keys corrupt react-aria
+  // ListBox's collection keymap and surface as `RangeError: Invalid array length`.
+  const visibleThreadsWithSelected = visibleThreadsWithSelectedRaw
+    ? (() => {
+        const seen = new Set<string>();
+        const out: typeof visibleThreadsWithSelectedRaw = [];
+        for (const t of visibleThreadsWithSelectedRaw) {
+          if (!t?.id || seen.has(t.id)) continue;
+          seen.add(t.id);
+          out.push(t);
+        }
+        return out;
+      })()
+    : visibleThreadsWithSelectedRaw;
 
   const loadThreadForSelection = async (
     threadId: string,
