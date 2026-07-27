@@ -1,33 +1,39 @@
 ## Diagnóstico
 
-O crash é do `react-aria-components` `ListBox` na lista de conversas de `/commercial` (`src/pages/messages/MessagesList.tsx`), disparado depois que o usuário clicou várias vezes em "Carregar mais" e trocou de filtro/endpoint.
+O erro `TypeError: undefined is not an object (evaluating 't.close')` reportado no Sentry vem do vendor `encoderWorker.umd-BU_-OxzJ.js` (o worker do `opus-media-recorder`). É o mesmo bug de race no warmup que já tratamos: o worker chama `encoder.close()` antes de a WASM alocar o encoder. Nada no fluxo real de gravação depende disso — o AudioRecorder já:
 
-Stack relevante (build): `CollectionRoot` → `useCachedChildren` → `Array.push` → `RangeError: Invalid array length`.
+- Faz `warmEncoder` best-effort e só chama `stop()` se recebeu chunk.
+- Envolve o Worker com `createSilencedEncoderWorker`, que faz `preventDefault`/`stopImmediatePropagation` no `error` do worker.
 
-O `ListBox` recebe `visibleThreadsWithSelected`, que é derivado de:
+Ou seja, no runtime o usuário não vê nada — o ruído está só no Sentry.
 
-1. `threads` do hook `useMessageThreads` (paginação por RPC + realtime),
-2. filtros por status e por endpoint,
-3. prepend condicional de `selectedThreadOverride`.
+## Por que o filtro atual não pegou
 
-Nenhum desses passos deduplica por `thread.id`. O `ListBox` do react-aria monta um keymap linkado usando `id={value.id}`: quando dois itens têm o mesmo `id` (o que acontece quando a paginação/realtime traz uma thread já presente em uma página anterior, ou quando o override coincide com um item que passou a existir na lista após um refetch), o keymap corrompe e a rotina interna que aloca o array de filhos explode com "Invalid array length".
+Em `src/instrument.ts` (linhas 86-95) já existe um `beforeSend` que descarta o crash, mas com dois predicados AND:
 
-Isso é consistente com o rastro de rede no incidente: várias chamadas seguidas a `rpc_list_message_threads` (paginação) intercaladas com aberturas de thread antes do erro.
+1. `filename.includes("encoderWorker.umd.js")` — no bundle atual o arquivo vem com hash (`encoderWorker.umd-BU_-OxzJ.js`), então o `.includes("encoderWorker.umd.js")` **não bate** (falta o `.` antes do hash).
+2. `mechanismType === "onerror"` — em Safari/WebKit este erro pode chegar via `generic`/`instrument` (o console mostra `Type: error, Category: exception`, sem indicação de `onerror`), então também falha.
 
-## Escopo da correção
+Resultado: o evento passa pelo filtro e vira ruído no Sentry, apesar do handler local do worker no `AudioRecorder.tsx` já ter engolido o evento visualmente.
 
-Correção mínima, só em frontend/apresentação, sem tocar em hook, RPC ou schema.
+## Mudança proposta (escopo mínimo, sem tocar em UX)
 
-1. Em `src/pages/messages/MessagesList.tsx`, deduplicar por `id` a lista final que entra no `ListBox` (`visibleThreadsWithSelected`), preservando a ordem da primeira ocorrência.
-2. Manter `id={value.id}` no `ListBoxItem` (já está correto) e não mudar o contrato do `ChatListItem`.
-3. Nada mais é alterado: filtros, paginação, realtime, override de seleção, badges, contadores continuam iguais.
+Editar apenas `src/instrument.ts`, no bloco `beforeSend`:
+
+- Trocar o match do filename para `encoderWorker.umd` (sem `.js`) e também procurar em **todos os frames**, não só no topo — hashes tipo `encoderWorker.umd-XXXX.js` continuam batendo.
+- Remover a exigência de `mechanismType === "onerror"`. Em compensação, adicionar uma segunda salvaguarda pelo texto da exceção para não mascarar outros bugs em código próprio: só descarta se a mensagem casar com um dos padrões conhecidos do polyfill (`evaluating 't.close'`, `encoder.close`, `Cannot read propert(y|ies) of undefined (reading 'close')`, `undefined is not an object (evaluating 't.close')`).
+- Manter tudo o resto do arquivo intacto (stale chunk, setSinkId, "Device not found: default").
+
+Resultado: qualquer crash cujo stack passe por `encoderWorker.umd*.js` **e** cuja mensagem seja um dos padrões conhecidos de `close()` em encoder não alocado é descartado antes de ir ao Sentry. Erros fora desse vendor continuam visíveis.
+
+## Fora de escopo
+
+- Não alterar `AudioRecorder.tsx` — o comportamento em runtime já está correto e o usuário não vê o erro.
+- Não substituir `opus-media-recorder` nem mudar warmup.
+- Não mexer em nenhum filtro Sentry existente (stale chunk, Twilio setSinkId, default device).
 
 ## Validação
 
-- Abrir `/commercial`, aplicar filtro por número, clicar em "Carregar mais" várias vezes, abrir uma thread já visível, alternar filtros e voltar. O `ListBox` não deve mais crashar.
-- Conferir no console que não há warning de "duplicate key" para `ChatListItem` mesmo após múltiplas páginas.
-
-## Não incluído
-
-- Não vou investigar/ajustar o merge de páginas dentro de `useMessageThreads` nesta rodada (fica como follow-up se quisermos remover a causa raiz e não só o sintoma).
-- Sem migração, sem mudança de UI, sem alteração de business logic.
+Após aplicar:
+1. Confirmar via `rg` que só `src/instrument.ts` foi tocado.
+2. No próximo deploy, checar no Sentry se o issue de `t.close` para de receber novos eventos (o handler local já silencia no console, então não há verificação visual — a evidência é a ausência do issue novo).
