@@ -1,62 +1,26 @@
-## Contexto
+## Diagnóstico
 
-Sentry capturou `TypeError: Failed to fetch dynamically imported module: .../ContactsList-dXVK5Xlv.js` no `ProtectedRoute`, com a navegação `/inbox → /contacts`. O usuário viu tela branca com o erro no canto (widget do Sentry).
+O erro `ReferenceError: useMemo is not defined` em `src/pages/messages/MessagesList.tsx:637` **não existe no código atual**.
 
-Já existe defesa em camadas:
+Verificação read-only (linha 1 do arquivo):
+```ts
+import { useState, useEffect, useMemo, useRef, Fragment } from 'react';
+```
 
-- `retryImport` em `src/App.tsx` intercepta o rejeito do `import()` dinâmico, chama `reloadForChunkRecovery()` e devolve uma Promise pendente (Suspense infinito) para não estourar até o reload acontecer.
-- `SentryFallback` em `src/main.tsx` é belt-and-suspenders: se algo escapar, detecta via `isStaleChunkError` e força reload.
+`useMemo` está devidamente importado e é usado em 4 lugares (linhas 637, 689, 723, 727).
 
-Mesmo assim o erro chegou ao ErrorBoundary. Causas plausíveis (não confirmadas 100%, mas consistentes com o stack):
+## Causa raiz
 
-1. **Bundle antigo em cache no cliente.** O `retryImport` só existe nos builds recentes. Clientes que ainda estão executando um bundle prévio (pré-`retryImport` para essa rota) não têm o interceptor — o rejeito do `import()` sobe direto ao ErrorBoundary.
-2. **Throttle de 10 s bloqueando o reload.** Se houve algum reload nos últimos 10 s (por outra causa: HMR, SW unregister, versão nova detectada), `reloadForChunkRecovery` retorna `false` e o `SentryFallback` mostra o botão "Recarregar agora" em vez de reload automático — visualmente é a "tela branca com mensagem".
-3. **Erro pós-mount que o ErrorBoundary intercepta antes do fallback re-renderizar** — Sentry ainda envia o evento mesmo quando o reload é disparado.
+Ruído transiente do HMR do Vite durante a sessão de desenvolvimento. Os logs mostram o padrão típico:
 
-## Objetivo
+- Múltiplos `[vite] hot updated: /src/pages/messages/MessagesList.tsx` em sequência (17:25:23, 17:25:45, 17:26:00, 17:27:31, 17:27:49)
+- Um `SyntaxError: Identifier 'useTranslation' has already been declared` em `NewConversationDialog.tsx` às 17:26:09, sintoma clássico de módulo re-executado sem descarte prévio
+- O erro do `useMemo` aparece exatamente após uma cadeia de hot updates parciais em `MessagesList.tsx`
 
-Reduzir a probabilidade de o usuário ver qualquer UI de erro por chunk stale, mesmo em clientes rodando bundles antigos, e garantir que o reload sempre aconteça na primeira ocorrência.
+Quando o Vite aplica um patch HMR mas o React Refresh reexecuta o módulo com o escopo antigo (imports não re-resolvidos), símbolos podem aparecer como "not defined" mesmo estando no topo do arquivo. Isso não reproduz em produção nem após reload completo.
 
-## Plano
+## Ação
 
-### 1. Guard global antes do React montar (`src/main.tsx`)
+**Nenhuma alteração de código necessária.** O erro se resolve com um hard reload (Ctrl+Shift+R) do preview. Não há bug de runtime nem de build para consertar.
 
-Registrar, no topo do arquivo (antes do `createRoot`), listeners globais que capturam chunk stale ainda no nível do `window`, independentemente de qual componente/versão de bundle disparou:
-
-- `window.addEventListener('error', ...)` — cobre erros síncronos e falhas de `<script type="module">`.
-- `window.addEventListener('unhandledrejection', ...)` — cobre `import()` rejeitados que não passaram por nenhum `.catch`.
-- `window.addEventListener('vite:preloadError', ...)` — evento oficial do Vite para falha de preload de chunk (o dispatch acontece antes do erro subir ao React).
-
-Em todos os três: se `isStaleChunkError(err)` → `event.preventDefault()` + `reloadForChunkRecovery()`. Isso protege clientes com bundle antigo sem `retryImport`, porque o handler vive no HTML/entrypoint.
-
-### 2. Reload garantido no `SentryFallback`
-
-Hoje, se o throttle bloqueia (`return false`), o usuário fica com a tela do botão. Ajustar para:
-
-- Sempre agendar um `setTimeout(() => window.location.reload(), 1500)` como fallback quando `reloadTriggered === false`, mantendo o botão para o caso extremo.
-- Isso garante que, na pior hipótese, o usuário espera ~1,5 s e o app se recupera sozinho — sem clique manual.
-
-### 3. Reset do flag `reloadInFlight` em `pageshow`
-
-`reloadInFlight` é módulo-level. Se um reload for disparado mas o browser servir bfcache (voltar/avançar), o flag permanece `true` e bloqueia novas recuperações. Adicionar `window.addEventListener('pageshow', () => { reloadInFlight = false; })` em `src/App.tsx` onde a variável vive.
-
-### 4. Filtrar telemetria em `src/instrument.ts`
-
-Chunk stale é operacional, não bug de código. Adicionar no `beforeSend` do Sentry (mesmo padrão do filtro do Twilio já implementado) o descarte de erros que passem por `isStaleChunkError`, para não poluir o Sentry com o mesmo evento a cada deploy. Manter breadcrumb, só suprimir o `capture`.
-
-### 5. Verificação
-
-- Após deploy, forçar cenário: simular chunk stale renomeando um asset em produção não é viável; validamos com a asserção lógica: os três listeners globais são registrados antes do `createRoot`, e o `vite:preloadError` cobre o caminho que hoje escapa em bundles antigos.
-- Confirmar no Sentry que o volume desse erro cai a zero após 48 h (o bundle antigo eventualmente é substituído em todos os clientes ativos).
-
-## Detalhes técnicos
-
-- Arquivos afetados: `src/main.tsx`, `src/App.tsx`, `src/instrument.ts`. Sem migrations, sem mudanças de schema, sem novas rotas.
-- Nenhuma mudança de comportamento em fluxo normal — só ativa em erros de carregamento de módulo.
-- O guard global usa `isStaleChunkError` já exportado por `App.tsx`, então há um import cross-module; isso é aceitável porque `App.tsx` já é importado em `main.tsx`.
-
-## Fora de escopo
-
-- Não vamos mudar a estratégia de chunking do Vite (última tentativa causou TDZ, documentado em `vite.config.ts`).
-- Não vamos introduzir service worker de cache de assets — o `public/sw.js` atual é kill-switch intencional e mexer nele é outro risco.
-- Não vamos alterar CDN/headers de cache — fora do frontend.
+Se quiser blindar essa classe de erro (HMR de arquivos grandes com muitos hooks), aí sim faria sentido um plano separado — por exemplo, quebrar `MessagesList.tsx` em componentes menores (o arquivo tem 700+ linhas com múltiplos `useMemo`/`useEffect` no mesmo componente), o que reduziria a superfície de reexecução do React Refresh. Mas isso é refactor, não fix.
