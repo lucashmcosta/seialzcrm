@@ -1,5 +1,6 @@
 import { useState, useEffect, useMemo, useRef, Fragment } from 'react';
 import { dispatchWhatsAppSend } from "@/lib/dispatchWhatsAppSend";
+import { toErrorMessageString } from "@/lib/errorMessage";
 
 import { usePersistedFilters } from '@/hooks/usePersistedFilters';
 import { Link, useSearchParams } from 'react-router-dom';
@@ -1223,14 +1224,15 @@ function DesktopMessagesList() {
       }
     } catch (error: any) {
       console.error('Error sending message:', error);
+      const msg = toErrorMessageString(error, 'Erro ao enviar mensagem');
       setMessages((prev) =>
         prev.map((m) =>
           m.id === tempId
-            ? { ...m, whatsapp_status: 'failed', error_message: error.message }
+            ? { ...m, whatsapp_status: 'failed', error_message: msg }
             : m
         )
       );
-      toast({ variant: 'destructive', description: error.message || 'Erro ao enviar mensagem' });
+      toast({ variant: 'destructive', description: msg });
     }
   };
 
@@ -1335,14 +1337,15 @@ function DesktopMessagesList() {
       refetchThreads();
     } catch (error: any) {
       console.error('Error sending template:', error);
+      const msg = toErrorMessageString(error);
       setMessages((prev) =>
         prev.map((m) =>
           m.id === tempId
-            ? { ...m, whatsapp_status: 'failed', error_message: error.message }
+            ? { ...m, whatsapp_status: 'failed', error_message: msg }
             : m
         )
       );
-      toast({ variant: 'destructive', description: error.message });
+      toast({ variant: 'destructive', description: msg });
     }
   };
 
@@ -1441,14 +1444,15 @@ function DesktopMessagesList() {
       refetchThreads();
     } catch (error: any) {
       console.error('Error uploading media:', error);
+      const msg = toErrorMessageString(error);
       setMessages((prev) =>
         prev.map((m) =>
           m.id === tempId
-            ? { ...m, whatsapp_status: 'failed', error_message: error.message }
+            ? { ...m, whatsapp_status: 'failed', error_message: msg }
             : m
         )
       );
-      toast({ variant: 'destructive', description: error.message });
+      toast({ variant: 'destructive', description: msg });
     } finally {
       setMediaUploading(false);
     }
@@ -1462,7 +1466,7 @@ function DesktopMessagesList() {
       await handleMediaUpload(audioFile, null);
     } catch (error: any) {
       console.error('Error sending audio:', error);
-      toast({ variant: 'destructive', description: error.message });
+      toast({ variant: 'destructive', description: toErrorMessageString(error) });
     }
   };
 
@@ -1474,7 +1478,7 @@ function DesktopMessagesList() {
       await handleMediaUpload(audioFile, null, { forceMediaType: 'document' });
     } catch (error: any) {
       console.error('Error sending audio as document:', error);
-      toast({ variant: 'destructive', description: error.message });
+      toast({ variant: 'destructive', description: toErrorMessageString(error) });
     }
   };
 

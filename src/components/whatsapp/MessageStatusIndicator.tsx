@@ -12,6 +12,7 @@ import {
   TooltipTrigger,
 } from '@/components/ui/tooltip';
 import { getWhatsAppErrorInfo } from '@/lib/whatsappErrorReason';
+import { toErrorMessageString } from '@/lib/errorMessage';
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 
@@ -41,6 +42,10 @@ export function MessageStatusIndicator({
 
   if (status === 'failed') {
     const info = getWhatsAppErrorInfo(errorCode);
+    const safeErrorMessage =
+      errorMessage == null ? null : toErrorMessageString(errorMessage);
+    const safeErrorCode =
+      errorCode == null ? null : typeof errorCode === 'string' ? errorCode : toErrorMessageString(errorCode);
     return (
       <TooltipProvider delayDuration={150}>
         <Tooltip>
@@ -81,12 +86,12 @@ export function MessageStatusIndicator({
               <details className="border-t pt-2">
                 <summary className="cursor-pointer text-muted-foreground select-none">Detalhes técnicos</summary>
                 <div className="mt-1 space-y-1 text-muted-foreground font-data">
-                {errorCode && (
-                  <div><span className="opacity-70">Código:</span> {errorCode}</div>
+                {safeErrorCode && (
+                  <div><span className="opacity-70">Código:</span> {safeErrorCode}</div>
                 )}
-                {errorMessage && (
+                {safeErrorMessage && (
                   <div className="break-words">
-                    <span className="opacity-70">Mensagem:</span> {errorMessage}
+                    <span className="opacity-70">Mensagem:</span> {safeErrorMessage}
                   </div>
                 )}
                 {sid && (
@@ -98,7 +103,7 @@ export function MessageStatusIndicator({
                     {format(new Date(sentAt), "dd/MM/yyyy HH:mm:ss", { locale: ptBR })}
                   </div>
                 )}
-                {!errorCode && !errorMessage && !sid && (
+                {!safeErrorCode && !safeErrorMessage && !sid && (
                   <div className="italic">Sem detalhes técnicos disponíveis.</div>
                 )}
                 </div>
