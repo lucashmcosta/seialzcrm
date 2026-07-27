@@ -10,7 +10,8 @@ import { AuthProvider, useAuthContext } from "@/contexts/AuthContext";
 import { OrganizationProvider } from "@/contexts/OrganizationContext";
 import { BrowserRouter, Routes, Route, Navigate, useLocation, useParams } from "react-router-dom";
 import { PageLoader } from "./components/common/PageLoader";
-import { SiteI18nProvider, detectLocale } from "@/i18n/SiteI18nProvider";
+import { SiteI18nProvider } from "@/i18n/SiteI18nProvider";
+import { detectLocale } from "@/i18n/config";
 import { DEFAULT_LOCALE, LOCALE_TO_SLUG, SLUG_TO_LOCALE } from "@/i18n/config";
 function RedirectPreserveQuery({ to }: { to: string }) {
   const { search, hash } = useLocation();

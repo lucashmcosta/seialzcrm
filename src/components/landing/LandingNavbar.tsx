@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react';
 import { Link, useLocation } from 'react-router-dom';
 const logoBlack = { url: '/brand/seialz-logo-color.png' };
 import { List, X } from '@phosphor-icons/react';
-import { useSiteT } from '@/i18n/SiteI18nProvider';
+import { useSiteT } from '@/i18n/useSiteI18n';
 import { LOCALE_TO_SLUG } from '@/i18n/config';
 import { LanguageSwitcher } from './LanguageSwitcher';
 
