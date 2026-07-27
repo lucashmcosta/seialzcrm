@@ -151,6 +151,47 @@ if (dsn) {
         return null;
       }
 
+      // Drop empty unhandled promise rejections (value: undefined) that are
+      // correlated with Twilio Voice SDK reconnect activity. The SDK internally
+      // rejects promises without a value during WSTransport reconnect/register
+      // (WS close 1006 → ConnectionError 31005 / AccessTokenExpired 20104),
+      // and the SDK reconnects on its own right after. Predicate is strict:
+      // - unhandledrejection mechanism
+      // - value is missing OR matches "Non-Error promise rejection ... undefined"
+      // - a recent breadcrumb references TwilioVoice / twilio / voice-sdk
+      const isEmptyRejection =
+        exceptionValue === "" ||
+        exceptionValue == null ||
+        /non-error promise rejection captured with value:\s*undefined/i.test(
+          exceptionValue,
+        );
+      if (
+        mechanismType === "onunhandledrejection" &&
+        isEmptyRejection
+      ) {
+        const breadcrumbs = event.breadcrumbs ?? [];
+        const recent = breadcrumbs.slice(-15);
+        const twilioRelated = recent.some((bc) => {
+          const msg = typeof bc?.message === "string" ? bc.message : "";
+          const cat = typeof bc?.category === "string" ? bc.category : "";
+          const data = bc?.data as Record<string, unknown> | undefined;
+          const args = Array.isArray(data?.arguments)
+            ? (data!.arguments as unknown[]).map((a) =>
+                typeof a === "string" ? a : "",
+              ).join(" ")
+            : "";
+          const haystack = `${msg} ${cat} ${args}`.toLowerCase();
+          return (
+            haystack.includes("twiliovoice") ||
+            haystack.includes("voice-sdk") ||
+            haystack.includes("twilio device") ||
+            haystack.includes("pstream") ||
+            haystack.includes("wstransport")
+          );
+        });
+        if (twilioRelated) return null;
+      }
+
       return event;
     },
   });
