@@ -9,7 +9,10 @@ export interface AudioFailureContext {
   messageId?: string;
   threadId?: string;
   mediaType?: string | null;
+  phase?: 'load' | 'play';
 }
+
+const reportedAudioFailures = new Set<string>();
 
 function safeHost(src: string | null | undefined): string | null {
   if (!src) return null;
@@ -39,16 +42,47 @@ function canPlay(audio: HTMLAudioElement | null | undefined, type: string): stri
   }
 }
 
+function extensionFromSrc(src: string | null | undefined): string | null {
+  if (!src) return null;
+  try {
+    const pathname = new URL(src).pathname.toLowerCase();
+    const match = pathname.match(/\.([a-z0-9]+)$/);
+    return match?.[1] ?? null;
+  } catch {
+    const match = src.toLowerCase().split('?')[0]?.match(/\.([a-z0-9]+)$/);
+    return match?.[1] ?? null;
+  }
+}
+
+function reportKey(ctx: AudioFailureContext): string {
+  const audio = ctx.audio ?? null;
+  const err = ctx.error as any;
+  return [
+    ctx.component,
+    ctx.messageId ?? 'no-message',
+    ctx.threadId ?? 'no-thread',
+    extensionFromSrc(ctx.src) ?? 'no-ext',
+    audio?.error?.code ?? err?.name ?? 'unknown',
+    ctx.phase ?? 'unknown',
+  ].join(':');
+}
+
 export function reportAudioFailure(ctx: AudioFailureContext): void {
+  const key = reportKey(ctx);
+  if (reportedAudioFailures.has(key)) return;
+  reportedAudioFailures.add(key);
+
   const err = ctx.error as any;
   const audio = ctx.audio ?? null;
   const extra: Record<string, unknown> = {
     component: ctx.component,
+    phase: ctx.phase ?? null,
     message_id: ctx.messageId ?? null,
     thread_id: ctx.threadId ?? null,
     media_type: ctx.mediaType ?? null,
     src_present: !!ctx.src,
     src_host: safeHost(ctx.src),
+    src_extension: extensionFromSrc(ctx.src),
     proxied: isProxied(ctx.src),
     audio_error_code: audio?.error?.code ?? null,
     audio_network_state: audio?.networkState ?? null,
@@ -57,6 +91,10 @@ export function reportAudioFailure(ctx: AudioFailureContext): void {
     can_play_audio_ogg: canPlay(audio, 'audio/ogg'),
     can_play_audio_mpeg: canPlay(audio, 'audio/mpeg'),
     can_play_audio_mp4: canPlay(audio, 'audio/mp4'),
+    can_play_audio_webm_opus: canPlay(audio, 'audio/webm; codecs="opus"'),
+    can_play_audio_webm: canPlay(audio, 'audio/webm'),
+    can_play_audio_aac: canPlay(audio, 'audio/aac'),
+    can_play_audio_amr: canPlay(audio, 'audio/amr'),
     can_play_audio_wav: canPlay(audio, 'audio/wav'),
     error_name: err?.name ?? null,
     error_message: err?.message ?? null,
@@ -67,6 +105,20 @@ export function reportAudioFailure(ctx: AudioFailureContext): void {
       try {
         Sentry.captureMessage('Audio playback failed', {
           level: 'warning',
+          tags: {
+            component: ctx.component,
+            phase: ctx.phase ?? 'unknown',
+            media_type: ctx.mediaType ?? 'unknown',
+            src_host: safeHost(ctx.src) ?? 'unknown',
+            src_extension: extensionFromSrc(ctx.src) ?? 'unknown',
+          },
+          fingerprint: [
+            'audio-playback-failed',
+            ctx.component,
+            ctx.phase ?? 'unknown',
+            extensionFromSrc(ctx.src) ?? 'unknown',
+            String(audio?.error?.code ?? err?.name ?? 'unknown'),
+          ],
           extra,
         });
       } catch {
@@ -85,5 +137,15 @@ export function isValidHttpUrl(src: string | null | undefined): boolean {
     return u.protocol === 'http:' || u.protocol === 'https:';
   } catch {
     return false;
+  }
+}
+
+export function isLikelyAudioUrl(src: string | null | undefined): boolean {
+  if (!src) return false;
+  try {
+    const pathname = new URL(src).pathname.toLowerCase();
+    return /\.(ogg|oga|opus|mp3|mpeg|wav|m4a|mp4|aac|amr|webm)$/.test(pathname);
+  } catch {
+    return /\.(ogg|oga|opus|mp3|mpeg|wav|m4a|mp4|aac|amr|webm)(\?|$)/i.test(src);
   }
 }
