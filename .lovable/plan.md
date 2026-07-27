@@ -1,36 +1,48 @@
 ## Diagnóstico
 
-Mesmo padrão já tratado nas rodadas anteriores: **stale chunk pós-deploy**.
+O erro `'text/html' is not a valid JavaScript MIME type.` é a variante Safari/WebKit de **stale chunk pós-deploy** (o servidor entregou `index.html` no lugar de um chunk JS que sumiu do CDN após deploy).
 
-- A sessão do usuário ficou aberta de 16/jul a 23/jul (breadcrumbs cobrindo 7 dias).
-- Bundle carregado era o antigo (`index-DcMBZh5t.js`), com o hash de `InboxPage-Dkblxycs.js` já removido do CDN após deploy.
-- Ao navegar `/opportunities/... → /inbox`, o `React.lazy(InboxPage)` tentou baixar o chunk inexistente e o `SentryFallback` capturou.
+O sistema já **recupera** esse caso automaticamente:
 
-O bundle atual em produção já contém todas as camadas de defesa:
+- `isStaleChunkError` em `src/App.tsx` já reconhece este texto (linhas 39‑40)
+- `retryImport` suspende o lazy() e dispara `reloadForChunkRecovery`
+- Guards globais em `src/main.tsx` (`error`, `unhandledrejection`, `vite:preloadError`) chamam o mesmo recovery
+- `SentryFallback` também detecta e recarrega
 
-- `retryImport` envolvendo os 61 `lazy()` em `App.tsx`
-- Guards globais em `src/main.tsx` para `error` e `unhandledrejection` interceptando padrões de importação dinâmica antes do React
-- Matcher ampliado (Chrome, Safari/WebKit, Firefox) — inclui `'text/html' is not a valid javascript mime type`, `is not a valid javascript mime type`, `expected a javascript module script`, etc.
-- `SentryFallback` disparando reload resiliente
-- `beforeSend` do Sentry descartando esses eventos como ruído
+O usuário nunca vê tela quebrada. Porém o evento **ainda chega ao Sentry** porque:
 
-Ou seja: uma sessão que abrisse esse mesmo cenário hoje seria auto-recuperada silenciosamente por reload antes de chegar ao ErrorBoundary. O evento reportado é histórico de uma sessão antiga que já ficou órfã do CDN.
+- `Sentry.ErrorBoundary` reporta o erro **antes** de renderizar o fallback → dispara `React ErrorBoundary TypeError` no dashboard.
+- O filtro `beforeSend` em `src/instrument.ts` tem sua própria lista `STALE_CHUNK_PATTERNS` que **não** inclui as variantes de MIME type:
+  ```
+  "failed to fetch dynamically imported module",
+  "error loading dynamically imported module",
+  "importing a module script failed",
+  "unable to preload css",
+  "loading chunk",
+  "chunkloaderror",
+  "module script",
+  ```
+- A mensagem `"'text/html' is not a valid JavaScript MIME type."` não bate com "module script" nem com nenhum outro item → passa pelo filtro e vira issue.
 
-## Ação recomendada
+## Escopo da correção (somente `src/instrument.ts`)
 
-**Nada a alterar no código.** O sistema já cobre este cenário:
+Alinhar `STALE_CHUNK_PATTERNS` do `beforeSend` do Sentry com a lista já aprovada em `App.tsx#isStaleChunkError`, acrescentando os três padrões que faltam:
 
-- Sessões novas: `retryImport` + reload silencioso resolvem sem UI de erro.
-- Sessões antigas ainda vivas: no próximo reload buscam o bundle atualizado e passam a herdar toda a blindagem.
-- No Sentry: o evento pode ser resolvido/ignorado — o `beforeSend` já descarta novos eventos idênticos.
+- `"'text/html' is not a valid javascript mime type"`
+- `"is not a valid javascript mime type"` (cobre outras variações: `text/plain`, `text/x-server-parsed-html`, etc.)
+- `"expected a javascript module script but the server responded"` (Chromium)
+- `"expected a javascript-or-wasm module script"` (Chromium mais recente)
+
+Nada mais muda. O predicado continua sendo simples `includes(...)` sobre a mensagem normalizada em lowercase — os padrões novos são strings estáveis emitidas pelos próprios navegadores, então não geram falso positivo.
 
 ## Fora do escopo
 
-- Não mexer em `App.tsx`, `main.tsx`, `SentryFallback`, `instrument.ts` — a lógica atual já é suficiente.
-- Não adicionar heartbeat de versão / forced reload periódico sem pedido explícito (mudaria comportamento além do reportado).
+- Não mexer em `App.tsx`, `main.tsx`, `SentryFallback` — a recuperação funcional já está correta.
+- Não alterar throttle, service worker, versão de bundle ou qualquer lógica de deploy.
+- Não adicionar heartbeat de versão.
 
 ## Validação
 
-- Confirmar em `src/App.tsx` que `InboxPage` está envolvido em `retryImport` (todos os 61 `lazy()` já foram cobertos em rodadas anteriores).
-- Confirmar em `src/instrument.ts` que `beforeSend` filtra "failed to fetch dynamically imported module" (já presente em `STALE_CHUNK_PATTERNS`).
-- Se quiser, marcar o issue como resolvido no Sentry — novas ocorrências não serão mais enviadas.
+- Reler `src/instrument.ts` e confirmar que os 4 padrões novos aparecem em `STALE_CHUNK_PATTERNS` e que `isStaleChunkMessage` continua sendo o único caller.
+- No Sentry: novas ocorrências deste erro deixam de ser criadas; o issue atual pode ser marcado como resolvido.
+- Comportamento do usuário permanece idêntico (reload silencioso).
