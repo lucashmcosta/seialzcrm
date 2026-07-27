@@ -12,6 +12,7 @@ import {
   TooltipTrigger,
 } from '@/components/ui/tooltip';
 import { getWhatsAppErrorInfo } from '@/lib/whatsappErrorReason';
+import { toErrorMessageString } from '@/lib/errorMessage';
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 
