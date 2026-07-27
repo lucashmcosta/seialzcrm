@@ -1,4 +1,5 @@
-import { Suspense, lazy } from "react";
+import { Suspense, lazy, type ComponentType, type LazyExoticComponent } from "react";
+import * as Sentry from "@sentry/react";
 import { useIsMobile } from "@/hooks/use-mobile";
 import { Toaster } from "@/components/ui/toaster";
 import { Toaster as Sonner } from "@/components/ui/sonner";
@@ -40,6 +41,11 @@ export function isStaleChunkError(error: unknown): boolean {
     "is not a valid javascript mime type",
     "expected a javascript module script but the server responded",
     "expected a javascript-or-wasm module script",
+    // Variant: module resolved but payload is undefined / missing default export.
+    // React.lazy's mountLazyComponent throws exactly this when payload._result is undefined.
+    "cannot read properties of undefined (reading 'default')",
+    "cannot read property 'default' of undefined",
+    "undefined is not an object (evaluating 'default')",
   ].some((entry) => normalized.includes(entry));
 }
 
@@ -92,14 +98,55 @@ function retryImport<T>(fn: () => Promise<T>, retries = 2): Promise<T> {
   });
 }
 
+/**
+ * Wraps `retryImport` + `React.lazy` and hardens the resolved payload.
+ *
+ * If the dynamic import resolves but the module is `undefined` / missing the
+ * expected export, React.lazy would throw `Cannot read properties of
+ * undefined (reading 'default')` inside `mountLazyComponent`, bypassing our
+ * retryImport catch. This helper validates the payload; on a bad payload it
+ * emits a Sentry breadcrumb naming the module, triggers the same silent
+ * reload recovery we use for stale chunks, and returns a never-resolving
+ * Promise so Suspense stays suspended while the page reloads.
+ */
+function lazyWithRetry<T extends ComponentType<any>>(
+  name: string,
+  importer: () => Promise<any>,
+  exportName: string = "default",
+): LazyExoticComponent<T> {
+  return lazy(() =>
+    retryImport(importer).then((mod: any) => {
+      const exported = mod && typeof mod === "object" ? mod[exportName] : undefined;
+      if (exported === undefined) {
+        try {
+          Sentry.addBreadcrumb({
+            category: "lazy",
+            level: "warning",
+            message: "module_missing_export",
+            data: {
+              name,
+              exportName,
+              modType: typeof mod,
+              keys: mod && typeof mod === "object" ? Object.keys(mod).slice(0, 20) : null,
+            },
+          });
+        } catch {
+          // Sentry unavailable: recovery still proceeds.
+        }
+        reloadForChunkRecovery();
+        return new Promise<{ default: T }>(() => {});
+      }
+      return { default: exported as T };
+    }),
+  );
+}
+
+
+
 
 // Lazy load call handlers (heavy Twilio SDK) with retry
-const InboundCallHandler = lazy(() =>
-  retryImport(() => import("./components/calls/InboundCallHandler")).then(m => ({ default: m.InboundCallHandler }))
-);
-const OutboundCallHandler = lazy(() =>
-  retryImport(() => import("./components/calls/OutboundCallHandler")).then(m => ({ default: m.OutboundCallHandler }))
-);
+const InboundCallHandler = lazyWithRetry("InboundCallHandler", () => import("./components/calls/InboundCallHandler"), "InboundCallHandler");
+const OutboundCallHandler = lazyWithRetry("OutboundCallHandler", () => import("./components/calls/OutboundCallHandler"), "OutboundCallHandler");
 
 // Auth pages - load immediately (small)
 import SignUp from "./pages/auth/SignUp";
@@ -107,100 +154,100 @@ import SignIn from "./pages/auth/SignIn";
 import ConfirmEmail from "./pages/auth/ConfirmEmail";
 import AcceptInvitation from "./pages/invite/AcceptInvitation";
 import LandingPage from "./pages/LandingPage";
-const PrivacyPolicyPage = lazy(() => retryImport(() => import("./pages/legal/PrivacyPolicy")));
-const TermsOfServicePage = lazy(() => retryImport(() => import("./pages/legal/TermsOfService")));
-const DataDeletionPage = lazy(() => retryImport(() => import("./pages/legal/DataDeletion")));
+const PrivacyPolicyPage = lazyWithRetry("PrivacyPolicyPage", () => import("./pages/legal/PrivacyPolicy"));
+const TermsOfServicePage = lazyWithRetry("TermsOfServicePage", () => import("./pages/legal/TermsOfService"));
+const DataDeletionPage = lazyWithRetry("DataDeletionPage", () => import("./pages/legal/DataDeletion"));
 import Onboarding from "./pages/Onboarding";
 import Dashboard from "./pages/Dashboard";
 import ReportsPage from "./pages/reports/ReportsPage";
 
 // Mobile pages
-const MobileSignIn = lazy(() => retryImport(() => import("./components/mobile/auth/MobileSignIn")));
+const MobileSignIn = lazyWithRetry("MobileSignIn", () => import("./components/mobile/auth/MobileSignIn"));
 
 // Public docs - load immediately
 import DocsIndex from "./pages/docs/DocsIndex";
 import DocsModule from "./pages/docs/DocsModule";
 import Health from "./pages/Health";
 import DevHealth from "./pages/DevHealth";
-const ApiDocs = lazy(() => retryImport(() => import("./pages/docs/ApiDocs")));
+const ApiDocs = lazyWithRetry("ApiDocs", () => import("./pages/docs/ApiDocs"));
 
 
 // Lazy load secondary CRM pages with retry for chunk resilience
-const ContactsList = lazy(() => retryImport(() => import("./pages/contacts/ContactsList")));
-const ContactDetail = lazy(() => retryImport(() => import("./pages/contacts/ContactDetail")));
-const ContactForm = lazy(() => retryImport(() => import("./pages/contacts/ContactForm")));
-const OpportunitiesKanban = lazy(() => retryImport(() => import("./pages/opportunities/OpportunitiesKanban")));
-const OpportunityDetail = lazy(() => retryImport(() => import("./pages/opportunities/OpportunityDetail")));
-const TasksList = lazy(() => retryImport(() => import("./pages/tasks/TasksList")));
-const MessagesList = lazy(() => retryImport(() => import("./pages/messages/MessagesList")));
-const InboxPage = lazy(() => retryImport(() => import("./pages/inbox/InboxPage")));
-const MarketingOverview = lazy(() => retryImport(() => import("./pages/marketing/index")));
-const MarketingAds = lazy(() => retryImport(() => import("./pages/marketing/ads/index")));
-const MarketingAdDetail = lazy(() => retryImport(() => import("./pages/marketing/ads/[id]")));
-const MarketingFunnel = lazy(() => retryImport(() => import("./pages/marketing/funnel")));
-const MarketingTimeline = lazy(() => retryImport(() => import("./pages/marketing/timeline")));
+const ContactsList = lazyWithRetry("ContactsList", () => import("./pages/contacts/ContactsList"));
+const ContactDetail = lazyWithRetry("ContactDetail", () => import("./pages/contacts/ContactDetail"));
+const ContactForm = lazyWithRetry("ContactForm", () => import("./pages/contacts/ContactForm"));
+const OpportunitiesKanban = lazyWithRetry("OpportunitiesKanban", () => import("./pages/opportunities/OpportunitiesKanban"));
+const OpportunityDetail = lazyWithRetry("OpportunityDetail", () => import("./pages/opportunities/OpportunityDetail"));
+const TasksList = lazyWithRetry("TasksList", () => import("./pages/tasks/TasksList"));
+const MessagesList = lazyWithRetry("MessagesList", () => import("./pages/messages/MessagesList"));
+const InboxPage = lazyWithRetry("InboxPage", () => import("./pages/inbox/InboxPage"));
+const MarketingOverview = lazyWithRetry("MarketingOverview", () => import("./pages/marketing/index"));
+const MarketingAds = lazyWithRetry("MarketingAds", () => import("./pages/marketing/ads/index"));
+const MarketingAdDetail = lazyWithRetry("MarketingAdDetail", () => import("./pages/marketing/ads/[id]"));
+const MarketingFunnel = lazyWithRetry("MarketingFunnel", () => import("./pages/marketing/funnel"));
+const MarketingTimeline = lazyWithRetry("MarketingTimeline", () => import("./pages/marketing/timeline"));
 // Settings layout + grid (replaces old Settings page)
-const SettingsLayout = lazy(() => retryImport(() => import("./components/settings/SettingsLayout")).then(m => ({ default: m.SettingsLayout })));
-const SettingsGrid = lazy(() => retryImport(() => import("./components/settings/SettingsGrid")).then(m => ({ default: m.SettingsGrid })));
-const GeneralSettings = lazy(() => retryImport(() => import("./components/settings/GeneralSettings")).then(m => ({ default: m.GeneralSettings })));
-const ThemeSettings = lazy(() => retryImport(() => import("./components/settings/ThemeSettings")).then(m => ({ default: m.ThemeSettings })));
-const UsersSettings = lazy(() => retryImport(() => import("./components/settings/UsersSettings")).then(m => ({ default: m.UsersSettings })));
-const PipelineSettings = lazy(() => retryImport(() => import("./components/settings/PipelineSettings")).then(m => ({ default: m.PipelineSettings })));
-const DuplicatePreventionSettings = lazy(() => retryImport(() => import("./components/settings/DuplicatePreventionSettings")).then(m => ({ default: m.DuplicatePreventionSettings })));
-const CustomFieldsSettings = lazy(() => retryImport(() => import("./components/settings/CustomFieldsSettings")).then(m => ({ default: m.CustomFieldsSettings })));
-const TagsSettings = lazy(() => retryImport(() => import("./components/settings/TagsSettings")).then(m => ({ default: m.TagsSettings })));
-const PermissionProfilesSettings = lazy(() => retryImport(() => import("./components/settings/PermissionProfilesSettings")).then(m => ({ default: m.PermissionProfilesSettings })));
-const BillingSettings = lazy(() => retryImport(() => import("./components/settings/BillingSettings")).then(m => ({ default: m.BillingSettings })));
-const IntegrationsSettings = lazy(() => retryImport(() => import("./components/settings/IntegrationsSettings")).then(m => ({ default: m.IntegrationsSettings })));
-const ApiWebhooksSettings = lazy(() => retryImport(() => import("./components/settings/ApiWebhooksSettings")).then(m => ({ default: m.ApiWebhooksSettings })));
-const AIAgentSettings = lazy(() => retryImport(() => import("./components/settings/AIAgentSettings")).then(m => ({ default: m.AIAgentSettings })));
-const AIProvidersSettings = lazy(() => retryImport(() => import("./components/settings/AIProvidersSettings")).then(m => ({ default: m.AIProvidersSettings })));
-const IntelligenceSettings = lazy(() => retryImport(() => import("./components/settings/IntelligenceSettings")).then(m => ({ default: m.IntelligenceSettings })));
-const KnowledgeBaseSettings = lazy(() => retryImport(() => import("./components/settings/KnowledgeBaseSettings")).then(m => ({ default: m.KnowledgeBaseSettings })));
-const KnowledgeEditChat = lazy(() => retryImport(() => import("./components/settings/KnowledgeEditChat")).then(m => ({ default: m.KnowledgeEditChat })));
-const ProductsSettings = lazy(() => retryImport(() => import("./components/settings/ProductsSettings")).then(m => ({ default: m.ProductsSettings })));
-const WhatsAppTemplatesPage = lazy(() => retryImport(() => import("./pages/settings/WhatsAppTemplates")));
-const WhatsAppSnippetsPage = lazy(() => retryImport(() => import("./pages/settings/WhatsAppSnippets")));
-const AuditLogs = lazy(() => retryImport(() => import("./pages/settings/AuditLogs")).then(m => ({ default: m.AuditLogs })));
-const RoundRobinSettings = lazy(() => retryImport(() => import("./components/settings/RoundRobinSettings")).then(m => ({ default: m.RoundRobinSettings })));
-const Trash = lazy(() => retryImport(() => import("./pages/settings/Trash")).then(m => ({ default: m.Trash })));
-const DocumentsSettings = lazy(() => retryImport(() => import("./components/settings/DocumentsSettings")).then(m => ({ default: m.DocumentsSettings })));
-const CustomerServiceSettings = lazy(() => retryImport(() => import("./components/settings/CustomerServiceSettings")).then(m => ({ default: m.CustomerServiceSettings })));
-const WebchatSettings = lazy(() => retryImport(() => import("./components/settings/WebchatSettings")).then(m => ({ default: m.WebchatSettings })));
-const Profile = lazy(() => retryImport(() => import("./pages/Profile")));
-const NotFound = lazy(() => retryImport(() => import("./pages/NotFound")));
+const SettingsLayout = lazyWithRetry("SettingsLayout", () => import("./components/settings/SettingsLayout"), "SettingsLayout");
+const SettingsGrid = lazyWithRetry("SettingsGrid", () => import("./components/settings/SettingsGrid"), "SettingsGrid");
+const GeneralSettings = lazyWithRetry("GeneralSettings", () => import("./components/settings/GeneralSettings"), "GeneralSettings");
+const ThemeSettings = lazyWithRetry("ThemeSettings", () => import("./components/settings/ThemeSettings"), "ThemeSettings");
+const UsersSettings = lazyWithRetry("UsersSettings", () => import("./components/settings/UsersSettings"), "UsersSettings");
+const PipelineSettings = lazyWithRetry("PipelineSettings", () => import("./components/settings/PipelineSettings"), "PipelineSettings");
+const DuplicatePreventionSettings = lazyWithRetry("DuplicatePreventionSettings", () => import("./components/settings/DuplicatePreventionSettings"), "DuplicatePreventionSettings");
+const CustomFieldsSettings = lazyWithRetry("CustomFieldsSettings", () => import("./components/settings/CustomFieldsSettings"), "CustomFieldsSettings");
+const TagsSettings = lazyWithRetry("TagsSettings", () => import("./components/settings/TagsSettings"), "TagsSettings");
+const PermissionProfilesSettings = lazyWithRetry("PermissionProfilesSettings", () => import("./components/settings/PermissionProfilesSettings"), "PermissionProfilesSettings");
+const BillingSettings = lazyWithRetry("BillingSettings", () => import("./components/settings/BillingSettings"), "BillingSettings");
+const IntegrationsSettings = lazyWithRetry("IntegrationsSettings", () => import("./components/settings/IntegrationsSettings"), "IntegrationsSettings");
+const ApiWebhooksSettings = lazyWithRetry("ApiWebhooksSettings", () => import("./components/settings/ApiWebhooksSettings"), "ApiWebhooksSettings");
+const AIAgentSettings = lazyWithRetry("AIAgentSettings", () => import("./components/settings/AIAgentSettings"), "AIAgentSettings");
+const AIProvidersSettings = lazyWithRetry("AIProvidersSettings", () => import("./components/settings/AIProvidersSettings"), "AIProvidersSettings");
+const IntelligenceSettings = lazyWithRetry("IntelligenceSettings", () => import("./components/settings/IntelligenceSettings"), "IntelligenceSettings");
+const KnowledgeBaseSettings = lazyWithRetry("KnowledgeBaseSettings", () => import("./components/settings/KnowledgeBaseSettings"), "KnowledgeBaseSettings");
+const KnowledgeEditChat = lazyWithRetry("KnowledgeEditChat", () => import("./components/settings/KnowledgeEditChat"), "KnowledgeEditChat");
+const ProductsSettings = lazyWithRetry("ProductsSettings", () => import("./components/settings/ProductsSettings"), "ProductsSettings");
+const WhatsAppTemplatesPage = lazyWithRetry("WhatsAppTemplatesPage", () => import("./pages/settings/WhatsAppTemplates"));
+const WhatsAppSnippetsPage = lazyWithRetry("WhatsAppSnippetsPage", () => import("./pages/settings/WhatsAppSnippets"));
+const AuditLogs = lazyWithRetry("AuditLogs", () => import("./pages/settings/AuditLogs"), "AuditLogs");
+const RoundRobinSettings = lazyWithRetry("RoundRobinSettings", () => import("./components/settings/RoundRobinSettings"), "RoundRobinSettings");
+const Trash = lazyWithRetry("Trash", () => import("./pages/settings/Trash"), "Trash");
+const DocumentsSettings = lazyWithRetry("DocumentsSettings", () => import("./components/settings/DocumentsSettings"), "DocumentsSettings");
+const CustomerServiceSettings = lazyWithRetry("CustomerServiceSettings", () => import("./components/settings/CustomerServiceSettings"), "CustomerServiceSettings");
+const WebchatSettings = lazyWithRetry("WebchatSettings", () => import("./components/settings/WebchatSettings"), "WebchatSettings");
+const Profile = lazyWithRetry("Profile", () => import("./pages/Profile"));
+const NotFound = lazyWithRetry("NotFound", () => import("./pages/NotFound"));
 
-const CompaniesList = lazy(() => retryImport(() => import("./pages/companies/CompaniesList")));
-const CompanyDetail = lazy(() => retryImport(() => import("./pages/companies/CompanyDetail")));
-const CompanyForm = lazy(() => retryImport(() => import("./pages/companies/CompanyForm")));
+const CompaniesList = lazyWithRetry("CompaniesList", () => import("./pages/companies/CompaniesList"));
+const CompanyDetail = lazyWithRetry("CompanyDetail", () => import("./pages/companies/CompanyDetail"));
+const CompanyForm = lazyWithRetry("CompanyForm", () => import("./pages/companies/CompanyForm"));
 
 // Lazy load WhatsApp Template pages
-const TemplatesList = lazy(() => retryImport(() => import("./pages/whatsapp/TemplatesList")));
-const TemplateForm = lazy(() => retryImport(() => import("./pages/whatsapp/TemplateForm")));
-const TemplateDetail = lazy(() => retryImport(() => import("./pages/whatsapp/TemplateDetail")));
+const TemplatesList = lazyWithRetry("TemplatesList", () => import("./pages/whatsapp/TemplatesList"));
+const TemplateForm = lazyWithRetry("TemplateForm", () => import("./pages/whatsapp/TemplateForm"));
+const TemplateDetail = lazyWithRetry("TemplateDetail", () => import("./pages/whatsapp/TemplateDetail"));
 
 // Lazy load Admin pages
-const AdminLogin = lazy(() => retryImport(() => import("./pages/admin/AdminLogin")));
-const AdminMFASetup = lazy(() => retryImport(() => import("./pages/admin/AdminMFASetup")));
-const AdminDashboard = lazy(() => retryImport(() => import("./pages/admin/AdminDashboard")));
-const AdminOrganizations = lazy(() => retryImport(() => import("./pages/admin/AdminOrganizations")));
-const AdminOrganizationDetail = lazy(() => retryImport(() => import("./pages/admin/AdminOrganizationDetail")));
-const AdminUsers = lazy(() => retryImport(() => import("./pages/admin/AdminUsers")));
-const AdminFeatureFlags = lazy(() => retryImport(() => import("./pages/admin/AdminFeatureFlags")));
-const AdminLogs = lazy(() => retryImport(() => import("./pages/admin/AdminLogs")));
-const AdminSecurity = lazy(() => retryImport(() => import("./pages/admin/AdminSecurity")));
-const AdminImpersonationHistory = lazy(() => retryImport(() => import("./pages/admin/AdminImpersonationHistory")));
-const AdminPlans = lazy(() => retryImport(() => import("./pages/admin/AdminPlans")));
-const AdminCoupons = lazy(() => retryImport(() => import("./pages/admin/AdminCoupons")));
-const AdminIntegrations = lazy(() => retryImport(() => import("./pages/admin/AdminIntegrations")));
-const AdminIntegrationDetail = lazy(() => retryImport(() => import("./pages/admin/AdminIntegrationDetail")));
-const AdminDocumentation = lazy(() => retryImport(() => import("./pages/admin/AdminDocumentation")));
-const AdminIntegrationHealth = lazy(() => retryImport(() => import("./pages/admin/AdminIntegrationHealth")));
-const AdminDocumentationEdit = lazy(() => retryImport(() => import("./pages/admin/AdminDocumentationEdit")));
-const ObservabilityPage = lazy(() => retryImport(() => import("./pages/admin/ObservabilityPage")));
-const AdminProtectedRoute = lazy(() => retryImport(() => import("./components/admin/AdminProtectedRoute")).then(m => ({ default: m.AdminProtectedRoute })));
-const ImpersonateCallback = lazy(() => retryImport(() => import("./pages/admin/ImpersonateCallback")));
-const AdminEvolution = lazy(() => retryImport(() => import("./pages/admin/AdminEvolution")));
+const AdminLogin = lazyWithRetry("AdminLogin", () => import("./pages/admin/AdminLogin"));
+const AdminMFASetup = lazyWithRetry("AdminMFASetup", () => import("./pages/admin/AdminMFASetup"));
+const AdminDashboard = lazyWithRetry("AdminDashboard", () => import("./pages/admin/AdminDashboard"));
+const AdminOrganizations = lazyWithRetry("AdminOrganizations", () => import("./pages/admin/AdminOrganizations"));
+const AdminOrganizationDetail = lazyWithRetry("AdminOrganizationDetail", () => import("./pages/admin/AdminOrganizationDetail"));
+const AdminUsers = lazyWithRetry("AdminUsers", () => import("./pages/admin/AdminUsers"));
+const AdminFeatureFlags = lazyWithRetry("AdminFeatureFlags", () => import("./pages/admin/AdminFeatureFlags"));
+const AdminLogs = lazyWithRetry("AdminLogs", () => import("./pages/admin/AdminLogs"));
+const AdminSecurity = lazyWithRetry("AdminSecurity", () => import("./pages/admin/AdminSecurity"));
+const AdminImpersonationHistory = lazyWithRetry("AdminImpersonationHistory", () => import("./pages/admin/AdminImpersonationHistory"));
+const AdminPlans = lazyWithRetry("AdminPlans", () => import("./pages/admin/AdminPlans"));
+const AdminCoupons = lazyWithRetry("AdminCoupons", () => import("./pages/admin/AdminCoupons"));
+const AdminIntegrations = lazyWithRetry("AdminIntegrations", () => import("./pages/admin/AdminIntegrations"));
+const AdminIntegrationDetail = lazyWithRetry("AdminIntegrationDetail", () => import("./pages/admin/AdminIntegrationDetail"));
+const AdminDocumentation = lazyWithRetry("AdminDocumentation", () => import("./pages/admin/AdminDocumentation"));
+const AdminIntegrationHealth = lazyWithRetry("AdminIntegrationHealth", () => import("./pages/admin/AdminIntegrationHealth"));
+const AdminDocumentationEdit = lazyWithRetry("AdminDocumentationEdit", () => import("./pages/admin/AdminDocumentationEdit"));
+const ObservabilityPage = lazyWithRetry("ObservabilityPage", () => import("./pages/admin/ObservabilityPage"));
+const AdminProtectedRoute = lazyWithRetry("AdminProtectedRoute", () => import("./components/admin/AdminProtectedRoute"), "AdminProtectedRoute");
+const ImpersonateCallback = lazyWithRetry("ImpersonateCallback", () => import("./pages/admin/ImpersonateCallback"));
+const AdminEvolution = lazyWithRetry("AdminEvolution", () => import("./pages/admin/AdminEvolution"));
 
 
 const queryClient = new QueryClient({
