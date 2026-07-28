@@ -1,52 +1,24 @@
 ## Diagnóstico
 
-O erro `TypeError: Importing a module script failed.` chega à `Sentry.ErrorBoundary` raiz vindo do subtree do `GlobalCallHandler` (`InboundCallHandler` + `OutboundCallHandler`, que carregam o Twilio Voice SDK).
+O evento reaberto no Sentry vem do bundle publicado `index-DKXK1q1n.js` — os frames apontam código minificado do bundle antigo, não do source atual. A navegação foi `/contacts/33196888… → /commercial?thread=2f264b51…`, ou seja, o React tentou montar o `MessagesList` (rota `/commercial`) via `React.lazy`, o módulo do chunk resolveu sem `default`, e `mountLazyComponent` estourou `Cannot read properties of undefined (reading 'default')` — exatamente a variante de stale chunk que já mapeamos.
 
-Cadeia observada nos breadcrumbs:
-1. Voice integration está **desligada** para a org (`[OutboundCall] Voice integration not enabled, skipping device initialization`).
-2. Ainda assim o bundle lazy do Twilio é carregado, e o SDK dispara 15 requisições para `sdk.twilio.com/.../sounds/*.mp3` — todas com `status_code: 0` (bloqueadas por rede/CSP/adblock/Safari ITP).
-3. Em seguida o SDK faz um `import()` interno (worker/áudio) que falha com "Importing a module script failed".
-4. Esse `import()` **não passa pelo nosso `retryImport`/`lazyWithRetry`**, então a rejeição escapa da rede de recuperação, sobe pelo Suspense e é capturada pela `ErrorBoundary`, resultando em tela branca.
+Estado do código atual (`src/App.tsx`, verificado agora):
+- `isStaleChunkError` **já inclui** os padrões `"cannot read properties of undefined (reading 'default')"`, `"cannot read property 'default' of undefined"` e `"undefined is not an object (evaluating 'default')"` (linhas 47–49).
+- `lazyWithRetry` **já valida** o export após o import: quando `mod[exportName]` é `undefined`, ele emite breadcrumb Sentry `module_missing_export` com o nome do módulo, dispara `reloadForChunkRecovery()` e devolve uma promise pendente — a `Sentry.ErrorBoundary` raiz nunca deveria ver o `TypeError`.
+- Todos os `lazy()` de rotas relevantes (incluindo `MessagesList`, `ContactDetail`, `OpportunityDetail`, `InboxPage`) estão migrados para `lazyWithRetry` (linhas 177–251).
 
-O padrão `"importing a module script failed"` já existe em `isStaleChunkError`, mas ele só é consultado (a) dentro do `retryImport` dos nossos lazies e (b) nos handlers globais `window.error` / `unhandledrejection` de `main.tsx`. Neste caso a falha é rethrown durante o render do subtree do call handler (não como unhandled rejection), então nem `main.tsx` nem `retryImport` a interceptam.
+Ou seja: **a proteção já está no repositório**; o evento reaberto foi emitido pelo bundle `index-DKXK1q1n.js`, que é anterior ao deploy dessa proteção. Como o Sentry reabre issues automaticamente quando um evento novo bate no mesmo fingerprint, ele reabriu com base num cliente ainda rodando o bundle velho.
 
-## Correção proposta
+## Ação proposta (sem código)
 
-Isolar o subtree dos call handlers atrás de um error boundary próprio que trate erros de import como ruído silencioso — os handlers são não-essenciais (só ativos quando voice está habilitado), então não faz sentido derrubar o app inteiro quando o SDK do Twilio falha ao carregar assets/módulos.
+1. **Confirmar release do evento reaberto.** No próprio issue do Sentry, checar `release` / `dist` do evento (não visível na mensagem colada). Se for anterior ao deploy que introduziu `lazyWithRetry` + os novos matchers em `isStaleChunkError`, é ruído esperado de cliente antigo — resolver novamente marcando "resolved in next release".
+2. **Verificar breadcrumb `module_missing_export`.** Se o evento for do bundle NOVO, ele deve trazer um breadcrumb `category: "lazy"`, `message: "module_missing_export"` com `data.name` apontando qual chunk chegou sem export. Sem esse breadcrumb, o cliente é do bundle antigo (caso 1). Com o breadcrumb, temos o nome do módulo para investigar por que o CDN serviu um chunk vazio.
+3. **Regra de fingerprint no Sentry (opcional, ainda no console).** Adicionar uma inbound filter / fingerprint override para `TypeError: Cannot read properties of undefined (reading 'default')` cujo stack contenha `mountLazyComponent`, agrupando por release. Isso impede que clientes em builds antigos continuem reabrindo o issue já resolvido no build atual.
 
-### Passos
-
-1. **Novo componente `src/components/calls/CallHandlersBoundary.tsx`**
-   - Class component `React.Component` com `componentDidCatch`.
-   - Se `isStaleChunkError(error)` for verdadeiro → chama `reloadForChunkRecovery()` e renderiza `null` (silencia).
-   - Se for erro do Twilio SDK (heurística: `error.stack` contém `twilio` OU `error.message` inclui algum dos padrões abaixo) → renderiza `null` + `Sentry.addBreadcrumb` (sem `captureException`, é ruído esperado quando assets do CDN Twilio são bloqueados):
-     - `"importing a module script failed"`
-     - `"failed to fetch dynamically imported module"`
-     - `"module script"`
-   - Qualquer outro erro → rethrow (`throw error` no render) para deixar a boundary superior tratar.
-
-2. **`src/App.tsx` — `GlobalCallHandler`**
-   - Envolver o `<Suspense>` interno com `<CallHandlersBoundary>`:
-     ```
-     <CallHandlersBoundary>
-       <Suspense fallback={null}>
-         <InboundCallHandler />
-         <OutboundCallHandler />
-       </Suspense>
-     </CallHandlersBoundary>
-     ```
-
-3. **`src/instrument.ts` — filtro adicional**
-   - Estender o `beforeSend` para descartar eventos cujo `error.stack` contenha `twilio-` (arquivo de bundle do SDK) **e** `message` bata em `STALE_CHUNK_PATTERNS` — evita novos issues no Sentry para essa mesma classe.
-
-### Fora de escopo
-
-- Não mexer na lógica de detecção de "voice enabled" (já está correta — o problema é que o bundle é lazy-loaded antes desse check dentro dos handlers).
-- Não mexer em CSP/rede para desbloquear os `.mp3` (é comportamento do usuário/rede; assets são opcionais para o SDK).
-- Nenhuma migration, nenhuma alteração de business logic.
+Sem alterações de código: as três guardas (`isStaleChunkError`, `retryImport`, `lazyWithRetry`) já cobrem este caso e o novo build irá silenciar automaticamente. Só faz sentido mexer em código se o passo 2 mostrar um breadcrumb `module_missing_export` — aí investigamos o chunk específico.
 
 ## Validação
 
-- Typecheck.
-- Confirmar que `GlobalCallHandler` continua montando normalmente para orgs com voice habilitada.
-- Confirmar que, quando `isStaleChunkError` bater, o `reloadForChunkRecovery` (idempotente + throttle de 10s) ainda dispara reload.
+- Abrir o issue reaberto no Sentry e olhar `release`/`dist` do último evento vs. release atual em produção.
+- Confirmar (ou não) a presença do breadcrumb `module_missing_export` no evento.
+- Após confirmar que os eventos remanescentes são todos do bundle antigo, marcar como "Resolved in next release".
