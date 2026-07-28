@@ -1,61 +1,27 @@
+
 ## Diagnóstico
 
-O erro capturado pelo Sentry:
+O evento `Audio playback failed` (SEIALZ-1T) é gerado pelo próprio código do Seialz, em `src/lib/audioErrorReport.ts`, chamado por `AudioMessagePlayer` e `CallRecordingPlayer` sempre que um `<audio>` falha em `load`/`play`.
 
-```
-TypeError: Cannot read properties of undefined (reading 'default')
-    at _re  ← React.lazy.mountLazyComponent
-    at ProtectedRoute (App.tsx:219)
-```
+A dedup atual (`reportedAudioFailures: Set<string>`) só evita duplicar **dentro da mesma sessão do browser**. A cada novo usuário / nova aba / novo deploy, o Set zera e o evento volta a subir para o Sentry. Como o CRM tem muitos usuários abrindo threads com áudios (Twilio expirado, mídia Evolution ainda não baixada, formato incompatível no Safari, rede instável), o issue reaparece constantemente — é ruído esperado, não bug de produto.
 
-acontece **imediatamente após navegar `/dashboard → /opportunities`**. Nos breadcrumbs não há nenhum "Failed to fetch dynamically imported module" antecedendo — ou seja, o `import()` da rota **resolveu**, porém o objeto do módulo entregue ao `React.lazy` está `undefined` (ou sem a chave `default`). O `mountLazyComponent` do React lê `payload._result.default` e explode com exatamente essa mensagem.
+Os breadcrumbs da segunda captura confirmam: o áudio quebra depois de fetches normais (`communication_endpoints`, `message_thread_reads`) — não há stack de código quebrando, é só o `<audio>` não conseguindo tocar a URL.
 
-Isto **não é** um stale-chunk clássico (não bate com nenhum matcher em `isStaleChunkError` e não vem de `retryImport`), então nossa infra atual de reload silencioso não intercepta. É uma variante nova: o chunk chega, mas seu payload está corrompido/vazio — típico de resposta HTML servida com MIME `application/javascript` (o Vercel devolvendo o index.html quando o hash antigo já não existe no CDN), ou de circular import que retorna partial namespace.
+## O que fazer
 
-Não temos evidência de qual dos ~60 `lazy()` foi o culpado neste evento — o `_re` minificado esconde isso. A hipótese mais provável é `OpportunitiesKanban` (rota destino), mas qualquer lazy filho no boot da rota pode ter sido o real.
+Parar de emitir esse evento como `captureMessage` no Sentry. Manter apenas:
 
-## Objetivo
+1. **Breadcrumb** no Sentry (`Sentry.addBreadcrumb`) com as mesmas tags/extras — assim, se um bug **real** acontecer na mesma sessão, o contexto do áudio ainda aparece no evento de verdade.
+2. **`console.warn`** local para debugging via DevTools.
 
-Fechar essa lacuna sem tocar em produto: qualquer `lazy()` cujo módulo resolva como `undefined` ou sem `default` deve ser tratado como stale-chunk — dispara `reloadForChunkRecovery()` e mantém suspenso, em vez de estourar no ErrorBoundary. Além disso, precisamos identificar em produção **qual** módulo falhou.
+Efeito: o issue SEIALZ-1T para de receber eventos novos e pode ser resolvido/arquivado. Nenhum comportamento de UI muda — `RetryableAudio` / `AudioMessagePlayer` continuam mostrando o fallback "Não foi possível carregar" e o botão de retry como hoje.
 
-## Plano
+## Arquivo afetado
 
-1. **Extrair um helper `lazyWithRetry` em `src/App.tsx`** que envolve o padrão hoje repetido em cada `lazy(() => retryImport(() => import(...)))`. Ele:
-   - recebe o `importer` e um `name` (string estática, ex.: `"OpportunitiesKanban"`) só para telemetria;
-   - após `retryImport(importer)`, valida se `mod && typeof mod === "object" && "default" in mod && mod.default !== undefined`;
-   - se **não** validar: envia um breadcrumb Sentry com o `name` e o formato do módulo recebido, chama `reloadForChunkRecovery()` e retorna `new Promise(() => {})` (mesmo caminho que já usamos para stale chunks). Nada chega ao ErrorBoundary.
-   - se validar: retorna o módulo normalmente.
-   - Para os lazies "named export" (ex.: `.then(m => ({ default: m.AdminProtectedRoute }))`), aceitar uma segunda variante que recebe o nome do export e faz a mesma validação sobre `m[exportName]`.
+- `src/lib/audioErrorReport.ts` — trocar `Sentry.captureMessage('Audio playback failed', { level: 'warning', ... })` por `Sentry.addBreadcrumb({ category: 'audio', level: 'warning', message: 'Audio playback failed', data: extra })` + `console.warn`. Manter a assinatura de `reportAudioFailure` e o Set de dedup intactos para não tocar nos callers (`AudioMessagePlayer.tsx`, `CallRecordingPlayer.tsx`, etc.).
 
-2. **Ampliar `isStaleChunkError`** para reconhecer também `"Cannot read properties of undefined (reading 'default')"` e `"undefined is not an object (evaluating 'default')"` (Safari). Isso protege caminhos onde o React já lançou antes de conseguirmos interceptar via helper (edge cases de Suspense fora do lazy wrapper). O `SentryFallback` e os guards em `main.tsx` já usam esse matcher, então basta estender a string.
+Nada mais muda: sem migration, sem alteração de UI, sem tocar em `instrument.ts`.
 
-3. **Migrar os `lazy()` de `src/App.tsx` para o helper.** Troca mecânica linha-a-linha (mesmo importer, apenas envolvido). Sem mudar rotas, ordem, `Suspense boundaries` ou lógica de auth. Nenhum outro arquivo é tocado.
+## Depois de aplicar
 
-4. **Observabilidade** — adicionar um `Sentry.addBreadcrumb({ category: "lazy", level: "warning", message: "module_missing_default", data: { name, keys } })` antes do reload, para que o próximo evento diga exatamente qual chunk chegou vazio. Sem novo transporte, sem novo serviço.
-
-## Fora de escopo
-
-- Nada de mudança em rotas, providers, contextos, banco, edge functions ou UI de produto.
-- Não vamos alterar a configuração do Vercel nem headers do CDN neste passo — o objetivo é blindar o cliente. Se após a instrumentação o breadcrumb mostrar que sempre é o mesmo chunk, aí discutimos cache/headers como passo 2.
-- Não vamos filtrar esses erros no Sentry (silenciar) — o helper já os transforma em reload silencioso, então eles somem naturalmente do fluxo do ErrorBoundary; o breadcrumb fica para diagnóstico.
-
-## Detalhes técnicos
-
-Assinatura pretendida:
-
-```ts
-function lazyWithRetry<T extends ComponentType<any>>(
-  name: string,
-  importer: () => Promise<{ default: T }>,
-): LazyExoticComponent<T>;
-
-function lazyWithRetry<T extends ComponentType<any>>(
-  name: string,
-  importer: () => Promise<Record<string, any>>,
-  exportName: string,
-): LazyExoticComponent<T>;
-```
-
-Local: `src/App.tsx` (mesma unidade dos `lazy()` atuais, evita novo arquivo). `isStaleChunkError` já vive lá e é exportado, então só ganha mais entradas na lista.
-
-Nenhuma migration, nenhuma edge function, nenhuma dependência nova.
+No Sentry, marcar SEIALZ-1T como **Resolved** (ou Archive → "Until it happens again" com threshold alto). Se o volume voltar a subir a partir de outra fonte, ela vai aparecer como issue nova com stack real.
