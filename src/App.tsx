@@ -296,10 +296,12 @@ function GlobalCallHandler() {
   if (!isAuthenticated || isAdminRoute) return null;
   
   return (
-    <Suspense fallback={null}>
-      <InboundCallHandler />
-      <OutboundCallHandler />
-    </Suspense>
+    <CallHandlersBoundary>
+      <Suspense fallback={null}>
+        <InboundCallHandler />
+        <OutboundCallHandler />
+      </Suspense>
+    </CallHandlersBoundary>
   );
 }
 
