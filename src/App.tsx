@@ -47,6 +47,10 @@ export function isStaleChunkError(error: unknown): boolean {
     "cannot read properties of undefined (reading 'default')",
     "cannot read property 'default' of undefined",
     "undefined is not an object (evaluating 'default')",
+    // WebKit prints the receiver name with the minified React.lazy internal
+    // slot, e.g. `evaluating 'e._result.default'`. Match the stable substring.
+    "_result.default",
+    "evaluating '_result",
   ].some((entry) => normalized.includes(entry));
 }
 
