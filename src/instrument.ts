@@ -81,6 +81,23 @@ if (dsn) {
         event.message;
       if (isStaleChunkMessage(originalMessage)) return null;
 
+      // Drop stale/import errors originating inside the Twilio Voice SDK
+      // bundle. The SDK dynamically imports workers and fetches CDN assets;
+      // adblockers, CSPs and Safari ITP frequently block those and the SDK
+      // rethrows as "Importing a module script failed". Call handlers are
+      // wrapped in CallHandlersBoundary which silences them at the React
+      // layer; this filter drops the same class of event when it arrives
+      // as an unhandled rejection instead.
+      {
+        const firstEx = event.exception?.values?.[0];
+        const frames = firstEx?.stacktrace?.frames ?? [];
+        const inTwilio = frames.some((frame) => {
+          const file = typeof frame?.filename === "string" ? frame.filename.toLowerCase() : "";
+          return file.includes("twilio") || file.includes("voice-sdk");
+        });
+        if (inTwilio && isStaleChunkMessage(originalMessage)) return null;
+      }
+
       // Drop uncaught errors originating inside the opus-media-recorder vendor
       // worker (encoderWorker.umd*.js — hashed at build time). These escape to
       // Sentry because they're thrown across the worker boundary; the app's
