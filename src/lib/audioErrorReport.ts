@@ -100,33 +100,27 @@ export function reportAudioFailure(ctx: AudioFailureContext): void {
     error_message: err?.message ?? null,
   };
 
+  // Do not emit this as a Sentry issue — it's expected noise (expired Twilio
+  // media URLs, Evolution media still downloading, Safari codec mismatch,
+  // flaky networks). Keep it as a breadcrumb so if a real error happens later
+  // in the same session, the audio context still shows up in that event.
+  console.warn('[audio] playback failed', extra);
+
   import('@sentry/react')
     .then((Sentry) => {
       try {
-        Sentry.captureMessage('Audio playback failed', {
+        Sentry.addBreadcrumb({
+          category: 'audio',
           level: 'warning',
-          tags: {
-            component: ctx.component,
-            phase: ctx.phase ?? 'unknown',
-            media_type: ctx.mediaType ?? 'unknown',
-            src_host: safeHost(ctx.src) ?? 'unknown',
-            src_extension: extensionFromSrc(ctx.src) ?? 'unknown',
-          },
-          fingerprint: [
-            'audio-playback-failed',
-            ctx.component,
-            ctx.phase ?? 'unknown',
-            extensionFromSrc(ctx.src) ?? 'unknown',
-            String(audio?.error?.code ?? err?.name ?? 'unknown'),
-          ],
-          extra,
+          message: 'Audio playback failed',
+          data: extra,
         });
       } catch {
-        console.warn('[audio] playback failed (sentry capture failed)', extra);
+        // ignore
       }
     })
     .catch(() => {
-      console.warn('[audio] playback failed', extra);
+      // ignore
     });
 }
 
