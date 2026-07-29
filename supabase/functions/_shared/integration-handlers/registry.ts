@@ -21,3 +21,4 @@ export function resolve(slug: string, action: string): Handler | undefined {
 register("webhook", "dispatch", webhookDispatchHandler);
 register("kommo", "upsert", kommoUpsertHandler);
 register("nammux", "send_opportunity_won", nammuxSendOpportunityWonHandler);
+register("nammux", "send_contact_updated", nammuxSendOpportunityWonHandler);

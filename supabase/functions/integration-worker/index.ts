@@ -179,7 +179,7 @@ async function persistResult(
               last_synced_at: nowIso,
               sync_error: null,
             },
-            { onConflict: "integration_slug,entity_type,internal_id" },
+            { onConflict: "organization_id,integration_slug,entity_type,internal_id" },
           );
         if (mapErr) console.error("[integration-worker] external_mappings upsert failed", job.id, mapErr);
       }

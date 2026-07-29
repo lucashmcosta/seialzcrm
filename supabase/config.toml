@@ -44,6 +44,19 @@ verify_jwt = false
 [functions.webchat-heartbeat]
 verify_jwt = false
 
+[functions.nammux-webhook-ingest]
+verify_jwt = false
+
+[functions.nammux-credential-manage]
+verify_jwt = false
+
+[functions.nammux-reconcile-opportunities]
+verify_jwt = false
+
+[functions.integration-worker]
+# Autenticação server-to-server própria via x-worker-token.
+verify_jwt = false
+
 # Evolution API (Fase 3 — Backend aditivo, INERTE em produção).
 # Webhook publico chamado pelo servidor Evolution (Vultr). Auth em codigo
 # via token compartilhado (EVOLUTION_GLOBAL_API_KEY) no header apikey/
@@ -57,5 +70,3 @@ verify_jwt = false
 # em código (getUser + user_organizations) para dar mensagens de erro claras.
 [functions.thread-migrate-endpoint-send]
 verify_jwt = false
-
-

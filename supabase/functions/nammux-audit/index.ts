@@ -1,7 +1,5 @@
-// Audit endpoint: reproduces the exact header/envelope construction used by
-// the nammux:send_opportunity_won handler and POSTs to httpbin.org/anything
-// so we can prove what is actually being sent on the wire.
-
+// Local-only integration audit. It never sends credentials or signed payloads
+// to third-party echo services.
 import { createClient } from "jsr:@supabase/supabase-js@2";
 
 const corsHeaders = {
@@ -9,87 +7,100 @@ const corsHeaders = {
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
 };
 
-async function hmacSha256Hex(secret: string, message: string): Promise<string> {
-  const enc = new TextEncoder();
-  const key = await crypto.subtle.importKey(
-    "raw", enc.encode(secret), { name: "HMAC", hash: "SHA-256" }, false, ["sign"],
-  );
-  const sig = await crypto.subtle.sign("HMAC", key, enc.encode(message));
-  return Array.from(new Uint8Array(sig)).map((b) => b.toString(16).padStart(2, "0")).join("");
+function json(status: number, body: unknown) {
+  return new Response(JSON.stringify(body), {
+    status,
+    headers: { ...corsHeaders, "Content-Type": "application/json" },
+  });
 }
 
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response(null, { headers: corsHeaders });
-  try {
-    const { organization_id } = await req.json();
-    const supabase = createClient(
-      Deno.env.get("SUPABASE_URL")!,
-      Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!,
-    );
+  if (req.method !== "POST") return json(405, { error: "method_not_allowed" });
 
-    const { data: row } = await supabase
-      .from("organization_integrations")
-      .select("config_values, integration:admin_integrations!inner(slug)")
-      .eq("organization_id", organization_id)
-      .eq("admin_integrations.slug", "nammux")
-      .maybeSingle();
+  const url = Deno.env.get("SUPABASE_URL")!;
+  const authorization = req.headers.get("authorization") ?? "";
+  const authClient = createClient(url, Deno.env.get("SUPABASE_ANON_KEY")!, {
+    global: { headers: { authorization } },
+    auth: { persistSession: false },
+  });
+  const { data: authData } = await authClient.auth.getUser();
+  if (!authData.user) return json(401, { error: "unauthorized" });
 
-    const cfg = (row?.config_values ?? {}) as Record<string, unknown>;
-    const seialzOrgId = organization_id as string;
-    const targetOrgId = String(cfg.nammux_organization_id ?? "").trim();
-    const secret = String(cfg.webhook_secret ?? "").trim();
+  const { organization_id: organizationId } = await req.json().catch(() => ({}));
+  if (!organizationId) return json(400, { error: "organization_id_required" });
 
-    const eventId = crypto.randomUUID();
-    const idemKey = `nammux.audit.${eventId}`;
-    const envelope = {
-      event_id: eventId,
-      event_type: "audit.dryrun",
-      idempotency_key: idemKey,
-      organization_id: seialzOrgId,
-      target_organization_id: targetOrgId,
-      occurred_at: new Date().toISOString(),
-      data: { organization_id: seialzOrgId, target_organization_id: targetOrgId },
-    };
-    const rawBody = JSON.stringify(envelope);
-    const ts = Math.floor(Date.now() / 1000).toString();
-    const signature = await hmacSha256Hex(secret || "noop", `${ts}.${rawBody}`);
-
-    const headers: Record<string, string> = {
-      "Content-Type": "application/json",
-      "X-Seialz-Signature": `sha256=${signature}`,
-      "X-Seialz-Timestamp": ts,
-      "X-Seialz-Event-Id": eventId,
-      "X-Seialz-Event-Type": "audit.dryrun",
-      "X-Seialz-Idempotency-Key": idemKey,
-      "X-Seialz-Organization-Id": seialzOrgId,
-      "X-Seialz-Target-Organization-Id": targetOrgId,
-      "User-Agent": "Seialz-Integration-Audit/1.0",
-    };
-
-    const echo = await fetch("https://httpbin.org/anything", {
-      method: "POST", headers, body: rawBody,
-    });
-    const echoed = await echo.json();
-
-    return new Response(JSON.stringify({
-      config_values_present: row != null,
-      nammux_organization_id_in_config: cfg.nammux_organization_id ?? null,
-      summary: {
-        seialz_organization_id: seialzOrgId,
-        nammux_organization_id: targetOrgId,
-        "header_X-Seialz-Organization-Id": headers["X-Seialz-Organization-Id"],
-        "header_X-Seialz-Target-Organization-Id": headers["X-Seialz-Target-Organization-Id"],
-        "envelope.organization_id": envelope.organization_id,
-        "envelope.target_organization_id": envelope.target_organization_id,
-      },
-      headers_sent: headers,
-      envelope_sent: envelope,
-      httpbin_echoed_headers: echoed?.headers,
-      httpbin_echoed_body: echoed?.json,
-    }, null, 2), { headers: { ...corsHeaders, "Content-Type": "application/json" } });
-  } catch (e) {
-    return new Response(JSON.stringify({ error: (e as Error).message }), {
-      status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" },
-    });
+  const admin = createClient(url, Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!, {
+    auth: { persistSession: false },
+  });
+  const { data: internalUser } = await admin
+    .from("users")
+    .select("id")
+    .eq("auth_user_id", authData.user.id)
+    .maybeSingle();
+  const { data: membership } = internalUser
+    ? await admin
+      .from("user_organizations")
+      .select("permission_profile_id")
+      .eq("user_id", internalUser.id)
+      .eq("organization_id", organizationId)
+      .eq("is_active", true)
+      .maybeSingle()
+    : { data: null };
+  const { data: profile } = membership
+    ? await admin
+      .from("permission_profiles")
+      .select("permissions")
+      .eq("id", membership.permission_profile_id)
+      .maybeSingle()
+    : { data: null };
+  if ((profile?.permissions as Record<string, unknown> | null)?.can_manage_integrations !== true) {
+    return json(403, { error: "forbidden" });
   }
+
+  const [{ data: integration }, { data: credentials }, { data: jobs }] = await Promise.all([
+    admin
+      .from("organization_integrations")
+      .select("is_enabled, config_values, integration:admin_integrations!inner(slug)")
+      .eq("organization_id", organizationId)
+      .eq("admin_integrations.slug", "nammux")
+      .maybeSingle(),
+    admin
+      .from("nammux_integration_credentials")
+      .select("key_id, is_active, valid_from, expires_at, created_at")
+      .eq("organization_id", organizationId)
+      .eq("is_active", true)
+      .order("created_at", { ascending: false }),
+    admin
+      .from("integration_jobs")
+      .select("status, last_error, created_at, completed_at")
+      .eq("organization_id", organizationId)
+      .eq("integration_slug", "nammux")
+      .order("created_at", { ascending: false })
+      .limit(10),
+  ]);
+  const config = (integration?.config_values ?? {}) as Record<string, unknown>;
+  return json(200, {
+    ok: true,
+    organization_id: organizationId,
+    enabled: integration?.is_enabled === true,
+    mapping: {
+      nammux_organization_id: config.nammux_organization_id ?? null,
+      configured: !!config.nammux_organization_id,
+    },
+    endpoint: {
+      configured: typeof config.webhook_url === "string" && !!config.webhook_url,
+      host: typeof config.webhook_url === "string"
+        ? (() => {
+          try {
+            return new URL(config.webhook_url).host;
+          } catch {
+            return null;
+          }
+        })()
+        : null,
+    },
+    credentials: credentials ?? [],
+    recent_jobs: jobs ?? [],
+  });
 });

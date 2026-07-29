@@ -34,6 +34,7 @@ import { ClickToCallButton } from '@/components/calls/ClickToCallButton';
 import { OwnerSelector } from '@/components/common/OwnerSelector';
 import { SendToSignatureButton } from '@/components/signature/SendToSignatureButton';
 import { TagSelector } from '@/components/common/TagSelector';
+import { NammuxOpportunityTab } from '@/components/opportunities/NammuxOpportunityTab';
 
 interface Opportunity {
   id: string;
@@ -80,6 +81,7 @@ export default function OpportunityDetail() {
     { id: 'tasks', label: t('contacts.tasksTab') },
     { id: 'attachments', label: t('attachments.title') },
     { id: 'documents', label: 'Documentos' },
+    { id: 'nammux', label: 'Nammux' },
     { id: 'notes', label: t('contacts.notesTab') },
   ];
 
@@ -421,6 +423,13 @@ export default function OpportunityDetail() {
             )}
             {selectedTab === 'tasks' && <ContactTasks opportunityId={opportunity.id} />}
             {selectedTab === 'attachments' && <ContactAttachments entityId={opportunity.id} entityType="opportunity" />}
+            {selectedTab === 'nammux' && organization && (
+              <NammuxOpportunityTab
+                organizationId={organization.id}
+                opportunityId={opportunity.id}
+                canManage={permissions.canManageIntegrations}
+              />
+            )}
             {selectedTab === 'notes' && <ContactNotes opportunityId={opportunity.id} />}
           </div>
         </div>
@@ -774,6 +783,14 @@ export default function OpportunityDetail() {
                   </CardContent>
                 </Card>
               )}
+            </Tabs.Panel>
+
+            <Tabs.Panel id="nammux">
+              <NammuxOpportunityTab
+                organizationId={organization.id}
+                opportunityId={opportunity.id}
+                canManage={permissions.canManageIntegrations}
+              />
             </Tabs.Panel>
 
             <Tabs.Panel id="notes">

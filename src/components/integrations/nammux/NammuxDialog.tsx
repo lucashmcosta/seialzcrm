@@ -45,6 +45,8 @@ interface NammuxConfig {
   include_opportunity_attachments: boolean;
   include_document_submissions: boolean;
   nammux_organization_id: string;
+  app_url: string;
+  contact_field_mapping: Record<string, string>;
 }
 
 const defaultConfig: NammuxConfig = {
@@ -56,6 +58,8 @@ const defaultConfig: NammuxConfig = {
   include_opportunity_attachments: true,
   include_document_submissions: true,
   nammux_organization_id: "",
+  app_url: "",
+  contact_field_mapping: {},
 };
 
 const jobStatusBadge = (s: string) => {
@@ -78,6 +82,7 @@ export function NammuxDialog({ open, onOpenChange, integration, orgIntegration: 
   const [tab, setTab] = useState("config");
   const [showSecret, setShowSecret] = useState(false);
   const [form, setForm] = useState<NammuxConfig>(defaultConfig);
+  const [mappingJson, setMappingJson] = useState("{}");
   const [saving, setSaving] = useState(false);
   const [testing, setTesting] = useState(false);
   const [testResult, setTestResult] = useState<{
@@ -118,20 +123,41 @@ export function NammuxDialog({ open, onOpenChange, integration, orgIntegration: 
 
   const isConnected = !!orgIntegration?.is_enabled;
 
+  const { data: credentialStatus, refetch: refetchCredentialStatus } = useQuery({
+    queryKey: ["nammux-credential-status", organization?.id],
+    enabled: !!organization?.id && open,
+    queryFn: async () => {
+      const { data, error } = await supabase.functions.invoke("nammux-credential-manage", {
+        body: { action: "status", organization_id: organization!.id },
+      });
+      if (error) throw error;
+      return data as {
+        ok: boolean;
+        credentials: Array<{
+          key_id: string;
+          valid_from: string;
+          expires_at: string | null;
+        }>;
+      };
+    },
+  });
+  const activeCredential = credentialStatus?.credentials?.[0] ?? null;
+
   useEffect(() => {
     if (open) {
       const cfg = (orgIntegration?.config_values ?? {}) as Partial<NammuxConfig>;
       setForm({
         ...defaultConfig,
         ...cfg,
-        webhook_secret: cfg.webhook_secret || "",
+        webhook_secret: "",
       });
       setTab("config");
+      setMappingJson(JSON.stringify(cfg.contact_field_mapping ?? {}, null, 2));
       setShowSecret(false);
       setTestResult(null);
       setExpandedJobId(null);
     }
-  }, [open, orgIntegration?.id]);
+  }, [open, orgIntegration?.id, orgIntegration?.config_values]);
 
   // Jobs (logs)
   const { data: jobs, isLoading: loadingJobs, refetch: refetchJobs } = useQuery({
@@ -187,18 +213,32 @@ export function NammuxDialog({ open, onOpenChange, integration, orgIntegration: 
     mutationFn: async () => {
       if (!organization || !integration) throw new Error("Sem organização");
       const url = form.webhook_url.trim();
-      if (form.enabled && url && !/^https?:\/\//i.test(url)) {
-        throw new Error("Webhook URL deve começar com http:// ou https://");
+      if (form.enabled && url && !/^https:\/\//i.test(url)) {
+        throw new Error("Webhook URL deve usar HTTPS");
+      }
+      let contactFieldMapping: Record<string, string>;
+      try {
+        contactFieldMapping = JSON.parse(mappingJson || "{}") as Record<string, string>;
+      } catch {
+        throw new Error("O mapeamento de campos personalizados não é um JSON válido.");
+      }
+      if (
+        !contactFieldMapping ||
+        Array.isArray(contactFieldMapping) ||
+        Object.values(contactFieldMapping).some((value) => typeof value !== "string")
+      ) {
+        throw new Error("O mapeamento deve ser um objeto: campo_seialz → campo_nammux.");
       }
       const config_values = {
         webhook_url: url,
-        webhook_secret: form.webhook_secret.trim(),
         enabled: form.enabled,
         send_opportunity_won: form.send_opportunity_won,
         include_contact_attachments: form.include_contact_attachments,
         include_opportunity_attachments: form.include_opportunity_attachments,
         include_document_submissions: form.include_document_submissions,
         nammux_organization_id: form.nammux_organization_id.trim(),
+        app_url: form.app_url.trim().replace(/\/+$/, ""),
+        contact_field_mapping: contactFieldMapping,
       };
 
       if (orgIntegration?.id) {
@@ -236,11 +276,26 @@ export function NammuxDialog({ open, onOpenChange, integration, orgIntegration: 
         } as never);
         if (error) throw error;
       }
+
+      if (form.webhook_secret.trim()) {
+        const { data, error } = await supabase.functions.invoke("nammux-credential-manage", {
+          body: {
+            action: "rotate",
+            organization_id: organization.id,
+            secret: form.webhook_secret.trim(),
+          },
+        });
+        if (error || !data?.ok) {
+          throw new Error(data?.details || data?.error || "Falha ao salvar credencial");
+        }
+        setForm((current) => ({ ...current, webhook_secret: "" }));
+      }
     },
     onSuccess: () => {
       toast.success("Configuração salva!");
       qc.invalidateQueries({ queryKey: ["org-integration", "nammux"] });
       qc.invalidateQueries({ queryKey: ["organization-integrations"] });
+      refetchCredentialStatus();
     },
     onError: (e: any) => toast.error(e.message || "Erro ao salvar"),
   });
@@ -277,8 +332,7 @@ export function NammuxDialog({ open, onOpenChange, integration, orgIntegration: 
     setTesting(true);
     setTestResult(null);
     try {
-      // Ensure latest config is persisted before testing
-      if (saveMutation.isPending) return;
+      await saveMutation.mutateAsync();
       const { data, error } = await supabase.functions.invoke("nammux-test-connection", {
         body: { organization_id: organization.id },
       });
@@ -390,6 +444,21 @@ export function NammuxDialog({ open, onOpenChange, integration, orgIntegration: 
                     </Alert>
                   )}
                 </div>
+
+                <div className="space-y-1.5">
+                  <Label htmlFor="nammux_app_url">URL do aplicativo Nammux</Label>
+                  <Input
+                    id="nammux_app_url"
+                    value={form.app_url}
+                    onChange={(event) =>
+                      setForm((current) => ({ ...current, app_url: event.target.value }))
+                    }
+                    placeholder="https://nammux.lovable.app"
+                  />
+                  <p className="text-[11px] text-muted-foreground">
+                    Usada pelo botão “Abrir no Nammux” na oportunidade.
+                  </p>
+                </div>
               </section>
 
               <section className="space-y-3">
@@ -418,14 +487,27 @@ export function NammuxDialog({ open, onOpenChange, integration, orgIntegration: 
                 </div>
 
                 <div className="space-y-1.5">
-                  <Label htmlFor="webhook_secret">Webhook Secret *</Label>
+                  <div className="flex items-center justify-between gap-2">
+                    <Label htmlFor="webhook_secret">
+                      {activeCredential ? "Rotacionar credencial" : "Credencial compartilhada *"}
+                    </Label>
+                    {activeCredential && (
+                      <Badge variant="secondary" className="font-mono text-[10px]">
+                        key_id: {activeCredential.key_id}
+                      </Badge>
+                    )}
+                  </div>
                   <div className="relative">
                     <Input
                       id="webhook_secret"
                       type={showSecret ? "text" : "password"}
                       value={form.webhook_secret}
                       onChange={(e) => setForm((p) => ({ ...p, webhook_secret: e.target.value }))}
-                      placeholder="Compartilhado com o Nammux para assinar HMAC"
+                      placeholder={
+                        activeCredential
+                          ? "Deixe vazio para manter a credencial atual"
+                          : "Mínimo de 32 caracteres; cadastre o mesmo valor no Nammux"
+                      }
                       className="pr-10"
                     />
                     <button
@@ -437,8 +519,8 @@ export function NammuxDialog({ open, onOpenChange, integration, orgIntegration: 
                     </button>
                   </div>
                   <p className="text-[11px] text-muted-foreground">
-                    Usado para assinar cada payload com HMAC-SHA256 no header{" "}
-                    <code>X-Seialz-Signature</code>.
+                    O valor é enviado somente ao backend e nunca pode ser consultado depois.
+                    A rotação mantém a chave anterior válida por 24 horas.
                   </p>
                 </div>
               </section>
@@ -450,6 +532,21 @@ export function NammuxDialog({ open, onOpenChange, integration, orgIntegration: 
                   description="Quando uma oportunidade for marcada como ganha, dispara evento ao Nammux."
                   checked={form.send_opportunity_won}
                   onChange={(v) => setForm((p) => ({ ...p, send_opportunity_won: v }))}
+                />
+              </section>
+
+              <section className="space-y-2">
+                <h3 className="text-sm font-semibold">Campos personalizados do contato</h3>
+                <p className="text-xs text-muted-foreground">
+                  JSON no formato <code>{`{"campo_no_seialz":"campo_no_nammux"}`}</code>.
+                  Somente campos jurídicos permitidos são aplicados; campos bancários são ignorados.
+                </p>
+                <textarea
+                  value={mappingJson}
+                  onChange={(event) => setMappingJson(event.target.value)}
+                  className="min-h-28 w-full rounded-md border border-input bg-background px-3 py-2 font-mono text-xs"
+                  spellCheck={false}
+                  placeholder={'{\n  "data_nascimento": "data_nascimento",\n  "nome_mae": "nome_mae"\n}'}
                 />
               </section>
 
@@ -517,7 +614,11 @@ export function NammuxDialog({ open, onOpenChange, integration, orgIntegration: 
                 <Button
                   variant="outline"
                   onClick={handleTest}
-                  disabled={testing || !form.webhook_url || !form.webhook_secret}
+                  disabled={
+                    testing ||
+                    !form.webhook_url ||
+                    (!activeCredential && !form.webhook_secret.trim())
+                  }
                 >
                   <PaperPlaneTilt size={16} className="mr-1.5" />
                   {testing ? "Testando..." : "Testar conexão"}

@@ -4,13 +4,28 @@
 
 import { Classification, type Handler, type HandlerResult } from "./types.ts";
 import { fetchWithClassification } from "./http.ts";
+import { loadActiveIntegrationSecret } from "../integration-credentials.ts";
 
 interface NammuxConfig {
   webhook_url?: string;
-  webhook_secret?: string;
   enabled?: boolean;
   send_opportunity_won?: boolean;
   nammux_organization_id?: string;
+}
+
+function allowedNammuxWebhook(value: string): URL | null {
+  try {
+    const url = new URL(value);
+    if (url.protocol !== "https:" || url.username || url.password) return null;
+    const defaults = ["rqnbnbbbmhtynuhecavv.supabase.co"];
+    const allowed = (Deno.env.get("NAMMUX_ALLOWED_WEBHOOK_HOSTS") ?? defaults.join(","))
+      .split(",")
+      .map((host) => host.trim().toLowerCase())
+      .filter(Boolean);
+    return allowed.includes(url.hostname.toLowerCase()) ? url : null;
+  } catch {
+    return null;
+  }
 }
 
 // deno-lint-ignore no-explicit-any
@@ -55,12 +70,23 @@ export const nammuxSendOpportunityWonHandler: Handler = async (ctx): Promise<Han
       error: "Nammux opportunity.won disabled in config_values (enabled / send_opportunity_won)",
     };
   }
-  const url = (cfg.webhook_url ?? "").trim();
-  const secret = (cfg.webhook_secret ?? "").trim();
-  if (!url || !secret) {
+  const url = allowedNammuxWebhook((cfg.webhook_url ?? "").trim());
+  let credential;
+  try {
+    credential = await loadActiveIntegrationSecret(
+      ctx.supabase,
+      ctx.event.organization_id,
+    );
+  } catch (error) {
     return {
       classification: Classification.Permanent,
-      error: "config_values.webhook_url or webhook_secret is missing",
+      error: error instanceof Error ? error.message : String(error),
+    };
+  }
+  if (!url || !credential) {
+    return {
+      classification: Classification.Permanent,
+      error: "Allowed webhook URL or active tenant credential is missing",
     };
   }
 
@@ -83,19 +109,28 @@ export const nammuxSendOpportunityWonHandler: Handler = async (ctx): Promise<Han
   const envelope: Record<string, unknown> = {
     event_id: ctx.event.id,
     event_type: ctx.event.event_type,
+    schema_version: Number(basePayload.schema_version ?? 1),
     idempotency_key: eventIdemKey,
+    source: "seialz_crm",
+    source_organization_id: seialzOrgId,
     organization_id: seialzOrgId,
     target_organization_id: targetOrgId,
+    correlation_id: ctx.event.id,
+    entity: {
+      type: ctx.event.entity_type,
+      id: ctx.event.entity_id,
+    },
     occurred_at: ctx.event.occurred_at,
     data,
   };
   const rawBody = JSON.stringify(envelope);
   const timestamp = Math.floor(Date.now() / 1000).toString();
-  const signature = await hmacSha256Hex(secret, `${timestamp}.${rawBody}`);
+  const signature = await hmacSha256Hex(credential.secret, `${timestamp}.${rawBody}`);
 
   const headers: Record<string, string> = {
     "Content-Type": "application/json",
     "X-Seialz-Signature": `sha256=${signature}`,
+    "X-Seialz-Key-Id": credential.keyId,
     "X-Seialz-Timestamp": timestamp,
     "X-Seialz-Event-Id": ctx.event.id,
     "X-Seialz-Event-Type": ctx.event.event_type,
@@ -105,9 +140,14 @@ export const nammuxSendOpportunityWonHandler: Handler = async (ctx): Promise<Han
     "X-Trace-Id": ctx.event.id,
     "User-Agent": "Seialz-Integration-Worker/1.0",
   };
+  const replay = (basePayload._replay as { replay?: boolean } | undefined)?.replay === true;
+  if (replay) {
+    headers["X-Seialz-Replay"] = "true";
+    headers["X-Seialz-Delivery-Id"] = ctx.event.id;
+  }
   if (targetOrgId) headers["X-Nammux-Organization-Id"] = targetOrgId;
 
-  const res = await fetchWithClassification(url, { method: "POST", headers, body: rawBody });
+  const res = await fetchWithClassification(url.toString(), { method: "POST", headers, body: rawBody });
 
   let externalPayload: Record<string, unknown> | undefined;
   try {
@@ -122,7 +162,11 @@ export const nammuxSendOpportunityWonHandler: Handler = async (ctx): Promise<Han
     durationMs: res.durationMs,
     error: res.error,
     externalPayload,
-    entityType: "opportunity",
-    internalId: (ctx.event.payload as { id?: string })?.id ?? ctx.event.id,
+    externalId:
+      typeof externalPayload?.external_process_id === "string"
+        ? externalPayload.external_process_id
+        : undefined,
+    entityType: ctx.event.entity_type,
+    internalId: ctx.event.entity_id,
   };
 };

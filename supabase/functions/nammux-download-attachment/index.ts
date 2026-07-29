@@ -9,21 +9,20 @@
 //
 // Signature base string:
 //   `${timestamp}.${method}.${path}.${query}`
-// Secret: organization_integrations.config_values.download_secret (preferred)
-//         falls back to config_values.webhook_secret.
+// Secret: encrypted tenant credential selected by X-Nammux-Key-Id.
 
 import { createClient } from "jsr:@supabase/supabase-js@2";
+import { loadActiveIntegrationSecret } from "../_shared/integration-credentials.ts";
 
 const corsHeaders: Record<string, string> = {
   "Access-Control-Allow-Origin": "*",
   "Access-Control-Allow-Headers":
-    "authorization, x-client-info, apikey, content-type, x-nammux-signature, x-nammux-timestamp, x-nammux-organization-id, x-seialz-organization-id",
+    "authorization, x-client-info, apikey, content-type, x-nammux-signature, x-nammux-key-id, x-nammux-timestamp, x-nammux-organization-id, x-seialz-organization-id",
   "Access-Control-Allow-Methods": "GET, OPTIONS",
 };
 
 const ALLOWED_ENTITY_TYPES = new Set(["contact", "opportunity", "contact_document"]);
 const TIMESTAMP_TOLERANCE_SECONDS = 5 * 60;
-const HMAC_DEBUG_ATTACHMENT_ID = "704637de-8248-4464-a9ed-923f8105ce7e";
 
 function json(body: unknown, status: number) {
   return new Response(JSON.stringify(body), {
@@ -74,6 +73,7 @@ Deno.serve(async (req) => {
   const url = new URL(req.url);
   const attachmentId = url.searchParams.get("attachment_id") ?? "";
   const sigHeader = req.headers.get("x-nammux-signature") ?? "";
+  const keyId = req.headers.get("x-nammux-key-id") ?? "";
   const tsHeader = req.headers.get("x-nammux-timestamp") ?? "";
   const nammuxOrgId = (req.headers.get("x-nammux-organization-id") ?? "").trim();
   const seialzOrgId = (req.headers.get("x-seialz-organization-id") ?? "").trim();
@@ -91,7 +91,7 @@ Deno.serve(async (req) => {
   };
 
   // Basic header presence
-  if (!sigHeader || !tsHeader || !nammuxOrgId || !seialzOrgId) {
+  if (!sigHeader || !keyId || !tsHeader || !nammuxOrgId || !seialzOrgId) {
     await logAudit(supabase, { ...baseAudit, status: 401, error: "missing_headers" });
     return json({ error: "Missing required headers" }, 401);
   }
@@ -126,11 +126,12 @@ Deno.serve(async (req) => {
     return json({ error: "Nammux organization mismatch" }, 403);
   }
 
-  const secret = String(cfg.download_secret ?? cfg.webhook_secret ?? "").trim();
-  if (!secret) {
+  const credential = await loadActiveIntegrationSecret(supabase, seialzOrgId, keyId);
+  if (!credential) {
     await logAudit(supabase, { ...baseAudit, status: 500, error: "missing_secret" });
     return json({ error: "Download secret not configured" }, 500);
   }
+  const secret = credential.secret;
 
   // Verify signature: `${timestamp}.${method}.${path}.${query}`
   const query = url.search.startsWith("?") ? url.search.slice(1) : url.search;
@@ -138,27 +139,6 @@ Deno.serve(async (req) => {
   const expected = await hmacSha256Hex(secret, baseString);
   const provided = sigHeader.startsWith("sha256=") ? sigHeader.slice(7) : sigHeader;
   const signatureMatch = timingSafeEqual(expected, provided);
-  // Temporary safe debug log for the real Nammux retry (no full secret exposed).
-  if (attachmentId === HMAC_DEBUG_ATTACHMENT_ID) {
-    console.log({
-      marker: "download_hmac_debug_v1",
-      attachment_id: attachmentId,
-      received_ts: tsHeader,
-      method: req.method,
-      pathname: url.pathname,
-      query,
-      base_string: baseString,
-      signature_header: sigHeader,
-      received_sig_prefix8: provided.slice(0, 8),
-      expected_sig_prefix8: expected.slice(0, 8),
-      signature_match: signatureMatch,
-      secret_source: cfg.download_secret ? "download_secret" : "webhook_secret",
-      secret_prefix4: secret.slice(0, 4),
-      secret_len: secret.length,
-      seialz_org_id: seialzOrgId,
-      nammux_org_id: nammuxOrgId,
-    });
-  }
   if (!signatureMatch) {
     await logAudit(supabase, { ...baseAudit, status: 401, error: "invalid_signature" });
     return json({ error: "Invalid signature" }, 401);

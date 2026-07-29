@@ -2,11 +2,9 @@
 // payload (current attachments + approved document_submissions).
 //
 // - Does NOT touch the original integration_events row (history preserved).
-// - Inserts a new replay integration_event with event_type='opportunity.won.replay'
-//   so the fanout trigger does NOT pick it up (only 'opportunity.won' subs match).
-// - Manually inserts ONE integration_job for the Nammux subscription, with the
-//   freshly-built payload. The handler reads ctx.event.payload, which is the
-//   fresh payload we stored on the replay event.
+// - Inserts a fresh canonical `opportunity.won` event. Replay is metadata,
+//   never a different event type, so consumers keep the same routing contract.
+// - The normal fanout trigger creates the Nammux job.
 // - Audit log + metadata flags: replay=true, replay_reason, requested_by_user_id.
 // - Auth: requires Supabase JWT + caller must have can_manage_integrations
 //   in the target organization.
@@ -144,13 +142,10 @@ Deno.serve(async (req) => {
     .maybeSingle();
   const originalEventId = originalEvt?.id ?? null;
 
-  // --- 9. Insert REPLAY integration_event.
-  // event_type='opportunity.won.replay' so the fanout trigger doesn't fan out
-  // to all subscriptions (no sub listens to .replay). We manually create the
-  // single nammux job below.
+  // --- 9. Insert canonical opportunity.won event with replay metadata.
   const replayTs = Date.now();
   const replayIdempotencyKey =
-    `seialz:opportunity.won.replay:${orgId}:${opportunityId}:${replayTs}`;
+    `seialz:opportunity.won:${orgId}:${opportunityId}:replay:${replayTs}`;
 
   const enrichedPayload = {
     ...payload,
@@ -167,7 +162,7 @@ Deno.serve(async (req) => {
     .from("integration_events")
     .insert({
       organization_id: orgId,
-      event_type: "opportunity.won.replay",
+      event_type: "opportunity.won",
       aggregate_type: "opportunity",
       aggregate_id: opportunityId,
       payload: enrichedPayload,
@@ -180,34 +175,16 @@ Deno.serve(async (req) => {
     return json(500, { error: "replay_event_insert_failed", details: evtErr?.message });
   }
 
-  // --- 10. Insert ONE integration_job for the nammux subscription.
-  // Worker uses idempotency_key UNIQUE constraint => use a fresh deterministic key.
-  const jobIdemKey = `${replayIdempotencyKey}:${sub.id}`;
+  // --- 10. Read the job created synchronously by the normal fanout trigger.
   const { data: job, error: jobErr } = await admin
     .from("integration_jobs")
-    .insert({
-      organization_id: orgId,
-      event_id: replayEvt.id,
-      subscription_id: sub.id,
-      integration_slug: "nammux",
-      target_action: "send_opportunity_won",
-      payload: enrichedPayload,
-      idempotency_key: jobIdemKey,
-      status: "pending",
-      attempts: 0,
-      next_run_at: new Date().toISOString(),
-    })
-    .select("id, status, next_run_at")
-    .single();
+    .select("id, status, next_run_at, idempotency_key")
+    .eq("event_id", replayEvt.id)
+    .eq("subscription_id", sub.id)
+    .maybeSingle();
   if (jobErr || !job) {
-    return json(500, { error: "job_insert_failed", details: jobErr?.message });
+    return json(500, { error: "fanout_job_not_created", details: jobErr?.message });
   }
-
-  // Mark replay event as published (no other consumers).
-  await admin
-    .from("integration_events")
-    .update({ status: "published", published_at: new Date().toISOString() })
-    .eq("id", replayEvt.id);
 
   // --- 11. Audit log ---
   await admin.from("integration_audit_logs").insert({
@@ -223,7 +200,7 @@ Deno.serve(async (req) => {
       replay_event_id: replayEvt.id,
       replay_idempotency_key: replayEvt.idempotency_key,
       job_id: job.id,
-      job_idempotency_key: jobIdemKey,
+      job_idempotency_key: job.idempotency_key,
       requested_by_user_id: internalUserId,
       requested_by_auth_user_id: authUserId,
       replay_reason: reason,

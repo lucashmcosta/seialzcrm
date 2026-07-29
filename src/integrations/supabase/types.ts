@@ -6019,6 +6019,165 @@ export type Database = {
           },
         ]
       }
+      nammux_process_snapshots: {
+        Row: {
+          area_id: string | null
+          area_name: string | null
+          cnj: string | null
+          created_at: string
+          distributed_at: string | null
+          external_contact_id: string | null
+          external_process_id: string
+          external_url: string | null
+          id: string
+          internal_number: string | null
+          last_error: string | null
+          last_event_id: string | null
+          last_synced_at: string
+          opportunity_id: string
+          organization_id: string
+          phase: string | null
+          process_title: string | null
+          responsible_name: string | null
+          responsible_user_id: string | null
+          source_updated_at: string | null
+          stage_id: string | null
+          stage_name: string | null
+          status_id: string | null
+          status_name: string | null
+          sync_status: string
+          updated_at: string
+        }
+        Insert: {
+          area_id?: string | null
+          area_name?: string | null
+          cnj?: string | null
+          created_at?: string
+          distributed_at?: string | null
+          external_contact_id?: string | null
+          external_process_id: string
+          external_url?: string | null
+          id?: string
+          internal_number?: string | null
+          last_error?: string | null
+          last_event_id?: string | null
+          last_synced_at?: string
+          opportunity_id: string
+          organization_id: string
+          phase?: string | null
+          process_title?: string | null
+          responsible_name?: string | null
+          responsible_user_id?: string | null
+          source_updated_at?: string | null
+          stage_id?: string | null
+          stage_name?: string | null
+          status_id?: string | null
+          status_name?: string | null
+          sync_status?: string
+          updated_at?: string
+        }
+        Update: {
+          area_id?: string | null
+          area_name?: string | null
+          cnj?: string | null
+          created_at?: string
+          distributed_at?: string | null
+          external_contact_id?: string | null
+          external_process_id?: string
+          external_url?: string | null
+          id?: string
+          internal_number?: string | null
+          last_error?: string | null
+          last_event_id?: string | null
+          last_synced_at?: string
+          opportunity_id?: string
+          organization_id?: string
+          phase?: string | null
+          process_title?: string | null
+          responsible_name?: string | null
+          responsible_user_id?: string | null
+          source_updated_at?: string | null
+          stage_id?: string | null
+          stage_name?: string | null
+          status_id?: string | null
+          status_name?: string | null
+          sync_status?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "nammux_process_snapshots_opportunity_id_fkey"
+            columns: ["opportunity_id"]
+            isOneToOne: false
+            referencedRelation: "opportunities"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "nammux_process_snapshots_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      nammux_sync_events: {
+        Row: {
+          created_at: string
+          direction: string
+          error: string | null
+          event_type: string
+          external_event_id: string
+          id: string
+          occurred_at: string | null
+          opportunity_id: string | null
+          organization_id: string
+          status: string
+          summary: Json
+        }
+        Insert: {
+          created_at?: string
+          direction: string
+          error?: string | null
+          event_type: string
+          external_event_id: string
+          id?: string
+          occurred_at?: string | null
+          opportunity_id?: string | null
+          organization_id: string
+          status: string
+          summary?: Json
+        }
+        Update: {
+          created_at?: string
+          direction?: string
+          error?: string | null
+          event_type?: string
+          external_event_id?: string
+          id?: string
+          occurred_at?: string | null
+          opportunity_id?: string | null
+          organization_id?: string
+          status?: string
+          summary?: Json
+        }
+        Relationships: [
+          {
+            foreignKeyName: "nammux_sync_events_opportunity_id_fkey"
+            columns: ["opportunity_id"]
+            isOneToOne: false
+            referencedRelation: "opportunities"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "nammux_sync_events_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       notifications: {
         Row: {
           body: string | null

@@ -2,12 +2,27 @@
 // and return HTTP status/duration/error so the UI can show the result.
 
 import { createClient } from "jsr:@supabase/supabase-js@2";
+import { loadActiveIntegrationSecret } from "../_shared/integration-credentials.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
   "Access-Control-Allow-Headers":
     "authorization, x-client-info, apikey, content-type",
 };
+
+function allowedNammuxWebhook(value: string): URL | null {
+  try {
+    const url = new URL(value);
+    if (url.protocol !== "https:" || url.username || url.password) return null;
+    const allowed = (Deno.env.get("NAMMUX_ALLOWED_WEBHOOK_HOSTS") ?? "rqnbnbbbmhtynuhecavv.supabase.co")
+      .split(",")
+      .map((host) => host.trim().toLowerCase())
+      .filter(Boolean);
+    return allowed.includes(url.hostname.toLowerCase()) ? url : null;
+  } catch {
+    return null;
+  }
+}
 
 async function hmacSha256Hex(secret: string, message: string): Promise<string> {
   const enc = new TextEncoder();
@@ -40,6 +55,46 @@ Deno.serve(async (req) => {
       Deno.env.get("SUPABASE_URL")!,
       Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!,
     );
+    const authorization = req.headers.get("authorization") ?? "";
+    const authClient = createClient(
+      Deno.env.get("SUPABASE_URL")!,
+      Deno.env.get("SUPABASE_ANON_KEY")!,
+      { global: { headers: { authorization } }, auth: { persistSession: false } },
+    );
+    const { data: authData } = await authClient.auth.getUser();
+    if (!authData.user) {
+      return new Response(JSON.stringify({ ok: false, error: "unauthorized" }), {
+        status: 401,
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
+    const { data: internalUser } = await supabase
+      .from("users")
+      .select("id")
+      .eq("auth_user_id", authData.user.id)
+      .maybeSingle();
+    const { data: membership } = internalUser
+      ? await supabase
+        .from("user_organizations")
+        .select("permission_profile_id")
+        .eq("user_id", internalUser.id)
+        .eq("organization_id", organization_id)
+        .eq("is_active", true)
+        .maybeSingle()
+      : { data: null };
+    const { data: profile } = membership
+      ? await supabase
+        .from("permission_profiles")
+        .select("permissions")
+        .eq("id", membership.permission_profile_id)
+        .maybeSingle()
+      : { data: null };
+    if ((profile?.permissions as Record<string, unknown> | null)?.can_manage_integrations !== true) {
+      return new Response(JSON.stringify({ ok: false, error: "forbidden" }), {
+        status: 403,
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
 
     const { data: row, error } = await supabase
       .from("organization_integrations")
@@ -56,17 +111,17 @@ Deno.serve(async (req) => {
     }
 
     const cfg = (row.config_values ?? {}) as Record<string, unknown>;
-    const url = String(cfg.webhook_url ?? "").trim();
-    const secret = String(cfg.webhook_secret ?? "").trim();
+    const url = allowedNammuxWebhook(String(cfg.webhook_url ?? "").trim());
+    const credential = await loadActiveIntegrationSecret(supabase, organization_id);
 
     if (!url) {
-      return new Response(JSON.stringify({ ok: false, error: "webhook_url não configurado" }), {
+      return new Response(JSON.stringify({ ok: false, error: "webhook_url não permitido" }), {
         status: 200,
         headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
     }
-    if (!secret) {
-      return new Response(JSON.stringify({ ok: false, error: "webhook_secret não configurado" }), {
+    if (!credential) {
+      return new Response(JSON.stringify({ ok: false, error: "credencial por organização não configurada" }), {
         status: 200,
         headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
@@ -97,11 +152,12 @@ Deno.serve(async (req) => {
     };
     const rawBody = JSON.stringify(envelope);
     const timestamp = Math.floor(Date.now() / 1000).toString();
-    const signature = await hmacSha256Hex(secret, `${timestamp}.${rawBody}`);
+    const signature = await hmacSha256Hex(credential.secret, `${timestamp}.${rawBody}`);
 
     const headers: Record<string, string> = {
       "Content-Type": "application/json",
       "X-Seialz-Signature": `sha256=${signature}`,
+      "X-Seialz-Key-Id": credential.keyId,
       "X-Seialz-Timestamp": timestamp,
       "X-Seialz-Event-Id": eventId,
       "X-Seialz-Event-Type": "connection.test",
