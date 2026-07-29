@@ -1777,7 +1777,9 @@ export type Database = {
           ad_referral_source_type: string | null
           ad_referral_source_url: string | null
           address_city: string | null
+          address_complement: string | null
           address_neighborhood: string | null
+          address_number: string | null
           address_state: string | null
           address_street: string | null
           address_zip: string | null
@@ -1842,7 +1844,9 @@ export type Database = {
           ad_referral_source_type?: string | null
           ad_referral_source_url?: string | null
           address_city?: string | null
+          address_complement?: string | null
           address_neighborhood?: string | null
+          address_number?: string | null
           address_state?: string | null
           address_street?: string | null
           address_zip?: string | null
@@ -1909,7 +1913,9 @@ export type Database = {
           ad_referral_source_type?: string | null
           ad_referral_source_url?: string | null
           address_city?: string | null
+          address_complement?: string | null
           address_neighborhood?: string | null
+          address_number?: string | null
           address_state?: string | null
           address_street?: string | null
           address_zip?: string | null

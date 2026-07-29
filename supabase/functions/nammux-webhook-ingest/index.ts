@@ -90,7 +90,14 @@ Deno.serve(async (req) => {
 
   const eventId = eventIdHeader || String(envelope.event_id ?? "");
   const eventType = req.headers.get("x-nammux-event-type") || String(envelope.event_type ?? "");
-  if (!eventId || !["process.snapshot.updated", "process.sync.failed"].includes(eventType)) {
+  if (
+    !eventId ||
+    ![
+      "process.snapshot.updated",
+      "process.sync.failed",
+      "contact.address.updated",
+    ].includes(eventType)
+  ) {
     return json(400, { error: "unsupported_event" });
   }
   if (Number(envelope.schema_version ?? 0) !== 1) {
@@ -125,6 +132,66 @@ Deno.serve(async (req) => {
   if (duplicate) return json(200, { ok: true, duplicate: true });
 
   const data = (envelope.data ?? {}) as Record<string, any>;
+
+  if (eventType === "contact.address.updated") {
+    const contactId = String(data.seialz_contact_id ?? "");
+    const address = (data.address ?? {}) as Record<string, unknown>;
+    if (!contactId) return json(400, { error: "contact_id_required" });
+    if (!address || typeof address !== "object") {
+      return json(400, { error: "address_required" });
+    }
+
+    const sourceUpdatedAt = address.updated_at
+      ? String(address.updated_at)
+      : envelope.occurred_at
+        ? String(envelope.occurred_at)
+        : null;
+    const { data: applied, error: applyError } = await admin.rpc(
+      "apply_nammux_contact_address",
+      {
+        _organization_id: organizationId,
+        _contact_id: contactId,
+        _address: address,
+        _source_event_id: eventId,
+        _source_updated_at: sourceUpdatedAt,
+      },
+    );
+    if (applyError) {
+      const notLinked = /NAMMUX_CONTACT_NOT_LINKED|NAMMUX_CONTACT_NOT_FOUND/i.test(
+        applyError.message,
+      );
+      console.error("contact address apply failed", applyError.message);
+      return json(notLinked ? 404 : 500, {
+        error: notLinked ? "contact_not_linked" : "contact_address_apply_failed",
+      });
+    }
+
+    const result = (applied ?? {}) as Record<string, unknown>;
+    const ignoredAsStale = result.ignored_as_stale === true;
+    await admin.from("nammux_sync_events").insert({
+      organization_id: organizationId,
+      opportunity_id: result.opportunity_id ?? null,
+      external_event_id: eventId,
+      event_type: eventType,
+      direction: "inbound",
+      status: ignoredAsStale ? "conflict" : "processed",
+      summary: {
+        contact_id: contactId,
+        ignored_as_stale: ignoredAsStale,
+        address_fields_received: Object.entries(address)
+          .filter(([key, value]) => key !== "updated_at" && value != null && String(value).trim())
+          .map(([key]) => key),
+      },
+      occurred_at: envelope.occurred_at ?? null,
+    });
+
+    return json(200, {
+      ok: true,
+      contact_id: contactId,
+      ignored_as_stale: ignoredAsStale,
+    });
+  }
+
   const opportunityId = String(data.seialz_opportunity_id ?? "");
   if (!opportunityId) return json(400, { error: "opportunity_id_required" });
 

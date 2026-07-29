@@ -103,6 +103,33 @@ export default function ContactDetail() {
     }
   }, [id, organization?.id]);
 
+  useEffect(() => {
+    if (!organization?.id || !id) return;
+
+    const channel = supabase
+      .channel(`contact-detail:${organization.id}:${id}`)
+      .on(
+        'postgres_changes',
+        {
+          event: 'UPDATE',
+          schema: 'public',
+          table: 'contacts',
+          filter: `id=eq.${id}`,
+        },
+        (payload) => {
+          const updated = payload.new as any;
+          if (updated.organization_id === organization.id) {
+            setContact(updated);
+          }
+        },
+      )
+      .subscribe();
+
+    return () => {
+      void supabase.removeChannel(channel);
+    };
+  }, [id, organization?.id]);
+
   const fetchContact = async () => {
     if (!organization || !id) return;
 
@@ -256,7 +283,13 @@ export default function ContactDetail() {
                 <div className="text-[14px]">
                   {contact?.address_street || contact?.address_city ? (
                     <>
-                      {contact.address_street && <div>{contact.address_street}</div>}
+                      {contact.address_street && (
+                        <div>
+                          {contact.address_street}
+                          {contact.address_number ? `, ${contact.address_number}` : ''}
+                          {contact.address_complement ? ` · ${contact.address_complement}` : ''}
+                        </div>
+                      )}
                       {contact.address_neighborhood && <div>{contact.address_neighborhood}</div>}
                       <div>
                         {[contact.address_city, contact.address_state].filter(Boolean).join(' - ')}
@@ -740,7 +773,13 @@ export default function ContactDetail() {
                   <div className="text-foreground">
                     {contact.address_street || contact.address_city ? (
                       <>
-                        {contact.address_street && <div>{contact.address_street}</div>}
+                        {contact.address_street && (
+                          <div>
+                            {contact.address_street}
+                            {contact.address_number ? `, ${contact.address_number}` : ''}
+                            {contact.address_complement ? ` · ${contact.address_complement}` : ''}
+                          </div>
+                        )}
                         {contact.address_neighborhood && <div>{contact.address_neighborhood}</div>}
                         <div>
                           {[contact.address_city, contact.address_state].filter(Boolean).join(' - ')}

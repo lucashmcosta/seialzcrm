@@ -73,6 +73,8 @@ export default function ContactForm() {
     rg_issuer: '',
     nationality: '',
     address_street: '',
+    address_number: '',
+    address_complement: '',
     address_neighborhood: '',
     address_city: '',
     address_state: '',
@@ -134,6 +136,8 @@ export default function ContactForm() {
         rg_issuer: (data as any).rg_issuer || '',
         nationality: (data as any).nationality || '',
         address_street: (data as any).address_street || '',
+        address_number: (data as any).address_number || '',
+        address_complement: (data as any).address_complement || '',
         address_neighborhood: (data as any).address_neighborhood || '',
         address_city: (data as any).address_city || '',
         address_state: (data as any).address_state || '',
@@ -510,12 +514,30 @@ export default function ContactForm() {
               {/* Endereço */}
               <div className="space-y-4">
                 <h3 className="text-sm font-semibold text-foreground border-b pb-2">Endereço</h3>
+                <div className="grid grid-cols-1 md:grid-cols-[1fr_140px] gap-4">
+                  <div>
+                    <Label htmlFor="address_street">Logradouro</Label>
+                    <Input
+                      id="address_street"
+                      value={formData.address_street}
+                      onChange={(e) => setFormData({ ...formData, address_street: e.target.value })}
+                    />
+                  </div>
+                  <div>
+                    <Label htmlFor="address_number">Número</Label>
+                    <Input
+                      id="address_number"
+                      value={formData.address_number}
+                      onChange={(e) => setFormData({ ...formData, address_number: e.target.value })}
+                    />
+                  </div>
+                </div>
                 <div>
-                  <Label htmlFor="address_street">Rua / Número</Label>
+                  <Label htmlFor="address_complement">Complemento</Label>
                   <Input
-                    id="address_street"
-                    value={formData.address_street}
-                    onChange={(e) => setFormData({ ...formData, address_street: e.target.value })}
+                    id="address_complement"
+                    value={formData.address_complement}
+                    onChange={(e) => setFormData({ ...formData, address_complement: e.target.value })}
                   />
                 </div>
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
