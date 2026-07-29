@@ -20,7 +20,11 @@ type Snapshot = {
   internal_number: string | null;
   phase: string | null;
   stage_name: string | null;
+  status_code: string | null;
   status_name: string | null;
+  status_changed_at: string | null;
+  status_change_reason: string | null;
+  status_changed_by_name: string | null;
   area_name: string | null;
   responsible_name: string | null;
   distributed_at: string | null;
@@ -101,6 +105,8 @@ export function NammuxOpportunityTab({
       return appUrl ? `${appUrl}/${snapshot.external_url.replace(/^\/+/, "")}` : null;
     }
   }, [appUrl, snapshot?.external_url]);
+  const isPreJudicialCancelled =
+    snapshot?.phase === "PRE_JUDICIAL" && snapshot.status_code === "CANCELADO";
 
   const syncNow = async () => {
     setSyncing(true);
@@ -137,6 +143,44 @@ export function NammuxOpportunityTab({
 
   return (
     <div className="space-y-4">
+      {isPreJudicialCancelled && snapshot && (
+        <Card className="border-destructive/40 bg-destructive/5">
+          <CardContent className="pt-6">
+            <div className="flex items-start gap-3">
+              <WarningCircle className="mt-0.5 h-5 w-5 shrink-0 text-destructive" />
+              <div className="min-w-0">
+                <div className="flex flex-wrap items-center gap-2">
+                  <h3 className="font-semibold text-destructive">
+                    Processo pré-judicial cancelado
+                  </h3>
+                  <Badge variant="destructive">Nammux</Badge>
+                </div>
+                <p className="mt-1 text-sm text-muted-foreground">
+                  A oportunidade permanece com seu status e sua etapa comercial
+                  atuais. Somente a operação pré-judicial no Nammux foi cancelada.
+                </p>
+                {snapshot.status_change_reason && (
+                  <p className="mt-3 text-sm">
+                    <span className="font-medium">Motivo:</span>{" "}
+                    {snapshot.status_change_reason}
+                  </p>
+                )}
+                {(snapshot.status_changed_by_name || snapshot.status_changed_at) && (
+                  <p className="mt-1 text-xs text-muted-foreground">
+                    {snapshot.status_changed_by_name
+                      ? `Por ${snapshot.status_changed_by_name}`
+                      : "Alterado no Nammux"}
+                    {snapshot.status_changed_at
+                      ? ` em ${new Date(snapshot.status_changed_at).toLocaleString("pt-BR")}`
+                      : ""}
+                  </p>
+                )}
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+      )}
+
       <Card>
         <CardContent className="pt-6 space-y-5">
           <div className="flex flex-wrap items-start justify-between gap-3">

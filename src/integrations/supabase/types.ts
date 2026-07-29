@@ -6049,6 +6049,10 @@ export type Database = {
           source_updated_at: string | null
           stage_id: string | null
           stage_name: string | null
+          status_change_reason: string | null
+          status_changed_at: string | null
+          status_changed_by_name: string | null
+          status_code: string | null
           status_id: string | null
           status_name: string | null
           sync_status: string
@@ -6077,6 +6081,10 @@ export type Database = {
           source_updated_at?: string | null
           stage_id?: string | null
           stage_name?: string | null
+          status_change_reason?: string | null
+          status_changed_at?: string | null
+          status_changed_by_name?: string | null
+          status_code?: string | null
           status_id?: string | null
           status_name?: string | null
           sync_status?: string
@@ -6105,6 +6113,10 @@ export type Database = {
           source_updated_at?: string | null
           stage_id?: string | null
           stage_name?: string | null
+          status_change_reason?: string | null
+          status_changed_at?: string | null
+          status_changed_by_name?: string | null
+          status_code?: string | null
           status_id?: string | null
           status_name?: string | null
           sync_status?: string

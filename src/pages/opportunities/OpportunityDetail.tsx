@@ -70,6 +70,7 @@ export default function OpportunityDetail() {
   const [selectedTab, setSelectedTab] = useState<Key>('overview');
   const [createdByName, setCreatedByName] = useState<string | null>(null);
   const [updatedByName, setUpdatedByName] = useState<string | null>(null);
+  const [nammuxPreJudicialCancelled, setNammuxPreJudicialCancelled] = useState(false);
   const [pendingStatus, setPendingStatus] = useState<'won' | 'lost' | null>(null);
   const { userProfile } = useOrganization();
 
@@ -81,7 +82,10 @@ export default function OpportunityDetail() {
     { id: 'tasks', label: t('contacts.tasksTab') },
     { id: 'attachments', label: t('attachments.title') },
     { id: 'documents', label: 'Documentos' },
-    { id: 'nammux', label: 'Nammux' },
+    {
+      id: 'nammux',
+      label: nammuxPreJudicialCancelled ? 'Nammux · Cancelado' : 'Nammux',
+    },
     { id: 'notes', label: t('contacts.notesTab') },
   ];
 
@@ -116,6 +120,20 @@ export default function OpportunityDetail() {
     }
 
     setOpportunity(data);
+
+    const { data: nammuxSnapshot, error: nammuxSnapshotError } = await supabase
+      .from('nammux_process_snapshots')
+      .select('phase,status_code')
+      .eq('organization_id', organization.id)
+      .eq('opportunity_id', data.id)
+      .maybeSingle();
+    if (nammuxSnapshotError) {
+      console.error('Error fetching Nammux process status:', nammuxSnapshotError);
+    }
+    setNammuxPreJudicialCancelled(
+      nammuxSnapshot?.phase === 'PRE_JUDICIAL' &&
+        nammuxSnapshot?.status_code === 'CANCELADO',
+    );
 
     // Fetch created_by / updated_by names
     const byIds = [(data as any)?.created_by, (data as any)?.updated_by].filter(Boolean) as string[];
@@ -359,6 +377,9 @@ export default function OpportunityDetail() {
                   ? t('status.lost')
                   : t('status.open')}
               </Badge>
+              {nammuxPreJudicialCancelled && (
+                <Badge variant="destructive">Processo cancelado</Badge>
+              )}
             </div>
             <div className="text-xl font-semibold text-foreground tabular-nums mt-1">
               {formatCurrency(opportunity.amount || 0)}
@@ -605,6 +626,9 @@ export default function OpportunityDetail() {
                       ? t('status.lost')
                       : t('status.open')}
                   </Badge>
+                  {nammuxPreJudicialCancelled && (
+                    <Badge variant="destructive">Processo cancelado</Badge>
+                  )}
                   <div className="text-xl font-semibold text-foreground tabular-nums">
                     {formatCurrency(opportunity.amount || 0)}
                   </div>
