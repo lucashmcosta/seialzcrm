@@ -78,10 +78,8 @@ async function invokeAuthenticatedFunction(functionName: string, body: Record<st
   if (sessionError || !session?.access_token) {
     throw new Error("Sua sessão expirou. Entre novamente antes de configurar a integração.");
   }
-  return supabase.functions.invoke(functionName, {
-    body,
-    headers: { Authorization: `Bearer ${session.access_token}` },
-  });
+  // Sem header manual: o supabase-js anexa o access token já renovado automaticamente.
+  return supabase.functions.invoke(functionName, { body });
 }
 
 async function functionFailureMessage(
@@ -89,11 +87,14 @@ async function functionFailureMessage(
   data: unknown,
   fallback: string,
 ): Promise<string> {
-  const payload = data as { details?: unknown; error?: unknown } | null;
-  if (typeof payload?.details === "string") return payload.details;
-  if (typeof payload?.error === "string") return payload.error;
-
   const context = (error as { context?: Response } | null)?.context;
+  const status = context?.status;
+  const withStatus = (message: string) => (status ? `${status} ${message}` : message);
+
+  const payload = data as { details?: unknown; error?: unknown } | null;
+  if (typeof payload?.details === "string") return withStatus(payload.details);
+  if (typeof payload?.error === "string") return withStatus(payload.error);
+
   if (context) {
     try {
       const responsePayload = (await context.clone().json()) as {
@@ -101,14 +102,15 @@ async function functionFailureMessage(
         error?: unknown;
         message?: unknown;
       };
-      if (typeof responsePayload.details === "string") return responsePayload.details;
-      if (typeof responsePayload.error === "string") return responsePayload.error;
-      if (typeof responsePayload.message === "string") return responsePayload.message;
+      if (typeof responsePayload.details === "string") return withStatus(responsePayload.details);
+      if (typeof responsePayload.error === "string") return withStatus(responsePayload.error);
+      if (typeof responsePayload.message === "string") return withStatus(responsePayload.message);
     } catch {
       // Preserve the safe fallback below.
     }
   }
-  return error instanceof Error && error.message ? error.message : fallback;
+  if (error instanceof Error && error.message) return withStatus(error.message);
+  return withStatus(fallback);
 }
 
 const jobStatusBadge = (s: string) => {
