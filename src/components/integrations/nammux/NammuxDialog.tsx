@@ -62,6 +62,14 @@ const defaultConfig: NammuxConfig = {
   contact_field_mapping: {},
 };
 
+function createCredentialDraft() {
+  const bytes = new Uint8Array(32);
+  crypto.getRandomValues(bytes);
+  const secret = Array.from(bytes, (byte) => byte.toString(16).padStart(2, "0")).join("");
+  const keyId = `nammux_${crypto.randomUUID().replaceAll("-", "").slice(0, 16)}`;
+  return { keyId, secret };
+}
+
 const jobStatusBadge = (s: string) => {
   const map: Record<string, { label: string; cls: string }> = {
     success: { label: "Sucesso", cls: "bg-green-600 text-white" },
@@ -93,9 +101,14 @@ export function NammuxDialog({ open, onOpenChange, integration, orgIntegration: 
   } | null>(null);
   const [disconnectOpen, setDisconnectOpen] = useState(false);
   const [expandedJobId, setExpandedJobId] = useState<string | null>(null);
-  const [copied, setCopied] = useState<"seialz" | null>(null);
+  const [copied, setCopied] = useState<"seialz" | "credential" | null>(null);
+  const [generatedKeyId, setGeneratedKeyId] = useState<string | null>(null);
+  const [issuedCredential, setIssuedCredential] = useState<{
+    key_id: string;
+    secret: string;
+  } | null>(null);
 
-  const copyToClipboard = async (value: string, key: "seialz") => {
+  const copyToClipboard = async (value: string, key: "seialz" | "credential") => {
     try {
       await navigator.clipboard.writeText(value);
       setCopied(key);
@@ -154,10 +167,18 @@ export function NammuxDialog({ open, onOpenChange, integration, orgIntegration: 
       setTab("config");
       setMappingJson(JSON.stringify(cfg.contact_field_mapping ?? {}, null, 2));
       setShowSecret(false);
+      setGeneratedKeyId(null);
       setTestResult(null);
       setExpandedJobId(null);
     }
   }, [open, orgIntegration?.id, orgIntegration?.config_values]);
+
+  useEffect(() => {
+    if (!open) {
+      setGeneratedKeyId(null);
+      setIssuedCredential(null);
+    }
+  }, [open]);
 
   // Jobs (logs)
   const { data: jobs, isLoading: loadingJobs, refetch: refetchJobs } = useQuery({
@@ -278,16 +299,20 @@ export function NammuxDialog({ open, onOpenChange, integration, orgIntegration: 
       }
 
       if (form.webhook_secret.trim()) {
+        const secret = form.webhook_secret.trim();
         const { data, error } = await supabase.functions.invoke("nammux-credential-manage", {
           body: {
             action: "rotate",
             organization_id: organization.id,
-            secret: form.webhook_secret.trim(),
+            key_id: generatedKeyId ?? undefined,
+            secret,
           },
         });
         if (error || !data?.ok) {
           throw new Error(data?.details || data?.error || "Falha ao salvar credencial");
         }
+        setIssuedCredential({ key_id: data.key_id, secret });
+        setGeneratedKeyId(null);
         setForm((current) => ({ ...current, webhook_secret: "" }));
       }
     },
@@ -325,6 +350,25 @@ export function NammuxDialog({ open, onOpenChange, integration, orgIntegration: 
     } finally {
       setSaving(false);
     }
+  };
+
+  const handleGenerateCredential = () => {
+    const draft = createCredentialDraft();
+    setGeneratedKeyId(draft.keyId);
+    setIssuedCredential(null);
+    setForm((current) => ({ ...current, webhook_secret: draft.secret }));
+    setShowSecret(true);
+    toast.success("Credencial segura gerada. Salve para ativá-la.");
+  };
+
+  const copyCredentialPackage = () => {
+    if (!issuedCredential) return;
+    const credentialPackage = JSON.stringify({
+      version: 1,
+      key_id: issuedCredential.key_id,
+      secret: issuedCredential.secret,
+    });
+    void copyToClipboard(credentialPackage, "credential");
   };
 
   const handleTest = async () => {
@@ -491,9 +535,9 @@ export function NammuxDialog({ open, onOpenChange, integration, orgIntegration: 
                     <Label htmlFor="webhook_secret">
                       {activeCredential ? "Rotacionar credencial" : "Credencial compartilhada *"}
                     </Label>
-                    {activeCredential && (
+                    {(generatedKeyId || activeCredential?.key_id) && (
                       <Badge variant="secondary" className="font-mono text-[10px]">
-                        key_id: {activeCredential.key_id}
+                        key_id: {generatedKeyId || activeCredential?.key_id}
                       </Badge>
                     )}
                   </div>
@@ -502,7 +546,11 @@ export function NammuxDialog({ open, onOpenChange, integration, orgIntegration: 
                       id="webhook_secret"
                       type={showSecret ? "text" : "password"}
                       value={form.webhook_secret}
-                      onChange={(e) => setForm((p) => ({ ...p, webhook_secret: e.target.value }))}
+                      onChange={(e) => {
+                        setGeneratedKeyId(null);
+                        setIssuedCredential(null);
+                        setForm((p) => ({ ...p, webhook_secret: e.target.value }));
+                      }}
                       placeholder={
                         activeCredential
                           ? "Deixe vazio para manter a credencial atual"
@@ -522,6 +570,36 @@ export function NammuxDialog({ open, onOpenChange, integration, orgIntegration: 
                     O valor é enviado somente ao backend e nunca pode ser consultado depois.
                     A rotação mantém a chave anterior válida por 24 horas.
                   </p>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    onClick={handleGenerateCredential}
+                  >
+                    Gerar credencial segura
+                  </Button>
+                  {issuedCredential && (
+                    <Alert>
+                      <AlertDescription className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+                        <span>
+                          Credencial salva. Copie o pacote uma única vez para cadastrar no Nammux.
+                        </span>
+                        <Button
+                          type="button"
+                          variant="secondary"
+                          size="sm"
+                          onClick={copyCredentialPackage}
+                        >
+                          {copied === "credential" ? (
+                            <Check size={16} className="mr-1.5" />
+                          ) : (
+                            <Copy size={16} className="mr-1.5" />
+                          )}
+                          Copiar pacote
+                        </Button>
+                      </AlertDescription>
+                    </Alert>
+                  )}
                 </div>
               </section>
 
