@@ -363,13 +363,13 @@ export function NammuxDialog({ open, onOpenChange, integration, orgIntegration: 
 
   const copyCredentialPackage = () => {
     if (!issuedCredential) return;
-    const credentialPackage = JSON.stringify({
-      version: 1,
-      key_id: issuedCredential.key_id,
-      secret: issuedCredential.secret,
-    });
+    const credentialPackage = JSON.stringify({ version: 1, ...issuedCredential });
     void copyToClipboard(credentialPackage, "credential");
   };
+
+  const credentialPackage = issuedCredential
+    ? JSON.stringify({ version: 1, ...issuedCredential })
+    : "";
 
   const handleTest = async () => {
     if (!organization?.id) return;
@@ -580,23 +580,41 @@ export function NammuxDialog({ open, onOpenChange, integration, orgIntegration: 
                   </Button>
                   {issuedCredential && (
                     <Alert>
-                      <AlertDescription className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+                      <AlertDescription className="space-y-2">
                         <span>
                           Credencial salva. Copie o pacote uma única vez para cadastrar no Nammux.
                         </span>
-                        <Button
-                          type="button"
-                          variant="secondary"
-                          size="sm"
-                          onClick={copyCredentialPackage}
-                        >
-                          {copied === "credential" ? (
-                            <Check size={16} className="mr-1.5" />
-                          ) : (
-                            <Copy size={16} className="mr-1.5" />
-                          )}
-                          Copiar pacote
-                        </Button>
+                        <Input
+                          readOnly
+                          value={credentialPackage}
+                          className="font-mono text-[11px]"
+                          aria-label="Pacote de credencial do Nammux"
+                          onFocus={(event) => event.currentTarget.select()}
+                        />
+                        <div className="flex flex-wrap gap-2">
+                          <Button
+                            type="button"
+                            variant="secondary"
+                            size="sm"
+                            onClick={copyCredentialPackage}
+                          >
+                            {copied === "credential" ? (
+                              <Check size={16} className="mr-1.5" />
+                            ) : (
+                              <Copy size={16} className="mr-1.5" />
+                            )}
+                            Copiar pacote
+                          </Button>
+                          <Button type="button" variant="outline" size="sm" asChild>
+                            <a
+                              href={form.app_url || "https://nammux.lovable.app"}
+                              target="_blank"
+                              rel="noreferrer"
+                            >
+                              Abrir Nammux em nova aba
+                            </a>
+                          </Button>
+                        </div>
                       </AlertDescription>
                     </Alert>
                   )}
