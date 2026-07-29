@@ -177,7 +177,7 @@ if (dsn) {
       // rejects promises without a value during WSTransport reconnect/register
       // (WS close 1006 → ConnectionError 31005 / AccessTokenExpired 20104),
       // and the SDK reconnects on its own right after. Predicate is strict:
-      // - unhandledrejection mechanism
+      // - unhandledrejection mechanism OR Sentry-normalized UnhandledRejection
       // - value is missing OR matches "Non-Error promise rejection ... undefined"
       // - a recent breadcrumb references TwilioVoice / twilio / voice-sdk
       const isEmptyRejection =
@@ -186,12 +186,15 @@ if (dsn) {
         /non-error promise rejection captured with value:\s*undefined/i.test(
           exceptionValue,
         );
+      const isUnhandledRejection =
+        mechanismType === "onunhandledrejection" ||
+        exceptionType === "UnhandledRejection";
       if (
-        mechanismType === "onunhandledrejection" &&
+        isUnhandledRejection &&
         isEmptyRejection
       ) {
         const breadcrumbs = event.breadcrumbs ?? [];
-        const recent = breadcrumbs.slice(-15);
+        const recent = breadcrumbs.slice(-30);
         const twilioRelated = recent.some((bc) => {
           const msg = typeof bc?.message === "string" ? bc.message : "";
           const cat = typeof bc?.category === "string" ? bc.category : "";
