@@ -22,14 +22,20 @@ Deno.serve(async (req) => {
   const anon = Deno.env.get("SUPABASE_ANON_KEY")!;
   const serviceRole = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
   const authorization = req.headers.get("authorization") ?? "";
-  if (!authorization) return json(401, { error: "missing_authorization" });
+  const accessToken = authorization.replace(/^Bearer\s+/i, "").trim();
+  if (!accessToken) return json(401, { error: "missing_authorization" });
 
   const authClient = createClient(url, anon, {
-    global: { headers: { authorization } },
     auth: { persistSession: false },
   });
-  const { data: authData, error: authError } = await authClient.auth.getUser();
-  if (authError || !authData.user) return json(401, { error: "invalid_authorization" });
+  const { data: authData, error: authError } = await authClient.auth.getUser(accessToken);
+  if (authError || !authData.user) {
+    console.warn("[nammux-credential-manage] authorization rejected", {
+      code: authError?.code ?? null,
+      status: authError?.status ?? null,
+    });
+    return json(401, { error: "invalid_authorization" });
+  }
 
   const body = await req.json().catch(() => ({}));
   const organizationId = typeof body.organization_id === "string" ? body.organization_id : "";

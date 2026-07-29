@@ -19,11 +19,12 @@ Deno.serve(async (req) => {
 
   const url = Deno.env.get("SUPABASE_URL")!;
   const authorization = req.headers.get("authorization") ?? "";
+  const accessToken = authorization.replace(/^Bearer\s+/i, "").trim();
+  if (!accessToken) return json(401, { error: "missing_authorization" });
   const authClient = createClient(url, Deno.env.get("SUPABASE_ANON_KEY")!, {
-    global: { headers: { authorization } },
     auth: { persistSession: false },
   });
-  const { data: authData } = await authClient.auth.getUser();
+  const { data: authData } = await authClient.auth.getUser(accessToken);
   if (!authData.user) return json(401, { error: "unauthorized" });
 
   const body = await req.json().catch(() => ({}));

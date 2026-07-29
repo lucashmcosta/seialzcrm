@@ -39,10 +39,9 @@ Deno.serve(async (req) => {
   if (!jwt) return json(401, { error: "missing_authorization" });
 
   const authClient = createClient(SUPABASE_URL, ANON, {
-    global: { headers: { Authorization: `Bearer ${jwt}` } },
     auth: { persistSession: false },
   });
-  const { data: userData, error: userErr } = await authClient.auth.getUser();
+  const { data: userData, error: userErr } = await authClient.auth.getUser(jwt);
   if (userErr || !userData?.user) return json(401, { error: "invalid_jwt" });
   const authUserId = userData.user.id;
 

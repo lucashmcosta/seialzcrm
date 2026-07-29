@@ -70,6 +70,47 @@ function createCredentialDraft() {
   return { keyId, secret };
 }
 
+async function invokeAuthenticatedFunction(functionName: string, body: Record<string, unknown>) {
+  const {
+    data: { session },
+    error: sessionError,
+  } = await supabase.auth.getSession();
+  if (sessionError || !session?.access_token) {
+    throw new Error("Sua sessão expirou. Entre novamente antes de configurar a integração.");
+  }
+  return supabase.functions.invoke(functionName, {
+    body,
+    headers: { Authorization: `Bearer ${session.access_token}` },
+  });
+}
+
+async function functionFailureMessage(
+  error: unknown,
+  data: unknown,
+  fallback: string,
+): Promise<string> {
+  const payload = data as { details?: unknown; error?: unknown } | null;
+  if (typeof payload?.details === "string") return payload.details;
+  if (typeof payload?.error === "string") return payload.error;
+
+  const context = (error as { context?: Response } | null)?.context;
+  if (context) {
+    try {
+      const responsePayload = (await context.clone().json()) as {
+        details?: unknown;
+        error?: unknown;
+        message?: unknown;
+      };
+      if (typeof responsePayload.details === "string") return responsePayload.details;
+      if (typeof responsePayload.error === "string") return responsePayload.error;
+      if (typeof responsePayload.message === "string") return responsePayload.message;
+    } catch {
+      // Preserve the safe fallback below.
+    }
+  }
+  return error instanceof Error && error.message ? error.message : fallback;
+}
+
 const jobStatusBadge = (s: string) => {
   const map: Record<string, { label: string; cls: string }> = {
     success: { label: "Sucesso", cls: "bg-green-600 text-white" },
@@ -140,10 +181,15 @@ export function NammuxDialog({ open, onOpenChange, integration, orgIntegration: 
     queryKey: ["nammux-credential-status", organization?.id],
     enabled: !!organization?.id && open,
     queryFn: async () => {
-      const { data, error } = await supabase.functions.invoke("nammux-credential-manage", {
-        body: { action: "status", organization_id: organization!.id },
+      const { data, error } = await invokeAuthenticatedFunction("nammux-credential-manage", {
+        action: "status",
+        organization_id: organization!.id,
       });
-      if (error) throw error;
+      if (error) {
+        throw new Error(
+          await functionFailureMessage(error, data, "Falha ao consultar a credencial"),
+        );
+      }
       return data as {
         ok: boolean;
         credentials: Array<{
@@ -300,16 +346,16 @@ export function NammuxDialog({ open, onOpenChange, integration, orgIntegration: 
 
       if (form.webhook_secret.trim()) {
         const secret = form.webhook_secret.trim();
-        const { data, error } = await supabase.functions.invoke("nammux-credential-manage", {
-          body: {
-            action: "rotate",
-            organization_id: organization.id,
-            key_id: generatedKeyId ?? undefined,
-            secret,
-          },
+        const { data, error } = await invokeAuthenticatedFunction("nammux-credential-manage", {
+          action: "rotate",
+          organization_id: organization.id,
+          key_id: generatedKeyId ?? undefined,
+          secret,
         });
         if (error || !data?.ok) {
-          throw new Error(data?.details || data?.error || "Falha ao salvar credencial");
+          throw new Error(
+            await functionFailureMessage(error, data, "Falha ao salvar credencial"),
+          );
         }
         setIssuedCredential({ key_id: data.key_id, secret });
         setGeneratedKeyId(null);
@@ -377,10 +423,12 @@ export function NammuxDialog({ open, onOpenChange, integration, orgIntegration: 
     setTestResult(null);
     try {
       await saveMutation.mutateAsync();
-      const { data, error } = await supabase.functions.invoke("nammux-test-connection", {
-        body: { organization_id: organization.id },
+      const { data, error } = await invokeAuthenticatedFunction("nammux-test-connection", {
+        organization_id: organization.id,
       });
-      if (error) throw error;
+      if (error) {
+        throw new Error(await functionFailureMessage(error, data, "Falha no teste"));
+      }
       setTestResult(data);
       if (data?.ok) toast.success("✅ Conexão validada");
       else toast.error(`❌ ${data?.error || "Falha no teste"}`);
