@@ -22,11 +22,11 @@ Deno.serve(async (req) => {
   const authorization = req.headers.get("authorization") ?? "";
   const accessToken = authorization.replace(/^Bearer\s+/i, "").trim();
   if (!accessToken) return json(401, { error: "missing_authorization" });
-  const authClient = createClient(url, Deno.env.get("SUPABASE_ANON_KEY")!, {
+  const authClient = createClient(url, Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!, {
     auth: { persistSession: false },
   });
-  const { data: authData } = await authClient.auth.getUser(accessToken);
-  if (!authData.user) return json(401, { error: "unauthorized" });
+  const { data: authData, error: authError } = await authClient.auth.getUser(accessToken);
+  if (authError || !authData.user) return json(401, { error: "unauthorized" });
 
   const { organization_id: organizationId } = await req.json().catch(() => ({}));
   if (!organizationId) return json(400, { error: "organization_id_required" });
