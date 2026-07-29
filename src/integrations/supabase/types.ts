@@ -6025,6 +6025,102 @@ export type Database = {
           },
         ]
       }
+      nammux_contact_address_state: {
+        Row: {
+          contact_id: string
+          last_event_id: string | null
+          last_synced_at: string
+          organization_id: string
+          source_updated_at: string | null
+        }
+        Insert: {
+          contact_id: string
+          last_event_id?: string | null
+          last_synced_at?: string
+          organization_id: string
+          source_updated_at?: string | null
+        }
+        Update: {
+          contact_id?: string
+          last_event_id?: string | null
+          last_synced_at?: string
+          organization_id?: string
+          source_updated_at?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "nammux_contact_address_state_contact_id_fkey"
+            columns: ["contact_id"]
+            isOneToOne: false
+            referencedRelation: "contacts"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "nammux_contact_address_state_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      nammux_integration_credentials: {
+        Row: {
+          created_at: string
+          created_by_user_id: string | null
+          expires_at: string | null
+          id: string
+          is_active: boolean
+          key_id: string
+          organization_id: string
+          rotated_from_key_id: string | null
+          secret_ciphertext: string
+          updated_at: string
+          valid_from: string
+        }
+        Insert: {
+          created_at?: string
+          created_by_user_id?: string | null
+          expires_at?: string | null
+          id?: string
+          is_active?: boolean
+          key_id: string
+          organization_id: string
+          rotated_from_key_id?: string | null
+          secret_ciphertext: string
+          updated_at?: string
+          valid_from?: string
+        }
+        Update: {
+          created_at?: string
+          created_by_user_id?: string | null
+          expires_at?: string | null
+          id?: string
+          is_active?: boolean
+          key_id?: string
+          organization_id?: string
+          rotated_from_key_id?: string | null
+          secret_ciphertext?: string
+          updated_at?: string
+          valid_from?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "nammux_integration_credentials_created_by_user_id_fkey"
+            columns: ["created_by_user_id"]
+            isOneToOne: false
+            referencedRelation: "users"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "nammux_integration_credentials_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       nammux_process_snapshots: {
         Row: {
           area_id: string | null
@@ -6131,6 +6227,13 @@ export type Database = {
             referencedColumns: ["id"]
           },
           {
+            foreignKeyName: "nammux_process_snapshots_opportunity_id_fkey"
+            columns: ["opportunity_id"]
+            isOneToOne: false
+            referencedRelation: "vw_intel_won_vs_lost_30d"
+            referencedColumns: ["opportunity_id"]
+          },
+          {
             foreignKeyName: "nammux_process_snapshots_organization_id_fkey"
             columns: ["organization_id"]
             isOneToOne: false
@@ -6186,6 +6289,13 @@ export type Database = {
             isOneToOne: false
             referencedRelation: "opportunities"
             referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "nammux_sync_events_opportunity_id_fkey"
+            columns: ["opportunity_id"]
+            isOneToOne: false
+            referencedRelation: "vw_intel_won_vs_lost_30d"
+            referencedColumns: ["opportunity_id"]
           },
           {
             foreignKeyName: "nammux_sync_events_organization_id_fkey"
@@ -9147,6 +9257,16 @@ export type Database = {
           type: string
         }[]
       }
+      apply_nammux_contact_address: {
+        Args: {
+          _address: Json
+          _contact_id: string
+          _organization_id: string
+          _source_event_id: string
+          _source_updated_at: string
+        }
+        Returns: Json
+      }
       assign_round_robin:
         | { Args: { _org_id: string }; Returns: string }
         | { Args: { _org_id: string; _queue: string }; Returns: string }
@@ -9166,6 +9286,10 @@ export type Database = {
       current_user_managed_org_ids: { Args: never; Returns: string[] }
       current_user_org_ids: { Args: never; Returns: string[] }
       f_unaccent: { Args: { "": string }; Returns: string }
+      fn_build_nammux_contact_payload: {
+        Args: { _contact_id: string }
+        Returns: Json
+      }
       fn_build_opportunity_won_payload: {
         Args: { _opportunity_id: string }
         Returns: Json
@@ -9177,6 +9301,10 @@ export type Database = {
           p_opportunity_id?: string
           p_organization_id: string
         }
+        Returns: undefined
+      }
+      fn_emit_nammux_contact_updated: {
+        Args: { _contact_id: string }
         Returns: undefined
       }
       fn_feature_flag_enabled: {
