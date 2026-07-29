@@ -408,13 +408,25 @@ export function NammuxDialog({ open, onOpenChange, integration, orgIntegration: 
   };
 
   const copyCredentialPackage = () => {
-    if (!issuedCredential) return;
-    const credentialPackage = JSON.stringify({ version: 1, ...issuedCredential });
+    if (!issuedCredential || !organization) return;
+    const credentialPackage = JSON.stringify({
+      version: 2,
+      ...issuedCredential,
+      seialz_organization_id: organization.id,
+      seialz_organization_name: organization.name,
+      nammux_organization_id: form.nammux_organization_id.trim(),
+    });
     void copyToClipboard(credentialPackage, "credential");
   };
 
-  const credentialPackage = issuedCredential
-    ? JSON.stringify({ version: 1, ...issuedCredential })
+  const credentialPackage = issuedCredential && organization
+    ? JSON.stringify({
+        version: 2,
+        ...issuedCredential,
+        seialz_organization_id: organization.id,
+        seialz_organization_name: organization.name,
+        nammux_organization_id: form.nammux_organization_id.trim(),
+      })
     : "";
 
   const handleTest = async () => {
