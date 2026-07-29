@@ -81,6 +81,23 @@ if (dsn) {
         event.message;
       if (isStaleChunkMessage(originalMessage)) return null;
 
+      // Drop errors whose stack points into Vite's dev dependency cache
+      // (`/node_modules/.vite/deps/...`). That path only exists in the local
+      // dev server / Lovable preview. When Vite re-optimizes dependencies
+      // mid-session the tab ends up mixing chunks from two generations
+      // (different `?v=` hashes), so a library can grab a second React copy
+      // and blow up with "Cannot read properties of null (reading 'useRef')".
+      // A reload fixes it and production is unaffected — pure dev noise.
+      {
+        const frames = event.exception?.values?.[0]?.stacktrace?.frames ?? [];
+        const inViteDevDeps = frames.some((frame) => {
+          const file = typeof frame?.filename === "string" ? frame.filename : "";
+          return file.includes("/node_modules/.vite/deps/");
+        });
+        if (inViteDevDeps) return null;
+      }
+
+
       // Drop stale/import errors originating inside the Twilio Voice SDK
       // bundle. The SDK dynamically imports workers and fetches CDN assets;
       // adblockers, CSPs and Safari ITP frequently block those and the SDK
