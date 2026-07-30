@@ -128,6 +128,31 @@ if (typeof window !== "undefined") {
   });
 }
 
+// DEV ONLY: Vite dependency re-optimization can leave the page with chunks from
+// two different generations (symptom: "Cannot read properties of null (reading
+// 'useRef')" / "Invalid hook call" coming from /node_modules/.vite/deps/).
+// A single reload per session fixes it; production is untouched.
+if (import.meta.env.DEV && typeof window !== "undefined") {
+  const RELOAD_FLAG = "vite-deps-reloaded";
+  const isViteDepsError = (err: unknown) => {
+    const stack = err instanceof Error ? `${err.stack ?? ""} ${err.message}` : String(err ?? "");
+    if (!stack.includes("/node_modules/.vite/deps/")) return false;
+    return /useRef|Invalid hook call|null \(reading|dispatcher/i.test(stack);
+  };
+  const recoverViteDeps = (err: unknown) => {
+    if (!isViteDepsError(err)) return;
+    try {
+      if (sessionStorage.getItem(RELOAD_FLAG)) return;
+      sessionStorage.setItem(RELOAD_FLAG, "1");
+    } catch {
+      return;
+    }
+    window.location.reload();
+  };
+  window.addEventListener("error", (event) => recoverViteDeps(event.error ?? event.message));
+  window.addEventListener("unhandledrejection", (event) => recoverViteDeps(event.reason));
+}
+
 createRoot(document.getElementById("root")!).render(
   <React.StrictMode>
     <Sentry.ErrorBoundary
