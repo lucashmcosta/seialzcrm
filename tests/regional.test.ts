@@ -1,13 +1,21 @@
 import {
   canonicalContactName,
+  contactSexLabelFor,
+  formatCep,
+  formatCpf,
   isValidCnpj,
   isValidCpf,
   normalizeCnpj,
+  normalizeContactSex,
 } from "../src/lib/regional.ts";
 
 function assertEquals(actual: unknown, expected: unknown): void {
   if (JSON.stringify(actual) !== JSON.stringify(expected)) {
-    throw new Error(`Expected ${JSON.stringify(expected)}, received ${JSON.stringify(actual)}`);
+    throw new Error(
+      `Expected ${JSON.stringify(expected)}, received ${
+        JSON.stringify(actual)
+      }`,
+    );
   }
 }
 
@@ -33,6 +41,24 @@ Deno.test("CPF validates check digits and repeated digits", () => {
   assertEquals(isValidCpf("529.982.247-25"), true);
   assertEquals(isValidCpf("529.982.247-24"), false);
   assertEquals(isValidCpf("111.111.111-11"), false);
+});
+
+Deno.test("CPF and CEP use Brazilian display masks without changing canonical digits", () => {
+  assertEquals(formatCpf("52998224725"), "529.982.247-25");
+  assertEquals(formatCpf("52998"), "529.98");
+  assertEquals(formatCep("01310930"), "01310-930");
+  assertEquals(formatCep("01310"), "01310");
+});
+
+Deno.test("contact sex is normalized independently from provider labels", () => {
+  assertEquals(normalizeContactSex("Feminino"), "female");
+  assertEquals(normalizeContactSex("Masculino"), "male");
+  assertEquals(contactSexLabelFor("female", "pt-BR"), "Feminino");
+  assertEquals(contactSexLabelFor("male", "en-US"), "Male");
+  assertEquals(
+    contactSexLabelFor("valor inesperado", "pt-BR"),
+    "Não informado",
+  );
 });
 
 Deno.test("CNPJ normalizes and validates check digits", () => {

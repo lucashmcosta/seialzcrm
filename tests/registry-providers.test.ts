@@ -40,6 +40,7 @@ Deno.test("CPF Brasil v2 response maps documented identity fields", () => {
   assertEquals(result.version, "2.0");
   assertEquals(result.payload.full_name, "Pessoa de Teste");
   assertEquals(result.payload.birth_date, "1899-11-30");
+  assertEquals(result.payload.sex, "female");
   assertEquals(result.payload.mother_name, "Mãe de Teste");
 });
 

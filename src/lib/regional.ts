@@ -1,22 +1,73 @@
-export type OperatingCountryCode = 'BR' | 'US';
+export type OperatingCountryCode = "BR" | "US";
+export type ContactSex = "female" | "male" | "other";
 export type CpfVerificationStatus =
-  | 'unverified'
-  | 'pending'
-  | 'verified'
-  | 'invalid'
-  | 'error';
+  | "unverified"
+  | "pending"
+  | "verified"
+  | "invalid"
+  | "error";
 
 export function digits(value: string | null | undefined): string {
-  return String(value ?? '').replace(/\D/g, '');
+  return String(value ?? "").replace(/\D/g, "");
+}
+
+export function formatCpf(value: string | null | undefined): string {
+  const cpf = digits(value).slice(0, 11);
+  return cpf
+    .replace(/^(\d{3})(\d)/, "$1.$2")
+    .replace(/^(\d{3})\.(\d{3})(\d)/, "$1.$2.$3")
+    .replace(/\.(\d{3})(\d)/, ".$1-$2");
+}
+
+export function formatCep(value: string | null | undefined): string {
+  const cep = digits(value).slice(0, 8);
+  return cep.replace(/^(\d{5})(\d)/, "$1-$2");
+}
+
+export function normalizeContactSex(
+  value: string | null | undefined,
+): ContactSex | "" {
+  const normalized = String(value ?? "")
+    .normalize("NFD")
+    .replace(/\p{Diacritic}/gu, "")
+    .trim()
+    .toLowerCase();
+  if (["f", "female", "feminino", "feminina", "mulher"].includes(normalized)) {
+    return "female";
+  }
+  if (["m", "male", "masculino", "masculina", "homem"].includes(normalized)) {
+    return "male";
+  }
+  if (
+    ["other", "outro", "outra", "nao binario", "non-binary", "nonbinary"]
+      .includes(normalized)
+  ) {
+    return "other";
+  }
+  return "";
+}
+
+export function contactSexLabelFor(
+  value: string | null | undefined,
+  locale: string,
+): string {
+  const sex = normalizeContactSex(value);
+  if (!sex) return locale === "en-US" ? "Not informed" : "Não informado";
+  const labels = locale === "en-US"
+    ? { female: "Female", male: "Male", other: "Other" }
+    : { female: "Feminino", male: "Masculino", other: "Outro" };
+  return labels[sex];
 }
 
 export function normalizeCnpj(value: string | null | undefined): string {
-  return String(value ?? '').replace(/[^0-9A-Za-z]/g, '').toUpperCase();
+  return String(value ?? "").replace(/[^0-9A-Za-z]/g, "").toUpperCase();
 }
 
 export function isValidCnpj(value: string | null | undefined): boolean {
   const cnpj = normalizeCnpj(value);
-  if (!/^[A-Z0-9]{12}\d{2}$/.test(cnpj) || /^([A-Z0-9])\1{13}$/.test(cnpj)) return false;
+  if (!/^[A-Z0-9]{12}\d{2}$/.test(cnpj) || /^([A-Z0-9])\1{13}$/.test(cnpj)) {
+    return false;
+  }
 
   const calculate = (baseLength: 12 | 13) => {
     const weights = baseLength === 12
@@ -30,7 +81,8 @@ export function isValidCnpj(value: string | null | undefined): boolean {
     return remainder < 2 ? 0 : 11 - remainder;
   };
 
-  return calculate(12) === Number(cnpj[12]) && calculate(13) === Number(cnpj[13]);
+  return calculate(12) === Number(cnpj[12]) &&
+    calculate(13) === Number(cnpj[13]);
 }
 
 export function isValidCpf(value: string | null | undefined): boolean {
@@ -53,12 +105,13 @@ export function canonicalContactName(
   country: OperatingCountryCode,
   values: { fullName?: string; firstName?: string; lastName?: string },
 ): { fullName: string; firstName: string | null; lastName: string | null } {
-  const clean = (value?: string) => String(value ?? '').trim().replace(/\s+/g, ' ');
+  const clean = (value?: string) =>
+    String(value ?? "").trim().replace(/\s+/g, " ");
   const firstName = clean(values.firstName);
   const lastName = clean(values.lastName);
-  if (country === 'US') {
+  if (country === "US") {
     return {
-      fullName: [firstName, lastName].filter(Boolean).join(' '),
+      fullName: [firstName, lastName].filter(Boolean).join(" "),
       firstName: firstName || null,
       lastName: lastName || null,
     };
@@ -71,24 +124,24 @@ export function canonicalContactName(
 }
 
 export const cpfStatusLabel: Record<CpfVerificationStatus, string> = {
-  unverified: 'Não verificado',
-  pending: 'Verificação pendente',
-  verified: 'Verificado',
-  invalid: 'CPF inválido',
-  error: 'Falha na verificação',
+  unverified: "Não verificado",
+  pending: "Verificação pendente",
+  verified: "Verificado",
+  invalid: "CPF inválido",
+  error: "Falha na verificação",
 };
 
 const cpfStatusLabelEn: Record<CpfVerificationStatus, string> = {
-  unverified: 'Not verified',
-  pending: 'Verification pending',
-  verified: 'Verified',
-  invalid: 'Invalid CPF',
-  error: 'Verification failed',
+  unverified: "Not verified",
+  pending: "Verification pending",
+  verified: "Verified",
+  invalid: "Invalid CPF",
+  error: "Verification failed",
 };
 
 export function cpfStatusLabelFor(
   status: CpfVerificationStatus,
   locale: string,
 ): string {
-  return locale === 'en-US' ? cpfStatusLabelEn[status] : cpfStatusLabel[status];
+  return locale === "en-US" ? cpfStatusLabelEn[status] : cpfStatusLabel[status];
 }

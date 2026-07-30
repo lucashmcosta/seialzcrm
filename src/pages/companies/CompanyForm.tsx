@@ -12,7 +12,7 @@ import { useOrganization } from '@/hooks/useOrganization';
 import { useTranslation } from '@/lib/i18n';
 import { toast } from 'sonner';
 import { useRegistryLookup } from '@/hooks/useRegistryLookup';
-import { digits, isValidCnpj, normalizeCnpj } from '@/lib/regional';
+import { digits, formatCep, isValidCnpj, normalizeCnpj } from '@/lib/regional';
 
 interface CnpjLookupData {
   cnpj?: string;
@@ -124,7 +124,9 @@ export default function CompanyForm() {
         address_neighborhood: data.address_neighborhood || '',
         address_city: data.address_city || '',
         address_state: data.address_state || '',
-        address_zip: data.address_zip || '',
+        address_zip: organization?.operating_country_code === 'BR'
+          ? formatCep(data.address_zip)
+          : data.address_zip || '',
         address_country_code: data.address_country_code || organization?.operating_country_code || '',
       });
     } catch (error) {
@@ -184,7 +186,9 @@ export default function CompanyForm() {
       primary_cnae_description: cnpjPreview.primary_cnae_description || current.primary_cnae_description,
       email: cnpjPreview.email || current.email,
       phone: cnpjPreview.phone || current.phone,
-      address_zip: address.postal_code || current.address_zip,
+      address_zip: isBrazil
+        ? formatCep(address.postal_code || current.address_zip)
+        : address.postal_code || current.address_zip,
       address_street: address.street || current.address_street,
       address_number: address.number || current.address_number,
       address_complement: address.complement || current.address_complement,
@@ -219,7 +223,7 @@ export default function CompanyForm() {
     if (!cepPreview) return;
     setFormData((current) => ({
       ...current,
-      address_zip: cepPreview.postal_code || current.address_zip,
+      address_zip: formatCep(cepPreview.postal_code || current.address_zip),
       address_street: cepPreview.street || current.address_street,
       address_neighborhood: cepPreview.neighborhood || current.address_neighborhood,
       address_city: cepPreview.city || current.address_city,
@@ -243,6 +247,9 @@ export default function CompanyForm() {
       if (isBrazil && formData.cnpj && !isValidCnpj(formData.cnpj)) {
         throw new Error('invalid_cnpj');
       }
+      const canonicalAddressZip = isBrazil
+        ? digits(formData.address_zip)
+        : formData.address_zip.trim();
       const companyData = {
         ...formData,
         organization_id: organization.id,
@@ -264,7 +271,7 @@ export default function CompanyForm() {
         address_neighborhood: formData.address_neighborhood || null,
         address_city: formData.address_city || null,
         address_state: formData.address_state || null,
-        address_zip: formData.address_zip || null,
+        address_zip: canonicalAddressZip || null,
         address_country_code: formData.address_country_code || organization.operating_country_code,
         address: [
           formData.address_street,
@@ -273,7 +280,7 @@ export default function CompanyForm() {
           formData.address_neighborhood,
           formData.address_city,
           formData.address_state,
-          formData.address_zip,
+          canonicalAddressZip,
         ].filter(Boolean).join(', ') || formData.address || null,
       };
 
@@ -570,7 +577,10 @@ export default function CompanyForm() {
                     id="address_zip"
                     value={formData.address_zip}
                     onChange={(e) => {
-                      setFormData({ ...formData, address_zip: e.target.value });
+                      setFormData({
+                        ...formData,
+                        address_zip: isBrazil ? formatCep(e.target.value) : e.target.value,
+                      });
                       setCepPreview(null);
                     }}
                     onBlur={isBrazil ? lookupCep : undefined}
@@ -580,6 +590,9 @@ export default function CompanyForm() {
                         void lookupCep();
                       }
                     }}
+                    placeholder={isBrazil ? '00000-000' : undefined}
+                    inputMode={isBrazil ? 'numeric' : undefined}
+                    maxLength={isBrazil ? 9 : undefined}
                   />
                 </div>
               </div>

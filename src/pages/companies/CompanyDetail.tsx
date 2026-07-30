@@ -9,6 +9,7 @@ import { supabase } from '@/integrations/supabase/client';
 import { useOrganization } from '@/hooks/useOrganization';
 import { useTranslation } from '@/lib/i18n';
 import { toast } from 'sonner';
+import { formatCep } from '@/lib/regional';
 
 interface Company {
   id: string;
@@ -229,7 +230,11 @@ export default function CompanyDetail() {
                         company.address_complement,
                         company.address_neighborhood,
                         [company.address_city, company.address_state].filter(Boolean).join(' - '),
-                        company.address_zip,
+                        company.address_zip
+                          ? company.address_country_code === 'BR'
+                            ? formatCep(company.address_zip)
+                            : company.address_zip
+                          : null,
                       ].filter(Boolean).join(' · ')
                     : company.address || '-'}
                 </p>

@@ -142,6 +142,27 @@ function isoDate(value: unknown): string | null {
   return br ? `${br[3]}-${br[2]}-${br[1]}` : null;
 }
 
+function normalizedSex(value: unknown): "female" | "male" | "other" | null {
+  const normalized = text(value)
+    ?.normalize("NFD")
+    .replace(/\p{Diacritic}/gu, "")
+    .toLowerCase();
+  if (!normalized) return null;
+  if (["f", "female", "feminino", "feminina", "mulher"].includes(normalized)) {
+    return "female";
+  }
+  if (["m", "male", "masculino", "masculina", "homem"].includes(normalized)) {
+    return "male";
+  }
+  if (
+    ["other", "outro", "outra", "nao binario", "non-binary", "nonbinary"]
+      .includes(normalized)
+  ) {
+    return "other";
+  }
+  return null;
+}
+
 function record(value: unknown): Record<string, unknown> | null {
   return value != null && typeof value === "object" && !Array.isArray(value)
     ? value as Record<string, unknown>
@@ -203,7 +224,7 @@ export function normalizeCpfBrasilResponse(
       full_name: text(data.NOME ?? data.nome),
       registration_status: text(data.SITUACAO ?? data.situacao),
       birth_date: isoDate(data.NASC ?? data.data_nascimento),
-      sex: text(data.SEXO ?? data.sexo),
+      sex: normalizedSex(data.SEXO ?? data.sexo),
       mother_name: text(data.NOME_MAE ?? data.MAE ?? data.nome_mae),
     },
   };
