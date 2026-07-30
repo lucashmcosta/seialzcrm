@@ -1,11 +1,32 @@
+import { createClient, type SupabaseClient } from "jsr:@supabase/supabase-js@2";
 import { featureFlagEnabled } from "../_shared/feature-flags.ts";
 import { requireRegistryAccess } from "../_shared/registry/auth.ts";
-import { lookupCpfBrasil } from "../_shared/registry/providers.ts";
+import { decidePersonNameMatch } from "../_shared/registry/name-match.ts";
+import {
+  isValidCpfValue,
+  lookupCpfBrasil,
+  type ProviderResult,
+} from "../_shared/registry/providers.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
-  "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
+  "Access-Control-Allow-Headers":
+    "authorization, x-client-info, apikey, content-type, x-registry-operator-token",
 };
+
+const SUPABASE_URL = Deno.env.get("SUPABASE_URL")!;
+const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
+const RESTART_CONFIRMATION = "CENTRAL_TRABALHISTA_CPF_BACKFILL";
+
+type BackfillAuth =
+  | {
+    ok: true;
+    admin: SupabaseClient;
+    userId: string | null;
+    permissions: Record<string, boolean>;
+    operator: boolean;
+  }
+  | { ok: false; status: number; error: string };
 
 function json(body: unknown, status = 200): Response {
   return new Response(JSON.stringify(body), {
@@ -14,19 +35,97 @@ function json(body: unknown, status = 200): Response {
   });
 }
 
-function normalizeName(value: unknown): string {
-  return String(value ?? "")
-    .normalize("NFD")
-    .replace(/\p{Diacritic}/gu, "")
-    .replace(/\s+/g, " ")
-    .trim()
-    .toLocaleUpperCase("pt-BR");
+function timingSafeEqual(left: string, right: string): boolean {
+  const leftBytes = new TextEncoder().encode(left);
+  const rightBytes = new TextEncoder().encode(right);
+  if (leftBytes.length !== rightBytes.length) return false;
+  let difference = 0;
+  for (let index = 0; index < leftBytes.length; index += 1) {
+    difference |= leftBytes[index] ^ rightBytes[index];
+  }
+  return difference === 0;
+}
+
+async function authorizeBackfill(
+  req: Request,
+  organizationId: string,
+): Promise<BackfillAuth> {
+  const expectedToken = Deno.env.get("REGISTRY_BACKFILL_OPERATOR_TOKEN")
+    ?.trim();
+  const pilotOrganizationId = Deno.env.get("REGISTRY_BACKFILL_PILOT_ORG_ID")
+    ?.trim();
+  const suppliedToken = req.headers.get("x-registry-operator-token")?.trim() ??
+    "";
+  if (
+    expectedToken &&
+    pilotOrganizationId === organizationId &&
+    timingSafeEqual(expectedToken, suppliedToken)
+  ) {
+    return {
+      ok: true,
+      admin: createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY, {
+        auth: { persistSession: false, autoRefreshToken: false },
+      }),
+      userId: null,
+      permissions: { can_manage_settings: true, can_edit_contacts: true },
+      operator: true,
+    };
+  }
+
+  const userAuth = await requireRegistryAccess(req, organizationId);
+  return userAuth.ok ? { ...userAuth, operator: false } : userAuth;
+}
+
+async function recordNameConflict(
+  admin: SupabaseClient,
+  organizationId: string,
+  contactId: string,
+  currentName: string,
+  providerName: string,
+): Promise<void> {
+  const { data: existingConflict } = await admin
+    .from("registry_data_conflicts")
+    .select("id")
+    .eq("organization_id", organizationId)
+    .eq("contact_id", contactId)
+    .eq("conflict_type", "cpf_name_mismatch")
+    .eq("status", "pending")
+    .limit(1)
+    .maybeSingle();
+  if (existingConflict) {
+    await admin.from("registry_data_conflicts").update({
+      current_value: currentName,
+      provider_value: providerName,
+    }).eq("id", existingConflict.id);
+    return;
+  }
+  await admin.from("registry_data_conflicts").insert({
+    organization_id: organizationId,
+    contact_id: contactId,
+    conflict_type: "cpf_name_mismatch",
+    current_value: currentName,
+    provider_value: providerName,
+  });
+}
+
+async function resolveNameConflict(
+  admin: SupabaseClient,
+  organizationId: string,
+  contactId: string,
+): Promise<void> {
+  await admin
+    .from("registry_data_conflicts")
+    .update({ status: "accepted", resolved_at: new Date().toISOString() })
+    .eq("organization_id", organizationId)
+    .eq("contact_id", contactId)
+    .eq("conflict_type", "cpf_name_mismatch")
+    .eq("status", "pending");
 }
 
 async function identifierHash(value: string): Promise<string> {
-  const secret = Deno.env.get("REGISTRY_AUDIT_HASH_KEY")
-    ?? Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")
-    ?? "registry-audit";
+  const secret = Deno.env.get("REGISTRY_AUDIT_HASH_KEY") ??
+    Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ??
+    "registry-audit";
   const encoder = new TextEncoder();
   const key = await crypto.subtle.importKey(
     "raw",
@@ -35,14 +134,20 @@ async function identifierHash(value: string): Promise<string> {
     false,
     ["sign"],
   );
-  const signature = await crypto.subtle.sign("HMAC", key, encoder.encode(value));
+  const signature = await crypto.subtle.sign(
+    "HMAC",
+    key,
+    encoder.encode(value),
+  );
   return Array.from(new Uint8Array(signature))
     .map((byte) => byte.toString(16).padStart(2, "0"))
     .join("");
 }
 
 Deno.serve(async (req) => {
-  if (req.method === "OPTIONS") return new Response("ok", { headers: corsHeaders });
+  if (req.method === "OPTIONS") {
+    return new Response("ok", { headers: corsHeaders });
+  }
   if (req.method !== "POST") return json({ error: "method_not_allowed" }, 405);
 
   let body: Record<string, unknown>;
@@ -54,17 +159,26 @@ Deno.serve(async (req) => {
 
   const organizationId = String(body.organization_id ?? "");
   const requestedJobId = body.job_id ? String(body.job_id) : null;
+  const mode = body.mode === "inventory" ? "inventory" : "process";
+  const restart = body.restart === true;
   const requestedLimit = Number(body.limit ?? 20);
-  const batchLimit = Math.max(1, Math.min(Number.isFinite(requestedLimit) ? requestedLimit : 20, 100));
+  const batchLimit = Math.max(
+    1,
+    Math.min(Number.isFinite(requestedLimit) ? requestedLimit : 20, 100),
+  );
   if (!organizationId) return json({ error: "organization_id_required" }, 400);
 
-  const auth = await requireRegistryAccess(req, organizationId);
+  const auth = await authorizeBackfill(req, organizationId);
   if (!auth.ok) return json({ error: auth.error }, auth.status);
   if (auth.permissions.can_manage_settings !== true) {
     return json({ error: "backfill_requires_manage_settings" }, 403);
   }
 
-  const enabled = await featureFlagEnabled(auth.admin, "registry_lookup_br", organizationId);
+  const enabled = await featureFlagEnabled(
+    auth.admin,
+    "registry_lookup_br",
+    organizationId,
+  );
   if (!enabled) return json({ error: "registry_lookup_disabled" }, 503);
   const { data: providerSettings } = await auth.admin
     .from("registry_provider_settings")
@@ -72,11 +186,107 @@ Deno.serve(async (req) => {
     .eq("organization_id", organizationId)
     .maybeSingle();
   if (
-    providerSettings?.cpf_lookup_enabled !== true
-    || !providerSettings.documented_purpose
-    || !providerSettings.privacy_notice_updated_at
+    providerSettings?.cpf_lookup_enabled !== true ||
+    !providerSettings.documented_purpose ||
+    !providerSettings.privacy_notice_updated_at
   ) {
     return json({ error: "cpf_lookup_not_authorized_for_organization" }, 403);
+  }
+
+  const baseContactsQuery = auth.admin
+    .from("contacts")
+    .select("id", { count: "exact", head: true })
+    .eq("organization_id", organizationId)
+    .is("deleted_at", null)
+    .not("cpf", "is", null);
+  const { count: totalCpfContacts, error: countError } =
+    await baseContactsQuery;
+  if (countError) return json({ error: "contacts_count_failed" }, 500);
+
+  if (mode === "inventory") {
+    const { data: currentJob } = await auth.admin
+      .from("registry_backfill_jobs")
+      .select("*")
+      .eq("organization_id", organizationId)
+      .eq("kind", "cpf")
+      .order("created_at", { ascending: false })
+      .limit(1)
+      .maybeSingle();
+    return json({
+      ok: true,
+      mode,
+      organization_id: organizationId,
+      cpf_contacts: totalCpfContacts ?? 0,
+      estimated_provider_calls: totalCpfContacts ?? 0,
+      current_job: currentJob,
+    });
+  }
+
+  if (restart) {
+    if (!auth.operator) {
+      return json({ error: "restart_requires_operator" }, 403);
+    }
+    if (body.confirm_restart !== RESTART_CONFIRMATION) {
+      return json({ error: "restart_confirmation_required" }, 400);
+    }
+    const { data: activeJob } = await auth.admin
+      .from("registry_backfill_jobs")
+      .select("id")
+      .eq("organization_id", organizationId)
+      .eq("kind", "cpf")
+      .in("status", ["pending", "running", "paused"])
+      .order("created_at", { ascending: false })
+      .limit(1)
+      .maybeSingle();
+    let restartJobId = activeJob?.id as string | undefined;
+    if (!restartJobId) {
+      const { data: latestJob } = await auth.admin
+        .from("registry_backfill_jobs")
+        .select("id")
+        .eq("organization_id", organizationId)
+        .eq("kind", "cpf")
+        .order("created_at", { ascending: false })
+        .limit(1)
+        .maybeSingle();
+      restartJobId = latestJob?.id as string | undefined;
+    }
+    const resetValues = {
+      status: "pending",
+      total_items: totalCpfContacts ?? 0,
+      processed_items: 0,
+      verified_items: 0,
+      conflict_items: 0,
+      error_items: 0,
+      exact_name_items: 0,
+      auto_merged_name_items: 0,
+      filled_empty_name_items: 0,
+      last_contact_id: null,
+      last_error_code: null,
+      started_at: null,
+      completed_at: null,
+      updated_at: new Date().toISOString(),
+    };
+    if (restartJobId) {
+      const { error: resetError } = await auth.admin
+        .from("registry_backfill_jobs")
+        .update(resetValues)
+        .eq("id", restartJobId);
+      if (resetError) return json({ error: "backfill_job_reset_failed" }, 500);
+    } else {
+      const { data: createdJob, error: createError } = await auth.admin
+        .from("registry_backfill_jobs")
+        .insert({
+          organization_id: organizationId,
+          kind: "cpf",
+          ...resetValues,
+        })
+        .select("id")
+        .single();
+      if (createError) {
+        return json({ error: "backfill_job_create_failed" }, 500);
+      }
+      restartJobId = createdJob.id;
+    }
   }
 
   let jobQuery = auth.admin
@@ -86,7 +296,10 @@ Deno.serve(async (req) => {
     .eq("kind", "cpf");
   jobQuery = requestedJobId
     ? jobQuery.eq("id", requestedJobId)
-    : jobQuery.in("status", ["pending", "running", "paused"]).order("created_at", { ascending: true });
+    : jobQuery.in("status", ["pending", "running", "paused"]).order(
+      "created_at",
+      { ascending: true },
+    );
   const { data: job, error: jobError } = await jobQuery.limit(1).maybeSingle();
   if (jobError) return json({ error: "backfill_job_lookup_failed" }, 500);
   if (!job) return json({ ok: true, status: "nothing_to_process" });
@@ -110,7 +323,9 @@ Deno.serve(async (req) => {
     .not("cpf", "is", null)
     .order("id", { ascending: true })
     .limit(batchLimit);
-  if (job.last_contact_id) contactsQuery = contactsQuery.gt("id", job.last_contact_id);
+  if (job.last_contact_id) {
+    contactsQuery = contactsQuery.gt("id", job.last_contact_id);
+  }
   const { data: contacts, error: contactsError } = await contactsQuery;
   if (contactsError) {
     await auth.admin.from("registry_backfill_jobs").update({
@@ -124,7 +339,11 @@ Deno.serve(async (req) => {
   if (!contacts?.length) {
     const { data: completed } = await auth.admin
       .from("registry_backfill_jobs")
-      .update({ status: "completed", completed_at: new Date().toISOString(), updated_at: new Date().toISOString() })
+      .update({
+        status: "completed",
+        completed_at: new Date().toISOString(),
+        updated_at: new Date().toISOString(),
+      })
       .eq("id", job.id)
       .select("*")
       .single();
@@ -135,14 +354,26 @@ Deno.serve(async (req) => {
   let verified = 0;
   let conflicts = 0;
   let errors = 0;
+  let exactNames = 0;
+  let autoMergedNames = 0;
+  let filledEmptyNames = 0;
   let lastContactId = job.last_contact_id as string | null;
   let pauseError: string | null = null;
 
   for (const contact of contacts) {
     const cpf = String(contact.cpf ?? "").replace(/\D/g, "");
-    lastContactId = contact.id;
+    const previousContactId = lastContactId;
     const started = Date.now();
-    const result = await lookupCpfBrasil(cpf);
+    const result: ProviderResult = isValidCpfValue(cpf)
+      ? await lookupCpfBrasil(cpf)
+      : {
+        ok: false,
+        provider: "local-validator",
+        version: "v1",
+        status: 422,
+        error: "invalid_or_not_found",
+        retryable: false,
+      };
     const hash = await identifierHash(`cpf:${cpf}`);
 
     await auth.admin.from("registry_lookup_audit").insert({
@@ -161,28 +392,48 @@ Deno.serve(async (req) => {
     processed += 1;
     if (result.ok) {
       const providerName = String(result.payload.full_name ?? "").trim();
-      const nameConflict = providerName
-        && normalizeName(providerName) !== normalizeName(contact.full_name);
-      if (nameConflict) {
-        conflicts += 1;
-        const { data: existingConflict } = await auth.admin
-          .from("registry_data_conflicts")
-          .select("id")
-          .eq("organization_id", organizationId)
-          .eq("contact_id", contact.id)
-          .eq("conflict_type", "cpf_name_mismatch")
-          .eq("status", "pending")
-          .limit(1)
-          .maybeSingle();
-        if (!existingConflict) {
-          await auth.admin.from("registry_data_conflicts").insert({
-            organization_id: organizationId,
-            contact_id: contact.id,
-            conflict_type: "cpf_name_mismatch",
-            current_value: contact.full_name,
-            provider_value: providerName,
-          });
+      const nameMatch = decidePersonNameMatch(contact.full_name, providerName);
+      if (nameMatch.decision === "exact") {
+        exactNames += 1;
+        await resolveNameConflict(auth.admin, organizationId, contact.id);
+      } else if (
+        nameMatch.decision === "auto_merge" ||
+        nameMatch.decision === "fill_empty"
+      ) {
+        const updatePayload: Record<string, unknown> = {
+          full_name: providerName,
+          updated_at: new Date().toISOString(),
+        };
+        if (auth.userId) updatePayload.updated_by = auth.userId;
+        const { error: nameUpdateError } = await auth.admin
+          .from("contacts")
+          .update(updatePayload)
+          .eq("id", contact.id)
+          .eq("organization_id", organizationId);
+        if (nameUpdateError) {
+          errors += 1;
+          conflicts += 1;
+          await recordNameConflict(
+            auth.admin,
+            organizationId,
+            contact.id,
+            String(contact.full_name ?? ""),
+            providerName,
+          );
+        } else {
+          if (nameMatch.decision === "fill_empty") filledEmptyNames += 1;
+          else autoMergedNames += 1;
+          await resolveNameConflict(auth.admin, organizationId, contact.id);
         }
+      } else if (nameMatch.decision === "review") {
+        conflicts += 1;
+        await recordNameConflict(
+          auth.admin,
+          organizationId,
+          contact.id,
+          String(contact.full_name ?? ""),
+          providerName,
+        );
       }
 
       await auth.admin.from("contact_identity_profiles").upsert({
@@ -202,7 +453,9 @@ Deno.serve(async (req) => {
       verified += 1;
     } else {
       errors += 1;
-      const status = result.error === "invalid_or_not_found" ? "invalid" : "error";
+      const status = result.error === "invalid_or_not_found"
+        ? "invalid"
+        : "error";
       await auth.admin.from("contact_identity_profiles").upsert({
         organization_id: organizationId,
         contact_id: contact.id,
@@ -214,11 +467,22 @@ Deno.serve(async (req) => {
         updated_at: new Date().toISOString(),
       }, { onConflict: "contact_id" });
 
-      if (result.error === "provider_not_configured" || result.status === 401 || result.status === 403 || result.status === 429) {
-        pauseError = result.error === "upstream_error" ? `provider_http_${result.status}` : result.error;
+      if (
+        result.error === "provider_not_configured" || result.status === 401 ||
+        result.status === 403 || result.status === 429
+      ) {
+        pauseError = result.error === "upstream_error"
+          ? `provider_http_${result.status}`
+          : result.error;
+        // Não avança o cursor nem os contadores: após corrigir token/cota,
+        // este mesmo contato precisa ser tentado novamente.
+        lastContactId = previousContactId;
+        processed -= 1;
+        errors -= 1;
         break;
       }
     }
+    lastContactId = contact.id;
   }
 
   const nextStatus = pauseError ? "paused" : "pending";
@@ -230,6 +494,11 @@ Deno.serve(async (req) => {
       verified_items: Number(job.verified_items ?? 0) + verified,
       conflict_items: Number(job.conflict_items ?? 0) + conflicts,
       error_items: Number(job.error_items ?? 0) + errors,
+      exact_name_items: Number(job.exact_name_items ?? 0) + exactNames,
+      auto_merged_name_items: Number(job.auto_merged_name_items ?? 0) +
+        autoMergedNames,
+      filled_empty_name_items: Number(job.filled_empty_name_items ?? 0) +
+        filledEmptyNames,
       last_contact_id: lastContactId,
       last_error_code: pauseError,
       updated_at: new Date().toISOString(),
@@ -242,6 +511,11 @@ Deno.serve(async (req) => {
     ok: true,
     status: nextStatus,
     processed_in_batch: processed,
+    exact_names_in_batch: exactNames,
+    auto_merged_names_in_batch: autoMergedNames,
+    filled_empty_names_in_batch: filledEmptyNames,
+    conflicts_in_batch: conflicts,
+    errors_in_batch: errors,
     job: updatedJob,
   });
 });
