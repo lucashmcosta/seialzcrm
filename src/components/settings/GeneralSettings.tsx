@@ -156,13 +156,13 @@ export function GeneralSettings() {
           ? 'Configuração salva. A revisão dos CPFs existentes foi colocada na fila segura.'
           : t('settings.orgUpdated'),
       });
-      if (backfillJobId) {
-        // Processa apenas um lote curto. Se a feature ainda estiver desativada,
-        // o job permanece pendente e poderá ser retomado sem duplicar consultas.
+      if (formData.operating_country_code === 'BR' && cpfLookupEnabled) {
+        // Inicia ou retoma um lote curto. Isso também cobre organizações que
+        // já eram BR antes de o provedor de CPF ser habilitado.
         void supabase.functions.invoke('registry-backfill', {
           body: {
             organization_id: organization.id,
-            job_id: backfillJobId,
+            ...(backfillJobId ? { job_id: backfillJobId } : {}),
             limit: 20,
           },
         });
