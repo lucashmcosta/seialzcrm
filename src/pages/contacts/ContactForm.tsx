@@ -456,10 +456,18 @@ export default function ContactForm() {
       toast.error('Escolha o país operacional da organização antes de salvar.');
       return;
     }
-    if (isBrazil && formData.cpf && !isValidCpf(formData.cpf)) {
-      setCpfVerification((current) => ({ ...current, status: 'invalid' }));
-      toast.error('Corrija o CPF inválido antes de salvar.');
-      return;
+    if (isBrazil && formData.cpf) {
+      const cpfDigits = digits(formData.cpf);
+      if (cpfDigits.length !== 11) {
+        setCpfVerification((current) => ({ ...current, status: 'invalid' }));
+        toast.error('O CPF deve ter exatamente 11 dígitos.');
+        return;
+      }
+      if (!isValidCpf(cpfDigits)) {
+        setCpfVerification((current) => ({ ...current, status: 'invalid' }));
+        toast.error('CPF inválido. Confira os dígitos informados.');
+        return;
+      }
     }
     
     setLoading(true);
@@ -788,8 +796,13 @@ export default function ContactForm() {
                       }}
                       placeholder="000.000.000-00"
                       inputMode="numeric"
+                      minLength={14}
                       maxLength={14}
+                      aria-describedby="cpf-format-help"
                     />
+                    <p id="cpf-format-help" className="mt-1 text-xs text-muted-foreground">
+                      Se informado, o CPF deve ter exatamente 11 dígitos.
+                    </p>
                   </div>
                   <div>
                     <Label htmlFor="rg">RG</Label>
