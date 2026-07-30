@@ -257,9 +257,6 @@ Deno.serve(async (req) => {
       verified_items: 0,
       conflict_items: 0,
       error_items: 0,
-      exact_name_items: 0,
-      auto_merged_name_items: 0,
-      filled_empty_name_items: 0,
       last_contact_id: null,
       last_error_code: null,
       started_at: null,
@@ -494,11 +491,6 @@ Deno.serve(async (req) => {
       verified_items: Number(job.verified_items ?? 0) + verified,
       conflict_items: Number(job.conflict_items ?? 0) + conflicts,
       error_items: Number(job.error_items ?? 0) + errors,
-      exact_name_items: Number(job.exact_name_items ?? 0) + exactNames,
-      auto_merged_name_items: Number(job.auto_merged_name_items ?? 0) +
-        autoMergedNames,
-      filled_empty_name_items: Number(job.filled_empty_name_items ?? 0) +
-        filledEmptyNames,
       last_contact_id: lastContactId,
       last_error_code: pauseError,
       updated_at: new Date().toISOString(),
