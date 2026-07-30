@@ -1,8 +1,21 @@
 export type LookupKind = "cep" | "cnpj" | "cpf";
 
 export type ProviderResult =
-  | { ok: true; provider: string; version: string; payload: Record<string, unknown>; status: number }
-  | { ok: false; provider: string; version: string; status: number; error: string; retryable: boolean };
+  | {
+    ok: true;
+    provider: string;
+    version: string;
+    payload: Record<string, unknown>;
+    status: number;
+  }
+  | {
+    ok: false;
+    provider: string;
+    version: string;
+    status: number;
+    error: string;
+    retryable: boolean;
+  };
 
 const TIMEOUT_MS = 6_000;
 const CIRCUIT_FAILURE_THRESHOLD = 5;
@@ -43,7 +56,8 @@ export function isValidCnpjValue(value: string): boolean {
     return remainder < 2 ? 0 : 11 - remainder;
   };
 
-  return calculate(12) === Number(cnpj[12]) && calculate(13) === Number(cnpj[13]);
+  return calculate(12) === Number(cnpj[12]) &&
+    calculate(13) === Number(cnpj[13]);
 }
 
 class ProviderCircuitOpenError extends Error {
@@ -74,7 +88,9 @@ async function getJson(
       const failures = (circuits.get(circuitKey)?.failures ?? 0) + 1;
       circuits.set(circuitKey, {
         failures,
-        openUntil: failures >= CIRCUIT_FAILURE_THRESHOLD ? Date.now() + CIRCUIT_OPEN_MS : 0,
+        openUntil: failures >= CIRCUIT_FAILURE_THRESHOLD
+          ? Date.now() + CIRCUIT_OPEN_MS
+          : 0,
       });
     } else {
       circuits.delete(circuitKey);
@@ -91,7 +107,9 @@ async function getJson(
       const failures = (circuits.get(circuitKey)?.failures ?? 0) + 1;
       circuits.set(circuitKey, {
         failures,
-        openUntil: failures >= CIRCUIT_FAILURE_THRESHOLD ? Date.now() + CIRCUIT_OPEN_MS : 0,
+        openUntil: failures >= CIRCUIT_FAILURE_THRESHOLD
+          ? Date.now() + CIRCUIT_OPEN_MS
+          : 0,
       });
     }
     throw error;
@@ -124,13 +142,90 @@ function isoDate(value: unknown): string | null {
   return br ? `${br[3]}-${br[2]}-${br[1]}` : null;
 }
 
+function record(value: unknown): Record<string, unknown> | null {
+  return value != null && typeof value === "object" && !Array.isArray(value)
+    ? value as Record<string, unknown>
+    : null;
+}
+
+const CPF_BRASIL_DEFAULT_VERSION = "2.0";
+
+const CPF_BRASIL_ERROR_CODES: Record<string, string> = {
+  MISSING_API_KEY: "provider_missing_api_key",
+  INVALID_API_KEY: "provider_invalid_api_key",
+  TOKEN_EXPIRED: "provider_token_expired",
+  PLAN_EXPIRED: "provider_plan_expired",
+  PLAN_SUSPENDED: "provider_plan_suspended",
+  QUOTA_EXCEEDED: "provider_quota_exceeded",
+  MISSING_CPF_PARAMETER: "invalid_or_not_found",
+  INVALID_CPF_FORMAT: "invalid_or_not_found",
+  CPF_NOT_FOUND: "invalid_or_not_found",
+};
+
+export function normalizeCpfBrasilResponse(
+  status: number,
+  json: Record<string, unknown> | null,
+  cpf: string,
+): ProviderResult {
+  const provider = "cpf-brasil";
+  const meta = record(json?.meta);
+  const version = text(meta?.api_version) ?? CPF_BRASIL_DEFAULT_VERSION;
+  const data = record(json?.data);
+
+  if (status !== 200 || json?.success !== true || !data) {
+    const documentedCode = text(json?.code)?.toUpperCase() ?? "";
+    const error = CPF_BRASIL_ERROR_CODES[documentedCode] ??
+      (status === 400 || status === 404 || status === 422
+        ? "invalid_or_not_found"
+        : status === 401 || status === 403
+        ? "provider_auth_error"
+        : status === 429
+        ? "provider_quota_exceeded"
+        : "upstream_error");
+
+    return {
+      ok: false,
+      provider,
+      version,
+      status,
+      error,
+      retryable: status >= 500 || status === 0,
+    };
+  }
+
+  return {
+    ok: true,
+    provider,
+    version,
+    status,
+    payload: {
+      cpf: text(data.CPF ?? data.cpf) ?? cpf,
+      full_name: text(data.NOME ?? data.nome),
+      registration_status: text(data.SITUACAO ?? data.situacao),
+      birth_date: isoDate(data.NASC ?? data.data_nascimento),
+      sex: text(data.SEXO ?? data.sexo),
+      mother_name: text(data.NOME_MAE ?? data.MAE ?? data.nome_mae),
+    },
+  };
+}
+
 export async function lookupBrasilApiCep(cep: string): Promise<ProviderResult> {
   const provider = "brasilapi";
   const version = "cep-v2";
   try {
-    const { status, json } = await getJson(provider, `https://brasilapi.com.br/api/cep/v2/${cep}`);
+    const { status, json } = await getJson(
+      provider,
+      `https://brasilapi.com.br/api/cep/v2/${cep}`,
+    );
     if (status !== 200 || !json) {
-      return { ok: false, provider, version, status, error: status === 404 ? "not_found" : "upstream_error", retryable: status >= 500 || status === 429 };
+      return {
+        ok: false,
+        provider,
+        version,
+        status,
+        error: status === 404 ? "not_found" : "upstream_error",
+        retryable: status >= 500 || status === 429,
+      };
     }
     return {
       ok: true,
@@ -155,9 +250,21 @@ export async function lookupViaCep(cep: string): Promise<ProviderResult> {
   const provider = "viacep";
   const version = "v1";
   try {
-    const { status, json } = await getJson(provider, `https://viacep.com.br/ws/${cep}/json/`);
+    const { status, json } = await getJson(
+      provider,
+      `https://viacep.com.br/ws/${cep}/json/`,
+    );
     if (status !== 200 || !json || json.erro === true) {
-      return { ok: false, provider, version, status, error: status === 400 || json?.erro === true ? "not_found" : "upstream_error", retryable: status >= 500 || status === 429 };
+      return {
+        ok: false,
+        provider,
+        version,
+        status,
+        error: status === 400 || json?.erro === true
+          ? "not_found"
+          : "upstream_error",
+        retryable: status >= 500 || status === 429,
+      };
     }
     return {
       ok: true,
@@ -178,13 +285,25 @@ export async function lookupViaCep(cep: string): Promise<ProviderResult> {
   }
 }
 
-export async function lookupBrasilApiCnpj(cnpj: string): Promise<ProviderResult> {
+export async function lookupBrasilApiCnpj(
+  cnpj: string,
+): Promise<ProviderResult> {
   const provider = "brasilapi";
   const version = "cnpj-v1";
   try {
-    const { status, json } = await getJson(provider, `https://brasilapi.com.br/api/cnpj/v1/${cnpj}`);
+    const { status, json } = await getJson(
+      provider,
+      `https://brasilapi.com.br/api/cnpj/v1/${cnpj}`,
+    );
     if (status !== 200 || !json) {
-      return { ok: false, provider, version, status, error: status === 404 ? "not_found" : "upstream_error", retryable: status >= 500 || status === 429 };
+      return {
+        ok: false,
+        provider,
+        version,
+        status,
+        error: status === 404 ? "not_found" : "upstream_error",
+        retryable: status >= 500 || status === 429,
+      };
     }
     return {
       ok: true,
@@ -222,10 +341,17 @@ export async function lookupBrasilApiCnpj(cnpj: string): Promise<ProviderResult>
 
 export async function lookupCpfBrasil(cpf: string): Promise<ProviderResult> {
   const provider = "cpf-brasil";
-  const version = "v2";
+  const version = CPF_BRASIL_DEFAULT_VERSION;
   const apiKey = Deno.env.get("CPF_BRASIL_API_KEY")?.trim();
   if (!apiKey) {
-    return { ok: false, provider, version, status: 503, error: "provider_not_configured", retryable: false };
+    return {
+      ok: false,
+      provider,
+      version,
+      status: 503,
+      error: "provider_not_configured",
+      retryable: false,
+    };
   }
   try {
     const { status, json } = await getJson(
@@ -233,32 +359,7 @@ export async function lookupCpfBrasil(cpf: string): Promise<ProviderResult> {
       `https://api.cpf-brasil.org/cpf/${cpf}`,
       { "X-API-Key": apiKey },
     );
-    if (status !== 200 || !json || json.success !== true || typeof json.data !== "object") {
-      const providerError = text(json?.error) ?? text(json?.message);
-      return {
-        ok: false,
-        provider,
-        version,
-        status,
-        error: status === 404 || status === 422 ? "invalid_or_not_found" : providerError === "invalid_cpf" ? "invalid_or_not_found" : "upstream_error",
-        retryable: status >= 500 || status === 429 || status === 0,
-      };
-    }
-    const data = json.data as Record<string, unknown>;
-    return {
-      ok: true,
-      provider,
-      version,
-      status,
-      payload: {
-        cpf: text(data.CPF ?? data.cpf) ?? cpf,
-        full_name: text(data.NOME ?? data.nome),
-        registration_status: text(data.SITUACAO ?? data.situacao),
-        birth_date: isoDate(data.NASC ?? data.data_nascimento),
-        sex: text(data.SEXO ?? data.sexo),
-        mother_name: text(data.MAE ?? data.nome_mae),
-      },
-    };
+    return normalizeCpfBrasilResponse(status, json, cpf);
   } catch (error) {
     return { ok: false, provider, version, status: 0, ...providerError(error) };
   }
