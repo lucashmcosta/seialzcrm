@@ -1,6 +1,7 @@
 // force rebuild 2026-05-11T05:30 - referral flat-notation parser fix
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "npm:@supabase/supabase-js@2";
+import { resolveContactIngressIdentity } from "../_shared/registry/ingress.ts";
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -381,11 +382,11 @@ serve(async (req) => {
             },
           }
           // Update é fire-and-forget (não bloqueia resposta) mas a decisão já foi tomada.
-          supabase
+          void Promise.resolve(supabase
             .from('integration_inbound_events')
             .update({ signature_valid: signatureValid, raw_headers: diagHeaders })
             .eq('id', insertedEventId)
-            .then(() => {})
+            .then(() => {}))
             .catch((e: unknown) => console.error('[signature_valid] update failed:', e))
 
           const logPayload = {
@@ -658,7 +659,7 @@ serve(async (req) => {
       // Persist media to storage
       const { urls: persistedMediaUrls, mediaType } = await persistMedia(
         supabase,
-        orgId,
+        orgId!,
         twilioAccountSid,
         twilioAuthToken,
         rawMediaUrls,
@@ -688,12 +689,32 @@ serve(async (req) => {
       } else if (inboundSettings.auto_create_contact) {
         // Auto-create contact only if enabled
         const contactName = profileName || `WhatsApp ${from}`
-        
+        const identity = await resolveContactIngressIdentity(supabase, {
+          organizationId: orgId!,
+          source: 'twilio_whatsapp',
+          externalId: from,
+          fullName: contactName,
+          safePayload: { phone_suffix: from.slice(-4) },
+        })
+        if (!identity.ok) {
+          console.warn('[wa-inbound] contact queued for regional name review', {
+            organization_id: orgId,
+            reason: identity.reason,
+          })
+          return new Response('<?xml version="1.0" encoding="UTF-8"?><Response></Response>', {
+            status: 200,
+            headers: { ...corsHeaders, 'Content-Type': 'text/xml' },
+          })
+        }
+
         const { data: newContact, error: createError } = await supabase
           .from('contacts')
           .insert({
             organization_id: orgId,
-            full_name: contactName,
+            full_name: identity.fullName,
+            first_name: identity.firstName,
+            last_name: identity.lastName,
+            address_country_code: identity.country,
             phone: from,
             source: 'whatsapp',
             lifecycle_stage: inboundSettings.default_lifecycle_stage || 'lead',

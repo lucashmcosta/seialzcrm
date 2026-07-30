@@ -30,7 +30,7 @@ import {
 } from '@/components/ui/alert-dialog';
 
 export function GeneralSettings() {
-  const { organization, locale } = useOrganization();
+  const { organization, locale, refetch } = useOrganization();
   const { t } = useTranslation(locale as any);
   const { toast } = useToast();
   const [loading, setLoading] = useState(false);
@@ -39,6 +39,9 @@ export function GeneralSettings() {
   const [logoUrl, setLogoUrl] = useState('');
   const [logoSize, setLogoSize] = useState(40);
   const [copiedOrgId, setCopiedOrgId] = useState(false);
+  const [cpfLookupEnabled, setCpfLookupEnabled] = useState(false);
+  const [cpfPurpose, setCpfPurpose] = useState('');
+  const [privacyNoticeConfirmed, setPrivacyNoticeConfirmed] = useState(false);
 
   const handleCopyOrgId = async () => {
     if (!organization?.id) return;
@@ -55,6 +58,7 @@ export function GeneralSettings() {
     name: '',
     default_currency: 'BRL',
     default_locale: 'pt-BR',
+    operating_country_code: '' as '' | 'BR' | 'US',
     timezone: 'America/Sao_Paulo',
     enable_companies_module: false,
   });
@@ -66,6 +70,7 @@ export function GeneralSettings() {
         name: organization.name || '',
         default_currency: organization.default_currency || 'BRL',
         default_locale: organization.default_locale || 'pt-BR',
+        operating_country_code: organization.operating_country_code || '',
         timezone: organization.timezone || 'America/Sao_Paulo',
         enable_companies_module: organization.enable_companies_module || false,
       });
@@ -73,6 +78,20 @@ export function GeneralSettings() {
       setLogoSize((organization as any).logo_size || 40);
     }
   }, [organization]);
+
+  useEffect(() => {
+    if (!organization?.id) return;
+    void (async () => {
+      const { data } = await supabase
+        .from('registry_provider_settings')
+        .select('cpf_lookup_enabled, documented_purpose, privacy_notice_updated_at')
+        .eq('organization_id', organization.id)
+        .maybeSingle();
+      setCpfLookupEnabled(data?.cpf_lookup_enabled === true);
+      setCpfPurpose(data?.documented_purpose || '');
+      setPrivacyNoticeConfirmed(Boolean(data?.privacy_notice_updated_at));
+    })();
+  }, [organization?.id]);
 
   const handleLogoSave = async (newLogoUrl: string, newSize: number) => {
     if (!organization?.id) return;
@@ -98,17 +117,57 @@ export function GeneralSettings() {
 
     setLoading(true);
     try {
+      if (!formData.operating_country_code) {
+        throw new Error('Escolha o país operacional da organização.');
+      }
+      let backfillJobId: string | null = null;
+      if (formData.operating_country_code !== organization.operating_country_code) {
+        const { data: countryResult, error: countryError } = await supabase.rpc('rpc_set_operating_country', {
+          p_organization_id: organization.id,
+          p_country_code: formData.operating_country_code,
+        });
+        if (countryError) throw countryError;
+        backfillJobId = (countryResult as { backfill_job_id?: string | null } | null)?.backfill_job_id ?? null;
+      }
+
+      const {
+        operating_country_code: _operatingCountryCode,
+        ...organizationData
+      } = formData;
       const { error } = await supabase
         .from('organizations')
-        .update(formData)
+        .update(organizationData)
         .eq('id', organization.id);
 
       if (error) throw error;
+      if (formData.operating_country_code === 'BR') {
+        const { error: providerError } = await supabase.rpc('rpc_configure_cpf_registry', {
+          p_organization_id: organization.id,
+          p_enabled: cpfLookupEnabled,
+          p_documented_purpose: cpfPurpose || null,
+          p_privacy_notice_confirmed: privacyNoticeConfirmed,
+        });
+        if (providerError) throw providerError;
+      }
 
       toast({
         title: t('common.success'),
-        description: t('settings.orgUpdated'),
+        description: backfillJobId
+          ? 'Configuração salva. A revisão dos CPFs existentes foi colocada na fila segura.'
+          : t('settings.orgUpdated'),
       });
+      if (backfillJobId) {
+        // Processa apenas um lote curto. Se a feature ainda estiver desativada,
+        // o job permanece pendente e poderá ser retomado sem duplicar consultas.
+        void supabase.functions.invoke('registry-backfill', {
+          body: {
+            organization_id: organization.id,
+            job_id: backfillJobId,
+            limit: 20,
+          },
+        });
+      }
+      await refetch();
     } catch (error) {
       console.error('Error updating organization:', error);
       toast({
@@ -197,6 +256,47 @@ export function GeneralSettings() {
             </div>
           </div>
 
+          {formData.operating_country_code === 'BR' && (
+            <div className="space-y-4 rounded-lg border p-4">
+              <div className="flex items-start justify-between gap-4">
+                <div>
+                  <Label htmlFor="cpf-registry-enabled">Consulta automática de CPF</Label>
+                  <p className="mt-1 text-sm text-muted-foreground">
+                    Usa a cpf-brasil.org somente pelo backend. A ativação exige finalidade legítima
+                    documentada e política de privacidade atualizada.
+                  </p>
+                </div>
+                <Switch
+                  id="cpf-registry-enabled"
+                  checked={cpfLookupEnabled}
+                  onCheckedChange={setCpfLookupEnabled}
+                />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="cpf-purpose">Finalidade documentada</Label>
+                <Input
+                  id="cpf-purpose"
+                  value={cpfPurpose}
+                  onChange={(event) => setCpfPurpose(event.target.value)}
+                  placeholder="Ex.: validação cadastral de clientes antes da contratação"
+                  disabled={!cpfLookupEnabled}
+                />
+                <p className="text-xs text-muted-foreground">Mínimo de 20 caracteres.</p>
+              </div>
+              <div className="flex items-center justify-between gap-4 rounded-md bg-muted/50 p-3">
+                <Label htmlFor="privacy-confirmed" className="font-normal">
+                  Confirmo que a política de privacidade informa esta consulta e sua finalidade.
+                </Label>
+                <Switch
+                  id="privacy-confirmed"
+                  checked={privacyNoticeConfirmed}
+                  onCheckedChange={setPrivacyNoticeConfirmed}
+                  disabled={!cpfLookupEnabled}
+                />
+              </div>
+            </div>
+          )}
+
           <div className="space-y-2">
             <Label htmlFor="name">{t('settings.orgName')}</Label>
             <Input
@@ -238,6 +338,35 @@ export function GeneralSettings() {
                 <SelectItem value="en-US">English (US)</SelectItem>
               </SelectContent>
             </Select>
+          </div>
+
+          <div className="space-y-2 rounded-lg border border-primary/20 bg-primary/5 p-4">
+            <div>
+              <Label htmlFor="operating-country">País operacional *</Label>
+              <p className="mt-1 text-sm text-muted-foreground">
+                Define o formato de nomes, endereços e documentos. Não altera o idioma da interface.
+              </p>
+            </div>
+            <Select
+              value={formData.operating_country_code}
+              onValueChange={(value: 'BR' | 'US') =>
+                setFormData({ ...formData, operating_country_code: value })
+              }
+            >
+              <SelectTrigger id="operating-country">
+                <SelectValue placeholder="Escolha Brasil ou Estados Unidos" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="BR">Brasil — Nome completo, CPF, CNPJ e CEP</SelectItem>
+                <SelectItem value="US">Estados Unidos — First Name, Last Name e ZIP</SelectItem>
+              </SelectContent>
+            </Select>
+            {organization?.operating_country_code &&
+              organization.operating_country_code !== formData.operating_country_code && (
+                <p className="text-sm text-amber-700">
+                  A alteração será auditada e poderá colocar cadastros incompatíveis em revisão.
+                </p>
+              )}
           </div>
 
           <div className="space-y-2">

@@ -1605,41 +1605,95 @@ export type Database = {
       companies: {
         Row: {
           address: string | null
+          address_city: string | null
+          address_complement: string | null
+          address_country_code: string | null
+          address_neighborhood: string | null
+          address_number: string | null
+          address_state: string | null
+          address_street: string | null
+          address_zip: string | null
+          cnpj: string | null
+          company_size: string | null
           created_at: string | null
           deleted_at: string | null
           domain: string | null
+          email: string | null
           id: string
+          legal_name: string | null
+          legal_nature: string | null
           name: string
+          opened_at: string | null
           organization_id: string
           phone: string | null
+          primary_cnae_code: string | null
+          primary_cnae_description: string | null
+          registration_status: string | null
           source: string | null
           source_external_id: string | null
+          trade_name: string | null
           updated_at: string | null
         }
         Insert: {
           address?: string | null
+          address_city?: string | null
+          address_complement?: string | null
+          address_country_code?: string | null
+          address_neighborhood?: string | null
+          address_number?: string | null
+          address_state?: string | null
+          address_street?: string | null
+          address_zip?: string | null
+          cnpj?: string | null
+          company_size?: string | null
           created_at?: string | null
           deleted_at?: string | null
           domain?: string | null
+          email?: string | null
           id?: string
+          legal_name?: string | null
+          legal_nature?: string | null
           name: string
+          opened_at?: string | null
           organization_id: string
           phone?: string | null
+          primary_cnae_code?: string | null
+          primary_cnae_description?: string | null
+          registration_status?: string | null
           source?: string | null
           source_external_id?: string | null
+          trade_name?: string | null
           updated_at?: string | null
         }
         Update: {
           address?: string | null
+          address_city?: string | null
+          address_complement?: string | null
+          address_country_code?: string | null
+          address_neighborhood?: string | null
+          address_number?: string | null
+          address_state?: string | null
+          address_street?: string | null
+          address_zip?: string | null
+          cnpj?: string | null
+          company_size?: string | null
           created_at?: string | null
           deleted_at?: string | null
           domain?: string | null
+          email?: string | null
           id?: string
+          legal_name?: string | null
+          legal_nature?: string | null
           name?: string
+          opened_at?: string | null
           organization_id?: string
           phone?: string | null
+          primary_cnae_code?: string | null
+          primary_cnae_description?: string | null
+          registration_status?: string | null
           source?: string | null
           source_external_id?: string | null
+          trade_name?: string | null
           updated_at?: string | null
         }
         Relationships: [
@@ -1766,6 +1820,117 @@ export type Database = {
           },
         ]
       }
+      contact_identity_profiles: {
+        Row: {
+          birth_date: string | null
+          contact_id: string
+          cpf_registration_status: string | null
+          cpf_verification_status: Database["public"]["Enums"]["cpf_verification_status"]
+          cpf_verified_at: string | null
+          created_at: string
+          id: string
+          last_error_code: string | null
+          mother_name: string | null
+          organization_id: string
+          sex: string | null
+          updated_at: string
+          verification_provider: string | null
+          verification_provider_version: string | null
+        }
+        Insert: {
+          birth_date?: string | null
+          contact_id: string
+          cpf_registration_status?: string | null
+          cpf_verification_status?: Database["public"]["Enums"]["cpf_verification_status"]
+          cpf_verified_at?: string | null
+          created_at?: string
+          id?: string
+          last_error_code?: string | null
+          mother_name?: string | null
+          organization_id: string
+          sex?: string | null
+          updated_at?: string
+          verification_provider?: string | null
+          verification_provider_version?: string | null
+        }
+        Update: {
+          birth_date?: string | null
+          contact_id?: string
+          cpf_registration_status?: string | null
+          cpf_verification_status?: Database["public"]["Enums"]["cpf_verification_status"]
+          cpf_verified_at?: string | null
+          created_at?: string
+          id?: string
+          last_error_code?: string | null
+          mother_name?: string | null
+          organization_id?: string
+          sex?: string | null
+          updated_at?: string
+          verification_provider?: string | null
+          verification_provider_version?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "contact_identity_profiles_contact_id_fkey"
+            columns: ["contact_id"]
+            isOneToOne: true
+            referencedRelation: "contacts"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "contact_identity_profiles_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      registry_provider_settings: {
+        Row: {
+          cpf_lookup_enabled: boolean
+          documented_purpose: string | null
+          enabled_at: string | null
+          enabled_by_user_id: string | null
+          organization_id: string
+          privacy_notice_updated_at: string | null
+          updated_at: string
+        }
+        Insert: {
+          cpf_lookup_enabled?: boolean
+          documented_purpose?: string | null
+          enabled_at?: string | null
+          enabled_by_user_id?: string | null
+          organization_id: string
+          privacy_notice_updated_at?: string | null
+          updated_at?: string
+        }
+        Update: {
+          cpf_lookup_enabled?: boolean
+          documented_purpose?: string | null
+          enabled_at?: string | null
+          enabled_by_user_id?: string | null
+          organization_id?: string
+          privacy_notice_updated_at?: string | null
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "registry_provider_settings_enabled_by_user_id_fkey"
+            columns: ["enabled_by_user_id"]
+            isOneToOne: false
+            referencedRelation: "users"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "registry_provider_settings_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: true
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       contacts: {
         Row: {
           ad_referral_body: string | null
@@ -1812,6 +1977,7 @@ export type Database = {
           meta_campaign_id: string | null
           meta_lead_id: string | null
           nationality: string | null
+          address_country_code: string | null
           organization_id: string
           owner_user_id: string | null
           phone: string | null
@@ -1881,6 +2047,7 @@ export type Database = {
           meta_campaign_id?: string | null
           meta_lead_id?: string | null
           nationality?: string | null
+          address_country_code?: string | null
           organization_id: string
           owner_user_id?: string | null
           phone?: string | null
@@ -1950,6 +2117,7 @@ export type Database = {
           meta_campaign_id?: string | null
           meta_lead_id?: string | null
           nationality?: string | null
+          address_country_code?: string | null
           organization_id?: string
           owner_user_id?: string | null
           phone?: string | null
@@ -6916,6 +7084,7 @@ export type Database = {
           cs_inbox_includes_service_endpoints: boolean
           default_currency: string | null
           default_locale: string | null
+          operating_country_code: string | null
           duplicate_check_mode:
             | Database["public"]["Enums"]["duplicate_check_mode"]
             | null
@@ -6946,6 +7115,7 @@ export type Database = {
           cs_inbox_includes_service_endpoints?: boolean
           default_currency?: string | null
           default_locale?: string | null
+          operating_country_code?: string | null
           duplicate_check_mode?:
             | Database["public"]["Enums"]["duplicate_check_mode"]
             | null
@@ -6978,6 +7148,7 @@ export type Database = {
           cs_inbox_includes_service_endpoints?: boolean
           default_currency?: string | null
           default_locale?: string | null
+          operating_country_code?: string | null
           duplicate_check_mode?:
             | Database["public"]["Enums"]["duplicate_check_mode"]
             | null
@@ -10002,6 +10173,19 @@ export type Database = {
           total_count: number
         }[]
       }
+      rpc_set_operating_country: {
+        Args: { p_country_code: string; p_organization_id: string }
+        Returns: Json
+      }
+      rpc_configure_cpf_registry: {
+        Args: {
+          p_documented_purpose?: string
+          p_enabled: boolean
+          p_organization_id: string
+          p_privacy_notice_confirmed?: boolean
+        }
+        Returns: Database["public"]["Tables"]["registry_provider_settings"]["Row"]
+      }
       rpc_update_integration_job_payload: {
         Args: { p_job_id: string; p_payload: Json }
         Returns: undefined
@@ -10137,6 +10321,12 @@ export type Database = {
         | "system"
       app_role: "admin" | "sales_rep" | "viewer"
       call_type: "made" | "received" | "scheduled"
+      cpf_verification_status:
+        | "unverified"
+        | "pending"
+        | "verified"
+        | "invalid"
+        | "error"
       duplicate_check_mode: "none" | "email" | "phone" | "email_or_phone"
       lifecycle_stage: "lead" | "customer" | "inactive"
       onboarding_step:
@@ -10287,6 +10477,13 @@ export const Constants = {
       ],
       app_role: ["admin", "sales_rep", "viewer"],
       call_type: ["made", "received", "scheduled"],
+      cpf_verification_status: [
+        "unverified",
+        "pending",
+        "verified",
+        "invalid",
+        "error",
+      ],
       duplicate_check_mode: ["none", "email", "phone", "email_or_phone"],
       lifecycle_stage: ["lead", "customer", "inactive"],
       onboarding_step: [

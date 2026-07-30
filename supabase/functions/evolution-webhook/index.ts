@@ -28,6 +28,7 @@ import { corsHeaders } from "../_shared/cors.ts";
 import { featureFlagEnabled } from "../_shared/feature-flags.ts";
 import { logEvolution, newRequestId } from "../_shared/evolution/logger.ts";
 import { callerKey, rateLimit } from "../_shared/evolution/rate-limit.ts";
+import { resolveContactIngressIdentity } from "../_shared/registry/ingress.ts";
 import {
   EVOLUTION_WEBHOOK_CONTRACT_VERSION,
   EvolutionWebhookEnvelope,
@@ -540,11 +541,24 @@ async function findOrCreateContact(
     return { contactId: null, contactOwnerId: null, created: false };
   }
   const contactName = profileName || `WhatsApp ${fromE164}`;
+  const identity = await resolveContactIngressIdentity(service, {
+    organizationId,
+    source: "evolution_whatsapp",
+    externalId: fromE164,
+    fullName: contactName,
+    safePayload: { phone_suffix: fromE164.slice(-4) },
+  });
+  if (!identity.ok) {
+    return { contactId: null, contactOwnerId: null, created: false };
+  }
   const { data: created, error } = await service
     .from("contacts")
     .insert({
       organization_id: organizationId,
-      full_name: contactName,
+      full_name: identity.fullName,
+      first_name: identity.firstName,
+      last_name: identity.lastName,
+      address_country_code: identity.country,
       phone: fromE164,
       source: "whatsapp",
       lifecycle_stage: inbound.default_lifecycle_stage || "lead",

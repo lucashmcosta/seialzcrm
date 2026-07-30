@@ -33,6 +33,9 @@ function applyTransform(value: string | null | undefined, transformType: string)
 
 interface LeadPayload {
   name?: string;
+  full_name?: string;
+  first_name?: string;
+  last_name?: string;
   email?: string;
   phone?: string;
   company?: string;
@@ -250,6 +253,9 @@ serve(async (req) => {
       // Build the payload from mapped fields
       payload = {
         name: (mapped.full_name as string) || rawPayload.name || '',
+        full_name: (mapped.full_name as string) || rawPayload.full_name || rawPayload.name,
+        first_name: (mapped.first_name as string) || rawPayload.first_name,
+        last_name: (mapped.last_name as string) || rawPayload.last_name,
         email: (mapped.email as string) || rawPayload.email,
         phone: (mapped.phone as string) || rawPayload.phone,
         company: (mapped.company_name as string) || rawPayload.company,
@@ -286,31 +292,50 @@ serve(async (req) => {
         }
       }
 
-      console.log('Field mapping applied. Translated payload:', JSON.stringify(payload));
+      console.log('Field mapping applied', {
+        organization_id: organizationId,
+        mapped_fields: Object.keys(mapped),
+      });
     } else {
       // No mapping configured — use raw payload as-is (backward compatible)
       payload = rawPayload;
     }
 
-    // Validate required fields
-    if (!payload.name || String(payload.name).trim() === '') {
-      return new Response(
-        JSON.stringify({ error: 'Field "name" (or mapped equivalent) is required' }),
-        { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-      );
-    }
-
-    // Parse name
-    const nameParts = String(payload.name).trim().split(' ');
-    const firstName = nameParts[0];
-    const lastName = nameParts.length > 1 ? nameParts.slice(1).join(' ') : null;
-
     // Duplicate check
     const { data: orgSettings } = await supabase
       .from('organizations')
-      .select('duplicate_check_mode, duplicate_enforce_block')
+      .select('duplicate_check_mode, duplicate_enforce_block, operating_country_code')
       .eq('id', organizationId)
       .single();
+
+    const operatingCountry = orgSettings?.operating_country_code;
+    if (!operatingCountry) {
+      return new Response(
+        JSON.stringify({ error: 'operating_country_required' }),
+        { status: 409, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      );
+    }
+
+    const explicitFirstName = String(payload.first_name ?? '').trim() || null;
+    const explicitLastName = String(payload.last_name ?? '').trim() || null;
+    const suppliedFullName = String(payload.full_name ?? payload.name ?? '').replace(/\s+/g, ' ').trim();
+    if (operatingCountry === 'US' && (!explicitFirstName || !explicitLastName)) {
+      return new Response(
+        JSON.stringify({ error: 'name_parts_required' }),
+        { status: 422, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      );
+    }
+    if (operatingCountry === 'BR' && !suppliedFullName) {
+      return new Response(
+        JSON.stringify({ error: 'full_name_required' }),
+        { status: 422, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      );
+    }
+    const firstName = explicitFirstName;
+    const lastName = explicitLastName;
+    const fullName = operatingCountry === 'US'
+      ? `${explicitFirstName} ${explicitLastName}`
+      : suppliedFullName;
 
     const duplicateCheckMode = orgSettings?.duplicate_check_mode || 'none';
     const duplicateEnforceBlock = orgSettings?.duplicate_enforce_block ?? false;
@@ -393,9 +418,10 @@ serve(async (req) => {
         .from('contacts')
         .insert({
           organization_id: organizationId,
-          full_name: String(payload.name).trim(),
+          full_name: fullName,
           first_name: firstName,
           last_name: lastName,
+          address_country_code: operatingCountry,
           email: payload.email || null,
           phone: payload.phone ? normalizePhoneToE164(payload.phone) : null,
           company_name: payload.company || null,
@@ -469,7 +495,7 @@ serve(async (req) => {
             organization_id: organizationId,
             contact_id: contactId,
             pipeline_stage_id: stages[0].id,
-            title: payload.opportunity_title || `Lead: ${payload.name}`,
+            title: payload.opportunity_title || `Lead: ${fullName}`,
             amount: payload.opportunity_value || 0,
             marketing_campaign_id: contactMarketingCampaignId,
             status: 'open',

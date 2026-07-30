@@ -53,6 +53,16 @@ verify_jwt = false
 [functions.nammux-reconcile-opportunities]
 verify_jwt = false
 
+# JWT validated in code so the function can enforce organization membership,
+# contact permissions and the BR operating profile with explicit errors.
+[functions.registry-lookup]
+verify_jwt = false
+
+# Backfill é iniciado por um administrador e valida JWT, organização, país e
+# can_manage_settings dentro da própria função.
+[functions.registry-backfill]
+verify_jwt = false
+
 [functions.integration-worker]
 # Autenticação server-to-server própria via x-worker-token.
 verify_jwt = false

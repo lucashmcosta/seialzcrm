@@ -16,6 +16,8 @@ import { supabase } from '@/integrations/supabase/client';
 import { useOrganizationContext } from '@/contexts/OrganizationContext';
 import { useToast } from '@/hooks/use-toast';
 import { normalizePhoneBR } from '@/lib/normalizePhoneBR';
+import { NameInput } from '@/components/NameInput';
+import { canonicalContactName, type OperatingCountryCode } from '@/lib/regional';
 
 type MetaRaw = {
   type?: string;
@@ -315,6 +317,8 @@ function SingleSharedContactCard({
           open={addOpen}
           onOpenChange={setAddOpen}
           initialName={name}
+          initialFirstName={contact.name?.first_name ?? ''}
+          initialLastName={contact.name?.last_name ?? ''}
           initialPhone={primaryPhone ?? ''}
           onCreated={(id) => setExistingId(id)}
         />
@@ -327,12 +331,16 @@ function AddSharedContactDialog({
   open,
   onOpenChange,
   initialName,
+  initialFirstName,
+  initialLastName,
   initialPhone,
   onCreated,
 }: {
   open: boolean;
   onOpenChange: (v: boolean) => void;
   initialName: string;
+  initialFirstName: string;
+  initialLastName: string;
   initialPhone: string;
   onCreated: (id: string) => void;
 }) {
@@ -340,6 +348,8 @@ function AddSharedContactDialog({
   const { toast } = useToast();
   const navigate = useNavigate();
   const [name, setName] = useState(initialName);
+  const [firstName, setFirstName] = useState(initialFirstName);
+  const [lastName, setLastName] = useState(initialLastName);
   const [phone, setPhone] = useState(initialPhone);
   const [saving, setSaving] = useState(false);
 
@@ -365,11 +375,21 @@ function AddSharedContactDialog({
           return;
         }
       }
+      if (!organization.operating_country_code) {
+        throw new Error('Escolha o país operacional antes de criar contatos.');
+      }
+      const canonicalName = canonicalContactName(
+        organization.operating_country_code as OperatingCountryCode,
+        { fullName: name, firstName, lastName },
+      );
       const { data, error } = await supabase
         .from('contacts')
         .insert({
           organization_id: organization.id,
-          full_name: name.trim() || 'Sem nome',
+          full_name: canonicalName.fullName,
+          first_name: canonicalName.firstName,
+          last_name: canonicalName.lastName,
+          address_country_code: organization.operating_country_code,
           phone: phone.trim() || null,
         })
         .select('id')
@@ -399,14 +419,17 @@ function AddSharedContactDialog({
           </DialogDescription>
         </DialogHeader>
         <div className="space-y-3">
-          <div>
-            <Label htmlFor="shared-contact-name">Nome</Label>
-            <Input
-              id="shared-contact-name"
-              value={name}
-              onChange={(e) => setName(e.target.value)}
-            />
-          </div>
+          <NameInput
+            locale={(organization?.default_locale || 'pt-BR') as 'pt-BR' | 'en-US'}
+            countryCode={organization?.operating_country_code}
+            fullName={name}
+            firstName={firstName}
+            lastName={lastName}
+            onFullNameChange={setName}
+            onFirstNameChange={setFirstName}
+            onLastNameChange={setLastName}
+            required
+          />
           <div>
             <Label htmlFor="shared-contact-phone">Telefone</Label>
             <Input
