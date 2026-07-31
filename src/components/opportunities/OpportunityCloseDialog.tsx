@@ -53,7 +53,9 @@ export function OpportunityCloseDialog(props: Props) {
     if (!evaluation.missing_codes.includes('cpf_api_verified')) return;
     checkedCpf.current = true;
     setCheckingCpf(true);
-    void supabase.from('contacts').select('cpf').eq('id', props.contactId).maybeSingle()
+    void Promise.resolve(
+      supabase.from('contacts').select('cpf').eq('id', props.contactId).maybeSingle(),
+    )
       .then(async ({ data }) => {
         if (data?.cpf) {
           try { await lookup('cpf', data.cpf, { contactId: props.contactId! }); } catch { /* checklist explains the result */ }
@@ -61,6 +63,7 @@ export function OpportunityCloseDialog(props: Props) {
         }
       })
       .finally(() => setCheckingCpf(false));
+
   }, [props.open, evaluation, props.contactId, lookup, refresh]);
 
   const confirm = async () => {
