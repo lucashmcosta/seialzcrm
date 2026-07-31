@@ -15,6 +15,8 @@ import { SiteI18nProvider } from "@/i18n/SiteI18nProvider";
 import { detectLocale } from "@/i18n/config";
 import { DEFAULT_LOCALE, LOCALE_TO_SLUG, SLUG_TO_LOCALE } from "@/i18n/config";
 import { CallHandlersBoundary } from "@/components/calls/CallHandlersBoundary";
+import { hardRefreshApp } from "@/hooks/useVersionCheck";
+
 function RedirectPreserveQuery({ to }: { to: string }) {
   const { search, hash } = useLocation();
   return <Navigate to={`${to}${search}${hash}`} replace />;
