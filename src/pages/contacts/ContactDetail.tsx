@@ -53,10 +53,9 @@ import { ContactTasks } from '@/components/contacts/ContactTasks';
 import { ContactCalls } from '@/components/contacts/ContactCalls';
 import { ContactMessages } from '@/components/contacts/ContactMessages';
 import { ContactConversations } from '@/components/contacts/ContactConversations';
-import { ContactAttachments } from '@/components/contacts/ContactAttachments';
 import { ContactOpportunities } from '@/components/contacts/ContactOpportunities';
 import { ContactNotes } from '@/components/contacts/ContactNotes';
-import { DocumentChecklist } from '@/components/documents/DocumentChecklist';
+import { UnifiedDocuments } from '@/components/documents/UnifiedDocuments';
 import {
   contactSexLabelFor,
   cpfStatusLabelFor,
@@ -113,7 +112,6 @@ export default function ContactDetail() {
     { id: "notes", label: t('contacts.notesTab') },
     { id: "calls", label: t('contacts.callsTab') },
     ...(!isMobile ? [{ id: "messages", label: locale === 'pt-BR' ? 'Conversas' : 'Conversations' }] : []),
-    { id: "attachments", label: t('contacts.attachmentsTab') },
     { id: "documents", label: "Documentos" },
   ];
 
@@ -373,7 +371,7 @@ export default function ContactDetail() {
       case 'notes': return <ContactNotes contactId={contact!.id} />;
       case 'calls': return <ContactCalls contactId={contact!.id} contactPhone={contact?.phone} contactName={contact?.full_name} />;
       case 'messages': return <ContactConversations contactId={contact!.id} />;
-      case 'attachments': return <ContactAttachments contactId={contact!.id} />;
+      case 'documents': return <UnifiedDocuments contactId={contact!.id} />;
       default: return null;
     }
   };
@@ -1042,12 +1040,8 @@ export default function ContactDetail() {
               <ContactConversations contactId={contact.id} />
             </Tabs.Panel>
 
-            <Tabs.Panel id="attachments">
-              <ContactAttachments contactId={contact.id} />
-            </Tabs.Panel>
-
             <Tabs.Panel id="documents">
-              <DocumentChecklist contactId={contact.id} />
+              <UnifiedDocuments contactId={contact.id} />
             </Tabs.Panel>
           </Tabs>
         </div>

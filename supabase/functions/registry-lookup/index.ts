@@ -73,6 +73,28 @@ async function lookup(kind: LookupKind, value: string): Promise<ProviderResult> 
   return fallback.ok ? fallback : primary;
 }
 
+function cpfFailureClass(result: Extract<ProviderResult, { ok: false }>): string {
+  if (
+    result.status === 429 || result.status >= 500 || result.status === 0 ||
+    ["timeout", "network_error", "provider_circuit_open", "upstream_error"].includes(result.error)
+  ) return "provider_unavailable";
+  if (["invalid_or_not_found", "not_found"].includes(result.error)) return "not_found";
+  if ([
+    "provider_auth_error", "provider_invalid_api_key", "provider_token_expired",
+    "provider_plan_expired", "provider_plan_suspended",
+  ].includes(result.error)) return "auth";
+  if (["provider_not_configured", "provider_missing_api_key"].includes(result.error)) return "configuration";
+  return "unknown";
+}
+
+function normalizedSex(value: unknown): string | null {
+  const normalized = String(value ?? "").trim().toLowerCase();
+  if (!normalized) return null;
+  if (["m", "masculino", "male"].includes(normalized)) return "male";
+  if (["f", "feminino", "female"].includes(normalized)) return "female";
+  return "other";
+}
+
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: corsHeaders });
   if (req.method !== "POST") return json({ error: "method_not_allowed" }, 405);
@@ -85,6 +107,8 @@ Deno.serve(async (req) => {
   }
 
   const organizationId = String(body.organization_id ?? "");
+  const contactId = body.contact_id ? String(body.contact_id) : null;
+  let existingCpfVerification: { status: string; verifiedAt: string | null } | null = null;
   const kind = String(body.kind ?? "") as LookupKind;
   if (!organizationId || !["cep", "cnpj", "cpf"].includes(kind)) {
     return json({ error: "invalid_parameters" }, 400);
@@ -122,6 +146,32 @@ Deno.serve(async (req) => {
     }
   }
 
+  if (contactId && kind !== "cpf") {
+    return json({ error: "contact_id_only_supported_for_cpf" }, 400);
+  }
+  if (contactId) {
+    const { data: contact } = await auth.admin
+      .from("contacts")
+      .select("id,cpf")
+      .eq("id", contactId)
+      .eq("organization_id", organizationId)
+      .is("deleted_at", null)
+      .maybeSingle();
+    if (!contact) return json({ error: "contact_not_found" }, 404);
+    if (String(contact.cpf ?? "").replace(/\D/g, "") !== value) {
+      return json({ error: "contact_cpf_mismatch" }, 409);
+    }
+    const { data: identity } = await auth.admin
+      .from("contact_identity_profiles")
+      .select("cpf_verification_status,cpf_verified_at")
+      .eq("organization_id", organizationId)
+      .eq("contact_id", contactId)
+      .maybeSingle();
+    existingCpfVerification = identity
+      ? { status: String(identity.cpf_verification_status), verifiedAt: identity.cpf_verified_at }
+      : null;
+  }
+
   const hash = await identifierHash(`${kind}:${value}`);
   if (kind !== "cpf") {
     const { data: cached } = await auth.admin
@@ -155,6 +205,28 @@ Deno.serve(async (req) => {
   });
 
   if (!result.ok) {
+    if (kind === "cpf" && contactId) {
+      const failureClass = cpfFailureClass(result);
+      const { error: persistError } = await auth.admin.from("contact_identity_profiles").upsert({
+        organization_id: organizationId,
+        contact_id: contactId,
+        cpf_verification_status: existingCpfVerification?.status === "verified"
+          ? "verified"
+          : failureClass === "not_found" ? "invalid" : "error",
+        verification_provider: result.provider,
+        verification_provider_version: result.version,
+        cpf_verified_at: existingCpfVerification?.status === "verified"
+          ? existingCpfVerification.verifiedAt
+          : null,
+        last_error_code: result.error,
+        last_verification_attempt_at: new Date().toISOString(),
+        last_failure_class: failureClass,
+        last_provider_http_status: result.status || null,
+        last_attempt_retryable: failureClass === "provider_unavailable",
+        updated_at: new Date().toISOString(),
+      }, { onConflict: "contact_id" });
+      if (persistError) return json({ error: "cpf_verification_persist_failed" }, 500);
+    }
     const status = result.error === "invalid_or_not_found" || result.error === "not_found"
       ? 422
       : result.error === "provider_not_configured"
@@ -181,12 +253,39 @@ Deno.serve(async (req) => {
     }, { onConflict: "lookup_kind,identifier_hash,provider" });
   }
 
+  if (kind === "cpf" && contactId) {
+    const returnedCpf = String(result.payload.cpf ?? "").replace(/\D/g, "");
+    if (returnedCpf && returnedCpf !== value) {
+      return json({ ok: false, kind, provider: result.provider, error: "provider_cpf_mismatch", retryable: false }, 502);
+    }
+    const { error: persistError } = await auth.admin.from("contact_identity_profiles").upsert({
+      organization_id: organizationId,
+      contact_id: contactId,
+      cpf_verification_status: "verified",
+      cpf_registration_status: result.payload.registration_status ?? null,
+      birth_date: result.payload.birth_date ?? null,
+      sex: normalizedSex(result.payload.sex),
+      mother_name: result.payload.mother_name ?? null,
+      verification_provider: result.provider,
+      verification_provider_version: result.version,
+      cpf_verified_at: new Date().toISOString(),
+      last_error_code: null,
+      last_verification_attempt_at: new Date().toISOString(),
+      last_failure_class: null,
+      last_provider_http_status: result.status,
+      last_attempt_retryable: false,
+      updated_at: new Date().toISOString(),
+    }, { onConflict: "contact_id" });
+    if (persistError) return json({ error: "cpf_verification_persist_failed" }, 500);
+  }
+
   return json({
     ok: true,
     kind,
     provider: result.provider,
     provider_version: result.version,
     cached: false,
+    persisted_contact_id: contactId,
     data: result.payload,
   });
 });

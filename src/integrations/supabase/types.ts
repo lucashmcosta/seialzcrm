@@ -1829,7 +1829,11 @@ export type Database = {
           cpf_verified_at: string | null
           created_at: string
           id: string
+          last_attempt_retryable: boolean
           last_error_code: string | null
+          last_failure_class: string | null
+          last_provider_http_status: number | null
+          last_verification_attempt_at: string | null
           mother_name: string | null
           organization_id: string
           sex: string | null
@@ -1845,7 +1849,11 @@ export type Database = {
           cpf_verified_at?: string | null
           created_at?: string
           id?: string
+          last_attempt_retryable?: boolean
           last_error_code?: string | null
+          last_failure_class?: string | null
+          last_provider_http_status?: number | null
+          last_verification_attempt_at?: string | null
           mother_name?: string | null
           organization_id: string
           sex?: string | null
@@ -1861,7 +1869,11 @@ export type Database = {
           cpf_verified_at?: string | null
           created_at?: string
           id?: string
+          last_attempt_retryable?: boolean
           last_error_code?: string | null
+          last_failure_class?: string | null
+          last_provider_http_status?: number | null
+          last_verification_attempt_at?: string | null
           mother_name?: string | null
           organization_id?: string
           sex?: string | null
@@ -6528,6 +6540,126 @@ export type Database = {
           },
         ]
       }
+      opportunity_close_attempts: {
+        Row: {
+          actor_user_id: string | null
+          created_at: string
+          evaluation: Json
+          fallback_used: boolean
+          id: string
+          opportunity_id: string
+          organization_id: string
+          override_reason: string | null
+          policy_version: number
+          result: string
+          source: string
+        }
+        Insert: {
+          actor_user_id?: string | null
+          created_at?: string
+          evaluation?: Json
+          fallback_used?: boolean
+          id?: string
+          opportunity_id: string
+          organization_id: string
+          override_reason?: string | null
+          policy_version: number
+          result: string
+          source?: string
+        }
+        Update: {
+          actor_user_id?: string | null
+          created_at?: string
+          evaluation?: Json
+          fallback_used?: boolean
+          id?: string
+          opportunity_id?: string
+          organization_id?: string
+          override_reason?: string | null
+          policy_version?: number
+          result?: string
+          source?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "opportunity_close_attempts_actor_user_id_fkey"
+            columns: ["actor_user_id"]
+            isOneToOne: false
+            referencedRelation: "users"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "opportunity_close_attempts_opportunity_id_fkey"
+            columns: ["opportunity_id"]
+            isOneToOne: false
+            referencedRelation: "opportunities"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "opportunity_close_attempts_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      opportunity_close_policies: {
+        Row: {
+          created_at: string
+          created_by: string | null
+          mode: string
+          organization_id: string
+          require_complete_address: boolean
+          require_cpf_verified: boolean
+          required_contact_custom_field_ids: string[]
+          required_contact_fields: string[]
+          required_opportunity_custom_field_ids: string[]
+          required_opportunity_fields: string[]
+          updated_at: string
+          updated_by: string | null
+          version: number
+        }
+        Insert: {
+          created_at?: string
+          created_by?: string | null
+          mode?: string
+          organization_id: string
+          require_complete_address?: boolean
+          require_cpf_verified?: boolean
+          required_contact_custom_field_ids?: string[]
+          required_contact_fields?: string[]
+          required_opportunity_custom_field_ids?: string[]
+          required_opportunity_fields?: string[]
+          updated_at?: string
+          updated_by?: string | null
+          version?: number
+        }
+        Update: {
+          created_at?: string
+          created_by?: string | null
+          mode?: string
+          organization_id?: string
+          require_complete_address?: boolean
+          require_cpf_verified?: boolean
+          required_contact_custom_field_ids?: string[]
+          required_contact_fields?: string[]
+          required_opportunity_custom_field_ids?: string[]
+          required_opportunity_fields?: string[]
+          updated_at?: string
+          updated_by?: string | null
+          version?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "opportunity_close_policies_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: true
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       opportunities: {
         Row: {
           amount: number | null
@@ -9456,6 +9588,10 @@ export type Database = {
       current_user_id: { Args: never; Returns: string }
       current_user_managed_org_ids: { Args: never; Returns: string[] }
       current_user_org_ids: { Args: never; Returns: string[] }
+      evaluate_opportunity_close_v1: {
+        Args: { _opportunity_id: string; _organization_id: string }
+        Returns: Json
+      }
       f_unaccent: { Args: { "": string }; Returns: string }
       fn_build_nammux_contact_payload: {
         Args: { _contact_id: string }
@@ -9566,6 +9702,14 @@ export type Database = {
       fn_outbox_resume_subscription: {
         Args: { p_id: string }
         Returns: undefined
+      }
+      list_entity_documents_v1: {
+        Args: {
+          _contact_id?: string
+          _opportunity_id?: string
+          _organization_id: string
+        }
+        Returns: Json
       }
       fn_outbox_retry_job: { Args: { p_job_id: string }; Returns: undefined }
       fn_outbox_top_errors: {
@@ -10281,6 +10425,30 @@ export type Database = {
       }
       take_over_thread: {
         Args: { _reason?: string; _thread_id: string }
+        Returns: Json
+      }
+      transition_opportunities_stage_batch_v1: {
+        Args: {
+          _close_date: string
+          _opportunity_ids: string[]
+          _organization_id: string
+          _override: boolean
+          _override_reason: string
+          _source: string
+          _target_stage_id: string
+        }
+        Returns: Json
+      }
+      transition_opportunity_stage_v1: {
+        Args: {
+          _close_date: string
+          _opportunity_id: string
+          _organization_id: string
+          _override: boolean
+          _override_reason: string
+          _source: string
+          _target_stage_id: string
+        }
         Returns: Json
       }
       trigger_intelligence_backfill: {

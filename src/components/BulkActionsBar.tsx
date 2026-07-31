@@ -6,6 +6,8 @@ import { supabase } from '@/integrations/supabase/client';
 import { useTranslation } from '@/lib/i18n';
 import { toast } from '@/hooks/use-toast';
 import { X, User, Prohibit, TrashSimple, Stack } from '@phosphor-icons/react';
+import { CloseDatePromptDialog } from '@/components/opportunities/CloseDatePromptDialog';
+import { useOrganization } from '@/hooks/useOrganization';
 
 interface User {
   id: string;
@@ -45,6 +47,8 @@ export function BulkActionsBar({
   const { t } = useTranslation(locale as any);
   const [processing, setProcessing] = useState(false);
   const [confirmOpen, setConfirmOpen] = useState(false);
+  const [pendingStage, setPendingStage] = useState<StageOption | null>(null);
+  const { organization } = useOrganization();
 
   const handleChangeOwner = async (ownerId: string) => {
     if (!ownerId || selectedIds.length === 0) return;
@@ -73,6 +77,10 @@ export function BulkActionsBar({
     if (!stageId || selectedIds.length === 0 || module !== 'opportunities') return;
     const target = stages?.find((s) => s.id === stageId);
     if (!target) return;
+    if (target.type === 'won' || target.type === 'lost') {
+      setPendingStage(target);
+      return;
+    }
 
     setProcessing(true);
     try {
@@ -90,6 +98,38 @@ export function BulkActionsBar({
       onClear();
     } catch (error) {
       console.error('Error changing stage:', error);
+      toast({ title: t('common.error'), variant: 'destructive' });
+    } finally {
+      setProcessing(false);
+    }
+  };
+
+  const handleConfirmBatchStage = async (closeDate: string) => {
+    if (!pendingStage || !organization?.id) return;
+    setProcessing(true);
+    try {
+      const { data, error } = await supabase.rpc('transition_opportunities_stage_batch_v1', {
+        _organization_id: organization.id,
+        _opportunity_ids: selectedIds,
+        _target_stage_id: pendingStage.id,
+        _close_date: closeDate,
+        _override: false,
+        _override_reason: '',
+        _source: 'bulk_actions',
+      });
+      if (error) throw error;
+      const result = data as unknown as { ok?: boolean; blocked?: unknown[] };
+      if (!result?.ok) {
+        const blocked = Array.isArray(result?.blocked) ? result.blocked.length : selectedIds.length;
+        toast({ title: `${blocked} oportunidade(s) com pendências`, description: 'Nenhuma oportunidade foi alterada. Corrija os dados e tente novamente.', variant: 'destructive' });
+        return;
+      }
+      toast({ title: t('common.success') });
+      setPendingStage(null);
+      onSuccess();
+      onClear();
+    } catch (error) {
+      console.error('Error changing stage in batch:', error);
       toast({ title: t('common.error'), variant: 'destructive' });
     } finally {
       setProcessing(false);
@@ -147,6 +187,14 @@ export function BulkActionsBar({
 
   return (
     <>
+      <CloseDatePromptDialog
+        open={pendingStage !== null}
+        onOpenChange={(open) => !open && setPendingStage(null)}
+        title={pendingStage?.type === 'won' ? 'Marcar selecionadas como Ganhas' : 'Marcar selecionadas como Perdidas'}
+        description="A operação é atômica: se alguma oportunidade estiver bloqueada, nenhuma será alterada."
+        onConfirm={handleConfirmBatchStage}
+        loading={processing}
+      />
       <div className="fixed bottom-6 left-1/2 -translate-x-1/2 z-50">
         <div className="bg-primary text-primary-foreground rounded-lg shadow-lg p-4 flex items-center gap-4 flex-wrap">
           <span className="font-medium">

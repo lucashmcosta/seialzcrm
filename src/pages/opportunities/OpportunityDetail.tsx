@@ -23,13 +23,15 @@ import { formatDateOnly } from '@/lib/utils';
 import { formatPhoneDisplay } from '@/lib/phoneUtils';
 import { ActivityTimeline } from '@/components/contacts/ActivityTimeline';
 import { ContactTasks } from '@/components/contacts/ContactTasks';
-import { ContactAttachments } from '@/components/contacts/ContactAttachments';
 import { ContactCalls } from '@/components/contacts/ContactCalls';
 import { ContactConversations } from '@/components/contacts/ContactConversations';
 import { ContactNotes } from '@/components/contacts/ContactNotes';
-import { DocumentChecklist } from '@/components/documents/DocumentChecklist';
 import { OpportunityDialog } from '@/components/opportunities/OpportunityDialog';
 import { CloseDatePromptDialog } from '@/components/opportunities/CloseDatePromptDialog';
+import { OpportunityCloseDialog } from '@/components/opportunities/OpportunityCloseDialog';
+import { OpportunityReadinessCard } from '@/components/opportunities/OpportunityReadinessCard';
+import { UnifiedDocuments } from '@/components/documents/UnifiedDocuments';
+import { transitionOpportunityStage } from '@/lib/opportunityClose';
 import { ClickToCallButton } from '@/components/calls/ClickToCallButton';
 import { OwnerSelector } from '@/components/common/OwnerSelector';
 import { SendToSignatureButton } from '@/components/signature/SendToSignatureButton';
@@ -80,7 +82,6 @@ export default function OpportunityDetail() {
     { id: 'calls', label: t('contacts.callsTab') },
     { id: 'conversations', label: t('contacts.conversationsTab') },
     { id: 'tasks', label: t('contacts.tasksTab') },
-    { id: 'attachments', label: t('attachments.title') },
     { id: 'documents', label: 'Documentos' },
     {
       id: 'nammux',
@@ -183,17 +184,14 @@ export default function OpportunityDetail() {
     if (!targetStage) return;
 
     try {
-      const { error } = await supabase
-        .from('opportunities')
-        .update({
-          status: newStatus,
-          pipeline_stage_id: targetStage.id,
-          close_date: closeDate,
-          updated_by: userProfile?.id || null,
-        } as any)
-        .eq('id', opportunity.id);
-
-      if (error) throw error;
+      const result = await transitionOpportunityStage({
+        organizationId: organization.id,
+        opportunityId: opportunity.id,
+        targetStageId: targetStage.id,
+        closeDate,
+        source: 'opportunity_detail',
+      });
+      if (!result.ok) throw new Error(result.error || 'closing_requirements_missing');
 
       toast({ title: t('opportunities.updated') });
       setPendingStatus(null);
@@ -206,11 +204,7 @@ export default function OpportunityDetail() {
 
   const handleMarkWon = async () => {
     if (!opportunity) return;
-    if (opportunity.close_date) {
-      await applyStatusChange('won', opportunity.close_date);
-    } else {
-      setPendingStatus('won');
-    }
+    setPendingStatus('won');
   };
 
   const handleMarkLost = async () => {
@@ -397,6 +391,7 @@ export default function OpportunityDetail() {
             />
 
             {selectedTab === 'overview' && (
+              <>
               <Card>
                 <CardContent className="pt-6 space-y-4">
                   <div>
@@ -425,6 +420,8 @@ export default function OpportunityDetail() {
                   </div>
                 </CardContent>
               </Card>
+              {organization && <OpportunityReadinessCard organizationId={organization.id} opportunityId={opportunity.id} />}
+              </>
             )}
             {selectedTab === 'timeline' && <ActivityTimeline opportunityId={opportunity.id} />}
             {selectedTab === 'calls' && opportunity.contact_id && (
@@ -443,7 +440,7 @@ export default function OpportunityDetail() {
               )
             )}
             {selectedTab === 'tasks' && <ContactTasks opportunityId={opportunity.id} />}
-            {selectedTab === 'attachments' && <ContactAttachments entityId={opportunity.id} entityType="opportunity" />}
+            {selectedTab === 'documents' && <UnifiedDocuments opportunityId={opportunity.id} contactId={opportunity.contact_id} />}
             {selectedTab === 'nammux' && organization && (
               <NammuxOpportunityTab
                 organizationId={organization.id}
@@ -463,12 +460,21 @@ export default function OpportunityDetail() {
           onSuccess={fetchOpportunity}
           titleOnly={isClosed}
         />
-        <CloseDatePromptDialog
-          open={pendingStatus !== null}
+        {pendingStatus === 'won' ? <OpportunityCloseDialog
+          open
           onOpenChange={(o) => !o && setPendingStatus(null)}
-          title={pendingStatus === 'won' ? 'Marcar como Ganho' : 'Marcar como Perdido'}
+          opportunityId={opportunity.id}
+          contactId={opportunity.contact_id}
+          targetStageId={stages.find((stage) => stage.type === 'won')?.id || ''}
+          initialCloseDate={opportunity.close_date}
+          source="opportunity_detail_mobile"
+          onSuccess={fetchOpportunity}
+        /> : <CloseDatePromptDialog
+          open={pendingStatus === 'lost'}
+          onOpenChange={(o) => !o && setPendingStatus(null)}
+          title="Marcar como Perdido"
           onConfirm={(date) => pendingStatus && applyStatusChange(pendingStatus, date)}
-        />
+        />}
       </MobileLayout>
     );
   }
@@ -758,6 +764,7 @@ export default function OpportunityDetail() {
                   </div>
                 </CardContent>
               </Card>
+              {organization && <OpportunityReadinessCard organizationId={organization.id} opportunityId={opportunity.id} />}
             </Tabs.Panel>
 
             <Tabs.Panel id="timeline">
@@ -793,20 +800,8 @@ export default function OpportunityDetail() {
               <ContactTasks opportunityId={opportunity.id} />
             </Tabs.Panel>
 
-            <Tabs.Panel id="attachments">
-              <ContactAttachments entityId={opportunity.id} entityType="opportunity" />
-            </Tabs.Panel>
-
             <Tabs.Panel id="documents">
-              {opportunity.contact_id ? (
-                <DocumentChecklist contactId={opportunity.contact_id} />
-              ) : (
-                <Card>
-                  <CardContent className="py-8 text-center text-muted-foreground">
-                    Esta oportunidade não tem um contato associado.
-                  </CardContent>
-                </Card>
-              )}
+              <UnifiedDocuments opportunityId={opportunity.id} contactId={opportunity.contact_id} />
             </Tabs.Panel>
 
             <Tabs.Panel id="nammux">
@@ -833,12 +828,21 @@ export default function OpportunityDetail() {
         titleOnly={isClosed}
       />
 
-      <CloseDatePromptDialog
-        open={pendingStatus !== null}
+      {pendingStatus === 'won' ? <OpportunityCloseDialog
+        open
         onOpenChange={(o) => !o && setPendingStatus(null)}
-        title={pendingStatus === 'won' ? 'Marcar como Ganho' : 'Marcar como Perdido'}
+        opportunityId={opportunity.id}
+        contactId={opportunity.contact_id}
+        targetStageId={stages.find((stage) => stage.type === 'won')?.id || ''}
+        initialCloseDate={opportunity.close_date}
+        source="opportunity_detail"
+        onSuccess={fetchOpportunity}
+      /> : <CloseDatePromptDialog
+        open={pendingStatus === 'lost'}
+        onOpenChange={(o) => !o && setPendingStatus(null)}
+        title="Marcar como Perdido"
         onConfirm={(date) => pendingStatus && applyStatusChange(pendingStatus, date)}
-      />
+      />}
     </Layout>
   );
 }
