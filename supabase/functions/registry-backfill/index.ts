@@ -17,6 +17,12 @@ const corsHeaders = {
 const SUPABASE_URL = Deno.env.get("SUPABASE_URL")!;
 const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
 const RESTART_CONFIRMATION = "CENTRAL_TRABALHISTA_CPF_BACKFILL";
+const RECONCILIATION_CONFIRMATION =
+  "APPLY_REVIEWED_CPF_RECONCILIATION";
+const REVIEWED_RECONCILIATION_ORGANIZATIONS = new Set([
+  "40ae935c-a7f7-4ad7-8ea4-91be6404a95f",
+  "b246ef6f-6242-4011-a112-6d8783d2896a",
+]);
 
 type BackfillAuth =
   | {
@@ -144,6 +150,243 @@ async function identifierHash(value: string): Promise<string> {
     .join("");
 }
 
+async function applyReviewedReconciliation(
+  auth: Extract<BackfillAuth, { ok: true }>,
+  organizationId: string,
+): Promise<Response> {
+  const { data: organization, error: organizationError } = await auth.admin
+    .from("organizations")
+    .select("operating_country_code")
+    .eq("id", organizationId)
+    .maybeSingle();
+  if (organizationError || organization?.operating_country_code !== "BR") {
+    return json({ error: "reconciliation_requires_br_organization" }, 409);
+  }
+
+  const { data: nameConflicts, error: conflictError } = await auth.admin
+    .from("registry_data_conflicts")
+    .select("id, contact_id, provider_value")
+    .eq("organization_id", organizationId)
+    .eq("conflict_type", "cpf_name_mismatch")
+    .eq("status", "pending")
+    .order("created_at", { ascending: true });
+  if (conflictError) {
+    return json({ error: "name_conflicts_lookup_failed" }, 500);
+  }
+
+  let namesApplied = 0;
+  let nameConflictsResolved = 0;
+  let nameErrors = 0;
+  const nameErrorDetails: Array<Record<string, string>> = [];
+  for (const conflict of nameConflicts ?? []) {
+    const providerName = String(conflict.provider_value ?? "").trim();
+    if (!conflict.contact_id || !providerName) {
+      nameErrors += 1;
+      nameErrorDetails.push({
+        conflict_id: String(conflict.id),
+        stage: "validate_provider_name",
+        code: "provider_name_missing",
+      });
+      continue;
+    }
+
+    const { data: updatedContact, error: updateError } = await auth.admin
+      .from("contacts")
+      .update({
+        full_name: providerName,
+        updated_at: new Date().toISOString(),
+      })
+      .eq("organization_id", organizationId)
+      .eq("id", conflict.contact_id)
+      .is("deleted_at", null)
+      .select("id")
+      .maybeSingle();
+    if (updateError || !updatedContact) {
+      nameErrors += 1;
+      nameErrorDetails.push({
+        conflict_id: String(conflict.id),
+        contact_id: String(conflict.contact_id),
+        stage: "update_contact_name",
+        code: String(updateError?.code ?? "contact_not_updated"),
+        message: String(updateError?.message ?? "contact_not_updated"),
+      });
+      continue;
+    }
+    namesApplied += 1;
+
+    const { error: resolveError } = await auth.admin
+      .from("registry_data_conflicts")
+      .update({
+        status: "accepted",
+        resolved_at: new Date().toISOString(),
+      })
+      .eq("id", conflict.id)
+      .eq("organization_id", organizationId)
+      .eq("status", "pending");
+    if (resolveError) {
+      nameErrors += 1;
+      nameErrorDetails.push({
+        conflict_id: String(conflict.id),
+        contact_id: String(conflict.contact_id),
+        stage: "resolve_name_conflict",
+        code: String(resolveError.code ?? "conflict_not_resolved"),
+        message: String(resolveError.message ?? "conflict_not_resolved"),
+      });
+      continue;
+    }
+    nameConflictsResolved += 1;
+  }
+
+  const { data: invalidProfiles, error: profileError } = await auth.admin
+    .from("contact_identity_profiles")
+    .select(
+      "contact_id, verification_provider, verification_provider_version, last_error_code",
+    )
+    .eq("organization_id", organizationId)
+    .eq("cpf_verification_status", "invalid")
+    .limit(2_000);
+  if (profileError) {
+    return json({ error: "invalid_profiles_lookup_failed" }, 500);
+  }
+
+  const invalidProfileByContact = new Map(
+    (invalidProfiles ?? []).map((profile) => [
+      String(profile.contact_id),
+      profile,
+    ]),
+  );
+  const invalidContactIds = [...invalidProfileByContact.keys()];
+  const contactsWithInvalidCpf: Array<{ id: string; cpf: string }> = [];
+  for (let index = 0; index < invalidContactIds.length; index += 100) {
+    const contactIds = invalidContactIds.slice(index, index + 100);
+    const { data: contacts, error: contactsError } = await auth.admin
+      .from("contacts")
+      .select("id, cpf")
+      .eq("organization_id", organizationId)
+      .in("id", contactIds)
+      .is("deleted_at", null)
+      .not("cpf", "is", null);
+    if (contactsError) {
+      return json({ error: "invalid_contacts_lookup_failed" }, 500);
+    }
+    for (const contact of contacts ?? []) {
+      const cpf = String(contact.cpf ?? "");
+      if (cpf.trim()) {
+        contactsWithInvalidCpf.push({ id: String(contact.id), cpf });
+      }
+    }
+  }
+
+  let invalidCpfsPreserved = 0;
+  let invalidCpfsCleared = 0;
+  let invalidCpfErrors = 0;
+  const invalidCpfErrorDetails: Array<Record<string, string>> = [];
+  for (const contact of contactsWithInvalidCpf) {
+    const profile = invalidProfileByContact.get(contact.id);
+    const { data: existingHistory, error: historyLookupError } =
+      await auth.admin
+        .from("registry_data_conflicts")
+        .select("id")
+        .eq("organization_id", organizationId)
+        .eq("contact_id", contact.id)
+        .eq("conflict_type", "cpf_invalid_removed")
+        .limit(1)
+        .maybeSingle();
+    if (historyLookupError) {
+      invalidCpfErrors += 1;
+      invalidCpfErrorDetails.push({
+        contact_id: contact.id,
+        stage: "lookup_preserved_history",
+        code: String(historyLookupError.code ?? "history_lookup_failed"),
+        message: String(historyLookupError.message ?? "history_lookup_failed"),
+      });
+      continue;
+    }
+
+    if (!existingHistory) {
+      const { error: preserveError } = await auth.admin
+        .from("registry_data_conflicts")
+        .insert({
+          organization_id: organizationId,
+          contact_id: contact.id,
+          conflict_type: "cpf_invalid_removed",
+          current_value: contact.cpf,
+          provider_value: JSON.stringify({
+            verification_provider: profile?.verification_provider ?? null,
+            verification_provider_version:
+              profile?.verification_provider_version ?? null,
+            last_error_code: profile?.last_error_code ?? null,
+          }),
+          status: "accepted",
+          resolved_at: new Date().toISOString(),
+        });
+      if (preserveError) {
+        invalidCpfErrors += 1;
+        invalidCpfErrorDetails.push({
+          contact_id: contact.id,
+          stage: "preserve_invalid_cpf",
+          code: String(preserveError.code ?? "history_insert_failed"),
+          message: String(preserveError.message ?? "history_insert_failed"),
+        });
+        continue;
+      }
+    }
+    invalidCpfsPreserved += 1;
+
+    const { data: clearedContact, error: clearError } = await auth.admin
+      .from("contacts")
+      .update({
+        cpf: null,
+        updated_at: new Date().toISOString(),
+      })
+      .eq("organization_id", organizationId)
+      .eq("id", contact.id)
+      .eq("cpf", contact.cpf)
+      .select("id")
+      .maybeSingle();
+    if (clearError || !clearedContact) {
+      invalidCpfErrors += 1;
+      invalidCpfErrorDetails.push({
+        contact_id: contact.id,
+        stage: "clear_contact_cpf",
+        code: String(clearError?.code ?? "contact_not_updated"),
+        message: String(clearError?.message ?? "contact_not_updated"),
+      });
+      continue;
+    }
+    invalidCpfsCleared += 1;
+  }
+
+  const summary = {
+    provider_names_applied: namesApplied,
+    name_conflicts_resolved: nameConflictsResolved,
+    name_errors: nameErrors,
+    invalid_cpfs_found: contactsWithInvalidCpf.length,
+    invalid_cpfs_preserved: invalidCpfsPreserved,
+    invalid_cpfs_cleared: invalidCpfsCleared,
+    invalid_cpf_errors: invalidCpfErrors,
+    name_error_details: nameErrorDetails.slice(0, 20),
+    invalid_cpf_error_details: invalidCpfErrorDetails.slice(0, 20),
+  };
+  await auth.admin.from("audit_logs").insert({
+    organization_id: organizationId,
+    entity_type: "organizations",
+    entity_id: organizationId,
+    action: "CPF_RECONCILIATION_REVIEW_APPLIED",
+    old_data: null,
+    new_data: summary,
+    changed_by_user_id: auth.userId,
+  });
+
+  const hasErrors = nameErrors > 0 || invalidCpfErrors > 0;
+  return json({
+    ok: !hasErrors,
+    mode: "apply_reviewed_reconciliation",
+    organization_id: organizationId,
+    ...summary,
+  }, hasErrors ? 500 : 200);
+}
+
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") {
     return new Response("ok", { headers: corsHeaders });
@@ -159,7 +402,11 @@ Deno.serve(async (req) => {
 
   const organizationId = String(body.organization_id ?? "");
   const requestedJobId = body.job_id ? String(body.job_id) : null;
-  const mode = body.mode === "inventory" ? "inventory" : "process";
+  const mode = body.mode === "inventory"
+    ? "inventory"
+    : body.mode === "apply_reviewed_reconciliation"
+    ? "apply_reviewed_reconciliation"
+    : "process";
   const restart = body.restart === true;
   const requestedLimit = Number(body.limit ?? 20);
   const batchLimit = Math.max(
@@ -172,6 +419,18 @@ Deno.serve(async (req) => {
   if (!auth.ok) return json({ error: auth.error }, auth.status);
   if (auth.permissions.can_manage_settings !== true) {
     return json({ error: "backfill_requires_manage_settings" }, 403);
+  }
+  if (mode === "apply_reviewed_reconciliation") {
+    if (
+      !auth.operator ||
+      !REVIEWED_RECONCILIATION_ORGANIZATIONS.has(organizationId)
+    ) {
+      return json({ error: "reconciliation_requires_operator" }, 403);
+    }
+    if (body.confirm !== RECONCILIATION_CONFIRMATION) {
+      return json({ error: "reconciliation_confirmation_required" }, 400);
+    }
+    return applyReviewedReconciliation(auth, organizationId);
   }
 
   const enabled = await featureFlagEnabled(
