@@ -29,7 +29,15 @@ const STALE_CHUNK_PATTERNS = [
   "is not a valid javascript mime type",
   "expected a javascript module script but the server responded",
   "expected a javascript-or-wasm module script",
+  // Variants where the chunk resolved but the payload has no default export
+  // (React.lazy internals). Kept in sync with isStaleChunkError in src/App.tsx.
+  "cannot read properties of undefined (reading 'default')",
+  "cannot read property 'default' of undefined",
+  "undefined is not an object (evaluating 'default')",
+  "_result.default",
+  "evaluating '_result",
 ];
+
 
 function isStaleChunkMessage(message: unknown): boolean {
   if (typeof message !== "string") return false;
