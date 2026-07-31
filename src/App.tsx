@@ -73,15 +73,29 @@ export function reloadForChunkRecovery(): boolean {
   if (reloadInFlight) return true;
 
   const reloadKey = "__seialz_chunk_recovery_at";
+  const attemptsKey = "__seialz_chunk_recovery_attempts";
   const lastReloadAt = Number(window.sessionStorage.getItem(reloadKey) ?? "0");
 
   if (Date.now() - lastReloadAt < 10_000) return false;
 
+  const attempts = Number(window.sessionStorage.getItem(attemptsKey) ?? "0");
   window.sessionStorage.setItem(reloadKey, Date.now().toString());
+  window.sessionStorage.setItem(attemptsKey, String(attempts + 1));
   reloadInFlight = true;
-  window.location.reload();
+
+  // First attempt: a plain reload is enough when the HTML revalidates.
+  // Any later attempt in the same session means the reload came back with the
+  // same stale asset references (cached index.html / service worker), so
+  // escalate to a hard refresh: unregister SWs, flush caches and bust the URL.
+  if (attempts === 0) {
+    window.location.reload();
+    return true;
+  }
+
+  hardRefreshApp().catch(() => window.location.reload());
   return true;
 }
+
 
 // Retry wrapper for dynamic imports (handles stale chunks after deployments)
 function retryImport<T>(fn: () => Promise<T>, retries = 2): Promise<T> {
