@@ -1751,75 +1751,6 @@ export type Database = {
         }
         Relationships: []
       }
-      contact_memories: {
-        Row: {
-          contact_id: string
-          created_at: string | null
-          facts: Json | null
-          id: string
-          name_asked: boolean | null
-          name_confirmed: boolean | null
-          name_confirmed_at: string | null
-          next_action: string | null
-          next_action_date: string | null
-          objections: Json | null
-          organization_id: string
-          original_whatsapp_name: string | null
-          preferences: Json | null
-          qualification: Json | null
-          updated_at: string | null
-        }
-        Insert: {
-          contact_id: string
-          created_at?: string | null
-          facts?: Json | null
-          id?: string
-          name_asked?: boolean | null
-          name_confirmed?: boolean | null
-          name_confirmed_at?: string | null
-          next_action?: string | null
-          next_action_date?: string | null
-          objections?: Json | null
-          organization_id: string
-          original_whatsapp_name?: string | null
-          preferences?: Json | null
-          qualification?: Json | null
-          updated_at?: string | null
-        }
-        Update: {
-          contact_id?: string
-          created_at?: string | null
-          facts?: Json | null
-          id?: string
-          name_asked?: boolean | null
-          name_confirmed?: boolean | null
-          name_confirmed_at?: string | null
-          next_action?: string | null
-          next_action_date?: string | null
-          objections?: Json | null
-          organization_id?: string
-          original_whatsapp_name?: string | null
-          preferences?: Json | null
-          qualification?: Json | null
-          updated_at?: string | null
-        }
-        Relationships: [
-          {
-            foreignKeyName: "contact_memories_contact_id_fkey"
-            columns: ["contact_id"]
-            isOneToOne: true
-            referencedRelation: "contacts"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "contact_memories_organization_id_fkey"
-            columns: ["organization_id"]
-            isOneToOne: false
-            referencedRelation: "organizations"
-            referencedColumns: ["id"]
-          },
-        ]
-      }
       contact_identity_profiles: {
         Row: {
           birth_date: string | null
@@ -1898,47 +1829,189 @@ export type Database = {
           },
         ]
       }
-      registry_provider_settings: {
+      contact_ingress_failures: {
         Row: {
-          cpf_lookup_enabled: boolean
-          documented_purpose: string | null
-          enabled_at: string | null
-          enabled_by_user_id: string | null
+          attempt_count: number
+          created_at: string
+          external_id: string | null
+          id: string
+          last_error_code: string | null
           organization_id: string
-          privacy_notice_updated_at: string | null
+          payload: Json
+          reason: string
+          resolved_at: string | null
+          resolved_by_user_id: string | null
+          source: string
+          status: string
           updated_at: string
         }
         Insert: {
-          cpf_lookup_enabled?: boolean
-          documented_purpose?: string | null
-          enabled_at?: string | null
-          enabled_by_user_id?: string | null
+          attempt_count?: number
+          created_at?: string
+          external_id?: string | null
+          id?: string
+          last_error_code?: string | null
           organization_id: string
-          privacy_notice_updated_at?: string | null
+          payload?: Json
+          reason: string
+          resolved_at?: string | null
+          resolved_by_user_id?: string | null
+          source: string
+          status?: string
           updated_at?: string
         }
         Update: {
-          cpf_lookup_enabled?: boolean
-          documented_purpose?: string | null
-          enabled_at?: string | null
-          enabled_by_user_id?: string | null
+          attempt_count?: number
+          created_at?: string
+          external_id?: string | null
+          id?: string
+          last_error_code?: string | null
           organization_id?: string
-          privacy_notice_updated_at?: string | null
+          payload?: Json
+          reason?: string
+          resolved_at?: string | null
+          resolved_by_user_id?: string | null
+          source?: string
+          status?: string
           updated_at?: string
         }
         Relationships: [
           {
-            foreignKeyName: "registry_provider_settings_enabled_by_user_id_fkey"
-            columns: ["enabled_by_user_id"]
+            foreignKeyName: "contact_ingress_failures_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "contact_ingress_failures_resolved_by_user_id_fkey"
+            columns: ["resolved_by_user_id"]
             isOneToOne: false
             referencedRelation: "users"
             referencedColumns: ["id"]
           },
+        ]
+      }
+      contact_memories: {
+        Row: {
+          contact_id: string
+          created_at: string | null
+          facts: Json | null
+          id: string
+          name_asked: boolean | null
+          name_confirmed: boolean | null
+          name_confirmed_at: string | null
+          next_action: string | null
+          next_action_date: string | null
+          objections: Json | null
+          organization_id: string
+          original_whatsapp_name: string | null
+          preferences: Json | null
+          qualification: Json | null
+          updated_at: string | null
+        }
+        Insert: {
+          contact_id: string
+          created_at?: string | null
+          facts?: Json | null
+          id?: string
+          name_asked?: boolean | null
+          name_confirmed?: boolean | null
+          name_confirmed_at?: string | null
+          next_action?: string | null
+          next_action_date?: string | null
+          objections?: Json | null
+          organization_id: string
+          original_whatsapp_name?: string | null
+          preferences?: Json | null
+          qualification?: Json | null
+          updated_at?: string | null
+        }
+        Update: {
+          contact_id?: string
+          created_at?: string | null
+          facts?: Json | null
+          id?: string
+          name_asked?: boolean | null
+          name_confirmed?: boolean | null
+          name_confirmed_at?: string | null
+          next_action?: string | null
+          next_action_date?: string | null
+          objections?: Json | null
+          organization_id?: string
+          original_whatsapp_name?: string | null
+          preferences?: Json | null
+          qualification?: Json | null
+          updated_at?: string | null
+        }
+        Relationships: [
           {
-            foreignKeyName: "registry_provider_settings_organization_id_fkey"
-            columns: ["organization_id"]
+            foreignKeyName: "contact_memories_contact_id_fkey"
+            columns: ["contact_id"]
             isOneToOne: true
+            referencedRelation: "contacts"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "contact_memories_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
             referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      contact_name_review_queue: {
+        Row: {
+          contact_id: string
+          created_at: string
+          id: string
+          organization_id: string
+          reason: string
+          resolved_at: string | null
+          resolved_by_user_id: string | null
+          status: string
+        }
+        Insert: {
+          contact_id: string
+          created_at?: string
+          id?: string
+          organization_id: string
+          reason: string
+          resolved_at?: string | null
+          resolved_by_user_id?: string | null
+          status?: string
+        }
+        Update: {
+          contact_id?: string
+          created_at?: string
+          id?: string
+          organization_id?: string
+          reason?: string
+          resolved_at?: string | null
+          resolved_by_user_id?: string | null
+          status?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "contact_name_review_queue_contact_id_fkey"
+            columns: ["contact_id"]
+            isOneToOne: false
+            referencedRelation: "contacts"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "contact_name_review_queue_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "contact_name_review_queue_resolved_by_user_id_fkey"
+            columns: ["resolved_by_user_id"]
+            isOneToOne: false
+            referencedRelation: "users"
             referencedColumns: ["id"]
           },
         ]
@@ -1955,6 +2028,7 @@ export type Database = {
           ad_referral_source_url: string | null
           address_city: string | null
           address_complement: string | null
+          address_country_code: string | null
           address_neighborhood: string | null
           address_number: string | null
           address_state: string | null
@@ -1989,7 +2063,6 @@ export type Database = {
           meta_campaign_id: string | null
           meta_lead_id: string | null
           nationality: string | null
-          address_country_code: string | null
           organization_id: string
           owner_user_id: string | null
           phone: string | null
@@ -2023,6 +2096,7 @@ export type Database = {
           ad_referral_source_url?: string | null
           address_city?: string | null
           address_complement?: string | null
+          address_country_code?: string | null
           address_neighborhood?: string | null
           address_number?: string | null
           address_state?: string | null
@@ -2059,7 +2133,6 @@ export type Database = {
           meta_campaign_id?: string | null
           meta_lead_id?: string | null
           nationality?: string | null
-          address_country_code?: string | null
           organization_id: string
           owner_user_id?: string | null
           phone?: string | null
@@ -2093,6 +2166,7 @@ export type Database = {
           ad_referral_source_url?: string | null
           address_city?: string | null
           address_complement?: string | null
+          address_country_code?: string | null
           address_neighborhood?: string | null
           address_number?: string | null
           address_state?: string | null
@@ -2129,7 +2203,6 @@ export type Database = {
           meta_campaign_id?: string | null
           meta_lead_id?: string | null
           nationality?: string | null
-          address_country_code?: string | null
           organization_id?: string
           owner_user_id?: string | null
           phone?: string | null
@@ -6540,126 +6613,6 @@ export type Database = {
           },
         ]
       }
-      opportunity_close_attempts: {
-        Row: {
-          actor_user_id: string | null
-          created_at: string
-          evaluation: Json
-          fallback_used: boolean
-          id: string
-          opportunity_id: string
-          organization_id: string
-          override_reason: string | null
-          policy_version: number
-          result: string
-          source: string
-        }
-        Insert: {
-          actor_user_id?: string | null
-          created_at?: string
-          evaluation?: Json
-          fallback_used?: boolean
-          id?: string
-          opportunity_id: string
-          organization_id: string
-          override_reason?: string | null
-          policy_version: number
-          result: string
-          source?: string
-        }
-        Update: {
-          actor_user_id?: string | null
-          created_at?: string
-          evaluation?: Json
-          fallback_used?: boolean
-          id?: string
-          opportunity_id?: string
-          organization_id?: string
-          override_reason?: string | null
-          policy_version?: number
-          result?: string
-          source?: string
-        }
-        Relationships: [
-          {
-            foreignKeyName: "opportunity_close_attempts_actor_user_id_fkey"
-            columns: ["actor_user_id"]
-            isOneToOne: false
-            referencedRelation: "users"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "opportunity_close_attempts_opportunity_id_fkey"
-            columns: ["opportunity_id"]
-            isOneToOne: false
-            referencedRelation: "opportunities"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "opportunity_close_attempts_organization_id_fkey"
-            columns: ["organization_id"]
-            isOneToOne: false
-            referencedRelation: "organizations"
-            referencedColumns: ["id"]
-          },
-        ]
-      }
-      opportunity_close_policies: {
-        Row: {
-          created_at: string
-          created_by: string | null
-          mode: string
-          organization_id: string
-          require_complete_address: boolean
-          require_cpf_verified: boolean
-          required_contact_custom_field_ids: string[]
-          required_contact_fields: string[]
-          required_opportunity_custom_field_ids: string[]
-          required_opportunity_fields: string[]
-          updated_at: string
-          updated_by: string | null
-          version: number
-        }
-        Insert: {
-          created_at?: string
-          created_by?: string | null
-          mode?: string
-          organization_id: string
-          require_complete_address?: boolean
-          require_cpf_verified?: boolean
-          required_contact_custom_field_ids?: string[]
-          required_contact_fields?: string[]
-          required_opportunity_custom_field_ids?: string[]
-          required_opportunity_fields?: string[]
-          updated_at?: string
-          updated_by?: string | null
-          version?: number
-        }
-        Update: {
-          created_at?: string
-          created_by?: string | null
-          mode?: string
-          organization_id?: string
-          require_complete_address?: boolean
-          require_cpf_verified?: boolean
-          required_contact_custom_field_ids?: string[]
-          required_contact_fields?: string[]
-          required_opportunity_custom_field_ids?: string[]
-          required_opportunity_fields?: string[]
-          updated_at?: string
-          updated_by?: string | null
-          version?: number
-        }
-        Relationships: [
-          {
-            foreignKeyName: "opportunity_close_policies_organization_id_fkey"
-            columns: ["organization_id"]
-            isOneToOne: true
-            referencedRelation: "organizations"
-            referencedColumns: ["id"]
-          },
-        ]
-      }
       opportunities: {
         Row: {
           amount: number | null
@@ -6960,6 +6913,147 @@ export type Database = {
           },
         ]
       }
+      opportunity_close_attempts: {
+        Row: {
+          actor_user_id: string | null
+          created_at: string
+          evaluation: Json
+          fallback_used: boolean
+          id: string
+          opportunity_id: string
+          organization_id: string
+          override_reason: string | null
+          policy_version: number
+          result: string
+          source: string
+        }
+        Insert: {
+          actor_user_id?: string | null
+          created_at?: string
+          evaluation?: Json
+          fallback_used?: boolean
+          id?: string
+          opportunity_id: string
+          organization_id: string
+          override_reason?: string | null
+          policy_version: number
+          result: string
+          source?: string
+        }
+        Update: {
+          actor_user_id?: string | null
+          created_at?: string
+          evaluation?: Json
+          fallback_used?: boolean
+          id?: string
+          opportunity_id?: string
+          organization_id?: string
+          override_reason?: string | null
+          policy_version?: number
+          result?: string
+          source?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "opportunity_close_attempts_actor_user_id_fkey"
+            columns: ["actor_user_id"]
+            isOneToOne: false
+            referencedRelation: "users"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "opportunity_close_attempts_opportunity_id_fkey"
+            columns: ["opportunity_id"]
+            isOneToOne: false
+            referencedRelation: "opportunities"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "opportunity_close_attempts_opportunity_id_fkey"
+            columns: ["opportunity_id"]
+            isOneToOne: false
+            referencedRelation: "vw_intel_won_vs_lost_30d"
+            referencedColumns: ["opportunity_id"]
+          },
+          {
+            foreignKeyName: "opportunity_close_attempts_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      opportunity_close_policies: {
+        Row: {
+          created_at: string
+          created_by: string | null
+          mode: string
+          organization_id: string
+          require_complete_address: boolean
+          require_cpf_verified: boolean
+          required_contact_custom_field_ids: string[]
+          required_contact_fields: string[]
+          required_opportunity_custom_field_ids: string[]
+          required_opportunity_fields: string[]
+          updated_at: string
+          updated_by: string | null
+          version: number
+        }
+        Insert: {
+          created_at?: string
+          created_by?: string | null
+          mode?: string
+          organization_id: string
+          require_complete_address?: boolean
+          require_cpf_verified?: boolean
+          required_contact_custom_field_ids?: string[]
+          required_contact_fields?: string[]
+          required_opportunity_custom_field_ids?: string[]
+          required_opportunity_fields?: string[]
+          updated_at?: string
+          updated_by?: string | null
+          version?: number
+        }
+        Update: {
+          created_at?: string
+          created_by?: string | null
+          mode?: string
+          organization_id?: string
+          require_complete_address?: boolean
+          require_cpf_verified?: boolean
+          required_contact_custom_field_ids?: string[]
+          required_contact_fields?: string[]
+          required_opportunity_custom_field_ids?: string[]
+          required_opportunity_fields?: string[]
+          updated_at?: string
+          updated_by?: string | null
+          version?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "opportunity_close_policies_created_by_fkey"
+            columns: ["created_by"]
+            isOneToOne: false
+            referencedRelation: "users"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "opportunity_close_policies_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: true
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "opportunity_close_policies_updated_by_fkey"
+            columns: ["updated_by"]
+            isOneToOne: false
+            referencedRelation: "users"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       organization_api_keys: {
         Row: {
           api_key: string
@@ -7216,7 +7310,6 @@ export type Database = {
           cs_inbox_includes_service_endpoints: boolean
           default_currency: string | null
           default_locale: string | null
-          operating_country_code: string | null
           duplicate_check_mode:
             | Database["public"]["Enums"]["duplicate_check_mode"]
             | null
@@ -7228,6 +7321,7 @@ export type Database = {
           name: string
           onboarding_completed_at: string | null
           onboarding_step: Database["public"]["Enums"]["onboarding_step"] | null
+          operating_country_code: string | null
           private_records_enabled: boolean
           round_robin_enabled: boolean
           round_robin_scope: string
@@ -7247,7 +7341,6 @@ export type Database = {
           cs_inbox_includes_service_endpoints?: boolean
           default_currency?: string | null
           default_locale?: string | null
-          operating_country_code?: string | null
           duplicate_check_mode?:
             | Database["public"]["Enums"]["duplicate_check_mode"]
             | null
@@ -7261,6 +7354,7 @@ export type Database = {
           onboarding_step?:
             | Database["public"]["Enums"]["onboarding_step"]
             | null
+          operating_country_code?: string | null
           private_records_enabled?: boolean
           round_robin_enabled?: boolean
           round_robin_scope?: string
@@ -7280,7 +7374,6 @@ export type Database = {
           cs_inbox_includes_service_endpoints?: boolean
           default_currency?: string | null
           default_locale?: string | null
-          operating_country_code?: string | null
           duplicate_check_mode?:
             | Database["public"]["Enums"]["duplicate_check_mode"]
             | null
@@ -7294,6 +7387,7 @@ export type Database = {
           onboarding_step?:
             | Database["public"]["Enums"]["onboarding_step"]
             | null
+          operating_country_code?: string | null
           private_records_enabled?: boolean
           round_robin_enabled?: boolean
           round_robin_scope?: string
@@ -7728,6 +7822,274 @@ export type Database = {
           provider?: string
         }
         Relationships: []
+      }
+      registry_backfill_jobs: {
+        Row: {
+          completed_at: string | null
+          conflict_items: number
+          created_at: string
+          error_items: number
+          id: string
+          kind: string
+          last_contact_id: string | null
+          last_error_code: string | null
+          organization_id: string
+          processed_items: number
+          started_at: string | null
+          status: string
+          total_items: number
+          updated_at: string
+          verified_items: number
+        }
+        Insert: {
+          completed_at?: string | null
+          conflict_items?: number
+          created_at?: string
+          error_items?: number
+          id?: string
+          kind?: string
+          last_contact_id?: string | null
+          last_error_code?: string | null
+          organization_id: string
+          processed_items?: number
+          started_at?: string | null
+          status?: string
+          total_items?: number
+          updated_at?: string
+          verified_items?: number
+        }
+        Update: {
+          completed_at?: string | null
+          conflict_items?: number
+          created_at?: string
+          error_items?: number
+          id?: string
+          kind?: string
+          last_contact_id?: string | null
+          last_error_code?: string | null
+          organization_id?: string
+          processed_items?: number
+          started_at?: string | null
+          status?: string
+          total_items?: number
+          updated_at?: string
+          verified_items?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "registry_backfill_jobs_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      registry_data_conflicts: {
+        Row: {
+          company_id: string | null
+          conflict_type: string
+          contact_id: string | null
+          created_at: string
+          current_value: string | null
+          id: string
+          organization_id: string
+          provider_value: string | null
+          resolved_at: string | null
+          resolved_by_user_id: string | null
+          status: string
+        }
+        Insert: {
+          company_id?: string | null
+          conflict_type: string
+          contact_id?: string | null
+          created_at?: string
+          current_value?: string | null
+          id?: string
+          organization_id: string
+          provider_value?: string | null
+          resolved_at?: string | null
+          resolved_by_user_id?: string | null
+          status?: string
+        }
+        Update: {
+          company_id?: string | null
+          conflict_type?: string
+          contact_id?: string | null
+          created_at?: string
+          current_value?: string | null
+          id?: string
+          organization_id?: string
+          provider_value?: string | null
+          resolved_at?: string | null
+          resolved_by_user_id?: string | null
+          status?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "registry_data_conflicts_company_id_fkey"
+            columns: ["company_id"]
+            isOneToOne: false
+            referencedRelation: "companies"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "registry_data_conflicts_contact_id_fkey"
+            columns: ["contact_id"]
+            isOneToOne: false
+            referencedRelation: "contacts"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "registry_data_conflicts_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "registry_data_conflicts_resolved_by_user_id_fkey"
+            columns: ["resolved_by_user_id"]
+            isOneToOne: false
+            referencedRelation: "users"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      registry_lookup_audit: {
+        Row: {
+          created_at: string
+          duration_ms: number | null
+          error_code: string | null
+          http_status: number | null
+          id: string
+          identifier_hash: string
+          identifier_suffix: string | null
+          lookup_kind: string
+          organization_id: string
+          outcome: string
+          provider: string
+          requested_by_user_id: string | null
+        }
+        Insert: {
+          created_at?: string
+          duration_ms?: number | null
+          error_code?: string | null
+          http_status?: number | null
+          id?: string
+          identifier_hash: string
+          identifier_suffix?: string | null
+          lookup_kind: string
+          organization_id: string
+          outcome: string
+          provider: string
+          requested_by_user_id?: string | null
+        }
+        Update: {
+          created_at?: string
+          duration_ms?: number | null
+          error_code?: string | null
+          http_status?: number | null
+          id?: string
+          identifier_hash?: string
+          identifier_suffix?: string | null
+          lookup_kind?: string
+          organization_id?: string
+          outcome?: string
+          provider?: string
+          requested_by_user_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "registry_lookup_audit_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "registry_lookup_audit_requested_by_user_id_fkey"
+            columns: ["requested_by_user_id"]
+            isOneToOne: false
+            referencedRelation: "users"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      registry_lookup_cache: {
+        Row: {
+          created_at: string
+          expires_at: string
+          identifier_hash: string
+          lookup_kind: string
+          normalized_payload: Json
+          provider: string
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          expires_at: string
+          identifier_hash: string
+          lookup_kind: string
+          normalized_payload: Json
+          provider: string
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          expires_at?: string
+          identifier_hash?: string
+          lookup_kind?: string
+          normalized_payload?: Json
+          provider?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
+      registry_provider_settings: {
+        Row: {
+          cpf_lookup_enabled: boolean
+          documented_purpose: string | null
+          enabled_at: string | null
+          enabled_by_user_id: string | null
+          organization_id: string
+          privacy_notice_updated_at: string | null
+          updated_at: string
+        }
+        Insert: {
+          cpf_lookup_enabled?: boolean
+          documented_purpose?: string | null
+          enabled_at?: string | null
+          enabled_by_user_id?: string | null
+          organization_id: string
+          privacy_notice_updated_at?: string | null
+          updated_at?: string
+        }
+        Update: {
+          cpf_lookup_enabled?: boolean
+          documented_purpose?: string | null
+          enabled_at?: string | null
+          enabled_by_user_id?: string | null
+          organization_id?: string
+          privacy_notice_updated_at?: string | null
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "registry_provider_settings_enabled_by_user_id_fkey"
+            columns: ["enabled_by_user_id"]
+            isOneToOne: false
+            referencedRelation: "users"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "registry_provider_settings_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: true
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       sales_events: {
         Row: {
@@ -9588,6 +9950,10 @@ export type Database = {
       current_user_id: { Args: never; Returns: string }
       current_user_managed_org_ids: { Args: never; Returns: string[] }
       current_user_org_ids: { Args: never; Returns: string[] }
+      evaluate_opportunity_close_internal_v1: {
+        Args: { _opportunity_id: string; _organization_id: string }
+        Returns: Json
+      }
       evaluate_opportunity_close_v1: {
         Args: { _opportunity_id: string; _organization_id: string }
         Returns: Json
@@ -9702,14 +10068,6 @@ export type Database = {
       fn_outbox_resume_subscription: {
         Args: { p_id: string }
         Returns: undefined
-      }
-      list_entity_documents_v1: {
-        Args: {
-          _contact_id?: string
-          _opportunity_id?: string
-          _organization_id: string
-        }
-        Returns: Json
       }
       fn_outbox_retry_job: { Args: { p_job_id: string }; Returns: undefined }
       fn_outbox_top_errors: {
@@ -9928,13 +10286,24 @@ export type Database = {
       }
       is_admin_user: { Args: never; Returns: boolean }
       is_org_admin: { Args: { _org_id: string }; Returns: boolean }
+      is_valid_cnpj: { Args: { _value: string }; Returns: boolean }
+      is_valid_cpf: { Args: { _value: string }; Returns: boolean }
       kairos_db_stats: { Args: never; Returns: Json }
       kairos_diagnose: { Args: never; Returns: Json }
       kairos_table_stats: { Args: never; Returns: Json }
+      list_entity_documents_v1: {
+        Args: {
+          _contact_id?: string
+          _opportunity_id?: string
+          _organization_id: string
+        }
+        Returns: Json
+      }
       merge_message_threads: {
         Args: { p_batch: string; p_loser: string; p_winner: string }
         Returns: undefined
       }
+      normalize_identity_digits: { Args: { _value: string }; Returns: string }
       normalize_phone_br: { Args: { phone_input: string }; Returns: string }
       populate_communication_endpoints_from_v2_senders: {
         Args: never
@@ -10150,6 +10519,29 @@ export type Database = {
           isSetofReturn: true
         }
       }
+      rpc_configure_cpf_registry: {
+        Args: {
+          p_documented_purpose?: string
+          p_enabled: boolean
+          p_organization_id: string
+          p_privacy_notice_confirmed?: boolean
+        }
+        Returns: {
+          cpf_lookup_enabled: boolean
+          documented_purpose: string | null
+          enabled_at: string | null
+          enabled_by_user_id: string | null
+          organization_id: string
+          privacy_notice_updated_at: string | null
+          updated_at: string
+        }
+        SetofOptions: {
+          from: "*"
+          to: "registry_provider_settings"
+          isOneToOne: true
+          isSetofReturn: false
+        }
+      }
       rpc_dismiss_integration_job: {
         Args: { p_job_id: string }
         Returns: undefined
@@ -10321,15 +10713,6 @@ export type Database = {
         Args: { p_country_code: string; p_organization_id: string }
         Returns: Json
       }
-      rpc_configure_cpf_registry: {
-        Args: {
-          p_documented_purpose?: string
-          p_enabled: boolean
-          p_organization_id: string
-          p_privacy_notice_confirmed?: boolean
-        }
-        Returns: Database["public"]["Tables"]["registry_provider_settings"]["Row"]
-      }
       rpc_update_integration_job_payload: {
         Args: { p_job_id: string; p_payload: Json }
         Returns: undefined
@@ -10477,6 +10860,10 @@ export type Database = {
         Returns: boolean
       }
       user_has_org_access: { Args: { org_id: string }; Returns: boolean }
+      user_has_org_permission: {
+        Args: { _org_id: string; _permission: string }
+        Returns: boolean
+      }
     }
     Enums: {
       activity_type:
