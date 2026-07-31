@@ -2,6 +2,7 @@ import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "npm:@supabase/supabase-js@2";
 import { edgeAuthMode } from "../_shared/auth.ts";
 import { validateTwilioRequestSignature } from "../_shared/twilio-signature.ts";
+import { resolveContactIngressIdentity } from "../_shared/registry/ingress.ts";
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -283,24 +284,42 @@ ${clientElements}
           
           if (inboundSettings.auto_create_contact) {
             // Auto-create contact
-            const { data: newContact, error: createError } = await supabase
-              .from('contacts')
-              .insert({
+            const generatedName = `Novo contato ${from}`
+            const identity = await resolveContactIngressIdentity(supabase, {
+              organizationId: phoneConfig.organization_id,
+              source: 'twilio_voice',
+              externalId: from,
+              fullName: generatedName,
+              safePayload: { phone_suffix: from.slice(-4) },
+            })
+            if (identity.ok) {
+              const { data: newContact, error: createError } = await supabase
+                .from('contacts')
+                .insert({
+                  organization_id: phoneConfig.organization_id,
+                  full_name: identity.fullName,
+                  first_name: identity.firstName,
+                  last_name: identity.lastName,
+                  address_country_code: identity.country,
+                  phone: from,
+                  source: 'inbound_call',
+                  lifecycle_stage: inboundSettings.default_lifecycle_stage || 'lead'
+                })
+                .select('id, full_name')
+                .single()
+
+              if (newContact) {
+                contactId = newContact.id
+                contactName = newContact.full_name
+                console.log('Auto-created contact:', contactId)
+              } else if (createError) {
+                console.error('Error auto-creating contact:', createError)
+              }
+            } else {
+              console.warn('Inbound caller queued for regional name review', {
                 organization_id: phoneConfig.organization_id,
-                full_name: `Novo contato ${from}`,
-                phone: from,
-                source: 'inbound_call',
-                lifecycle_stage: inboundSettings.default_lifecycle_stage || 'lead'
+                reason: identity.reason,
               })
-              .select('id, full_name')
-              .single()
-            
-            if (newContact) {
-              contactId = newContact.id
-              contactName = newContact.full_name
-              console.log('Auto-created contact:', contactId)
-            } else if (createError) {
-              console.error('Error auto-creating contact:', createError)
             }
           }
         }

@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useParams, useNavigate, Link } from 'react-router-dom';
 import { Layout } from '@/components/Layout';
 import { supabase } from '@/integrations/supabase/client';
@@ -16,6 +16,15 @@ import { toast } from 'sonner';
 import { ArrowLeft } from '@phosphor-icons/react';
 import { NameInput } from '@/components/NameInput';
 import { OwnerSelector } from '@/components/common/OwnerSelector';
+import { useRegistryLookup } from '@/hooks/useRegistryLookup';
+import {
+  canonicalContactName,
+  cpfStatusLabelFor,
+  digits,
+  isValidCpf,
+  type CpfVerificationStatus,
+  type OperatingCountryCode,
+} from '@/lib/regional';
 
 /**
  * Porta em TS a função public.normalize_phone_br do banco.
@@ -55,6 +64,7 @@ export default function ContactForm() {
   const { user } = useAuth();
   const { organization, userProfile, locale } = useOrganization();
   const { t } = useTranslation(locale as any);
+  const { lookup, isBrazil } = useRegistryLookup();
   const isEdit = !!id;
 
   const [formData, setFormData] = useState({
@@ -79,11 +89,45 @@ export default function ContactForm() {
     address_city: '',
     address_state: '',
     address_zip: '',
+    address_country_code: '',
   });
   const [loading, setLoading] = useState(false);
   const [duplicates, setDuplicates] = useState<any[]>([]);
   const [showDuplicateWarning, setShowDuplicateWarning] = useState(false);
   const [companies, setCompanies] = useState<Array<{ id: string; name: string }>>([]);
+  const [cpfLookupLoading, setCpfLookupLoading] = useState(false);
+  const [cpfVerification, setCpfVerification] = useState<{
+    status: CpfVerificationStatus;
+    registrationStatus: string;
+    birthDate: string;
+    sex: string;
+    motherName: string;
+    provider: string;
+    providerVersion: string;
+    errorCode: string;
+    verifiedAt: string;
+  }>({
+    status: 'unverified',
+    registrationStatus: '',
+    birthDate: '',
+    sex: '',
+    motherName: '',
+    provider: '',
+    providerVersion: '',
+    errorCode: '',
+    verifiedAt: '',
+  });
+  const [cepLookupLoading, setCepLookupLoading] = useState(false);
+  const [cepPreview, setCepPreview] = useState<null | {
+    postal_code?: string;
+    street?: string;
+    neighborhood?: string;
+    city?: string;
+    region?: string;
+    country_code?: string;
+  }>(null);
+  const lastCpfLookupRef = useRef('');
+  const lastCepLookupRef = useRef('');
 
   useEffect(() => {
     if (isEdit) {
@@ -131,19 +175,160 @@ export default function ContactForm() {
         lifecycle_stage: data.lifecycle_stage || 'lead',
         do_not_contact: data.do_not_contact || false,
         owner_user_id: data.owner_user_id || null,
-        cpf: (data as any).cpf || '',
-        rg: (data as any).rg || '',
-        rg_issuer: (data as any).rg_issuer || '',
-        nationality: (data as any).nationality || '',
-        address_street: (data as any).address_street || '',
-        address_number: (data as any).address_number || '',
-        address_complement: (data as any).address_complement || '',
-        address_neighborhood: (data as any).address_neighborhood || '',
-        address_city: (data as any).address_city || '',
-        address_state: (data as any).address_state || '',
-        address_zip: (data as any).address_zip || '',
+        cpf: data.cpf || '',
+        rg: data.rg || '',
+        rg_issuer: data.rg_issuer || '',
+        nationality: data.nationality || '',
+        address_street: data.address_street || '',
+        address_number: data.address_number || '',
+        address_complement: data.address_complement || '',
+        address_neighborhood: data.address_neighborhood || '',
+        address_city: data.address_city || '',
+        address_state: data.address_state || '',
+        address_zip: data.address_zip || '',
+        address_country_code: data.address_country_code || organization.operating_country_code || '',
       });
+
+      const { data: identity } = await supabase
+        .from('contact_identity_profiles')
+        .select('cpf_verification_status,cpf_registration_status,birth_date,sex,mother_name,verification_provider,verification_provider_version,cpf_verified_at,last_error_code')
+        .eq('contact_id', data.id)
+        .maybeSingle();
+      if (identity) {
+        setCpfVerification({
+          status: identity.cpf_verification_status || 'unverified',
+          registrationStatus: identity.cpf_registration_status || '',
+          birthDate: identity.birth_date || '',
+          sex: identity.sex || '',
+          motherName: identity.mother_name || '',
+          provider: identity.verification_provider || '',
+          providerVersion: identity.verification_provider_version || '',
+          errorCode: identity.last_error_code || '',
+          verifiedAt: identity.cpf_verified_at || '',
+        });
+        lastCpfLookupRef.current = digits(data.cpf);
+      }
     }
+  };
+
+  const handleCpfChange = (value: string) => {
+    const normalized = digits(value);
+    setFormData((current) => ({ ...current, cpf: value }));
+    if (normalized !== lastCpfLookupRef.current) {
+      setCpfVerification((current) => ({
+        ...current,
+        status: 'unverified',
+        registrationStatus: '',
+        birthDate: '',
+        sex: '',
+        motherName: '',
+        provider: '',
+        providerVersion: '',
+        errorCode: '',
+        verifiedAt: '',
+      }));
+    }
+  };
+
+  const verifyCpf = async () => {
+    if (!isBrazil || cpfLookupLoading) return;
+    const cpf = digits(formData.cpf);
+    if (!cpf) return;
+    if (!isValidCpf(cpf)) {
+      setCpfVerification((current) => ({ ...current, status: 'invalid', errorCode: 'invalid_cpf' }));
+      toast.error('CPF inválido. Confira os dígitos informados.');
+      return;
+    }
+    if (cpf === lastCpfLookupRef.current && cpfVerification.status === 'verified') return;
+
+    setCpfLookupLoading(true);
+    setCpfVerification((current) => ({ ...current, status: 'pending', errorCode: '' }));
+    try {
+      const result = await lookup<{
+        cpf?: string;
+        full_name?: string;
+        registration_status?: string;
+        birth_date?: string;
+        sex?: string;
+        mother_name?: string;
+      }>('cpf', cpf, id ? { contactId: id } : undefined);
+      const data = result.data || {};
+      lastCpfLookupRef.current = cpf;
+      setFormData((current) => ({
+        ...current,
+        cpf,
+        full_name: data.full_name || current.full_name,
+      }));
+      setCpfVerification({
+        status: 'verified',
+        registrationStatus: data.registration_status || '',
+        birthDate: data.birth_date || '',
+        sex: data.sex || '',
+        motherName: data.mother_name || '',
+        provider: result.provider || 'cpf-brasil',
+        providerVersion: result.provider_version || 'v2',
+        errorCode: '',
+        verifiedAt: new Date().toISOString(),
+      });
+      toast.success('CPF verificado e dados cadastrais preenchidos.');
+    } catch (error: unknown) {
+      const code = error instanceof Error ? error.message : 'registry_lookup_failed';
+      const invalid = code.includes('invalid_or_not_found') || code.includes('invalid_cpf');
+      setCpfVerification((current) => ({
+        ...current,
+        status: invalid ? 'invalid' : 'error',
+        errorCode: code,
+      }));
+      toast.error(
+        invalid
+          ? 'CPF não encontrado ou inválido.'
+          : 'Não foi possível verificar agora. O contato poderá ser salvo como não verificado.',
+      );
+    } finally {
+      setCpfLookupLoading(false);
+    }
+  };
+
+  const lookupCep = async () => {
+    if (!isBrazil || cepLookupLoading) return;
+    const cep = digits(formData.address_zip);
+    if (!cep) return;
+    if (cep.length !== 8) {
+      toast.error('Informe um CEP com 8 dígitos.');
+      return;
+    }
+    if (cep === lastCepLookupRef.current && cepPreview) return;
+    setCepLookupLoading(true);
+    try {
+      const result = await lookup<{
+        postal_code?: string;
+        street?: string;
+        neighborhood?: string;
+        city?: string;
+        region?: string;
+        country_code?: string;
+      }>('cep', cep);
+      setCepPreview(result.data || null);
+      lastCepLookupRef.current = cep;
+    } catch {
+      toast.error('Não foi possível consultar o CEP agora.');
+    } finally {
+      setCepLookupLoading(false);
+    }
+  };
+
+  const applyCepPreview = () => {
+    if (!cepPreview) return;
+    setFormData((current) => ({
+      ...current,
+      address_zip: cepPreview.postal_code || current.address_zip,
+      address_street: cepPreview.street || current.address_street,
+      address_neighborhood: cepPreview.neighborhood || current.address_neighborhood,
+      address_city: cepPreview.city || current.address_city,
+      address_state: cepPreview.region || current.address_state,
+      address_country_code: cepPreview.country_code || 'BR',
+    }));
+    setCepPreview(null);
   };
 
   const checkDuplicates = async () => {
@@ -252,19 +437,69 @@ export default function ContactForm() {
 
   const saveContact = async () => {
     if (!organization || !userProfile) return;
+    if (!organization.operating_country_code) {
+      toast.error('Escolha o país operacional da organização antes de salvar.');
+      return;
+    }
+    if (isBrazil && formData.cpf && !isValidCpf(formData.cpf)) {
+      setCpfVerification((current) => ({ ...current, status: 'invalid' }));
+      toast.error('Corrija o CPF inválido antes de salvar.');
+      return;
+    }
     
     setLoading(true);
 
+    const name = canonicalContactName(
+      organization.operating_country_code as OperatingCountryCode,
+      {
+        fullName: formData.full_name,
+        firstName: formData.first_name,
+        lastName: formData.last_name,
+      },
+    );
     const contactData = {
       ...formData,
+      full_name: name.fullName,
+      first_name: name.firstName,
+      last_name: name.lastName,
+      cpf: formData.cpf ? digits(formData.cpf) : null,
+      address_country_code: formData.address_country_code || organization.operating_country_code,
       organization_id: organization.id,
       owner_user_id: formData.owner_user_id || userProfile.id,
     };
 
-    const handleDbError = async (error: any) => {
+    const saveIdentity = async (contactId: string) => {
+      if (!contactData.cpf) return;
+      const { error } = await supabase
+        .from('contact_identity_profiles')
+        .upsert({
+          organization_id: organization.id,
+          contact_id: contactId,
+          cpf_verification_status: cpfVerification.status,
+          cpf_registration_status: cpfVerification.registrationStatus || null,
+          birth_date: cpfVerification.birthDate || null,
+          sex: cpfVerification.sex || null,
+          mother_name: cpfVerification.motherName || null,
+          verification_provider: cpfVerification.provider || null,
+          verification_provider_version: cpfVerification.providerVersion || null,
+          cpf_verified_at: cpfVerification.status === 'verified' ? (cpfVerification.verifiedAt || new Date().toISOString()) : null,
+          last_error_code: cpfVerification.errorCode || null,
+          updated_at: new Date().toISOString(),
+        }, { onConflict: 'contact_id' });
+      if (error) throw error;
+    };
+
+    const handleDbError = async (error: unknown) => {
+      const dbError = error as { code?: string; message?: string };
       // Postgres unique violation
-      if (error?.code === '23505') {
-        const msg = String(error?.message || '');
+      if (dbError.code === '23505') {
+        const msg = String(dbError.message || '');
+        const duplicateCpfId = msg.match(/duplicate_cpf:([0-9a-f-]{36})/i)?.[1];
+        if (duplicateCpfId) {
+          toast.error('Este CPF já pertence a outro contato. Abrindo o cadastro existente.');
+          navigate(`/contacts/${duplicateCpfId}`);
+          return;
+        }
         if (msg.includes('phone_normalized') || msg.includes('phone')) {
           const dups = await checkPhoneUniqueness();
           if (dups.length > 0) {
@@ -279,13 +514,13 @@ export default function ContactForm() {
           return;
         }
       }
-      toast.error(error?.message || t('common.error'));
+      toast.error(dbError.message || t('common.error'));
     };
 
     if (isEdit) {
       const { error } = await supabase
         .from('contacts')
-        .update({ ...contactData, updated_by: userProfile.id } as any)
+        .update({ ...contactData, updated_by: userProfile.id })
         .eq('id', id);
 
       if (error) {
@@ -294,12 +529,21 @@ export default function ContactForm() {
         return;
       }
 
+      try {
+        await saveIdentity(id!);
+      } catch (identityError: unknown) {
+        toast.error(identityError instanceof Error
+          ? identityError.message
+          : 'Contato salvo, mas a verificação cadastral não foi registrada.');
+        setLoading(false);
+        return;
+      }
       toast.success(t('contacts.updated'));
       navigate(`/contacts/${id}`);
     } else {
       const { data, error } = await supabase
         .from('contacts')
-        .insert({ ...contactData, created_by: userProfile.id } as any)
+        .insert({ ...contactData, created_by: userProfile.id })
         .select()
         .single();
 
@@ -309,6 +553,15 @@ export default function ContactForm() {
         return;
       }
 
+      try {
+        await saveIdentity(data.id);
+      } catch (identityError: unknown) {
+        toast.error(identityError instanceof Error
+          ? identityError.message
+          : 'Contato salvo, mas a verificação cadastral não foi registrada.');
+        setLoading(false);
+        return;
+      }
       toast.success(t('contacts.created'));
       navigate(`/contacts/${data.id}`);
     }
@@ -319,6 +572,24 @@ export default function ContactForm() {
     setDuplicates([]);
     await saveContact();
   };
+
+  if (organization && !organization.operating_country_code) {
+    return (
+      <Layout>
+        <div className="p-6">
+          <Card className="mx-auto max-w-xl p-6">
+            <h1 className="text-xl font-semibold">Escolha o país operacional</h1>
+            <p className="mt-2 text-sm text-muted-foreground">
+              O padrão regional precisa ser definido antes de criar ou editar contatos.
+            </p>
+            <Button className="mt-4" color="primary" onClick={() => navigate('/settings/general')}>
+              Abrir configurações
+            </Button>
+          </Card>
+        </div>
+      </Layout>
+    );
+  }
 
   return (
     <Layout>
@@ -386,12 +657,14 @@ export default function ContactForm() {
             <form onSubmit={handleSubmit} className="space-y-6">
               <NameInput
                 locale={locale as any}
+                countryCode={organization?.operating_country_code}
                 fullName={formData.full_name}
                 firstName={formData.first_name}
                 lastName={formData.last_name}
                 onFullNameChange={(value) => setFormData({ ...formData, full_name: value })}
                 onFirstNameChange={(value) => setFormData({ ...formData, first_name: value })}
                 onLastNameChange={(value) => setFormData({ ...formData, last_name: value })}
+                required
               />
 
               <div>
@@ -469,16 +742,34 @@ export default function ContactForm() {
                 />
               </div>
 
-              {/* Documentos */}
-              <div className="space-y-4">
+              {/* Documentos brasileiros */}
+              {isBrazil && <div className="space-y-4">
                 <h3 className="text-sm font-semibold text-foreground border-b pb-2">Documentos</h3>
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   <div>
-                    <Label htmlFor="cpf">CPF</Label>
+                    <div className="flex items-center justify-between gap-2">
+                      <Label htmlFor="cpf">CPF</Label>
+                      <span className={`text-xs ${
+                        cpfVerification.status === 'verified'
+                          ? 'text-emerald-600'
+                          : cpfVerification.status === 'invalid'
+                          ? 'text-destructive'
+                          : 'text-muted-foreground'
+                      }`}>
+                        {cpfLookupLoading ? 'Consultando…' : cpfStatusLabelFor(cpfVerification.status, locale)}
+                      </span>
+                    </div>
                     <Input
                       id="cpf"
                       value={formData.cpf}
-                      onChange={(e) => setFormData({ ...formData, cpf: e.target.value })}
+                      onChange={(e) => handleCpfChange(e.target.value)}
+                      onBlur={verifyCpf}
+                      onKeyDown={(e) => {
+                        if (e.key === 'Enter') {
+                          e.preventDefault();
+                          void verifyCpf();
+                        }
+                      }}
                       placeholder="000.000.000-00"
                     />
                   </div>
@@ -509,31 +800,57 @@ export default function ContactForm() {
                     />
                   </div>
                 </div>
-              </div>
+                {(cpfVerification.status === 'verified' ||
+                  cpfVerification.birthDate ||
+                  cpfVerification.sex ||
+                  cpfVerification.motherName) && (
+                  <div className="rounded-lg border bg-muted/30 p-4">
+                    <p className="text-sm font-medium">Dados cadastrais retornados</p>
+                    <dl className="mt-3 grid grid-cols-1 gap-3 text-sm md:grid-cols-2">
+                      <div>
+                        <dt className="text-muted-foreground">Situação cadastral</dt>
+                        <dd>{cpfVerification.registrationStatus || 'Não informada'}</dd>
+                      </div>
+                      <div>
+                        <dt className="text-muted-foreground">Nascimento</dt>
+                        <dd>{cpfVerification.birthDate || 'Não informado'}</dd>
+                      </div>
+                      <div>
+                        <dt className="text-muted-foreground">Sexo</dt>
+                        <dd>{cpfVerification.sex || 'Não informado'}</dd>
+                      </div>
+                      <div>
+                        <dt className="text-muted-foreground">Nome da mãe</dt>
+                        <dd>{cpfVerification.motherName || 'Não informado'}</dd>
+                      </div>
+                    </dl>
+                  </div>
+                )}
+              </div>}
 
               {/* Endereço */}
               <div className="space-y-4">
                 <h3 className="text-sm font-semibold text-foreground border-b pb-2">Endereço</h3>
-                <div className="grid grid-cols-1 md:grid-cols-[1fr_140px] gap-4">
+                <div className={`grid grid-cols-1 gap-4 ${isBrazil ? 'md:grid-cols-[1fr_140px]' : ''}`}>
                   <div>
-                    <Label htmlFor="address_street">Logradouro</Label>
+                    <Label htmlFor="address_street">{isBrazil ? 'Logradouro' : 'Street address'}</Label>
                     <Input
                       id="address_street"
                       value={formData.address_street}
                       onChange={(e) => setFormData({ ...formData, address_street: e.target.value })}
                     />
                   </div>
-                  <div>
+                  {isBrazil && <div>
                     <Label htmlFor="address_number">Número</Label>
                     <Input
                       id="address_number"
                       value={formData.address_number}
                       onChange={(e) => setFormData({ ...formData, address_number: e.target.value })}
                     />
-                  </div>
+                  </div>}
                 </div>
                 <div>
-                  <Label htmlFor="address_complement">Complemento</Label>
+                  <Label htmlFor="address_complement">{isBrazil ? 'Complemento' : 'Address line 2'}</Label>
                   <Input
                     id="address_complement"
                     value={formData.address_complement}
@@ -541,16 +858,16 @@ export default function ContactForm() {
                   />
                 </div>
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  <div>
+                  {isBrazil && <div>
                     <Label htmlFor="address_neighborhood">Bairro</Label>
                     <Input
                       id="address_neighborhood"
                       value={formData.address_neighborhood}
                       onChange={(e) => setFormData({ ...formData, address_neighborhood: e.target.value })}
                     />
-                  </div>
+                  </div>}
                   <div>
-                    <Label htmlFor="address_city">Cidade</Label>
+                    <Label htmlFor="address_city">{isBrazil ? 'Cidade' : 'City'}</Label>
                     <Input
                       id="address_city"
                       value={formData.address_city}
@@ -558,7 +875,7 @@ export default function ContactForm() {
                     />
                   </div>
                   <div>
-                    <Label htmlFor="address_state">Estado</Label>
+                    <Label htmlFor="address_state">{isBrazil ? 'Estado' : 'State'}</Label>
                     <Input
                       id="address_state"
                       value={formData.address_state}
@@ -567,15 +884,41 @@ export default function ContactForm() {
                     />
                   </div>
                   <div>
-                    <Label htmlFor="address_zip">CEP</Label>
+                    <Label htmlFor="address_zip">{isBrazil ? 'CEP' : 'ZIP code'}</Label>
                     <Input
                       id="address_zip"
                       value={formData.address_zip}
-                      onChange={(e) => setFormData({ ...formData, address_zip: e.target.value })}
-                      placeholder="00000-000"
+                      onChange={(e) => {
+                        setFormData({ ...formData, address_zip: e.target.value });
+                        setCepPreview(null);
+                      }}
+                      onBlur={isBrazil ? lookupCep : undefined}
+                      onKeyDown={(e) => {
+                        if (isBrazil && e.key === 'Enter') {
+                          e.preventDefault();
+                          void lookupCep();
+                        }
+                      }}
+                      placeholder={isBrazil ? '00000-000' : '00000'}
                     />
                   </div>
                 </div>
+                {isBrazil && cepLookupLoading && (
+                  <p className="text-sm text-muted-foreground">Consultando CEP…</p>
+                )}
+                {isBrazil && cepPreview && (
+                  <div className="rounded-lg border border-primary/20 bg-primary/5 p-4">
+                    <p className="text-sm font-medium">Endereço encontrado</p>
+                    <p className="mt-1 text-sm text-muted-foreground">
+                      {[cepPreview.street, cepPreview.neighborhood, cepPreview.city, cepPreview.region]
+                        .filter(Boolean)
+                        .join(', ')}
+                    </p>
+                    <Button type="button" color="secondary" size="sm" className="mt-3" onClick={applyCepPreview}>
+                      Aplicar endereço
+                    </Button>
+                  </div>
+                )}
               </div>
 
               <div className="flex items-center space-x-2">

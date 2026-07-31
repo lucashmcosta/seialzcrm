@@ -20,6 +20,7 @@ import { BulkActionsBar } from '@/components/BulkActionsBar';
 import { Skeleton } from '@/components/ui/skeleton';
 import { OpportunityDialog } from '@/components/opportunities/OpportunityDialog';
 import { CloseDatePromptDialog } from '@/components/opportunities/CloseDatePromptDialog';
+import { OpportunityCloseDialog } from '@/components/opportunities/OpportunityCloseDialog';
 import { OpportunityCard } from '@/components/opportunities/OpportunityCard';
 import { SeialzOpportunityCard } from '@/components/opportunities/SeialzOpportunityCard';
 import { SeialzTopbar } from '@/components/seialz/SeialzTopbar';
@@ -589,8 +590,8 @@ export default function OpportunitiesKanban() {
     const destStage = stages.find(s => s.id === newStageId);
     const destType = destStage?.type;
 
-    // Require close_date when moving to won/lost
-    if ((destType === 'won' || destType === 'lost') && !movedOpp.close_date) {
+    // Ganho sempre abre o checklist; perdido pede a data quando necessário.
+    if (destType === 'won' || (destType === 'lost' && !movedOpp.close_date)) {
       setPendingMove({
         opportunityId,
         oldStageId,
@@ -621,6 +622,12 @@ export default function OpportunitiesKanban() {
       close_date: closeDate,
     });
     setPendingMove(null);
+  };
+
+  const handleWonMoveSuccess = async () => {
+    setPendingMove(null);
+    await fetchData();
+    toast.success('Oportunidade marcada como ganha');
   };
 
   const handleEdit = (opportunity: Opportunity) => {
@@ -1293,12 +1300,20 @@ export default function OpportunitiesKanban() {
           onSuccess={fetchData}
         />
 
-        <CloseDatePromptDialog
-          open={pendingMove !== null}
+        {pendingMove?.newStatus === 'won' ? <OpportunityCloseDialog
+          open
           onOpenChange={(o) => !o && setPendingMove(null)}
-          title={pendingMove?.newStatus === 'won' ? 'Marcar como Ganho' : 'Marcar como Perdido'}
+          opportunityId={pendingMove.opportunityId}
+          contactId={opportunitiesByStage[pendingMove.oldStageId]?.find((item) => item.id === pendingMove.opportunityId)?.contact_id || null}
+          targetStageId={pendingMove.newStageId}
+          source="kanban"
+          onSuccess={handleWonMoveSuccess}
+        /> : <CloseDatePromptDialog
+          open={pendingMove?.newStatus === 'lost'}
+          onOpenChange={(o) => !o && setPendingMove(null)}
+          title="Marcar como Perdido"
           onConfirm={handleConfirmPendingMove}
-        />
+        />}
 
         <AlertDialog open={!!deleteId} onOpenChange={(open) => !open && setDeleteId(null)}>
           <AlertDialogContent>
@@ -1628,12 +1643,20 @@ export default function OpportunitiesKanban() {
         onSuccess={fetchData}
       />
 
-      <CloseDatePromptDialog
-        open={pendingMove !== null}
+      {pendingMove?.newStatus === 'won' ? <OpportunityCloseDialog
+        open
         onOpenChange={(o) => !o && setPendingMove(null)}
-        title={pendingMove?.newStatus === 'won' ? 'Marcar como Ganho' : 'Marcar como Perdido'}
+        opportunityId={pendingMove.opportunityId}
+        contactId={opportunitiesByStage[pendingMove.oldStageId]?.find((item) => item.id === pendingMove.opportunityId)?.contact_id || null}
+        targetStageId={pendingMove.newStageId}
+        source="kanban"
+        onSuccess={handleWonMoveSuccess}
+      /> : <CloseDatePromptDialog
+        open={pendingMove?.newStatus === 'lost'}
+        onOpenChange={(o) => !o && setPendingMove(null)}
+        title="Marcar como Perdido"
         onConfirm={handleConfirmPendingMove}
-      />
+      />}
 
       <AlertDialog open={!!deleteId} onOpenChange={(open) => !open && setDeleteId(null)}>
         <AlertDialogContent>

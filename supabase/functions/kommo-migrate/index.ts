@@ -1,4 +1,5 @@
 import { createClient } from "jsr:@supabase/supabase-js@2";
+import { resolveContactIngressIdentity } from "../_shared/registry/ingress.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -337,6 +338,17 @@ Deno.serve(async (req) => {
               // Bug B fix: ensure created_at is always a valid date
               const createdAt = kommoDate(ct.created_at) || new Date().toISOString();
               const updatedAt = kommoDate(ct.updated_at) || createdAt;
+              const identity = await resolveContactIngressIdentity(sb, {
+                organizationId: orgId,
+                source: "kommo_import",
+                externalId: `kommo_${ct.id}`,
+                fullName: ct.name || "Sem nome",
+                safePayload: { kommo_contact_id: String(ct.id) },
+              });
+              if (!identity.ok) {
+                sc++;
+                continue;
+              }
               
               if (ex) {
                 if (dupMode === "skip") { sc++; cMap[String(ct.id)] = ex.id; continue; }
@@ -344,7 +356,18 @@ Deno.serve(async (req) => {
                   // Loop-guard RPC: suprime trigger de outbound durante import
                   const { error: ue } = await sb.rpc("rpc_kommo_upsert_contact", {
                     p_existing_id: ex.id,
-                    p_data: { full_name: ct.name, email, phone, source_external_id: `kommo_${ct.id}`, company_id: compId, owner_user_id: owner || null, updated_at: updatedAt },
+                    p_data: {
+                      full_name: identity.fullName,
+                      first_name: identity.firstName,
+                      last_name: identity.lastName,
+                      address_country_code: identity.country,
+                      email,
+                      phone,
+                      source_external_id: `kommo_${ct.id}`,
+                      company_id: compId,
+                      owner_user_id: owner || null,
+                      updated_at: updatedAt,
+                    },
                   });
                   if (ue) errs.push({ type: "contact", kommo_id: ct.id, error: ue.message });
                   else { ic++; cIds.push(ex.id); cMap[String(ct.id)] = ex.id; }
@@ -353,7 +376,20 @@ Deno.serve(async (req) => {
               }
               const { data: nId, error: ie } = await sb.rpc("rpc_kommo_upsert_contact", {
                 p_existing_id: null,
-                p_data: { organization_id: orgId, full_name: ct.name || "Sem nome", email, phone, source_external_id: `kommo_${ct.id}`, company_id: compId, owner_user_id: owner || null, created_at: createdAt, updated_at: updatedAt },
+                p_data: {
+                  organization_id: orgId,
+                  full_name: identity.fullName,
+                  first_name: identity.firstName,
+                  last_name: identity.lastName,
+                  address_country_code: identity.country,
+                  email,
+                  phone,
+                  source_external_id: `kommo_${ct.id}`,
+                  company_id: compId,
+                  owner_user_id: owner || null,
+                  created_at: createdAt,
+                  updated_at: updatedAt,
+                },
               });
               if (ie) errs.push({ type: "contact", kommo_id: ct.id, error: ie.message });
               else { ic++; cIds.push(nId as string); cMap[String(ct.id)] = nId as string; }

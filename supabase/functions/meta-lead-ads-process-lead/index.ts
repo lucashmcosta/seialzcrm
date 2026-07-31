@@ -187,24 +187,71 @@ serve(async (req) => {
       }
     }
 
-    // Normalize (contact only)
-    const fullName =
-      contactStandard.full_name ||
-      [contactStandard.first_name, contactStandard.last_name].filter(Boolean).join(" ").trim() ||
-      "Lead Meta";
-    const firstName = contactStandard.first_name || fullName.split(" ")[0];
-    const lastName =
-      contactStandard.last_name ||
-      (fullName.split(" ").length > 1 ? fullName.split(" ").slice(1).join(" ") : null);
+    const { data: org } = await admin
+      .from("organizations")
+      .select("duplicate_check_mode, operating_country_code")
+      .eq("id", organization_id)
+      .maybeSingle();
+    const operatingCountry = org?.operating_country_code;
+    const explicitFirstName = String(contactStandard.first_name ?? "").trim() || null;
+    const explicitLastName = String(contactStandard.last_name ?? "").trim() || null;
+    const suppliedFullName = String(contactStandard.full_name ?? "").replace(/\s+/g, " ").trim();
+    const invalidNameReason = !operatingCountry
+      ? "operating_country_required"
+      : operatingCountry === "US" && (!explicitFirstName || !explicitLastName)
+      ? "name_parts_required"
+      : operatingCountry === "BR" && !suppliedFullName
+      ? "full_name_required"
+      : null;
+    if (invalidNameReason) {
+      const { data: openFailure } = await admin
+        .from("contact_ingress_failures")
+        .select("id, attempt_count")
+        .eq("organization_id", organization_id)
+        .eq("source", "meta_lead_ads")
+        .eq("external_id", lead.id)
+        .eq("reason", invalidNameReason)
+        .eq("status", "pending")
+        .limit(1)
+        .maybeSingle();
+      const safePayload = {
+        lead_id: lead.id,
+        lead_form_id,
+        full_name: suppliedFullName || null,
+        first_name: explicitFirstName,
+        last_name: explicitLastName,
+      };
+      if (openFailure) {
+        await admin.from("contact_ingress_failures").update({
+          payload: safePayload,
+          attempt_count: Number(openFailure.attempt_count ?? 1) + 1,
+          last_error_code: invalidNameReason,
+          updated_at: new Date().toISOString(),
+        }).eq("id", openFailure.id);
+      } else {
+        await admin.from("contact_ingress_failures").insert({
+          organization_id,
+          source: "meta_lead_ads",
+          external_id: lead.id,
+          reason: invalidNameReason,
+          payload: safePayload,
+          last_error_code: invalidNameReason,
+        });
+      }
+      return json({ error: invalidNameReason, queued_for_review: true }, 422);
+    }
+
+    // BR preserves full_name as the source of truth. US composes it from the
+    // mandatory parts. Never infer name parts from a Brazilian full name.
+    const firstName = explicitFirstName;
+    const lastName = explicitLastName;
+    const fullName = operatingCountry === "US"
+      ? `${explicitFirstName} ${explicitLastName}`
+      : suppliedFullName;
     const email = contactStandard.email ? String(contactStandard.email).trim().toLowerCase() : null;
     const phone = contactStandard.phone ? normalizePhoneToE164(String(contactStandard.phone)) : null;
 
     // Dedup by org settings
-    const { data: org } = await admin
-      .from("organizations")
-      .select("duplicate_check_mode")
-      .eq("id", organization_id)
-      .maybeSingle();
     const dupMode = org?.duplicate_check_mode || "none";
 
     let existingId: string | null = null;
@@ -287,6 +334,7 @@ serve(async (req) => {
           full_name: fullName,
           first_name: firstName,
           last_name: lastName,
+          address_country_code: operatingCountry,
           email,
           phone,
           phone_verified: phoneVerified,
@@ -652,7 +700,7 @@ serve(async (req) => {
     }
 
     // Name confirmation memory
-    if (settings?.set_name_confirmed && fullName !== "Lead Meta") {
+    if (settings?.set_name_confirmed && fullName) {
       await admin.from("contact_memories").upsert(
         {
           organization_id,

@@ -53,10 +53,10 @@ import { ContactTasks } from '@/components/contacts/ContactTasks';
 import { ContactCalls } from '@/components/contacts/ContactCalls';
 import { ContactMessages } from '@/components/contacts/ContactMessages';
 import { ContactConversations } from '@/components/contacts/ContactConversations';
-import { ContactAttachments } from '@/components/contacts/ContactAttachments';
 import { ContactOpportunities } from '@/components/contacts/ContactOpportunities';
 import { ContactNotes } from '@/components/contacts/ContactNotes';
-import { DocumentChecklist } from '@/components/documents/DocumentChecklist';
+import { UnifiedDocuments } from '@/components/documents/UnifiedDocuments';
+import { cpfStatusLabelFor, type CpfVerificationStatus } from '@/lib/regional';
 
 const getLifecycleColor = (stage: string | null): "gray" | "blue" | "purple" | "success" | "error" => {
   switch (stage) {
@@ -68,6 +68,18 @@ const getLifecycleColor = (stage: string | null): "gray" | "blue" | "purple" | "
   }
 };
 
+interface ContactIdentityProfile {
+  cpf_verification_status: CpfVerificationStatus;
+  cpf_registration_status: string | null;
+  birth_date: string | null;
+  sex: string | null;
+  mother_name: string | null;
+  verification_provider: string | null;
+  verification_provider_version: string | null;
+  cpf_verified_at: string | null;
+  last_error_code: string | null;
+}
+
 export default function ContactDetail() {
   const { id } = useParams();
   const navigate = useNavigate();
@@ -78,6 +90,7 @@ export default function ContactDetail() {
   const { hasVoiceIntegration } = useVoiceIntegration();
   const { startCall } = useOutboundCall();
   const [contact, setContact] = useState<any>(null);
+  const [identityProfile, setIdentityProfile] = useState<ContactIdentityProfile | null>(null);
   const [campaign, setCampaign] = useState<any>(null);
   const [loading, setLoading] = useState(true);
   const [selectedTab, setSelectedTab] = useState<Key>("details");
@@ -93,7 +106,6 @@ export default function ContactDetail() {
     { id: "notes", label: t('contacts.notesTab') },
     { id: "calls", label: t('contacts.callsTab') },
     ...(!isMobile ? [{ id: "messages", label: locale === 'pt-BR' ? 'Conversas' : 'Conversations' }] : []),
-    { id: "attachments", label: t('contacts.attachmentsTab') },
     { id: "documents", label: "Documentos" },
   ];
 
@@ -146,6 +158,17 @@ export default function ContactDetail() {
     }
 
     setContact(data);
+    if (data?.id && organization.operating_country_code === 'BR') {
+      const { data: identity } = await supabase
+        .from('contact_identity_profiles')
+        .select('cpf_verification_status, cpf_registration_status, birth_date, sex, mother_name, verification_provider, verification_provider_version, cpf_verified_at, last_error_code')
+        .eq('organization_id', organization.id)
+        .eq('contact_id', data.id)
+        .maybeSingle();
+      setIdentityProfile(identity);
+    } else {
+      setIdentityProfile(null);
+    }
 
     // Fetch linked marketing campaign for origin badge
     if (data?.marketing_campaign_id) {
@@ -267,6 +290,15 @@ export default function ContactDetail() {
                 <div>
                   <div className="text-[11px] text-muted-foreground/40">CPF</div>
                   <div className="text-[14px]">{contact?.cpf || '—'}</div>
+                  {contact?.cpf && (
+                    <div className="mt-1 text-[11px] text-muted-foreground">
+                      {cpfStatusLabelFor(
+                        (identityProfile?.cpf_verification_status || 'unverified') as CpfVerificationStatus,
+                        locale,
+                      )}
+                      {identityProfile?.cpf_registration_status ? ` · ${identityProfile.cpf_registration_status}` : ''}
+                    </div>
+                  )}
                 </div>
                 <div>
                   <div className="text-[11px] text-muted-foreground/40">RG</div>
@@ -308,7 +340,7 @@ export default function ContactDetail() {
       case 'notes': return <ContactNotes contactId={contact!.id} />;
       case 'calls': return <ContactCalls contactId={contact!.id} contactPhone={contact?.phone} contactName={contact?.full_name} />;
       case 'messages': return <ContactConversations contactId={contact!.id} />;
-      case 'attachments': return <ContactAttachments contactId={contact!.id} />;
+      case 'documents': return <UnifiedDocuments contactId={contact!.id} />;
       default: return null;
     }
   };
@@ -744,6 +776,15 @@ export default function ContactDetail() {
                     <div>
                       <div className="text-sm text-muted-foreground">CPF</div>
                       <div className="text-foreground">{contact.cpf || '—'}</div>
+                      {contact.cpf && (
+                        <div className="text-xs text-muted-foreground">
+                          {cpfStatusLabelFor(
+                            (identityProfile?.cpf_verification_status || 'unverified') as CpfVerificationStatus,
+                            locale,
+                          )}
+                          {identityProfile?.cpf_registration_status ? ` · ${identityProfile.cpf_registration_status}` : ''}
+                        </div>
+                      )}
                     </div>
                   </div>
                   <div className="flex items-center gap-3">
@@ -762,6 +803,35 @@ export default function ContactDetail() {
                       <div className="text-foreground">{contact.nationality || '—'}</div>
                     </div>
                   </div>
+                  {identityProfile?.birth_date && (
+                    <div className="flex items-center gap-3">
+                      <Calendar className="h-4 w-4 text-muted-foreground" />
+                      <div>
+                        <div className="text-sm text-muted-foreground">Nascimento</div>
+                        <div className="text-foreground">
+                          {new Date(`${identityProfile.birth_date}T12:00:00`).toLocaleDateString(locale)}
+                        </div>
+                      </div>
+                    </div>
+                  )}
+                  {identityProfile?.sex && (
+                    <div className="flex items-center gap-3">
+                      <User className="h-4 w-4 text-muted-foreground" />
+                      <div>
+                        <div className="text-sm text-muted-foreground">Sexo</div>
+                        <div className="text-foreground">{identityProfile.sex}</div>
+                      </div>
+                    </div>
+                  )}
+                  {identityProfile?.mother_name && (
+                    <div className="flex items-center gap-3">
+                      <User className="h-4 w-4 text-muted-foreground" />
+                      <div>
+                        <div className="text-sm text-muted-foreground">Nome da mãe</div>
+                        <div className="text-foreground">{identityProfile.mother_name}</div>
+                      </div>
+                    </div>
+                  )}
                 </div>
               </Card>
 
@@ -932,12 +1002,8 @@ export default function ContactDetail() {
               <ContactConversations contactId={contact.id} />
             </Tabs.Panel>
 
-            <Tabs.Panel id="attachments">
-              <ContactAttachments contactId={contact.id} />
-            </Tabs.Panel>
-
             <Tabs.Panel id="documents">
-              <DocumentChecklist contactId={contact.id} />
+              <UnifiedDocuments contactId={contact.id} />
             </Tabs.Panel>
           </Tabs>
         </div>

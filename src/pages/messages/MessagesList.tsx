@@ -58,6 +58,8 @@ import { SpinnerGap, Check, Checks, Clock, WarningCircle, Sparkle, Briefcase, Sm
 import { MessageStatusIndicator, MessageFailureInline } from '@/components/whatsapp/MessageStatusIndicator';
 import { ConfirmDialog } from '@/components/ui/confirm-dialog';
 import { CloseDatePromptDialog } from '@/components/opportunities/CloseDatePromptDialog';
+import { OpportunityCloseDialog } from '@/components/opportunities/OpportunityCloseDialog';
+import { transitionOpportunityStage } from '@/lib/opportunityClose';
 import { AgentMessageFeedbackDialog } from '@/components/whatsapp/AgentMessageFeedbackDialog';
 import { getProxiedMediaUrl } from '@/lib/mediaProxy';
 import { NewConversationDialog } from '@/components/messages/NewConversationDialog';
@@ -384,7 +386,7 @@ function DesktopMessagesList() {
   const [isExporting, setIsExporting] = useState(false);
 
   // Opportunities for current contact (mark as won/lost from chat)
-  type ChatOpp = { id: string; title: string; pipeline_stage_id: string; close_date: string | null };
+  type ChatOpp = { id: string; title: string; pipeline_stage_id: string; close_date: string | null; contact_id: string | null };
   const [contactOpportunities, setContactOpportunities] = useState<ChatOpp[]>([]);
   const [pipelineStages, setPipelineStages] = useState<Array<{ id: string; name: string; type: string | null; order_index: number | null }>>([]);
   const [confirmAction, setConfirmAction] = useState<{ kind: 'won' | 'lost'; opp: ChatOpp } | null>(null);
@@ -831,7 +833,7 @@ function DesktopMessagesList() {
     (async () => {
       const { data } = await supabase
         .from('opportunities')
-        .select('id, title, pipeline_stage_id, close_date')
+        .select('id, title, pipeline_stage_id, close_date, contact_id')
         .eq('organization_id', organization.id)
         .eq('contact_id', contactId)
         .eq('status', 'open')
@@ -864,16 +866,14 @@ function DesktopMessagesList() {
 
     setMarkingOpp(true);
     try {
-      const { error } = await supabase
-        .from('opportunities')
-        .update({
-          status: kind,
-          pipeline_stage_id: targetStage.id,
-          close_date: closeDate,
-          updated_by: userProfile?.id || null,
-        } as any)
-        .eq('id', opp.id);
-      if (error) throw error;
+      const result = await transitionOpportunityStage({
+        organizationId: organization.id,
+        opportunityId: opp.id,
+        targetStageId: targetStage.id,
+        closeDate,
+        source: 'inbox',
+      });
+      if (!result.ok) throw new Error(result.error || 'closing_requirements_missing');
       toast({
         title: kind === 'won'
           ? (locale === 'pt-BR' ? 'Oportunidade marcada como ganha' : 'Opportunity marked as won')
@@ -2645,20 +2645,34 @@ function DesktopMessagesList() {
         cancelText={locale === 'pt-BR' ? 'Cancelar' : 'Cancel'}
         variant={confirmAction?.kind === 'lost' ? 'destructive' : 'default'}
         loading={markingOpp}
-        onConfirm={() => confirmAction && handleMarkOpportunity(confirmAction.kind, confirmAction.opp)}
+        onConfirm={() => {
+          if (!confirmAction) return;
+          if (confirmAction.kind === 'won') {
+            setPendingCloseDate(confirmAction);
+            setConfirmAction(null);
+          } else void handleMarkOpportunity(confirmAction.kind, confirmAction.opp);
+        }}
       />
 
-      <CloseDatePromptDialog
-        open={!!pendingCloseDate}
+      {pendingCloseDate?.kind === 'won' && organization ? <OpportunityCloseDialog
+        open
+        onOpenChange={(open) => !open && setPendingCloseDate(null)}
+        opportunityId={pendingCloseDate.opp.id}
+        contactId={pendingCloseDate.opp.contact_id}
+        targetStageId={pipelineStages.find((stage) => stage.type === 'won')?.id || ''}
+        initialCloseDate={pendingCloseDate.opp.close_date}
+        source="inbox"
+        onSuccess={() => {
+          setContactOpportunities((current) => current.filter((item) => item.id !== pendingCloseDate.opp.id));
+          setPendingCloseDate(null);
+        }}
+      /> : <CloseDatePromptDialog
+        open={pendingCloseDate?.kind === 'lost'}
         onOpenChange={(o) => !o && setPendingCloseDate(null)}
-        title={
-          pendingCloseDate?.kind === 'won'
-            ? (locale === 'pt-BR' ? 'Marcar como Ganho' : 'Mark as Won')
-            : (locale === 'pt-BR' ? 'Marcar como Perdido' : 'Mark as Lost')
-        }
+        title={locale === 'pt-BR' ? 'Marcar como Perdido' : 'Mark as Lost'}
         loading={markingOpp}
         onConfirm={(date) => pendingCloseDate && handleMarkOpportunity(pendingCloseDate.kind, pendingCloseDate.opp, date)}
-      />
+      />}
 
       {/* Move stage dialog */}
       <Dialog

@@ -4,6 +4,7 @@ import { useTranslation, Locale } from '@/lib/i18n';
 
 interface NameInputProps {
   locale: Locale;
+  countryCode?: 'BR' | 'US' | null;
   fullName?: string;
   firstName?: string;
   lastName?: string;
@@ -15,6 +16,7 @@ interface NameInputProps {
 
 export function NameInput({
   locale,
+  countryCode,
   fullName = '',
   firstName = '',
   lastName = '',
@@ -25,7 +27,9 @@ export function NameInput({
 }: NameInputProps) {
   const { t } = useTranslation(locale);
 
-  if (locale === 'pt-BR') {
+  const useFullName = countryCode ? countryCode === 'BR' : locale === 'pt-BR';
+
+  if (useFullName) {
     return (
       <div className="space-y-2">
         <Label htmlFor="fullName">{t('auth.fullName')}</Label>

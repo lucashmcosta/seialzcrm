@@ -108,7 +108,9 @@ async function hmacSha256Hex(key: string, message: Uint8Array): Promise<string> 
   const cryptoKey = await crypto.subtle.importKey(
     "raw", new TextEncoder().encode(key), { name: "HMAC", hash: "SHA-256" }, false, ["sign"],
   );
-  const sig = await crypto.subtle.sign("HMAC", cryptoKey, message);
+  const ownedMessage = new Uint8Array(message.byteLength);
+  ownedMessage.set(message);
+  const sig = await crypto.subtle.sign("HMAC", cryptoKey, ownedMessage.buffer);
   return Array.from(new Uint8Array(sig)).map((b) => b.toString(16).padStart(2, "0")).join("");
 }
 
@@ -458,12 +460,68 @@ async function findOrCreateContact(
     return { contactId: null, contactOwnerId: null, created: false };
   }
 
+  const { data: organization } = await supabase
+    .from("organizations")
+    .select("operating_country_code")
+    .eq("id", endpoint.organization_id)
+    .maybeSingle();
+  const operatingCountry = organization?.operating_country_code ?? null;
+  if (operatingCountry !== "BR") {
+    const reason = operatingCountry === "US" ? "name_parts_required" : "operating_country_required";
+    const encoder = new TextEncoder();
+    const secret = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? "whatsapp-ingress";
+    const key = await crypto.subtle.importKey(
+      "raw",
+      encoder.encode(secret),
+      { name: "HMAC", hash: "SHA-256" },
+      false,
+      ["sign"],
+    );
+    const signature = await crypto.subtle.sign("HMAC", key, encoder.encode(fromE164));
+    const externalId = Array.from(new Uint8Array(signature))
+      .map((byte) => byte.toString(16).padStart(2, "0"))
+      .join("");
+    const { data: openFailure } = await supabase
+      .from("contact_ingress_failures")
+      .select("id, attempt_count")
+      .eq("organization_id", endpoint.organization_id)
+      .eq("source", "meta_whatsapp")
+      .eq("external_id", externalId)
+      .eq("reason", reason)
+      .eq("status", "pending")
+      .limit(1)
+      .maybeSingle();
+    const safePayload = {
+      profile_name: profileName || null,
+      phone_suffix: fromE164.slice(-4),
+    };
+    if (openFailure) {
+      await supabase.from("contact_ingress_failures").update({
+        payload: safePayload,
+        attempt_count: Number(openFailure.attempt_count ?? 1) + 1,
+        last_error_code: reason,
+        updated_at: new Date().toISOString(),
+      }).eq("id", openFailure.id);
+    } else {
+      await supabase.from("contact_ingress_failures").insert({
+        organization_id: endpoint.organization_id,
+        source: "meta_whatsapp",
+        external_id: externalId,
+        reason,
+        payload: safePayload,
+        last_error_code: reason,
+      });
+    }
+    return { contactId: null, contactOwnerId: null, created: false };
+  }
+
   const contactName = profileName || `WhatsApp ${fromE164}`;
   const { data: newContact, error } = await supabase
     .from("contacts")
     .insert({
       organization_id: endpoint.organization_id,
       full_name: contactName,
+      address_country_code: operatingCountry,
       phone: fromE164,
       source: "whatsapp",
       lifecycle_stage: inbound.default_lifecycle_stage || "lead",

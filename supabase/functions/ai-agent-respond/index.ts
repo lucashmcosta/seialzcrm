@@ -322,14 +322,69 @@ async function executeTool(
           // Buscar dados atuais para salvar o nome original do WhatsApp
           const { data: currentContact } = await supabase
             .from('contacts')
-            .select('full_name')
+            .select('full_name, first_name, last_name')
             .eq('id', context.contactId)
             .single();
+          const { data: organization } = await supabase
+            .from('organizations')
+            .select('operating_country_code')
+            .eq('id', context.organizationId)
+            .single();
+
+          const resultingFirstName = String(args.first_name ?? currentContact?.first_name ?? '').trim();
+          const resultingLastName = String(args.last_name ?? currentContact?.last_name ?? '').trim();
+          if (organization?.operating_country_code === 'US' && (!resultingFirstName || !resultingLastName)) {
+            const reason = 'name_parts_required';
+            const { data: openFailure } = await supabase
+              .from('contact_ingress_failures')
+              .select('id, attempt_count')
+              .eq('organization_id', context.organizationId)
+              .eq('source', 'ai_agent')
+              .eq('external_id', context.contactId)
+              .eq('reason', reason)
+              .eq('status', 'pending')
+              .limit(1)
+              .maybeSingle();
+            const payload = {
+              contact_id: context.contactId,
+              full_name: args.full_name ?? null,
+              first_name: args.first_name ?? null,
+              last_name: args.last_name ?? null,
+            };
+            if (openFailure) {
+              await supabase.from('contact_ingress_failures').update({
+                payload,
+                attempt_count: Number(openFailure.attempt_count ?? 1) + 1,
+                last_error_code: reason,
+                updated_at: new Date().toISOString(),
+              }).eq('id', openFailure.id);
+            } else {
+              await supabase.from('contact_ingress_failures').insert({
+                organization_id: context.organizationId,
+                source: 'ai_agent',
+                external_id: context.contactId,
+                reason,
+                payload,
+                last_error_code: reason,
+              });
+            }
+            return {
+              success: false,
+              message: 'name_parts_required: informe First Name e Last Name para esta organização.',
+              data: { queued_for_review: true },
+            };
+          }
           
           // Preparar dados do nome
-          if (args.full_name) updateData.full_name = args.full_name;
-          if (args.first_name) updateData.first_name = args.first_name;
-          if (args.last_name) updateData.last_name = args.last_name;
+          if (organization?.operating_country_code === 'US') {
+            updateData.first_name = resultingFirstName;
+            updateData.last_name = resultingLastName;
+            updateData.full_name = `${resultingFirstName} ${resultingLastName}`;
+          } else {
+            if (args.full_name) updateData.full_name = args.full_name;
+            if (args.first_name) updateData.first_name = args.first_name;
+            if (args.last_name) updateData.last_name = args.last_name;
+          }
           
           // Atualizar memórias: marcar como confirmado e salvar nome original do WhatsApp
           const memoryUpdate: Record<string, any> = {

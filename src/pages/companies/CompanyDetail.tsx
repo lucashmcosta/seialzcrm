@@ -15,7 +15,25 @@ interface Company {
   name: string;
   domain: string | null;
   phone: string | null;
+  email: string | null;
   address: string | null;
+  cnpj: string | null;
+  legal_name: string | null;
+  trade_name: string | null;
+  registration_status: string | null;
+  opened_at: string | null;
+  legal_nature: string | null;
+  company_size: string | null;
+  primary_cnae_code: string | null;
+  primary_cnae_description: string | null;
+  address_street: string | null;
+  address_number: string | null;
+  address_complement: string | null;
+  address_neighborhood: string | null;
+  address_city: string | null;
+  address_state: string | null;
+  address_zip: string | null;
+  address_country_code: string | null;
   created_at: string;
   updated_at: string;
 }
@@ -175,9 +193,46 @@ export default function CompanyDetail() {
                 <span className="text-sm text-muted-foreground">{t('companies.phone')}</span>
                 <p className="font-medium">{company.phone || '-'}</p>
               </div>
+              {company.cnpj && (
+                <div>
+                  <span className="text-sm text-muted-foreground">CNPJ</span>
+                  <p className="font-medium">{company.cnpj}</p>
+                </div>
+              )}
+              {company.legal_name && (
+                <div>
+                  <span className="text-sm text-muted-foreground">Razão social</span>
+                  <p className="font-medium">{company.legal_name}</p>
+                </div>
+              )}
+              {company.registration_status && (
+                <div>
+                  <span className="text-sm text-muted-foreground">Situação cadastral</span>
+                  <p className="font-medium">{company.registration_status}</p>
+                </div>
+              )}
+              {company.primary_cnae_code && (
+                <div>
+                  <span className="text-sm text-muted-foreground">CNAE principal</span>
+                  <p className="font-medium">
+                    {company.primary_cnae_code}
+                    {company.primary_cnae_description ? ` · ${company.primary_cnae_description}` : ''}
+                  </p>
+                </div>
+              )}
               <div>
                 <span className="text-sm text-muted-foreground">{t('companies.address')}</span>
-                <p className="font-medium">{company.address || '-'}</p>
+                <p className="font-medium">
+                  {company.address_street || company.address_city
+                    ? [
+                        [company.address_street, company.address_number].filter(Boolean).join(', '),
+                        company.address_complement,
+                        company.address_neighborhood,
+                        [company.address_city, company.address_state].filter(Boolean).join(' - '),
+                        company.address_zip,
+                      ].filter(Boolean).join(' · ')
+                    : company.address || '-'}
+                </p>
               </div>
               <div>
                 <span className="text-sm text-muted-foreground">{t('companies.created')}</span>

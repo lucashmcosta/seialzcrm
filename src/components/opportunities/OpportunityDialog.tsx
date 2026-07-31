@@ -246,13 +246,14 @@ export function OpportunityDialog({ open, onOpenChange, opportunity, stages, onS
                       <SelectValue />
                     </SelectTrigger>
                     <SelectContent>
-                      {stages.map((stage) => (
+                      {stages.filter((stage) => stage.type === 'custom' || stage.id === opportunity?.pipeline_stage_id).map((stage) => (
                         <SelectItem key={stage.id} value={stage.id}>
                           {stage.name}
                         </SelectItem>
                       ))}
                     </SelectContent>
                   </Select>
+                  <p className="text-xs text-muted-foreground">Use “Marcar como ganho/perdido” para etapas de fechamento.</p>
                 </div>
                 {organization?.enable_companies_module && (
                   <div className="space-y-2">

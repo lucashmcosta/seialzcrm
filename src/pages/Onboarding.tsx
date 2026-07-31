@@ -12,14 +12,17 @@ import { useToast } from '@/hooks/use-toast';
 import { NameInput } from '@/components/NameInput';
 import { Sparkle, EnvelopeSimple, X } from '@phosphor-icons/react';
 import { Badge } from '@/components/ui/badge';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { canonicalContactName, type OperatingCountryCode } from '@/lib/regional';
 
 export default function Onboarding() {
   const navigate = useNavigate();
-  const { organization, userProfile, locale } = useOrganization();
+  const { organization, userProfile, locale, refetch } = useOrganization();
   const { t } = useTranslation(locale as 'pt-BR' | 'en-US');
   const { toast } = useToast();
   const [loading, setLoading] = useState(false);
   const [currentStep, setCurrentStep] = useState(0);
+  const [operatingCountry, setOperatingCountry] = useState<OperatingCountryCode | ''>('');
 
   // Step 0: Invites
   const [inviteEmail, setInviteEmail] = useState('');
@@ -28,9 +31,33 @@ export default function Onboarding() {
   // Step 1: Contact
   const [contactData, setContactData] = useState({
     fullName: '',
+    firstName: '',
+    lastName: '',
     email: '',
     phone: '',
   });
+
+  const handleCountrySelection = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!organization?.id || !operatingCountry) return;
+    setLoading(true);
+    try {
+      const { error } = await supabase.rpc('rpc_set_operating_country', {
+        p_organization_id: organization.id,
+        p_country_code: operatingCountry,
+      });
+      if (error) throw error;
+      await refetch();
+    } catch (error: unknown) {
+      toast({
+        title: t('common.error'),
+        description: error instanceof Error ? error.message : t('common.error'),
+        variant: 'destructive',
+      });
+    } finally {
+      setLoading(false);
+    }
+  };
 
   // Step 2: Opportunity
   const [opportunityData, setOpportunityData] = useState({
@@ -137,13 +164,20 @@ export default function Onboarding() {
 
     setLoading(true);
     try {
+      const country = organization.operating_country_code as OperatingCountryCode;
+      const name = canonicalContactName(country, {
+        fullName: contactData.fullName,
+        firstName: contactData.firstName,
+        lastName: contactData.lastName,
+      });
       const { data: contact, error } = await supabase
         .from('contacts')
         .insert({
           organization_id: organization.id,
-          full_name: contactData.fullName,
-          first_name: contactData.fullName.split(' ')[0],
-          last_name: contactData.fullName.split(' ').slice(1).join(' ') || null,
+          full_name: name.fullName,
+          first_name: name.firstName,
+          last_name: name.lastName,
+          address_country_code: country,
           email: contactData.email || null,
           phone: contactData.phone || null,
           owner_user_id: userProfile.id,
@@ -180,6 +214,45 @@ export default function Onboarding() {
       setLoading(false);
     }
   };
+
+  if (organization && !organization.operating_country_code) {
+    return (
+      <div className="min-h-screen bg-background flex items-center justify-center p-4">
+        <Card className="w-full max-w-lg">
+          <CardHeader>
+            <CardTitle>Escolha o país operacional</CardTitle>
+            <CardDescription>
+              Essa escolha define nomes, endereços e documentos da organização. O idioma continua independente.
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            <form onSubmit={handleCountrySelection} className="space-y-4">
+              <Select
+                value={operatingCountry}
+                onValueChange={(value: OperatingCountryCode) => setOperatingCountry(value)}
+              >
+                <SelectTrigger>
+                  <SelectValue placeholder="Selecione o padrão regional" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="BR">Brasil — Nome completo, CPF, CNPJ e CEP</SelectItem>
+                  <SelectItem value="US">Estados Unidos — First Name, Last Name e ZIP</SelectItem>
+                </SelectContent>
+              </Select>
+              <Button
+                type="submit"
+                color="primary"
+                className="w-full"
+                disabled={!operatingCountry || loading}
+              >
+                {loading ? t('common.loading') : 'Salvar e continuar'}
+              </Button>
+            </form>
+          </CardContent>
+        </Card>
+      </div>
+    );
+  }
 
   const handleCreateOpportunity = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -347,8 +420,13 @@ export default function Onboarding() {
               
               <NameInput
                 locale={locale as 'pt-BR' | 'en-US'}
+                countryCode={organization?.operating_country_code}
                 fullName={contactData.fullName}
+                firstName={contactData.firstName}
+                lastName={contactData.lastName}
                 onFullNameChange={(value) => setContactData({ ...contactData, fullName: value })}
+                onFirstNameChange={(value) => setContactData({ ...contactData, firstName: value })}
+                onLastNameChange={(value) => setContactData({ ...contactData, lastName: value })}
                 required
               />
 
