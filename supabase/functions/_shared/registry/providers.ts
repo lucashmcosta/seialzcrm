@@ -15,7 +15,10 @@ export type ProviderResult =
     status: number;
     error: string;
     retryable: boolean;
+    providerCode?: string | null;
+    providerMessage?: string | null;
   };
+
 
 const TIMEOUT_MS = 6_000;
 const CIRCUIT_FAILURE_THRESHOLD = 5;
