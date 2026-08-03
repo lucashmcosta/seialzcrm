@@ -109,6 +109,8 @@ export default function ContactForm() {
     provider: string;
     providerVersion: string;
     errorCode: string;
+    providerCode: string;
+    providerMessage: string;
   }>({
     status: 'unverified',
     registrationStatus: '',
@@ -118,6 +120,8 @@ export default function ContactForm() {
     provider: '',
     providerVersion: '',
     errorCode: '',
+    providerCode: '',
+    providerMessage: '',
   });
   const [cepLookupLoading, setCepLookupLoading] = useState(false);
   const [cepPreview, setCepPreview] = useState<null | {
