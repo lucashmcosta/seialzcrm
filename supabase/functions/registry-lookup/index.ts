@@ -78,6 +78,7 @@ function cpfFailureClass(result: Extract<ProviderResult, { ok: false }>): string
     result.status === 429 || result.status >= 500 || result.status === 0 ||
     ["timeout", "network_error", "provider_circuit_open", "upstream_error"].includes(result.error)
   ) return "provider_unavailable";
+  if (["invalid_cpf_format", "invalid_cpf"].includes(result.error)) return "invalid";
   if (["invalid_or_not_found", "not_found"].includes(result.error)) return "not_found";
   if ([
     "provider_auth_error", "provider_invalid_api_key", "provider_token_expired",
