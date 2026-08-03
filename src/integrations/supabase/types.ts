@@ -10279,6 +10279,10 @@ export type Database = {
         Args: { _org_id: string }
         Returns: boolean
       }
+      can_manage_permission_profiles: {
+        Args: { _organization_id: string }
+        Returns: boolean
+      }
       can_review_contact_documents: {
         Args: { _contact_id: string }
         Returns: boolean
