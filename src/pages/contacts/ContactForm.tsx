@@ -809,6 +809,8 @@ export default function ContactForm() {
                           ? 'text-emerald-600'
                           : cpfVerification.status === 'invalid'
                           ? 'text-destructive'
+                          : cpfVerification.status === 'not_found'
+                          ? 'text-amber-600'
                           : 'text-muted-foreground'
                       }`}>
                         {cpfLookupLoading ? 'Consultando…' : cpfStatusLabelFor(cpfVerification.status, locale)}
@@ -834,6 +836,16 @@ export default function ContactForm() {
                     <p id="cpf-format-help" className="mt-1 text-xs text-muted-foreground">
                       Se informado, o CPF deve ter exatamente 11 dígitos.
                     </p>
+                    {!cpfLookupLoading && cpfVerification.status === 'not_found' && (
+                      <p className="mt-1 text-xs text-amber-600">
+                        O CPF é matematicamente válido, mas o provedor não retornou dados cadastrais. Você pode salvar o contato assim.
+                      </p>
+                    )}
+                    {!cpfLookupLoading && (cpfVerification.providerCode || cpfVerification.providerMessage) && (
+                      <p className="mt-1 text-xs text-muted-foreground break-words">
+                        Motivo do provedor: {[cpfVerification.providerCode, cpfVerification.providerMessage].filter(Boolean).join(' — ')}
+                      </p>
+                    )}
                   </div>
                   <div>
                     <Label htmlFor="rg">RG</Label>
