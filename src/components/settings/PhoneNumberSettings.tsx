@@ -1,5 +1,7 @@
 import { useState, useEffect } from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import { Badge } from '@/components/ui/badge';
+import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Label } from '@/components/ui/label';
 import { Button } from '@/components/ui/button';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
@@ -7,7 +9,19 @@ import { Checkbox } from '@/components/ui/checkbox';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import { Switch } from '@/components/ui/switch';
-import { SpinnerGap, Phone, FloppyDisk, Users, UserPlus } from '@phosphor-icons/react';
+import {
+  SpinnerGap,
+  Phone,
+  FloppyDisk,
+  Users,
+  UserPlus,
+  PhoneCall,
+  PhoneOutgoing,
+  MagnifyingGlass,
+  ShieldCheck,
+  Clock,
+  WarningCircle,
+} from '@phosphor-icons/react';
 import { supabase } from '@/integrations/supabase/client';
 import { telephonySupabase } from '@/integrations/supabase/telephonyClient';
 import { useOrganization } from '@/hooks/useOrganization';
@@ -18,7 +32,6 @@ interface InboundSettings {
   auto_create_contact: boolean;
   default_lifecycle_stage: string;
 }
-
 interface NumberUserGrant {
   user_id: string;
   can_receive_calls: boolean;
@@ -70,6 +83,7 @@ export function PhoneNumberSettings() {
   const [phoneNumbers, setPhoneNumbers] = useState<PhoneNumber[]>([]);
   const [users, setUsers] = useState<User[]>([]);
   const [selectedPhone, setSelectedPhone] = useState<PhoneNumber | null>(null);
+  const [userSearch, setUserSearch] = useState('');
 
   useEffect(() => {
     if (organization?.id) {
@@ -133,10 +147,9 @@ export function PhoneNumberSettings() {
       }));
       
       setPhoneNumbers(phoneList);
-      
-      if (phoneList.length > 0) {
-        setSelectedPhone(phoneList[0]);
-      }
+      setSelectedPhone((current) => (
+        phoneList.find((phone) => phone.id === current?.id) || phoneList[0] || null
+      ));
 
       const userList = userOrgs?.map(uo => ({
         id: (uo.users as any).id,
@@ -220,7 +233,7 @@ export function PhoneNumberSettings() {
       fetchData();
     } catch (error) {
       console.error('Error saving phone settings:', error);
-      toast.error('Erro ao salvar configurações');
+      toast.error(error instanceof Error ? error.message : 'Erro ao salvar configurações');
     } finally {
       setSaving(false);
     }
@@ -235,6 +248,21 @@ export function PhoneNumberSettings() {
       ...selectedPhone,
       grants: [...selectedPhone.grants.filter((grant) => grant.user_id !== userId), { ...current, [key]: value }],
     });
+  };
+
+  const updateAllGrants = (key: 'can_receive_calls' | 'can_originate_calls', value: boolean) => {
+    if (!selectedPhone) return;
+    const nextGrants = users.map((user, index) => {
+      const current = selectedPhone.grants.find((grant) => grant.user_id === user.id) || {
+        user_id: user.id,
+        can_receive_calls: false,
+        can_originate_calls: false,
+        priority: index + 1,
+      };
+      const isOwner = selectedPhone.number_type === 'user' && selectedPhone.assigned_user_id === user.id;
+      return { ...current, [key]: isOwner ? true : value };
+    });
+    setSelectedPhone({ ...selectedPhone, grants: nextGrants });
   };
 
   const updateScheduleDay = (day: string, enabled: boolean, start = '09:00', end = '18:00') => {
@@ -289,27 +317,52 @@ export function PhoneNumberSettings() {
     );
   }
 
+  const normalizedSearch = userSearch.trim().toLocaleLowerCase('pt-BR');
+  const filteredUsers = users.filter((user) => !normalizedSearch
+    || user.full_name.toLocaleLowerCase('pt-BR').includes(normalizedSearch)
+    || user.email.toLocaleLowerCase('pt-BR').includes(normalizedSearch));
+  const receiveCount = selectedPhone?.number_type === 'user'
+    ? (selectedPhone.assigned_user_id ? 1 : 0)
+    : users.filter((user) => selectedPhone?.grants.some((grant) => grant.user_id === user.id && grant.can_receive_calls)).length;
+  const originateCount = users.filter((user) => {
+    if (selectedPhone?.number_type === 'user' && selectedPhone.assigned_user_id === user.id) return true;
+    return selectedPhone?.grants.some((grant) => grant.user_id === user.id && grant.can_originate_calls);
+  }).length;
+
   return (
-    <Card>
-      <CardHeader>
-        <CardTitle className="flex items-center gap-2">
-          <Phone className="h-5 w-5" />
-          Configuração de Chamadas Recebidas
-        </CardTitle>
-        <CardDescription>
-          Configure como as chamadas recebidas serão roteadas para sua equipe
-        </CardDescription>
+    <Card className="overflow-hidden border-primary/20 shadow-sm">
+      <CardHeader className="border-b bg-muted/30">
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+          <div>
+            <CardTitle className="flex items-center gap-2 text-xl">
+              <span className="rounded-lg bg-primary/10 p-2 text-primary"><Phone className="h-5 w-5" /></span>
+              Central de telefonia
+            </CardTitle>
+            <CardDescription className="mt-2">
+              Defina quem atende, quem pode ligar e o que acontece quando ninguém está disponível.
+            </CardDescription>
+          </div>
+          {selectedPhone && (
+            <div className="flex flex-wrap gap-2">
+              <Badge variant={selectedPhone.is_active ? 'default' : 'secondary'}>{selectedPhone.is_active ? 'Ativo' : 'Inativo'}</Badge>
+              <Badge variant="outline">{selectedPhone.number_type === 'company' ? 'Corporativo' : 'Individual'}</Badge>
+              {selectedPhone.is_default_outbound && <Badge variant="outline">Saída padrão</Badge>}
+            </div>
+          )}
+        </div>
       </CardHeader>
-      <CardContent className="space-y-6">
-        {/* Phone Number Selection (for future multi-number support) */}
-        {phoneNumbers.length > 1 && (
+      <CardContent className="space-y-8 p-4 sm:p-6">
+        <div className="grid gap-4 rounded-xl border bg-card p-4 md:grid-cols-[minmax(0,1fr)_auto] md:items-end">
           <div className="space-y-2">
-            <Label>Número</Label>
+            <Label>Número que está sendo configurado</Label>
             <Select
               value={selectedPhone?.id}
               onValueChange={(id) => {
                 const phone = phoneNumbers.find(p => p.id === id);
-                if (phone) setSelectedPhone(phone);
+                if (phone) {
+                  setSelectedPhone(phone);
+                  setUserSearch('');
+                }
               }}
             >
               <SelectTrigger>
@@ -318,37 +371,39 @@ export function PhoneNumberSettings() {
               <SelectContent>
                 {phoneNumbers.map(phone => (
                   <SelectItem key={phone.id} value={phone.id}>
-                    {phone.friendly_name || formatPhoneDisplay(phone.phone_number)}
+                    {phone.friendly_name || 'Sem nome'} · {formatPhoneDisplay(phone.phone_number)}
                   </SelectItem>
                 ))}
               </SelectContent>
             </Select>
           </div>
-        )}
+          {selectedPhone && (
+            <div className="flex gap-2 text-sm text-muted-foreground md:justify-end">
+              <span><strong className="text-foreground">{receiveCount}</strong> recebem</span>
+              <span>·</span>
+              <span><strong className="text-foreground">{originateCount}</strong> podem ligar</span>
+            </div>
+          )}
+        </div>
 
         {selectedPhone && (
           <>
-            {/* Phone Info */}
-            <div className="p-4 bg-muted rounded-lg">
-              <p className="text-sm text-muted-foreground">Número</p>
-              <p className="text-lg font-medium">{formatPhoneDisplay(selectedPhone.phone_number)}</p>
-            </div>
-
-            {/* Friendly Name */}
-            <div className="space-y-2">
-              <Label htmlFor="friendlyName">Nome amigável</Label>
-              <Input
-                id="friendlyName"
-                value={selectedPhone.friendly_name || ''}
-                onChange={(e) => setSelectedPhone({
-                  ...selectedPhone,
-                  friendly_name: e.target.value
-                })}
-                placeholder="Ex: Vendas, Suporte, Principal"
-              />
-            </div>
-
-            <div className="grid gap-4 md:grid-cols-2">
+            <section className="space-y-4">
+              <div>
+                <p className="text-xs font-semibold uppercase tracking-wide text-primary">1. Identificação e responsabilidade</p>
+                <h3 className="mt-1 text-base font-semibold">Como este número será usado</h3>
+              </div>
+              <div className="grid gap-4 md:grid-cols-2">
+                <div className="space-y-2">
+                  <Label htmlFor="friendlyName">Nome do número</Label>
+                  <Input
+                    id="friendlyName"
+                    value={selectedPhone.friendly_name || ''}
+                    onChange={(e) => setSelectedPhone({ ...selectedPhone, friendly_name: e.target.value })}
+                    placeholder="Ex: Vendas, Suporte, Principal"
+                  />
+                  <p className="text-xs text-muted-foreground">{formatPhoneDisplay(selectedPhone.phone_number)}</p>
+                </div>
               <div className="space-y-2">
                 <Label>Tipo do número</Label>
                 <Select value={selectedPhone.number_type} onValueChange={(value: 'company' | 'user') => setSelectedPhone({
@@ -363,6 +418,11 @@ export function PhoneNumberSettings() {
                     <SelectItem value="user">Individual · somente titular</SelectItem>
                   </SelectContent>
                 </Select>
+                <p className="text-xs text-muted-foreground">
+                  {selectedPhone.number_type === 'company'
+                    ? 'Distribui para a equipe autorizada em round-robin.'
+                    : 'Toca exclusivamente para o titular definido.'}
+                </p>
               </div>
               <div className="space-y-2">
                 <Label>Responsável por chamadas perdidas</Label>
@@ -372,11 +432,12 @@ export function PhoneNumberSettings() {
                   <SelectTrigger><SelectValue placeholder="Selecione" /></SelectTrigger>
                   <SelectContent>{users.map((user) => <SelectItem key={user.id} value={user.id}>{user.full_name}</SelectItem>)}</SelectContent>
                 </Select>
+                <p className="text-xs text-muted-foreground">Recebe a tarefa automática de retorno após o fallback.</p>
               </div>
-            </div>
+              </div>
 
             {selectedPhone.number_type === 'user' && (
-              <div className="space-y-2">
+              <div className="space-y-2 rounded-lg border border-primary/20 bg-primary/5 p-4">
                 <Label>Titular</Label>
                 <Select value={selectedPhone.assigned_user_id || ''} onValueChange={(value) => setSelectedPhone({
                   ...selectedPhone, assigned_user_id: value, missed_call_owner_user_id: value,
@@ -387,37 +448,118 @@ export function PhoneNumberSettings() {
                 <p className="text-xs text-muted-foreground">Se o titular não atender em 15 segundos, a chamada segue diretamente para o fallback.</p>
               </div>
             )}
+            </section>
 
-            <div className="space-y-3">
-                <Label className="flex items-center gap-2"><Users className="h-4 w-4" /> Autorizações por usuário</Label>
-                <div className="border rounded-lg divide-y">
-                  <div className="grid grid-cols-[1fr_90px_90px] gap-2 p-2 text-xs text-muted-foreground">
-                    <span>Usuário</span><span className="text-center">Receber</span><span className="text-center">Realizar</span>
-                  </div>
-                  {users.map((user) => {
-                    const grant = selectedPhone.grants.find((item) => item.user_id === user.id);
-                    return (
-                      <div key={user.id} className="grid grid-cols-[1fr_90px_90px] items-center gap-2 p-3">
-                        <div><p className="font-medium">{user.full_name}</p><p className="text-xs text-muted-foreground">{user.email}</p></div>
-                        <Checkbox
-                          className="mx-auto"
-                          disabled={selectedPhone.number_type === 'user'}
-                          checked={selectedPhone.number_type === 'user' ? selectedPhone.assigned_user_id === user.id : grant?.can_receive_calls === true}
-                          onCheckedChange={(value) => updateGrant(user.id, 'can_receive_calls', value === true)}
-                        />
-                        <Checkbox className="mx-auto" checked={grant?.can_originate_calls === true} onCheckedChange={(value) => updateGrant(user.id, 'can_originate_calls', value === true)} />
-                      </div>
-                    );
-                  })}
+            <section className="space-y-4 border-t pt-8">
+              <div className="flex flex-col gap-3 md:flex-row md:items-end md:justify-between">
+                <div>
+                  <p className="text-xs font-semibold uppercase tracking-wide text-primary">2. Pessoas e permissões</p>
+                  <h3 className="mt-1 text-base font-semibold">Quem atende e quem pode ligar</h3>
+                  <p className="mt-1 text-sm text-muted-foreground">As duas autorizações são independentes para números corporativos.</p>
                 </div>
-                <p className="text-xs text-muted-foreground">
-                  {selectedPhone.number_type === 'company'
-                    ? 'O round-robin tenta até três usuários disponíveis, por 15 segundos cada.'
-                    : 'Somente o titular recebe. A permissão Realizar permite que outros usuários autorizados usem este número na saída.'}
-                </p>
+                <div className="relative w-full md:w-72">
+                  <MagnifyingGlass className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+                  <Input
+                    value={userSearch}
+                    onChange={(event) => setUserSearch(event.target.value)}
+                    placeholder="Buscar usuário"
+                    className="pl-9"
+                  />
+                </div>
               </div>
 
-            <div className="grid gap-3 md:grid-cols-3">
+              {selectedPhone.number_type === 'company' && receiveCount === users.length && users.length > 1 && (
+                <Alert className="border-amber-500/40 bg-amber-500/5">
+                  <WarningCircle className="h-4 w-4 text-amber-600" />
+                  <AlertDescription>
+                    Todos os {users.length} usuários ativos estão autorizados a receber este número. Revise a lista antes de usar em produção.
+                  </AlertDescription>
+                </Alert>
+              )}
+
+              <div className="grid gap-4 lg:grid-cols-2">
+                <div className="overflow-hidden rounded-xl border">
+                  <div className="flex items-start justify-between gap-3 border-b bg-muted/30 p-4">
+                    <div>
+                      <div className="flex items-center gap-2 font-semibold"><PhoneCall className="h-5 w-5 text-primary" /> Receber chamadas</div>
+                      <p className="mt-1 text-xs text-muted-foreground">
+                        {selectedPhone.number_type === 'company' ? 'Participa do round-robin deste número.' : 'Exclusivo para o titular.'}
+                      </p>
+                    </div>
+                    <Badge variant="secondary">{receiveCount}</Badge>
+                  </div>
+                  {selectedPhone.number_type === 'company' ? (
+                    <>
+                      <div className="flex gap-2 border-b px-4 py-2">
+                        <Button type="button" variant="ghost" size="sm" onClick={() => updateAllGrants('can_receive_calls', true)}>Selecionar todos</Button>
+                        <Button type="button" variant="ghost" size="sm" onClick={() => updateAllGrants('can_receive_calls', false)}>Limpar</Button>
+                      </div>
+                      <div className="max-h-96 divide-y overflow-y-auto">
+                        {filteredUsers.map((user) => {
+                          const grant = selectedPhone.grants.find((item) => item.user_id === user.id);
+                          return (
+                            <div key={user.id} className="flex items-center justify-between gap-3 p-3">
+                              <div className="min-w-0"><p className="truncate text-sm font-medium">{user.full_name}</p><p className="truncate text-xs text-muted-foreground">{user.email}</p></div>
+                              <Switch checked={grant?.can_receive_calls === true} onCheckedChange={(value) => updateGrant(user.id, 'can_receive_calls', value)} />
+                            </div>
+                          );
+                        })}
+                        {filteredUsers.length === 0 && <p className="p-4 text-center text-sm text-muted-foreground">Nenhum usuário encontrado.</p>}
+                      </div>
+                    </>
+                  ) : (
+                    <div className="p-4 text-sm text-muted-foreground">
+                      Selecione o titular acima. Nenhum colega receberá chamadas deste número.
+                    </div>
+                  )}
+                </div>
+
+                <div className="overflow-hidden rounded-xl border">
+                  <div className="flex items-start justify-between gap-3 border-b bg-muted/30 p-4">
+                    <div>
+                      <div className="flex items-center gap-2 font-semibold"><PhoneOutgoing className="h-5 w-5 text-primary" /> Realizar chamadas</div>
+                      <p className="mt-1 text-xs text-muted-foreground">Pode escolher este número ao ligar pelo CRM.</p>
+                    </div>
+                    <Badge variant="secondary">{originateCount}</Badge>
+                  </div>
+                  <div className="flex gap-2 border-b px-4 py-2">
+                    <Button type="button" variant="ghost" size="sm" onClick={() => updateAllGrants('can_originate_calls', true)}>Selecionar todos</Button>
+                    <Button type="button" variant="ghost" size="sm" onClick={() => updateAllGrants('can_originate_calls', false)}>Limpar</Button>
+                  </div>
+                  <div className="max-h-96 divide-y overflow-y-auto">
+                    {filteredUsers.map((user) => {
+                      const grant = selectedPhone.grants.find((item) => item.user_id === user.id);
+                      const isOwner = selectedPhone.number_type === 'user' && selectedPhone.assigned_user_id === user.id;
+                      return (
+                        <div key={user.id} className="flex items-center justify-between gap-3 p-3">
+                          <div className="min-w-0">
+                            <div className="flex items-center gap-2"><p className="truncate text-sm font-medium">{user.full_name}</p>{isOwner && <Badge variant="outline" className="text-[10px]">Titular</Badge>}</div>
+                            <p className="truncate text-xs text-muted-foreground">{user.email}</p>
+                          </div>
+                          <Switch disabled={isOwner} checked={isOwner || grant?.can_originate_calls === true} onCheckedChange={(value) => updateGrant(user.id, 'can_originate_calls', value)} />
+                        </div>
+                      );
+                    })}
+                    {filteredUsers.length === 0 && <p className="p-4 text-center text-sm text-muted-foreground">Nenhum usuário encontrado.</p>}
+                  </div>
+                </div>
+              </div>
+
+              {selectedPhone.number_type === 'company' && (
+                <div className="grid gap-3 rounded-lg bg-muted/40 p-4 text-sm md:grid-cols-3">
+                  <span className="flex items-center gap-2"><Users className="h-4 w-4 text-primary" /> Até 3 pessoas distintas</span>
+                  <span className="flex items-center gap-2"><Clock className="h-4 w-4 text-primary" /> 15 segundos por tentativa</span>
+                  <span className="flex items-center gap-2"><ShieldCheck className="h-4 w-4 text-primary" /> Só usuários online e disponíveis</span>
+                </div>
+              )}
+            </section>
+
+            <section className="space-y-4 border-t pt-8">
+              <div>
+                <p className="text-xs font-semibold uppercase tracking-wide text-primary">3. Operação do número</p>
+                <h3 className="mt-1 text-base font-semibold">Status, saída e gravação</h3>
+              </div>
+              <div className="grid gap-3 md:grid-cols-3">
               <div className="flex items-center justify-between rounded-lg border p-3">
                 <Label>Número ativo</Label><Switch checked={selectedPhone.is_active} onCheckedChange={(value) => setSelectedPhone({ ...selectedPhone, is_active: value })} />
               </div>
@@ -427,38 +569,57 @@ export function PhoneNumberSettings() {
               <div className="flex items-center justify-between rounded-lg border p-3">
                 <Label>Gravar chamadas</Label><Switch checked={selectedPhone.recording_enabled} onCheckedChange={(value) => setSelectedPhone({ ...selectedPhone, recording_enabled: value })} />
               </div>
-            </div>
+              </div>
+            </section>
 
-            <div className="border-t pt-6 space-y-4">
-              <div className="flex items-center justify-between">
-                <div><h3 className="font-semibold">Horário de atendimento</h3><p className="text-xs text-muted-foreground">Fora do horário, o fallback é executado imediatamente.</p></div>
+            <section className="space-y-5 border-t pt-8">
+              <div>
+                <p className="text-xs font-semibold uppercase tracking-wide text-primary">4. Horário e contingência</p>
+                <h3 className="mt-1 text-base font-semibold">Quando atender e o que fazer se ninguém atender</h3>
+              </div>
+              <div className="flex items-center justify-between rounded-lg border p-4">
+                <div><Label>Horário de atendimento</Label><p className="mt-1 text-xs text-muted-foreground">Fora do horário, a mensagem e a tarefa são executadas imediatamente.</p></div>
                 <Switch checked={selectedPhone.business_hours.enabled} onCheckedChange={(value) => setSelectedPhone({
                   ...selectedPhone, business_hours: { ...selectedPhone.business_hours, enabled: value },
                 })} />
               </div>
-              {selectedPhone.business_hours.enabled && WEEKDAYS.map(([day, label]) => {
-                const segment = selectedPhone.business_hours.schedule[day]?.[0];
-                return (
-                  <div key={day} className="grid grid-cols-[100px_1fr_1fr] items-center gap-3">
-                    <label className="flex items-center gap-2 text-sm"><Checkbox checked={!!segment} onCheckedChange={(value) => updateScheduleDay(day, value === true, segment?.start, segment?.end)} />{label}</label>
-                    <Input type="time" disabled={!segment} value={segment?.start || '09:00'} onChange={(event) => updateScheduleDay(day, true, event.target.value, segment?.end)} />
-                    <Input type="time" disabled={!segment} value={segment?.end || '18:00'} onChange={(event) => updateScheduleDay(day, true, segment?.start, event.target.value)} />
-                  </div>
-                );
-              })}
-            </div>
+              {selectedPhone.business_hours.enabled && (
+                <div className="space-y-3 rounded-xl border p-4">
+                  <div className="flex items-center justify-between"><Label>Dias e faixas de atendimento</Label><Badge variant="outline">{selectedPhone.timezone || organization?.timezone || 'America/Sao_Paulo'}</Badge></div>
+                  {WEEKDAYS.map(([day, label]) => {
+                    const segment = selectedPhone.business_hours.schedule[day]?.[0];
+                    return (
+                      <div key={day} className="grid grid-cols-[100px_1fr_1fr] items-center gap-3">
+                        <label className="flex items-center gap-2 text-sm"><Checkbox checked={!!segment} onCheckedChange={(value) => updateScheduleDay(day, value === true, segment?.start, segment?.end)} />{label}</label>
+                        <Input aria-label={`Início de ${label}`} type="time" disabled={!segment} value={segment?.start || '09:00'} onChange={(event) => updateScheduleDay(day, true, event.target.value, segment?.end)} />
+                        <Input aria-label={`Fim de ${label}`} type="time" disabled={!segment} value={segment?.end || '18:00'} onChange={(event) => updateScheduleDay(day, true, segment?.start, event.target.value)} />
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
 
-            <div className="space-y-2">
-              <Label>Mensagem de indisponibilidade</Label>
-              <Textarea value={selectedPhone.fallback_message} onChange={(event) => setSelectedPhone({ ...selectedPhone, fallback_message: event.target.value })} rows={3} />
-              <p className="text-xs text-muted-foreground">Após a mensagem, uma tarefa de retorno é criada para o responsável definido acima.</p>
-            </div>
+              <div className="grid gap-4 md:grid-cols-2">
+                <div className="space-y-2">
+                  <Label>Mensagem de indisponibilidade</Label>
+                  <Textarea value={selectedPhone.fallback_message} onChange={(event) => setSelectedPhone({ ...selectedPhone, fallback_message: event.target.value })} rows={4} />
+                </div>
+                <div className="rounded-xl border bg-muted/30 p-4 text-sm">
+                  <p className="font-medium">Fluxo de fallback</p>
+                  <ol className="mt-3 space-y-2 text-muted-foreground">
+                    <li>1. Reproduz a mensagem ao cliente.</li>
+                    <li>2. Encerra a ligação sem repetir destinatários.</li>
+                    <li>3. Cria uma única tarefa para o responsável.</li>
+                  </ol>
+                </div>
+              </div>
+            </section>
 
             {/* Inbound Settings Section */}
-            <div className="border-t pt-6 space-y-4">
-              <div className="flex items-center gap-2">
-                <UserPlus className="h-5 w-5 text-muted-foreground" />
-                <h3 className="font-semibold">Números Desconhecidos</h3>
+            <section className="space-y-4 border-t pt-8">
+              <div>
+                <p className="text-xs font-semibold uppercase tracking-wide text-primary">5. Contatos desconhecidos</p>
+                <h3 className="mt-1 flex items-center gap-2 text-base font-semibold"><UserPlus className="h-5 w-5" /> Cadastro automático</h3>
               </div>
               
               {/* Auto Create Contact */}
@@ -496,17 +657,19 @@ export function PhoneNumberSettings() {
                   </Select>
                 </div>
               )}
-            </div>
+            </section>
 
             {/* Save Button */}
-            <Button onClick={handleSave} disabled={saving} className="w-full">
+            <div className="sticky bottom-3 z-10 rounded-xl border bg-background/95 p-3 shadow-lg backdrop-blur">
+            <Button onClick={handleSave} disabled={saving} className="w-full" size="lg">
               {saving ? (
                  <SpinnerGap className="h-4 w-4 animate-spin mr-2" />
               ) : (
                  <FloppyDisk className="h-4 w-4 mr-2" />
               )}
-              Salvar Configurações
+              Salvar configuração do número
             </Button>
+            </div>
           </>
         )}
       </CardContent>

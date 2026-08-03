@@ -14,7 +14,7 @@ import { useTranslation } from '@/lib/i18n';
 import { useOrganization } from '@/hooks/useOrganization';
 import { 
   ChatCircle, Phone, EnvelopeSimple, Plugs, Warning, Plus, Robot, Sparkle, 
-  UploadSimple, ArrowsClockwise, PenNib, CheckCircle, XCircle, Clock, Users, Briefcase
+  UploadSimple, ArrowsClockwise, PenNib, CheckCircle, XCircle, Clock, Users, Briefcase, SlidersHorizontal
 } from '@phosphor-icons/react';
 import { IntegrationConnectDialog } from './IntegrationConnectDialog';
 import { IntegrationDetailDialog } from './IntegrationDetailDialog';
@@ -215,6 +215,13 @@ export function IntegrationsSettings() {
     setConnectDialogOpen(true);
   };
 
+  const openTelephonyControl = () => {
+    setSelectedCategory('telephony');
+    window.setTimeout(() => {
+      document.getElementById('telephony-control-center')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    }, 50);
+  };
+
   // Kommo token expiry check
   const getKommoTokenExpiry = (connection: any) => {
     if (!connection?.config_values?.token_expires_at) return null;
@@ -400,6 +407,26 @@ export function IntegrationsSettings() {
           </TabsList>
         </Tabs>
 
+        {selectedCategory === 'telephony' && (
+          <section id="telephony-control-center" className="scroll-mt-6 space-y-4">
+            <div>
+              <h3 className="text-base font-semibold">Operação da telefonia</h3>
+              <p className="mt-1 text-sm text-muted-foreground">Gerencie disponibilidade, números, destinatários, saída, horários e fallback.</p>
+            </div>
+            <TelephonyAvailabilitySettings />
+            {canManagePhoneNumbers ? (
+              <PhoneNumberSettings />
+            ) : (
+              <Alert>
+                <Warning className="h-4 w-4" />
+                <AlertDescription>
+                  Você pode controlar sua disponibilidade, mas precisa da permissão “Gerenciar Telefonia” para alterar números e equipes.
+                </AlertDescription>
+              </Alert>
+            )}
+          </section>
+        )}
+
         {/* Integrations Grid */}
         {isLoading ? (
           <div className="text-center py-8">
@@ -490,6 +517,16 @@ export function IntegrationsSettings() {
                     />
                   </div>
                   <div className="mt-4 flex justify-end gap-2">
+                    {integration.category === 'telephony' && isConnected && canManagePhoneNumbers && (
+                      <Button
+                        variant="default"
+                        size="sm"
+                        onClick={openTelephonyControl}
+                      >
+                        <SlidersHorizontal className="mr-1 h-4 w-4" />
+                        Gerenciar números e equipe
+                      </Button>
+                    )}
                     <Button
                       variant="link"
                       size="sm"
@@ -515,13 +552,6 @@ export function IntegrationsSettings() {
           </div>
         )}
 
-        {/* Phone Number Settings */}
-        {orgIntegrations?.some(oi => oi.integration?.category === 'telephony') && (
-          <>
-            <TelephonyAvailabilitySettings />
-            {canManagePhoneNumbers && <PhoneNumberSettings />}
-          </>
-        )}
       </div>
 
       {selectedIntegration && !['meta-lead-ads', 'meta-capi', 'nammux', 'meta-whatsapp-cloud', 'evolution-whatsapp'].includes(selectedIntegration.slug) && (
