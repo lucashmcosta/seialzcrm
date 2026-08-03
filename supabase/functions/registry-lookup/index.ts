@@ -234,11 +234,14 @@ Deno.serve(async (req) => {
       }, { onConflict: "contact_id" });
       if (persistError) return json({ error: "cpf_verification_persist_failed" }, 500);
     }
+    // "not found" is an expected business outcome (CPF valid but absent from the
+    // provider base), so we answer 200 with ok:false to avoid client error noise.
     const status = result.error === "invalid_or_not_found" || result.error === "not_found"
-      ? 422
+      ? 200
       : result.error === "provider_not_configured"
       ? 503
       : 502;
+
     return json({
       ok: false,
       kind,
