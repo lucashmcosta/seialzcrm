@@ -316,24 +316,40 @@ serve(async (req) => {
     };
     delete securedConfigValues.auth_token;
     delete securedConfigValues.api_key_secret;
-    const { error: upsertError } = await supabase
-      .from("organization_integrations")
-      .upsert({
-        organization_id: organizationId,
-        integration_id: twilioIntegration.id,
-        config_values: securedConfigValues,
-        is_enabled: true,
-        connected_at: new Date().toISOString(),
-      }, {
-        onConflict: "organization_id,integration_id",
-      });
+    const integrationPayload = {
+      organization_id: organizationId,
+      integration_id: twilioIntegration.id,
+      config_values: securedConfigValues,
+      is_enabled: true,
+      connected_at: new Date().toISOString(),
+    };
+    let organizationIntegrationId = existingVoiceIntegration?.id as
+      | string
+      | undefined;
+    let integrationSaveError: { message: string } | null = null;
+    if (organizationIntegrationId) {
+      const { error } = await supabase
+        .from("organization_integrations")
+        .update(integrationPayload)
+        .eq("id", organizationIntegrationId)
+        .eq("organization_id", organizationId);
+      integrationSaveError = error;
+    } else {
+      const { data, error } = await supabase
+        .from("organization_integrations")
+        .insert(integrationPayload)
+        .select("id")
+        .single();
+      integrationSaveError = error;
+      organizationIntegrationId = data?.id;
+    }
 
-    if (upsertError) {
-      console.error("Error upserting integration:", upsertError);
+    if (integrationSaveError || !organizationIntegrationId) {
+      console.error("Error saving integration:", integrationSaveError);
       return new Response(
         JSON.stringify({
           error: "Failed to save integration config",
-          details: upsertError.message,
+          details: integrationSaveError?.message || "Missing integration id",
         }),
         {
           status: 500,
@@ -346,13 +362,6 @@ serve(async (req) => {
       "Integration saved successfully for organization:",
       organizationId,
     );
-
-    const { data: organizationIntegration } = await supabase
-      .from("organization_integrations")
-      .select("id")
-      .eq("organization_id", organizationId)
-      .eq("integration_id", twilioIntegration.id)
-      .single();
 
     await supabase
       .from("organization_phone_numbers")
@@ -371,7 +380,7 @@ serve(async (req) => {
         twilio_phone_sid: phoneNumberSid,
         provider: "twilio",
         provider_number_id: phoneNumberSid,
-        organization_integration_id: organizationIntegration?.id ?? null,
+        organization_integration_id: organizationIntegrationId,
         number_type: "company",
         is_active: true,
         is_default_outbound: true,
