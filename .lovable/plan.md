@@ -1,34 +1,42 @@
-# Por que vem 404 no CPF 867.033.115-28 — e por que hoje não sabemos a razão exata
+# Mostrar o motivo real do provedor em vez de "CPF inválido"
 
-## Resposta direta
+## Situação atual (verificada)
 
-O 404 **não é do Seialz**. Ele vem da API externa `https://api.cpf-brasil.org/cpf/{cpf}` (`supabase/functions/_shared/registry/providers.ts`, `lookupCpfBrasil`). O CPF é matematicamente válido (dígitos verificadores conferem), mas o provedor respondeu que não devolve dados para esse número.
+- `normalizeCpfBrasilResponse` (`supabase/functions/_shared/registry/providers.ts`) já recebe o JSON do provedor e lê `json.code`, mas **descarta** esse código e a mensagem: só devolve uma categoria interna (`invalid_or_not_found`, `provider_quota_exceeded`, ...).
+- `supabase/functions/registry-lookup/index.ts` colapsa `invalid_or_not_found` e `not_found` na classe `not_found` e grava `cpf_verification_status = 'invalid'` em `contact_identity_profiles`.
+- `registry_lookup_audit` guarda apenas `outcome`, `http_status` e `error_code` (categoria interna) — não há coluna para o código/mensagem do provedor.
+- `ContactForm.tsx` mostra o texto fixo "CPF não encontrado ou inválido." / "CPF inválido", sem distinguir erro de digitação de "não existe na base".
 
-Qual dos motivos possíveis foi (CPF não consta na base do provedor, cadastro cancelado/suspenso na Receita, base desatualizada, ou restrição do plano) **hoje é impossível afirmar** — e isso é uma lacuna de instrumentação nossa, não uma dedução que eu possa fazer com honestidade:
+Conclusão: sim, o Seialz pode armazenar e exibir o `code`/`message` — hoje simplesmente não propaga.
 
-- `normalizeCpfBrasilResponse` colapsa `400`, `404` e `422` — e também os códigos documentados `MISSING_CPF_PARAMETER`, `INVALID_CPF_FORMAT` e `CPF_NOT_FOUND` — em um único `error = "invalid_or_not_found"`.
-- O corpo da resposta do provedor (`code`, `message`) é descartado: nada dele é gravado em `registry_lookup_audit` nem logado.
-- Em `registry_lookup_audit` só sobra `http_status = 404` e `error_code = "invalid_or_not_found"`.
-- Nos logs da função `registry-lookup` não há nenhuma linha da consulta — apenas `booted`/`shutdown`.
+## O que fazer
 
-Ou seja: a informação que responderia "por que não vem os dados" foi jogada fora no momento da chamada.
+### 1. Propagar o código/mensagem do provedor
+- Em `ProviderResult` (caso de falha), adicionar `provider_code` e `provider_message`, preenchidos com `json.code` e `json.message` (ou equivalente) em `normalizeCpfBrasilResponse`.
+- Sanitizar: truncar mensagem (~300 chars) e nunca incluir o CPF completo nem a API key.
 
-## O que fazer para responder de fato
+### 2. Separar "inválido" de "não encontrado"
+- Criar classe de falha `not_found` distinta de `invalid`:
+  - `INVALID_CPF_FORMAT` / falha de dígito verificador → `invalid`
+  - `CPF_NOT_FOUND` / 404 com CPF matematicamente válido → `not_found`
+- Refletir isso em `cpf_verification_status`: usar `not_found` em vez de forçar `invalid`.
 
-1. **Preservar o diagnóstico do provedor**
-   - Em `getJson`/`lookupCpfBrasil`, capturar `code` e `message` do corpo de erro e propagá-los no `ProviderResult` como `provider_code` / `provider_message`.
-   - Persistir esses campos em `registry_lookup_audit` (coluna nova `provider_error` jsonb, sem PII) e logar uma linha estruturada em `registry-lookup` com CPF mascarado.
+### 3. Persistir para auditoria e para a tela
+- `registry_lookup_audit`: novas colunas `provider_code` e `provider_message`.
+- `contact_identity_profiles`: novas colunas `last_provider_code` e `last_provider_message` (ao lado de `last_error_code`).
+- A resposta da Edge Function passa a devolver `error`, `provider_code`, `provider_message`.
 
-2. **Separar "não encontrado" de "inválido"**
-   - `INVALID_CPF_FORMAT` / `MISSING_CPF_PARAMETER` → `invalid`.
-   - `CPF_NOT_FOUND` e `404` sem código → `not_found`.
-   - `403`/`PLAN_*` → `provider_denied`.
+### 4. UI do formulário de contato
+- Badge/label por estado:
+  - `invalid` → "CPF inválido (verifique os dígitos)" (vermelho)
+  - `not_found` → "CPF não encontrado na base do provedor" (âmbar, não bloqueante)
+  - `error` / cota / auth → "Consulta indisponível" com detalhe do provedor
+- Exibir o motivo do provedor em texto secundário ou tooltip (`provider_code — provider_message`).
+- Permitir salvar normalmente quando o CPF é matematicamente válido e o resultado é `not_found`.
 
-3. **Corrigir a UX no formulário de contato**
-   - `src/pages/contacts/ContactForm.tsx` hoje mostra "CPF inválido" para `not_found`. Passar a exibir "CPF não localizado na base consultada" e **permitir salvar** quando o CPF passa na validação local, mantendo `cpf_verification_status` como `not_found` em vez de `invalid`.
+## Notas técnicas
 
-4. **Reconsultar esse CPF depois do item 1** para ver o código real do provedor e, se for `CPF_NOT_FOUND`, escalar com o fornecedor (ou avaliar provedor secundário para fallback).
-
-## Nota técnica
-
-Nada acima foi aplicado. Arquivos envolvidos: `supabase/functions/_shared/registry/providers.ts`, `supabase/functions/registry-lookup/index.ts`, `src/pages/contacts/ContactForm.tsx`, `src/lib/regional.ts`, mais uma migration para o campo de auditoria.
+- Mudanças de banco: 2 migrations pequenas (colunas nullable, sem backfill).
+- Enum `cpf_verification_status` já é texto/enum? Verificar antes: se for enum, adicionar valor `not_found`; se for texto, apenas ajustar código.
+- Nenhuma alteração no fluxo de RLS ou multi-tenancy.
+- Documentar o novo contrato em `docs/` (referência de registry lookup).
