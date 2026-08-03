@@ -85,3 +85,8 @@ verify_jwt = false
 # Auth própria em código via header x-health-token (SERVICE_HEALTH_TOKEN).
 [functions.service-health]
 verify_jwt = false
+
+# Histórico operacional read-only por serviço (Kairos Tech).
+# Mesma auth própria em código via header x-health-token.
+[functions.service-events]
+verify_jwt = false
