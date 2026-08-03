@@ -5,8 +5,9 @@ export type CpfVerificationStatus =
   | "pending"
   | "verified"
   | "invalid"
-  | "not_found"
-  | "error";
+  | "error"
+  | "not_found";
+
 
 export function digits(value: string | null | undefined): string {
   return String(value ?? "").replace(/\D/g, "");
@@ -128,19 +129,20 @@ export const cpfStatusLabel: Record<CpfVerificationStatus, string> = {
   unverified: "Não verificado",
   pending: "Verificação pendente",
   verified: "Verificado",
-  invalid: "CPF inválido — verifique os dígitos",
-  not_found: "Não encontrado na base do provedor",
-  error: "Consulta indisponível",
+  invalid: "CPF inválido",
+  error: "Falha na verificação",
+  not_found: "Não encontrado na base",
 };
 
 const cpfStatusLabelEn: Record<CpfVerificationStatus, string> = {
   unverified: "Not verified",
   pending: "Verification pending",
   verified: "Verified",
-  invalid: "Invalid CPF — check the digits",
-  not_found: "Not found in provider database",
-  error: "Lookup unavailable",
+  invalid: "Invalid CPF",
+  error: "Verification failed",
+  not_found: "Not found in registry",
 };
+
 
 export function cpfStatusLabelFor(
   status: CpfVerificationStatus,

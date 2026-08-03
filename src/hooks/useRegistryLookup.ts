@@ -16,6 +16,7 @@ export interface RegistryLookupResult<T = Record<string, unknown>> {
   provider_code?: string | null;
   provider_message?: string | null;
   persisted_contact_id?: string | null;
+
 }
 
 export function useRegistryLookup() {

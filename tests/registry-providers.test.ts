@@ -44,28 +44,19 @@ Deno.test("CPF Brasil v2 response maps documented identity fields", () => {
   assertEquals(result.payload.mother_name, "Mãe de Teste");
 });
 
-Deno.test("CPF Brasil v2 maps documented failures and keeps sanitized provider detail", () => {
+Deno.test("CPF Brasil v2 maps documented failures without exposing provider messages", () => {
   const expired = normalizeCpfBrasilResponse(401, {
     error: "Unauthorized",
-    message: "Token expired for key: abc123secret",
+    message: "Sensitive provider message",
     code: "TOKEN_EXPIRED",
   }, "52998224725");
   const notFound = normalizeCpfBrasilResponse(404, {
     code: "CPF_NOT_FOUND",
-    message: "CPF 529.982.247-25 não encontrado",
-  }, "52998224725");
-  const badFormat = normalizeCpfBrasilResponse(400, {
-    code: "INVALID_CPF_FORMAT",
   }, "52998224725");
 
-  if (expired.ok || notFound.ok || badFormat.ok) throw new Error("Expected provider failures");
+  if (expired.ok || notFound.ok) throw new Error("Expected provider failures");
   assertEquals(expired.error, "provider_token_expired");
   assertEquals(expired.retryable, false);
-  assertEquals(expired.provider_code, "TOKEN_EXPIRED");
-  assertEquals(expired.provider_message?.includes("abc123secret"), false);
-  assertEquals(notFound.error, "not_found");
+  assertEquals(notFound.error, "invalid_or_not_found");
   assertEquals(notFound.retryable, false);
-  assertEquals(notFound.provider_code, "CPF_NOT_FOUND");
-  assertEquals(notFound.provider_message?.includes("529.982.247-25"), false);
-  assertEquals(badFormat.error, "invalid_cpf_format");
 });

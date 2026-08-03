@@ -15,9 +15,10 @@ export type ProviderResult =
     status: number;
     error: string;
     retryable: boolean;
-    provider_code?: string | null;
-    provider_message?: string | null;
+    providerCode?: string | null;
+    providerMessage?: string | null;
   };
+
 
 const TIMEOUT_MS = 6_000;
 const CIRCUIT_FAILURE_THRESHOLD = 5;
@@ -180,28 +181,20 @@ const CPF_BRASIL_ERROR_CODES: Record<string, string> = {
   PLAN_EXPIRED: "provider_plan_expired",
   PLAN_SUSPENDED: "provider_plan_suspended",
   QUOTA_EXCEEDED: "provider_quota_exceeded",
-  MISSING_CPF_PARAMETER: "invalid_cpf_format",
-  INVALID_CPF_FORMAT: "invalid_cpf_format",
+  MISSING_CPF_PARAMETER: "invalid_or_not_found",
+  INVALID_CPF_FORMAT: "invalid_or_not_found",
   CPF_NOT_FOUND: "not_found",
 };
 
-const PROVIDER_MESSAGE_MAX_LENGTH = 300;
-
-/**
- * Keeps the provider explanation while removing anything that could carry PII
- * (long digit runs such as a full CPF) or credentials.
- */
-export function sanitizeProviderMessage(
-  value: unknown,
-): string | null {
+export function sanitizeProviderMessage(value: unknown): string | null {
   const raw = text(value);
   if (!raw) return null;
   return raw
-    .replace(/\d[\d.\-\s]{8,}\d/g, "[redacted]")
-    .replace(/(key|token|secret|authorization)\s*[:=]\s*\S+/gi, "$1: [redacted]")
-    .slice(0, PROVIDER_MESSAGE_MAX_LENGTH)
-    .trim();
+    .replace(/\d{3}\.?\d{3}\.?\d{3}-?\d{2}/g, "[cpf]")
+    .replace(/\b[\w.+-]+@[\w-]+\.[\w.]+\b/g, "[email]")
+    .slice(0, 300);
 }
+
 
 export function normalizeCpfBrasilResponse(
   status: number,
@@ -219,7 +212,7 @@ export function normalizeCpfBrasilResponse(
       (status === 404
         ? "not_found"
         : status === 400 || status === 422
-        ? "invalid_cpf_format"
+        ? "invalid_or_not_found"
         : status === 401 || status === 403
         ? "provider_auth_error"
         : status === 429
@@ -233,10 +226,11 @@ export function normalizeCpfBrasilResponse(
       status,
       error,
       retryable: status >= 500 || status === 0,
-      provider_code: documentedCode || null,
-      provider_message: sanitizeProviderMessage(json?.message ?? json?.error),
+      providerCode: documentedCode || null,
+      providerMessage: sanitizeProviderMessage(json?.message ?? json?.error),
     };
   }
+
 
   return {
     ok: true,

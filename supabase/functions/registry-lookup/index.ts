@@ -78,7 +78,6 @@ function cpfFailureClass(result: Extract<ProviderResult, { ok: false }>): string
     result.status === 429 || result.status >= 500 || result.status === 0 ||
     ["timeout", "network_error", "provider_circuit_open", "upstream_error"].includes(result.error)
   ) return "provider_unavailable";
-  if (["invalid_cpf_format", "invalid_cpf"].includes(result.error)) return "invalid";
   if (["invalid_or_not_found", "not_found"].includes(result.error)) return "not_found";
   if ([
     "provider_auth_error", "provider_invalid_api_key", "provider_token_expired",
@@ -192,6 +191,9 @@ Deno.serve(async (req) => {
   const result = await lookup(kind, value);
   const durationMs = Date.now() - started;
 
+  const providerCode = result.ok ? null : (result.providerCode ?? null);
+  const providerMessage = result.ok ? null : (result.providerMessage ?? null);
+
   await auth.admin.from("registry_lookup_audit").insert({
     organization_id: organizationId,
     requested_by_user_id: auth.userId,
@@ -203,8 +205,8 @@ Deno.serve(async (req) => {
     http_status: result.status || null,
     duration_ms: durationMs,
     error_code: result.ok ? null : result.error,
-    provider_code: result.ok ? null : result.provider_code ?? null,
-    provider_message: result.ok ? null : result.provider_message ?? null,
+    provider_code: providerCode,
+    provider_message: providerMessage,
   });
 
   if (!result.ok) {
@@ -215,19 +217,15 @@ Deno.serve(async (req) => {
         contact_id: contactId,
         cpf_verification_status: existingCpfVerification?.status === "verified"
           ? "verified"
-          : failureClass === "not_found"
-          ? "not_found"
-          : failureClass === "invalid"
-          ? "invalid"
-          : "error",
+          : failureClass === "not_found" ? "not_found" : "error",
         verification_provider: result.provider,
         verification_provider_version: result.version,
         cpf_verified_at: existingCpfVerification?.status === "verified"
           ? existingCpfVerification.verifiedAt
           : null,
         last_error_code: result.error,
-        last_provider_code: result.provider_code ?? null,
-        last_provider_message: result.provider_message ?? null,
+        last_provider_code: providerCode,
+        last_provider_message: providerMessage,
         last_verification_attempt_at: new Date().toISOString(),
         last_failure_class: failureClass,
         last_provider_http_status: result.status || null,
@@ -236,7 +234,7 @@ Deno.serve(async (req) => {
       }, { onConflict: "contact_id" });
       if (persistError) return json({ error: "cpf_verification_persist_failed" }, 500);
     }
-    const status = ["invalid_or_not_found", "not_found", "invalid_cpf_format"].includes(result.error)
+    const status = result.error === "invalid_or_not_found" || result.error === "not_found"
       ? 422
       : result.error === "provider_not_configured"
       ? 503
@@ -247,10 +245,11 @@ Deno.serve(async (req) => {
       provider: result.provider,
       error: result.error,
       retryable: result.retryable,
-      provider_code: result.provider_code ?? null,
-      provider_message: result.provider_message ?? null,
+      provider_code: providerCode,
+      provider_message: providerMessage,
     }, status);
   }
+
 
   if (kind !== "cpf") {
     const ttlMs = kind === "cep" ? 30 * 24 * 60 * 60 * 1000 : 24 * 60 * 60 * 1000;

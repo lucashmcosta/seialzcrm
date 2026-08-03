@@ -109,8 +109,6 @@ export default function ContactForm() {
     provider: string;
     providerVersion: string;
     errorCode: string;
-    providerCode: string;
-    providerMessage: string;
   }>({
     status: 'unverified',
     registrationStatus: '',
@@ -120,8 +118,6 @@ export default function ContactForm() {
     provider: '',
     providerVersion: '',
     errorCode: '',
-    providerCode: '',
-    providerMessage: '',
   });
   const [cepLookupLoading, setCepLookupLoading] = useState(false);
   const [cepPreview, setCepPreview] = useState<null | {
@@ -201,7 +197,7 @@ export default function ContactForm() {
 
       const { data: identity } = await supabase
         .from('contact_identity_profiles')
-        .select('cpf_verification_status,cpf_registration_status,birth_date,sex,mother_name,verification_provider,verification_provider_version,last_error_code,last_provider_code,last_provider_message')
+        .select('cpf_verification_status,cpf_registration_status,birth_date,sex,mother_name,verification_provider,verification_provider_version,last_error_code')
         .eq('contact_id', data.id)
         .maybeSingle();
       if (identity) {
@@ -214,8 +210,6 @@ export default function ContactForm() {
           provider: identity.verification_provider || '',
           providerVersion: identity.verification_provider_version || '',
           errorCode: identity.last_error_code || '',
-          providerCode: identity.last_provider_code || '',
-          providerMessage: identity.last_provider_message || '',
         });
         lastCpfLookupRef.current = digits(data.cpf);
       }
@@ -238,8 +232,6 @@ export default function ContactForm() {
         provider: '',
         providerVersion: '',
         errorCode: '',
-        providerCode: '',
-        providerMessage: '',
       }));
     }
     if (normalized.length === 11) {
@@ -253,13 +245,7 @@ export default function ContactForm() {
     if (!cpf) return;
     if (cpfInFlightRef.current === cpf) return;
     if (!isValidCpf(cpf)) {
-      setCpfVerification((current) => ({
-        ...current,
-        status: 'invalid',
-        errorCode: 'invalid_cpf',
-        providerCode: '',
-        providerMessage: '',
-      }));
+      setCpfVerification((current) => ({ ...current, status: 'invalid', errorCode: 'invalid_cpf' }));
       toast.error('CPF inválido. Confira os dígitos informados.');
       return;
     }
@@ -269,13 +255,7 @@ export default function ContactForm() {
     if (sequence !== cpfLookupSequenceRef.current) return;
     cpfInFlightRef.current = cpf;
     setCpfLookupLoading(true);
-    setCpfVerification((current) => ({
-      ...current,
-      status: 'pending',
-      errorCode: '',
-      providerCode: '',
-      providerMessage: '',
-    }));
+    setCpfVerification((current) => ({ ...current, status: 'pending', errorCode: '' }));
     try {
       const result = await lookup<{
         cpf?: string;
@@ -302,31 +282,28 @@ export default function ContactForm() {
         provider: result.provider || 'cpf-brasil',
         providerVersion: result.provider_version || '2.0',
         errorCode: '',
-        providerCode: '',
-        providerMessage: '',
       }));
       toast.success('CPF verificado e dados cadastrais preenchidos.');
     } catch (error: unknown) {
       if (sequence !== cpfLookupSequenceRef.current) return;
       const code = error instanceof Error ? error.message : 'registry_lookup_failed';
       const payload = (error as { payload?: { provider_code?: string | null; provider_message?: string | null } }).payload;
-      const notFound = code.includes('not_found') || code.includes('invalid_or_not_found');
-      const invalidFormat = code.includes('invalid_cpf');
+      const notFound = code.includes('not_found');
+      const invalid = code.includes('invalid_cpf') || code === 'invalid_or_not_found';
+      const reason = [payload?.provider_code, payload?.provider_message].filter(Boolean).join(' — ');
       setCpfVerification((current) => ({
         ...current,
-        status: invalidFormat ? 'invalid' : notFound ? 'not_found' : 'error',
-        errorCode: code,
-        providerCode: payload?.provider_code || '',
-        providerMessage: payload?.provider_message || '',
+        status: notFound ? 'not_found' : invalid ? 'invalid' : 'error',
+        errorCode: reason ? `${code} (${reason})` : code,
       }));
-      const detail = [payload?.provider_code, payload?.provider_message].filter(Boolean).join(' — ');
       toast.error(
-        invalidFormat
+        notFound
+          ? `CPF não encontrado na base do provedor.${reason ? ` Motivo do provedor: ${reason}` : ''} O contato pode ser salvo como não verificado.`
+          : invalid
           ? 'CPF inválido. Confira os dígitos informados.'
-          : notFound
-          ? `CPF não encontrado na base do provedor.${detail ? ` (${detail})` : ''}`
-          : `Consulta indisponível agora. O contato poderá ser salvo como não verificado.${detail ? ` (${detail})` : ''}`,
+          : 'Não foi possível verificar agora. O contato poderá ser salvo como não verificado.',
       );
+
     } finally {
       if (cpfInFlightRef.current === cpf) cpfInFlightRef.current = '';
       if (sequence === cpfLookupSequenceRef.current) setCpfLookupLoading(false);
@@ -537,8 +514,6 @@ export default function ContactForm() {
           verification_provider_version: cpfVerification.providerVersion || null,
           cpf_verified_at: cpfVerification.status === 'verified' ? new Date().toISOString() : null,
           last_error_code: cpfVerification.errorCode || null,
-          last_provider_code: cpfVerification.providerCode || null,
-          last_provider_message: cpfVerification.providerMessage || null,
           updated_at: new Date().toISOString(),
         }, { onConflict: 'contact_id' });
       if (error) throw error;
@@ -813,6 +788,7 @@ export default function ContactForm() {
                           ? 'text-amber-600'
                           : 'text-muted-foreground'
                       }`}>
+
                         {cpfLookupLoading ? 'Consultando…' : cpfStatusLabelFor(cpfVerification.status, locale)}
                       </span>
                     </div>
@@ -836,16 +812,6 @@ export default function ContactForm() {
                     <p id="cpf-format-help" className="mt-1 text-xs text-muted-foreground">
                       Se informado, o CPF deve ter exatamente 11 dígitos.
                     </p>
-                    {!cpfLookupLoading && cpfVerification.status === 'not_found' && (
-                      <p className="mt-1 text-xs text-amber-600">
-                        O CPF é matematicamente válido, mas o provedor não retornou dados cadastrais. Você pode salvar o contato assim.
-                      </p>
-                    )}
-                    {!cpfLookupLoading && (cpfVerification.providerCode || cpfVerification.providerMessage) && (
-                      <p className="mt-1 text-xs text-muted-foreground break-words">
-                        Motivo do provedor: {[cpfVerification.providerCode, cpfVerification.providerMessage].filter(Boolean).join(' — ')}
-                      </p>
-                    )}
                   </div>
                   <div>
                     <Label htmlFor="rg">RG</Label>

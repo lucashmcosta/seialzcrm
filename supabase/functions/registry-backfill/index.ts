@@ -627,7 +627,7 @@ Deno.serve(async (req) => {
         provider: "local-validator",
         version: "v1",
         status: 422,
-        error: "invalid_cpf_format",
+        error: "invalid_or_not_found",
         retryable: false,
       };
     const hash = await identifierHash(`cpf:${cpf}`);
@@ -643,8 +643,6 @@ Deno.serve(async (req) => {
       http_status: result.status || null,
       duration_ms: Date.now() - started,
       error_code: result.ok ? null : result.error,
-      provider_code: result.ok ? null : result.provider_code ?? null,
-      provider_message: result.ok ? null : result.provider_message ?? null,
     });
 
     processed += 1;
@@ -711,10 +709,8 @@ Deno.serve(async (req) => {
       verified += 1;
     } else {
       errors += 1;
-      const status = result.error === "invalid_cpf_format"
+      const status = result.error === "invalid_or_not_found"
         ? "invalid"
-        : ["not_found", "invalid_or_not_found"].includes(result.error)
-        ? "not_found"
         : "error";
       await auth.admin.from("contact_identity_profiles").upsert({
         organization_id: organizationId,
@@ -724,8 +720,6 @@ Deno.serve(async (req) => {
         verification_provider_version: result.version,
         cpf_verified_at: null,
         last_error_code: result.error,
-        last_provider_code: result.provider_code ?? null,
-        last_provider_message: result.provider_message ?? null,
         updated_at: new Date().toISOString(),
       }, { onConflict: "contact_id" });
 
