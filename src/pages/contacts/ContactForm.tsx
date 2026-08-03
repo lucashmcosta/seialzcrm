@@ -784,8 +784,11 @@ export default function ContactForm() {
                           ? 'text-emerald-600'
                           : cpfVerification.status === 'invalid'
                           ? 'text-destructive'
+                          : cpfVerification.status === 'not_found'
+                          ? 'text-amber-600'
                           : 'text-muted-foreground'
                       }`}>
+
                         {cpfLookupLoading ? 'Consultando…' : cpfStatusLabelFor(cpfVerification.status, locale)}
                       </span>
                     </div>
