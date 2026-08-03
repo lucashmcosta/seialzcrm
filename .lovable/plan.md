@@ -19,7 +19,7 @@ Header `x-health-token` comparado com o secret `SERVICE_HEALTH_TOKEN` (mesmo pad
 | Serviço exposto | Fonte atual | Métricas disponíveis |
 |---|---|---|
 | `outbox-worker` | `fn_outbox_health_summary_internal()` (`worker_last_run_at` = último `integration_audit_logs` com actor `integration-worker`) | processed (`success_24h`), errors (`failed_24h`), pending, running |
-| `integration-worker` | mesma fonte acima (é o processo do outbox; exposto como serviço próprio com o mesmo heartbeat) | idem |
+| `integration-worker` | sem heartbeat próprio (a telemetria existente pertence ao outbox-worker) | `status: "unknown"`, `metrics: {}` |
 | `inbox-reaper` | `outbox_system_heartbeats` componente `reaper` (`last_run_at`, `last_detail.reaped`) | processed (`reaped`) |
 | `inbox-dispatcher` | `fn_inbound_health_summary('1 hour')` agregada por status | processed, errors, latencyMs (avg_latency_sec × 1000) |
 | `evolution-api` | `evolution_instances` (`last_known_state`, `last_state_checked_at`) | instâncias abertas / total |
@@ -28,7 +28,7 @@ Header `x-health-token` comparado com o secret `SERVICE_HEALTH_TOKEN` (mesmo pad
 | `railway-backend` | não observado pelo Seialz | `status: "unknown"` |
 | `scheduler` | `pg_cron` não é legível pela função sem nova estrutura; sem heartbeat próprio | `status: "unknown"` |
 
-Nenhuma métrica inventada: campos sem fonte são omitidos (não zerados). `uptimeSeconds` e `version` por serviço só aparecem quando derivam de dado real; caso contrário são `null`.
+Nenhuma métrica inventada e nenhuma fonte reaproveitada entre serviços: cada serviço só recebe status e métricas se tiver fonte própria de monitoramento. Os demais ficam `unknown` com `metrics: {}` até ganharem telemetria própria. Campos sem fonte são omitidos (não zerados). `uptimeSeconds` e `version` por serviço só aparecem quando derivam de dado real; caso contrário são `null`.
 
 ## Regras de status (derivadas, sem novo estado persistido)
 
