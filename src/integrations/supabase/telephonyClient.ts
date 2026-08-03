@@ -66,6 +66,7 @@ type Table<Row, Insert = Partial<Row>, Update = Partial<Row>> = {
 };
 
 type TelephonyDatabase = {
+  __InternalSupabase: { PostgrestVersion: '13.0.5' };
   public: {
     Tables: {
       organization_phone_numbers: Table<TelephonyNumberRow>;
@@ -79,6 +80,7 @@ type TelephonyDatabase = {
     CompositeTypes: Record<never, never>;
   };
 };
+
 
 // Temporary typed view over the additive V2 schema. This can be removed once
 // the generated Database type is refreshed after the migration is applied.
