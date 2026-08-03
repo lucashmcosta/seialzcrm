@@ -17,6 +17,10 @@ import type { CallInfo, CallStatus, IncomingCallInfo, OutboundCallContextType, T
 export { useOutboundCall } from './outbound-call/context';
 export type { CallStatus, CallInfo } from './outbound-call/types';
 
+function expectedTwilioIdentity(userId: string, organizationId: string) {
+  return `user_${userId.replace(/[^A-Za-z0-9]/g, '')}_org_${organizationId.replace(/[^A-Za-z0-9]/g, '')}`;
+}
+
 export function TelephonyProvider({ children }: { children: ReactNode }) {
   const location = useLocation();
   const { organization, userProfile } = useOrganization();
@@ -62,6 +66,7 @@ export function TelephonyProvider({ children }: { children: ReactNode }) {
   const incomingCallRef = useRef<TwilioCall | null>(null);
   const presenceTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const presenceActiveCallRef = useRef<string | null>(null);
+  const deviceRegisteredRef = useRef(false);
   // A fresh ID per mounted tab avoids duplicated tabs sharing the same lease.
   const presenceSessionRef = useRef<string>(crypto.randomUUID());
 
@@ -270,7 +275,7 @@ export function TelephonyProvider({ children }: { children: ReactNode }) {
   }, [organization?.id, userProfile?.id]);
 
   const updatePresence = useCallback(async (activeCallId: string | null = null) => {
-    if (!telephonyV2 || !isVoiceLeader || !organization?.id || !userProfile?.id || isAdminRoute) return;
+    if (!telephonyV2 || !deviceRegisteredRef.current || !isVoiceLeader || !organization?.id || !userProfile?.id || isAdminRoute) return;
     presenceActiveCallRef.current = activeCallId;
     await telephonySupabase.from('telephony_presence').upsert({
       organization_id: organization.id,
@@ -290,6 +295,7 @@ export function TelephonyProvider({ children }: { children: ReactNode }) {
   }, [telephonyV2, updatePresence]);
 
   const removePresence = useCallback(() => {
+    deviceRegisteredRef.current = false;
     if (presenceTimerRef.current) {
       clearInterval(presenceTimerRef.current);
       presenceTimerRef.current = null;
@@ -338,6 +344,7 @@ export function TelephonyProvider({ children }: { children: ReactNode }) {
 
   // Full cleanup (including device)
   const fullCleanup = useCallback(() => {
+    deviceRegisteredRef.current = false;
     clearStateTimeout();
     unsubscribeFromCallStatus();
     if (activeCallRef.current) {
@@ -634,6 +641,22 @@ export function TelephonyProvider({ children }: { children: ReactNode }) {
 
       device.on('registered', () => {
         console.log('Twilio Device registered and ready');
+        const expectedIdentity = organization?.id && userProfile?.id
+          ? expectedTwilioIdentity(userProfile.id, organization.id)
+          : null;
+        if (!expectedIdentity || device.identity !== expectedIdentity) {
+          console.error('[OutboundCall] Twilio identity mismatch', {
+            expectedIdentity,
+            actualIdentity: device.identity,
+          });
+          deviceRegisteredRef.current = false;
+          setErrorMessage('Identidade da telefonia inválida. Atualize a página.');
+          setStatus('failed');
+          setIsDeviceReady(false);
+          removePresence();
+          return;
+        }
+        deviceRegisteredRef.current = true;
         setStatus('ready');
         setIsDeviceReady(true);
         isInitializingRef.current = false;
@@ -642,6 +665,7 @@ export function TelephonyProvider({ children }: { children: ReactNode }) {
 
       device.on('error', (error) => {
         console.error('Twilio Device error:', error);
+        deviceRegisteredRef.current = false;
         setErrorMessage(error.message || 'Erro no dispositivo de áudio');
         setStatus('failed');
         setIsDeviceReady(false);
@@ -651,7 +675,10 @@ export function TelephonyProvider({ children }: { children: ReactNode }) {
 
       device.on('unregistered', () => {
         console.log('Twilio Device unregistered');
+        deviceRegisteredRef.current = false;
         setIsDeviceReady(false);
+        setErrorMessage('Telefonia desconectada. Atualize a página para reconectar.');
+        removePresence();
       });
 
       device.on('tokenWillExpire', async () => {
@@ -698,7 +725,7 @@ export function TelephonyProvider({ children }: { children: ReactNode }) {
       setStatus('failed');
       isInitializingRef.current = false;
     }
-  }, [getToken, getUserData, telephonyV2, organization?.id, startPresenceHeartbeat, removePresence, updatePresence]);
+  }, [getToken, getUserData, telephonyV2, organization?.id, userProfile?.id, startPresenceHeartbeat, removePresence, updatePresence]);
 
   // Check voice integration availability (inline, no external context dependency)
   useEffect(() => {

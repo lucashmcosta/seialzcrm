@@ -3,6 +3,7 @@ import { telephonyV2Enabled } from "../_shared/telephony/feature-flag.ts";
 import {
   escapeXml,
   normalizeE164BR,
+  twilioVoiceIdentity,
   TwilioVoiceAdapter,
 } from "../_shared/telephony/twilio.ts";
 import { resolveContactIngressIdentity } from "../_shared/registry/ingress.ts";
@@ -212,7 +213,7 @@ async function findOrCreateContact(
 
 // deno-lint-ignore no-explicit-any
 function renderAttempt(call: any, number: any, attempt: any): Response {
-  const identity = `user-${attempt.user_id}-org-${call.organization_id}`;
+  const identity = twilioVoiceIdentity(attempt.user_id, call.organization_id);
   const query = `callId=${call.id}&attemptId=${attempt.id}`;
   const routeUrl = escapeXml(`${BASE_URL}/route?${query}`);
   const statusUrl = escapeXml(`${BASE_URL}/status?${query}`);
