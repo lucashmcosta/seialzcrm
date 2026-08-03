@@ -1895,7 +1895,9 @@ export type Database = {
           last_attempt_retryable: boolean
           last_error_code: string | null
           last_failure_class: string | null
+          last_provider_code: string | null
           last_provider_http_status: number | null
+          last_provider_message: string | null
           last_verification_attempt_at: string | null
           mother_name: string | null
           organization_id: string
@@ -1915,7 +1917,9 @@ export type Database = {
           last_attempt_retryable?: boolean
           last_error_code?: string | null
           last_failure_class?: string | null
+          last_provider_code?: string | null
           last_provider_http_status?: number | null
+          last_provider_message?: string | null
           last_verification_attempt_at?: string | null
           mother_name?: string | null
           organization_id: string
@@ -1935,7 +1939,9 @@ export type Database = {
           last_attempt_retryable?: boolean
           last_error_code?: string | null
           last_failure_class?: string | null
+          last_provider_code?: string | null
           last_provider_http_status?: number | null
+          last_provider_message?: string | null
           last_verification_attempt_at?: string | null
           mother_name?: string | null
           organization_id?: string
@@ -8215,6 +8221,8 @@ export type Database = {
           organization_id: string
           outcome: string
           provider: string
+          provider_code: string | null
+          provider_message: string | null
           requested_by_user_id: string | null
         }
         Insert: {
@@ -8229,6 +8237,8 @@ export type Database = {
           organization_id: string
           outcome: string
           provider: string
+          provider_code?: string | null
+          provider_message?: string | null
           requested_by_user_id?: string | null
         }
         Update: {
@@ -8243,6 +8253,8 @@ export type Database = {
           organization_id?: string
           outcome?: string
           provider?: string
+          provider_code?: string | null
+          provider_message?: string | null
           requested_by_user_id?: string | null
         }
         Relationships: [
@@ -11249,6 +11261,7 @@ export type Database = {
         | "verified"
         | "invalid"
         | "error"
+        | "not_found"
       duplicate_check_mode: "none" | "email" | "phone" | "email_or_phone"
       lifecycle_stage: "lead" | "customer" | "inactive"
       onboarding_step:
@@ -11405,6 +11418,7 @@ export const Constants = {
         "verified",
         "invalid",
         "error",
+        "not_found",
       ],
       duplicate_check_mode: ["none", "email", "phone", "email_or_phone"],
       lifecycle_stage: ["lead", "customer", "inactive"],
