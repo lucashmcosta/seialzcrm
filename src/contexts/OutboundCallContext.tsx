@@ -323,8 +323,23 @@ export function TelephonyProvider({ children }: { children: ReactNode }) {
     }
   }, [telephonyV2, organization?.id, userProfile?.id]);
 
+  const terminateActiveTransfer = useCallback(() => {
+    const transfer = transferSessionRef.current;
+    transferSessionRef.current = null;
+    if (
+      !transfer ||
+      !organization?.id ||
+      ['completed', 'canceled', 'failed'].includes(transfer.state)
+    ) return;
+    void supabase.functions.invoke('telephony-transfer-control', {
+      headers: { 'x-organization-id': organization.id },
+      body: { transferId: transfer.id, action: 'end_call' },
+    });
+  }, [organization?.id]);
+
   // Cleanup call state only (keep device)
   const cleanupCall = useCallback(() => {
+    terminateActiveTransfer();
     clearStateTimeout();
     unsubscribeFromCallStatus();
     if (realtimeCleanupTimeoutRef.current) {
@@ -363,13 +378,14 @@ export function TelephonyProvider({ children }: { children: ReactNode }) {
     numberSelectionRef.current = null;
     setNumberSelection(null);
     void updatePresence(null);
-  }, [isDeviceReady, clearStateTimeout, unsubscribeFromCallStatus, updatePresence]);
+  }, [isDeviceReady, clearStateTimeout, unsubscribeFromCallStatus, updatePresence, terminateActiveTransfer]);
 
   // Keep ref in sync so realtime subscription can call cleanupCall without a circular dep
   cleanupCallRef.current = cleanupCall;
 
   // Full cleanup (including device)
   const fullCleanup = useCallback(() => {
+    terminateActiveTransfer();
     deviceRegisteredRef.current = false;
     clearStateTimeout();
     unsubscribeFromCallStatus();
@@ -433,7 +449,7 @@ export function TelephonyProvider({ children }: { children: ReactNode }) {
     isInitializingRef.current = false;
     callFinalizedRef.current = false;
     lastProcessedStatusRef.current = null;
-  }, [clearStateTimeout, unsubscribeFromCallStatus, removePresence]);
+  }, [clearStateTimeout, unsubscribeFromCallStatus, removePresence, terminateActiveTransfer]);
 
   // Update call record in database
   const updateCallRecord = useCallback(async (callStatus: string, endedAt?: Date) => {
@@ -1003,11 +1019,21 @@ export function TelephonyProvider({ children }: { children: ReactNode }) {
       const current = transferSessionRef.current;
       if (!current || ['completed', 'canceled', 'failed'].includes(current.state)) return;
       if (current.state === 'handoff_pending') {
-        setTransferSession({ ...current, state: 'completed' });
+        applyTransferUpdate({ state: 'completed' });
+      } else if (current.state === 'with_customer') {
+        applyTransferUpdate({ state: 'canceled' });
+        suppressCallFinalizationRef.current = false;
+        void updatePresence(null);
+        if (organization?.id) {
+          void supabase.functions.invoke('telephony-transfer-control', {
+            headers: { 'x-organization-id': organization.id },
+            body: { transferId: current.id, action: 'end_call' },
+          });
+        }
       }
     });
     return call;
-  }, []);
+  }, [applyTransferUpdate, organization?.id, updatePresence]);
 
   const loadTransferTargets = useCallback(async () => {
     if (!organization?.id || !callIdRef.current || !canTransferCalls) return;
@@ -1097,22 +1123,27 @@ export function TelephonyProvider({ children }: { children: ReactNode }) {
       return;
     }
     // Clean up any existing call first (but keep device)
-    if (isOnCall) {
+    const replacingActiveCall = isOnCall;
+    if (replacingActiveCall) {
       cleanupCall();
     }
 
     setCallInfo(params);
     pendingCallRef.current = params;
 
-    // If device is ready, start call immediately
-    if (isDeviceReady && deviceRef.current) {
-      console.log('Device ready, starting call immediately');
-      makeCall();
-    } else {
-      // Device not ready, initialize it first
-      console.log('Device not ready, initializing...');
-      initializeDevice();
-    }
+    const connect = () => {
+      if (isDeviceReady && deviceRef.current) {
+        console.log('Device ready, starting call immediately');
+        makeCall();
+      } else {
+        console.log('Device not ready, initializing...');
+        initializeDevice();
+      }
+    };
+    // Twilio closes the previous browser leg asynchronously. Give it a short
+    // window before opening a replacement call on the same Device.
+    if (replacingActiveCall) window.setTimeout(connect, 350);
+    else connect();
   }, [telephonyV2, permissions.canMakeCalls, isOnCall, cleanupCall, isDeviceReady, makeCall, initializeDevice]);
 
   const startCall = useCallback((params: CallInfo) => {
@@ -1182,6 +1213,9 @@ export function TelephonyProvider({ children }: { children: ReactNode }) {
 
     const transfer = transferSessionRef.current;
     if (transfer && organization?.id) {
+      const endingTransfer = { ...transfer, state: 'canceled' as CallTransferState };
+      transferSessionRef.current = endingTransfer;
+      setTransferSession(endingTransfer);
       void supabase.functions.invoke('telephony-transfer-control', {
         headers: { 'x-organization-id': organization.id },
         body: { transferId: transfer.id, action: 'end_call' },

@@ -3,7 +3,9 @@ import { validateServiceRoleAuth } from "../_shared/auth.ts";
 import { escapeXml } from "../_shared/telephony/twilio.ts";
 import {
   deleteTwilioQueue,
+  twilioAccountUrl,
   twilioApiContext,
+  twilioRequest,
   updateTwilioCall,
 } from "../_shared/telephony/twilio-api.ts";
 
@@ -30,6 +32,7 @@ Deno.serve(async (req) => {
       "consult_ringing",
       "returning_to_customer",
       "handoff_pending",
+      "with_customer",
     ]).lt("updated_at", cutoff)
     .limit(100);
   if (error) return json({ error: error.message }, 500);
@@ -51,6 +54,40 @@ Deno.serve(async (req) => {
       const fallbackMessage = number?.fallback_message ||
         "Não foi possível concluir a transferência. Retornaremos em breve.";
       const twilio = await twilioApiContext(admin, transfer.organization_id);
+      if (transfer.state === "with_customer") {
+        const providerCall = await twilioRequest<{ status?: string }>(
+          twilio,
+          twilioAccountUrl(
+            twilio,
+            `Calls/${transfer.customer_call_sid}.json`,
+          ),
+        );
+        if (
+          ["queued", "ringing", "in-progress"].includes(
+            providerCall.status || "",
+          )
+        ) continue;
+        await admin.from("call_transfers").update({
+          state: "canceled",
+          result: "customer_call_ended",
+          completed_at: new Date().toISOString(),
+          updated_at: new Date().toISOString(),
+        }).eq("id", transfer.id).eq("state", "with_customer");
+        await admin.from("calls").update({
+          status: "completed",
+          result: "answered",
+          transfer_status: "canceled",
+          ended_at: new Date().toISOString(),
+        }).eq("id", transfer.call_id);
+        await admin.rpc("release_telephony_transfer_reservations", {
+          _transfer_id: transfer.id,
+        });
+        await deleteTwilioQueue(twilio, transfer.provider_queue_sid).catch(
+          () => undefined,
+        );
+        reconciled += 1;
+        continue;
+      }
       await updateTwilioCall(twilio, transfer.customer_call_sid, {
         twiml: `<Response><Say language="pt-BR">${
           escapeXml(fallbackMessage)
