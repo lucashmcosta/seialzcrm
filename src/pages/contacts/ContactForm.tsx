@@ -537,6 +537,8 @@ export default function ContactForm() {
           verification_provider_version: cpfVerification.providerVersion || null,
           cpf_verified_at: cpfVerification.status === 'verified' ? new Date().toISOString() : null,
           last_error_code: cpfVerification.errorCode || null,
+          last_provider_code: cpfVerification.providerCode || null,
+          last_provider_message: cpfVerification.providerMessage || null,
           updated_at: new Date().toISOString(),
         }, { onConflict: 'contact_id' });
       if (error) throw error;
