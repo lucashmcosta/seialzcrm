@@ -287,17 +287,23 @@ export default function ContactForm() {
     } catch (error: unknown) {
       if (sequence !== cpfLookupSequenceRef.current) return;
       const code = error instanceof Error ? error.message : 'registry_lookup_failed';
-      const invalid = code.includes('invalid_or_not_found') || code.includes('invalid_cpf');
+      const payload = (error as { payload?: { provider_code?: string | null; provider_message?: string | null } }).payload;
+      const notFound = code.includes('not_found');
+      const invalid = code.includes('invalid_cpf') || code === 'invalid_or_not_found';
+      const reason = [payload?.provider_code, payload?.provider_message].filter(Boolean).join(' — ');
       setCpfVerification((current) => ({
         ...current,
-        status: invalid ? 'invalid' : 'error',
-        errorCode: code,
+        status: notFound ? 'not_found' : invalid ? 'invalid' : 'error',
+        errorCode: reason ? `${code} (${reason})` : code,
       }));
       toast.error(
-        invalid
-          ? 'CPF não encontrado ou inválido.'
+        notFound
+          ? `CPF não encontrado na base do provedor.${reason ? ` Motivo do provedor: ${reason}` : ''} O contato pode ser salvo como não verificado.`
+          : invalid
+          ? 'CPF inválido. Confira os dígitos informados.'
           : 'Não foi possível verificar agora. O contato poderá ser salvo como não verificado.',
       );
+
     } finally {
       if (cpfInFlightRef.current === cpf) cpfInFlightRef.current = '';
       if (sequence === cpfLookupSequenceRef.current) setCpfLookupLoading(false);
