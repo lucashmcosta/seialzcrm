@@ -203,6 +203,8 @@ Deno.serve(async (req) => {
     http_status: result.status || null,
     duration_ms: durationMs,
     error_code: result.ok ? null : result.error,
+    provider_code: result.ok ? null : result.provider_code ?? null,
+    provider_message: result.ok ? null : result.provider_message ?? null,
   });
 
   if (!result.ok) {
@@ -213,13 +215,19 @@ Deno.serve(async (req) => {
         contact_id: contactId,
         cpf_verification_status: existingCpfVerification?.status === "verified"
           ? "verified"
-          : failureClass === "not_found" ? "invalid" : "error",
+          : failureClass === "not_found"
+          ? "not_found"
+          : failureClass === "invalid"
+          ? "invalid"
+          : "error",
         verification_provider: result.provider,
         verification_provider_version: result.version,
         cpf_verified_at: existingCpfVerification?.status === "verified"
           ? existingCpfVerification.verifiedAt
           : null,
         last_error_code: result.error,
+        last_provider_code: result.provider_code ?? null,
+        last_provider_message: result.provider_message ?? null,
         last_verification_attempt_at: new Date().toISOString(),
         last_failure_class: failureClass,
         last_provider_http_status: result.status || null,
@@ -228,7 +236,7 @@ Deno.serve(async (req) => {
       }, { onConflict: "contact_id" });
       if (persistError) return json({ error: "cpf_verification_persist_failed" }, 500);
     }
-    const status = result.error === "invalid_or_not_found" || result.error === "not_found"
+    const status = ["invalid_or_not_found", "not_found", "invalid_cpf_format"].includes(result.error)
       ? 422
       : result.error === "provider_not_configured"
       ? 503
@@ -239,6 +247,8 @@ Deno.serve(async (req) => {
       provider: result.provider,
       error: result.error,
       retryable: result.retryable,
+      provider_code: result.provider_code ?? null,
+      provider_message: result.provider_message ?? null,
     }, status);
   }
 
