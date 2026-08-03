@@ -14,6 +14,16 @@ export interface TwilioVoiceConfig {
   apiKeySecret?: string;
 }
 
+export function twilioVoiceIdentity(userId: string, organizationId: string): string {
+  const user = userId.replace(/[^A-Za-z0-9]/g, "");
+  const organization = organizationId.replace(/[^A-Za-z0-9]/g, "");
+  const identity = `user_${user}_org_${organization}`;
+  if (!user || !organization || identity.length > 121) {
+    throw new Error("invalid_twilio_voice_identity");
+  }
+  return identity;
+}
+
 function base64Url(input: string | Uint8Array): string {
   const bytes = typeof input === "string"
     ? new TextEncoder().encode(input)
@@ -199,7 +209,7 @@ export class TwilioVoiceAdapter implements VoiceProviderAdapter {
     config = await ensureApiKey(this.admin, input.organizationId, config);
     const now = Math.floor(Date.now() / 1000);
     const expiresAt = now + 3600;
-    const identity = `user-${input.userId}-org-${input.organizationId}`;
+    const identity = twilioVoiceIdentity(input.userId, input.organizationId);
     const header = { typ: "JWT", alg: "HS256", cty: "twilio-fpa;v=1" };
     const payload = {
       jti: `${config.apiKeySid}-${crypto.randomUUID()}`,

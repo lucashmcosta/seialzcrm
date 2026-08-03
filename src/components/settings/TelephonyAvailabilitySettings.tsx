@@ -3,13 +3,17 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Button } from '@/components/ui/button';
 import { Switch } from '@/components/ui/switch';
 import { Label } from '@/components/ui/label';
+import { Badge } from '@/components/ui/badge';
+import { Alert, AlertDescription } from '@/components/ui/alert';
 import { PhoneCall, Moon } from '@phosphor-icons/react';
 import { useOrganization } from '@/hooks/useOrganization';
 import { telephonySupabase } from '@/integrations/supabase/telephonyClient';
 import { toast } from 'sonner';
+import { useOutboundCall } from '@/contexts/OutboundCallContext';
 
 export function TelephonyAvailabilitySettings() {
   const { organization, userProfile } = useOrganization();
+  const { isDeviceReady, errorMessage } = useOutboundCall();
   const [receiveCalls, setReceiveCalls] = useState(true);
   const [dndUntil, setDndUntil] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
@@ -48,10 +52,18 @@ export function TelephonyAvailabilitySettings() {
   return (
     <Card>
       <CardHeader>
-        <CardTitle className="flex items-center gap-2"><PhoneCall className="h-5 w-5" /> Minha disponibilidade</CardTitle>
+        <div className="flex items-start justify-between gap-3">
+          <CardTitle className="flex items-center gap-2"><PhoneCall className="h-5 w-5" /> Minha disponibilidade</CardTitle>
+          <Badge variant={isDeviceReady ? 'default' : 'destructive'}>{isDeviceReady ? 'Navegador pronto' : 'Telefonia offline'}</Badge>
+        </div>
         <CardDescription>O roteamento também exige que este navegador esteja conectado recentemente.</CardDescription>
       </CardHeader>
       <CardContent className="space-y-4">
+        {!isDeviceReady && (
+          <Alert variant="destructive">
+            <AlertDescription>{errorMessage || 'Este navegador não está registrado para receber chamadas. Atualize a página.'}</AlertDescription>
+          </Alert>
+        )}
         <div className="flex items-center justify-between">
           <Label>Participar das chamadas recebidas</Label>
           <Switch checked={receiveCalls} disabled={saving} onCheckedChange={(value) => void save(value, dndUntil)} />
