@@ -897,6 +897,45 @@ export function TelephonyProvider({ children }: { children: ReactNode }) {
     };
   }, [isAdminRoute, organization?.id, userProfile?.id, hasVoiceIntegration, voiceLoading, telephonyFlagLoading, permissionsLoading, isVoiceLeader, canUseVoiceDevice]);
 
+  const applyTransferUpdate = useCallback((next: { state: CallTransferState; failure_reason?: string | null }) => {
+    const current = transferSessionRef.current;
+    if (!current) return;
+    const stateChanged = current.state !== next.state;
+    const updated: CallTransferSession = {
+      ...current,
+      state: next.state,
+      error: next.failure_reason || null,
+    };
+    transferSessionRef.current = updated;
+    setTransferSession(updated);
+    if (!stateChanged) return;
+    if (next.state === 'completed') {
+      suppressCallFinalizationRef.current = false;
+      void updatePresence(null);
+      if (transferOriginRef.current === 'incoming') {
+        incomingCallRef.current = null;
+        setActiveIncomingCall(null);
+        setActiveIncomingCallInfo(null);
+      } else {
+        setStatus('ended');
+      }
+      setTimeout(() => cleanupCallRef.current?.(), 1200);
+    } else if (next.state === 'canceled') {
+      suppressCallFinalizationRef.current = false;
+      setTimeout(() => {
+        setTransferSession(null);
+        transferSessionRef.current = null;
+        if (transferChannelRef.current) {
+          supabase.removeChannel(transferChannelRef.current);
+          transferChannelRef.current = null;
+        }
+      }, 800);
+    } else if (next.state === 'failed') {
+      suppressCallFinalizationRef.current = false;
+      setErrorMessage('A transferência falhou');
+    }
+  }, [updatePresence]);
+
   const subscribeToTransfer = useCallback((transferId: string) => {
     if (transferChannelRef.current) supabase.removeChannel(transferChannelRef.current);
     transferChannelRef.current = supabase.channel(`call-transfer-${transferId}`)
@@ -904,38 +943,42 @@ export function TelephonyProvider({ children }: { children: ReactNode }) {
         event: 'UPDATE', schema: 'public', table: 'call_transfers', filter: `id=eq.${transferId}`,
       }, (payload) => {
         const next = payload.new as { state: CallTransferState; failure_reason?: string | null };
-        setTransferSession((current) => current ? {
-          ...current,
-          state: next.state as CallTransferState,
-          error: next.failure_reason || null,
-        } : current);
-        if (next.state === 'completed') {
-          suppressCallFinalizationRef.current = false;
-          void updatePresence(null);
-          if (transferOriginRef.current === 'incoming') {
-            incomingCallRef.current = null;
-            setActiveIncomingCall(null);
-            setActiveIncomingCallInfo(null);
-          } else {
-            setStatus('ended');
-          }
-          setTimeout(() => cleanupCallRef.current?.(), 1200);
-        } else if (next.state === 'canceled') {
-          suppressCallFinalizationRef.current = false;
-          setTimeout(() => {
-            setTransferSession(null);
-            transferSessionRef.current = null;
-            if (transferChannelRef.current) {
-              supabase.removeChannel(transferChannelRef.current);
-              transferChannelRef.current = null;
-            }
-          }, 800);
-        } else if (next.state === 'failed') {
-          suppressCallFinalizationRef.current = false;
-          setErrorMessage('A transferência falhou');
-        }
+        applyTransferUpdate(next);
       }).subscribe();
-  }, [updatePresence]);
+  }, [applyTransferUpdate]);
+
+  // Realtime is the low-latency path, while polling guarantees that a dropped
+  // publication event cannot leave the modal stuck in a transitional state.
+  useEffect(() => {
+    const transferId = transferSession?.id;
+    if (!transferId) return;
+    let disposed = false;
+    let loading = false;
+    const refresh = async () => {
+      if (disposed || loading) return;
+      loading = true;
+      try {
+        const { data, error } = await telephonySupabase.from('call_transfers')
+          .select('state, failure_reason')
+          .eq('id', transferId)
+          .maybeSingle();
+        if (!disposed && !error && data?.state) {
+          applyTransferUpdate({
+            state: data.state as CallTransferState,
+            failure_reason: data.failure_reason,
+          });
+        }
+      } finally {
+        loading = false;
+      }
+    };
+    void refresh();
+    const timer = window.setInterval(() => void refresh(), 1000);
+    return () => {
+      disposed = true;
+      window.clearInterval(timer);
+    };
+  }, [transferSession?.id, applyTransferUpdate]);
 
   const connectTransferCall = useCallback(async (params: Record<string, string>) => {
     if (!deviceRef.current) throw new Error('Dispositivo de telefonia indisponível');
@@ -1015,6 +1058,7 @@ export function TelephonyProvider({ children }: { children: ReactNode }) {
       suppressCallFinalizationRef.current = false;
       toast.error(error instanceof Error ? error.message : 'Erro ao iniciar transferência');
       setTransferSession(null);
+      transferSessionRef.current = null;
     } finally {
       setTransferLoading(false);
     }
@@ -1031,7 +1075,9 @@ export function TelephonyProvider({ children }: { children: ReactNode }) {
         body: { transferId: current.id, action },
       });
       if (error || data?.error) throw new Error(data?.error || 'Não foi possível controlar a transferência');
-      setTransferSession((session) => session ? { ...session, state: data.state as CallTransferState } : session);
+      const updated = { ...current, state: data.state as CallTransferState, error: null };
+      transferSessionRef.current = updated;
+      setTransferSession(updated);
       if (data.connectParams) await connectTransferCall(data.connectParams as Record<string, string>);
       if (action === 'complete') toast.success(`Transferindo para ${current.targetName}`);
       if (action === 'return_to_customer') toast.success('Voltando para o cliente');
