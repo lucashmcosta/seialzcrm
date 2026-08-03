@@ -201,7 +201,7 @@ export default function ContactForm() {
 
       const { data: identity } = await supabase
         .from('contact_identity_profiles')
-        .select('cpf_verification_status,cpf_registration_status,birth_date,sex,mother_name,verification_provider,verification_provider_version,last_error_code')
+        .select('cpf_verification_status,cpf_registration_status,birth_date,sex,mother_name,verification_provider,verification_provider_version,last_error_code,last_provider_code,last_provider_message')
         .eq('contact_id', data.id)
         .maybeSingle();
       if (identity) {
@@ -214,6 +214,8 @@ export default function ContactForm() {
           provider: identity.verification_provider || '',
           providerVersion: identity.verification_provider_version || '',
           errorCode: identity.last_error_code || '',
+          providerCode: identity.last_provider_code || '',
+          providerMessage: identity.last_provider_message || '',
         });
         lastCpfLookupRef.current = digits(data.cpf);
       }
