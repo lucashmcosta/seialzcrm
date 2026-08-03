@@ -238,6 +238,8 @@ export default function ContactForm() {
         provider: '',
         providerVersion: '',
         errorCode: '',
+        providerCode: '',
+        providerMessage: '',
       }));
     }
     if (normalized.length === 11) {
@@ -251,7 +253,13 @@ export default function ContactForm() {
     if (!cpf) return;
     if (cpfInFlightRef.current === cpf) return;
     if (!isValidCpf(cpf)) {
-      setCpfVerification((current) => ({ ...current, status: 'invalid', errorCode: 'invalid_cpf' }));
+      setCpfVerification((current) => ({
+        ...current,
+        status: 'invalid',
+        errorCode: 'invalid_cpf',
+        providerCode: '',
+        providerMessage: '',
+      }));
       toast.error('CPF inválido. Confira os dígitos informados.');
       return;
     }
@@ -261,7 +269,13 @@ export default function ContactForm() {
     if (sequence !== cpfLookupSequenceRef.current) return;
     cpfInFlightRef.current = cpf;
     setCpfLookupLoading(true);
-    setCpfVerification((current) => ({ ...current, status: 'pending', errorCode: '' }));
+    setCpfVerification((current) => ({
+      ...current,
+      status: 'pending',
+      errorCode: '',
+      providerCode: '',
+      providerMessage: '',
+    }));
     try {
       const result = await lookup<{
         cpf?: string;
@@ -288,21 +302,30 @@ export default function ContactForm() {
         provider: result.provider || 'cpf-brasil',
         providerVersion: result.provider_version || '2.0',
         errorCode: '',
+        providerCode: '',
+        providerMessage: '',
       }));
       toast.success('CPF verificado e dados cadastrais preenchidos.');
     } catch (error: unknown) {
       if (sequence !== cpfLookupSequenceRef.current) return;
       const code = error instanceof Error ? error.message : 'registry_lookup_failed';
-      const invalid = code.includes('invalid_or_not_found') || code.includes('invalid_cpf');
+      const payload = (error as { payload?: { provider_code?: string | null; provider_message?: string | null } }).payload;
+      const notFound = code.includes('not_found') || code.includes('invalid_or_not_found');
+      const invalidFormat = code.includes('invalid_cpf');
       setCpfVerification((current) => ({
         ...current,
-        status: invalid ? 'invalid' : 'error',
+        status: invalidFormat ? 'invalid' : notFound ? 'not_found' : 'error',
         errorCode: code,
+        providerCode: payload?.provider_code || '',
+        providerMessage: payload?.provider_message || '',
       }));
+      const detail = [payload?.provider_code, payload?.provider_message].filter(Boolean).join(' — ');
       toast.error(
-        invalid
-          ? 'CPF não encontrado ou inválido.'
-          : 'Não foi possível verificar agora. O contato poderá ser salvo como não verificado.',
+        invalidFormat
+          ? 'CPF inválido. Confira os dígitos informados.'
+          : notFound
+          ? `CPF não encontrado na base do provedor.${detail ? ` (${detail})` : ''}`
+          : `Consulta indisponível agora. O contato poderá ser salvo como não verificado.${detail ? ` (${detail})` : ''}`,
       );
     } finally {
       if (cpfInFlightRef.current === cpf) cpfInFlightRef.current = '';
