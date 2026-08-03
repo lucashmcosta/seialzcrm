@@ -133,7 +133,7 @@ export function PhoneNumberSettings() {
         ring_users: phone.ring_users || [],
         ring_timeout_seconds: phone.ring_timeout_seconds || 30,
         inbound_settings: (phone.inbound_settings as unknown as InboundSettings) || { auto_create_contact: true, default_lifecycle_stage: 'lead' },
-        number_type: phone.number_type || (phone.assigned_user_id ? 'user' : 'company'),
+        number_type: (phone.number_type as 'company' | 'user') || (phone.assigned_user_id ? 'user' : 'company'),
         assigned_user_id: phone.assigned_user_id,
         is_active: phone.is_active ?? true,
         is_default_outbound: phone.is_default_outbound ?? phone.is_primary ?? false,
