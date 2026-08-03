@@ -5,6 +5,7 @@ export type CpfVerificationStatus =
   | "pending"
   | "verified"
   | "invalid"
+  | "not_found"
   | "error";
 
 export function digits(value: string | null | undefined): string {
