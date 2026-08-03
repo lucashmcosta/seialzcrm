@@ -1427,6 +1427,9 @@ Deno.serve(async (req) => {
   const route = url.pathname.split("/").filter(Boolean).pop() ?? "voice";
   try {
     const params = await paramsOf(req);
+    // Every Twilio callback is signed. Reject an unsigned request before any
+    // route-specific lookup so invalid payloads cannot receive fallback TwiML.
+    if (!req.headers.get("x-twilio-signature")) return empty(403);
     if (route === "voice" || route === "telephony-webhook") {
       return await handleVoice(req, params);
     }
