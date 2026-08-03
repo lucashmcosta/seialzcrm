@@ -80,3 +80,8 @@ verify_jwt = false
 # em código (getUser + user_organizations) para dar mensagens de erro claras.
 [functions.thread-migrate-endpoint-send]
 verify_jwt = false
+
+# Snapshot read-only de saúde operacional consumido pelo Kairos Tech.
+# Auth própria em código via header x-health-token (SERVICE_HEALTH_TOKEN).
+[functions.service-health]
+verify_jwt = false
