@@ -3,8 +3,8 @@ import { telephonyV2Enabled } from "../_shared/telephony/feature-flag.ts";
 import {
   escapeXml,
   normalizeE164BR,
-  twilioVoiceIdentity,
   TwilioVoiceAdapter,
+  twilioVoiceIdentity,
 } from "../_shared/telephony/twilio.ts";
 import { resolveContactIngressIdentity } from "../_shared/registry/ingress.ts";
 import {
@@ -277,7 +277,7 @@ async function nextRecipient(call: any, number: any): Promise<Response> {
     attempt_number: recipient.attempt_number,
     provider: "twilio",
     status: "queued",
-  }).select("id").single();
+  }).select("id, user_id, attempt_number").single();
   if (attemptError || !attempt) {
     console.error("[telephony-webhook] attempt_create_failed", {
       callId: call.id,

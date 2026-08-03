@@ -14,7 +14,13 @@ export interface TwilioVoiceConfig {
   apiKeySecret?: string;
 }
 
-export function twilioVoiceIdentity(userId: string, organizationId: string): string {
+export function twilioVoiceIdentity(
+  userId: string,
+  organizationId: string,
+): string {
+  if (typeof userId !== "string" || typeof organizationId !== "string") {
+    throw new Error("invalid_twilio_voice_identity");
+  }
   const user = userId.replace(/[^A-Za-z0-9]/g, "");
   const organization = organizationId.replace(/[^A-Za-z0-9]/g, "");
   const identity = `user_${user}_org_${organization}`;
