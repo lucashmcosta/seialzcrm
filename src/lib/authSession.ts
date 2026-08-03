@@ -63,3 +63,24 @@ export async function getTwilioAccessToken(body?: Record<string, unknown>): Prom
 
   return data.token as string;
 }
+
+export interface TelephonySession {
+  provider: 'twilio';
+  token: string;
+  identity: string;
+  expiresAt: string;
+}
+
+export async function getTelephonySession(organizationId: string): Promise<TelephonySession | null> {
+  const session = await getVerifiedSession();
+  if (!session) return null;
+  const { data, error } = await supabase.functions.invoke('telephony-session-token', {
+    body: {},
+    headers: { 'x-organization-id': organizationId },
+  });
+  if (error || !data?.token) {
+    if (isInvalidSessionError(error)) await supabase.auth.signOut({ scope: 'local' });
+    throw new Error('Erro ao inicializar a sessão de telefonia');
+  }
+  return data as TelephonySession;
+}

@@ -5,7 +5,7 @@ import { Toaster } from "@/components/ui/toaster";
 import { Toaster as Sonner } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { OutboundCallProvider } from "@/contexts/OutboundCallContext";
+import { TelephonyProvider } from "@/contexts/OutboundCallContext";
 import { ThemeProvider } from "@/contexts/ThemeContext";
 import { AuthProvider, useAuthContext } from "@/contexts/AuthContext";
 import { OrganizationProvider } from "@/contexts/OrganizationContext";
@@ -346,7 +346,7 @@ const App = () => (
       <BrowserRouter>
         <AuthProvider>
         <OrganizationProvider>
-        <OutboundCallProvider>
+        <TelephonyProvider>
         <ThemeProvider>
         <GlobalCallHandler />
         <Suspense fallback={<PageLoader />}>
@@ -741,7 +741,7 @@ const App = () => (
         </Routes>
         </Suspense>
         </ThemeProvider>
-        </OutboundCallProvider>
+        </TelephonyProvider>
         </OrganizationProvider>
         </AuthProvider>
       </BrowserRouter>

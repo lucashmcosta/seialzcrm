@@ -1,5 +1,6 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "npm:@supabase/supabase-js@2";
+import { TwilioVoiceAdapter } from "../_shared/telephony/twilio.ts";
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -105,182 +106,13 @@ serve(async (req) => {
       }
     }
 
-    // Step 1: Get the Twilio Voice integration from admin_integrations
-    const { data: twilioIntegration } = await supabase
-      .from('admin_integrations')
-      .select('id')
-      .eq('slug', 'twilio-voice')
-      .single()
-
-    if (!twilioIntegration) {
-      console.error('Twilio Voice integration not found in admin_integrations')
-      return new Response(
-        JSON.stringify({ error: 'Twilio Voice integration not available' }),
-        { status: 404, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-      )
-    }
-
-    console.log('Found Twilio Voice integration:', twilioIntegration.id)
-
-    // Step 2: Get the organization's integration config for Twilio Voice
-    // Use targetOrgId (validated) instead of userOrg.organization_id
-    const { data: integration, error: integrationError } = await supabase
-      .from('organization_integrations')
-      .select('config_values')
-      .eq('organization_id', targetOrgId)
-      .eq('integration_id', twilioIntegration.id)
-      .eq('is_enabled', true)
-      .maybeSingle()
-
-    if (integrationError) {
-      console.error('Error fetching organization integration:', integrationError)
-      return new Response(
-        JSON.stringify({ error: 'Failed to fetch Twilio configuration' }),
-        { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-      )
-    }
-
-    if (!integration || !integration.config_values) {
-      console.error('Twilio Voice integration not found for org:', targetOrgId)
-      return new Response(
-        JSON.stringify({ error: 'Twilio Voice not configured. Please connect Twilio Voice in Settings > Integrations.' }),
-        { status: 404, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-      )
-    }
-
-    console.log('Found organization integration with config')
-
-    const config = integration.config_values as Record<string, string>
-    const { account_sid, auth_token, twiml_app_sid } = config
-    let { api_key_sid, api_key_secret } = config
-
-    if (!account_sid || !twiml_app_sid) {
-      return new Response(
-        JSON.stringify({ error: 'Twilio configuration incomplete' }),
-        { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-      )
-    }
-
-    // Check if we have API keys, if not, create them
-    if (!api_key_sid || !api_key_secret) {
-      // Create API Key via Twilio
-      const createKeyUrl = `https://api.twilio.com/2010-04-01/Accounts/${account_sid}/Keys.json`
-      
-      const keyResponse = await fetch(createKeyUrl, {
-        method: 'POST',
-        headers: {
-          'Authorization': 'Basic ' + btoa(`${account_sid}:${auth_token}`),
-          'Content-Type': 'application/x-www-form-urlencoded',
-        },
-        body: new URLSearchParams({
-          FriendlyName: `CRM API Key - ${targetOrgId.slice(0, 8)}`
-        }).toString()
-      })
-
-      if (!keyResponse.ok) {
-        const errorText = await keyResponse.text()
-        console.error('Failed to create API Key:', errorText)
-        return new Response(
-          JSON.stringify({ error: 'Failed to create API credentials' }),
-          { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-        )
-      }
-
-      const keyData = await keyResponse.json()
-      api_key_sid = keyData.sid
-      api_key_secret = keyData.secret
-
-      // Save API key to integration config
-      await supabase
-        .from('organization_integrations')
-        .update({
-          config_values: {
-            ...config,
-            api_key_sid: api_key_sid,
-            api_key_secret: api_key_secret,
-          }
-        })
-        .eq('organization_id', targetOrgId)
-        .eq('integration_id', twilioIntegration.id)
-
-      console.log('API Key created and saved:', api_key_sid)
-    }
-
-    // SECURITY: Generate identity with organization ID to isolate calls per org
-    // Format: user-{userId}-org-{orgId}
-    // This ensures calls are ONLY delivered to devices registered for the same org
-    const identity = `user-${userProfile.id}-org-${targetOrgId}`
-    const ttl = 3600 // 1 hour
-
-    const header = {
-      typ: 'JWT',
-      alg: 'HS256',
-      cty: 'twilio-fpa;v=1'
-    }
-
-    const now = Math.floor(Date.now() / 1000)
-    
-    const payload = {
-      jti: `${api_key_sid}-${now}`,
-      iss: api_key_sid,
-      sub: account_sid,
-      exp: now + ttl,
-      grants: {
-        identity: identity,
-        voice: {
-          outgoing: {
-            application_sid: twiml_app_sid
-          },
-          incoming: {
-            allow: true
-          }
-        }
-      }
-    }
-
-    const base64UrlEncode = (obj: object) => {
-      const str = JSON.stringify(obj)
-      const bytes = new TextEncoder().encode(str)
-      return btoa(String.fromCharCode(...bytes))
-        .replace(/\+/g, '-')
-        .replace(/\//g, '_')
-        .replace(/=+$/, '')
-    }
-
-    const headerB64 = base64UrlEncode(header)
-    const payloadB64 = base64UrlEncode(payload)
-    const message = `${headerB64}.${payloadB64}`
-
-    // Create HMAC-SHA256 signature
-    const encoder = new TextEncoder()
-    const keyData = encoder.encode(api_key_secret)
-    const messageData = encoder.encode(message)
-
-    const cryptoKey = await crypto.subtle.importKey(
-      'raw',
-      keyData.buffer as ArrayBuffer,
-      { name: 'HMAC', hash: 'SHA-256' },
-      false,
-      ['sign']
-    )
-    
-    const signature = await crypto.subtle.sign('HMAC', cryptoKey, messageData.buffer as ArrayBuffer)
-    const signatureB64 = btoa(String.fromCharCode(...new Uint8Array(signature)))
-      .replace(/\+/g, '-')
-      .replace(/\//g, '_')
-      .replace(/=+$/, '')
-
-    const accessToken = `${message}.${signatureB64}`
-
-    console.log('Access token generated for identity:', identity)
-
-    return new Response(
-      JSON.stringify({ 
-        token: accessToken,
-        identity: identity,
-      }),
-      { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-    )
+    const voiceSession = await new TwilioVoiceAdapter(supabase).issueSession({
+      organizationId: targetOrgId,
+      userId: userProfile.id,
+    })
+    return new Response(JSON.stringify({ token: voiceSession.token, identity: voiceSession.identity }), {
+      headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+    })
 
   } catch (error: unknown) {
     console.error('Token generation error:', error)

@@ -55,6 +55,17 @@ const PERMISSION_GROUPS: PermissionGroup[] = [
       { key: 'view_all_contacts', label: 'Ver TODOS os Contatos', description: 'Acessa contatos de todos os usuários da organização' },
       { key: 'view_all_opportunities', label: 'Ver TODAS as Oportunidades', description: 'Visualiza o Kanban completo, incluindo oportunidades de outros vendedores' },
       { key: 'view_all_threads', label: 'Ver TODAS as Conversas', description: 'Acessa conversas de WhatsApp de toda a equipe' },
+      { key: 'can_view_all_calls', label: 'Ver TODAS as Chamadas', description: 'Acessa o histórico telefônico de toda a equipe' },
+    ],
+  },
+  {
+    title: 'Telefonia',
+    description: 'Uso e administração das chamadas do CRM',
+    icon: Shield,
+    permissions: [
+      { key: 'can_make_calls', label: 'Realizar Chamadas', description: 'Permite originar chamadas pelos números autorizados' },
+      { key: 'can_receive_calls', label: 'Receber Chamadas', description: 'Permite participar do roteamento dos números autorizados' },
+      { key: 'can_manage_telephony', label: 'Gerenciar Telefonia', description: 'Configura números, destinatários, horários e fallback' },
     ],
   },
   {
