@@ -1,8 +1,8 @@
 import {
   escapeXml,
   normalizeE164BR,
-  twilioVoiceIdentity,
   TwilioVoiceAdapter,
+  twilioVoiceIdentity,
 } from "./twilio.ts";
 
 function assertEquals(actual: unknown, expected: unknown): void {
@@ -15,7 +15,9 @@ function assertThrows(run: () => unknown, expectedMessage: string): void {
   try {
     run();
   } catch (error) {
-    if (error instanceof Error && error.message.includes(expectedMessage)) return;
+    if (error instanceof Error && error.message.includes(expectedMessage)) {
+      return;
+    }
     throw error;
   }
   throw new Error("Expected function to throw");
@@ -61,6 +63,17 @@ Deno.test("twilioVoiceIdentity removes UUID separators", () => {
 Deno.test("twilioVoiceIdentity rejects an empty component", () => {
   assertThrows(
     () => twilioVoiceIdentity("---", "b246ef6f-6242-4011-a112-6d8783d2896a"),
+    "invalid_twilio_voice_identity",
+  );
+});
+
+Deno.test("twilioVoiceIdentity rejects a missing runtime component", () => {
+  assertThrows(
+    () =>
+      twilioVoiceIdentity(
+        undefined as unknown as string,
+        "b246ef6f-6242-4011-a112-6d8783d2896a",
+      ),
     "invalid_twilio_voice_identity",
   );
 });
