@@ -191,6 +191,9 @@ Deno.serve(async (req) => {
   const result = await lookup(kind, value);
   const durationMs = Date.now() - started;
 
+  const providerCode = result.ok ? null : (result.providerCode ?? null);
+  const providerMessage = result.ok ? null : (result.providerMessage ?? null);
+
   await auth.admin.from("registry_lookup_audit").insert({
     organization_id: organizationId,
     requested_by_user_id: auth.userId,
@@ -202,6 +205,8 @@ Deno.serve(async (req) => {
     http_status: result.status || null,
     duration_ms: durationMs,
     error_code: result.ok ? null : result.error,
+    provider_code: providerCode,
+    provider_message: providerMessage,
   });
 
   if (!result.ok) {
@@ -212,13 +217,15 @@ Deno.serve(async (req) => {
         contact_id: contactId,
         cpf_verification_status: existingCpfVerification?.status === "verified"
           ? "verified"
-          : failureClass === "not_found" ? "invalid" : "error",
+          : failureClass === "not_found" ? "not_found" : "error",
         verification_provider: result.provider,
         verification_provider_version: result.version,
         cpf_verified_at: existingCpfVerification?.status === "verified"
           ? existingCpfVerification.verifiedAt
           : null,
         last_error_code: result.error,
+        last_provider_code: providerCode,
+        last_provider_message: providerMessage,
         last_verification_attempt_at: new Date().toISOString(),
         last_failure_class: failureClass,
         last_provider_http_status: result.status || null,
@@ -238,8 +245,11 @@ Deno.serve(async (req) => {
       provider: result.provider,
       error: result.error,
       retryable: result.retryable,
+      provider_code: providerCode,
+      provider_message: providerMessage,
     }, status);
   }
+
 
   if (kind !== "cpf") {
     const ttlMs = kind === "cep" ? 30 * 24 * 60 * 60 * 1000 : 24 * 60 * 60 * 1000;
