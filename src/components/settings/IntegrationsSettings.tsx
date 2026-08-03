@@ -516,7 +516,7 @@ export function IntegrationsSettings() {
         )}
 
         {/* Phone Number Settings */}
-        {orgIntegrations?.some(oi => oi.is_enabled && oi.integration?.category === 'telephony') && (
+        {orgIntegrations?.some(oi => oi.integration?.category === 'telephony') && (
           <>
             <TelephonyAvailabilitySettings />
             {canManagePhoneNumbers && <PhoneNumberSettings />}
