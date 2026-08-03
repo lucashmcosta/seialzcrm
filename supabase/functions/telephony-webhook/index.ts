@@ -293,7 +293,26 @@ async function nextRecipient(call: any, number: any): Promise<Response> {
     return await fallback(call, number);
   }
 
-  return renderAttempt(call, number, attempt);
+  try {
+    return renderAttempt(call, number, attempt);
+  } catch (error) {
+    console.error("[telephony-webhook] attempt_render_failed", {
+      callId: call.id,
+      attemptId: attempt.id,
+      userId: attempt.user_id,
+      message: error instanceof Error ? error.message : String(error),
+    });
+    await admin.from("call_attempts").update({
+      status: "failed",
+      ended_at: new Date().toISOString(),
+      failure_reason: "twiml_render_failed",
+    }).eq("id", attempt.id).eq("call_id", call.id);
+    await admin.from("telephony_presence").update({ active_call_id: null })
+      .eq("organization_id", call.organization_id)
+      .eq("user_id", attempt.user_id)
+      .eq("active_call_id", call.id);
+    return await fallback(call, number);
+  }
 }
 
 async function handleVoice(
