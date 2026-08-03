@@ -643,6 +643,8 @@ Deno.serve(async (req) => {
       http_status: result.status || null,
       duration_ms: Date.now() - started,
       error_code: result.ok ? null : result.error,
+      provider_code: result.ok ? null : result.provider_code ?? null,
+      provider_message: result.ok ? null : result.provider_message ?? null,
     });
 
     processed += 1;
