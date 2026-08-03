@@ -209,7 +209,9 @@ export function normalizeCpfBrasilResponse(
   if (status !== 200 || json?.success !== true || !data) {
     const documentedCode = text(json?.code)?.toUpperCase() ?? "";
     const error = CPF_BRASIL_ERROR_CODES[documentedCode] ??
-      (status === 400 || status === 404 || status === 422
+      (status === 404
+        ? "not_found"
+        : status === 400 || status === 422
         ? "invalid_or_not_found"
         : status === 401 || status === 403
         ? "provider_auth_error"
@@ -224,8 +226,11 @@ export function normalizeCpfBrasilResponse(
       status,
       error,
       retryable: status >= 500 || status === 0,
+      providerCode: documentedCode || null,
+      providerMessage: sanitizeProviderMessage(json?.message ?? json?.error),
     };
   }
+
 
   return {
     ok: true,
