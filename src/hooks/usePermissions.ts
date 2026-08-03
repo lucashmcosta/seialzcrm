@@ -20,6 +20,10 @@ export interface Permissions {
   viewAllThreads: boolean;
   manageAssignments: boolean;
   roundRobinRecipient: boolean;
+  canMakeCalls: boolean;
+  canReceiveCalls: boolean;
+  canViewAllCalls: boolean;
+  canManageTelephony: boolean;
 }
 
 const defaultPermissions: Permissions = {
@@ -38,6 +42,10 @@ const defaultPermissions: Permissions = {
   viewAllThreads: false,
   manageAssignments: false,
   roundRobinRecipient: false,
+  canMakeCalls: false,
+  canReceiveCalls: false,
+  canViewAllCalls: false,
+  canManageTelephony: false,
 };
 
 export function usePermissions() {
@@ -85,6 +93,10 @@ export function usePermissions() {
         viewAllThreads: perms.view_all_threads || false,
         manageAssignments: perms.manage_assignments || false,
         roundRobinRecipient: perms.round_robin_recipient || false,
+        canMakeCalls: perms.can_make_calls || false,
+        canReceiveCalls: perms.can_receive_calls || false,
+        canViewAllCalls: perms.can_view_all_calls || false,
+        canManageTelephony: perms.can_manage_telephony || false,
       };
     },
   });

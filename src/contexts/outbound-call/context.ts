@@ -14,7 +14,7 @@ export const OutboundCallContext = createContext<OutboundCallContextType | undef
 export function useOutboundCall() {
   const context = useContext(OutboundCallContext);
   if (context === undefined) {
-    throw new Error('useOutboundCall must be used within an OutboundCallProvider');
+    throw new Error('useOutboundCall must be used within a TelephonyProvider');
   }
   return context;
 }

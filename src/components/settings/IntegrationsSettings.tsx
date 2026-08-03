@@ -19,6 +19,7 @@ import {
 import { IntegrationConnectDialog } from './IntegrationConnectDialog';
 import { IntegrationDetailDialog } from './IntegrationDetailDialog';
 import { PhoneNumberSettings } from './PhoneNumberSettings';
+import { TelephonyAvailabilitySettings } from './TelephonyAvailabilitySettings';
 import { KommoMigrationDialog } from './KommoMigrationDialog';
 import { MetaLeadAdsDialog } from '@/components/integrations/meta-lead-ads/MetaLeadAdsDialog';
 import { MetaCapiDialog } from '@/components/integrations/meta-capi/MetaCapiDialog';
@@ -28,6 +29,7 @@ import { EvolutionWhatsAppDialog } from '@/components/integrations/evolution-wha
 import { AIProviderCard } from './AIProviderCard';
 import { useAIProviders } from '@/hooks/useAIProviders';
 import { usePermissions } from '@/hooks/usePermissions';
+import { useTelephonyV2Flag } from '@/hooks/useTelephonyV2Flag';
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 
@@ -68,7 +70,9 @@ export function IntegrationsSettings() {
   const { t } = useTranslation(locale as any);
   const queryClient = useQueryClient();
   const { permissions } = usePermissions();
+  const { enabled: telephonyV2 } = useTelephonyV2Flag(organization?.id);
   const canManageAI = permissions.canManageIntegrations;
+  const canManagePhoneNumbers = telephonyV2 ? permissions.canManageTelephony : permissions.canManageIntegrations;
   const { data: aiProviderMap = {} } = useAIProviders(organization?.id);
   const [selectedIntegration, setSelectedIntegration] = useState<any>(null);
   const [connectDialogOpen, setConnectDialogOpen] = useState(false);
@@ -513,7 +517,10 @@ export function IntegrationsSettings() {
 
         {/* Phone Number Settings */}
         {orgIntegrations?.some(oi => oi.is_enabled && oi.integration?.category === 'telephony') && (
-          <PhoneNumberSettings />
+          <>
+            <TelephonyAvailabilitySettings />
+            {canManagePhoneNumbers && <PhoneNumberSettings />}
+          </>
         )}
       </div>
 

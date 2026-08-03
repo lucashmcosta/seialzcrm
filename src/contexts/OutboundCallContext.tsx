@@ -2,19 +2,27 @@ import React, { useState, useRef, useCallback, useEffect, ReactNode } from 'reac
 import { useLocation } from 'react-router-dom';
 import type { Device as TwilioDevice, Call as TwilioCall } from '@twilio/voice-sdk';
 import { supabase } from '@/integrations/supabase/client';
+import { telephonySupabase } from '@/integrations/supabase/telephonyClient';
 import { toast } from 'sonner';
-import { getTwilioAccessToken, getVerifiedSession } from '@/lib/authSession';
+import { getTelephonySession, getTwilioAccessToken, getVerifiedSession } from '@/lib/authSession';
+import { useOrganization } from '@/hooks/useOrganization';
+import { useTelephonyV2Flag } from '@/hooks/useTelephonyV2Flag';
+import { usePermissions } from '@/hooks/usePermissions';
 
 import { OutboundCallContext } from './outbound-call/context';
-import type { CallInfo, CallStatus, OutboundCallContextType, TokenCache } from './outbound-call/types';
+import type { CallInfo, CallStatus, IncomingCallInfo, OutboundCallContextType, TokenCache } from './outbound-call/types';
 
 // Re-export public API so existing import paths
 // (`@/contexts/OutboundCallContext`) keep working unchanged.
 export { useOutboundCall } from './outbound-call/context';
 export type { CallStatus, CallInfo } from './outbound-call/types';
 
-export function OutboundCallProvider({ children }: { children: ReactNode }) {
+export function TelephonyProvider({ children }: { children: ReactNode }) {
   const location = useLocation();
+  const { organization, userProfile } = useOrganization();
+  const { permissions, loading: permissionsLoading } = usePermissions();
+  const { enabled: telephonyV2, loading: telephonyFlagLoading } = useTelephonyV2Flag(organization?.id);
+  const [isVoiceLeader, setIsVoiceLeader] = useState(false);
   const [hasVoiceIntegration, setHasVoiceIntegration] = useState(false);
   const [voiceLoading, setVoiceLoading] = useState(true);
   const [status, setStatus] = useState<CallStatus>('idle');
@@ -25,6 +33,10 @@ export function OutboundCallProvider({ children }: { children: ReactNode }) {
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [isMinimized, setIsMinimized] = useState(false);
   const [isDeviceReady, setIsDeviceReady] = useState(false);
+  const [incomingCallInfo, setIncomingCallInfo] = useState<IncomingCallInfo | null>(null);
+  const [activeIncomingCallInfo, setActiveIncomingCallInfo] = useState<IncomingCallInfo | null>(null);
+  const [activeIncomingCall, setActiveIncomingCall] = useState<TwilioCall | null>(null);
+  const [incomingMuted, setIncomingMuted] = useState(false);
 
   // SECURITY: Never initialize in admin routes
   const isAdminRoute = location.pathname.startsWith('/admin');
@@ -47,8 +59,49 @@ export function OutboundCallProvider({ children }: { children: ReactNode }) {
   const initTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const realtimeCleanupTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const cleanupCallRef = useRef<(() => void) | null>(null);
+  const incomingCallRef = useRef<TwilioCall | null>(null);
+  const presenceTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const presenceActiveCallRef = useRef<string | null>(null);
+  // A fresh ID per mounted tab avoids duplicated tabs sharing the same lease.
+  const presenceSessionRef = useRef<string>(crypto.randomUUID());
 
   const isOnCall = status !== 'idle' && status !== 'failed' && status !== 'ended';
+  const isOnIncomingCall = activeIncomingCall !== null;
+  const canUseVoiceDevice = !telephonyV2 || permissions.canMakeCalls || permissions.canReceiveCalls;
+
+  useEffect(() => {
+    if (!telephonyV2) {
+      setIsVoiceLeader(true);
+      return;
+    }
+    if (!organization?.id || isAdminRoute) {
+      setIsVoiceLeader(false);
+      return;
+    }
+    const key = `__seialz_voice_leader_${organization.id}`;
+    const tabId = presenceSessionRef.current;
+    const claim = () => {
+      const now = Date.now();
+      let current: { tabId?: string; expiresAt?: number } = {};
+      try { current = JSON.parse(window.localStorage.getItem(key) || '{}'); } catch { /* Ignore a malformed stale lease. */ }
+      if (!current.tabId || current.tabId === tabId || Number(current.expiresAt) <= now) {
+        window.localStorage.setItem(key, JSON.stringify({ tabId, expiresAt: now + 15_000 }));
+        setIsVoiceLeader(true);
+      } else {
+        setIsVoiceLeader(false);
+      }
+    };
+    claim();
+    const timer = setInterval(claim, 5_000);
+    return () => {
+      clearInterval(timer);
+      try {
+        const current = JSON.parse(window.localStorage.getItem(key) || '{}');
+        if (current.tabId === tabId) window.localStorage.removeItem(key);
+      } catch { /* Ignore a malformed stale lease. */ }
+      setIsVoiceLeader(false);
+    };
+  }, [telephonyV2, organization?.id, isAdminRoute]);
 
   // Clear any pending state timeout
   const clearStateTimeout = useCallback(() => {
@@ -180,7 +233,9 @@ export function OutboundCallProvider({ children }: { children: ReactNode }) {
       return tokenCacheRef.current.token;
     }
 
-    const token = await getTwilioAccessToken();
+    const token = telephonyV2
+      ? (organization?.id ? (await getTelephonySession(organization.id))?.token ?? null : null)
+      : await getTwilioAccessToken();
 
     if (!token) {
       throw new Error('Sessão expirada. Faça login novamente.');
@@ -194,7 +249,7 @@ export function OutboundCallProvider({ children }: { children: ReactNode }) {
 
     console.log('Token fetched and cached');
     return token;
-  }, []);
+  }, [telephonyV2, organization?.id]);
 
   // Get cached user data or fetch it
   const getUserData = useCallback(async () => {
@@ -202,30 +257,50 @@ export function OutboundCallProvider({ children }: { children: ReactNode }) {
       return userDataCacheRef.current;
     }
 
-    const { data: userData } = await supabase.auth.getUser();
-    const { data: userProfile } = await supabase
-      .from('users')
-      .select('id')
-      .eq('auth_user_id', userData.user?.id)
-      .single();
-
-    const { data: userOrg } = await supabase
-      .from('user_organizations')
-      .select('organization_id')
-      .eq('user_id', userProfile?.id)
-      .eq('is_active', true)
-      .single();
-
-    if (userOrg && userProfile) {
+    const { data } = await supabase.auth.getUser();
+    if (data.user && organization?.id && userProfile?.id) {
       userDataCacheRef.current = {
         userId: userProfile.id,
-        orgId: userOrg.organization_id,
+        orgId: organization.id,
       };
       return userDataCacheRef.current;
     }
 
     return null;
-  }, []);
+  }, [organization?.id, userProfile?.id]);
+
+  const updatePresence = useCallback(async (activeCallId: string | null = null) => {
+    if (!telephonyV2 || !isVoiceLeader || !organization?.id || !userProfile?.id || isAdminRoute) return;
+    presenceActiveCallRef.current = activeCallId;
+    await telephonySupabase.from('telephony_presence').upsert({
+      organization_id: organization.id,
+      user_id: userProfile.id,
+      session_id: presenceSessionRef.current,
+      status: 'available',
+      active_call_id: activeCallId,
+      last_seen_at: new Date().toISOString(),
+    }, { onConflict: 'organization_id,user_id,session_id' });
+  }, [telephonyV2, isVoiceLeader, organization?.id, userProfile?.id, isAdminRoute]);
+
+  const startPresenceHeartbeat = useCallback(() => {
+    if (!telephonyV2) return;
+    if (presenceTimerRef.current) clearInterval(presenceTimerRef.current);
+    void updatePresence(presenceActiveCallRef.current);
+    presenceTimerRef.current = setInterval(() => void updatePresence(presenceActiveCallRef.current), 30_000);
+  }, [telephonyV2, updatePresence]);
+
+  const removePresence = useCallback(() => {
+    if (presenceTimerRef.current) {
+      clearInterval(presenceTimerRef.current);
+      presenceTimerRef.current = null;
+    }
+    if (telephonyV2 && organization?.id && userProfile?.id) {
+      void telephonySupabase.from('telephony_presence').delete()
+        .eq('organization_id', organization.id)
+        .eq('user_id', userProfile.id)
+        .eq('session_id', presenceSessionRef.current);
+    }
+  }, [telephonyV2, organization?.id, userProfile?.id]);
 
   // Cleanup call state only (keep device)
   const cleanupCall = useCallback(() => {
@@ -255,7 +330,8 @@ export function OutboundCallProvider({ children }: { children: ReactNode }) {
     pendingCallRef.current = null;
     callFinalizedRef.current = false;
     lastProcessedStatusRef.current = null;
-  }, [isDeviceReady, clearStateTimeout, unsubscribeFromCallStatus]);
+    void updatePresence(null);
+  }, [isDeviceReady, clearStateTimeout, unsubscribeFromCallStatus, updatePresence]);
 
   // Keep ref in sync so realtime subscription can call cleanupCall without a circular dep
   cleanupCallRef.current = cleanupCall;
@@ -272,6 +348,15 @@ export function OutboundCallProvider({ children }: { children: ReactNode }) {
       try { deviceRef.current.destroy(); } catch {}
       deviceRef.current = null;
     }
+    if (incomingCallRef.current) {
+      try { incomingCallRef.current.disconnect(); } catch {}
+      incomingCallRef.current = null;
+    }
+    setIncomingCallInfo(null);
+    setActiveIncomingCallInfo(null);
+    setActiveIncomingCall(null);
+    setIncomingMuted(false);
+    removePresence();
     if (timerRef.current) {
       clearInterval(timerRef.current);
       timerRef.current = null;
@@ -300,7 +385,7 @@ export function OutboundCallProvider({ children }: { children: ReactNode }) {
     isInitializingRef.current = false;
     callFinalizedRef.current = false;
     lastProcessedStatusRef.current = null;
-  }, []);
+  }, [clearStateTimeout, unsubscribeFromCallStatus, removePresence]);
 
   // Update call record in database
   const updateCallRecord = useCallback(async (callStatus: string, endedAt?: Date) => {
@@ -364,7 +449,7 @@ export function OutboundCallProvider({ children }: { children: ReactNode }) {
       return;
     }
 
-    const { phoneNumber, contactId, opportunityId } = pendingCallRef.current;
+    const { phoneNumber, contactId, opportunityId, phoneNumberId } = pendingCallRef.current;
 
     try {
       setStatus('connecting');
@@ -373,14 +458,28 @@ export function OutboundCallProvider({ children }: { children: ReactNode }) {
       // Timeout: if not ringing within 15s, something is wrong
       setStateTimeout(15000, 'Tempo esgotado ao conectar chamada');
 
-      // Start call record creation in PARALLEL (non-blocking)
-      createCallRecordAsync(phoneNumber, contactId, opportunityId);
+      let connectParams: Record<string, string> = { To: phoneNumber };
+      if (telephonyV2) {
+        const { data, error } = await supabase.functions.invoke('telephony-call-intent', {
+          body: { to: phoneNumber, contactId, opportunityId, phoneNumberId },
+          headers: { 'x-organization-id': organization!.id },
+        });
+        if (error || !data?.callId || !data?.connectParams) {
+          throw new Error(data?.error || 'Não foi possível preparar a chamada');
+        }
+        callIdRef.current = data.callId;
+        callStartTimeRef.current = new Date();
+        connectParams = data.connectParams as Record<string, string>;
+        subscribeToCallStatus(data.callId);
+        void updatePresence(data.callId);
+      } else {
+        // Legacy path remains available while the organization flag is off.
+        createCallRecordAsync(phoneNumber, contactId, opportunityId);
+      }
 
       // Connect the call IMMEDIATELY
       const call = await deviceRef.current.connect({
-        params: {
-          To: phoneNumber,
-        },
+        params: connectParams,
       });
 
       activeCallRef.current = call;
@@ -413,6 +512,7 @@ export function OutboundCallProvider({ children }: { children: ReactNode }) {
         clearStateTimeout();
         setStatus('ended');
         updateCallRecord('completed', new Date());
+        void updatePresence(null);
       });
 
       call.on('cancel', () => {
@@ -422,6 +522,7 @@ export function OutboundCallProvider({ children }: { children: ReactNode }) {
         clearStateTimeout();
         setStatus('ended');
         updateCallRecord('canceled', new Date());
+        void updatePresence(null);
       });
 
       call.on('reject', () => {
@@ -432,6 +533,7 @@ export function OutboundCallProvider({ children }: { children: ReactNode }) {
         setStatus('failed');
         setErrorMessage('Chamada rejeitada');
         updateCallRecord('busy', new Date());
+        void updatePresence(null);
       });
 
       call.on('error', (error: any) => {
@@ -442,15 +544,17 @@ export function OutboundCallProvider({ children }: { children: ReactNode }) {
         setErrorMessage(error?.message || 'Erro na chamada');
         setStatus('failed');
         updateCallRecord('failed', new Date());
+        void updatePresence(null);
       });
 
     } catch (error: any) {
       console.error('Call connection error:', error);
       clearStateTimeout();
+      void updatePresence(null);
       setErrorMessage(error.message || 'Erro ao conectar chamada');
       setStatus('failed');
     }
-  }, [updateCallRecord, createCallRecordAsync, setStateTimeout, clearStateTimeout]);
+  }, [telephonyV2, organization, updateCallRecord, createCallRecordAsync, setStateTimeout, clearStateTimeout, subscribeToCallStatus, updatePresence]);
 
   // Initialize device (persistent - runs once)
   const initializeDevice = useCallback(async () => {
@@ -486,11 +590,54 @@ export function OutboundCallProvider({ children }: { children: ReactNode }) {
         allowIncomingWhileBusy: false,
       });
 
+      if (telephonyV2) {
+        device.on('incoming', async (call) => {
+          const from = call.parameters.From || call.parameters.Caller || '';
+          let contactName: string | undefined;
+          let contactId: string | undefined;
+          if (organization?.id && from) {
+            const digits = from.replace(/\D/g, '');
+            const e164 = from.startsWith('+') ? from : `+${digits}`;
+            const { data: contact } = await supabase.from('contacts').select('id, full_name')
+              .eq('organization_id', organization.id)
+              .or(`phone.eq.${e164},phone_normalized.eq.${digits}`)
+              .is('deleted_at', null).limit(1).maybeSingle();
+            contactName = contact?.full_name;
+            contactId = contact?.id;
+          }
+          const info: IncomingCallInfo = { from, contactName, contactId };
+          incomingCallRef.current = call;
+          setIncomingCallInfo(info);
+
+          const callId = call.customParameters?.get('CallId') ?? null;
+          void updatePresence(callId);
+          call.on('accept', () => {
+            setActiveIncomingCall(call);
+            setActiveIncomingCallInfo(info);
+            setIncomingCallInfo(null);
+            void updatePresence(callId);
+          });
+          const finish = () => {
+            incomingCallRef.current = null;
+            setIncomingCallInfo(null);
+            setActiveIncomingCall(null);
+            setActiveIncomingCallInfo(null);
+            setIncomingMuted(false);
+            void updatePresence(null);
+          };
+          call.on('disconnect', finish);
+          call.on('cancel', finish);
+          call.on('reject', finish);
+          call.on('error', finish);
+        });
+      }
+
       device.on('registered', () => {
         console.log('Twilio Device registered and ready');
         setStatus('ready');
         setIsDeviceReady(true);
         isInitializingRef.current = false;
+        startPresenceHeartbeat();
       });
 
       device.on('error', (error) => {
@@ -498,6 +645,7 @@ export function OutboundCallProvider({ children }: { children: ReactNode }) {
         setErrorMessage(error.message || 'Erro no dispositivo de áudio');
         setStatus('failed');
         setIsDeviceReady(false);
+        removePresence();
         isInitializingRef.current = false;
       });
 
@@ -550,7 +698,7 @@ export function OutboundCallProvider({ children }: { children: ReactNode }) {
       setStatus('failed');
       isInitializingRef.current = false;
     }
-  }, [getToken, getUserData]);
+  }, [getToken, getUserData, telephonyV2, organization?.id, startPresenceHeartbeat, removePresence, updatePresence]);
 
   // Check voice integration availability (inline, no external context dependency)
   useEffect(() => {
@@ -558,6 +706,8 @@ export function OutboundCallProvider({ children }: { children: ReactNode }) {
       setVoiceLoading(false);
       return;
     }
+    setVoiceLoading(true);
+    setHasVoiceIntegration(false);
     let cancelled = false;
     const check = async () => {
       try {
@@ -566,26 +716,12 @@ export function OutboundCallProvider({ children }: { children: ReactNode }) {
           setVoiceLoading(false);
           return;
         }
-        // Get user's org
-        const { data: userData } = await supabase
-          .from('users')
-          .select('id')
-          .eq('auth_user_id', session.user.id)
-          .maybeSingle();
-        if (!userData || cancelled) { setVoiceLoading(false); return; }
-
-        const { data: orgData } = await supabase
-          .from('user_organizations')
-          .select('organization_id')
-          .eq('user_id', userData.id)
-          .eq('is_active', true)
-          .maybeSingle();
-        if (!orgData || cancelled) { setVoiceLoading(false); return; }
+        if (!organization?.id || cancelled) { setVoiceLoading(false); return; }
 
         const { data } = await supabase
           .from('organization_integrations')
           .select('id, admin_integrations!inner(slug, category)')
-          .eq('organization_id', orgData.organization_id)
+          .eq('organization_id', organization.id)
           .eq('is_enabled', true)
           .or('slug.eq.twilio-voice,category.eq.telephony', { referencedTable: 'admin_integrations' })
           .maybeSingle();
@@ -600,7 +736,7 @@ export function OutboundCallProvider({ children }: { children: ReactNode }) {
     };
     check();
     return () => { cancelled = true; };
-  }, [isAdminRoute]);
+  }, [isAdminRoute, organization?.id]);
 
   // Initialize device on mount (persistent)
   // CRITICAL SECURITY: Never initialize in admin portal or without auth or without voice integration
@@ -612,7 +748,7 @@ export function OutboundCallProvider({ children }: { children: ReactNode }) {
     }
 
     // Skip if voice integration is not enabled or still loading
-    if (voiceLoading || !hasVoiceIntegration) {
+    if (voiceLoading || telephonyFlagLoading || permissionsLoading || !hasVoiceIntegration || !isVoiceLeader || !canUseVoiceDevice) {
       console.log('[OutboundCall] Voice integration not enabled, skipping device initialization');
       return;
     }
@@ -651,10 +787,14 @@ export function OutboundCallProvider({ children }: { children: ReactNode }) {
       }
       fullCleanup();
     };
-  }, [isAdminRoute, hasVoiceIntegration, voiceLoading]);
+  }, [isAdminRoute, organization?.id, userProfile?.id, hasVoiceIntegration, voiceLoading, telephonyFlagLoading, permissionsLoading, isVoiceLeader, canUseVoiceDevice]);
 
   // Start a new call
   const startCall = useCallback((params: CallInfo) => {
+    if (telephonyV2 && !permissions.canMakeCalls) {
+      toast.error('Você não tem permissão para realizar chamadas');
+      return;
+    }
     // Clean up any existing call first (but keep device)
     if (isOnCall) {
       cleanupCall();
@@ -672,7 +812,7 @@ export function OutboundCallProvider({ children }: { children: ReactNode }) {
       console.log('Device not ready, initializing...');
       initializeDevice();
     }
-  }, [isOnCall, cleanupCall, isDeviceReady, makeCall, initializeDevice]);
+  }, [telephonyV2, permissions.canMakeCalls, isOnCall, cleanupCall, isDeviceReady, makeCall, initializeDevice]);
 
   // End the current call
   const endCall = useCallback(() => {
@@ -687,13 +827,14 @@ export function OutboundCallProvider({ children }: { children: ReactNode }) {
     }
     setStatus('ended');
     updateCallRecord('completed', new Date());
+    void updatePresence(null);
 
     // Force cleanup after short delay — don't wait for disconnect event
     setTimeout(() => {
       activeCallRef.current = null;
       cleanupCall();
     }, 1500);
-  }, [cleanupCall, clearStateTimeout, updateCallRecord]);
+  }, [cleanupCall, clearStateTimeout, updateCallRecord, updatePresence]);
 
   // Toggle mute
   const toggleMute = useCallback(() => {
@@ -736,6 +877,39 @@ export function OutboundCallProvider({ children }: { children: ReactNode }) {
     }
   }, [status]);
 
+  const answerIncomingCall = useCallback(() => {
+    const call = incomingCallRef.current;
+    if (!call) return;
+    call.accept();
+  }, []);
+
+  const rejectIncomingCall = useCallback(() => {
+    const call = incomingCallRef.current;
+    if (!call) return;
+    call.reject();
+    incomingCallRef.current = null;
+    setIncomingCallInfo(null);
+    void updatePresence(null);
+  }, [updatePresence]);
+
+  const endIncomingCall = useCallback(() => {
+    const call = activeIncomingCall ?? incomingCallRef.current;
+    if (call) call.disconnect();
+    incomingCallRef.current = null;
+    setIncomingCallInfo(null);
+    setActiveIncomingCall(null);
+    setActiveIncomingCallInfo(null);
+    setIncomingMuted(false);
+    void updatePresence(null);
+  }, [activeIncomingCall, updatePresence]);
+
+  const toggleIncomingMute = useCallback(() => {
+    if (!activeIncomingCall) return;
+    const next = !incomingMuted;
+    activeIncomingCall.mute(next);
+    setIncomingMuted(next);
+  }, [activeIncomingCall, incomingMuted]);
+
   const value: OutboundCallContextType = {
     startCall,
     isOnCall,
@@ -751,6 +925,16 @@ export function OutboundCallProvider({ children }: { children: ReactNode }) {
     isMinimized,
     setMinimized: setIsMinimized,
     isDeviceReady,
+    telephonyV2,
+    incomingCallInfo,
+    activeIncomingCallInfo,
+    activeIncomingCall,
+    isOnIncomingCall,
+    incomingMuted,
+    answerIncomingCall,
+    rejectIncomingCall,
+    endIncomingCall,
+    toggleIncomingMute,
   };
 
   return (
@@ -759,3 +943,6 @@ export function OutboundCallProvider({ children }: { children: ReactNode }) {
     </OutboundCallContext.Provider>
   );
 }
+
+// Compatibility export while callers migrate to the provider-neutral name.
+export const OutboundCallProvider = TelephonyProvider;

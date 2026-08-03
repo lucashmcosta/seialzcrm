@@ -11,10 +11,10 @@
 // Plano: docs/operations/proposals/2026-07-05-edge-auth-hardening.md
 
 export interface TwilioSignatureResult {
-  checked: boolean;   // false = não foi possível validar (sem assinatura/token)
+  checked: boolean; // false = não foi possível validar (sem assinatura/token)
   valid: boolean;
-  matched: string;    // label do candidate que bateu, ou "none"
-  reason?: string;    // preenchido quando checked=false ou valid=false
+  matched: string; // label do candidate que bateu, ou "none"
+  reason?: string; // preenchido quando checked=false ou valid=false
   candidateCount: number;
 }
 
@@ -23,15 +23,29 @@ export async function validateTwilioRequestSignature(opts: {
   params: Record<string, string>;
   authToken: string | undefined | null;
   publicBaseEnvVar?: string; // default TWILIO_WEBHOOK_PUBLIC_BASE_URL
+  publicBaseUrl?: string; // explicit override, primarily for deterministic tests
 }): Promise<TwilioSignatureResult> {
   const { req, params, authToken } = opts;
-  const signature = req.headers.get("x-twilio-signature") || req.headers.get("X-Twilio-Signature");
+  const signature = req.headers.get("x-twilio-signature") ||
+    req.headers.get("X-Twilio-Signature");
 
   if (!signature) {
-    return { checked: false, valid: false, matched: "none", reason: "missing_signature", candidateCount: 0 };
+    return {
+      checked: false,
+      valid: false,
+      matched: "none",
+      reason: "missing_signature",
+      candidateCount: 0,
+    };
   }
   if (!authToken) {
-    return { checked: false, valid: false, matched: "none", reason: "no_auth_token_resolved", candidateCount: 0 };
+    return {
+      checked: false,
+      valid: false,
+      matched: "none",
+      reason: "no_auth_token_resolved",
+      candidateCount: 0,
+    };
   }
 
   const parsed = new URL(req.url);
@@ -41,19 +55,34 @@ export async function validateTwilioRequestSignature(opts: {
     : "/functions/v1" + parsed.pathname;
 
   const candidates: { label: string; url: string }[] = [];
-  let publicBase = (Deno.env.get(opts.publicBaseEnvVar || "TWILIO_WEBHOOK_PUBLIC_BASE_URL") || "").trim();
+  let publicBase = (opts.publicBaseUrl ??
+    Deno.env.get(opts.publicBaseEnvVar || "TWILIO_WEBHOOK_PUBLIC_BASE_URL") ??
+    "").trim();
   while (publicBase.endsWith("/")) publicBase = publicBase.slice(0, -1);
   if (publicBase) {
     const lastSegment = parsed.pathname.split("/").pop() || "";
-    candidates.push({ label: "canonical_env", url: publicBase + "/" + lastSegment + search });
+    candidates.push({
+      label: "canonical_env",
+      url: publicBase + "/" + lastSegment + search,
+    });
   }
-  const fwdHost = (req.headers.get("x-forwarded-host") || "").split(",")[0].trim();
-  const fwdProto = (req.headers.get("x-forwarded-proto") || "https").split(",")[0].trim();
+  const fwdHost = (req.headers.get("x-forwarded-host") || "").split(",")[0]
+    .trim();
+  const fwdProto = (req.headers.get("x-forwarded-proto") || "https").split(
+    ",",
+  )[0].trim();
   if (fwdHost) {
-    candidates.push({ label: "forwarded_headers", url: fwdProto + "://" + fwdHost + pathPart + search });
+    candidates.push({
+      label: "forwarded_headers",
+      url: fwdProto + "://" + fwdHost + pathPart + search,
+    });
   }
-  const internalHost = (req.headers.get("host") || parsed.host).split(",")[0].trim();
-  candidates.push({ label: "fallback_internal", url: (fwdProto || "https") + "://" + internalHost + pathPart + search });
+  const internalHost = (req.headers.get("host") || parsed.host).split(",")[0]
+    .trim();
+  candidates.push({
+    label: "fallback_internal",
+    url: (fwdProto || "https") + "://" + internalHost + pathPart + search,
+  });
 
   const sortedKeys = Object.keys(params).sort();
   const paramsConcat = sortedKeys.map((k) => k + params[k]).join("");
@@ -66,12 +95,27 @@ export async function validateTwilioRequestSignature(opts: {
   );
 
   for (const c of candidates) {
-    const sig = await crypto.subtle.sign("HMAC", key, new TextEncoder().encode(c.url + paramsConcat));
+    const sig = await crypto.subtle.sign(
+      "HMAC",
+      key,
+      new TextEncoder().encode(c.url + paramsConcat),
+    );
     const b64 = btoa(String.fromCharCode(...new Uint8Array(sig)));
     if (b64 === signature) {
-      return { checked: true, valid: true, matched: c.label, candidateCount: candidates.length };
+      return {
+        checked: true,
+        valid: true,
+        matched: c.label,
+        candidateCount: candidates.length,
+      };
     }
   }
 
-  return { checked: true, valid: false, matched: "none", reason: "no_candidate_matched", candidateCount: candidates.length };
+  return {
+    checked: true,
+    valid: false,
+    matched: "none",
+    reason: "no_candidate_matched",
+    candidateCount: candidates.length,
+  };
 }

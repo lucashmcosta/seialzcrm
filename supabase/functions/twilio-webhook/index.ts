@@ -3,6 +3,7 @@ import { createClient } from "npm:@supabase/supabase-js@2";
 import { edgeAuthMode } from "../_shared/auth.ts";
 import { validateTwilioRequestSignature } from "../_shared/twilio-signature.ts";
 import { resolveContactIngressIdentity } from "../_shared/registry/ingress.ts";
+import { decryptIntegrationSecret } from "../_shared/integration-credentials.ts";
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -136,7 +137,11 @@ serve(async (req) => {
             q = q.eq('config_values->>account_sid', params.AccountSid)
           }
           const { data: integ } = await q.limit(1).maybeSingle()
-          twilioAuthToken = (integ?.config_values as Record<string, string> | null)?.auth_token ?? null
+          const voiceConfig = (integ?.config_values as Record<string, string> | null) ?? null
+          twilioAuthToken = voiceConfig?.auth_token ?? null
+          if (!twilioAuthToken && voiceConfig?.auth_token_encrypted) {
+            twilioAuthToken = await decryptIntegrationSecret(voiceConfig.auth_token_encrypted)
+          }
         }
       } catch (e) {
         console.warn('[AUTH-OBSERVE] twilio-webhook: token lookup failed:', (e as Error)?.message)

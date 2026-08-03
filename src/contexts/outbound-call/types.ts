@@ -19,6 +19,13 @@ export interface CallInfo {
   contactName?: string;
   contactId?: string;
   opportunityId?: string;
+  phoneNumberId?: string;
+}
+
+export interface IncomingCallInfo {
+  from: string;
+  contactName?: string;
+  contactId?: string;
 }
 
 export interface TokenCache {
@@ -41,4 +48,14 @@ export interface OutboundCallContextType {
   isMinimized: boolean;
   setMinimized: (val: boolean) => void;
   isDeviceReady: boolean;
+  telephonyV2: boolean;
+  incomingCallInfo: IncomingCallInfo | null;
+  activeIncomingCallInfo: IncomingCallInfo | null;
+  activeIncomingCall: unknown | null;
+  isOnIncomingCall: boolean;
+  incomingMuted: boolean;
+  answerIncomingCall: () => void;
+  rejectIncomingCall: () => void;
+  endIncomingCall: () => void;
+  toggleIncomingMute: () => void;
 }

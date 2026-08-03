@@ -5,6 +5,7 @@ import { supabase } from '@/integrations/supabase/client';
 import { useOrganization } from './useOrganization';
 import { useVoiceIntegration } from './useVoiceIntegration';
 import { getTwilioAccessToken } from '@/lib/authSession';
+import { useTelephonyV2Flag } from './useTelephonyV2Flag';
 
 interface InboundCallInfo {
   call: Call;
@@ -36,6 +37,7 @@ export function useInboundCalls(): UseInboundCallsReturn {
   const location = useLocation();
   const { organization, userProfile } = useOrganization();
   const { hasVoiceIntegration, loading: voiceLoading } = useVoiceIntegration();
+  const { enabled: telephonyV2, loading: telephonyFlagLoading } = useTelephonyV2Flag(organization?.id);
   const [isReady, setIsReady] = useState(false);
   const [incomingCall, setIncomingCall] = useState<InboundCallInfo | null>(null);
   const [activeCall, setActiveCall] = useState<Call | null>(null);
@@ -99,6 +101,7 @@ export function useInboundCalls(): UseInboundCallsReturn {
 
   // Initialize Twilio Device for receiving calls
   const initializeDevice = useCallback(async () => {
+    if (telephonyV2) return;
     if (!organization?.id || !userProfile?.id) {
       return;
     }
@@ -190,7 +193,7 @@ export function useInboundCalls(): UseInboundCallsReturn {
     } catch (error) {
       console.error('[InboundCalls] Error initializing device:', error);
     }
-  }, [organization?.id, userProfile?.id, checkUserShouldReceiveCalls]);
+  }, [organization?.id, userProfile?.id, checkUserShouldReceiveCalls, telephonyV2]);
 
   // Answer incoming call
   const answerCall = useCallback(() => {
@@ -240,7 +243,14 @@ export function useInboundCalls(): UseInboundCallsReturn {
 
   // Only initialize if voice integration is active and NOT in admin route
   useEffect(() => {
-    if (voiceLoading) return;
+    if (voiceLoading || telephonyFlagLoading) return;
+    if (telephonyV2) {
+      if (deviceRef.current) {
+        deviceRef.current.destroy();
+        deviceRef.current = null;
+      }
+      return;
+    }
     
     // CRITICAL SECURITY: Never initialize in admin portal
     if (isAdminRoute) {
@@ -267,7 +277,7 @@ export function useInboundCalls(): UseInboundCallsReturn {
         deviceRef.current = null;
       }
     };
-  }, [initializeDevice, hasVoiceIntegration, voiceLoading, isAdminRoute, organization?.id, userProfile?.id]);
+  }, [initializeDevice, hasVoiceIntegration, voiceLoading, telephonyFlagLoading, telephonyV2, isAdminRoute, organization?.id, userProfile?.id]);
 
   return {
     isReady,

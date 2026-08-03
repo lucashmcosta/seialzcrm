@@ -32,7 +32,7 @@ import { OpportunityCloseDialog } from '@/components/opportunities/OpportunityCl
 import { OpportunityReadinessCard } from '@/components/opportunities/OpportunityReadinessCard';
 import { UnifiedDocuments } from '@/components/documents/UnifiedDocuments';
 import { transitionOpportunityStage } from '@/lib/opportunityClose';
-import { ClickToCallButton } from '@/components/calls/ClickToCallButton';
+import { useOutboundCall } from '@/contexts/OutboundCallContext';
 import { OwnerSelector } from '@/components/common/OwnerSelector';
 import { SendToSignatureButton } from '@/components/signature/SendToSignatureButton';
 import { TagSelector } from '@/components/common/TagSelector';
@@ -65,6 +65,7 @@ export default function OpportunityDetail() {
   const { organization, locale } = useOrganization();
   const { t } = useTranslation(locale as any);
   const { permissions } = usePermissions();
+  const { startCall, telephonyV2 } = useOutboundCall();
   const [opportunity, setOpportunity] = useState<Opportunity | null>(null);
   const [stages, setStages] = useState<PipelineStage[]>([]);
   const [loading, setLoading] = useState(true);
@@ -547,17 +548,22 @@ export default function OpportunityDetail() {
 
                 {/* Direita: ações + valor + status */}
                 <div className="flex items-center gap-2 shrink-0">
-                  {contactPhone && (
+                  {contactPhone && (!telephonyV2 || permissions.canMakeCalls) && (
                     <Tooltip>
                       <TooltipTrigger asChild>
                         <span>
-                          <ClickToCallButton
-                            phoneNumber={contactPhone}
-                            contactId={opportunity.contact_id || undefined}
-                            opportunityId={opportunity.id}
+                          <Button
                             variant="ghost"
                             size="icon"
-                          />
+                            onClick={() => startCall({
+                              phoneNumber: contactPhone,
+                              contactName: opportunity.contacts?.full_name,
+                              contactId: opportunity.contact_id || undefined,
+                              opportunityId: opportunity.id,
+                            })}
+                          >
+                            <Phone className="h-4 w-4" />
+                          </Button>
                         </span>
                       </TooltipTrigger>
                       <TooltipContent>Ligar</TooltipContent>

@@ -1,5 +1,6 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "npm:@supabase/supabase-js@2";
+import { loadTwilioVoiceConfig } from "../_shared/telephony/twilio.ts";
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -84,11 +85,13 @@ serve(async (req) => {
       })
     }
 
-    const twilioConfig = integration.config_values as {
-      account_sid: string
-      auth_token: string
-      phone_number: string
-      enable_recording?: boolean
+    const resolvedConfig = await loadTwilioVoiceConfig(supabaseAdmin, userOrg.organization_id)
+    const rawConfig = integration.config_values as Record<string, unknown>
+    const twilioConfig = {
+      account_sid: resolvedConfig.accountSid,
+      auth_token: resolvedConfig.authToken,
+      phone_number: String(rawConfig.phone_number || ''),
+      enable_recording: rawConfig.enable_recording === true,
     }
 
     if (!twilioConfig.account_sid || !twilioConfig.auth_token || !twilioConfig.phone_number) {

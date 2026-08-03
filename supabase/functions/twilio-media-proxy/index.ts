@@ -1,4 +1,5 @@
 import { createClient } from "npm:@supabase/supabase-js@2";
+import { loadTwilioVoiceConfig } from "../_shared/telephony/twilio.ts";
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -94,32 +95,17 @@ Deno.serve(async (req) => {
       });
     }
 
-    // Load Twilio credentials for the org (any twilio-* integration that has account_sid/auth_token)
-    const { data: integrations } = await supabase
-      .from('organization_integrations')
-      .select('config_values, admin_integrations!inner(slug)')
-      .eq('organization_id', organizationId)
-      .eq('is_enabled', true);
-
-    let accountSid: string | undefined;
-    let authToken: string | undefined;
-    for (const it of integrations ?? []) {
-      const cfg = (it as any).config_values || {};
-      if (cfg.account_sid && cfg.auth_token) {
-        accountSid = cfg.account_sid;
-        authToken = cfg.auth_token;
-        break;
-      }
-    }
-
-    if (!accountSid || !authToken) {
+    let voiceConfig;
+    try {
+      voiceConfig = await loadTwilioVoiceConfig(supabase, organizationId);
+    } catch {
       return new Response(JSON.stringify({ error: 'Twilio credentials not configured' }), {
         status: 400,
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },
       });
     }
 
-    const basic = btoa(`${accountSid}:${authToken}`);
+    const basic = btoa(`${voiceConfig.accountSid}:${voiceConfig.authToken}`);
 
     // Forward Range header for audio/video seeking support
     const upstreamHeaders: Record<string, string> = { Authorization: `Basic ${basic}` };

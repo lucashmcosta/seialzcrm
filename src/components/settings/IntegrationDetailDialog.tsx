@@ -324,7 +324,22 @@ export function IntegrationDetailDialog({
       </div>
       <div className="space-y-2">
         <Label className="text-muted-foreground">Auth Token</Label>
-        <p className="font-mono text-sm bg-muted px-3 py-2 rounded-md">{maskSecret(configValues.auth_token)}</p>
+        <div className="flex items-center gap-2 bg-muted px-3 py-2 rounded-md">
+          {(configValues.auth_token_encrypted || configValues.auth_token) ? (
+            <CheckCircle className="h-4 w-4 text-green-500" />
+          ) : (
+            <XCircle className="h-4 w-4 text-destructive" />
+          )}
+          <span className="text-sm">
+            {(configValues.auth_token_encrypted || configValues.auth_token) ? 'Protegido no backend' : 'Não configurado'}
+          </span>
+        </div>
+      </div>
+      <div className="space-y-2">
+        <Label className="text-muted-foreground">TwiML App</Label>
+        <p className="font-mono text-sm bg-muted px-3 py-2 rounded-md">
+          {configValues.twiml_app_sid ? `…${String(configValues.twiml_app_sid).slice(-8)}` : 'Será gerenciada automaticamente'}
+        </p>
       </div>
       <div className="space-y-2">
         <Label className="text-muted-foreground">Número de Telefone</Label>

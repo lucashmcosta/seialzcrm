@@ -31,6 +31,17 @@ interface IntegrationConnectDialogProps {
   };
 }
 
+interface TwilioVoiceSetupStatus {
+  configured: boolean;
+  credentialsAvailable: boolean;
+  credentialsEncrypted: boolean;
+  accountSid: string | null;
+  phoneNumber: string | null;
+  enableRecording: boolean;
+  twimlAppSidSuffix: string | null;
+  webhookMode: 'telephony_v2' | 'legacy';
+}
+
 export function IntegrationConnectDialog({
   open,
   onOpenChange,
@@ -51,6 +62,29 @@ export function IntegrationConnectDialog({
 
   const isTwilioVoice = integration.slug === 'twilio-voice';
   const isTwilioWhatsApp = integration.slug === 'twilio-whatsapp';
+
+  const { data: voiceSetupStatus, isLoading: loadingVoiceStatus } = useQuery({
+    queryKey: ['twilio-voice-setup-status', organization?.id],
+    enabled: !!organization?.id && isTwilioVoice && open,
+    queryFn: async (): Promise<TwilioVoiceSetupStatus> => {
+      const { data, error } = await supabase.functions.invoke('twilio-setup', {
+        headers: { 'x-organization-id': organization!.id },
+        body: { mode: 'status', organizationId: organization!.id },
+      });
+      if (error) throw error;
+      return data as TwilioVoiceSetupStatus;
+    },
+  });
+
+  useEffect(() => {
+    if (!open || !isTwilioVoice || !voiceSetupStatus?.configured) return;
+    setConfigValues((previous) => ({
+      ...previous,
+      account_sid: previous.account_sid || voiceSetupStatus.accountSid || '',
+      phone_number: previous.phone_number || voiceSetupStatus.phoneNumber || '',
+      enable_recording: previous.enable_recording ?? voiceSetupStatus.enableRecording,
+    }));
+  }, [open, isTwilioVoice, voiceSetupStatus]);
 
   // Fetch Twilio Voice credentials if connecting WhatsApp
   const { data: voiceIntegration } = useQuery({
@@ -190,8 +224,11 @@ export function IntegrationConnectDialog({
 
       // For Twilio Voice, run automatic setup
       if (isTwilioVoice) {
-        if (!configValues.account_sid || !configValues.auth_token) {
-          throw new Error('Credenciais do Twilio são obrigatórias (Account SID e Auth Token)');
+        if (!configValues.account_sid || !configValues.phone_number) {
+          throw new Error('Account SID e número Twilio são obrigatórios');
+        }
+        if (!configValues.auth_token && !voiceSetupStatus?.credentialsAvailable) {
+          throw new Error('Informe o Auth Token para concluir a configuração');
         }
         
         setSetupPhase('configuring');
@@ -199,10 +236,11 @@ export function IntegrationConnectDialog({
         console.log('Calling twilio-setup edge function...');
         
         const { data: setupData, error: setupError } = await supabase.functions.invoke('twilio-setup', {
+          headers: { 'x-organization-id': organization.id },
           body: {
             organizationId: organization.id,
             accountSid: configValues.account_sid,
-            authToken: configValues.auth_token,
+            authToken: configValues.auth_token || undefined,
             phoneNumber: configValues.phone_number,
             enableRecording: configValues.enable_recording,
           },
@@ -273,6 +311,7 @@ export function IntegrationConnectDialog({
       await queryClient.invalidateQueries({ queryKey: ['organization-integrations'] });
       await queryClient.invalidateQueries({ queryKey: ['whatsapp-integration'] });
       await queryClient.invalidateQueries({ queryKey: ['twilio-voice-credentials'] });
+      await queryClient.invalidateQueries({ queryKey: ['twilio-voice-setup-status'] });
       onOpenChange(false);
       setConfigValues({});
       setSetupPhase('form');
@@ -290,15 +329,19 @@ export function IntegrationConnectDialog({
 
   const renderField = (field: any) => {
     const { key, label, type, placeholder, required, options, description } = field;
+    const canReuseVoiceSecret = isTwilioVoice && key === 'auth_token' && voiceSetupStatus?.credentialsAvailable;
+    const fieldRequired = required && !canReuseVoiceSecret;
 
     const fieldLabel = (
       <Label htmlFor={key}>
-        {label} {required && <span className="text-destructive">*</span>}
+        {label} {fieldRequired && <span className="text-destructive">*</span>}
       </Label>
     );
 
-    const fieldDescription = description && (
-      <p className="text-xs text-muted-foreground break-words">{description}</p>
+    const fieldDescription = (description || canReuseVoiceSecret) && (
+      <p className="text-xs text-muted-foreground break-words">
+        {canReuseVoiceSecret ? 'Deixe em branco para reutilizar o token já protegido no backend.' : description}
+      </p>
     );
 
     switch (type) {
@@ -334,7 +377,7 @@ export function IntegrationConnectDialog({
               id={key}
               type="number"
               placeholder={placeholder}
-              required={required}
+              required={fieldRequired}
               value={configValues[key] ?? field.default ?? ''}
               onChange={(e) =>
                 setConfigValues({ ...configValues, [key]: parseInt(e.target.value) || 0 })
@@ -350,7 +393,7 @@ export function IntegrationConnectDialog({
             <Textarea
               id={key}
               placeholder={placeholder}
-              required={required}
+              required={fieldRequired}
               value={configValues[key] || ''}
               onChange={(e) =>
                 setConfigValues({ ...configValues, [key]: e.target.value })
@@ -381,8 +424,8 @@ export function IntegrationConnectDialog({
             <Input
               id={key}
               type={type || 'text'}
-              placeholder={placeholder}
-              required={required}
+              placeholder={canReuseVoiceSecret ? 'Token atual será reutilizado' : placeholder}
+              required={fieldRequired}
               value={configValues[key] || ''}
               onChange={(e) =>
                 setConfigValues({ ...configValues, [key]: e.target.value })
@@ -425,6 +468,26 @@ export function IntegrationConnectDialog({
                   <Info className="h-4 w-4" />
                   <AlertDescription>
                     Credenciais detectadas da integração Twilio Voice. Selecione o número para WhatsApp abaixo.
+                  </AlertDescription>
+                </Alert>
+              )}
+
+              {isTwilioVoice && voiceSetupStatus?.configured && (
+                <Alert className="bg-primary/10 border-primary/20">
+                  <Info className="h-4 w-4" />
+                  <AlertDescription>
+                    Configuração existente detectada. O número, a TwiML App
+                    {voiceSetupStatus.twimlAppSidSuffix ? ` …${voiceSetupStatus.twimlAppSidSuffix}` : ''} e o Auth Token protegido serão reutilizados.
+                    Webhook atual: {voiceSetupStatus.webhookMode === 'telephony_v2' ? 'Telefonia V2' : 'legado'}.
+                  </AlertDescription>
+                </Alert>
+              )}
+
+              {isTwilioVoice && !loadingVoiceStatus && !voiceSetupStatus?.configured && (
+                <Alert>
+                  <Info className="h-4 w-4" />
+                  <AlertDescription>
+                    Informe somente Account SID, Auth Token e o número Twilio em formato E.164. A API Key, a TwiML App e os webhooks serão criados e vinculados automaticamente.
                   </AlertDescription>
                 </Alert>
               )}
@@ -485,7 +548,7 @@ export function IntegrationConnectDialog({
             </Button>
             <Button 
               type="submit" 
-              disabled={connectMutation.isPending || setupPhase === 'configuring'}
+              disabled={connectMutation.isPending || setupPhase === 'configuring' || (isTwilioVoice && loadingVoiceStatus)}
             >
               {connectMutation.isPending ? 'Conectando...' : 'Conectar'}
             </Button>

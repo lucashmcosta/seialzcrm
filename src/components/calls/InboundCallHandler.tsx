@@ -2,6 +2,8 @@
 import { useState, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useInboundCalls } from '@/hooks/useInboundCalls';
+import { useOutboundCall } from '@/contexts/OutboundCallContext';
+import type { Call } from '@twilio/voice-sdk';
 import { IncomingCallModal } from './IncomingCallModal';
 
 /**
@@ -13,17 +15,17 @@ export function InboundCallHandler() {
   const navigate = useNavigate();
   const [isMinimized, setIsMinimized] = useState(false);
 
-  const {
-    incomingCall,
-    activeCallInfo,
-    answerCall,
-    rejectCall,
-    isOnCall,
-    activeCall,
-    endCall,
-    toggleMute,
-    isMuted
-  } = useInboundCalls();
+  const legacy = useInboundCalls();
+  const unified = useOutboundCall();
+  const incomingCall = unified.telephonyV2 ? unified.incomingCallInfo : legacy.incomingCall;
+  const activeCallInfo = unified.telephonyV2 ? unified.activeIncomingCallInfo : legacy.activeCallInfo;
+  const answerCall = unified.telephonyV2 ? unified.answerIncomingCall : legacy.answerCall;
+  const rejectCall = unified.telephonyV2 ? unified.rejectIncomingCall : legacy.rejectCall;
+  const isOnCall = unified.telephonyV2 ? unified.isOnIncomingCall : legacy.isOnCall;
+  const activeCall = (unified.telephonyV2 ? unified.activeIncomingCall : legacy.activeCall) as Call | null;
+  const endCall = unified.telephonyV2 ? unified.endIncomingCall : legacy.endCall;
+  const toggleMute = unified.telephonyV2 ? unified.toggleIncomingMute : legacy.toggleMute;
+  const isMuted = unified.telephonyV2 ? unified.incomingMuted : legacy.isMuted;
 
   // Custom answer handler: answer + minimize + navigate to contact
   const handleAnswer = useCallback(() => {
