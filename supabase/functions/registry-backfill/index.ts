@@ -627,7 +627,7 @@ Deno.serve(async (req) => {
         provider: "local-validator",
         version: "v1",
         status: 422,
-        error: "invalid_or_not_found",
+        error: "invalid_cpf_format",
         retryable: false,
       };
     const hash = await identifierHash(`cpf:${cpf}`);
