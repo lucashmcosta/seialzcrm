@@ -5,7 +5,9 @@ export type CpfVerificationStatus =
   | "pending"
   | "verified"
   | "invalid"
-  | "error";
+  | "error"
+  | "not_found";
+
 
 export function digits(value: string | null | undefined): string {
   return String(value ?? "").replace(/\D/g, "");
