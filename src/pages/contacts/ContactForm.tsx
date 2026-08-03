@@ -296,13 +296,18 @@ export default function ContactForm() {
         status: notFound ? 'not_found' : invalid ? 'invalid' : 'error',
         errorCode: reason ? `${code} (${reason})` : code,
       }));
-      toast.error(
-        notFound
-          ? `CPF não encontrado na base do provedor.${reason ? ` Motivo do provedor: ${reason}` : ''} O contato pode ser salvo como não verificado.`
-          : invalid
-          ? 'CPF inválido. Confira os dígitos informados.'
-          : 'Não foi possível verificar agora. O contato poderá ser salvo como não verificado.',
-      );
+      if (notFound) {
+        toast.warning(
+          `CPF não encontrado na base do provedor.${reason ? ` Motivo do provedor: ${reason}` : ''} O contato pode ser salvo como não verificado.`,
+        );
+      } else {
+        toast.error(
+          invalid
+            ? 'CPF inválido. Confira os dígitos informados.'
+            : 'Não foi possível verificar agora. O contato poderá ser salvo como não verificado.',
+        );
+      }
+
 
     } finally {
       if (cpfInFlightRef.current === cpf) cpfInFlightRef.current = '';
