@@ -42,6 +42,19 @@ interface TwilioVoiceSetupStatus {
   webhookMode: 'telephony_v2' | 'legacy';
 }
 
+async function edgeFunctionErrorMessage(error: unknown, fallback: string) {
+  const context = (error as { context?: Response } | null)?.context;
+  if (context instanceof Response) {
+    try {
+      const payload = await context.clone().json() as { error?: string };
+      if (payload.error) return payload.error;
+    } catch {
+      // The response body may already have been consumed by the client.
+    }
+  }
+  return fallback;
+}
+
 export function IntegrationConnectDialog({
   open,
   onOpenChange,
@@ -250,7 +263,10 @@ export function IntegrationConnectDialog({
 
         if (setupError) {
           console.error('Twilio Voice setup error:', setupError);
-          throw new Error('Erro ao configurar Twilio Voice. Verifique suas credenciais.');
+          throw new Error(await edgeFunctionErrorMessage(
+            setupError,
+            'Erro ao configurar Twilio Voice. Verifique suas credenciais.',
+          ));
         }
 
         if (!setupData?.success) {
