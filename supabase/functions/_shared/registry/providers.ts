@@ -15,6 +15,8 @@ export type ProviderResult =
     status: number;
     error: string;
     retryable: boolean;
+    provider_code?: string | null;
+    provider_message?: string | null;
   };
 
 const TIMEOUT_MS = 6_000;
