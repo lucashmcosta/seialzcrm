@@ -249,7 +249,23 @@ async function nextRecipient(call: any, number: any): Promise<Response> {
     _excluded_user_ids: tried,
     _call_id: call.id,
   });
-  if (error || !data?.[0]?.user_id) return await fallback(call, number);
+  if (error) {
+    console.error("[telephony-webhook] recipient_claim_failed", {
+      callId: call.id,
+      numberId: number.id,
+      code: error.code,
+      message: error.message,
+    });
+    return await fallback(call, number);
+  }
+  if (!data?.[0]?.user_id) {
+    console.warn("[telephony-webhook] no_eligible_recipient", {
+      callId: call.id,
+      numberId: number.id,
+      triedCount: tried.length,
+    });
+    return await fallback(call, number);
+  }
   const recipient = data[0];
   const { data: attempt, error: attemptError } = await admin.from(
     "call_attempts",
@@ -261,7 +277,20 @@ async function nextRecipient(call: any, number: any): Promise<Response> {
     provider: "twilio",
     status: "queued",
   }).select("id").single();
-  if (attemptError || !attempt) return await fallback(call, number);
+  if (attemptError || !attempt) {
+    console.error("[telephony-webhook] attempt_create_failed", {
+      callId: call.id,
+      numberId: number.id,
+      userId: recipient.user_id,
+      code: attemptError?.code,
+      message: attemptError?.message,
+    });
+    await admin.from("telephony_presence").update({ active_call_id: null })
+      .eq("organization_id", call.organization_id)
+      .eq("user_id", recipient.user_id)
+      .eq("active_call_id", call.id);
+    return await fallback(call, number);
+  }
 
   return renderAttempt(call, number, attempt);
 }
