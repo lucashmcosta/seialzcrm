@@ -139,7 +139,7 @@ export function PhoneNumberSettings() {
         is_default_outbound: phone.is_default_outbound ?? phone.is_primary ?? false,
         recording_enabled: phone.recording_enabled ?? false,
         timezone: phone.timezone,
-        business_hours: phone.business_hours || defaultBusinessHours(),
+        business_hours: (phone.business_hours as unknown as PhoneNumber['business_hours']) || defaultBusinessHours(),
         max_attempts: phone.number_type === 'user' ? 1 : (phone.max_attempts || 3),
         fallback_message: phone.fallback_message || 'No momento não podemos atender. Registramos sua ligação e retornaremos em breve.',
         missed_call_owner_user_id: phone.missed_call_owner_user_id,
