@@ -14,6 +14,7 @@ import {
 
 const SUPABASE_URL = Deno.env.get("SUPABASE_URL") ?? "";
 const BASE_URL = `${SUPABASE_URL}/functions/v1/telephony-webhook`;
+const LEGACY_VOICE_URL = `${SUPABASE_URL}/functions/v1/twilio-webhook/voice`;
 const admin = createClient(
   SUPABASE_URL,
   Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? "",
@@ -327,7 +328,10 @@ async function handleVoice(
     return empty(403);
   }
   if (!await telephonyV2Enabled(admin, number.organization_id)) {
-    return empty(404);
+    const legacyUrl = escapeXml(
+      `${LEGACY_VOICE_URL}?orgId=${encodeURIComponent(number.organization_id)}`,
+    );
+    return xml(`<Redirect method="POST">${legacyUrl}</Redirect>`);
   }
   const fallbackOwner = await resolveFallbackOwner(number);
   const compatibilityOwner = fallbackOwner ?? number.missed_call_owner_user_id;
