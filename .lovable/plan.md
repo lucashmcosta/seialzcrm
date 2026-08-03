@@ -19,7 +19,7 @@ Header `x-health-token` comparado com o secret `SERVICE_HEALTH_TOKEN` (mesmo pad
 | Serviço exposto | Fonte atual | Métricas disponíveis |
 |---|---|---|
 | `outbox-worker` | `fn_outbox_health_summary_internal()` (`worker_last_run_at` = último `integration_audit_logs` com actor `integration-worker`) | processed (`success_24h`), errors (`failed_24h`), pending, running |
-| `integration-worker` | mesma fonte acima (é o processo do outbox; exposto como serviço próprio com o mesmo heartbeat) | idem |
+| `integration-worker` | sem heartbeat próprio (a telemetria existente pertence ao outbox-worker) | `status: "unknown"`, `metrics: {}` |
 | `inbox-reaper` | `outbox_system_heartbeats` componente `reaper` (`last_run_at`, `last_detail.reaped`) | processed (`reaped`) |
 | `inbox-dispatcher` | `fn_inbound_health_summary('1 hour')` agregada por status | processed, errors, latencyMs (avg_latency_sec × 1000) |
 | `evolution-api` | `evolution_instances` (`last_known_state`, `last_state_checked_at`) | instâncias abertas / total |
