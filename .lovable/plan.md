@@ -28,7 +28,7 @@ Header `x-health-token` comparado com o secret `SERVICE_HEALTH_TOKEN` (mesmo pad
 | `railway-backend` | não observado pelo Seialz | `status: "unknown"` |
 | `scheduler` | `pg_cron` não é legível pela função sem nova estrutura; sem heartbeat próprio | `status: "unknown"` |
 
-Nenhuma métrica inventada: campos sem fonte são omitidos (não zerados). `uptimeSeconds` e `version` por serviço só aparecem quando derivam de dado real; caso contrário são `null`.
+Nenhuma métrica inventada e nenhuma fonte reaproveitada entre serviços: cada serviço só recebe status e métricas se tiver fonte própria de monitoramento. Os demais ficam `unknown` com `metrics: {}` até ganharem telemetria própria. Campos sem fonte são omitidos (não zerados). `uptimeSeconds` e `version` por serviço só aparecem quando derivam de dado real; caso contrário são `null`.
 
 ## Regras de status (derivadas, sem novo estado persistido)
 
