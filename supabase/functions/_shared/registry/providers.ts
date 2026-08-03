@@ -183,8 +183,18 @@ const CPF_BRASIL_ERROR_CODES: Record<string, string> = {
   QUOTA_EXCEEDED: "provider_quota_exceeded",
   MISSING_CPF_PARAMETER: "invalid_or_not_found",
   INVALID_CPF_FORMAT: "invalid_or_not_found",
-  CPF_NOT_FOUND: "invalid_or_not_found",
+  CPF_NOT_FOUND: "not_found",
 };
+
+export function sanitizeProviderMessage(value: unknown): string | null {
+  const raw = text(value);
+  if (!raw) return null;
+  return raw
+    .replace(/\d{3}\.?\d{3}\.?\d{3}-?\d{2}/g, "[cpf]")
+    .replace(/\b[\w.+-]+@[\w-]+\.[\w.]+\b/g, "[email]")
+    .slice(0, 300);
+}
+
 
 export function normalizeCpfBrasilResponse(
   status: number,
