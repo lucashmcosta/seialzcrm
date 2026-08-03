@@ -13,6 +13,8 @@ export interface RegistryLookupResult<T = Record<string, unknown>> {
   data?: T;
   error?: string;
   retryable?: boolean;
+  provider_code?: string | null;
+  provider_message?: string | null;
   persisted_contact_id?: string | null;
 }
 
