@@ -131,6 +131,7 @@ export const cpfStatusLabel: Record<CpfVerificationStatus, string> = {
   verified: "Verificado",
   invalid: "CPF inválido",
   error: "Falha na verificação",
+  not_found: "Não encontrado na base",
 };
 
 const cpfStatusLabelEn: Record<CpfVerificationStatus, string> = {
@@ -139,7 +140,9 @@ const cpfStatusLabelEn: Record<CpfVerificationStatus, string> = {
   verified: "Verified",
   invalid: "Invalid CPF",
   error: "Verification failed",
+  not_found: "Not found in registry",
 };
+
 
 export function cpfStatusLabelFor(
   status: CpfVerificationStatus,
