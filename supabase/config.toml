@@ -37,6 +37,21 @@ verify_jwt = false
 [functions.telephony-call-intent]
 verify_jwt = false
 
+[functions.telephony-number-inventory]
+verify_jwt = false
+
+[functions.telephony-number-catalog]
+verify_jwt = false
+
+[functions.telephony-transfer-intent]
+verify_jwt = false
+
+[functions.telephony-transfer-control]
+verify_jwt = false
+
+[functions.telephony-transfer-reconcile]
+verify_jwt = false
+
 [functions.telephony-webhook]
 verify_jwt = false
 

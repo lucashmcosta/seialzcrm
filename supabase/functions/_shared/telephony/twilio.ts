@@ -173,6 +173,19 @@ export class TwilioVoiceAdapter implements VoiceProviderAdapter {
     };
   }
 
+  consultationParams(input: {
+    callId: string;
+    transferId: string;
+    targetUserId: string;
+  }): Record<string, string> {
+    return {
+      Mode: "consult",
+      CallId: input.callId,
+      TransferId: input.transferId,
+      TargetUserId: input.targetUserId,
+    };
+  }
+
   async verifyWebhook(input: {
     request: Request;
     params: Record<string, string>;

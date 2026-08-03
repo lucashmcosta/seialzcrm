@@ -6,11 +6,13 @@ import { PhoneDisconnect, Microphone, MicrophoneSlash, ArrowsInSimple, GridFour 
 import { DialPad } from './DialPad';
 import { formatPhoneDisplay } from '@/lib/phoneUtils';
 import { CallStatus } from '@/contexts/OutboundCallContext';
+import { CallTransferControls } from './CallTransferControls';
 
 interface OutboundCallModalProps {
   open: boolean;
   phoneNumber: string;
   contactName?: string;
+  fromNumber?: string;
   status: CallStatus;
   duration: number;
   isMuted: boolean;
@@ -81,6 +83,7 @@ export function OutboundCallModal({
   open,
   phoneNumber,
   contactName,
+  fromNumber,
   status,
   duration,
   isMuted,
@@ -178,6 +181,7 @@ export function OutboundCallModal({
               <h3 className="text-xl font-semibold text-foreground">{contactName}</h3>
             )}
             <p className="text-muted-foreground">{formatPhoneDisplay(phoneNumber)}</p>
+            {fromNumber && <p className="text-xs text-muted-foreground">Saindo por {formatPhoneDisplay(fromNumber)}</p>}
           </div>
 
           {/* Status & Timer */}
@@ -207,6 +211,8 @@ export function OutboundCallModal({
             dtmfDigits={dtmfDigits}
             onDialPress={onDialPress}
           />
+
+          {status === 'connected' && <CallTransferControls />}
 
           {/* End Call Button */}
           {isCallActive && (

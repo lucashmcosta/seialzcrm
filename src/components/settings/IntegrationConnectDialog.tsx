@@ -237,8 +237,8 @@ export function IntegrationConnectDialog({
 
       // For Twilio Voice, run automatic setup
       if (isTwilioVoice) {
-        if (!configValues.account_sid || !configValues.phone_number) {
-          throw new Error('Account SID e número Twilio são obrigatórios');
+        if (!configValues.account_sid) {
+          throw new Error('Account SID é obrigatório');
         }
         if (!configValues.auth_token && !voiceSetupStatus?.credentialsAvailable) {
           throw new Error('Informe o Auth Token para concluir a configuração');
@@ -254,7 +254,7 @@ export function IntegrationConnectDialog({
             organizationId: organization.id,
             accountSid: configValues.account_sid,
             authToken: configValues.auth_token || undefined,
-            phoneNumber: configValues.phone_number,
+            phoneNumber: configValues.phone_number || undefined,
             enableRecording: configValues.enable_recording,
           },
         });
@@ -346,7 +346,7 @@ export function IntegrationConnectDialog({
   const renderField = (field: any) => {
     const { key, label, type, placeholder, required, options, description } = field;
     const canReuseVoiceSecret = isTwilioVoice && key === 'auth_token' && voiceSetupStatus?.credentialsAvailable;
-    const fieldRequired = required && !canReuseVoiceSecret;
+    const fieldRequired = required && !canReuseVoiceSecret && !(isTwilioVoice && key === 'phone_number');
 
     const fieldLabel = (
       <Label htmlFor={key}>
@@ -503,7 +503,7 @@ export function IntegrationConnectDialog({
                 <Alert>
                   <Info className="h-4 w-4" />
                   <AlertDescription>
-                    Informe somente Account SID, Auth Token e o número Twilio em formato E.164. A API Key, a TwiML App e os webhooks serão criados e vinculados automaticamente.
+                    Informe o Account SID e o Auth Token. O número é opcional: depois você poderá importar todos os números da conta ou comprar novas linhas na Central de Telefonia.
                   </AlertDescription>
                 </Alert>
               )}

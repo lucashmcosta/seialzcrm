@@ -15,6 +15,7 @@ import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { formatPhoneDisplay } from '@/lib/phoneUtils';
 import { supabase } from '@/integrations/supabase/client';
+import { telephonySupabase } from '@/integrations/supabase/telephonyClient';
 import { useOrganization } from '@/hooks/useOrganization';
 import { toast } from 'sonner';
 
@@ -71,6 +72,18 @@ export function IntegrationDetailDialog({
   const [addEndpointOpen, setAddEndpointOpen] = useState(false);
 
   const isKommo = integration?.slug === 'kommo';
+
+  const { data: twilioPhoneNumbers = [] } = useQuery({
+    queryKey: ['twilio-voice-phone-numbers', organization?.id],
+    enabled: !!organization?.id && integration?.slug === 'twilio-voice' && open,
+    queryFn: async () => {
+      const { data, error } = await telephonySupabase.from('organization_phone_numbers')
+        .select('id, phone_number, friendly_name, assigned_user_id, is_active, is_default_outbound')
+        .eq('organization_id', organization!.id).order('phone_number');
+      if (error) throw error;
+      return data || [];
+    },
+  });
 
   // Fetch Kommo migration history
   const { data: kommoImportLogs } = useQuery({
@@ -342,11 +355,21 @@ export function IntegrationDetailDialog({
         </p>
       </div>
       <div className="space-y-2">
-        <Label className="text-muted-foreground">Número de Telefone</Label>
-        <p className="font-mono text-sm bg-muted px-3 py-2 rounded-md flex items-center gap-2">
-          <Phone className="h-4 w-4" />
-          {formatPhoneDisplay(configValues.phone_number) || 'Não configurado'}
-        </p>
+        <Label className="text-muted-foreground">Números sincronizados ({twilioPhoneNumbers.length})</Label>
+        {twilioPhoneNumbers.length > 0 ? (
+          <div className="space-y-2">
+            {twilioPhoneNumbers.map((number) => (
+              <div key={number.id} className="flex items-center gap-2 rounded-md bg-muted px-3 py-2">
+                <Phone className="h-4 w-4" />
+                <span className="flex-1 font-mono text-sm">{formatPhoneDisplay(number.phone_number)}</span>
+                <Badge variant={number.is_active ? 'default' : 'secondary'}>{number.assigned_user_id ? 'Individual' : 'Corporativo'}</Badge>
+                {number.is_default_outbound && <Badge variant="outline">Padrão</Badge>}
+              </div>
+            ))}
+          </div>
+        ) : (
+          <p className="text-sm text-muted-foreground">Nenhum número sincronizado. Use a Central de Telefonia para importar ou comprar.</p>
+        )}
       </div>
       <div className="space-y-2">
         <Label className="text-muted-foreground">Gravação Automática</Label>

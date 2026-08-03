@@ -5,7 +5,6 @@ import { useOutboundCall } from '@/contexts/OutboundCallContext';
 import { useTranslation } from '@/lib/i18n';
 import { useIsMobile } from '@/hooks/use-mobile';
 import { supabase } from '@/integrations/supabase/client';
-import { telephonySupabase } from '@/integrations/supabase/telephonyClient';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -43,14 +42,6 @@ interface ContactCallsProps {
   contactName?: string;
 }
 
-interface VoiceNumberOption {
-  id: string;
-  phone_number: string;
-  friendly_name: string | null;
-  number_type: 'company' | 'user';
-  is_default_outbound: boolean;
-}
-
 export function ContactCalls({ contactId, opportunityId, contactPhone, contactName }: ContactCallsProps) {
   const { organization, locale, userProfile } = useOrganization();
   const { hasVoiceIntegration } = useVoiceIntegration();
@@ -65,8 +56,6 @@ export function ContactCalls({ contactId, opportunityId, contactPhone, contactNa
   const [scheduleDialogOpen, setScheduleDialogOpen] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [filter, setFilter] = useState<'all' | 'made' | 'received' | 'scheduled'>('all');
-  const [voiceNumbers, setVoiceNumbers] = useState<VoiceNumberOption[]>([]);
-  const [selectedVoiceNumberId, setSelectedVoiceNumberId] = useState<string | undefined>();
   const [formData, setFormData] = useState({
     direction: 'outgoing' as 'outgoing' | 'incoming',
     status: 'completed',
@@ -78,29 +67,6 @@ export function ContactCalls({ contactId, opportunityId, contactPhone, contactNa
   useEffect(() => {
     fetchCalls();
   }, [contactId, organization?.id]);
-
-  useEffect(() => {
-    if (!telephonyV2 || !organization?.id || !userProfile?.id) {
-      setVoiceNumbers([]);
-      setSelectedVoiceNumberId(undefined);
-      return;
-    }
-    void (async () => {
-      const { data: allNumbers } = await telephonySupabase.from('organization_phone_numbers')
-        .select('id, phone_number, friendly_name, number_type, assigned_user_id, is_default_outbound')
-        .eq('organization_id', organization.id).eq('is_active', true);
-      const { data: grants } = await telephonySupabase.from('organization_phone_number_users')
-        .select('phone_number_id').eq('organization_id', organization.id)
-        .eq('user_id', userProfile.id).eq('can_originate_calls', true);
-      const grantedIds = new Set((grants || []).map((grant) => grant.phone_number_id));
-      const allowed = (allNumbers || []).filter((number) =>
-        (number.number_type === 'user' && number.assigned_user_id === userProfile.id) || grantedIds.has(number.id)
-      ) as VoiceNumberOption[];
-      allowed.sort((a, b) => Number(b.number_type === 'user') - Number(a.number_type === 'user') || Number(b.is_default_outbound) - Number(a.is_default_outbound));
-      setVoiceNumbers(allowed);
-      setSelectedVoiceNumberId(allowed[0]?.id);
-    })();
-  }, [telephonyV2, organization?.id, userProfile?.id]);
 
   const fetchCalls = async () => {
     if (!organization?.id) return;
@@ -232,20 +198,11 @@ export function ContactCalls({ contactId, opportunityId, contactPhone, contactNa
           <div className="flex items-center gap-2 flex-wrap">
             {contactPhone && canStartVoiceCall && (
               <>
-                {telephonyV2 && voiceNumbers.length > 1 && (
-                  <Select value={selectedVoiceNumberId} onValueChange={setSelectedVoiceNumberId}>
-                    <SelectTrigger className="h-9 w-[190px]"><SelectValue placeholder="Número de saída" /></SelectTrigger>
-                    <SelectContent>{voiceNumbers.map((number) => (
-                      <SelectItem key={number.id} value={number.id}>{number.friendly_name || number.phone_number}</SelectItem>
-                    ))}</SelectContent>
-                  </Select>
-                )}
                 <Button size="sm" onClick={() => startCall({ 
                   phoneNumber: contactPhone, 
                   contactName, 
                   contactId, 
                   opportunityId,
-                  phoneNumberId: selectedVoiceNumberId,
                 })}>
                   <Phone className="w-4 h-4 mr-1" />
                   Ligar
@@ -399,7 +356,6 @@ export function ContactCalls({ contactId, opportunityId, contactPhone, contactNa
                         contactName, 
                         contactId, 
                         opportunityId,
-                        phoneNumberId: selectedVoiceNumberId,
                       })}>
                         <Phone className="w-4 h-4 mr-2" />
                         Ligar agora

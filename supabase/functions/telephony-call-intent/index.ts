@@ -115,6 +115,7 @@ Deno.serve(async (req) => {
       organization_id: context.organizationId,
       user_id: context.userId,
       initiated_by_user_id: context.userId,
+      current_agent_user_id: context.userId,
       contact_id: body.contactId ?? null,
       opportunity_id: body.opportunityId ?? null,
       phone_number_id: number.id,

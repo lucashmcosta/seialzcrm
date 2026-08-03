@@ -10,7 +10,7 @@ import { useTelephonyV2Flag } from '@/hooks/useTelephonyV2Flag';
 import { usePermissions } from '@/hooks/usePermissions';
 
 import { OutboundCallContext } from './outbound-call/context';
-import type { CallInfo, CallStatus, IncomingCallInfo, OutboundCallContextType, TokenCache } from './outbound-call/types';
+import type { CallInfo, CallStatus, IncomingCallInfo, OutboundCallContextType, TokenCache, CallTransferSession, CallTransferTarget, CallTransferState, OutboundNumberSelection } from './outbound-call/types';
 
 // Re-export public API so existing import paths
 // (`@/contexts/OutboundCallContext`) keep working unchanged.
@@ -41,6 +41,11 @@ export function TelephonyProvider({ children }: { children: ReactNode }) {
   const [activeIncomingCallInfo, setActiveIncomingCallInfo] = useState<IncomingCallInfo | null>(null);
   const [activeIncomingCall, setActiveIncomingCall] = useState<TwilioCall | null>(null);
   const [incomingMuted, setIncomingMuted] = useState(false);
+  const [activeCallId, setActiveCallId] = useState<string | null>(null);
+  const [transferSession, setTransferSession] = useState<CallTransferSession | null>(null);
+  const [transferTargets, setTransferTargets] = useState<CallTransferTarget[]>([]);
+  const [transferLoading, setTransferLoading] = useState(false);
+  const [numberSelection, setNumberSelection] = useState<OutboundNumberSelection | null>(null);
 
   // SECURITY: Never initialize in admin routes
   const isAdminRoute = location.pathname.startsWith('/admin');
@@ -69,10 +74,20 @@ export function TelephonyProvider({ children }: { children: ReactNode }) {
   const deviceRegisteredRef = useRef(false);
   // A fresh ID per mounted tab avoids duplicated tabs sharing the same lease.
   const presenceSessionRef = useRef<string>(crypto.randomUUID());
+  const transferCallRef = useRef<TwilioCall | null>(null);
+  const transferSessionRef = useRef<CallTransferSession | null>(null);
+  const numberSelectionRef = useRef<OutboundNumberSelection | null>(null);
+  const outboundSelectionRequestRef = useRef(0);
+  const transferChannelRef = useRef<ReturnType<typeof supabase.channel> | null>(null);
+  const suppressCallFinalizationRef = useRef(false);
+  const transferOriginRef = useRef<'incoming' | 'outgoing'>('outgoing');
 
   const isOnCall = status !== 'idle' && status !== 'failed' && status !== 'ended';
   const isOnIncomingCall = activeIncomingCall !== null;
   const canUseVoiceDevice = !telephonyV2 || permissions.canMakeCalls || permissions.canReceiveCalls;
+  const canTransferCalls = telephonyV2 && permissions.canTransferCalls;
+
+  useEffect(() => { transferSessionRef.current = transferSession; }, [transferSession]);
 
   useEffect(() => {
     if (!telephonyV2) {
@@ -330,12 +345,23 @@ export function TelephonyProvider({ children }: { children: ReactNode }) {
     setDtmfDigits('');
     setErrorMessage(null);
     setCallInfo(null);
+    setActiveCallId(null);
     setIsMinimized(false);
     callIdRef.current = null;
     callStartTimeRef.current = null;
     pendingCallRef.current = null;
     callFinalizedRef.current = false;
     lastProcessedStatusRef.current = null;
+    suppressCallFinalizationRef.current = false;
+    transferCallRef.current = null;
+    if (transferChannelRef.current) {
+      supabase.removeChannel(transferChannelRef.current);
+      transferChannelRef.current = null;
+    }
+    setTransferSession(null);
+    setTransferTargets([]);
+    numberSelectionRef.current = null;
+    setNumberSelection(null);
     void updatePresence(null);
   }, [isDeviceReady, clearStateTimeout, unsubscribeFromCallStatus, updatePresence]);
 
@@ -363,6 +389,21 @@ export function TelephonyProvider({ children }: { children: ReactNode }) {
     setActiveIncomingCallInfo(null);
     setActiveIncomingCall(null);
     setIncomingMuted(false);
+    if (transferCallRef.current) {
+      try { transferCallRef.current.disconnect(); } catch {}
+      transferCallRef.current = null;
+    }
+    if (transferChannelRef.current) {
+      supabase.removeChannel(transferChannelRef.current);
+      transferChannelRef.current = null;
+    }
+    setTransferSession(null);
+    setTransferTargets([]);
+    setTransferLoading(false);
+    setActiveCallId(null);
+    numberSelectionRef.current = null;
+    setNumberSelection(null);
+    suppressCallFinalizationRef.current = false;
     removePresence();
     if (timerRef.current) {
       clearInterval(timerRef.current);
@@ -440,6 +481,7 @@ export function TelephonyProvider({ children }: { children: ReactNode }) {
 
       if (newCall) {
         callIdRef.current = newCall.id;
+        setActiveCallId(newCall.id);
         console.log('Call record created with ID:', newCall.id);
         // Subscribe to server-side status updates (dual-path sync)
         subscribeToCallStatus(newCall.id);
@@ -475,6 +517,8 @@ export function TelephonyProvider({ children }: { children: ReactNode }) {
           throw new Error(data?.error || 'Não foi possível preparar a chamada');
         }
         callIdRef.current = data.callId;
+        setActiveCallId(data.callId);
+        setCallInfo((current) => current ? { ...current, fromNumber: data.from, phoneNumberId: data.phoneNumberId } : current);
         callStartTimeRef.current = new Date();
         connectParams = data.connectParams as Record<string, string>;
         subscribeToCallStatus(data.callId);
@@ -514,6 +558,7 @@ export function TelephonyProvider({ children }: { children: ReactNode }) {
 
       call.on('disconnect', () => {
         console.log('[SDK] Call disconnected');
+        if (suppressCallFinalizationRef.current && transferSessionRef.current) return;
         callFinalizedRef.current = true;
         lastProcessedStatusRef.current = 'completed';
         clearStateTimeout();
@@ -524,6 +569,7 @@ export function TelephonyProvider({ children }: { children: ReactNode }) {
 
       call.on('cancel', () => {
         console.log('[SDK] Call cancelled');
+        if (suppressCallFinalizationRef.current && transferSessionRef.current) return;
         callFinalizedRef.current = true;
         lastProcessedStatusRef.current = 'canceled';
         clearStateTimeout();
@@ -534,6 +580,7 @@ export function TelephonyProvider({ children }: { children: ReactNode }) {
 
       call.on('reject', () => {
         console.log('[SDK] Call rejected');
+        if (suppressCallFinalizationRef.current && transferSessionRef.current) return;
         callFinalizedRef.current = true;
         lastProcessedStatusRef.current = 'busy';
         clearStateTimeout();
@@ -545,6 +592,7 @@ export function TelephonyProvider({ children }: { children: ReactNode }) {
 
       call.on('error', (error: any) => {
         console.error('[SDK] Call error:', error);
+        if (suppressCallFinalizationRef.current && transferSessionRef.current) return;
         callFinalizedRef.current = true;
         lastProcessedStatusRef.current = 'failed';
         clearStateTimeout();
@@ -599,7 +647,10 @@ export function TelephonyProvider({ children }: { children: ReactNode }) {
 
       if (telephonyV2) {
         device.on('incoming', async (call) => {
-          const from = call.parameters.From || call.parameters.Caller || '';
+          const transferId = call.customParameters?.get('TransferId') || undefined;
+          const transferRole = call.customParameters?.get('TransferRole') === 'consult' ? 'consult' as const : undefined;
+          const customerFrom = call.customParameters?.get('CustomerFrom') || '';
+          const from = customerFrom || call.parameters.From || call.parameters.Caller || '';
           let contactName: string | undefined;
           let contactId: string | undefined;
           if (organization?.id && from) {
@@ -612,24 +663,54 @@ export function TelephonyProvider({ children }: { children: ReactNode }) {
             contactName = contact?.full_name;
             contactId = contact?.id;
           }
-          const info: IncomingCallInfo = { from, contactName, contactId };
+          const info: IncomingCallInfo = {
+            from,
+            contactName,
+            contactId,
+            transferId,
+            transferRole,
+            initiatorName: call.customParameters?.get('InitiatorName') || undefined,
+          };
           incomingCallRef.current = call;
           setIncomingCallInfo(info);
 
           const callId = call.customParameters?.get('CallId') ?? null;
+          if (callId) {
+            callIdRef.current = callId;
+            setActiveCallId(callId);
+          }
           void updatePresence(callId);
           call.on('accept', () => {
             setActiveIncomingCall(call);
             setActiveIncomingCallInfo(info);
             setIncomingCallInfo(null);
             void updatePresence(callId);
+            if (transferId) {
+              if (transferChannelRef.current) supabase.removeChannel(transferChannelRef.current);
+              transferChannelRef.current = supabase.channel(`transfer-recipient-${transferId}`)
+                .on('postgres_changes', {
+                  event: 'UPDATE', schema: 'public', table: 'call_transfers', filter: `id=eq.${transferId}`,
+                }, (payload) => {
+                  const next = payload.new as { state?: CallTransferState };
+                  if (next.state === 'completed') {
+                    // The consulted colleague is now the current call owner and
+                    // may initiate a subsequent private transfer.
+                    setActiveIncomingCallInfo((current) => current?.transferId === transferId
+                      ? { ...current, transferRole: undefined }
+                      : current);
+                  }
+                }).subscribe();
+            }
           });
           const finish = () => {
+            if (suppressCallFinalizationRef.current && transferSessionRef.current) return;
             incomingCallRef.current = null;
             setIncomingCallInfo(null);
             setActiveIncomingCall(null);
             setActiveIncomingCallInfo(null);
             setIncomingMuted(false);
+            setActiveCallId(null);
+            callIdRef.current = null;
             void updatePresence(null);
           };
           call.on('disconnect', finish);
@@ -816,8 +897,155 @@ export function TelephonyProvider({ children }: { children: ReactNode }) {
     };
   }, [isAdminRoute, organization?.id, userProfile?.id, hasVoiceIntegration, voiceLoading, telephonyFlagLoading, permissionsLoading, isVoiceLeader, canUseVoiceDevice]);
 
+  const subscribeToTransfer = useCallback((transferId: string) => {
+    if (transferChannelRef.current) supabase.removeChannel(transferChannelRef.current);
+    transferChannelRef.current = supabase.channel(`call-transfer-${transferId}`)
+      .on('postgres_changes', {
+        event: 'UPDATE', schema: 'public', table: 'call_transfers', filter: `id=eq.${transferId}`,
+      }, (payload) => {
+        const next = payload.new as { state: CallTransferState; failure_reason?: string | null };
+        setTransferSession((current) => current ? {
+          ...current,
+          state: next.state as CallTransferState,
+          error: next.failure_reason || null,
+        } : current);
+        if (next.state === 'completed') {
+          suppressCallFinalizationRef.current = false;
+          void updatePresence(null);
+          if (transferOriginRef.current === 'incoming') {
+            incomingCallRef.current = null;
+            setActiveIncomingCall(null);
+            setActiveIncomingCallInfo(null);
+          } else {
+            setStatus('ended');
+          }
+          setTimeout(() => cleanupCallRef.current?.(), 1200);
+        } else if (next.state === 'canceled') {
+          suppressCallFinalizationRef.current = false;
+          setTimeout(() => {
+            setTransferSession(null);
+            transferSessionRef.current = null;
+            if (transferChannelRef.current) {
+              supabase.removeChannel(transferChannelRef.current);
+              transferChannelRef.current = null;
+            }
+          }, 800);
+        } else if (next.state === 'failed') {
+          suppressCallFinalizationRef.current = false;
+          setErrorMessage('A transferência falhou');
+        }
+      }).subscribe();
+  }, [updatePresence]);
+
+  const connectTransferCall = useCallback(async (params: Record<string, string>) => {
+    if (!deviceRef.current) throw new Error('Dispositivo de telefonia indisponível');
+    // The provider redirect normally closes the previous direct bridge first.
+    // A short yield prevents the SDK from treating the consultation as a
+    // simultaneous call while allowIncomingWhileBusy is disabled.
+    await new Promise((resolve) => setTimeout(resolve, 250));
+    const call = await deviceRef.current.connect({ params });
+    transferCallRef.current = call;
+    if (transferOriginRef.current === 'incoming') {
+      incomingCallRef.current = call;
+      setActiveIncomingCall(call);
+    } else {
+      activeCallRef.current = call;
+    }
+    call.on('error', (error: unknown) => {
+      console.error('[TelephonyTransfer] consult call error', error);
+      const message = error instanceof Error ? error.message : 'Falha na consulta';
+      setTransferSession((current) => current ? { ...current, error: message } : current);
+    });
+    call.on('disconnect', () => {
+      const current = transferSessionRef.current;
+      if (!current || ['completed', 'canceled', 'failed'].includes(current.state)) return;
+      if (current.state === 'handoff_pending') {
+        setTransferSession({ ...current, state: 'completed' });
+      }
+    });
+    return call;
+  }, []);
+
+  const loadTransferTargets = useCallback(async () => {
+    if (!organization?.id || !callIdRef.current || !canTransferCalls) return;
+    setTransferLoading(true);
+    try {
+      const { data, error } = await supabase.functions.invoke('telephony-transfer-intent', {
+        headers: { 'x-organization-id': organization.id },
+        body: { action: 'targets', callId: callIdRef.current },
+      });
+      if (error || data?.error) throw new Error(data?.error || 'Não foi possível consultar a equipe');
+      setTransferTargets(data.targets || []);
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : 'Erro ao consultar usuários disponíveis');
+      setTransferTargets([]);
+    } finally {
+      setTransferLoading(false);
+    }
+  }, [organization?.id, canTransferCalls]);
+
+  const startTransfer = useCallback(async (target: CallTransferTarget) => {
+    if (!organization?.id || !callIdRef.current || !canTransferCalls || transferSessionRef.current) return;
+    setTransferLoading(true);
+    suppressCallFinalizationRef.current = true;
+    transferOriginRef.current = activeIncomingCall || incomingCallRef.current ? 'incoming' : 'outgoing';
+    try {
+      const { data, error } = await supabase.functions.invoke('telephony-transfer-intent', {
+        headers: { 'x-organization-id': organization.id },
+        body: { callId: callIdRef.current, targetUserId: target.userId },
+      });
+      if (error || data?.error || !data?.transferId || !data?.connectParams) {
+        throw new Error(data?.error || 'Não foi possível iniciar a transferência');
+      }
+      const session: CallTransferSession = {
+        id: data.transferId,
+        callId: callIdRef.current,
+        targetUserId: target.userId,
+        targetName: target.fullName,
+        state: data.state || 'customer_queued',
+      };
+      transferSessionRef.current = session;
+      setTransferSession(session);
+      subscribeToTransfer(data.transferId);
+      try { activeCallRef.current?.disconnect(); } catch { /* provider leg may already be redirected */ }
+      try { activeIncomingCall?.disconnect(); } catch { /* provider leg may already be redirected */ }
+      await connectTransferCall(data.connectParams as Record<string, string>);
+      toast.success(`Cliente em espera. Chamando ${target.fullName}.`);
+    } catch (error) {
+      suppressCallFinalizationRef.current = false;
+      toast.error(error instanceof Error ? error.message : 'Erro ao iniciar transferência');
+      setTransferSession(null);
+    } finally {
+      setTransferLoading(false);
+    }
+  }, [organization?.id, canTransferCalls, activeIncomingCall, subscribeToTransfer, connectTransferCall]);
+
+  const controlTransfer = useCallback(async (action: 'return_to_customer' | 'consult_again' | 'complete' | 'cancel') => {
+    const current = transferSessionRef.current;
+    if (!organization?.id || !current) return;
+    setTransferLoading(true);
+    try {
+      if (action === 'consult_again') suppressCallFinalizationRef.current = true;
+      const { data, error } = await supabase.functions.invoke('telephony-transfer-control', {
+        headers: { 'x-organization-id': organization.id },
+        body: { transferId: current.id, action },
+      });
+      if (error || data?.error) throw new Error(data?.error || 'Não foi possível controlar a transferência');
+      setTransferSession((session) => session ? { ...session, state: data.state as CallTransferState } : session);
+      if (data.connectParams) await connectTransferCall(data.connectParams as Record<string, string>);
+      if (action === 'complete') toast.success(`Transferindo para ${current.targetName}`);
+      if (action === 'return_to_customer') toast.success('Voltando para o cliente');
+      if (action === 'cancel') toast.success('Transferência encerrada; você continua com o cliente');
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : 'Erro na transferência');
+      setTransferSession((session) => session ? { ...session, error: error instanceof Error ? error.message : 'Erro na transferência' } : session);
+    } finally {
+      setTransferLoading(false);
+    }
+  }, [organization?.id, connectTransferCall]);
+
   // Start a new call
-  const startCall = useCallback((params: CallInfo) => {
+  const beginCall = useCallback((params: CallInfo) => {
     if (telephonyV2 && !permissions.canMakeCalls) {
       toast.error('Você não tem permissão para realizar chamadas');
       return;
@@ -841,9 +1069,79 @@ export function TelephonyProvider({ children }: { children: ReactNode }) {
     }
   }, [telephonyV2, permissions.canMakeCalls, isOnCall, cleanupCall, isDeviceReady, makeCall, initializeDevice]);
 
+  const startCall = useCallback((params: CallInfo) => {
+    const requestId = ++outboundSelectionRequestRef.current;
+    numberSelectionRef.current = null;
+    setNumberSelection(null);
+    if (!telephonyV2 || params.phoneNumberId || !organization?.id || !userProfile?.id) {
+      beginCall(params);
+      return;
+    }
+    void (async () => {
+      try {
+        const [{ data: numbers }, { data: grants }] = await Promise.all([
+          telephonySupabase.from('organization_phone_numbers').select('id, phone_number, friendly_name, number_type, assigned_user_id, is_default_outbound')
+            .eq('organization_id', organization.id).eq('is_active', true),
+          telephonySupabase.from('organization_phone_number_users').select('phone_number_id, user_id, can_originate_calls')
+            .eq('organization_id', organization.id).eq('user_id', userProfile.id).eq('can_originate_calls', true),
+        ]);
+        const grantIds = new Set((grants || []).map((grant) => grant.phone_number_id));
+        const options = (numbers || []).filter((number) =>
+          (number.number_type === 'user' && number.assigned_user_id === userProfile.id) || grantIds.has(number.id)
+        ).sort((left, right) => {
+          const leftRank = left.number_type === 'user' && left.assigned_user_id === userProfile.id ? 0 : left.is_default_outbound ? 1 : 2;
+          const rightRank = right.number_type === 'user' && right.assigned_user_id === userProfile.id ? 0 : right.is_default_outbound ? 1 : 2;
+          return leftRank - rightRank;
+        }).map((number, index) => ({
+          id: number.id,
+          phoneNumber: number.phone_number,
+          friendlyName: number.friendly_name || number.phone_number,
+          numberType: number.number_type,
+          automatic: index === 0,
+        }));
+        if (requestId !== outboundSelectionRequestRef.current) return;
+        if (options.length <= 1) {
+          beginCall({ ...params, phoneNumberId: options[0]?.id });
+          return;
+        }
+        const selection = { call: params, options };
+        numberSelectionRef.current = selection;
+        setNumberSelection(selection);
+      } catch (error) {
+        if (requestId !== outboundSelectionRequestRef.current) return;
+        console.warn('[Telephony] Could not preselect outbound number; backend will resolve it', error);
+        beginCall(params);
+      }
+    })();
+  }, [telephonyV2, organization?.id, userProfile?.id, beginCall]);
+
+  const selectOutboundNumber = useCallback((phoneNumberId: string) => {
+    const selection = numberSelectionRef.current;
+    if (!selection || !selection.options.some((option) => option.id === phoneNumberId)) return;
+    outboundSelectionRequestRef.current += 1;
+    numberSelectionRef.current = null;
+    setNumberSelection(null);
+    beginCall({ ...selection.call, phoneNumberId });
+  }, [beginCall]);
+
+  const cancelOutboundNumberSelection = useCallback(() => {
+    outboundSelectionRequestRef.current += 1;
+    numberSelectionRef.current = null;
+    setNumberSelection(null);
+  }, []);
+
   // End the current call
   const endCall = useCallback(() => {
     clearStateTimeout();
+
+    const transfer = transferSessionRef.current;
+    if (transfer && organization?.id) {
+      void supabase.functions.invoke('telephony-transfer-control', {
+        headers: { 'x-organization-id': organization.id },
+        body: { transferId: transfer.id, action: 'end_call' },
+      });
+      suppressCallFinalizationRef.current = false;
+    }
 
     if (activeCallRef.current) {
       try {
@@ -861,7 +1159,7 @@ export function TelephonyProvider({ children }: { children: ReactNode }) {
       activeCallRef.current = null;
       cleanupCall();
     }, 1500);
-  }, [cleanupCall, clearStateTimeout, updateCallRecord, updatePresence]);
+  }, [cleanupCall, clearStateTimeout, updateCallRecord, updatePresence, organization?.id]);
 
   // Toggle mute
   const toggleMute = useCallback(() => {
@@ -920,6 +1218,14 @@ export function TelephonyProvider({ children }: { children: ReactNode }) {
   }, [updatePresence]);
 
   const endIncomingCall = useCallback(() => {
+    const transfer = transferSessionRef.current;
+    if (transfer && organization?.id) {
+      void supabase.functions.invoke('telephony-transfer-control', {
+        headers: { 'x-organization-id': organization.id },
+        body: { transferId: transfer.id, action: 'end_call' },
+      });
+      suppressCallFinalizationRef.current = false;
+    }
     const call = activeIncomingCall ?? incomingCallRef.current;
     if (call) call.disconnect();
     incomingCallRef.current = null;
@@ -928,7 +1234,7 @@ export function TelephonyProvider({ children }: { children: ReactNode }) {
     setActiveIncomingCallInfo(null);
     setIncomingMuted(false);
     void updatePresence(null);
-  }, [activeIncomingCall, updatePresence]);
+  }, [activeIncomingCall, updatePresence, organization?.id]);
 
   const toggleIncomingMute = useCallback(() => {
     if (!activeIncomingCall) return;
@@ -962,6 +1268,17 @@ export function TelephonyProvider({ children }: { children: ReactNode }) {
     rejectIncomingCall,
     endIncomingCall,
     toggleIncomingMute,
+    activeCallId,
+    canTransferCalls,
+    transferSession,
+    transferTargets,
+    transferLoading,
+    loadTransferTargets,
+    startTransfer,
+    controlTransfer,
+    numberSelection,
+    selectOutboundNumber,
+    cancelOutboundNumberSelection,
   };
 
   return (
