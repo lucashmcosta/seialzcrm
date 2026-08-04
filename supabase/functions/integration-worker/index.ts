@@ -60,16 +60,33 @@ Deno.serve(async (req) => {
     if (claimed.length < BATCH_SIZE) break;
   }
 
+  const durationMs = Math.round(performance.now() - startedAt);
+
+  // Heartbeat de vida (best-effort): gravado SEMPRE, inclusive quando processed = 0.
+  // `integration_audit_logs` continua sendo trilha de trabalho por job — não sinal de vida.
+  const { error: hbErr } = await supabase
+    .from("outbox_system_heartbeats")
+    .upsert(
+      {
+        component: "integration-worker",
+        last_run_at: new Date().toISOString(),
+        last_detail: { processed: totalProcessed, duration_ms: durationMs, summary },
+      },
+      { onConflict: "component" },
+    );
+  if (hbErr) console.warn("[integration-worker] heartbeat upsert failed", hbErr.message);
+
   return new Response(
     JSON.stringify({
       ok: true,
       processed: totalProcessed,
-      durationMs: Math.round(performance.now() - startedAt),
+      durationMs,
       summary,
     }),
     { headers: { "Content-Type": "application/json" } },
   );
 });
+
 
 // deno-lint-ignore no-explicit-any
 async function processJob(supabase: any, job: IntegrationJob, summary: Record<string, number>) {
