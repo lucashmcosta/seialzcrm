@@ -986,12 +986,10 @@ function extractConnectionState(env: EvolutionWebhookEnvelope):
   "open" | "connecting" | "close" | "unknown" | null {
   const d = (env.data ?? {}) as Record<string, unknown>;
   const raw = d.state ?? d.status ?? d.connection ?? null;
-  if (!isString(raw)) return null;
-  const s = raw.toLowerCase();
-  if (s === "open" || s === "connected") return "open";
-  if (s === "connecting" || s === "qr" || s === "pairing") return "connecting";
-  if (s === "close" || s === "closed" || s === "disconnected" || s === "logout") return "close";
-  return "unknown";
+  // Mapeamento centralizado em _shared/evolution/state.ts — mesmo vocabulário
+  // usado pelo health check periódico. `refused`, `logged_out`, `replaced`
+  // etc. são estados terminais e viram `close`, não `unknown`.
+  return normalizeEvolutionState(raw);
 }
 function extractQrExpiresAt(env: EvolutionWebhookEnvelope): Date {
   const d = (env.data ?? {}) as Record<string, unknown>;
