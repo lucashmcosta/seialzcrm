@@ -53,14 +53,18 @@ curl -s https://qvmtzfvkhkhkhdpclzua.supabase.co/functions/v1/service-health \
       "lastHeartbeat": "2026-08-03T14:19:40.000Z",
       "uptimeSeconds": null,
       "version": null,
+      "lastDeadLetterAt": "2026-05-26T02:14:00.000Z",
       "metrics": {
-        "processed": 1284,
-        "errors": 3,
+        "processed": 18,
+        "errors": 0,
         "pending": 0,
         "running": 1,
         "stuck5m": 0,
-        "failed": 2,
-        "deadLetter": 1
+        "failed": 0,
+        "failed24h": 0,
+        "deadLetter": 0,
+        "deadLetter24h": 0,
+        "deadLetterTotal": 5549
       }
     }
   ],
