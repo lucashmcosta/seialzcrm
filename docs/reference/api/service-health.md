@@ -127,6 +127,7 @@ O backlog histórico de dead letters (`deadLetterTotal`) **nunca** entra na clas
 
 Casos específicos:
 
+- **`outbox-worker`** tem heartbeat de vida próprio em `outbox_system_heartbeats` (`component='integration-worker'`, `last_detail = { processed, duration_ms, summary }`), gravado ao fim de **toda** invocação — inclusive com `processed = 0`. `integration_audit_logs` (actor `integration-worker`) é trilha de trabalho por job, não sinal de vida: usá-la como heartbeat gerava `critical` falso sempre que a fila ficava vazia por mais de 15 min.
 - **`inbox-dispatcher`** não tem heartbeat próprio; a frescura é inferida dos eventos da última hora. Zero eventos na janela não é erro → `unknown`.
 - Uma fonte indisponível degrada **apenas** o serviço correspondente (leituras em `Promise.allSettled`), o restante da resposta continua válido.
 
