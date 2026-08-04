@@ -102,7 +102,7 @@ curl -s https://qvmtzfvkhkhkhdpclzua.supabase.co/functions/v1/service-health \
 | `outbox-worker` | `fn_outbox_health_summary_internal()` + contagens de 24h em `integration_jobs` (`worker_last_run_at` vem de `outbox_system_heartbeats` componente `integration-worker`, gravado a cada invocação mesmo com fila vazia) | `processed` (sucesso 24h), `errors` (falhas 24h), `pending`, `running`, `stuck5m`, `failed` (histórico), `failed24h`, `deadLetter` = `deadLetter24h`, `deadLetterTotal` (histórico), `lastDeadLetterAt` |
 | `inbox-reaper` | `outbox_system_heartbeats` componente `reaper` | `processed` (`last_detail.reaped`) |
 | `inbox-dispatcher` | `fn_inbound_health_summary('1 hour')` | `processed`, `errors`, `deadLetter`, `latencyMs` (média ponderada) |
-| `evolution-api` | `evolution_instances` (`last_known_state`, `last_state_checked_at`) | `instancesOpen`, `instancesTotal` |
+| `evolution-api` | `evolution_instances` (`last_known_state`, `last_state_checked_at`), atualizado por webhook `CONNECTION_UPDATE` **e** pelo cron `evolution-health-check` (a cada 5 min) | `instancesOpen`, `instancesConnecting`, `instancesClose`, `instancesUnknown`, `instancesTotal`, `stateStale` (0/1), `stateAgeSeconds` (`-1` = nunca verificado) + campo `detail` legível |
 | `integration-worker` | **sem telemetria própria** | — (`unknown`) |
 | `public-subscriber-worker` | **sem telemetria própria** | — (`unknown`) |
 | `redis` | não observado pelo Seialz | — (`unknown`) |
