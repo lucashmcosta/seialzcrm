@@ -241,6 +241,49 @@ if (dsn) {
         if (twilioRelated) return null;
       }
 
+      // Drop AbortError from the Twilio Voice SDK's Insights EventPublisher.
+      // The SDK posts quality metrics to eventgw.*.twilio.com; when the Call /
+      // Device is torn down at the end of a call (or the network/adblocker cuts
+      // the request) that fetch is aborted and surfaces as an uncaught
+      // AbortError. The call itself completes normally and the `calls` row is
+      // persisted. Predicate is strict: AbortError/"operation was aborted"/
+      // "Load failed" AND evidence of the Twilio publisher in a stack frame or
+      // a recent breadcrumb — aborts from our own fetches stay visible.
+      {
+        const looksAborted =
+          exceptionType === "AbortError" ||
+          /the operation was aborted/i.test(exceptionValue) ||
+          /load failed/i.test(exceptionValue);
+        if (looksAborted) {
+          const twilioPublisherFrame = frames.some((frame) => {
+            const file =
+              typeof frame?.filename === "string" ? frame.filename.toLowerCase() : "";
+            return file.includes("twilio") || file.includes("voice-sdk");
+          });
+          const recent = (event.breadcrumbs ?? []).slice(-30);
+          const twilioPublisherBreadcrumb = recent.some((bc) => {
+            const msg = typeof bc?.message === "string" ? bc.message : "";
+            const data = bc?.data as Record<string, unknown> | undefined;
+            const url = typeof data?.url === "string" ? data.url : "";
+            const args = Array.isArray(data?.arguments)
+              ? (data!.arguments as unknown[])
+                  .map((a) => (typeof a === "string" ? a : ""))
+                  .join(" ")
+              : "";
+            const haystack = `${msg} ${url} ${args}`.toLowerCase();
+            return (
+              haystack.includes("eventgw") ||
+              haystack.includes("endpointmetrics") ||
+              haystack.includes("endpointevents") ||
+              haystack.includes("eventpublisher") ||
+              haystack.includes("twiliovoice")
+            );
+          });
+          if (twilioPublisherFrame || twilioPublisherBreadcrumb) return null;
+        }
+      }
+
+
       // Drop React DOM reconciliation crashes caused by Google Translate (or
       // similar page translators) mutating text nodes out from under React.
       // Translate wraps text in <font> tags, so React's fiber references a
