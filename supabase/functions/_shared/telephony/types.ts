@@ -18,6 +18,12 @@ export interface VoiceProviderAdapter {
     callId: string;
     phoneNumberId: string;
   }): Record<string, string>;
+  consultationParams(input: {
+    callId: string;
+    transferId: string;
+    targetUserId: string;
+    consultationSequence: number;
+  }): Record<string, string>;
   verifyWebhook(input: {
     request: Request;
     params: Record<string, string>;

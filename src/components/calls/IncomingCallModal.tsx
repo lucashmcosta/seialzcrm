@@ -7,6 +7,8 @@ import { Call } from '@twilio/voice-sdk';
 import { formatPhoneDisplay } from '@/lib/phoneUtils';
 import { DialPad } from './DialPad';
 import { MinimizedCallWidget } from './MinimizedCallWidget';
+import { CallTransferControls } from './CallTransferControls';
+import { useOutboundCall } from '@/contexts/OutboundCallContext';
 
 interface IncomingCallModalProps {
   isRinging: boolean;
@@ -41,6 +43,8 @@ export function IncomingCallModal({
   onMinimize,
   onExpand
 }: IncomingCallModalProps) {
+  const { incomingCallInfo, activeIncomingCallInfo, telephonyV2 } = useOutboundCall();
+  const transferInfo = telephonyV2 ? (incomingCallInfo || activeIncomingCallInfo) : null;
   const [duration, setDuration] = useState(0);
   const [digits, setDigits] = useState('');
   const [showDialPad, setShowDialPad] = useState(false);
@@ -170,9 +174,12 @@ export function IncomingCallModal({
           {/* Status */}
           <div className="text-center">
             {isRinging ? (
-              <p className="text-primary font-medium animate-pulse">
-                Chamada recebida...
-              </p>
+              <div>
+                <p className="text-primary font-medium animate-pulse">
+                  {transferInfo?.transferRole === 'consult' ? 'Consulta privada de transferência' : 'Chamada recebida...'}
+                </p>
+                {transferInfo?.initiatorName && <p className="text-xs text-muted-foreground">Solicitada por {transferInfo.initiatorName}</p>}
+              </div>
             ) : (
               <p className="text-lg font-mono">
                 {formatDuration(duration)}
@@ -195,6 +202,7 @@ export function IncomingCallModal({
           )}
 
           {/* Actions */}
+          {isOnCall && <CallTransferControls />}
           <div className="flex items-center gap-4">
             {isRinging ? (
               <>

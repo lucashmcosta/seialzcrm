@@ -12,6 +12,18 @@ import {
   isTerminalCallStatus,
   telephonyAttemptLimit,
 } from "../_shared/telephony/routing.ts";
+import {
+  deleteTwilioQueue,
+  twilioAccountUrl,
+  twilioApiContext,
+  twilioRequest,
+  updateTwilioCall,
+} from "../_shared/telephony/twilio-api.ts";
+import {
+  canApplyTransferEvent,
+  transferBridgeOutcome,
+  transferOwnsOriginalDial,
+} from "../_shared/telephony/transfer.ts";
 
 const SUPABASE_URL = Deno.env.get("SUPABASE_URL") ?? "";
 const BASE_URL = `${SUPABASE_URL}/functions/v1/telephony-webhook`;
@@ -73,6 +85,171 @@ async function callContext(
   return number ? { call, number } : null;
 }
 
+// deno-lint-ignore no-explicit-any
+async function transferContext(
+  transferId: string,
+): Promise<{ transfer: any; call: any; number: any } | null> {
+  const { data: transfer } = await admin.from("call_transfers").select("*").eq(
+    "id",
+    transferId,
+  ).maybeSingle();
+  if (!transfer) return null;
+  const context = await callContext(transfer.call_id);
+  return context ? { transfer, ...context } : null;
+}
+
+// deno-lint-ignore no-explicit-any
+async function recordTransferEvent(
+  transfer: any,
+  key: string,
+  type: string,
+  payload: Record<string, unknown>,
+) {
+  await admin.from("call_transfer_events").upsert({
+    organization_id: transfer.organization_id,
+    transfer_id: transfer.id,
+    provider: "twilio",
+    provider_event_key: key,
+    event_type: type,
+    payload,
+  }, { onConflict: "provider,provider_event_key" });
+}
+
+// deno-lint-ignore no-explicit-any
+async function setUserPresence(transfer: any, userId: string, active: boolean) {
+  let query = admin.from("telephony_presence").update({
+    active_call_id: active ? transfer.call_id : null,
+    last_seen_at: new Date().toISOString(),
+  }).eq("organization_id", transfer.organization_id).eq("user_id", userId);
+  query = active
+    ? query.is("active_call_id", null)
+    : query.eq("active_call_id", transfer.call_id);
+  await query;
+}
+
+function transferCycle(url: URL, fallback: number): number {
+  const raw = url.searchParams.get("cycle");
+  // Pre-hardening callbacks did not carry a cycle. They are safe only for the
+  // original consultation; after a re-consult they must be treated as stale.
+  if (!raw) return fallback === 1 ? 1 : 0;
+  const parsed = Number(raw);
+  return Number.isInteger(parsed) && parsed > 0 ? parsed : fallback;
+}
+
+// Delayed Twilio callbacks are expected. They may update their own leg/event,
+// but only the currently owning transfer cycle may mutate the shared call.
+// deno-lint-ignore no-explicit-any
+async function ownsCurrentTransferCycle(context: any, cycle: number) {
+  if (Number(context.transfer.consultation_sequence || 1) !== cycle) {
+    return false;
+  }
+  const { data: call } = await admin.from("calls").select("active_transfer_id")
+    .eq("id", context.call.id).maybeSingle();
+  return canApplyTransferEvent({
+    transferId: context.transfer.id,
+    activeTransferId: call?.active_transfer_id,
+    currentCycle: Number(context.transfer.consultation_sequence || 1),
+    eventCycle: cycle,
+  });
+}
+
+// deno-lint-ignore no-explicit-any
+async function renderTransferBridge(
+  context: { transfer: any; call: any; number: any },
+  actor: "initiator" | "target",
+  finish: boolean,
+): Promise<Response> {
+  const { transfer, call, number } = context;
+  const userId = actor === "target"
+    ? transfer.target_user_id
+    : transfer.initiated_by_user_id;
+  const { count } = await admin.from("call_transfer_legs").select("id", {
+    count: "exact",
+    head: true,
+  })
+    .eq("transfer_id", transfer.id).eq("role", "customer_bridge");
+  const sequence = (count ?? 0) + 1;
+  const { data: leg } = await admin.from("call_transfer_legs").insert({
+    organization_id: transfer.organization_id,
+    transfer_id: transfer.id,
+    call_id: transfer.call_id,
+    user_id: userId,
+    role: "customer_bridge",
+    sequence,
+    status: "queued",
+  }).select("id").single();
+  await recordTransferEvent(
+    transfer,
+    `bridge:${transfer.id}:${actor}:${sequence}`,
+    "customer_bridge_started",
+    { actor, userId, sequence },
+  );
+  const actionUrl = escapeXml(
+    `${BASE_URL}/transfer-bridge-result?transferId=${transfer.id}&legId=${
+      leg?.id ?? ""
+    }&actor=${actor}&cycle=${transfer.consultation_sequence || 1}`,
+  );
+  const recordingUrl = escapeXml(
+    `${BASE_URL}/recording?callId=${call.id}&transferLegId=${leg?.id ?? ""}`,
+  );
+  const record = number.recording_enabled
+    ? ` record="record-from-answer-dual" recordingStatusCallback="${recordingUrl}"`
+    : "";
+  const connectedUrl = escapeXml(
+    `${BASE_URL}/transfer-bridge-connected?transferId=${transfer.id}&legId=${
+      leg?.id ?? ""
+    }&actor=${actor}&finish=${finish ? "1" : "0"}&cycle=${
+      transfer.consultation_sequence || 1
+    }`,
+  );
+  return xml(
+    `<Dial action="${actionUrl}"${record}><Queue url="${connectedUrl}" method="POST">${
+      escapeXml(transfer.queue_name)
+    }</Queue></Dial>`,
+  );
+}
+
+// deno-lint-ignore no-explicit-any
+async function createTransferRecoveryCall(
+  context: { transfer: any; call: any; number: any },
+  actor: "initiator" | "target",
+) {
+  const userId = actor === "target"
+    ? context.transfer.target_user_id
+    : context.transfer.initiated_by_user_id;
+  const identity = twilioVoiceIdentity(
+    userId,
+    context.transfer.organization_id,
+  );
+  const twilio = await twilioApiContext(
+    admin,
+    context.transfer.organization_id,
+  );
+  return await twilioRequest<{ sid: string }>(
+    twilio,
+    twilioAccountUrl(twilio, "Calls.json"),
+    {
+      method: "POST",
+      form: {
+        To: `client:${identity}`,
+        From: context.number.phone_number,
+        Url:
+          `${BASE_URL}/transfer-bridge?transferId=${context.transfer.id}&actor=${actor}&cycle=${
+            context.transfer.consultation_sequence || 1
+          }`,
+        Method: "POST",
+        Timeout: 15,
+        StatusCallback:
+          `${BASE_URL}/transfer-recovery-status?transferId=${context.transfer.id}&actor=${actor}&cycle=${
+            context.transfer.consultation_sequence || 1
+          }`,
+        StatusCallbackMethod: "POST",
+        StatusCallbackEvent: "completed",
+      },
+    },
+  );
+}
+
 async function verifySignature(
   req: Request,
   params: Record<string, string>,
@@ -114,19 +291,7 @@ async function resolveFallbackOwner(number: any): Promise<string | null> {
 }
 
 // deno-lint-ignore no-explicit-any
-async function fallback(call: any, number: any): Promise<Response> {
-  const { data: latest } = await admin.from("calls")
-    .select("status, result, missed_task_id, ended_at")
-    .eq("id", call.id)
-    .maybeSingle();
-  if (
-    latest &&
-    (["in-progress", "completed"].includes(latest.status) ||
-      latest.result === "answered")
-  ) {
-    return xml("<Hangup/>");
-  }
-  call = { ...call, ...latest };
+async function ensureMissedCallTask(call: any, number: any) {
   const owner = await resolveFallbackOwner(number);
   let taskId: string | null = call.missed_task_id ?? null;
   if (owner && !taskId) {
@@ -158,18 +323,36 @@ async function fallback(call: any, number: any): Promise<Response> {
       taskId = task?.id ?? null;
     }
   }
-  await admin.from("calls").update({
-    status: "no-answer",
-    result: "missed",
-    ended_at: new Date().toISOString(),
-    missed_task_id: taskId,
-  }).eq("id", call.id);
   if (!owner) {
     console.error("[telephony-webhook] no_fallback_owner", {
       callId: call.id,
       numberId: number.id,
     });
   }
+  return taskId;
+}
+
+// deno-lint-ignore no-explicit-any
+async function fallback(call: any, number: any): Promise<Response> {
+  const { data: latest } = await admin.from("calls")
+    .select("status, result, missed_task_id, ended_at")
+    .eq("id", call.id)
+    .maybeSingle();
+  if (
+    latest &&
+    (["in-progress", "completed"].includes(latest.status) ||
+      latest.result === "answered")
+  ) {
+    return xml("<Hangup/>");
+  }
+  call = { ...call, ...latest };
+  const taskId = await ensureMissedCallTask(call, number);
+  await admin.from("calls").update({
+    status: "no-answer",
+    result: "missed",
+    ended_at: new Date().toISOString(),
+    missed_task_id: taskId,
+  }).eq("id", call.id);
   return message(
     number.fallback_message ||
       "No momento não podemos atender. Retornaremos em breve.",
@@ -315,10 +498,751 @@ async function nextRecipient(call: any, number: any): Promise<Response> {
   }
 }
 
+async function handleTransferVoice(
+  req: Request,
+  params: Record<string, string>,
+): Promise<Response | null> {
+  if (
+    !params.TransferId || !["consult", "retrieve"].includes(params.Mode || "")
+  ) return null;
+  const context = await transferContext(params.TransferId);
+  if (!context || context.call.id !== params.CallId) {
+    return message("Transferência inválida.");
+  }
+  if (!await verifySignature(req, params, context.transfer.organization_id)) {
+    return empty(403);
+  }
+  const cycle = Number(params.ConsultationSequence || 1);
+  if (
+    cycle !== Number(context.transfer.consultation_sequence || 1) ||
+    !await ownsCurrentTransferCycle(context, cycle)
+  ) {
+    await recordTransferEvent(
+      context.transfer,
+      `stale-voice:${params.CallSid || crypto.randomUUID()}:${cycle}`,
+      "stale_consultation_voice_ignored",
+      { cycle, currentCycle: context.transfer.consultation_sequence },
+    );
+    return xml("<Hangup/>");
+  }
+  if (["completed", "canceled", "failed"].includes(context.transfer.state)) {
+    return message("Transferência encerrada.");
+  }
+  if (params.Mode === "retrieve") {
+    return await renderTransferBridge(
+      context,
+      "initiator",
+      params.FinishTransfer === "1",
+    );
+  }
+  if (params.TargetUserId !== context.transfer.target_user_id) {
+    return empty(403);
+  }
+  const { count } = await admin.from("call_transfer_legs").select("id", {
+    count: "exact",
+    head: true,
+  })
+    .eq("transfer_id", context.transfer.id).eq("role", "consult_initiator");
+  const sequence = (count ?? 0) + 1;
+  const { data: initiatorLeg } = await admin.from("call_transfer_legs").insert({
+    organization_id: context.transfer.organization_id,
+    transfer_id: context.transfer.id,
+    call_id: context.call.id,
+    user_id: context.transfer.initiated_by_user_id,
+    role: "consult_initiator",
+    sequence,
+    provider_call_sid: params.CallSid,
+    status: "in-progress",
+    answered_at: new Date().toISOString(),
+  }).select("id").single();
+  await admin.from("call_transfers").update({
+    state: "consult_ringing",
+    consult_parent_call_sid: params.CallSid,
+    version: context.transfer.version + 1,
+    updated_at: new Date().toISOString(),
+  }).eq("id", context.transfer.id)
+    .eq("consultation_sequence", cycle)
+    .in("state", ["customer_queued", "consult_ringing"]);
+  await admin.from("calls").update({ transfer_status: "consult_ringing" }).eq(
+    "id",
+    context.call.id,
+  ).eq("active_transfer_id", context.transfer.id);
+  const { data: initiator } = await admin.from("users").select("full_name").eq(
+    "id",
+    context.transfer.initiated_by_user_id,
+  ).maybeSingle();
+  const statusUrl = escapeXml(
+    `${BASE_URL}/transfer-leg-status?transferId=${context.transfer.id}&sequence=${sequence}&cycle=${cycle}`,
+  );
+  const actionUrl = escapeXml(
+    `${BASE_URL}/transfer-consult-result?transferId=${context.transfer.id}&sequence=${sequence}&initiatorLegId=${
+      initiatorLeg?.id ?? ""
+    }&cycle=${cycle}`,
+  );
+  const identity = twilioVoiceIdentity(
+    context.transfer.target_user_id,
+    context.transfer.organization_id,
+  );
+  const customerAddress = context.call.direction === "outgoing"
+    ? context.call.to_number
+    : context.call.from_number;
+  return xml(
+    `<Dial timeout="15" action="${actionUrl}"><Client statusCallback="${statusUrl}" statusCallbackEvent="initiated ringing answered completed"><Identity>${
+      escapeXml(identity)
+    }</Identity><Parameter name="CallId" value="${
+      escapeXml(context.call.id)
+    }"/><Parameter name="TransferId" value="${
+      escapeXml(context.transfer.id)
+    }"/><Parameter name="ConsultationSequence" value="${cycle}"/><Parameter name="TransferRole" value="consult"/><Parameter name="CustomerFrom" value="${
+      escapeXml(customerAddress || "")
+    }"/><Parameter name="InitiatorName" value="${
+      escapeXml(initiator?.full_name || "Colega")
+    }"/></Client></Dial>`,
+  );
+}
+
+async function handleTransferLegStatus(
+  req: Request,
+  params: Record<string, string>,
+  url: URL,
+): Promise<Response> {
+  const transferId = url.searchParams.get("transferId");
+  const sequence = Number(url.searchParams.get("sequence") || 1);
+  if (!transferId || !params.CallSid) return empty(400);
+  const context = await transferContext(transferId);
+  if (
+    !context ||
+    !await verifySignature(req, params, context.transfer.organization_id)
+  ) return empty(403);
+  const status = voiceAdapter.normalizeStatus(params.CallStatus);
+  const terminal = isTerminalCallStatus(status);
+  await admin.from("call_transfer_legs").upsert({
+    organization_id: context.transfer.organization_id,
+    transfer_id: transferId,
+    call_id: context.call.id,
+    user_id: context.transfer.target_user_id,
+    role: "consult_target",
+    sequence,
+    provider_call_sid: params.CallSid,
+    status,
+    answered_at: ["answered", "in-progress"].includes(status)
+      ? new Date().toISOString()
+      : undefined,
+    ended_at: terminal ? new Date().toISOString() : undefined,
+    duration_seconds: terminal
+      ? Number(params.CallDuration || 0) || null
+      : undefined,
+    failure_reason: terminal && status !== "completed" ? status : null,
+  }, { onConflict: "transfer_id,role,sequence" });
+  await recordTransferEvent(
+    context.transfer,
+    `leg:${params.CallSid}:${status}:${params.SequenceNumber || "0"}`,
+    `consult_target_${status}`,
+    { callSid: params.CallSid, status, sequence },
+  );
+  const cycle = transferCycle(
+    url,
+    Number(context.transfer.consultation_sequence || 1),
+  );
+  if (!await ownsCurrentTransferCycle(context, cycle)) {
+    await recordTransferEvent(
+      context.transfer,
+      `stale-leg:${params.CallSid}:${status}:${cycle}`,
+      "stale_consultation_leg_ignored",
+      { callSid: params.CallSid, status, sequence, cycle },
+    );
+    return empty();
+  }
+  if (["answered", "in-progress"].includes(status)) {
+    const { data: transitioned } = await admin.from("call_transfers").update({
+      state: "consulting",
+      consult_target_call_sid: params.CallSid,
+      target_answered_at: new Date().toISOString(),
+      version: context.transfer.version + 1,
+      updated_at: new Date().toISOString(),
+    }).eq("id", transferId).eq("consultation_sequence", cycle)
+      .in("state", ["customer_queued", "consult_ringing"])
+      .select("id").maybeSingle();
+    if (transitioned) {
+      await admin.from("calls").update({ transfer_status: "consulting" }).eq(
+        "id",
+        context.call.id,
+      ).eq("active_transfer_id", transferId);
+    }
+  }
+  if (
+    terminal && ["consulting", "consult_ringing"].includes(
+      context.transfer.state,
+    )
+  ) {
+    // When the target hangs up, the parent Dial action below returns the
+    // customer to the initiator. When the initiator/browser disappears, that
+    // action never runs; after this short race window the target is rung again
+    // and connected straight to the waiting customer.
+    await new Promise((resolve) => setTimeout(resolve, 750));
+    const pending = await transferContext(transferId);
+    if (
+      pending && await ownsCurrentTransferCycle(pending, cycle) &&
+      ["consulting", "consult_ringing"].includes(
+        pending.transfer.state,
+      )
+    ) {
+      if (pending.transfer.consult_parent_call_sid) {
+        const twilio = await twilioApiContext(
+          admin,
+          pending.transfer.organization_id,
+        );
+        const parent = await twilioRequest<{ status?: string }>(
+          twilio,
+          twilioAccountUrl(
+            twilio,
+            `Calls/${pending.transfer.consult_parent_call_sid}.json`,
+          ),
+        ).catch(() => null);
+        if (
+          parent && ["queued", "ringing", "in-progress"].includes(
+            parent.status || "",
+          )
+        ) return empty();
+      }
+      await admin.from("call_transfers").update({
+        state: "handoff_pending",
+        failure_reason: "initiator_disconnected_during_consult",
+        version: pending.transfer.version + 1,
+        updated_at: new Date().toISOString(),
+      }).eq("id", transferId).eq("state", "consulting")
+        .eq("consultation_sequence", cycle);
+      await admin.from("calls").update({ transfer_status: "handoff_pending" })
+        .eq("id", pending.call.id).eq("active_transfer_id", transferId);
+      try {
+        await createTransferRecoveryCall(pending, "target");
+      } catch (error) {
+        console.error("[telephony-webhook] target_recovery_call_failed", error);
+        await admin.from("call_transfers").update({
+          state: "returning_to_customer",
+          failure_reason: "target_recovery_call_failed",
+          version: pending.transfer.version + 2,
+          updated_at: new Date().toISOString(),
+        }).eq("id", transferId).eq("consultation_sequence", cycle);
+        await createTransferRecoveryCall(pending, "initiator").catch(() =>
+          undefined
+        );
+      }
+    }
+  }
+  return empty();
+}
+
+async function handleTransferConsultResult(
+  req: Request,
+  params: Record<string, string>,
+  url: URL,
+): Promise<Response> {
+  const transferId = url.searchParams.get("transferId");
+  const initiatorLegId = url.searchParams.get("initiatorLegId");
+  if (!transferId) return empty(400);
+  const context = await transferContext(transferId);
+  if (
+    !context ||
+    !await verifySignature(req, params, context.transfer.organization_id)
+  ) return empty(403);
+  if (initiatorLegId) {
+    await admin.from("call_transfer_legs").update({
+      status: params.DialCallStatus || "completed",
+      ended_at: new Date().toISOString(),
+      duration_seconds: Number(params.DialCallDuration || 0) || null,
+    }).eq("id", initiatorLegId).eq("transfer_id", transferId);
+  }
+  const refreshed = await transferContext(transferId);
+  if (!refreshed) return empty(404);
+  const cycle = transferCycle(
+    url,
+    Number(refreshed.transfer.consultation_sequence || 1),
+  );
+  if (!await ownsCurrentTransferCycle(refreshed, cycle)) {
+    await recordTransferEvent(
+      refreshed.transfer,
+      `stale-consult-result:${params.CallSid || initiatorLegId}:${cycle}`,
+      "stale_consultation_result_ignored",
+      { cycle, dialStatus: params.DialCallStatus || null },
+    );
+    return xml("<Hangup/>");
+  }
+  if (
+    [
+      "handoff_pending",
+      "completed",
+      "returning_to_customer",
+      "canceled",
+      "failed",
+    ].includes(refreshed.transfer.state)
+  ) {
+    return xml("<Hangup/>");
+  }
+  await admin.from("call_transfers").update({
+    state: "returning_to_customer",
+    failure_reason: `consult_${params.DialCallStatus || "ended"}`,
+    version: refreshed.transfer.version + 1,
+    updated_at: new Date().toISOString(),
+  }).eq("id", transferId).eq("consultation_sequence", cycle);
+  await admin.from("calls").update({ transfer_status: "returning_to_customer" })
+    .eq("id", refreshed.call.id).eq("active_transfer_id", transferId);
+  await setUserPresence(
+    refreshed.transfer,
+    refreshed.transfer.target_user_id,
+    false,
+  );
+  return await renderTransferBridge(
+    {
+      ...refreshed,
+      transfer: { ...refreshed.transfer, state: "returning_to_customer" },
+    },
+    "initiator",
+    false,
+  );
+}
+
+async function handleTransferBridge(
+  req: Request,
+  params: Record<string, string>,
+  url: URL,
+): Promise<Response> {
+  const transferId = url.searchParams.get("transferId");
+  const actor = url.searchParams.get("actor") === "target"
+    ? "target"
+    : "initiator";
+  if (!transferId) return empty(400);
+  const context = await transferContext(transferId);
+  if (
+    !context ||
+    !await verifySignature(req, params, context.transfer.organization_id)
+  ) return empty(403);
+  const cycle = transferCycle(
+    url,
+    Number(context.transfer.consultation_sequence || 1),
+  );
+  if (!await ownsCurrentTransferCycle(context, cycle)) return xml("<Hangup/>");
+  return await renderTransferBridge(
+    context,
+    actor,
+    url.searchParams.get("finish") === "1",
+  );
+}
+
+async function handleTransferBridgeConnected(
+  req: Request,
+  params: Record<string, string>,
+  url: URL,
+): Promise<Response> {
+  const transferId = url.searchParams.get("transferId");
+  const legId = url.searchParams.get("legId");
+  const actor = url.searchParams.get("actor") === "target"
+    ? "target"
+    : "initiator";
+  const finish = url.searchParams.get("finish") === "1";
+  if (!transferId) return empty(400);
+  const context = await transferContext(transferId);
+  if (
+    !context ||
+    !await verifySignature(req, params, context.transfer.organization_id)
+  ) return empty(403);
+  const cycle = transferCycle(
+    url,
+    Number(context.transfer.consultation_sequence || 1),
+  );
+  if (!await ownsCurrentTransferCycle(context, cycle)) {
+    await recordTransferEvent(
+      context.transfer,
+      `stale-bridge-connected:${params.CallSid || legId}:${cycle}`,
+      "stale_customer_bridge_ignored",
+      { actor, cycle },
+    );
+    return xml("");
+  }
+  const userId = actor === "target"
+    ? context.transfer.target_user_id
+    : context.transfer.initiated_by_user_id;
+  const { state: nextState, result } = transferBridgeOutcome(actor, finish);
+  if (legId) {
+    await admin.from("call_transfer_legs").update({
+      status: "in-progress",
+      answered_at: new Date().toISOString(),
+    }).eq("id", legId).eq("transfer_id", transferId);
+  }
+  const { data: transitioned } = await admin.from("call_transfers").update({
+    state: nextState,
+    result,
+    active_user_id: userId,
+    completed_at: actor === "target" || finish
+      ? new Date().toISOString()
+      : null,
+    version: context.transfer.version + 1,
+    updated_at: new Date().toISOString(),
+  }).eq("id", transferId).in("state", [
+    "returning_to_customer",
+    "handoff_pending",
+  ]).eq("consultation_sequence", cycle).select("id").maybeSingle();
+  if (!transitioned) return xml("");
+  await admin.from("calls").update({
+    current_agent_user_id: userId,
+    transfer_status: nextState,
+    status: "in-progress",
+    active_transfer_id: nextState === "completed" || nextState === "canceled"
+      ? null
+      : transferId,
+  }).eq("id", context.call.id).eq("active_transfer_id", transferId);
+  if (actor === "target") {
+    await setUserPresence(
+      context.transfer,
+      context.transfer.initiated_by_user_id,
+      false,
+    );
+    await setUserPresence(
+      context.transfer,
+      context.transfer.target_user_id,
+      true,
+    );
+  } else {
+    await setUserPresence(
+      context.transfer,
+      context.transfer.target_user_id,
+      false,
+    );
+    await setUserPresence(
+      context.transfer,
+      context.transfer.initiated_by_user_id,
+      true,
+    );
+  }
+  await admin.rpc("release_telephony_transfer_reservations", {
+    _transfer_id: transferId,
+  });
+  await recordTransferEvent(
+    context.transfer,
+    `bridge-connected:${transferId}:${actor}:${legId || params.CallSid}`,
+    "customer_bridge_connected",
+    { actor, userId, queueSid: params.QueueSid || null },
+  );
+  return xml("");
+}
+
+async function handleTransferBridgeResult(
+  req: Request,
+  params: Record<string, string>,
+  url: URL,
+): Promise<Response> {
+  const transferId = url.searchParams.get("transferId");
+  const legId = url.searchParams.get("legId");
+  if (!transferId) return empty(400);
+  const context = await transferContext(transferId);
+  if (
+    !context ||
+    !await verifySignature(req, params, context.transfer.organization_id)
+  ) return empty(403);
+  if (legId) {
+    await admin.from("call_transfer_legs").update({
+      status: params.DialCallStatus || "completed",
+      ended_at: new Date().toISOString(),
+      duration_seconds: Number(params.DialCallDuration || 0) || null,
+    }).eq("id", legId).eq("transfer_id", transferId);
+  }
+  const refreshed = await transferContext(transferId);
+  if (!refreshed) return empty();
+  const cycle = transferCycle(
+    url,
+    Number(refreshed.transfer.consultation_sequence || 1),
+  );
+  if (cycle !== Number(refreshed.transfer.consultation_sequence || 1)) {
+    await recordTransferEvent(
+      refreshed.transfer,
+      `stale-bridge-result:${params.CallSid || legId}:${cycle}`,
+      "stale_customer_bridge_result_ignored",
+      { cycle, dialStatus: params.DialCallStatus || null },
+    );
+    return xml("<Hangup/>");
+  }
+  const { data: activeOtherTransfer } = await admin.from("call_transfers")
+    .select("id").eq("call_id", refreshed.call.id).neq("id", transferId)
+    .not("state", "in", "(completed,canceled,failed)").limit(1).maybeSingle();
+  if (activeOtherTransfer) {
+    // A subsequent transfer intentionally ends the previous customer bridge.
+    // Its delayed Dial callback must not complete the shared business call or
+    // release the new transfer's reservations.
+    try {
+      const twilio = await twilioApiContext(
+        admin,
+        refreshed.transfer.organization_id,
+      );
+      await deleteTwilioQueue(twilio, refreshed.transfer.provider_queue_sid);
+      await admin.from("call_transfers").update({
+        provider_queue_sid: null,
+        updated_at: new Date().toISOString(),
+      }).eq("id", transferId);
+    } catch (error) {
+      console.warn("[telephony-webhook] previous_queue_cleanup_failed", error);
+    }
+    return xml("<Hangup/>");
+  }
+  const ownsSharedCall = refreshed.call.active_transfer_id === transferId;
+  if (
+    ["parking_customer", "customer_queued", "consult_ringing", "consulting"]
+      .includes(refreshed.transfer.state)
+  ) {
+    return xml("<Hangup/>");
+  }
+  if (
+    ["returning_to_customer", "handoff_pending"].includes(
+      refreshed.transfer.state,
+    )
+  ) {
+    await admin.from("call_transfers").update({
+      state: "failed",
+      result: "customer_bridge_failed",
+      failure_reason: params.DialCallStatus || "queue_member_unavailable",
+      completed_at: new Date().toISOString(),
+      updated_at: new Date().toISOString(),
+    }).eq("id", transferId);
+    if (!ownsSharedCall) return xml("<Hangup/>");
+    await admin.from("calls").update({
+      status: "completed",
+      result: "customer_hangup",
+      transfer_status: "failed",
+      ended_at: new Date().toISOString(),
+      active_transfer_id: null,
+    }).eq("id", refreshed.call.id).eq("active_transfer_id", transferId);
+    await admin.rpc("release_telephony_transfer_reservations", {
+      _transfer_id: transferId,
+    });
+    return xml("<Hangup/>");
+  }
+  if (
+    !ownsSharedCall &&
+    !["completed", "canceled", "failed"].includes(refreshed.transfer.state)
+  ) return xml("<Hangup/>");
+  await admin.from("calls").update({
+    status: "completed",
+    result: refreshed.transfer.result || "answered",
+    transfer_status: refreshed.transfer.state,
+    ended_at: new Date().toISOString(),
+    active_transfer_id: null,
+  }).eq("id", refreshed.call.id).or(
+    `active_transfer_id.eq.${transferId},active_transfer_id.is.null`,
+  );
+  await admin.rpc("release_telephony_transfer_reservations", {
+    _transfer_id: transferId,
+  });
+  try {
+    const twilio = await twilioApiContext(
+      admin,
+      refreshed.transfer.organization_id,
+    );
+    await deleteTwilioQueue(twilio, refreshed.transfer.provider_queue_sid);
+    await admin.from("call_transfers").update({
+      provider_queue_sid: null,
+      updated_at: new Date().toISOString(),
+    }).eq("id", transferId);
+  } catch (error) {
+    console.warn("[telephony-webhook] transfer_queue_cleanup_failed", error);
+  }
+  return xml("<Hangup/>");
+}
+
+async function handleTransferRecoveryStatus(
+  req: Request,
+  params: Record<string, string>,
+  url: URL,
+): Promise<Response> {
+  const transferId = url.searchParams.get("transferId");
+  const actor = url.searchParams.get("actor") === "target"
+    ? "target"
+    : "initiator";
+  if (!transferId) return empty(400);
+  const context = await transferContext(transferId);
+  if (
+    !context ||
+    !await verifySignature(req, params, context.transfer.organization_id)
+  ) return empty(403);
+  const cycle = transferCycle(
+    url,
+    Number(context.transfer.consultation_sequence || 1),
+  );
+  if (!await ownsCurrentTransferCycle(context, cycle)) return empty();
+  if (
+    ["completed", "canceled", "failed", "with_customer"].includes(
+      context.transfer.state,
+    )
+  ) {
+    return empty();
+  }
+  if (actor === "target" && context.transfer.state === "handoff_pending") {
+    await admin.from("call_transfers").update({
+      state: "returning_to_customer",
+      failure_reason: `target_recovery_${params.CallStatus || "no_answer"}`,
+      version: context.transfer.version + 1,
+      updated_at: new Date().toISOString(),
+    }).eq("id", transferId).eq("consultation_sequence", cycle);
+    await admin.from("calls").update({
+      transfer_status: "returning_to_customer",
+    })
+      .eq("id", context.call.id).eq("active_transfer_id", transferId);
+    await createTransferRecoveryCall(context, "initiator").catch((error) =>
+      console.error("[telephony-webhook] initiator_recovery_call_failed", error)
+    );
+    return empty();
+  }
+  if (
+    actor === "initiator" && context.transfer.state === "returning_to_customer"
+  ) {
+    const twilio = await twilioApiContext(
+      admin,
+      context.transfer.organization_id,
+    );
+    await updateTwilioCall(twilio, context.transfer.customer_call_sid, {
+      twiml: `<Response><Say language="pt-BR">${
+        escapeXml(
+          context.number.fallback_message ||
+            "Não foi possível concluir a transferência. Retornaremos em breve.",
+        )
+      }</Say><Hangup/></Response>`,
+    }).catch(() => undefined);
+    const missedTaskId = await ensureMissedCallTask(
+      context.call,
+      context.number,
+    );
+    await admin.from("call_transfers").update({
+      state: "failed",
+      result: "agents_unavailable",
+      failure_reason: `initiator_recovery_${params.CallStatus || "no_answer"}`,
+      version: context.transfer.version + 1,
+      completed_at: new Date().toISOString(),
+      updated_at: new Date().toISOString(),
+    }).eq("id", transferId);
+    await admin.from("calls").update({
+      status: "failed",
+      result: "transfer_failed",
+      transfer_status: "failed",
+      missed_task_id: missedTaskId,
+      ended_at: new Date().toISOString(),
+      active_transfer_id: null,
+    }).eq("id", context.call.id).eq("active_transfer_id", transferId);
+    await admin.rpc("release_telephony_transfer_reservations", {
+      _transfer_id: transferId,
+    });
+    await deleteTwilioQueue(twilio, context.transfer.provider_queue_sid).catch(
+      () => undefined,
+    );
+  }
+  return empty();
+}
+
+async function handleTransferWait(
+  req: Request,
+  params: Record<string, string>,
+  url: URL,
+): Promise<Response> {
+  const transferId = url.searchParams.get("transferId");
+  if (!transferId) return empty(400);
+  const context = await transferContext(transferId);
+  if (
+    !context ||
+    !await verifySignature(req, params, context.transfer.organization_id)
+  ) return empty(403);
+  const cycle = transferCycle(
+    url,
+    Number(context.transfer.consultation_sequence || 1),
+  );
+  if (!await ownsCurrentTransferCycle(context, cycle)) return xml("<Hangup/>");
+  return xml(
+    `<Say language="pt-BR">${
+      escapeXml(
+        context.number.hold_message ||
+          "Aguarde enquanto transferimos sua ligação.",
+      )
+    }</Say><Pause length="5"/>`,
+  );
+}
+
+async function handleTransferQueueResult(
+  req: Request,
+  params: Record<string, string>,
+  url: URL,
+): Promise<Response> {
+  const transferId = url.searchParams.get("transferId");
+  if (!transferId) return empty(400);
+  const context = await transferContext(transferId);
+  if (
+    !context ||
+    !await verifySignature(req, params, context.transfer.organization_id)
+  ) return empty(403);
+  const result = params.QueueResult || "unknown";
+  const cycle = transferCycle(
+    url,
+    Number(context.transfer.consultation_sequence || 1),
+  );
+  await recordTransferEvent(
+    context.transfer,
+    `queue:${transferId}:${cycle}:${result}:${
+      params.SequenceNumber || params.CallStatus || "0"
+    }`,
+    "queue_result",
+    { result, queueSid: params.QueueSid || null, cycle },
+  );
+  if (!await ownsCurrentTransferCycle(context, cycle)) {
+    await recordTransferEvent(
+      context.transfer,
+      `stale-queue:${transferId}:${cycle}:${params.SequenceNumber || "0"}`,
+      "stale_queue_result_ignored",
+      { result, cycle },
+    );
+    return xml("<Hangup/>");
+  }
+  if (["hangup", "error", "queue-full", "system-error"].includes(result)) {
+    await admin.from("call_transfers").update({
+      state: "failed",
+      result: "customer_left_queue",
+      failure_reason: result,
+      completed_at: new Date().toISOString(),
+      updated_at: new Date().toISOString(),
+    }).eq("id", transferId).not("state", "in", "(completed,canceled,failed)");
+    await admin.from("calls").update({
+      status: "completed",
+      result: "customer_hangup",
+      transfer_status: "failed",
+      ended_at: new Date().toISOString(),
+      active_transfer_id: null,
+    }).eq("id", context.call.id).eq("active_transfer_id", transferId);
+    await admin.rpc("release_telephony_transfer_reservations", {
+      _transfer_id: transferId,
+    });
+    const twilio = await twilioApiContext(
+      admin,
+      context.transfer.organization_id,
+    );
+    for (
+      const sid of [
+        context.transfer.consult_parent_call_sid,
+        context.transfer.consult_target_call_sid,
+      ]
+    ) {
+      if (sid) {
+        await updateTwilioCall(twilio, sid, { status: "completed" }).catch(() =>
+          undefined
+        );
+      }
+    }
+    await deleteTwilioQueue(twilio, context.transfer.provider_queue_sid).catch(
+      () => undefined,
+    );
+  }
+  return xml("<Hangup/>");
+}
+
 async function handleVoice(
   req: Request,
   params: Record<string, string>,
 ): Promise<Response> {
+  const transferResponse = await handleTransferVoice(req, params);
+  if (transferResponse) return transferResponse;
   const callId = params.CallId;
   if (callId) {
     const context = await callContext(callId);
@@ -462,12 +1386,29 @@ async function handleRoute(
   const dialStatus = voiceAdapter.normalizeStatus(
     params.DialCallStatus || params.CallStatus || "failed",
   );
+  const transferIsActive = transferOwnsOriginalDial(
+    context.call.transfer_status,
+  );
   const { data: currentAttempt } = attemptId
     ? await admin.from("call_attempts").select(
       "user_id, attempt_number, status, ended_at, duration_seconds",
     )
       .eq("id", attemptId).eq("call_id", callId).maybeSingle()
     : { data: null };
+  // An out-of-order callback from the original Dial must not complete the
+  // business call after the customer has entered the private transfer flow.
+  if (transferIsActive) {
+    if (attemptId) {
+      await admin.from("call_attempts").update({
+        status: dialStatus,
+        provider_call_sid: params.DialCallSid || params.CallSid || null,
+        ended_at: new Date().toISOString(),
+        duration_seconds:
+          Number(params.DialCallDuration || params.CallDuration || 0) || null,
+      }).eq("id", attemptId).eq("call_id", callId);
+    }
+    return xml("<Hangup/>");
+  }
   if (currentAttempt?.ended_at) {
     if (["completed", "answered"].includes(currentAttempt.status)) {
       await admin.from("calls").update({
@@ -586,10 +1527,14 @@ async function handleStatus(
       answered_at: new Date().toISOString(),
       answered_by_user_id: attempt?.user_id ??
         context.call.initiated_by_user_id,
+      current_agent_user_id: attempt?.user_id ??
+        context.call.initiated_by_user_id,
       user_id: attempt?.user_id ?? context.call.user_id,
     }).eq("id", callId);
   }
-  if (isTerminalCallStatus(status) && attemptId) {
+  if (
+    isTerminalCallStatus(status) && attemptId && !context.call.transfer_status
+  ) {
     const { data: endedAttempt } = await admin.from("call_attempts").select(
       "user_id",
     )
@@ -610,6 +1555,7 @@ async function handleRecording(
 ): Promise<Response> {
   const callId = url.searchParams.get("callId");
   const attemptId = url.searchParams.get("attemptId");
+  const transferLegId = url.searchParams.get("transferLegId");
   if (!callId || !params.RecordingSid || !params.RecordingUrl) return empty();
   const context = await callContext(callId);
   if (
@@ -620,6 +1566,8 @@ async function handleRecording(
     organization_id: context.call.organization_id,
     call_id: callId,
     call_attempt_id: attemptId || null,
+    call_transfer_leg_id: transferLegId || null,
+    segment_type: "customer_agent",
     recording_sid: params.RecordingSid,
     recording_url: voiceAdapter.recordingMediaUrl(params.RecordingUrl),
     duration_seconds: Number(params.RecordingDuration || 0) || null,
@@ -634,12 +1582,39 @@ Deno.serve(async (req) => {
   const route = url.pathname.split("/").filter(Boolean).pop() ?? "voice";
   try {
     const params = await paramsOf(req);
+    // Every Twilio callback is signed. Reject an unsigned request before any
+    // route-specific lookup so invalid payloads cannot receive fallback TwiML.
+    if (!req.headers.get("x-twilio-signature")) return empty(403);
     if (route === "voice" || route === "telephony-webhook") {
       return await handleVoice(req, params);
     }
     if (route === "route") return await handleRoute(req, params, url);
     if (route === "status") return await handleStatus(req, params, url);
     if (route === "recording") return await handleRecording(req, params, url);
+    if (route === "transfer-leg-status") {
+      return await handleTransferLegStatus(req, params, url);
+    }
+    if (route === "transfer-consult-result") {
+      return await handleTransferConsultResult(req, params, url);
+    }
+    if (route === "transfer-bridge") {
+      return await handleTransferBridge(req, params, url);
+    }
+    if (route === "transfer-bridge-connected") {
+      return await handleTransferBridgeConnected(req, params, url);
+    }
+    if (route === "transfer-bridge-result") {
+      return await handleTransferBridgeResult(req, params, url);
+    }
+    if (route === "transfer-recovery-status") {
+      return await handleTransferRecoveryStatus(req, params, url);
+    }
+    if (route === "transfer-wait") {
+      return await handleTransferWait(req, params, url);
+    }
+    if (route === "transfer-queue-result") {
+      return await handleTransferQueueResult(req, params, url);
+    }
     return empty(404);
   } catch (error) {
     console.error("[telephony-webhook] unhandled", error);

@@ -2,6 +2,8 @@
 
 **Referência técnica:** `docs/audit/04-integracoes/voice-twilio.md` e `docs/audit/02-edge-functions/twilio-*`.
 
+**Referência de implementação (DivusApp):** [`transferencia-de-chamadas.md`](transferencia-de-chamadas.md) — como o divus/platform faz voz + transferência de ligações de ponta a ponta (token, Device WebRTC, inbound/outbound, controles, park/cold-transfer via Queue, gravação). Base para replicar aqui.
+
 ## Finalidade
 Chamadas outbound e inbound via WebRTC direto no cliente usando `@twilio/voice-sdk`.
 

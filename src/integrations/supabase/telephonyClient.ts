@@ -24,6 +24,17 @@ interface TelephonyNumberRow {
   fallback_action: string;
   fallback_message: string;
   missed_call_owner_user_id: string | null;
+  hold_message: string;
+  provider_number_id: string | null;
+  iso_country: string | null;
+  number_kind: string | null;
+  capabilities: Json;
+  sync_status: string;
+  last_synced_at: string | null;
+  address_sid: string | null;
+  regulatory_bundle_sid: string | null;
+  created_at: string;
+  updated_at: string;
 }
 
 interface NumberUserRow {
@@ -58,6 +69,19 @@ interface PresenceRow {
   created_at: string;
 }
 
+interface CallTransferRow {
+  id: string;
+  organization_id: string;
+  call_id: string;
+  initiated_by_user_id: string;
+  target_user_id: string;
+  active_user_id: string | null;
+  state: string;
+  result: string | null;
+  failure_reason: string | null;
+  updated_at: string;
+}
+
 type Table<Row, Insert = Partial<Row>, Update = Partial<Row>> = {
   Row: Row;
   Insert: Insert;
@@ -72,6 +96,7 @@ type TelephonyDatabase = {
       organization_phone_number_users: Table<NumberUserRow>;
       telephony_user_settings: Table<UserSettingsRow>;
       telephony_presence: Table<PresenceRow>;
+      call_transfers: Table<CallTransferRow>;
     };
     Views: Record<never, never>;
     Functions: Record<never, never>;
