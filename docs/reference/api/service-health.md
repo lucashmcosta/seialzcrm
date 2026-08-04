@@ -117,9 +117,9 @@ Nenhuma fonte é reaproveitada entre serviços: um serviço só recebe status e 
 
 | Status | Critério |
 |---|---|
-| `healthy` | heartbeat < 5 min e sem sinal de acúmulo de falhas |
-| `warning` | heartbeat entre 5 e 15 min, ou acúmulo (`failed > 50`, `dead_letter > 100`, falhas no inbound, parte das instâncias Evolution fora do ar) |
-| `critical` | heartbeat > 15 min ou ausente para serviço que deveria bater, jobs presos > 5 min, `dead_letter` no inbound, todas as instâncias Evolution fora do ar |
+| `healthy` | heartbeat < 5 min e nenhuma falha na janela operacional de 24h |
+| `warning` | heartbeat entre 5 e 15 min, ou `failed24h > 0`, ou acúmulo operacional (`pending > 100`), falhas no inbound, parte das instâncias Evolution fora do ar |
+| `critical` | heartbeat > 15 min ou ausente para serviço que deveria bater, `stuck5m > 0`, `deadLetter24h > 0`, `dead_letter` no inbound, todas as instâncias Evolution fora do ar |
 | `unknown` | serviço sem fonte de heartbeat hoje, ou janela sem eventos no dispatcher |
 
 Casos específicos:
