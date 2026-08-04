@@ -228,18 +228,47 @@ Deno.serve(async (req) => {
     services.push(unknownService("inbox-dispatcher", "Inbox Dispatcher"));
   }
 
-  // ---- Evolution API (instance connection state already persisted)
+  // ---- Evolution API (estado das instâncias + frescor da verificação)
+  //
+  // Duas condições distintas, reportadas separadamente para o Kairos:
+  //   * instância fora do ar  -> last_known_state != 'open'
+  //   * estado desatualizado  -> last_state_checked_at antigo (checker parado)
   const evo: any[] | null =
     evoRes.status === "fulfilled" && !evoRes.value.error ? ((evoRes.value.data as any[]) ?? []) : null;
   if (evo && evo.length > 0) {
-    const open = evo.filter((i) => String(i.last_known_state ?? "").toLowerCase() === "open").length;
+    const stateOf = (i: any) => String(i.last_known_state ?? "unknown").toLowerCase();
+    const open = evo.filter((i) => stateOf(i) === "open").length;
+    const connecting = evo.filter((i) => stateOf(i) === "connecting").length;
+    const closed = evo.filter((i) => stateOf(i) === "close").length;
+    const unknownState = evo.length - open - connecting - closed;
     const lastChecked = evo
       .map((i) => i.last_state_checked_at)
       .filter(Boolean)
       .sort()
       .pop() ?? null;
-    const status: Status =
-      open === evo.length ? "healthy" : open === 0 ? "critical" : "warning";
+
+    // Frescor: o health check periódico roda a cada 5 min.
+    const checkAge = ageMs(lastChecked);
+    const stale = checkAge === null || checkAge > STATE_STALE_MS;
+
+    let status: Status = open === evo.length ? "healthy" : open === 0 ? "critical" : "warning";
+    const reasons: string[] = [];
+    if (open < evo.length) {
+      reasons.push(
+        `${evo.length - open} de ${evo.length} instância(s) sem sessão ativa (close=${closed}, connecting=${connecting}, unknown=${unknownState})`,
+      );
+    }
+    if (stale) {
+      // Estado potencialmente defasado: o alerta não pode ser lido como
+      // "instância caiu" sem antes considerar que ninguém verificou.
+      if (status === "healthy") status = "warning";
+      reasons.push(
+        checkAge === null
+          ? "estado nunca verificado"
+          : `estado verificado há ${Math.round(checkAge / 60_000)} min (verificação periódica atrasada)`,
+      );
+    }
+
     services.push({
       slug: "evolution-api",
       name: "Evolution API",
@@ -247,11 +276,21 @@ Deno.serve(async (req) => {
       lastHeartbeat: lastChecked,
       uptimeSeconds: null,
       version: null,
-      metrics: { instancesOpen: open, instancesTotal: evo.length },
+      detail: reasons.length > 0 ? reasons.join("; ") : "todas as instâncias conectadas",
+      metrics: {
+        instancesOpen: open,
+        instancesConnecting: connecting,
+        instancesClose: closed,
+        instancesUnknown: unknownState,
+        instancesTotal: evo.length,
+        stateStale: stale ? 1 : 0,
+        stateAgeSeconds: checkAge === null ? -1 : Math.round(checkAge / 1000),
+      },
     });
   } else {
     services.push(unknownService("evolution-api", "Evolution API"));
   }
+
 
   // ---- Services without their own telemetry today
   services.push(unknownService("integration-worker", "Integration Worker"));
