@@ -99,7 +99,7 @@ curl -s https://qvmtzfvkhkhkhdpclzua.supabase.co/functions/v1/service-health \
 
 | `slug` | Fonte de telemetria hoje | Métricas |
 |---|---|---|
-| `outbox-worker` | `fn_outbox_health_summary_internal()` + contagens de 24h em `integration_jobs` (`worker_last_run_at` derivado de `integration_audit_logs` actor `integration-worker`) | `processed` (sucesso 24h), `errors` (falhas 24h), `pending`, `running`, `stuck5m`, `failed` (histórico), `failed24h`, `deadLetter` = `deadLetter24h`, `deadLetterTotal` (histórico), `lastDeadLetterAt` |
+| `outbox-worker` | `fn_outbox_health_summary_internal()` + contagens de 24h em `integration_jobs` (`worker_last_run_at` vem de `outbox_system_heartbeats` componente `integration-worker`, gravado a cada invocação mesmo com fila vazia) | `processed` (sucesso 24h), `errors` (falhas 24h), `pending`, `running`, `stuck5m`, `failed` (histórico), `failed24h`, `deadLetter` = `deadLetter24h`, `deadLetterTotal` (histórico), `lastDeadLetterAt` |
 | `inbox-reaper` | `outbox_system_heartbeats` componente `reaper` | `processed` (`last_detail.reaped`) |
 | `inbox-dispatcher` | `fn_inbound_health_summary('1 hour')` | `processed`, `errors`, `deadLetter`, `latencyMs` (média ponderada) |
 | `evolution-api` | `evolution_instances` (`last_known_state`, `last_state_checked_at`) | `instancesOpen`, `instancesTotal` |
@@ -127,6 +127,7 @@ O backlog histórico de dead letters (`deadLetterTotal`) **nunca** entra na clas
 
 Casos específicos:
 
+- **`outbox-worker`** tem heartbeat de vida próprio em `outbox_system_heartbeats` (`component='integration-worker'`, `last_detail = { processed, duration_ms, summary }`), gravado ao fim de **toda** invocação — inclusive com `processed = 0`. `integration_audit_logs` (actor `integration-worker`) é trilha de trabalho por job, não sinal de vida: usá-la como heartbeat gerava `critical` falso sempre que a fila ficava vazia por mais de 15 min.
 - **`inbox-dispatcher`** não tem heartbeat próprio; a frescura é inferida dos eventos da última hora. Zero eventos na janela não é erro → `unknown`.
 - Uma fonte indisponível degrada **apenas** o serviço correspondente (leituras em `Promise.allSettled`), o restante da resposta continua válido.
 
