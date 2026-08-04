@@ -30,6 +30,7 @@ type Service = {
   lastHeartbeat: string | null;
   uptimeSeconds: number | null;
   version: string | null;
+  lastDeadLetterAt?: string | null;
   metrics: Record<string, number>;
 };
 
@@ -78,12 +79,38 @@ Deno.serve(async (req) => {
     auth: { persistSession: false },
   });
 
-  const [outboxRes, reaperRes, inboundRes, evoRes] = await Promise.allSettled([
-    supabase.rpc("fn_outbox_health_summary_internal"),
-    supabase.from("outbox_system_heartbeats").select("component,last_run_at,last_detail").eq("component", "reaper").maybeSingle(),
-    supabase.rpc("fn_inbound_health_summary", { _window: "01:00:00" }),
-    supabase.from("evolution_instances").select("last_known_state,last_state_checked_at"),
-  ]);
+  const since24h = new Date(Date.now() - 24 * 60 * 60_000).toISOString();
+
+  const [outboxRes, reaperRes, inboundRes, evoRes, dl24Res, failed24Res, lastDlRes] =
+    await Promise.allSettled([
+      supabase.rpc("fn_outbox_health_summary_internal"),
+      supabase.from("outbox_system_heartbeats").select("component,last_run_at,last_detail").eq("component", "reaper").maybeSingle(),
+      supabase.rpc("fn_inbound_health_summary", { _window: "01:00:00" }),
+      supabase.from("evolution_instances").select("last_known_state,last_state_checked_at"),
+      supabase
+        .from("integration_jobs")
+        .select("id", { count: "exact", head: true })
+        .eq("status", "dead_letter")
+        .gte("last_error_at", since24h),
+      supabase
+        .from("integration_jobs")
+        .select("id", { count: "exact", head: true })
+        .eq("status", "failed")
+        .gte("last_error_at", since24h),
+      supabase
+        .from("integration_jobs")
+        .select("last_error_at")
+        .eq("status", "dead_letter")
+        .not("last_error_at", "is", null)
+        .order("last_error_at", { ascending: false })
+        .limit(1)
+        .maybeSingle(),
+    ]);
+
+  const countOf = (res: PromiseSettledResult<any>): number => {
+    if (res.status !== "fulfilled" || res.value?.error) return 0;
+    return Number(res.value?.count ?? 0);
+  };
 
   const services: Service[] = [];
 
@@ -92,9 +119,23 @@ Deno.serve(async (req) => {
     outboxRes.status === "fulfilled" && !outboxRes.value.error ? outboxRes.value.data : null;
   if (outbox) {
     const stuck = Number(outbox.running_stuck_5m ?? 0);
-    const failed = Number(outbox.failed ?? 0);
-    const dead = Number(outbox.dead_letter ?? 0);
-    const degraded: Status | null = stuck > 0 ? "critical" : failed > 50 || dead > 100 ? "warning" : null;
+    const failedTotal = Number(outbox.failed ?? 0);
+    const deadTotal = Number(outbox.dead_letter ?? 0);
+    const deadLetter24h = countOf(dl24Res);
+    const failed24h = countOf(failed24Res);
+    const pending = Number(outbox.pending ?? 0);
+    const lastDeadLetterAt: string | null =
+      lastDlRes.status === "fulfilled" && !lastDlRes.value?.error
+        ? (lastDlRes.value?.data?.last_error_at ?? null)
+        : null;
+
+    // Operational window only: the historical dead-letter backlog never drives status.
+    const degraded: Status | null = stuck > 0 || deadLetter24h > 0
+      ? "critical"
+      : failed24h > 0 || pending > 100
+      ? "warning"
+      : null;
+
     services.push({
       slug: "outbox-worker",
       name: "Outbox Worker",
@@ -102,14 +143,20 @@ Deno.serve(async (req) => {
       lastHeartbeat: outbox.worker_last_run_at ?? null,
       uptimeSeconds: null,
       version: null,
+      lastDeadLetterAt,
       metrics: {
         processed: Number(outbox.success_24h ?? 0),
         errors: Number(outbox.failed_24h ?? 0),
-        pending: Number(outbox.pending ?? 0),
+        pending,
         running: Number(outbox.running ?? 0),
         stuck5m: stuck,
-        failed: failed,
-        deadLetter: dead,
+        failed: failedTotal,
+        failed24h,
+        // BREAKING (documented): `deadLetter` is now the 24h window, not the
+        // historical accumulator. Use `deadLetterTotal` for the backlog.
+        deadLetter: deadLetter24h,
+        deadLetter24h,
+        deadLetterTotal: deadTotal,
       },
     });
   } else {
