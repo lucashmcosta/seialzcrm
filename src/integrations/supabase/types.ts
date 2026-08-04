@@ -1298,6 +1298,7 @@ export type Database = {
         Row: {
           call_attempt_id: string | null
           call_id: string
+          call_transfer_leg_id: string | null
           created_at: string | null
           duration_seconds: number | null
           file_size_bytes: number | null
@@ -1305,11 +1306,13 @@ export type Database = {
           organization_id: string
           recording_sid: string
           recording_url: string
+          segment_type: string
           transcription: string | null
         }
         Insert: {
           call_attempt_id?: string | null
           call_id: string
+          call_transfer_leg_id?: string | null
           created_at?: string | null
           duration_seconds?: number | null
           file_size_bytes?: number | null
@@ -1317,11 +1320,13 @@ export type Database = {
           organization_id: string
           recording_sid: string
           recording_url: string
+          segment_type?: string
           transcription?: string | null
         }
         Update: {
           call_attempt_id?: string | null
           call_id?: string
+          call_transfer_leg_id?: string | null
           created_at?: string | null
           duration_seconds?: number | null
           file_size_bytes?: number | null
@@ -1329,6 +1334,7 @@ export type Database = {
           organization_id?: string
           recording_sid?: string
           recording_url?: string
+          segment_type?: string
           transcription?: string | null
         }
         Relationships: [
@@ -1347,10 +1353,265 @@ export type Database = {
             referencedColumns: ["id"]
           },
           {
+            foreignKeyName: "call_recordings_call_transfer_leg_id_fkey"
+            columns: ["call_transfer_leg_id"]
+            isOneToOne: false
+            referencedRelation: "call_transfer_legs"
+            referencedColumns: ["id"]
+          },
+          {
             foreignKeyName: "call_recordings_organization_id_fkey"
             columns: ["organization_id"]
             isOneToOne: false
             referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      call_transfer_events: {
+        Row: {
+          created_at: string
+          event_type: string
+          id: string
+          organization_id: string
+          payload: Json
+          provider: string
+          provider_event_key: string
+          transfer_id: string
+        }
+        Insert: {
+          created_at?: string
+          event_type: string
+          id?: string
+          organization_id: string
+          payload?: Json
+          provider?: string
+          provider_event_key: string
+          transfer_id: string
+        }
+        Update: {
+          created_at?: string
+          event_type?: string
+          id?: string
+          organization_id?: string
+          payload?: Json
+          provider?: string
+          provider_event_key?: string
+          transfer_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "call_transfer_events_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "call_transfer_events_transfer_id_fkey"
+            columns: ["transfer_id"]
+            isOneToOne: false
+            referencedRelation: "call_transfers"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      call_transfer_legs: {
+        Row: {
+          answered_at: string | null
+          call_id: string
+          created_at: string
+          duration_seconds: number | null
+          ended_at: string | null
+          failure_reason: string | null
+          id: string
+          organization_id: string
+          provider: string
+          provider_call_sid: string | null
+          role: string
+          sequence: number
+          started_at: string
+          status: string
+          transfer_id: string
+          user_id: string | null
+        }
+        Insert: {
+          answered_at?: string | null
+          call_id: string
+          created_at?: string
+          duration_seconds?: number | null
+          ended_at?: string | null
+          failure_reason?: string | null
+          id?: string
+          organization_id: string
+          provider?: string
+          provider_call_sid?: string | null
+          role: string
+          sequence?: number
+          started_at?: string
+          status?: string
+          transfer_id: string
+          user_id?: string | null
+        }
+        Update: {
+          answered_at?: string | null
+          call_id?: string
+          created_at?: string
+          duration_seconds?: number | null
+          ended_at?: string | null
+          failure_reason?: string | null
+          id?: string
+          organization_id?: string
+          provider?: string
+          provider_call_sid?: string | null
+          role?: string
+          sequence?: number
+          started_at?: string
+          status?: string
+          transfer_id?: string
+          user_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "call_transfer_legs_call_id_fkey"
+            columns: ["call_id"]
+            isOneToOne: false
+            referencedRelation: "calls"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "call_transfer_legs_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "call_transfer_legs_transfer_id_fkey"
+            columns: ["transfer_id"]
+            isOneToOne: false
+            referencedRelation: "call_transfers"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "call_transfer_legs_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "users"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      call_transfers: {
+        Row: {
+          active_user_id: string | null
+          call_id: string
+          completed_at: string | null
+          consult_parent_call_sid: string | null
+          consult_target_call_sid: string | null
+          created_at: string
+          customer_call_sid: string
+          customer_queued_at: string | null
+          failure_reason: string | null
+          id: string
+          initiated_by_user_id: string
+          organization_id: string
+          original_agent_call_sid: string | null
+          provider: string
+          provider_queue_sid: string | null
+          queue_name: string
+          result: string | null
+          started_at: string
+          state: string
+          target_answered_at: string | null
+          target_user_id: string
+          updated_at: string
+          version: number
+        }
+        Insert: {
+          active_user_id?: string | null
+          call_id: string
+          completed_at?: string | null
+          consult_parent_call_sid?: string | null
+          consult_target_call_sid?: string | null
+          created_at?: string
+          customer_call_sid: string
+          customer_queued_at?: string | null
+          failure_reason?: string | null
+          id?: string
+          initiated_by_user_id: string
+          organization_id: string
+          original_agent_call_sid?: string | null
+          provider?: string
+          provider_queue_sid?: string | null
+          queue_name: string
+          result?: string | null
+          started_at?: string
+          state?: string
+          target_answered_at?: string | null
+          target_user_id: string
+          updated_at?: string
+          version?: number
+        }
+        Update: {
+          active_user_id?: string | null
+          call_id?: string
+          completed_at?: string | null
+          consult_parent_call_sid?: string | null
+          consult_target_call_sid?: string | null
+          created_at?: string
+          customer_call_sid?: string
+          customer_queued_at?: string | null
+          failure_reason?: string | null
+          id?: string
+          initiated_by_user_id?: string
+          organization_id?: string
+          original_agent_call_sid?: string | null
+          provider?: string
+          provider_queue_sid?: string | null
+          queue_name?: string
+          result?: string | null
+          started_at?: string
+          state?: string
+          target_answered_at?: string | null
+          target_user_id?: string
+          updated_at?: string
+          version?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "call_transfers_active_user_id_fkey"
+            columns: ["active_user_id"]
+            isOneToOne: false
+            referencedRelation: "users"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "call_transfers_call_id_fkey"
+            columns: ["call_id"]
+            isOneToOne: false
+            referencedRelation: "calls"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "call_transfers_initiated_by_user_id_fkey"
+            columns: ["initiated_by_user_id"]
+            isOneToOne: false
+            referencedRelation: "users"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "call_transfers_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "call_transfers_target_user_id_fkey"
+            columns: ["target_user_id"]
+            isOneToOne: false
+            referencedRelation: "users"
             referencedColumns: ["id"]
           },
         ]
@@ -1363,6 +1624,7 @@ export type Database = {
           call_type: string | null
           contact_id: string | null
           created_at: string | null
+          current_agent_user_id: string | null
           deleted_at: string | null
           direction: string
           duration_seconds: number | null
@@ -1383,6 +1645,7 @@ export type Database = {
           started_at: string | null
           status: string | null
           to_number: string | null
+          transfer_status: string | null
           user_id: string
         }
         Insert: {
@@ -1392,6 +1655,7 @@ export type Database = {
           call_type?: string | null
           contact_id?: string | null
           created_at?: string | null
+          current_agent_user_id?: string | null
           deleted_at?: string | null
           direction: string
           duration_seconds?: number | null
@@ -1412,6 +1676,7 @@ export type Database = {
           started_at?: string | null
           status?: string | null
           to_number?: string | null
+          transfer_status?: string | null
           user_id: string
         }
         Update: {
@@ -1421,6 +1686,7 @@ export type Database = {
           call_type?: string | null
           contact_id?: string | null
           created_at?: string | null
+          current_agent_user_id?: string | null
           deleted_at?: string | null
           direction?: string
           duration_seconds?: number | null
@@ -1441,6 +1707,7 @@ export type Database = {
           started_at?: string | null
           status?: string | null
           to_number?: string | null
+          transfer_status?: string | null
           user_id?: string
         }
         Relationships: [
@@ -1456,6 +1723,13 @@ export type Database = {
             columns: ["contact_id"]
             isOneToOne: false
             referencedRelation: "contacts"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "calls_current_agent_user_id_fkey"
+            columns: ["current_agent_user_id"]
+            isOneToOne: false
+            referencedRelation: "users"
             referencedColumns: ["id"]
           },
           {
@@ -7389,19 +7663,25 @@ export type Database = {
       }
       organization_phone_numbers: {
         Row: {
+          address_sid: string | null
           assigned_user_id: string | null
           business_hours: Json
+          capabilities: Json
           created_at: string | null
           fallback_action: string
           fallback_message: string
           friendly_name: string | null
+          hold_message: string
           id: string
           inbound_settings: Json | null
           is_active: boolean
           is_default_outbound: boolean
           is_primary: boolean | null
+          iso_country: string | null
+          last_synced_at: string | null
           max_attempts: number
           missed_call_owner_user_id: string | null
+          number_kind: string | null
           number_type: string
           organization_id: string
           organization_integration_id: string | null
@@ -7409,9 +7689,11 @@ export type Database = {
           provider: string
           provider_number_id: string | null
           recording_enabled: boolean
+          regulatory_bundle_sid: string | null
           ring_strategy: string
           ring_timeout_seconds: number | null
           ring_users: string[] | null
+          sync_status: string
           timezone: string | null
           twilio_phone_sid: string | null
           updated_at: string | null
@@ -7419,19 +7701,25 @@ export type Database = {
           voicemail_greeting: string | null
         }
         Insert: {
+          address_sid?: string | null
           assigned_user_id?: string | null
           business_hours?: Json
+          capabilities?: Json
           created_at?: string | null
           fallback_action?: string
           fallback_message?: string
           friendly_name?: string | null
+          hold_message?: string
           id?: string
           inbound_settings?: Json | null
           is_active?: boolean
           is_default_outbound?: boolean
           is_primary?: boolean | null
+          iso_country?: string | null
+          last_synced_at?: string | null
           max_attempts?: number
           missed_call_owner_user_id?: string | null
+          number_kind?: string | null
           number_type?: string
           organization_id: string
           organization_integration_id?: string | null
@@ -7439,9 +7727,11 @@ export type Database = {
           provider?: string
           provider_number_id?: string | null
           recording_enabled?: boolean
+          regulatory_bundle_sid?: string | null
           ring_strategy?: string
           ring_timeout_seconds?: number | null
           ring_users?: string[] | null
+          sync_status?: string
           timezone?: string | null
           twilio_phone_sid?: string | null
           updated_at?: string | null
@@ -7449,19 +7739,25 @@ export type Database = {
           voicemail_greeting?: string | null
         }
         Update: {
+          address_sid?: string | null
           assigned_user_id?: string | null
           business_hours?: Json
+          capabilities?: Json
           created_at?: string | null
           fallback_action?: string
           fallback_message?: string
           friendly_name?: string | null
+          hold_message?: string
           id?: string
           inbound_settings?: Json | null
           is_active?: boolean
           is_default_outbound?: boolean
           is_primary?: boolean | null
+          iso_country?: string | null
+          last_synced_at?: string | null
           max_attempts?: number
           missed_call_owner_user_id?: string | null
+          number_kind?: string | null
           number_type?: string
           organization_id?: string
           organization_integration_id?: string | null
@@ -7469,9 +7765,11 @@ export type Database = {
           provider?: string
           provider_number_id?: string | null
           recording_enabled?: boolean
+          regulatory_bundle_sid?: string | null
           ring_strategy?: string
           ring_timeout_seconds?: number | null
           ring_users?: string[] | null
+          sync_status?: string
           timezone?: string | null
           twilio_phone_sid?: string | null
           updated_at?: string | null
@@ -9241,6 +9539,145 @@ export type Database = {
           },
         ]
       }
+      telephony_number_purchase_intents: {
+        Row: {
+          address_requirements: string | null
+          address_sid: string | null
+          assigned_user_id: string | null
+          capabilities: Json
+          created_at: string
+          currency: string | null
+          error_code: string | null
+          error_detail: string | null
+          expires_at: string
+          friendly_name: string | null
+          id: string
+          idempotency_key: string
+          iso_country: string
+          missed_call_owner_user_id: string
+          monthly_price: number | null
+          number_kind: string
+          number_type: string
+          organization_id: string
+          organization_integration_id: string
+          phone_number: string
+          phone_number_id: string | null
+          provider: string
+          provider_number_id: string | null
+          purchased_at: string | null
+          regulatory_bundle_sid: string | null
+          regulatory_requirements: Json
+          requested_by_user_id: string
+          status: string
+          updated_at: string
+        }
+        Insert: {
+          address_requirements?: string | null
+          address_sid?: string | null
+          assigned_user_id?: string | null
+          capabilities?: Json
+          created_at?: string
+          currency?: string | null
+          error_code?: string | null
+          error_detail?: string | null
+          expires_at: string
+          friendly_name?: string | null
+          id?: string
+          idempotency_key: string
+          iso_country: string
+          missed_call_owner_user_id: string
+          monthly_price?: number | null
+          number_kind: string
+          number_type: string
+          organization_id: string
+          organization_integration_id: string
+          phone_number: string
+          phone_number_id?: string | null
+          provider?: string
+          provider_number_id?: string | null
+          purchased_at?: string | null
+          regulatory_bundle_sid?: string | null
+          regulatory_requirements?: Json
+          requested_by_user_id: string
+          status?: string
+          updated_at?: string
+        }
+        Update: {
+          address_requirements?: string | null
+          address_sid?: string | null
+          assigned_user_id?: string | null
+          capabilities?: Json
+          created_at?: string
+          currency?: string | null
+          error_code?: string | null
+          error_detail?: string | null
+          expires_at?: string
+          friendly_name?: string | null
+          id?: string
+          idempotency_key?: string
+          iso_country?: string
+          missed_call_owner_user_id?: string
+          monthly_price?: number | null
+          number_kind?: string
+          number_type?: string
+          organization_id?: string
+          organization_integration_id?: string
+          phone_number?: string
+          phone_number_id?: string | null
+          provider?: string
+          provider_number_id?: string | null
+          purchased_at?: string | null
+          regulatory_bundle_sid?: string | null
+          regulatory_requirements?: Json
+          requested_by_user_id?: string
+          status?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "telephony_number_purchase_inte_organization_integration_id_fkey"
+            columns: ["organization_integration_id"]
+            isOneToOne: false
+            referencedRelation: "organization_integrations"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "telephony_number_purchase_intent_missed_call_owner_user_id_fkey"
+            columns: ["missed_call_owner_user_id"]
+            isOneToOne: false
+            referencedRelation: "users"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "telephony_number_purchase_intents_assigned_user_id_fkey"
+            columns: ["assigned_user_id"]
+            isOneToOne: false
+            referencedRelation: "users"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "telephony_number_purchase_intents_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "telephony_number_purchase_intents_phone_number_id_fkey"
+            columns: ["phone_number_id"]
+            isOneToOne: false
+            referencedRelation: "organization_phone_numbers"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "telephony_number_purchase_intents_requested_by_user_id_fkey"
+            columns: ["requested_by_user_id"]
+            isOneToOne: false
+            referencedRelation: "users"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       telephony_presence: {
         Row: {
           active_call_id: string | null
@@ -10310,6 +10747,47 @@ export type Database = {
           user_id: string
         }[]
       }
+      claim_telephony_transfer_target: {
+        Args: {
+          _call_id: string
+          _customer_call_sid: string
+          _initiator_user_id: string
+          _original_agent_call_sid?: string
+          _queue_name: string
+          _target_user_id: string
+        }
+        Returns: {
+          active_user_id: string | null
+          call_id: string
+          completed_at: string | null
+          consult_parent_call_sid: string | null
+          consult_target_call_sid: string | null
+          created_at: string
+          customer_call_sid: string
+          customer_queued_at: string | null
+          failure_reason: string | null
+          id: string
+          initiated_by_user_id: string
+          organization_id: string
+          original_agent_call_sid: string | null
+          provider: string
+          provider_queue_sid: string | null
+          queue_name: string
+          result: string | null
+          started_at: string
+          state: string
+          target_answered_at: string | null
+          target_user_id: string
+          updated_at: string
+          version: number
+        }[]
+        SetofOptions: {
+          from: "*"
+          to: "call_transfers"
+          isOneToOne: false
+          isSetofReturn: true
+        }
+      }
       count_custom_fields_for_org: {
         Args: { p_module?: string; p_organization_id: string }
         Returns: number
@@ -10689,6 +11167,10 @@ export type Database = {
         Args: { _reason?: string; _thread_id: string; _to_user_id: string }
         Returns: Json
       }
+      reclaim_telephony_transfer_target: {
+        Args: { _initiator_user_id: string; _transfer_id: string }
+        Returns: boolean
+      }
       record_failed_admin_login: {
         Args: { p_email: string; p_ip: string }
         Returns: undefined
@@ -10699,6 +11181,10 @@ export type Database = {
           exhausted: number
           recovered: number
         }[]
+      }
+      release_telephony_transfer_reservations: {
+        Args: { _transfer_id: string }
+        Returns: undefined
       }
       release_worker_lease: {
         Args: { p_holder: string; p_name: string }
@@ -11179,6 +11665,10 @@ export type Database = {
       }
       telephony_number_is_open: {
         Args: { _at?: string; _phone_number_id: string }
+        Returns: boolean
+      }
+      telephony_transfer_enabled_for_org: {
+        Args: { _org_id: string }
         Returns: boolean
       }
       telephony_v2_enabled_for_org: {
