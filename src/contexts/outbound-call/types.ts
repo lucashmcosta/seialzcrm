@@ -113,7 +113,13 @@ export interface OutboundCallContextType {
   transferOperation: CallTransferOperation | null;
   loadTransferTargets: () => Promise<void>;
   startTransfer: (target: CallTransferTarget) => Promise<void>;
-  controlTransfer: (action: 'return_to_customer' | 'consult_again' | 'complete' | 'cancel') => Promise<void>;
+  controlTransfer: (
+    action: 'return_to_customer' | 'consult_again' | 'complete' | 'cancel',
+    options?: { targetUserId?: string; targetName?: string },
+  ) => Promise<void>;
+  // Always-available way out of any transfer state (spinner traps included):
+  // returns to the customer, cancels the hold, or ends the call as appropriate.
+  escapeTransfer: () => Promise<void>;
   numberSelection: OutboundNumberSelection | null;
   selectOutboundNumber: (phoneNumberId: string) => void;
   cancelOutboundNumberSelection: () => void;

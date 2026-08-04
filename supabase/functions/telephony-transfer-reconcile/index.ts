@@ -24,7 +24,21 @@ Deno.serve(async (req) => {
     Deno.env.get("SUPABASE_URL") ?? "",
     Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? "",
   );
-  const cutoff = new Date(Date.now() - 5 * 60_000).toISOString();
+  // Per-state staleness windows. Transient states (a lost Twilio callback)
+  // should unstick in ~1 minute; a queued customer gets a bit longer; the
+  // legitimate resting `with_customer` state keeps the original 5 minutes.
+  const STATE_STALE_MS: Record<string, number> = {
+    parking_customer: 60_000,
+    consult_ringing: 60_000,
+    returning_to_customer: 60_000,
+    handoff_pending: 60_000,
+    customer_queued: 120_000,
+    with_customer: 300_000,
+  };
+  const now = Date.now();
+  // Fetch floor at the shortest window so the sweep catches every candidate;
+  // each row is then filtered by its own state's threshold inside the loop.
+  const fetchCutoff = new Date(now - 60_000).toISOString();
   const { data: stale, error } = await admin.from("call_transfers").select("*")
     .in("state", [
       "parking_customer",
@@ -33,12 +47,14 @@ Deno.serve(async (req) => {
       "returning_to_customer",
       "handoff_pending",
       "with_customer",
-    ]).lt("updated_at", cutoff)
+    ]).lt("updated_at", fetchCutoff)
     .limit(100);
   if (error) return json({ error: error.message }, 500);
   let reconciled = 0;
   const failures: Array<{ transferId: string; error: string }> = [];
   for (const transfer of stale ?? []) {
+    const threshold = STATE_STALE_MS[transfer.state] ?? 300_000;
+    if (now - new Date(transfer.updated_at).getTime() < threshold) continue;
     try {
       const { data: call } = await admin.from("calls").select(
         "*, organization_phone_numbers(id, phone_number, friendly_name, fallback_message, missed_call_owner_user_id)",
@@ -109,7 +125,7 @@ Deno.serve(async (req) => {
       await admin.from("call_transfers").update({
         state: "failed",
         result: "reconciled_timeout",
-        failure_reason: "transfer_stale_over_5_minutes",
+        failure_reason: "transfer_stale_timeout",
         completed_at: new Date().toISOString(),
         updated_at: new Date().toISOString(),
       }).eq("id", transfer.id).not(

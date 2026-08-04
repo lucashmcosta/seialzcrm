@@ -79,6 +79,8 @@ interface CallTransferRow {
   state: string;
   result: string | null;
   failure_reason: string | null;
+  version: number;
+  consultation_sequence: number;
   updated_at: string;
 }
 

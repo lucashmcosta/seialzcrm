@@ -996,6 +996,29 @@ export function TelephonyProvider({ children }: { children: ReactNode }) {
     }
   }, [updatePresence]);
 
+  // Single source of truth for reading the transfer row and applying it.
+  // Shared by the 1s polling safety net and the realtime channel-degraded
+  // fallback. Logs errors instead of swallowing them so a schema drift (e.g. a
+  // missing column) can never again silently kill the sync.
+  const refreshTransferState = useCallback(async (transferId: string) => {
+    const { data, error } = await telephonySupabase.from('call_transfers')
+      .select('state, version, consultation_sequence, failure_reason')
+      .eq('id', transferId)
+      .maybeSingle();
+    if (error) {
+      console.error('[TelephonyTransfer] state poll failed', error);
+      return;
+    }
+    if (data?.state) {
+      applyTransferUpdate({
+        state: data.state as CallTransferState,
+        version: data.version,
+        consultation_sequence: data.consultation_sequence,
+        failure_reason: data.failure_reason,
+      });
+    }
+  }, [applyTransferUpdate]);
+
   const subscribeToTransfer = useCallback((transferId: string) => {
     if (transferChannelRef.current) supabase.removeChannel(transferChannelRef.current);
     transferChannelRef.current = supabase.channel(`call-transfer-${transferId}`)
@@ -1009,8 +1032,14 @@ export function TelephonyProvider({ children }: { children: ReactNode }) {
           failure_reason?: string | null;
         };
         applyTransferUpdate(next);
-      }).subscribe();
-  }, [applyTransferUpdate]);
+      }).subscribe((status) => {
+        // If the realtime channel drops, immediately reconcile via a direct
+        // read so the modal never waits on the next 1s tick to recover.
+        if (status === 'CHANNEL_ERROR' || status === 'TIMED_OUT' || status === 'CLOSED') {
+          void refreshTransferState(transferId);
+        }
+      });
+  }, [applyTransferUpdate, refreshTransferState]);
 
   // Realtime is the low-latency path, while polling guarantees that a dropped
   // publication event cannot leave the modal stuck in a transitional state.
@@ -1023,18 +1052,7 @@ export function TelephonyProvider({ children }: { children: ReactNode }) {
       if (disposed || loading) return;
       loading = true;
       try {
-        const { data, error } = await telephonySupabase.from('call_transfers')
-          .select('state, version, consultation_sequence, failure_reason')
-          .eq('id', transferId)
-          .maybeSingle();
-        if (!disposed && !error && data?.state) {
-          applyTransferUpdate({
-            state: data.state as CallTransferState,
-            version: data.version,
-            consultation_sequence: data.consultation_sequence,
-            failure_reason: data.failure_reason,
-          });
-        }
+        await refreshTransferState(transferId);
       } finally {
         loading = false;
       }
@@ -1045,7 +1063,7 @@ export function TelephonyProvider({ children }: { children: ReactNode }) {
       disposed = true;
       window.clearInterval(timer);
     };
-  }, [transferSession?.id, applyTransferUpdate]);
+  }, [transferSession?.id, refreshTransferState]);
 
   const connectTransferCall = useCallback(async (
     params: Record<string, string>,
@@ -1225,7 +1243,10 @@ export function TelephonyProvider({ children }: { children: ReactNode }) {
     }
   }, [organization?.id, canTransferCalls, activeIncomingCall, subscribeToTransfer, connectTransferCall, recoverCustomerAfterConnectionFailure]);
 
-  const controlTransfer = useCallback(async (action: 'return_to_customer' | 'consult_again' | 'complete' | 'cancel') => {
+  const controlTransfer = useCallback(async (
+    action: 'return_to_customer' | 'consult_again' | 'complete' | 'cancel',
+    options?: { targetUserId?: string; targetName?: string },
+  ) => {
     const current = transferSessionRef.current;
     if (!organization?.id || !current) return;
     setTransferLoading(true);
@@ -1237,7 +1258,11 @@ export function TelephonyProvider({ children }: { children: ReactNode }) {
     };
     setTransferOperation(operation[action]);
     try {
-      if (action === 'consult_again') suppressCallFinalizationRef.current = true;
+      // Every action except `cancel` tears down / reconnects a Twilio leg; the
+      // guard must be set BEFORE that so the SDK disconnect handler in makeCall
+      // does not finalize the whole call as ended. `cancel` keeps the customer
+      // leg and clears state, so it stays unsuppressed (reset below).
+      if (action !== 'cancel') suppressCallFinalizationRef.current = true;
       const { data, error } = await withTransferTimeout(supabase.functions.invoke('telephony-transfer-control', {
         headers: { 'x-organization-id': organization.id },
         body: {
@@ -1245,6 +1270,8 @@ export function TelephonyProvider({ children }: { children: ReactNode }) {
           action,
           expectedVersion: current.version,
           requestId: crypto.randomUUID(),
+          // Only meaningful for consult_again: consult a DIFFERENT colleague.
+          ...(options?.targetUserId ? { targetUserId: options.targetUserId } : {}),
         },
       }));
       if (error || data?.error) throw new Error(data?.error || 'Não foi possível controlar a transferência');
@@ -1253,6 +1280,9 @@ export function TelephonyProvider({ children }: { children: ReactNode }) {
         state: data.state as CallTransferState,
         version: data.version ?? current.version,
         consultationSequence: data.consultationSequence ?? current.consultationSequence,
+        // Backend echoes the reclaimed target when consulting someone new.
+        targetUserId: (data.targetUserId as string) ?? options?.targetUserId ?? current.targetUserId,
+        targetName: options?.targetName ?? current.targetName,
         error: null,
       };
       transferSessionRef.current = updated;
@@ -1516,6 +1546,29 @@ export function TelephonyProvider({ children }: { children: ReactNode }) {
     setIncomingMuted(next);
   }, [activeIncomingCall, incomingMuted]);
 
+  // Always-available escape so a stuck/transitional transfer state can never
+  // trap the agent behind a spinner. Chooses the safe exit for the state:
+  //  - reachable "soft" states -> return the customer to the initiator;
+  //  - resting with_customer   -> cancel the hold (agent keeps the customer);
+  //  - transient states with no soft return -> end the call outright.
+  const escapeTransfer = useCallback(async () => {
+    const current = transferSessionRef.current;
+    if (!current) return;
+    const state = current.state;
+    if (['consulting', 'consult_ringing', 'customer_queued'].includes(state)) {
+      await controlTransfer('return_to_customer');
+      return;
+    }
+    if (state === 'with_customer') {
+      await controlTransfer('cancel');
+      return;
+    }
+    // parking_customer | returning_to_customer | handoff_pending (or unknown):
+    // no soft return exists; end_call is the guaranteed exit.
+    if (transferOriginRef.current === 'incoming') endIncomingCall();
+    else endCall();
+  }, [controlTransfer, endCall, endIncomingCall]);
+
   const value: OutboundCallContextType = {
     startCall,
     isOnCall,
@@ -1550,6 +1603,7 @@ export function TelephonyProvider({ children }: { children: ReactNode }) {
     loadTransferTargets,
     startTransfer,
     controlTransfer,
+    escapeTransfer,
     numberSelection,
     selectOutboundNumber,
     cancelOutboundNumberSelection,

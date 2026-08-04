@@ -671,19 +671,24 @@ async function handleTransferLegStatus(
     }
   }
   if (
-    terminal && ["consulting", "consult_ringing"].includes(
+    terminal && ["consulting"].includes(
       context.transfer.state,
     )
   ) {
-    // When the target hangs up, the parent Dial action below returns the
-    // customer to the initiator. When the initiator/browser disappears, that
-    // action never runs; after this short race window the target is rung again
-    // and connected straight to the waiting customer.
+    // Recovery only applies once the target ANSWERED (state `consulting`). If
+    // the target never answers (`consult_ringing`), we must NOT touch state
+    // here: the parent `<Dial action>` (handleTransferConsultResult) already
+    // returns the initiator to the parked customer. Racing it into
+    // `handoff_pending` here made that action hit its guard and `<Hangup/>`,
+    // which is exactly why a no-answer never returned to the customer.
+    // With the target already answered, if the initiator/browser then
+    // disappears the Dial action may never run; after this short race window
+    // the target is rung again and connected straight to the waiting customer.
     await new Promise((resolve) => setTimeout(resolve, 750));
     const pending = await transferContext(transferId);
     if (
       pending && await ownsCurrentTransferCycle(pending, cycle) &&
-      ["consulting", "consult_ringing"].includes(
+      ["consulting"].includes(
         pending.transfer.state,
       )
     ) {

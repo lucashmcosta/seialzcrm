@@ -69,6 +69,10 @@ Deno.serve(async (req) => {
         | "end_call";
       expectedVersion?: number;
       requestId?: string;
+      // Optional override for `consult_again`: consult a DIFFERENT colleague
+      // (re-parks the customer and reserves this new target). When omitted the
+      // original target is re-consulted.
+      targetUserId?: string;
     };
     if (!body.transferId || !body.action) {
       return json({ error: "transfer_id_and_action_required" }, 400);
@@ -343,11 +347,12 @@ Deno.serve(async (req) => {
         return json({ error: "customer_not_with_initiator" }, 409);
       }
       const { data: reclaimed, error } = await context.admin.rpc(
-        "reclaim_telephony_transfer_target_v2",
+        "reclaim_telephony_transfer_target_v3",
         {
           _transfer_id: transfer.id,
           _initiator_user_id: context.userId,
           _expected_version: expectedVersion,
+          _target_user_id: body.targetUserId ?? null,
         },
       );
       if (error || !reclaimed?.[0]) {
@@ -414,10 +419,13 @@ Deno.serve(async (req) => {
         state: "customer_queued",
         version: queuedTransfer.version,
         consultationSequence: queuedTransfer.consultation_sequence,
+        // Reflect the RECLAIMED target (may be a different colleague than the
+        // original) so the client dials the right person and updates its label.
+        targetUserId: reclaimedTransfer.target_user_id,
         connectParams: adapter.consultationParams({
           callId: transfer.call_id,
           transferId: transfer.id,
-          targetUserId: transfer.target_user_id,
+          targetUserId: reclaimedTransfer.target_user_id,
           consultationSequence: cycle,
         }),
       };
