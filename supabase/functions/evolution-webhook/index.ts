@@ -28,6 +28,7 @@ import { corsHeaders } from "../_shared/cors.ts";
 import { featureFlagEnabled } from "../_shared/feature-flags.ts";
 import { logEvolution, newRequestId } from "../_shared/evolution/logger.ts";
 import { callerKey, rateLimit } from "../_shared/evolution/rate-limit.ts";
+import { normalizeEvolutionState } from "../_shared/evolution/state.ts";
 import { resolveContactIngressIdentity } from "../_shared/registry/ingress.ts";
 import {
   EVOLUTION_WEBHOOK_CONTRACT_VERSION,
