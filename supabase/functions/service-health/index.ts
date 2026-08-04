@@ -31,11 +31,15 @@ type Service = {
   uptimeSeconds: number | null;
   version: string | null;
   lastDeadLetterAt?: string | null;
+  /** Explicação legível do status (quando aplicável). */
+  detail?: string;
   metrics: Record<string, number>;
 };
 
 const WARN_MS = 5 * 60_000;
 const CRIT_MS = 15 * 60_000;
+/** Idade máxima aceitável de `last_state_checked_at` das instâncias Evolution. */
+const STATE_STALE_MS = 15 * 60_000;
 
 function ageMs(ts: string | null | undefined): number | null {
   if (!ts) return null;
