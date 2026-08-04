@@ -102,7 +102,7 @@ curl -s https://qvmtzfvkhkhkhdpclzua.supabase.co/functions/v1/service-health \
 | `outbox-worker` | `fn_outbox_health_summary_internal()` + contagens de 24h em `integration_jobs` (`worker_last_run_at` vem de `outbox_system_heartbeats` componente `integration-worker`, gravado a cada invocação mesmo com fila vazia) | `processed` (sucesso 24h), `errors` (falhas 24h), `pending`, `running`, `stuck5m`, `failed` (histórico), `failed24h`, `deadLetter` = `deadLetter24h`, `deadLetterTotal` (histórico), `lastDeadLetterAt` |
 | `inbox-reaper` | `outbox_system_heartbeats` componente `reaper` | `processed` (`last_detail.reaped`) |
 | `inbox-dispatcher` | `fn_inbound_health_summary('1 hour')` | `processed`, `errors`, `deadLetter`, `latencyMs` (média ponderada) |
-| `evolution-api` | `evolution_instances` (`last_known_state`, `last_state_checked_at`) | `instancesOpen`, `instancesTotal` |
+| `evolution-api` | `evolution_instances` (`last_known_state`, `last_state_checked_at`), atualizado por webhook `CONNECTION_UPDATE` **e** pelo cron `evolution-health-check` (a cada 5 min) | `instancesOpen`, `instancesConnecting`, `instancesClose`, `instancesUnknown`, `instancesTotal`, `stateStale` (0/1), `stateAgeSeconds` (`-1` = nunca verificado) + campo `detail` legível |
 | `integration-worker` | **sem telemetria própria** | — (`unknown`) |
 | `public-subscriber-worker` | **sem telemetria própria** | — (`unknown`) |
 | `redis` | não observado pelo Seialz | — (`unknown`) |
@@ -129,6 +129,10 @@ Casos específicos:
 
 - **`outbox-worker`** tem heartbeat de vida próprio em `outbox_system_heartbeats` (`component='integration-worker'`, `last_detail = { processed, duration_ms, summary }`), gravado ao fim de **toda** invocação — inclusive com `processed = 0`. `integration_audit_logs` (actor `integration-worker`) é trilha de trabalho por job, não sinal de vida: usá-la como heartbeat gerava `critical` falso sempre que a fila ficava vazia por mais de 15 min.
 - **`inbox-dispatcher`** não tem heartbeat próprio; a frescura é inferida dos eventos da última hora. Zero eventos na janela não é erro → `unknown`.
+- **`evolution-api`** separa duas condições distintas, para o Kairos não confundir uma com a outra:
+  - **instância fora do ar** → `last_known_state != 'open'` (`instancesClose` / `instancesConnecting` / `instancesUnknown`). Todas fora → `critical`; parte → `warning`.
+  - **estado desatualizado** → `last_state_checked_at` com mais de 15 min (`stateStale = 1`), indicando que a *verificação* parou, não necessariamente a instância. Sozinho, eleva `healthy` → `warning`; nunca rebaixa um `critical` real.
+  O motivo em texto vai no campo `detail` do serviço.
 - Uma fonte indisponível degrada **apenas** o serviço correspondente (leituras em `Promise.allSettled`), o restante da resposta continua válido.
 
 ---
