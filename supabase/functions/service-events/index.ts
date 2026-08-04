@@ -31,6 +31,7 @@ type Event = {
   attempt: number | null;
   maxAttempts: number | null;
   referenceId: string | null;
+  severitySource?: "job" | "audit" | "event";
   metadata: Record<string, unknown>;
 };
 
@@ -103,6 +104,22 @@ function httpStatusFrom(value: unknown): number | null {
   return num(v.status ?? v.statusCode ?? v.http_status ?? (v.response as any)?.status);
 }
 
+/** Extracts an HTTP status code mentioned in a persisted error string. */
+function httpStatusFromText(value: unknown): number | null {
+  if (value == null) return null;
+  const s = typeof value === "string" ? value : JSON.stringify(value);
+  const m = s.match(/\b(?:status|http)[^0-9]{0,4}([1-5]\d{2})\b/i) ?? s.match(/\b([45]\d{2})\b/);
+  return m ? num(m[1]) : null;
+}
+
+/** True when a persisted error looks like a network/timeout failure. */
+function isTimeout(value: unknown): boolean {
+  if (value == null) return false;
+  const s = (typeof value === "string" ? value : JSON.stringify(value)).toLowerCase();
+  return /timeout|timed out|etimedout|deadline exceeded|connection closed|econnreset/.test(s);
+}
+
+
 function withTimeout<T>(p: PromiseLike<T>): Promise<T> {
   return Promise.race([
     Promise.resolve(p),
@@ -128,7 +145,18 @@ type Ctx = {
   status: string | null;
   from: string | null;
   to: string | null;
+  /** null = no severity filter (default recent feed). */
+  levels: Set<Level> | null;
 };
+
+/** True when the caller asked for severities beyond plain `info`. */
+function wantsLevel(ctx: Ctx, level: Level): boolean {
+  return ctx.levels === null || ctx.levels.has(level);
+}
+
+function severityFiltered(ctx: Ctx): boolean {
+  return ctx.levels !== null;
+}
 
 /** Applies cursor/from/to window on a timestamp column. */
 function applyWindow(q: any, col: string, ctx: Ctx) {
@@ -145,111 +173,205 @@ function jobLevel(status: string, stuck: boolean): Level {
   return "info";
 }
 
+const JOB_FAILURE_STATUSES = ["failed", "dead_letter"];
+const AUDIT_FAILURE_ACTIONS = [
+  "worker.retryable",
+  "worker.permanent",
+  "retry_scheduled",
+  "worker.failed",
+  "worker.error",
+  "worker.dead_letter",
+];
+
+function jobEvent(row: any, occurredAt: string, now: number): Event {
+  const status = String(row.status ?? "unknown");
+  const attempt = num(row.attempts);
+  const maxAttempts = num(row.max_attempts);
+  const httpStatus = httpStatusFrom(row.external_response) ??
+    httpStatusFromText(row.last_error);
+  const startedAge = row.started_at ? now - new Date(String(row.started_at)).getTime() : 0;
+  const stuck = status === "running" && startedAge > 5 * 60_000;
+  const error = sanitizeError(row.last_error);
+  const timedOut = isTimeout(row.last_error);
+
+  let summary: string;
+  if (status === "completed" || status === "success") {
+    summary = httpStatus
+      ? `Webhook dispatch concluído com HTTP ${httpStatus}`
+      : "Job processado com sucesso";
+  } else if (status === "dead_letter") {
+    summary = `Job movido para dead letter${httpStatus ? ` após HTTP ${httpStatus}` : ""}${
+      timedOut ? " (timeout)" : ""
+    }`;
+  } else if (status === "failed") {
+    summary = `Job falhou${httpStatus ? ` com HTTP ${httpStatus}` : ""}${
+      timedOut ? " (timeout)" : ""
+    }${error ? ` — ${error}` : ""}`;
+  } else if (status === "running") {
+    summary = stuck ? "Job preso em execução há mais de 5 minutos" : "Job em execução";
+  } else if (attempt && maxAttempts) {
+    summary = `Job enviado para retry — tentativa ${attempt} de ${maxAttempts}`;
+  } else {
+    summary = `Job com status ${status}`;
+  }
+
+  let level = jobLevel(status, stuck);
+  if (level === "info" && (timedOut || (httpStatus !== null && httpStatus >= 500))) {
+    level = "error";
+  }
+
+  return {
+    id: `job:${row.id}`,
+    occurredAt,
+    level,
+    status,
+    type: "outbox.job",
+    summary,
+    durationMs: durationBetween(row.started_at, row.completed_at),
+    attempt,
+    maxAttempts,
+    referenceId: row.id,
+    severitySource: "job",
+    metadata: {
+      integrationSlug: row.integration_slug ?? null,
+      targetAction: row.target_action ?? null,
+      httpStatus,
+      timeout: timedOut,
+      error,
+      integrationJobId: row.id,
+      integrationEventId: row.event_id ?? null,
+      subscriptionId: row.subscription_id ?? null,
+      organizationId: row.organization_id ?? null,
+    },
+  };
+}
+
+const JOB_COLS =
+  "id,organization_id,integration_slug,target_action,status,attempts,max_attempts,last_error,last_error_at,started_at,completed_at,created_at,event_id,subscription_id,external_response";
+
 async function outboxWorkerEvents(ctx: Ctx): Promise<Event[]> {
   const cap = ctx.limit;
+  const statusFilter = ctx.status;
 
-  let jobsQ = ctx.supabase
-    .from("integration_jobs")
-    .select(
-      "id,organization_id,integration_slug,target_action,status,attempts,max_attempts,last_error,last_error_at,started_at,completed_at,created_at,event_id,subscription_id,external_response",
-    );
-  jobsQ = applyWindow(jobsQ, "created_at", ctx);
-  if (ctx.status) jobsQ = jobsQ.eq("status", ctx.status);
-  jobsQ = jobsQ.order("created_at", { ascending: false }).limit(cap);
+  // Each read is ordered/paginated by ONE stable column, and `occurredAt` is
+  // exactly that column — no coalesce in the ordering.
+  const queries: Array<{ q: any; col: string } | null> = [];
 
-  let auditQ = ctx.supabase
+  // 1) Finished jobs (stable column: completed_at)
+  const wantFinished = statusFilter
+    ? ["success", "completed"].includes(statusFilter)
+    : wantsLevel(ctx, "info");
+  if (wantFinished) {
+    let q = ctx.supabase.from("integration_jobs").select(JOB_COLS)
+      .not("completed_at", "is", null);
+    q = statusFilter ? q.eq("status", statusFilter) : q.in("status", ["success", "completed"]);
+    q = applyWindow(q, "completed_at", ctx);
+    queries.push({ q: q.order("completed_at", { ascending: false }).limit(cap), col: "completed_at" });
+  }
+
+  // 2) Failed / dead-letter jobs (stable column: last_error_at)
+  const failureStatuses = statusFilter
+    ? (JOB_FAILURE_STATUSES.includes(statusFilter) ? [statusFilter] : [])
+    : JOB_FAILURE_STATUSES;
+  const wantFailures = failureStatuses.length > 0 &&
+    (wantsLevel(ctx, "error") || wantsLevel(ctx, "critical"));
+  if (wantFailures) {
+    let q = ctx.supabase.from("integration_jobs").select(JOB_COLS)
+      .in("status", failureStatuses)
+      .not("last_error_at", "is", null);
+    q = applyWindow(q, "last_error_at", ctx);
+    queries.push({ q: q.order("last_error_at", { ascending: false }).limit(cap), col: "last_error_at" });
+  }
+
+  // 3) Running jobs, including the stuck ones (stable column: started_at)
+  const wantRunning = statusFilter ? statusFilter === "running" : true;
+  if (wantRunning) {
+    let q = ctx.supabase.from("integration_jobs").select(JOB_COLS)
+      .eq("status", "running")
+      .not("started_at", "is", null);
+    q = applyWindow(q, "started_at", ctx);
+    queries.push({ q: q.order("started_at", { ascending: false }).limit(cap), col: "started_at" });
+  }
+
+  // 4) Worker audit log (stable column: created_at) — `status` maps to `action`.
+  let auditQ: any = ctx.supabase
     .from("integration_audit_logs")
     .select("id,organization_id,integration_slug,action,actor,details,job_id,event_id,created_at");
+  if (statusFilter) auditQ = auditQ.eq("action", statusFilter);
+  else if (severityFiltered(ctx) && !wantsLevel(ctx, "info")) {
+    auditQ = auditQ.in("action", AUDIT_FAILURE_ACTIONS);
+  }
   auditQ = applyWindow(auditQ, "created_at", ctx);
   auditQ = auditQ.order("created_at", { ascending: false }).limit(cap);
 
-  let eventsQ = ctx.supabase
+  // 5) integration_events (stable column: occurred_at)
+  let eventsQ: any = ctx.supabase
     .from("integration_events")
     .select("id,organization_id,aggregate_type,event_type,status,occurred_at,published_at");
+  let includeEvents = true;
+  if (statusFilter) eventsQ = eventsQ.eq("status", statusFilter);
+  else if (severityFiltered(ctx) && !wantsLevel(ctx, "info")) {
+    if (wantsLevel(ctx, "error")) eventsQ = eventsQ.eq("status", "failed");
+    else includeEvents = false;
+  }
   eventsQ = applyWindow(eventsQ, "occurred_at", ctx);
-  if (ctx.status) eventsQ = eventsQ.eq("status", ctx.status);
   eventsQ = eventsQ.order("occurred_at", { ascending: false }).limit(cap);
 
-  const [jobsRes, auditRes, eventsRes] = await Promise.allSettled([
-    withTimeout(jobsQ),
+  const jobQueries = queries.filter(Boolean) as Array<{ q: any; col: string }>;
+  const settled = await Promise.allSettled([
+    ...jobQueries.map((entry) => withTimeout(entry.q)),
     withTimeout(auditQ),
-    withTimeout(eventsQ),
+    includeEvents ? withTimeout(eventsQ) : Promise.resolve({ data: [], error: null } as any),
   ]);
 
   const out: Event[] = [];
   const now = Date.now();
+  const seen = new Set<string>();
 
-  for (const j of rowsOf(jobsRes)) {
-    const status = String(j.status ?? "unknown");
-    const attempt = num(j.attempts);
-    const maxAttempts = num(j.max_attempts);
-    const httpStatus = httpStatusFrom(j.external_response);
-    const startedAge = j.started_at ? now - new Date(String(j.started_at)).getTime() : 0;
-    const stuck = status === "running" && startedAge > 5 * 60_000;
-    const error = sanitizeError(j.last_error);
-
-    let summary: string;
-    if (status === "completed" || status === "success") {
-      summary = httpStatus
-        ? `Webhook dispatch concluído com HTTP ${httpStatus}`
-        : "Job processado com sucesso";
-    } else if (status === "dead_letter") {
-      summary = `Job movido para dead letter${httpStatus ? ` após HTTP ${httpStatus}` : ""}`;
-    } else if (status === "failed") {
-      summary = `Job falhou${error ? ` — ${error}` : ""}`;
-    } else if (status === "running") {
-      summary = stuck
-        ? `Job preso em execução há mais de 5 minutos`
-        : "Job em execução";
-    } else if (attempt && maxAttempts) {
-      summary = `Job enviado para retry — tentativa ${attempt} de ${maxAttempts}`;
-    } else {
-      summary = `Job com status ${status}`;
+  jobQueries.forEach((entry, index) => {
+    for (const row of rowsOf(settled[index])) {
+      const occurredAt = row[entry.col];
+      if (!occurredAt) continue;
+      const event = jobEvent(row, String(occurredAt), now);
+      if (seen.has(event.id)) continue;
+      seen.add(event.id);
+      out.push(event);
     }
+  });
 
-    out.push({
-      id: `job:${j.id}`,
-      occurredAt: String(j.completed_at ?? j.last_error_at ?? j.started_at ?? j.created_at),
-      level: jobLevel(status, stuck),
-      status,
-      type: "outbox.job",
-      summary,
-      durationMs: durationBetween(j.started_at, j.completed_at),
-      attempt,
-      maxAttempts,
-      referenceId: j.id,
-      metadata: {
-        integrationSlug: j.integration_slug ?? null,
-        targetAction: j.target_action ?? null,
-        httpStatus,
-        error,
-        integrationJobId: j.id,
-        integrationEventId: j.event_id ?? null,
-        subscriptionId: j.subscription_id ?? null,
-        organizationId: j.organization_id ?? null,
-      },
-    });
-  }
+  const auditRes = settled[jobQueries.length];
+  const eventsRes = settled[jobQueries.length + 1];
+
 
   for (const a of rowsOf(auditRes)) {
     const action = String(a.action ?? "unknown");
     const d = (a.details ?? {}) as Record<string, unknown>;
     const attempt = num(d.attempt ?? d.attempts);
     const maxAttempts = num(d.max_attempts ?? d.maxAttempts);
-    const httpStatus = num(d.http_status ?? d.status_code) ?? httpStatusFrom(d);
+    const httpStatus = num(d.http_status ?? d.status_code) ?? httpStatusFrom(d) ??
+      httpStatusFromText(d.error ?? d.message ?? d.last_error);
     const error = sanitizeError(d.error ?? d.message ?? d.last_error);
     const batch = num(d.processed ?? d.batch_size ?? d.jobs);
+    const timedOut = isTimeout(d.error ?? d.message ?? d.last_error);
 
     let level: Level = "info";
-    if (/dead_letter/.test(action)) level = "critical";
-    else if (/fail|error/.test(action)) level = "error";
-    else if (/retry/.test(action)) level = "warning";
+    if (action === "worker.permanent" || /dead_letter/.test(action)) level = "critical";
+    else if (action === "worker.retryable" || action === "retry_scheduled" || /retry/.test(action)) {
+      level = "warning";
+    } else if (/fail|error/.test(action)) level = "error";
+    if (level === "info" && (timedOut || (httpStatus !== null && httpStatus >= 500))) {
+      level = "error";
+    }
 
     let summary: string;
     if (action === "worker.success") {
       summary = httpStatus
         ? `Execução do worker concluída com HTTP ${httpStatus}`
         : "Execução do worker concluída com sucesso";
+    } else if (action === "worker.permanent") {
+      summary = `Job encerrado como falha permanente${
+        attempt && maxAttempts ? ` — tentativa ${attempt} de ${maxAttempts}` : ""
+      }${error ? ` — ${error}` : ""}`;
     } else if (action === "worker.retryable" || action === "retry_scheduled") {
       summary = attempt && maxAttempts
         ? `Job enviado para retry — tentativa ${attempt} de ${maxAttempts}`
@@ -271,10 +393,12 @@ async function outboxWorkerEvents(ctx: Ctx): Promise<Event[]> {
       attempt,
       maxAttempts,
       referenceId: a.job_id ?? a.event_id ?? null,
+      severitySource: "audit",
       metadata: {
         integrationSlug: a.integration_slug ?? null,
         actor: a.actor ?? null,
         httpStatus,
+        timeout: timedOut,
         error,
         integrationJobId: a.job_id ?? null,
         integrationEventId: a.event_id ?? null,
@@ -296,6 +420,7 @@ async function outboxWorkerEvents(ctx: Ctx): Promise<Event[]> {
       attempt: null,
       maxAttempts: null,
       referenceId: e.id,
+      severitySource: "event",
       metadata: {
         aggregateType: e.aggregate_type ?? null,
         integrationEventId: e.id,
@@ -343,7 +468,9 @@ function inboundEvent(row: any, prefix: string): Event {
   const error = sanitizeError(row.process_error);
   return {
     id: `${prefix}:${row.id}`,
-    occurredAt: String(row.processed_at ?? row.last_attempt_at ?? row.received_at),
+    // occurredAt IS the ordering/pagination column (received_at) so the keyset
+    // stays consistent; processing timestamps live in metadata.
+    occurredAt: String(row.received_at ?? row.last_attempt_at ?? row.processed_at),
     level: inboundLevel(status),
     status,
     type: `inbound.${row.source_event ?? "event"}`,
@@ -362,6 +489,8 @@ function inboundEvent(row: any, prefix: string): Event {
       parseAttempts: num(row.parse_attempts),
       replayCount: num(row.replay_count),
       shadowMode: row.shadow_mode ?? null,
+      processedAt: row.processed_at ?? null,
+      lastAttemptAt: row.last_attempt_at ?? null,
       traceId: row.trace_id ?? null,
       error,
       organizationId: row.organization_id ?? null,
@@ -372,10 +501,22 @@ function inboundEvent(row: any, prefix: string): Event {
 const INBOUND_COLS =
   "id,organization_id,integration_slug,source_event,received_at,processed_at,last_attempt_at,process_status,process_error,error_classification,dead_letter_reason,retry_count,max_attempts,parse_attempts,replay_count,handler_key,parser_function,trace_id,shadow_mode";
 
+const INBOUND_FAILURE_STATUSES = [
+  "failed",
+  "parse_failed",
+  "dead_letter",
+  "retry_scheduled",
+  "retrying",
+  "divergent",
+];
+
 async function inboxDispatcherEvents(ctx: Ctx): Promise<Event[]> {
-  let inboundQ = ctx.supabase.from("integration_inbound_events").select(INBOUND_COLS);
+  let inboundQ: any = ctx.supabase.from("integration_inbound_events").select(INBOUND_COLS);
   inboundQ = applyWindow(inboundQ, "received_at", ctx);
   if (ctx.status) inboundQ = inboundQ.eq("process_status", ctx.status);
+  else if (severityFiltered(ctx) && !wantsLevel(ctx, "info")) {
+    inboundQ = inboundQ.in("process_status", INBOUND_FAILURE_STATUSES);
+  }
   inboundQ = inboundQ.order("received_at", { ascending: false }).limit(ctx.limit);
 
   let ingestQ = ctx.supabase
@@ -495,12 +636,15 @@ async function inboxReaperEvents(ctx: Ctx): Promise<Event[]> {
 }
 
 async function evolutionEvents(ctx: Ctx): Promise<Event[]> {
-  let inboundQ = ctx.supabase
+  let inboundQ: any = ctx.supabase
     .from("integration_inbound_events")
     .select(INBOUND_COLS)
     .eq("integration_slug", "evolution_api");
   inboundQ = applyWindow(inboundQ, "received_at", ctx);
   if (ctx.status) inboundQ = inboundQ.eq("process_status", ctx.status);
+  else if (severityFiltered(ctx) && !wantsLevel(ctx, "info")) {
+    inboundQ = inboundQ.in("process_status", INBOUND_FAILURE_STATUSES);
+  }
   inboundQ = inboundQ.order("received_at", { ascending: false }).limit(ctx.limit);
 
   let instancesQ = ctx.supabase
@@ -617,10 +761,32 @@ Deno.serve(async (req) => {
     return Number.isFinite(t.getTime()) ? t.toISOString() : null;
   };
 
+  const VALID_LEVELS: Level[] = ["info", "warning", "error", "critical"];
+  const rawLevel = (url.searchParams.get("level") ?? "").trim();
+  const severityOnly = ["1", "true", "yes"].includes(
+    (url.searchParams.get("severityOnly") ?? "").trim().toLowerCase(),
+  );
+  let levels: Set<Level> | null = null;
+  if (rawLevel) {
+    const parsed = rawLevel.split(",").map((v) => v.trim().toLowerCase()).filter(Boolean);
+    const invalid = parsed.filter((v) => !VALID_LEVELS.includes(v as Level));
+    if (invalid.length > 0) return json({ error: "invalid_level", invalid }, 400);
+    levels = new Set(parsed as Level[]);
+  } else if (severityOnly) {
+    levels = new Set<Level>(["warning", "error", "critical"]);
+  }
+
   const service = { slug, displayName: SERVICES[slug] };
   const base = { generated_at: new Date().toISOString(), service };
 
-  if (NO_SOURCE.has(slug)) return json({ ...base, events: [], nextCursor: null });
+  if (NO_SOURCE.has(slug)) {
+    return json({
+      ...base,
+      events: [],
+      nextCursor: null,
+      pagination: { mode: "per-source-keyset" },
+    });
+  }
 
   const ctx: Ctx = {
     supabase: createClient(SUPABASE_URL, SERVICE_ROLE_KEY, { auth: { persistSession: false } }),
@@ -629,6 +795,7 @@ Deno.serve(async (req) => {
     status: url.searchParams.get("status")?.trim() || null,
     from: isoOrNull(url.searchParams.get("from")),
     to: isoOrNull(url.searchParams.get("to")),
+    levels,
   };
 
   try {
@@ -640,6 +807,9 @@ Deno.serve(async (req) => {
 
     events = events
       .filter((e) => e.occurredAt && Number.isFinite(new Date(e.occurredAt).getTime()))
+      // Severity filter is applied AFTER normalization, so it means the same
+      // thing for every source.
+      .filter((e) => (levels === null ? true : levels.has(e.level)))
       .sort((a, b) => (a.occurredAt < b.occurredAt ? 1 : a.occurredAt > b.occurredAt ? -1 : 0));
 
     const page = events.slice(0, limit);
@@ -647,7 +817,18 @@ Deno.serve(async (req) => {
       ? page[page.length - 1].occurredAt
       : null;
 
-    return json({ ...base, events: page, nextCursor });
+    return json({
+      ...base,
+      filters: {
+        level: levels ? [...levels] : null,
+        status: ctx.status,
+        from: ctx.from,
+        to: ctx.to,
+      },
+      events: page,
+      nextCursor,
+      pagination: { mode: "per-source-keyset" },
+    });
   } catch (err) {
     console.error("service-events failed", sanitizeError((err as Error)?.message));
     return json({ error: "internal_error" }, 500);

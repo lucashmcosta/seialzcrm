@@ -29,15 +29,33 @@ Token ausente/incorreto → `401 {"error":"unauthorized"}`.
 | `service` | sim | — | slug validado por allowlist; desconhecido → `400 {"error":"unknown_service"}` |
 | `limit` | não | `50` | máximo `100`; valores fora da faixa são normalizados |
 | `cursor` | não | — | ISO 8601 do `occurredAt` da última página (keyset descendente) |
-| `status` | não | — | filtra pelo status nativo da fonte (ex.: `failed`, `dead_letter`, `processed`) |
-| `from` / `to` | não | — | janela ISO 8601 sobre o timestamp da fonte |
+| `level` | não | — | `info`, `warning`, `error`, `critical`; múltiplos separados por vírgula. Valor inválido → `400 {"error":"invalid_level"}` |
+| `severityOnly` | não | `false` | `true` equivale a `level=warning,error,critical` |
+| `status` | não | — | status nativo da fonte, aplicado em **todas** as fontes (`integration_jobs.status`, `integration_inbound_events.process_status`, `integration_events.status`, `integration_audit_logs.action`). Valor inaplicável a uma fonte exclui aquela fonte da página |
+| `from` / `to` | não | — | janela ISO 8601 sobre o timestamp de ordenação da fonte |
 
-### Exemplo
+Regras de janela e severidade:
+
+- O filtro `level` é aplicado **após** a normalização dos eventos, então significa a mesma coisa em todas as fontes.
+- **Não existe cota mínima de severidade.** A página padrão (sem `level`) é apenas atividade recente e respeita rigorosamente `from`, `to` e `cursor` — falhas antigas não são injetadas na timeline.
+- Com `level`/`severityOnly`/`status`, as consultas dirigidas por severidade recebem integralmente `from`, `to` e `cursor`. Ou seja: `level=critical&from=<24h>` **não** retorna dead letters antigos; sem `from`, o filtro pesquisa o histórico.
+
+### Exemplos
 
 ```bash
-curl -s "https://qvmtzfvkhkhkhdpclzua.supabase.co/functions/v1/service-events?service=outbox-worker&limit=50" \
+# feed recente (sem filtro de severidade)
+curl -s ".../service-events?service=outbox-worker&limit=50" \
+  -H "x-health-token: $SERVICE_HEALTH_TOKEN"
+
+# apenas falhas nas últimas 24h
+curl -s ".../service-events?service=outbox-worker&severityOnly=true&from=2026-08-03T16:00:00Z" \
+  -H "x-health-token: $SERVICE_HEALTH_TOKEN"
+
+# dead letters históricos
+curl -s ".../service-events?service=outbox-worker&level=critical&limit=100" \
   -H "x-health-token: $SERVICE_HEALTH_TOKEN"
 ```
+
 
 ---
 
@@ -73,7 +91,9 @@ curl -s "https://qvmtzfvkhkhkhdpclzua.supabase.co/functions/v1/service-events?se
       }
     }
   ],
-  "nextCursor": null
+  "filters": { "level": null, "status": null, "from": null, "to": null },
+  "nextCursor": null,
+  "pagination": { "mode": "per-source-keyset" }
 }
 ```
 
@@ -82,16 +102,19 @@ curl -s "https://qvmtzfvkhkhkhdpclzua.supabase.co/functions/v1/service-events?se
 | Campo | Tipo | Observação |
 |---|---|---|
 | `events[].id` | string | id estável com prefixo da fonte (`job:`, `audit:`, `inbound:`, `dlq:`, …) |
-| `events[].occurredAt` | ISO 8601 | ordenação descendente |
-| `events[].level` | `info` \| `warning` \| `error` \| `critical` | derivado do status da fonte |
-| `events[].status` | string \| null | status nativo da fonte |
+| `events[].occurredAt` | ISO 8601 | **é exatamente a coluna de ordenação/paginação da fonte** (sem `coalesce`): `completed_at`, `last_error_at`, `started_at`, `created_at`, `received_at`, `occurred_at`, `archived_at` |
+| `events[].level` | `info` \| `warning` \| `error` \| `critical` | derivado do status/ação da fonte; `dead_letter` e `worker.permanent` → `critical`; `worker.retryable`/`retry_scheduled` → `warning`; HTTP 5xx e timeout → `error` |
+| `events[].status` | string \| null | status nativo da fonte (para `integration_audit_logs`, a `action`) |
+| `events[].severitySource` | `job` \| `audit` \| `event` | de onde veio a severidade (apenas no `outbox-worker`) |
 | `events[].type` | string | tipo técnico do evento |
 | `events[].summary` | string | texto legível para troubleshooting |
 | `events[].durationMs` | number \| null | apenas quando a fonte tem início e fim |
 | `events[].attempt` / `maxAttempts` | number \| null | tentativas quando a fonte registra |
 | `events[].referenceId` | string \| null | id do job/evento correlacionado |
-| `events[].metadata` | object | allowlist de campos técnicos (ver Privacidade) |
+| `events[].metadata` | object | allowlist de campos técnicos (inclui `httpStatus`, `timeout`, `processedAt`, `lastAttemptAt`) — ver Privacidade |
+| `filters` | object | eco dos filtros aplicados (`level`, `status`, `from`, `to`) |
 | `nextCursor` | string \| null | passar como `cursor` na próxima chamada |
+| `pagination.mode` | `per-source-keyset` | cada fonte é paginada por sua própria coluna estável; o cursor é derivado do `occurredAt` do último item da página |
 
 ---
 

@@ -1173,7 +1173,7 @@ export function TelephonyProvider({ children }: { children: ReactNode }) {
           id: number.id,
           phoneNumber: number.phone_number,
           friendlyName: number.friendly_name || number.phone_number,
-          numberType: number.number_type,
+          numberType: number.number_type === 'user' ? ('user' as const) : ('company' as const),
           automatic: index === 0,
         }));
         if (requestId !== outboundSelectionRequestRef.current) return;

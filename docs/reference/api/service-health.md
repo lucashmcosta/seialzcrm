@@ -53,14 +53,18 @@ curl -s https://qvmtzfvkhkhkhdpclzua.supabase.co/functions/v1/service-health \
       "lastHeartbeat": "2026-08-03T14:19:40.000Z",
       "uptimeSeconds": null,
       "version": null,
+      "lastDeadLetterAt": "2026-05-26T02:14:00.000Z",
       "metrics": {
-        "processed": 1284,
-        "errors": 3,
+        "processed": 18,
+        "errors": 0,
         "pending": 0,
         "running": 1,
         "stuck5m": 0,
-        "failed": 2,
-        "deadLetter": 1
+        "failed": 0,
+        "failed24h": 0,
+        "deadLetter": 0,
+        "deadLetter24h": 0,
+        "deadLetterTotal": 5549
       }
     }
   ],
@@ -83,7 +87,11 @@ curl -s https://qvmtzfvkhkhkhdpclzua.supabase.co/functions/v1/service-health \
 | `services[].uptimeSeconds` | number \| null | `null` — não existe fonte hoje |
 | `services[].version` | string \| null | `null` — não existe fonte hoje |
 | `services[].metrics` | object | apenas métricas com fonte real; `{}` quando `unknown` |
+| `services[].lastDeadLetterAt` | ISO 8601 \| null | apenas no `outbox-worker`: data do último dead letter registrado |
 | `totalHealthy` / `totalWarning` / `totalCritical` | number | `unknown` não entra em nenhum total |
+
+> **Mudança de semântica (atenção, Kairos):** `deadLetter` passou a ser a contagem da **janela de 24h**, e não mais o acumulado histórico. O acumulado agora é `deadLetterTotal`. Use `deadLetter24h` para causa/severidade; `deadLetterTotal` é backlog e **não** afeta o status.
+
 
 ---
 
@@ -91,7 +99,7 @@ curl -s https://qvmtzfvkhkhkhdpclzua.supabase.co/functions/v1/service-health \
 
 | `slug` | Fonte de telemetria hoje | Métricas |
 |---|---|---|
-| `outbox-worker` | `fn_outbox_health_summary_internal()` (`worker_last_run_at` derivado de `integration_audit_logs` actor `integration-worker`) | `processed` (sucesso 24h), `errors` (falhas 24h), `pending`, `running`, `stuck5m`, `failed`, `deadLetter` |
+| `outbox-worker` | `fn_outbox_health_summary_internal()` + contagens de 24h em `integration_jobs` (`worker_last_run_at` derivado de `integration_audit_logs` actor `integration-worker`) | `processed` (sucesso 24h), `errors` (falhas 24h), `pending`, `running`, `stuck5m`, `failed` (histórico), `failed24h`, `deadLetter` = `deadLetter24h`, `deadLetterTotal` (histórico), `lastDeadLetterAt` |
 | `inbox-reaper` | `outbox_system_heartbeats` componente `reaper` | `processed` (`last_detail.reaped`) |
 | `inbox-dispatcher` | `fn_inbound_health_summary('1 hour')` | `processed`, `errors`, `deadLetter`, `latencyMs` (média ponderada) |
 | `evolution-api` | `evolution_instances` (`last_known_state`, `last_state_checked_at`) | `instancesOpen`, `instancesTotal` |
@@ -109,10 +117,13 @@ Nenhuma fonte é reaproveitada entre serviços: um serviço só recebe status e 
 
 | Status | Critério |
 |---|---|
-| `healthy` | heartbeat < 5 min e sem sinal de acúmulo de falhas |
-| `warning` | heartbeat entre 5 e 15 min, ou acúmulo (`failed > 50`, `dead_letter > 100`, falhas no inbound, parte das instâncias Evolution fora do ar) |
-| `critical` | heartbeat > 15 min ou ausente para serviço que deveria bater, jobs presos > 5 min, `dead_letter` no inbound, todas as instâncias Evolution fora do ar |
+| `healthy` | heartbeat < 5 min e nenhuma falha na janela operacional de 24h |
+| `warning` | heartbeat entre 5 e 15 min, ou `failed24h > 0`, ou acúmulo operacional (`pending > 100`), falhas no inbound, parte das instâncias Evolution fora do ar |
+| `critical` | heartbeat > 15 min ou ausente para serviço que deveria bater, `stuck5m > 0`, `deadLetter24h > 0`, `dead_letter` no inbound, todas as instâncias Evolution fora do ar |
 | `unknown` | serviço sem fonte de heartbeat hoje, ou janela sem eventos no dispatcher |
+
+O backlog histórico de dead letters (`deadLetterTotal`) **nunca** entra na classificação: só a janela de 24h define severidade.
+
 
 Casos específicos:
 
