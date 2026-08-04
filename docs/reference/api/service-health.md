@@ -99,7 +99,7 @@ curl -s https://qvmtzfvkhkhkhdpclzua.supabase.co/functions/v1/service-health \
 
 | `slug` | Fonte de telemetria hoje | Métricas |
 |---|---|---|
-| `outbox-worker` | `fn_outbox_health_summary_internal()` (`worker_last_run_at` derivado de `integration_audit_logs` actor `integration-worker`) | `processed` (sucesso 24h), `errors` (falhas 24h), `pending`, `running`, `stuck5m`, `failed`, `deadLetter` |
+| `outbox-worker` | `fn_outbox_health_summary_internal()` + contagens de 24h em `integration_jobs` (`worker_last_run_at` derivado de `integration_audit_logs` actor `integration-worker`) | `processed` (sucesso 24h), `errors` (falhas 24h), `pending`, `running`, `stuck5m`, `failed` (histórico), `failed24h`, `deadLetter` = `deadLetter24h`, `deadLetterTotal` (histórico), `lastDeadLetterAt` |
 | `inbox-reaper` | `outbox_system_heartbeats` componente `reaper` | `processed` (`last_detail.reaped`) |
 | `inbox-dispatcher` | `fn_inbound_health_summary('1 hour')` | `processed`, `errors`, `deadLetter`, `latencyMs` (média ponderada) |
 | `evolution-api` | `evolution_instances` (`last_known_state`, `last_state_checked_at`) | `instancesOpen`, `instancesTotal` |
