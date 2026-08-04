@@ -87,7 +87,11 @@ curl -s https://qvmtzfvkhkhkhdpclzua.supabase.co/functions/v1/service-health \
 | `services[].uptimeSeconds` | number \| null | `null` — não existe fonte hoje |
 | `services[].version` | string \| null | `null` — não existe fonte hoje |
 | `services[].metrics` | object | apenas métricas com fonte real; `{}` quando `unknown` |
+| `services[].lastDeadLetterAt` | ISO 8601 \| null | apenas no `outbox-worker`: data do último dead letter registrado |
 | `totalHealthy` / `totalWarning` / `totalCritical` | number | `unknown` não entra em nenhum total |
+
+> **Mudança de semântica (atenção, Kairos):** `deadLetter` passou a ser a contagem da **janela de 24h**, e não mais o acumulado histórico. O acumulado agora é `deadLetterTotal`. Use `deadLetter24h` para causa/severidade; `deadLetterTotal` é backlog e **não** afeta o status.
+
 
 ---
 
