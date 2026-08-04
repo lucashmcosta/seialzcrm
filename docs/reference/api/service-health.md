@@ -122,6 +122,9 @@ Nenhuma fonte é reaproveitada entre serviços: um serviço só recebe status e 
 | `critical` | heartbeat > 15 min ou ausente para serviço que deveria bater, `stuck5m > 0`, `deadLetter24h > 0`, `dead_letter` no inbound, todas as instâncias Evolution fora do ar |
 | `unknown` | serviço sem fonte de heartbeat hoje, ou janela sem eventos no dispatcher |
 
+O backlog histórico de dead letters (`deadLetterTotal`) **nunca** entra na classificação: só a janela de 24h define severidade.
+
+
 Casos específicos:
 
 - **`inbox-dispatcher`** não tem heartbeat próprio; a frescura é inferida dos eventos da última hora. Zero eventos na janela não é erro → `unknown`.
