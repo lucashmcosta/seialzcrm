@@ -52,6 +52,19 @@ function message(text: string): Response {
   return xml(`<Say language="pt-BR">${escapeXml(text)}</Say><Hangup/>`);
 }
 
+// Música de espera do cliente durante a transferência, em loop infinito.
+// Espelha o DivusApp (waitUrl com holdmusic contínua). Configurável via env;
+// default = twimlet holdmusic (ambiente), que o Twilio busca server-side.
+// Se a URL for um .mp3/.wav, toca via <Play loop="0">; senão trata como TwiML
+// (twimlet) e redireciona.
+const HOLD_MUSIC_URL = Deno.env.get("TELEPHONY_HOLD_MUSIC_URL") ||
+  "http://twimlets.com/holdmusic?Bucket=com.twilio.music.ambient";
+function holdMusicTwiml(): string {
+  return /\.(mp3|wav)(\?|$)/i.test(HOLD_MUSIC_URL)
+    ? `<Play loop="0">${escapeXml(HOLD_MUSIC_URL)}</Play>`
+    : `<Redirect>${escapeXml(HOLD_MUSIC_URL)}</Redirect>`;
+}
+
 async function paramsOf(req: Request): Promise<Record<string, string>> {
   const form = await req.formData();
   const params: Record<string, string> = {};
@@ -1152,19 +1165,15 @@ async function handleTransferWait(
     !context ||
     !await verifySignature(req, params, context.transfer.organization_id)
   ) return empty(403);
-  const cycle = transferCycle(
-    url,
-    Number(context.transfer.consultation_sequence || 1),
-  );
-  if (!await ownsCurrentTransferCycle(context, cycle)) return xml("<Hangup/>");
-  return xml(
-    `<Say language="pt-BR">${
-      escapeXml(
-        context.number.hold_message ||
-          "Aguarde enquanto transferimos sua ligação.",
-      )
-    }</Say><Pause length="5"/>`,
-  );
+  // waitUrl do cliente em espera. NUNCA devolver <Hangup/> por ciclo: enquanto o
+  // transfer estiver ativo, o cliente segue em espera (música em loop), qualquer
+  // que seja o ciclo de consulta em andamento. Só encerra se o transfer já chegou
+  // a estado terminal. (Regra herdada do DivusApp §9.3: a waitUrl/queue-result
+  // nunca devem devolver <Hangup/> — foi o que derrubava a perna do cliente.)
+  if (["completed", "canceled", "failed"].includes(context.transfer.state)) {
+    return xml("<Hangup/>");
+  }
+  return xml(holdMusicTwiml());
 }
 
 async function handleTransferQueueResult(
@@ -1199,7 +1208,9 @@ async function handleTransferQueueResult(
       "stale_queue_result_ignored",
       { result, cycle },
     );
-    return xml("<Hangup/>");
+    // no-op (não <Hangup/>): resultado de fila de ciclo antigo não deve derrubar
+    // a perna do cliente/consultor. (DivusApp §9.3)
+    return xml("");
   }
   if (["hangup", "error", "queue-full", "system-error"].includes(result)) {
     await admin.from("call_transfers").update({
@@ -1239,7 +1250,10 @@ async function handleTransferQueueResult(
       () => undefined,
     );
   }
-  return xml("<Hangup/>");
+  // no-op: o encerramento real (se houver) já foi feito acima via REST. A TwiML
+  // de action da fila nunca deve devolver <Hangup/> — poderia matar uma perna que
+  // acabou de ser bridada. (DivusApp §9.3)
+  return xml("");
 }
 
 async function handleVoice(
