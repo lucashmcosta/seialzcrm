@@ -23,8 +23,10 @@ const STATE_LABELS: Record<string, string> = {
   failed: 'Falha na transferência',
 };
 
-// Transitional states that only show a spinner; reveal an escape after a delay.
-const TRAPPED_STATES = ['parking_customer', 'returning_to_customer', 'handoff_pending'];
+// Estados transitórios (aguardam um callback da Twilio para avançar). NÃO travam
+// a UI com spinner: o modal mostra o label do estado e, se demorar além de 5s,
+// revela a saída de emergência.
+const TRANSITIONAL_STATES = ['parking_customer', 'customer_queued', 'consult_ringing', 'returning_to_customer', 'handoff_pending'];
 
 export function CallTransferControls() {
   const {
@@ -44,14 +46,18 @@ export function CallTransferControls() {
   const [showEscape, setShowEscape] = useState(false);
 
   const state = transferSession?.state;
-  const busy = transferOperation !== null || (!!state && TRAPPED_STATES.includes(state));
+  // inFlight = uma ação do usuário está a caminho (evita duplo-clique). NÃO gate
+  // o modal com spinner: o estado já reflete o alvo de forma otimista. transitional
+  // = estado que aguarda a Twilio; revela a saída de emergência se demorar.
+  const inFlight = transferOperation !== null;
+  const transitional = !!state && TRANSITIONAL_STATES.includes(state);
 
   useEffect(() => {
     setShowEscape(false);
-    if (!busy) return;
+    if (!transitional) return;
     const timer = window.setTimeout(() => setShowEscape(true), 5000);
     return () => window.clearTimeout(timer);
-  }, [busy, state]);
+  }, [transitional, state]);
 
   if (!activeCallId || !canTransferCalls) return null;
   if (!transferSession && activeIncomingCallInfo?.transferRole === 'consult') return null;
@@ -71,20 +77,6 @@ export function CallTransferControls() {
       await controlTransfer('consult_again', { targetUserId: target.userId, targetName: target.fullName });
     }
   };
-
-  const processingLabel = transferOperation === 'starting'
-    ? 'Colocando o cliente em espera…'
-    : transferOperation === 'returning'
-      ? 'Retomando o cliente…'
-      : transferOperation === 'consulting_again'
-        ? 'Preparando a consulta…'
-        : transferOperation === 'completing'
-          ? `Passando para ${transferSession?.targetName || 'o colega'}…`
-          : transferOperation === 'canceling'
-            ? 'Encerrando a espera…'
-            : transferOperation === 'recovering'
-              ? 'Recuperando o cliente…'
-              : 'Aguardando confirmação da Twilio…';
 
   const targetDialog = (
     <Dialog open={targetDialogOpen} onOpenChange={setTargetDialogOpen}>
@@ -134,10 +126,10 @@ export function CallTransferControls() {
       {/* Customer on hold, no colleague yet: resume OR call a colleague. */}
       {state === 'on_hold' && (
         <div className="grid gap-2 sm:grid-cols-2">
-          <Button variant="outline" disabled={busy} onClick={() => void controlTransfer('resume')}>
+          <Button variant="outline" disabled={inFlight} onClick={() => void controlTransfer('resume')}>
             <ArrowUUpLeft className="mr-2 h-4 w-4" /> Retomar cliente
           </Button>
-          <Button disabled={busy} onClick={() => void openPicker()}>
+          <Button disabled={inFlight} onClick={() => void openPicker()}>
             <Users className="mr-2 h-4 w-4" /> Transferir / Chamar colega
           </Button>
         </div>
@@ -145,7 +137,7 @@ export function CallTransferControls() {
 
       {/* Colleague being rung: abort back to the customer if needed. */}
       {['customer_queued', 'consult_ringing'].includes(state ?? '') && (
-        <Button variant="outline" className="w-full" disabled={busy} onClick={() => void controlTransfer('return_to_customer')}>
+        <Button variant="outline" className="w-full" disabled={inFlight} onClick={() => void controlTransfer('return_to_customer')}>
           <ArrowUUpLeft className="mr-2 h-4 w-4" /> Retomar cliente
         </Button>
       )}
@@ -153,14 +145,14 @@ export function CallTransferControls() {
       {/* Talking to the colleague: hand over, try another, or come back. */}
       {state === 'consulting' && (
         <div className="space-y-2">
-          <Button className="w-full" disabled={busy} onClick={() => void controlTransfer('complete')}>
+          <Button className="w-full" disabled={inFlight} onClick={() => void controlTransfer('complete')}>
             <UserSwitch className="mr-2 h-4 w-4" /> Passar cliente para {transferSession.targetName}
           </Button>
           <div className="grid gap-2 sm:grid-cols-2">
-            <Button variant="outline" disabled={busy} onClick={() => void controlTransfer('return_to_customer')}>
+            <Button variant="outline" disabled={inFlight} onClick={() => void controlTransfer('return_to_customer')}>
               <ArrowUUpLeft className="mr-2 h-4 w-4" /> Retomar cliente
             </Button>
-            <Button variant="outline" disabled={busy} onClick={() => void openPicker()}>
+            <Button variant="outline" disabled={inFlight} onClick={() => void openPicker()}>
               <Users className="mr-2 h-4 w-4" /> Chamar outra pessoa
             </Button>
           </div>
@@ -170,18 +162,18 @@ export function CallTransferControls() {
       {/* Back with the customer after a consult: consult again or end the mode. */}
       {state === 'with_customer' && (
         <div className="grid gap-2 sm:grid-cols-2">
-          <Button variant="outline" disabled={busy} onClick={() => void openPicker()}>
+          <Button variant="outline" disabled={inFlight} onClick={() => void openPicker()}>
             <ArrowsLeftRight className="mr-2 h-4 w-4" /> Chamar colega
           </Button>
-          <Button variant="secondary" disabled={busy} onClick={() => void controlTransfer('cancel')}>
+          <Button variant="secondary" disabled={inFlight} onClick={() => void controlTransfer('cancel')}>
             Encerrar espera
           </Button>
         </div>
       )}
 
-      {(busy || audioReconnecting) && (
+      {audioReconnecting && (
         <div className="flex items-center justify-center gap-2 text-xs text-muted-foreground">
-          <SpinnerGap className="h-3 w-3 animate-spin" /> {audioReconnecting ? 'Reconectando áudio…' : processingLabel}
+          <SpinnerGap className="h-3 w-3 animate-spin" /> Reconectando áudio…
         </div>
       )}
 
