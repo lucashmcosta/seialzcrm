@@ -82,7 +82,13 @@ Deno.serve(async (req) => {
     provider = await resolveProvider(admin, organization_id, "transcription");
   } catch (e) {
     if (e instanceof ProviderResolutionError) {
-      return json({ error: e.code }, e.code === "no_provider" ? 503 : 402);
+      // no_provider (org sem BYOK e managed sem chave) NAO deve retornar 503:
+      // 503 e retryable e gera retry storm no worker. Trata como skip idempotente
+      // (200) para o audio nao ser re-enfileirado ate haver provider configurado.
+      if (e.code === "no_provider") {
+        return json({ ok: true, skipped: "no_transcription_provider" });
+      }
+      return json({ error: e.code }, 402);
     }
     throw e;
   }
