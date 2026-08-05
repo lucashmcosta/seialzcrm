@@ -24,6 +24,7 @@ export interface Permissions {
   canReceiveCalls: boolean;
   canViewAllCalls: boolean;
   canManageTelephony: boolean;
+  canTransferCalls: boolean;
 }
 
 const defaultPermissions: Permissions = {
@@ -46,6 +47,7 @@ const defaultPermissions: Permissions = {
   canReceiveCalls: false,
   canViewAllCalls: false,
   canManageTelephony: false,
+  canTransferCalls: false,
 };
 
 export function usePermissions() {
@@ -97,6 +99,7 @@ export function usePermissions() {
         canReceiveCalls: perms.can_receive_calls || false,
         canViewAllCalls: perms.can_view_all_calls || false,
         canManageTelephony: perms.can_manage_telephony || false,
+        canTransferCalls: perms.can_transfer_calls || false,
       };
     },
   });
