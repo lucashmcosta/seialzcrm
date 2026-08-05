@@ -112,6 +112,10 @@ export interface OutboundCallContextType {
   transferTargets: CallTransferTarget[];
   transferLoading: boolean;
   transferOperation: CallTransferOperation | null;
+  // True apenas durante o teardown+renegociação WebRTC de uma ação de transfer
+  // (parte real da latência). Indicador leve "reconectando áudio", não bloqueia
+  // o modal — o estado do modal já reflete o alvo de forma otimista.
+  audioReconnecting: boolean;
   loadTransferTargets: () => Promise<void>;
   startTransfer: (target: CallTransferTarget) => Promise<void>;
   // Put the customer on hold independently (no colleague). From `on_hold` the

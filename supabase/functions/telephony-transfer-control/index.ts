@@ -56,9 +56,6 @@ Deno.serve(async (req) => {
     if (context.permissions.can_transfer_calls !== true) {
       return json({ error: "cannot_transfer_calls" }, 403);
     }
-    if (
-      !await telephonyTransferEnabled(context.admin, context.organizationId)
-    ) return json({ error: "telephony_transfer_disabled" }, 404);
     const body = await req.json() as {
       transferId?: string;
       action?:
@@ -79,10 +76,19 @@ Deno.serve(async (req) => {
     if (!body.transferId || !body.action) {
       return json({ error: "transfer_id_and_action_required" }, 400);
     }
-    const { data: transfer } = await context.admin.from("call_transfers")
-      .select("*")
-      .eq("id", body.transferId).eq("organization_id", context.organizationId)
-      .maybeSingle();
+    // Flag de feature e a linha do transfer são independentes → em paralelo
+    // (economiza 1 round-trip de DB no prelúdio de toda ação).
+    const [transferEnabled, transferRes] = await Promise.all([
+      telephonyTransferEnabled(context.admin, context.organizationId),
+      context.admin.from("call_transfers")
+        .select("*")
+        .eq("id", body.transferId).eq("organization_id", context.organizationId)
+        .maybeSingle(),
+    ]);
+    if (!transferEnabled) {
+      return json({ error: "telephony_transfer_disabled" }, 404);
+    }
+    const transfer = transferRes.data;
     if (!transfer) return json({ error: "transfer_not_found" }, 404);
     if (transfer.initiated_by_user_id !== context.userId) {
       return json({ error: "only_transfer_initiator_can_control" }, 403);
@@ -133,45 +139,44 @@ Deno.serve(async (req) => {
     }).select("id").single();
     if (commandError) throw commandError;
     commandId = command.id;
-    const twilio = await twilioApiContext(
-      context.admin,
-      context.organizationId,
-    );
+    // Config do Twilio carregada LAZY dentro de cada branch que toca a REST do
+    // Twilio (end_call / complete / return-com-parent / consult_again). resume,
+    // consult e cancel(with_customer) não pagam esse round-trip; o deno check
+    // garante que nenhum branch use `twilio` sem tê-lo carregado.
 
     if (body.action === "end_call") {
-      for (
-        const sid of [
-          transfer.customer_call_sid,
-          transfer.consult_parent_call_sid,
-          transfer.consult_target_call_sid,
-        ]
-      ) {
-        if (sid) {
-          await updateTwilioCall(twilio, sid, { status: "completed" }).catch(
-            () => undefined,
-          );
-        }
-      }
-      await context.admin.from("call_transfers").update({
-        state: "canceled",
-        result: "call_ended_by_initiator",
-        completed_at: new Date().toISOString(),
-        updated_at: new Date().toISOString(),
-        version: transfer.version + 1,
-      }).eq("id", transfer.id).eq("version", expectedVersion);
-      await context.admin.from("calls").update({
-        status: "completed",
-        result: "answered",
-        transfer_status: "canceled",
-        ended_at: new Date().toISOString(),
-        active_transfer_id: null,
-      }).eq("id", transfer.call_id).eq("active_transfer_id", transfer.id);
-      await context.admin.rpc("release_telephony_transfer_reservations", {
-        _transfer_id: transfer.id,
-      });
-      await deleteTwilioQueue(twilio, transfer.provider_queue_sid).catch(() =>
-        undefined
+      const twilio = await twilioApiContext(context.admin, context.organizationId);
+      // Hangups das pernas + delete da fila + writes de estado são independentes
+      // (encerramento terminal) → tudo em paralelo. Corta ~1-1.5s do for-loop de
+      // REST Twilio em série. Best-effort mantido (.catch por chamada).
+      const legHangups = [
+        transfer.customer_call_sid,
+        transfer.consult_parent_call_sid,
+        transfer.consult_target_call_sid,
+      ].filter((sid): sid is string => !!sid).map((sid) =>
+        updateTwilioCall(twilio, sid, { status: "completed" }).catch(() => undefined)
       );
+      await Promise.all([
+        ...legHangups,
+        deleteTwilioQueue(twilio, transfer.provider_queue_sid).catch(() => undefined),
+        context.admin.from("call_transfers").update({
+          state: "canceled",
+          result: "call_ended_by_initiator",
+          completed_at: new Date().toISOString(),
+          updated_at: new Date().toISOString(),
+          version: transfer.version + 1,
+        }).eq("id", transfer.id).eq("version", expectedVersion),
+        context.admin.from("calls").update({
+          status: "completed",
+          result: "answered",
+          transfer_status: "canceled",
+          ended_at: new Date().toISOString(),
+          active_transfer_id: null,
+        }).eq("id", transfer.call_id).eq("active_transfer_id", transfer.id),
+        context.admin.rpc("release_telephony_transfer_reservations", {
+          _transfer_id: transfer.id,
+        }),
+      ]);
       const response = {
         success: true,
         state: "canceled",
@@ -292,6 +297,7 @@ Deno.serve(async (req) => {
       await context.admin.from("calls").update({
         transfer_status: "handoff_pending",
       }).eq("id", transfer.call_id).eq("active_transfer_id", transfer.id);
+      const twilio = await twilioApiContext(context.admin, context.organizationId);
       try {
         await updateTwilioCall(twilio, transfer.consult_target_call_sid, {
           url: `${WEBHOOK_BASE}/transfer-bridge?transferId=${
@@ -378,6 +384,7 @@ Deno.serve(async (req) => {
         transfer_status: "returning_to_customer",
       }).eq("id", transfer.call_id).eq("active_transfer_id", transfer.id);
       if (transfer.consult_parent_call_sid) {
+        const twilio = await twilioApiContext(context.admin, context.organizationId);
         try {
           await updateTwilioCall(twilio, transfer.consult_parent_call_sid, {
             url: `${WEBHOOK_BASE}/transfer-bridge?transferId=${
@@ -454,6 +461,7 @@ Deno.serve(async (req) => {
         return json({ error: "transfer_target_unavailable" }, 409);
       }
       const reclaimedTransfer = reclaimed[0];
+      const twilio = await twilioApiContext(context.admin, context.organizationId);
       const cycle = Number(reclaimedTransfer.consultation_sequence);
       const enqueueTwiml = `<Response><Enqueue waitUrl="${
         escapeXml(

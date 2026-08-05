@@ -127,10 +127,13 @@ Deno.serve(async (req) => {
   try {
     const context = await requireTelephonyUser(req);
     admin = context.admin;
-    if (
-      !await telephonyV2Enabled(context.admin, context.organizationId) ||
-      !await telephonyTransferEnabled(context.admin, context.organizationId)
-    ) {
+    // Os dois flags são independentes → em paralelo (economiza 1 round-trip em
+    // toda ação do transfer-intent: hold, targets, start).
+    const [v2Enabled, transferEnabled] = await Promise.all([
+      telephonyV2Enabled(context.admin, context.organizationId),
+      telephonyTransferEnabled(context.admin, context.organizationId),
+    ]);
+    if (!v2Enabled || !transferEnabled) {
       return json({ error: "telephony_transfer_disabled" }, 404);
     }
     if (context.permissions.can_transfer_calls !== true) {
@@ -177,11 +180,17 @@ Deno.serve(async (req) => {
           consultationSequence: existingHold.consultation_sequence,
         });
       }
-      const legs = await providerLegs(context.admin, call);
+      // Legs (leitura em call_attempts) e a config do Twilio são independentes →
+      // em paralelo. NÃO paralelizar com createTwilioQueue/enqueue abaixo: a fila
+      // precisa existir (MaxSize:1) antes do enqueue — é o fix música/no-drop.
+      const [legs, twilioCtx] = await Promise.all([
+        providerLegs(context.admin, call),
+        twilioApiContext(context.admin, context.organizationId),
+      ]);
+      twilio = twilioCtx;
       if (!legs.customerCallSid) {
         return json({ error: "customer_provider_leg_not_found" }, 409);
       }
-      twilio = await twilioApiContext(context.admin, context.organizationId);
       const queueName = `seialz_${crypto.randomUUID().replaceAll("-", "")}`;
       const queue = await createTwilioQueue(twilio, queueName);
       queueSid = queue.sid;
