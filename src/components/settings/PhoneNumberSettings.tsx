@@ -40,6 +40,13 @@ interface NumberUserGrant {
   priority: number;
 }
 
+interface NumberUserGrant {
+  user_id: string;
+  can_receive_calls: boolean;
+  can_originate_calls: boolean;
+  priority: number;
+}
+
 interface PhoneNumber {
   id: string;
   phone_number: string;

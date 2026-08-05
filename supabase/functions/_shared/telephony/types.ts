@@ -22,6 +22,7 @@ export interface VoiceProviderAdapter {
     callId: string;
     transferId: string;
     targetUserId: string;
+    consultationSequence: number;
   }): Record<string, string>;
   verifyWebhook(input: {
     request: Request;

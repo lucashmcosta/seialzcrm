@@ -177,12 +177,14 @@ export class TwilioVoiceAdapter implements VoiceProviderAdapter {
     callId: string;
     transferId: string;
     targetUserId: string;
+    consultationSequence: number;
   }): Record<string, string> {
     return {
       Mode: "consult",
       CallId: input.callId,
       TransferId: input.transferId,
       TargetUserId: input.targetUserId,
+      ConsultationSequence: String(input.consultationSequence),
     };
   }
 

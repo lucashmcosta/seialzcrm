@@ -1,4 +1,5 @@
 import {
+  canApplyTransferEvent,
   isTerminalTransferState,
   transferBridgeOutcome,
   transferOwnsOriginalDial,
@@ -49,4 +50,34 @@ Deno.test("terminal transfer states are explicit", () => {
   assertEquals(isTerminalTransferState("canceled"), true);
   assertEquals(isTerminalTransferState("failed"), true);
   assertEquals(isTerminalTransferState("consulting"), false);
+});
+
+Deno.test("only the owning transfer cycle may mutate the shared call", () => {
+  assertEquals(
+    canApplyTransferEvent({
+      transferId: "new-transfer",
+      activeTransferId: "new-transfer",
+      currentCycle: 2,
+      eventCycle: 2,
+    }),
+    true,
+  );
+  assertEquals(
+    canApplyTransferEvent({
+      transferId: "old-transfer",
+      activeTransferId: "new-transfer",
+      currentCycle: 1,
+      eventCycle: 1,
+    }),
+    false,
+  );
+  assertEquals(
+    canApplyTransferEvent({
+      transferId: "new-transfer",
+      activeTransferId: "new-transfer",
+      currentCycle: 2,
+      eventCycle: 1,
+    }),
+    false,
+  );
 });

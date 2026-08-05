@@ -55,25 +55,31 @@ async function listTargets(
   initiatorUserId: string,
 ) {
   const cutoff = new Date(Date.now() - 75_000).toISOString();
-  const [{ data: memberships }, { data: presence }, { data: settings }] =
-    await Promise.all([
-      admin.from("user_organizations")
-        .select(
-          "user_id, users!inner(full_name, email), permission_profiles!inner(permissions)",
-        )
-        .eq("organization_id", organizationId).eq("is_active", true).neq(
-          "user_id",
-          initiatorUserId,
-        ),
-      admin.from("telephony_presence").select(
-        "user_id, active_call_id, status, last_seen_at",
+  const [
+    { data: memberships },
+    { data: presence },
+    { data: settings },
+    { data: reservations },
+  ] = await Promise.all([
+    admin.from("user_organizations")
+      .select(
+        "user_id, users!inner(full_name, email), permission_profiles!inner(permissions)",
       )
-        .eq("organization_id", organizationId).gte("last_seen_at", cutoff),
-      admin.from("telephony_user_settings").select(
-        "user_id, receive_calls_enabled, dnd_until",
-      )
-        .eq("organization_id", organizationId),
-    ]);
+      .eq("organization_id", organizationId).eq("is_active", true).neq(
+        "user_id",
+        initiatorUserId,
+      ),
+    admin.from("telephony_presence").select(
+      "user_id, active_call_id, status, last_seen_at",
+    )
+      .eq("organization_id", organizationId).gte("last_seen_at", cutoff),
+    admin.from("telephony_user_settings").select(
+      "user_id, receive_calls_enabled, dnd_until",
+    )
+      .eq("organization_id", organizationId),
+    admin.from("telephony_transfer_reservations").select("user_id")
+      .eq("organization_id", organizationId),
+  ]);
   return (memberships ?? []).flatMap((membership: Record<string, unknown>) => {
     const permissions = (membership.permission_profiles as {
       permissions?: Record<string, boolean>;
@@ -89,13 +95,17 @@ async function listTargets(
     ) => row.status === "available" && !row.active_call_id);
     const busy = sessions.some((row: { active_call_id: string | null }) =>
       !!row.active_call_id
+    ) || (reservations ?? []).some((row: { user_id: string }) =>
+      row.user_id === membership.user_id
     );
     const dnd = userSettings?.dnd_until &&
       new Date(userSettings.dnd_until).getTime() > Date.now();
     if (
       permissions.can_receive_calls !== true ||
       userSettings?.receive_calls_enabled === false || dnd || !online || busy
-    ) return [];
+    ) {
+      return [];
+    }
     const user = membership.users as { full_name?: string; email?: string };
     return [{
       userId: membership.user_id,
@@ -130,6 +140,7 @@ Deno.serve(async (req) => {
       callId?: string;
       targetUserId?: string;
       action?: string;
+      requestId?: string;
     };
     if (!body.callId) return json({ error: "call_id_required" }, 400);
     const call = await loadTransferableCall(
@@ -147,6 +158,82 @@ Deno.serve(async (req) => {
     if (currentAgent !== context.userId) {
       return json({ error: "not_current_call_agent" }, 403);
     }
+    // Independent HOLD: park the customer with hold music WITHOUT reserving a
+    // colleague. The agent's leg ends naturally (customer redirected to the
+    // queue); from `on_hold` they can then resume or consult a colleague.
+    if (body.action === "hold") {
+      const requestId = body.requestId || crypto.randomUUID();
+      const { data: existingHold } = await context.admin.from("call_transfers")
+        .select("*")
+        .eq("organization_id", context.organizationId)
+        .eq("initiated_by_user_id", context.userId)
+        .eq("client_request_id", requestId)
+        .maybeSingle();
+      if (existingHold) {
+        return json({
+          transferId: existingHold.id,
+          state: existingHold.state,
+          version: existingHold.version,
+          consultationSequence: existingHold.consultation_sequence,
+        });
+      }
+      const legs = await providerLegs(context.admin, call);
+      if (!legs.customerCallSid) {
+        return json({ error: "customer_provider_leg_not_found" }, 409);
+      }
+      twilio = await twilioApiContext(context.admin, context.organizationId);
+      const queueName = `seialz_${crypto.randomUUID().replaceAll("-", "")}`;
+      const queue = await createTwilioQueue(twilio, queueName);
+      queueSid = queue.sid;
+      const { data: held, error: holdError } = await context.admin.rpc(
+        "hold_telephony_call",
+        {
+          _call_id: call.id,
+          _initiator_user_id: context.userId,
+          _queue_name: queueName,
+          _customer_call_sid: legs.customerCallSid,
+          _original_agent_call_sid: legs.originalAgentCallSid,
+          _request_id: requestId,
+        },
+      );
+      if (holdError || !held?.[0]) {
+        await deleteTwilioQueue(twilio, queueSid).catch(() => undefined);
+        queueSid = null;
+        return json({
+          error: (holdError?.message || "").match(/call_[a-z_]+/)?.[0] ||
+            "hold_cannot_start",
+        }, 409);
+      }
+      const heldTransferId = String(held[0].id);
+      transferId = heldTransferId;
+      await context.admin.from("call_transfers").update({
+        provider_queue_sid: queue.sid,
+        updated_at: new Date().toISOString(),
+      }).eq("id", heldTransferId);
+      const holdQuery = `transferId=${encodeURIComponent(heldTransferId)}&cycle=1`;
+      const enqueueTwiml = `<Response><Enqueue waitUrl="${
+        escapeXml(`${WEBHOOK_BASE}/transfer-wait?${holdQuery}`)
+      }" waitUrlMethod="POST" action="${
+        escapeXml(`${WEBHOOK_BASE}/transfer-queue-result?${holdQuery}`)
+      }" method="POST">${escapeXml(queueName)}</Enqueue></Response>`;
+      await updateTwilioCall(twilio, legs.customerCallSid, { twiml: enqueueTwiml });
+      const { data: heldState } = await context.admin.from("call_transfers")
+        .update({
+          state: "on_hold",
+          customer_queued_at: new Date().toISOString(),
+          version: Number(held[0].version || 1) + 1,
+          updated_at: new Date().toISOString(),
+        }).eq("id", heldTransferId).eq("state", "parking_customer")
+        .select("version, consultation_sequence").maybeSingle();
+      await context.admin.from("calls").update({ transfer_status: "on_hold" })
+        .eq("id", call.id);
+      return json({
+        transferId: heldTransferId,
+        state: "on_hold",
+        version: heldState?.version ?? Number(held[0].version || 1) + 1,
+        consultationSequence: heldState?.consultation_sequence ?? 1,
+      }, 201);
+    }
     if (body.action === "targets" || !body.targetUserId) {
       return json({
         targets: await listTargets(
@@ -154,6 +241,29 @@ Deno.serve(async (req) => {
           context.organizationId,
           context.userId,
         ),
+      });
+    }
+    const requestId = body.requestId || crypto.randomUUID();
+    const { data: existing } = await context.admin.from("call_transfers")
+      .select("*")
+      .eq("organization_id", context.organizationId)
+      .eq("initiated_by_user_id", context.userId)
+      .eq("client_request_id", requestId)
+      .maybeSingle();
+    if (existing) {
+      const adapter = new TwilioVoiceAdapter(context.admin);
+      return json({
+        transferId: existing.id,
+        state: existing.state,
+        version: existing.version,
+        consultationSequence: existing.consultation_sequence,
+        targetUserId: existing.target_user_id,
+        connectParams: adapter.consultationParams({
+          callId: existing.call_id,
+          transferId: existing.id,
+          targetUserId: existing.target_user_id,
+          consultationSequence: existing.consultation_sequence,
+        }),
       });
     }
     const legs = await providerLegs(context.admin, call);
@@ -165,7 +275,7 @@ Deno.serve(async (req) => {
     const queue = await createTwilioQueue(twilio, queueName);
     queueSid = queue.sid;
     const { data: claimed, error: claimError } = await context.admin.rpc(
-      "claim_telephony_transfer_target",
+      "claim_telephony_transfer_target_v2",
       {
         _call_id: call.id,
         _initiator_user_id: context.userId,
@@ -173,6 +283,7 @@ Deno.serve(async (req) => {
         _queue_name: queueName,
         _customer_call_sid: legs.customerCallSid,
         _original_agent_call_sid: legs.originalAgentCallSid,
+        _request_id: requestId,
       },
     );
     if (claimError || !claimed?.[0]) {
@@ -188,6 +299,24 @@ Deno.serve(async (req) => {
     }
     const claimedTransferId = String(claimed[0].id);
     transferId = claimedTransferId;
+    if (claimed[0].queue_name !== queueName) {
+      await deleteTwilioQueue(twilio, queueSid).catch(() => undefined);
+      queueSid = null;
+      const adapter = new TwilioVoiceAdapter(context.admin);
+      return json({
+        transferId: claimedTransferId,
+        state: claimed[0].state,
+        version: claimed[0].version,
+        consultationSequence: claimed[0].consultation_sequence,
+        targetUserId: claimed[0].target_user_id,
+        connectParams: adapter.consultationParams({
+          callId: call.id,
+          transferId: claimedTransferId,
+          targetUserId: claimed[0].target_user_id,
+          consultationSequence: claimed[0].consultation_sequence,
+        }),
+      });
+    }
     const { error: queueLinkError } = await context.admin.from("call_transfers")
       .update({
         provider_queue_sid: queue.sid,
@@ -197,7 +326,9 @@ Deno.serve(async (req) => {
     if (queueLinkError) {
       throw new Error(`transfer_queue_link_failed:${queueLinkError.message}`);
     }
-    const query = `transferId=${encodeURIComponent(claimedTransferId)}`;
+    const query = `transferId=${encodeURIComponent(claimedTransferId)}&cycle=${
+      Number(claimed[0].consultation_sequence || 1)
+    }`;
     const enqueueTwiml = `<Response><Enqueue waitUrl="${
       escapeXml(`${WEBHOOK_BASE}/transfer-wait?${query}`)
     }" waitUrlMethod="POST" action="${
@@ -206,14 +337,16 @@ Deno.serve(async (req) => {
     await updateTwilioCall(twilio, legs.customerCallSid, {
       twiml: enqueueTwiml,
     });
-    const { error: queuedStateError } = await context.admin.from(
-      "call_transfers",
-    ).update({
-      state: "customer_queued",
-      customer_queued_at: new Date().toISOString(),
-      version: 2,
-      updated_at: new Date().toISOString(),
-    }).eq("id", claimedTransferId);
+    const { data: queuedTransfer, error: queuedStateError } = await context
+      .admin.from(
+        "call_transfers",
+      ).update({
+        state: "customer_queued",
+        customer_queued_at: new Date().toISOString(),
+        version: Number(claimed[0].version || 1) + 1,
+        updated_at: new Date().toISOString(),
+      }).eq("id", claimedTransferId).eq("state", "parking_customer")
+      .select("version, consultation_sequence").maybeSingle();
     if (queuedStateError) {
       throw new Error(`transfer_state_save_failed:${queuedStateError.message}`);
     }
@@ -228,7 +361,7 @@ Deno.serve(async (req) => {
     await context.admin.from("call_transfer_events").upsert({
       organization_id: context.organizationId,
       transfer_id: claimedTransferId,
-      provider_event_key: `intent:${claimedTransferId}`,
+      provider_event_key: `intent:${claimedTransferId}:${requestId}`,
       event_type: "customer_park_requested",
       payload: { customerCallSid: legs.customerCallSid, queueSid: queue.sid },
     }, { onConflict: "provider,provider_event_key" });
@@ -236,11 +369,14 @@ Deno.serve(async (req) => {
     return json({
       transferId: claimedTransferId,
       state: "customer_queued",
+      version: queuedTransfer?.version ?? Number(claimed[0].version || 1) + 1,
+      consultationSequence: queuedTransfer?.consultation_sequence ?? 1,
       targetUserId: body.targetUserId,
       connectParams: adapter.consultationParams({
         callId: call.id,
         transferId: claimedTransferId,
         targetUserId: body.targetUserId,
+        consultationSequence: queuedTransfer?.consultation_sequence ?? 1,
       }),
     }, 201);
   } catch (error) {
@@ -253,6 +389,10 @@ Deno.serve(async (req) => {
         failure_reason: "park_failed",
         completed_at: new Date().toISOString(),
       }).eq("id", transferId);
+      await admin.from("calls").update({
+        transfer_status: "failed",
+        active_transfer_id: null,
+      }).eq("active_transfer_id", transferId);
       await admin.rpc("release_telephony_transfer_reservations", {
         _transfer_id: transferId,
       });

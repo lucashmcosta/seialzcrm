@@ -1368,6 +1368,73 @@ export type Database = {
           },
         ]
       }
+      call_transfer_commands: {
+        Row: {
+          action: string
+          completed_at: string | null
+          created_at: string
+          error_code: string | null
+          expected_version: number | null
+          id: string
+          organization_id: string
+          request_id: string
+          requested_by_user_id: string
+          response: Json | null
+          status: string
+          transfer_id: string
+        }
+        Insert: {
+          action: string
+          completed_at?: string | null
+          created_at?: string
+          error_code?: string | null
+          expected_version?: number | null
+          id?: string
+          organization_id: string
+          request_id: string
+          requested_by_user_id: string
+          response?: Json | null
+          status?: string
+          transfer_id: string
+        }
+        Update: {
+          action?: string
+          completed_at?: string | null
+          created_at?: string
+          error_code?: string | null
+          expected_version?: number | null
+          id?: string
+          organization_id?: string
+          request_id?: string
+          requested_by_user_id?: string
+          response?: Json | null
+          status?: string
+          transfer_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "call_transfer_commands_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "call_transfer_commands_requested_by_user_id_fkey"
+            columns: ["requested_by_user_id"]
+            isOneToOne: false
+            referencedRelation: "users"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "call_transfer_commands_transfer_id_fkey"
+            columns: ["transfer_id"]
+            isOneToOne: false
+            referencedRelation: "call_transfers"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       call_transfer_events: {
         Row: {
           created_at: string
@@ -1506,9 +1573,11 @@ export type Database = {
         Row: {
           active_user_id: string | null
           call_id: string
+          client_request_id: string | null
           completed_at: string | null
           consult_parent_call_sid: string | null
           consult_target_call_sid: string | null
+          consultation_sequence: number
           created_at: string
           customer_call_sid: string
           customer_queued_at: string | null
@@ -1518,22 +1587,25 @@ export type Database = {
           organization_id: string
           original_agent_call_sid: string | null
           provider: string
+          provider_cleanup_pending: boolean
           provider_queue_sid: string | null
           queue_name: string
           result: string | null
           started_at: string
           state: string
           target_answered_at: string | null
-          target_user_id: string
+          target_user_id: string | null
           updated_at: string
           version: number
         }
         Insert: {
           active_user_id?: string | null
           call_id: string
+          client_request_id?: string | null
           completed_at?: string | null
           consult_parent_call_sid?: string | null
           consult_target_call_sid?: string | null
+          consultation_sequence?: number
           created_at?: string
           customer_call_sid: string
           customer_queued_at?: string | null
@@ -1543,22 +1615,25 @@ export type Database = {
           organization_id: string
           original_agent_call_sid?: string | null
           provider?: string
+          provider_cleanup_pending?: boolean
           provider_queue_sid?: string | null
           queue_name: string
           result?: string | null
           started_at?: string
           state?: string
           target_answered_at?: string | null
-          target_user_id: string
+          target_user_id?: string | null
           updated_at?: string
           version?: number
         }
         Update: {
           active_user_id?: string | null
           call_id?: string
+          client_request_id?: string | null
           completed_at?: string | null
           consult_parent_call_sid?: string | null
           consult_target_call_sid?: string | null
+          consultation_sequence?: number
           created_at?: string
           customer_call_sid?: string
           customer_queued_at?: string | null
@@ -1568,13 +1643,14 @@ export type Database = {
           organization_id?: string
           original_agent_call_sid?: string | null
           provider?: string
+          provider_cleanup_pending?: boolean
           provider_queue_sid?: string | null
           queue_name?: string
           result?: string | null
           started_at?: string
           state?: string
           target_answered_at?: string | null
-          target_user_id?: string
+          target_user_id?: string | null
           updated_at?: string
           version?: number
         }
@@ -1618,6 +1694,7 @@ export type Database = {
       }
       calls: {
         Row: {
+          active_transfer_id: string | null
           answered_at: string | null
           answered_by_user_id: string | null
           call_sid: string | null
@@ -1649,6 +1726,7 @@ export type Database = {
           user_id: string
         }
         Insert: {
+          active_transfer_id?: string | null
           answered_at?: string | null
           answered_by_user_id?: string | null
           call_sid?: string | null
@@ -1680,6 +1758,7 @@ export type Database = {
           user_id: string
         }
         Update: {
+          active_transfer_id?: string | null
           answered_at?: string | null
           answered_by_user_id?: string | null
           call_sid?: string | null
@@ -1711,6 +1790,13 @@ export type Database = {
           user_id?: string
         }
         Relationships: [
+          {
+            foreignKeyName: "calls_active_transfer_id_fkey"
+            columns: ["active_transfer_id"]
+            isOneToOne: false
+            referencedRelation: "call_transfers"
+            referencedColumns: ["id"]
+          },
           {
             foreignKeyName: "calls_answered_by_user_id_fkey"
             columns: ["answered_by_user_id"]
@@ -9730,6 +9816,71 @@ export type Database = {
           },
         ]
       }
+      telephony_transfer_reservations: {
+        Row: {
+          call_id: string
+          consultation_sequence: number
+          created_at: string
+          expires_at: string
+          id: string
+          organization_id: string
+          transfer_id: string
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          call_id: string
+          consultation_sequence: number
+          created_at?: string
+          expires_at?: string
+          id?: string
+          organization_id: string
+          transfer_id: string
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          call_id?: string
+          consultation_sequence?: number
+          created_at?: string
+          expires_at?: string
+          id?: string
+          organization_id?: string
+          transfer_id?: string
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "telephony_transfer_reservations_call_id_fkey"
+            columns: ["call_id"]
+            isOneToOne: false
+            referencedRelation: "calls"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "telephony_transfer_reservations_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "telephony_transfer_reservations_transfer_id_fkey"
+            columns: ["transfer_id"]
+            isOneToOne: false
+            referencedRelation: "call_transfers"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "telephony_transfer_reservations_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "users"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       telephony_user_settings: {
         Row: {
           created_at: string
@@ -10736,6 +10887,47 @@ export type Database = {
         Args: { _contact_id: string }
         Returns: boolean
       }
+      cancel_telephony_transfer_workflow: {
+        Args: {
+          _expected_version: number
+          _initiator_user_id: string
+          _transfer_id: string
+        }
+        Returns: {
+          active_user_id: string | null
+          call_id: string
+          client_request_id: string | null
+          completed_at: string | null
+          consult_parent_call_sid: string | null
+          consult_target_call_sid: string | null
+          consultation_sequence: number
+          created_at: string
+          customer_call_sid: string
+          customer_queued_at: string | null
+          failure_reason: string | null
+          id: string
+          initiated_by_user_id: string
+          organization_id: string
+          original_agent_call_sid: string | null
+          provider: string
+          provider_cleanup_pending: boolean
+          provider_queue_sid: string | null
+          queue_name: string
+          result: string | null
+          started_at: string
+          state: string
+          target_answered_at: string | null
+          target_user_id: string | null
+          updated_at: string
+          version: number
+        }[]
+        SetofOptions: {
+          from: "*"
+          to: "call_transfers"
+          isOneToOne: false
+          isSetofReturn: true
+        }
+      }
       claim_next_telephony_recipient: {
         Args: {
           _call_id?: string
@@ -10759,9 +10951,11 @@ export type Database = {
         Returns: {
           active_user_id: string | null
           call_id: string
+          client_request_id: string | null
           completed_at: string | null
           consult_parent_call_sid: string | null
           consult_target_call_sid: string | null
+          consultation_sequence: number
           created_at: string
           customer_call_sid: string
           customer_queued_at: string | null
@@ -10771,13 +10965,59 @@ export type Database = {
           organization_id: string
           original_agent_call_sid: string | null
           provider: string
+          provider_cleanup_pending: boolean
           provider_queue_sid: string | null
           queue_name: string
           result: string | null
           started_at: string
           state: string
           target_answered_at: string | null
-          target_user_id: string
+          target_user_id: string | null
+          updated_at: string
+          version: number
+        }[]
+        SetofOptions: {
+          from: "*"
+          to: "call_transfers"
+          isOneToOne: false
+          isSetofReturn: true
+        }
+      }
+      claim_telephony_transfer_target_v2: {
+        Args: {
+          _call_id: string
+          _customer_call_sid: string
+          _initiator_user_id: string
+          _original_agent_call_sid: string
+          _queue_name: string
+          _request_id: string
+          _target_user_id: string
+        }
+        Returns: {
+          active_user_id: string | null
+          call_id: string
+          client_request_id: string | null
+          completed_at: string | null
+          consult_parent_call_sid: string | null
+          consult_target_call_sid: string | null
+          consultation_sequence: number
+          created_at: string
+          customer_call_sid: string
+          customer_queued_at: string | null
+          failure_reason: string | null
+          id: string
+          initiated_by_user_id: string
+          organization_id: string
+          original_agent_call_sid: string | null
+          provider: string
+          provider_cleanup_pending: boolean
+          provider_queue_sid: string | null
+          queue_name: string
+          result: string | null
+          started_at: string
+          state: string
+          target_answered_at: string | null
+          target_user_id: string | null
           updated_at: string
           version: number
         }[]
@@ -11121,6 +11361,50 @@ export type Database = {
         Args: { _org_id: string; _role: string; _user_id: string }
         Returns: boolean
       }
+      hold_telephony_call: {
+        Args: {
+          _call_id: string
+          _customer_call_sid: string
+          _initiator_user_id: string
+          _original_agent_call_sid: string
+          _queue_name: string
+          _request_id: string
+        }
+        Returns: {
+          active_user_id: string | null
+          call_id: string
+          client_request_id: string | null
+          completed_at: string | null
+          consult_parent_call_sid: string | null
+          consult_target_call_sid: string | null
+          consultation_sequence: number
+          created_at: string
+          customer_call_sid: string
+          customer_queued_at: string | null
+          failure_reason: string | null
+          id: string
+          initiated_by_user_id: string
+          organization_id: string
+          original_agent_call_sid: string | null
+          provider: string
+          provider_cleanup_pending: boolean
+          provider_queue_sid: string | null
+          queue_name: string
+          result: string | null
+          started_at: string
+          state: string
+          target_answered_at: string | null
+          target_user_id: string | null
+          updated_at: string
+          version: number
+        }[]
+        SetofOptions: {
+          from: "*"
+          to: "call_transfers"
+          isOneToOne: false
+          isSetofReturn: true
+        }
+      }
       intelligence_fire_all_now: { Args: never; Returns: Json }
       intelligence_reap_stale_jobs: {
         Args: { p_max_reclaims?: number; p_stale_minutes?: number }
@@ -11171,6 +11455,89 @@ export type Database = {
         Args: { _initiator_user_id: string; _transfer_id: string }
         Returns: boolean
       }
+      reclaim_telephony_transfer_target_v2: {
+        Args: {
+          _expected_version: number
+          _initiator_user_id: string
+          _transfer_id: string
+        }
+        Returns: {
+          active_user_id: string | null
+          call_id: string
+          client_request_id: string | null
+          completed_at: string | null
+          consult_parent_call_sid: string | null
+          consult_target_call_sid: string | null
+          consultation_sequence: number
+          created_at: string
+          customer_call_sid: string
+          customer_queued_at: string | null
+          failure_reason: string | null
+          id: string
+          initiated_by_user_id: string
+          organization_id: string
+          original_agent_call_sid: string | null
+          provider: string
+          provider_cleanup_pending: boolean
+          provider_queue_sid: string | null
+          queue_name: string
+          result: string | null
+          started_at: string
+          state: string
+          target_answered_at: string | null
+          target_user_id: string | null
+          updated_at: string
+          version: number
+        }[]
+        SetofOptions: {
+          from: "*"
+          to: "call_transfers"
+          isOneToOne: false
+          isSetofReturn: true
+        }
+      }
+      reclaim_telephony_transfer_target_v3: {
+        Args: {
+          _expected_version: number
+          _initiator_user_id: string
+          _target_user_id?: string
+          _transfer_id: string
+        }
+        Returns: {
+          active_user_id: string | null
+          call_id: string
+          client_request_id: string | null
+          completed_at: string | null
+          consult_parent_call_sid: string | null
+          consult_target_call_sid: string | null
+          consultation_sequence: number
+          created_at: string
+          customer_call_sid: string
+          customer_queued_at: string | null
+          failure_reason: string | null
+          id: string
+          initiated_by_user_id: string
+          organization_id: string
+          original_agent_call_sid: string | null
+          provider: string
+          provider_cleanup_pending: boolean
+          provider_queue_sid: string | null
+          queue_name: string
+          result: string | null
+          started_at: string
+          state: string
+          target_answered_at: string | null
+          target_user_id: string | null
+          updated_at: string
+          version: number
+        }[]
+        SetofOptions: {
+          from: "*"
+          to: "call_transfers"
+          isOneToOne: false
+          isSetofReturn: true
+        }
+      }
       record_failed_admin_login: {
         Args: { p_email: string; p_ip: string }
         Returns: undefined
@@ -11189,6 +11556,48 @@ export type Database = {
       release_worker_lease: {
         Args: { p_holder: string; p_name: string }
         Returns: undefined
+      }
+      reserve_telephony_transfer_target: {
+        Args: {
+          _expected_version: number
+          _initiator_user_id: string
+          _target_user_id: string
+          _transfer_id: string
+        }
+        Returns: {
+          active_user_id: string | null
+          call_id: string
+          client_request_id: string | null
+          completed_at: string | null
+          consult_parent_call_sid: string | null
+          consult_target_call_sid: string | null
+          consultation_sequence: number
+          created_at: string
+          customer_call_sid: string
+          customer_queued_at: string | null
+          failure_reason: string | null
+          id: string
+          initiated_by_user_id: string
+          organization_id: string
+          original_agent_call_sid: string | null
+          provider: string
+          provider_cleanup_pending: boolean
+          provider_queue_sid: string | null
+          queue_name: string
+          result: string | null
+          started_at: string
+          state: string
+          target_answered_at: string | null
+          target_user_id: string | null
+          updated_at: string
+          version: number
+        }[]
+        SetofOptions: {
+          from: "*"
+          to: "call_transfers"
+          isOneToOne: false
+          isSetofReturn: true
+        }
       }
       reset_admin_login_attempts: {
         Args: { p_admin_id: string }

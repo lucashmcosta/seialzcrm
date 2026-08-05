@@ -18,6 +18,16 @@ export function transferOwnsOriginalDial(state: string | null | undefined) {
   return !!state && !isTerminalTransferState(state);
 }
 
+export function canApplyTransferEvent(input: {
+  transferId: string;
+  activeTransferId: string | null | undefined;
+  currentCycle: number;
+  eventCycle: number;
+}) {
+  return input.activeTransferId === input.transferId &&
+    input.currentCycle === input.eventCycle;
+}
+
 export function transferBridgeOutcome(
   actor: "initiator" | "target",
   finish: boolean,
