@@ -78,6 +78,7 @@ export function TelephonyProvider({ children }: { children: ReactNode }) {
   const [transferTargets, setTransferTargets] = useState<CallTransferTarget[]>([]);
   const [transferLoading, setTransferLoading] = useState(false);
   const [transferOperation, setTransferOperation] = useState<CallTransferOperation | null>(null);
+  const [audioReconnecting, setAudioReconnecting] = useState(false);
   const [numberSelection, setNumberSelection] = useState<OutboundNumberSelection | null>(null);
 
   // SECURITY: Never initialize in admin routes
@@ -960,6 +961,16 @@ export function TelephonyProvider({ children }: { children: ReactNode }) {
   }) => {
     const current = transferSessionRef.current;
     if (!current) return;
+    // Guard de versão monotônica: ignora reconciliações ATRASADAS (poll de 1s /
+    // realtime que leram a linha antes do backend commitar). O backend sempre
+    // bumpa `version` a cada escrita — inclusive nos rollbacks de falha, sempre
+    // com versão MAIOR — então uma versão menor é sempre stale. Isso é o que torna
+    // o estado otimista à prova de reversão.
+    if (
+      typeof next.version === 'number' &&
+      typeof current.version === 'number' &&
+      next.version < current.version
+    ) return;
     const stateChanged = current.state !== next.state;
     const updated: CallTransferSession = {
       ...current,
@@ -1072,6 +1083,10 @@ export function TelephonyProvider({ children }: { children: ReactNode }) {
   ) => {
     const device = deviceRef.current;
     if (!device) throw new Error('Dispositivo de telefonia indisponível');
+    // Indicador leve "reconectando áudio" cobre o teardown + renegociação WebRTC
+    // (a parte REAL dos ~0.5-1.5s), sem travar o modal. Reset garantido no finally.
+    setAudioReconnecting(true);
+    try {
     const generation = ++transferConnectGenerationRef.current;
     await closeTransferLegs(device, [
       transferCallRef.current,
@@ -1138,6 +1153,9 @@ export function TelephonyProvider({ children }: { children: ReactNode }) {
       }
     });
     return call;
+    } finally {
+      setAudioReconnecting(false);
+    }
   }, [activeIncomingCall, applyTransferUpdate, organization?.id, updatePresence]);
 
   const loadTransferTargets = useCallback(async () => {
@@ -1296,6 +1314,7 @@ export function TelephonyProvider({ children }: { children: ReactNode }) {
   ) => {
     const current = transferSessionRef.current;
     if (!organization?.id || !current) return;
+    const preClick = current; // snapshot para reverter em caso de falha
     setTransferLoading(true);
     const operation: Record<typeof action, CallTransferOperation> = {
       return_to_customer: 'returning',
@@ -1306,6 +1325,31 @@ export function TelephonyProvider({ children }: { children: ReactNode }) {
       cancel: 'canceling',
     };
     setTransferOperation(operation[action]);
+    // Otimismo VISUAL: reflete o estado-alvo IMEDIATAMENTE (o modal responde na
+    // hora) para o subconjunto seguro de ações. `complete` fica de fora de
+    // propósito (interage com o handler de disconnect via handoff_pending) e
+    // `cancel` limpa a sessão no caminho atual. O servidor segue sendo a verdade:
+    // reconciliamos com a resposta e, em falha, revertemos (ver catch). O guard de
+    // versão impede que um poll atrasado desfaça este estado.
+    const optimisticTarget: Partial<Record<typeof action, CallTransferState>> = {
+      resume: 'returning_to_customer',
+      return_to_customer: 'returning_to_customer',
+      consult: 'customer_queued',
+      consult_again: 'customer_queued',
+    };
+    const targetState = optimisticTarget[action];
+    if (targetState) {
+      const optimistic: CallTransferSession = {
+        ...current,
+        state: targetState,
+        version: (current.version ?? 0) + 1,
+        targetUserId: options?.targetUserId ?? current.targetUserId,
+        targetName: options?.targetName ?? current.targetName,
+        error: null,
+      };
+      transferSessionRef.current = optimistic;
+      setTransferSession(optimistic);
+    }
     try {
       // Every action except `cancel` tears down / reconnects a Twilio leg; the
       // guard must be set BEFORE that so the SDK disconnect handler in makeCall
@@ -1362,9 +1406,14 @@ export function TelephonyProvider({ children }: { children: ReactNode }) {
     } catch (error) {
       const message = transferErrorMessage(error);
       toast.error(message);
+      // Reverter o otimismo: volta ao snapshot pré-clique ANTES de reconciliar —
+      // senão o guard de versão bloquearia uma releitura de versão menor (ex.: o
+      // backend nem chegou a commitar). Em seguida reconcilia com a linha real.
+      transferSessionRef.current = preClick;
+      setTransferSession(preClick);
       const { data: refreshed } = await telephonySupabase.from('call_transfers')
         .select('state, version, consultation_sequence, failure_reason')
-        .eq('id', current.id).maybeSingle();
+        .eq('id', preClick.id).maybeSingle();
       if (refreshed?.state) {
         applyTransferUpdate({
           state: refreshed.state as CallTransferState,
@@ -1657,6 +1706,7 @@ export function TelephonyProvider({ children }: { children: ReactNode }) {
     transferTargets,
     transferLoading,
     transferOperation,
+    audioReconnecting,
     loadTransferTargets,
     startTransfer,
     holdCall,

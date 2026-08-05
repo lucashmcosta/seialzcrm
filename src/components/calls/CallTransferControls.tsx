@@ -33,6 +33,7 @@ export function CallTransferControls() {
     transferSession,
     transferTargets,
     transferOperation,
+    audioReconnecting,
     loadTransferTargets,
     holdCall,
     controlTransfer,
@@ -178,9 +179,9 @@ export function CallTransferControls() {
         </div>
       )}
 
-      {busy && (
+      {(busy || audioReconnecting) && (
         <div className="flex items-center justify-center gap-2 text-xs text-muted-foreground">
-          <SpinnerGap className="h-3 w-3 animate-spin" /> {processingLabel}
+          <SpinnerGap className="h-3 w-3 animate-spin" /> {audioReconnecting ? 'Reconectando áudio…' : processingLabel}
         </div>
       )}
 
