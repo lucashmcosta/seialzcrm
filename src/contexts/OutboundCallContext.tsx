@@ -432,6 +432,7 @@ export function TelephonyProvider({ children }: { children: ReactNode }) {
       activeCallRef.current = null;
     }
     if (deviceRef.current) {
+      console.warn('[PERF] fullCleanup DESTROYING Twilio Device @', Math.round(performance.now()));
       try { deviceRef.current.destroy(); } catch {}
       deviceRef.current = null;
     }
@@ -677,6 +678,7 @@ export function TelephonyProvider({ children }: { children: ReactNode }) {
 
     try {
       isInitializingRef.current = true;
+      console.log('[PERF] initializeDevice START @', Math.round(performance.now()));
       setStatus('initializing');
       setErrorMessage(null);
 
@@ -689,7 +691,7 @@ export function TelephonyProvider({ children }: { children: ReactNode }) {
       }
 
       const token = await getToken();
-      console.log('Got access token, initializing persistent device...');
+      console.log('[PERF] token fetched @', Math.round(performance.now()));
 
       // Dynamic import: keeps @twilio/voice-sdk out of the eager static
       // graph so the main bundle never references its bindings during
@@ -844,6 +846,7 @@ export function TelephonyProvider({ children }: { children: ReactNode }) {
       }, 10000);
 
       device.on('registered', () => {
+        console.log('[PERF] device REGISTERED @', Math.round(performance.now()));
         if (initTimeoutRef.current) {
           clearTimeout(initTimeoutRef.current);
           initTimeoutRef.current = null;
@@ -913,9 +916,10 @@ export function TelephonyProvider({ children }: { children: ReactNode }) {
 
     // Skip if voice integration is not enabled or still loading
     if (voiceLoading || telephonyFlagLoading || permissionsLoading || !hasVoiceIntegration || !isVoiceLeader || !canUseVoiceDevice) {
-      console.log('[OutboundCall] Voice integration not enabled, skipping device initialization');
+      console.log('[PERF] device-init SKIP @', Math.round(performance.now()), { voiceLoading, telephonyFlagLoading, permissionsLoading, hasVoiceIntegration, isVoiceLeader, canUseVoiceDevice });
       return;
     }
+    console.log('[PERF] device-init PROCEED @', Math.round(performance.now()));
 
     let timer: ReturnType<typeof setTimeout> | null = null;
     let isMounted = true;
@@ -1269,6 +1273,7 @@ export function TelephonyProvider({ children }: { children: ReactNode }) {
   // modal shows the hold banner (state on_hold).
   const holdCall = useCallback(async () => {
     if (!organization?.id || !callIdRef.current || !canTransferCalls || transferSessionRef.current) return;
+    console.log('[PERF] HOLD CLICK @', Math.round(performance.now()));
     setTransferLoading(true);
     setTransferOperation('starting');
     suppressCallFinalizationRef.current = true;
@@ -1298,6 +1303,7 @@ export function TelephonyProvider({ children }: { children: ReactNode }) {
       transferSessionRef.current = session;
       setTransferSession(session);
       subscribeToTransfer(data.transferId);
+      console.log('[PERF] HOLD server done (cliente na fila) @', Math.round(performance.now()));
       toast.success('Cliente em espera.');
     } catch (error) {
       suppressCallFinalizationRef.current = false;
@@ -1448,6 +1454,7 @@ export function TelephonyProvider({ children }: { children: ReactNode }) {
     pendingCallRef.current = params;
 
     const connect = () => {
+      console.log('[PERF] CALL connect() @', Math.round(performance.now()), 'deviceReady=', isDeviceReady && !!deviceRef.current);
       if (isDeviceReady && deviceRef.current) {
         console.log('Device ready, starting call immediately');
         makeCall();
