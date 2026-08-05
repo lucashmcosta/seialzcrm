@@ -1173,6 +1173,18 @@ async function handleTransferWait(
   if (["completed", "canceled", "failed"].includes(context.transfer.state)) {
     return xml("<Hangup/>");
   }
+  // Captura o SID da fila que o <Enqueue> criou sob demanda (o hold não cria a
+  // Queue explicitamente, para poupar 1 REST do Twilio). Idempotente (só quando
+  // ainda nulo) e best-effort — necessário apenas para o cleanup (deleteTwilioQueue);
+  // uma falha aqui não pode afetar a música de espera.
+  if (params.QueueSid) {
+    try {
+      await admin.from("call_transfers")
+        .update({ provider_queue_sid: params.QueueSid })
+        .eq("id", context.transfer.id)
+        .is("provider_queue_sid", null);
+    } catch { /* sem impacto no áudio */ }
+  }
   return xml(holdMusicTwiml());
 }
 

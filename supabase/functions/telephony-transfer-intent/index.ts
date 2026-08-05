@@ -181,8 +181,7 @@ Deno.serve(async (req) => {
         });
       }
       // Legs (leitura em call_attempts) e a config do Twilio são independentes →
-      // em paralelo. NÃO paralelizar com createTwilioQueue/enqueue abaixo: a fila
-      // precisa existir (MaxSize:1) antes do enqueue — é o fix música/no-drop.
+      // em paralelo.
       const [legs, twilioCtx] = await Promise.all([
         providerLegs(context.admin, call),
         twilioApiContext(context.admin, context.organizationId),
@@ -191,9 +190,13 @@ Deno.serve(async (req) => {
       if (!legs.customerCallSid) {
         return json({ error: "customer_provider_leg_not_found" }, 409);
       }
+      // NÃO criamos a Queue explicitamente: o <Enqueue> abaixo cria a fila sob
+      // demanda pelo nome (comportamento nativo do Twilio). Isso tira 1 REST do
+      // Twilio (~400ms) do caminho crítico — o cliente entra em espera já no 1º
+      // redirect. Fila é única por transfer (nome aleatório), então o MaxSize
+      // default é irrelevante. O provider_queue_sid é capturado na 1ª chamada da
+      // waitUrl (handleTransferWait recebe QueueSid) para o cleanup posterior.
       const queueName = `seialz_${crypto.randomUUID().replaceAll("-", "")}`;
-      const queue = await createTwilioQueue(twilio, queueName);
-      queueSid = queue.sid;
       const { data: held, error: holdError } = await context.admin.rpc(
         "hold_telephony_call",
         {
@@ -206,8 +209,6 @@ Deno.serve(async (req) => {
         },
       );
       if (holdError || !held?.[0]) {
-        await deleteTwilioQueue(twilio, queueSid).catch(() => undefined);
-        queueSid = null;
         return json({
           error: (holdError?.message || "").match(/call_[a-z_]+/)?.[0] ||
             "hold_cannot_start",
@@ -215,10 +216,6 @@ Deno.serve(async (req) => {
       }
       const heldTransferId = String(held[0].id);
       transferId = heldTransferId;
-      await context.admin.from("call_transfers").update({
-        provider_queue_sid: queue.sid,
-        updated_at: new Date().toISOString(),
-      }).eq("id", heldTransferId);
       const holdQuery = `transferId=${encodeURIComponent(heldTransferId)}&cycle=1`;
       const enqueueTwiml = `<Response><Enqueue waitUrl="${
         escapeXml(`${WEBHOOK_BASE}/transfer-wait?${holdQuery}`)
