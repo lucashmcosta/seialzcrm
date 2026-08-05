@@ -31,14 +31,13 @@ Deno.serve(async (req) => {
 
   const SUPABASE_URL = Deno.env.get("SUPABASE_URL")!;
   const SERVICE_ROLE = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
-  const ANON = Deno.env.get("SUPABASE_ANON_KEY")!;
 
   // --- 1. Auth: resolve caller from JWT ---
   const authHeader = req.headers.get("Authorization") ?? "";
   const jwt = authHeader.replace(/^Bearer\s+/i, "").trim();
   if (!jwt) return json(401, { error: "missing_authorization" });
 
-  const authClient = createClient(SUPABASE_URL, ANON, {
+  const authClient = createClient(SUPABASE_URL, SERVICE_ROLE, {
     auth: { persistSession: false },
   });
   const { data: userData, error: userErr } = await authClient.auth.getUser(jwt);

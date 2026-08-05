@@ -65,6 +65,7 @@ const PERMISSION_GROUPS: PermissionGroup[] = [
     permissions: [
       { key: 'can_make_calls', label: 'Realizar Chamadas', description: 'Permite originar chamadas pelos números autorizados' },
       { key: 'can_receive_calls', label: 'Receber Chamadas', description: 'Permite participar do roteamento dos números autorizados' },
+      { key: 'can_transfer_calls', label: 'Transferir Chamadas', description: 'Permite consultar um colega e transferir uma chamada ativa' },
       { key: 'can_manage_telephony', label: 'Gerenciar Telefonia', description: 'Configura números, destinatários, horários e fallback' },
     ],
   },

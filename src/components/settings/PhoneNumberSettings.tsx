@@ -27,10 +27,17 @@ import { telephonySupabase } from '@/integrations/supabase/telephonyClient';
 import { useOrganization } from '@/hooks/useOrganization';
 import { toast } from 'sonner';
 import { formatPhoneDisplay } from '@/lib/phoneUtils';
+import { TwilioNumberManagement } from './TwilioNumberManagement';
 
 interface InboundSettings {
   auto_create_contact: boolean;
   default_lifecycle_stage: string;
+}
+interface NumberUserGrant {
+  user_id: string;
+  can_receive_calls: boolean;
+  can_originate_calls: boolean;
+  priority: number;
 }
 
 interface NumberUserGrant {
@@ -56,6 +63,7 @@ interface PhoneNumber {
   timezone: string | null;
   business_hours: { enabled: boolean; schedule: Record<string, Array<{ start: string; end: string }>> };
   max_attempts: number;
+  hold_message: string;
   fallback_message: string;
   missed_call_owner_user_id: string | null;
   grants: NumberUserGrant[];
@@ -134,14 +142,15 @@ export function PhoneNumberSettings() {
         ring_users: phone.ring_users || [],
         ring_timeout_seconds: phone.ring_timeout_seconds || 30,
         inbound_settings: (phone.inbound_settings as unknown as InboundSettings) || { auto_create_contact: true, default_lifecycle_stage: 'lead' },
-        number_type: phone.number_type || (phone.assigned_user_id ? 'user' : 'company'),
+        number_type: (phone.number_type as 'company' | 'user') || (phone.assigned_user_id ? 'user' : 'company'),
         assigned_user_id: phone.assigned_user_id,
         is_active: phone.is_active ?? true,
         is_default_outbound: phone.is_default_outbound ?? phone.is_primary ?? false,
         recording_enabled: phone.recording_enabled ?? false,
         timezone: phone.timezone,
-        business_hours: phone.business_hours || defaultBusinessHours(),
+        business_hours: (phone.business_hours as unknown as PhoneNumber['business_hours']) || defaultBusinessHours(),
         max_attempts: phone.number_type === 'user' ? 1 : (phone.max_attempts || 3),
+        hold_message: phone.hold_message || 'Aguarde um momento enquanto consultamos outro atendente.',
         fallback_message: phone.fallback_message || 'No momento não podemos atender. Registramos sua ligação e retornaremos em breve.',
         missed_call_owner_user_id: phone.missed_call_owner_user_id,
         grants: (grants || []).filter((grant) => grant.phone_number_id === phone.id),
@@ -177,6 +186,13 @@ export function PhoneNumberSettings() {
       toast.error('Defina o titular do número individual');
       return;
     }
+    if (selectedPhone.number_type === 'user' && selectedPhone.is_active && phoneNumbers.some((number) =>
+      number.id !== selectedPhone.id && number.is_active && number.number_type === 'user' &&
+      number.assigned_user_id === selectedPhone.assigned_user_id
+    )) {
+      toast.error('Este usuário já possui outro número individual ativo');
+      return;
+    }
 
     setSaving(true);
     try {
@@ -205,6 +221,7 @@ export function PhoneNumberSettings() {
           business_hours: selectedPhone.business_hours,
           max_attempts: selectedPhone.number_type === 'user' ? 1 : Math.min(selectedPhone.max_attempts, 3),
           fallback_action: 'message_and_task',
+          hold_message: selectedPhone.hold_message,
           fallback_message: selectedPhone.fallback_message,
           missed_call_owner_user_id: selectedPhone.missed_call_owner_user_id,
           ring_strategy: selectedPhone.number_type === 'user' ? 'specific_users' : 'round_robin',
@@ -304,17 +321,20 @@ export function PhoneNumberSettings() {
 
   if (phoneNumbers.length === 0) {
     return (
-      <Card>
-        <CardHeader>
-          <CardTitle className="flex items-center gap-2">
-            <Phone className="h-5 w-5" />
-            Configuração de Chamadas
-          </CardTitle>
-          <CardDescription>
-            Nenhum número de telefone configurado. Conecte a integração Twilio Voice primeiro.
-          </CardDescription>
-        </CardHeader>
-      </Card>
+      <div className="space-y-4">
+        <TwilioNumberManagement users={users} onChanged={fetchData} />
+        <Card>
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2">
+              <Phone className="h-5 w-5" />
+              Configuração de Chamadas
+            </CardTitle>
+            <CardDescription>
+              Nenhum número sincronizado. Importe um número da conta Twilio ou compre uma nova linha acima.
+            </CardDescription>
+          </CardHeader>
+        </Card>
+      </div>
     );
   }
 
@@ -331,6 +351,8 @@ export function PhoneNumberSettings() {
   }).length;
 
   return (
+    <div className="space-y-4">
+    <TwilioNumberManagement users={users} onChanged={fetchData} />
     <Card className="overflow-hidden border-primary/20 shadow-sm">
       <CardHeader className="border-b bg-muted/30">
         <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
@@ -385,6 +407,32 @@ export function PhoneNumberSettings() {
               <span><strong className="text-foreground">{originateCount}</strong> podem ligar</span>
             </div>
           )}
+        </div>
+
+        <div className="space-y-3 rounded-xl border bg-muted/20 p-4">
+          <div>
+            <p className="text-sm font-semibold">Linhas individuais da equipe</p>
+            <p className="text-xs text-muted-foreground">Cada usuário pode ter no máximo uma linha individual ativa.</p>
+          </div>
+          <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
+            {users.map((user) => {
+              const personal = phoneNumbers.find((phone) => phone.is_active && phone.number_type === 'user' && phone.assigned_user_id === user.id);
+              return (
+                <button
+                  key={user.id}
+                  type="button"
+                  onClick={() => personal && setSelectedPhone(personal)}
+                  disabled={!personal}
+                  className="rounded-lg border bg-card p-3 text-left disabled:cursor-default disabled:opacity-70"
+                >
+                  <span className="block truncate text-sm font-medium">{user.full_name}</span>
+                  <span className="mt-1 block text-xs text-muted-foreground">
+                    {personal ? formatPhoneDisplay(personal.phone_number) : 'Sem número individual'}
+                  </span>
+                </button>
+              );
+            })}
+          </div>
         </div>
 
         {selectedPhone && (
@@ -602,10 +650,15 @@ export function PhoneNumberSettings() {
 
               <div className="grid gap-4 md:grid-cols-2">
                 <div className="space-y-2">
+                  <Label>Mensagem de espera na transferência</Label>
+                  <Textarea value={selectedPhone.hold_message} onChange={(event) => setSelectedPhone({ ...selectedPhone, hold_message: event.target.value })} rows={4} />
+                  <p className="text-xs text-muted-foreground">Tocada somente enquanto o cliente aguarda na fila privada.</p>
+                </div>
+                <div className="space-y-2">
                   <Label>Mensagem de indisponibilidade</Label>
                   <Textarea value={selectedPhone.fallback_message} onChange={(event) => setSelectedPhone({ ...selectedPhone, fallback_message: event.target.value })} rows={4} />
                 </div>
-                <div className="rounded-xl border bg-muted/30 p-4 text-sm">
+                <div className="rounded-xl border bg-muted/30 p-4 text-sm md:col-span-2">
                   <p className="font-medium">Fluxo de fallback</p>
                   <ol className="mt-3 space-y-2 text-muted-foreground">
                     <li>1. Reproduz a mensagem ao cliente.</li>
@@ -675,5 +728,6 @@ export function PhoneNumberSettings() {
         )}
       </CardContent>
     </Card>
+    </div>
   );
 }

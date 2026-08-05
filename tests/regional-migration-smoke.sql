@@ -16,6 +16,29 @@ VALUES (
 
 INSERT INTO public.contacts (id, organization_id, full_name, cpf)
 VALUES (
+  '20000000-0000-0000-0000-000000000004',
+  '10000000-0000-0000-0000-000000000004',
+  'Legacy contact with CPF',
+  '529.982.247-25'
+);
+
+DO $$
+BEGIN
+  INSERT INTO public.contacts (organization_id, full_name, cpf)
+  VALUES (
+    '10000000-0000-0000-0000-000000000004',
+    'Legacy duplicate CPF',
+    '52998224725'
+  );
+  RAISE EXCEPTION 'duplicate CPF was accepted for a tenant awaiting regional configuration';
+EXCEPTION
+  WHEN unique_violation THEN
+    IF SQLERRM NOT LIKE 'duplicate_cpf:%' THEN RAISE; END IF;
+END;
+$$;
+
+INSERT INTO public.contacts (id, organization_id, full_name, cpf)
+VALUES (
   '20000000-0000-0000-0000-000000000001',
   '10000000-0000-0000-0000-000000000001',
   'Maria da Silva',

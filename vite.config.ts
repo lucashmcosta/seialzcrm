@@ -80,6 +80,35 @@ export default defineConfig(({ mode }) => {
       },
       dedupe: ["react", "react-dom", "react/jsx-runtime"],
     },
+    // Pre-bundle the React-dependent libraries up front. Without this, Vite
+    // discovers some of them lazily and re-runs the dep optimizer mid-session;
+    // an open tab then mixes chunks from two generations (different `?v=`
+    // hashes), a library grabs a second React copy and hooks explode with
+    // "Cannot read properties of null (reading 'useRef')". Dev-only concern.
+    optimizeDeps: {
+      include: [
+        "react",
+        "react-dom",
+        "react-dom/client",
+        "react/jsx-runtime",
+        "react-router-dom",
+        "react-helmet-async",
+        "react-hook-form",
+        "@tanstack/react-query",
+        "framer-motion",
+        "react-aria-components",
+        "@react-aria/focus",
+        "@radix-ui/react-tooltip",
+        "@radix-ui/react-dialog",
+        "@radix-ui/react-popover",
+        "@radix-ui/react-dropdown-menu",
+        "@radix-ui/react-select",
+        "@radix-ui/react-tabs",
+        "@radix-ui/react-toast",
+        "@radix-ui/react-slot",
+      ],
+    },
+
     // Note: previously we had aggressive `manualChunks` here that split
     // radix/datepicker/icons/supabase/tanstack into separate chunks.
     // That triggered a production-only TDZ ("Cannot access 'X' before

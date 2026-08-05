@@ -91,7 +91,8 @@ serve(async (req) => {
     }
 
     if (
-      existingVoiceIntegration && (!accountSid || !authToken || !phoneNumber)
+      existingVoiceIntegration &&
+      (!accountSid || !authToken || (!useV2 && !phoneNumber))
     ) {
       try {
         const resolved = await loadTwilioVoiceConfig(
@@ -112,7 +113,9 @@ serve(async (req) => {
       }
     }
 
-    if (!organizationId || !accountSid || !authToken || !phoneNumber) {
+    if (
+      !organizationId || !accountSid || !authToken || (!useV2 && !phoneNumber)
+    ) {
       return new Response(
         JSON.stringify({ error: "Missing required fields" }),
         {
@@ -196,23 +199,29 @@ serve(async (req) => {
     // ========== Configure the phone number to use the TwiML App ==========
     // This enables inbound calls to be routed to our webhook
 
+    // Compatibility: when a number is supplied, bind just that number. V2
+    // inventory management imports the rest independently and never changes
+    // another number's default/assignment settings.
     // Step 1: Find the phone number SID
-    const phoneSearchUrl =
-      `https://api.twilio.com/2010-04-01/Accounts/${accountSid}/IncomingPhoneNumbers.json?PhoneNumber=${
+    const phoneSearchUrl = phoneNumber
+      ? `https://api.twilio.com/2010-04-01/Accounts/${accountSid}/IncomingPhoneNumbers.json?PhoneNumber=${
         encodeURIComponent(phoneNumber)
-      }`;
+      }`
+      : null;
 
     console.log("Searching for phone number SID:", phoneNumber);
 
     let phoneNumberSid: string | null = null;
 
-    const phoneListResponse = await fetch(phoneSearchUrl, {
-      headers: {
-        "Authorization": "Basic " + btoa(`${accountSid}:${authToken}`),
-      },
-    });
+    const phoneListResponse = phoneSearchUrl
+      ? await fetch(phoneSearchUrl, {
+        headers: {
+          "Authorization": "Basic " + btoa(`${accountSid}:${authToken}`),
+        },
+      })
+      : null;
 
-    if (phoneListResponse.ok) {
+    if (phoneListResponse?.ok) {
       const phoneListData = await phoneListResponse.json();
       phoneNumberSid = phoneListData.incoming_phone_numbers?.[0]?.sid;
 
@@ -259,11 +268,11 @@ serve(async (req) => {
           "Phone number not found in Twilio account. Inbound calls may not work.",
         );
       }
-    } else {
+    } else if (phoneListResponse) {
       const searchError = await phoneListResponse.text();
       console.error("Failed to search for phone number:", searchError);
     }
-    if (useV2 && !phoneNumberSid) {
+    if (useV2 && phoneNumber && !phoneNumberSid) {
       return new Response(
         JSON.stringify({
           error: "O número informado não foi encontrado nesta conta Twilio",
@@ -310,7 +319,7 @@ serve(async (req) => {
       ...existingValues,
       account_sid: accountSid,
       auth_token_encrypted: encryptedAuthToken,
-      phone_number: phoneNumber,
+      ...(phoneNumber ? { phone_number: phoneNumber } : {}),
       enable_recording: enableRecording || false,
       twiml_app_sid: twimlAppSid,
     };
@@ -363,76 +372,97 @@ serve(async (req) => {
       organizationId,
     );
 
-    await supabase
-      .from("organization_phone_numbers")
-      .update({ is_default_outbound: false, is_primary: false })
-      .eq("organization_id", organizationId)
-      .eq("provider", "twilio")
-      .neq("phone_number", phoneNumber);
-
     // ========== Insert/Update phone number in organization_phone_numbers ==========
-    const { data: savedPhone, error: phoneInsertError } = await supabase
-      .from("organization_phone_numbers")
-      .upsert({
-        organization_id: organizationId,
-        phone_number: phoneNumber,
-        friendly_name: "Número Principal",
-        twilio_phone_sid: phoneNumberSid,
-        provider: "twilio",
-        provider_number_id: phoneNumberSid,
-        organization_integration_id: organizationIntegrationId,
-        number_type: "company",
-        is_active: true,
-        is_default_outbound: true,
-        recording_enabled: enableRecording || false,
-        max_attempts: 3,
-        missed_call_owner_user_id: context.userId,
-        is_primary: true,
-        ring_strategy: "round_robin",
-        ring_timeout_seconds: 15,
-      }, {
-        onConflict: "organization_id,phone_number",
-      })
-      .select("id")
-      .single();
+    if (phoneNumber) {
+      const { data: existingDefault } = await supabase.from(
+        "organization_phone_numbers",
+      )
+        .select("id").eq("organization_id", organizationId).eq(
+          "provider",
+          "twilio",
+        )
+        .eq("number_type", "company").eq("is_active", true).eq(
+          "is_default_outbound",
+          true,
+        )
+        .maybeSingle();
+      const { data: existingPhone } = await supabase.from(
+        "organization_phone_numbers",
+      )
+        .select("id").eq("organization_id", organizationId).eq(
+          "phone_number",
+          phoneNumber,
+        ).maybeSingle();
+      const makeDefault = !existingDefault;
+      const phoneResult = existingPhone
+        ? await supabase.from("organization_phone_numbers").update({
+          twilio_phone_sid: phoneNumberSid,
+          provider: "twilio",
+          provider_number_id: phoneNumberSid,
+          organization_integration_id: organizationIntegrationId,
+          sync_status: "synced",
+          last_synced_at: new Date().toISOString(),
+        }).eq("id", existingPhone.id).select("id").single()
+        : await supabase.from("organization_phone_numbers").insert({
+          organization_id: organizationId,
+          phone_number: phoneNumber,
+          friendly_name: makeDefault ? "Número Principal" : phoneNumber,
+          twilio_phone_sid: phoneNumberSid,
+          provider: "twilio",
+          provider_number_id: phoneNumberSid,
+          organization_integration_id: organizationIntegrationId,
+          number_type: "company",
+          is_active: true,
+          is_default_outbound: makeDefault,
+          recording_enabled: enableRecording || false,
+          max_attempts: 3,
+          missed_call_owner_user_id: context.userId,
+          is_primary: makeDefault,
+          ring_strategy: "round_robin",
+          ring_timeout_seconds: 15,
+          sync_status: "synced",
+          last_synced_at: new Date().toISOString(),
+        }).select("id").single();
+      const savedPhone = phoneResult.data;
+      const phoneInsertError = phoneResult.error;
 
-    if (phoneInsertError) {
-      console.error("Error inserting phone number:", phoneInsertError);
-      if (useV2) {
-        return new Response(
-          JSON.stringify({
-            error: "Falha ao registrar o número na Telefonia V2",
-            details: phoneInsertError.message,
-          }),
-          {
-            status: 500,
-            headers: { ...corsHeaders, "Content-Type": "application/json" },
-          },
-        );
-      }
-    } else {
-      console.log("Phone number registered in organization_phone_numbers");
-      const { error: numberUserError } = await supabase.from(
-        "organization_phone_number_users",
-      ).upsert({
-        organization_id: organizationId,
-        phone_number_id: savedPhone.id,
-        user_id: context.userId,
-        can_receive_calls: true,
-        can_originate_calls: true,
-        priority: 1,
-      }, { onConflict: "phone_number_id,user_id" });
-      if (numberUserError && useV2) {
-        return new Response(
-          JSON.stringify({
-            error: "Falha ao autorizar o gestor no número Twilio",
-            details: numberUserError.message,
-          }),
-          {
-            status: 500,
-            headers: { ...corsHeaders, "Content-Type": "application/json" },
-          },
-        );
+      if (phoneInsertError || !savedPhone) {
+        console.error("Error inserting phone number:", phoneInsertError);
+        if (useV2) {
+          return new Response(
+            JSON.stringify({
+              error: "Falha ao registrar o número na Telefonia V2",
+              details: phoneInsertError?.message,
+            }),
+            {
+              status: 500,
+              headers: { ...corsHeaders, "Content-Type": "application/json" },
+            },
+          );
+        }
+      } else if (!existingPhone) {
+        const { error: numberUserError } = await supabase.from(
+          "organization_phone_number_users",
+        ).upsert({
+          organization_id: organizationId,
+          phone_number_id: savedPhone.id,
+          user_id: context.userId,
+          can_receive_calls: true,
+          can_originate_calls: true,
+          priority: 1,
+        }, { onConflict: "phone_number_id,user_id" });
+        if (numberUserError && useV2) {
+          return new Response(
+            JSON.stringify({
+              error: "Falha ao autorizar o gestor no número Twilio",
+              details: numberUserError.message,
+            }),
+            {
+              status: 500,
+              headers: { ...corsHeaders, "Content-Type": "application/json" },
+            },
+          );
+        }
       }
     }
     // ========== END: Phone number registration ==========

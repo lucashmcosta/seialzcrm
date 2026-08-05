@@ -37,6 +37,21 @@ verify_jwt = false
 [functions.telephony-call-intent]
 verify_jwt = false
 
+[functions.telephony-number-inventory]
+verify_jwt = false
+
+[functions.telephony-number-catalog]
+verify_jwt = false
+
+[functions.telephony-transfer-intent]
+verify_jwt = false
+
+[functions.telephony-transfer-control]
+verify_jwt = false
+
+[functions.telephony-transfer-reconcile]
+verify_jwt = false
+
 [functions.telephony-webhook]
 verify_jwt = false
 
@@ -90,4 +105,14 @@ verify_jwt = false
 # junto com o primeiro envio livre. verify_jwt=false porque validamos o JWT
 # em código (getUser + user_organizations) para dar mensagens de erro claras.
 [functions.thread-migrate-endpoint-send]
+verify_jwt = false
+
+# Snapshot read-only de saúde operacional consumido pelo Kairos Tech.
+# Auth própria em código via header x-health-token (SERVICE_HEALTH_TOKEN).
+[functions.service-health]
+verify_jwt = false
+
+# Histórico operacional read-only por serviço (Kairos Tech).
+# Mesma auth própria em código via header x-health-token.
+[functions.service-events]
 verify_jwt = false

@@ -1221,9 +1221,84 @@ export type Database = {
           },
         ]
       }
+      call_attempts: {
+        Row: {
+          answered_at: string | null
+          attempt_number: number
+          call_id: string
+          created_at: string
+          duration_seconds: number | null
+          ended_at: string | null
+          failure_reason: string | null
+          id: string
+          organization_id: string
+          provider: string
+          provider_call_sid: string | null
+          started_at: string
+          status: string
+          user_id: string | null
+        }
+        Insert: {
+          answered_at?: string | null
+          attempt_number: number
+          call_id: string
+          created_at?: string
+          duration_seconds?: number | null
+          ended_at?: string | null
+          failure_reason?: string | null
+          id?: string
+          organization_id: string
+          provider?: string
+          provider_call_sid?: string | null
+          started_at?: string
+          status?: string
+          user_id?: string | null
+        }
+        Update: {
+          answered_at?: string | null
+          attempt_number?: number
+          call_id?: string
+          created_at?: string
+          duration_seconds?: number | null
+          ended_at?: string | null
+          failure_reason?: string | null
+          id?: string
+          organization_id?: string
+          provider?: string
+          provider_call_sid?: string | null
+          started_at?: string
+          status?: string
+          user_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "call_attempts_call_id_fkey"
+            columns: ["call_id"]
+            isOneToOne: false
+            referencedRelation: "calls"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "call_attempts_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "call_attempts_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "users"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       call_recordings: {
         Row: {
+          call_attempt_id: string | null
           call_id: string
+          call_transfer_leg_id: string | null
           created_at: string | null
           duration_seconds: number | null
           file_size_bytes: number | null
@@ -1231,10 +1306,13 @@ export type Database = {
           organization_id: string
           recording_sid: string
           recording_url: string
+          segment_type: string
           transcription: string | null
         }
         Insert: {
+          call_attempt_id?: string | null
           call_id: string
+          call_transfer_leg_id?: string | null
           created_at?: string | null
           duration_seconds?: number | null
           file_size_bytes?: number | null
@@ -1242,10 +1320,13 @@ export type Database = {
           organization_id: string
           recording_sid: string
           recording_url: string
+          segment_type?: string
           transcription?: string | null
         }
         Update: {
+          call_attempt_id?: string | null
           call_id?: string
+          call_transfer_leg_id?: string | null
           created_at?: string | null
           duration_seconds?: number | null
           file_size_bytes?: number | null
@@ -1253,14 +1334,29 @@ export type Database = {
           organization_id?: string
           recording_sid?: string
           recording_url?: string
+          segment_type?: string
           transcription?: string | null
         }
         Relationships: [
+          {
+            foreignKeyName: "call_recordings_call_attempt_id_fkey"
+            columns: ["call_attempt_id"]
+            isOneToOne: false
+            referencedRelation: "call_attempts"
+            referencedColumns: ["id"]
+          },
           {
             foreignKeyName: "call_recordings_call_id_fkey"
             columns: ["call_id"]
             isOneToOne: false
             referencedRelation: "calls"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "call_recordings_call_transfer_leg_id_fkey"
+            columns: ["call_transfer_leg_id"]
+            isOneToOne: false
+            referencedRelation: "call_transfer_legs"
             referencedColumns: ["id"]
           },
           {
@@ -1272,79 +1368,468 @@ export type Database = {
           },
         ]
       }
-      calls: {
+      call_transfer_commands: {
+        Row: {
+          action: string
+          completed_at: string | null
+          created_at: string
+          error_code: string | null
+          expected_version: number | null
+          id: string
+          organization_id: string
+          request_id: string
+          requested_by_user_id: string
+          response: Json | null
+          status: string
+          transfer_id: string
+        }
+        Insert: {
+          action: string
+          completed_at?: string | null
+          created_at?: string
+          error_code?: string | null
+          expected_version?: number | null
+          id?: string
+          organization_id: string
+          request_id: string
+          requested_by_user_id: string
+          response?: Json | null
+          status?: string
+          transfer_id: string
+        }
+        Update: {
+          action?: string
+          completed_at?: string | null
+          created_at?: string
+          error_code?: string | null
+          expected_version?: number | null
+          id?: string
+          organization_id?: string
+          request_id?: string
+          requested_by_user_id?: string
+          response?: Json | null
+          status?: string
+          transfer_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "call_transfer_commands_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "call_transfer_commands_requested_by_user_id_fkey"
+            columns: ["requested_by_user_id"]
+            isOneToOne: false
+            referencedRelation: "users"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "call_transfer_commands_transfer_id_fkey"
+            columns: ["transfer_id"]
+            isOneToOne: false
+            referencedRelation: "call_transfers"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      call_transfer_events: {
+        Row: {
+          created_at: string
+          event_type: string
+          id: string
+          organization_id: string
+          payload: Json
+          provider: string
+          provider_event_key: string
+          transfer_id: string
+        }
+        Insert: {
+          created_at?: string
+          event_type: string
+          id?: string
+          organization_id: string
+          payload?: Json
+          provider?: string
+          provider_event_key: string
+          transfer_id: string
+        }
+        Update: {
+          created_at?: string
+          event_type?: string
+          id?: string
+          organization_id?: string
+          payload?: Json
+          provider?: string
+          provider_event_key?: string
+          transfer_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "call_transfer_events_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "call_transfer_events_transfer_id_fkey"
+            columns: ["transfer_id"]
+            isOneToOne: false
+            referencedRelation: "call_transfers"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      call_transfer_legs: {
         Row: {
           answered_at: string | null
+          call_id: string
+          created_at: string
+          duration_seconds: number | null
+          ended_at: string | null
+          failure_reason: string | null
+          id: string
+          organization_id: string
+          provider: string
+          provider_call_sid: string | null
+          role: string
+          sequence: number
+          started_at: string
+          status: string
+          transfer_id: string
+          user_id: string | null
+        }
+        Insert: {
+          answered_at?: string | null
+          call_id: string
+          created_at?: string
+          duration_seconds?: number | null
+          ended_at?: string | null
+          failure_reason?: string | null
+          id?: string
+          organization_id: string
+          provider?: string
+          provider_call_sid?: string | null
+          role: string
+          sequence?: number
+          started_at?: string
+          status?: string
+          transfer_id: string
+          user_id?: string | null
+        }
+        Update: {
+          answered_at?: string | null
+          call_id?: string
+          created_at?: string
+          duration_seconds?: number | null
+          ended_at?: string | null
+          failure_reason?: string | null
+          id?: string
+          organization_id?: string
+          provider?: string
+          provider_call_sid?: string | null
+          role?: string
+          sequence?: number
+          started_at?: string
+          status?: string
+          transfer_id?: string
+          user_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "call_transfer_legs_call_id_fkey"
+            columns: ["call_id"]
+            isOneToOne: false
+            referencedRelation: "calls"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "call_transfer_legs_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "call_transfer_legs_transfer_id_fkey"
+            columns: ["transfer_id"]
+            isOneToOne: false
+            referencedRelation: "call_transfers"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "call_transfer_legs_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "users"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      call_transfers: {
+        Row: {
+          active_user_id: string | null
+          call_id: string
+          client_request_id: string | null
+          completed_at: string | null
+          consult_parent_call_sid: string | null
+          consult_target_call_sid: string | null
+          consultation_sequence: number
+          created_at: string
+          customer_call_sid: string
+          customer_queued_at: string | null
+          failure_reason: string | null
+          id: string
+          initiated_by_user_id: string
+          organization_id: string
+          original_agent_call_sid: string | null
+          provider: string
+          provider_cleanup_pending: boolean
+          provider_queue_sid: string | null
+          queue_name: string
+          result: string | null
+          started_at: string
+          state: string
+          target_answered_at: string | null
+          target_user_id: string | null
+          updated_at: string
+          version: number
+        }
+        Insert: {
+          active_user_id?: string | null
+          call_id: string
+          client_request_id?: string | null
+          completed_at?: string | null
+          consult_parent_call_sid?: string | null
+          consult_target_call_sid?: string | null
+          consultation_sequence?: number
+          created_at?: string
+          customer_call_sid: string
+          customer_queued_at?: string | null
+          failure_reason?: string | null
+          id?: string
+          initiated_by_user_id: string
+          organization_id: string
+          original_agent_call_sid?: string | null
+          provider?: string
+          provider_cleanup_pending?: boolean
+          provider_queue_sid?: string | null
+          queue_name: string
+          result?: string | null
+          started_at?: string
+          state?: string
+          target_answered_at?: string | null
+          target_user_id?: string | null
+          updated_at?: string
+          version?: number
+        }
+        Update: {
+          active_user_id?: string | null
+          call_id?: string
+          client_request_id?: string | null
+          completed_at?: string | null
+          consult_parent_call_sid?: string | null
+          consult_target_call_sid?: string | null
+          consultation_sequence?: number
+          created_at?: string
+          customer_call_sid?: string
+          customer_queued_at?: string | null
+          failure_reason?: string | null
+          id?: string
+          initiated_by_user_id?: string
+          organization_id?: string
+          original_agent_call_sid?: string | null
+          provider?: string
+          provider_cleanup_pending?: boolean
+          provider_queue_sid?: string | null
+          queue_name?: string
+          result?: string | null
+          started_at?: string
+          state?: string
+          target_answered_at?: string | null
+          target_user_id?: string | null
+          updated_at?: string
+          version?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "call_transfers_active_user_id_fkey"
+            columns: ["active_user_id"]
+            isOneToOne: false
+            referencedRelation: "users"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "call_transfers_call_id_fkey"
+            columns: ["call_id"]
+            isOneToOne: false
+            referencedRelation: "calls"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "call_transfers_initiated_by_user_id_fkey"
+            columns: ["initiated_by_user_id"]
+            isOneToOne: false
+            referencedRelation: "users"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "call_transfers_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "call_transfers_target_user_id_fkey"
+            columns: ["target_user_id"]
+            isOneToOne: false
+            referencedRelation: "users"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      calls: {
+        Row: {
+          active_transfer_id: string | null
+          answered_at: string | null
+          answered_by_user_id: string | null
           call_sid: string | null
           call_type: string | null
           contact_id: string | null
           created_at: string | null
+          current_agent_user_id: string | null
           deleted_at: string | null
           direction: string
           duration_seconds: number | null
           ended_at: string | null
           from_number: string | null
           id: string
+          initiated_by_user_id: string | null
           is_sample: boolean | null
+          missed_task_id: string | null
           notes: string | null
           opportunity_id: string | null
           organization_id: string
+          phone_number_id: string | null
+          provider: string
+          provider_parent_call_id: string | null
+          result: string | null
           scheduled_at: string | null
           started_at: string | null
           status: string | null
           to_number: string | null
+          transfer_status: string | null
           user_id: string
         }
         Insert: {
+          active_transfer_id?: string | null
           answered_at?: string | null
+          answered_by_user_id?: string | null
           call_sid?: string | null
           call_type?: string | null
           contact_id?: string | null
           created_at?: string | null
+          current_agent_user_id?: string | null
           deleted_at?: string | null
           direction: string
           duration_seconds?: number | null
           ended_at?: string | null
           from_number?: string | null
           id?: string
+          initiated_by_user_id?: string | null
           is_sample?: boolean | null
+          missed_task_id?: string | null
           notes?: string | null
           opportunity_id?: string | null
           organization_id: string
+          phone_number_id?: string | null
+          provider?: string
+          provider_parent_call_id?: string | null
+          result?: string | null
           scheduled_at?: string | null
           started_at?: string | null
           status?: string | null
           to_number?: string | null
+          transfer_status?: string | null
           user_id: string
         }
         Update: {
+          active_transfer_id?: string | null
           answered_at?: string | null
+          answered_by_user_id?: string | null
           call_sid?: string | null
           call_type?: string | null
           contact_id?: string | null
           created_at?: string | null
+          current_agent_user_id?: string | null
           deleted_at?: string | null
           direction?: string
           duration_seconds?: number | null
           ended_at?: string | null
           from_number?: string | null
           id?: string
+          initiated_by_user_id?: string | null
           is_sample?: boolean | null
+          missed_task_id?: string | null
           notes?: string | null
           opportunity_id?: string | null
           organization_id?: string
+          phone_number_id?: string | null
+          provider?: string
+          provider_parent_call_id?: string | null
+          result?: string | null
           scheduled_at?: string | null
           started_at?: string | null
           status?: string | null
           to_number?: string | null
+          transfer_status?: string | null
           user_id?: string
         }
         Relationships: [
+          {
+            foreignKeyName: "calls_active_transfer_id_fkey"
+            columns: ["active_transfer_id"]
+            isOneToOne: false
+            referencedRelation: "call_transfers"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "calls_answered_by_user_id_fkey"
+            columns: ["answered_by_user_id"]
+            isOneToOne: false
+            referencedRelation: "users"
+            referencedColumns: ["id"]
+          },
           {
             foreignKeyName: "calls_contact_id_fkey"
             columns: ["contact_id"]
             isOneToOne: false
             referencedRelation: "contacts"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "calls_current_agent_user_id_fkey"
+            columns: ["current_agent_user_id"]
+            isOneToOne: false
+            referencedRelation: "users"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "calls_initiated_by_user_id_fkey"
+            columns: ["initiated_by_user_id"]
+            isOneToOne: false
+            referencedRelation: "users"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "calls_missed_task_id_fkey"
+            columns: ["missed_task_id"]
+            isOneToOne: false
+            referencedRelation: "tasks"
             referencedColumns: ["id"]
           },
           {
@@ -1366,6 +1851,13 @@ export type Database = {
             columns: ["organization_id"]
             isOneToOne: false
             referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "calls_phone_number_id_fkey"
+            columns: ["phone_number_id"]
+            isOneToOne: false
+            referencedRelation: "organization_phone_numbers"
             referencedColumns: ["id"]
           },
           {
@@ -1751,6 +2243,153 @@ export type Database = {
         }
         Relationships: []
       }
+      contact_identity_profiles: {
+        Row: {
+          birth_date: string | null
+          contact_id: string
+          cpf_registration_status: string | null
+          cpf_verification_status: Database["public"]["Enums"]["cpf_verification_status"]
+          cpf_verified_at: string | null
+          created_at: string
+          id: string
+          last_attempt_retryable: boolean
+          last_error_code: string | null
+          last_failure_class: string | null
+          last_provider_code: string | null
+          last_provider_http_status: number | null
+          last_provider_message: string | null
+          last_verification_attempt_at: string | null
+          mother_name: string | null
+          organization_id: string
+          sex: string | null
+          updated_at: string
+          verification_provider: string | null
+          verification_provider_version: string | null
+        }
+        Insert: {
+          birth_date?: string | null
+          contact_id: string
+          cpf_registration_status?: string | null
+          cpf_verification_status?: Database["public"]["Enums"]["cpf_verification_status"]
+          cpf_verified_at?: string | null
+          created_at?: string
+          id?: string
+          last_attempt_retryable?: boolean
+          last_error_code?: string | null
+          last_failure_class?: string | null
+          last_provider_code?: string | null
+          last_provider_http_status?: number | null
+          last_provider_message?: string | null
+          last_verification_attempt_at?: string | null
+          mother_name?: string | null
+          organization_id: string
+          sex?: string | null
+          updated_at?: string
+          verification_provider?: string | null
+          verification_provider_version?: string | null
+        }
+        Update: {
+          birth_date?: string | null
+          contact_id?: string
+          cpf_registration_status?: string | null
+          cpf_verification_status?: Database["public"]["Enums"]["cpf_verification_status"]
+          cpf_verified_at?: string | null
+          created_at?: string
+          id?: string
+          last_attempt_retryable?: boolean
+          last_error_code?: string | null
+          last_failure_class?: string | null
+          last_provider_code?: string | null
+          last_provider_http_status?: number | null
+          last_provider_message?: string | null
+          last_verification_attempt_at?: string | null
+          mother_name?: string | null
+          organization_id?: string
+          sex?: string | null
+          updated_at?: string
+          verification_provider?: string | null
+          verification_provider_version?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "contact_identity_profiles_contact_id_fkey"
+            columns: ["contact_id"]
+            isOneToOne: true
+            referencedRelation: "contacts"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "contact_identity_profiles_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      contact_ingress_failures: {
+        Row: {
+          attempt_count: number
+          created_at: string
+          external_id: string | null
+          id: string
+          last_error_code: string | null
+          organization_id: string
+          payload: Json
+          reason: string
+          resolved_at: string | null
+          resolved_by_user_id: string | null
+          source: string
+          status: string
+          updated_at: string
+        }
+        Insert: {
+          attempt_count?: number
+          created_at?: string
+          external_id?: string | null
+          id?: string
+          last_error_code?: string | null
+          organization_id: string
+          payload?: Json
+          reason: string
+          resolved_at?: string | null
+          resolved_by_user_id?: string | null
+          source: string
+          status?: string
+          updated_at?: string
+        }
+        Update: {
+          attempt_count?: number
+          created_at?: string
+          external_id?: string | null
+          id?: string
+          last_error_code?: string | null
+          organization_id?: string
+          payload?: Json
+          reason?: string
+          resolved_at?: string | null
+          resolved_by_user_id?: string | null
+          source?: string
+          status?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "contact_ingress_failures_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "contact_ingress_failures_resolved_by_user_id_fkey"
+            columns: ["resolved_by_user_id"]
+            isOneToOne: false
+            referencedRelation: "users"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       contact_memories: {
         Row: {
           contact_id: string
@@ -1820,125 +2459,57 @@ export type Database = {
           },
         ]
       }
-      contact_identity_profiles: {
+      contact_name_review_queue: {
         Row: {
-          birth_date: string | null
           contact_id: string
-          cpf_registration_status: string | null
-          cpf_verification_status: Database["public"]["Enums"]["cpf_verification_status"]
-          cpf_verified_at: string | null
           created_at: string
           id: string
-          last_attempt_retryable: boolean
-          last_error_code: string | null
-          last_failure_class: string | null
-          last_provider_http_status: number | null
-          last_verification_attempt_at: string | null
-          mother_name: string | null
           organization_id: string
-          sex: string | null
-          updated_at: string
-          verification_provider: string | null
-          verification_provider_version: string | null
+          reason: string
+          resolved_at: string | null
+          resolved_by_user_id: string | null
+          status: string
         }
         Insert: {
-          birth_date?: string | null
           contact_id: string
-          cpf_registration_status?: string | null
-          cpf_verification_status?: Database["public"]["Enums"]["cpf_verification_status"]
-          cpf_verified_at?: string | null
           created_at?: string
           id?: string
-          last_attempt_retryable?: boolean
-          last_error_code?: string | null
-          last_failure_class?: string | null
-          last_provider_http_status?: number | null
-          last_verification_attempt_at?: string | null
-          mother_name?: string | null
           organization_id: string
-          sex?: string | null
-          updated_at?: string
-          verification_provider?: string | null
-          verification_provider_version?: string | null
+          reason: string
+          resolved_at?: string | null
+          resolved_by_user_id?: string | null
+          status?: string
         }
         Update: {
-          birth_date?: string | null
           contact_id?: string
-          cpf_registration_status?: string | null
-          cpf_verification_status?: Database["public"]["Enums"]["cpf_verification_status"]
-          cpf_verified_at?: string | null
           created_at?: string
           id?: string
-          last_attempt_retryable?: boolean
-          last_error_code?: string | null
-          last_failure_class?: string | null
-          last_provider_http_status?: number | null
-          last_verification_attempt_at?: string | null
-          mother_name?: string | null
           organization_id?: string
-          sex?: string | null
-          updated_at?: string
-          verification_provider?: string | null
-          verification_provider_version?: string | null
+          reason?: string
+          resolved_at?: string | null
+          resolved_by_user_id?: string | null
+          status?: string
         }
         Relationships: [
           {
-            foreignKeyName: "contact_identity_profiles_contact_id_fkey"
+            foreignKeyName: "contact_name_review_queue_contact_id_fkey"
             columns: ["contact_id"]
-            isOneToOne: true
+            isOneToOne: false
             referencedRelation: "contacts"
             referencedColumns: ["id"]
           },
           {
-            foreignKeyName: "contact_identity_profiles_organization_id_fkey"
+            foreignKeyName: "contact_name_review_queue_organization_id_fkey"
             columns: ["organization_id"]
             isOneToOne: false
             referencedRelation: "organizations"
             referencedColumns: ["id"]
           },
-        ]
-      }
-      registry_provider_settings: {
-        Row: {
-          cpf_lookup_enabled: boolean
-          documented_purpose: string | null
-          enabled_at: string | null
-          enabled_by_user_id: string | null
-          organization_id: string
-          privacy_notice_updated_at: string | null
-          updated_at: string
-        }
-        Insert: {
-          cpf_lookup_enabled?: boolean
-          documented_purpose?: string | null
-          enabled_at?: string | null
-          enabled_by_user_id?: string | null
-          organization_id: string
-          privacy_notice_updated_at?: string | null
-          updated_at?: string
-        }
-        Update: {
-          cpf_lookup_enabled?: boolean
-          documented_purpose?: string | null
-          enabled_at?: string | null
-          enabled_by_user_id?: string | null
-          organization_id?: string
-          privacy_notice_updated_at?: string | null
-          updated_at?: string
-        }
-        Relationships: [
           {
-            foreignKeyName: "registry_provider_settings_enabled_by_user_id_fkey"
-            columns: ["enabled_by_user_id"]
+            foreignKeyName: "contact_name_review_queue_resolved_by_user_id_fkey"
+            columns: ["resolved_by_user_id"]
             isOneToOne: false
             referencedRelation: "users"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "registry_provider_settings_organization_id_fkey"
-            columns: ["organization_id"]
-            isOneToOne: true
-            referencedRelation: "organizations"
             referencedColumns: ["id"]
           },
         ]
@@ -1955,6 +2526,7 @@ export type Database = {
           ad_referral_source_url: string | null
           address_city: string | null
           address_complement: string | null
+          address_country_code: string | null
           address_neighborhood: string | null
           address_number: string | null
           address_state: string | null
@@ -1989,7 +2561,6 @@ export type Database = {
           meta_campaign_id: string | null
           meta_lead_id: string | null
           nationality: string | null
-          address_country_code: string | null
           organization_id: string
           owner_user_id: string | null
           phone: string | null
@@ -2023,6 +2594,7 @@ export type Database = {
           ad_referral_source_url?: string | null
           address_city?: string | null
           address_complement?: string | null
+          address_country_code?: string | null
           address_neighborhood?: string | null
           address_number?: string | null
           address_state?: string | null
@@ -2059,7 +2631,6 @@ export type Database = {
           meta_campaign_id?: string | null
           meta_lead_id?: string | null
           nationality?: string | null
-          address_country_code?: string | null
           organization_id: string
           owner_user_id?: string | null
           phone?: string | null
@@ -2093,6 +2664,7 @@ export type Database = {
           ad_referral_source_url?: string | null
           address_city?: string | null
           address_complement?: string | null
+          address_country_code?: string | null
           address_neighborhood?: string | null
           address_number?: string | null
           address_state?: string | null
@@ -2129,7 +2701,6 @@ export type Database = {
           meta_campaign_id?: string | null
           meta_lead_id?: string | null
           nationality?: string | null
-          address_country_code?: string | null
           organization_id?: string
           owner_user_id?: string | null
           phone?: string | null
@@ -6205,6 +6776,102 @@ export type Database = {
           },
         ]
       }
+      nammux_contact_address_state: {
+        Row: {
+          contact_id: string
+          last_event_id: string | null
+          last_synced_at: string
+          organization_id: string
+          source_updated_at: string | null
+        }
+        Insert: {
+          contact_id: string
+          last_event_id?: string | null
+          last_synced_at?: string
+          organization_id: string
+          source_updated_at?: string | null
+        }
+        Update: {
+          contact_id?: string
+          last_event_id?: string | null
+          last_synced_at?: string
+          organization_id?: string
+          source_updated_at?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "nammux_contact_address_state_contact_id_fkey"
+            columns: ["contact_id"]
+            isOneToOne: false
+            referencedRelation: "contacts"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "nammux_contact_address_state_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      nammux_integration_credentials: {
+        Row: {
+          created_at: string
+          created_by_user_id: string | null
+          expires_at: string | null
+          id: string
+          is_active: boolean
+          key_id: string
+          organization_id: string
+          rotated_from_key_id: string | null
+          secret_ciphertext: string
+          updated_at: string
+          valid_from: string
+        }
+        Insert: {
+          created_at?: string
+          created_by_user_id?: string | null
+          expires_at?: string | null
+          id?: string
+          is_active?: boolean
+          key_id: string
+          organization_id: string
+          rotated_from_key_id?: string | null
+          secret_ciphertext: string
+          updated_at?: string
+          valid_from?: string
+        }
+        Update: {
+          created_at?: string
+          created_by_user_id?: string | null
+          expires_at?: string | null
+          id?: string
+          is_active?: boolean
+          key_id?: string
+          organization_id?: string
+          rotated_from_key_id?: string | null
+          secret_ciphertext?: string
+          updated_at?: string
+          valid_from?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "nammux_integration_credentials_created_by_user_id_fkey"
+            columns: ["created_by_user_id"]
+            isOneToOne: false
+            referencedRelation: "users"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "nammux_integration_credentials_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       nammux_process_snapshots: {
         Row: {
           area_id: string | null
@@ -6311,6 +6978,13 @@ export type Database = {
             referencedColumns: ["id"]
           },
           {
+            foreignKeyName: "nammux_process_snapshots_opportunity_id_fkey"
+            columns: ["opportunity_id"]
+            isOneToOne: false
+            referencedRelation: "vw_intel_won_vs_lost_30d"
+            referencedColumns: ["opportunity_id"]
+          },
+          {
             foreignKeyName: "nammux_process_snapshots_organization_id_fkey"
             columns: ["organization_id"]
             isOneToOne: false
@@ -6366,6 +7040,13 @@ export type Database = {
             isOneToOne: false
             referencedRelation: "opportunities"
             referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "nammux_sync_events_opportunity_id_fkey"
+            columns: ["opportunity_id"]
+            isOneToOne: false
+            referencedRelation: "vw_intel_won_vs_lost_30d"
+            referencedColumns: ["opportunity_id"]
           },
           {
             foreignKeyName: "nammux_sync_events_organization_id_fkey"
@@ -6426,126 +7107,6 @@ export type Database = {
             columns: ["user_id"]
             isOneToOne: false
             referencedRelation: "users"
-            referencedColumns: ["id"]
-          },
-        ]
-      }
-      opportunity_close_attempts: {
-        Row: {
-          actor_user_id: string | null
-          created_at: string
-          evaluation: Json
-          fallback_used: boolean
-          id: string
-          opportunity_id: string
-          organization_id: string
-          override_reason: string | null
-          policy_version: number
-          result: string
-          source: string
-        }
-        Insert: {
-          actor_user_id?: string | null
-          created_at?: string
-          evaluation?: Json
-          fallback_used?: boolean
-          id?: string
-          opportunity_id: string
-          organization_id: string
-          override_reason?: string | null
-          policy_version: number
-          result: string
-          source?: string
-        }
-        Update: {
-          actor_user_id?: string | null
-          created_at?: string
-          evaluation?: Json
-          fallback_used?: boolean
-          id?: string
-          opportunity_id?: string
-          organization_id?: string
-          override_reason?: string | null
-          policy_version?: number
-          result?: string
-          source?: string
-        }
-        Relationships: [
-          {
-            foreignKeyName: "opportunity_close_attempts_actor_user_id_fkey"
-            columns: ["actor_user_id"]
-            isOneToOne: false
-            referencedRelation: "users"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "opportunity_close_attempts_opportunity_id_fkey"
-            columns: ["opportunity_id"]
-            isOneToOne: false
-            referencedRelation: "opportunities"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "opportunity_close_attempts_organization_id_fkey"
-            columns: ["organization_id"]
-            isOneToOne: false
-            referencedRelation: "organizations"
-            referencedColumns: ["id"]
-          },
-        ]
-      }
-      opportunity_close_policies: {
-        Row: {
-          created_at: string
-          created_by: string | null
-          mode: string
-          organization_id: string
-          require_complete_address: boolean
-          require_cpf_verified: boolean
-          required_contact_custom_field_ids: string[]
-          required_contact_fields: string[]
-          required_opportunity_custom_field_ids: string[]
-          required_opportunity_fields: string[]
-          updated_at: string
-          updated_by: string | null
-          version: number
-        }
-        Insert: {
-          created_at?: string
-          created_by?: string | null
-          mode?: string
-          organization_id: string
-          require_complete_address?: boolean
-          require_cpf_verified?: boolean
-          required_contact_custom_field_ids?: string[]
-          required_contact_fields?: string[]
-          required_opportunity_custom_field_ids?: string[]
-          required_opportunity_fields?: string[]
-          updated_at?: string
-          updated_by?: string | null
-          version?: number
-        }
-        Update: {
-          created_at?: string
-          created_by?: string | null
-          mode?: string
-          organization_id?: string
-          require_complete_address?: boolean
-          require_cpf_verified?: boolean
-          required_contact_custom_field_ids?: string[]
-          required_contact_fields?: string[]
-          required_opportunity_custom_field_ids?: string[]
-          required_opportunity_fields?: string[]
-          updated_at?: string
-          updated_by?: string | null
-          version?: number
-        }
-        Relationships: [
-          {
-            foreignKeyName: "opportunity_close_policies_organization_id_fkey"
-            columns: ["organization_id"]
-            isOneToOne: true
-            referencedRelation: "organizations"
             referencedColumns: ["id"]
           },
         ]
@@ -6850,6 +7411,147 @@ export type Database = {
           },
         ]
       }
+      opportunity_close_attempts: {
+        Row: {
+          actor_user_id: string | null
+          created_at: string
+          evaluation: Json
+          fallback_used: boolean
+          id: string
+          opportunity_id: string
+          organization_id: string
+          override_reason: string | null
+          policy_version: number
+          result: string
+          source: string
+        }
+        Insert: {
+          actor_user_id?: string | null
+          created_at?: string
+          evaluation?: Json
+          fallback_used?: boolean
+          id?: string
+          opportunity_id: string
+          organization_id: string
+          override_reason?: string | null
+          policy_version: number
+          result: string
+          source?: string
+        }
+        Update: {
+          actor_user_id?: string | null
+          created_at?: string
+          evaluation?: Json
+          fallback_used?: boolean
+          id?: string
+          opportunity_id?: string
+          organization_id?: string
+          override_reason?: string | null
+          policy_version?: number
+          result?: string
+          source?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "opportunity_close_attempts_actor_user_id_fkey"
+            columns: ["actor_user_id"]
+            isOneToOne: false
+            referencedRelation: "users"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "opportunity_close_attempts_opportunity_id_fkey"
+            columns: ["opportunity_id"]
+            isOneToOne: false
+            referencedRelation: "opportunities"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "opportunity_close_attempts_opportunity_id_fkey"
+            columns: ["opportunity_id"]
+            isOneToOne: false
+            referencedRelation: "vw_intel_won_vs_lost_30d"
+            referencedColumns: ["opportunity_id"]
+          },
+          {
+            foreignKeyName: "opportunity_close_attempts_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      opportunity_close_policies: {
+        Row: {
+          created_at: string
+          created_by: string | null
+          mode: string
+          organization_id: string
+          require_complete_address: boolean
+          require_cpf_verified: boolean
+          required_contact_custom_field_ids: string[]
+          required_contact_fields: string[]
+          required_opportunity_custom_field_ids: string[]
+          required_opportunity_fields: string[]
+          updated_at: string
+          updated_by: string | null
+          version: number
+        }
+        Insert: {
+          created_at?: string
+          created_by?: string | null
+          mode?: string
+          organization_id: string
+          require_complete_address?: boolean
+          require_cpf_verified?: boolean
+          required_contact_custom_field_ids?: string[]
+          required_contact_fields?: string[]
+          required_opportunity_custom_field_ids?: string[]
+          required_opportunity_fields?: string[]
+          updated_at?: string
+          updated_by?: string | null
+          version?: number
+        }
+        Update: {
+          created_at?: string
+          created_by?: string | null
+          mode?: string
+          organization_id?: string
+          require_complete_address?: boolean
+          require_cpf_verified?: boolean
+          required_contact_custom_field_ids?: string[]
+          required_contact_fields?: string[]
+          required_opportunity_custom_field_ids?: string[]
+          required_opportunity_fields?: string[]
+          updated_at?: string
+          updated_by?: string | null
+          version?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "opportunity_close_policies_created_by_fkey"
+            columns: ["created_by"]
+            isOneToOne: false
+            referencedRelation: "users"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "opportunity_close_policies_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: true
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "opportunity_close_policies_updated_by_fkey"
+            columns: ["updated_by"]
+            isOneToOne: false
+            referencedRelation: "users"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       organization_api_keys: {
         Row: {
           api_key: string
@@ -6984,53 +7686,177 @@ export type Database = {
           },
         ]
       }
+      organization_phone_number_users: {
+        Row: {
+          can_originate_calls: boolean
+          can_receive_calls: boolean
+          created_at: string
+          id: string
+          last_offered_at: string | null
+          organization_id: string
+          phone_number_id: string
+          priority: number
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          can_originate_calls?: boolean
+          can_receive_calls?: boolean
+          created_at?: string
+          id?: string
+          last_offered_at?: string | null
+          organization_id: string
+          phone_number_id: string
+          priority?: number
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          can_originate_calls?: boolean
+          can_receive_calls?: boolean
+          created_at?: string
+          id?: string
+          last_offered_at?: string | null
+          organization_id?: string
+          phone_number_id?: string
+          priority?: number
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "organization_phone_number_users_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "organization_phone_number_users_phone_number_id_fkey"
+            columns: ["phone_number_id"]
+            isOneToOne: false
+            referencedRelation: "organization_phone_numbers"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "organization_phone_number_users_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "users"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       organization_phone_numbers: {
         Row: {
+          address_sid: string | null
           assigned_user_id: string | null
+          business_hours: Json
+          capabilities: Json
           created_at: string | null
+          fallback_action: string
+          fallback_message: string
           friendly_name: string | null
+          hold_message: string
           id: string
           inbound_settings: Json | null
+          is_active: boolean
+          is_default_outbound: boolean
           is_primary: boolean | null
+          iso_country: string | null
+          last_synced_at: string | null
+          max_attempts: number
+          missed_call_owner_user_id: string | null
+          number_kind: string | null
+          number_type: string
           organization_id: string
+          organization_integration_id: string | null
           phone_number: string
+          provider: string
+          provider_number_id: string | null
+          recording_enabled: boolean
+          regulatory_bundle_sid: string | null
           ring_strategy: string
           ring_timeout_seconds: number | null
           ring_users: string[] | null
+          sync_status: string
+          timezone: string | null
           twilio_phone_sid: string | null
           updated_at: string | null
           voicemail_enabled: boolean | null
           voicemail_greeting: string | null
         }
         Insert: {
+          address_sid?: string | null
           assigned_user_id?: string | null
+          business_hours?: Json
+          capabilities?: Json
           created_at?: string | null
+          fallback_action?: string
+          fallback_message?: string
           friendly_name?: string | null
+          hold_message?: string
           id?: string
           inbound_settings?: Json | null
+          is_active?: boolean
+          is_default_outbound?: boolean
           is_primary?: boolean | null
+          iso_country?: string | null
+          last_synced_at?: string | null
+          max_attempts?: number
+          missed_call_owner_user_id?: string | null
+          number_kind?: string | null
+          number_type?: string
           organization_id: string
+          organization_integration_id?: string | null
           phone_number: string
+          provider?: string
+          provider_number_id?: string | null
+          recording_enabled?: boolean
+          regulatory_bundle_sid?: string | null
           ring_strategy?: string
           ring_timeout_seconds?: number | null
           ring_users?: string[] | null
+          sync_status?: string
+          timezone?: string | null
           twilio_phone_sid?: string | null
           updated_at?: string | null
           voicemail_enabled?: boolean | null
           voicemail_greeting?: string | null
         }
         Update: {
+          address_sid?: string | null
           assigned_user_id?: string | null
+          business_hours?: Json
+          capabilities?: Json
           created_at?: string | null
+          fallback_action?: string
+          fallback_message?: string
           friendly_name?: string | null
+          hold_message?: string
           id?: string
           inbound_settings?: Json | null
+          is_active?: boolean
+          is_default_outbound?: boolean
           is_primary?: boolean | null
+          iso_country?: string | null
+          last_synced_at?: string | null
+          max_attempts?: number
+          missed_call_owner_user_id?: string | null
+          number_kind?: string | null
+          number_type?: string
           organization_id?: string
+          organization_integration_id?: string | null
           phone_number?: string
+          provider?: string
+          provider_number_id?: string | null
+          recording_enabled?: boolean
+          regulatory_bundle_sid?: string | null
           ring_strategy?: string
           ring_timeout_seconds?: number | null
           ring_users?: string[] | null
+          sync_status?: string
+          timezone?: string | null
           twilio_phone_sid?: string | null
           updated_at?: string | null
           voicemail_enabled?: boolean | null
@@ -7045,10 +7871,24 @@ export type Database = {
             referencedColumns: ["id"]
           },
           {
+            foreignKeyName: "organization_phone_numbers_missed_call_owner_user_id_fkey"
+            columns: ["missed_call_owner_user_id"]
+            isOneToOne: false
+            referencedRelation: "users"
+            referencedColumns: ["id"]
+          },
+          {
             foreignKeyName: "organization_phone_numbers_organization_id_fkey"
             columns: ["organization_id"]
             isOneToOne: false
             referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "organization_phone_numbers_organization_integration_id_fkey"
+            columns: ["organization_integration_id"]
+            isOneToOne: false
+            referencedRelation: "organization_integrations"
             referencedColumns: ["id"]
           },
         ]
@@ -7106,7 +7946,6 @@ export type Database = {
           cs_inbox_includes_service_endpoints: boolean
           default_currency: string | null
           default_locale: string | null
-          operating_country_code: string | null
           duplicate_check_mode:
             | Database["public"]["Enums"]["duplicate_check_mode"]
             | null
@@ -7118,6 +7957,7 @@ export type Database = {
           name: string
           onboarding_completed_at: string | null
           onboarding_step: Database["public"]["Enums"]["onboarding_step"] | null
+          operating_country_code: string | null
           private_records_enabled: boolean
           round_robin_enabled: boolean
           round_robin_scope: string
@@ -7137,7 +7977,6 @@ export type Database = {
           cs_inbox_includes_service_endpoints?: boolean
           default_currency?: string | null
           default_locale?: string | null
-          operating_country_code?: string | null
           duplicate_check_mode?:
             | Database["public"]["Enums"]["duplicate_check_mode"]
             | null
@@ -7151,6 +7990,7 @@ export type Database = {
           onboarding_step?:
             | Database["public"]["Enums"]["onboarding_step"]
             | null
+          operating_country_code?: string | null
           private_records_enabled?: boolean
           round_robin_enabled?: boolean
           round_robin_scope?: string
@@ -7170,7 +8010,6 @@ export type Database = {
           cs_inbox_includes_service_endpoints?: boolean
           default_currency?: string | null
           default_locale?: string | null
-          operating_country_code?: string | null
           duplicate_check_mode?:
             | Database["public"]["Enums"]["duplicate_check_mode"]
             | null
@@ -7184,6 +8023,7 @@ export type Database = {
           onboarding_step?:
             | Database["public"]["Enums"]["onboarding_step"]
             | null
+          operating_country_code?: string | null
           private_records_enabled?: boolean
           round_robin_enabled?: boolean
           round_robin_scope?: string
@@ -7618,6 +8458,280 @@ export type Database = {
           provider?: string
         }
         Relationships: []
+      }
+      registry_backfill_jobs: {
+        Row: {
+          completed_at: string | null
+          conflict_items: number
+          created_at: string
+          error_items: number
+          id: string
+          kind: string
+          last_contact_id: string | null
+          last_error_code: string | null
+          organization_id: string
+          processed_items: number
+          started_at: string | null
+          status: string
+          total_items: number
+          updated_at: string
+          verified_items: number
+        }
+        Insert: {
+          completed_at?: string | null
+          conflict_items?: number
+          created_at?: string
+          error_items?: number
+          id?: string
+          kind?: string
+          last_contact_id?: string | null
+          last_error_code?: string | null
+          organization_id: string
+          processed_items?: number
+          started_at?: string | null
+          status?: string
+          total_items?: number
+          updated_at?: string
+          verified_items?: number
+        }
+        Update: {
+          completed_at?: string | null
+          conflict_items?: number
+          created_at?: string
+          error_items?: number
+          id?: string
+          kind?: string
+          last_contact_id?: string | null
+          last_error_code?: string | null
+          organization_id?: string
+          processed_items?: number
+          started_at?: string | null
+          status?: string
+          total_items?: number
+          updated_at?: string
+          verified_items?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "registry_backfill_jobs_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      registry_data_conflicts: {
+        Row: {
+          company_id: string | null
+          conflict_type: string
+          contact_id: string | null
+          created_at: string
+          current_value: string | null
+          id: string
+          organization_id: string
+          provider_value: string | null
+          resolved_at: string | null
+          resolved_by_user_id: string | null
+          status: string
+        }
+        Insert: {
+          company_id?: string | null
+          conflict_type: string
+          contact_id?: string | null
+          created_at?: string
+          current_value?: string | null
+          id?: string
+          organization_id: string
+          provider_value?: string | null
+          resolved_at?: string | null
+          resolved_by_user_id?: string | null
+          status?: string
+        }
+        Update: {
+          company_id?: string | null
+          conflict_type?: string
+          contact_id?: string | null
+          created_at?: string
+          current_value?: string | null
+          id?: string
+          organization_id?: string
+          provider_value?: string | null
+          resolved_at?: string | null
+          resolved_by_user_id?: string | null
+          status?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "registry_data_conflicts_company_id_fkey"
+            columns: ["company_id"]
+            isOneToOne: false
+            referencedRelation: "companies"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "registry_data_conflicts_contact_id_fkey"
+            columns: ["contact_id"]
+            isOneToOne: false
+            referencedRelation: "contacts"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "registry_data_conflicts_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "registry_data_conflicts_resolved_by_user_id_fkey"
+            columns: ["resolved_by_user_id"]
+            isOneToOne: false
+            referencedRelation: "users"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      registry_lookup_audit: {
+        Row: {
+          created_at: string
+          duration_ms: number | null
+          error_code: string | null
+          http_status: number | null
+          id: string
+          identifier_hash: string
+          identifier_suffix: string | null
+          lookup_kind: string
+          organization_id: string
+          outcome: string
+          provider: string
+          provider_code: string | null
+          provider_message: string | null
+          requested_by_user_id: string | null
+        }
+        Insert: {
+          created_at?: string
+          duration_ms?: number | null
+          error_code?: string | null
+          http_status?: number | null
+          id?: string
+          identifier_hash: string
+          identifier_suffix?: string | null
+          lookup_kind: string
+          organization_id: string
+          outcome: string
+          provider: string
+          provider_code?: string | null
+          provider_message?: string | null
+          requested_by_user_id?: string | null
+        }
+        Update: {
+          created_at?: string
+          duration_ms?: number | null
+          error_code?: string | null
+          http_status?: number | null
+          id?: string
+          identifier_hash?: string
+          identifier_suffix?: string | null
+          lookup_kind?: string
+          organization_id?: string
+          outcome?: string
+          provider?: string
+          provider_code?: string | null
+          provider_message?: string | null
+          requested_by_user_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "registry_lookup_audit_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "registry_lookup_audit_requested_by_user_id_fkey"
+            columns: ["requested_by_user_id"]
+            isOneToOne: false
+            referencedRelation: "users"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      registry_lookup_cache: {
+        Row: {
+          created_at: string
+          expires_at: string
+          identifier_hash: string
+          lookup_kind: string
+          normalized_payload: Json
+          provider: string
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          expires_at: string
+          identifier_hash: string
+          lookup_kind: string
+          normalized_payload: Json
+          provider: string
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          expires_at?: string
+          identifier_hash?: string
+          lookup_kind?: string
+          normalized_payload?: Json
+          provider?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
+      registry_provider_settings: {
+        Row: {
+          cpf_lookup_enabled: boolean
+          documented_purpose: string | null
+          enabled_at: string | null
+          enabled_by_user_id: string | null
+          organization_id: string
+          privacy_notice_updated_at: string | null
+          updated_at: string
+        }
+        Insert: {
+          cpf_lookup_enabled?: boolean
+          documented_purpose?: string | null
+          enabled_at?: string | null
+          enabled_by_user_id?: string | null
+          organization_id: string
+          privacy_notice_updated_at?: string | null
+          updated_at?: string
+        }
+        Update: {
+          cpf_lookup_enabled?: boolean
+          documented_purpose?: string | null
+          enabled_at?: string | null
+          enabled_by_user_id?: string | null
+          organization_id?: string
+          privacy_notice_updated_at?: string | null
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "registry_provider_settings_enabled_by_user_id_fkey"
+            columns: ["enabled_by_user_id"]
+            isOneToOne: false
+            referencedRelation: "users"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "registry_provider_settings_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: true
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       sales_events: {
         Row: {
@@ -8504,6 +9618,304 @@ export type Database = {
           },
           {
             foreignKeyName: "team_memberships_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "users"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      telephony_number_purchase_intents: {
+        Row: {
+          address_requirements: string | null
+          address_sid: string | null
+          assigned_user_id: string | null
+          capabilities: Json
+          created_at: string
+          currency: string | null
+          error_code: string | null
+          error_detail: string | null
+          expires_at: string
+          friendly_name: string | null
+          id: string
+          idempotency_key: string
+          iso_country: string
+          missed_call_owner_user_id: string
+          monthly_price: number | null
+          number_kind: string
+          number_type: string
+          organization_id: string
+          organization_integration_id: string
+          phone_number: string
+          phone_number_id: string | null
+          provider: string
+          provider_number_id: string | null
+          purchased_at: string | null
+          regulatory_bundle_sid: string | null
+          regulatory_requirements: Json
+          requested_by_user_id: string
+          status: string
+          updated_at: string
+        }
+        Insert: {
+          address_requirements?: string | null
+          address_sid?: string | null
+          assigned_user_id?: string | null
+          capabilities?: Json
+          created_at?: string
+          currency?: string | null
+          error_code?: string | null
+          error_detail?: string | null
+          expires_at: string
+          friendly_name?: string | null
+          id?: string
+          idempotency_key: string
+          iso_country: string
+          missed_call_owner_user_id: string
+          monthly_price?: number | null
+          number_kind: string
+          number_type: string
+          organization_id: string
+          organization_integration_id: string
+          phone_number: string
+          phone_number_id?: string | null
+          provider?: string
+          provider_number_id?: string | null
+          purchased_at?: string | null
+          regulatory_bundle_sid?: string | null
+          regulatory_requirements?: Json
+          requested_by_user_id: string
+          status?: string
+          updated_at?: string
+        }
+        Update: {
+          address_requirements?: string | null
+          address_sid?: string | null
+          assigned_user_id?: string | null
+          capabilities?: Json
+          created_at?: string
+          currency?: string | null
+          error_code?: string | null
+          error_detail?: string | null
+          expires_at?: string
+          friendly_name?: string | null
+          id?: string
+          idempotency_key?: string
+          iso_country?: string
+          missed_call_owner_user_id?: string
+          monthly_price?: number | null
+          number_kind?: string
+          number_type?: string
+          organization_id?: string
+          organization_integration_id?: string
+          phone_number?: string
+          phone_number_id?: string | null
+          provider?: string
+          provider_number_id?: string | null
+          purchased_at?: string | null
+          regulatory_bundle_sid?: string | null
+          regulatory_requirements?: Json
+          requested_by_user_id?: string
+          status?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "telephony_number_purchase_inte_organization_integration_id_fkey"
+            columns: ["organization_integration_id"]
+            isOneToOne: false
+            referencedRelation: "organization_integrations"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "telephony_number_purchase_intent_missed_call_owner_user_id_fkey"
+            columns: ["missed_call_owner_user_id"]
+            isOneToOne: false
+            referencedRelation: "users"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "telephony_number_purchase_intents_assigned_user_id_fkey"
+            columns: ["assigned_user_id"]
+            isOneToOne: false
+            referencedRelation: "users"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "telephony_number_purchase_intents_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "telephony_number_purchase_intents_phone_number_id_fkey"
+            columns: ["phone_number_id"]
+            isOneToOne: false
+            referencedRelation: "organization_phone_numbers"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "telephony_number_purchase_intents_requested_by_user_id_fkey"
+            columns: ["requested_by_user_id"]
+            isOneToOne: false
+            referencedRelation: "users"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      telephony_presence: {
+        Row: {
+          active_call_id: string | null
+          created_at: string
+          last_seen_at: string
+          organization_id: string
+          session_id: string
+          status: string
+          user_id: string
+        }
+        Insert: {
+          active_call_id?: string | null
+          created_at?: string
+          last_seen_at?: string
+          organization_id: string
+          session_id: string
+          status?: string
+          user_id: string
+        }
+        Update: {
+          active_call_id?: string | null
+          created_at?: string
+          last_seen_at?: string
+          organization_id?: string
+          session_id?: string
+          status?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "telephony_presence_active_call_id_fkey"
+            columns: ["active_call_id"]
+            isOneToOne: false
+            referencedRelation: "calls"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "telephony_presence_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "telephony_presence_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "users"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      telephony_transfer_reservations: {
+        Row: {
+          call_id: string
+          consultation_sequence: number
+          created_at: string
+          expires_at: string
+          id: string
+          organization_id: string
+          transfer_id: string
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          call_id: string
+          consultation_sequence: number
+          created_at?: string
+          expires_at?: string
+          id?: string
+          organization_id: string
+          transfer_id: string
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          call_id?: string
+          consultation_sequence?: number
+          created_at?: string
+          expires_at?: string
+          id?: string
+          organization_id?: string
+          transfer_id?: string
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "telephony_transfer_reservations_call_id_fkey"
+            columns: ["call_id"]
+            isOneToOne: false
+            referencedRelation: "calls"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "telephony_transfer_reservations_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "telephony_transfer_reservations_transfer_id_fkey"
+            columns: ["transfer_id"]
+            isOneToOne: false
+            referencedRelation: "call_transfers"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "telephony_transfer_reservations_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "users"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      telephony_user_settings: {
+        Row: {
+          created_at: string
+          dnd_until: string | null
+          organization_id: string
+          receive_calls_enabled: boolean
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          dnd_until?: string | null
+          organization_id: string
+          receive_calls_enabled?: boolean
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          dnd_until?: string | null
+          organization_id?: string
+          receive_calls_enabled?: boolean
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "telephony_user_settings_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "telephony_user_settings_user_id_fkey"
             columns: ["user_id"]
             isOneToOne: false
             referencedRelation: "users"
@@ -9450,6 +10862,16 @@ export type Database = {
           type: string
         }[]
       }
+      apply_nammux_contact_address: {
+        Args: {
+          _address: Json
+          _contact_id: string
+          _organization_id: string
+          _source_event_id: string
+          _source_updated_at: string
+        }
+        Returns: Json
+      }
       assign_round_robin:
         | { Args: { _org_id: string }; Returns: string }
         | { Args: { _org_id: string; _queue: string }; Returns: string }
@@ -9457,9 +10879,154 @@ export type Database = {
         Args: { _org_id: string }
         Returns: boolean
       }
+      can_manage_permission_profiles: {
+        Args: { _organization_id: string }
+        Returns: boolean
+      }
       can_review_contact_documents: {
         Args: { _contact_id: string }
         Returns: boolean
+      }
+      cancel_telephony_transfer_workflow: {
+        Args: {
+          _expected_version: number
+          _initiator_user_id: string
+          _transfer_id: string
+        }
+        Returns: {
+          active_user_id: string | null
+          call_id: string
+          client_request_id: string | null
+          completed_at: string | null
+          consult_parent_call_sid: string | null
+          consult_target_call_sid: string | null
+          consultation_sequence: number
+          created_at: string
+          customer_call_sid: string
+          customer_queued_at: string | null
+          failure_reason: string | null
+          id: string
+          initiated_by_user_id: string
+          organization_id: string
+          original_agent_call_sid: string | null
+          provider: string
+          provider_cleanup_pending: boolean
+          provider_queue_sid: string | null
+          queue_name: string
+          result: string | null
+          started_at: string
+          state: string
+          target_answered_at: string | null
+          target_user_id: string | null
+          updated_at: string
+          version: number
+        }[]
+        SetofOptions: {
+          from: "*"
+          to: "call_transfers"
+          isOneToOne: false
+          isSetofReturn: true
+        }
+      }
+      claim_next_telephony_recipient: {
+        Args: {
+          _call_id?: string
+          _excluded_user_ids?: string[]
+          _phone_number_id: string
+        }
+        Returns: {
+          attempt_number: number
+          user_id: string
+        }[]
+      }
+      claim_telephony_transfer_target: {
+        Args: {
+          _call_id: string
+          _customer_call_sid: string
+          _initiator_user_id: string
+          _original_agent_call_sid?: string
+          _queue_name: string
+          _target_user_id: string
+        }
+        Returns: {
+          active_user_id: string | null
+          call_id: string
+          client_request_id: string | null
+          completed_at: string | null
+          consult_parent_call_sid: string | null
+          consult_target_call_sid: string | null
+          consultation_sequence: number
+          created_at: string
+          customer_call_sid: string
+          customer_queued_at: string | null
+          failure_reason: string | null
+          id: string
+          initiated_by_user_id: string
+          organization_id: string
+          original_agent_call_sid: string | null
+          provider: string
+          provider_cleanup_pending: boolean
+          provider_queue_sid: string | null
+          queue_name: string
+          result: string | null
+          started_at: string
+          state: string
+          target_answered_at: string | null
+          target_user_id: string | null
+          updated_at: string
+          version: number
+        }[]
+        SetofOptions: {
+          from: "*"
+          to: "call_transfers"
+          isOneToOne: false
+          isSetofReturn: true
+        }
+      }
+      claim_telephony_transfer_target_v2: {
+        Args: {
+          _call_id: string
+          _customer_call_sid: string
+          _initiator_user_id: string
+          _original_agent_call_sid: string
+          _queue_name: string
+          _request_id: string
+          _target_user_id: string
+        }
+        Returns: {
+          active_user_id: string | null
+          call_id: string
+          client_request_id: string | null
+          completed_at: string | null
+          consult_parent_call_sid: string | null
+          consult_target_call_sid: string | null
+          consultation_sequence: number
+          created_at: string
+          customer_call_sid: string
+          customer_queued_at: string | null
+          failure_reason: string | null
+          id: string
+          initiated_by_user_id: string
+          organization_id: string
+          original_agent_call_sid: string | null
+          provider: string
+          provider_cleanup_pending: boolean
+          provider_queue_sid: string | null
+          queue_name: string
+          result: string | null
+          started_at: string
+          state: string
+          target_answered_at: string | null
+          target_user_id: string | null
+          updated_at: string
+          version: number
+        }[]
+        SetofOptions: {
+          from: "*"
+          to: "call_transfers"
+          isOneToOne: false
+          isSetofReturn: true
+        }
       }
       count_custom_fields_for_org: {
         Args: { p_module?: string; p_organization_id: string }
@@ -9468,11 +11035,19 @@ export type Database = {
       current_user_id: { Args: never; Returns: string }
       current_user_managed_org_ids: { Args: never; Returns: string[] }
       current_user_org_ids: { Args: never; Returns: string[] }
+      evaluate_opportunity_close_internal_v1: {
+        Args: { _opportunity_id: string; _organization_id: string }
+        Returns: Json
+      }
       evaluate_opportunity_close_v1: {
         Args: { _opportunity_id: string; _organization_id: string }
         Returns: Json
       }
       f_unaccent: { Args: { "": string }; Returns: string }
+      fn_build_nammux_contact_payload: {
+        Args: { _contact_id: string }
+        Returns: Json
+      }
       fn_build_opportunity_won_payload: {
         Args: { _opportunity_id: string }
         Returns: Json
@@ -9484,6 +11059,10 @@ export type Database = {
           p_opportunity_id?: string
           p_organization_id: string
         }
+        Returns: undefined
+      }
+      fn_emit_nammux_contact_updated: {
+        Args: { _contact_id: string }
         Returns: undefined
       }
       fn_feature_flag_enabled: {
@@ -9574,14 +11153,6 @@ export type Database = {
       fn_outbox_resume_subscription: {
         Args: { p_id: string }
         Returns: undefined
-      }
-      list_entity_documents_v1: {
-        Args: {
-          _contact_id?: string
-          _opportunity_id?: string
-          _organization_id: string
-        }
-        Returns: Json
       }
       fn_outbox_retry_job: { Args: { p_job_id: string }; Returns: undefined }
       fn_outbox_top_errors: {
@@ -9790,6 +11361,50 @@ export type Database = {
         Args: { _org_id: string; _role: string; _user_id: string }
         Returns: boolean
       }
+      hold_telephony_call: {
+        Args: {
+          _call_id: string
+          _customer_call_sid: string
+          _initiator_user_id: string
+          _original_agent_call_sid: string
+          _queue_name: string
+          _request_id: string
+        }
+        Returns: {
+          active_user_id: string | null
+          call_id: string
+          client_request_id: string | null
+          completed_at: string | null
+          consult_parent_call_sid: string | null
+          consult_target_call_sid: string | null
+          consultation_sequence: number
+          created_at: string
+          customer_call_sid: string
+          customer_queued_at: string | null
+          failure_reason: string | null
+          id: string
+          initiated_by_user_id: string
+          organization_id: string
+          original_agent_call_sid: string | null
+          provider: string
+          provider_cleanup_pending: boolean
+          provider_queue_sid: string | null
+          queue_name: string
+          result: string | null
+          started_at: string
+          state: string
+          target_answered_at: string | null
+          target_user_id: string | null
+          updated_at: string
+          version: number
+        }[]
+        SetofOptions: {
+          from: "*"
+          to: "call_transfers"
+          isOneToOne: false
+          isSetofReturn: true
+        }
+      }
       intelligence_fire_all_now: { Args: never; Returns: Json }
       intelligence_reap_stale_jobs: {
         Args: { p_max_reclaims?: number; p_stale_minutes?: number }
@@ -9800,13 +11415,24 @@ export type Database = {
       }
       is_admin_user: { Args: never; Returns: boolean }
       is_org_admin: { Args: { _org_id: string }; Returns: boolean }
+      is_valid_cnpj: { Args: { _value: string }; Returns: boolean }
+      is_valid_cpf: { Args: { _value: string }; Returns: boolean }
       kairos_db_stats: { Args: never; Returns: Json }
       kairos_diagnose: { Args: never; Returns: Json }
       kairos_table_stats: { Args: never; Returns: Json }
+      list_entity_documents_v1: {
+        Args: {
+          _contact_id?: string
+          _opportunity_id?: string
+          _organization_id: string
+        }
+        Returns: Json
+      }
       merge_message_threads: {
         Args: { p_batch: string; p_loser: string; p_winner: string }
         Returns: undefined
       }
+      normalize_identity_digits: { Args: { _value: string }; Returns: string }
       normalize_phone_br: { Args: { phone_input: string }; Returns: string }
       populate_communication_endpoints_from_v2_senders: {
         Args: never
@@ -9825,6 +11451,93 @@ export type Database = {
         Args: { _reason?: string; _thread_id: string; _to_user_id: string }
         Returns: Json
       }
+      reclaim_telephony_transfer_target: {
+        Args: { _initiator_user_id: string; _transfer_id: string }
+        Returns: boolean
+      }
+      reclaim_telephony_transfer_target_v2: {
+        Args: {
+          _expected_version: number
+          _initiator_user_id: string
+          _transfer_id: string
+        }
+        Returns: {
+          active_user_id: string | null
+          call_id: string
+          client_request_id: string | null
+          completed_at: string | null
+          consult_parent_call_sid: string | null
+          consult_target_call_sid: string | null
+          consultation_sequence: number
+          created_at: string
+          customer_call_sid: string
+          customer_queued_at: string | null
+          failure_reason: string | null
+          id: string
+          initiated_by_user_id: string
+          organization_id: string
+          original_agent_call_sid: string | null
+          provider: string
+          provider_cleanup_pending: boolean
+          provider_queue_sid: string | null
+          queue_name: string
+          result: string | null
+          started_at: string
+          state: string
+          target_answered_at: string | null
+          target_user_id: string | null
+          updated_at: string
+          version: number
+        }[]
+        SetofOptions: {
+          from: "*"
+          to: "call_transfers"
+          isOneToOne: false
+          isSetofReturn: true
+        }
+      }
+      reclaim_telephony_transfer_target_v3: {
+        Args: {
+          _expected_version: number
+          _initiator_user_id: string
+          _target_user_id?: string
+          _transfer_id: string
+        }
+        Returns: {
+          active_user_id: string | null
+          call_id: string
+          client_request_id: string | null
+          completed_at: string | null
+          consult_parent_call_sid: string | null
+          consult_target_call_sid: string | null
+          consultation_sequence: number
+          created_at: string
+          customer_call_sid: string
+          customer_queued_at: string | null
+          failure_reason: string | null
+          id: string
+          initiated_by_user_id: string
+          organization_id: string
+          original_agent_call_sid: string | null
+          provider: string
+          provider_cleanup_pending: boolean
+          provider_queue_sid: string | null
+          queue_name: string
+          result: string | null
+          started_at: string
+          state: string
+          target_answered_at: string | null
+          target_user_id: string | null
+          updated_at: string
+          version: number
+        }[]
+        SetofOptions: {
+          from: "*"
+          to: "call_transfers"
+          isOneToOne: false
+          isSetofReturn: true
+        }
+      }
       record_failed_admin_login: {
         Args: { p_email: string; p_ip: string }
         Returns: undefined
@@ -9836,9 +11549,55 @@ export type Database = {
           recovered: number
         }[]
       }
+      release_telephony_transfer_reservations: {
+        Args: { _transfer_id: string }
+        Returns: undefined
+      }
       release_worker_lease: {
         Args: { p_holder: string; p_name: string }
         Returns: undefined
+      }
+      reserve_telephony_transfer_target: {
+        Args: {
+          _expected_version: number
+          _initiator_user_id: string
+          _target_user_id: string
+          _transfer_id: string
+        }
+        Returns: {
+          active_user_id: string | null
+          call_id: string
+          client_request_id: string | null
+          completed_at: string | null
+          consult_parent_call_sid: string | null
+          consult_target_call_sid: string | null
+          consultation_sequence: number
+          created_at: string
+          customer_call_sid: string
+          customer_queued_at: string | null
+          failure_reason: string | null
+          id: string
+          initiated_by_user_id: string
+          organization_id: string
+          original_agent_call_sid: string | null
+          provider: string
+          provider_cleanup_pending: boolean
+          provider_queue_sid: string | null
+          queue_name: string
+          result: string | null
+          started_at: string
+          state: string
+          target_answered_at: string | null
+          target_user_id: string | null
+          updated_at: string
+          version: number
+        }[]
+        SetofOptions: {
+          from: "*"
+          to: "call_transfers"
+          isOneToOne: false
+          isSetofReturn: true
+        }
       }
       reset_admin_login_attempts: {
         Args: { p_admin_id: string }
@@ -10022,6 +11781,29 @@ export type Database = {
           isSetofReturn: true
         }
       }
+      rpc_configure_cpf_registry: {
+        Args: {
+          p_documented_purpose?: string
+          p_enabled: boolean
+          p_organization_id: string
+          p_privacy_notice_confirmed?: boolean
+        }
+        Returns: {
+          cpf_lookup_enabled: boolean
+          documented_purpose: string | null
+          enabled_at: string | null
+          enabled_by_user_id: string | null
+          organization_id: string
+          privacy_notice_updated_at: string | null
+          updated_at: string
+        }
+        SetofOptions: {
+          from: "*"
+          to: "registry_provider_settings"
+          isOneToOne: true
+          isSetofReturn: false
+        }
+      }
       rpc_dismiss_integration_job: {
         Args: { p_job_id: string }
         Returns: undefined
@@ -10193,15 +11975,6 @@ export type Database = {
         Args: { p_country_code: string; p_organization_id: string }
         Returns: Json
       }
-      rpc_configure_cpf_registry: {
-        Args: {
-          p_documented_purpose?: string
-          p_enabled: boolean
-          p_organization_id: string
-          p_privacy_notice_confirmed?: boolean
-        }
-        Returns: Database["public"]["Tables"]["registry_provider_settings"]["Row"]
-      }
       rpc_update_integration_job_payload: {
         Args: { p_job_id: string; p_payload: Json }
         Returns: undefined
@@ -10299,6 +12072,18 @@ export type Database = {
         Args: { _reason?: string; _thread_id: string }
         Returns: Json
       }
+      telephony_number_is_open: {
+        Args: { _at?: string; _phone_number_id: string }
+        Returns: boolean
+      }
+      telephony_transfer_enabled_for_org: {
+        Args: { _org_id: string }
+        Returns: boolean
+      }
+      telephony_v2_enabled_for_org: {
+        Args: { _org_id: string }
+        Returns: boolean
+      }
       transition_opportunities_stage_batch_v1: {
         Args: {
           _close_date: string
@@ -10349,6 +12134,14 @@ export type Database = {
         Returns: boolean
       }
       user_has_org_access: { Args: { org_id: string }; Returns: boolean }
+      user_has_org_permission: {
+        Args: { _org_id: string; _permission: string }
+        Returns: boolean
+      }
+      user_has_telephony_permission: {
+        Args: { _org_id: string; _permission: string }
+        Returns: boolean
+      }
     }
     Enums: {
       activity_type:
@@ -10367,6 +12160,7 @@ export type Database = {
         | "verified"
         | "invalid"
         | "error"
+        | "not_found"
       duplicate_check_mode: "none" | "email" | "phone" | "email_or_phone"
       lifecycle_stage: "lead" | "customer" | "inactive"
       onboarding_step:
@@ -10523,6 +12317,7 @@ export const Constants = {
         "verified",
         "invalid",
         "error",
+        "not_found",
       ],
       duplicate_check_mode: ["none", "email", "phone", "email_or_phone"],
       lifecycle_stage: ["lead", "customer", "inactive"],

@@ -1414,6 +1414,10 @@ export function TelephonyProvider({ children }: { children: ReactNode }) {
         setErrorMessage(message);
         toast.error(message);
       });
+    } else if (replacingActiveCall) {
+      // No live Device leg to coordinate yet: Twilio still closes the previous
+      // browser leg asynchronously, so give it a short window before reconnecting.
+      window.setTimeout(connect, 350);
     } else connect();
   }, [telephonyV2, permissions.canMakeCalls, isOnCall, cleanupCall, isDeviceReady, makeCall, initializeDevice]);
 
@@ -1444,7 +1448,7 @@ export function TelephonyProvider({ children }: { children: ReactNode }) {
           id: number.id,
           phoneNumber: number.phone_number,
           friendlyName: number.friendly_name || number.phone_number,
-          numberType: number.number_type,
+          numberType: number.number_type === 'user' ? ('user' as const) : ('company' as const),
           automatic: index === 0,
         }));
         if (requestId !== outboundSelectionRequestRef.current) return;

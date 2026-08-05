@@ -19,9 +19,13 @@ import { OwnerSelector } from '@/components/common/OwnerSelector';
 import { useRegistryLookup } from '@/hooks/useRegistryLookup';
 import {
   canonicalContactName,
+  contactSexLabelFor,
   cpfStatusLabelFor,
   digits,
+  formatCep,
+  formatCpf,
   isValidCpf,
+  normalizeContactSex,
   type CpfVerificationStatus,
   type OperatingCountryCode,
 } from '@/lib/regional';
@@ -105,7 +109,6 @@ export default function ContactForm() {
     provider: string;
     providerVersion: string;
     errorCode: string;
-    verifiedAt: string;
   }>({
     status: 'unverified',
     registrationStatus: '',
@@ -115,7 +118,6 @@ export default function ContactForm() {
     provider: '',
     providerVersion: '',
     errorCode: '',
-    verifiedAt: '',
   });
   const [cepLookupLoading, setCepLookupLoading] = useState(false);
   const [cepPreview, setCepPreview] = useState<null | {
@@ -127,6 +129,8 @@ export default function ContactForm() {
     country_code?: string;
   }>(null);
   const lastCpfLookupRef = useRef('');
+  const cpfLookupSequenceRef = useRef(0);
+  const cpfInFlightRef = useRef('');
   const lastCepLookupRef = useRef('');
 
   useEffect(() => {
@@ -175,7 +179,7 @@ export default function ContactForm() {
         lifecycle_stage: data.lifecycle_stage || 'lead',
         do_not_contact: data.do_not_contact || false,
         owner_user_id: data.owner_user_id || null,
-        cpf: data.cpf || '',
+        cpf: formatCpf(data.cpf),
         rg: data.rg || '',
         rg_issuer: data.rg_issuer || '',
         nationality: data.nationality || '',
@@ -185,13 +189,15 @@ export default function ContactForm() {
         address_neighborhood: data.address_neighborhood || '',
         address_city: data.address_city || '',
         address_state: data.address_state || '',
-        address_zip: data.address_zip || '',
+        address_zip: organization.operating_country_code === 'BR'
+          ? formatCep(data.address_zip)
+          : data.address_zip || '',
         address_country_code: data.address_country_code || organization.operating_country_code || '',
       });
 
       const { data: identity } = await supabase
         .from('contact_identity_profiles')
-        .select('cpf_verification_status,cpf_registration_status,birth_date,sex,mother_name,verification_provider,verification_provider_version,cpf_verified_at,last_error_code')
+        .select('cpf_verification_status,cpf_registration_status,birth_date,sex,mother_name,verification_provider,verification_provider_version,last_error_code')
         .eq('contact_id', data.id)
         .maybeSingle();
       if (identity) {
@@ -199,12 +205,11 @@ export default function ContactForm() {
           status: identity.cpf_verification_status || 'unverified',
           registrationStatus: identity.cpf_registration_status || '',
           birthDate: identity.birth_date || '',
-          sex: identity.sex || '',
+          sex: normalizeContactSex(identity.sex),
           motherName: identity.mother_name || '',
           provider: identity.verification_provider || '',
           providerVersion: identity.verification_provider_version || '',
           errorCode: identity.last_error_code || '',
-          verifiedAt: identity.cpf_verified_at || '',
         });
         lastCpfLookupRef.current = digits(data.cpf);
       }
@@ -212,8 +217,10 @@ export default function ContactForm() {
   };
 
   const handleCpfChange = (value: string) => {
-    const normalized = digits(value);
-    setFormData((current) => ({ ...current, cpf: value }));
+    const normalized = digits(value).slice(0, 11);
+    const sequence = ++cpfLookupSequenceRef.current;
+    setCpfLookupLoading(false);
+    setFormData((current) => ({ ...current, cpf: formatCpf(normalized) }));
     if (normalized !== lastCpfLookupRef.current) {
       setCpfVerification((current) => ({
         ...current,
@@ -225,15 +232,18 @@ export default function ContactForm() {
         provider: '',
         providerVersion: '',
         errorCode: '',
-        verifiedAt: '',
       }));
+    }
+    if (normalized.length === 11) {
+      void verifyCpf(normalized, sequence);
     }
   };
 
-  const verifyCpf = async () => {
-    if (!isBrazil || cpfLookupLoading) return;
-    const cpf = digits(formData.cpf);
+  const verifyCpf = async (candidate = formData.cpf, expectedSequence?: number) => {
+    if (!isBrazil) return;
+    const cpf = digits(candidate);
     if (!cpf) return;
+    if (cpfInFlightRef.current === cpf) return;
     if (!isValidCpf(cpf)) {
       setCpfVerification((current) => ({ ...current, status: 'invalid', errorCode: 'invalid_cpf' }));
       toast.error('CPF inválido. Confira os dígitos informados.');
@@ -241,6 +251,9 @@ export default function ContactForm() {
     }
     if (cpf === lastCpfLookupRef.current && cpfVerification.status === 'verified') return;
 
+    const sequence = expectedSequence ?? ++cpfLookupSequenceRef.current;
+    if (sequence !== cpfLookupSequenceRef.current) return;
+    cpfInFlightRef.current = cpf;
     setCpfLookupLoading(true);
     setCpfVerification((current) => ({ ...current, status: 'pending', errorCode: '' }));
     try {
@@ -251,41 +264,54 @@ export default function ContactForm() {
         birth_date?: string;
         sex?: string;
         mother_name?: string;
-      }>('cpf', cpf, id ? { contactId: id } : undefined);
+      }>('cpf', cpf);
+      if (sequence !== cpfLookupSequenceRef.current) return;
       const data = result.data || {};
       lastCpfLookupRef.current = cpf;
       setFormData((current) => ({
         ...current,
-        cpf,
+        cpf: formatCpf(cpf),
         full_name: data.full_name || current.full_name,
       }));
-      setCpfVerification({
+      setCpfVerification((current) => ({
         status: 'verified',
-        registrationStatus: data.registration_status || '',
-        birthDate: data.birth_date || '',
-        sex: data.sex || '',
-        motherName: data.mother_name || '',
+        registrationStatus: data.registration_status || current.registrationStatus,
+        birthDate: data.birth_date || current.birthDate,
+        sex: normalizeContactSex(data.sex) || current.sex,
+        motherName: data.mother_name || current.motherName,
         provider: result.provider || 'cpf-brasil',
-        providerVersion: result.provider_version || 'v2',
+        providerVersion: result.provider_version || '2.0',
         errorCode: '',
-        verifiedAt: new Date().toISOString(),
-      });
+      }));
       toast.success('CPF verificado e dados cadastrais preenchidos.');
     } catch (error: unknown) {
+      if (sequence !== cpfLookupSequenceRef.current) return;
       const code = error instanceof Error ? error.message : 'registry_lookup_failed';
-      const invalid = code.includes('invalid_or_not_found') || code.includes('invalid_cpf');
+      const payload = (error as { payload?: { provider_code?: string | null; provider_message?: string | null } }).payload;
+      const notFound = code.includes('not_found');
+      const invalid = code.includes('invalid_cpf') || code === 'invalid_or_not_found';
+      const reason = [payload?.provider_code, payload?.provider_message].filter(Boolean).join(' — ');
       setCpfVerification((current) => ({
         ...current,
-        status: invalid ? 'invalid' : 'error',
-        errorCode: code,
+        status: notFound ? 'not_found' : invalid ? 'invalid' : 'error',
+        errorCode: reason ? `${code} (${reason})` : code,
       }));
-      toast.error(
-        invalid
-          ? 'CPF não encontrado ou inválido.'
-          : 'Não foi possível verificar agora. O contato poderá ser salvo como não verificado.',
-      );
+      if (notFound) {
+        toast.warning(
+          `CPF não encontrado na base do provedor.${reason ? ` Motivo do provedor: ${reason}` : ''} O contato pode ser salvo como não verificado.`,
+        );
+      } else {
+        toast.error(
+          invalid
+            ? 'CPF inválido. Confira os dígitos informados.'
+            : 'Não foi possível verificar agora. O contato poderá ser salvo como não verificado.',
+        );
+      }
+
+
     } finally {
-      setCpfLookupLoading(false);
+      if (cpfInFlightRef.current === cpf) cpfInFlightRef.current = '';
+      if (sequence === cpfLookupSequenceRef.current) setCpfLookupLoading(false);
     }
   };
 
@@ -321,7 +347,7 @@ export default function ContactForm() {
     if (!cepPreview) return;
     setFormData((current) => ({
       ...current,
-      address_zip: cepPreview.postal_code || current.address_zip,
+      address_zip: formatCep(cepPreview.postal_code || current.address_zip),
       address_street: cepPreview.street || current.address_street,
       address_neighborhood: cepPreview.neighborhood || current.address_neighborhood,
       address_city: cepPreview.city || current.address_city,
@@ -441,10 +467,18 @@ export default function ContactForm() {
       toast.error('Escolha o país operacional da organização antes de salvar.');
       return;
     }
-    if (isBrazil && formData.cpf && !isValidCpf(formData.cpf)) {
-      setCpfVerification((current) => ({ ...current, status: 'invalid' }));
-      toast.error('Corrija o CPF inválido antes de salvar.');
-      return;
+    if (isBrazil && formData.cpf) {
+      const cpfDigits = digits(formData.cpf);
+      if (cpfDigits.length !== 11) {
+        setCpfVerification((current) => ({ ...current, status: 'invalid' }));
+        toast.error('O CPF deve ter exatamente 11 dígitos.');
+        return;
+      }
+      if (!isValidCpf(cpfDigits)) {
+        setCpfVerification((current) => ({ ...current, status: 'invalid' }));
+        toast.error('CPF inválido. Confira os dígitos informados.');
+        return;
+      }
     }
     
     setLoading(true);
@@ -463,13 +497,14 @@ export default function ContactForm() {
       first_name: name.firstName,
       last_name: name.lastName,
       cpf: formData.cpf ? digits(formData.cpf) : null,
+      address_zip: isBrazil ? digits(formData.address_zip) : formData.address_zip || null,
       address_country_code: formData.address_country_code || organization.operating_country_code,
       organization_id: organization.id,
       owner_user_id: formData.owner_user_id || userProfile.id,
     };
 
     const saveIdentity = async (contactId: string) => {
-      if (!contactData.cpf) return;
+      if (!isBrazil) return;
       const { error } = await supabase
         .from('contact_identity_profiles')
         .upsert({
@@ -482,7 +517,7 @@ export default function ContactForm() {
           mother_name: cpfVerification.motherName || null,
           verification_provider: cpfVerification.provider || null,
           verification_provider_version: cpfVerification.providerVersion || null,
-          cpf_verified_at: cpfVerification.status === 'verified' ? (cpfVerification.verifiedAt || new Date().toISOString()) : null,
+          cpf_verified_at: cpfVerification.status === 'verified' ? new Date().toISOString() : null,
           last_error_code: cpfVerification.errorCode || null,
           updated_at: new Date().toISOString(),
         }, { onConflict: 'contact_id' });
@@ -754,8 +789,11 @@ export default function ContactForm() {
                           ? 'text-emerald-600'
                           : cpfVerification.status === 'invalid'
                           ? 'text-destructive'
+                          : cpfVerification.status === 'not_found'
+                          ? 'text-amber-600'
                           : 'text-muted-foreground'
                       }`}>
+
                         {cpfLookupLoading ? 'Consultando…' : cpfStatusLabelFor(cpfVerification.status, locale)}
                       </span>
                     </div>
@@ -763,7 +801,7 @@ export default function ContactForm() {
                       id="cpf"
                       value={formData.cpf}
                       onChange={(e) => handleCpfChange(e.target.value)}
-                      onBlur={verifyCpf}
+                      onBlur={() => void verifyCpf()}
                       onKeyDown={(e) => {
                         if (e.key === 'Enter') {
                           e.preventDefault();
@@ -771,7 +809,14 @@ export default function ContactForm() {
                         }
                       }}
                       placeholder="000.000.000-00"
+                      inputMode="numeric"
+                      minLength={14}
+                      maxLength={14}
+                      aria-describedby="cpf-format-help"
                     />
+                    <p id="cpf-format-help" className="mt-1 text-xs text-muted-foreground">
+                      Se informado, o CPF deve ter exatamente 11 dígitos.
+                    </p>
                   </div>
                   <div>
                     <Label htmlFor="rg">RG</Label>
@@ -799,29 +844,63 @@ export default function ContactForm() {
                       placeholder="brasileiro(a)"
                     />
                   </div>
+                  <div>
+                    <Label htmlFor="birth_date">Data de nascimento</Label>
+                    <Input
+                      id="birth_date"
+                      type="date"
+                      value={cpfVerification.birthDate}
+                      onChange={(event) => setCpfVerification((current) => ({
+                        ...current,
+                        birthDate: event.target.value,
+                      }))}
+                      max={new Date().toISOString().slice(0, 10)}
+                    />
+                  </div>
+                  <div>
+                    <Label htmlFor="sex">Sexo</Label>
+                    <Select
+                      value={cpfVerification.sex || 'not_informed'}
+                      onValueChange={(value) => setCpfVerification((current) => ({
+                        ...current,
+                        sex: value === 'not_informed' ? '' : value,
+                      }))}
+                    >
+                      <SelectTrigger id="sex">
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="not_informed">Não informado</SelectItem>
+                        <SelectItem value="female">Feminino</SelectItem>
+                        <SelectItem value="male">Masculino</SelectItem>
+                        <SelectItem value="other">Outro</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <div className="md:col-span-2">
+                    <Label htmlFor="mother_name">Nome da mãe</Label>
+                    <Input
+                      id="mother_name"
+                      value={cpfVerification.motherName}
+                      onChange={(event) => setCpfVerification((current) => ({
+                        ...current,
+                        motherName: event.target.value,
+                      }))}
+                      placeholder="Nome completo"
+                    />
+                  </div>
                 </div>
-                {(cpfVerification.status === 'verified' ||
-                  cpfVerification.birthDate ||
-                  cpfVerification.sex ||
-                  cpfVerification.motherName) && (
+                {cpfVerification.status === 'verified' && (
                   <div className="rounded-lg border bg-muted/30 p-4">
-                    <p className="text-sm font-medium">Dados cadastrais retornados</p>
+                    <p className="text-sm font-medium">Verificação cadastral</p>
                     <dl className="mt-3 grid grid-cols-1 gap-3 text-sm md:grid-cols-2">
                       <div>
                         <dt className="text-muted-foreground">Situação cadastral</dt>
                         <dd>{cpfVerification.registrationStatus || 'Não informada'}</dd>
                       </div>
                       <div>
-                        <dt className="text-muted-foreground">Nascimento</dt>
-                        <dd>{cpfVerification.birthDate || 'Não informado'}</dd>
-                      </div>
-                      <div>
-                        <dt className="text-muted-foreground">Sexo</dt>
-                        <dd>{cpfVerification.sex || 'Não informado'}</dd>
-                      </div>
-                      <div>
-                        <dt className="text-muted-foreground">Nome da mãe</dt>
-                        <dd>{cpfVerification.motherName || 'Não informado'}</dd>
+                        <dt className="text-muted-foreground">Sexo normalizado</dt>
+                        <dd>{contactSexLabelFor(cpfVerification.sex, locale)}</dd>
                       </div>
                     </dl>
                   </div>
@@ -889,7 +968,10 @@ export default function ContactForm() {
                       id="address_zip"
                       value={formData.address_zip}
                       onChange={(e) => {
-                        setFormData({ ...formData, address_zip: e.target.value });
+                        setFormData({
+                          ...formData,
+                          address_zip: isBrazil ? formatCep(e.target.value) : e.target.value,
+                        });
                         setCepPreview(null);
                       }}
                       onBlur={isBrazil ? lookupCep : undefined}
@@ -900,6 +982,8 @@ export default function ContactForm() {
                         }
                       }}
                       placeholder={isBrazil ? '00000-000' : '00000'}
+                      inputMode={isBrazil ? 'numeric' : undefined}
+                      maxLength={isBrazil ? 9 : undefined}
                     />
                   </div>
                 </div>

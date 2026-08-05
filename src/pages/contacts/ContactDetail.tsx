@@ -56,7 +56,13 @@ import { ContactConversations } from '@/components/contacts/ContactConversations
 import { ContactOpportunities } from '@/components/contacts/ContactOpportunities';
 import { ContactNotes } from '@/components/contacts/ContactNotes';
 import { UnifiedDocuments } from '@/components/documents/UnifiedDocuments';
-import { cpfStatusLabelFor, type CpfVerificationStatus } from '@/lib/regional';
+import {
+  contactSexLabelFor,
+  cpfStatusLabelFor,
+  formatCep,
+  formatCpf,
+  type CpfVerificationStatus,
+} from '@/lib/regional';
 
 const getLifecycleColor = (stage: string | null): "gray" | "blue" | "purple" | "success" | "error" => {
   switch (stage) {
@@ -289,7 +295,7 @@ export default function ContactDetail() {
               <div className="grid grid-cols-2 gap-3">
                 <div>
                   <div className="text-[11px] text-muted-foreground/40">CPF</div>
-                  <div className="text-[14px]">{contact?.cpf || '—'}</div>
+                  <div className="text-[14px]">{contact?.cpf ? formatCpf(contact.cpf) : '—'}</div>
                   {contact?.cpf && (
                     <div className="mt-1 text-[11px] text-muted-foreground">
                       {cpfStatusLabelFor(
@@ -304,6 +310,26 @@ export default function ContactDetail() {
                   <div className="text-[11px] text-muted-foreground/40">RG</div>
                   <div className="text-[14px]">{contact?.rg ? `${contact.rg}${contact.rg_issuer ? ` - ${contact.rg_issuer}` : ''}` : '—'}</div>
                 </div>
+                {identityProfile?.birth_date && (
+                  <div>
+                    <div className="text-[11px] text-muted-foreground/40">Nascimento</div>
+                    <div className="text-[14px]">
+                      {new Date(`${identityProfile.birth_date}T12:00:00`).toLocaleDateString(locale)}
+                    </div>
+                  </div>
+                )}
+                {identityProfile?.sex && (
+                  <div>
+                    <div className="text-[11px] text-muted-foreground/40">Sexo</div>
+                    <div className="text-[14px]">{contactSexLabelFor(identityProfile.sex, locale)}</div>
+                  </div>
+                )}
+                {identityProfile?.mother_name && (
+                  <div className="col-span-2">
+                    <div className="text-[11px] text-muted-foreground/40">Nome da mãe</div>
+                    <div className="text-[14px]">{identityProfile.mother_name}</div>
+                  </div>
+                )}
               </div>
             </div>
 
@@ -325,7 +351,12 @@ export default function ContactDetail() {
                       {contact.address_neighborhood && <div>{contact.address_neighborhood}</div>}
                       <div>
                         {[contact.address_city, contact.address_state].filter(Boolean).join(' - ')}
-                        {contact.address_zip && ` · CEP ${contact.address_zip}`}
+                        {contact.address_zip &&
+                          ` · ${contact.address_country_code === 'BR' || organization?.operating_country_code === 'BR' ? 'CEP' : 'ZIP'} ${
+                            contact.address_country_code === 'BR' || organization?.operating_country_code === 'BR'
+                              ? formatCep(contact.address_zip)
+                              : contact.address_zip
+                          }`}
                       </div>
                     </>
                   ) : '—'}
@@ -775,7 +806,7 @@ export default function ContactDetail() {
                     <FileText className="h-4 w-4 text-muted-foreground" />
                     <div>
                       <div className="text-sm text-muted-foreground">CPF</div>
-                      <div className="text-foreground">{contact.cpf || '—'}</div>
+                      <div className="text-foreground">{contact.cpf ? formatCpf(contact.cpf) : '—'}</div>
                       {contact.cpf && (
                         <div className="text-xs text-muted-foreground">
                           {cpfStatusLabelFor(
@@ -819,7 +850,9 @@ export default function ContactDetail() {
                       <User className="h-4 w-4 text-muted-foreground" />
                       <div>
                         <div className="text-sm text-muted-foreground">Sexo</div>
-                        <div className="text-foreground">{identityProfile.sex}</div>
+                        <div className="text-foreground">
+                          {contactSexLabelFor(identityProfile.sex, locale)}
+                        </div>
                       </div>
                     </div>
                   )}
@@ -853,7 +886,12 @@ export default function ContactDetail() {
                         {contact.address_neighborhood && <div>{contact.address_neighborhood}</div>}
                         <div>
                           {[contact.address_city, contact.address_state].filter(Boolean).join(' - ')}
-                          {contact.address_zip && ` · CEP ${contact.address_zip}`}
+                          {contact.address_zip &&
+                            ` · ${contact.address_country_code === 'BR' || organization?.operating_country_code === 'BR' ? 'CEP' : 'ZIP'} ${
+                              contact.address_country_code === 'BR' || organization?.operating_country_code === 'BR'
+                                ? formatCep(contact.address_zip)
+                                : contact.address_zip
+                            }`}
                         </div>
                       </>
                     ) : '—'}

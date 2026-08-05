@@ -19,20 +19,22 @@ Deno.serve(async (req) => {
   if (req.method !== "POST") return json(405, { error: "method_not_allowed" });
 
   const url = Deno.env.get("SUPABASE_URL")!;
-  const anon = Deno.env.get("SUPABASE_ANON_KEY")!;
   const serviceRole = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
   const authorization = req.headers.get("authorization") ?? "";
   const accessToken = authorization.replace(/^Bearer\s+/i, "").trim();
-  if (!accessToken) return json(401, { error: "missing_authorization" });
+  if (!accessToken) {
+    console.warn("[nammux-credential-manage] missing authorization header");
+    return json(401, { error: "missing_authorization" });
+  }
 
-  const authClient = createClient(url, anon, {
-    auth: { persistSession: false },
-  });
-  const { data: authData, error: authError } = await authClient.auth.getUser(accessToken);
+  // Valida o token com o client service-role (mesmo padrão de _shared/auth.ts).
+  const admin = createClient(url, serviceRole, { auth: { persistSession: false } });
+  const { data: authData, error: authError } = await admin.auth.getUser(accessToken);
   if (authError || !authData.user) {
     console.warn("[nammux-credential-manage] authorization rejected", {
       code: authError?.code ?? null,
       status: authError?.status ?? null,
+      message: authError?.message ?? null,
     });
     return json(401, { error: "invalid_authorization" });
   }
@@ -41,8 +43,6 @@ Deno.serve(async (req) => {
   const organizationId = typeof body.organization_id === "string" ? body.organization_id : "";
   const action = typeof body.action === "string" ? body.action : "status";
   if (!organizationId) return json(400, { error: "organization_id_required" });
-
-  const admin = createClient(url, serviceRole, { auth: { persistSession: false } });
   const { data: internalUser } = await admin
     .from("users")
     .select("id")

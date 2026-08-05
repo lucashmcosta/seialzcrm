@@ -29,7 +29,15 @@ const STALE_CHUNK_PATTERNS = [
   "is not a valid javascript mime type",
   "expected a javascript module script but the server responded",
   "expected a javascript-or-wasm module script",
+  // Variants where the chunk resolved but the payload has no default export
+  // (React.lazy internals). Kept in sync with isStaleChunkError in src/App.tsx.
+  "cannot read properties of undefined (reading 'default')",
+  "cannot read property 'default' of undefined",
+  "undefined is not an object (evaluating 'default')",
+  "_result.default",
+  "evaluating '_result",
 ];
+
 
 function isStaleChunkMessage(message: unknown): boolean {
   if (typeof message !== "string") return false;
@@ -80,6 +88,23 @@ if (dsn) {
         event.exception?.values?.[0]?.value ??
         event.message;
       if (isStaleChunkMessage(originalMessage)) return null;
+
+      // Drop errors whose stack points into Vite's dev dependency cache
+      // (`/node_modules/.vite/deps/...`). That path only exists in the local
+      // dev server / Lovable preview. When Vite re-optimizes dependencies
+      // mid-session the tab ends up mixing chunks from two generations
+      // (different `?v=` hashes), so a library can grab a second React copy
+      // and blow up with "Cannot read properties of null (reading 'useRef')".
+      // A reload fixes it and production is unaffected — pure dev noise.
+      {
+        const frames = event.exception?.values?.[0]?.stacktrace?.frames ?? [];
+        const inViteDevDeps = frames.some((frame) => {
+          const file = typeof frame?.filename === "string" ? frame.filename : "";
+          return file.includes("/node_modules/.vite/deps/");
+        });
+        if (inViteDevDeps) return null;
+      }
+
 
       // Drop stale/import errors originating inside the Twilio Voice SDK
       // bundle. The SDK dynamically imports workers and fetches CDN assets;
@@ -177,7 +202,7 @@ if (dsn) {
       // rejects promises without a value during WSTransport reconnect/register
       // (WS close 1006 → ConnectionError 31005 / AccessTokenExpired 20104),
       // and the SDK reconnects on its own right after. Predicate is strict:
-      // - unhandledrejection mechanism
+      // - unhandledrejection mechanism OR Sentry-normalized UnhandledRejection
       // - value is missing OR matches "Non-Error promise rejection ... undefined"
       // - a recent breadcrumb references TwilioVoice / twilio / voice-sdk
       const isEmptyRejection =
@@ -186,12 +211,15 @@ if (dsn) {
         /non-error promise rejection captured with value:\s*undefined/i.test(
           exceptionValue,
         );
+      const isUnhandledRejection =
+        mechanismType === "onunhandledrejection" ||
+        exceptionType === "UnhandledRejection";
       if (
-        mechanismType === "onunhandledrejection" &&
+        isUnhandledRejection &&
         isEmptyRejection
       ) {
         const breadcrumbs = event.breadcrumbs ?? [];
-        const recent = breadcrumbs.slice(-15);
+        const recent = breadcrumbs.slice(-30);
         const twilioRelated = recent.some((bc) => {
           const msg = typeof bc?.message === "string" ? bc.message : "";
           const cat = typeof bc?.category === "string" ? bc.category : "";
@@ -212,6 +240,49 @@ if (dsn) {
         });
         if (twilioRelated) return null;
       }
+
+      // Drop AbortError from the Twilio Voice SDK's Insights EventPublisher.
+      // The SDK posts quality metrics to eventgw.*.twilio.com; when the Call /
+      // Device is torn down at the end of a call (or the network/adblocker cuts
+      // the request) that fetch is aborted and surfaces as an uncaught
+      // AbortError. The call itself completes normally and the `calls` row is
+      // persisted. Predicate is strict: AbortError/"operation was aborted"/
+      // "Load failed" AND evidence of the Twilio publisher in a stack frame or
+      // a recent breadcrumb — aborts from our own fetches stay visible.
+      {
+        const looksAborted =
+          exceptionType === "AbortError" ||
+          /the operation was aborted/i.test(exceptionValue) ||
+          /load failed/i.test(exceptionValue);
+        if (looksAborted) {
+          const twilioPublisherFrame = frames.some((frame) => {
+            const file =
+              typeof frame?.filename === "string" ? frame.filename.toLowerCase() : "";
+            return file.includes("twilio") || file.includes("voice-sdk");
+          });
+          const recent = (event.breadcrumbs ?? []).slice(-30);
+          const twilioPublisherBreadcrumb = recent.some((bc) => {
+            const msg = typeof bc?.message === "string" ? bc.message : "";
+            const data = bc?.data as Record<string, unknown> | undefined;
+            const url = typeof data?.url === "string" ? data.url : "";
+            const args = Array.isArray(data?.arguments)
+              ? (data!.arguments as unknown[])
+                  .map((a) => (typeof a === "string" ? a : ""))
+                  .join(" ")
+              : "";
+            const haystack = `${msg} ${url} ${args}`.toLowerCase();
+            return (
+              haystack.includes("eventgw") ||
+              haystack.includes("endpointmetrics") ||
+              haystack.includes("endpointevents") ||
+              haystack.includes("eventpublisher") ||
+              haystack.includes("twiliovoice")
+            );
+          });
+          if (twilioPublisherFrame || twilioPublisherBreadcrumb) return null;
+        }
+      }
+
 
       // Drop React DOM reconciliation crashes caused by Google Translate (or
       // similar page translators) mutating text nodes out from under React.
