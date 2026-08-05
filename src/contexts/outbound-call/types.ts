@@ -40,6 +40,7 @@ export type CallTransferState =
   | 'returning_to_customer'
   | 'with_customer'
   | 'handoff_pending'
+  | 'on_hold'
   | 'completed'
   | 'canceled'
   | 'failed';
@@ -113,8 +114,11 @@ export interface OutboundCallContextType {
   transferOperation: CallTransferOperation | null;
   loadTransferTargets: () => Promise<void>;
   startTransfer: (target: CallTransferTarget) => Promise<void>;
+  // Put the customer on hold independently (no colleague). From `on_hold` the
+  // agent can then resume or consult a colleague.
+  holdCall: () => Promise<void>;
   controlTransfer: (
-    action: 'return_to_customer' | 'consult_again' | 'complete' | 'cancel',
+    action: 'return_to_customer' | 'consult_again' | 'complete' | 'cancel' | 'resume' | 'consult',
     options?: { targetUserId?: string; targetName?: string },
   ) => Promise<void>;
   // Always-available way out of any transfer state (spinner traps included):

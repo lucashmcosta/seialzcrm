@@ -66,7 +66,9 @@ Deno.serve(async (req) => {
         | "consult_again"
         | "complete"
         | "cancel"
-        | "end_call";
+        | "end_call"
+        | "resume"
+        | "consult";
       expectedVersion?: number;
       requestId?: string;
       // Optional override for `consult_again`: consult a DIFFERENT colleague
@@ -175,6 +177,94 @@ Deno.serve(async (req) => {
         state: "canceled",
         version: transfer.version + 1,
         consultationSequence: transfer.consultation_sequence,
+      };
+      await completeCommand(context.admin, commandId, response);
+      return json(response);
+    }
+
+    // Resume a customer who is on hold (no colleague involved): re-dial the
+    // agent into the queue to dequeue the customer, then end the transfer mode
+    // (normal call). The agent's leg ended when the customer was parked, so the
+    // browser must dial back in (Mode: retrieve, FinishTransfer=1).
+    if (body.action === "resume") {
+      if (transfer.state !== "on_hold") {
+        await failCommand(context.admin, commandId, "customer_not_on_hold");
+        return json({ error: "customer_not_on_hold" }, 409);
+      }
+      const { data: transitioned } = await context.admin.from("call_transfers")
+        .update({
+          state: "returning_to_customer",
+          version: transfer.version + 1,
+          updated_at: new Date().toISOString(),
+        }).eq("id", transfer.id).eq("version", expectedVersion)
+        .eq("state", "on_hold").select("id").maybeSingle();
+      if (!transitioned) {
+        await failCommand(context.admin, commandId, "transfer_state_changed");
+        return json({ error: "transfer_state_changed" }, 409);
+      }
+      await context.admin.from("calls").update({
+        transfer_status: "returning_to_customer",
+      }).eq("id", transfer.call_id).eq("active_transfer_id", transfer.id);
+      const adapter = new TwilioVoiceAdapter(context.admin);
+      const response = {
+        success: true,
+        state: "returning_to_customer",
+        version: transfer.version + 1,
+        consultationSequence: transfer.consultation_sequence,
+        connectParams: {
+          ...adapter.consultationParams({
+            callId: transfer.call_id,
+            transferId: transfer.id,
+            targetUserId: transfer.target_user_id ?? "",
+            consultationSequence: transfer.consultation_sequence,
+          }),
+          Mode: "retrieve",
+          FinishTransfer: "1",
+        },
+      };
+      await completeCommand(context.admin, commandId, response);
+      return json(response);
+    }
+
+    // Consult a colleague for a call that is already on hold: reserve the
+    // colleague (customer stays parked, no re-park) and hand the browser
+    // Mode: consult params to dial them.
+    if (body.action === "consult") {
+      if (transfer.state !== "on_hold") {
+        await failCommand(context.admin, commandId, "customer_not_on_hold");
+        return json({ error: "customer_not_on_hold" }, 409);
+      }
+      if (!body.targetUserId) {
+        await failCommand(context.admin, commandId, "target_user_required");
+        return json({ error: "target_user_required" }, 400);
+      }
+      const { data: reserved, error } = await context.admin.rpc(
+        "reserve_telephony_transfer_target",
+        {
+          _transfer_id: transfer.id,
+          _initiator_user_id: context.userId,
+          _expected_version: expectedVersion,
+          _target_user_id: body.targetUserId,
+        },
+      );
+      if (error || !reserved?.[0]) {
+        await failCommand(context.admin, commandId, "transfer_target_unavailable");
+        return json({ error: "transfer_target_unavailable" }, 409);
+      }
+      const reservedTransfer = reserved[0];
+      const adapter = new TwilioVoiceAdapter(context.admin);
+      const response = {
+        success: true,
+        state: "customer_queued",
+        version: reservedTransfer.version,
+        consultationSequence: reservedTransfer.consultation_sequence,
+        targetUserId: reservedTransfer.target_user_id,
+        connectParams: adapter.consultationParams({
+          callId: transfer.call_id,
+          transferId: transfer.id,
+          targetUserId: reservedTransfer.target_user_id,
+          consultationSequence: reservedTransfer.consultation_sequence,
+        }),
       };
       await completeCommand(context.admin, commandId, response);
       return json(response);

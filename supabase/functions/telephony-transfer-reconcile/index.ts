@@ -34,6 +34,7 @@ Deno.serve(async (req) => {
     handoff_pending: 60_000,
     customer_queued: 120_000,
     with_customer: 300_000,
+    on_hold: 300_000,
   };
   const now = Date.now();
   // Fetch floor at the shortest window so the sweep catches every candidate;
@@ -47,6 +48,7 @@ Deno.serve(async (req) => {
       "returning_to_customer",
       "handoff_pending",
       "with_customer",
+      "on_hold",
     ]).lt("updated_at", fetchCutoff)
     .limit(100);
   if (error) return json({ error: error.message }, 500);
@@ -70,7 +72,7 @@ Deno.serve(async (req) => {
       const fallbackMessage = number?.fallback_message ||
         "Não foi possível concluir a transferência. Retornaremos em breve.";
       const twilio = await twilioApiContext(admin, transfer.organization_id);
-      if (transfer.state === "with_customer") {
+      if (["with_customer", "on_hold"].includes(transfer.state)) {
         const providerCall = await twilioRequest<{ status?: string }>(
           twilio,
           twilioAccountUrl(

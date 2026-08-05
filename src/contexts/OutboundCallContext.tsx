@@ -1243,8 +1243,54 @@ export function TelephonyProvider({ children }: { children: ReactNode }) {
     }
   }, [organization?.id, canTransferCalls, activeIncomingCall, subscribeToTransfer, connectTransferCall, recoverCustomerAfterConnectionFailure]);
 
+  // Independent HOLD: park the customer with no colleague. The agent's leg ends
+  // when the customer is parked; the suppress guard keeps the call alive so the
+  // modal shows the hold banner (state on_hold).
+  const holdCall = useCallback(async () => {
+    if (!organization?.id || !callIdRef.current || !canTransferCalls || transferSessionRef.current) return;
+    setTransferLoading(true);
+    setTransferOperation('starting');
+    suppressCallFinalizationRef.current = true;
+    transferOriginRef.current = activeIncomingCall || incomingCallRef.current ? 'incoming' : 'outgoing';
+    // Provisional session set BEFORE the park so the agent-leg disconnect that
+    // follows does not finalize the whole call.
+    const provisional: CallTransferSession = {
+      id: 'pending', callId: callIdRef.current, targetUserId: '', targetName: '',
+      state: 'parking_customer', version: 0, consultationSequence: 1,
+    };
+    transferSessionRef.current = provisional;
+    setTransferSession(provisional);
+    try {
+      const requestId = crypto.randomUUID();
+      const { data, error } = await withTransferTimeout(supabase.functions.invoke('telephony-transfer-intent', {
+        headers: { 'x-organization-id': organization.id },
+        body: { callId: callIdRef.current, action: 'hold', requestId },
+      }));
+      if (error || data?.error || !data?.transferId) {
+        throw new Error(data?.error || 'Não foi possível colocar em espera');
+      }
+      const session: CallTransferSession = {
+        id: data.transferId, callId: callIdRef.current, targetUserId: '', targetName: '',
+        state: (data.state || 'on_hold') as CallTransferState,
+        version: data.version ?? 1, consultationSequence: data.consultationSequence ?? 1,
+      };
+      transferSessionRef.current = session;
+      setTransferSession(session);
+      subscribeToTransfer(data.transferId);
+      toast.success('Cliente em espera.');
+    } catch (error) {
+      suppressCallFinalizationRef.current = false;
+      transferSessionRef.current = null;
+      setTransferSession(null);
+      toast.error(transferErrorMessage(error));
+    } finally {
+      setTransferLoading(false);
+      setTransferOperation(null);
+    }
+  }, [organization?.id, canTransferCalls, activeIncomingCall, subscribeToTransfer]);
+
   const controlTransfer = useCallback(async (
-    action: 'return_to_customer' | 'consult_again' | 'complete' | 'cancel',
+    action: 'return_to_customer' | 'consult_again' | 'complete' | 'cancel' | 'resume' | 'consult',
     options?: { targetUserId?: string; targetName?: string },
   ) => {
     const current = transferSessionRef.current;
@@ -1252,7 +1298,9 @@ export function TelephonyProvider({ children }: { children: ReactNode }) {
     setTransferLoading(true);
     const operation: Record<typeof action, CallTransferOperation> = {
       return_to_customer: 'returning',
+      resume: 'returning',
       consult_again: 'consulting_again',
+      consult: 'consulting_again',
       complete: 'completing',
       cancel: 'canceling',
     };
@@ -1555,6 +1603,10 @@ export function TelephonyProvider({ children }: { children: ReactNode }) {
     const current = transferSessionRef.current;
     if (!current) return;
     const state = current.state;
+    if (state === 'on_hold') {
+      await controlTransfer('resume');
+      return;
+    }
     if (['consulting', 'consult_ringing', 'customer_queued'].includes(state)) {
       await controlTransfer('return_to_customer');
       return;
@@ -1602,6 +1654,7 @@ export function TelephonyProvider({ children }: { children: ReactNode }) {
     transferOperation,
     loadTransferTargets,
     startTransfer,
+    holdCall,
     controlTransfer,
     escapeTransfer,
     numberSelection,

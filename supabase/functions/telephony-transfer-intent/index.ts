@@ -158,6 +158,82 @@ Deno.serve(async (req) => {
     if (currentAgent !== context.userId) {
       return json({ error: "not_current_call_agent" }, 403);
     }
+    // Independent HOLD: park the customer with hold music WITHOUT reserving a
+    // colleague. The agent's leg ends naturally (customer redirected to the
+    // queue); from `on_hold` they can then resume or consult a colleague.
+    if (body.action === "hold") {
+      const requestId = body.requestId || crypto.randomUUID();
+      const { data: existingHold } = await context.admin.from("call_transfers")
+        .select("*")
+        .eq("organization_id", context.organizationId)
+        .eq("initiated_by_user_id", context.userId)
+        .eq("client_request_id", requestId)
+        .maybeSingle();
+      if (existingHold) {
+        return json({
+          transferId: existingHold.id,
+          state: existingHold.state,
+          version: existingHold.version,
+          consultationSequence: existingHold.consultation_sequence,
+        });
+      }
+      const legs = await providerLegs(context.admin, call);
+      if (!legs.customerCallSid) {
+        return json({ error: "customer_provider_leg_not_found" }, 409);
+      }
+      twilio = await twilioApiContext(context.admin, context.organizationId);
+      const queueName = `seialz_${crypto.randomUUID().replaceAll("-", "")}`;
+      const queue = await createTwilioQueue(twilio, queueName);
+      queueSid = queue.sid;
+      const { data: held, error: holdError } = await context.admin.rpc(
+        "hold_telephony_call",
+        {
+          _call_id: call.id,
+          _initiator_user_id: context.userId,
+          _queue_name: queueName,
+          _customer_call_sid: legs.customerCallSid,
+          _original_agent_call_sid: legs.originalAgentCallSid,
+          _request_id: requestId,
+        },
+      );
+      if (holdError || !held?.[0]) {
+        await deleteTwilioQueue(twilio, queueSid).catch(() => undefined);
+        queueSid = null;
+        return json({
+          error: (holdError?.message || "").match(/call_[a-z_]+/)?.[0] ||
+            "hold_cannot_start",
+        }, 409);
+      }
+      const heldTransferId = String(held[0].id);
+      transferId = heldTransferId;
+      await context.admin.from("call_transfers").update({
+        provider_queue_sid: queue.sid,
+        updated_at: new Date().toISOString(),
+      }).eq("id", heldTransferId);
+      const holdQuery = `transferId=${encodeURIComponent(heldTransferId)}&cycle=1`;
+      const enqueueTwiml = `<Response><Enqueue waitUrl="${
+        escapeXml(`${WEBHOOK_BASE}/transfer-wait?${holdQuery}`)
+      }" waitUrlMethod="POST" action="${
+        escapeXml(`${WEBHOOK_BASE}/transfer-queue-result?${holdQuery}`)
+      }" method="POST">${escapeXml(queueName)}</Enqueue></Response>`;
+      await updateTwilioCall(twilio, legs.customerCallSid, { twiml: enqueueTwiml });
+      const { data: heldState } = await context.admin.from("call_transfers")
+        .update({
+          state: "on_hold",
+          customer_queued_at: new Date().toISOString(),
+          version: Number(held[0].version || 1) + 1,
+          updated_at: new Date().toISOString(),
+        }).eq("id", heldTransferId).eq("state", "parking_customer")
+        .select("version, consultation_sequence").maybeSingle();
+      await context.admin.from("calls").update({ transfer_status: "on_hold" })
+        .eq("id", call.id);
+      return json({
+        transferId: heldTransferId,
+        state: "on_hold",
+        version: heldState?.version ?? Number(held[0].version || 1) + 1,
+        consultationSequence: heldState?.consultation_sequence ?? 1,
+      }, 201);
+    }
     if (body.action === "targets" || !body.targetUserId) {
       return json({
         targets: await listTargets(
