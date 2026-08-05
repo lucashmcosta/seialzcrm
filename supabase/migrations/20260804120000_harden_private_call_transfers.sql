@@ -41,6 +41,8 @@ CREATE INDEX IF NOT EXISTS idx_transfer_reservations_expiry
 
 ALTER TABLE public.telephony_transfer_reservations ENABLE ROW LEVEL SECURITY;
 
+DROP POLICY IF EXISTS "Users view permitted transfer reservations"
+  ON public.telephony_transfer_reservations;
 CREATE POLICY "Users view permitted transfer reservations"
   ON public.telephony_transfer_reservations FOR SELECT TO authenticated
   USING (
@@ -80,6 +82,8 @@ CREATE TABLE IF NOT EXISTS public.call_transfer_commands (
 
 ALTER TABLE public.call_transfer_commands ENABLE ROW LEVEL SECURITY;
 
+DROP POLICY IF EXISTS "Users view own transfer commands"
+  ON public.call_transfer_commands;
 CREATE POLICY "Users view own transfer commands"
   ON public.call_transfer_commands FOR SELECT TO authenticated
   USING (
