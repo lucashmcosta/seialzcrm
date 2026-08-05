@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { useLocation } from 'react-router-dom';
 import { Device, Call } from '@twilio/voice-sdk';
+import { voiceCodecPreferences } from '@/lib/telephony';
 import { supabase } from '@/integrations/supabase/client';
 import { useOrganization } from './useOrganization';
 import { useVoiceIntegration } from './useVoiceIntegration';
@@ -127,7 +128,7 @@ export function useInboundCalls(): UseInboundCallsReturn {
       // Create and register device
       const device = new Device(token, {
         logLevel: 1,
-        codecPreferences: [Call.Codec.Opus, Call.Codec.PCMU],
+        codecPreferences: voiceCodecPreferences(Call.Codec),
       });
 
       device.on('registered', () => {
