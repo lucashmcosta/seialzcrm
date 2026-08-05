@@ -34,6 +34,12 @@ for (const file of mdFiles(DOCS)) {
   const isFrozen = rel.startsWith(join("docs", "audit") + "/");
   const text = readFileSync(file, "utf8");
   const sink = isFrozen ? warnings : errors;
+  // Docs que descrevem um repositório EXTERNO (ex.: divus/platform) citam paths
+  // `src/...`/`supabase/...` que de propósito não existem no Seialz. Marcar o doc
+  // com "docs-validate: ignore-refs" faz as refs em backtick virarem aviso, não erro
+  // (os links markdown relativos continuam sendo validados normalmente).
+  const ignoreRefs = /docs-validate:\s*ignore-refs/.test(text);
+  const refSink = (isFrozen || ignoreRefs) ? warnings : errors;
 
   for (const m of text.matchAll(MD_LINK)) {
     const target = m[1];
@@ -44,7 +50,7 @@ for (const file of mdFiles(DOCS)) {
 
   for (const m of text.matchAll(BACKTICK_PATH)) {
     const resolved = join(ROOT, m[1]);
-    if (!existsSync(resolved)) sink.push(`${rel}: ref → ${m[1]}`);
+    if (!existsSync(resolved)) refSink.push(`${rel}: ref → ${m[1]}`);
   }
 }
 

@@ -1,5 +1,7 @@
 # Telefonia Twilio — voz + transferência (referência do DivusApp)
 
+<!-- docs-validate: ignore-refs — Este documento descreve o repositório EXTERNO divus/platform (referência de design). Os paths src/... e supabase/... citados são do divus, não do Seialz, então não devem ser validados contra este filesystem. -->
+
 > **O que é este documento.** Uma descrição técnica de ponta a ponta de **como o DivusApp (divus/platform) implementa telefonia Twilio**: chamadas WebRTC no navegador, inbound/outbound, controles em chamada, gravação e — principalmente — **transferência de ligações**. Serve de **referência** para replicar o comportamento aqui no Seialz.
 >
 > Tudo aqui é derivado do código real do divus/platform. Os caminhos de arquivo citados (`supabase/functions/...`, `src/...`) referem-se ao **repositório do divus**, não ao do Seialz.
