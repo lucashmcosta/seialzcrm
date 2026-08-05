@@ -1013,6 +1013,9 @@ export function TelephonyProvider({ children }: { children: ReactNode }) {
   // fallback. Logs errors instead of swallowing them so a schema drift (e.g. a
   // missing column) can never again silently kill the sync.
   const refreshTransferState = useCallback(async (transferId: string) => {
+    // 'pending' é a sessão provisória do hold (ainda sem linha no banco): não há
+    // o que ler. Evita GET call_transfers?id=eq.pending -> 400 (uuid inválido).
+    if (!transferId || transferId === 'pending') return;
     const { data, error } = await telephonySupabase.from('call_transfers')
       .select('state, version, consultation_sequence, failure_reason')
       .eq('id', transferId)
@@ -1057,7 +1060,8 @@ export function TelephonyProvider({ children }: { children: ReactNode }) {
   // publication event cannot leave the modal stuck in a transitional state.
   useEffect(() => {
     const transferId = transferSession?.id;
-    if (!transferId) return;
+    // Não pollar a sessão provisória do hold ('pending', sem linha no banco).
+    if (!transferId || transferId === 'pending') return;
     let disposed = false;
     let loading = false;
     const refresh = async () => {
