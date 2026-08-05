@@ -5,6 +5,7 @@ import { supabase } from '@/integrations/supabase/client';
 import { telephonySupabase } from '@/integrations/supabase/telephonyClient';
 import { toast } from 'sonner';
 import { getTelephonySession, getTwilioAccessToken, getVerifiedSession } from '@/lib/authSession';
+import { voiceCodecPreferences } from '@/lib/telephony';
 import { useOrganization } from '@/hooks/useOrganization';
 import { useTelephonyV2Flag } from '@/hooks/useTelephonyV2Flag';
 import { usePermissions } from '@/hooks/usePermissions';
@@ -695,7 +696,7 @@ export function TelephonyProvider({ children }: { children: ReactNode }) {
       const { Device, Call } = await import('@twilio/voice-sdk');
 
       const device = new Device(token, {
-        codecPreferences: [Call.Codec.PCMU, Call.Codec.Opus],
+        codecPreferences: voiceCodecPreferences(Call.Codec),
         allowIncomingWhileBusy: false,
       });
 

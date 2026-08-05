@@ -1,5 +1,6 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { Device, Call } from '@twilio/voice-sdk';
+import { voiceCodecPreferences } from '@/lib/telephony';
 import { Dialog, DialogContent } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { Avatar, AvatarFallback } from '@/components/ui/avatar';
@@ -60,7 +61,7 @@ export function ActiveCallModal({
 
       // Create and register the Device
       const device = new Device(token, {
-        codecPreferences: [Call.Codec.PCMU, Call.Codec.Opus],
+        codecPreferences: voiceCodecPreferences(Call.Codec),
         allowIncomingWhileBusy: false,
       });
 
