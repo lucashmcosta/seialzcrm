@@ -930,12 +930,10 @@ export function TelephonyProvider({ children }: { children: ReactNode }) {
         }
 
         if (isMounted) {
-          // Small delay to ensure everything is ready
-          timer = setTimeout(() => {
-            if (isMounted) {
-              initializeDevice();
-            }
-          }, 1000);
+          // Pré-aquece o device IMEDIATAMENTE (sem delay artificial) para reduzir
+          // o tempo até a 1ª discagem. O gate acima já garante que voz/flags/
+          // permissões carregaram, e initializeDevice é idempotente (guarda própria).
+          initializeDevice();
         }
       } catch (error) {
         console.log('[OutboundCall] Auth check failed:', error);
