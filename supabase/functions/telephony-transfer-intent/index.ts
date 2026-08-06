@@ -118,6 +118,9 @@ async function listTargets(
 Deno.serve(async (req) => {
   const preflight = corsPreflight(req);
   if (preflight) return preflight;
+  // warm-ping (cron): mantém a function quente (aqui: HOLD/consultar → o que o
+  // usuário sente como "demora pra entrar em espera").
+  if (new URL(req.url).pathname.endsWith("/warm")) return new Response("ok");
   if (req.method !== "POST") return json({ error: "method_not_allowed" }, 405);
   let queueSid: string | null = null;
   let twilio: Awaited<ReturnType<typeof twilioApiContext>> | null = null;
