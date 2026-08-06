@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { ArrowsLeftRight, ArrowUUpLeft, Pause, PhoneCall, PhoneSlash, SpinnerGap, UserSwitch, Users } from '@phosphor-icons/react';
+import { ArrowsLeftRight, ArrowUUpLeft, Pause, PhoneCall, PhoneSlash, Play, SpinnerGap, UserSwitch, Users } from '@phosphor-icons/react';
 import { useOutboundCall } from '@/contexts/OutboundCallContext';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Badge } from '@/components/ui/badge';
@@ -7,26 +7,32 @@ import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import type { CallTransferTarget } from '@/contexts/outbound-call/types';
 
-// Hold (espera) is INDEPENDENT of transfer, DivusApp-style: put the customer on
-// hold first; only then decide to resume or to consult/transfer a colleague.
+// ESPERA (hold) e TRANSFERÊNCIA são controles SEPARADOS aqui, como mudo x teclado.
+// - Espera: coloca o cliente em espera / retoma (nenhum colega envolvido).
+// - Transferência: consulta/passa para um colega (o cliente fica em espera durante).
+// Colocar em espera e retomar formam um ciclo próprio; retomar volta ao normal.
 const STATE_LABELS: Record<string, string> = {
-  parking_customer: 'Colocando cliente em espera…',
+  parking_customer: 'Colocando em espera…',
   on_hold: 'Cliente em espera',
   customer_queued: 'Chamando o colega…',
   consult_ringing: 'Chamando o colega…',
   consulting: 'Falando com o colega',
-  returning_to_customer: 'Retomando o cliente…',
+  returning_to_customer: 'Voltando ao cliente…',
   with_customer: 'Você está com o cliente',
   handoff_pending: 'Passando para o colega…',
   completed: 'Transferência concluída',
-  canceled: 'Espera encerrada',
-  failed: 'Falha na transferência',
+  canceled: 'Encerrada',
+  failed: 'Falha',
 };
 
-// Estados transitórios (aguardam um callback da Twilio para avançar). NÃO travam
-// a UI com spinner: o modal mostra o label do estado e, se demorar além de 5s,
-// revela a saída de emergência.
+// Estados transitórios (aguardam um callback da Twilio para avançar). NÃO travam a
+// UI com spinner: o modal mostra o label do estado e, se demorar além de 5s, revela
+// a saída de emergência.
 const TRANSITIONAL_STATES = ['parking_customer', 'customer_queued', 'consult_ringing', 'returning_to_customer', 'handoff_pending'];
+
+// Estados em que uma TRANSFERÊNCIA está em andamento (colega envolvido) — mostram
+// os controles de transferência em vez dos de espera.
+const TRANSFER_STATES = ['customer_queued', 'consult_ringing', 'consulting', 'with_customer', 'handoff_pending'];
 
 export function CallTransferControls() {
   const {
@@ -46,9 +52,8 @@ export function CallTransferControls() {
   const [showEscape, setShowEscape] = useState(false);
 
   const state = transferSession?.state;
-  // inFlight = uma ação do usuário está a caminho (evita duplo-clique). NÃO gate
-  // o modal com spinner: o estado já reflete o alvo de forma otimista. transitional
-  // = estado que aguarda a Twilio; revela a saída de emergência se demorar.
+  // inFlight = uma ação do usuário está a caminho (evita duplo-clique). O estado do
+  // modal já reflete o alvo de forma otimista. transitional revela a saída se demorar.
   const inFlight = transferOperation !== null;
   const transitional = !!state && TRANSITIONAL_STATES.includes(state);
 
@@ -69,13 +74,20 @@ export function CallTransferControls() {
 
   const pickTarget = async (target: CallTransferTarget) => {
     setTargetDialogOpen(false);
-    // From on_hold => first consult (customer already parked). From an active
-    // consult (consulting / with_customer) => switch to another colleague.
+    // De on_hold => 1ª consulta (cliente já parkeado). De um consult ativo
+    // (consulting / with_customer) => trocar de colega.
     if (state === 'on_hold') {
       await controlTransfer('consult', { targetUserId: target.userId, targetName: target.fullName });
     } else {
       await controlTransfer('consult_again', { targetUserId: target.userId, targetName: target.fullName });
     }
+  };
+
+  // Transferir a partir de uma chamada normal: coloca o cliente em espera e abre o
+  // seletor de colega (a espera é o pré-requisito técnico da transferência).
+  const startTransferFlow = async () => {
+    await holdCall();
+    await openPicker();
   };
 
   const targetDialog = (
@@ -102,47 +114,59 @@ export function CallTransferControls() {
     </Dialog>
   );
 
-  // Live call, nothing on hold yet: the only action is to put on hold.
+  // ───────── Chamada normal (sem sessão): ESPERA e TRANSFERIR, controles separados.
   if (!transferSession) {
     return (
-      <Button variant="outline" onClick={() => void holdCall()}>
-        <Pause className="mr-2 h-4 w-4" /> Colocar em espera
-      </Button>
+      <>
+        <div className="grid gap-2 sm:grid-cols-2">
+          <Button variant="outline" onClick={() => void holdCall()}>
+            <Pause className="mr-2 h-4 w-4" /> Colocar em espera
+          </Button>
+          <Button variant="outline" onClick={() => void startTransferFlow()}>
+            <ArrowsLeftRight className="mr-2 h-4 w-4" /> Transferir
+          </Button>
+        </div>
+        {targetDialog}
+      </>
     );
   }
+
+  const inTransfer = !!state && TRANSFER_STATES.includes(state);
 
   return (
     <div className="w-full space-y-3 rounded-xl border border-primary/20 bg-primary/5 p-3">
       <div className="flex items-center justify-between gap-2">
-        <div className="min-w-0">
-          <p className="truncate text-sm font-medium">
-            {state === 'on_hold' ? 'Cliente em espera' : transferSession.targetName ? `Colega: ${transferSession.targetName}` : 'Cliente em espera'}
-          </p>
-        </div>
+        <p className="truncate text-sm font-medium">
+          {inTransfer ? (transferSession.targetName ? `Transferência • ${transferSession.targetName}` : 'Transferência') : 'Espera'}
+        </p>
         <Badge variant={state === 'failed' ? 'destructive' : 'outline'}>{STATE_LABELS[state ?? ''] || state}</Badge>
       </div>
       {transferSession.error && <p className="text-xs text-destructive">{transferSession.error}</p>}
 
-      {/* Customer on hold, no colleague yet: resume OR call a colleague. */}
+      {/* ══ ESPERA ══ Cliente em espera (sem colega): retomar é a ação principal;
+          transferir para um colega fica numa seção separada abaixo. */}
       {state === 'on_hold' && (
-        <div className="grid gap-2 sm:grid-cols-2">
-          <Button variant="outline" disabled={inFlight} onClick={() => void controlTransfer('resume')}>
-            <ArrowUUpLeft className="mr-2 h-4 w-4" /> Retomar cliente
+        <div className="space-y-2">
+          <Button className="w-full" disabled={inFlight} onClick={() => void controlTransfer('resume')}>
+            <Play className="mr-2 h-4 w-4" /> Retomar cliente
           </Button>
-          <Button disabled={inFlight} onClick={() => void openPicker()}>
-            <Users className="mr-2 h-4 w-4" /> Transferir / Chamar colega
-          </Button>
+          <div className="border-t border-primary/10 pt-2">
+            <p className="mb-1 text-[11px] uppercase tracking-wide text-muted-foreground">Transferência</p>
+            <Button variant="outline" className="w-full" disabled={inFlight} onClick={() => void openPicker()}>
+              <Users className="mr-2 h-4 w-4" /> Chamar um colega
+            </Button>
+          </div>
         </div>
       )}
 
-      {/* Colleague being rung: abort back to the customer if needed. */}
+      {/* ══ TRANSFERÊNCIA ══ Colega sendo chamado: abortar de volta ao cliente. */}
       {['customer_queued', 'consult_ringing'].includes(state ?? '') && (
         <Button variant="outline" className="w-full" disabled={inFlight} onClick={() => void controlTransfer('return_to_customer')}>
-          <ArrowUUpLeft className="mr-2 h-4 w-4" /> Retomar cliente
+          <ArrowUUpLeft className="mr-2 h-4 w-4" /> Voltar ao cliente
         </Button>
       )}
 
-      {/* Talking to the colleague: hand over, try another, or come back. */}
+      {/* Falando com o colega: passar, tentar outro, ou voltar ao cliente. */}
       {state === 'consulting' && (
         <div className="space-y-2">
           <Button className="w-full" disabled={inFlight} onClick={() => void controlTransfer('complete')}>
@@ -150,23 +174,23 @@ export function CallTransferControls() {
           </Button>
           <div className="grid gap-2 sm:grid-cols-2">
             <Button variant="outline" disabled={inFlight} onClick={() => void controlTransfer('return_to_customer')}>
-              <ArrowUUpLeft className="mr-2 h-4 w-4" /> Retomar cliente
+              <ArrowUUpLeft className="mr-2 h-4 w-4" /> Voltar ao cliente
             </Button>
             <Button variant="outline" disabled={inFlight} onClick={() => void openPicker()}>
-              <Users className="mr-2 h-4 w-4" /> Chamar outra pessoa
+              <Users className="mr-2 h-4 w-4" /> Outro colega
             </Button>
           </div>
         </div>
       )}
 
-      {/* Back with the customer after a consult: consult again or end the mode. */}
+      {/* De volta com o cliente após uma consulta: consultar de novo ou encerrar. */}
       {state === 'with_customer' && (
         <div className="grid gap-2 sm:grid-cols-2">
           <Button variant="outline" disabled={inFlight} onClick={() => void openPicker()}>
             <ArrowsLeftRight className="mr-2 h-4 w-4" /> Chamar colega
           </Button>
           <Button variant="secondary" disabled={inFlight} onClick={() => void controlTransfer('cancel')}>
-            Encerrar espera
+            Encerrar transferência
           </Button>
         </div>
       )}
@@ -179,7 +203,7 @@ export function CallTransferControls() {
 
       {showEscape && (
         <Button variant="destructive" className="w-full" onClick={() => void escapeTransfer()}>
-          <PhoneSlash className="mr-2 h-4 w-4" /> Encerrar transferência
+          <PhoneSlash className="mr-2 h-4 w-4" /> {state === 'on_hold' ? 'Encerrar espera' : 'Encerrar transferência'}
         </Button>
       )}
 
