@@ -18,6 +18,13 @@ import {
 
 const SUPABASE_URL = Deno.env.get("SUPABASE_URL") ?? "";
 const WEBHOOK_BASE = `${SUPABASE_URL}/functions/v1/telephony-webhook`;
+// Música de espera: waitUrl aponta DIRETO pro provedor de música (twimlet/mp3),
+// não pra uma edge function nossa — o cliente ouve música em 1 hop (sem RTT
+// transcontinental extra Twilio->edge nem as queries por ciclo da waitUrl).
+// A `action` (transfer-queue-result) continua sendo nossa e só roda quando o
+// cliente SAI da fila. Configurável via env TELEPHONY_HOLD_MUSIC_URL.
+const HOLD_MUSIC_WAIT_URL = Deno.env.get("TELEPHONY_HOLD_MUSIC_URL") ||
+  "http://twimlets.com/holdmusic?Bucket=com.twilio.music.ambient";
 
 // deno-lint-ignore no-explicit-any
 async function loadTransferableCall(
@@ -221,8 +228,8 @@ Deno.serve(async (req) => {
       transferId = heldTransferId;
       const holdQuery = `transferId=${encodeURIComponent(heldTransferId)}&cycle=1`;
       const enqueueTwiml = `<Response><Enqueue waitUrl="${
-        escapeXml(`${WEBHOOK_BASE}/transfer-wait?${holdQuery}`)
-      }" waitUrlMethod="POST" action="${
+        escapeXml(HOLD_MUSIC_WAIT_URL)
+      }" waitUrlMethod="GET" action="${
         escapeXml(`${WEBHOOK_BASE}/transfer-queue-result?${holdQuery}`)
       }" method="POST">${escapeXml(queueName)}</Enqueue></Response>`;
       await updateTwilioCall(twilio, legs.customerCallSid, { twiml: enqueueTwiml });
@@ -339,8 +346,8 @@ Deno.serve(async (req) => {
       Number(claimed[0].consultation_sequence || 1)
     }`;
     const enqueueTwiml = `<Response><Enqueue waitUrl="${
-      escapeXml(`${WEBHOOK_BASE}/transfer-wait?${query}`)
-    }" waitUrlMethod="POST" action="${
+      escapeXml(HOLD_MUSIC_WAIT_URL)
+    }" waitUrlMethod="GET" action="${
       escapeXml(`${WEBHOOK_BASE}/transfer-queue-result?${query}`)
     }" method="POST">${escapeXml(queueName)}</Enqueue></Response>`;
     await updateTwilioCall(twilio, legs.customerCallSid, {
