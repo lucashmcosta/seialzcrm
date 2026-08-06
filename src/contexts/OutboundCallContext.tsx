@@ -148,12 +148,23 @@ export function TelephonyProvider({ children }: { children: ReactNode }) {
     };
     claim();
     const timer = setInterval(claim, 5_000);
-    return () => {
-      clearInterval(timer);
+    // Libera a lease de líder na saída/refresh da página. O cleanup do effect NÃO
+    // roda de forma confiável num reload de página inteira (F5/hard refresh), então
+    // um listener de `pagehide` garante que a próxima carga/aba vire líder NA HORA
+    // em vez de esperar a lease de 15s expirar. Era isso que adiava o pré-aquecimento
+    // do device (device-init preso em isVoiceLeader=false por ~10s) e deixava a 1ª
+    // ligação após um reload lenta. Só libera o lock — nunca cria dois líderes.
+    const release = () => {
       try {
         const current = JSON.parse(window.localStorage.getItem(key) || '{}');
         if (current.tabId === tabId) window.localStorage.removeItem(key);
       } catch { /* Ignore a malformed stale lease. */ }
+    };
+    window.addEventListener('pagehide', release);
+    return () => {
+      clearInterval(timer);
+      window.removeEventListener('pagehide', release);
+      release();
       setIsVoiceLeader(false);
     };
   }, [telephonyV2, organization?.id, isAdminRoute]);
