@@ -1416,12 +1416,22 @@ export function TelephonyProvider({ children }: { children: ReactNode }) {
           throw connectError;
         }
       } else if (action === 'resume') {
-        // Retomar via keepalive: a MESMA perna do atendente foi religada ao cliente
-        // no servidor (sem re-discar). Só desmutamos o mic — o mute foi aplicado ao
-        // pôr em espera.
+        // Retomar religa a MESMA perna do atendente ao cliente no servidor (sem
+        // re-discar): desmuta o mic e ENCERRA a sessão de espera. Espera é
+        // INDEPENDENTE de transferência — voltamos ao estado normal da chamada e o
+        // botão "Colocar em espera" reaparece (não fica preso em with_customer).
         try { activeCallRef.current?.mute(false); } catch { /* noop */ }
         try { incomingCallRef.current?.mute(false); } catch { /* noop */ }
         setIsMuted(false);
+        suppressCallFinalizationRef.current = false;
+        transferConnectGenerationRef.current += 1;
+        transferSessionRef.current = null;
+        setTransferSession(null);
+        if (transferChannelRef.current) {
+          supabase.removeChannel(transferChannelRef.current);
+          transferChannelRef.current = null;
+        }
+        toast.success('De volta com o cliente.');
       }
       if (action === 'complete') toast.success(`Transferindo para ${current.targetName}`);
       if (action === 'return_to_customer') toast.success('Voltando para o cliente');
