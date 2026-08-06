@@ -424,6 +424,21 @@ const App = () => (
             path="/exclusao-de-dados"
             element={<SiteI18nProvider><DataDeletionPage /></SiteI18nProvider>}
           />
+          <Route
+            path="/suporte"
+            element={<SiteI18nProvider><SupportPage /></SiteI18nProvider>}
+          />
+          <Route
+            path="/:locale/support"
+            element={
+              <LocaleGuard>
+                <SiteI18nProvider>
+                  <SupportPage />
+                </SiteI18nProvider>
+              </LocaleGuard>
+            }
+          />
+
 
 
 

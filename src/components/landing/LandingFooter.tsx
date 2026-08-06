@@ -55,6 +55,9 @@ export function LandingFooter() {
           <Link to={dataDeletionUrl} style={linkStyle} onMouseEnter={onEnter} onMouseLeave={onLeave}>
             {t('footer.dataDeletion')}
           </Link>
+          <Link to={supportUrl} style={linkStyle} onMouseEnter={onEnter} onMouseLeave={onLeave}>
+            {t('footer.support')}
+          </Link>
           <a
             href={`/${slug}#cta`}
             style={linkStyle}
