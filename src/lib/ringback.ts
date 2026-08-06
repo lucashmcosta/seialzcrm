@@ -19,11 +19,17 @@ const RING_FREQS_HZ = [440, 480]; // duplo-tom do ringback US (igual ao do Twili
 const RING_ON_S = 2.0; // 2s tocando
 const RING_OFF_S = 4.0; // 4s em silêncio → ciclo de 6s
 const RING_VOLUME = 0.32; // mais alto que antes (era 0.12); pico somado ~0.6, sem clipar
+// Atraso do 1º toque audível pra CASAR com a animação de entrada do modal (~200ms do
+// DialogContent shadcn + render). Sem isso o som sai instantâneo e "chega antes" do
+// modal aparecer. 350ms alinha som+visual e ainda mascara quase todo o gap (~2s). O
+// AudioContext é criado/resumido NA HORA do clique (autoplay); só o toque espera.
+const RING_START_DELAY_MS = 350;
 
 let audioCtx: AudioContext | null = null;
 let oscillators: OscillatorNode[] = [];
 let gain: GainNode | null = null;
 let cadenceTimer: ReturnType<typeof setInterval> | null = null;
+let startTimer: ReturnType<typeof setTimeout> | null = null;
 
 function ctor(): typeof AudioContext | undefined {
   return window.AudioContext ||
@@ -33,7 +39,9 @@ function ctor(): typeof AudioContext | undefined {
 
 // DEVE ser chamado dentro do gesto do usuário (o clique de ligar) para o AudioContext
 // poder tocar (política de autoplay). É idempotente e à prova de falha (áudio opcional).
-export function startRingback(): void {
+// O 1º toque audível espera `delayMs` (default RING_START_DELAY_MS) pra casar com o
+// modal; a criação/resume do contexto acontece já, dentro do gesto.
+export function startRingback(delayMs: number = RING_START_DELAY_MS): void {
   try {
     const AC = ctor();
     if (!AC) return;
@@ -47,6 +55,8 @@ export function startRingback(): void {
     gain.gain.value = 0;
     gain.connect(audioCtx.destination);
 
+    // Osciladores já rodam (silenciosos, ganho 0) desde o clique; o ganho só abre no
+    // primeiro toque, após o atraso — assim o áudio entra junto com o modal.
     oscillators = RING_FREQS_HZ.map((freq) => {
       const osc = audioCtx!.createOscillator();
       osc.type = "sine";
@@ -56,7 +66,6 @@ export function startRingback(): void {
       return osc;
     });
 
-    // Primeiro "trim" já sai imediato (mascara o gap na hora); depois repete na cadência.
     const ring = () => {
       if (!audioCtx || !gain) return;
       const now = audioCtx.currentTime;
@@ -64,8 +73,16 @@ export function startRingback(): void {
       gain.gain.setValueAtTime(RING_VOLUME, now);
       gain.gain.setValueAtTime(0, now + RING_ON_S);
     };
-    ring();
-    cadenceTimer = setInterval(ring, (RING_ON_S + RING_OFF_S) * 1000);
+    const beginCadence = () => {
+      startTimer = null;
+      ring(); // primeiro toque
+      cadenceTimer = setInterval(ring, (RING_ON_S + RING_OFF_S) * 1000);
+    };
+    if (delayMs > 0) {
+      startTimer = setTimeout(beginCadence, delayMs);
+    } else {
+      beginCadence();
+    }
   } catch {
     /* áudio é opcional — nunca deve afetar a chamada */
   }
@@ -76,6 +93,10 @@ export function stopRingback(): void {
 }
 
 function stopNodes(): void {
+  if (startTimer) {
+    clearTimeout(startTimer);
+    startTimer = null;
+  }
   if (cadenceTimer) {
     clearInterval(cadenceTimer);
     cadenceTimer = null;
