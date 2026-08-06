@@ -43,15 +43,34 @@ async function providerLegs(admin: any, call: any) {
     .select("provider_call_sid, user_id, status, attempt_number")
     .eq("call_id", call.id).not("provider_call_sid", "is", null)
     .order("attempt_number", { ascending: false }).limit(1).maybeSingle();
+  const agentSid = call.call_sid || call.provider_parent_call_id;
   if (call.direction === "incoming") {
     return {
-      customerCallSid: call.call_sid || call.provider_parent_call_id,
+      customerCallSid: agentSid,
       originalAgentCallSid: attempt?.provider_call_sid || null,
     };
   }
+  // A perna do CLIENTE (outbound) vem de call_attempts.provider_call_sid — mas esse
+  // campo é VOLÁTIL: nasce como o SID do AGENTE (handleVoice grava o parentSid),
+  // é sobrescrito pro SID do cliente pelos status callbacks, e pode voltar a ser o
+  // do agente quando a perna do agente passa pelo /route no churn de hold→retomar.
+  // NUNCA pode ser o próprio SID do agente (senão o hold enfileira o AGENTE e larga
+  // o cliente — exatamente a inversão no 2º hold). Se estiver corrompido/ausente,
+  // cai no customer_call_sid ESTÁVEL capturado por um transfer anterior desta mesma
+  // chamada (a perna PSTN real do cliente não muda durante a chamada).
+  let customerCallSid = attempt?.provider_call_sid || null;
+  if (!customerCallSid || (agentSid && customerCallSid === agentSid)) {
+    const { data: prior } = await admin.from("call_transfers")
+      .select("customer_call_sid")
+      .eq("call_id", call.id)
+      .not("customer_call_sid", "is", null)
+      .neq("customer_call_sid", agentSid)
+      .order("created_at", { ascending: false }).limit(1).maybeSingle();
+    customerCallSid = prior?.customer_call_sid || customerCallSid;
+  }
   return {
-    customerCallSid: attempt?.provider_call_sid || null,
-    originalAgentCallSid: call.call_sid || call.provider_parent_call_id,
+    customerCallSid,
+    originalAgentCallSid: agentSid,
   };
 }
 
