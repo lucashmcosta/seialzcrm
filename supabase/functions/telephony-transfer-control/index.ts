@@ -231,9 +231,19 @@ Deno.serve(async (req) => {
         return json({ error: "agent_leg_not_found" }, 409);
       }
       const twilio = await twilioApiContext(context.admin, context.organizationId);
+      // O <Dial> do resume PRECISA de `action` apontando pro /route — igual ao
+      // <Dial> original da chamada (handleVoice) e ao keepalive do handleRoute.
+      // É esse `action` que devolve a perna do agente ao handleRoute quando o
+      // bridge termina: numa nova ESPERA (transfer_status='on_hold') o handleRoute
+      // a mantém VIVA de novo; senão encerra limpo. SEM ele, o Dial do resume cai
+      // fora do fim do documento e a perna do agente DESLIGA no 2º hold (quando o
+      // cliente é re-enfileirado e sai deste bridge) — a inversão espera↔agente.
+      const resumeRouteUrl = escapeXml(
+        `${WEBHOOK_BASE}/route?callId=${encodeURIComponent(transfer.call_id)}`,
+      );
       try {
         await updateTwilioCall(twilio, agentCallSid, {
-          twiml: `<Response><Dial answerOnBridge="true"><Queue>${
+          twiml: `<Response><Dial answerOnBridge="true" action="${resumeRouteUrl}" method="POST"><Queue>${
             escapeXml(transfer.queue_name)
           }</Queue></Dial></Response>`,
         });
