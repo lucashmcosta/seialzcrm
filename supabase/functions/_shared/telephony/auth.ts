@@ -41,30 +41,30 @@ export async function requireTelephonyUser(req: Request) {
     Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? "",
   );
   const token = authHeader.slice("Bearer ".length);
-  const { data: claims, error } = await auth.auth.getClaims(token);
-  const authUserId = claims?.claims?.sub;
-  if (error || !authUserId) throw new Response("Unauthorized", { status: 401 });
-
-  const { data: user } = await admin
-    .from("users")
-    .select("id")
-    .eq("auth_user_id", authUserId)
-    .single();
-  if (!user) throw new Response("User not found", { status: 404 });
-
   const requestedOrganizationId = req.headers.get("x-organization-id")?.trim();
   if (!requestedOrganizationId) {
     throw new Response("Organization required", { status: 400 });
   }
+  const { data: claims, error } = await auth.auth.getClaims(token);
+  const authUserId = claims?.claims?.sub;
+  if (error || !authUserId) throw new Response("Unauthorized", { status: 401 });
 
-  const { data: membership } = await admin
-    .from("user_organizations")
-    .select("organization_id, permission_profiles!inner(permissions)")
-    .eq("user_id", user.id)
-    .eq("organization_id", requestedOrganizationId)
-    .eq("is_active", true)
-    .single();
-  if (!membership) {
+  // Uma query só (era 2 round-trips seriais: users + user_organizations): busca o
+  // user já com a membership da org pedida via inner join.
+  const { data: user } = await admin
+    .from("users")
+    .select(
+      "id, user_organizations!inner(organization_id, permission_profiles!inner(permissions))",
+    )
+    .eq("auth_user_id", authUserId)
+    .eq("user_organizations.organization_id", requestedOrganizationId)
+    .eq("user_organizations.is_active", true)
+    .maybeSingle();
+  const membership = (user?.user_organizations as unknown as Array<{
+    organization_id: string;
+    permission_profiles?: { permissions?: Record<string, boolean> };
+  }>)?.[0];
+  if (!user || !membership) {
     throw new Response("Organization not found", { status: 404 });
   }
 
@@ -72,9 +72,7 @@ export async function requireTelephonyUser(req: Request) {
     admin,
     token,
     userId: user.id as string,
-    organizationId: membership.organization_id as string,
-    permissions: (membership.permission_profiles as unknown as {
-      permissions?: Record<string, boolean>;
-    })?.permissions ?? {},
+    organizationId: membership.organization_id,
+    permissions: membership.permission_profiles?.permissions ?? {},
   };
 }
