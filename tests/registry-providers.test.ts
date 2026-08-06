@@ -7,6 +7,7 @@ import {
   lookupSerproCpfV3,
   normalizeCpfBrasilResponse,
   normalizeSerproResponse,
+  sanitizeProviderMessage,
 } from "../supabase/functions/_shared/registry/providers.ts";
 
 function assertEquals(actual: unknown, expected: unknown): void {
@@ -62,8 +63,24 @@ Deno.test("CPF Brasil v2 maps documented failures without exposing provider mess
   if (expired.ok || notFound.ok) throw new Error("Expected provider failures");
   assertEquals(expired.error, "provider_token_expired");
   assertEquals(expired.retryable, false);
-  assertEquals(notFound.error, "invalid_or_not_found");
+  // CPF_NOT_FOUND = CPF válido porém ausente da base → `not_found` (distinto de
+  // MISSING_CPF_PARAMETER/INVALID_CPF_FORMAT, que viram `invalid_or_not_found`).
+  assertEquals(notFound.error, "not_found");
   assertEquals(notFound.retryable, false);
+});
+
+Deno.test("sanitizeProviderMessage redige PII estruturada (CPF, e-mail, data, dígitos)", () => {
+  const out = sanitizeProviderMessage(
+    "CPF 529.982.247-25 de fulano@ex.com nasc 01/05/1976 tel 11987654321",
+  );
+  if (!out) throw new Error("expected string");
+  assertEquals(out.includes("529.982.247-25"), false);
+  assertEquals(out.includes("fulano@ex.com"), false);
+  assertEquals(out.includes("01/05/1976"), false);
+  assertEquals(out.includes("11987654321"), false);
+  assertEquals(out.includes("[cpf]") && out.includes("[email]") && out.includes("[data]"), true);
+  // ISO também
+  assertEquals(sanitizeProviderMessage("em 1976-05-01")?.includes("1976-05-01"), false);
 });
 
 // --- SERPRO --------------------------------------------------------------

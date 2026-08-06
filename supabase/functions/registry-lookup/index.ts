@@ -51,9 +51,13 @@ function allowed(key: string): boolean {
 }
 
 async function identifierHash(value: string): Promise<string> {
+  // Chave dedicada para pseudonimizar o identificador (CPF) na auditoria. Sem o
+  // literal fraco anterior ("registry-audit"): um fallback de baixa entropia
+  // torna o HMAC de CPF reversível por força bruta (~10^9). A service-role key
+  // (alta entropia) fica só como último recurso; fail-closed se nenhuma existir.
   const secret = Deno.env.get("REGISTRY_AUDIT_HASH_KEY")
-    ?? Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")
-    ?? "registry-audit";
+    ?? Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
+  if (!secret) throw new Error("registry_audit_hash_key_missing");
   const encoder = new TextEncoder();
   const key = await crypto.subtle.importKey(
     "raw",
