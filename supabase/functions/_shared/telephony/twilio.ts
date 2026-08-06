@@ -52,11 +52,24 @@ async function decryptMaybe(
   return typeof plaintext === "string" ? plaintext : "";
 }
 
+// Cache por-instância (as functions são mantidas quentes por cron) da config do
+// Twilio por org, TTL curto — evita reler organization_integrations + descriptografar
+// AES a CADA hop de webhook (verifySignature/twilioApiContext, várias vezes por
+// operação). Invalida em ensureApiKey (que muta a config). Trocar credencial reflete
+// em até TTL segundos — aceitável (raríssimo) e ainda assim seguro.
+const _voiceConfigCache = new Map<
+  string,
+  { config: TwilioVoiceConfig; expiresAt: number }
+>();
+const VOICE_CONFIG_TTL_MS = 30_000;
+
 // deno-lint-ignore no-explicit-any
 export async function loadTwilioVoiceConfig(
   admin: any,
   organizationId: string,
 ): Promise<TwilioVoiceConfig> {
+  const cached = _voiceConfigCache.get(organizationId);
+  if (cached && cached.expiresAt > Date.now()) return cached.config;
   const { data: row, error } = await admin
     .from("organization_integrations")
     .select("id, config_values, admin_integrations!inner(slug)")
@@ -97,7 +110,7 @@ export async function loadTwilioVoiceConfig(
       .update({ config_values: secured }).eq("id", row.id);
     if (secureError) throw new Error("twilio_credential_migration_failed");
   }
-  return {
+  const result: TwilioVoiceConfig = {
     integrationId: row.id,
     accountSid: String(config.account_sid),
     authToken,
@@ -107,6 +120,11 @@ export async function loadTwilioVoiceConfig(
       : undefined,
     apiKeySecret: apiKeySecret || undefined,
   };
+  _voiceConfigCache.set(organizationId, {
+    config: result,
+    expiresAt: Date.now() + VOICE_CONFIG_TTL_MS,
+  });
+  return result;
 }
 
 // deno-lint-ignore no-explicit-any
@@ -149,6 +167,7 @@ async function ensureApiKey(
   next.api_key_secret_encrypted = encryptedSecret;
   await admin.from("organization_integrations").update({ config_values: next })
     .eq("id", config.integrationId);
+  _voiceConfigCache.delete(organizationId); // config mudou (nova API key)
   return {
     ...config,
     apiKeySid: String(created.sid),
