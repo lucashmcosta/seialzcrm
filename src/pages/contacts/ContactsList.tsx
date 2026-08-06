@@ -678,7 +678,9 @@ export default function ContactsList() {
                   {initialLoading ? (
                     <TableBody
                       items={Array.from({ length: Math.min(itemsPerPage, 10) }, (_, i) => ({ id: `__skel_${i}` }))}
+                      dependencies={[activeColumns]}
                     >
+
                       {(row) => (
                         <TableRow key={row.id}>
                           <TableCheckboxCell isSelected={false} onChange={() => {}} />
@@ -706,7 +708,7 @@ export default function ContactsList() {
                       )}
                     </TableBody>
                   ) : (
-                    <TableBody items={sortedContacts} dependencies={[selectedIds]}>
+                    <TableBody items={sortedContacts} dependencies={[selectedIds, activeColumns]}>
                       {(contact) => (
                         <TableRow
                           key={contact.id}
