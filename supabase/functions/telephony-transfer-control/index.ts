@@ -14,6 +14,10 @@ import {
 
 const SUPABASE_URL = Deno.env.get("SUPABASE_URL") ?? "";
 const WEBHOOK_BASE = `${SUPABASE_URL}/functions/v1/telephony-webhook`;
+// Música de espera direto no provedor (twimlet/mp3), não numa function nossa —
+// 1 hop até a música. Ver telephony-transfer-intent. Configurável via env.
+const HOLD_MUSIC_WAIT_URL = Deno.env.get("TELEPHONY_HOLD_MUSIC_URL") ||
+  "http://twimlets.com/holdmusic?Bucket=com.twilio.music.ambient";
 
 // deno-lint-ignore no-explicit-any
 async function completeCommand(
@@ -466,12 +470,8 @@ Deno.serve(async (req) => {
       const twilio = await twilioApiContext(context.admin, context.organizationId);
       const cycle = Number(reclaimedTransfer.consultation_sequence);
       const enqueueTwiml = `<Response><Enqueue waitUrl="${
-        escapeXml(
-          `${WEBHOOK_BASE}/transfer-wait?transferId=${
-            encodeURIComponent(transfer.id)
-          }&cycle=${cycle}`,
-        )
-      }" waitUrlMethod="POST" action="${
+        escapeXml(HOLD_MUSIC_WAIT_URL)
+      }" waitUrlMethod="GET" action="${
         escapeXml(
           `${WEBHOOK_BASE}/transfer-queue-result?transferId=${
             encodeURIComponent(transfer.id)

@@ -1203,6 +1203,16 @@ async function handleTransferQueueResult(
     !context ||
     !await verifySignature(req, params, context.transfer.organization_id)
   ) return empty(403);
+  // Captura o SID da fila que o <Enqueue> criou sob demanda (a waitUrl agora
+  // aponta DIRETO pra música e não passa mais pela nossa transfer-wait).
+  // Idempotente/best-effort — só serve pro cleanup (deleteTwilioQueue).
+  if (params.QueueSid) {
+    try {
+      await admin.from("call_transfers")
+        .update({ provider_queue_sid: params.QueueSid })
+        .eq("id", context.transfer.id).is("provider_queue_sid", null);
+    } catch { /* sem impacto no fluxo */ }
+  }
   const result = params.QueueResult || "unknown";
   const cycle = transferCycle(
     url,
