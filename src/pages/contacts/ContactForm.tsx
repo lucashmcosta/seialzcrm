@@ -32,6 +32,7 @@ import {
   type CpfVerificationStatus,
   type OperatingCountryCode,
 } from '@/lib/regional';
+import { AlertTriangle, CheckCircle2, Loader2, RefreshCw } from 'lucide-react';
 
 /**
  * Porta em TS a função public.normalize_phone_br do banco.
@@ -233,12 +234,12 @@ export default function ContactForm() {
     setFormData((current) => ({ ...current, cpf: formatCpf(normalized) }));
     if (normalized !== lastCpfLookupRef.current) {
       setCpfFallbackAvailable(false);
-      setBirthDateInput('');
+      // Preserva a data de nascimento (é input do usuário, não resultado do CPF):
+      // ao corrigir/reeditar o CPF, a data digitada não deve sumir.
       setCpfVerification((current) => ({
         ...current,
         status: 'unverified',
         registrationStatus: '',
-        birthDate: '',
         sex: '',
         motherName: '',
         provider: '',
@@ -825,43 +826,47 @@ export default function ContactForm() {
                 <h3 className="text-sm font-semibold text-foreground border-b pb-2">Documentos</h3>
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   <div>
-                    <div className="flex items-center justify-between gap-2">
-                      <Label htmlFor="cpf">CPF</Label>
-                      <span className={`text-xs ${
-                        cpfVerification.status === 'verified'
-                          ? 'text-emerald-600'
-                          : cpfVerification.status === 'invalid'
-                          ? 'text-destructive'
-                          : cpfVerification.status === 'not_found'
-                          ? 'text-amber-600'
-                          : 'text-muted-foreground'
-                      }`}>
-
-                        {cpfLookupLoading ? 'Consultando…' : cpfStatusLabelFor(cpfVerification.status, locale)}
+                    <Label htmlFor="cpf">CPF</Label>
+                    <div className="relative">
+                      <Input
+                        id="cpf"
+                        value={formData.cpf}
+                        onChange={(e) => handleCpfChange(e.target.value)}
+                        onBlur={() => void verifyCpf()}
+                        onKeyDown={(e) => {
+                          if (e.key === 'Enter') {
+                            e.preventDefault();
+                            void verifyCpf();
+                          }
+                        }}
+                        placeholder="000.000.000-00"
+                        inputMode="numeric"
+                        minLength={14}
+                        maxLength={14}
+                        aria-describedby="cpf-format-help"
+                        className="pr-9"
+                      />
+                      <span
+                        className="pointer-events-none absolute right-2.5 top-1/2 -translate-y-1/2"
+                        title={cpfLookupLoading ? 'Verificando…' : cpfStatusLabelFor(cpfVerification.status, locale)}
+                        aria-label={cpfLookupLoading ? 'Verificando' : cpfStatusLabelFor(cpfVerification.status, locale)}
+                      >
+                        {cpfLookupLoading ? (
+                          <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />
+                        ) : cpfVerification.status === 'verified' ? (
+                          <CheckCircle2 className="h-4 w-4 text-emerald-600" />
+                        ) : cpfVerification.status === 'invalid' ? (
+                          <AlertTriangle className="h-4 w-4 text-destructive" />
+                        ) : (cpfVerification.status === 'not_found' || cpfVerification.status === 'error') ? (
+                          <AlertTriangle className="h-4 w-4 text-amber-500" />
+                        ) : null}
                       </span>
                     </div>
-                    <Input
-                      id="cpf"
-                      value={formData.cpf}
-                      onChange={(e) => handleCpfChange(e.target.value)}
-                      onBlur={() => void verifyCpf()}
-                      onKeyDown={(e) => {
-                        if (e.key === 'Enter') {
-                          e.preventDefault();
-                          void verifyCpf();
-                        }
-                      }}
-                      placeholder="000.000.000-00"
-                      inputMode="numeric"
-                      minLength={14}
-                      maxLength={14}
-                      aria-describedby="cpf-format-help"
-                    />
                     <p id="cpf-format-help" className="mt-1 text-xs text-muted-foreground">
                       Se informado, o CPF deve ter exatamente 11 dígitos.
                     </p>
                     {cpfFallbackAvailable && (
-                      <div className="mt-2 rounded-md border border-amber-300 bg-amber-50 p-2 text-xs text-amber-800">
+                      <div className="mt-2 rounded-md border border-amber-300 bg-amber-50 p-2.5 text-xs text-amber-800">
                         <p className="mb-2">
                           Não confirmado no provedor primário. Informe a data de
                           nascimento para confirmar direto na Receita Federal (SERPRO).
@@ -869,19 +874,36 @@ export default function ContactForm() {
                         <Label htmlFor="cpf-fallback-birthdate" className="sr-only">
                           Data de nascimento
                         </Label>
-                        <Input
-                          id="cpf-fallback-birthdate"
-                          inputMode="numeric"
-                          placeholder="dd/mm/aaaa"
-                          maxLength={10}
-                          value={birthDateInput}
-                          onChange={(event) => handleBirthDateChange(event.target.value)}
-                          disabled={cpfLookupLoading}
-                          autoFocus
-                        />
-                        {cpfLookupLoading && (
-                          <p className="mt-1">Confirmando na Receita…</p>
-                        )}
+                        <div className="relative">
+                          <Input
+                            id="cpf-fallback-birthdate"
+                            inputMode="numeric"
+                            placeholder="dd/mm/aaaa"
+                            maxLength={10}
+                            value={birthDateInput}
+                            onChange={(event) => handleBirthDateChange(event.target.value)}
+                            disabled={cpfLookupLoading}
+                            autoFocus
+                            className="bg-white pr-9"
+                          />
+                          <button
+                            type="button"
+                            title="Confirmar na Receita"
+                            aria-label="Confirmar na Receita"
+                            disabled={cpfLookupLoading || !brDateToIso(birthDateInput)}
+                            onClick={() => {
+                              const iso = brDateToIso(birthDateInput);
+                              if (iso) void verifyCpf(formData.cpf, undefined, { birthDate: iso });
+                            }}
+                            className="absolute right-2 top-1/2 -translate-y-1/2 text-amber-700 hover:text-amber-900 disabled:opacity-40"
+                          >
+                            {cpfLookupLoading ? (
+                              <Loader2 className="h-4 w-4 animate-spin" />
+                            ) : (
+                              <RefreshCw className="h-4 w-4" />
+                            )}
+                          </button>
+                        </div>
                       </div>
                     )}
                   </div>
