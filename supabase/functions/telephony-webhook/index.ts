@@ -1263,6 +1263,10 @@ async function handleTransferQueueResult(
       const sid of [
         context.transfer.consult_parent_call_sid,
         context.transfer.consult_target_call_sid,
+        // Perna do agente mantida VIVA no hold (keepalive): se o cliente desligar
+        // na espera, derruba já a perna do agente (senão ela só cairia no próximo
+        // tick do loop de keepalive, ~60s depois).
+        context.call.call_sid,
       ]
     ) {
       if (sid) {
@@ -1442,6 +1446,22 @@ async function handleRoute(
   // An out-of-order callback from the original Dial must not complete the
   // business call after the customer has entered the private transfer flow.
   if (transferIsActive) {
+    // HOLD: mantém a perna do agente VIVA em vez de encerrar, para o retomar ser
+    // instantâneo (o resume redireciona esta MESMA perna pra fila do cliente,
+    // sem re-discar). Loop leve de keepalive (Pause + Redirect ao /route) que se
+    // auto-encerra quando o estado sai de on_hold: o resume redireciona a perna
+    // pra fora deste loop; se o cliente desligar, transfer-queue-result derruba
+    // a perna do agente e o próximo tick do loop cai no <Hangup/> abaixo.
+    if (context.call.transfer_status === "on_hold") {
+      const routeUrl = escapeXml(
+        `${BASE_URL}/route?callId=${encodeURIComponent(callId)}${
+          attemptId ? `&attemptId=${encodeURIComponent(attemptId)}` : ""
+        }`,
+      );
+      return xml(
+        `<Pause length="60"/><Redirect method="POST">${routeUrl}</Redirect>`,
+      );
+    }
     if (attemptId) {
       await admin.from("call_attempts").update({
         status: dialStatus,

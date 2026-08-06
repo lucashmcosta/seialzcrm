@@ -1415,6 +1415,13 @@ export function TelephonyProvider({ children }: { children: ReactNode }) {
           }
           throw connectError;
         }
+      } else if (action === 'resume') {
+        // Retomar via keepalive: a MESMA perna do atendente foi religada ao cliente
+        // no servidor (sem re-discar). Só desmutamos o mic — o mute foi aplicado ao
+        // pôr em espera.
+        try { activeCallRef.current?.mute(false); } catch { /* noop */ }
+        try { incomingCallRef.current?.mute(false); } catch { /* noop */ }
+        setIsMuted(false);
       }
       if (action === 'complete') toast.success(`Transferindo para ${current.targetName}`);
       if (action === 'return_to_customer') toast.success('Voltando para o cliente');
