@@ -702,10 +702,14 @@ export function TelephonyProvider({ children }: { children: ReactNode }) {
         codecPreferences: voiceCodecPreferences(Call.Codec),
         allowIncomingWhileBusy: false,
       });
-      // Remove o "blip" do SDK nas transições de perna da transferência (parkear/
-      // retomar): o som de `disconnect` era o que tocava ao colocar em espera e ao
-      // voltar, dando sensação de delay. O feedback visual da nossa UI já basta.
+      // Remove os "blips" do SDK nas transições de perna da transferência:
+      //  - `disconnect`: tocava ao PARKEAR (perna do atendente cai).
+      //  - `outgoing`: tocava ao RETOMAR (navegador re-disca a perna pra buscar o
+      //    cliente de volta).
+      // Mantemos `incoming` (toque de chamada recebida é feedback útil). O feedback
+      // visual da UI já cobre; não afeta chamadas normais de forma relevante.
       try { device.audio?.disconnect(false); } catch { /* audio API opcional */ }
+      try { device.audio?.outgoing(false); } catch { /* idem */ }
 
       if (telephonyV2) {
         device.on('incoming', async (call) => {
