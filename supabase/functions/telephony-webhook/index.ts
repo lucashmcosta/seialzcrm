@@ -1295,12 +1295,15 @@ async function handleVoice(
   if (callId) {
     const context = await callContext(callId);
     if (!context) return message("Não foi possível iniciar a chamada.");
-    if (!await verifySignature(req, params, context.call.organization_id)) {
-      return empty(403);
-    }
-    if (!await telephonyV2Enabled(admin, context.call.organization_id)) {
-      return empty(404);
-    }
+    // sig-check e flag v2 são leituras independentes (dependem só do org) → em
+    // paralelo em vez de 2 round-trips em série no caminho crítico da discagem. A
+    // assinatura ainda BARRA antes de qualquer escrita (checada logo abaixo).
+    const [signatureOk, v2Enabled] = await Promise.all([
+      verifySignature(req, params, context.call.organization_id),
+      telephonyV2Enabled(admin, context.call.organization_id),
+    ]);
+    if (!signatureOk) return empty(403);
+    if (!v2Enabled) return empty(404);
     if (
       context.call.direction !== "outgoing" ||
       !["queued", "initiated", "ringing"].includes(context.call.status)
@@ -1308,20 +1311,24 @@ async function handleVoice(
       return message("Chamada inválida ou já processada.");
     }
     const parentSid = params.CallSid;
-    const { data: attempt } = await admin.from("call_attempts").upsert({
-      organization_id: context.call.organization_id,
-      call_id: context.call.id,
-      user_id: context.call.initiated_by_user_id,
-      attempt_number: 1,
-      provider: "twilio",
-      provider_call_sid: parentSid,
-      status: "initiated",
-    }, { onConflict: "call_id,attempt_number" }).select("id").single();
-    await admin.from("calls").update({
-      call_sid: parentSid,
-      provider_parent_call_id: parentSid,
-      status: "initiated",
-    }).eq("id", context.call.id);
+    // As duas escritas (call_attempts + calls) são independentes → Promise.all. O
+    // attempt.id é usado no query string da TwiML abaixo, por isso guardamos o retorno.
+    const [{ data: attempt }] = await Promise.all([
+      admin.from("call_attempts").upsert({
+        organization_id: context.call.organization_id,
+        call_id: context.call.id,
+        user_id: context.call.initiated_by_user_id,
+        attempt_number: 1,
+        provider: "twilio",
+        provider_call_sid: parentSid,
+        status: "initiated",
+      }, { onConflict: "call_id,attempt_number" }).select("id").single(),
+      admin.from("calls").update({
+        call_sid: parentSid,
+        provider_parent_call_id: parentSid,
+        status: "initiated",
+      }).eq("id", context.call.id),
+    ]);
     const query = `callId=${context.call.id}&attemptId=${attempt?.id ?? ""}`;
     const routeUrl = escapeXml(`${BASE_URL}/route?${query}`);
     const statusUrl = escapeXml(`${BASE_URL}/status?${query}`);
