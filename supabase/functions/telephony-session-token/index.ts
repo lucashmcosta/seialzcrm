@@ -9,6 +9,9 @@ import { telephonyV2Enabled } from "../_shared/telephony/feature-flag.ts";
 Deno.serve(async (req) => {
   const preflight = corsPreflight(req);
   if (preflight) return preflight;
+  // warm-ping (cron): mantém a function quente, evitando cold start (~1.5s) no
+  // caminho interativo (aqui: emissão do token → 1ª discagem). Responde antes de auth/DB.
+  if (new URL(req.url).pathname.endsWith("/warm")) return new Response("ok");
   if (req.method !== "POST") return json({ error: "method_not_allowed" }, 405);
   try {
     const context = await requireTelephonyUser(req);

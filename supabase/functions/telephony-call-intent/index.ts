@@ -67,6 +67,8 @@ async function authorizedNumber(
 Deno.serve(async (req) => {
   const preflight = corsPreflight(req);
   if (preflight) return preflight;
+  // warm-ping (cron): mantém a function quente (aqui: criação da chamada → discagem).
+  if (new URL(req.url).pathname.endsWith("/warm")) return new Response("ok");
   if (req.method !== "POST") return json({ error: "method_not_allowed" }, 405);
   try {
     const context = await requireTelephonyUser(req);
