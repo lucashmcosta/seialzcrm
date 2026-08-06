@@ -72,45 +72,59 @@ Deno.serve(async (req) => {
   if (req.method !== "POST") return json({ error: "method_not_allowed" }, 405);
   try {
     const context = await requireTelephonyUser(req);
-    if (!await telephonyV2Enabled(context.admin, context.organizationId)) {
-      return json({ error: "telephony_v2_disabled" }, 404);
-    }
+    // Permissão vem em memória do requireTelephonyUser (sem query) → checa primeiro,
+    // fail-fast de graça, antes de disparar qualquer leitura.
     if (context.permissions.can_make_calls !== true) {
       return json({ error: "cannot_make_calls" }, 403);
     }
     const body = await req.json() as TelephonyCallIntentRequest;
     if (!body.to) return json({ error: "phone_required" }, 400);
 
-    const selected = await authorizedNumber(
-      context.admin,
-      context.organizationId,
-      context.userId,
-      body.phoneNumberId,
-    );
+    // Caminho crítico da discagem: flag v2, número autorizado, e as validações de
+    // contato/oportunidade são todas independentes (só dependem do org do auth) →
+    // em paralelo em vez de 4 round-trips em série. O insert (que precisa do
+    // number.id) continua depois. Nenhuma escrita muda; só reordena as leituras.
+    const [v2Enabled, selected, contactMissing, opportunityMissing] =
+      await Promise.all([
+        telephonyV2Enabled(context.admin, context.organizationId),
+        authorizedNumber(
+          context.admin,
+          context.organizationId,
+          context.userId,
+          body.phoneNumberId,
+        ),
+        body.contactId
+          ? context.admin.from("contacts").select("id")
+            .eq("id", body.contactId).eq(
+              "organization_id",
+              context.organizationId,
+            )
+            .is("deleted_at", null).maybeSingle().then((r: { data: unknown }) =>
+              !r.data
+            )
+          : Promise.resolve(false),
+        body.opportunityId
+          ? context.admin.from("opportunities").select("id")
+            .eq("id", body.opportunityId).eq(
+              "organization_id",
+              context.organizationId,
+            ).is("deleted_at", null).maybeSingle().then((
+              r: { data: unknown },
+            ) => !r.data)
+          : Promise.resolve(false),
+      ]);
+    if (!v2Enabled) return json({ error: "telephony_v2_disabled" }, 404);
     if (selected.error || !selected.number) {
       return json(
         { error: selected.error ?? "phone_number_not_found" },
         selected.error === "phone_number_not_authorized" ? 403 : 400,
       );
     }
+    if (contactMissing) return json({ error: "contact_not_found" }, 404);
+    if (opportunityMissing) {
+      return json({ error: "opportunity_not_found" }, 404);
+    }
     const number = selected.number;
-    if (body.contactId) {
-      const { data: contact } = await context.admin.from("contacts").select(
-        "id",
-      )
-        .eq("id", body.contactId).eq("organization_id", context.organizationId)
-        .is("deleted_at", null).maybeSingle();
-      if (!contact) return json({ error: "contact_not_found" }, 404);
-    }
-    if (body.opportunityId) {
-      const { data: opportunity } = await context.admin.from("opportunities")
-        .select("id")
-        .eq("id", body.opportunityId).eq(
-          "organization_id",
-          context.organizationId,
-        ).is("deleted_at", null).maybeSingle();
-      if (!opportunity) return json({ error: "opportunity_not_found" }, 404);
-    }
 
     const toE164 = normalizeE164BR(body.to);
     const { data: call, error } = await context.admin.from("calls").insert({
