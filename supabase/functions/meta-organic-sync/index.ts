@@ -91,15 +91,23 @@ serve(async (req) => {
       const stats = { media: 0, insights: 0 };
       try {
         const platform = asset.asset_type === "instagram_account" ? "instagram" : "facebook";
+        // Página exige PAGE access token (erro #210 com token de usuário/system-user).
+        let mediaToken = accessToken;
+        if (platform === "facebook") {
+          try {
+            const pt = await metaGraphGet(`/${asset.external_id}`, { fields: "access_token" }, { accessToken, appSecret });
+            if (pt?.access_token) mediaToken = pt.access_token;
+          } catch (_) { /* sem page token -> tenta com o token atual */ }
+        }
         let media: any[] = [];
         if (platform === "instagram") {
           media = await graphPaginate(`/${asset.external_id}/media`,
             { fields: "id,caption,media_type,media_product_type,permalink,timestamp,thumbnail_url", limit: 50 },
-            accessToken, appSecret, { maxPages: 2 });
+            mediaToken, appSecret, { maxPages: 2 });
         } else {
           media = await graphPaginate(`/${asset.external_id}/published_posts`,
             { fields: "id,message,permalink_url,created_time,full_picture", limit: 50 },
-            accessToken, appSecret, { maxPages: 2 });
+            mediaToken, appSecret, { maxPages: 2 });
         }
 
         for (const m of media.slice(0, MAX_MEDIA)) {
@@ -121,7 +129,7 @@ serve(async (req) => {
             const metric = platform === "instagram"
               ? "reach,likes,comments,saved,shares"
               : "post_impressions,post_impressions_unique,post_reactions_by_type_total";
-            const ins = await metaGraphGet(`/${m.id}/insights`, { metric }, { accessToken, appSecret });
+            const ins = await metaGraphGet(`/${m.id}/insights`, { metric }, { accessToken: mediaToken, appSecret });
             const rows = ins?.data ?? [];
             await admin.from("meta_media_insights").upsert({
               organization_id, connection_id, media_id: mediaRow.id, period: "lifetime", end_time: null,
