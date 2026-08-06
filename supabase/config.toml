@@ -1,5 +1,9 @@
 project_id = "qvmtzfvkhkhkhdpclzua"
 
+# Meta Data Deletion Callback: público (a Meta chama sem JWT; valida signed_request).
+[functions.meta-data-deletion-callback]
+verify_jwt = false
+
 [functions.meta-whatsapp-webhook]
 verify_jwt = false
 
@@ -116,3 +120,19 @@ verify_jwt = false
 # Mesma auth própria em código via header x-health-token.
 [functions.service-events]
 verify_jwt = false
+
+# TEMPORÁRIO (validação F0 local) — portas alternativas p/ não conflitar com
+# outra stack supabase local. NÃO COMMITAR: revertido antes do PR.
+[api]
+port = 54421
+[db]
+port = 54422
+shadow_port = 54420
+[db.pooler]
+port = 54429
+[studio]
+port = 54423
+[inbucket]
+port = 54424
+[analytics]
+port = 54427

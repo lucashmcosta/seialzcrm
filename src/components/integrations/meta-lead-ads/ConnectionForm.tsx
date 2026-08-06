@@ -218,7 +218,11 @@ export function ConnectionForm({ existing, onSuccess }: Props) {
     <div className="space-y-6">
       <Card className="p-6 space-y-6">
         <div>
-          <h2 className="text-lg font-semibold">Conectar conta Meta</h2>
+          <h2 className="text-lg font-semibold">Conectar conta Meta <span className="ml-2 rounded bg-amber-100 px-1.5 py-0.5 text-[11px] font-medium text-amber-800">Legado</span></h2>
+          <p className="mb-2 text-xs text-amber-700">
+            Método legado (token manual). Prefira <strong>“Continuar com Facebook”</strong> no card de
+            Conexão Meta em Integrações — mantido temporariamente para fallback/debug.
+          </p>
           <p className="text-sm text-muted-foreground mt-1">
             Gere um System User Token no Business Manager → Configurações → System Users → Generate Token,
             com permissões <code className="text-xs bg-muted px-1 rounded">leads_retrieval</code>,{" "}
