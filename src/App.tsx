@@ -178,6 +178,7 @@ import LandingPage from "./pages/LandingPage";
 const PrivacyPolicyPage = lazyWithRetry("PrivacyPolicyPage", () => import("./pages/legal/PrivacyPolicy"));
 const TermsOfServicePage = lazyWithRetry("TermsOfServicePage", () => import("./pages/legal/TermsOfService"));
 const DataDeletionPage = lazyWithRetry("DataDeletionPage", () => import("./pages/legal/DataDeletion"));
+const SupportPage = lazyWithRetry("SupportPage", () => import("./pages/legal/Support"));
 import Onboarding from "./pages/Onboarding";
 import Dashboard from "./pages/Dashboard";
 import ReportsPage from "./pages/reports/ReportsPage";
@@ -424,6 +425,21 @@ const App = () => (
             path="/exclusao-de-dados"
             element={<SiteI18nProvider><DataDeletionPage /></SiteI18nProvider>}
           />
+          <Route
+            path="/suporte"
+            element={<SiteI18nProvider><SupportPage /></SiteI18nProvider>}
+          />
+          <Route
+            path="/:locale/support"
+            element={
+              <LocaleGuard>
+                <SiteI18nProvider>
+                  <SupportPage />
+                </SiteI18nProvider>
+              </LocaleGuard>
+            }
+          />
+
 
 
 

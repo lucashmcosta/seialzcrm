@@ -64,7 +64,7 @@ const PAGES = [
     seoTitle: "Privacy Policy — Seialz",
     seoDesc: "How Kairos Labs LLC (Seialz) collects, uses, stores, shares, and protects personal information, including data received from Meta platforms.",
     updatedLabel: "Last updated",
-    footer: { privacy: "Privacy Policy", terms: "Terms of Service", data: "Data Deletion" },
+    footer: { privacy: "Privacy Policy", terms: "Terms of Service", data: "Data Deletion", support: "Support" },
     altUrl: "/politica-de-privacidade",
     altLabel: "PT",
     currentLabel: "EN",
@@ -79,7 +79,7 @@ const PAGES = [
     seoTitle: "Terms of Service — Seialz",
     seoDesc: "Terms and conditions for using the Seialz platform (Kairos Labs LLC).",
     updatedLabel: "Last updated",
-    footer: { privacy: "Privacy Policy", terms: "Terms of Service", data: "Data Deletion" },
+    footer: { privacy: "Privacy Policy", terms: "Terms of Service", data: "Data Deletion", support: "Support" },
     altUrl: "/termos-de-servico",
     altLabel: "PT",
     currentLabel: "EN",
@@ -94,7 +94,7 @@ const PAGES = [
     seoTitle: "Data Deletion Instructions — Seialz",
     seoDesc: "How to request the deletion of your data from Seialz, including data received through Meta products (WhatsApp, Facebook, Instagram).",
     updatedLabel: "Last updated",
-    footer: { privacy: "Privacy Policy", terms: "Terms of Service", data: "Data Deletion" },
+    footer: { privacy: "Privacy Policy", terms: "Terms of Service", data: "Data Deletion", support: "Support" },
     altUrl: "/exclusao-de-dados",
     altLabel: "PT",
     currentLabel: "EN",
@@ -109,7 +109,7 @@ const PAGES = [
     seoTitle: "Política de Privacidade — Seialz",
     seoDesc: "Como a Kairos Labs LLC (Seialz) coleta, utiliza, armazena, compartilha e protege dados pessoais, incluindo dados recebidos das plataformas Meta.",
     updatedLabel: "Última atualização",
-    footer: { privacy: "Política de Privacidade", terms: "Termos de Serviço", data: "Exclusão de Dados" },
+    footer: { privacy: "Política de Privacidade", terms: "Termos de Serviço", data: "Exclusão de Dados", support: "Suporte" },
     altUrl: "/en/privacy-policy",
     altLabel: "EN",
     currentLabel: "PT",
@@ -124,7 +124,7 @@ const PAGES = [
     seoTitle: "Termos de Serviço — Seialz",
     seoDesc: "Termos e condições de uso da plataforma Seialz (Kairos Labs LLC).",
     updatedLabel: "Última atualização",
-    footer: { privacy: "Política de Privacidade", terms: "Termos de Serviço", data: "Exclusão de Dados" },
+    footer: { privacy: "Política de Privacidade", terms: "Termos de Serviço", data: "Exclusão de Dados", support: "Suporte" },
     altUrl: "/en/terms-of-service",
     altLabel: "EN",
     currentLabel: "PT",
@@ -139,11 +139,41 @@ const PAGES = [
     seoTitle: "Instruções de Exclusão de Dados — Seialz",
     seoDesc: "Como solicitar a exclusão dos seus dados no Seialz, incluindo dados recebidos por meio de produtos Meta (WhatsApp, Facebook, Instagram).",
     updatedLabel: "Última atualização",
-    footer: { privacy: "Política de Privacidade", terms: "Termos de Serviço", data: "Exclusão de Dados" },
+    footer: { privacy: "Política de Privacidade", terms: "Termos de Serviço", data: "Exclusão de Dados", support: "Suporte" },
     altUrl: "/en/data-deletion",
     altLabel: "EN",
     currentLabel: "PT",
     alternates: { en: "/en/data-deletion", "pt-BR": "/exclusao-de-dados" },
+  },
+  {
+    url: "/en/support",
+    mdFile: "en/support.md",
+    lang: "en",
+    homeUrl: "/en",
+    title: "Support",
+    seoTitle: "Support — Seialz",
+    seoDesc: "Official Seialz support channel. Reach our team by email at suporte@seialz.com.",
+    updatedLabel: "Last updated",
+    footer: { privacy: "Privacy Policy", terms: "Terms of Service", data: "Data Deletion", support: "Support" },
+    altUrl: "/suporte",
+    altLabel: "PT",
+    currentLabel: "EN",
+    alternates: { en: "/en/support", "pt-BR": "/suporte" },
+  },
+  {
+    url: "/suporte",
+    mdFile: "pt-BR/support.md",
+    lang: "pt-BR",
+    homeUrl: "/pt-br",
+    title: "Suporte",
+    seoTitle: "Suporte — Seialz",
+    seoDesc: "Canal oficial de suporte do Seialz. Fale com nosso time por e-mail em suporte@seialz.com.",
+    updatedLabel: "Última atualização",
+    footer: { privacy: "Política de Privacidade", terms: "Termos de Serviço", data: "Exclusão de Dados", support: "Suporte" },
+    altUrl: "/en/support",
+    altLabel: "EN",
+    currentLabel: "PT",
+    alternates: { en: "/en/support", "pt-BR": "/suporte" },
   },
 ];
 
@@ -264,6 +294,8 @@ ${bodyHtml}
       <a href="${p.lang === "en" ? "/en/terms-of-service" : "/termos-de-servico"}">${escapeHtml(p.footer.terms)}</a>
       &nbsp;·&nbsp;
       <a href="${p.lang === "en" ? "/en/data-deletion" : "/exclusao-de-dados"}">${escapeHtml(p.footer.data)}</a>
+      &nbsp;·&nbsp;
+      <a href="${p.lang === "en" ? "/en/support" : "/suporte"}">${escapeHtml(p.footer.support)}</a>
     </span>
   </div>
 </footer>

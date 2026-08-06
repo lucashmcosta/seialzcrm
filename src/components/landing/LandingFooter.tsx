@@ -24,6 +24,7 @@ export function LandingFooter() {
   const privacyUrl = getLegalUrl('privacy-policy', locale);
   const termsUrl = getLegalUrl('terms-of-service', locale);
   const dataDeletionUrl = getLegalUrl('data-deletion', locale);
+  const supportUrl = getLegalUrl('support', locale);
 
   return (
     <footer
@@ -53,6 +54,9 @@ export function LandingFooter() {
           </Link>
           <Link to={dataDeletionUrl} style={linkStyle} onMouseEnter={onEnter} onMouseLeave={onLeave}>
             {t('footer.dataDeletion')}
+          </Link>
+          <Link to={supportUrl} style={linkStyle} onMouseEnter={onEnter} onMouseLeave={onLeave}>
+            {t('footer.support')}
           </Link>
           <a
             href={`/${slug}#cta`}
