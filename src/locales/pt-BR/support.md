@@ -1,7 +1,5 @@
 # SUPORTE — SEIALZ
 
-**Última atualização: 6 de agosto de 2026**
-
 O Seialz é uma plataforma de CRM e Sales Ops operada pela **Kairos Labs LLC**. Esta página reúne os canais oficiais de atendimento para clientes, usuários e parceiros.
 
 ## Canal oficial
