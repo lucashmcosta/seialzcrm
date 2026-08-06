@@ -403,3 +403,255 @@ export async function lookupCpfBrasil(cpf: string): Promise<ProviderResult> {
     return { ok: false, provider, version, status: 0, ...providerError(error) };
   }
 }
+
+// --- SERPRO (Consulta CPF — Receita Federal) --------------------------------
+// Fallback autoritativo do cpf-brasil. v2 (`/v2/cpf/{ni}`) consulta só pelo CPF;
+// v3 (`/v3/cpf/{ni}/{nasc}`) exige a data de nascimento. Auth via OAuth2
+// client-credentials (token de ~1h, cacheado em memória e compartilhado v2/v3).
+
+const SERPRO_TOKEN_BUFFER_MS = 60_000;
+let serproToken: { value: string; expiresAt: number } | null = null;
+
+function serproConfig(): {
+  key: string | undefined;
+  secret: string | undefined;
+  baseUrl: string;
+  tokenUrl: string;
+  requestTag: string | undefined;
+} {
+  const baseUrl = (Deno.env.get("SERPRO_CPF_BASE_URL")?.trim() ||
+    "https://gateway.apiserpro.serpro.gov.br/consulta-cpf-df")
+    .replace(/\/+$/, "");
+  return {
+    key: Deno.env.get("SERPRO_CONSUMER_KEY")?.trim(),
+    secret: Deno.env.get("SERPRO_CONSUMER_SECRET")?.trim(),
+    baseUrl,
+    tokenUrl: Deno.env.get("SERPRO_TOKEN_URL")?.trim() ||
+      "https://gateway.apiserpro.serpro.gov.br/token",
+    requestTag: Deno.env.get("SERPRO_REQUEST_TAG")?.trim() || undefined,
+  };
+}
+
+export function serproConfigured(): boolean {
+  const { key, secret } = serproConfig();
+  return Boolean(key && secret);
+}
+
+class SerproTokenError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = "SerproTokenError";
+  }
+}
+
+async function getSerproToken(forceRefresh = false): Promise<string> {
+  if (
+    !forceRefresh && serproToken &&
+    serproToken.expiresAt - Date.now() > SERPRO_TOKEN_BUFFER_MS
+  ) {
+    return serproToken.value;
+  }
+  const { key, secret, tokenUrl } = serproConfig();
+  if (!key || !secret) throw new SerproTokenError("provider_not_configured");
+
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), TIMEOUT_MS);
+  try {
+    const response = await fetch(tokenUrl, {
+      method: "POST",
+      headers: {
+        Authorization: `Basic ${btoa(`${key}:${secret}`)}`,
+        // Content-Type obrigatório: o gateway responde 415 sem ele.
+        "Content-Type": "application/x-www-form-urlencoded",
+        Accept: "application/json",
+      },
+      body: "grant_type=client_credentials",
+      signal: controller.signal,
+    });
+    if (response.status !== 200) {
+      throw new SerproTokenError(`token_http_${response.status}`);
+    }
+    let json: Record<string, unknown> | null = null;
+    try {
+      json = await response.json();
+    } catch {
+      // resposta não-JSON — tratada como token ausente abaixo
+    }
+    const accessToken = text(json?.access_token);
+    if (!accessToken) throw new SerproTokenError("token_missing_access_token");
+    const expiresInSec = Number(json?.expires_in);
+    const ttlMs = Number.isFinite(expiresInSec) && expiresInSec > 0
+      ? expiresInSec * 1000
+      : 3_600_000;
+    serproToken = { value: accessToken, expiresAt: Date.now() + ttlMs };
+    return accessToken;
+  } finally {
+    clearTimeout(timeout);
+  }
+}
+
+function isRealDate(year: number, month: number, day: number): boolean {
+  if (!Number.isInteger(year) || month < 1 || month > 12 || day < 1 || day > 31) {
+    return false;
+  }
+  const date = new Date(Date.UTC(year, month - 1, day));
+  return date.getUTCFullYear() === year &&
+    date.getUTCMonth() === month - 1 &&
+    date.getUTCDate() === day;
+}
+
+// ISO (yyyy-mm-dd) -> ddmmaaaa, para montar o path do v3.
+export function isoToDdmmaaaa(value: unknown): string | null {
+  const raw = text(value);
+  const match = raw?.match(/^(\d{4})-(\d{2})-(\d{2})$/);
+  if (!match) return null;
+  const [, yyyy, mm, dd] = match;
+  if (!isRealDate(Number(yyyy), Number(mm), Number(dd))) return null;
+  return `${dd}${mm}${yyyy}`;
+}
+
+// ddmmaaaa -> ISO (yyyy-mm-dd), para ler `nascimento`/`dataInscricao` da resposta.
+export function ddmmaaaaToIso(value: unknown): string | null {
+  const digits = text(value)?.replace(/\D/g, "");
+  if (!digits || digits.length !== 8) return null;
+  const dd = digits.slice(0, 2);
+  const mm = digits.slice(2, 4);
+  const yyyy = digits.slice(4, 8);
+  if (!isRealDate(Number(yyyy), Number(mm), Number(dd))) return null;
+  return `${yyyy}-${mm}-${dd}`;
+}
+
+export function normalizeSerproResponse(
+  status: number,
+  json: Record<string, unknown> | null,
+  cpf: string,
+  version: string,
+  birthDateIso: string | null,
+): ProviderResult {
+  const provider = "serpro";
+  if (status !== 200 || !json) {
+    const error = status === 404
+      ? "not_found"
+      : status === 400 || status === 422
+      ? "invalid_or_not_found"
+      : status === 401 || status === 403
+      ? "provider_auth_error"
+      : status === 429
+      ? "provider_quota_exceeded"
+      : "upstream_error";
+    return {
+      ok: false,
+      provider,
+      version,
+      status,
+      error,
+      retryable: status >= 500 || status === 0,
+      providerCode: null,
+      providerMessage: sanitizeProviderMessage(
+        json?.mensagem ?? json?.message ?? json?.error,
+      ),
+    };
+  }
+
+  const situacao = record(json.situacao);
+  const registrationStatus = situacao
+    ? text(situacao.descricao ?? situacao.codigo)
+    : text(json.situacao);
+
+  return {
+    ok: true,
+    provider,
+    version,
+    status,
+    payload: {
+      cpf: text(json.ni) ?? cpf,
+      full_name: text(json.nome),
+      // `situacao` fica em raw e não é exibida na UI (decisão de produto).
+      registration_status: registrationStatus,
+      // `nascimento` é o valor autoritativo da Receita; cai para a data de
+      // entrada se a resposta não trouxer o campo.
+      birth_date: ddmmaaaaToIso(json.nascimento) ?? birthDateIso,
+      sex: null, // SERPRO Consulta CPF não retorna sexo.
+      mother_name: text(json.nomeMae ?? json.nome_mae),
+    },
+  };
+}
+
+async function lookupSerpro(
+  circuitKey: string,
+  version: string,
+  path: string,
+  cpf: string,
+  birthDateIso: string | null,
+): Promise<ProviderResult> {
+  const provider = "serpro";
+  if (!serproConfigured()) {
+    return {
+      ok: false,
+      provider,
+      version,
+      status: 503,
+      error: "provider_not_configured",
+      retryable: false,
+    };
+  }
+  const { baseUrl, requestTag } = serproConfig();
+  const url = `${baseUrl}${path}`;
+  const run = async (token: string) => {
+    const headers: Record<string, string> = { Authorization: `Bearer ${token}` };
+    if (requestTag) headers["x-request-tag"] = requestTag.slice(0, 32);
+    return getJson(circuitKey, url, headers);
+  };
+  try {
+    let { status, json } = await run(await getSerproToken());
+    if (status === 401) {
+      // Token pode ter expirado no gateway antes do TTL local: renova uma vez.
+      ({ status, json } = await run(await getSerproToken(true)));
+    }
+    return normalizeSerproResponse(status, json, cpf, version, birthDateIso);
+  } catch (error) {
+    if (error instanceof SerproTokenError) {
+      if (error.message === "provider_not_configured") {
+        return { ok: false, provider, version, status: 503, error: "provider_not_configured", retryable: false };
+      }
+      // Falha ao emitir o token: 5xx/429 do endpoint de token são transitórios
+      // (indisponibilidade), não erro de credencial. Só 401/403 são de auth.
+      const tokenStatus = Number(error.message.match(/^token_http_(\d+)$/)?.[1] ?? 0);
+      if (tokenStatus >= 500 || tokenStatus === 429) {
+        return { ok: false, provider, version, status: tokenStatus, error: "upstream_error", retryable: true };
+      }
+      return { ok: false, provider, version, status: tokenStatus || 0, error: "provider_auth_error", retryable: false };
+    }
+    return { ok: false, provider, version, status: 0, ...providerError(error) };
+  }
+}
+
+// v2: consulta só pelo CPF (sem data de nascimento).
+export function lookupSerproCpfV2(cpf: string): Promise<ProviderResult> {
+  return lookupSerpro("serpro-v2", "serpro-v2", `/v2/cpf/${cpf}`, cpf, null);
+}
+
+// v3: consulta pelo CPF + data de nascimento (ddmmaaaa no path).
+export function lookupSerproCpfV3(
+  cpf: string,
+  birthDateIso: string,
+): Promise<ProviderResult> {
+  const nasc = isoToDdmmaaaa(birthDateIso);
+  if (!nasc) {
+    return Promise.resolve({
+      ok: false,
+      provider: "serpro",
+      version: "serpro-v3",
+      status: 422,
+      error: "invalid_or_not_found",
+      retryable: false,
+    });
+  }
+  return lookupSerpro(
+    "serpro-v3",
+    "serpro-v3",
+    `/v3/cpf/${cpf}/${nasc}`,
+    cpf,
+    birthDateIso,
+  );
+}

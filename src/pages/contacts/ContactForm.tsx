@@ -100,6 +100,9 @@ export default function ContactForm() {
   const [showDuplicateWarning, setShowDuplicateWarning] = useState(false);
   const [companies, setCompanies] = useState<Array<{ id: string; name: string }>>([]);
   const [cpfLookupLoading, setCpfLookupLoading] = useState(false);
+  // Fica true quando o provedor primário falha e o backend sinaliza que o
+  // fallback SERPRO v3 pode confirmar o CPF se informarmos a data de nascimento.
+  const [cpfFallbackAvailable, setCpfFallbackAvailable] = useState(false);
   const [cpfVerification, setCpfVerification] = useState<{
     status: CpfVerificationStatus;
     registrationStatus: string;
@@ -222,6 +225,7 @@ export default function ContactForm() {
     setCpfLookupLoading(false);
     setFormData((current) => ({ ...current, cpf: formatCpf(normalized) }));
     if (normalized !== lastCpfLookupRef.current) {
+      setCpfFallbackAvailable(false);
       setCpfVerification((current) => ({
         ...current,
         status: 'unverified',
@@ -239,11 +243,22 @@ export default function ContactForm() {
     }
   };
 
-  const verifyCpf = async (candidate = formData.cpf, expectedSequence?: number) => {
+  const verifyCpf = async (
+    candidate = formData.cpf,
+    expectedSequence?: number,
+    options?: { birthDate?: string },
+  ) => {
     if (!isBrazil) return;
     const cpf = digits(candidate);
     if (!cpf) return;
     if (cpfInFlightRef.current === cpf) return;
+    // Data de nascimento para eventual escalada ao SERPRO v3: usamos apenas o
+    // valor passado explicitamente (botão de confirmação do fallback). NÃO lemos
+    // de `cpfVerification.birthDate` aqui de propósito — no disparo automático
+    // esse closure pode conter a data de OUTRO CPF (contato editado), o que
+    // faria a consulta v3 com data errada. Sem data, o backend sinaliza
+    // `fallback_available` e a UI pede a data pelo prompt.
+    const birthDate = options?.birthDate || undefined;
     if (!isValidCpf(cpf)) {
       setCpfVerification((current) => ({ ...current, status: 'invalid', errorCode: 'invalid_cpf' }));
       toast.error('CPF inválido. Confira os dígitos informados.');
@@ -264,10 +279,11 @@ export default function ContactForm() {
         birth_date?: string;
         sex?: string;
         mother_name?: string;
-      }>('cpf', cpf);
+      }>('cpf', cpf, { birthDate });
       if (sequence !== cpfLookupSequenceRef.current) return;
       const data = result.data || {};
       lastCpfLookupRef.current = cpf;
+      setCpfFallbackAvailable(false);
       setFormData((current) => ({
         ...current,
         cpf: formatCpf(cpf),
@@ -283,14 +299,19 @@ export default function ContactForm() {
         providerVersion: result.provider_version || '2.0',
         errorCode: '',
       }));
-      toast.success('CPF verificado e dados cadastrais preenchidos.');
+      toast.success(
+        result.provider === 'serpro'
+          ? 'CPF confirmado na Receita Federal (SERPRO) e dados preenchidos.'
+          : 'CPF verificado e dados cadastrais preenchidos.',
+      );
     } catch (error: unknown) {
       if (sequence !== cpfLookupSequenceRef.current) return;
       const code = error instanceof Error ? error.message : 'registry_lookup_failed';
-      const payload = (error as { payload?: { provider_code?: string | null; provider_message?: string | null } }).payload;
+      const payload = (error as { payload?: { provider_code?: string | null; provider_message?: string | null; fallback_available?: boolean } }).payload;
       const notFound = code.includes('not_found');
       const invalid = code.includes('invalid_cpf') || code === 'invalid_or_not_found';
       const reason = [payload?.provider_code, payload?.provider_message].filter(Boolean).join(' — ');
+      setCpfFallbackAvailable(Boolean(payload?.fallback_available));
       setCpfVerification((current) => ({
         ...current,
         status: notFound ? 'not_found' : invalid ? 'invalid' : 'error',
@@ -817,6 +838,24 @@ export default function ContactForm() {
                     <p id="cpf-format-help" className="mt-1 text-xs text-muted-foreground">
                       Se informado, o CPF deve ter exatamente 11 dígitos.
                     </p>
+                    {cpfFallbackAvailable && (
+                      <div className="mt-2 rounded-md border border-amber-300 bg-amber-50 p-2 text-xs text-amber-800">
+                        <p>
+                          Não foi possível confirmar no provedor primário. Informe a
+                          data de nascimento abaixo e confirme direto na Receita Federal (SERPRO).
+                        </p>
+                        <Button
+                          type="button"
+                          size="sm"
+                          color="secondary"
+                          className="mt-2"
+                          disabled={cpfLookupLoading || !cpfVerification.birthDate}
+                          onClick={() => void verifyCpf(formData.cpf, undefined, { birthDate: cpfVerification.birthDate })}
+                        >
+                          Confirmar na Receita (SERPRO)
+                        </Button>
+                      </div>
+                    )}
                   </div>
                   <div>
                     <Label htmlFor="rg">RG</Label>

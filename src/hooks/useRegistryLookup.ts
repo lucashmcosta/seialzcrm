@@ -13,6 +13,7 @@ export interface RegistryLookupResult<T = Record<string, unknown>> {
   data?: T;
   error?: string;
   retryable?: boolean;
+  fallback_available?: boolean;
   provider_code?: string | null;
   provider_message?: string | null;
   persisted_contact_id?: string | null;
@@ -25,7 +26,7 @@ export function useRegistryLookup() {
   const lookup = useCallback(async <T = Record<string, unknown>>(
     kind: RegistryKind,
     value: string,
-    options?: { contactId?: string },
+    options?: { contactId?: string; birthDate?: string },
   ): Promise<RegistryLookupResult<T>> => {
     if (!organization?.id) throw new Error('organization_required');
     if (organization.operating_country_code !== 'BR') {
@@ -34,7 +35,16 @@ export function useRegistryLookup() {
 
     const { data, error } = await supabase.functions.invoke<RegistryLookupResult<T>>(
       'registry-lookup',
-      { body: { organization_id: organization.id, kind, value, contact_id: options?.contactId } },
+      {
+        body: {
+          organization_id: organization.id,
+          kind,
+          value,
+          contact_id: options?.contactId,
+          // Só para CPF: usado como entrada do fallback SERPRO v3.
+          birth_date: options?.birthDate,
+        },
+      },
     );
 
     if (error) {
