@@ -226,6 +226,12 @@ Deno.serve(async (req) => {
       }
       const heldTransferId = String(held[0].id);
       transferId = heldTransferId;
+      // Marca on_hold ANTES de redirecionar o cliente: quando o <Dial> do agente
+      // terminar (cliente saiu pra fila), o handleRoute já vê on_hold e MANTÉM a
+      // perna do agente VIVA (keepalive) em vez de <Hangup/> — assim o retomar é
+      // instantâneo (redirect server-side, sem re-discar).
+      await context.admin.from("calls").update({ transfer_status: "on_hold" })
+        .eq("id", call.id);
       const holdQuery = `transferId=${encodeURIComponent(heldTransferId)}&cycle=1`;
       const enqueueTwiml = `<Response><Enqueue waitUrl="${
         escapeXml(HOLD_MUSIC_WAIT_URL)
@@ -241,8 +247,6 @@ Deno.serve(async (req) => {
           updated_at: new Date().toISOString(),
         }).eq("id", heldTransferId).eq("state", "parking_customer")
         .select("version, consultation_sequence").maybeSingle();
-      await context.admin.from("calls").update({ transfer_status: "on_hold" })
-        .eq("id", call.id);
       return json({
         transferId: heldTransferId,
         state: "on_hold",

@@ -213,25 +213,59 @@ Deno.serve(async (req) => {
         await failCommand(context.admin, commandId, "transfer_state_changed");
         return json({ error: "transfer_state_changed" }, 409);
       }
+      // Retomar SEM re-discar: a perna do agente foi mantida VIVA no hold
+      // (keepalive no handleRoute). Redirecionamos ELA server-side pra dentro da
+      // fila do cliente (<Dial><Queue>), o que desenfileira o cliente e reconecta
+      // os dois na hora — sem nova negociação WebRTC no navegador, sem blip. A
+      // mesma perna/Call do browser continua; o front só precisa desmutar.
+      const { data: callRow } = await context.admin.from("calls")
+        .select("call_sid").eq("id", transfer.call_id).maybeSingle();
+      const agentCallSid = callRow?.call_sid as string | undefined;
+      if (!agentCallSid) {
+        await context.admin.from("call_transfers").update({
+          state: "on_hold",
+          version: transfer.version + 2,
+          updated_at: new Date().toISOString(),
+        }).eq("id", transfer.id).eq("version", transfer.version + 1);
+        await failCommand(context.admin, commandId, "agent_leg_not_found");
+        return json({ error: "agent_leg_not_found" }, 409);
+      }
+      const twilio = await twilioApiContext(context.admin, context.organizationId);
+      try {
+        await updateTwilioCall(twilio, agentCallSid, {
+          twiml: `<Response><Dial answerOnBridge="true"><Queue>${
+            escapeXml(transfer.queue_name)
+          }</Queue></Dial></Response>`,
+        });
+      } catch (error) {
+        await context.admin.from("call_transfers").update({
+          state: "on_hold",
+          failure_reason: "resume_redirect_failed",
+          version: transfer.version + 2,
+          updated_at: new Date().toISOString(),
+        }).eq("id", transfer.id).eq("state", "returning_to_customer")
+          .eq("version", transfer.version + 1);
+        await context.admin.from("calls").update({ transfer_status: "on_hold" })
+          .eq("id", transfer.call_id).eq("active_transfer_id", transfer.id);
+        throw error;
+      }
+      const { data: reconnected } = await context.admin.from("call_transfers")
+        .update({
+          state: "with_customer",
+          version: transfer.version + 2,
+          updated_at: new Date().toISOString(),
+        }).eq("id", transfer.id).eq("version", transfer.version + 1)
+        .select("version, consultation_sequence").maybeSingle();
       await context.admin.from("calls").update({
-        transfer_status: "returning_to_customer",
+        transfer_status: "with_customer",
       }).eq("id", transfer.call_id).eq("active_transfer_id", transfer.id);
-      const adapter = new TwilioVoiceAdapter(context.admin);
       const response = {
         success: true,
-        state: "returning_to_customer",
-        version: transfer.version + 1,
-        consultationSequence: transfer.consultation_sequence,
-        connectParams: {
-          ...adapter.consultationParams({
-            callId: transfer.call_id,
-            transferId: transfer.id,
-            targetUserId: transfer.target_user_id ?? "",
-            consultationSequence: transfer.consultation_sequence,
-          }),
-          Mode: "retrieve",
-          FinishTransfer: "1",
-        },
+        state: "with_customer",
+        version: reconnected?.version ?? transfer.version + 2,
+        consultationSequence: reconnected?.consultation_sequence ??
+          transfer.consultation_sequence,
+        // sem connectParams: o front NÃO re-disca; só desmuta a perna existente.
       };
       await completeCommand(context.admin, commandId, response);
       return json(response);
