@@ -866,45 +866,11 @@ export default function ContactForm() {
                       Se informado, o CPF deve ter exatamente 11 dígitos.
                     </p>
                     {cpfFallbackAvailable && (
-                      <div className="mt-2 rounded-md border border-amber-300 bg-amber-50 p-2.5 text-xs text-amber-800">
-                        <p className="mb-2">
-                          Não confirmado no provedor primário. Informe a data de
-                          nascimento para confirmar direto na Receita Federal (SERPRO).
-                        </p>
-                        <Label htmlFor="cpf-fallback-birthdate" className="sr-only">
-                          Data de nascimento
-                        </Label>
-                        <div className="relative">
-                          <Input
-                            id="cpf-fallback-birthdate"
-                            inputMode="numeric"
-                            placeholder="dd/mm/aaaa"
-                            maxLength={10}
-                            value={birthDateInput}
-                            onChange={(event) => handleBirthDateChange(event.target.value)}
-                            disabled={cpfLookupLoading}
-                            autoFocus
-                            className="bg-white pr-9"
-                          />
-                          <button
-                            type="button"
-                            title="Confirmar na Receita"
-                            aria-label="Confirmar na Receita"
-                            disabled={cpfLookupLoading || !brDateToIso(birthDateInput)}
-                            onClick={() => {
-                              const iso = brDateToIso(birthDateInput);
-                              if (iso) void verifyCpf(formData.cpf, undefined, { birthDate: iso });
-                            }}
-                            className="absolute right-2 top-1/2 -translate-y-1/2 text-amber-700 hover:text-amber-900 disabled:opacity-40"
-                          >
-                            {cpfLookupLoading ? (
-                              <Loader2 className="h-4 w-4 animate-spin" />
-                            ) : (
-                              <RefreshCw className="h-4 w-4" />
-                            )}
-                          </button>
-                        </div>
-                      </div>
+                      <p className="mt-2 rounded-md border border-amber-300 bg-amber-50 p-2.5 text-xs text-amber-800">
+                        Não encontramos esse CPF. Informe a{' '}
+                        <span className="font-medium">data de nascimento</span> para
+                        fazer uma nova busca.
+                      </p>
                     )}
                   </div>
                   <div>
@@ -934,16 +900,40 @@ export default function ContactForm() {
                     />
                   </div>
                   <div>
-                    <Label htmlFor="birth_date">Data de nascimento</Label>
+                    <Label htmlFor="birth_date" className={cpfFallbackAvailable ? 'text-amber-700' : undefined}>
+                      Data de nascimento
+                    </Label>
                     {isBrazil ? (
-                      <Input
-                        id="birth_date"
-                        inputMode="numeric"
-                        placeholder="dd/mm/aaaa"
-                        maxLength={10}
-                        value={birthDateInput}
-                        onChange={(event) => handleBirthDateChange(event.target.value)}
-                      />
+                      <div className="relative">
+                        <Input
+                          id="birth_date"
+                          inputMode="numeric"
+                          placeholder="dd/mm/aaaa"
+                          maxLength={10}
+                          value={birthDateInput}
+                          onChange={(event) => handleBirthDateChange(event.target.value)}
+                          className={cpfFallbackAvailable ? 'pr-9 ring-2 ring-amber-400 focus-visible:ring-amber-500' : undefined}
+                        />
+                        {cpfFallbackAvailable && (
+                          <button
+                            type="button"
+                            title="Buscar na Receita com a data de nascimento"
+                            aria-label="Nova busca com a data de nascimento"
+                            disabled={cpfLookupLoading || !brDateToIso(birthDateInput)}
+                            onClick={() => {
+                              const iso = brDateToIso(birthDateInput);
+                              if (iso) void verifyCpf(formData.cpf, undefined, { birthDate: iso });
+                            }}
+                            className="absolute right-2 top-1/2 -translate-y-1/2 text-amber-700 hover:text-amber-900 disabled:opacity-40"
+                          >
+                            {cpfLookupLoading ? (
+                              <Loader2 className="h-4 w-4 animate-spin" />
+                            ) : (
+                              <RefreshCw className="h-4 w-4" />
+                            )}
+                          </button>
+                        )}
+                      </div>
                     ) : (
                       <Input
                         id="birth_date"
