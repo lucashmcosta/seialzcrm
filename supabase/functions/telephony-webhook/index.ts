@@ -1,4 +1,7 @@
-import { createClient } from "npm:@supabase/supabase-js@2";
+// jsr (Deno-nativo) em vez de npm: reduz o cold start da function — o npm:@supabase
+// carrega um grafo de polyfills pesado a cada boot. Mesma API. (Recomendação do Supabase
+// p/ edge functions; já usado por transcribe-audio/integration-worker/etc.)
+import { createClient } from "jsr:@supabase/supabase-js@2";
 import { telephonyV2Enabled } from "../_shared/telephony/feature-flag.ts";
 import {
   escapeXml,
@@ -1608,6 +1611,12 @@ async function handleRecording(
 
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return empty();
+  // Rota leve de "warm-ping" (chamada por um cron a cada minuto) para manter a
+  // function quente e evitar cold starts (~2-3s) nos callbacks do Twilio.
+  // Responde imediatamente, antes de qualquer auth/DB.
+  if (new URL(req.url).pathname.endsWith("/warm")) {
+    return new Response("ok", { status: 200 });
+  }
   if (req.method !== "POST") return empty(405);
   const url = new URL(req.url);
   const route = url.pathname.split("/").filter(Boolean).pop() ?? "voice";

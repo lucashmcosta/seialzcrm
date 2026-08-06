@@ -1,4 +1,6 @@
-import { createClient } from "npm:@supabase/supabase-js@2";
+// jsr (Deno-nativo) em vez de npm: reduz o cold start das functions de telefonia
+// que importam este módulo (transfer-control/intent/session-token/call-intent).
+import { createClient } from "jsr:@supabase/supabase-js@2";
 
 export function json(body: unknown, status = 200): Response {
   return new Response(JSON.stringify(body), {
