@@ -186,12 +186,20 @@ const CPF_BRASIL_ERROR_CODES: Record<string, string> = {
   CPF_NOT_FOUND: "not_found",
 };
 
+// Mensagens de erro vêm do provedor externo (texto livre) e são persistidas na
+// auditoria/perfil. Redige PII estruturada antes de guardar/retornar: CPF,
+// e-mail, datas e sequências longas de dígitos (telefone/RG/etc). Nomes/nome da
+// mãe não têm formato confiável para regex — mitigados por NÃO exibir mais a
+// mensagem do provedor na UI (ver ContactForm) e pelo cap de tamanho.
 export function sanitizeProviderMessage(value: unknown): string | null {
   const raw = text(value);
   if (!raw) return null;
   return raw
     .replace(/\d{3}\.?\d{3}\.?\d{3}-?\d{2}/g, "[cpf]")
     .replace(/\b[\w.+-]+@[\w-]+\.[\w.]+\b/g, "[email]")
+    .replace(/\b\d{2}[\/-]\d{2}[\/-]\d{4}\b/g, "[data]")
+    .replace(/\b\d{4}-\d{2}-\d{2}\b/g, "[data]")
+    .replace(/\d{7,}/g, "[num]")
     .slice(0, 300);
 }
 
