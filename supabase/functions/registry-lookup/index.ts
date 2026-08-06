@@ -4,9 +4,13 @@ import {
   lookupBrasilApiCep,
   lookupBrasilApiCnpj,
   lookupCpfBrasil,
+  lookupSerproCpfV2,
+  lookupSerproCpfV3,
   lookupViaCep,
   isValidCnpjValue,
   isValidCpfValue,
+  serproConfigured,
+  serproV2Enabled,
   type LookupKind,
   type ProviderResult,
 } from "../_shared/registry/providers.ts";
@@ -64,8 +68,40 @@ async function identifierHash(value: string): Promise<string> {
     .join("");
 }
 
-async function lookup(kind: LookupKind, value: string): Promise<ProviderResult> {
-  if (kind === "cpf") return lookupCpfBrasil(value);
+async function lookup(
+  kind: LookupKind,
+  value: string,
+  birthDate: string | null,
+): Promise<ProviderResult> {
+  if (kind === "cpf") {
+    const primary = await lookupCpfBrasil(value);
+    if (primary.ok) return primary; // primário resolveu → SERPRO nem é chamado (custo contido)
+    if (!serproConfigured()) return primary;
+
+    // Contrato v3-only (SERPRO_CPF_V2_ENABLED=false): pula o v2 (que só daria 403).
+    if (!serproV2Enabled()) {
+      if (birthDate) return lookupSerproCpfV3(value, birthDate);
+      // Sem data: pede a data à UI sem gastar chamada. Marcado por `fallback_available`.
+      return {
+        ok: false,
+        provider: "serpro",
+        version: "serpro-v3",
+        status: 0,
+        error: "birth_date_required",
+        retryable: false,
+      };
+    }
+
+    const v2 = await lookupSerproCpfV2(value); // fallback sem data de nascimento
+    if (v2.ok) return v2;
+    if (!serproEscalatesToV3(v2)) return v2; // ex.: not_found → não escala (mesma base da Receita)
+
+    if (birthDate) {
+      const v3 = await lookupSerproCpfV3(value, birthDate);
+      return v3.ok ? v3 : v2; // devolve o erro do v2 se o v3 também falhar
+    }
+    return v2; // sem data: o handler sinaliza `fallback_available` para a UI pedir
+  }
   if (kind === "cnpj") return lookupBrasilApiCnpj(value);
   const primary = await lookupBrasilApiCep(value);
   if (primary.ok) return primary;
@@ -85,6 +121,15 @@ function cpfFailureClass(result: Extract<ProviderResult, { ok: false }>): string
   ].includes(result.error)) return "auth";
   if (["provider_not_configured", "provider_missing_api_key"].includes(result.error)) return "configuration";
   return "unknown";
+}
+
+// Escala o SERPRO v2 -> v3 apenas quando o v3 pode de fato recuperar:
+// indisponibilidade transitória do v2 ou v2 não provisionado no contrato (auth).
+// NÃO escala em "não encontrado" (mesma base da Receita) nem em quota excedida
+// (o v3 compartilha a mesma quota e falharia igual, gastando outra consulta paga).
+function serproEscalatesToV3(result: Extract<ProviderResult, { ok: false }>): boolean {
+  if (result.error === "provider_quota_exceeded") return false;
+  return ["provider_unavailable", "auth"].includes(cpfFailureClass(result));
 }
 
 function normalizedSex(value: unknown): string | null {
@@ -108,7 +153,8 @@ Deno.serve(async (req) => {
 
   const organizationId = String(body.organization_id ?? "");
   const contactId = body.contact_id ? String(body.contact_id) : null;
-  let existingCpfVerification: { status: string; verifiedAt: string | null } | null = null;
+  let existingCpfVerification: { status: string; verifiedAt: string | null; provider: string | null; version: string | null } | null = null;
+  let existingIdentity: { birth_date: string | null; sex: string | null; mother_name: string | null } | null = null;
   const kind = String(body.kind ?? "") as LookupKind;
   if (!organizationId || !["cep", "cnpj", "cpf"].includes(kind)) {
     return json({ error: "invalid_parameters" }, 400);
@@ -163,12 +209,20 @@ Deno.serve(async (req) => {
     }
     const { data: identity } = await auth.admin
       .from("contact_identity_profiles")
-      .select("cpf_verification_status,cpf_verified_at")
+      .select("cpf_verification_status,cpf_verified_at,birth_date,sex,mother_name,verification_provider,verification_provider_version")
       .eq("organization_id", organizationId)
       .eq("contact_id", contactId)
       .maybeSingle();
     existingCpfVerification = identity
-      ? { status: String(identity.cpf_verification_status), verifiedAt: identity.cpf_verified_at }
+      ? {
+        status: String(identity.cpf_verification_status),
+        verifiedAt: identity.cpf_verified_at,
+        provider: identity.verification_provider ?? null,
+        version: identity.verification_provider_version ?? null,
+      }
+      : null;
+    existingIdentity = identity
+      ? { birth_date: identity.birth_date ?? null, sex: identity.sex ?? null, mother_name: identity.mother_name ?? null }
       : null;
   }
 
@@ -187,8 +241,17 @@ Deno.serve(async (req) => {
     }
   }
 
+  // Data de nascimento para o fallback SERPRO v3: prioriza a informada no body
+  // (prompt da UI), senão reaproveita a já salva no perfil do contato.
+  const bodyBirthDate = typeof body.birth_date === "string" && /^\d{4}-\d{2}-\d{2}$/.test(body.birth_date)
+    ? body.birth_date
+    : null;
+  const effectiveBirthDate = kind === "cpf"
+    ? (bodyBirthDate ?? existingIdentity?.birth_date ?? null)
+    : null;
+
   const started = Date.now();
-  const result = await lookup(kind, value);
+  const result = await lookup(kind, value, effectiveBirthDate);
   const durationMs = Date.now() - started;
 
   const providerCode = result.ok ? null : (result.providerCode ?? null);
@@ -210,7 +273,8 @@ Deno.serve(async (req) => {
   });
 
   if (!result.ok) {
-    if (kind === "cpf" && contactId) {
+    // `birth_date_required` não é falha: é um pedido de data para a UI. Não persiste.
+    if (kind === "cpf" && contactId && result.error !== "birth_date_required") {
       const failureClass = cpfFailureClass(result);
       const { error: persistError } = await auth.admin.from("contact_identity_profiles").upsert({
         organization_id: organizationId,
@@ -218,8 +282,15 @@ Deno.serve(async (req) => {
         cpf_verification_status: existingCpfVerification?.status === "verified"
           ? "verified"
           : failureClass === "not_found" ? "not_found" : "error",
-        verification_provider: result.provider,
-        verification_provider_version: result.version,
+        // Não reescreve o provedor de uma verificação já existente por causa de
+        // uma tentativa de erro posterior (senão um registro verificado pelo
+        // cpf-brasil passaria a alegar "verificado pelo serpro").
+        verification_provider: existingCpfVerification?.status === "verified"
+          ? (existingCpfVerification.provider ?? result.provider)
+          : result.provider,
+        verification_provider_version: existingCpfVerification?.status === "verified"
+          ? (existingCpfVerification.version ?? result.version)
+          : result.version,
         cpf_verified_at: existingCpfVerification?.status === "verified"
           ? existingCpfVerification.verifiedAt
           : null,
@@ -236,11 +307,19 @@ Deno.serve(async (req) => {
     }
     // "not found" is an expected business outcome (CPF valid but absent from the
     // provider base), so we answer 200 with ok:false to avoid client error noise.
-    const status = result.error === "invalid_or_not_found" || result.error === "not_found"
+    const status = ["invalid_or_not_found", "not_found", "birth_date_required"].includes(result.error)
       ? 200
       : result.error === "provider_not_configured"
       ? 503
       : 502;
+
+    // Sinaliza para a UI pedir a data de nascimento: quando o v2 caiu por problema
+    // de provedor sem data para escalar, OU no contrato v3-only sem data (o
+    // dispatcher devolve `birth_date_required` sem gastar chamada).
+    const fallbackAvailable = kind === "cpf" && !effectiveBirthDate
+      && result.provider === "serpro"
+      && (result.error === "birth_date_required"
+        || (result.version === "serpro-v2" && serproEscalatesToV3(result)));
 
     return json({
       ok: false,
@@ -248,6 +327,7 @@ Deno.serve(async (req) => {
       provider: result.provider,
       error: result.error,
       retryable: result.retryable,
+      fallback_available: fallbackAvailable,
       provider_code: providerCode,
       provider_message: providerMessage,
     }, status);
@@ -267,7 +347,10 @@ Deno.serve(async (req) => {
   }
 
   if (kind === "cpf" && contactId) {
-    const returnedCpf = String(result.payload.cpf ?? "").replace(/\D/g, "");
+    // padStart: alguns provedores serializam o CPF como número e perdem o zero
+    // à esquerda (~10% dos CPFs). Sem isso, um match correto viraria 502.
+    const rawReturnedCpf = String(result.payload.cpf ?? "").replace(/\D/g, "");
+    const returnedCpf = rawReturnedCpf ? rawReturnedCpf.padStart(11, "0") : "";
     if (returnedCpf && returnedCpf !== value) {
       return json({ ok: false, kind, provider: result.provider, error: "provider_cpf_mismatch", retryable: false }, 502);
     }
@@ -276,9 +359,11 @@ Deno.serve(async (req) => {
       contact_id: contactId,
       cpf_verification_status: "verified",
       cpf_registration_status: result.payload.registration_status ?? null,
-      birth_date: result.payload.birth_date ?? null,
-      sex: normalizedSex(result.payload.sex),
-      mother_name: result.payload.mother_name ?? null,
+      // O SERPRO não retorna sexo/nome da mãe: preserva o que já existe no perfil
+      // em vez de sobrescrever com null.
+      birth_date: result.payload.birth_date ?? existingIdentity?.birth_date ?? null,
+      sex: normalizedSex(result.payload.sex) ?? existingIdentity?.sex ?? null,
+      mother_name: result.payload.mother_name ?? existingIdentity?.mother_name ?? null,
       verification_provider: result.provider,
       verification_provider_version: result.version,
       cpf_verified_at: new Date().toISOString(),

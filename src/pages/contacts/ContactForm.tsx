@@ -18,17 +18,21 @@ import { NameInput } from '@/components/NameInput';
 import { OwnerSelector } from '@/components/common/OwnerSelector';
 import { useRegistryLookup } from '@/hooks/useRegistryLookup';
 import {
+  brDateToIso,
   canonicalContactName,
   contactSexLabelFor,
   cpfStatusLabelFor,
   digits,
   formatCep,
   formatCpf,
+  formatDateBR,
+  isoToBrDate,
   isValidCpf,
   normalizeContactSex,
   type CpfVerificationStatus,
   type OperatingCountryCode,
 } from '@/lib/regional';
+import { AlertTriangle, CheckCircle2, Loader2, RefreshCw } from 'lucide-react';
 
 /**
  * Porta em TS a função public.normalize_phone_br do banco.
@@ -100,6 +104,16 @@ export default function ContactForm() {
   const [showDuplicateWarning, setShowDuplicateWarning] = useState(false);
   const [companies, setCompanies] = useState<Array<{ id: string; name: string }>>([]);
   const [cpfLookupLoading, setCpfLookupLoading] = useState(false);
+  // Motivo do fallback quando o primário não confirma o CPF:
+  //  'need_date'  → falta a data de nascimento para uma nova busca;
+  //  'mismatch'   → data foi informada mas CPF+data não batem na Receita.
+  const [cpfFallbackReason, setCpfFallbackReason] = useState<'' | 'need_date' | 'mismatch'>('');
+  // Data de nascimento como texto mascarado dd/mm/aaaa (exibição BR). A fonte da
+  // verdade continua sendo `cpfVerification.birthDate` em ISO.
+  const [birthDateInput, setBirthDateInput] = useState('');
+  // Espelha `cpfVerification.birthDate` (ISO) para o verifyCpf ler sempre o valor
+  // atual, sem risco de closure obsoleto — usado como entrada do SERPRO v3.
+  const birthDateIsoRef = useRef('');
   const [cpfVerification, setCpfVerification] = useState<{
     status: CpfVerificationStatus;
     registrationStatus: string;
@@ -132,6 +146,11 @@ export default function ContactForm() {
   const cpfLookupSequenceRef = useRef(0);
   const cpfInFlightRef = useRef('');
   const lastCepLookupRef = useRef('');
+
+  // Mantém a ref da data de nascimento (ISO) sempre com o valor atual.
+  useEffect(() => {
+    birthDateIsoRef.current = cpfVerification.birthDate;
+  }, [cpfVerification.birthDate]);
 
   useEffect(() => {
     if (isEdit) {
@@ -211,6 +230,7 @@ export default function ContactForm() {
           providerVersion: identity.verification_provider_version || '',
           errorCode: identity.last_error_code || '',
         });
+        setBirthDateInput(isoToBrDate(identity.birth_date || ''));
         lastCpfLookupRef.current = digits(data.cpf);
       }
     }
@@ -222,11 +242,13 @@ export default function ContactForm() {
     setCpfLookupLoading(false);
     setFormData((current) => ({ ...current, cpf: formatCpf(normalized) }));
     if (normalized !== lastCpfLookupRef.current) {
+      setCpfFallbackReason('');
+      // Preserva a data de nascimento (é input do usuário, não resultado do CPF):
+      // ao corrigir/reeditar o CPF, a data digitada não deve sumir.
       setCpfVerification((current) => ({
         ...current,
         status: 'unverified',
         registrationStatus: '',
-        birthDate: '',
         sex: '',
         motherName: '',
         provider: '',
@@ -239,11 +261,19 @@ export default function ContactForm() {
     }
   };
 
-  const verifyCpf = async (candidate = formData.cpf, expectedSequence?: number) => {
+  const verifyCpf = async (
+    candidate = formData.cpf,
+    expectedSequence?: number,
+    options?: { birthDate?: string },
+  ) => {
     if (!isBrazil) return;
     const cpf = digits(candidate);
     if (!cpf) return;
     if (cpfInFlightRef.current === cpf) return;
+    // Data de nascimento para a consulta SERPRO v3: usa o valor explícito (retry)
+    // ou a data atual do formulário via ref (sem closure obsoleto). Se já houver
+    // data preenchida, a consulta já vai com ela — sem precisar pedir de novo.
+    const birthDate = options?.birthDate || birthDateIsoRef.current || undefined;
     if (!isValidCpf(cpf)) {
       setCpfVerification((current) => ({ ...current, status: 'invalid', errorCode: 'invalid_cpf' }));
       toast.error('CPF inválido. Confira os dígitos informados.');
@@ -264,10 +294,11 @@ export default function ContactForm() {
         birth_date?: string;
         sex?: string;
         mother_name?: string;
-      }>('cpf', cpf);
+      }>('cpf', cpf, { birthDate });
       if (sequence !== cpfLookupSequenceRef.current) return;
       const data = result.data || {};
       lastCpfLookupRef.current = cpf;
+      setCpfFallbackReason('');
       setFormData((current) => ({
         ...current,
         cpf: formatCpf(cpf),
@@ -283,35 +314,59 @@ export default function ContactForm() {
         providerVersion: result.provider_version || '2.0',
         errorCode: '',
       }));
-      toast.success('CPF verificado e dados cadastrais preenchidos.');
+      if (data.birth_date) setBirthDateInput(isoToBrDate(data.birth_date));
+      toast.success(
+        result.provider === 'serpro'
+          ? 'CPF confirmado na Receita Federal (SERPRO) e dados preenchidos.'
+          : 'CPF verificado e dados cadastrais preenchidos.',
+      );
     } catch (error: unknown) {
       if (sequence !== cpfLookupSequenceRef.current) return;
       const code = error instanceof Error ? error.message : 'registry_lookup_failed';
-      const payload = (error as { payload?: { provider_code?: string | null; provider_message?: string | null } }).payload;
+      const payload = (error as { payload?: { fallback_available?: boolean } }).payload;
+      const needDate = Boolean(payload?.fallback_available); // faltou a data para nova busca
       const notFound = code.includes('not_found');
-      const invalid = code.includes('invalid_cpf') || code === 'invalid_or_not_found';
-      const reason = [payload?.provider_code, payload?.provider_message].filter(Boolean).join(' — ');
+      const invalid = code.includes('invalid_cpf');
+      // Data foi enviada mas o CPF+data não bateram na Receita.
+      const mismatch = !needDate && notFound && Boolean(birthDate);
+
+      setCpfFallbackReason(needDate ? 'need_date' : mismatch ? 'mismatch' : '');
       setCpfVerification((current) => ({
         ...current,
-        status: notFound ? 'not_found' : invalid ? 'invalid' : 'error',
-        errorCode: reason ? `${code} (${reason})` : code,
+        status: (needDate || mismatch || notFound) ? 'not_found' : invalid ? 'invalid' : 'error',
+        errorCode: code,
       }));
-      if (notFound) {
-        toast.warning(
-          `CPF não encontrado na base do provedor.${reason ? ` Motivo do provedor: ${reason}` : ''} O contato pode ser salvo como não verificado.`,
-        );
+
+      if (needDate) {
+        // A mensagem inline já orienta a informar a data — sem toast ruidoso.
+      } else if (mismatch) {
+        toast.error('Os dados não batem: confira o CPF e a data de nascimento.');
+      } else if (invalid) {
+        toast.error('CPF inválido. Confira os dígitos informados.');
+      } else if (notFound) {
+        toast.warning('CPF não encontrado. O contato pode ser salvo como não verificado.');
       } else {
-        toast.error(
-          invalid
-            ? 'CPF inválido. Confira os dígitos informados.'
-            : 'Não foi possível verificar agora. O contato poderá ser salvo como não verificado.',
-        );
+        toast.error('Não foi possível verificar agora. O contato poderá ser salvo como não verificado.');
       }
-
-
     } finally {
       if (cpfInFlightRef.current === cpf) cpfInFlightRef.current = '';
       if (sequence === cpfLookupSequenceRef.current) setCpfLookupLoading(false);
+    }
+  };
+
+  // Campo de data de nascimento (BR): mascara dd/mm/aaaa, guarda ISO como fonte
+  // da verdade e, no fluxo de fallback, dispara a verificação SERPRO v3 sozinho
+  // quando a data fica completa (sem botão).
+  const handleBirthDateChange = (raw: string) => {
+    const masked = formatDateBR(raw);
+    setBirthDateInput(masked);
+    const iso = brDateToIso(masked);
+    birthDateIsoRef.current = iso;
+    setCpfVerification((current) => ({ ...current, birthDate: iso }));
+    // Quando estamos aguardando a data (need_date) ou corrigindo (mismatch),
+    // completar a data dispara a nova busca sozinho.
+    if (iso && cpfFallbackReason && !cpfLookupLoading) {
+      void verifyCpf(formData.cpf, undefined, { birthDate: iso });
     }
   };
 
@@ -782,41 +837,62 @@ export default function ContactForm() {
                 <h3 className="text-sm font-semibold text-foreground border-b pb-2">Documentos</h3>
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   <div>
-                    <div className="flex items-center justify-between gap-2">
-                      <Label htmlFor="cpf">CPF</Label>
-                      <span className={`text-xs ${
-                        cpfVerification.status === 'verified'
-                          ? 'text-emerald-600'
-                          : cpfVerification.status === 'invalid'
-                          ? 'text-destructive'
-                          : cpfVerification.status === 'not_found'
-                          ? 'text-amber-600'
-                          : 'text-muted-foreground'
-                      }`}>
-
-                        {cpfLookupLoading ? 'Consultando…' : cpfStatusLabelFor(cpfVerification.status, locale)}
+                    <Label htmlFor="cpf">CPF</Label>
+                    <div className="relative">
+                      <Input
+                        id="cpf"
+                        value={formData.cpf}
+                        onChange={(e) => handleCpfChange(e.target.value)}
+                        onBlur={() => void verifyCpf()}
+                        onKeyDown={(e) => {
+                          if (e.key === 'Enter') {
+                            e.preventDefault();
+                            void verifyCpf();
+                          }
+                        }}
+                        placeholder="000.000.000-00"
+                        inputMode="numeric"
+                        minLength={14}
+                        maxLength={14}
+                        aria-describedby="cpf-format-help"
+                        className="pr-9"
+                      />
+                      <span
+                        className="pointer-events-none absolute right-2.5 top-1/2 -translate-y-1/2"
+                        title={cpfLookupLoading ? 'Verificando…' : cpfStatusLabelFor(cpfVerification.status, locale)}
+                        aria-label={cpfLookupLoading ? 'Verificando' : cpfStatusLabelFor(cpfVerification.status, locale)}
+                      >
+                        {cpfLookupLoading ? (
+                          <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />
+                        ) : cpfVerification.status === 'verified' ? (
+                          <CheckCircle2 className="h-4 w-4 text-emerald-600" />
+                        ) : cpfVerification.status === 'invalid' ? (
+                          <AlertTriangle className="h-4 w-4 text-destructive" />
+                        ) : (cpfVerification.status === 'not_found' || cpfVerification.status === 'error') ? (
+                          <AlertTriangle className="h-4 w-4 text-amber-500" />
+                        ) : null}
                       </span>
                     </div>
-                    <Input
-                      id="cpf"
-                      value={formData.cpf}
-                      onChange={(e) => handleCpfChange(e.target.value)}
-                      onBlur={() => void verifyCpf()}
-                      onKeyDown={(e) => {
-                        if (e.key === 'Enter') {
-                          e.preventDefault();
-                          void verifyCpf();
-                        }
-                      }}
-                      placeholder="000.000.000-00"
-                      inputMode="numeric"
-                      minLength={14}
-                      maxLength={14}
-                      aria-describedby="cpf-format-help"
-                    />
                     <p id="cpf-format-help" className="mt-1 text-xs text-muted-foreground">
                       Se informado, o CPF deve ter exatamente 11 dígitos.
                     </p>
+                    {cpfFallbackReason && (
+                      <p className="mt-2 rounded-md border border-amber-300 bg-amber-50 p-2.5 text-xs text-amber-800">
+                        {cpfFallbackReason === 'mismatch' ? (
+                          <>
+                            Não encontramos esse CPF com essa data de nascimento.
+                            Confira o <span className="font-medium">CPF</span> e a{' '}
+                            <span className="font-medium">data de nascimento</span>.
+                          </>
+                        ) : (
+                          <>
+                            Não encontramos esse CPF. Informe a{' '}
+                            <span className="font-medium">data de nascimento</span> para
+                            fazer uma nova busca.
+                          </>
+                        )}
+                      </p>
+                    )}
                   </div>
                   <div>
                     <Label htmlFor="rg">RG</Label>
@@ -845,17 +921,52 @@ export default function ContactForm() {
                     />
                   </div>
                   <div>
-                    <Label htmlFor="birth_date">Data de nascimento</Label>
-                    <Input
-                      id="birth_date"
-                      type="date"
-                      value={cpfVerification.birthDate}
-                      onChange={(event) => setCpfVerification((current) => ({
-                        ...current,
-                        birthDate: event.target.value,
-                      }))}
-                      max={new Date().toISOString().slice(0, 10)}
-                    />
+                    <Label htmlFor="birth_date" className={cpfFallbackReason ? 'text-amber-700' : undefined}>
+                      Data de nascimento
+                    </Label>
+                    {isBrazil ? (
+                      <div className="relative">
+                        <Input
+                          id="birth_date"
+                          inputMode="numeric"
+                          placeholder="dd/mm/aaaa"
+                          maxLength={10}
+                          value={birthDateInput}
+                          onChange={(event) => handleBirthDateChange(event.target.value)}
+                          className={cpfFallbackReason ? 'pr-9 ring-2 ring-amber-400 focus-visible:ring-amber-500' : undefined}
+                        />
+                        {cpfFallbackReason && (
+                          <button
+                            type="button"
+                            title="Buscar na Receita com a data de nascimento"
+                            aria-label="Nova busca com a data de nascimento"
+                            disabled={cpfLookupLoading || !brDateToIso(birthDateInput)}
+                            onClick={() => {
+                              const iso = brDateToIso(birthDateInput);
+                              if (iso) void verifyCpf(formData.cpf, undefined, { birthDate: iso });
+                            }}
+                            className="absolute right-2 top-1/2 -translate-y-1/2 text-amber-700 hover:text-amber-900 disabled:opacity-40"
+                          >
+                            {cpfLookupLoading ? (
+                              <Loader2 className="h-4 w-4 animate-spin" />
+                            ) : (
+                              <RefreshCw className="h-4 w-4" />
+                            )}
+                          </button>
+                        )}
+                      </div>
+                    ) : (
+                      <Input
+                        id="birth_date"
+                        type="date"
+                        value={cpfVerification.birthDate}
+                        onChange={(event) => setCpfVerification((current) => ({
+                          ...current,
+                          birthDate: event.target.value,
+                        }))}
+                        max={new Date().toISOString().slice(0, 10)}
+                      />
+                    )}
                   </div>
                   <div>
                     <Label htmlFor="sex">Sexo</Label>
