@@ -6,6 +6,7 @@ import { telephonySupabase } from '@/integrations/supabase/telephonyClient';
 import { toast } from 'sonner';
 import { getTelephonySession, getTwilioAccessToken, getVerifiedSession } from '@/lib/authSession';
 import { voiceCodecPreferences } from '@/lib/telephony';
+import { startRingback, stopRingback } from '@/lib/ringback';
 import { useOrganization } from '@/hooks/useOrganization';
 import { useTelephonyV2Flag } from '@/hooks/useTelephonyV2Flag';
 import { usePermissions } from '@/hooks/usePermissions';
@@ -385,6 +386,7 @@ export function TelephonyProvider({ children }: { children: ReactNode }) {
 
   // Cleanup call state only (keep device)
   const cleanupCall = useCallback(() => {
+    stopRingback();
     terminateActiveTransfer();
     clearStateTimeout();
     unsubscribeFromCallStatus();
@@ -572,6 +574,12 @@ export function TelephonyProvider({ children }: { children: ReactNode }) {
       setStatus('connecting');
       console.log('Connecting call to:', phoneNumber);
 
+      // Ringback local IMEDIATO: mascara o gap de setup (call-intent + WebRTC + /voice
+      // + disca PSTN, ~1-2s estruturais) com um tom de chamada na hora do clique, em
+      // vez de silêncio. Para no 'ringing' (o ringback real da operadora assume) ou no
+      // atendimento/fim/erro. Só na ligação normal — as pernas de transferência não.
+      startRingback();
+
       // Timeout: if not ringing within 15s, something is wrong
       setStateTimeout(15000, 'Tempo esgotado ao conectar chamada');
 
@@ -605,6 +613,9 @@ export function TelephonyProvider({ children }: { children: ReactNode }) {
 
       // Call events
       call.on('ringing', () => {
+        // Chegou o toque real (early media da operadora) — encerra o ringback local
+        // e passa a bola pro áudio da chamada.
+        stopRingback();
         if (callFinalizedRef.current) return;
         console.log('[SDK] Call ringing');
         lastProcessedStatusRef.current = 'ringing';
@@ -615,6 +626,7 @@ export function TelephonyProvider({ children }: { children: ReactNode }) {
       });
 
       call.on('accept', () => {
+        stopRingback();
         if (callFinalizedRef.current) return;
         console.log('[SDK] Call accepted/connected');
         lastProcessedStatusRef.current = 'in-progress';
@@ -625,6 +637,7 @@ export function TelephonyProvider({ children }: { children: ReactNode }) {
       });
 
       call.on('disconnect', () => {
+        stopRingback();
         console.log('[SDK] Call disconnected');
         if (suppressCallFinalizationRef.current && transferSessionRef.current) return;
         callFinalizedRef.current = true;
@@ -636,6 +649,7 @@ export function TelephonyProvider({ children }: { children: ReactNode }) {
       });
 
       call.on('cancel', () => {
+        stopRingback();
         console.log('[SDK] Call cancelled');
         if (suppressCallFinalizationRef.current && transferSessionRef.current) return;
         callFinalizedRef.current = true;
@@ -647,6 +661,7 @@ export function TelephonyProvider({ children }: { children: ReactNode }) {
       });
 
       call.on('reject', () => {
+        stopRingback();
         console.log('[SDK] Call rejected');
         if (suppressCallFinalizationRef.current && transferSessionRef.current) return;
         callFinalizedRef.current = true;
@@ -659,6 +674,7 @@ export function TelephonyProvider({ children }: { children: ReactNode }) {
       });
 
       call.on('error', (error: any) => {
+        stopRingback();
         console.error('[SDK] Call error:', error);
         if (suppressCallFinalizationRef.current && transferSessionRef.current) return;
         callFinalizedRef.current = true;
@@ -671,6 +687,7 @@ export function TelephonyProvider({ children }: { children: ReactNode }) {
       });
 
     } catch (error: any) {
+      stopRingback();
       console.error('Call connection error:', error);
       clearStateTimeout();
       void updatePresence(null);
