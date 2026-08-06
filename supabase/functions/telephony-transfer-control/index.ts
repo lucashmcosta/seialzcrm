@@ -249,23 +249,30 @@ Deno.serve(async (req) => {
           .eq("id", transfer.call_id).eq("active_transfer_id", transfer.id);
         throw error;
       }
+      // Retomar ENCERRA a sessão de espera (espera é independente de transferência):
+      // o cliente voltou pra você e a chamada é normal de novo. Marca a sessão como
+      // terminal e LIBERA a chamada (active_transfer_id/transfer_status nulos) para
+      // que um novo "Colocar em espera" possa começar do zero.
       const { data: reconnected } = await context.admin.from("call_transfers")
         .update({
-          state: "with_customer",
+          state: "canceled",
+          result: "resumed_to_customer",
+          completed_at: new Date().toISOString(),
           version: transfer.version + 2,
           updated_at: new Date().toISOString(),
         }).eq("id", transfer.id).eq("version", transfer.version + 1)
         .select("version, consultation_sequence").maybeSingle();
       await context.admin.from("calls").update({
-        transfer_status: "with_customer",
+        transfer_status: null,
+        active_transfer_id: null,
       }).eq("id", transfer.call_id).eq("active_transfer_id", transfer.id);
       const response = {
         success: true,
-        state: "with_customer",
+        state: "canceled",
         version: reconnected?.version ?? transfer.version + 2,
         consultationSequence: reconnected?.consultation_sequence ??
           transfer.consultation_sequence,
-        // sem connectParams: o front NÃO re-disca; só desmuta a perna existente.
+        // sem connectParams: o front NÃO re-disca; só desmuta e limpa a sessão.
       };
       await completeCommand(context.admin, commandId, response);
       return json(response);
