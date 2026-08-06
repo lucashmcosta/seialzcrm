@@ -437,6 +437,13 @@ export function serproConfigured(): boolean {
   return Boolean(key && secret);
 }
 
+// Alguns contratos SERPRO só provisionam o v3 (o v2 retorna 403 "Resource
+// forbidden"). Defina SERPRO_CPF_V2_ENABLED="false" para pular o v2 e ir direto
+// ao v3, evitando uma chamada morta (~800ms) a cada fallback.
+export function serproV2Enabled(): boolean {
+  return Deno.env.get("SERPRO_CPF_V2_ENABLED")?.trim().toLowerCase() !== "false";
+}
+
 class SerproTokenError extends Error {
   constructor(message: string) {
     super(message);

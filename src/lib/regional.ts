@@ -26,6 +26,44 @@ export function formatCep(value: string | null | undefined): string {
   return cep.replace(/^(\d{5})(\d)/, "$1-$2");
 }
 
+function isRealYmd(year: number, month: number, day: number): boolean {
+  if (!Number.isInteger(year) || month < 1 || month > 12 || day < 1 || day > 31) {
+    return false;
+  }
+  const date = new Date(Date.UTC(year, month - 1, day));
+  return date.getUTCFullYear() === year &&
+    date.getUTCMonth() === month - 1 &&
+    date.getUTCDate() === day;
+}
+
+// Máscara de digitação: dígitos -> "dd/mm/aaaa" (padrão BR).
+export function formatDateBR(value: string | null | undefined): string {
+  const d = digits(value).slice(0, 8);
+  return d
+    .replace(/^(\d{2})(\d)/, "$1/$2")
+    .replace(/^(\d{2})\/(\d{2})(\d)/, "$1/$2/$3");
+}
+
+// "dd/mm/aaaa" completo e válido -> ISO "aaaa-mm-dd"; senão "".
+export function brDateToIso(value: string | null | undefined): string {
+  const d = digits(value);
+  if (d.length !== 8) return "";
+  const day = d.slice(0, 2);
+  const month = d.slice(2, 4);
+  const year = d.slice(4, 8);
+  if (!isRealYmd(Number(year), Number(month), Number(day))) return "";
+  return `${year}-${month}-${day}`;
+}
+
+// ISO "aaaa-mm-dd" -> "dd/mm/aaaa" para exibição; senão "".
+export function isoToBrDate(value: string | null | undefined): string {
+  const match = String(value ?? "").match(/^(\d{4})-(\d{2})-(\d{2})$/);
+  if (!match) return "";
+  const [, year, month, day] = match;
+  if (!isRealYmd(Number(year), Number(month), Number(day))) return "";
+  return `${day}/${month}/${year}`;
+}
+
 export function normalizeContactSex(
   value: string | null | undefined,
 ): ContactSex | "" {

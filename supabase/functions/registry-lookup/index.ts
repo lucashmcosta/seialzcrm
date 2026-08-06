@@ -10,6 +10,7 @@ import {
   isValidCnpjValue,
   isValidCpfValue,
   serproConfigured,
+  serproV2Enabled,
   type LookupKind,
   type ProviderResult,
 } from "../_shared/registry/providers.ts";
@@ -76,6 +77,20 @@ async function lookup(
     const primary = await lookupCpfBrasil(value);
     if (primary.ok) return primary; // primário resolveu → SERPRO nem é chamado (custo contido)
     if (!serproConfigured()) return primary;
+
+    // Contrato v3-only (SERPRO_CPF_V2_ENABLED=false): pula o v2 (que só daria 403).
+    if (!serproV2Enabled()) {
+      if (birthDate) return lookupSerproCpfV3(value, birthDate);
+      // Sem data: pede a data à UI sem gastar chamada. Marcado por `fallback_available`.
+      return {
+        ok: false,
+        provider: "serpro",
+        version: "serpro-v3",
+        status: 0,
+        error: "birth_date_required",
+        retryable: false,
+      };
+    }
 
     const v2 = await lookupSerproCpfV2(value); // fallback sem data de nascimento
     if (v2.ok) return v2;
@@ -258,7 +273,8 @@ Deno.serve(async (req) => {
   });
 
   if (!result.ok) {
-    if (kind === "cpf" && contactId) {
+    // `birth_date_required` não é falha: é um pedido de data para a UI. Não persiste.
+    if (kind === "cpf" && contactId && result.error !== "birth_date_required") {
       const failureClass = cpfFailureClass(result);
       const { error: persistError } = await auth.admin.from("contact_identity_profiles").upsert({
         organization_id: organizationId,
@@ -291,17 +307,19 @@ Deno.serve(async (req) => {
     }
     // "not found" is an expected business outcome (CPF valid but absent from the
     // provider base), so we answer 200 with ok:false to avoid client error noise.
-    const status = result.error === "invalid_or_not_found" || result.error === "not_found"
+    const status = ["invalid_or_not_found", "not_found", "birth_date_required"].includes(result.error)
       ? 200
       : result.error === "provider_not_configured"
       ? 503
       : 502;
 
-    // Sinaliza para a UI pedir a data de nascimento: só quando o SERPRO v2 caiu
-    // por problema de provedor e ainda não temos data para escalar ao v3.
+    // Sinaliza para a UI pedir a data de nascimento: quando o v2 caiu por problema
+    // de provedor sem data para escalar, OU no contrato v3-only sem data (o
+    // dispatcher devolve `birth_date_required` sem gastar chamada).
     const fallbackAvailable = kind === "cpf" && !effectiveBirthDate
-      && result.provider === "serpro" && result.version === "serpro-v2"
-      && serproEscalatesToV3(result);
+      && result.provider === "serpro"
+      && (result.error === "birth_date_required"
+        || (result.version === "serpro-v2" && serproEscalatesToV3(result)));
 
     return json({
       ok: false,

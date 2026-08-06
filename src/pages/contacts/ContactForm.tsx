@@ -18,12 +18,15 @@ import { NameInput } from '@/components/NameInput';
 import { OwnerSelector } from '@/components/common/OwnerSelector';
 import { useRegistryLookup } from '@/hooks/useRegistryLookup';
 import {
+  brDateToIso,
   canonicalContactName,
   contactSexLabelFor,
   cpfStatusLabelFor,
   digits,
   formatCep,
   formatCpf,
+  formatDateBR,
+  isoToBrDate,
   isValidCpf,
   normalizeContactSex,
   type CpfVerificationStatus,
@@ -103,6 +106,9 @@ export default function ContactForm() {
   // Fica true quando o provedor primário falha e o backend sinaliza que o
   // fallback SERPRO v3 pode confirmar o CPF se informarmos a data de nascimento.
   const [cpfFallbackAvailable, setCpfFallbackAvailable] = useState(false);
+  // Data de nascimento como texto mascarado dd/mm/aaaa (exibição BR). A fonte da
+  // verdade continua sendo `cpfVerification.birthDate` em ISO.
+  const [birthDateInput, setBirthDateInput] = useState('');
   const [cpfVerification, setCpfVerification] = useState<{
     status: CpfVerificationStatus;
     registrationStatus: string;
@@ -214,6 +220,7 @@ export default function ContactForm() {
           providerVersion: identity.verification_provider_version || '',
           errorCode: identity.last_error_code || '',
         });
+        setBirthDateInput(isoToBrDate(identity.birth_date || ''));
         lastCpfLookupRef.current = digits(data.cpf);
       }
     }
@@ -226,6 +233,7 @@ export default function ContactForm() {
     setFormData((current) => ({ ...current, cpf: formatCpf(normalized) }));
     if (normalized !== lastCpfLookupRef.current) {
       setCpfFallbackAvailable(false);
+      setBirthDateInput('');
       setCpfVerification((current) => ({
         ...current,
         status: 'unverified',
@@ -299,6 +307,7 @@ export default function ContactForm() {
         providerVersion: result.provider_version || '2.0',
         errorCode: '',
       }));
+      if (data.birth_date) setBirthDateInput(isoToBrDate(data.birth_date));
       toast.success(
         result.provider === 'serpro'
           ? 'CPF confirmado na Receita Federal (SERPRO) e dados preenchidos.'
@@ -333,6 +342,19 @@ export default function ContactForm() {
     } finally {
       if (cpfInFlightRef.current === cpf) cpfInFlightRef.current = '';
       if (sequence === cpfLookupSequenceRef.current) setCpfLookupLoading(false);
+    }
+  };
+
+  // Campo de data de nascimento (BR): mascara dd/mm/aaaa, guarda ISO como fonte
+  // da verdade e, no fluxo de fallback, dispara a verificação SERPRO v3 sozinho
+  // quando a data fica completa (sem botão).
+  const handleBirthDateChange = (raw: string) => {
+    const masked = formatDateBR(raw);
+    setBirthDateInput(masked);
+    const iso = brDateToIso(masked);
+    setCpfVerification((current) => ({ ...current, birthDate: iso }));
+    if (iso && cpfFallbackAvailable && !cpfLookupLoading) {
+      void verifyCpf(formData.cpf, undefined, { birthDate: iso });
     }
   };
 
@@ -840,20 +862,26 @@ export default function ContactForm() {
                     </p>
                     {cpfFallbackAvailable && (
                       <div className="mt-2 rounded-md border border-amber-300 bg-amber-50 p-2 text-xs text-amber-800">
-                        <p>
-                          Não foi possível confirmar no provedor primário. Informe a
-                          data de nascimento abaixo e confirme direto na Receita Federal (SERPRO).
+                        <p className="mb-2">
+                          Não confirmado no provedor primário. Informe a data de
+                          nascimento para confirmar direto na Receita Federal (SERPRO).
                         </p>
-                        <Button
-                          type="button"
-                          size="sm"
-                          color="secondary"
-                          className="mt-2"
-                          disabled={cpfLookupLoading || !cpfVerification.birthDate}
-                          onClick={() => void verifyCpf(formData.cpf, undefined, { birthDate: cpfVerification.birthDate })}
-                        >
-                          Confirmar na Receita (SERPRO)
-                        </Button>
+                        <Label htmlFor="cpf-fallback-birthdate" className="sr-only">
+                          Data de nascimento
+                        </Label>
+                        <Input
+                          id="cpf-fallback-birthdate"
+                          inputMode="numeric"
+                          placeholder="dd/mm/aaaa"
+                          maxLength={10}
+                          value={birthDateInput}
+                          onChange={(event) => handleBirthDateChange(event.target.value)}
+                          disabled={cpfLookupLoading}
+                          autoFocus
+                        />
+                        {cpfLookupLoading && (
+                          <p className="mt-1">Confirmando na Receita…</p>
+                        )}
                       </div>
                     )}
                   </div>
@@ -885,16 +913,27 @@ export default function ContactForm() {
                   </div>
                   <div>
                     <Label htmlFor="birth_date">Data de nascimento</Label>
-                    <Input
-                      id="birth_date"
-                      type="date"
-                      value={cpfVerification.birthDate}
-                      onChange={(event) => setCpfVerification((current) => ({
-                        ...current,
-                        birthDate: event.target.value,
-                      }))}
-                      max={new Date().toISOString().slice(0, 10)}
-                    />
+                    {isBrazil ? (
+                      <Input
+                        id="birth_date"
+                        inputMode="numeric"
+                        placeholder="dd/mm/aaaa"
+                        maxLength={10}
+                        value={birthDateInput}
+                        onChange={(event) => handleBirthDateChange(event.target.value)}
+                      />
+                    ) : (
+                      <Input
+                        id="birth_date"
+                        type="date"
+                        value={cpfVerification.birthDate}
+                        onChange={(event) => setCpfVerification((current) => ({
+                          ...current,
+                          birthDate: event.target.value,
+                        }))}
+                        max={new Date().toISOString().slice(0, 10)}
+                      />
+                    )}
                   </div>
                   <div>
                     <Label htmlFor="sex">Sexo</Label>
