@@ -136,9 +136,19 @@ if (import.meta.env.DEV && typeof window !== "undefined") {
   const RELOAD_FLAG = "vite-deps-reloaded";
   const isViteDepsError = (err: unknown) => {
     const stack = err instanceof Error ? `${err.stack ?? ""} ${err.message}` : String(err ?? "");
+    // React Fast Refresh can fail to reconcile the DOM after an HMR update
+    // (symptom: NotFoundError on removeChild/insertBefore during
+    // performReactRefresh, leaving a blank screen). A reload restores it.
+    if (
+      /performReactRefresh|scheduleRefresh|@react-refresh/.test(stack) &&
+      /removeChild|insertBefore|NotFoundError/.test(stack)
+    ) {
+      return true;
+    }
     if (!stack.includes("/node_modules/.vite/deps/")) return false;
     return /useRef|Invalid hook call|null \(reading|dispatcher/i.test(stack);
   };
+
   const recoverViteDeps = (err: unknown) => {
     if (!isViteDepsError(err)) return;
     try {
