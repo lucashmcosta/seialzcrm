@@ -702,6 +702,10 @@ export function TelephonyProvider({ children }: { children: ReactNode }) {
         codecPreferences: voiceCodecPreferences(Call.Codec),
         allowIncomingWhileBusy: false,
       });
+      // Remove o "blip" do SDK nas transições de perna da transferência (parkear/
+      // retomar): o som de `disconnect` era o que tocava ao colocar em espera e ao
+      // voltar, dando sensação de delay. O feedback visual da nossa UI já basta.
+      try { device.audio?.disconnect(false); } catch { /* audio API opcional */ }
 
       if (telephonyV2) {
         device.on('incoming', async (call) => {
@@ -1122,6 +1126,10 @@ export function TelephonyProvider({ children }: { children: ReactNode }) {
       throw new Error('transfer_state_changed');
     }
     transferCallRef.current = call;
+    // Nova perna (retomar/consultar) volta desmutada — o mute aplicado no hold
+    // não persiste na próxima conversa.
+    try { call.mute(false); } catch { /* noop */ }
+    setIsMuted(false);
     if (transferOriginRef.current === 'incoming') {
       incomingCallRef.current = call;
       setActiveIncomingCall(call);
@@ -1274,6 +1282,12 @@ export function TelephonyProvider({ children }: { children: ReactNode }) {
   const holdCall = useCallback(async () => {
     if (!organization?.id || !callIdRef.current || !canTransferCalls || transferSessionRef.current) return;
     console.log('[PERF] HOLD CLICK @', Math.round(performance.now()));
+    // Muta o mic do atendente IMEDIATAMENTE (local/instantâneo): protege o ~1.5s
+    // até o cliente ser parkeado, pra ele nunca escutar algo sem querer nesse
+    // intervalo. No retomar, a nova perna volta desmutada (ver connectTransferCall).
+    try { activeCallRef.current?.mute(true); } catch { /* leg pode já ter caído */ }
+    try { incomingCallRef.current?.mute(true); } catch { /* idem */ }
+    setIsMuted(true);
     setTransferLoading(true);
     setTransferOperation('starting');
     suppressCallFinalizationRef.current = true;
