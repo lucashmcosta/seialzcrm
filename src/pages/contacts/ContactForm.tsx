@@ -104,12 +104,16 @@ export default function ContactForm() {
   const [showDuplicateWarning, setShowDuplicateWarning] = useState(false);
   const [companies, setCompanies] = useState<Array<{ id: string; name: string }>>([]);
   const [cpfLookupLoading, setCpfLookupLoading] = useState(false);
-  // Fica true quando o provedor primário falha e o backend sinaliza que o
-  // fallback SERPRO v3 pode confirmar o CPF se informarmos a data de nascimento.
-  const [cpfFallbackAvailable, setCpfFallbackAvailable] = useState(false);
+  // Motivo do fallback quando o primário não confirma o CPF:
+  //  'need_date'  → falta a data de nascimento para uma nova busca;
+  //  'mismatch'   → data foi informada mas CPF+data não batem na Receita.
+  const [cpfFallbackReason, setCpfFallbackReason] = useState<'' | 'need_date' | 'mismatch'>('');
   // Data de nascimento como texto mascarado dd/mm/aaaa (exibição BR). A fonte da
   // verdade continua sendo `cpfVerification.birthDate` em ISO.
   const [birthDateInput, setBirthDateInput] = useState('');
+  // Espelha `cpfVerification.birthDate` (ISO) para o verifyCpf ler sempre o valor
+  // atual, sem risco de closure obsoleto — usado como entrada do SERPRO v3.
+  const birthDateIsoRef = useRef('');
   const [cpfVerification, setCpfVerification] = useState<{
     status: CpfVerificationStatus;
     registrationStatus: string;
@@ -142,6 +146,11 @@ export default function ContactForm() {
   const cpfLookupSequenceRef = useRef(0);
   const cpfInFlightRef = useRef('');
   const lastCepLookupRef = useRef('');
+
+  // Mantém a ref da data de nascimento (ISO) sempre com o valor atual.
+  useEffect(() => {
+    birthDateIsoRef.current = cpfVerification.birthDate;
+  }, [cpfVerification.birthDate]);
 
   useEffect(() => {
     if (isEdit) {
@@ -233,7 +242,7 @@ export default function ContactForm() {
     setCpfLookupLoading(false);
     setFormData((current) => ({ ...current, cpf: formatCpf(normalized) }));
     if (normalized !== lastCpfLookupRef.current) {
-      setCpfFallbackAvailable(false);
+      setCpfFallbackReason('');
       // Preserva a data de nascimento (é input do usuário, não resultado do CPF):
       // ao corrigir/reeditar o CPF, a data digitada não deve sumir.
       setCpfVerification((current) => ({
@@ -261,13 +270,10 @@ export default function ContactForm() {
     const cpf = digits(candidate);
     if (!cpf) return;
     if (cpfInFlightRef.current === cpf) return;
-    // Data de nascimento para eventual escalada ao SERPRO v3: usamos apenas o
-    // valor passado explicitamente (botão de confirmação do fallback). NÃO lemos
-    // de `cpfVerification.birthDate` aqui de propósito — no disparo automático
-    // esse closure pode conter a data de OUTRO CPF (contato editado), o que
-    // faria a consulta v3 com data errada. Sem data, o backend sinaliza
-    // `fallback_available` e a UI pede a data pelo prompt.
-    const birthDate = options?.birthDate || undefined;
+    // Data de nascimento para a consulta SERPRO v3: usa o valor explícito (retry)
+    // ou a data atual do formulário via ref (sem closure obsoleto). Se já houver
+    // data preenchida, a consulta já vai com ela — sem precisar pedir de novo.
+    const birthDate = options?.birthDate || birthDateIsoRef.current || undefined;
     if (!isValidCpf(cpf)) {
       setCpfVerification((current) => ({ ...current, status: 'invalid', errorCode: 'invalid_cpf' }));
       toast.error('CPF inválido. Confira os dígitos informados.');
@@ -292,7 +298,7 @@ export default function ContactForm() {
       if (sequence !== cpfLookupSequenceRef.current) return;
       const data = result.data || {};
       lastCpfLookupRef.current = cpf;
-      setCpfFallbackAvailable(false);
+      setCpfFallbackReason('');
       setFormData((current) => ({
         ...current,
         cpf: formatCpf(cpf),
@@ -317,29 +323,31 @@ export default function ContactForm() {
     } catch (error: unknown) {
       if (sequence !== cpfLookupSequenceRef.current) return;
       const code = error instanceof Error ? error.message : 'registry_lookup_failed';
-      const payload = (error as { payload?: { provider_code?: string | null; provider_message?: string | null; fallback_available?: boolean } }).payload;
+      const payload = (error as { payload?: { fallback_available?: boolean } }).payload;
+      const needDate = Boolean(payload?.fallback_available); // faltou a data para nova busca
       const notFound = code.includes('not_found');
-      const invalid = code.includes('invalid_cpf') || code === 'invalid_or_not_found';
-      const reason = [payload?.provider_code, payload?.provider_message].filter(Boolean).join(' — ');
-      setCpfFallbackAvailable(Boolean(payload?.fallback_available));
+      const invalid = code.includes('invalid_cpf');
+      // Data foi enviada mas o CPF+data não bateram na Receita.
+      const mismatch = !needDate && notFound && Boolean(birthDate);
+
+      setCpfFallbackReason(needDate ? 'need_date' : mismatch ? 'mismatch' : '');
       setCpfVerification((current) => ({
         ...current,
-        status: notFound ? 'not_found' : invalid ? 'invalid' : 'error',
-        errorCode: reason ? `${code} (${reason})` : code,
+        status: (needDate || mismatch || notFound) ? 'not_found' : invalid ? 'invalid' : 'error',
+        errorCode: code,
       }));
-      if (notFound) {
-        toast.warning(
-          `CPF não encontrado na base do provedor.${reason ? ` Motivo do provedor: ${reason}` : ''} O contato pode ser salvo como não verificado.`,
-        );
+
+      if (needDate) {
+        // A mensagem inline já orienta a informar a data — sem toast ruidoso.
+      } else if (mismatch) {
+        toast.error('Os dados não batem: confira o CPF e a data de nascimento.');
+      } else if (invalid) {
+        toast.error('CPF inválido. Confira os dígitos informados.');
+      } else if (notFound) {
+        toast.warning('CPF não encontrado. O contato pode ser salvo como não verificado.');
       } else {
-        toast.error(
-          invalid
-            ? 'CPF inválido. Confira os dígitos informados.'
-            : 'Não foi possível verificar agora. O contato poderá ser salvo como não verificado.',
-        );
+        toast.error('Não foi possível verificar agora. O contato poderá ser salvo como não verificado.');
       }
-
-
     } finally {
       if (cpfInFlightRef.current === cpf) cpfInFlightRef.current = '';
       if (sequence === cpfLookupSequenceRef.current) setCpfLookupLoading(false);
@@ -353,8 +361,11 @@ export default function ContactForm() {
     const masked = formatDateBR(raw);
     setBirthDateInput(masked);
     const iso = brDateToIso(masked);
+    birthDateIsoRef.current = iso;
     setCpfVerification((current) => ({ ...current, birthDate: iso }));
-    if (iso && cpfFallbackAvailable && !cpfLookupLoading) {
+    // Quando estamos aguardando a data (need_date) ou corrigindo (mismatch),
+    // completar a data dispara a nova busca sozinho.
+    if (iso && cpfFallbackReason && !cpfLookupLoading) {
       void verifyCpf(formData.cpf, undefined, { birthDate: iso });
     }
   };
@@ -865,11 +876,21 @@ export default function ContactForm() {
                     <p id="cpf-format-help" className="mt-1 text-xs text-muted-foreground">
                       Se informado, o CPF deve ter exatamente 11 dígitos.
                     </p>
-                    {cpfFallbackAvailable && (
+                    {cpfFallbackReason && (
                       <p className="mt-2 rounded-md border border-amber-300 bg-amber-50 p-2.5 text-xs text-amber-800">
-                        Não encontramos esse CPF. Informe a{' '}
-                        <span className="font-medium">data de nascimento</span> para
-                        fazer uma nova busca.
+                        {cpfFallbackReason === 'mismatch' ? (
+                          <>
+                            Não encontramos esse CPF com essa data de nascimento.
+                            Confira o <span className="font-medium">CPF</span> e a{' '}
+                            <span className="font-medium">data de nascimento</span>.
+                          </>
+                        ) : (
+                          <>
+                            Não encontramos esse CPF. Informe a{' '}
+                            <span className="font-medium">data de nascimento</span> para
+                            fazer uma nova busca.
+                          </>
+                        )}
                       </p>
                     )}
                   </div>
@@ -900,7 +921,7 @@ export default function ContactForm() {
                     />
                   </div>
                   <div>
-                    <Label htmlFor="birth_date" className={cpfFallbackAvailable ? 'text-amber-700' : undefined}>
+                    <Label htmlFor="birth_date" className={cpfFallbackReason ? 'text-amber-700' : undefined}>
                       Data de nascimento
                     </Label>
                     {isBrazil ? (
@@ -912,9 +933,9 @@ export default function ContactForm() {
                           maxLength={10}
                           value={birthDateInput}
                           onChange={(event) => handleBirthDateChange(event.target.value)}
-                          className={cpfFallbackAvailable ? 'pr-9 ring-2 ring-amber-400 focus-visible:ring-amber-500' : undefined}
+                          className={cpfFallbackReason ? 'pr-9 ring-2 ring-amber-400 focus-visible:ring-amber-500' : undefined}
                         />
-                        {cpfFallbackAvailable && (
+                        {cpfFallbackReason && (
                           <button
                             type="button"
                             title="Buscar na Receita com a data de nascimento"
