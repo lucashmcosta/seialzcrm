@@ -36,7 +36,7 @@ export const HREFLANG: Record<Locale, string> = {
  * URLs canônicas das páginas legais (registradas no painel da Meta).
  * PT usa slugs em português no top-level; EN mantém o prefixo /en/.
  */
-export type LegalPage = "privacy-policy" | "terms-of-service" | "data-deletion";
+export type LegalPage = "privacy-policy" | "terms-of-service" | "data-deletion" | "support";
 
 export const LEGAL_ROUTES: Record<LegalPage, Record<Locale, string>> = {
   "privacy-policy": {
@@ -50,6 +50,10 @@ export const LEGAL_ROUTES: Record<LegalPage, Record<Locale, string>> = {
   "data-deletion": {
     "pt-BR": "/exclusao-de-dados",
     en: "/en/data-deletion",
+  },
+  support: {
+    "pt-BR": "/suporte",
+    en: "/en/support",
   },
 };
 

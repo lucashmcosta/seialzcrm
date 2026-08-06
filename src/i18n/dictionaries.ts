@@ -9,27 +9,36 @@ import ptHome from "@/locales/pt-BR/home.json";
 import ptTerms from "@/locales/pt-BR/terms.json";
 import ptPrivacy from "@/locales/pt-BR/privacy-policy.json";
 import ptDataDeletion from "@/locales/pt-BR/data-deletion.json";
+import ptSupport from "@/locales/pt-BR/support.json";
 import ptPrivacyBody from "@/locales/pt-BR/privacy-policy.md?raw";
 import ptTermsBody from "@/locales/pt-BR/terms-of-service.md?raw";
 import ptDataDeletionBody from "@/locales/pt-BR/data-deletion.md?raw";
+import ptSupportBody from "@/locales/pt-BR/support.md?raw";
 
 import enCommon from "@/locales/en/common.json";
 import enHome from "@/locales/en/home.json";
 import enTerms from "@/locales/en/terms.json";
 import enPrivacy from "@/locales/en/privacy-policy.json";
 import enDataDeletion from "@/locales/en/data-deletion.json";
+import enSupport from "@/locales/en/support.json";
 import enPrivacyBody from "@/locales/en/privacy-policy.md?raw";
 import enTermsBody from "@/locales/en/terms-of-service.md?raw";
 import enDataDeletionBody from "@/locales/en/data-deletion.md?raw";
+import enSupportBody from "@/locales/en/support.md?raw";
 
 export type Namespace =
   | "common"
   | "home"
   | "terms"
   | "privacy-policy"
-  | "data-deletion";
+  | "data-deletion"
+  | "support";
 
-export type LegalBodyKey = "privacy-policy" | "terms-of-service" | "data-deletion";
+export type LegalBodyKey =
+  | "privacy-policy"
+  | "terms-of-service"
+  | "data-deletion"
+  | "support";
 
 type Dict = Record<string, unknown>;
 
@@ -40,6 +49,7 @@ const dictionaries: Record<Locale, Record<Namespace, Dict>> = {
     terms: ptTerms as Dict,
     "privacy-policy": ptPrivacy as Dict,
     "data-deletion": ptDataDeletion as Dict,
+    support: ptSupport as Dict,
   },
   en: {
     common: enCommon as Dict,
@@ -47,6 +57,7 @@ const dictionaries: Record<Locale, Record<Namespace, Dict>> = {
     terms: enTerms as Dict,
     "privacy-policy": enPrivacy as Dict,
     "data-deletion": enDataDeletion as Dict,
+    support: enSupport as Dict,
   },
 };
 
@@ -55,11 +66,13 @@ const legalBodies: Record<Locale, Record<LegalBodyKey, string>> = {
     "privacy-policy": ptPrivacyBody,
     "terms-of-service": ptTermsBody,
     "data-deletion": ptDataDeletionBody,
+    support: ptSupportBody,
   },
   en: {
     "privacy-policy": enPrivacyBody,
     "terms-of-service": enTermsBody,
     "data-deletion": enDataDeletionBody,
+    support: enSupportBody,
   },
 };
 

@@ -24,6 +24,7 @@ export function LandingFooter() {
   const privacyUrl = getLegalUrl('privacy-policy', locale);
   const termsUrl = getLegalUrl('terms-of-service', locale);
   const dataDeletionUrl = getLegalUrl('data-deletion', locale);
+  const supportUrl = getLegalUrl('support', locale);
 
   return (
     <footer
