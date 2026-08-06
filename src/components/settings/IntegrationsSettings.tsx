@@ -26,6 +26,7 @@ import { MetaCapiDialog } from '@/components/integrations/meta-capi/MetaCapiDial
 import { NammuxDialog } from '@/components/integrations/nammux/NammuxDialog';
 import { MetaWhatsAppCloudDialog } from '@/components/integrations/meta-whatsapp-cloud/MetaWhatsAppCloudDialog';
 import { EvolutionWhatsAppDialog } from '@/components/integrations/evolution-whatsapp/EvolutionWhatsAppDialog';
+import { MetaConnectionCard } from '@/components/integrations/meta/MetaConnectionCard';
 import { AIProviderCard } from './AIProviderCard';
 import { useAIProviders } from '@/hooks/useAIProviders';
 import { usePermissions } from '@/hooks/usePermissions';
@@ -395,6 +396,9 @@ export function IntegrationsSettings() {
             {t('settings.requestIntegration') || 'Solicitar integração'}
           </Button>
         </div>
+
+        {/* Conexão Meta canônica (OAuth) */}
+        <MetaConnectionCard />
 
         {/* Category Filter */}
         <Tabs value={selectedCategory} onValueChange={setSelectedCategory}>
