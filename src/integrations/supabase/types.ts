@@ -7804,6 +7804,13 @@ export type Database = {
             referencedColumns: ["id"]
           },
           {
+            foreignKeyName: "meta_media_insights_media_id_fkey"
+            columns: ["media_id"]
+            isOneToOne: false
+            referencedRelation: "vw_meta_media_performance"
+            referencedColumns: ["id"]
+          },
+          {
             foreignKeyName: "meta_media_insights_organization_id_fkey"
             columns: ["organization_id"]
             isOneToOne: false
@@ -11984,6 +11991,46 @@ export type Database = {
         Relationships: [
           {
             foreignKeyName: "marketing_campaigns_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      vw_meta_media_performance: {
+        Row: {
+          caption: string | null
+          comments: number | null
+          connection_id: string | null
+          engagement: number | null
+          external_id: string | null
+          has_insights: boolean | null
+          id: string | null
+          impressions: number | null
+          insights_synced_at: string | null
+          likes: number | null
+          media_type: string | null
+          organization_id: string | null
+          permalink: string | null
+          platform: string | null
+          published_at: string | null
+          reach: number | null
+          saves: number | null
+          shares: number | null
+          thumbnail_url: string | null
+          views: number | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "meta_media_connection_id_fkey"
+            columns: ["connection_id"]
+            isOneToOne: false
+            referencedRelation: "meta_connections"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "meta_media_organization_id_fkey"
             columns: ["organization_id"]
             isOneToOne: false
             referencedRelation: "organizations"

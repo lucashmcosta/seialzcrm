@@ -1,13 +1,14 @@
 import { ReactNode } from 'react';
 import { Link } from 'react-router-dom';
 import { Layout } from '@/components/Layout';
-import { ChartBar, Megaphone, Funnel, ChartLine, House } from '@phosphor-icons/react';
+import { ChartBar, Megaphone, Funnel, ChartLine, House, InstagramLogo } from '@phosphor-icons/react';
 import { useLocation } from 'react-router-dom';
 import { cn } from '@/lib/utils';
 
 const TABS = [
   { href: '/marketing', label: 'Overview', icon: House, exact: true },
   { href: '/marketing/ads', label: 'Ads', icon: Megaphone },
+  { href: '/marketing/organic', label: 'Orgânico', icon: InstagramLogo },
   { href: '/marketing/funnel', label: 'Funil', icon: Funnel },
   { href: '/marketing/timeline', label: 'Histórico', icon: ChartLine },
 ];
