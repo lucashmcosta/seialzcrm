@@ -8,7 +8,7 @@ import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "jsr:@supabase/supabase-js@2";
 import { corsHeaders } from "../_shared/cors.ts";
 import { facebookAppSecret, resolveConnectionToken } from "../_shared/meta/connection.ts";
-import { metaGraphGet } from "../_shared/meta-graph.ts";
+import { metaGraphGet, MetaGraphError } from "../_shared/meta-graph.ts";
 
 function json(body: unknown, status = 200): Response {
   return new Response(JSON.stringify(body), { status, headers: { ...corsHeaders, "Content-Type": "application/json" } });
@@ -71,6 +71,84 @@ serve(async (req) => {
       pageTokens.set(assetExternalId, t);
       return t;
     };
+
+    // ---- Bateria de reconciliação FB (read-only): testa nomes ATUAIS de v26 ----
+    if (body.fb_recon) {
+      const tryGet = async (path: string, params: Record<string, any>, token: string) => {
+        try {
+          const r = await metaGraphGet(path, params, { accessToken: token, appSecret });
+          return { status: 200, ok: true, data: r as any };
+        } catch (e) {
+          if (e instanceof MetaGraphError) return { status: e.status, ok: false, code: e.error?.code, error: (e.error?.message || "").slice(0, 180), data: null as any };
+          return { status: 0, ok: false, error: (e as Error).message?.slice(0, 160), data: null as any };
+        }
+      };
+      const insVal = (resp: any): any => {
+        const rows = resp?.data?.data ?? [];
+        const r = rows[0];
+        if (!r) return null;
+        if (r.total_value?.value !== undefined) return r.total_value.value;
+        if (Array.isArray(r.values)) return r.values.reduce((a: number, v: any) => a + Number(v?.value ?? 0), 0);
+        return null;
+      };
+
+      const { data: pageAsset } = await admin.from("meta_assets")
+        .select("external_id").eq("connection_id", connection_id).eq("asset_type", "page").eq("selection_state", "selected").maybeSingle();
+      const pageExt = pageAsset?.external_id as string | undefined;
+      const pageTok = pageExt ? await pageTokenFor(pageExt) : accessToken;
+      const s = Math.floor(Date.now() / 1000) - 28 * 86400, u = Math.floor(Date.now() / 1000);
+
+      // PAGE-LEVEL
+      const page: any = { external_id: pageExt, window: "28d · period=day · metric_type=total_value", tests: [] };
+      for (const metric of ["page_total_media_view_unique", "page_media_view", "page_follows"]) {
+        const r = await tryGet(`/${pageExt}/insights`, { metric, period: "day", metric_type: "total_value", since: s, until: u }, pageTok);
+        page.tests.push({ endpoint: "/{page}/insights", metric, status: r.status, ok: r.ok, value: r.ok ? insVal(r) : null, code: (r as any).code, error: (r as any).error });
+      }
+
+      // POST-LEVEL + VIDEO/REEL
+      const posts: any[] = [];
+      for (const ext of externalIds) {
+        const { data: mrow } = await admin.from("meta_media").select("media_type, published_at").eq("connection_id", connection_id).eq("external_id", ext).maybeSingle();
+        const p: any = { external_id: ext, media_type: mrow?.media_type ?? null, published_at: mrow?.published_at ?? null, tests: [] };
+        for (const metric of ["post_total_media_view_unique", "post_media_view", "post_clicks_by_type"]) {
+          const r = await tryGet(`/${ext}/insights`, { metric }, pageTok);
+          const rows = r?.data?.data ?? [];
+          const raw = rows[0]?.total_value?.value ?? rows[0]?.values?.[0]?.value ?? null;
+          p.tests.push({ endpoint: "/{post}/insights", metric, status: r.status, ok: r.ok, value: r.ok ? raw : null, code: (r as any).code, error: (r as any).error });
+        }
+        const obj = await tryGet(`/${ext}`, { fields: "reactions.summary(total_count),comments.summary(total_count),shares" }, pageTok);
+        p.tests.push({
+          endpoint: "/{post}?fields=reactions/comments/shares", metric: "object summaries", status: obj.status, ok: obj.ok,
+          value: obj.ok ? { reactions: obj.data?.reactions?.summary?.total_count ?? null, comments: obj.data?.comments?.summary?.total_count ?? null, shares: obj.data?.shares?.count ?? null } : null,
+          code: (obj as any).code, error: (obj as any).error,
+        });
+        // resolve video_id
+        const att = await tryGet(`/${ext}`, { fields: "status_type,attachments{media_type,type,target,subattachments{target,media_type}}" }, pageTok);
+        let videoId: string | null = null;
+        const a0 = att.data?.attachments?.data?.[0];
+        videoId = a0?.target?.id ?? a0?.subattachments?.data?.[0]?.target?.id ?? null;
+        p.video_id = videoId;
+        p.attachment_media_type = a0?.media_type ?? a0?.type ?? null;
+        if (videoId) {
+          // Testa cada métrica de vídeo/reel INDIVIDUALMENTE p/ saber quais são válidas em v26.
+          const vmetrics = [
+            "total_video_views_unique", "total_video_views", "fb_reels_total_plays",
+            "post_video_views", "post_video_views_unique", "blue_reels_play_count",
+            "total_video_view_total_time", "total_video_avg_time_watched",
+            "total_video_reactions_by_type_total", "total_video_social_actions", "total_video_impressions",
+          ];
+          p.video_insights = { endpoint: "/{video}/video_insights", tests: [] };
+          for (const vm of vmetrics) {
+            const vr = await tryGet(`/${videoId}/video_insights`, { metric: vm }, pageTok);
+            const rows = vr?.data?.data ?? [];
+            p.video_insights.tests.push({ metric: vm, status: vr.status, ok: vr.ok, value: vr.ok ? (rows[0]?.values?.[0]?.value ?? rows[0]?.total_value?.value ?? null) : null, code: (vr as any).code, error: (vr as any).error });
+          }
+        }
+        posts.push(p);
+      }
+
+      return json({ success: true, graph_version: Deno.env.get("META_GRAPH_API_VERSION") || "default", fetched_at, page, posts });
+    }
 
     const media: any[] = [];
     for (const ext of externalIds) {
