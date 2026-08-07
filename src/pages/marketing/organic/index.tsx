@@ -169,16 +169,18 @@ function OverviewTab({ agg, aggPrev, loading, platform, account, accountLoading,
   const ig = account?.instagram, fb = account?.facebook;
   let accViews: number | null = null, accReach: number | null = null, viewsSrc = '', reachSrc = '';
   if (platform === 'instagram') {
-    accViews = ig?.available ? ig.views : null; viewsSrc = 'nível de conta (Instagram)';
+    accViews = ig?.available ? ig.views : null; viewsSrc = 'views · nível de conta (Instagram)';
     accReach = ig?.available ? ig.reach : null;
-    reachSrc = accReach != null ? 'contas únicas (dedup) · conta' : rangeDays > 30 ? 'reach de conta só p/ janela ≤30 dias' : 'indisponível';
+    reachSrc = accReach != null ? 'contas únicas (reach dedup) · conta' : rangeDays > 30 ? 'reach de conta só p/ janela ≤30 dias' : 'indisponível';
   } else if (platform === 'facebook') {
-    accViews = fb?.available ? fb.views : null; viewsSrc = fb?.available ? 'nível de conta (Facebook)' : 'soma por conteúdo';
-    accReach = null; reachSrc = 'reach de Página indisponível na API (Graph v26)';
+    accViews = fb?.available ? fb.views : null; viewsSrc = fb?.available ? 'media views · nível de página (Facebook)' : 'media views · soma por conteúdo';
+    accReach = fb?.available ? fb.reach : null;
+    reachSrc = accReach != null ? 'contas únicas (reach dedup) · página' : rangeDays > 30 ? 'reach de página só p/ janela ≤30 dias' : 'indisponível';
   } else {
-    accViews = account?.combined.views_available ? account.combined.views : null; viewsSrc = 'nível de conta (Instagram + Facebook)';
+    accViews = account?.combined.views_available ? account.combined.views : null; viewsSrc = 'views/media views · nível de conta (Instagram + Facebook)';
+    // Reach não é somável entre redes: mostramos IG (dedup) e o FB fica na nota.
     accReach = account?.combined.reach_instagram ?? null;
-    reachSrc = accReach != null ? 'Instagram (dedup) · Facebook indisponível' : rangeDays > 30 ? 'reach de conta só p/ janela ≤30 dias' : 'indisponível';
+    reachSrc = accReach != null ? 'Instagram (reach dedup) · Facebook na nota abaixo' : rangeDays > 30 ? 'reach de conta só p/ janela ≤30 dias' : 'indisponível';
   }
 
   const viewsCard = accViews != null
@@ -224,9 +226,13 @@ function OverviewTab({ agg, aggPrev, loading, platform, account, accountLoading,
         />
       </div>
       <p className="text-xs text-muted-foreground">
-        Views e Alcance usam <strong>insights de nível de conta</strong> (mesma fonte do Business Suite): Views = todas as reproduções no período;
-        Alcance = contas únicas (deduplicado). {rangeDays > 30 && <>O Alcance de conta só é fornecido pela Meta em janelas de até 30 dias — selecione ≤30 dias para vê-lo. </>}
-        Curtidas, comentários, compartilhamentos e salvos são somados por conteúdo publicado no período.
+        Views e Alcance usam <strong>insights de nível de conta/página</strong> (mesma fonte do Business Suite):
+        Views = reproduções/exibições no período; Alcance = <strong>contas únicas (deduplicado)</strong>, nunca soma de reach por conteúdo.
+        {' '}No Facebook, "views" é <strong>media view</strong> (conteúdo renderizado) — semântica mais restrita que a "impression" antiga, então tende a ser menor; não é comparável 1:1 com métricas de impressão de outras fontes.
+        {rangeDays > 30 && <> O Alcance deduplicado só é fornecido pela Meta em janelas de até 30 dias — selecione ≤30 dias para vê-lo.</>}
+        {platform !== 'facebook' && account?.combined.reach_facebook != null && <> Alcance do Facebook (dedup, página): {fmtInt(account.combined.reach_facebook)}.</>}
+        {fb?.followers != null && (platform === 'facebook' || platform === 'all') && <> Seguidores da página (Facebook): {fmtInt(fb.followers)}.</>}
+        {' '}Curtidas/reações, comentários, compartilhamentos e salvos são somados por conteúdo publicado no período.
       </p>
     </>
   );

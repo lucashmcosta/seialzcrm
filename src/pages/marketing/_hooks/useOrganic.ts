@@ -57,7 +57,7 @@ export function useOrganicMedia(orgId?: string, from?: Date, to?: Date, platform
 // On-demand via edge function; usado só no Overview. Media-level continua no conteúdo.
 export interface AccountInsights {
   instagram: { reach: number | null; views: number | null; available: boolean; reach_window_limit_days?: number };
-  facebook: { reach: number | null; views: number | null; available: boolean };
+  facebook: { reach: number | null; views: number | null; followers: number | null; available: boolean; reach_window_limit_days?: number };
   combined: { views: number; reach_instagram: number | null; reach_facebook: number | null; views_available: boolean };
 }
 export function useAccountInsights(orgId?: string, from?: Date, to?: Date) {

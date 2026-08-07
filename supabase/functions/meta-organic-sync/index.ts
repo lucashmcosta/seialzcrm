@@ -185,30 +185,54 @@ serve(async (req) => {
         const firstPage = () => metaGraphGet(mediaPath, { fields: mediaFields, limit: PAGE_LIMIT }, { accessToken: mediaToken, appSecret });
 
         // (Re)coleta insights lifetime de UMA mídia já existente. Idempotente. Tolerante.
-        // Facebook post: `post_impressions` foi depreciada (15/11/2025) → `post_media_view`.
-        // IG: `views` (unificação abr/2025). O insight `likes` == campo-objeto `like_count`
-        // (provado na reconciliação) — divergência com a UI da Meta é lag da Meta, não nosso.
+        // IG: `views`/`reach` (unificação abr/2025); `likes`(insight) == `like_count`(objeto).
+        // FB v26 (confirmado empíricamente na Página real): reach dedup por conteúdo =
+        // `post_total_media_view_unique`; views (media view) = `post_media_view`;
+        // engajamento por object fields (reactions/comments/shares) — `post_impressions`/
+        // `post_engaged_users` foram depreciadas. Semânticas diferentes rotuladas na UI.
         const upsertInsights = async (mediaRowId: string, extId: string, mediaType: string) => {
           try {
-            const metric = platform === "instagram"
-              ? (mediaType === "reel"
+            let reach: number | null = null, impressions: number | null = null, views: number | null = null;
+            let engagement: number | null = null, likes: number | null = null, comments: number | null = null;
+            let shares: number | null = null, saves: number | null = null;
+            let raw: unknown = {};
+            if (platform === "instagram") {
+              const metric = mediaType === "reel"
                 ? "views,reach,likes,comments,shares,saved"
-                : "reach,likes,comments,saved,shares")
-              : "post_media_view";
-            const ins = await metaGraphGet(`/${extId}/insights`, { metric }, { accessToken: mediaToken, appSecret });
-            const rows = ins?.data ?? [];
+                : "reach,likes,comments,saved,shares";
+              const ins = await metaGraphGet(`/${extId}/insights`, { metric }, { accessToken: mediaToken, appSecret });
+              const rows = ins?.data ?? [];
+              reach = pickMetric(rows, ["reach"]);
+              views = pickMetric(rows, ["views", "plays", "ig_reels_video_view_total_time"]);
+              likes = pickMetric(rows, ["likes"]);
+              comments = pickMetric(rows, ["comments"]);
+              shares = pickMetric(rows, ["shares"]);
+              saves = pickMetric(rows, ["saved"]);
+              raw = { insights: rows };
+            } else {
+              // Facebook: reach dedup + views (media view). Para reels, `post_media_view` == plays.
+              const ins = await metaGraphGet(`/${extId}/insights`,
+                { metric: "post_media_view,post_total_media_view_unique" }, { accessToken: mediaToken, appSecret });
+              const rows = ins?.data ?? [];
+              views = pickMetric(rows, ["post_media_view"]);
+              reach = pickMetric(rows, ["post_total_media_view_unique"]);
+              // Engajamento por object fields (reactions=curtidas+outras reações, comments, shares).
+              let obj: any = {};
+              try {
+                obj = await metaGraphGet(`/${extId}`,
+                  { fields: "reactions.summary(total_count),comments.summary(total_count),shares" },
+                  { accessToken: mediaToken, appSecret });
+              } catch (_) { /* engajamento indisponível p/ este conteúdo */ }
+              likes = toInt(obj?.reactions?.summary?.total_count);
+              comments = toInt(obj?.comments?.summary?.total_count);
+              shares = toInt(obj?.shares?.count);
+              raw = { insights: rows, object: { reactions: obj?.reactions?.summary ?? null, comments: obj?.comments?.summary ?? null, shares: obj?.shares ?? null } };
+            }
             await admin.from("meta_media_insights").upsert({
               // end_time sentinela p/ lifetime: NULL quebra o UNIQUE (NULL≠NULL) → duplicaria.
               organization_id, connection_id, media_id: mediaRowId, period: "lifetime", end_time: "1970-01-01",
-              reach: pickMetric(rows, ["reach", "post_impressions_unique"]),
-              impressions: pickMetric(rows, ["impressions", "post_impressions"]),
-              views: pickMetric(rows, ["views", "plays", "post_media_view", "ig_reels_video_view_total_time"]),
-              engagement: pickMetric(rows, ["engagement", "post_engaged_users"]),
-              likes: pickMetric(rows, ["likes"]),
-              comments: pickMetric(rows, ["comments"]),
-              shares: pickMetric(rows, ["shares"]),
-              saves: pickMetric(rows, ["saved"]),
-              raw: rows, source_api_version: GRAPH_API_VERSION, parser_version: PARSER_VERSION, synced_at: new Date().toISOString(),
+              reach, impressions, views, engagement, likes, comments, shares, saves,
+              raw, source_api_version: GRAPH_API_VERSION, parser_version: PARSER_VERSION, synced_at: new Date().toISOString(),
             }, { onConflict: "media_id,period,end_time" });
             stats.insights++;
           } catch (_) {

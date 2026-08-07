@@ -74,7 +74,7 @@ serve(async (req) => {
     const result: any = {
       // reach_window_limit_days: a Meta só deduplica reach de conta em janelas ≤30d.
       instagram: { reach: null, views: null, available: false, reach_window_limit_days: 30 },
-      facebook: { reach: null, views: null, available: false },
+      facebook: { reach: null, views: null, followers: null, available: false, reach_window_limit_days: 30 },
     };
 
     // Janelas de ≤30 dias (limite da API p/ account insights).
@@ -105,22 +105,36 @@ serve(async (req) => {
           result.instagram.available = true;
         }
       } else {
-        // Facebook Página: métricas de nível de conta muito depreciadas (nov/2025). Best-effort.
+        // Facebook Página v26 (nomes ATUAIS, confirmados empíricamente):
+        //  views (media view) = page_media_view (aditiva → soma janelas);
+        //  reach dedup = page_total_media_view_unique (só cabe em 1 janela ≤30d);
+        //  seguidores = page_follows.
         let pageToken = accessToken;
         try {
           const pt = await metaGraphGet(`/${a.external_id}`, { fields: "access_token" }, { accessToken, appSecret });
           if (pt?.access_token) pageToken = pt.access_token;
         } catch (_) { /* usa token atual */ }
-        for (const metric of ["page_views", "page_impressions_unique", "page_reach"]) {
+        let viewsSum = 0, viewsAny = false, reachExact: number | null = null, followers: number | null = null, ok = false;
+        for (const [ws, wu] of windows) {
           try {
             const r = await metaGraphGet(`/${a.external_id}/insights`,
-              { metric, period: "day", since: s, until: u }, { accessToken: pageToken, appSecret });
+              { metric: "page_media_view,page_total_media_view_unique,page_follows", period: "day", metric_type: "total_value", since: ws, until: wu },
+              { accessToken: pageToken, appSecret });
             const rows = r?.data ?? [];
-            const sum = (rows[0]?.values ?? []).reduce((acc: number, v: any) => acc + Number(v?.value ?? 0), 0);
-            if (metric === "page_views") result.facebook.views = num(sum);
-            else if (result.facebook.reach == null) result.facebook.reach = num(sum);
-            result.facebook.available = true;
-          } catch (_) { /* métrica de Página indisponível nesta versão */ }
+            const vw = totalValue(rows, "page_media_view");
+            if (vw != null) { viewsSum += vw; viewsAny = true; }
+            if (windows.length === 1) reachExact = totalValue(rows, "page_total_media_view_unique");
+            const fl = totalValue(rows, "page_follows");
+            if (fl != null) followers = fl;
+            ok = true;
+          } catch (e) { result.facebook.error = (e as Error).message?.slice(0, 200); }
+        }
+        if (ok) {
+          result.facebook.views = viewsAny ? viewsSum : null;
+          result.facebook.reach = reachExact; // null quando a janela > 30d
+          result.facebook.followers = followers;
+          result.facebook.available = true;
+          result.facebook.reach_window_limit_days = 30;
         }
       }
     }
