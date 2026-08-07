@@ -102,9 +102,19 @@ serve(async (req) => {
     const chain = Number(body._chain ?? 0);
     if (!organization_id || !connection_id) return json({ error: "missing_fields" }, 400);
 
-    // Modo serviço (trigger headless/cron/auto-continuação) via token dedicado; senão JWT + membership.
+    // Modo serviço (trigger headless/cron/auto-continuação): x-sync-token dedicado OU
+    // bearer == token interno (get_internal_function_auth_token, usado pelo pg_cron); senão JWT+membership.
     const svcToken = req.headers.get("x-sync-token");
-    const serviceMode = Boolean(svcToken && svcToken === Deno.env.get("META_SYNC_TRIGGER_TOKEN"));
+    let serviceMode = Boolean(svcToken && svcToken === Deno.env.get("META_SYNC_TRIGGER_TOKEN"));
+    if (!serviceMode) {
+      const bearer = req.headers.get("Authorization")?.replace("Bearer ", "").trim();
+      if (bearer) {
+        try {
+          const { data: internal } = await admin.rpc("get_internal_function_auth_token");
+          if (internal && bearer === internal) serviceMode = true;
+        } catch (_) { /* rpc indisponível → segue p/ validação de JWT */ }
+      }
+    }
     if (!serviceMode) {
       const authHeader = req.headers.get("Authorization");
       if (!authHeader?.startsWith("Bearer ")) return json({ error: "Unauthorized" }, 401);
