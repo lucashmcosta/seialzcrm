@@ -1,6 +1,6 @@
 // Helpers to call the Meta Graph API with appsecret_proof.
 
-const API_VERSION = Deno.env.get("META_GRAPH_API_VERSION") || "v23.0";
+const API_VERSION = Deno.env.get("META_GRAPH_API_VERSION") || "v26.0";
 const BASE_URL = `https://graph.facebook.com/${API_VERSION}`;
 
 async function hmacSha256Hex(key: string, message: string): Promise<string> {
