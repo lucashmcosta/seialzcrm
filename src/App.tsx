@@ -205,6 +205,7 @@ const MessagesList = lazyWithRetry("MessagesList", () => import("./pages/message
 const InboxPage = lazyWithRetry("InboxPage", () => import("./pages/inbox/InboxPage"));
 const MarketingOverview = lazyWithRetry("MarketingOverview", () => import("./pages/marketing/index"));
 const MarketingAds = lazyWithRetry("MarketingAds", () => import("./pages/marketing/ads/index"));
+const MarketingOrganic = lazyWithRetry("MarketingOrganic", () => import("./pages/marketing/organic/index"));
 const MarketingAdDetail = lazyWithRetry("MarketingAdDetail", () => import("./pages/marketing/ads/[id]"));
 const MarketingFunnel = lazyWithRetry("MarketingFunnel", () => import("./pages/marketing/funnel"));
 const MarketingTimeline = lazyWithRetry("MarketingTimeline", () => import("./pages/marketing/timeline"));
@@ -662,6 +663,7 @@ const App = () => (
           <Route path="/marketing" element={<ProtectedRoute><MarketingOverview /></ProtectedRoute>} />
           <Route path="/marketing/ads" element={<ProtectedRoute><MarketingAds /></ProtectedRoute>} />
           <Route path="/marketing/ads/:id" element={<ProtectedRoute><MarketingAdDetail /></ProtectedRoute>} />
+          <Route path="/marketing/organic" element={<ProtectedRoute><MarketingOrganic /></ProtectedRoute>} />
           <Route path="/marketing/funnel" element={<ProtectedRoute><MarketingFunnel /></ProtectedRoute>} />
           <Route path="/marketing/timeline" element={<ProtectedRoute><MarketingTimeline /></ProtectedRoute>} />
           <Route path="/settings" element={<ProtectedRoute><SettingsLayout /></ProtectedRoute>}>

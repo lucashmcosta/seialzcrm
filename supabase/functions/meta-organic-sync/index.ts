@@ -126,14 +126,17 @@ serve(async (req) => {
 
           // Insights por mídia (métricas variam; tolera erro).
           try {
-            // Métricas conservadoras válidas no v25 (variam por tipo; erros são tolerados).
+            // Métricas por tipo de mídia (IG varia: reels têm views/shares/saved). Erros tolerados.
             const metric = platform === "instagram"
-              ? "reach,likes,comments"
+              ? (mediaType === "reel"
+                ? "views,reach,likes,comments,shares,saved"
+                : "reach,likes,comments,saved,shares")
               : "post_impressions,post_clicks";
             const ins = await metaGraphGet(`/${m.id}/insights`, { metric }, { accessToken: mediaToken, appSecret });
             const rows = ins?.data ?? [];
             await admin.from("meta_media_insights").upsert({
-              organization_id, connection_id, media_id: mediaRow.id, period: "lifetime", end_time: null,
+              // end_time sentinela p/ lifetime: NULL quebra o UNIQUE (NULL≠NULL) → duplicaria.
+              organization_id, connection_id, media_id: mediaRow.id, period: "lifetime", end_time: "1970-01-01",
               reach: pickMetric(rows, ["reach", "post_impressions_unique"]),
               impressions: pickMetric(rows, ["impressions", "post_impressions"]),
               views: pickMetric(rows, ["views", "plays", "ig_reels_video_view_total_time"]),
