@@ -4,7 +4,7 @@ import { metaGraphGet, MetaGraphError } from "../meta-graph.ts";
 import { decryptSecret } from "../crypto.ts";
 
 // Versão canônica da Graph (fonte de verdade operacional; frontend recebe via build).
-export const GRAPH_API_VERSION = Deno.env.get("META_GRAPH_API_VERSION") || "v25.0";
+export const GRAPH_API_VERSION = Deno.env.get("META_GRAPH_API_VERSION") || "v26.0";
 export const SYNC_VERSION = "1";
 export const PARSER_VERSION = "1";
 const GRAPH_BASE = `https://graph.facebook.com/${GRAPH_API_VERSION}`;
