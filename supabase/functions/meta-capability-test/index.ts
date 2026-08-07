@@ -103,15 +103,23 @@ serve(async (req) => {
     await run("Reels (page)", "pages_read_engagement", `/{page}/video_reels`, page?.external_id ?? null,
       page ? async () => ({ count: (await metaGraphGet(`/${page.external_id}/video_reels`, { limit: 3 }, pageOpts)).data?.length ?? 0 }) : null);
     await run("Page insights", "read_insights", `/{page}/insights`, page?.external_id ?? null,
-      page ? async () => ({ count: (await metaGraphGet(`/${page.external_id}/insights`, { metric: "page_impressions", period: "day" }, pageOpts)).data?.length ?? 0 }) : null);
+      page ? async () => ({ count: (await metaGraphGet(`/${page.external_id}/insights`, { metric: "page_impressions_unique", period: "days_28" }, pageOpts)).data?.length ?? 0 }) : null);
     await run("Instagram insights", "instagram_manage_insights", `/{ig}/insights`, ig?.external_id ?? null,
       ig ? async () => ({ count: (await metaGraphGet(`/${ig.external_id}/insights`, { metric: "reach", period: "day" }, opts)).data?.length ?? 0 }) : null);
 
     // ---------- LEAD ADS ----------
     await run("Lead Ads — pages", "pages_show_list", "/me/accounts", null,
       async () => ({ count: (await metaGraphGet("/me/accounts", { fields: "id", limit: 5 }, opts)).data?.length ?? 0 }));
-    await run("Lead Ads — leadgen forms", "leads_retrieval + pages_manage_metadata", `/{page}/leadgen_forms`, page?.external_id ?? null,
-      page ? async () => ({ count: (await metaGraphGet(`/${page.external_id}/leadgen_forms`, { fields: "id,name", limit: 3 }, pageOpts)).data?.length ?? 0 }) : null);
+    let firstFormId: string | null = null;
+    await run("Lead Ads — leadgen forms", "pages_manage_metadata", `/{page}/leadgen_forms`, page?.external_id ?? null,
+      page ? async () => {
+        const r = await metaGraphGet(`/${page.external_id}/leadgen_forms`, { fields: "id,name", limit: 3 }, pageOpts);
+        firstFormId = r?.data?.[0]?.id ?? null;
+        return { count: r?.data?.length ?? 0 };
+      } : null);
+    // Leitura real de leads (só contagem; NENHUM dado de lead é retornado/logado).
+    await run("Lead Ads — leitura de leads", "leads_retrieval", `/{form}/leads`, firstFormId,
+      firstFormId ? async () => ({ count: (await metaGraphGet(`/${firstFormId}/leads`, { fields: "id,created_time", limit: 1 }, pageOpts)).data?.length ?? 0 }) : null);
 
     const summary = results.reduce((a: Record<string, number>, r) => { a[r.verdict] = (a[r.verdict] ?? 0) + 1; return a; }, {});
     return json({ success: true, connection_id, page_token_available: Boolean(pageToken), summary, results });

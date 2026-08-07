@@ -126,9 +126,10 @@ serve(async (req) => {
 
           // Insights por mídia (métricas variam; tolera erro).
           try {
+            // Métricas conservadoras válidas no v25 (variam por tipo; erros são tolerados).
             const metric = platform === "instagram"
-              ? "reach,likes,comments,saved,shares"
-              : "post_impressions,post_impressions_unique,post_reactions_by_type_total";
+              ? "reach,likes,comments"
+              : "post_impressions,post_clicks";
             const ins = await metaGraphGet(`/${m.id}/insights`, { metric }, { accessToken: mediaToken, appSecret });
             const rows = ins?.data ?? [];
             await admin.from("meta_media_insights").upsert({
