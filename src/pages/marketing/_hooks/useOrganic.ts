@@ -27,12 +27,15 @@ export interface OrganicMediaRow {
 
 const COLS = 'id,platform,media_type,external_id,permalink,caption,thumbnail_url,published_at,reach,impressions,views,engagement,likes,comments,shares,saves,has_insights';
 
-// 1 query por período — reutilizada por todas as sub-abas (Overview/Conteúdo/Top/Histórico/Resumo).
-export function useOrganicMedia(orgId?: string, from?: Date, to?: Date) {
+// Seletor de origem: Instagram / Facebook / combinado.
+export type PlatformFilter = 'instagram' | 'facebook' | 'all';
+
+// 1 query por período+plataforma — reutilizada por todas as sub-abas.
+export function useOrganicMedia(orgId?: string, from?: Date, to?: Date, platform: PlatformFilter = 'all') {
   const fromIso = from ? toISODate(from) : undefined;
   const toIso = to ? toISODate(to) : undefined;
   return useQuery({
-    queryKey: ['marketing', 'organic', 'media', orgId, fromIso, toIso],
+    queryKey: ['marketing', 'organic', 'media', orgId, fromIso, toIso, platform],
     enabled: !!orgId,
     staleTime: 5 * 60 * 1000,
     queryFn: async () => {
@@ -40,11 +43,37 @@ export function useOrganicMedia(orgId?: string, from?: Date, to?: Date) {
         .from('vw_meta_media_performance')
         .select(COLS)
         .eq('organization_id', orgId!);
+      if (platform !== 'all') q = q.eq('platform', platform);
       if (fromIso) q = q.gte('published_at', fromIso);
       if (toIso) q = q.lte('published_at', `${toIso}T23:59:59`);
-      const { data, error } = await q.order('published_at', { ascending: false }).limit(1000);
+      const { data, error } = await q.order('published_at', { ascending: false }).limit(2000);
       if (error) throw error;
       return (data ?? []) as unknown as OrganicMediaRow[];
+    },
+  });
+}
+
+// Insights de NÍVEL DE CONTA (semântica do Business Suite: reach dedup, views totais).
+// On-demand via edge function; usado só no Overview. Media-level continua no conteúdo.
+export interface AccountInsights {
+  instagram: { reach: number | null; views: number | null; available: boolean; reach_window_limit_days?: number };
+  facebook: { reach: number | null; views: number | null; available: boolean };
+  combined: { views: number; reach_instagram: number | null; reach_facebook: number | null; views_available: boolean };
+}
+export function useAccountInsights(orgId?: string, from?: Date, to?: Date) {
+  const fromIso = from ? toISODate(from) : undefined;
+  const toIso = to ? toISODate(to) : undefined;
+  return useQuery({
+    queryKey: ['marketing', 'organic', 'account', orgId, fromIso, toIso],
+    enabled: !!orgId && !!fromIso && !!toIso,
+    staleTime: 10 * 60 * 1000,
+    retry: false,
+    queryFn: async (): Promise<AccountInsights | null> => {
+      const { data, error } = await supabase.functions.invoke('meta-account-insights', {
+        body: { organization_id: orgId, since: fromIso, until: toIso },
+      });
+      if (error) return null; // best-effort: Overview cai p/ media-level se indisponível
+      return data as AccountInsights;
     },
   });
 }

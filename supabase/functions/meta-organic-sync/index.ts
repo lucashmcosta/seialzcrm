@@ -153,7 +153,7 @@ serve(async (req) => {
         cursor: cursor as unknown as Record<string, unknown>,
       }, { onConflict: "asset_id,kind" });
 
-      const stats = { media: 0, insights: 0, insights_failed: 0, pages: 0 };
+      const stats = { media: 0, insights: 0, insights_failed: 0, pages: 0, refreshed: 0 };
       let assetDone = false;
       try {
         const platform = asset.asset_type === "instagram_account" ? "instagram" : "facebook";
@@ -174,34 +174,22 @@ serve(async (req) => {
           : "id,message,permalink_url,created_time,full_picture";
         const firstPage = () => metaGraphGet(mediaPath, { fields: mediaFields, limit: PAGE_LIMIT }, { accessToken: mediaToken, appSecret });
 
-        // Processa (upsert mídia + insights, tolerante) uma mídia. Idempotente.
-        const processMedia = async (m: any) => {
-          const mediaType = platform === "instagram"
-            ? (m.media_product_type === "REELS" ? "reel" : String(m.media_type ?? "post").toLowerCase())
-            : "post";
-          const { data: mediaRow } = await admin.from("meta_media").upsert({
-            organization_id, connection_id, asset_id: asset.id, platform, media_type: mediaType,
-            external_id: String(m.id), permalink: m.permalink ?? m.permalink_url ?? null,
-            caption: m.caption ?? m.message ?? null, thumbnail_url: m.thumbnail_url ?? m.full_picture ?? null,
-            published_at: m.timestamp ?? m.created_time ?? null,
-            raw: m, source_api_version: GRAPH_API_VERSION, parser_version: PARSER_VERSION, synced_at: new Date().toISOString(),
-          }, { onConflict: "connection_id,external_id" }).select("id").single();
-          stats.media++;
-          if (!mediaRow) return;
+        // (Re)coleta insights lifetime de UMA mídia já existente. Idempotente. Tolerante.
+        // Facebook post: `post_impressions` foi depreciada (15/11/2025) → `post_media_view`.
+        // IG: `views` (unificação abr/2025). O insight `likes` == campo-objeto `like_count`
+        // (provado na reconciliação) — divergência com a UI da Meta é lag da Meta, não nosso.
+        const upsertInsights = async (mediaRowId: string, extId: string, mediaType: string) => {
           try {
-            // Métricas por tipo de mídia (unificação Meta abr/2025: `views` p/ reels).
-            // Facebook post: `post_impressions` foi depreciada (15/11/2025, todas as versões)
-            // → usa `post_media_view` (substituta oficial). Erros tolerados.
             const metric = platform === "instagram"
               ? (mediaType === "reel"
                 ? "views,reach,likes,comments,shares,saved"
                 : "reach,likes,comments,saved,shares")
               : "post_media_view";
-            const ins = await metaGraphGet(`/${m.id}/insights`, { metric }, { accessToken: mediaToken, appSecret });
+            const ins = await metaGraphGet(`/${extId}/insights`, { metric }, { accessToken: mediaToken, appSecret });
             const rows = ins?.data ?? [];
             await admin.from("meta_media_insights").upsert({
               // end_time sentinela p/ lifetime: NULL quebra o UNIQUE (NULL≠NULL) → duplicaria.
-              organization_id, connection_id, media_id: mediaRow.id, period: "lifetime", end_time: "1970-01-01",
+              organization_id, connection_id, media_id: mediaRowId, period: "lifetime", end_time: "1970-01-01",
               reach: pickMetric(rows, ["reach", "post_impressions_unique"]),
               impressions: pickMetric(rows, ["impressions", "post_impressions"]),
               views: pickMetric(rows, ["views", "plays", "post_media_view", "ig_reels_video_view_total_time"]),
@@ -216,6 +204,23 @@ serve(async (req) => {
           } catch (_) {
             stats.insights_failed++; /* métrica indisponível p/ esse tipo/mídia */
           }
+        };
+
+        // Processa (upsert mídia + insights) uma mídia recém-listada. Idempotente.
+        const processMedia = async (m: any) => {
+          const mediaType = platform === "instagram"
+            ? (m.media_product_type === "REELS" ? "reel" : String(m.media_type ?? "post").toLowerCase())
+            : "post";
+          const { data: mediaRow } = await admin.from("meta_media").upsert({
+            organization_id, connection_id, asset_id: asset.id, platform, media_type: mediaType,
+            external_id: String(m.id), permalink: m.permalink ?? m.permalink_url ?? null,
+            caption: m.caption ?? m.message ?? null, thumbnail_url: m.thumbnail_url ?? m.full_picture ?? null,
+            published_at: m.timestamp ?? m.created_time ?? null,
+            raw: m, source_api_version: GRAPH_API_VERSION, parser_version: PARSER_VERSION, synced_at: new Date().toISOString(),
+          }, { onConflict: "connection_id,external_id" }).select("id").single();
+          stats.media++;
+          if (!mediaRow) return;
+          await upsertInsights(mediaRow.id, String(m.id), mediaType);
         };
 
         // Persiste o cursor (checkpoint) após cada página concluída — retomável a frio.
@@ -275,7 +280,37 @@ serve(async (req) => {
           if ((hitWatermark || reachedEnd) && newestId) {
             cursor.watermark_id = newestId; cursor.watermark_ts = newestTs;
           }
-          assetDone = hitWatermark || reachedEnd;
+          const newScanDone = hitWatermark || reachedEnd;
+
+          // REFRESH POR TIERS: conteúdo NÃO é imutável — viral cresce por meses. Re-coleta
+          // insights das mídias "vencidas", stalest-first, sem rebuscar todo o histórico.
+          // Tiers (janela de frescor por perfil de crescimento):
+          //   viral (views ≥ 100k): 12h · recente (≤7d): 6h · médio (≤90d): 72h · antigo estável: 720h.
+          let refreshExhausted = true;
+          if (Date.now() <= deadline) {
+            const { data: cand } = await admin
+              .from("meta_media_insights")
+              .select("media_id, synced_at, views, meta_media!inner(external_id, media_type, published_at, asset_id)")
+              .eq("meta_media.asset_id", asset.id)
+              .eq("period", "lifetime")
+              .order("synced_at", { ascending: true })
+              .limit(600);
+            const nowMs = Date.now();
+            for (const c of cand ?? []) {
+              if (Date.now() > deadline) { refreshExhausted = false; break; }
+              const mm: any = (c as any).meta_media;
+              const ageDays = mm?.published_at ? (nowMs - new Date(mm.published_at).getTime()) / 86400000 : 9999;
+              const staleH = (c as any).synced_at ? (nowMs - new Date((c as any).synced_at).getTime()) / 3600000 : 9999;
+              const views = Number((c as any).views ?? 0);
+              const thr = views >= 100000 ? 12 : ageDays <= 7 ? 6 : ageDays <= 90 ? 72 : 720;
+              if (staleH < thr) continue; // ainda fresco p/ o seu tier
+              await upsertInsights(String((c as any).media_id), String(mm.external_id), String(mm.media_type));
+              stats.refreshed++;
+            }
+          }
+
+          // Só "idle" quando a varredura do novo terminou E não sobrou refresh vencido no orçamento.
+          assetDone = newScanDone && refreshExhausted;
           await saveCursor();
         }
 

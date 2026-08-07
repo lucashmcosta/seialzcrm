@@ -7,9 +7,10 @@ import { EmptyState } from '../_components/EmptyState';
 import { ChartSkeleton, TableSkeleton, CardSkeleton } from '../_components/Skeletons';
 import { useMarketingPeriod } from '../_hooks/useMarketingPeriod';
 import {
-  useOrganicMedia, aggregate, timeseries, topBy, weeklySummary,
+  useOrganicMedia, useAccountInsights, aggregate, timeseries, topBy, weeklySummary,
   engagementRateOf,
   type OrganicMediaRow, type OrganicMetric, type Availability,
+  type PlatformFilter, type AccountInsights,
 } from '../_hooks/useOrganic';
 import { fmtInt, fmtPct, fmtDateBR, previousRange } from '../_lib/format';
 import {
@@ -64,25 +65,57 @@ const TOP_METRICS: { key: OrganicMetric; label: string }[] = [
   { key: 'saves', label: 'Salvos' },
 ];
 
+// Segmented control de origem: Instagram / Facebook / Todos.
+function PlatformToggle({ value, onChange }: { value: PlatformFilter; onChange: (v: PlatformFilter) => void }) {
+  const opts: { key: PlatformFilter; label: string }[] = [
+    { key: 'instagram', label: 'Instagram' },
+    { key: 'facebook', label: 'Facebook' },
+    { key: 'all', label: 'Todos' },
+  ];
+  return (
+    <div className="inline-flex rounded-md border border-border bg-card p-0.5">
+      {opts.map((o) => (
+        <button
+          key={o.key}
+          type="button"
+          onClick={() => onChange(o.key)}
+          className={cn(
+            'px-3 py-1.5 text-sm font-medium rounded-[5px] transition-colors',
+            value === o.key ? 'bg-primary text-primary-foreground' : 'text-muted-foreground hover:text-foreground',
+          )}
+        >
+          {o.label}
+        </button>
+      ))}
+    </div>
+  );
+}
+
 export default function MarketingOrganic() {
   const { organization } = useOrganization();
   const orgId = organization?.id;
   const { preset, setPreset, custom, setCustom, range } = useMarketingPeriod('last_30', 'organic');
+  const [platform, setPlatform] = useState<PlatformFilter>('all');
 
-  const media = useOrganicMedia(orgId, range.from, range.to);
+  const media = useOrganicMedia(orgId, range.from, range.to, platform);
   const prev = previousRange(range.from, range.to);
-  const mediaPrev = useOrganicMedia(orgId, prev.from, prev.to);
+  const mediaPrev = useOrganicMedia(orgId, prev.from, prev.to, platform);
+  const account = useAccountInsights(orgId, range.from, range.to);
 
   const rows = useMemo(() => media.data ?? [], [media.data]);
   const agg = useMemo(() => aggregate(rows), [rows]);
   const aggPrev = useMemo(() => aggregate(mediaPrev.data ?? []), [mediaPrev.data]);
+  const rangeDays = Math.round((range.to.getTime() - range.from.getTime()) / 86400000);
 
   const loading = media.isLoading;
   const isEmpty = !loading && rows.length === 0;
 
   return (
     <MarketingLayout title="Orgânico">
-      <PeriodFilter preset={preset} setPreset={setPreset} custom={custom} setCustom={setCustom} />
+      <div className="flex flex-wrap items-center gap-3">
+        <PeriodFilter preset={preset} setPreset={setPreset} custom={custom} setCustom={setCustom} />
+        <PlatformToggle value={platform} onChange={setPlatform} />
+      </div>
 
       {isEmpty ? (
         <EmptyState
@@ -101,7 +134,8 @@ export default function MarketingOrganic() {
           </TabsList>
 
           <TabsContent value="overview" className="mt-4 space-y-4">
-            <OverviewTab agg={agg} aggPrev={aggPrev} loading={loading} />
+            <OverviewTab agg={agg} aggPrev={aggPrev} loading={loading}
+              platform={platform} account={account.data ?? null} accountLoading={account.isLoading} rangeDays={rangeDays} />
           </TabsContent>
           <TabsContent value="content" className="mt-4">
             <ContentTab rows={rows} loading={loading} />
@@ -122,53 +156,78 @@ export default function MarketingOrganic() {
 }
 
 // ---------------- Visão geral ----------------
-function OverviewTab({ agg, aggPrev, loading }: { agg: ReturnType<typeof aggregate>; aggPrev: ReturnType<typeof aggregate>; loading: boolean }) {
+function OverviewTab({ agg, aggPrev, loading, platform, account, accountLoading, rangeDays }: {
+  agg: ReturnType<typeof aggregate>; aggPrev: ReturnType<typeof aggregate>; loading: boolean;
+  platform: PlatformFilter; account: AccountInsights | null; accountLoading: boolean; rangeDays: number;
+}) {
   if (loading) return <CardSkeleton count={6} />;
 
   const t = agg.totals, a = agg.availability, tp = aggPrev.totals;
-  const cards = [
-    overviewCard('Views', t.views, a.views, 'primary', t.views, tp.views),
-    overviewCard('Alcance', t.reach, a.reach, 'primary', t.reach, tp.reach),
-    overviewCard('Curtidas', t.likes, a.likes, 'success', t.likes, tp.likes),
-    overviewCard('Comentários', t.comments, a.comments, 'success', t.comments, tp.comments),
-    overviewCard('Compartilhamentos', t.shares, a.shares, 'success', t.shares, tp.shares),
-    overviewCard('Salvos', t.saves, a.saves, 'success', t.saves, tp.saves),
-  ];
+
+  // Views/Alcance de NÍVEL DE CONTA (semântica Business Suite): views = todas as
+  // reproduções no período; reach = contas ÚNICAS (dedup). Reach só existe p/ janelas ≤30d.
+  const ig = account?.instagram, fb = account?.facebook;
+  let accViews: number | null = null, accReach: number | null = null, viewsSrc = '', reachSrc = '';
+  if (platform === 'instagram') {
+    accViews = ig?.available ? ig.views : null; viewsSrc = 'nível de conta (Instagram)';
+    accReach = ig?.available ? ig.reach : null;
+    reachSrc = accReach != null ? 'contas únicas (dedup) · conta' : rangeDays > 30 ? 'reach de conta só p/ janela ≤30 dias' : 'indisponível';
+  } else if (platform === 'facebook') {
+    accViews = fb?.available ? fb.views : null; viewsSrc = fb?.available ? 'nível de conta (Facebook)' : 'soma por conteúdo';
+    accReach = null; reachSrc = 'reach de Página indisponível na API (Graph v26)';
+  } else {
+    accViews = account?.combined.views_available ? account.combined.views : null; viewsSrc = 'nível de conta (Instagram + Facebook)';
+    accReach = account?.combined.reach_instagram ?? null;
+    reachSrc = accReach != null ? 'Instagram (dedup) · Facebook indisponível' : rangeDays > 30 ? 'reach de conta só p/ janela ≤30 dias' : 'indisponível';
+  }
+
+  const viewsCard = accViews != null
+    ? { label: 'Views', value: fmtInt(accViews), sublabel: viewsSrc, accent: 'primary' as const }
+    : overviewCard('Views', t.views, a.views, 'primary', t.views, tp.views);
+  const reachCard = accReach != null
+    ? { label: 'Alcance', value: fmtInt(accReach), sublabel: reachSrc, accent: 'primary' as const }
+    : { label: 'Alcance', value: accountLoading ? '…' : 'n/d', sublabel: reachSrc, accent: 'primary' as const };
+
+  // Interações e curtidas/etc. seguem por conteúdo (media-level). Taxa usa reach de conta quando houver.
+  const interactions = t.likes + t.comments + t.shares + t.saves;
+  const engRate = accReach && accReach > 0 && a.likes === 'available' ? interactions / accReach : agg.engagement_rate;
 
   return (
     <>
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
-        {cards.map((c) => (
-          <MetricCard key={c.label} {...c} />
-        ))}
+        <MetricCard {...viewsCard} />
+        <MetricCard {...reachCard} />
+        <MetricCard {...overviewCard('Curtidas', t.likes, a.likes, 'success', t.likes, tp.likes)} />
+        <MetricCard {...overviewCard('Comentários', t.comments, a.comments, 'success', t.comments, tp.comments)} />
+        <MetricCard {...overviewCard('Compartilhamentos', t.shares, a.shares, 'success', t.shares, tp.shares)} />
+        <MetricCard {...overviewCard('Salvos', t.saves, a.saves, 'success', t.saves, tp.saves)} />
       </div>
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
         <MetricCard label="Conteúdos publicados" value={fmtInt(agg.content_count)} current={agg.content_count} previous={aggPrev.content_count} mono />
         <MetricCard
           label="Interações"
-          value={a.likes === 'available' ? fmtInt(t.likes + t.comments + t.shares + t.saves) : 'n/d'}
+          value={a.likes === 'available' ? fmtInt(interactions) : 'n/d'}
           sublabel="Curtidas + coment. + compart. + salvos"
           accent="success"
         />
         <MetricCard
           label="Taxa de engajamento"
-          value={agg.engagement_rate != null ? fmtPct(agg.engagement_rate * 100, 2) : '—'}
-          sublabel={agg.engagement_rate != null ? 'Interações / alcance' : 'Requer alcance + interações'}
+          value={engRate != null ? fmtPct(engRate * 100, 2) : '—'}
+          sublabel={engRate != null ? (accReach ? 'Interações / alcance de conta' : 'Interações / alcance') : 'Requer alcance + interações'}
           accent="warning"
         />
         <MetricCard
           label="Views/conteúdo"
           value={a.views === 'available' && agg.counts.views > 0 ? fmtInt(t.views / agg.counts.views) : 'n/d'}
-          sublabel={agg.counts.views > 0 ? `Base: ${fmtInt(agg.counts.views)} c/ views` : undefined}
+          sublabel={agg.counts.views > 0 ? `Base: ${fmtInt(agg.counts.views)} conteúdos c/ views` : undefined}
           mono
         />
       </div>
-      {agg.counts.reach < agg.content_count && (
-        <p className="text-xs text-muted-foreground">
-          Métricas de engajamento cobrem {fmtInt(agg.counts.reach)} de {fmtInt(agg.content_count)} conteúdos publicados;
-          os demais ({fmtInt(agg.content_count - agg.counts.reach)}) ainda não têm insights coletados (ex.: posts do Facebook).
-        </p>
-      )}
+      <p className="text-xs text-muted-foreground">
+        Views e Alcance usam <strong>insights de nível de conta</strong> (mesma fonte do Business Suite): Views = todas as reproduções no período;
+        Alcance = contas únicas (deduplicado). {rangeDays > 30 && <>O Alcance de conta só é fornecido pela Meta em janelas de até 30 dias — selecione ≤30 dias para vê-lo. </>}
+        Curtidas, comentários, compartilhamentos e salvos são somados por conteúdo publicado no período.
+      </p>
     </>
   );
 }
