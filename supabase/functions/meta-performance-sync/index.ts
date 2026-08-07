@@ -41,17 +41,10 @@ function actionSum(actions: any[], types: string[]): number {
 serve(async (req) => {
   if (req.method === "OPTIONS") return new Response(null, { headers: corsHeaders });
   try {
-    const authHeader = req.headers.get("Authorization");
-    if (!authHeader?.startsWith("Bearer ")) return json({ error: "Unauthorized" }, 401);
-    const token = authHeader.replace("Bearer ", "");
-    const supabase = createClient(
+    const admin = createClient(
       Deno.env.get("SUPABASE_URL")!,
-      Deno.env.get("SUPABASE_ANON_KEY")!,
-      { global: { headers: { Authorization: authHeader } } },
+      Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!,
     );
-    const { data: claims, error: authErr } = await supabase.auth.getClaims(token);
-    if (authErr || !claims?.claims) return json({ error: "Unauthorized" }, 401);
-
     const body = await req.json().catch(() => ({}));
     const organization_id = String(body.organization_id ?? "");
     const connection_id = String(body.connection_id ?? "");
@@ -59,17 +52,27 @@ serve(async (req) => {
     const onlyAssetId = body.asset_id ? String(body.asset_id) : null;
     if (!organization_id || !connection_id) return json({ error: "missing_fields" }, 400);
 
-    const admin = createClient(
-      Deno.env.get("SUPABASE_URL")!,
-      Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!,
-    );
-    const { data: user } = await admin
-      .from("users").select("id").eq("auth_user_id", claims.claims.sub).maybeSingle();
-    if (!user) return json({ error: "user_not_found" }, 403);
-    const { data: membership } = await admin
-      .from("user_organizations").select("id")
-      .eq("user_id", user.id).eq("organization_id", organization_id).maybeSingle();
-    if (!membership) return json({ error: "forbidden_org" }, 403);
+    // Modo serviço (trigger headless/cron) via token dedicado; senão, JWT do usuário + membership.
+    const svcToken = req.headers.get("x-sync-token");
+    const serviceMode = Boolean(svcToken && svcToken === Deno.env.get("META_SYNC_TRIGGER_TOKEN"));
+    if (!serviceMode) {
+      const authHeader = req.headers.get("Authorization");
+      if (!authHeader?.startsWith("Bearer ")) return json({ error: "Unauthorized" }, 401);
+      const token = authHeader.replace("Bearer ", "");
+      const supabase = createClient(
+        Deno.env.get("SUPABASE_URL")!, Deno.env.get("SUPABASE_ANON_KEY")!,
+        { global: { headers: { Authorization: authHeader } } },
+      );
+      const { data: claims, error: authErr } = await supabase.auth.getClaims(token);
+      if (authErr || !claims?.claims) return json({ error: "Unauthorized" }, 401);
+      const { data: user } = await admin
+        .from("users").select("id").eq("auth_user_id", claims.claims.sub).maybeSingle();
+      if (!user) return json({ error: "user_not_found" }, 403);
+      const { data: membership } = await admin
+        .from("user_organizations").select("id")
+        .eq("user_id", user.id).eq("organization_id", organization_id).maybeSingle();
+      if (!membership) return json({ error: "forbidden_org" }, 403);
+    }
 
     const { data: conn } = await admin.from("meta_connections").select("id")
       .eq("id", connection_id).eq("organization_id", organization_id).maybeSingle();

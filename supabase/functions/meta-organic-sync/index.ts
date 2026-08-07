@@ -39,27 +39,31 @@ function pickMetric(rows: any[], names: string[]): number | null {
 serve(async (req) => {
   if (req.method === "OPTIONS") return new Response(null, { headers: corsHeaders });
   try {
-    const authHeader = req.headers.get("Authorization");
-    if (!authHeader?.startsWith("Bearer ")) return json({ error: "Unauthorized" }, 401);
-    const token = authHeader.replace("Bearer ", "");
-    const supabase = createClient(
-      Deno.env.get("SUPABASE_URL")!, Deno.env.get("SUPABASE_ANON_KEY")!,
-      { global: { headers: { Authorization: authHeader } } },
-    );
-    const { data: claims, error: authErr } = await supabase.auth.getClaims(token);
-    if (authErr || !claims?.claims) return json({ error: "Unauthorized" }, 401);
-
+    const admin = createClient(Deno.env.get("SUPABASE_URL")!, Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!);
     const body = await req.json().catch(() => ({}));
     const organization_id = String(body.organization_id ?? "");
     const connection_id = String(body.connection_id ?? "");
     if (!organization_id || !connection_id) return json({ error: "missing_fields" }, 400);
 
-    const admin = createClient(Deno.env.get("SUPABASE_URL")!, Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!);
-    const { data: user } = await admin.from("users").select("id").eq("auth_user_id", claims.claims.sub).maybeSingle();
-    if (!user) return json({ error: "user_not_found" }, 403);
-    const { data: membership } = await admin.from("user_organizations").select("id")
-      .eq("user_id", user.id).eq("organization_id", organization_id).maybeSingle();
-    if (!membership) return json({ error: "forbidden_org" }, 403);
+    // Modo serviço (trigger headless/cron) via token dedicado; senão, JWT do usuário + membership.
+    const svcToken = req.headers.get("x-sync-token");
+    const serviceMode = Boolean(svcToken && svcToken === Deno.env.get("META_SYNC_TRIGGER_TOKEN"));
+    if (!serviceMode) {
+      const authHeader = req.headers.get("Authorization");
+      if (!authHeader?.startsWith("Bearer ")) return json({ error: "Unauthorized" }, 401);
+      const token = authHeader.replace("Bearer ", "");
+      const supabase = createClient(
+        Deno.env.get("SUPABASE_URL")!, Deno.env.get("SUPABASE_ANON_KEY")!,
+        { global: { headers: { Authorization: authHeader } } },
+      );
+      const { data: claims, error: authErr } = await supabase.auth.getClaims(token);
+      if (authErr || !claims?.claims) return json({ error: "Unauthorized" }, 401);
+      const { data: user } = await admin.from("users").select("id").eq("auth_user_id", claims.claims.sub).maybeSingle();
+      if (!user) return json({ error: "user_not_found" }, 403);
+      const { data: membership } = await admin.from("user_organizations").select("id")
+        .eq("user_id", user.id).eq("organization_id", organization_id).maybeSingle();
+      if (!membership) return json({ error: "forbidden_org" }, 403);
+    }
     const { data: conn } = await admin.from("meta_connections").select("id")
       .eq("id", connection_id).eq("organization_id", organization_id).maybeSingle();
     if (!conn) return json({ error: "connection_not_found" }, 404);
@@ -87,15 +91,23 @@ serve(async (req) => {
       const stats = { media: 0, insights: 0 };
       try {
         const platform = asset.asset_type === "instagram_account" ? "instagram" : "facebook";
+        // Página exige PAGE access token (erro #210 com token de usuário/system-user).
+        let mediaToken = accessToken;
+        if (platform === "facebook") {
+          try {
+            const pt = await metaGraphGet(`/${asset.external_id}`, { fields: "access_token" }, { accessToken, appSecret });
+            if (pt?.access_token) mediaToken = pt.access_token;
+          } catch (_) { /* sem page token -> tenta com o token atual */ }
+        }
         let media: any[] = [];
         if (platform === "instagram") {
           media = await graphPaginate(`/${asset.external_id}/media`,
             { fields: "id,caption,media_type,media_product_type,permalink,timestamp,thumbnail_url", limit: 50 },
-            accessToken, appSecret, { maxPages: 2 });
+            mediaToken, appSecret, { maxPages: 2 });
         } else {
           media = await graphPaginate(`/${asset.external_id}/published_posts`,
             { fields: "id,message,permalink_url,created_time,full_picture", limit: 50 },
-            accessToken, appSecret, { maxPages: 2 });
+            mediaToken, appSecret, { maxPages: 2 });
         }
 
         for (const m of media.slice(0, MAX_MEDIA)) {
@@ -114,10 +126,11 @@ serve(async (req) => {
 
           // Insights por mídia (métricas variam; tolera erro).
           try {
+            // Métricas conservadoras válidas no v25 (variam por tipo; erros são tolerados).
             const metric = platform === "instagram"
-              ? "reach,likes,comments,saved,shares"
-              : "post_impressions,post_impressions_unique,post_reactions_by_type_total";
-            const ins = await metaGraphGet(`/${m.id}/insights`, { metric }, { accessToken, appSecret });
+              ? "reach,likes,comments"
+              : "post_impressions,post_clicks";
+            const ins = await metaGraphGet(`/${m.id}/insights`, { metric }, { accessToken: mediaToken, appSecret });
             const rows = ins?.data ?? [];
             await admin.from("meta_media_insights").upsert({
               organization_id, connection_id, media_id: mediaRow.id, period: "lifetime", end_time: null,
