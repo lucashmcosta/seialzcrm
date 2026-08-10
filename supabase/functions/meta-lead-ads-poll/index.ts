@@ -63,7 +63,7 @@ serve(async (req) => {
       // Load page + integration to get tokens + ensure both active + integration enabled
       const { data: page } = await admin
         .from("meta_lead_pages")
-        .select("id, page_access_token_encrypted, is_active, organization_integration_id")
+        .select("id, page_access_token_encrypted, is_active, organization_integration_id, last_health_check_status")
         .eq("id", form.meta_lead_page_id!)
         .maybeSingle();
       if (!page || !page.is_active) continue;
@@ -162,6 +162,20 @@ serve(async (req) => {
             ...(lastLeadTime ? { last_synced_lead_created_time: lastLeadTime } : {}),
           })
           .eq("id", form.id);
+
+        // Sync bem-sucedida → o token da página é válido. Reseta a saúde da página
+        // para 'ok' (o caminho de erro marca 'expired', mas nada revertia no sucesso:
+        // um 'expired' antigo, já resolvido, ficava preso e exibia badge "Token expirado").
+        if (page.last_health_check_status !== "ok") {
+          await admin
+            .from("meta_lead_pages")
+            .update({
+              last_health_check_status: "ok",
+              last_health_check_error: null,
+              last_health_check_at: new Date().toISOString(),
+            })
+            .eq("id", page.id);
+        }
       } catch (e: any) {
         formError = e.message || String(e);
         tokenExpired = isTokenError(e);

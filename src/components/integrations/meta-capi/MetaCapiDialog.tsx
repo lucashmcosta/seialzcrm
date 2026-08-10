@@ -17,13 +17,14 @@ import { toast } from "sonner";
 import { format } from "date-fns";
 import { ptBR } from "date-fns/locale";
 import { useMetaConnection } from "@/hooks/useMetaConnection";
-import { CanonicalCredentialPanel } from "@/components/integrations/meta/CanonicalCredentialPanel";
+import { MetaConnectionBanner } from "@/components/integrations/meta/MetaConnectionBanner";
 
 interface Props {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   integration: any;
   orgIntegration: any;
+  onManageConnection?: () => void;
 }
 
 type ConfigField = {
@@ -89,7 +90,7 @@ const statusBadge = (s: string) => {
   return <Badge className={`text-[10px] ${m.cls}`}>{m.label}</Badge>;
 };
 
-export function MetaCapiDialog({ open, onOpenChange, integration, orgIntegration: initialOrgIntegration }: Props) {
+export function MetaCapiDialog({ open, onOpenChange, integration, orgIntegration: initialOrgIntegration, onManageConnection }: Props) {
   const { organization } = useOrganization();
   const qc = useQueryClient();
   const [tab, setTab] = useState("connection");
@@ -148,7 +149,7 @@ export function MetaCapiDialog({ open, onOpenChange, integration, orgIntegration
 
   // Espelha a decisão do backend (resolveOrgMetaToken): quando a credencial canônica
   // está ativa, o token de envio vem da Meta Connection — a capability não gerencia auth.
-  const { canonicalActive, connection } = useMetaConnection(organization?.id);
+  const { canonicalActive } = useMetaConnection(organization?.id);
   const ca = (orgIntegration?.connected_account || {}) as any;
   const isConnected = canonicalActive || !!orgIntegration?.is_enabled;
   const isTestMode = !!ca.test_event_code;
@@ -507,9 +508,18 @@ export function MetaCapiDialog({ open, onOpenChange, integration, orgIntegration
             </div>
           </DialogHeader>
 
+          {/* Credencial canônica: a conexão vive só na integração Meta. A capability
+              mostra apenas um banner; a aba de credencial vira "Pixel" (só config).
+              Sem flag/conexão, tudo permanece como o legado (aba "Conexão"). */}
+          {canonicalActive && (
+            <div className="mt-4">
+              <MetaConnectionBanner onManage={onManageConnection} />
+            </div>
+          )}
+
           <Tabs value={tab} onValueChange={setTab} className="mt-4">
             <TabsList className="grid grid-cols-2 w-full">
-              <TabsTrigger value="connection">Conexão</TabsTrigger>
+              <TabsTrigger value="connection">{canonicalActive ? "Pixel" : "Conexão"}</TabsTrigger>
               <TabsTrigger value="events" disabled={!isConnected}>
                 Eventos enviados
               </TabsTrigger>
@@ -522,12 +532,7 @@ export function MetaCapiDialog({ open, onOpenChange, integration, orgIntegration
                     <Label className="text-xs text-muted-foreground">Pixel ID</Label>
                     <p className="font-mono text-sm">{ca.pixel_id || "—"}</p>
                   </div>
-                  {canonicalActive ? (
-                    <CanonicalCredentialPanel
-                      connection={connection}
-                      note="O token de envio da Conversions API é resolvido pela Meta Connection. O Pixel/Dataset e os campos abaixo continuam sendo configuração desta capability."
-                    />
-                  ) : (
+                  {!canonicalActive && (
                     <>
                       <div>
                         <Label className="text-xs text-muted-foreground">Access Token</Label>
@@ -596,12 +601,6 @@ export function MetaCapiDialog({ open, onOpenChange, integration, orgIntegration
                 </Card>
               ) : (
                 <Card className="p-4 space-y-4">
-                  {canonicalActive && (
-                    <CanonicalCredentialPanel
-                      connection={connection}
-                      note="Credencial resolvida pela Meta Connection. Ajuste apenas os campos de configuração desta capability abaixo."
-                    />
-                  )}
                   {!isConnected && hasMetaLeadAds && !canonicalActive && (
                     <div className="space-y-2">
                       <Label className="text-xs text-muted-foreground">Modo de conexão</Label>

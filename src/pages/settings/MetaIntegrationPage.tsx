@@ -323,10 +323,10 @@ export default function MetaIntegrationPage() {
 
       {/* Dialogs maduros — reutilizados sem alteração */}
       {bySlug('meta-lead-ads') && (
-        <MetaLeadAdsDialog open={leadOpen} onOpenChange={setLeadOpen} integration={bySlug('meta-lead-ads')} orgIntegration={orgBySlug('meta-lead-ads')} />
+        <MetaLeadAdsDialog open={leadOpen} onOpenChange={setLeadOpen} integration={bySlug('meta-lead-ads')} orgIntegration={orgBySlug('meta-lead-ads')} onManageConnection={() => { setLeadOpen(false); setSection('conexao'); }} />
       )}
       {bySlug('meta-capi') && (
-        <MetaCapiDialog open={capiOpen} onOpenChange={setCapiOpen} integration={bySlug('meta-capi')} orgIntegration={orgBySlug('meta-capi')} />
+        <MetaCapiDialog open={capiOpen} onOpenChange={setCapiOpen} integration={bySlug('meta-capi')} orgIntegration={orgBySlug('meta-capi')} onManageConnection={() => { setCapiOpen(false); setSection('conexao'); }} />
       )}
       {bySlug('meta-whatsapp-cloud') && (
         <MetaWhatsAppCloudDialog open={waOpen} onOpenChange={setWaOpen} integration={bySlug('meta-whatsapp-cloud')} orgIntegration={orgBySlug('meta-whatsapp-cloud')} />

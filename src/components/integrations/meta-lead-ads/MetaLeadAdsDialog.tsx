@@ -15,16 +15,17 @@ import { MappingDrawer } from "./MappingDrawer";
 import { SettingsCard } from "./SettingsCard";
 import { StatusDashboard } from "./StatusDashboard";
 import { useMetaConnection } from "@/hooks/useMetaConnection";
-import { CanonicalCredentialPanel } from "@/components/integrations/meta/CanonicalCredentialPanel";
+import { MetaConnectionBanner } from "@/components/integrations/meta/MetaConnectionBanner";
 
 interface Props {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   integration: any;
   orgIntegration: any;
+  onManageConnection?: () => void;
 }
 
-export function MetaLeadAdsDialog({ open, onOpenChange, integration, orgIntegration: initialOrgIntegration }: Props) {
+export function MetaLeadAdsDialog({ open, onOpenChange, integration, orgIntegration: initialOrgIntegration, onManageConnection }: Props) {
   const { organization } = useOrganization();
   const qc = useQueryClient();
   const [tab, setTab] = useState("connection");
@@ -48,7 +49,7 @@ export function MetaLeadAdsDialog({ open, onOpenChange, integration, orgIntegrat
 
   // Espelha a decisão do backend: credencial canônica ativa (flag + Meta Connection)
   // conta como conectado, mesmo antes de a UI legada refletir isso.
-  const { canonicalActive, connection } = useMetaConnection(organization?.id);
+  const { canonicalActive } = useMetaConnection(organization?.id);
   const isConnected = canonicalActive || !!orgIntegration?.is_enabled;
   const ca = (orgIntegration?.connected_account || {}) as any;
 
@@ -147,9 +148,18 @@ export function MetaLeadAdsDialog({ open, onOpenChange, integration, orgIntegrat
             </div>
           </DialogHeader>
 
+          {/* Credencial canônica: a conexão vive só na integração Meta. A capability
+              mostra apenas um banner e abre direto em Formulários. Sem flag/conexão,
+              a aba "Conexão" (Card A legado) permanece intacta. */}
+          {canonicalActive && (
+            <div className="mt-4">
+              <MetaConnectionBanner onManage={onManageConnection} />
+            </div>
+          )}
+
           <Tabs value={tab} onValueChange={setTab} className="mt-4">
-            <TabsList className="grid grid-cols-4 w-full">
-              <TabsTrigger value="connection">Conexão</TabsTrigger>
+            <TabsList className={`grid w-full ${canonicalActive ? "grid-cols-3" : "grid-cols-4"}`}>
+              {!canonicalActive && <TabsTrigger value="connection">Conexão</TabsTrigger>}
               <TabsTrigger value="forms" disabled={!isConnected}>
                 Formulários
               </TabsTrigger>
@@ -161,17 +171,15 @@ export function MetaLeadAdsDialog({ open, onOpenChange, integration, orgIntegrat
               </TabsTrigger>
             </TabsList>
 
-            <TabsContent value="connection" className="mt-4">
-              {canonicalActive ? (
-                <CanonicalCredentialPanel connection={connection} />
-              ) : (
+            {!canonicalActive && (
+              <TabsContent value="connection" className="mt-4">
                 <ConnectionForm
                   integrationId={integration?.id}
                   existing={orgIntegration}
                   onSuccess={refetchOrg}
                 />
-              )}
-            </TabsContent>
+              </TabsContent>
+            )}
 
             <TabsContent value="forms" className="mt-4">
               {isConnected && orgIntegration && (
