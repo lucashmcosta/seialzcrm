@@ -1,11 +1,13 @@
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 
-// Espelha, no frontend, a MESMA decisão que o backend toma em
-// `_shared/meta/connection.ts` (resolveOrgMetaToken): a credencial canônica só
-// está ativa quando a flag `meta_canonical_credential` está ligada para a org E
-// existe uma Meta Connection `connected`. Enquanto qualquer condição faltar, a UI
-// continua no caminho legado — idêntico ao de hoje. Aditivo e reversível pela flag.
+// Espelha, no frontend, a decisão de credencial da org: a credencial canônica só
+// está ativa quando a flag `meta_canonical_credential` está ligada para a PRÓPRIA
+// org E existe uma Meta Connection **conectada e saudável** para ela. Enquanto
+// qualquer condição faltar (flag OFF, sem conexão, ou conexão em estado de saúde
+// ruim), a UI continua no caminho legado — idêntico ao de hoje, sem regressão para
+// orgs não migradas. Aditivo e reversível pela flag. Tudo escopado por organization_id
+// (multi-tenant; sem hardcode de org/conexão).
 export interface MetaConnectionInfo {
   id: string;
   status: string;
@@ -19,7 +21,9 @@ export interface MetaConnectionInfo {
 export interface MetaConnectionState {
   connection: MetaConnectionInfo | null;
   flagOn: boolean;
-  /** flagOn && connection.status === 'connected' — igual ao resolver do backend. */
+  /** Conexão da org conectada e sem estado de saúde ruim (expired/error). */
+  healthy: boolean;
+  /** flagOn && conexão conectada e saudável. Fonte única do "modo canônico" da UI. */
   canonicalActive: boolean;
   isLoading: boolean;
 }
@@ -57,7 +61,14 @@ export function useMetaConnection(orgId?: string | null): MetaConnectionState {
 
   const connection = data?.connection ?? null;
   const flagOn = data?.flagOn ?? false;
-  const canonicalActive = flagOn && connection?.status === "connected";
+  // A query já filtra status='connected'; consideramos saudável salvo estado de saúde
+  // explicitamente ruim (expired/error). Conexão ausente => não saudável => legado.
+  const healthy =
+    !!connection &&
+    connection.status === "connected" &&
+    connection.last_health !== "expired" &&
+    connection.last_health !== "error";
+  const canonicalActive = flagOn && healthy;
 
-  return { connection, flagOn, canonicalActive, isLoading };
+  return { connection, flagOn, healthy, canonicalActive, isLoading };
 }
