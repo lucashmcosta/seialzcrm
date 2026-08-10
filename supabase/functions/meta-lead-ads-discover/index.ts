@@ -3,6 +3,7 @@ import { createClient } from "jsr:@supabase/supabase-js@2";
 import { corsHeaders } from "../_shared/cors.ts";
 import { decryptSecret, encryptSecret } from "../_shared/crypto.ts";
 import { metaGraphGet } from "../_shared/meta-graph.ts";
+import { resolveOrgMetaToken } from "../_shared/meta/connection.ts";
 
 // Auto-mapping: known Meta field keys → contact standard fields
 const AUTO_MAP: Record<string, string> = {
@@ -53,10 +54,17 @@ serve(async (req) => {
     }
 
     const ca: any = orgIntegration.connected_account || {};
-    const accessToken = await decryptSecret(ca.system_user_token_encrypted);
-    const appSecret = ca.app_secret_encrypted
-      ? await decryptSecret(ca.app_secret_encrypted)
-      : undefined;
+    // Fase 1: token canônico (dual-read) com fallback ao token legado (System User).
+    const resolved = await resolveOrgMetaToken(admin, organization_id, async () => {
+      if (!ca.system_user_token_encrypted) return null;
+      return {
+        token: await decryptSecret(ca.system_user_token_encrypted),
+        appSecret: ca.app_secret_encrypted ? await decryptSecret(ca.app_secret_encrypted) : undefined,
+      };
+    }, { capability: "lead-generation" });
+    if (!resolved) return json({ error: "no_meta_token" }, 400);
+    const accessToken = resolved.token;
+    const appSecret = resolved.appSecret;
 
     // 1) List pages
     const pagesResp = await metaGraphGet("/me/accounts", {

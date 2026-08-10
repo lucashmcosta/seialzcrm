@@ -3,6 +3,7 @@ import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "jsr:@supabase/supabase-js@2";
 import { corsHeaders } from "../_shared/cors.ts";
 import { decryptSecret } from "../_shared/crypto.ts";
+import { resolveOrgMetaToken } from "../_shared/meta/connection.ts";
 
 const META_API_VERSION = Deno.env.get("META_GRAPH_API_VERSION") || "v25.0";
 
@@ -106,20 +107,13 @@ async function buildUserData(contact: any | null) {
   return ud;
 }
 
-async function getAccessToken(_admin: any, orgId: string, ca: any): Promise<string | null> {
-  // CAPI MUST use its own token. No cross-integration fallback.
-  if (!ca?.access_token_encrypted) {
-    console.warn(`[meta-token] slug=meta-capi org=${orgId} result=fail reason=missing_access_token_encrypted`);
-    return null;
-  }
-  try {
-    const token = await decryptSecret(ca.access_token_encrypted);
-    console.log(`[meta-token] slug=meta-capi org=${orgId} result=ok`);
-    return token;
-  } catch (e) {
-    console.warn(`[meta-token] slug=meta-capi org=${orgId} result=fail reason=${(e as Error).message}`);
-    return null;
-  }
+async function getAccessToken(admin: any, orgId: string, ca: any): Promise<string | null> {
+  // Fase 1: token canônico (dual-read) com fallback ao token PRÓPRIO da CAPI.
+  const resolved = await resolveOrgMetaToken(admin, orgId, async () => {
+    if (!ca?.access_token_encrypted) return null;
+    return { token: await decryptSecret(ca.access_token_encrypted) };
+  }, { capability: "capi" });
+  return resolved?.token ?? null;
 }
 
 serve(async (req) => {

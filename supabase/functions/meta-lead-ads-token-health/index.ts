@@ -5,6 +5,7 @@ import { decryptSecret } from "../_shared/crypto.ts";
 import { isTokenError, metaGraphGet } from "../_shared/meta-graph.ts";
 import { notifyOrgUsers } from "../_shared/notify.ts";
 import { validateServiceRoleAuth } from "../_shared/auth.ts";
+import { resolveOrgMetaToken } from "../_shared/meta/connection.ts";
 
 serve(async (req) => {
   if (req.method === "OPTIONS") return new Response(null, { headers: corsHeaders });
@@ -40,13 +41,17 @@ serve(async (req) => {
 
     for (const oi of orgIntegrations || []) {
       const ca: any = oi.connected_account || {};
-      if (!ca.system_user_token_encrypted) continue;
+      // Fase 1: valida o token canônico (dual-read) com fallback ao legado.
+      const resolved = await resolveOrgMetaToken(admin, oi.organization_id, async () => {
+        if (!ca.system_user_token_encrypted) return null;
+        return {
+          token: await decryptSecret(ca.system_user_token_encrypted),
+          appSecret: ca.app_secret_encrypted ? await decryptSecret(ca.app_secret_encrypted) : undefined,
+        };
+      }, { capability: "lead-generation-health" });
+      if (!resolved) continue;
       try {
-        const accessToken = await decryptSecret(ca.system_user_token_encrypted);
-        const appSecret = ca.app_secret_encrypted
-          ? await decryptSecret(ca.app_secret_encrypted)
-          : undefined;
-        await metaGraphGet("/me", { fields: "id" }, { accessToken, appSecret });
+        await metaGraphGet("/me", { fields: "id" }, { accessToken: resolved.token, appSecret: resolved.appSecret });
 
         await admin
           .from("organization_integrations")
@@ -54,6 +59,7 @@ serve(async (req) => {
             connected_account: {
               ...ca,
               status: "connected",
+              token_source: resolved.source,
               last_token_check_at: new Date().toISOString(),
               last_token_check_error: null,
             },
