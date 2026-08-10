@@ -12,9 +12,12 @@ import { toast } from "sonner";
 interface Props {
   organizationIntegrationId: string;
   onConfigureMapping: (leadFormId: string) => void;
+  // Sob credencial canônica, a saúde do token vive na Meta Connection — não exibir o
+  // sinal legado "Token expirado" por página (estado contraditório com "via canonical").
+  hideLegacyExpiredBadge?: boolean;
 }
 
-export function PagesAndFormsList({ organizationIntegrationId, onConfigureMapping }: Props) {
+export function PagesAndFormsList({ organizationIntegrationId, onConfigureMapping, hideLegacyExpiredBadge }: Props) {
   const qc = useQueryClient();
 
   const { data: pages, isLoading } = useQuery({
@@ -76,7 +79,7 @@ export function PagesAndFormsList({ organizationIntegrationId, onConfigureMappin
               <Badge variant="outline" className="text-[11px]">
                 {page.meta_page_category || "Page"}
               </Badge>
-              {page.last_health_check_status === "expired" && (
+              {!hideLegacyExpiredBadge && page.last_health_check_status === "expired" && (
                 <Badge variant="destructive" className="text-[11px] gap-1">
                   <Warning className="h-3 w-3" />
                   Token expirado

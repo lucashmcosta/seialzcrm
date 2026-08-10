@@ -172,6 +172,7 @@ export function MetaLeadAdsDialog({
             <PagesAndFormsList
               organizationIntegrationId={orgIntegration.id}
               onConfigureMapping={(formId) => setMappingFormId(formId)}
+              hideLegacyExpiredBadge={canonicalActive}
             />
           </Card>
         )}
