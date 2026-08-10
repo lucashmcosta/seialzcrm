@@ -55,7 +55,7 @@ import { ContactMessages } from '@/components/contacts/ContactMessages';
 import { ContactConversations } from '@/components/contacts/ContactConversations';
 import { ContactOpportunities } from '@/components/contacts/ContactOpportunities';
 import { ContactNotes } from '@/components/contacts/ContactNotes';
-import { UnifiedDocuments } from '@/components/documents/UnifiedDocuments';
+import { DocumentsPanel } from '@/components/documents/DocumentsPanel';
 import {
   contactSexLabelFor,
   cpfStatusLabelFor,
@@ -371,7 +371,7 @@ export default function ContactDetail() {
       case 'notes': return <ContactNotes contactId={contact!.id} />;
       case 'calls': return <ContactCalls contactId={contact!.id} contactPhone={contact?.phone} contactName={contact?.full_name} />;
       case 'messages': return <ContactConversations contactId={contact!.id} />;
-      case 'documents': return <UnifiedDocuments contactId={contact!.id} />;
+      case 'documents': return <DocumentsPanel contactId={contact!.id} />;
       default: return null;
     }
   };
@@ -1041,7 +1041,7 @@ export default function ContactDetail() {
             </Tabs.Panel>
 
             <Tabs.Panel id="documents">
-              <UnifiedDocuments contactId={contact.id} />
+              <DocumentsPanel contactId={contact.id} />
             </Tabs.Panel>
           </Tabs>
         </div>
