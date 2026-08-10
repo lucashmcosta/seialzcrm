@@ -4,6 +4,7 @@ import { supabase } from '@/integrations/supabase/client';
 import { Button } from '@/components/ui/button';
 import { ArrowsClockwise, CheckCircle, Warning } from '@phosphor-icons/react';
 import { toast } from 'sonner';
+import { usePermissions } from '@/hooks/usePermissions';
 
 interface Props {
   orgId?: string;
@@ -73,6 +74,7 @@ function getSyncIssue(discoverData: any, insightsData: any): string | null {
 
 export function SyncStatusCard({ orgId }: Props) {
   const qc = useQueryClient();
+  const { permissions } = usePermissions();
   const [syncing, setSyncing] = useState(false);
 
   const { data: status } = useQuery({
@@ -159,22 +161,27 @@ export function SyncStatusCard({ orgId }: Props) {
               Última sincronização <span className="text-foreground">{formatRelative(lastSyncIso)}</span>
               {' • '}
               <span className="text-foreground font-mono">{status?.activeAds ?? 0}</span> ads ativos
+              {' • '}
+              <span className="text-xs">atualização automática diária</span>
             </>
           ) : (
-            'Nenhum dado sincronizado ainda'
+            'Sincronização automática diária — sem dados ainda'
           )}
         </span>
       </div>
-      <Button
-        size="sm"
-        variant="outline"
-        onClick={handleSync}
-        disabled={syncing || !orgId}
-        className="gap-2"
-      >
-        <ArrowsClockwise size={14} weight={syncing ? 'bold' : 'regular'} className={syncing ? 'animate-spin' : ''} />
-        {syncing ? 'Sincronizando…' : 'Sincronizar agora'}
-      </Button>
+      {/* Sync é automático (cron diário). Ação manual só para admin, como diagnóstico. */}
+      {permissions.canManageSettings && (
+        <Button
+          size="icon-sm"
+          variant="ghost"
+          onClick={handleSync}
+          disabled={syncing || !orgId}
+          title="Sincronizar agora (diagnóstico)"
+          aria-label="Sincronizar agora (diagnóstico)"
+        >
+          <ArrowsClockwise size={14} weight={syncing ? 'bold' : 'regular'} className={syncing ? 'animate-spin' : ''} />
+        </Button>
+      )}
     </div>
   );
 }

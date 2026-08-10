@@ -15,6 +15,7 @@ import {
 } from '@phosphor-icons/react';
 import { MetaConnectButton } from '@/components/integrations/meta/MetaConnectButton';
 import { MetaAssetSelector } from '@/components/integrations/meta/MetaAssetSelector';
+import { AdsManagerConfig } from '@/components/integrations/meta/AdsManagerConfig';
 import { StatusDashboard } from '@/components/integrations/meta-lead-ads/StatusDashboard';
 import { MetaLeadAdsDialog } from '@/components/integrations/meta-lead-ads/MetaLeadAdsDialog';
 import { MetaCapiDialog } from '@/components/integrations/meta-capi/MetaCapiDialog';
@@ -246,12 +247,15 @@ export default function MetaIntegrationPage() {
           )}
 
           {section === 'performance' && (
-            <ConfigLinkCard
-              icon={Megaphone} title="Performance (Ads)"
-              desc="Sincroniza campanhas, conjuntos, anúncios e insights. A análise (gráficos, tabelas) vive no módulo Marketing."
-              status={lastSync('performance') ? `Último sync: ${fmtDateBR(lastSync('performance')!)}` : 'Sem sync ainda'}
-              to="/marketing" toLabel="Ver no Marketing"
-            />
+            <div className="space-y-4">
+              <ConfigLinkCard
+                icon={Megaphone} title="Performance (Ads)"
+                desc="Configuração e status. Sincronização automática diária; a análise (gráficos, tabelas) vive no módulo Marketing."
+                status={lastSync('performance') ? `Último sync: ${fmtDateBR(lastSync('performance')!)}` : 'Sync automático diário'}
+                to="/marketing" toLabel="Ver no Marketing"
+              />
+              <AdsManagerConfig enabled={enabledSlug('meta-lead-ads')} />
+            </div>
           )}
           {section === 'organico' && (
             <ConfigLinkCard
